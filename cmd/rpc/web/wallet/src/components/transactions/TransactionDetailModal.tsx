@@ -1,9 +1,10 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X, Copy, ExternalLink, CheckCircle2, AlertTriangle } from "lucide-react";
+import { X, Copy, ExternalLink, CheckCircle2, AlertTriangle, Info } from "lucide-react";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { LucideIcon } from "@/components/ui/LucideIcon";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { ActionTooltip } from "@/components/ui/ActionTooltip";
 
 export interface TxError {
   code: number;
@@ -27,6 +28,12 @@ interface TransactionDetailModalProps {
   open: boolean;
   onClose: () => void;
 }
+
+const EDIT_STAKE_AMOUNT_TOOLTIP = {
+  label: "Edit Stake Amount",
+  description:
+    "This value is typically the difference between the previous stake amount and the new stake amount, so it may not reflect what was actually withdrawn.",
+};
 
 /* --- helpers --------------------------------------------------- */
 
@@ -240,26 +247,43 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
                   {tx.amount != null && (
                     <DetailRow label="Amount">
-                      <span
-                        className={
-                          getFundWay(tx.type) === "in"
-                            ? "text-[#35cd48]"
-                            : getFundWay(tx.type) === "out"
-                              ? "text-[#ff1845]"
-                              : "text-foreground"
-                        }
-                      >
-                        {getFundWay(tx.type) === "out"
-                          ? "-"
-                          : getFundWay(tx.type) === "in"
-                            ? "+"
-                            : ""}
-                        {toDisplay(Number(tx.amount)).toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 6,
-                        })}{" "}
-                        {symbol}
-                      </span>
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        <span
+                          className={
+                            getFundWay(tx.type) === "in"
+                              ? "text-[#35cd48]"
+                              : getFundWay(tx.type) === "out"
+                                ? "text-[#ff1845]"
+                                : "text-foreground"
+                          }
+                        >
+                          {getFundWay(tx.type) === "out"
+                            ? "-"
+                            : getFundWay(tx.type) === "in"
+                              ? "+"
+                              : ""}
+                          {toDisplay(Number(tx.amount)).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 6,
+                          })}{" "}
+                          {symbol}
+                        </span>
+                        {tx.type === "editStake" ? (
+                          <ActionTooltip
+                            label={EDIT_STAKE_AMOUNT_TOOLTIP.label}
+                            description={EDIT_STAKE_AMOUNT_TOOLTIP.description}
+                          >
+                            <span
+                              tabIndex={0}
+                              role="note"
+                              aria-label={EDIT_STAKE_AMOUNT_TOOLTIP.label}
+                              className="inline-flex items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:text-foreground focus:outline-none"
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </span>
+                          </ActionTooltip>
+                        ) : null}
+                      </div>
                     </DetailRow>
                   )}
 

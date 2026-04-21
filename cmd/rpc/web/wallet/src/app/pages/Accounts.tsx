@@ -22,10 +22,11 @@ import { useConfig } from "@/app/providers/ConfigProvider";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { PageHeader } from "@/components/layouts/PageHeader";
 import { getCanopySymbol } from "@/lib/utils/canopySymbols";
 
 const desktopRowCellClass =
-  "px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#171717]";
+  "px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]";
 
 const LatestUpdated = ({ className = "" }: { className?: string }) => (
   <div className={`flex items-center gap-2 lg:gap-4 ${className}`}>
@@ -242,28 +243,22 @@ export const Accounts = () => {
       transition={{ duration: 0.3 }}
     >
       {/* ── Page header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
-            Accounts
-          </h1>
-          <p className="mt-1 text-sm md:text-base text-muted-foreground">
-            {accounts.length} address{accounts.length !== 1 ? "es" : ""} across your keystore
-          </p>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search addresses…"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="h-9 w-72 rounded-lg border border-border/60 bg-secondary/80 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
-          />
-        </div>
-      </div>
+      <PageHeader
+        title="Accounts"
+        subtitle={`${accounts.length} address${accounts.length !== 1 ? "es" : ""} across your keystore`}
+        actions={
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search addresses…"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="h-9 w-72 rounded-lg border border-border/60 bg-secondary/80 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
+            />
+          </div>
+        }
+      />
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

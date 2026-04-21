@@ -210,7 +210,7 @@ const ValidatorsPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
+            className="w-full"
         >
             <ValidatorsFilters
                 totalValidators={totalValidators}

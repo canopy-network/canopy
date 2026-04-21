@@ -4144,6 +4144,7 @@
         },
         "keystore": {},
         "fees": {},
+        "params": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
@@ -4152,7 +4153,8 @@
           "critical": [
             "admin.config",
             "account",
-            "keystore"
+            "keystore",
+            "params"
           ]
         }
       },
@@ -4180,8 +4182,8 @@
           "title": "Create Order Guide",
           "items": [
             {
-              "label": "Execution",
-              "value": "Create runs on root chain",
+              "label": "Confirmation",
+              "value": "Submitted first, then confirmed after block inclusion",
               "icon": "Info"
             },
             {
@@ -4256,15 +4258,16 @@
             "type": "amount",
             "label": "Amount For Sale",
             "required": true,
-            "min": 1e-06,
-            "max": "{{ fromMicroDenom<{{ds.account?.amount ?? 0}}> }}",
+            "min": "{{ ds.params ? fromMicroDenom(ds.params?.validator?.minimumOrderSize ?? 1) : 0.000001 }}",
+            "max": "{{(() => { const available = ds.account?.amount ?? 0; const fee = toMicroDenom(form.fee || 0); return fromMicroDenom(Math.max(0, available - fee)); })()}}",
             "validation": {
               "messages": {
                 "required": "Amount for sale is required",
-                "min": "Amount must be greater than 0",
-                "max": "Insufficient balance. Max available: {{max}} {{chain.denom.symbol}}"
+                "min": "Amount must be at least {{min}} {{chain.denom.symbol}}",
+                "max": "Insufficient balance after fee. Max available: {{max}} {{chain.denom.symbol}}"
               }
             },
+            "help": "Network minimum order size: {{ ds.params ? fromMicroDenom(ds.params?.validator?.minimumOrderSize ?? 0) : 0 }} {{chain.denom.symbol}}",
             "span": {
               "base": 12,
               "md": 6
@@ -4401,8 +4404,22 @@
       "notifications": {
         "onSuccess": {
           "variant": "success",
-          "title": "Order Created",
-          "description": "{{result}}"
+          "title": "Order Submitted",
+          "description": "Node accepted transaction: {{result}}",
+          "actions": [
+            {
+              "type": "link",
+              "label": "View Order",
+              "href": "{{chain.explorer.order}}/{{form.committees}}/{{slice<{{result}}, 0, 40>}}",
+              "newTab": true
+            },
+            {
+              "type": "link",
+              "label": "View Transaction",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
+          ]
         }
       }
     },

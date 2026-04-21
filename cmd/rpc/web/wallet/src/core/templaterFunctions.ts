@@ -24,6 +24,15 @@ export function getDenomFactor(): number {
 }
 
 export const templateFns = {
+    slice: (v: any, start: any, end?: any) => {
+        const value = String(v ?? "")
+        const startIndex = Number(start)
+        const endIndex = end == null || end === "" ? undefined : Number(end)
+        if (!Number.isFinite(startIndex)) return ""
+        if (endIndex != null && !Number.isFinite(endIndex)) return ""
+        return value.slice(startIndex, endIndex)
+    },
+
     formatToCoin: (v: any) => {
         if (v === '' || v == null) return ''
         const n = Number(v)

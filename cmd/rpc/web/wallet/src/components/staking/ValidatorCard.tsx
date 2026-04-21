@@ -154,7 +154,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
   return (
     <motion.div
       variants={itemVariants}
-      className="rounded-lg border border-[#272729] bg-[#171717] p-3.5"
+      className="rounded-lg border border-[#272729] bg-[#1a1a1a] p-3.5"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="grid flex-1 grid-cols-3 gap-3">

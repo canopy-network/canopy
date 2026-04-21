@@ -1,12 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Info } from 'lucide-react';
 import { useConfig } from '@/app/providers/ConfigProvider';
 import { LucideIcon } from '@/components/ui/LucideIcon';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TransactionDetailModal, type TxDetail } from '@/components/transactions/TransactionDetailModal';
+import { ActionTooltip } from '@/components/ui/ActionTooltip';
 
 export interface TxError {
     code: number;
@@ -31,6 +32,11 @@ export interface RecentTransactionsCardProps {
     isLoading?: boolean;
     hasError?: boolean;
 }
+
+const EDIT_STAKE_AMOUNT_TOOLTIP = {
+    label: 'Edit Stake Amount',
+    description: 'This value is typically the difference between the previous stake amount and the new stake amount, so it may not reflect what was actually withdrawn.',
+};
 
 const toEpochMs = (t: any) => {
     const n = Number(t ?? 0);
@@ -101,9 +107,28 @@ const TransactionRow = React.memo<TransactionRowProps>(({
             </div>
 
             <div className="ml-auto flex items-center gap-2.5 shrink-0">
-                <span className={`text-xs font-semibold tabular-nums whitespace-nowrap ${amountColor}`}>
-                    {amountTxt}
-                </span>
+                <div className="flex items-center gap-1.5">
+                    <span className={`text-xs font-semibold tabular-nums whitespace-nowrap ${amountColor}`}>
+                        {amountTxt}
+                    </span>
+                    {tx.type === 'editStake' ? (
+                        <ActionTooltip
+                            label={EDIT_STAKE_AMOUNT_TOOLTIP.label}
+                            description={EDIT_STAKE_AMOUNT_TOOLTIP.description}
+                        >
+                            <span
+                                tabIndex={0}
+                                role="note"
+                                aria-label={EDIT_STAKE_AMOUNT_TOOLTIP.label}
+                                onClick={(event) => event.stopPropagation()}
+                                onMouseDown={(event) => event.stopPropagation()}
+                                className="inline-flex items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:text-foreground focus:outline-none"
+                            >
+                                <Info className="h-3.5 w-3.5" />
+                            </span>
+                        </ActionTooltip>
+                    ) : null}
+                </div>
                 <StatusBadge label={tx.status} size="sm" />
             </div>
 

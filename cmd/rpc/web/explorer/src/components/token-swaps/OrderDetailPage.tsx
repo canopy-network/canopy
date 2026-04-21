@@ -15,6 +15,7 @@ const formatAmount = (micro: number): string => {
 const OrderDetailPage: React.FC = () => {
     const { committee: committeeParam, orderId } = useParams<{ committee: string; orderId: string }>()
     const navigate = useNavigate()
+    const [viewMode, setViewMode] = React.useState<'decoded' | 'raw'>('decoded')
 
     if (!committeeParam) {
         throw new Error('Missing required route parameter: committee')
@@ -41,7 +42,7 @@ const OrderDetailPage: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]">
+            <div className="w-full">
                 <div className="animate-pulse">
                     <div className="h-8 bg-gray-700/50 rounded w-1/3 mb-4"></div>
                     <div className="h-32 bg-gray-700/50 rounded mb-6"></div>
@@ -61,13 +62,13 @@ const OrderDetailPage: React.FC = () => {
 
     if (error || !orderData) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]">
+            <div className="w-full">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold text-white mb-4">Order not found</h1>
                     <p className="text-gray-400 mb-6">The requested order could not be found.</p>
                     <button
                         onClick={() => navigate('/token-swaps')}
-                        className="bg-primary text-black px-6 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+                        className="rounded-lg border border-[#272729] bg-[#171717] px-6 py-2 text-white transition-colors hover:bg-[#272729]"
                     >
                         Back to Token Swaps
                     </button>
@@ -100,17 +101,13 @@ const OrderDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
+            className="w-full"
         >
             {/* Header */}
             <div className="mb-8">
                 <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400 mb-4">
-                    <button onClick={() => navigate('/')} className="hover:text-primary transition-colors">
-                        Home
-                    </button>
-                    <i className="fa-solid fa-chevron-right text-xs"></i>
                     <button onClick={() => navigate('/token-swaps')} className="hover:text-primary transition-colors">
-                        Token Swaps
+                        Swaps
                     </button>
                     <i className="fa-solid fa-chevron-right text-xs"></i>
                     <span className="text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px] sm:max-w-full">
@@ -142,7 +139,7 @@ const OrderDetailPage: React.FC = () => {
 
                     <button
                         onClick={() => navigate('/token-swaps')}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-700/50 text-white hover:bg-white/8 self-start md:self-center"
+                        className="flex self-start items-center gap-2 rounded-lg border border-[#272729] bg-[#171717] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#272729] md:self-center"
                     >
                         <i className="fa-solid fa-arrow-left"></i>
                         Back to Swaps
@@ -160,138 +157,184 @@ const OrderDetailPage: React.FC = () => {
                             transition={{ duration: 0.3 }}
                             className="bg-card rounded-xl border border-white/10 p-6"
                         >
-                            <h2 className="text-xl font-semibold text-white mb-6">
-                                Order Information
-                            </h2>
-
-                            <div className="space-y-4">
-                                <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400 text-sm">Order ID</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-primary font-mono text-sm">{id}</span>
-                                        <button
-                                            onClick={() => copyToClipboard(id)}
-                                            className="text-primary hover:text-primary transition-colors flex-shrink-0"
-                                        >
-                                            <i className="fa-solid fa-copy text-xs"></i>
-                                        </button>
-                                    </div>
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-xl font-semibold text-white">
+                                    Order Information
+                                </h2>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setViewMode('decoded')}
+                                        className={`rounded px-3 py-1 text-sm transition-colors ${viewMode === 'decoded' ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5'}`}
+                                    >
+                                        Decoded
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode('raw')}
+                                        className={`rounded px-3 py-1 text-sm transition-colors ${viewMode === 'raw' ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5'}`}
+                                    >
+                                        Raw
+                                    </button>
                                 </div>
-
-                                <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400 text-sm">Status</span>
-                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium w-fit ${
-                                        status === 'Active'
-                                            ? 'bg-primary/20 text-primary'
-                                            : 'bg-yellow-500/20 text-yellow-400'
-                                    }`}>
-                                        {status}
-                                    </span>
-                                </div>
-
-                                <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400 text-sm">Committee</span>
-                                    <span className="text-white font-mono">{committee}</span>
-                                </div>
-
-                                <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400 text-sm">Amount For Sale</span>
-                                    <span className="text-primary font-mono">{formatAmount(amountForSale)}</span>
-                                </div>
-
-                                <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400 text-sm">Requested Amount</span>
-                                    <span className="text-primary font-mono">{formatAmount(requestedAmount)}</span>
-                                </div>
-
-                                <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400 text-sm">Exchange Rate</span>
-                                    <span className="text-white font-mono">
-                                        {exchangeRate !== 'N/A' ? `1 : ${exchangeRate}` : exchangeRate}
-                                    </span>
-                                </div>
-
-                                {rate && (
-                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                        <span className="text-gray-400 text-sm">Rate</span>
-                                        <span className="text-white font-mono">{rate}</span>
-                                    </div>
-                                )}
-
-                                <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400 text-sm">Seller Send Address</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-400 font-mono text-sm">{sellersSendAddress}</span>
-                                        {sellersSendAddress !== 'N/A' && (
-                                            <button
-                                                onClick={() => copyToClipboard(sellersSendAddress)}
-                                                className="text-primary hover:text-primary transition-colors flex-shrink-0"
-                                            >
-                                                <i className="fa-solid fa-copy text-xs"></i>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400 text-sm">Seller Receive Address</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-400 font-mono text-sm">{sellerReceiveAddress}</span>
-                                        {sellerReceiveAddress !== 'N/A' && (
-                                            <button
-                                                onClick={() => copyToClipboard(sellerReceiveAddress)}
-                                                className="text-primary hover:text-primary transition-colors flex-shrink-0"
-                                            >
-                                                <i className="fa-solid fa-copy text-xs"></i>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {buyerSendAddress && (
-                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                        <span className="text-gray-400 text-sm">Buyer Send Address</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-gray-400 font-mono text-sm">{buyerSendAddress}</span>
-                                            <button
-                                                onClick={() => copyToClipboard(buyerSendAddress)}
-                                                className="text-primary hover:text-primary transition-colors flex-shrink-0"
-                                            >
-                                                <i className="fa-solid fa-copy text-xs"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {buyerReceiveAddress && (
-                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                        <span className="text-gray-400 text-sm">Buyer Receive Address</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-gray-400 font-mono text-sm">{buyerReceiveAddress}</span>
-                                            <button
-                                                onClick={() => copyToClipboard(buyerReceiveAddress)}
-                                                className="text-primary hover:text-primary transition-colors flex-shrink-0"
-                                            >
-                                                <i className="fa-solid fa-copy text-xs"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {buyerChainDeadline > 0 && (
-                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                        <span className="text-gray-400 text-sm">Buyer Chain Deadline</span>
-                                        <span className="text-white font-mono">{buyerChainDeadline.toLocaleString()}</span>
-                                    </div>
-                                )}
-
-                                {data && (
-                                    <div className="flex flex-col pb-4 gap-2">
-                                        <span className="text-gray-400 text-sm">Data</span>
-                                        <span className="text-white font-mono text-sm break-all">{data}</span>
-                                    </div>
-                                )}
                             </div>
+
+                            {viewMode === 'raw' ? (
+                                <div className="rounded-lg border border-white/10 p-4">
+                                    <pre className="overflow-x-auto whitespace-pre-wrap text-xs font-mono">
+                                        <code className="text-gray-300">
+                                            {JSON.stringify(order, null, 2)
+                                                .split('\n')
+                                                .map((line, index) => (
+                                                    <div key={index} className="flex">
+                                                        <span className="mr-4 w-8 select-none text-right text-gray-600">
+                                                            {String(index + 1).padStart(2, '0')}
+                                                        </span>
+                                                        <span
+                                                            className="flex-1"
+                                                            dangerouslySetInnerHTML={{
+                                                                __html: line
+                                                                    .replace(/(".*?")\s*:/g, '<span class="text-blue-400">$1</span>:')
+                                                                    .replace(/:\s*(".*?")/g, ': <span class="text-primary">$1</span>')
+                                                                    .replace(/:\s*(\d+)/g, ': <span class="text-yellow-400">$1</span>')
+                                                                    .replace(/:\s*(true|false|null)/g, ': <span class="text-purple-400">$1</span>')
+                                                                    .replace(/({|}|\[|\])/g, '<span class="text-gray-500">$1</span>')
+                                                                    || '&nbsp;'
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                        </code>
+                                    </pre>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                        <span className="text-gray-400 text-sm">Order ID</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-primary font-mono text-sm">{id}</span>
+                                            <button
+                                                onClick={() => copyToClipboard(id)}
+                                                className="text-primary hover:text-primary transition-colors flex-shrink-0"
+                                            >
+                                                <i className="fa-solid fa-copy text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                        <span className="text-gray-400 text-sm">Status</span>
+                                        <span className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                            status === 'Active'
+                                                ? 'bg-primary/20 text-primary'
+                                                : 'bg-yellow-500/20 text-yellow-400'
+                                        }`}>
+                                            {status}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                        <span className="text-gray-400 text-sm">Committee</span>
+                                        <span className="text-white font-mono">{committee}</span>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                        <span className="text-gray-400 text-sm">Amount For Sale</span>
+                                        <span className="text-primary font-mono">{formatAmount(amountForSale)}</span>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                        <span className="text-gray-400 text-sm">Requested Amount</span>
+                                        <span className="text-primary font-mono">{formatAmount(requestedAmount)}</span>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                        <span className="text-gray-400 text-sm">Exchange Rate</span>
+                                        <span className="text-white font-mono">
+                                            {exchangeRate !== 'N/A' ? `1 : ${exchangeRate}` : exchangeRate}
+                                        </span>
+                                    </div>
+
+                                    {rate && (
+                                        <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                            <span className="text-gray-400 text-sm">Rate</span>
+                                            <span className="text-white font-mono">{rate}</span>
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                        <span className="text-gray-400 text-sm">Seller Send Address</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-400 font-mono text-sm">{sellersSendAddress}</span>
+                                            {sellersSendAddress !== 'N/A' && (
+                                                <button
+                                                    onClick={() => copyToClipboard(sellersSendAddress)}
+                                                    className="text-primary hover:text-primary transition-colors flex-shrink-0"
+                                                >
+                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                        <span className="text-gray-400 text-sm">Seller Receive Address</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-400 font-mono text-sm">{sellerReceiveAddress}</span>
+                                            {sellerReceiveAddress !== 'N/A' && (
+                                                <button
+                                                    onClick={() => copyToClipboard(sellerReceiveAddress)}
+                                                    className="text-primary hover:text-primary transition-colors flex-shrink-0"
+                                                >
+                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {buyerSendAddress && (
+                                        <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                            <span className="text-gray-400 text-sm">Buyer Send Address</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-gray-400 font-mono text-sm">{buyerSendAddress}</span>
+                                                <button
+                                                    onClick={() => copyToClipboard(buyerSendAddress)}
+                                                    className="text-primary hover:text-primary transition-colors flex-shrink-0"
+                                                >
+                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {buyerReceiveAddress && (
+                                        <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                            <span className="text-gray-400 text-sm">Buyer Receive Address</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-gray-400 font-mono text-sm">{buyerReceiveAddress}</span>
+                                                <button
+                                                    onClick={() => copyToClipboard(buyerReceiveAddress)}
+                                                    className="text-primary hover:text-primary transition-colors flex-shrink-0"
+                                                >
+                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {buyerChainDeadline > 0 && (
+                                        <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
+                                            <span className="text-gray-400 text-sm">Buyer Chain Deadline</span>
+                                            <span className="text-white font-mono">{buyerChainDeadline.toLocaleString()}</span>
+                                        </div>
+                                    )}
+
+                                    {data && (
+                                        <div className="flex flex-col gap-2 pb-4">
+                                            <span className="text-gray-400 text-sm">Data</span>
+                                            <span className="break-all text-sm font-mono text-white">{data}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </motion.div>
                     </div>
 
@@ -393,36 +436,6 @@ const OrderDetailPage: React.FC = () => {
                                             {exchangeRate !== 'N/A' ? `1 : ${exchangeRate}` : exchangeRate}
                                         </span>
                                     </div>
-                                </div>
-                            </motion.div>
-
-                            {/* Raw Data */}
-                            <motion.div
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.3, delay: 0.2 }}
-                                className="bg-card rounded-xl border border-white/10 p-6"
-                            >
-                                <h3 className="text-lg font-semibold text-white mb-4">
-                                    Raw Data
-                                </h3>
-
-                                <div className="border border-white/10 rounded-lg p-4">
-                                    <pre className="text-xs overflow-x-auto whitespace-pre-wrap font-mono">
-                                        <code className="text-gray-300">
-                                            {JSON.stringify(order, null, 2)
-                                                .split('\n')
-                                                .map((line, index) => (
-                                                    <div key={index} className="flex">
-                                                        <span className="text-gray-600 mr-4 select-none w-8 text-right">
-                                                            {String(index + 1).padStart(2, '0')}
-                                                        </span>
-                                                        <span className="flex-1">{line || '\u00A0'}</span>
-                                                    </div>
-                                                ))
-                                            }
-                                        </code>
-                                    </pre>
                                 </div>
                             </motion.div>
                         </div>

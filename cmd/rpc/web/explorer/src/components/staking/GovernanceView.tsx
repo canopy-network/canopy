@@ -1,9 +1,10 @@
 import React from 'react'
 import { motion } from 'framer-motion'
-import TableCard from '../Home/TableCard'
 import { useParams } from '../../hooks/useApi'
 import stakingConfig from '../../data/staking.json'
-import { toCNPY } from '../../lib/utils'
+import ExplorerOverviewCards from '../ExplorerOverviewCards'
+import { formatPaginationRange, toCNPY } from '../../lib/utils'
+import AnimatedNumber from '../AnimatedNumber'
 
 interface GovernanceParam {
     paramName: string
@@ -12,7 +13,13 @@ interface GovernanceParam {
     visible: boolean
 }
 
+const desktopHeaderClass =
+    'px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4'
+const desktopRowCellClass =
+    'bg-[#1a1a1a] px-2 py-2 align-middle transition-colors group-hover:bg-[#272729] sm:px-3 lg:px-4'
+
 const GovernanceView: React.FC = () => {
+    const [currentPage, setCurrentPage] = React.useState(1)
     // Get governance parameters from the /v1/query/params endpoint
     const { data: paramsData, isLoading, error } = useParams(0)
 
@@ -131,6 +138,7 @@ const GovernanceView: React.FC = () => {
     }
 
     const governanceParams = getGovernanceParams()
+    const itemsPerPage = stakingConfig.governance.table.pagination.itemsPerPage || 10
 
     const getParamSpaceColor = (space: string) => {
         return stakingConfig.ui.colors[space] || stakingConfig.ui.colors.default
@@ -153,7 +161,26 @@ const GovernanceView: React.FC = () => {
     }
 
     // Generate rows dynamically based on JSON configuration
-    const rows = governanceParams.map((param, index) => {
+    const totalPages = Math.max(1, Math.ceil(governanceParams.length / itemsPerPage))
+    const startIdx = governanceParams.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1
+    const endIdx = Math.min(currentPage * itemsPerPage, governanceParams.length)
+
+    const visiblePages = React.useMemo(() => {
+        if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
+        const pageSet = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])
+        return Array.from(pageSet).filter((page) => page >= 1 && page <= totalPages).sort((a, b) => a - b)
+    }, [currentPage, totalPages])
+
+    const goToPage = (page: number) => {
+        setCurrentPage(Math.min(Math.max(1, page), totalPages))
+    }
+
+    const paginatedParams = React.useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage
+        return governanceParams.slice(start, start + itemsPerPage)
+    }, [currentPage, governanceParams, itemsPerPage])
+
+    const rows = paginatedParams.map((param, index) => {
         const row = []
 
         // Generate cells dynamically based on headers configuration
@@ -202,15 +229,16 @@ const GovernanceView: React.FC = () => {
             }
 
             row.push(
-                <motion.span
+                <motion.div
                     key={headerKey}
-                    className={cellClassName}
                     initial={cellAnimation.initial}
                     animate={cellAnimation.animate}
                     transition={cellAnimation.transition}
                 >
-                    {cellContent}
-                </motion.span>
+                    <span className={cellClassName}>
+                        {cellContent}
+                    </span>
+                </motion.div>
             )
         })
 
@@ -222,6 +250,27 @@ const GovernanceView: React.FC = () => {
         key,
         label
     }))
+    const governanceOverviewCards = stakingConfig.governance.stats.cards
+        .filter((card) => card.visible)
+        .map((card) => {
+            let count = governanceParams.length
+            if (card.title === 'Consensus Parameters') {
+                count = governanceParams.filter(p => p.paramSpace === 'consensus').length
+            } else if (card.title === 'Validator Parameters') {
+                count = governanceParams.filter(p => p.paramSpace === 'validator').length
+            } else if (card.title === 'Fee Parameters') {
+                count = governanceParams.filter(p => p.paramSpace === 'fee').length
+            } else if (card.title === 'Governance Parameters') {
+                count = governanceParams.filter(p => p.paramSpace === 'governance').length
+            }
+
+            return {
+                title: card.title,
+                value: count.toLocaleString(),
+                subValue: card.description,
+                icon: `fa-solid ${card.icon}`,
+            }
+        })
 
     // Show loading state
     if (isLoading && stakingConfig.governance.table.loading.visible) {
@@ -232,10 +281,10 @@ const GovernanceView: React.FC = () => {
                 transition={{ duration: 0.5, delay: 0.3 }}
             >
                 <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-white mb-2">
+                    <h2 className="explorer-page-title">
                         {stakingConfig.governance.title}
                     </h2>
-                    <p className="text-gray-400">
+                    <p className="explorer-page-subtitle">
                         {stakingConfig.governance.description}
                     </p>
                 </div>
@@ -257,10 +306,10 @@ const GovernanceView: React.FC = () => {
                 transition={{ duration: 0.5, delay: 0.3 }}
             >
                 <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-white mb-2">
+                    <h2 className="explorer-page-title">
                         {stakingConfig.governance.title}
                     </h2>
-                    <p className="text-gray-400">
+                    <p className="explorer-page-subtitle">
                         {stakingConfig.governance.description}
                     </p>
                 </div>
@@ -283,109 +332,139 @@ const GovernanceView: React.FC = () => {
             {/* Header */}
             {stakingConfig.governance.visible && (
                 <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-white mb-2">
+                    <h2 className="explorer-page-title">
                         {stakingConfig.governance.title}
                     </h2>
-                    <p className="text-gray-400">
+                    <p className="explorer-page-subtitle">
                         {stakingConfig.governance.description}
                     </p>
-                    {paramsData ? (
-                        <p className="text-primary text-sm mt-2">
-                            <i className="fa-solid fa-database mr-1"></i>
-                            {stakingConfig.governance.daoDataText}
-                        </p>
-                    ) : (
-                        <p className="text-yellow-400 text-sm mt-2">
-                            <i className="fa-solid fa-exclamation-triangle mr-1"></i>
-                            {stakingConfig.governance.daoDataTextFallback}
-                        </p>
-                    )}
                 </div>
-            )}
-
-            {/* Governance Parameters Table */}
-            {stakingConfig.governance.table.visible && (
-                <TableCard
-                    title={stakingConfig.governance.table.title}
-                    columns={columns}
-                    rows={rows}
-                    totalCount={governanceParams.length}
-                    currentPage={1}
-                    onPageChange={() => { }}
-                    loading={isLoading}
-                    spacing={stakingConfig.governance.table.spacing}
-                />
             )}
 
             {/* Governance Stats */}
             {stakingConfig.governance.stats.visible && (
-                <motion.div
-                    className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.4 }}
-                >
-                    {stakingConfig.governance.stats.cards.map((card, index) => {
-                        if (!card.visible) return null
+                <ExplorerOverviewCards cards={governanceOverviewCards} className="mb-8" />
+            )}
 
-                        const getColorClass = (color: string) => {
-                            switch (color) {
-                                case 'blue': return 'text-blue-400'
-                                case 'primary': return 'text-primary'
-                                case 'purple': return 'text-purple-400'
-                                default: return 'text-gray-400'
-                            }
-                        }
+            {/* Governance Parameters Table */}
+            {stakingConfig.governance.table.visible && (
+                <div className="rounded-xl border border-white/10 bg-card p-5">
+                    <div className="overflow-x-auto">
+                        <table
+                            className="w-full min-w-[880px]"
+                            style={{ tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
+                        >
+                            <thead>
+                                <tr>
+                                    {columns.map((column) => (
+                                        <th key={column.key} className={desktopHeaderClass}>
+                                            {column.label}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {isLoading ? (
+                                    Array.from({ length: itemsPerPage }).map((_, index) => (
+                                        <tr key={`skeleton-${index}`} className="group animate-pulse">
+                                            {columns.map((column, columnIndex) => (
+                                                <td
+                                                    key={`${column.key}-${index}`}
+                                                    className={desktopRowCellClass}
+                                                    style={{
+                                                        borderTopLeftRadius: columnIndex === 0 ? '10px' : undefined,
+                                                        borderBottomLeftRadius: columnIndex === 0 ? '10px' : undefined,
+                                                        borderTopRightRadius: columnIndex === columns.length - 1 ? '10px' : undefined,
+                                                        borderBottomRightRadius: columnIndex === columns.length - 1 ? '10px' : undefined,
+                                                    }}
+                                                >
+                                                    <div className={`h-4 rounded bg-white/6 ${columnIndex === 0 ? 'w-40' : columnIndex === 1 ? 'w-28' : 'w-24'}`} />
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))
+                                ) : rows.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
+                                            No governance parameters found
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    rows.map((row, rowIndex) => (
+                                        <tr key={`param-row-${rowIndex}`} className="group">
+                                            {row.map((cell, columnIndex) => (
+                                                <td
+                                                    key={`param-cell-${rowIndex}-${columnIndex}`}
+                                                    className={desktopRowCellClass}
+                                                    style={{
+                                                        borderTopLeftRadius: columnIndex === 0 ? '10px' : undefined,
+                                                        borderBottomLeftRadius: columnIndex === 0 ? '10px' : undefined,
+                                                        borderTopRightRadius: columnIndex === row.length - 1 ? '10px' : undefined,
+                                                        borderBottomRightRadius: columnIndex === row.length - 1 ? '10px' : undefined,
+                                                    }}
+                                                >
+                                                    {cell}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
 
-                        const getCount = () => {
-                            if (card.title === 'Consensus Parameters') {
-                                return governanceParams.filter(p => p.paramSpace === 'consensus').length
-                            } else if (card.title === 'Validator Parameters') {
-                                return governanceParams.filter(p => p.paramSpace === 'validator').length
-                            } else if (card.title === 'Fee Parameters') {
-                                return governanceParams.filter(p => p.paramSpace === 'fee').length
-                            } else if (card.title === 'Governance Parameters') {
-                                return governanceParams.filter(p => p.paramSpace === 'governance').length
-                            } else {
-                                return governanceParams.length
-                            }
-                        }
+                    {!isLoading && governanceParams.length > 0 && (
+                        <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={governanceParams.length} />
+                            </div>
 
-                        return (
-                            <motion.div
-                                key={card.title}
-                                className="bg-card rounded-lg p-6 border border-white/8 relative"
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.3, delay: 0.1 + (index * 0.1) }}
-                            >
-                                {/* Icon in top-right */}
-                                <div className="absolute top-4 right-4">
-                                    <i className={`fa-solid ${card.icon} ${getColorClass(card.color)} text-xl`}></i>
-                                </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => goToPage(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                    className="rounded-lg border border-[#272729] bg-[#0f0f0f] px-3 py-1.5 text-white transition-colors hover:border-white/15 hover:bg-[#272729] disabled:cursor-not-allowed disabled:text-white/30 disabled:hover:border-[#272729] disabled:hover:bg-[#0f0f0f]"
+                                >
+                                    <i className="fa-solid fa-angle-left mr-1" />
+                                    Previous
+                                </button>
 
-                                {/* Title */}
-                                <div className="mb-4">
-                                    <h3 className="text-white font-medium text-sm">{card.title}</h3>
-                                </div>
+                                {visiblePages.map((page, index, arr) => {
+                                    const prevPage = arr[index - 1]
+                                    const showDots = index > 0 && page - (prevPage || 0) > 1
 
-                                {/* Main Value */}
-                                <div className="mb-2">
-                                    <div className={`text-3xl font-bold ${getColorClass(card.color)}`}>
-                                        {getCount()}
-                                    </div>
-                                </div>
+                                    return (
+                                        <React.Fragment key={page}>
+                                            {showDots && <span className="px-1 text-white/40">…</span>}
+                                            <button
+                                                type="button"
+                                                onClick={() => goToPage(page)}
+                                                className={`min-w-[36px] rounded-lg border px-3 py-1.5 transition-colors ${
+                                                    currentPage === page
+                                                        ? 'border-white/15 bg-[#272729] text-white'
+                                                        : 'border-[#272729] bg-[#0f0f0f] text-white/70 hover:border-white/15 hover:bg-[#272729] hover:text-white'
+                                                }`}
+                                            >
+                                                {page}
+                                            </button>
+                                        </React.Fragment>
+                                    )
+                                })}
 
-                                {/* Description */}
-                                <div className="flex items-center gap-2">
-                                    <span className="text-gray-400 text-sm">
-                                        {card.description}
-                                    </span>
-                                </div>
-                            </motion.div>
-                        )
-                    })}
-                </motion.div>
+                                <button
+                                    type="button"
+                                    onClick={() => goToPage(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                    className="rounded-lg border border-[#272729] bg-[#0f0f0f] px-3 py-1.5 text-white transition-colors hover:border-white/15 hover:bg-[#272729] disabled:cursor-not-allowed disabled:text-white/30 disabled:hover:border-[#272729] disabled:hover:bg-[#0f0f0f]"
+                                >
+                                    Next
+                                    <i className="fa-solid fa-angle-right ml-1" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
             )}
         </motion.div>
     )

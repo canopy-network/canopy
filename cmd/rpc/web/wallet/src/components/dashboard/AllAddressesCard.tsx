@@ -40,6 +40,7 @@ const AddressRow = React.memo<{
         </div>
 
         <div className="ml-auto flex items-center gap-2.5 flex-shrink-0">
+            <span className="text-xs font-semibold text-foreground tabular-nums whitespace-nowrap">{Number(address.totalValue).toLocaleString()}</span>
             <button
                 type="button"
                 className="inline-flex items-center justify-center rounded-md border border-border/50 p-1.5 text-muted-foreground transition-colors hover:border-white/15 hover:bg-primary/5 hover:text-foreground"
@@ -51,7 +52,6 @@ const AddressRow = React.memo<{
             >
                 <Send style={{ width: 12, height: 12 }} />
             </button>
-            <span className="text-xs font-semibold text-foreground tabular-nums whitespace-nowrap">{Number(address.totalValue).toLocaleString()}</span>
         </div>
     </motion.div>
 ));

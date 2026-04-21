@@ -83,16 +83,16 @@ const SearchPage: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-background">
-            <div className="container mx-auto p-8 md:my-8 bg-card md:rounded-xl">
+        <div className="w-full">
+            <div className="w-full bg-card p-8 md:rounded-xl">
                 {/* Header */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-8"
                 >
-                    <h1 className="text-3xl font-bold text-white mb-2">Search Results</h1>
-                    <p className="text-gray-400">Find blocks, transactions, addresses, and validators</p>
+                    <h1 className="explorer-page-title">Search Results</h1>
+                    <p className="explorer-page-subtitle">Find blocks, transactions, addresses, and validators</p>
                 </motion.div>
 
                 {/* Search Input */}

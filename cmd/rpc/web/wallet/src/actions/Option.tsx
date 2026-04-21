@@ -14,8 +14,11 @@ export const Option: React.FC<{
         onClick={onSelect}
         disabled={disabled}
         className={cx(
-            "w-full text-left rounded-md  p-3 transition-colors",
-            "focus:outline-none ",
+            "w-full rounded-md border p-3 text-left transition-colors",
+            "focus:outline-none focus:ring-2 focus:ring-[#35cd48]/20",
+            selected
+                ? "border-[#35cd48]/35 bg-[#35cd48]/10"
+                : "border-[#272729] bg-[#171717] hover:border-white/10 hover:bg-[#272729]/60",
             disabled && "opacity-60 cursor-not-allowed"
         )}
         aria-pressed={selected}
@@ -23,18 +26,20 @@ export const Option: React.FC<{
         <div className="flex items-start gap-3">
       <span
           className={cx(
-              "mt-1  h-4 w-4 rounded-full border relative",
-              selected ? "border-foreground/50" : "border-border"
+              "relative mt-1 h-4 w-4 rounded-full border",
+              selected ? "border-[#35cd48]" : "border-[#272729]"
           )}
           aria-hidden
       >
-          <span className={cx(selected && "bg-foreground" , " absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full")}/>
+          <span className={cx(
+              "absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors",
+              selected ? "bg-[#35cd48]" : "bg-transparent"
+          )}/>
       </span>
             <div className="flex-1">
-                <div className="font-medium text-foreground">{label}</div>
-                {help ? <div className="text-xs text-muted-foreground mt-0.5">{help}</div> : null}
+                <div className={cx("font-medium", selected ? "text-[#35cd48]" : "text-foreground")}>{label}</div>
+                {help ? <div className={cx("mt-0.5 text-xs", selected ? "text-[#35cd48]/80" : "text-muted-foreground")}>{help}</div> : null}
             </div>
         </div>
     </button>
 );
-

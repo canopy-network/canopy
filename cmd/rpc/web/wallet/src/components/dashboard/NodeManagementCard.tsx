@@ -33,7 +33,7 @@ const rewardDeltaClass = (value: number) => {
     return 'text-white/60';
 };
 
-const desktopRowCellClass = 'px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#171717]';
+const desktopRowCellClass = 'px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]';
 const actionButtonClass = 'inline-flex items-center justify-center rounded-lg border border-[#272729] p-2 text-white/70 transition-all duration-150 hover:border-white/15 hover:bg-[#272729] hover:text-white';
 
 const getNodeStatusBadgeClass = (status: string) => {
@@ -199,7 +199,7 @@ const ValidatorMobileCard = React.memo<{
 
     return (
         <motion.div
-            className="rounded-lg border border-[#272729] bg-[#171717] p-3.5 space-y-3"
+            className="rounded-lg border border-[#272729] bg-[#1a1a1a] p-3.5 space-y-3"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18, delay: index * 0.04 }}

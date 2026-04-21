@@ -7,25 +7,25 @@
 :root {
   --background: 0 0% 6%;
   --foreground: 0 0% 98%;
-  --card: 0 0% 10%;
+  --card: 0 0% 9%;
   --card-foreground: 0 0% 98%;
-  --popover: 0 0% 10%;
+  --popover: 0 0% 9%;
   --popover-foreground: 0 0% 98%;
-  --primary: 121 48% 53%;
+  --primary: 128 60% 51%;
   --primary-foreground: 0 0% 6%;
-  --secondary: 0 0% 12%;
+  --secondary: 0 0% 9%;
   --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 15%;
+  --muted: 0 0% 16%;
   --muted-foreground: 0 0% 64%;
-  --accent: 0 0% 15%;
+  --accent: 0 0% 16%;
   --accent-foreground: 0 0% 98%;
-  --destructive: 0 84% 60%;
+  --destructive: 348 100% 55%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 20%;
-  --input: 0 0% 24%;
-  --border-accent: 121 34% 52%;
-  --border-subtle: 0 0% 18%;
-  --ring: 121 48% 53%;
+  --border: 0 0% 16%;
+  --input: 0 0% 16%;
+  --border-accent: 128 60% 51%;
+  --border-subtle: 0 0% 16%;
+  --ring: 128 60% 51%;
   --radius: 0.625rem;
   --sidebar-width: 220px;
   --topbar-height: 52px;
@@ -43,25 +43,25 @@
 .dark {
   --background: 0 0% 6%;
   --foreground: 0 0% 98%;
-  --card: 0 0% 10%;
+  --card: 0 0% 9%;
   --card-foreground: 0 0% 98%;
-  --popover: 0 0% 10%;
+  --popover: 0 0% 9%;
   --popover-foreground: 0 0% 98%;
-  --primary: 121 48% 53%;
+  --primary: 128 60% 51%;
   --primary-foreground: 0 0% 6%;
-  --secondary: 0 0% 12%;
+  --secondary: 0 0% 9%;
   --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 15%;
+  --muted: 0 0% 16%;
   --muted-foreground: 0 0% 64%;
-  --accent: 0 0% 15%;
+  --accent: 0 0% 16%;
   --accent-foreground: 0 0% 98%;
-  --destructive: 0 84% 60%;
+  --destructive: 348 100% 55%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 20%;
-  --input: 0 0% 24%;
-  --border-accent: 121 34% 52%;
-  --border-subtle: 0 0% 18%;
-  --ring: 121 48% 53%;
+  --border: 0 0% 16%;
+  --input: 0 0% 16%;
+  --border-accent: 128 60% 51%;
+  --border-subtle: 0 0% 16%;
+  --ring: 128 60% 51%;
 }
 
 html,
@@ -136,6 +136,43 @@ html {
   line-height: 1.35;
   font-weight: 500;
   color: hsl(var(--muted-foreground));
+}
+
+.wallet-page-title {
+  font-size: 1.875rem;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: hsl(var(--foreground));
+}
+
+.wallet-page-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #35cd48;
+}
+
+.wallet-page-subtitle::before {
+  content: "\f1c0";
+  flex-shrink: 0;
+  font-family: "Font Awesome 7 Free";
+  font-size: 0.875rem;
+  font-weight: 900;
+  line-height: 1;
+  color: inherit;
+}
+
+.wallet-page-title + .wallet-page-subtitle {
+  margin-top: 0.5rem;
+}
+
+@media (min-width: 768px) {
+  .wallet-page-title {
+    font-size: 2.25rem;
+  }
 }
 
 .surface-panel {
@@ -215,6 +252,42 @@ html {
   animation: pulse-ring 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+@keyframes landing-confetti-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -14vh, 0) rotate(0deg);
+  }
+  8% {
+    opacity: var(--landing-confetti-opacity, 0.7);
+  }
+  22% {
+    transform: translate3d(var(--landing-confetti-x1, -10px), 24vh, 0) rotate(80deg);
+  }
+  48% {
+    transform: translate3d(var(--landing-confetti-x2, 6px), 52vh, 0) rotate(170deg);
+  }
+  74% {
+    transform: translate3d(var(--landing-confetti-x3, -5px), 82vh, 0) rotate(260deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--landing-confetti-x4, 12px), 112vh, 0) rotate(var(--landing-confetti-rotate, 340deg));
+  }
+}
+
+.landing-confetti-piece {
+  position: absolute;
+  top: -14vh;
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 0 7px rgba(255, 255, 255, 0.12);
+  will-change: transform, opacity;
+  animation-name: landing-confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
@@ -278,4 +351,10 @@ html {
 .scrollbar-hide::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-confetti-piece {
+    animation: none !important;
+  }
 }

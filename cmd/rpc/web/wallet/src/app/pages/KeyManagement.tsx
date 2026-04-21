@@ -10,6 +10,7 @@ import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import { useDS } from '@/core/useDs';
 import { downloadJson } from '@/helpers/download';
 import { useToast } from '@/toast/ToastContext';
+import { PageHeader } from '@/components/layouts/PageHeader';
 
 type KeyManagementModal = 'import' | 'create' | null;
 
@@ -70,19 +71,20 @@ export const KeyManagement = (): JSX.Element => {
                 transition={{ duration: 0.4 }}
                 className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"
             >
-                <div className="min-w-0">
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">Key Management</h1>
-                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground md:text-base">
-                        Create, import, back up, and manage wallet keys from one place.
-                    </p>
-                </div>
-                <Button
-                    className="h-12 border border-[#272729] bg-[#0f0f0f] px-5 text-white hover:bg-[#272729] lg:self-start"
-                    onClick={handleDownloadKeys}
-                >
-                    <Download className="h-4 w-4" />
-                    Download Full Keystore
-                </Button>
+                <PageHeader
+                    title="Key Management"
+                    subtitle="Create, import, back up, and manage wallet keys from one place."
+                    actions={
+                        <Button
+                            className="h-12 border border-[#272729] bg-[#0f0f0f] px-5 text-white hover:bg-[#272729]"
+                            onClick={handleDownloadKeys}
+                        >
+                            <Download className="h-4 w-4" />
+                            Download Full Keystore
+                        </Button>
+                    }
+                    className="w-full"
+                />
             </motion.div>
 
             <motion.div

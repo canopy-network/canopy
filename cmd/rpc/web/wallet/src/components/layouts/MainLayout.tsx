@@ -1,10 +1,12 @@
 import { Outlet } from 'react-router-dom'
+import AppConfetti from './AppConfetti'
 import { AppSidebar } from './AppSidebar'
 import { TopBar } from './TopBar'
 
 export default function MainLayout() {
     return (
         <div className="relative flex h-dvh min-h-dvh overflow-hidden bg-background">
+            <AppConfetti />
             <AppSidebar />
 
             <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

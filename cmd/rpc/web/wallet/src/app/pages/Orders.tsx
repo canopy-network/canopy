@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { useDS } from "@/core/useDs";
+import { PageHeader } from "@/components/layouts/PageHeader";
 
 const ACTION_IDS = {
   createOrder: "orderCreate",
@@ -107,14 +108,10 @@ export default function Orders(): JSX.Element {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <div>
-        <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">Orders</h1>
-        <p className="mt-1 text-sm md:text-base text-muted-foreground">
-          Create, reprice, void, lock, and close orders or execute DEX operations.
-          Fill in the order details manually in each form.
-        </p>
-
-      </div>
+      <PageHeader
+        title="Orders"
+        subtitle="Create, reprice, void, lock, and close orders or execute DEX operations. Fill in the order details manually in each form."
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <div className="xl:col-span-8 space-y-6">

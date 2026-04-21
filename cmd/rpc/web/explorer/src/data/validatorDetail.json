@@ -33,7 +33,7 @@
   },
   "stakeByChains": {
     "title": "Stake by Nested Chains",
-    "totalDelegated": "Total Delegated",
+    "totalDelegated": "Total Staked",
     "totalNetworkControl": "Total Network Control",
     "chains": {
       "canopyMain": "Canopy Main Chain",

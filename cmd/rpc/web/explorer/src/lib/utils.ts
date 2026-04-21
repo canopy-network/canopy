@@ -195,3 +195,9 @@ export function extractAmountMicro(tx: Record<string, unknown>): number {
 
     return 0
 }
+
+export function formatPaginationRange(start: number, end: number): string {
+    if (start <= 0 || end <= 0) return '0'
+    if (start === end) return `${start}`
+    return `${start} to ${end}`
+}

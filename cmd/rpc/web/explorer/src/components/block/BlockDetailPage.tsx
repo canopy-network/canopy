@@ -228,7 +228,7 @@ const BlockDetailPage: React.FC = () => {
 
     if (loading || isLoading) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="w-full">
                 <div className="animate-pulse">
                     <div className="h-8 bg-gray-700/50 rounded w-1/3 mb-4"></div>
                     <div className="h-32 bg-gray-700/50 rounded mb-6"></div>
@@ -250,7 +250,7 @@ const BlockDetailPage: React.FC = () => {
 
     if (!block) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="w-full">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold text-white mb-4">Block not found</h1>
                     <p className="text-gray-400 mb-6">The requested block could not be found.</p>
@@ -287,7 +287,7 @@ const BlockDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
+            className="w-full"
         >
             <BlockDetailHeader
                 blockHeight={block.height}

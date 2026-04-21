@@ -2,6 +2,7 @@ import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
+import { formatPaginationRange } from '../../lib/utils'
 
 export interface TableColumn {
     label: React.ReactNode
@@ -10,10 +11,13 @@ export interface TableColumn {
 
 export interface TableCardProps {
     title?: string | React.ReactNode
+    titleActions?: React.ReactNode
     live?: boolean
     columns: TableColumn[]
     rows: Array<React.ReactNode[]>
     viewAllPath?: string
+    headerLinkLabel?: string
+    showFooterViewAll?: boolean
     loading?: boolean
     paginate?: boolean
     pageSize?: number
@@ -37,10 +41,13 @@ export interface TableCardProps {
 
 const TableCard: React.FC<TableCardProps> = ({
     title,
+    titleActions,
     live = true,
     columns,
     rows,
     viewAllPath,
+    headerLinkLabel,
+    showFooterViewAll = true,
     loading = false,
     paginate = false,
     pageSize = 10, // Default to 10 to match API pagination
@@ -129,12 +136,20 @@ const TableCard: React.FC<TableCardProps> = ({
         >
             <div className={`flex items-center ${title ? 'justify-between ' : 'justify-end'} mb-4`}>
                 {title && (
-                    <h3 className="text-lg text-white/90 inline-flex items-center gap-2">
-                        {title}
-                        {loading && <i className="fa-solid fa-circle-notch fa-spin text-gray-400 text-sm" aria-hidden="true"></i>}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-lg text-white/90 inline-flex items-center gap-2">
+                            {title}
+                            {loading && <i className="fa-solid fa-circle-notch fa-spin text-gray-400 text-sm" aria-hidden="true"></i>}
+                        </h3>
+                        {titleActions}
+                    </div>
                 )}
                 <div className="flex items-center gap-2">
+                    {headerLinkLabel && viewAllPath && (
+                        <Link to={viewAllPath} className="text-sm text-gray-400 transition-colors duration-200 hover:text-white">
+                            {headerLinkLabel}
+                        </Link>
+                    )}
                     {live && (
                         <span className="inline-flex items-center gap-1 text-sm text-primary bg-green-500/10 rounded-full px-2 py-0.5">
                             <i className="fa-solid fa-circle text-[6px] animate-pulse"></i>
@@ -239,9 +254,9 @@ const TableCard: React.FC<TableCardProps> = ({
             {compactFooter ? (
                 <div className="mt-auto pt-3 flex items-center flex-row-reverse justify-between">
                     <div className="text-gray-400 text-sm">
-                        Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
+                        {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
                     </div>
-                    {viewAllPath && (
+                    {viewAllPath && showFooterViewAll && (
                         <Link to={viewAllPath} className="text-primary text-sm inline-flex items-center gap-1">
                             View All <i className="fa-solid fa-arrow-right-long"></i>
                         </Link>
@@ -257,9 +272,10 @@ const TableCard: React.FC<TableCardProps> = ({
                                     <button
                                         onClick={prev}
                                         disabled={currentPaginatedPage === 1}
-                                        className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === 1 ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/8 hover:bg-white/10 text-white'}`}
+                                        className="explorer-pagination-button px-3 py-2 text-sm"
+                                        aria-label="Previous page"
                                     >
-                                        <i className="fa-solid fa-angle-left mr-1"></i>Previous
+                                        <i className="fa-solid fa-angle-left"></i>
                                     </button>
                                     <span className="text-sm text-gray-400">
                                         Page {currentPaginatedPage} of {totalPages}
@@ -267,40 +283,41 @@ const TableCard: React.FC<TableCardProps> = ({
                                     <button
                                         onClick={next}
                                         disabled={currentPaginatedPage === totalPages}
-                                        className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === totalPages ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/8 hover:bg-white/10 text-white'}`}
+                                        className="explorer-pagination-button px-3 py-2 text-sm"
+                                        aria-label="Next page"
                                     >
-                                        Next<i className="fa-solid fa-angle-right ml-1"></i>
+                                        <i className="fa-solid fa-angle-right"></i>
                                     </button>
                                 </div>
                                 <div className="text-center text-xs text-gray-500">
-                                    Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
+                                    {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
                                 </div>
                             </div>
 
                             {/* Desktop Pagination */}
                             <div className="hidden md:flex items-center justify-between text-sm text-gray-400">
                                 <div className="flex items-center gap-2">
-                                    <button onClick={prev} disabled={currentPaginatedPage === 1} className={`px-2 py-1 rounded ${currentPaginatedPage === 1 ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/8 hover:bg-white/10'}`}> <i className="fa-solid fa-angle-left"></i> Previous</button>
+                                    <button onClick={prev} disabled={currentPaginatedPage === 1} className="explorer-pagination-button px-3 py-1.5" aria-label="Previous page"> <i className="fa-solid fa-angle-left"></i></button>
                                     {visiblePages.map((p, idx, arr) => {
                                         const prevNum = arr[idx - 1]
                                         const needDots = idx > 0 && p - (prevNum || 0) > 1
                                         return (
                                             <React.Fragment key={p}>
                                                 {needDots && <span className="px-1">…</span>}
-                                                <button onClick={() => goToPage(p)} className={`min-w-[28px] px-2 py-1 rounded ${currentPaginatedPage === p ? 'bg-primary text-black' : 'bg-input hover:bg-white/10'}`}>{p}</button>
+                                                <button onClick={() => goToPage(p)} className={`explorer-pagination-button explorer-pagination-page px-3 py-1.5 ${currentPaginatedPage === p ? 'explorer-pagination-page-active' : ''}`}>{p}</button>
                                             </React.Fragment>
                                         )
                                     })}
-                                    <button onClick={next} disabled={currentPaginatedPage === totalPages} className={`px-2 py-1 rounded ${currentPaginatedPage === totalPages ? 'bg-input text-gray-500 cursor-not-allowed' : 'bg-input hover:bg-white/10'}`}>Next <i className="fa-solid fa-angle-right"></i></button>
+                                    <button onClick={next} disabled={currentPaginatedPage === totalPages} className="explorer-pagination-button px-3 py-1.5" aria-label="Next page"><i className="fa-solid fa-angle-right"></i></button>
                                 </div>
                                 <div>
-                                    Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
+                                    {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {viewAllPath && (
+                    {viewAllPath && showFooterViewAll && (
                         <div className="mt-auto pt-3 text-center">
                             <Link to={viewAllPath} className="text-primary text-sm inline-flex items-center gap-1">
                                 View All <i className="fa-solid fa-arrow-right-long"></i>
@@ -314,5 +331,3 @@ const TableCard: React.FC<TableCardProps> = ({
 }
 
 export default TableCard
-
-

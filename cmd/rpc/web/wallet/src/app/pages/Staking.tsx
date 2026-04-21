@@ -16,6 +16,7 @@ import { StatsCards } from "@/components/staking/StatsCards";
 import { Toolbar } from "@/components/staking/Toolbar";
 import { ValidatorList } from "@/components/staking/ValidatorList";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
+import { PageHeader } from "@/components/layouts/PageHeader";
 
 type ValidatorRow = {
   address: string;
@@ -180,14 +181,10 @@ export default function Staking(): JSX.Element {
       {/* Hidden link for CSV export */}
       <a ref={csvRef} hidden aria-hidden="true" />
 
-      <div>
-        <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
-          Staking
-        </h1>
-        <p className="mt-1 text-sm md:text-base text-muted-foreground">
-          Track staked positions, rewards, and validator activity.
-        </p>
-      </div>
+      <PageHeader
+        title="Staking"
+        subtitle="Track staked positions, rewards, and validator activity."
+      />
 
       {/* Top stats */}
       <StatsCards

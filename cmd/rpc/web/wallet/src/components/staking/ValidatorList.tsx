@@ -29,6 +29,7 @@ interface Validator {
   status: "Staked" | "Paused" | "Unstaking" | "Delegate";
   rewards24h: number;
   committees?: number[];
+  compound?: boolean;
   isSynced: boolean;
   delegate?: boolean;
   netAddress?: string;
@@ -51,7 +52,7 @@ const itemVariants = {
 const desktopHeaderClass =
   "px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4";
 const desktopRowCellClass =
-  "px-2 sm:px-3 lg:px-4 py-2 align-middle transition-colors group-hover:bg-[#272729] bg-[#171717]";
+  "px-2 sm:px-3 lg:px-4 py-2 align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]";
 const actionButtonClass =
   "inline-flex items-center justify-center rounded-lg border border-border/60 p-2 text-foreground transition-colors hover:border-white/20 hover:bg-accent";
 

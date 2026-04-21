@@ -12,7 +12,8 @@
     "admin": "http://localhost:50003"
   },
   "explorer": {
-    "tx": "http://localhost:50001/transaction"
+    "tx": "http://localhost:50001/transaction",
+    "order": "http://localhost:50001/order"
   },
   "address": {
     "format": "evm"

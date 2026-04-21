@@ -48,7 +48,7 @@
       },
       {
         "label": "Analytics",
-        "path": "/analytics",
+        "path": "/supply",
         "children": [
           {
             "label": "Supply",
@@ -57,10 +57,6 @@
           {
             "label": "Governance",
             "path": "/governance"
-          },
-          {
-            "label": "Network Charts",
-            "path": "/analytics"
           }
         ]
       }

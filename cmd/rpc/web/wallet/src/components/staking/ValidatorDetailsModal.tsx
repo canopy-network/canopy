@@ -11,6 +11,7 @@ export interface ValidatorDetails {
   status: "Staked" | "Paused" | "Unstaking" | "Delegate";
   rewards24h: number;
   committees?: number[];
+  compound?: boolean;
   isSynced: boolean;
   delegate?: boolean;
   netAddress?: string;
@@ -253,6 +254,23 @@ export const ValidatorDetailsModal: React.FC<{
                   label="Role"
                   value={validator.delegate ? "Delegate" : "Validator"}
                 />
+                <DetailBlock label="Auto-Compounding">
+                  <span
+                    className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${
+                      validator.compound === true
+                        ? "border-[#35cd48]/35 bg-[#35cd48]/12 text-[#35cd48]"
+                        : validator.compound === false
+                          ? "border-[#272729] bg-[#171717] text-white/70"
+                          : "border-[#272729] bg-[#171717] text-muted-foreground"
+                    }`}
+                  >
+                    {validator.compound === true
+                      ? "Enabled"
+                      : validator.compound === false
+                        ? "Disabled"
+                        : "Unknown"}
+                  </span>
+                </DetailBlock>
                 {validator.output ? (
                   <DetailBlock
                     label="Output"

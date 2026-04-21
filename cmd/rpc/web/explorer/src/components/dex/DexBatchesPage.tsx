@@ -4,6 +4,7 @@ import DexBatchesTable from './DexBatchesTable'
 import type { DexBatchRow } from './DexBatchesTable'
 import { useDexBatch, useNextDexBatch } from '../../hooks/useApi'
 import dexTexts from '../../data/dex.json'
+import ExplorerOverviewCards from '../ExplorerOverviewCards'
 
 // Backend treats chainId 0 as a wildcard that returns batches for all committees
 const ALL_COMMITTEES = 0
@@ -36,13 +37,47 @@ const DexBatchesPage: React.FC = () => {
 
     const isLoading = lockedLoading || nextLoading
 
-    const rows: DexBatchRow[] = isLoading
+    const apiRows: DexBatchRow[] = isLoading
         ? []
         : [...toRows(lockedData, 'Locked'), ...toRows(nextData, 'Next')]
+    const rows: DexBatchRow[] = apiRows
+    const lockedRows = React.useMemo(() => rows.filter((row) => row.batchType === 'Locked'), [rows])
+    const nextRows = React.useMemo(() => rows.filter((row) => row.batchType === 'Next'), [rows])
+    const overviewCards = React.useMemo(() => {
+        const committees = new Set(rows.map((row) => row.committee))
+        const totalOrders = rows.reduce((sum, row) => sum + row.orders, 0)
+
+        return [
+            {
+                title: 'Locked Batches',
+                value: lockedRows.length.toLocaleString(),
+                subValue: 'Processing now',
+                icon: 'fa-solid fa-lock',
+            },
+            {
+                title: 'Next Batches',
+                value: nextRows.length.toLocaleString(),
+                subValue: 'Queued next',
+                icon: 'fa-solid fa-forward-step',
+            },
+            {
+                title: 'Committees',
+                value: committees.size.toLocaleString(),
+                subValue: 'Active committees',
+                icon: 'fa-solid fa-diagram-project',
+            },
+            {
+                title: 'Orders',
+                value: totalOrders.toLocaleString(),
+                subValue: 'Visible orders',
+                icon: 'fa-solid fa-book',
+            },
+        ]
+    }, [rows])
 
     if (isLoading) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="w-full">
                 <div className="animate-pulse">
                     <div className="h-8 bg-gray-700/50 rounded w-1/4 mb-6"></div>
                     <div className="h-40 bg-gray-700/50 rounded"></div>
@@ -57,18 +92,23 @@ const DexBatchesPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
+            className="w-full"
         >
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-white mb-2">
+                <h1 className="explorer-page-title">
                     {dexTexts.page.title}
                 </h1>
-                <p className="text-gray-400">
+                <p className="explorer-page-subtitle">
                     {dexTexts.page.description}
                 </p>
             </div>
 
-            <DexBatchesTable rows={rows} loading={isLoading} />
+            <ExplorerOverviewCards cards={overviewCards} className="mb-8" />
+
+            <div className="space-y-8">
+                <DexBatchesTable title="Locked Batches" rows={lockedRows} loading={isLoading} />
+                <DexBatchesTable title="Next Batches" rows={nextRows} loading={isLoading} />
+            </div>
         </motion.div>
     )
 }

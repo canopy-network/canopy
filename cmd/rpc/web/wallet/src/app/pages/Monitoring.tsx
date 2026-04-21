@@ -8,6 +8,7 @@ import PerformanceMetrics from "@/components/monitoring/PerformanceMetrics";
 import SystemResources from "@/components/monitoring/SystemResources";
 import RawJSON from "@/components/monitoring/RawJSON";
 import MonitoringSkeleton from "@/components/monitoring/MonitoringSkeleton";
+import { PageHeader } from "@/components/layouts/PageHeader";
 
 export default function Monitoring(): JSX.Element {
   const [activeTab, setActiveTab] = useState<
@@ -157,14 +158,10 @@ export default function Monitoring(): JSX.Element {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <div>
-        <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
-          Monitoring
-        </h1>
-        <p className="mt-1 text-sm md:text-base text-muted-foreground">
-          Node status, peers, performance metrics, and raw network data
-        </p>
-      </div>
+      <PageHeader
+        title="Monitoring"
+        subtitle="Node status, peers, performance metrics, and raw network data"
+      />
 
       <NodeStatus
         nodeStatus={nodeStatus}

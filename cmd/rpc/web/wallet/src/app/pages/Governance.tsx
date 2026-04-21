@@ -19,6 +19,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
 import { ActionsModal } from "@/actions/ActionsModal";
 import { useManifest } from "@/hooks/useManifest";
+import { PageHeader } from "@/components/layouts/PageHeader";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -232,14 +233,10 @@ export const Governance = () => {
         animate="visible"
         variants={containerVariants}
       >
-        <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
-            Governance
-          </h1>
-          <p className="mt-1 text-sm md:text-base text-muted-foreground">
-            Manage polls and proposals with guided, one-step submissions and explicit review details.
-          </p>
-        </div>
+        <PageHeader
+          title="Governance"
+          subtitle="Manage polls and proposals with guided, one-step submissions and explicit review details."
+        />
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
               {criticalActions.map((item) => {

@@ -6,6 +6,7 @@ import type { SwapFilterValues } from './SwapFilters';
 import RecentSwapsTable from './RecentSwapsTable';
 import { useOrders } from '../../hooks/useApi'
 import { toCNPY } from '../../lib/utils';
+import ExplorerOverviewCards from '../ExplorerOverviewCards';
 
 interface Order {
     id: string;
@@ -89,6 +90,38 @@ const TokenSwapsPage: React.FC = () => {
         const set = new Set(swaps.map((s) => s.committee));
         return Array.from(set).sort((a, b) => a - b);
     }, [swaps]);
+    const overviewCards = useMemo(() => {
+        const activeCount = swaps.filter((swap) => swap.status === 'Active').length;
+        const lockedCount = swaps.filter((swap) => swap.status === 'Locked').length;
+        const totalVolume = swaps.reduce((sum, swap) => sum + swap.amountRaw, 0);
+
+        return [
+            {
+                title: 'Orders',
+                value: swaps.length.toLocaleString(),
+                subValue: 'Open book',
+                icon: 'fa-solid fa-book',
+            },
+            {
+                title: 'Active',
+                value: activeCount.toLocaleString(),
+                subValue: 'Open orders',
+                icon: 'fa-solid fa-unlock',
+            },
+            {
+                title: 'Locked',
+                value: lockedCount.toLocaleString(),
+                subValue: 'Buyer locked',
+                icon: 'fa-solid fa-lock',
+            },
+            {
+                title: 'Open Volume',
+                value: `${totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })} CNPY`,
+                subValue: `${availableCommittees.length.toLocaleString()} committees`,
+                icon: 'fa-solid fa-chart-column',
+            },
+        ];
+    }, [availableCommittees.length, swaps]);
 
     const filteredSwaps = useMemo(() => {
         let result = swaps;
@@ -189,20 +222,22 @@ const TokenSwapsPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
+            className="w-full"
         >
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Token Swaps</h1>
-                    <p className="text-gray-400">Atomic swap orders on the Canopy network</p>
+                    <h1 className="explorer-page-title">Token Swaps</h1>
+                    <p className="explorer-page-subtitle">Atomic swap orderbook on the Canopy network</p>
                 </div>
                 <div className="flex items-center space-x-4">
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors duration-200 font-medium"
-                    >
-                        <i className="fas fa-sync-alt mr-2"></i>Refresh
-                    </button>
+                    <SwapFilters
+                        compact
+                        onApplyFilters={handleApplyFilters}
+                        onResetFilters={handleResetFilters}
+                        filters={filters}
+                        onFiltersChange={setFilters}
+                        availableCommittees={availableCommittees}
+                    />
                     <button
                         onClick={handleExportData}
                         className="px-4 py-2 bg-card border-white/10 text-gray-300 hover:bg-card/80 rounded-lg transition-colors duration-200 font-medium"
@@ -212,13 +247,8 @@ const TokenSwapsPage: React.FC = () => {
                 </div>
             </div>
 
-            <SwapFilters
-                onApplyFilters={handleApplyFilters}
-                onResetFilters={handleResetFilters}
-                filters={filters}
-                onFiltersChange={setFilters}
-                availableCommittees={availableCommittees}
-            />
+            <ExplorerOverviewCards cards={overviewCards} className="mb-8" />
+
             <RecentSwapsTable
                 swaps={sortedSwaps}
                 loading={isLoading && !ordersData}

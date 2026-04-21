@@ -6,9 +6,10 @@ import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { getCanopySymbol } from "@/lib/utils/canopySymbols";
 import { useDenom } from "@/hooks/useDenom";
+import { PageHeader } from "@/components/layouts/PageHeader";
 
 const desktopRowCellClass =
-  "px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#171717]";
+  "px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]";
 
 const LatestUpdated = ({ className = "" }: { className?: string }) => (
   <div className={`flex items-center gap-2 lg:gap-4 ${className}`}>
@@ -184,12 +185,10 @@ export const AllAddresses = () => {
       <div className="px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2">
-            All Addresses
-          </h1>
-          <p className="text-base md:text-lg text-muted-foreground">
-            Manage all your wallet addresses and their balances
-          </p>
+          <PageHeader
+            title="All Addresses"
+            subtitle="Manage all your wallet addresses and their balances"
+          />
         </div>
 
         {/* Filters */}
