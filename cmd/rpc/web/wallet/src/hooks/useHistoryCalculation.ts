@@ -8,6 +8,24 @@ export interface HistoryResult {
     change24h: number;
     changePercentage: number;
     progressPercentage: number;
+    periodLabel: string;
+}
+
+function formatHistoryPeriodLabel(seconds: number | null): string {
+    if (seconds == null || seconds <= 0) return 'Live';
+    const minutes = seconds / 60;
+    const hours = seconds / 3600;
+
+    if (minutes < 60) {
+        return `${Math.max(1, Math.round(minutes))}m`;
+    }
+
+    if (hours < 24) {
+        const roundedHours = hours < 10 ? Math.round(hours * 10) / 10 : Math.round(hours);
+        return `${roundedHours}h`;
+    }
+
+    return '24h';
 }
 
 /**
@@ -33,6 +51,17 @@ export function useHistoryCalculation() {
     const height24hAgo = blocksPerDay != null
         ? Math.max(0, currentHeight - blocksPerDay)
         : null
+    const hasFull24hHistory = blocksPerDay != null && currentHeight > blocksPerDay
+    const historyStartHeight = currentHeight > 0
+        ? (hasFull24hHistory ? (height24hAgo ?? 1) : 1)
+        : null
+    const historySpanBlocks = historyStartHeight != null
+        ? Math.max(0, currentHeight - historyStartHeight)
+        : null
+    const historySpanSeconds = historySpanBlocks != null && secondsPerBlock != null
+        ? historySpanBlocks * secondsPerBlock
+        : null
+    const periodLabel = hasFull24hHistory ? '24h' : formatHistoryPeriodLabel(historySpanSeconds)
 
     /**
      * Calculate history metrics from current and previous values
@@ -47,13 +76,19 @@ export function useHistoryCalculation() {
             previous24h: previousTotal,
             change24h,
             changePercentage,
-            progressPercentage
+            progressPercentage,
+            periodLabel,
         }
     }
 
     return {
         currentHeight,
         height24hAgo,
+        historyStartHeight,
+        historySpanBlocks,
+        historySpanSeconds,
+        hasFull24hHistory,
+        periodLabel,
         blocksPerDay,
         secondsPerBlock,
         calculateHistory,

@@ -49,10 +49,10 @@ export const Dashboard = () => {
                 {/* Page heading */}
                 <motion.div variants={item} className="flex items-center justify-between mb-1">
                     <div>
-                        <h1 className="text-xl font-bold text-foreground tracking-tight">
+                        <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
                             Dashboard
                         </h1>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="mt-1 text-sm md:text-base text-muted-foreground">
                             All wallets overview & node management
                         </p>
                     </div>

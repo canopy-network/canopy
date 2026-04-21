@@ -940,7 +940,7 @@ export default function ActionRunner({
                       disabled={hasStepErrors}
                       onClick={goNext}
                       className={cx(
-                        "flex-1 px-4 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base bg-zinc-500 text-white hover:bg-zinc-400 hover:text-white transition-colors",
+                        "flex-1 rounded-xl border border-white/80 bg-black px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white hover:text-black sm:py-3 sm:text-base",
                         hasStepErrors && "opacity-50 cursor-not-allowed",
                       )}
                     >
@@ -1089,8 +1089,8 @@ function GeneratedTxResult({
           Copy the JSON below, then complete the remaining steps:
         </p>
         <ol className="text-xs text-foreground/75 leading-relaxed space-y-1 list-decimal list-inside">
-          <li><strong>Approve</strong> — Paste this JSON into the <strong>Approve / Reject Proposal</strong> action and vote Approve. This adds it to the node's approve list.</li>
-          <li><strong>Submit</strong> — Paste this JSON into the <strong>Manual Raw TX Broadcast</strong> action to broadcast it to the network.</li>
+          <li><strong>Review & Approve</strong> — Paste this JSON into the <strong>Vote on Proposal</strong> step or action and choose Approve or Reject. This saves the replica vote on the node.</li>
+          <li><strong>Submit</strong> — Paste this JSON into the <strong>Submit Payload</strong> step or action to broadcast it to the network.</li>
         </ol>
       </div>
 
@@ -1130,4 +1130,3 @@ function GeneratedTxResult({
     </motion.div>
   );
 }
-

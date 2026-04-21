@@ -8,13 +8,13 @@ const statusBadgeVariants = cva(
     variants: {
       status: {
         // Transaction statuses
-        confirmed: "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20",
+        confirmed: "bg-[#35cd48]/12 text-[#35cd48] ring-1 ring-[#35cd48]/30",
         pending:   "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20",
         failed:    "bg-red-500/10 text-red-400 ring-1 ring-red-500/20",
         open:      "bg-red-500/10 text-red-400 ring-1 ring-red-500/20",
 
         // Validator statuses
-        staked:    "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20",
+        staked:    "bg-[#35cd48]/12 text-[#35cd48] ring-1 ring-[#35cd48]/30",
         unstaking: "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20",
         paused:    "bg-red-500/10 text-red-400 ring-1 ring-red-500/20",
 
@@ -23,14 +23,14 @@ const statusBadgeVariants = cva(
         delegated: "bg-primary/10 text-primary ring-1 ring-primary/20",
 
         // Generic
-        active:    "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20",
+        active:    "bg-[#35cd48]/12 text-[#35cd48] ring-1 ring-[#35cd48]/30",
         inactive:  "bg-muted/50 text-muted-foreground ring-1 ring-border/60",
         warning:   "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20",
         error:     "bg-red-500/10 text-red-400 ring-1 ring-red-500/20",
         info:      "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20",
 
         // Live indicator
-        live:      "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20",
+        live:      "bg-[#35cd48]/12 text-[#35cd48] ring-1 ring-[#35cd48]/30",
       },
       size: {
         sm: "px-1.5 py-0.5 text-[10px]",

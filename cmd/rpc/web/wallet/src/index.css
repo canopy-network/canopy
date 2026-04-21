@@ -131,6 +131,13 @@ html {
   font-family: var(--font-body);
 }
 
+.wallet-card-title {
+  font-size: 0.9375rem;
+  line-height: 1.35;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+
 .surface-panel {
   background: hsl(var(--card));
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -226,10 +233,6 @@ html {
   );
   background-size: 200% 100%;
   animation: shimmer 1.4s ease infinite;
-}
-
-.text-glow {
-  text-shadow: 0 0 18px hsl(var(--primary) / 0.46);
 }
 
 @keyframes accordion-down {

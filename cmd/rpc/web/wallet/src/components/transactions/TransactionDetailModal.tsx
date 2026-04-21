@@ -59,11 +59,19 @@ const formatTimeAgo = (tsMs: number) => {
 };
 
 const getStatusColor = (s: string) => {
-  if (s === "Confirmed") return "bg-green-500/20 text-green-400 border-green-500/30";
-  if (s === "Pending") return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
-  if (s === "Open") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
-  if (s === "Failed") return "bg-red-500/20 text-red-400 border-red-500/30";
-  return "bg-muted/20 text-muted-foreground border-border/30";
+  if (s === "Confirmed") return "bg-[#35cd48]/12 text-[#35cd48] border-[#35cd48]/35";
+  if (s === "Pending") return "bg-[#ddb228]/12 text-[#ddb228] border-[#ddb228]/35";
+  if (s === "Open") return "bg-[#216cd0]/12 text-[#216cd0] border-[#216cd0]/35";
+  if (s === "Failed") return "bg-[#ff1845]/12 text-[#ff1845] border-[#ff1845]/35";
+  return "bg-[#0f0f0f] text-white/60 border-[#272729]";
+};
+
+const truncateMiddle = (value: string, removed = 10) => {
+  if (value.length <= removed + 8) return value;
+  const visible = value.length - removed;
+  const leading = Math.ceil(visible / 2);
+  const trailing = Math.floor(visible / 2);
+  return `${value.slice(0, leading)}...${value.slice(value.length - trailing)}`;
 };
 
 /* --- sub-components -------------------------------------------- */
@@ -100,17 +108,15 @@ const CopyHash = ({ hash }: { hash: string }) => {
   return (
     <button
       onClick={handleCopy}
-      className="inline-flex items-center gap-1.5 group"
+      className="inline-flex items-center gap-1.5 rounded-md border border-[#272729] bg-[#171717] px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-primary"
       title="Copy full hash"
     >
-      <span className="text-sm text-foreground group-hover:text-primary transition-colors">
-        {hash.slice(0, 14)}...{hash.slice(-12)}
-      </span>
       {copied ? (
         <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />
       ) : (
-        <Copy className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+        <Copy className="w-3.5 h-3.5 shrink-0" />
       )}
+      <span>{copied ? "Copied" : "Copy"}</span>
     </button>
   );
 };
@@ -151,7 +157,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
       {open && tx && (
         <>
           <motion.div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-[#0f0f0f]/80 backdrop-blur-md z-50"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -166,7 +172,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             onClick={onClose}
           >
             <motion.div
-              className="w-full max-w-lg max-h-[calc(100dvh-2rem)] bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col"
+              className="w-full max-w-lg max-h-[calc(100dvh-2rem)] bg-[#171717] rounded-2xl border border-[#272729] shadow-[0_24px_72px_rgba(0,0,0,0.55)] overflow-hidden flex flex-col"
               initial={{ scale: 0.95, y: 16 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 16, opacity: 0 }}
@@ -175,10 +181,10 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-border/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-xl border border-[#272729] bg-[#0f0f0f] flex items-center justify-center shrink-0">
                     <LucideIcon
                       name={getIcon(tx.type)}
-                      className="w-4 h-4 text-primary"
+                      className="w-4 h-4 text-[#35cd48]"
                     />
                   </div>
                   <div>
@@ -198,7 +204,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   </span>
                   <button
                     onClick={onClose}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                    className="w-8 h-8 rounded-lg border border-[#272729] bg-[#0f0f0f] flex items-center justify-center text-white/60 hover:text-white hover:bg-[#272729] transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -210,8 +216,13 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-2">
                     Transaction Hash
                   </p>
-                  <div className="flex items-center gap-2 bg-background/60 rounded-lg px-3 py-2.5">
-                    <CopyHash hash={tx.hash} />
+                  <div className="flex flex-col gap-3 bg-[#0f0f0f] border border-[#272729] rounded-lg px-3 py-2.5">
+                    <div className="text-sm text-foreground break-all font-mono">
+                      {truncateMiddle(tx.hash)}
+                    </div>
+                    <div className="flex justify-end">
+                      <CopyHash hash={tx.hash} />
+                    </div>
                   </div>
                 </section>
 
@@ -232,9 +243,9 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                       <span
                         className={
                           getFundWay(tx.type) === "in"
-                            ? "text-green-400"
+                            ? "text-[#35cd48]"
                             : getFundWay(tx.type) === "out"
-                              ? "text-red-400"
+                              ? "text-[#ff1845]"
                               : "text-foreground"
                         }
                       >
@@ -286,17 +297,17 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 {tx.error && (
                   <section className="py-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                      <p className="text-xs text-red-400 uppercase tracking-wider font-medium">
+                      <AlertTriangle className="w-3.5 h-3.5 text-[#ff1845] shrink-0" />
+                      <p className="text-xs text-[#ff1845] uppercase tracking-wider font-medium">
                         Transaction Error
                       </p>
                     </div>
-                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 space-y-2">
+                    <div className="bg-[#ff1845]/10 border border-[#ff1845]/20 rounded-lg px-4 py-3 space-y-2">
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider shrink-0">
                           Code
                         </span>
-                        <span className="text-sm text-red-400">{tx.error.code}</span>
+                        <span className="text-sm text-[#ff1845]">{tx.error.code}</span>
                       </div>
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider shrink-0">
@@ -304,11 +315,11 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                         </span>
                         <span className="text-sm text-foreground">{tx.error.module}</span>
                       </div>
-                      <div className="flex flex-col gap-1 pt-1 border-t border-red-500/20">
+                      <div className="flex flex-col gap-1 pt-1 border-t border-[#ff1845]/20">
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
                           Message
                         </span>
-                        <span className="text-sm text-red-300 break-words">{tx.error.msg}</span>
+                        <span className="text-sm text-[#ff1845] break-words">{tx.error.msg}</span>
                       </div>
                     </div>
                   </section>
@@ -321,7 +332,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                     href={`${explorerTxUrl}/${tx.hash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[#216cd0] hover:text-[#216cd0]/80 transition-colors"
                   >
                     View on Explorer
                     <ExternalLink className="w-3.5 h-3.5" />

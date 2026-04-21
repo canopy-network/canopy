@@ -9,7 +9,7 @@ import { fetchRewardEventsInRange, sumRewards } from "./stakingRewardsEvents";
  */
 export function useValidatorRewardsHistory(address?: string) {
     const dsFetch = useDSFetcher();
-    const { currentHeight, secondsPerBlock, isReady } = useHistoryCalculation();
+    const { currentHeight, secondsPerBlock, isReady, periodLabel } = useHistoryCalculation();
 
     return useQuery({
         queryKey: ['validatorRewardsHistory', address, currentHeight],
@@ -18,7 +18,7 @@ export function useValidatorRewardsHistory(address?: string) {
 
         queryFn: async (): Promise<HistoryResult> => {
             if (secondsPerBlock == null) {
-                return { current: 0, previous24h: 0, change24h: 0, changePercentage: 0, progressPercentage: 0 };
+                return { current: 0, previous24h: 0, change24h: 0, changePercentage: 0, progressPercentage: 0, periodLabel };
             }
             try {
                 const { events } = await fetchRewardEventsInRange(dsFetch, {
@@ -37,7 +37,8 @@ export function useValidatorRewardsHistory(address?: string) {
                     previous24h: 0,
                     change24h: rewardsLast24h,
                     changePercentage: 0,
-                    progressPercentage: 100
+                    progressPercentage: 100,
+                    periodLabel,
                 };
             } catch {
                 return {
@@ -45,7 +46,8 @@ export function useValidatorRewardsHistory(address?: string) {
                     previous24h: 0,
                     change24h: 0,
                     changePercentage: 0,
-                    progressPercentage: 0
+                    progressPercentage: 0,
+                    periodLabel,
                 };
             }
         }

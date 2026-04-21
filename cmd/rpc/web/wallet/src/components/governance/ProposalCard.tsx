@@ -65,7 +65,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
 
   return (
     <motion.div
-      className="bg-card rounded-xl p-6 border border-border hover:border-primary/40 transition-all duration-300"
+      className="bg-card rounded-xl p-6 border border-border hover:border-white/20 transition-all duration-300"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}

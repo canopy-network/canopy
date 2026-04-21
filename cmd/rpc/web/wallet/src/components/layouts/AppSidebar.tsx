@@ -28,9 +28,9 @@ const navItems = [
 /** Matches canopy-frontend `MainNav` + shell: rounded-xl rows, zinc borders, white/active pill. */
 function navLinkClass(isActive: boolean, collapsed: boolean): string {
     const base =
-        'group relative flex w-full min-w-0 font-medium rounded-xl transition-all duration-200 text-sm';
+        'group relative flex w-full min-w-0 font-medium rounded-xl transition-all duration-200 text-[14px]';
     const layout = collapsed
-        ? 'flex-col items-center justify-center gap-1 py-2.5'
+        ? 'w-[57px] flex-col items-center justify-center gap-1 py-2'
         : 'items-center gap-3 px-3 py-2';
     const state = isActive
         ? 'text-white bg-white/[0.08]'
@@ -67,7 +67,7 @@ export const AppSidebar = (): JSX.Element => {
                     <Link
                         to="/"
                         className={`flex h-full w-full min-w-0 items-center overflow-hidden transition-all duration-300 ${
-                            collapsed ? 'justify-center' : 'justify-start'
+                            collapsed ? 'justify-center' : 'justify-start py-1 pl-4 pr-2'
                         }`}
                     >
                         <AnimatePresence mode="wait" initial={false}>
@@ -85,13 +85,13 @@ export const AppSidebar = (): JSX.Element => {
                             ) : (
                                 <motion.img
                                     key="logo"
-                                    src="/canopy-logo.png"
+                                    src="/canopy-wallet-logo.svg"
                                     alt="Canopy Wallet"
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
                                     transition={{ duration: 0.18 }}
-                                    className="h-7 w-auto flex-shrink-0 object-contain"
+                                    className="h-[22px] w-auto flex-shrink-0 object-contain"
                                 />
                             )}
                         </AnimatePresence>
@@ -121,7 +121,7 @@ export const AppSidebar = (): JSX.Element => {
                                                 animate={{ opacity: 1, width: 'auto' }}
                                                 exit={{ opacity: 0, width: 0 }}
                                                 transition={{ duration: 0.18 }}
-                                                className="truncate overflow-hidden whitespace-nowrap"
+                                                className={`truncate overflow-hidden whitespace-nowrap ${collapsed ? 'text-[10px]' : ''}`}
                                             >
                                                 {name}
                                             </motion.span>
@@ -164,8 +164,8 @@ export const AppSidebar = (): JSX.Element => {
                     >
                         <Menu className="h-5 w-5" />
                     </button>
-                    <Link to="/" className="flex items-center">
-                        <img src="/canopy-logo.png" alt="Canopy Wallet" className="h-6 w-auto object-contain" />
+                    <Link to="/" className="flex items-center px-1 py-1">
+                        <img src="/canopy-wallet-logo.svg" alt="Canopy Wallet" className="h-[18px] w-auto object-contain" />
                     </Link>
                     <div className="w-9" />
                 </header>
@@ -195,9 +195,9 @@ export const AppSidebar = (): JSX.Element => {
                                         <Link
                                             to="/"
                                             onClick={() => setMobileOpen(false)}
-                                            className="flex items-center"
+                                            className="flex items-center px-1 py-1"
                                         >
-                                            <img src="/canopy-logo.png" alt="Canopy Wallet" className="h-6 w-auto object-contain" />
+                                            <img src="/canopy-wallet-logo.svg" alt="Canopy Wallet" className="h-[18px] w-auto object-contain" />
                                         </Link>
                                         <button
                                             type="button"

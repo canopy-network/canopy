@@ -140,7 +140,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-start sm:items-center justify-center p-2 pt-[calc(env(safe-area-inset-top)+60px)] sm:p-4"
+          className="fixed inset-0 bg-[#0f0f0f]/80 backdrop-blur-md flex items-start sm:items-center justify-center p-2 pt-[calc(env(safe-area-inset-top)+60px)] sm:p-4"
           style={{ zIndex: 9999 }}
           onClick={closeAction}
         >
@@ -153,7 +153,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
               width: { duration: 0.3, ease: 'easeInOut' },
             }}
             className={cx(
-              'relative bg-card border border-border overflow-hidden flex flex-col min-h-0',
+              'relative bg-[#171717] border border-[#272729] shadow-[0_24px_72px_rgba(0,0,0,0.55)] overflow-hidden flex flex-col min-h-0',
               'w-full max-w-[min(100vw-1rem,72rem)] rounded-lg sm:rounded-xl',
               'h-[calc(100dvh-1rem)]',
               'max-h-[calc(100dvh-1rem)]',
@@ -165,7 +165,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
           >
             <XIcon
               onClick={closeAction}
-              className="absolute top-3 right-3 sm:top-4 sm:right-4 w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+              className="absolute top-3 right-3 sm:top-4 sm:right-4 w-5 h-5 sm:w-6 sm:h-6 rounded-lg border border-[#272729] bg-[#0f0f0f] p-1 text-white/60 cursor-pointer hover:bg-[#272729] hover:text-white z-10"
             />
 
             {availableTabs.length > 1 ? (
@@ -181,8 +181,8 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 <div className="shrink-0 px-3 pt-4 pb-2 sm:px-5 sm:pt-5 sm:pb-3 md:px-6 md:pt-6">
                   <div className="mb-2 pr-8 sm:mb-3 flex items-start gap-3">
                     {availableTabs[0].icon && (
-                      <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10">
-                        <LucideIcon name={availableTabs[0].icon} className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                      <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full border border-[#272729] bg-[#0f0f0f]">
+                        <LucideIcon name={availableTabs[0].icon} className="w-5 h-5 sm:w-6 sm:h-6 text-[#35cd48]" />
                       </div>
                     )}
                     <h2 className="text-xl sm:text-2xl font-semibold text-foreground break-words">

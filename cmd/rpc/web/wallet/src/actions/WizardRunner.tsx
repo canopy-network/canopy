@@ -142,7 +142,7 @@ export default function WizardRunner({ action }: { action: Action }) {
               )}
               <button
                 onClick={onNext}
-                className="px-3 py-2 rounded-xl bg-zinc-500 text-white hover:bg-zinc-400 hover:text-white font-semibold transition-colors"
+                className="rounded-xl border border-white/80 bg-black px-3 py-2 font-semibold text-white transition-colors hover:bg-white hover:text-black"
               >
                 {stepIndex + 1 < (action.steps?.length ?? 1)
                   ? "Continue"
@@ -218,4 +218,3 @@ export default function WizardRunner({ action }: { action: Action }) {
     </div>
   );
 }
-

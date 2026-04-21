@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 
 import { LucideIcon } from '@/components/ui/LucideIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ActionTooltip } from '@/components/ui/ActionTooltip';
 import { selectQuickActions } from '@/core/actionForm';
 import { Action } from '@/manifest/types';
 import { useAccountData } from '@/hooks/useAccountData';
@@ -74,6 +75,25 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
         [modifiedActions.length]
     );
 
+    const getActionDescription = React.useCallback((action: Action) => {
+        switch (action.id) {
+            case 'send':
+                return 'Transfer funds from the selected account.';
+            case 'receive':
+                return 'Show address details for incoming transfers.';
+            case 'stake':
+                return hasStake ? 'Adjust committees or update the current stake.' : 'Delegate funds to a validator.';
+            case 'unstake':
+                return 'Begin removing stake from the selected validator.';
+            case 'pauseValidator':
+                return 'Temporarily pause validator activity.';
+            case 'unpauseValidator':
+                return 'Resume validator activity after a pause.';
+            default:
+                return 'Open this action flow.';
+        }
+    }, [hasStake]);
+
     return (
         <motion.div
             className="canopy-card p-5 h-full flex flex-col"
@@ -83,7 +103,7 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
         >
             {/* Header */}
             <div className="flex items-center gap-2 mb-4">
-                <span className="text-sm font-medium text-muted-foreground">
+                <span className="wallet-card-title">
                     Quick Actions
                 </span>
             </div>
@@ -93,21 +113,27 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
                 style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
             >
                 {modifiedActions.map(a => (
-                    <motion.button
+                    <ActionTooltip
                         key={a.id}
-                        onClick={() => handleRunAction(a)}
-                        className="group flex flex-col items-center justify-center gap-2 rounded-lg border border-border/60 p-3.5 min-h-[72px] transition-all duration-150 hover:border-primary/35 hover:bg-primary/5 btn-glow"
-                        whileHover={{ scale: 1.015 }}
-                        whileTap={{ scale: 0.975 }}
-                        aria-label={a.title ?? a.id}
+                        label={a.title ?? a.id}
+                        description={getActionDescription(a)}
+                        className="w-full"
                     >
-                        <div className="w-8 h-8 rounded-lg bg-muted/60 group-hover:bg-primary/15 flex items-center justify-center transition-colors duration-150 border border-border/40 group-hover:border-primary/20">
-                            <LucideIcon name={a.icon || a.id} className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors duration-150" />
-                        </div>
-                        <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors duration-150 text-center leading-tight">
-                            {a.title ?? a.id}
-                        </span>
-                    </motion.button>
+                        <motion.button
+                            onClick={() => handleRunAction(a)}
+                            className="group flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-border/60 p-3.5 min-h-[72px] transition-all duration-150 hover:border-white/20 hover:bg-primary/5 btn-glow"
+                            whileHover={{ scale: 1.015 }}
+                            whileTap={{ scale: 0.975 }}
+                            aria-label={a.title ?? a.id}
+                        >
+                            <div className="w-8 h-8 rounded-lg bg-muted/60 group-hover:bg-primary/15 flex items-center justify-center transition-colors duration-150 border border-border/40 group-hover:border-white/15">
+                                <LucideIcon name={a.icon || a.id} className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors duration-150" />
+                            </div>
+                            <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors duration-150 text-center leading-tight">
+                                {a.title ?? a.id}
+                            </span>
+                        </motion.button>
+                    </ActionTooltip>
                 ))}
                 {modifiedActions.length === 0 && (
                     <EmptyState icon="Zap" title="No quick actions" description="Actions from manifest" size="sm" />

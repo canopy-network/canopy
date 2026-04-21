@@ -35,5 +35,4 @@ export function canopyIconSvg(color: string): string {
 
 export const EXPLORER_NEON_GREEN = "#45ca46";
 export const EXPLORER_NEON_BORDER = "#45ca46";
-export const EXPLORER_ICON_GLOW =
-  "text-[#45ca46] drop-shadow-[0_0_12px_rgba(69,202,70,0.4)]";
+export const EXPLORER_ICON_GLOW = "text-[#45ca46]";

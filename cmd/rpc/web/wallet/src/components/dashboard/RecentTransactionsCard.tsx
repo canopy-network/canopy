@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { useConfig } from '@/app/providers/ConfigProvider';
 import { LucideIcon } from '@/components/ui/LucideIcon';
-import { NavLink } from 'react-router-dom';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -78,10 +77,10 @@ const TransactionRow = React.memo<TransactionRowProps>(({
 
     return (
         <motion.button
-            className={`group w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg border text-left transition-all duration-150 cursor-pointer ${
+            className={`group w-full flex items-center gap-3 px-3.5 py-3 rounded-lg text-left transition-all duration-150 cursor-pointer ${
                 isFailed
-                    ? 'border-status-error/20 hover:border-status-error/35 hover:bg-status-error/4'
-                    : 'border-border/50 hover:border-primary/25 hover:bg-primary/4'
+                    ? 'hover:bg-status-error/4'
+                    : 'hover:bg-primary/4'
             }`}
             initial={{ opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
@@ -101,8 +100,8 @@ const TransactionRow = React.memo<TransactionRowProps>(({
                 <div className="text-xs text-muted-foreground/60 mt-0.5">{timeAgo}</div>
             </div>
 
-            <div className="flex flex-col items-end gap-1 shrink-0">
-                <span className={`text-xs font-semibold tabular-nums ${amountColor}`}>
+            <div className="ml-auto flex items-center gap-2.5 shrink-0">
+                <span className={`text-xs font-semibold tabular-nums whitespace-nowrap ${amountColor}`}>
                     {amountTxt}
                 </span>
                 <StatusBadge label={tx.status} size="sm" />
@@ -161,27 +160,16 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
     return (
         <motion.div className={cardBase} {...cardMotion}>
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">
-                        Recent Transactions
-                    </span>
-                    {/* Live indicator */}
-                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/8 border border-primary/15">
-                        <span className="relative flex h-1.5 w-1.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-70" />
-                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
-                        </span>
-                        <span className="text-[10px] text-primary font-medium">Live</span>
-                    </span>
+            <div className="mb-4 flex items-start justify-between gap-3">
+                <span className="wallet-card-title">
+                    Recent Transactions
+                </span>
+                <div className="flex items-center gap-2 self-start lg:gap-4">
+                    <div className="relative inline-flex items-center gap-1.5 rounded-full bg-[#35cd48]/5 px-4 py-1">
+                        <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#35cd48] shadow-[0_0_4px_rgba(53,205,72,0.8)]" />
+                        <span className="text-sm font-medium text-[#35cd48]">Live</span>
+                    </div>
                 </div>
-                <NavLink
-                    to="/all-transactions"
-                    className="text-xs text-muted-foreground hover:text-primary transition-colors font-medium flex items-center gap-1"
-                >
-                    See all
-                    <ChevronRight style={{ width: 12, height: 12 }} />
-                </NavLink>
             </div>
 
             <div className="space-y-1.5">
@@ -199,15 +187,6 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
                     />
                 ))}
             </div>
-
-            {transactions.length > 5 && (
-                <div className="text-center mt-3">
-                    <NavLink to="/all-transactions" className="text-xs text-muted-foreground hover:text-primary font-medium transition-colors">
-                        All {transactions.length} transactions →
-                    </NavLink>
-                </div>
-            )}
-
             <TransactionDetailModal
                 tx={selectedTx}
                 open={selectedTx !== null}

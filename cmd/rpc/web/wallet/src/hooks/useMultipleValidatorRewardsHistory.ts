@@ -10,7 +10,7 @@ import { fetchRewardEventsInRange, sumRewards } from "./stakingRewardsEvents";
  */
 export function useMultipleValidatorRewardsHistory(addresses: string[]) {
     const dsFetch = useDSFetcher();
-    const { currentHeight, secondsPerBlock, isReady } = useHistoryCalculation();
+    const { currentHeight, secondsPerBlock, isReady, periodLabel } = useHistoryCalculation();
 
     // Create stable query key from addresses
     const addressesKey = useMemo(
@@ -49,6 +49,7 @@ export function useMultipleValidatorRewardsHistory(addresses: string[]) {
                         change24h: rewards24h,
                         changePercentage: 0,
                         progressPercentage: 100,
+                        periodLabel,
                         rewards24h: rewards24h,
                         // With a bounded 24h query we only guarantee 24h totals here.
                         totalRewards: rewards24h
@@ -61,6 +62,7 @@ export function useMultipleValidatorRewardsHistory(addresses: string[]) {
                         change24h: 0,
                         changePercentage: 0,
                         progressPercentage: 0,
+                        periodLabel,
                         rewards24h: 0,
                         totalRewards: 0
                     };
