@@ -508,9 +508,13 @@ func (p *P2P) DialAndDisconnect(a *lib.PeerAddress, strictPublicKey bool) lib.Er
 // OnPeerError() callback to P2P when a peer errors
 func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string, uuid uint64) {
 	p.log.Warn(PeerError(publicKey, remoteAddr, err))
+	// acquire the write lock before modifying the peer set
+	unlock := lockWithTrace("p2p", &p.mux, p.log)
+	removeErr := p.PeerSet.Remove(publicKey, uuid)
+	unlock()
 	// ignore error: peer may have disconnected before added
-	if err = p.PeerSet.Remove(publicKey, uuid); err != nil {
-		p.log.Errorf("Remove error: %s", err.Error())
+	if removeErr != nil {
+		p.log.Errorf("Remove error: %s", removeErr.Error())
 	}
 
 	// Add to failed peers using the configured address from must-connects when possible.
