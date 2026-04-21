@@ -29,7 +29,7 @@ const (
 	maxStreamSendQueueSize = 1000                                // maximum number of items in a stream send queue before blocking
 	keepAlivePeriod        = 10 * time.Second                    // TCP keep-alive probe interval
 	heartbeatInterval      = time.Second                         // how often to send heartbeat pings
-	heartbeatTimeout       = 2 * time.Second                     // how long to wait for liveness before dropping the peer
+	heartbeatTimeout       = 3 * time.Second                     // how long to wait for liveness before dropping the peer
 	heartbeatTopic         = lib.Topic_HEARTBEAT                 // dedicated heartbeat stream
 	heartbeatPing          = "ping"
 	heartbeatPong          = "pong"
