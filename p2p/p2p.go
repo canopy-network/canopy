@@ -295,13 +295,18 @@ func (p *P2P) DialFailedPeers(interval time.Duration) {
 				}
 			}
 
+			// prevent a stampede of dials by staggering with a delay
+			const reconnectStagger = 100 * time.Millisecond
 			// Attempt a single dial per tick; keep it in the failed set if it doesn't succeed.
-			go func(mapKey any, a *lib.PeerAddress) {
+			go func(mapKey any, a *lib.PeerAddress, idx int) {
+				if idx > 0 {
+					time.Sleep(time.Duration(idx) * reconnectStagger)
+				}
 				if err := p.Dial(a, false, true); err != nil {
 					return
 				}
 				p.failedPeers.Delete(mapKey)
-			}(key, reconnect)
+			}(key, reconnect, count)
 
 			count++
 			return true
