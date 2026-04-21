@@ -76,7 +76,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
           className="bg-card rounded-xl p-6 border border-border relative overflow-hidden"
         >
           <div className="flex items-center justify-between">
-            <h3 className="text-muted-foreground text-sm font-medium mb-2">
+            <h3 className="wallet-card-title mb-2">
               {stat.title}
             </h3>
             <stat.icon className={`${stat.iconColor} w-5 h-5`} />

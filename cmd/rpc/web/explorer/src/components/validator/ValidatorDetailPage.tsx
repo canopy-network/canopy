@@ -26,7 +26,6 @@ interface ValidatorDetail {
         committeeId: number
         stakedAmount: number
         percentage: number
-        icon: string
         color: string
     }>
 }
@@ -71,21 +70,13 @@ const ValidatorDetailPage: React.FC = () => {
         fetchCommitteeData()
     }, [validatorData?.committees])
 
-    const icons = [
-        'fa-solid fa-leaf',
-        'fa-brands fa-ethereum',
-        'fa-brands fa-bitcoin',
-        'fa-solid fa-circle-nodes',
-        'fa-solid fa-link',
-        'fa-solid fa-network-wired'
-    ]
     const chainColors = [
-        'bg-green-300/10 text-primary text-lg',
-        'bg-blue-300/10 text-blue-500 text-lg',
-        'bg-yellow-600/10 text-yellow-400 text-lg',
-        'bg-purple-300/10 text-purple-500 text-lg',
-        'bg-red-300/10 text-red-500 text-lg',
-        'bg-cyan-300/10 text-cyan-500 text-lg'
+        '#35cd48',
+        '#216cd0',
+        '#ddb228',
+        '#ffffff',
+        '#ff1845',
+        '#35cd48'
     ]
 
     const generateNestedChains = (committees: number[], validatorStake: number) => {
@@ -102,7 +93,6 @@ const ValidatorDetailPage: React.FC = () => {
                 committeeId: committeeId,
                 stakedAmount: validatorStake,
                 percentage: stakingPower,
-                icon: icons[index % icons.length],
                 color: chainColors[index % chainColors.length]
             }
         })
@@ -163,18 +153,18 @@ const ValidatorDetailPage: React.FC = () => {
 
     if (loading || isLoading) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]">
+            <div className="w-full">
                 <div className="animate-pulse">
-                    <div className="h-8 bg-gray-700/50 rounded w-1/3 mb-4"></div>
-                    <div className="h-32 bg-gray-700/50 rounded mb-6"></div>
+                    <div className="mb-4 h-8 w-1/3 rounded bg-[#171717]"></div>
+                    <div className="mb-6 h-32 rounded bg-[#171717]"></div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 space-y-6">
-                            <div className="h-64 bg-gray-700/50 rounded"></div>
-                            <div className="h-96 bg-gray-700/50 rounded"></div>
+                            <div className="h-64 rounded bg-[#171717]"></div>
+                            <div className="h-96 rounded bg-[#171717]"></div>
                         </div>
                         <div className="space-y-6">
-                            <div className="h-48 bg-gray-700/50 rounded"></div>
-                            <div className="h-32 bg-gray-700/50 rounded"></div>
+                            <div className="h-48 rounded bg-[#171717]"></div>
+                            <div className="h-32 rounded bg-[#171717]"></div>
                         </div>
                     </div>
                 </div>
@@ -184,13 +174,13 @@ const ValidatorDetailPage: React.FC = () => {
 
     if (!validator) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="w-full">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold text-white mb-4">Validator not found</h1>
-                    <p className="text-gray-400 mb-6">The requested validator could not be found.</p>
+                    <p className="mb-6 text-white/60">The requested validator could not be found.</p>
                     <button
                         onClick={() => navigate('/validators')}
-                        className="bg-primary text-black px-6 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+                        className="rounded-lg bg-[#35cd48] px-6 py-2 text-[#0f0f0f] transition-colors hover:opacity-90"
                     >
                         {validatorDetailTexts.page.backToValidators}
                     </button>
@@ -210,17 +200,13 @@ const ValidatorDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
+            className="w-full"
         >
             {/* Breadcrumb */}
             <div className="mb-6 sm:mb-8">
-                <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-gray-400 mb-4">
-                    <button onClick={() => navigate('/')} className="hover:text-primary transition-colors">
-                        Home
-                    </button>
-                    <i className="fa-solid fa-chevron-right text-xs"></i>
-                    <button onClick={() => navigate('/validators')} className="hover:text-primary transition-colors">
-                        {validator.delegate ? 'Delegators' : 'Validators'}
+                <nav className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/60 sm:text-sm">
+                    <button onClick={() => navigate('/staking')} className="transition-colors hover:text-[#35cd48]">
+                        Staking
                     </button>
                     <i className="fa-solid fa-chevron-right text-xs"></i>
                     <span className="text-white break-all sm:break-normal font-mono text-xs sm:text-sm">

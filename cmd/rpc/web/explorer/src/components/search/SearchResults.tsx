@@ -696,18 +696,16 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             {allFilteredResults.length > 0 && (
                 <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 lg:flex-row-reverse">
                     <div className="text-xs sm:text-sm text-gray-400 text-center sm:text-left">
-                        Showing {startIndex + 1} to {Math.min(endIndex, allFilteredResults.length)} of <AnimatedNumber value={allFilteredResults.length} /> results
+                        {startIndex + 1} to {Math.min(endIndex, allFilteredResults.length)} of <AnimatedNumber value={allFilteredResults.length} /> results
                     </div>
                     <div className="flex gap-2 flex-wrap justify-center">
                         <button
                             onClick={handlePrevious}
                             disabled={currentPage === 1}
-                            className={`px-3 py-1.5 rounded-md text-xs sm:text-sm transition-colors ${currentPage === 1
-                                ? 'bg-input text-gray-500 cursor-not-allowed'
-                                : 'bg-input text-white hover:bg-white/10'
-                                }`}
+                            className="explorer-pagination-button px-3 py-1.5 text-xs sm:text-sm"
+                            aria-label="Previous page"
                         >
-                            Previous
+                            <i className="fa-solid fa-angle-left"></i>
                         </button>
 
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -716,9 +714,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 <button
                                     key={pageNum}
                                     onClick={() => handlePageChange(pageNum)}
-                                    className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${currentPage === pageNum
-                                        ? 'bg-primary text-black'
-                                        : 'bg-input text-white hover:bg-white/10'
+                                    className={`explorer-pagination-button explorer-pagination-page px-3 py-1.5 text-xs sm:text-sm font-medium ${currentPage === pageNum
+                                        ? 'explorer-pagination-page-active'
+                                        : ''
                                         }`}
                                 >
                                     {pageNum}
@@ -729,12 +727,10 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                         <button
                             onClick={handleNext}
                             disabled={currentPage === totalPages}
-                            className={`px-3 py-1.5 rounded-md text-xs sm:text-sm transition-colors ${currentPage === totalPages
-                                ? 'bg-input text-gray-500 cursor-not-allowed'
-                                : 'bg-input text-white hover:bg-white/10'
-                                }`}
+                            className="explorer-pagination-button px-3 py-1.5 text-xs sm:text-sm"
+                            aria-label="Next page"
                         >
-                            Next
+                            <i className="fa-solid fa-angle-right"></i>
                         </button>
                     </div>
                 </div>

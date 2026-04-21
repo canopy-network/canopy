@@ -90,7 +90,7 @@ const Navbar = () => {
                     {/* Section 1: Left - Logo + Block # */}
                     <div className="flex items-center">
                         <Link to="/" className="flex items-center space-x-3">
-                            <Logo size={260} showText={false} />
+                            <Logo />
                             <div className="bg-card rounded-full px-2 py-1 flex items-center gap-2 text-base">
                                 <p className='text-gray-500 font-light'>Block:</p>
                                 <p className="font-medium text-white">#{latestBlock.data?.totalCount?.toLocaleString() || '0'}</p>

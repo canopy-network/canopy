@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Check, ChevronDown } from 'lucide-react'
 
 interface Network {
     id: string
@@ -31,7 +32,14 @@ const networks: Network[] = [
     }
 ]
 
-const NetworkSelector: React.FC = () => {
+interface NetworkSelectorProps {
+    fullWidth?: boolean
+}
+
+const buttonClass =
+    'inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-white/15 px-3 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white'
+
+const NetworkSelector: React.FC<NetworkSelectorProps> = ({ fullWidth = false }) => {
     const [isOpen, setIsOpen] = useState(false)
     const [selectedNetwork, setSelectedNetwork] = useState<Network>(networks[0])
     const dropdownRef = useRef<HTMLDivElement>(null)
@@ -90,21 +98,18 @@ const NetworkSelector: React.FC = () => {
         <div className="relative max-w-full" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-primary hover:bg-white/10 transition-colors duration-200 max-w-full"
+                className={`${buttonClass} ${fullWidth ? 'w-full' : 'max-w-full'}`}
             >
-                <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+                <div className="flex min-w-0 flex-1 items-center space-x-2 overflow-hidden">
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${selectedNetwork.isTestnet ? 'bg-yellow-400' : 'bg-green-400'}`} />
-                    <span className="truncate whitespace-nowrap overflow-hidden text-ellipsis">{selectedNetwork.name}</span>
+                    <span className="truncate whitespace-nowrap overflow-hidden text-ellipsis text-sm">{selectedNetwork.name}</span>
                 </div>
-                <motion.svg
-                    className="h-4 w-4 flex-shrink-0"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
+                <motion.div
                     animate={{ rotate: isOpen ? 180 : 0 }}
                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                 >
-                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
-                </motion.svg>
+                    <ChevronDown className="h-4 w-4 flex-shrink-0" />
+                </motion.div>
             </button>
 
             <AnimatePresence>
@@ -114,7 +119,7 @@ const NetworkSelector: React.FC = () => {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                         transition={{ duration: 0.18, ease: 'easeOut' }}
-                        className="absolute right-0 mt-2 min-w-[200px] overflow-hidden rounded-lg border border-white/10 bg-card shadow-2xl z-50"
+                        className={`absolute z-50 mt-2 overflow-hidden rounded-lg border border-white/10 bg-card shadow-2xl ${fullWidth ? 'left-0 right-0 min-w-full' : 'right-0 min-w-[220px]'}`}
                     >
                         <motion.div
                             initial={{ opacity: 0 }}
@@ -130,9 +135,9 @@ const NetworkSelector: React.FC = () => {
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.03 * index, duration: 0.14 }}
                                     onClick={() => handleNetworkSelect(network)}
-                                    className={`w-full text-left px-3 py-2 text-sm font-normal transition-colors duration-200 flex items-center space-x-3 ${selectedNetwork.id === network.id
-                                        ? 'text-primary bg-primary/10'
-                                        : 'text-gray-300 hover:text-primary hover:bg-white/10'
+                                    className={`flex w-full items-center space-x-3 px-3 py-2 text-left text-sm font-normal transition-colors duration-200 ${selectedNetwork.id === network.id
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-gray-300 hover:bg-white/10 hover:text-white'
                                         }`}
                                 >
                                     <div className={`w-2 h-2 rounded-full ${network.isTestnet ? 'bg-yellow-400' : 'bg-green-400'}`} />
@@ -141,15 +146,12 @@ const NetworkSelector: React.FC = () => {
                                         <div className="text-xs text-gray-500 truncate">{network.rpcUrl}</div>
                                     </div>
                                     {selectedNetwork.id === network.id && (
-                                        <motion.svg
+                                        <motion.div
                                             initial={{ scale: 0 }}
                                             animate={{ scale: 1 }}
-                                            className="h-4 w-4 text-primary"
-                                            viewBox="0 0 20 20"
-                                            fill="currentColor"
                                         >
-                                            <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                                        </motion.svg>
+                                            <Check className="h-4 w-4 text-primary" />
+                                        </motion.div>
                                     )}
                                 </motion.button>
                             ))}

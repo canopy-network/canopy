@@ -42,7 +42,8 @@ chainConfig.rpc = {
 // Update explorer paths (built from the base URL)
 const trimmedExplorer = explorerBasePath.replace(/\/+$/, '');
 chainConfig.explorer = {
-  tx: `${trimmedExplorer}/transaction`
+  tx: `${trimmedExplorer}/transaction`,
+  order: `${trimmedExplorer}/order`
 };
 
 // Write the updated config

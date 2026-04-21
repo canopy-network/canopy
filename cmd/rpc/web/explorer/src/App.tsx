@@ -1,8 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
-import { AnimatePresence } from 'framer-motion'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
-import Navbar from './components/Navbar'
-import Footer from './components/Footer'
 import HomePage from './pages/Home'
 import SearchPage from './pages/Search'
 import NotFoundPage from './pages/NotFound'
@@ -14,7 +11,6 @@ import ValidatorsPage from './components/validator/ValidatorsPage'
 import ValidatorDetailPage from './components/validator/ValidatorDetailPage'
 import AccountsPage from './components/account/AccountsPage'
 import AccountDetailPage from './components/account/AccountDetailPage'
-import NetworkAnalyticsPage from './components/analytics/NetworkAnalyticsPage'
 import TokenSwapsPage from './components/token-swaps/TokenSwapsPage'
 import OrderDetailPage from './components/token-swaps/OrderDetailPage'
 import DexBatchesPage from './components/dex/DexBatchesPage'
@@ -22,38 +18,7 @@ import StakingPage from './components/staking/StakingPage'
 import GovernancePage from './components/staking/GovernancePage'
 import SupplyPage from './components/staking/SupplyPage'
 import { useNetworkChangeHandler } from './hooks/useApi'
-
-
-function AnimatedRoutes() {
-  const location = useLocation()
-  return (
-    <AnimatePresence mode="popLayout" initial={false}>
-      <Routes location={location} key={location.pathname}>
-        <Route index element={<HomePage />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/blocks" element={<BlocksPage />} />
-        <Route path="/block/:blockHeight" element={<BlockDetailPage />} />
-        <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/transaction/:transactionHash" element={<TransactionDetailPage />} />
-        <Route path="/validators" element={<ValidatorsPage />} />
-        <Route path="/delegators" element={<ValidatorsPage />} />
-        <Route path="/validator/:validatorAddress" element={<ValidatorDetailPage />} />
-        <Route path="/accounts" element={<AccountsPage />} />
-        <Route path="/account/:address" element={<AccountDetailPage />} />
-        <Route path="/analytics" element={<NetworkAnalyticsPage />} />
-        <Route path="/token-swaps" element={<TokenSwapsPage />} />
-        <Route path="/order/:committee/:orderId" element={<OrderDetailPage />} />
-        <Route path="/dex" element={<DexBatchesPage />} />
-        <Route path="/staking" element={<StakingPage />} />
-        <Route path="/governance" element={<GovernancePage />} />
-        <Route path="/supply" element={<SupplyPage />} />
-        <Route path="/governance" element={<HomePage />} />
-        <Route path="/orders" element={<HomePage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </AnimatePresence>
-  )
-}
+import ExplorerLayout from './components/layouts/ExplorerLayout'
 
 function App() {
   // Handle network changes and invalidate queries
@@ -61,12 +26,30 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-background flex flex-col">
-        <Navbar />
-        <main className="flex-1">
-          <AnimatedRoutes />
-        </main>
-        <Footer />
+      <div className="min-h-screen bg-background">
+        <Routes>
+          <Route element={<ExplorerLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="/summary" element={<Navigate to="/" replace />} />
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="/blocks" element={<BlocksPage />} />
+            <Route path="/block/:blockHeight" element={<BlockDetailPage />} />
+            <Route path="/transactions" element={<TransactionsPage />} />
+            <Route path="/transaction/:transactionHash" element={<TransactionDetailPage />} />
+            <Route path="/validators" element={<ValidatorsPage />} />
+            <Route path="/delegators" element={<ValidatorsPage />} />
+            <Route path="/validator/:validatorAddress" element={<ValidatorDetailPage />} />
+            <Route path="/accounts" element={<AccountsPage />} />
+            <Route path="/account/:address" element={<AccountDetailPage />} />
+            <Route path="/token-swaps" element={<TokenSwapsPage />} />
+            <Route path="/order/:committee/:orderId" element={<OrderDetailPage />} />
+            <Route path="/dex" element={<DexBatchesPage />} />
+            <Route path="/staking" element={<StakingPage />} />
+            <Route path="/governance" element={<GovernancePage />} />
+            <Route path="/supply" element={<SupplyPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
         <Toaster
           position="top-right"
           toastOptions={{

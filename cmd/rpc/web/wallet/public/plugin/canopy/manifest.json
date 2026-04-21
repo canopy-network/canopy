@@ -451,8 +451,16 @@
         "wizard": {
           "steps": [
             {
-              "id": "setup",
-              "title": "Setup"
+              "id": "addresses",
+              "title": "Addresses"
+            },
+            {
+              "id": "amount",
+              "title": "Amount"
+            },
+            {
+              "id": "preferences",
+              "title": "Preferences"
             },
             {
               "id": "committees",
@@ -469,7 +477,7 @@
             "span": {
               "base": 12
             },
-            "step": "setup"
+            "step": "addresses"
           },
           {
             "id": "operator",
@@ -491,7 +499,7 @@
               }
             },
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
-            "step": "setup"
+            "step": "addresses"
           },
           {
             "type": "section",
@@ -500,7 +508,7 @@
             "icon": "Info",
             "variant": "default",
             "showIf": "{{ form.operator && ds.validator }}",
-            "step": "setup",
+            "step": "addresses",
             "span": {
               "base": 12
             }
@@ -511,7 +519,7 @@
             "span": {
               "base": 12
             },
-            "step": "setup"
+            "step": "addresses"
           },
           {
             "id": "output",
@@ -533,7 +541,7 @@
             "value": "{{ ds.validator ? ds.validator.output : '' }}",
             "autoPopulate": "once",
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
-            "step": "setup"
+            "step": "addresses"
           },
           {
             "id": "signerResponsible",
@@ -557,7 +565,7 @@
                 "help": "Output Address"
               }
             ],
-            "step": "setup"
+            "step": "addresses"
           },
           {
             "type": "section",
@@ -566,7 +574,7 @@
             "icon": "Wallet",
             "variant": "info",
             "showIf": "{{ form.signerResponsible && form.operator && form.output }}",
-            "step": "setup",
+            "step": "addresses",
             "span": {
               "base": 12
             }
@@ -579,7 +587,7 @@
             "span": {
               "base": 12
             },
-            "step": "setup"
+            "step": "amount"
           },
           {
             "id": "amount",
@@ -612,7 +620,7 @@
             "span": {
               "base": 12
             },
-            "step": "setup"
+            "step": "amount"
           },
           {
             "type": "section",
@@ -621,7 +629,7 @@
             "icon": "TrendingUp",
             "variant": "success",
             "showIf": "{{ ds.validator }}",
-            "step": "setup",
+            "step": "amount",
             "span": {
               "base": 12
             }
@@ -632,7 +640,7 @@
             "span": {
               "base": 12
             },
-            "step": "setup",
+            "step": "amount",
             "showIf": "{{ ds.validator }}"
           },
           {
@@ -657,7 +665,7 @@
                 "toolTip": "This will delegate your tokens to a committee."
               }
             ],
-            "step": "setup"
+            "step": "preferences"
           },
           {
             "id": "isAutocompound",
@@ -667,7 +675,7 @@
             "label": "Autocompound",
             "value": "{{ ds.validator ? ds.validator.compound === true : false }}",
             "autoPopulate": "once",
-            "step": "setup"
+            "step": "preferences"
           },
           {
             "type": "section",
@@ -706,32 +714,6 @@
             "span": {
               "base": 12
             },
-            "step": "committees"
-          },
-          {
-            "id": "showAdvancedCommittees",
-            "name": "showAdvancedCommittees",
-            "type": "collapsibleGroup",
-            "title": "Advanced Options",
-            "description": "Manual committee configuration",
-            "icon": "Settings",
-            "variant": "default",
-            "defaultExpanded": false,
-            "step": "committees",
-            "span": {
-              "base": 12
-            }
-          },
-          {
-            "id": "manualCommittees",
-            "name": "manualCommittees",
-            "type": "text",
-            "label": "Committees IDs (manual override)",
-            "placeholder": "1,2,3",
-            "help": "Enter comma separated committee IDs to manually override selection",
-            "value": "{{ Array.isArray(form.selectCommittees) ? form.selectCommittees.join(',') : (ds.validator?.committees ? (Array.isArray(ds.validator.committees) ? ds.validator.committees.join(',') : ds.validator.committees) : '') }}",
-            "readOnly": false,
-            "showIf": "{{ form.showAdvancedCommittees }}",
             "step": "committees"
           },
           {
@@ -3156,7 +3138,6 @@
       "ds": {
         "height": {},
         "gov.poll": {},
-        "gov.proposals": {},
         "keystore": {},
         "account": {
           "account": {
@@ -3164,9 +3145,9 @@
           }
         },
         "__options": {
-          "staleTimeMs": 4000,
+          "staleTimeMs": 0,
           "refetchIntervalMs": 4000,
-          "refetchOnMount": true,
+          "refetchOnMount": "always",
           "refetchOnWindowFocus": false
         }
       },
@@ -3196,38 +3177,12 @@
             "id": "proposalHash",
             "name": "proposalHash",
             "type": "select",
-            "label": "Poll",
+            "label": "Poll Hash",
             "required": true,
             "map": "{{Object.entries(ds['gov.poll'] || {}).map(([k, v]) => { const h = v?.proposalHash || k; return { label: String(h).slice(0, 12) + '...', value: h }; })}}",
-            "help": "Select the poll you want to vote on.",
+            "help": "Select the poll hash you want to vote on.",
             "span": {
               "base": 12
-            }
-          },
-          {
-            "id": "proposal",
-            "name": "proposal",
-            "type": "textarea",
-            "label": "Proposal Text",
-            "required": true,
-            "rows": 3,
-            "placeholder": "Enter the exact proposal text used to start the poll",
-            "help": "Must exactly match the proposal text that was used when this poll was created.",
-            "span": {
-              "base": 12
-            }
-          },
-          {
-            "id": "endBlock",
-            "name": "endBlock",
-            "type": "number",
-            "label": "End Block",
-            "required": true,
-            "placeholder": "Enter the end block used to start the poll",
-            "help": "Must exactly match the endBlock value that was used when this poll was created.",
-            "span": {
-              "base": 12,
-              "md": 6
             }
           },
           {
@@ -3240,6 +3195,7 @@
             "autoPopulate": "always",
             "placeholder": "https://...",
             "help": "Auto-filled from the poll data.",
+            "readOnly": true,
             "span": {
               "base": 12,
               "md": 6
@@ -3277,14 +3233,6 @@
               "value": "{{form.proposalHash}}"
             },
             {
-              "label": "Proposal Text",
-              "value": "{{form.proposal}}"
-            },
-            {
-              "label": "End Block",
-              "value": "{{form.endBlock}}"
-            },
-            {
               "label": "Vote",
               "value": "{{form.voteApprove ? 'Approve' : 'Reject'}}"
             }
@@ -3300,34 +3248,69 @@
           "value": "{{form.address || account.address}}",
           "coerce": "string"
         },
-        "pollJSON": {
-          "proposal": "{{form.proposal}}",
-          "endBlock": "{{(Number(form.endBlock || 0))}}",
-          "URL": "{{form.URL || ''}}"
+        "output": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
         },
-        "pollApprove": {
-          "value": "{{form.voteApprove}}",
+        "amount": {
+          "value": 1,
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{JSON.stringify({ votePoll: form.proposalHash, approve: form.voteApprove })}}",
+          "coerce": "string"
+        },
+        "delegate": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{fees.raw.sendFee}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
           "coerce": "boolean"
         },
         "password": {
           "value": "{{session.password}}",
           "coerce": "string"
-        },
-        "submit": {
-          "value": true,
-          "coerce": "boolean"
         }
       },
       "submit": {
         "base": "admin",
-        "path": "/v1/admin/tx-vote-poll",
+        "path": "/v1/admin/tx-send",
         "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Poll Vote Submitted",
+          "description": "Your vote was submitted using the selected poll hash.",
+          "actions": []
+        }
       }
     },
     {
       "id": "govGenerateParamChange",
-      "title": "Create Parameter Change Proposal",
-      "icon": "Settings",
+      "title": "Submit a Proposal",
+      "icon": "ScrollText",
       "ds": {
         "height": {},
         "params": {},
@@ -3349,12 +3332,52 @@
       "ui": {
         "slots": {
           "modal": {
-            "className": "sm:max-w-[32rem] md:max-w-[44rem]"
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
           }
         }
       },
       "form": {
         "fields": [
+          {
+            "type": "section",
+            "title": "Proposal Flow",
+            "description": "Generate the signed proposal payload first. Then review and approve it, and finally submit that same payload to the network.",
+            "icon": "Info",
+            "variant": "info",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "proposalType",
+            "name": "proposalType",
+            "type": "select",
+            "label": "Proposal Type",
+            "required": true,
+            "value": "protocol",
+            "options": [
+              {
+                "label": "Protocol Change",
+                "value": "protocol"
+              },
+              {
+                "label": "Treasury Subsidy",
+                "value": "treasury"
+              }
+            ],
+            "help": "Choose the governance proposal type to generate.",
+            "span": {
+              "base": 12,
+              "md": 6
+            }
+          },
           {
             "id": "address",
             "name": "address",
@@ -3364,6 +3387,16 @@
             "value": "{{account.address}}",
             "autoPopulate": "once",
             "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": {
+              "base": 12,
+              "md": 6
+            }
+          },
+          {
+            "type": "divider",
+            "label": "Proposal Details",
+            "variant": "gradient",
+            "spacing": "lg",
             "span": {
               "base": 12
             }
@@ -3375,6 +3408,7 @@
             "label": "Parameter Space",
             "required": true,
             "value": "fee",
+            "showIf": "{{ form.proposalType !== 'treasury' }}",
             "map": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const toValue = { consensus: 'cons', validator: 'val', fee: 'fee', governance: 'gov', economics: 'eco' }; const toLabel = { consensus: 'Consensus Parameters', validator: 'Validator Parameters', fee: 'Fee Parameters', governance: 'Governance Parameters', economics: 'Economics Parameters' }; const keys = Object.keys(root || {}); if (!keys.length) return null; return keys.map(k => ({ label: toLabel[k] || k, value: toValue[k] || k })); })()}}",
             "options": [
               {
@@ -3409,6 +3443,7 @@
             "type": "select",
             "label": "Parameter Key",
             "required": true,
+            "showIf": "{{ form.proposalType !== 'treasury' }}",
             "map": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.paramSpace || 'fee'; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); const space = root?.[resolved] || {}; return Object.keys(space).map(k => ({ label: k, value: k })); })()}}",
             "span": {
               "base": 12,
@@ -3421,8 +3456,30 @@
             "type": "text",
             "label": "New Value",
             "required": true,
+            "showIf": "{{ form.proposalType !== 'treasury' }}",
             "value": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.paramSpace || 'fee'; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); return root?.[resolved]?.[form.paramKey] ?? ''; })()}}",
-            "autoPopulate": "once",
+            "autoPopulate": "always",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Treasury Amount",
+            "required": true,
+            "showIf": "{{ form.proposalType === 'treasury' }}",
+            "help": "Amount to request from the treasury if the proposal passes.",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "type": "divider",
+            "label": "Voting Window",
+            "variant": "gradient",
+            "spacing": "lg",
             "span": {
               "base": 12
             }
@@ -3470,8 +3527,8 @@
             "id": "memo",
             "name": "memo",
             "type": "textarea",
-            "label": "Memo",
-            "placeholder": "Description/reason for change",
+            "label": "Proposal Memo",
+            "placeholder": "{{ form.proposalType === 'treasury' ? 'Description or reason for the treasury request' : 'Description or reason for the parameter change' }}",
             "span": {
               "base": 12
             }
@@ -3480,10 +3537,18 @@
             "id": "fee",
             "name": "fee",
             "type": "amount",
-            "label": "Fee",
+            "label": "Proposal Fee",
             "required": true,
-            "value": "{{fees.raw?.changeParameterFee != null ? fromMicroDenom(fees.raw.changeParameterFee) : ''}}",
+            "value": "{{(() => { const minFee = form.proposalType === 'treasury' ? fees.raw?.subsidyFee : fees.raw?.changeParameterFee; return minFee != null ? fromMicroDenom(minFee) : ''; })()}}",
             "autoPopulate": "always",
+            "min": "{{(() => { const minFee = form.proposalType === 'treasury' ? fees.raw?.subsidyFee : fees.raw?.changeParameterFee; return fromMicroDenom(minFee ?? 0); })()}}",
+            "validation": {
+              "messages": {
+                "required": "Proposal fee is required",
+                "min": "Proposal fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "{{ form.proposalType === 'treasury' ? 'Uses the treasury subsidy proposal fee.' : 'Uses the protocol change proposal fee.' }}",
             "span": {
               "base": 12,
               "md": 12
@@ -3491,46 +3556,50 @@
           }
         ],
         "confirmation": {
-          "title": "Confirm Parameter Change Proposal",
+          "title": "Confirm Proposal Payload",
           "summary": [
             {
-              "label": "Parameter",
-              "value": "{{form.paramSpace}} / {{form.paramKey}}"
+              "label": "Proposal Type",
+              "value": "{{form.proposalType === 'treasury' ? 'Treasury Subsidy' : 'Protocol Change'}}"
             },
             {
-              "label": "Value",
-              "value": "{{form.paramValue}}"
+              "label": "Proposal Details",
+              "value": "{{form.proposalType === 'treasury' ? `${form.amount || 0} ${chain.denom.symbol} treasury subsidy` : `${form.paramSpace} / ${form.paramKey} -> ${form.paramValue}`}}"
             },
             {
               "label": "Voting Window",
               "value": "{{form.startBlock}} -> {{form.endBlock}}"
+            },
+            {
+              "label": "Fee",
+              "value": "{{numberToLocaleString<{{form.fee || 0}}>}} {{chain.denom.symbol}}"
             }
           ],
           "btn": {
-            "icon": "Settings",
-            "label": "Generate Proposal"
+            "icon": "ScrollText",
+            "label": "Generate Payload"
           }
         }
       },
       "payload": {
         "address": {
-          "value": "{{account.address}}",
+          "value": "{{form.address || account.address}}",
           "coerce": "string"
         },
         "amount": {
-          "value": 0,
+          "value": "{{form.proposalType === 'treasury' ? toMicroDenom(form.amount || 0) : 0}}",
           "coerce": "number"
         },
         "paramSpace": {
-          "value": "{{form.paramSpace}}",
+          "value": "{{form.proposalType === 'treasury' ? '' : form.paramSpace}}",
           "coerce": "string"
         },
         "paramKey": {
-          "value": "{{form.paramKey}}",
+          "value": "{{form.proposalType === 'treasury' ? '' : form.paramKey}}",
           "coerce": "string"
         },
         "paramValue": {
-          "value": "{{form.paramValue}}",
+          "value": "{{form.proposalType === 'treasury' ? '' : form.paramValue}}",
           "coerce": "string"
         },
         "startBlock": {
@@ -3560,14 +3629,14 @@
       },
       "submit": {
         "base": "admin",
-        "path": "/v1/admin/tx-change-param",
+        "path": "{{form.proposalType === 'treasury' ? '/v1/admin/tx-dao-transfer' : '/v1/admin/tx-change-param'}}",
         "method": "POST"
       },
       "notifications": {
         "onSuccess": {
           "variant": "success",
-          "title": "Proposal Generated",
-          "description": "Copy the JSON, then Approve it (step 2) and Submit via Raw TX Broadcast (step 3)."
+          "title": "Proposal Payload Generated",
+          "description": "Copy the signed JSON, then continue to Vote on Proposal and Submit Payload."
         }
       }
     },
@@ -3575,6 +3644,7 @@
       "id": "govGenerateDaoTransfer",
       "title": "Create Treasury Subsidy Proposal",
       "icon": "Coins",
+      "hidden": true,
       "ds": {
         "height": {},
         "fees": {},
@@ -3778,7 +3848,7 @@
     },
     {
       "id": "govSubmitProposalTx",
-      "title": "Manual Raw TX Broadcast",
+      "title": "Submit Payload",
       "icon": "Send",
       "ui": {
         "slots": {
@@ -3793,10 +3863,10 @@
             "id": "proposalTx",
             "name": "proposalTx",
             "type": "textarea",
-            "label": "Raw Proposal JSON",
+            "label": "Signed Proposal JSON",
             "required": true,
             "placeholder": "{\"type\":\"...\"}",
-            "help": "Advanced mode: paste a fully signed raw transaction JSON to broadcast via /v1/tx.",
+            "help": "Paste the same signed proposal JSON generated in step 1 to broadcast it to the network.",
             "rows": 12,
             "span": {
               "base": 12
@@ -3804,16 +3874,16 @@
           }
         ],
         "confirmation": {
-          "title": "Confirm Manual Broadcast",
+          "title": "Confirm Proposal Submission",
           "summary": [
             {
               "label": "Payload",
-              "value": "Raw JSON transaction will be sent to /v1/tx"
+              "value": "Signed proposal JSON will be broadcast to /v1/tx"
             }
           ],
           "btn": {
             "icon": "Send",
-            "label": "Submit"
+            "label": "Submit to Network"
           }
         }
       },
@@ -3830,14 +3900,14 @@
       "notifications": {
         "onSuccess": {
           "variant": "success",
-          "title": "Raw Transaction Broadcast",
-          "description": "The raw transaction was sent to the network endpoint."
+          "title": "Proposal Submitted",
+          "description": "The signed proposal payload was sent to the network endpoint."
         }
       }
     },
     {
       "id": "govAddProposalVote",
-      "title": "Approve / Reject Proposal",
+      "title": "Vote on Proposal",
       "icon": "Vote",
       "ui": {
         "slots": {
@@ -3849,13 +3919,30 @@
       "form": {
         "fields": [
           {
+            "type": "section",
+            "title": "Replica Vote",
+            "description": "Review a generated proposal payload and store this validator or replica's approve or reject vote before the proposal is submitted.",
+            "icon": "Info",
+            "variant": "info",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": {
+              "base": 12
+            }
+          },
+          {
             "id": "proposalJson",
             "name": "proposalJson",
             "type": "textarea",
             "label": "Proposal Transaction JSON",
             "required": true,
             "placeholder": "Paste the generated proposal JSON here",
-            "help": "Paste the raw transaction JSON from step 1 (Generate Proposal). This adds the proposal to the node's local approve list.",
+            "help": "Paste the signed proposal JSON from step 1. This stores the vote decision on the node's local approve list.",
             "rows": 12,
             "span": {
               "base": 12
@@ -3915,7 +4002,7 @@
         "onSuccess": {
           "variant": "success",
           "title": "Proposal Vote Saved",
-          "description": "Added to the node's approve list. Now submit the JSON via Raw TX Broadcast (step 3)."
+          "description": "Added to the node's approve list. Next, submit the same JSON to the network."
         }
       }
     },
@@ -4057,6 +4144,7 @@
         },
         "keystore": {},
         "fees": {},
+        "params": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
@@ -4065,7 +4153,8 @@
           "critical": [
             "admin.config",
             "account",
-            "keystore"
+            "keystore",
+            "params"
           ]
         }
       },
@@ -4093,8 +4182,8 @@
           "title": "Create Order Guide",
           "items": [
             {
-              "label": "Execution",
-              "value": "Create runs on root chain",
+              "label": "Confirmation",
+              "value": "Submitted first, then confirmed after block inclusion",
               "icon": "Info"
             },
             {
@@ -4169,15 +4258,16 @@
             "type": "amount",
             "label": "Amount For Sale",
             "required": true,
-            "min": 1e-06,
-            "max": "{{ fromMicroDenom<{{ds.account?.amount ?? 0}}> }}",
+            "min": "{{ ds.params ? fromMicroDenom(ds.params?.validator?.minimumOrderSize ?? 1) : 0.000001 }}",
+            "max": "{{(() => { const available = ds.account?.amount ?? 0; const fee = toMicroDenom(form.fee || 0); return fromMicroDenom(Math.max(0, available - fee)); })()}}",
             "validation": {
               "messages": {
                 "required": "Amount for sale is required",
-                "min": "Amount must be greater than 0",
-                "max": "Insufficient balance. Max available: {{max}} {{chain.denom.symbol}}"
+                "min": "Amount must be at least {{min}} {{chain.denom.symbol}}",
+                "max": "Insufficient balance after fee. Max available: {{max}} {{chain.denom.symbol}}"
               }
             },
+            "help": "Network minimum order size: {{ ds.params ? fromMicroDenom(ds.params?.validator?.minimumOrderSize ?? 0) : 0 }} {{chain.denom.symbol}}",
             "span": {
               "base": 12,
               "md": 6
@@ -4314,8 +4404,22 @@
       "notifications": {
         "onSuccess": {
           "variant": "success",
-          "title": "Order Created",
-          "description": "{{result}}"
+          "title": "Order Submitted",
+          "description": "Node accepted transaction: {{result}}",
+          "actions": [
+            {
+              "type": "link",
+              "label": "View Order",
+              "href": "{{chain.explorer.order}}/{{form.committees}}/{{slice<{{result}}, 0, 40>}}",
+              "newTab": true
+            },
+            {
+              "type": "link",
+              "label": "View Transaction",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
+          ]
         }
       }
     },

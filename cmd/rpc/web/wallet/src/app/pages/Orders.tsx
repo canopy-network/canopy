@@ -1,20 +1,22 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeftRight,
+  ChevronDown,
   CheckCircle2,
   CircleDashed,
   Droplets,
+  Info,
   Lock,
   Pencil,
   PlusCircle,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { useDS } from "@/core/useDs";
+import { PageHeader } from "@/components/layouts/PageHeader";
 
 const ACTION_IDS = {
   createOrder: "orderCreate",
@@ -72,6 +74,7 @@ const toSafeInt = (value: unknown): number | undefined => {
 export default function Orders(): JSX.Element {
   const { chain } = useConfig();
   const { openAction } = useActionModal();
+  const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
 
   const configQ = useDS<AdminConfigResponse>("admin.config", {}, {
     staleTimeMs: 5000,
@@ -100,27 +103,17 @@ export default function Orders(): JSX.Element {
 
   return (
     <motion.div
-      className="min-h-screen bg-background"
+      className="space-y-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <div className="px-6 py-8 space-y-6">
-        <section className="canopy-card p-5 md:p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-2xl font-semibold text-foreground">Orders</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Create, reprice, void, lock, and close orders or execute DEX operations.
-            Fill in the order details manually in each form.
-          </p>
+      <PageHeader
+        title="Orders"
+        subtitle="Create, reprice, void, lock, and close orders or execute DEX operations. Fill in the order details manually in each form."
+      />
 
-          <div className="flex flex-wrap items-center gap-2 mt-3">
-            <StatusBadge label={`Committee ${committeeId ?? "-"}`} status="info" size="sm" />
-          </div>
-        </section>
-
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <div className="xl:col-span-8 space-y-6">
             <section className="canopy-card p-5 md:p-6">
               <h2 className="text-lg font-semibold text-foreground mb-1">Committee Orderbook</h2>
@@ -161,6 +154,87 @@ export default function Orders(): JSX.Element {
                 />
               </div>
             </section>
+
+            <section
+              id="how-it-works"
+              className="overflow-hidden rounded-2xl border border-[#272729] bg-[#171717] shadow-sm"
+            >
+              <button
+                type="button"
+                className="flex h-auto w-full items-start justify-between gap-3 px-5 py-5 text-left transition-colors hover:bg-[#0f0f0f]"
+                onClick={() => setIsHowItWorksOpen((open) => !open)}
+                aria-expanded={isHowItWorksOpen}
+                aria-controls="orders-how-it-works-content"
+              >
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#216cd0]/12 text-[#216cd0]">
+                      <Info className="h-4 w-4" />
+                    </span>
+                    <h2 className="text-xl font-semibold tracking-tight text-foreground">How it works</h2>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    A quick guide to committee orderbook actions, DEX operations, and when to use each flow.
+                  </p>
+                </div>
+                <ChevronDown
+                  className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                    isHowItWorksOpen ? "rotate-0" : "-rotate-90"
+                  }`}
+                />
+              </button>
+              {isHowItWorksOpen && (
+                <div
+                  id="orders-how-it-works-content"
+                  className="border-t border-[#272729] px-5 pb-5 pt-4"
+                >
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-[#272729] bg-[#171717] p-5">
+                      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <ArrowLeftRight className="h-4 w-4 text-white/70" />
+                        Orderbook vs DEX
+                      </div>
+                      <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+                        <p>
+                          The committee orderbook is a staged peer-to-peer flow. One side creates an order, another side locks it, and the trade is finalized only when the close step completes.
+                        </p>
+                        <p>
+                          DEX operations are direct pool interactions. They are better for immediate swaps or liquidity management and do not use the separate create, lock, and close lifecycle.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[#272729] bg-[#171717] p-5">
+                      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <PlusCircle className="h-4 w-4 text-white/70" />
+                        Committee Orderbook Actions
+                      </div>
+                      <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+                        <p>
+                          <span className="font-medium text-foreground">Create</span> opens a new committee order. <span className="font-medium text-foreground">Reprice</span> updates an open order before it is taken, and <span className="font-medium text-foreground">Void</span> cancels it.
+                        </p>
+                        <p>
+                          <span className="font-medium text-foreground">Lock</span> reserves an available order for the counterparty, and <span className="font-medium text-foreground">Close</span> completes the swap once both sides are ready.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[#272729] bg-[#171717] p-5">
+                      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <Droplets className="h-4 w-4 text-white/70" />
+                        DEX Operations
+                      </div>
+                      <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+                        <p>
+                          <span className="font-medium text-foreground">Limit Order</span> places a trade with a price constraint. Use it when execution price matters more than speed.
+                        </p>
+                        <p>
+                          <span className="font-medium text-foreground">Deposit Liquidity</span> adds funds to the pool, while <span className="font-medium text-foreground">Withdraw Liquidity</span> removes your position back out of it.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
 
           <aside className="xl:col-span-4 space-y-6 xl:sticky xl:top-[calc(var(--topbar-height,52px)+1rem)] self-start">
@@ -192,7 +266,6 @@ export default function Orders(): JSX.Element {
               </div>
             </section>
           </aside>
-        </div>
       </div>
     </motion.div>
   );

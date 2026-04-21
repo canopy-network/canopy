@@ -8,7 +8,6 @@ import { Accounts } from '@/app/pages/Accounts'
 import Staking from '@/app/pages/Staking'
 import Monitoring from '@/app/pages/Monitoring'
 import Governance from '@/app/pages/Governance'
-import AllTransactions from '@/app/pages/AllTransactions'
 import Orders from '@/app/pages/Orders'
 
 const router = createBrowserRouter([
@@ -22,7 +21,6 @@ const router = createBrowserRouter([
             { path: '/orders', element: <Orders /> },
             { path: '/monitoring', element: <Monitoring /> },
             { path: '/key-management', element: <KeyManagement /> },
-            { path: '/all-transactions', element: <AllTransactions /> },
             { path: '/all-addresses', element: <Navigate to="/accounts" replace /> },
         ],
     },
@@ -31,4 +29,3 @@ const router = createBrowserRouter([
 })
 
 export default router
-

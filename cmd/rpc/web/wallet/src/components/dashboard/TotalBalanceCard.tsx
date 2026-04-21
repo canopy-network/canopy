@@ -11,10 +11,10 @@ import { SparklineChart } from '@/components/ui/SparklineChart';
 
 export const TotalBalanceCard = React.memo(() => {
     const navigate = useNavigate();
-    const { totalBalance, loading } = useAccountData();
-    const { data: historyData, isLoading: historyLoading } = useBalanceHistory();
-    const { data: chartData = [], isLoading: chartLoading } = useBalanceChart({ points: 12, type: 'balance' });
-    const { symbol, decimals, factor } = useDenom();
+    const { totalLiquid, loading } = useAccountData();
+    const { data: historyData, isLoading: historyLoading } = useBalanceHistory({ type: 'liquid' });
+    const { data: chartData = [], isLoading: chartLoading } = useBalanceChart({ points: 12, type: 'liquid' });
+    const { symbol, factor } = useDenom();
     const [hasAnimated, setHasAnimated] = useState(false);
 
     const isPositive = (historyData?.changePercentage ?? 0) >= 0;
@@ -27,7 +27,7 @@ export const TotalBalanceCard = React.memo(() => {
 
     return (
         <motion.div
-            className="canopy-card bg-[#191919] p-5 h-full flex flex-col cursor-pointer hover:border-primary/30 transition-colors"
+            className="canopy-card bg-[#191919] p-5 h-full flex flex-col cursor-pointer hover:border-white/15 transition-colors"
             initial={hasAnimated ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
@@ -40,54 +40,47 @@ export const TotalBalanceCard = React.memo(() => {
 
             {/* Header */}
             <div className="flex items-center gap-2 mb-4">
-                <span className="text-sm font-medium text-muted-foreground">
-                    Total Balance
+                <span className="wallet-card-title">
+                    Total Liquid Balance
                 </span>
             </div>
 
             {/* Balance */}
-            <div className="flex-1">
+            <div className="flex-1 flex flex-col">
                 {loading ? (
                     <div className="h-9 w-36 rounded-md skeleton mb-1" />
                 ) : (
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-[2.25rem] font-semibold text-foreground tabular-nums leading-none text-glow">
-                            <AnimatedNumber
-                                value={totalBalance / factor}
-                                format={{ notation: 'standard', maximumFractionDigits: 2 }}
-                            />
-                        </span>
-                        <span className="text-sm font-medium text-muted-foreground/50">{symbol}</span>
+                    <div className="flex items-baseline justify-between gap-3">
+                        <div className="flex items-baseline gap-2 min-w-0">
+                            <span className="text-[2.25rem] font-semibold text-foreground tabular-nums leading-none">
+                                <AnimatedNumber
+                                    value={totalLiquid / factor}
+                                    format={{ notation: 'standard', maximumFractionDigits: 2 }}
+                                />
+                            </span>
+                            <span className="text-sm font-medium text-muted-foreground/50">{symbol}</span>
+                        </div>
+                        {historyLoading ? (
+                            <div className="h-3.5 w-24 rounded skeleton flex-shrink-0" />
+                        ) : historyData ? (
+                            <div className={`flex items-center gap-1.5 text-xs font-medium flex-shrink-0 ${isPositive ? 'text-primary' : 'text-destructive'}`}>
+                                {isPositive
+                                    ? <TrendingUp style={{ width: 13, height: 13 }} />
+                                    : <TrendingDown style={{ width: 13, height: 13 }} />
+                                }
+                                <AnimatedNumber
+                                    value={Math.abs(historyData.changePercentage)}
+                                    format={{ notation: 'standard', maximumFractionDigits: 1 }}
+                                />
+                                <span>%</span>
+                                <span className="text-muted-foreground font-normal ml-0.5">{historyData.periodLabel}</span>
+                            </div>
+                        ) : (
+                            <span className="text-xs text-muted-foreground flex-shrink-0">No history</span>
+                        )}
                     </div>
                 )}
-            </div>
-
-            {/* Chart + 24h change */}
-            <div className="mt-4 pt-3 border-t border-border/50">
-                {/* 24h change pill */}
-                <div className="flex items-center justify-between mb-2">
-                    {historyLoading ? (
-                        <div className="h-3.5 w-24 rounded skeleton" />
-                    ) : historyData ? (
-                        <div className={`flex items-center gap-1.5 text-xs font-medium ${isPositive ? 'text-primary' : 'text-destructive'}`}>
-                            {isPositive
-                                ? <TrendingUp style={{ width: 13, height: 13 }} />
-                                : <TrendingDown style={{ width: 13, height: 13 }} />
-                            }
-                            <AnimatedNumber
-                                value={Math.abs(historyData.changePercentage)}
-                                format={{ notation: 'standard', maximumFractionDigits: 1 }}
-                            />
-                            <span>%</span>
-                            <span className="text-muted-foreground font-normal ml-0.5">24h</span>
-                        </div>
-                    ) : (
-                        <span className="text-xs text-muted-foreground">No history</span>
-                    )}
-                </div>
-
-                {/* Sparkline */}
-                <div className="h-20 w-full rounded-lg border border-border/40 bg-background/30 overflow-hidden">
+                <div className="mt-3 h-24 w-full rounded-lg border border-border/40 bg-background/30 overflow-hidden">
                     {chartLoading && chartData.length === 0 ? (
                         <div className="h-full w-full skeleton" />
                     ) : (

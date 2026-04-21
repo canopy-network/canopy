@@ -6,17 +6,15 @@ type LogoProps = {
     showText?: boolean
 }
 
-const SYMBOL_THRESHOLD = 40;
-
-const Logo: React.FC<LogoProps> = ({ size = 32, className = '' }) => {
-    const useSymbol = size <= SYMBOL_THRESHOLD;
-    const height = useSymbol ? size : Math.round(size * 0.18);
+const Logo: React.FC<LogoProps> = ({ size, className = '', showText = true }) => {
+    const src = showText ? '/canopy-explorer-logo.svg' : '/canopy-symbol.png'
+    const height = size ?? (showText ? 24 : 32)
 
     return (
         <div className={`flex items-center ${className}`}>
             <img
-                src={useSymbol ? '/canopy-symbol.png' : '/canopy-logo.png'}
-                alt="Canopy"
+                src={src}
+                alt={showText ? 'Canopy Explorer' : 'Canopy'}
                 style={{ height }}
                 className="flex-shrink-0 object-contain"
             />

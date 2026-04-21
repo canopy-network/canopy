@@ -6,13 +6,14 @@ type LogoProps = {
     showText?: boolean
 }
 
-const Logo: React.FC<LogoProps> = ({ className = '', showText = true }) => {
+const Logo: React.FC<LogoProps> = ({ size, className = '', showText = true }) => {
     return (
         <div className={`flex items-center ${className}`}>
             <img
-                src={showText ? '/canopy-logo.png' : '/canopy-symbol.png'}
+                src={showText ? '/canopy-wallet-logo.svg' : '/canopy-symbol.png'}
                 alt="Canopy"
-                className="h-8 w-auto object-contain"
+                className="w-auto object-contain"
+                style={{ height: size ?? (showText ? 22 : 32) }}
             />
         </div>
     )

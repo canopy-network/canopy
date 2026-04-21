@@ -38,42 +38,48 @@ export const SectionField: React.FC<SectionFieldProps> = ({
   const span = field.span?.base ?? 12;
 
   // Variant styling
-  const variantStyles: Record<string, { bg: string; border: string; text: string; icon: string }> = {
+  const variantStyles: Record<string, { bg: string; border: string; text: string; icon: string; description: string }> = {
     default: {
       bg: "bg-card/50",
       border: "border-border",
       text: "text-foreground",
       icon: "text-muted-foreground",
+      description: "text-muted-foreground",
     },
     info: {
-      bg: "bg-blue-950/30",
-      border: "border-blue-800/30",
-      text: "text-blue-100",
-      icon: "text-blue-400",
+      bg: "bg-[#216cd0]/10",
+      border: "border-[#216cd0]/25",
+      text: "text-[#216cd0]",
+      icon: "text-[#216cd0]",
+      description: "text-[#216cd0]",
     },
     warning: {
-      bg: "bg-yellow-950/30",
-      border: "border-yellow-800/30",
-      text: "text-yellow-100",
-      icon: "text-yellow-400",
+      bg: "bg-[#ddb228]/10",
+      border: "border-[#ddb228]/25",
+      text: "text-[#ddb228]",
+      icon: "text-[#ddb228]",
+      description: "text-[#ddb228]",
     },
     success: {
-      bg: "bg-emerald-950/30",
-      border: "border-emerald-800/30",
-      text: "text-emerald-100",
-      icon: "text-emerald-400",
+      bg: "bg-[#35cd48]/10",
+      border: "border-[#35cd48]/25",
+      text: "text-[#35cd48]",
+      icon: "text-[#35cd48]",
+      description: "text-[#35cd48]",
     },
     error: {
-      bg: "bg-red-950/30",
-      border: "border-red-800/30",
-      text: "text-red-100",
-      icon: "text-red-400",
+      bg: "bg-[#ff1845]/10",
+      border: "border-[#ff1845]/25",
+      text: "text-[#ff1845]",
+      icon: "text-[#ff1845]",
+      description: "text-[#ff1845]",
     },
     primary: {
       bg: "bg-white/[0.06]",
       border: "border-white/12",
       text: "text-foreground",
       icon: "text-foreground/70",
+      description: "text-muted-foreground",
     },
   };
 
@@ -106,7 +112,7 @@ export const SectionField: React.FC<SectionFieldProps> = ({
               </h4>
             )}
             {description && !collapsed && (
-              <p className="text-xs text-muted-foreground mt-1">{description}</p>
+              <p className={cx("mt-1 text-xs", styles.description)}>{description}</p>
             )}
           </div>
           {collapsible && (

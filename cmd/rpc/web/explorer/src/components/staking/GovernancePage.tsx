@@ -9,9 +9,9 @@ const GovernancePage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
-            className="min-h-screen bg-background"
+            className="w-full"
         >
-            <div className="max-w-[100rem] mx-auto px-4 py-8">
+            <div className="w-full">
                 {/* Governance Content */}
                 <GovernanceView />
             </div>

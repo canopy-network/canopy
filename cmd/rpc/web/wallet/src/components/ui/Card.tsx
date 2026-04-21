@@ -10,7 +10,7 @@ const cardVariants = cva("relative flex flex-col border shadow-sm", {
             glass:
                 "gap-5 border border-white/15 bg-white/[0.045] text-white backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_28px_rgba(0,0,0,0.32)]",
             outline:
-                "gap-5 border-border/85 bg-secondary/55 text-foreground backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:border-primary/35",
+                "gap-5 border-border/85 bg-secondary/55 text-foreground backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:border-white/20",
             ghost: "bg-transparent border-transparent shadow-none",
             gradient:
                 "gap-5 border border-white/10 bg-card text-card-foreground shadow-none",
@@ -86,7 +86,7 @@ const CardTitle = React.forwardRef<
     <div
         ref={ref}
         data-slot="card-title"
-        className={cx("leading-none font-semibold", className)}
+        className={cx("wallet-card-title", className)}
         {...props}
     />
 ));

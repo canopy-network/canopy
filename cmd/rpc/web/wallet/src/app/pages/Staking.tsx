@@ -16,6 +16,7 @@ import { StatsCards } from "@/components/staking/StatsCards";
 import { Toolbar } from "@/components/staking/Toolbar";
 import { ValidatorList } from "@/components/staking/ValidatorList";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
+import { PageHeader } from "@/components/layouts/PageHeader";
 
 type ValidatorRow = {
   address: string;
@@ -50,7 +51,6 @@ export default function Staking(): JSX.Element {
 
   const csvRef = useRef<HTMLAnchorElement>(null);
 
-  const [searchTerm, setSearchTerm] = useState("");
   const [chainCount, setChainCount] = useState<number>(0);
 
   const validatorAddresses = useMemo(
@@ -113,16 +113,6 @@ export default function Staking(): JSX.Element {
     });
   }, [validators, rewardsHistory]);
 
-  const filtered: ValidatorRow[] = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        (r.nickname || "").toLowerCase().includes(q) ||
-        r.address.toLowerCase().includes(q),
-    );
-  }, [rows, searchTerm]);
-
   const prepareCSVData = useCallback(() => {
     const header = [
       "address",
@@ -138,7 +128,7 @@ export default function Staking(): JSX.Element {
       "unstakingHeight",
     ];
     const lines = [header.join(",")].concat(
-      filtered.map((r) =>
+      rows.map((r) =>
         [
           r.address,
           r.nickname || "",
@@ -155,7 +145,7 @@ export default function Staking(): JSX.Element {
       ),
     );
     return lines.join("\n");
-  }, [filtered]);
+  }, [rows]);
 
   const exportCSV = useCallback(() => {
     const csvContent = prepareCSVData();
@@ -183,37 +173,38 @@ export default function Staking(): JSX.Element {
 
   return (
     <motion.div
-      className="min-h-screen bg-background"
+      className="space-y-6"
       initial="hidden"
       animate="visible"
       variants={containerVariants}
     >
       {/* Hidden link for CSV export */}
-      <a ref={csvRef} style={{ display: "none" }} />
+      <a ref={csvRef} hidden aria-hidden="true" />
 
-      <div className="px-6 py-8">
-        {/* Top stats */}
-        <StatsCards
-          totalStaked={totalStaked}
-          totalRewards={staking.totalRewards24h || 0}
-          validatorsCount={validators.length}
-          chainCount={chainCount}
+      <PageHeader
+        title="Staking"
+        subtitle="Track staked positions, rewards, and validator activity."
+      />
+
+      {/* Top stats */}
+      <StatsCards
+        totalStaked={totalStaked}
+        totalRewards={staking.totalRewards24h || 0}
+        validatorsCount={validators.length}
+        chainCount={chainCount}
+        activeValidatorsCount={activeValidatorsCount}
+      />
+
+      <div className="flex flex-col bg-card rounded-xl border border-border p-5">
+        {/* Toolbar */}
+        <Toolbar
+          onAddStake={handleAddStake}
+          onExportCSV={exportCSV}
           activeValidatorsCount={activeValidatorsCount}
         />
 
-        <div className="flex flex-col bg-card rounded-xl p-6 border border-border">
-          {/* Toolbar */}
-          <Toolbar
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            onAddStake={handleAddStake}
-            onExportCSV={exportCSV}
-            activeValidatorsCount={activeValidatorsCount}
-          />
-
-          {/* Validator List */}
-          <ValidatorList validators={filtered} />
-        </div>
+        {/* Validator List */}
+        <ValidatorList validators={rows} />
       </div>
     </motion.div>
   );

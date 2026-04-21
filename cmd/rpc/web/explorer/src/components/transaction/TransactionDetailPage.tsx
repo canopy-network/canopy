@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
 import { toCNPY, extractAmountMicro } from '../../lib/utils'
+import TransactionTypeBadge from './TransactionTypeBadge'
 
 // Helper function to format fee - shows in CNPY (converted from micro denomination)
 const formatFee = (micro: number): string => {
@@ -167,7 +168,7 @@ const TransactionDetailPage: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]">
+            <div className="w-full">
                 <div className="animate-pulse">
                     <div className="h-8 bg-gray-700/50 rounded w-1/3 mb-4"></div>
                     <div className="h-32 bg-gray-700/50 rounded mb-6"></div>
@@ -189,7 +190,7 @@ const TransactionDetailPage: React.FC = () => {
 
     if (error || !transactionData) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]">
+            <div className="w-full">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold text-white mb-4">Transaction not found</h1>
                     <p className="text-gray-400 mb-6">The requested transaction could not be found.</p>
@@ -228,16 +229,12 @@ const TransactionDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
+            className="w-full"
         >
             {/* Header */}
             <div className="mb-8">
                 {/* Breadcrumb */}
                 <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400 mb-4">
-                    <button onClick={() => navigate('/')} className="hover:text-primary transition-colors">
-                        Home
-                    </button>
-                    <i className="fa-solid fa-chevron-right text-xs"></i>
                     <button onClick={() => navigate('/transactions')} className="hover:text-primary transition-colors">
                         Transactions
                     </button>
@@ -279,7 +276,7 @@ const TransactionDetailPage: React.FC = () => {
                     <div className="flex items-center gap-2 self-start md:self-center">
                         <button
                             onClick={handlePreviousTx}
-                            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors bg-gray-700/50 text-white hover:bg-white/8 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1 sm:gap-2 rounded-lg border border-[#272729] bg-[#171717] px-2 py-2 text-xs font-medium text-[#ffffff] transition-colors hover:border-[#35cd48] hover:bg-[#0f0f0f] disabled:cursor-not-allowed disabled:border-[#272729] disabled:bg-[#0f0f0f] disabled:text-[#272729] disabled:hover:border-[#272729] disabled:hover:bg-[#0f0f0f] sm:px-4 sm:text-sm"
                             disabled={currentTxIndex <= 0}
                         >
                             <i className="fa-solid fa-chevron-left"></i>
@@ -288,7 +285,7 @@ const TransactionDetailPage: React.FC = () => {
                         </button>
                         <button
                             onClick={handleNextTx}
-                            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors bg-primary text-black hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1 sm:gap-2 rounded-lg border border-[#35cd48] bg-[#35cd48] px-2 py-2 text-xs font-medium text-[#0f0f0f] transition-colors hover:bg-[#0f0f0f] hover:text-[#35cd48] disabled:cursor-not-allowed disabled:border-[#272729] disabled:bg-[#0f0f0f] disabled:text-[#272729] disabled:hover:bg-[#0f0f0f] disabled:hover:text-[#272729] sm:px-4 sm:text-sm"
                             disabled={currentTxIndex >= blockTransactions.length - 1}
                         >
                             <span className="hidden sm:inline">Next Tx</span>
@@ -496,7 +493,7 @@ const TransactionDetailPage: React.FC = () => {
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-400 text-sm">Transaction Type</span>
-                                        <span className="text-white text-sm">{txType}</span>
+                                        <TransactionTypeBadge type={txType} />
                                     </div>
                                     {position !== null && (
                                         <div className="flex justify-between items-center">
@@ -571,9 +568,7 @@ const TransactionDetailPage: React.FC = () => {
                                 <div className="border border-white/10 rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-3">
                                         <span className="text-gray-400 text-sm">Message Type</span>
-                                        <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 rounded">
-                                            {txType}
-                                        </span>
+                                        <TransactionTypeBadge type={txType} />
                                     </div>
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-start">
@@ -611,9 +606,7 @@ const TransactionDetailPage: React.FC = () => {
                                     <div className="border border-white/10 rounded-lg p-4">
                                         <div className="flex items-center justify-between mb-3">
                                             <span className="text-gray-400 text-sm">Reward Distribution</span>
-                                            <span className="px-2 py-1 text-xs bg-primary/20 text-primary rounded">
-                                                Rewards
-                                            </span>
+                                            <TransactionTypeBadge type="certificateResults" />
                                         </div>
                                         <div className="space-y-2">
                                             <div className="flex justify-between items-start">

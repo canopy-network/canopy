@@ -172,10 +172,10 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-white">
+                    <h1 className="explorer-page-title">
                         {pageTitle || validatorsTexts.page.title}
                     </h1>
-                    <p className="text-gray-400">
+                    <p className="explorer-page-subtitle">
                         {pageTitle === 'Delegators'
                             ? 'Complete list of Canopy network delegators'
                             : pageTitle === 'Staking'

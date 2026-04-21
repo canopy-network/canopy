@@ -83,7 +83,7 @@ export const GovernanceStatsCards: React.FC<GovernanceStatsCardsProps> = ({
                     className="bg-card flex flex-col justify-center rounded-xl p-6 border border-border relative overflow-hidden gap-4"
                 >
                     <div className="flex items-center justify-between">
-                        <h3 className="text-muted-foreground text-sm font-medium">
+                        <h3 className="wallet-card-title">
                             {stat.title}
                         </h3>
                         <i className={`${stat.icon} ${stat.iconColor} text-2xl`}></i>

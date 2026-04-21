@@ -1,43 +1,138 @@
 import React from 'react'
-import TableCard from './TableCard'
-import { useAllValidators, useTransactionsWithRealPagination, useAllBlocksCache, useCardData } from '../../hooks/useApi'
+import { motion } from 'framer-motion'
+import { useAllValidators, useAllBlocksCache, useCardData } from '../../hooks/useApi'
 import AnimatedNumber from '../AnimatedNumber'
-import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 import { Link } from 'react-router-dom'
-import Logo from '../Logo'
-import { toCNPY, extractAmountMicro } from '../../lib/utils'
+import { toCNPY } from '../../lib/utils'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
+const desktopRowCellClass =
+    'px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]'
 
+const LiveIndicator = () => (
+    <div className="relative inline-flex items-center gap-1.5 rounded-full bg-[#35cd48]/5 px-4 py-1">
+        <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#35cd48] shadow-[0_0_4px_rgba(53,205,72,0.8)]" />
+        <span className="text-sm font-medium text-[#35cd48]">Live</span>
+    </div>
+)
 
-const normalizeList = (payload: any) => {
-    if (!payload) return [] as any[]
-    if (Array.isArray(payload)) return payload
-    const found = payload.results || payload.list || payload.data || payload.validators || payload.transactions
-    return Array.isArray(found) ? found : []
+const CNPY_GRADIENTS = [
+    'linear-gradient(135deg, #45ca46 0%, #2f8f36 100%)',
+    'linear-gradient(135deg, #36cfc9 0%, #1677ff 100%)',
+    'linear-gradient(135deg, #faad14 0%, #d46b08 100%)',
+    'linear-gradient(135deg, #9254de 0%, #531dab 100%)',
+    'linear-gradient(135deg, #f759ab 0%, #cf1322 100%)',
+]
+
+const getCnpyGradient = (seed: string) => {
+    const total = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0)
+    return CNPY_GRADIENTS[total % CNPY_GRADIENTS.length]
 }
 
-// Get transaction type icon based on action type
-const getTransactionIcon = (action: string): string => {
-    const actionLower = (action || '').toLowerCase()
+const CnpyBadge: React.FC<{ seed: string }> = ({ seed }) => (
+    <div
+        className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full p-[3px]"
+        style={{ background: getCnpyGradient(seed) }}
+    >
+        <img src="/canopy-symbol-white.png" alt="" className="h-full w-full object-contain" />
+    </div>
+)
 
-    if (actionLower.includes('stake') || actionLower.includes('delegate') || actionLower.includes('edit-stake')) {
-        return 'bi bi-file-lock2'
-    } else if (actionLower.includes('send') || actionLower.includes('transfer')) {
-        return 'bi bi-send'
-    } else if (actionLower.includes('certificate') || actionLower.includes('certificateresults')) {
-        return 'bi bi-c-circle-fill'
-    } else if (actionLower.includes('swap') || actionLower.includes('exchange')) {
-        return 'bi bi-arrow-left-right'
-    }
-
-    // Default icon
-    return 'fa-solid fa-circle'
+interface SummaryTableProps {
+    title: string
+    columns: string[]
+    rows: React.ReactNode[][]
+    viewAllPath: string
+    emptyLabel: string
+    minWidth?: string
 }
+
+const SummaryTable: React.FC<SummaryTableProps> = ({
+    title,
+    columns,
+    rows,
+    viewAllPath,
+    emptyLabel,
+    minWidth = 'min-w-[1100px]',
+}) => (
+    <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="rounded-xl border border-white/10 bg-[#1a1a1a] p-5"
+    >
+        <div className="mb-5 flex items-center justify-between gap-3 leading-none">
+            <h2 className="wallet-card-title tracking-tight">{title}</h2>
+            <LiveIndicator />
+        </div>
+
+        <div className="overflow-x-auto">
+            <table
+                className={`w-full ${minWidth}`}
+                style={{ tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
+            >
+                <thead>
+                    <tr>
+                        {columns.map((label) => (
+                            <th
+                                key={label}
+                                className="px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4"
+                            >
+                                {label}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.length === 0 ? (
+                        <tr>
+                            <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
+                                {emptyLabel}
+                            </td>
+                        </tr>
+                    ) : (
+                        rows.map((cells, index) => (
+                            <motion.tr
+                                key={`${title}-${index}`}
+                                className="group"
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.06 + index * 0.04 }}
+                            >
+                                {cells.map((cell, cellIndex) => (
+                                    <td
+                                        key={`${title}-${index}-${cellIndex}`}
+                                        className={desktopRowCellClass}
+                                        style={{
+                                            borderTopLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderBottomLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderTopRightRadius: cellIndex === cells.length - 1 ? '10px' : undefined,
+                                            borderBottomRightRadius: cellIndex === cells.length - 1 ? '10px' : undefined,
+                                        }}
+                                    >
+                                        {cell}
+                                    </td>
+                                ))}
+                            </motion.tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
+        </div>
+
+        <div className="pt-4 text-center">
+            <Link
+                to={viewAllPath}
+                className="inline-flex items-center gap-1 text-sm text-white/60 transition-colors hover:text-white/80"
+            >
+                View All <i className="fa-solid fa-arrow-right-long"></i>
+            </Link>
+        </div>
+    </motion.section>
+)
 
 const ExtraTables: React.FC = () => {
     const { data: allValidatorsData } = useAllValidators()
-    const { data: txsPage } = useTransactionsWithRealPagination(1, 20)
     const { data: blocksPage } = useAllBlocksCache()
     const { data: cardData } = useCardData()
 
@@ -49,12 +144,12 @@ const ExtraTables: React.FC = () => {
 
     // Get all validators and take only top 10 by staking power
     const allValidators = allValidatorsData?.results || []
-    const txs = normalizeList(txsPage)
-    const blocks = normalizeList(blocksPage)
-
-    // Check if all transactions are from Canopy
-    const allChains = txs.map((t: any) => t.chain || 'Canopy')
-    const allCanopy = allChains.every((chain: string) => chain === 'Canopy' || !chain)
+    const blocks = React.useMemo(() => {
+        if (!blocksPage) return [] as any[]
+        if (Array.isArray(blocksPage)) return blocksPage
+        const found = (blocksPage as any).results || (blocksPage as any).list || (blocksPage as any).data || (blocksPage as any).validators || (blocksPage as any).transactions
+        return Array.isArray(found) ? found : []
+    }, [blocksPage])
 
     // Calculate total stake for percentages
     const totalStake = React.useMemo(() => allValidators.reduce((sum: number, v: any) => sum + Number(v.stakedAmount || 0), 0), [allValidators])
@@ -118,15 +213,11 @@ const ExtraTables: React.FC = () => {
     const validatorRows: Array<React.ReactNode[]> = React.useMemo(() => {
         if (top10Validators.length === 0) return []
 
-        // Calculate the maximum stake for relative progress bar display
-        const maxStake = top10Validators.length > 0 ? Math.max(...top10Validators.map(v => Number(v.stakedAmount || 0))) : 1
         return top10Validators.map((v: any, idx: number) => {
             const address = v.address || 'N/A'
             const stake = Number(v.stakedAmount ?? 0)
             const chainsStaked = Array.isArray(v.committees) ? v.committees.length : (Number(v.committees) || 0)
             const powerPct = totalStake > 0 ? (stake / totalStake) * 100 : 0
-            // For visual progress bar, use relative percentage based on max stake
-            const visualPct = maxStake > 0 ? (stake / maxStake) * 100 : 0
             // Calculate validator status based on README specifications
             const isUnstaking = v.unstakingHeight && v.unstakingHeight > 0
             const isPaused = v.maxPausedHeight && v.maxPausedHeight > 0
@@ -153,17 +244,9 @@ const ExtraTables: React.FC = () => {
             const totalWeight = stake
 
             return [
-                <span className="text-gray-400">
-                    <AnimatedNumber
-                        value={idx + 1}
-                        className="text-gray-400"
-                    />
-                </span>,
-                <div className="flex items-center gap-2" >
-                    <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary font-semibold">
-                        {address && address !== 'N/A' ? address.slice(0, 2).toUpperCase() : 'N/A'}
-                    </div>
-                    <Link to={`/validator/${address}?rank=${idx + 1}`} className="text-white hover:text-primary hover:underline">{truncate(String(address), 16)}</Link>
+                <div className="flex items-center gap-2">
+                    <CnpyBadge seed={address} />
+                    <Link to={`/validator/${address}`} className="text-white hover:text-primary hover:underline">{truncate(String(address), 16)}</Link>
                 </div>,
                 <span className="text-gray-200">
                     {rewardsPct}%
@@ -211,148 +294,34 @@ const ExtraTables: React.FC = () => {
                         stake ? `${toCNPY(Number(stake)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : '0 CNPY'
                     )}
                 </span>,
-                <div className="flex items-center gap-2">
-                    <div className="w-24 sm:w-32 h-3 bg-gray-700/60 rounded-full overflow-hidden">
-                        <div className="h-3 bg-primary transition-[width] duration-500 ease-out" style={{ width: `${visualPct}%` }}></div>
-                    </div>
-                    <i className="fa-solid fa-bolt text-primary/80 text-xs"></i>
-                </div>,
+                <span className="text-gray-200">
+                    <AnimatedNumber
+                        value={v.stakingPower}
+                        format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                        suffix="%"
+                        className="text-gray-200"
+                    />
+                </span>,
             ]
         })
     }, [top10Validators, totalStake, validatorStats])
 
     return (
         <div className="grid grid-cols-1 gap-6">
-            <TableCard
-                title="Validator Ranking"
-                live={false}
+            <SummaryTable
+                title="Validators"
                 viewAllPath="/validators"
-                paginate={false}
-                compactFooter={true}
                 columns={[
-                    { label: 'Rank', width: 'w-[5%]' },
-                    { label: 'Name/Address', width: 'w-[18%]' },
-                    { label: 'Rewards %', width: 'w-[10%]' },
-                    { label: 'Chains Staked', width: 'w-[8%]' },
-                    { label: '24h Change', width: 'w-[8%]' },
-                    { label: 'Total Weight', width: 'w-[14%]' },
-                    { label: 'Total Stake', width: 'w-[14%]' },
-                    { label: 'Staking Power', width: 'w-[15%]' },
+                    'Name/Address',
+                    'Rewards %',
+                    'Chains Staked',
+                    '24h Change',
+                    'Total Weight',
+                    'Total Stake',
+                    'Staking Power',
                 ]}
                 rows={validatorRows}
-            />
-
-            <TableCard
-                title="Recent Transactions"
-                live
-                columns={[
-                    { label: 'Hash' },
-                    { label: 'Time' },
-                    { label: 'Action' },
-                    { label: 'Amount' },
-                    { label: 'From' },
-                    { label: 'To' },
-                    ...(allCanopy ? [] : [{ label: 'Chain' }]),
-                ]}
-                paginate={false}
-                compactFooter={true}
-                viewAllPath="/transactions"
-                rows={txs.map((t: any) => {
-                    const ts = t.time || t.timestamp || t.blockTime
-                    let timeAgo = 'N/A'
-
-                    if (ts) {
-                        try {
-                            // Handle different timestamp formats
-                            let date: Date
-                            if (typeof ts === 'number') {
-                                // If timestamp is in microseconds (Canopy format)
-                                if (ts > 1e12) {
-                                    date = new Date(ts / 1000)
-                                } else {
-                                    date = new Date(ts * 1000)
-                                }
-                            } else if (typeof ts === 'string') {
-                                date = parseISO(ts)
-                            } else {
-                                date = new Date(ts)
-                            }
-
-                            if (isValid(date)) {
-                                timeAgo = formatDistanceToNow(date, { addSuffix: true })
-                            }
-                        } catch (error) {
-                            console.error('Error formatting date:', error)
-                            timeAgo = 'N/A'
-                        }
-                    }
-
-                    const action = t.messageType || t.type || 'Transfer'
-                    const chain = t.chain || 'Canopy'
-                    const from = t.sender || t.from || 'N/A'
-
-                    // Handle different transaction types
-                    let to = 'N/A'
-                    let amount: number | string = 'N/A'
-
-                    if (action === 'certificateResults') {
-                        // For certificateResults, show the first reward recipient
-                        if (t.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents) {
-                            const recipients = t.transaction.msg.qc.results.rewardRecipients.paymentPercents
-                            if (recipients.length > 0) {
-                                to = recipients[0].address || 'N/A'
-                            }
-                        }
-                        const amountRaw = extractAmountMicro(t as Record<string, unknown>)
-                        amount = amountRaw > 0 ? amountRaw : (t.fee ?? 0)
-                    } else {
-                        // For other transaction types
-                        to = t.recipient || t.to || 'N/A'
-                        const amountRaw = extractAmountMicro(t as Record<string, unknown>)
-                        amount = amountRaw > 0 ? amountRaw : 'N/A'
-                    }
-
-                    const hash = t.txHash || t.hash || 'N/A'
-                    const actionIcon = getTransactionIcon(action)
-
-                    const baseRow = [
-                        <Link to={`/transaction/${hash}`} className="text-gray-100 hover:text-primary hover:underline">{truncate(String(hash))}</Link>,
-                        <span className="text-gray-400">
-                            {timeAgo}
-                        </span>,
-                        <span className="bg-green-300/10 text-primary rounded-full px-2 py-1 text-xs inline-flex items-center gap-1">
-                            <i className={actionIcon} style={{ fontSize: '0.875rem' }}></i>
-                            {action || 'N/A'}
-                        </span>,
-                        <span className="text-primary">
-                            {typeof amount === 'number' ? (
-                                <>
-                                    <AnimatedNumber
-                                        value={toCNPY(amount)}
-                                        format={{ minimumFractionDigits: 2, maximumFractionDigits: 6 }}
-                                        className="text-primary"
-                                    />&nbsp; CNPY </>
-                            ) : (
-                                <span className="text-primary">{amount !== 'N/A' ? `${toCNPY(Number(amount)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : 'N/A'}</span>
-                            )}
-                        </span>,
-                        <Link to={`/account/${from}`} className="text-white hover:text-primary hover:underline">{truncate(String(from))}</Link>,
-                        <Link to={`/account/${to}`} className="text-white hover:text-primary hover:underline">{truncate(String(to))}</Link>,
-                    ]
-
-                    if (!allCanopy) {
-                        baseRow.push(
-                            <div className="flex items-center gap-2">
-                                <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center">
-                                    <Logo size={20} showText={false} />
-                                </div>
-                                <span className="text-gray-200 text-sm">{chain}</span>
-                            </div>
-                        )
-                    }
-
-                    return baseRow
-                })}
+                emptyLabel="No validators found"
             />
         </div>
     )

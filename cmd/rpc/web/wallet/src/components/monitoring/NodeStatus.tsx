@@ -5,7 +5,6 @@ interface NodeStatusProps {
   nodeStatus: {
     synced: boolean;
     blockHeight: number;
-    syncProgress: number;
     nodeAddress: string;
     phase: string;
     round: number;
@@ -36,15 +35,18 @@ export default function NodeStatus({
   const currentNode =
     availableNodes.find((n) => n.id === selectedNode) || availableNodes[0];
 
-  const truncate = (addr: string) =>
+  const truncateAddress = (addr: string) =>
     addr ? `${addr.slice(0, 8)}...${addr.slice(-4)}` : "Connecting...";
+
+  const formatPhase = (phase: string) =>
+    phase ? phase.replace(/_/g, " ") : "Unknown";
 
   return (
     <>
       {/* Node identity row */}
-      <div className="flex items-center justify-between gap-4 mb-5">
-        <div className="flex items-center gap-3">
-          <span className="relative flex h-2.5 w-2.5">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="relative mt-1 flex h-2.5 w-2.5 shrink-0">
             {nodeStatus.synced && (
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-50" />
             )}
@@ -58,15 +60,15 @@ export default function NodeStatus({
             <p className="text-sm font-semibold text-foreground">
               {currentNode?.name || "Current Node"}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {truncate(nodeStatus.nodeAddress)}
+            <p className="mt-0.5 break-all font-mono text-[11px] text-muted-foreground">
+              {nodeStatus.nodeAddress || "Connecting..."}
             </p>
           </div>
         </div>
 
         <button
           onClick={onCopyAddress}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg border border-border/60 hover:border-border hover:bg-accent/60 transition-all duration-150"
+          className="flex items-center gap-1.5 self-start rounded-lg border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:border-border hover:bg-accent/60 hover:text-foreground"
         >
           <Copy className="w-3.5 h-3.5" />
           Copy Address
@@ -94,23 +96,22 @@ export default function NodeStatus({
           </span>
         </div>
 
-        {/* Progress */}
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground">Round Progress</span>
-          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-500"
-              style={{ width: `${nodeStatus.syncProgress}%` }}
-            />
-          </div>
-          <span className="text-xs text-muted-foreground">{nodeStatus.syncProgress}%</span>
+        {/* Consensus round */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">Consensus</span>
+          <span className="text-sm font-semibold text-foreground">
+            Round {nodeStatus.round}
+          </span>
+          <span className="font-mono text-[11px] text-muted-foreground">
+            {formatPhase(nodeStatus.phase)}
+          </span>
         </div>
 
         {/* Node Address */}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Node Address</span>
-          <span className="text-sm text-foreground">
-            {truncate(nodeStatus.nodeAddress)}
+          <span className="font-mono text-xs text-foreground">
+            {truncateAddress(nodeStatus.nodeAddress)}
           </span>
         </div>
 

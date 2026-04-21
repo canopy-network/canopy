@@ -245,13 +245,12 @@ $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v
 
 **Route:** `/v1/query/indexer-blobs`
 
-**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. When delta mode is enabled, only the differences between current and previous blobs are returned.
+**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. Accounts, pools, and validators are returned as deltas between the current and previous blobs.
 
 **HTTP Method**: `POST`
 
 **Request**:
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
-- **delta**: `bool` – if true, returns only the differences between the current and previous blobs (optional: defaults to false)
 
 **Response**: raw protobuf bytes (`application/x-protobuf`) representing an `IndexerBlobs` message containing:
 - **current**: `IndexerBlob` - the indexer blob at the requested height
@@ -285,8 +284,7 @@ $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v
 $ curl -X POST localhost:50002/v1/query/indexer-blobs \
   -H "Content-Type: application/json" \
   -d '{
-        "height": 100,
-        "delta": false
+        "height": 100
       }'
 
 > <binary protobuf response>

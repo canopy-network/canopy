@@ -18,7 +18,6 @@ type heightRequest struct {
 
 type indexerBlobsRequest struct {
 	heightRequest
-	Delta bool `json:"delta,omitempty"`
 }
 
 type chainRequest struct {
@@ -389,8 +388,9 @@ const defaultIndexerBlobCacheEntries = 64
 
 type indexerBlobCacheEntry struct {
 	height     uint64
-	blobs      *fsm.IndexerBlobs
-	protoBytes []byte
+	current    *fsm.IndexerBlob
+	deltaBlobs *fsm.IndexerBlobs
+	deltaBytes []byte
 }
 
 type indexerBlobCache struct {
@@ -419,11 +419,14 @@ func (c *indexerBlobCache) get(height uint64) (*indexerBlobCacheEntry, bool) {
 }
 
 func (c *indexerBlobCache) getCurrent(height uint64) (*fsm.IndexerBlob, bool) {
-	entry, ok := c.get(height)
-	if !ok || entry == nil || entry.blobs == nil {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, ok := c.entries[height]
+	if !ok || entry == nil || entry.current == nil {
 		return nil, false
 	}
-	return entry.blobs.Current, entry.blobs.Current != nil
+	return entry.current, true
 }
 
 func (c *indexerBlobCache) put(height uint64, entry *indexerBlobCacheEntry) {
@@ -433,18 +436,21 @@ func (c *indexerBlobCache) put(height uint64, entry *indexerBlobCacheEntry) {
 	if _, ok := c.entries[height]; ok {
 		c.entries[height] = entry
 		c.touch(height)
+		c.retainLatestCurrent(height)
 		return
 	}
 
 	c.entries[height] = entry
 	c.order = append(c.order, height)
 	if len(c.order) <= c.maxEntries {
+		c.retainLatestCurrent(height)
 		return
 	}
 
 	evictHeight := c.order[0]
 	c.order = c.order[1:]
 	delete(c.entries, evictHeight)
+	c.retainLatestCurrent(height)
 }
 
 func (c *indexerBlobCache) touch(height uint64) {
@@ -453,6 +459,21 @@ func (c *indexerBlobCache) touch(height uint64) {
 			c.order = append(c.order[:i], c.order[i+1:]...)
 			c.order = append(c.order, height)
 			return
+		}
+	}
+}
+
+// retainLatestCurrent keeps only the newest full snapshot in memory.
+// Older cached heights retain their delta payloads, but their full
+// current blobs are dropped because they are only needed to compute the
+// next sequential height delta.
+func (c *indexerBlobCache) retainLatestCurrent(latestHeight uint64) {
+	for _, h := range c.order {
+		if h == latestHeight {
+			continue
+		}
+		if entry := c.entries[h]; entry != nil {
+			entry.current = nil
 		}
 	}
 }

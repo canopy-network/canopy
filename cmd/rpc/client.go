@@ -40,20 +40,9 @@ func (c *Client) Height() (p *lib.HeightResult, err lib.ErrorI) {
 
 // IndexerBlobs retrieves the indexer blob protobuf and unmarshals it.
 func (c *Client) IndexerBlobs(height uint64) (p *fsm.IndexerBlobs, err lib.ErrorI) {
-	return c.indexerBlobs(height, false)
-}
-
-// IndexerBlobsDelta retrieves changed accounts/pools/validators between current and previous blobs.
-// Other entities remain full snapshots.
-func (c *Client) IndexerBlobsDelta(height uint64) (p *fsm.IndexerBlobs, err lib.ErrorI) {
-	return c.indexerBlobs(height, true)
-}
-
-func (c *Client) indexerBlobs(height uint64, delta bool) (p *fsm.IndexerBlobs, err lib.ErrorI) {
 	p = new(fsm.IndexerBlobs)
 	req := indexerBlobsRequest{
 		heightRequest: heightRequest{Height: height},
-		Delta:         delta,
 	}
 	bz, err := lib.MarshalJSON(req)
 	if err != nil {

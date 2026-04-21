@@ -7,6 +7,7 @@ import { ErrorBoundary }          from '@/components/ErrorBoundary';
 import { RecentTransactionsCard } from '@/components/dashboard/RecentTransactionsCard';
 import { ActionsModal }           from '@/actions/ActionsModal';
 import { useDashboard }           from '@/hooks/useDashboard';
+import { PageHeader }             from '@/components/layouts/PageHeader';
 
 const item = {
     hidden:  { opacity: 0, y: 14 },
@@ -48,14 +49,11 @@ export const Dashboard = () => {
             >
                 {/* Page heading */}
                 <motion.div variants={item} className="flex items-center justify-between mb-1">
-                    <div>
-                        <h1 className="text-xl font-bold text-foreground tracking-tight">
-                            Dashboard
-                        </h1>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                            All wallets overview & node management
-                        </p>
-                    </div>
+                    <PageHeader
+                        title="Dashboard"
+                        subtitle="All wallets overview & node management"
+                        className="w-full"
+                    />
                 </motion.div>
 
                 {/* ── Row 1: Balance + Staked ── */}

@@ -54,16 +54,57 @@ const toNumber = (value: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const extractAmountMicro = (row: Record<string, unknown>): number => {
+  for (const key of ["amount", "value", "amountForSale"]) {
+    if (row[key] !== undefined) return toNumber(row[key]);
+  }
+
+  const txn = row.transaction as Record<string, unknown> | undefined;
+  for (const key of ["amount", "value", "amountForSale"]) {
+    if (txn?.[key] !== undefined) return toNumber(txn[key]);
+  }
+
+  const msg = txn?.msg as Record<string, unknown> | undefined;
+  if (!msg) return 0;
+
+  // Flat message shapes returned by tx endpoints for DEX/order operations.
+  if (msg.amountForSale !== undefined) return toNumber(msg.amountForSale);
+  if (msg.amount !== undefined) return toNumber(msg.amount);
+
+  // Wrapped message shapes used by some query responses.
+  for (const key of [
+    "messageSend",
+    "messageStake",
+    "messageEditStake",
+    "messageDAOTransfer",
+    "messageSubsidy",
+    "messageDexLiquidityDeposit",
+  ]) {
+    const inner = msg[key] as Record<string, unknown> | undefined;
+    if (inner?.amount !== undefined) return toNumber(inner.amount);
+  }
+
+  for (const key of [
+    "messageCreateOrder",
+    "messageEditOrder",
+    "messageDexLimitOrder",
+  ]) {
+    const inner = msg[key] as Record<string, unknown> | undefined;
+    if (inner?.amountForSale !== undefined) return toNumber(inner.amountForSale);
+  }
+
+  return 0;
+};
+
 const makeTx = (
   i: Record<string, unknown>,
   overrides?: { type?: string; status?: string },
 ): Transaction => {
   const txn = i.transaction as Record<string, unknown> | undefined;
-  const msg = txn?.msg as Record<string, unknown> | undefined;
   return {
     hash: String(i.txHash ?? i.hash ?? ""),
     type: overrides?.type ?? inferTxType(i),
-    amount: toNumber(msg?.amount),
+    amount: extractAmountMicro(i),
     fee: txn?.fee as number | undefined,
     status: normalizeStatus(overrides?.status ?? txn?.status, "Confirmed"),
     time: toNumber(txn?.time ?? i.time),

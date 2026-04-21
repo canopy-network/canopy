@@ -27,10 +27,6 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
         <div className="mb-8">
             {/* Breadcrumb */}
             <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400 mb-4">
-                <button onClick={() => navigate('/')} className="hover:text-primary transition-colors">
-                    {blockDetailTexts.page.breadcrumb.home}
-                </button>
-                <i className="fa-solid fa-chevron-right text-xs"></i>
                 <button onClick={() => navigate('/blocks')} className="hover:text-primary transition-colors">
                     {blockDetailTexts.page.breadcrumb.blocks}
                 </button>
@@ -71,9 +67,9 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
                     <button
                         onClick={onPreviousBlock}
                         disabled={!hasPrevious}
-                        className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${hasPrevious
-                            ? 'bg-gray-700/50 text-white hover:bg-white/8'
-                            : 'bg-gray-800/30 text-gray-500 cursor-not-allowed'
+                        className={`flex items-center gap-1 sm:gap-2 rounded-lg border px-2 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${hasPrevious
+                            ? 'border-[#272729] bg-[#171717] text-[#ffffff] hover:border-[#35cd48] hover:bg-[#0f0f0f]'
+                            : 'border-[#272729] bg-[#0f0f0f] text-[#272729] cursor-not-allowed'
                             }`}
                     >
                         <i className="fa-solid fa-chevron-left"></i>
@@ -83,9 +79,9 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
                     <button
                         onClick={onNextBlock}
                         disabled={!hasNext}
-                        className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${hasNext
-                            ? 'bg-primary text-black hover:bg-primary/90'
-                            : 'bg-gray-800/30 text-gray-500 cursor-not-allowed'
+                        className={`flex items-center gap-1 sm:gap-2 rounded-lg border px-2 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${hasNext
+                            ? 'border-[#35cd48] bg-[#35cd48] text-[#0f0f0f] hover:bg-[#0f0f0f] hover:text-[#35cd48]'
+                            : 'border-[#272729] bg-[#0f0f0f] text-[#272729] cursor-not-allowed'
                             }`}
                     >
                         <span className="hidden sm:inline">{blockDetailTexts.page.navigation.nextBlock}</span>
