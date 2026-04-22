@@ -5,6 +5,7 @@ import {
     Transactions,
     AllTransactions,
     getTransactionsWithRealPagination,
+    getRecentTransactionsPreview,
     Accounts,
     Validators,
     ValidatorsWithFilters,
@@ -152,6 +153,21 @@ export const useTransactionsWithRealPagination = (page: number, perPage: number 
         queryFn: () => getTransactionsWithRealPagination(page, perPage, filters),
         staleTime: 30000,
         enabled: true,
+    });
+};
+
+export const useRecentTransactionsPreview = (blocks: any[] | undefined, limit: number = 5) => {
+    const latestBlockHeight = Number(blocks?.[0]?.blockHeader?.height ?? blocks?.[0]?.height ?? 0);
+
+    return useQuery({
+        queryKey: ['recentTransactionsPreview', latestBlockHeight, limit],
+        queryFn: () => getRecentTransactionsPreview(limit, blocks),
+        staleTime: 5000,
+        refetchInterval: 10000,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
+        enabled: Array.isArray(blocks) && blocks.length > 0,
+        placeholderData: (previousData) => previousData,
     });
 };
 
