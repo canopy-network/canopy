@@ -179,7 +179,7 @@ const ValidatorDetailPage: React.FC = () => {
                     <h1 className="text-2xl font-bold text-white mb-4">Validator not found</h1>
                     <p className="mb-6 text-white/60">The requested validator could not be found.</p>
                     <button
-                        onClick={() => navigate('/validators')}
+                        onClick={() => navigate('/staking')}
                         className="rounded-lg bg-[#35cd48] px-6 py-2 text-[#0f0f0f] transition-colors hover:opacity-90"
                     >
                         {validatorDetailTexts.page.backToValidators}

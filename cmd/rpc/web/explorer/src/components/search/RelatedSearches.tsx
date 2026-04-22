@@ -22,7 +22,7 @@ const RelatedSearches: React.FC = () => {
             title: 'Top Validators',
             description: 'See the most active validators',
             icon: 'fa-solid fa-chart-pie',
-            link: '/validators',
+            link: '/staking',
             color: 'text-primary bg-green-600/20 py-2.5 pr-7.5 pl-[0.610rem] rounded-full'
         }
     ]

@@ -35,14 +35,6 @@
           {
             "label": "Staking",
             "path": "/staking"
-          },
-          {
-            "label": "Validators",
-            "path": "/validators"
-          },
-          {
-            "label": "Delegators",
-            "path": "/delegators"
           }
         ]
       },

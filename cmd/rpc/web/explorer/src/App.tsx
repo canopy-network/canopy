@@ -7,7 +7,6 @@ import BlocksPage from './components/block/BlocksPage'
 import BlockDetailPage from './components/block/BlockDetailPage'
 import TransactionsPage from './components/transaction/TransactionsPage'
 import TransactionDetailPage from './components/transaction/TransactionDetailPage'
-import ValidatorsPage from './components/validator/ValidatorsPage'
 import ValidatorDetailPage from './components/validator/ValidatorDetailPage'
 import AccountsPage from './components/account/AccountsPage'
 import AccountDetailPage from './components/account/AccountDetailPage'
@@ -36,8 +35,8 @@ function App() {
             <Route path="/block/:blockHeight" element={<BlockDetailPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/transaction/:transactionHash" element={<TransactionDetailPage />} />
-            <Route path="/validators" element={<ValidatorsPage />} />
-            <Route path="/delegators" element={<ValidatorsPage />} />
+            <Route path="/validators" element={<Navigate to="/staking" replace />} />
+            <Route path="/delegators" element={<Navigate to="/staking" replace />} />
             <Route path="/validator/:validatorAddress" element={<ValidatorDetailPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/account/:address" element={<AccountDetailPage />} />
