@@ -313,7 +313,7 @@ const ExtraTables: React.FC = () => {
         <div className="grid grid-cols-1 gap-6">
             <SummaryTable
                 title="Validators"
-                viewAllPath="/validators"
+                viewAllPath="/staking"
                 columns={[
                     'Name/Address',
                     'Rewards %',
