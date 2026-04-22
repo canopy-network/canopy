@@ -166,7 +166,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
             </div>
           </div>
           <div>
-            <span className={`${WALLET_BADGE_CLASS} ${statusBadgeClass(validator.status)}`}>
+            <span className={`${WALLET_BADGE_CLASS} leading-none ${statusBadgeClass(validator.status)}`}>
               {validator.status}
             </span>
           </div>

@@ -167,7 +167,7 @@ export const ValidatorDetailsModal: React.FC<{
                     Status
                   </div>
                   <div className="mt-2">
-                    <span className={`${WALLET_BADGE_CLASS} ${statusBadgeClass(validator.status)}`}>
+                    <span className={`${WALLET_BADGE_CLASS} leading-none ${statusBadgeClass(validator.status)}`}>
                       {validator.status}
                     </span>
                   </div>

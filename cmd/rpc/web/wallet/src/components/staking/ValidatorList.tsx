@@ -164,7 +164,7 @@ const DesktopValidatorRow: React.FC<{
         </span>
       </td>
       <td className={desktopRowCellClass}>
-        <span className={`${WALLET_BADGE_CLASS} ${statusBadgeClass(validator.status)}`}>
+        <span className={`${WALLET_BADGE_CLASS} leading-none ${statusBadgeClass(validator.status)}`}>
           {validator.status}
         </span>
       </td>

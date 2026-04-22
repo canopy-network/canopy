@@ -346,7 +346,7 @@ export const AllAddresses = () => {
                         style={{ borderTopRightRadius: "10px", borderBottomRightRadius: "10px" }}
                       >
                         <span
-                          className={`${WALLET_BADGE_CLASS} ${getStatusColor(addr.status)}`}
+                          className={`${WALLET_BADGE_CLASS} leading-none ${getStatusColor(addr.status)}`}
                         >
                           {addr.status}
                         </span>

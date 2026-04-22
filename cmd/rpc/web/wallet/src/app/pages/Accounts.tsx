@@ -487,7 +487,7 @@ export const Accounts = () => {
 
                     {/* Status */}
                     <td className={desktopRowCellClass}>
-                      <span className={`${WALLET_BADGE_CLASS} ${addr.statusCls}`}>
+                      <span className={`${WALLET_BADGE_CLASS} leading-none ${addr.statusCls}`}>
                         {addr.statusLabel}
                       </span>
                     </td>
