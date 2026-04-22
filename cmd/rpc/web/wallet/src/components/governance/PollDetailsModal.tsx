@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { Poll } from "@/hooks/useGovernance";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 interface PollDetailsModalProps {
   poll: Poll | null;
@@ -19,9 +20,7 @@ interface PollDetailsModalProps {
 }
 
 const pollStatusBadge = (status: Poll["status"]) => {
-  if (status === "active") return "bg-[#216cd0]/12 text-[#216cd0] border-[#216cd0]/35";
-  if (status === "passed") return "bg-[#35cd48]/12 text-[#35cd48] border-[#35cd48]/35";
-  return "bg-[#ff1845]/12 text-[#ff1845] border-[#ff1845]/35";
+  return WALLET_BADGE_TONE;
 };
 
 const clampPercent = (value: number) => {
@@ -72,10 +71,10 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border ${pollStatusBadge(poll.status)}`}>
+                      <span className={`${WALLET_BADGE_CLASS} ${pollStatusBadge(poll.status)}`}>
                         {poll.status}
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-[#216cd0]/35 bg-[#216cd0]/12 px-2.5 py-1 text-[11px] font-semibold text-[#216cd0]">
+                      <span className={`${WALLET_BADGE_CLASS} gap-1`}>
                         <ShieldCheck className="h-3.5 w-3.5" />
                         Poll Details
                       </span>

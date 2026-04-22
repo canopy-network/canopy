@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ExternalLink, Eye, Search, ThumbsDown, ThumbsUp, Filter } from "lucide-react";
 import { Poll } from "@/hooks/useGovernance";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { WALLET_BADGE_CLASS } from "@/components/ui/badgeStyles";
 
 interface PollTableProps {
   polls: Poll[];
@@ -191,7 +192,7 @@ export const PollTable: React.FC<PollTableProps> = ({
                       ) : null}
                     </td>
                     <td className="py-3 px-3 align-middle">
-                      <span className="text-sm font-medium capitalize text-white/70">
+                      <span className={`${WALLET_BADGE_CLASS} capitalize`}>
                         {poll.status}
                       </span>
                     </td>

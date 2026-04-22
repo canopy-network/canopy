@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Download, Plus } from "lucide-react";
+import { WALLET_BADGE_CLASS } from "@/components/ui/badgeStyles";
 
 interface ToolbarProps {
   onAddStake: () => void;
@@ -26,7 +27,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       <div className="flex items-center gap-3">
         <h2 className="wallet-card-title flex items-center gap-2 flex-wrap tracking-tight">
           <span>All Validators</span>
-          <span className="bg-primary/20 text-primary text-xs px-2 py-1 font-medium rounded-full">
+          <span className={WALLET_BADGE_CLASS}>
             {activeValidatorsCount} active
           </span>
         </h2>

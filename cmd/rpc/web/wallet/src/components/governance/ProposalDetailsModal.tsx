@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Minus, X } from 'lucide-react';
 import { Proposal } from '@/hooks/useGovernance';
 import { useDenom } from '@/hooks/useDenom';
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from '@/components/ui/badgeStyles';
 
 interface ProposalDetailsModalProps {
     proposal: Proposal | null;
@@ -19,21 +20,11 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
     if (!proposal) return null;
 
     const getCategoryColor = (category: string) => {
-        const colors: Record<string, string> = {
-            'Gov': 'bg-[#216cd0]/12 text-[#216cd0] border-[#216cd0]/35',
-            'Subsidy': 'bg-[#ddb228]/12 text-[#ddb228] border-[#ddb228]/35',
-            'Other': 'bg-[#0f0f0f] text-white/60 border-[#272729]'
-        };
-        return colors[category] || colors.Other;
+        return WALLET_BADGE_TONE;
     };
 
     const getResultBadge = (result: string) => {
-        const colors: Record<string, string> = {
-            'Pass': 'bg-[#35cd48]/12 text-[#35cd48] border border-[#35cd48]/35',
-            'Fail': 'bg-[#ff1845]/12 text-[#ff1845] border border-[#ff1845]/35',
-            'Pending': 'bg-[#ddb228]/12 text-[#ddb228] border border-[#ddb228]/35'
-        };
-        return colors[result] || colors.Pending;
+        return WALLET_BADGE_TONE;
     };
 
     const formatDate = (timestamp: string) => {
@@ -81,10 +72,10 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                             <div className="flex items-start justify-between p-4 sm:p-6 border-b border-border shrink-0">
                                 <div className="flex-1 pr-4">
                                     <div className="flex items-center gap-3 mb-3">
-                                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(proposal.category)}`}>
+                                        <span className={`${WALLET_BADGE_CLASS} ${getCategoryColor(proposal.category)}`}>
                                             {proposal.category}
                                         </span>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getResultBadge(proposal.result)}`}>
+                                        <span className={`${WALLET_BADGE_CLASS} ${getResultBadge(proposal.result)}`}>
                                             {proposal.result}
                                         </span>
                                     </div>

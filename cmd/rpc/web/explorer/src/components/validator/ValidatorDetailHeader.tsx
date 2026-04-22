@@ -2,6 +2,7 @@ import React from 'react'
 import validatorDetailTexts from '../../data/validatorDetail.json'
 import toast from 'react-hot-toast'
 import CnpyColorIcon from '../ui/CnpyColorIcon'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface ValidatorDetail {
     address: string
@@ -71,27 +72,27 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
             return {
                 label: 'Unstaking',
                 icon: 'fa-solid fa-arrow-down',
-                color: 'border border-[#ff1845]/30 bg-[#ff1845]/12 text-[#ff1845]'
+                color: GREEN_BADGE_CLASS
             }
         }
         if (validator.maxPausedHeight > 0) {
             return {
                 label: 'Paused',
                 icon: 'fa-solid fa-pause-circle',
-                color: 'border border-[#ddb228]/30 bg-[#ddb228]/12 text-[#ddb228]'
+                color: GREEN_BADGE_CLASS
             }
         }
         if (validator.delegate) {
             return {
                 label: 'Delegator',
                 icon: 'fa-solid fa-users',
-                color: 'border border-[#216cd0]/30 bg-[#216cd0]/12 text-[#216cd0]'
+                color: GREEN_BADGE_CLASS
             }
         }
         return {
             label: 'Validator',
             icon: 'fa-solid fa-shield-halved',
-            color: 'border border-[#35cd48]/30 bg-[#35cd48]/12 text-[#35cd48]'
+            color: GREEN_BADGE_CLASS
         }
     }
 
@@ -102,7 +103,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
             <div className="flex flex-col lg:flex-row items-start justify-between gap-4">
                 {/* Validator information */}
                 <div className="flex items-start gap-3 sm:gap-4 w-full lg:w-auto">
-                    <CnpyColorIcon seed={validator.address} size={64} />
+                    <CnpyColorIcon seed={validator.address} size={64} color="#E5E7EB" />
 
                     {/* Validator details */}
                     <div className="flex-1 min-w-0">
@@ -163,7 +164,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                 {/* Type badge */}
                 <div className="flex items-start justify-start gap-4 h-full w-full lg:w-auto">
                     <div className="flex items-start gap-3">
-                        <span className={`flex items-center gap-2 rounded-lg px-4 py-2 ${typeInfo.color}`}>
+                        <span className={`${typeInfo.color} gap-2 px-3`}>
                             <i className={`${typeInfo.icon} text-sm`}></i>
                             <span className="text-sm font-medium">
                                 {typeInfo.label}

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import blockDetailTexts from '../../data/blockDetail.json'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface BlockDetailInfoProps {
     block: {
@@ -116,10 +117,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
 
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.status}</span>
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${block.status === 'confirmed'
-                            ? 'bg-primary/20 text-primary'
-                            : 'bg-yellow-500/20 text-yellow-400'
-                            }`}>
+                        <span className={GREEN_BADGE_CLASS}>
                             {block.status === 'confirmed' ? blockDetailTexts.page.status.confirmed : blockDetailTexts.page.status.pending}
                         </span>
                     </div>

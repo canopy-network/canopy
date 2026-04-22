@@ -23,6 +23,7 @@ import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
 import { PageHeader } from "@/components/layouts/PageHeader";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 import { getCanopySymbol } from "@/lib/utils/canopySymbols";
 
 const desktopRowCellClass =
@@ -30,7 +31,7 @@ const desktopRowCellClass =
 
 const LatestUpdated = ({ className = "" }: { className?: string }) => (
   <div className={`flex items-center gap-2 lg:gap-4 ${className}`}>
-    <div className="relative inline-flex items-center gap-1.5 rounded-full bg-[#35cd48]/5 px-4 py-1">
+    <div className="relative inline-flex items-center gap-1.5 rounded-full border border-[rgba(53,205,72,0.30)] bg-[rgba(53,205,72,0.12)] px-4 py-1">
       <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#35cd48] shadow-[0_0_4px_rgba(53,205,72,0.8)]" />
       <span className="text-sm font-medium text-[#35cd48]">Live</span>
     </div>
@@ -97,8 +98,8 @@ export const Accounts = () => {
   const getStatusInfo = (address: string) => {
     const staked = stakingData.find(s => s.address === address)?.staked ?? 0;
     return staked > 0
-      ? { label: "Staked",  cls: "border-[#35cd48]/35 bg-[#35cd48]/12 text-[#35cd48]" }
-      : { label: "Liquid",  cls: "border-[#272729] bg-[#0f0f0f] text-white/60" };
+      ? { label: "Staked",  cls: WALLET_BADGE_TONE }
+      : { label: "Liquid",  cls: WALLET_BADGE_TONE };
   };
 
   const processedAddresses = useMemo(() => accounts
@@ -486,7 +487,7 @@ export const Accounts = () => {
 
                     {/* Status */}
                     <td className={desktopRowCellClass}>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${addr.statusCls}`}>
+                      <span className={`${WALLET_BADGE_CLASS} ${addr.statusCls}`}>
                         {addr.statusLabel}
                       </span>
                     </td>

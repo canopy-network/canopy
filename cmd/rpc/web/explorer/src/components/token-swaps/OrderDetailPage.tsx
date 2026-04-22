@@ -5,6 +5,7 @@ import { useOrder } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 
 import { toCNPY } from '../../lib/utils'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 const formatAmount = (micro: number): string => {
     if (micro === 0) return '0 CNPY'
@@ -117,19 +118,15 @@ const OrderDetailPage: React.FC = () => {
 
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                            <i className="fa-solid fa-right-left text-background text-lg"></i>
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                            <i className="fa-solid fa-right-left text-lg text-white/80"></i>
                         </div>
                         <div>
                             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white">
                                 Order Details
                             </h1>
                             <div className="flex items-center gap-3 mt-2">
-                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                                    status === 'Active'
-                                        ? 'bg-primary/20 text-primary'
-                                        : 'bg-yellow-500/20 text-yellow-400'
-                                }`}>
+                                <span className={GREEN_BADGE_CLASS}>
                                     {status}
                                 </span>
                                 <span className="text-gray-400 text-sm">Committee {committee}</span>
@@ -222,11 +219,7 @@ const OrderDetailPage: React.FC = () => {
 
                                     <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                         <span className="text-gray-400 text-sm">Status</span>
-                                        <span className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                            status === 'Active'
-                                                ? 'bg-primary/20 text-primary'
-                                                : 'bg-yellow-500/20 text-yellow-400'
-                                        }`}>
+                                        <span className={GREEN_BADGE_CLASS}>
                                             {status}
                                         </span>
                                     </div>

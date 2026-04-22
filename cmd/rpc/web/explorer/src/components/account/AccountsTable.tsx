@@ -32,7 +32,7 @@ const truncateMiddle = (value: string, leading = 10, trailing = 6) => {
 }
 
 const CnpyBadge: React.FC<{ seed: string }> = ({ seed }) => (
-    <CnpyColorIcon seed={seed} size={24} />
+    <CnpyColorIcon seed={seed} size={28} />
 )
 
 const AccountsTable: React.FC<AccountsTableProps> = ({

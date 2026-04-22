@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
 import toast from 'react-hot-toast'
 import { Account, TransactionsBySender, TransactionsByRec } from '../../lib/api'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface SearchResultsProps {
     results: any
@@ -250,7 +251,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 </div>
                                 <span className="text-white text-lg">Address</span>
                             </div>
-                            <div className="bg-green-700/30 text-primary text-sm rounded-full px-2 py-0.5 w-fit">
+                            <div className={GREEN_BADGE_CLASS}>
                                 Address
                             </div>
                         </div>
@@ -328,7 +329,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 icon: 'fa-cube',
                 iconColor: 'text-primary',
                 bgColor: 'bg-green-700/30',
-                badgeColor: 'bg-green-700/30',
+                badgeClass: GREEN_BADGE_CLASS,
                 badgeText: 'Block',
                 title: `Block #${item.blockHeader?.height ?? item.height ?? 'N/A'}`,
                 borderColor: 'border-gray-400/10',
@@ -346,7 +347,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 icon: 'fa-arrow-right-arrow-left',
                 iconColor: 'text-blue-500',
                 bgColor: 'bg-blue-700/30',
-                badgeColor: 'bg-blue-700/30',
+                badgeClass: GREEN_BADGE_CLASS,
                 badgeText: 'Transaction',
                 title: 'Transaction',
                 borderColor: 'border-gray-400/10',
@@ -370,7 +371,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 icon: 'fa-shield-halved',
                 iconColor: (item.delegate === true) ? 'text-blue-500' : 'text-primary',
                 bgColor: 'bg-green-700/30',
-                badgeColor: (item.delegate === true) ? 'bg-blue-700/20' : 'bg-green-700/30',
+                badgeClass: GREEN_BADGE_CLASS,
                 badgeText: (item.delegate === true) ? 'Delegator' : 'Validator',
                 title: item.name || item.delegate ? 'Delegator' : 'Validator',
                 borderColor: 'border-gray-400/10',
@@ -407,7 +408,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 </div>
                                 <span className="text-white text-base sm:text-lg break-words">{config.title}</span>
                             </div>
-                            <div className={`${config.badgeColor} ${config.iconColor} text-sm rounded-full px-2 py-0.5 w-fit`}>
+                            <div className={config.badgeClass}>
                                 {config.badgeText}
                             </div>
                         </div>

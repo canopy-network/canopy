@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Search, ChevronDown, Eye, Trash2, Filter } from "lucide-react";
 import { Proposal } from "@/hooks/useGovernance";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { WALLET_BADGE_CLASS } from "@/components/ui/badgeStyles";
 
 interface ProposalTableProps {
   proposals: Proposal[];
@@ -221,26 +222,26 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                       </div>
                     </td>
                     <td className="py-3 px-3 align-middle">
-                      <span className="text-sm font-medium text-white/80">
+                      <span className={WALLET_BADGE_CLASS}>
                         {proposal.category}
                       </span>
                     </td>
                     <td className="py-3 px-3 align-middle">
-                      <span className="text-sm font-medium capitalize text-white/70">
+                      <span className={`${WALLET_BADGE_CLASS} capitalize`}>
                         {proposal.status}
                       </span>
                     </td>
                     <td className="py-3 px-3 align-middle">
                       {proposal.approve === true ? (
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-[#35cd48]/12 text-[#35cd48] border-[#35cd48]/35">
+                        <span className={WALLET_BADGE_CLASS}>
                           Approved
                         </span>
                       ) : proposal.approve === false ? (
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-[#ff1845]/12 text-[#ff1845] border-[#ff1845]/35">
+                        <span className={WALLET_BADGE_CLASS}>
                           Rejected
                         </span>
                       ) : (
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-[#0f0f0f] text-white/60 border-[#272729]">
+                        <span className={WALLET_BADGE_CLASS}>
                           No vote
                         </span>
                       )}

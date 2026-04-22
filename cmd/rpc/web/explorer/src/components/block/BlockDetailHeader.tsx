@@ -1,6 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import blockDetailTexts from '../../data/blockDetail.json'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface BlockDetailHeaderProps {
     blockHeight: number
@@ -41,18 +42,15 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
                 <div className="flex items-center gap-4">
                     <div className="flex flex-col justify-center">
                         <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                                <i className="fa-solid fa-cube text-background text-lg"></i>
+                            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                                <i className="fa-solid fa-cube text-lg text-white/80"></i>
                             </div>
                             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white break-words">
                                 {blockDetailTexts.page.title}{blockHeight.toLocaleString()}
                             </h1>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 mt-2">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${status === 'confirmed'
-                                ? 'bg-primary/20 text-primary'
-                                : 'bg-yellow-500/20 text-yellow-400'
-                                }`}>
+                            <span className={GREEN_BADGE_CLASS}>
                                 {status === 'confirmed' ? blockDetailTexts.page.status.confirmed : blockDetailTexts.page.status.pending}
                             </span>
                             <span className="text-gray-400 text-sm">

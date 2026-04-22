@@ -5,6 +5,7 @@ import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useDenom } from "@/hooks/useDenom";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 interface ValidatorCardProps {
   validator: {
@@ -47,17 +48,7 @@ const truncateAddress = (address: string) =>
   `${address.substring(0, 8)}…${address.substring(address.length - 4)}`;
 
 const statusBadgeClass = (status: ValidatorCardProps["validator"]["status"]) => {
-  switch (status) {
-    case "Staked":
-    case "Delegate":
-      return "border-primary/25 bg-primary/12 text-primary";
-    case "Paused":
-      return "border-yellow-500/25 bg-yellow-500/12 text-yellow-400";
-    case "Unstaking":
-      return "border-red-500/25 bg-red-500/12 text-red-400";
-    default:
-      return "border-border/60 bg-background text-muted-foreground";
-  }
+  return WALLET_BADGE_TONE;
 };
 
 const actionButtonClass =
@@ -175,9 +166,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
             </div>
           </div>
           <div>
-            <span
-              className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-tight ${statusBadgeClass(validator.status)}`}
-            >
+            <span className={`${WALLET_BADGE_CLASS} ${statusBadgeClass(validator.status)}`}>
               {validator.status}
             </span>
           </div>

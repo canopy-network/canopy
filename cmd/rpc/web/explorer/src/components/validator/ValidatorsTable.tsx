@@ -6,6 +6,7 @@ import TableCard from '../Home/TableCard'
 import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
 import CnpyColorIcon from '../ui/CnpyColorIcon'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface Validator {
     rank: number
@@ -88,19 +89,8 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
     }
 
     const formatActivityScore = (score: string) => {
-        const colors = {
-            Active: 'bg-primary/20 text-primary',
-            Standby: 'bg-yellow-500/20 text-yellow-400',
-            Paused: 'bg-orange-500/20 text-orange-400',
-            Unstaking: 'bg-red-500/20 text-red-400',
-            Delegate: 'bg-blue-500/20 text-blue-400',
-            Inactive: 'bg-gray-500/20 text-gray-400',
-        }
-
-        const colorClass = colors[score as keyof typeof colors] || colors.Inactive
-
         return (
-            <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${colorClass}`}>
+            <span className={GREEN_BADGE_CLASS}>
                 {score}
             </span>
         )

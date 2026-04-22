@@ -208,13 +208,11 @@ const OverviewCards: React.FC = () => {
         return {
             href: hash ? `/transaction/${hash}` : undefined,
             cells: [
+                <TransactionTypeBadge type={txType} />,
                 hash ? (
-                    <div className="flex max-w-[14rem] items-center gap-2 truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80">
-                    <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-green-300/10 text-primary">
-                        <i className="fa-solid fa-arrow-right-arrow-left text-sm" />
+                    <span className="block max-w-[14rem] truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80">
+                        {truncateHash(hash)}
                     </span>
-                    <span className="truncate">{truncateHash(hash)}</span>
-                    </div>
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
@@ -228,7 +226,6 @@ const OverviewCards: React.FC = () => {
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
-                <TransactionTypeBadge type={txType} />,
                 amount > 0 ? (
                     <span className="whitespace-nowrap text-sm text-white tabular-nums">{formatAmount(amount)}</span>
                 ) : (
@@ -298,7 +295,7 @@ const OverviewCards: React.FC = () => {
             <WalletPreviewTable
                 title="Transactions"
                 viewAllPath="/transactions"
-                columns={['Hash', 'From', 'Type', 'Amount', 'Time']}
+                columns={['Type', 'Hash', 'From', 'Amount', 'Time']}
                 rows={transactionRows}
                 loading={isTransactionsLoading}
                 emptyLabel="No transactions found"

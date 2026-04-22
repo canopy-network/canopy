@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Poll } from '@/hooks/useGovernance';
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from '@/components/ui/badgeStyles';
 
 interface PollCardProps {
     poll: Poll;
@@ -14,16 +15,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
         poll.title.trim().toLowerCase() === poll.hash.toLowerCase();
 
     const getStatusColor = (status: Poll['status']) => {
-        switch (status) {
-            case 'active':
-                return 'bg-primary/20 text-primary border-primary/40';
-            case 'passed':
-                return 'bg-green-500/20 text-green-400 border-green-500/40';
-            case 'rejected':
-                return 'bg-red-500/20 text-red-400 border-red-500/40';
-            default:
-                return 'bg-muted/20 text-muted-foreground border-border/40';
-        }
+        return WALLET_BADGE_TONE;
     };
 
     const getStatusLabel = (status: Poll['status']) => {
@@ -58,11 +50,11 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
             {/* Header with status and time */}
             <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(poll.status)}`}>
+                    <span className={`${WALLET_BADGE_CLASS} ${getStatusColor(poll.status)}`}>
                         {getStatusLabel(poll.status)}
                     </span>
                     {poll.status === 'active' && (
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400 border border-orange-500/40">
+                        <span className={WALLET_BADGE_CLASS}>
                             {formatEndTime(poll.endTime)}
                         </span>
                     )}

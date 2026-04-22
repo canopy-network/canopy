@@ -4,6 +4,7 @@ import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
 import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import TransactionTypeBadge from './TransactionTypeBadge'
 import PageSizeSelect from '../shared/PageSizeSelect'
+import { GREEN_BADGE_CLASS, GREEN_BADGE_TONE } from '../ui/badgeStyles'
 
 interface Transaction {
     hash: string
@@ -61,14 +62,7 @@ const formatAge = (timestamp?: string, status?: Transaction['status']) => {
 }
 
 const statusClassName = (status: Transaction['status']) => {
-    switch (status) {
-        case 'confirmed':
-            return 'border-primary/25 bg-primary/12 text-primary'
-        case 'pending':
-            return 'border-yellow-500/25 bg-yellow-500/12 text-yellow-400'
-        case 'failed':
-            return 'border-red-500/25 bg-red-500/12 text-red-400'
-    }
+    return GREEN_BADGE_TONE
 }
 
 const statusLabel = (status: Transaction['status']) => {
@@ -108,9 +102,9 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     }
 
     const columns = [
+        { label: 'Type' },
         { label: 'Hash' },
         { label: 'Block' },
-        { label: 'Type' },
         { label: 'From' },
         { label: 'To' },
         { label: 'Amount' },
@@ -182,14 +176,16 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
                                     >
+                                        <TransactionTypeBadge type={transaction.type} />
+                                    </td>
+                                    <td
+                                        className={desktopRowCellClass}
+                                    >
                                         <Link
                                             to={`/transaction/${transaction.hash}`}
-                                            className="flex max-w-[13rem] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
+                                            className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
                                             title={transaction.hash}
                                         >
-                                            <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-green-300/10 text-primary">
-                                                <i className="fa-solid fa-arrow-right-arrow-left text-sm" />
-                                            </span>
                                             <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                                                 {truncateMiddle(transaction.hash)}
                                             </span>
@@ -206,9 +202,6 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                         ) : (
                                             <span className="text-sm font-medium text-yellow-400">Mempool</span>
                                         )}
-                                    </td>
-                                    <td className={desktopRowCellClass}>
-                                        <TransactionTypeBadge type={transaction.type} />
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         {transaction.from === 'N/A' ? (
@@ -241,7 +234,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <span
-                                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-tight ${statusClassName(transaction.status)}`}
+                                            className={`${GREEN_BADGE_CLASS} ${statusClassName(transaction.status)}`}
                                         >
                                             {statusLabel(transaction.status)}
                                         </span>

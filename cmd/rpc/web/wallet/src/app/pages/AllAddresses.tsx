@@ -7,13 +7,14 @@ import { useAccounts } from "@/app/providers/AccountsProvider";
 import { getCanopySymbol } from "@/lib/utils/canopySymbols";
 import { useDenom } from "@/hooks/useDenom";
 import { PageHeader } from "@/components/layouts/PageHeader";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 const desktopRowCellClass =
   "px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]";
 
 const LatestUpdated = ({ className = "" }: { className?: string }) => (
   <div className={`flex items-center gap-2 lg:gap-4 ${className}`}>
-    <div className="relative inline-flex items-center gap-1.5 rounded-full bg-[#35cd48]/5 px-4 py-1">
+    <div className="relative inline-flex items-center gap-1.5 rounded-full border border-[rgba(53,205,72,0.30)] bg-[rgba(53,205,72,0.12)] px-4 py-1">
       <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#35cd48] shadow-[0_0_4px_rgba(53,205,72,0.8)]" />
       <span className="text-sm font-medium text-[#35cd48]">Live</span>
     </div>
@@ -53,16 +54,7 @@ export const AllAddresses = () => {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Staked":
-        return "border-[#35cd48]/35 bg-[#35cd48]/12 text-[#35cd48]";
-      case "Unstaking":
-        return "border-[#ddb228]/35 bg-[#ddb228]/12 text-[#ddb228]";
-      case "Liquid":
-        return "border-[#272729] bg-[#0f0f0f] text-white/60";
-      default:
-        return "border-[#272729] bg-[#0f0f0f] text-white/60";
-    }
+    return WALLET_BADGE_TONE;
   };
 
   const processedAddresses = useMemo(() => {
@@ -354,7 +346,7 @@ export const AllAddresses = () => {
                         style={{ borderTopRightRadius: "10px", borderBottomRightRadius: "10px" }}
                       >
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(addr.status)}`}
+                          className={`${WALLET_BADGE_CLASS} ${getStatusColor(addr.status)}`}
                         >
                           {addr.status}
                         </span>

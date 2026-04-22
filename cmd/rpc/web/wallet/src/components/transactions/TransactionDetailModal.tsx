@@ -5,6 +5,7 @@ import { useConfig } from "@/app/providers/ConfigProvider";
 import { LucideIcon } from "@/components/ui/LucideIcon";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 export interface TxError {
   code: number;
@@ -66,11 +67,7 @@ const formatTimeAgo = (tsMs: number) => {
 };
 
 const getStatusColor = (s: string) => {
-  if (s === "Confirmed") return "bg-[#35cd48]/12 text-[#35cd48] border-[#35cd48]/35";
-  if (s === "Pending") return "bg-[#ddb228]/12 text-[#ddb228] border-[#ddb228]/35";
-  if (s === "Open") return "bg-[#216cd0]/12 text-[#216cd0] border-[#216cd0]/35";
-  if (s === "Failed") return "bg-[#ff1845]/12 text-[#ff1845] border-[#ff1845]/35";
-  return "bg-[#0f0f0f] text-white/60 border-[#272729]";
+  return WALLET_BADGE_TONE;
 };
 
 const truncateMiddle = (value: string, removed = 10) => {
@@ -204,9 +201,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(tx.status)}`}
-                  >
+                  <span className={`${WALLET_BADGE_CLASS} ${getStatusColor(tx.status)}`}>
                     {tx.status}
                   </span>
                   <button

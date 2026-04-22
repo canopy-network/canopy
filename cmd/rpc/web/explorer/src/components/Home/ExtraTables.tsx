@@ -5,6 +5,7 @@ import AnimatedNumber from '../AnimatedNumber'
 import { Link } from 'react-router-dom'
 import { toCNPY } from '../../lib/utils'
 import CnpyColorIcon from '../ui/CnpyColorIcon'
+import { GREEN_BADGE_CLASS, GREEN_BADGE_TONE } from '../ui/badgeStyles'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 const desktopRowCellClass =
@@ -18,8 +19,12 @@ const LiveIndicator = () => (
 )
 
 const CnpyBadge: React.FC<{ seed: string }> = ({ seed }) => (
-    <CnpyColorIcon seed={seed} size={24} />
+    <CnpyColorIcon seed={seed} size={28} />
 )
+
+const activityBadgeClass = (activityScore: string) => {
+    return GREEN_BADGE_TONE
+}
 
 interface SummaryTableProps {
     title: string
@@ -265,13 +270,7 @@ const ExtraTables: React.FC = () => {
                         chainsStaked || '0'
                     )}
                 </span>,
-                <span className={`text-xs px-2 py-1 rounded-full ${activityScore === 'Active' ? 'bg-primary/20 text-primary' :
-                    activityScore === 'Standby' ? 'bg-yellow-500/20 text-yellow-400' :
-                        activityScore === 'Paused' ? 'bg-orange-500/20 text-orange-400' :
-                            activityScore === 'Unstaking' ? 'bg-red-500/20 text-red-400' :
-                                activityScore === 'Delegate' ? 'bg-blue-500/20 text-blue-400' :
-                                    'bg-gray-500/20 text-gray-400'
-                    }`}>
+                <span className={`${GREEN_BADGE_CLASS} ${activityBadgeClass(activityScore)}`}>
                     {activityScore}
                 </span>,
                 <span className="text-gray-200">

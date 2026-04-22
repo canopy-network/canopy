@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Copy, Globe, Scan, X } from "lucide-react";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useDenom } from "@/hooks/useDenom";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 export interface ValidatorDetails {
   address: string;
@@ -34,17 +35,7 @@ const formatRewards = (amount: number, factor: number) =>
   `${amount >= 0 ? "+" : ""}${formatAmount(amount, factor)}`;
 
 const statusBadgeClass = (status: ValidatorDetails["status"]) => {
-  switch (status) {
-    case "Staked":
-    case "Delegate":
-      return "border-primary/25 bg-primary/12 text-primary";
-    case "Paused":
-      return "border-yellow-500/25 bg-yellow-500/12 text-yellow-400";
-    case "Unstaking":
-      return "border-red-500/25 bg-red-500/12 text-red-400";
-    default:
-      return "border-border/60 bg-background text-muted-foreground";
-  }
+  return WALLET_BADGE_TONE;
 };
 
 const DetailBlock: React.FC<{
@@ -176,9 +167,7 @@ export const ValidatorDetailsModal: React.FC<{
                     Status
                   </div>
                   <div className="mt-2">
-                    <span
-                      className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${statusBadgeClass(validator.status)}`}
-                    >
+                    <span className={`${WALLET_BADGE_CLASS} ${statusBadgeClass(validator.status)}`}>
                       {validator.status}
                     </span>
                   </div>

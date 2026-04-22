@@ -3,6 +3,7 @@ import type { SwapData, SortKey, SortDir } from './TokenSwapsPage';
 import AnimatedNumber from '../AnimatedNumber';
 import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils';
 import PageSizeSelect from '../shared/PageSizeSelect';
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles';
 
 interface RecentSwapsTableProps {
     swaps: SwapData[];
@@ -192,13 +193,7 @@ const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({
                                         className={desktopRowCellClass}
                                         style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
                                     >
-                                        <span
-                                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-tight ${
-                                                swap.status === 'Active'
-                                                    ? 'border-primary/25 bg-primary/12 text-primary'
-                                                    : 'border-yellow-500/25 bg-yellow-500/12 text-yellow-400'
-                                            }`}
-                                        >
+                                        <span className={GREEN_BADGE_CLASS}>
                                             {swap.status}
                                         </span>
                                     </td>

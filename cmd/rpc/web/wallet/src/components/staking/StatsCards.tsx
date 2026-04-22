@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Gift, Link2, Lock, ShieldCheck } from 'lucide-react';
 import { useStakedBalanceHistory } from '@/hooks/useStakedBalanceHistory';
 import { useDenom } from '@/hooks/useDenom';
+import { WALLET_BADGE_CLASS } from '@/components/ui/badgeStyles';
 
 interface StatsCardsProps {
     totalStaked: number;
@@ -98,7 +99,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             subtitle: (
                 <div className="flex items-center justify-between gap-3">
                     <span>Covered by {pluralize(validatorsCount, 'validator')}</span>
-                    <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground ring-1 ring-border/60">
+                    <span className={WALLET_BADGE_CLASS}>
                         {activeValidatorsCount} active
                     </span>
                 </div>

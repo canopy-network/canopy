@@ -5,6 +5,7 @@ import transactionsTexts from '../../data/transactions.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
 import { formatPaginationRange } from '../../lib/utils'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface Transaction {
     hash: string
@@ -53,19 +54,6 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
         if (!fee || fee === 0) return '0 CNPY'
         const cnpy = fee / 1_000_000
         return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
-    }
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'success':
-                return 'border-primary/25 bg-primary/12 text-primary'
-            case 'failed':
-                return 'border-red-500/25 bg-red-500/12 text-red-400'
-            case 'pending':
-                return 'border-yellow-500/25 bg-yellow-500/12 text-yellow-400'
-            default:
-                return 'border-gray-500/25 bg-gray-500/12 text-gray-400'
-        }
     }
 
     const getTransactionType = (tx: Transaction): string => {
@@ -182,9 +170,7 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                                         <span className="text-sm text-white tabular-nums">{formatFee(tx.fee || 0)}</span>
                                     </td>
                                     <td className={desktopRowCellClass}>
-                                        <span
-                                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-tight ${getStatusColor(tx.status || 'success')}`}
-                                        >
+                                        <span className={GREEN_BADGE_CLASS}>
                                             {transactionsTexts.status[tx.status as keyof typeof transactionsTexts.status] || transactionsTexts.status.success}
                                         </span>
                                     </td>

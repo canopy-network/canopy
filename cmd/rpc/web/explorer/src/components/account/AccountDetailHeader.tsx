@@ -29,20 +29,18 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
     return (
         <div className="mb-6">
             <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary">
-                            <i className="fa-solid fa-wallet text-lg text-background"></i>
+                <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                        <i className="fa-solid fa-wallet text-lg text-white/80"></i>
+                    </div>
+                    <div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <h1 className="text-xl font-bold leading-none text-white sm:text-2xl md:text-3xl">
+                                {accountDetailTexts.header.title}
+                            </h1>
                         </div>
-                        <div>
-                            <div className="flex flex-wrap items-center gap-3">
-                                <h1 className="text-xl font-bold text-white sm:text-2xl md:text-3xl">
-                                    {accountDetailTexts.header.title}
-                                </h1>
-                            </div>
-                            <div className="mt-2 text-sm text-gray-400">
-                                {accountDetailTexts.header.address}
-                            </div>
+                        <div className="mt-2 text-sm text-gray-400">
+                            {accountDetailTexts.header.address}
                         </div>
                     </div>
                 </div>
