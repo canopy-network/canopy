@@ -13,6 +13,8 @@ interface StageCardProps {
     metric: string
 }
 
+const stageCardSubtitleClass = 'explorer-overview-card-subvalue'
+
 const Stages = () => {
     const { data: cardData } = useCardData()
 
@@ -127,42 +129,42 @@ const Stages = () => {
         {
             title: 'Blocks',
             data: latestBlockHeight.toString(),
-            subtitle: <p className="text-sm text-gray-500">Heights</p>,
+            subtitle: <p className={stageCardSubtitleClass}>Heights</p>,
             icon: <i className="fa-solid fa-cube"></i>,
             metric: 'blocks',
         },
         {
             title: 'Total Supply',
             data: convertNumber(totalSupplyCNPY),
-            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
+            subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-wallet"></i>,
             metric: 'totalSupply',
         },
         {
             title: 'Liquid Supply',
             data: convertNumber(liquidSupplyCNPY),
-            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
+            subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-droplet"></i>,
             metric: 'liquidSupply',
         },
         {
             title: 'Total Stake',
             data: convertNumber(totalStakeCNPY),
-            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
+            subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-lock"></i>,
             metric: 'totalStake',
         },
         {
             title: 'Total Validating',
             data: isLoadingStats ? 'Loading...' : convertNumber(totalValidating),
-            subtitle: <p className="text-sm text-gray-500">Validators</p>,
+            subtitle: <p className={stageCardSubtitleClass}>Validators</p>,
             icon: <i className="fa-solid fa-shield-halved"></i>,
             metric: 'totalValidating',
         },
         {
             title: 'Total Delegating',
             data: isLoadingStats ? 'Loading...' : convertNumber(totalDelegating),
-            subtitle: <p className="text-sm text-gray-500">Delegators</p>,
+            subtitle: <p className={stageCardSubtitleClass}>Delegators</p>,
             icon: <i className="fa-solid fa-coins"></i>,
             metric: 'totalDelegating',
         },
@@ -171,14 +173,14 @@ const Stages = () => {
             data: isLoadingStats ? 'Loading...' : convertNumber(totalAccounts),
             icon: <i className="fa-solid fa-users"></i>,
             metric: 'accounts',
-            subtitle: <p className="text-sm text-gray-500">Indexed accounts</p>,
+            subtitle: <p className={stageCardSubtitleClass}>Indexed accounts</p>,
         },
         {
             title: 'Total Txs',
             data: isLoadingStats ? 'Loading...' : convertNumber(totalTxs),
             icon: <i className="fa-solid fa-arrow-right-arrow-left"></i>,
             metric: 'txs',
-            subtitle: <p className="text-sm text-gray-500">Confirmed txs</p>,
+            subtitle: <p className={stageCardSubtitleClass}>Confirmed txs</p>,
         },
     ]
 
@@ -195,8 +197,13 @@ const Stages = () => {
     }
 
     return (
-        <section className="w-full">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <section className="explorer-overview-section">
+            <div className="explorer-overview-header">
+                <h2 className="explorer-overview-title">
+                    Overview
+                </h2>
+            </div>
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 sm:gap-4">
                 {stages.map((stage, index) => (
                     <motion.article
                         key={stage.metric}
@@ -204,15 +211,19 @@ const Stages = () => {
                         whileInView={{ opacity: 1, y: 0, scale: 1 }}
                         viewport={{ amount: 0.6 }}
                         transition={{ duration: 0.22, delay: index * 0.03, ease: 'easeOut' }}
-                        className="relative flex h-full flex-col rounded-xl border border-white/10 bg-card p-5 shadow-xl"
+                        className="explorer-overview-card"
                     >
                         <div className="flex items-center gap-2">
-                            <span className="text-base leading-none text-[#35cd48]">{stage.icon}</span>
-                            <h3 className="text-sm text-gray-300">{stage.title}</h3>
+                            <span className="inline-flex shrink-0 items-center justify-center text-sm leading-none text-[#35cd48]">
+                                {stage.icon}
+                            </span>
+                            <div className="min-w-0">
+                                <h3 className="explorer-overview-card-label">{stage.title}</h3>
+                            </div>
                         </div>
 
-                        <div className="mt-3 min-h-[3.5rem]">
-                            <div className="text-3xl md:text-4xl font-semibold tracking-tight text-white">
+                        <div className="mt-2 min-h-[2.5rem]">
+                            <div className="explorer-overview-card-value">
                                 {(() => {
                                     const { number, prefix, suffix } = parseNumberFromString(stage.data)
                                     return (
@@ -232,7 +243,7 @@ const Stages = () => {
 
                         {(() => {
                             const subtitleBlock = stage.subtitle && (
-                                <div className="mt-2 flex items-center justify-between gap-3">
+                                <div className="mt-1.5 flex items-center justify-between gap-2">
                                     <div className="flex-1">
                                         {stage.subtitle}
                                     </div>

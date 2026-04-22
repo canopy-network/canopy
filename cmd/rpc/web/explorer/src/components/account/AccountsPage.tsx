@@ -75,7 +75,7 @@ const AccountsPage: React.FC = () => {
             className="w-full"
         >
             <div className="w-full">
-                <div className="mb-8">
+                <div className="mb-4">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <h1 className="explorer-page-title">{accountsTexts.page.title}</h1>

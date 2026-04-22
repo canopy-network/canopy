@@ -5,7 +5,8 @@ import accountDetailTexts from '../../data/accountDetail.json'
 import transactionsTexts from '../../data/transactions.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
-import { formatPaginationRange } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
+import PageSizeSelect from '../shared/PageSizeSelect'
 
 interface Transaction {
     txHash: string
@@ -30,6 +31,8 @@ interface AccountTransactionsTableProps {
     loading?: boolean
     currentPage?: number
     onPageChange?: (page: number) => void
+    pageSize?: number
+    onPageSizeChange?: (value: number) => void
     type: 'sent' | 'received'
     totalCount?: number
     totalPages?: number
@@ -46,6 +49,8 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
     loading = false,
     currentPage = 1,
     onPageChange,
+    pageSize = 10,
+    onPageSizeChange,
     type,
     totalCount = 0,
     totalPages = 1,
@@ -162,7 +167,6 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             <span
                 key="hash"
                 className="text-sm font-medium text-white transition-colors hover:text-primary"
-                onClick={() => navigate(`/transaction/${transaction.txHash}`)}
                 title={transaction.txHash}
             >
                 {truncate(transaction.txHash)}
@@ -244,7 +248,6 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         { label: renderSortableHeader(transactionsTexts.table.headers.age, 'age'), width: 'min-w-[100px]' }
     ]
 
-    const pageSize = Math.max(transactions.length, 10)
     const safeTotalPages = Math.max(1, totalPages)
     const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
     const endIdx = totalCount === 0 ? 0 : Math.min(currentPage * pageSize, totalCount)
@@ -266,10 +269,15 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         return (
             <div className={`mt-4 flex ${compact ? 'items-center justify-between' : 'flex-col gap-3 md:flex-row md:items-center md:justify-between'} text-sm text-white/60`}>
                 <div className={compact ? 'text-xs text-gray-400' : ''}>
-                    {formatPaginationRange(startIdx, endIdx)} of {totalCount.toLocaleString()}
+                    <span>
+                        {formatPaginationRange(startIdx, endIdx)} of {totalCount.toLocaleString()}
+                    </span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
+                    {onPageSizeChange && (
+                        <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+                    )}
                     <button
                         type="button"
                         onClick={() => goToPage(currentPage - 1)}
@@ -508,7 +516,22 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                     </tr>
                                 ) : (
                                     rows.map((row, rowIndex) => (
-                                        <tr key={`${type}-${rowIndex}`} className="group">
+                                        <tr
+                                            key={`${type}-${rowIndex}`}
+                                            className="group cursor-pointer"
+                                            onClick={(event) => {
+                                                if (shouldIgnoreRowNavigation(event.target)) return
+                                                navigate(`/transaction/${sortedTransactions[rowIndex].txHash}`)
+                                            }}
+                                            onKeyDown={(event) => {
+                                                if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                                event.preventDefault()
+                                                navigate(`/transaction/${sortedTransactions[rowIndex].txHash}`)
+                                            }}
+                                            tabIndex={0}
+                                            role="link"
+                                            aria-label={`View transaction ${sortedTransactions[rowIndex].txHash}`}
+                                        >
                                             {row.map((cell, columnIndex) => (
                                                 <td
                                                     key={`${type}-${rowIndex}-${columnIndex}`}

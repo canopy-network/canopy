@@ -22,8 +22,14 @@ const PageSizeSelect: React.FC<PageSizeSelectProps> = ({
                 <select
                     value={value}
                     onChange={(e) => onChange(Number(e.target.value))}
-                    className="appearance-none rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 pr-7 text-[11px] font-medium tracking-normal text-white/75 outline-none transition-colors hover:border-white/20 focus:border-[#35cd48]/40"
+                    className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 pr-6 text-[11px] font-medium tracking-normal text-white/75 outline-none transition-colors hover:border-white/20 focus:border-[#35cd48]/40"
                     aria-label={`${label} per page`}
+                    style={{
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        backgroundImage: 'none',
+                    }}
                 >
                     {options.map((option) => (
                         <option key={option} value={option} className="bg-[#111111] text-white">

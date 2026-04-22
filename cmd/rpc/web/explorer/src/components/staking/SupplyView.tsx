@@ -39,6 +39,11 @@ const SupplyView: React.FC = () => {
         return Math.max(0, Math.min(100, (stakedSupplyCNPY / totalSupplyCNPY) * 100))
     }, [stakedSupplyCNPY, totalSupplyCNPY])
 
+    const liquidRatio = React.useMemo(() => {
+        if (totalSupplyCNPY <= 0) return Math.max(0, 100 - stakingRatio)
+        return Math.max(0, Math.min(100, (liquidSupplyCNPY / totalSupplyCNPY) * 100))
+    }, [liquidSupplyCNPY, stakingRatio, totalSupplyCNPY])
+
     const supplyMetrics = [
         {
             title: 'Total',
@@ -97,7 +102,7 @@ const SupplyView: React.FC = () => {
             transition={{ duration: 0.5, delay: 0.3 }}
         >
             {/* Header */}
-            <div className="mb-6">
+            <div className="mb-4">
                 <h2 className="explorer-page-title">
                     {stakingTexts.supply.title}
                 </h2>
@@ -109,7 +114,7 @@ const SupplyView: React.FC = () => {
             {/* Supply Metrics Grid */}
             <ExplorerOverviewCards cards={supplyMetrics} className="mb-8" />
 
-            {/* Supply Distribution Chart */}
+            {/* Supply Distribution */}
             <motion.div
                 className="mb-8 rounded-lg border border-[#272729] bg-[#171717] p-6"
                 initial={{ opacity: 0, y: 20 }}
@@ -118,39 +123,31 @@ const SupplyView: React.FC = () => {
             >
                 <h3 className="text-lg font-semibold text-white mb-4">Supply Distribution</h3>
                 <div className="space-y-4">
-                    {/* Staked Supply Bar */}
-                    <div>
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm text-gray-400">Staked</span>
-                            <span className="text-sm font-medium text-[#35cd48]">
-                                {stakingRatio.toFixed(2)}%
-                            </span>
+                    <div className="flex items-center justify-between gap-4 text-sm">
+                        <div className="flex items-center gap-2 text-[#35cd48]">
+                            <span className="h-2 w-2 rounded-full bg-[#35cd48]" />
+                            <span>Staked {stakingRatio.toFixed(2)}%</span>
                         </div>
-                        <div className="w-full bg-white/10 rounded-full h-3">
+                        <div className="text-xs uppercase tracking-[0.2em] text-gray-500">of total supply</div>
+                        <div className="flex items-center gap-2 text-[#216cd0]">
+                            <span>Liquid {liquidRatio.toFixed(2)}%</span>
+                            <span className="h-2 w-2 rounded-full bg-[#216cd0]" />
+                        </div>
+                    </div>
+                    <div className="overflow-hidden rounded-full bg-white/10">
+                        <div className="flex h-3 w-full">
                             <motion.div
-                                className="h-3 rounded-full bg-[#35cd48]"
+                                className="bg-[#35cd48]"
                                 initial={{ width: 0 }}
                                 animate={{ width: `${stakingRatio}%` }}
                                 transition={{ duration: 1, delay: 0.5 }}
-                            ></motion.div>
-                        </div>
-                    </div>
-
-                    {/* Liquid Supply Bar */}
-                    <div>
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm text-gray-400">Liquid</span>
-                            <span className="text-sm font-medium text-[#216cd0]">
-                                {totalSupplyCNPY > 0 ? ((liquidSupplyCNPY / totalSupplyCNPY) * 100).toFixed(2) : (100 - stakingRatio).toFixed(2)}%
-                            </span>
-                        </div>
-                        <div className="w-full bg-white/10 rounded-full h-3">
+                            />
                             <motion.div
-                                className="h-3 rounded-full bg-[#216cd0]"
+                                className="bg-[#216cd0]"
                                 initial={{ width: 0 }}
-                                animate={{ width: `${totalSupplyCNPY > 0 ? (liquidSupplyCNPY / totalSupplyCNPY) * 100 : 100 - stakingRatio}%` }}
+                                animate={{ width: `${liquidRatio}%` }}
                                 transition={{ duration: 1, delay: 0.7 }}
-                            ></motion.div>
+                            />
                         </div>
                     </div>
                 </div>

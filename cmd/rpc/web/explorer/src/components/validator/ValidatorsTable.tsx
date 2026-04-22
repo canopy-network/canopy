@@ -1,10 +1,11 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import validatorsTexts from '../../data/validators.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TableCard from '../Home/TableCard'
-import { formatPaginationRange, toCNPY } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
+import CnpyColorIcon from '../ui/CnpyColorIcon'
 
 interface Validator {
     rank: number
@@ -52,26 +53,8 @@ const desktopHeaderClass =
 const desktopRowCellClass =
     'bg-[#1a1a1a] px-2 py-2 align-middle transition-colors group-hover:bg-[#272729] sm:px-3 lg:px-4'
 
-const CNPY_GRADIENTS = [
-    'linear-gradient(135deg, #45ca46 0%, #2f8f36 100%)',
-    'linear-gradient(135deg, #36cfc9 0%, #1677ff 100%)',
-    'linear-gradient(135deg, #faad14 0%, #d46b08 100%)',
-    'linear-gradient(135deg, #9254de 0%, #531dab 100%)',
-    'linear-gradient(135deg, #f759ab 0%, #cf1322 100%)',
-]
-
-const getCnpyGradient = (seed: string) => {
-    const total = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-    return CNPY_GRADIENTS[total % CNPY_GRADIENTS.length]
-}
-
 const CnpyBadge: React.FC<{ seed: string }> = ({ seed }) => (
-    <div
-        className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full p-[3px]"
-        style={{ background: getCnpyGradient(seed) }}
-    >
-        <img src="/canopy-symbol-white.png" alt="" className="h-full w-full object-contain" />
-    </div>
+    <CnpyColorIcon seed={seed} size={28} />
 )
 
 const LiveIndicator = () => (
@@ -98,6 +81,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
     showLiveIndicator = true,
     showTitle = true,
 }) => {
+    const navigate = useNavigate()
     const truncateMiddle = (value: string, leading = 14, trailing = 10) => {
         if (!value || value.length <= leading + trailing + 1) return value || 'N/A'
         return `${value.slice(0, leading)}…${value.slice(-trailing)}`
@@ -162,13 +146,12 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
 
     const baseColumns = [
         { key: 'rank', label: 'Rank', widthWithRank: 'w-[6%]', widthWithoutRank: '' },
-        { key: 'address', label: 'Validator Name/Address', widthWithRank: 'w-[22%]', widthWithoutRank: 'w-[28%]' },
-        { key: 'reward', label: 'Reward % (24h)', widthWithRank: 'w-[11%]', widthWithoutRank: 'w-[12%]' },
+        { key: 'address', label: 'Validator Name/Address', widthWithRank: 'w-[24%]', widthWithoutRank: 'w-[30%]' },
         { key: 'status', label: 'Status', widthWithRank: 'w-[14%]', widthWithoutRank: 'w-[14%]' },
-        { key: 'chains', label: 'Chains Restaked', widthWithRank: 'w-[10%]', widthWithoutRank: 'w-[10%]' },
+        { key: 'chains', label: 'Chains Restaked', widthWithRank: 'w-[11%]', widthWithoutRank: 'w-[11%]' },
         { key: 'weight', label: 'Stake Weight', widthWithRank: 'w-[12%]', widthWithoutRank: 'w-[12%]' },
-        { key: 'stake', label: 'Total Stake (CNPY)', widthWithRank: 'w-[15%]', widthWithoutRank: 'w-[16%]' },
-        { key: 'power', label: 'Staking Power', widthWithRank: 'w-[10%]', widthWithoutRank: 'w-[8%]' },
+        { key: 'stake', label: 'Total Stake (CNPY)', widthWithRank: 'w-[18%]', widthWithoutRank: 'w-[18%]' },
+        { key: 'power', label: 'Staking Power', widthWithRank: 'w-[15%]', widthWithoutRank: 'w-[15%]' },
     ]
 
     const columns = baseColumns
@@ -210,17 +193,6 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
                     {truncateMiddle(identifier)}
                 </span>
             </Link>
-        )
-
-        cells.push(
-            <span className="text-sm font-medium text-primary">
-                <AnimatedNumber
-                    value={validator.estimatedRewardRate}
-                    format={{ maximumFractionDigits: 2 }}
-                    suffix="%"
-                    className="text-primary"
-                />
-            </span>
         )
 
         cells.push(formatActivityScore(validator.activityScore))
@@ -359,24 +331,43 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
                                     </td>
                                 </tr>
                             ) : (
-                                rows.map((cells, rowIndex) => (
-                                    <tr key={validators[rowIndex]?.address || rowIndex} className="group">
-                                        {cells.map((cell, cellIndex) => (
-                                            <td
-                                                key={`${validators[rowIndex]?.address || rowIndex}-${cellIndex}`}
-                                                className={`${desktopRowCellClass} ${columns[cellIndex]?.width || ''}`}
-                                                style={{
-                                                    borderTopLeftRadius: cellIndex === 0 ? '10px' : undefined,
-                                                    borderBottomLeftRadius: cellIndex === 0 ? '10px' : undefined,
-                                                    borderTopRightRadius: cellIndex === cells.length - 1 ? '10px' : undefined,
-                                                    borderBottomRightRadius: cellIndex === cells.length - 1 ? '10px' : undefined,
-                                                }}
-                                            >
-                                                {cell}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))
+                                rows.map((cells, rowIndex) => {
+                                    const validator = validators[rowIndex]
+
+                                    return (
+                                        <tr
+                                            key={validator?.address || rowIndex}
+                                            className="group cursor-pointer"
+                                            onClick={(event) => {
+                                                if (!validator || shouldIgnoreRowNavigation(event.target)) return
+                                                navigate(`/validator/${validator.address}?rank=${validator.rank}`)
+                                            }}
+                                            onKeyDown={(event) => {
+                                                if (!validator || shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                                event.preventDefault()
+                                                navigate(`/validator/${validator.address}?rank=${validator.rank}`)
+                                            }}
+                                            tabIndex={validator ? 0 : undefined}
+                                            role={validator ? 'link' : undefined}
+                                            aria-label={validator ? `View validator ${validator.address}` : undefined}
+                                        >
+                                            {cells.map((cell, cellIndex) => (
+                                                <td
+                                                    key={`${validator?.address || rowIndex}-${cellIndex}`}
+                                                    className={`${desktopRowCellClass} ${columns[cellIndex]?.width || ''}`}
+                                                    style={{
+                                                        borderTopLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                                        borderBottomLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                                        borderTopRightRadius: cellIndex === cells.length - 1 ? '10px' : undefined,
+                                                        borderBottomRightRadius: cellIndex === cells.length - 1 ? '10px' : undefined,
+                                                    }}
+                                                >
+                                                    {cell}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    )
+                                })
                             )}
                         </tbody>
                     </table>
@@ -385,7 +376,10 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
                 {!loading && totalCount > 0 && (
                     <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
                         <div className="flex items-center gap-3">
-                            {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalCount} />
+                            <span className="inline-flex items-baseline gap-1">
+                                <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                                <AnimatedNumber value={totalCount} />
+                            </span>
                             {onPageSizeChange && (
                                 <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
                             )}

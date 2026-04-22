@@ -65,6 +65,7 @@ interface WalletPreviewTableProps {
         href?: string
         cells: React.ReactNode[]
     }>
+    loading?: boolean
     viewAllPath: string
     emptyLabel: string
     minWidth?: string
@@ -74,6 +75,7 @@ const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
     title,
     columns,
     rows,
+    loading = false,
     viewAllPath,
     emptyLabel,
     minWidth = 'min-w-[720px]',
@@ -110,7 +112,26 @@ const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
                     </tr>
                 </thead>
                 <tbody>
-                    {rows.length === 0 ? (
+                    {loading ? (
+                        Array.from({ length: 5 }).map((_, index) => (
+                            <tr key={`${title}-loading-${index}`} className="animate-pulse">
+                                {columns.map((_, cellIndex) => (
+                                    <td
+                                        key={`${title}-loading-${index}-${cellIndex}`}
+                                        className={desktopRowCellClass}
+                                        style={{
+                                            borderTopLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderBottomLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderTopRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                            borderBottomRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                        }}
+                                    >
+                                        <div className="h-3 w-20 rounded bg-white/10 sm:w-28 lg:w-32" />
+                                    </td>
+                                ))}
+                            </tr>
+                        ))
+                    ) : rows.length === 0 ? (
                         <tr>
                             <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
                                 {emptyLabel}
@@ -171,8 +192,8 @@ const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
 }
 
 const OverviewCards: React.FC = () => {
-    const { data: txsPage } = useTransactionsWithRealPagination(1, 5)
-    const { data: blocksPage } = useAllBlocksCache()
+    const { data: txsPage, isLoading: isTransactionsLoading } = useTransactionsWithRealPagination(1, 5)
+    const { data: blocksPage, isLoading: isBlocksLoading } = useAllBlocksCache()
 
     const txs = normalizeList(txsPage)
     const blockList = normalizeList(blocksPage)
@@ -270,6 +291,7 @@ const OverviewCards: React.FC = () => {
                 viewAllPath="/blocks"
                 columns={['Height', 'Hash', 'Producer', 'Txs', 'Time']}
                 rows={blockRows}
+                loading={isBlocksLoading}
                 emptyLabel="No blocks found"
                 minWidth="min-w-[760px]"
             />
@@ -278,6 +300,7 @@ const OverviewCards: React.FC = () => {
                 viewAllPath="/transactions"
                 columns={['Hash', 'From', 'Type', 'Amount', 'Time']}
                 rows={transactionRows}
+                loading={isTransactionsLoading}
                 emptyLabel="No transactions found"
                 minWidth="min-w-[760px]"
             />

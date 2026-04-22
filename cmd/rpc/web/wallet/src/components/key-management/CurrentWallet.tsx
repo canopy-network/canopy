@@ -383,8 +383,8 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
           </Button>
           <Button
             onClick={handleDeleteAccount}
-            variant="destructive"
-            className="h-11 w-full"
+            variant="secondary"
+            className="h-11 w-full border-[#ff1845]/30 bg-[#ff1845]/10 text-[#ff6b84] shadow-none hover:border-[#ff1845]/40 hover:bg-[#ff1845]/14 hover:text-[#ff7f96]"
             disabled={!selectedAccount}
           >
             <Trash2 className="h-4 w-4" />

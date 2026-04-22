@@ -239,41 +239,41 @@ export const Governance = () => {
         />
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {criticalActions.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <motion.button
-                key={item.title}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={() => openActions(item.actions)}
-                className="group text-left rounded-xl border border-[#272729] bg-[#171717] px-4 py-4 transition-all duration-200 hover:border-white/15 hover:bg-[#0f0f0f]"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                      <span className={`inline-flex h-7 w-7 items-center justify-center ${item.iconClassName}`}>
-                        <Icon className="w-4 h-4" />
-                      </span>
-                  <span className="text-sm font-semibold text-foreground">{item.title}</span>
-                  <ActionTooltip
-                    label={item.title}
-                    description={item.help}
-                    className="ml-auto"
-                  >
-                    <span
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#272729] text-muted-foreground hover:bg-[#272729] hover:text-foreground"
-                      tabIndex={0}
-                      aria-label={`${item.title} help`}
-                    >
-                      <CircleHelp className="w-3.5 h-3.5" />
+            {criticalActions.map((item) => {
+              const Icon = item.icon;
+              return (
+                <motion.button
+                  key={item.title}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => openActions(item.actions)}
+                  className="group text-left rounded-xl border border-[#272729] bg-[#171717] px-4 py-4 transition-all duration-200 hover:border-white/15 hover:bg-[#0f0f0f]"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`inline-flex h-7 w-7 items-center justify-center ${item.iconClassName}`}>
+                      <Icon className="w-4 h-4" />
                     </span>
-                  </ActionTooltip>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed min-h-[36px]">
-                  {item.description}
-                </p>
-              </motion.button>
-            );
-          })}
+                    <span className="text-sm font-semibold text-foreground">{item.title}</span>
+                    <ActionTooltip
+                      label={item.title}
+                      description={item.help}
+                      className="ml-auto"
+                    >
+                      <span
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#272729] text-muted-foreground hover:bg-[#272729] hover:text-foreground"
+                        tabIndex={0}
+                        aria-label={`${item.title} help`}
+                      >
+                        <CircleHelp className="w-3.5 h-3.5" />
+                      </span>
+                    </ActionTooltip>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed min-h-[36px]">
+                    {item.description}
+                  </p>
+                </motion.button>
+              );
+            })}
         </div>
 
         <section

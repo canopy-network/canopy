@@ -91,6 +91,7 @@ const TokenSwapsPage: React.FC = () => {
         const set = new Set(swaps.map((s) => s.committee));
         return Array.from(set).sort((a, b) => a - b);
     }, [swaps]);
+
     const overviewCards = useMemo(() => {
         const activeCount = swaps.filter((swap) => swap.status === 'Active').length;
         const lockedCount = swaps.filter((swap) => swap.status === 'Locked').length;
@@ -117,12 +118,12 @@ const TokenSwapsPage: React.FC = () => {
             },
             {
                 title: 'Open Volume',
-                value: `${totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })} CNPY`,
-                subValue: `${availableCommittees.length.toLocaleString()} committees`,
+                value: totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+                subValue: 'CNPY',
                 icon: 'fa-solid fa-chart-column',
             },
         ];
-    }, [availableCommittees.length, swaps]);
+    }, [swaps]);
 
     const filteredSwaps = useMemo(() => {
         let result = swaps;
@@ -225,7 +226,7 @@ const TokenSwapsPage: React.FC = () => {
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="w-full"
         >
-            <div className="flex justify-between items-center mb-8">
+            <div className="mb-4 flex items-center justify-between">
                 <div>
                     <h1 className="explorer-page-title">Token Swaps</h1>
                     <p className="explorer-page-subtitle">Atomic swap orderbook on the Canopy network</p>

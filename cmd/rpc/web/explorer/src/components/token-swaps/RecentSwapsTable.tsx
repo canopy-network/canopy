@@ -1,7 +1,7 @@
 import React from 'react';
 import type { SwapData, SortKey, SortDir } from './TokenSwapsPage';
 import AnimatedNumber from '../AnimatedNumber';
-import { formatPaginationRange } from '../../lib/utils';
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils';
 import PageSizeSelect from '../shared/PageSizeSelect';
 
 interface RecentSwapsTableProps {
@@ -140,7 +140,22 @@ const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({
                             </tr>
                         ) : (
                             paginatedSwaps.map((swap) => (
-                                <tr key={`${swap.committee}-${swap.orderId}`} className="group">
+                                <tr
+                                    key={`${swap.committee}-${swap.orderId}`}
+                                    className="group cursor-pointer"
+                                    onClick={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target)) return;
+                                        onRowClick?.(swap);
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return;
+                                        event.preventDefault();
+                                        onRowClick?.(swap);
+                                    }}
+                                    tabIndex={onRowClick ? 0 : undefined}
+                                    role={onRowClick ? 'link' : undefined}
+                                    aria-label={onRowClick ? `View order ${swap.orderId}` : undefined}
+                                >
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
@@ -197,7 +212,10 @@ const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({
             {!loading && totalCount > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-3">
-                        {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalCount} />
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                            <AnimatedNumber value={totalCount} />
+                        </span>
                         {onPageSizeChange && (
                             <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
                         )}

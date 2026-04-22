@@ -1,7 +1,7 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
-import { formatPaginationRange, toCNPY } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import TransactionTypeBadge from './TransactionTypeBadge'
 import PageSizeSelect from '../shared/PageSizeSelect'
 
@@ -91,6 +91,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     onPageChange,
     onPageSizeChange,
 }) => {
+    const navigate = useNavigate()
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
     const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
     const endIdx = Math.min(currentPage * pageSize, totalCount)
@@ -161,7 +162,22 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                             </tr>
                         ) : (
                             transactions.map((transaction) => (
-                                <tr key={`${transaction.status}-${transaction.hash}`} className="group">
+                                <tr
+                                    key={`${transaction.status}-${transaction.hash}`}
+                                    className="group cursor-pointer"
+                                    onClick={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(`/transaction/${transaction.hash}`)
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        event.preventDefault()
+                                        navigate(`/transaction/${transaction.hash}`)
+                                    }}
+                                    tabIndex={0}
+                                    role="link"
+                                    aria-label={`View transaction ${transaction.hash}`}
+                                >
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
@@ -246,7 +262,9 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             {!loading && totalCount > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-3">
-                        {formatPaginationRange(startIdx, endIdx)} of {totalCount.toLocaleString()} transactions
+                        <span>
+                            {formatPaginationRange(startIdx, endIdx)} of {totalCount.toLocaleString()} transactions
+                        </span>
                         {onPageSizeChange && (
                             <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
                         )}

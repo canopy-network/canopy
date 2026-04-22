@@ -1,3 +1,14 @@
+export const rowNavigationIgnoreSelector =
+    'a, button, input, select, textarea, summary, [role="button"], [role="link"], [data-row-click-ignore="true"]'
+
+export function shouldIgnoreRowNavigation(target: EventTarget | null): boolean {
+    return target instanceof Element && Boolean(target.closest(rowNavigationIgnoreSelector))
+}
+
+export function isRowNavigationKey(key: string): boolean {
+    return key === 'Enter' || key === ' '
+}
+
 // cnpyConversionRate sets the conversion rate between CNPY and uCNPY
 export const cnpyConversionRate = 1_000_000;
 

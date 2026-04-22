@@ -47,7 +47,7 @@ export const queryKeys = {
     committee: (page: number, chainId: number) => ['committee', page, chainId],
     dao: (height: number) => ['dao', height],
     account: (height: number, address: string) => ['account', height, address],
-    accountWithTxs: (height: number, address: string, page: number) => ['accountWithTxs', height, address, page],
+    accountWithTxs: (height: number, address: string, page: number, perPage: number = 10) => ['accountWithTxs', height, address, page, perPage],
     params: (height: number) => ['params', height],
     supply: (height: number) => ['supply', height],
     validator: (height: number, address: string) => ['validator', height, address],
@@ -289,10 +289,10 @@ export const useAccount = (height: number, address: string) => {
 };
 
 // Hooks for Account with Transactions
-export const useAccountWithTxs = (height: number, address: string, page: number) => {
+export const useAccountWithTxs = (height: number, address: string, page: number, perPage: number = 10) => {
     return useQuery({
-        queryKey: queryKeys.accountWithTxs(height, address, page),
-        queryFn: () => AccountWithTxs(height, address, page),
+        queryKey: queryKeys.accountWithTxs(height, address, page, perPage),
+        queryFn: () => AccountWithTxs(height, address, page, perPage),
         staleTime: 30000,
         enabled: !!address,
     });

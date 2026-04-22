@@ -61,12 +61,12 @@ export const Dashboard = () => {
                     variants={item}
                     className="grid grid-cols-1 md:grid-cols-2 gap-4"
                 >
-                    <ErrorBoundary>
-                        <TotalBalanceCard />
-                    </ErrorBoundary>
-                    <ErrorBoundary>
-                        <StakedBalanceCard />
-                    </ErrorBoundary>
+                        <ErrorBoundary>
+                            <TotalBalanceCard />
+                        </ErrorBoundary>
+                        <ErrorBoundary>
+                            <StakedBalanceCard />
+                        </ErrorBoundary>
                 </motion.div>
 
                 {/* ── Row 2: Node Management ── */}

@@ -91,6 +91,12 @@ const TableCard: React.FC<TableCardProps> = ({
         }
     }, [totalPages, isExternalPagination])
 
+    React.useEffect(() => {
+        if (!isExternalPagination) {
+            setInternalPage(1)
+        }
+    }, [effectivePageSize, isExternalPagination])
+
     const startIdx = isExternalPagination ? (propCurrentPage - 1) * effectivePageSize : (internalPage - 1) * effectivePageSize
     const endIdx = isExternalPagination ? startIdx + effectivePageSize : startIdx + effectivePageSize
     const pageRows = React.useMemo(() => isExternalPagination ? rows : rows.slice(startIdx, endIdx), [rows, startIdx, endIdx, isExternalPagination])
@@ -241,7 +247,12 @@ const TableCard: React.FC<TableCardProps> = ({
             {compactFooter ? (
                 <div className="mt-auto pt-3 flex items-center flex-row-reverse justify-between">
                     <div className="text-gray-400 text-sm">
-                        {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
+                        <span>
+                            <span className="inline-flex items-baseline gap-1">
+                                <span>{formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of</span>
+                                <AnimatedNumber value={totalItems} />
+                            </span>
+                        </span>
                     </div>
                     {viewAllPath && showFooterViewAll && (
                         <Link to={viewAllPath} className="text-primary text-sm inline-flex items-center gap-1">
@@ -278,7 +289,10 @@ const TableCard: React.FC<TableCardProps> = ({
                                 </div>
                                 <div className="flex items-center justify-center gap-3 text-center text-xs text-gray-500">
                                     <span>
-                                        {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
+                                        <span className="inline-flex items-baseline gap-1">
+                                            <span>{formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of</span>
+                                            <AnimatedNumber value={totalItems} />
+                                        </span>
                                     </span>
                                     {showEntriesSelector && onEntriesPerPageChange && (
                                         <PageSizeSelect
@@ -308,7 +322,10 @@ const TableCard: React.FC<TableCardProps> = ({
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span>
-                                        {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
+                                        <span className="inline-flex items-baseline gap-1">
+                                            <span>{formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of</span>
+                                            <AnimatedNumber value={totalItems} />
+                                        </span>
                                     </span>
                                     {showEntriesSelector && onEntriesPerPageChange && (
                                         <PageSizeSelect

@@ -1,15 +1,13 @@
-const CANOPY_SYMBOLS = [
-    '/canopy-symbol-color.png',
-    '/canopy-symbol-light.png',
-    '/canopy-symbol-white.png',
-] as const;
+import { canopyIconSvg, getCanopyAccent } from "@/lib/utils/brand";
+
+function encodeCanopyIcon(color: string): string {
+    return `data:image/svg+xml;utf8,${encodeURIComponent(canopyIconSvg(color))}`;
+}
 
 export function getCanopySymbol(index: number): string {
-    return CANOPY_SYMBOLS[index % CANOPY_SYMBOLS.length];
+    return encodeCanopyIcon(getCanopyAccent(index));
 }
 
 export function getCanopySymbolByHash(input: string): string {
-    let h = 0;
-    for (let i = 0; i < input.length; i++) h = (h << 5) - h + input.charCodeAt(i);
-    return CANOPY_SYMBOLS[Math.abs(h) % CANOPY_SYMBOLS.length];
+    return encodeCanopyIcon(getCanopyAccent(input));
 }

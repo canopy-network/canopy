@@ -204,7 +204,10 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
             {totalTransactions > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
                     <div>
-                        {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalTransactions} />
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                            <AnimatedNumber value={totalTransactions} />
+                        </span>
                     </div>
 
                     <div className="flex items-center gap-2">

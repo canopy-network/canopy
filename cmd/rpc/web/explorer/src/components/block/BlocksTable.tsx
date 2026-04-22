@@ -1,8 +1,8 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
 import AnimatedNumber from '../AnimatedNumber'
-import { formatPaginationRange } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
 
 interface Block {
@@ -80,6 +80,7 @@ const BlocksTable: React.FC<BlocksTableProps> = ({
     onPageChange,
     onPageSizeChange,
 }) => {
+    const navigate = useNavigate()
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
     const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
     const endIdx = Math.min(currentPage * pageSize, totalCount)
@@ -151,7 +152,22 @@ const BlocksTable: React.FC<BlocksTableProps> = ({
                             </tr>
                         ) : (
                             blocks.map((block) => (
-                                <tr key={block.height} className="group">
+                                <tr
+                                    key={block.height}
+                                    className="group cursor-pointer"
+                                    onClick={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(`/block/${block.height}`)
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        event.preventDefault()
+                                        navigate(`/block/${block.height}`)
+                                    }}
+                                    tabIndex={0}
+                                    role="link"
+                                    aria-label={`View block ${block.height}`}
+                                >
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
@@ -216,7 +232,10 @@ const BlocksTable: React.FC<BlocksTableProps> = ({
             {!loading && totalCount > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-3">
-                        {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalCount} />
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                            <AnimatedNumber value={totalCount} />
+                        </span>
                         {onPageSizeChange && (
                             <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
                         )}

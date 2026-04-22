@@ -49,9 +49,9 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             subtitle: stakedHistoryLoading ? (
                 'Loading change...'
             ) : stakedHistory ? (
-                <span className={`flex items-center gap-1 ${stakedChangePercentage >= 0 ? 'text-primary' : 'text-status-error'}`}>
+                <span className="flex items-center gap-1 text-muted-foreground">
                     <svg
-                        className={`w-3 h-3 ${stakedChangePercentage < 0 ? 'rotate-180' : ''}`}
+                        className={`h-3 w-3 ${stakedChangePercentage < 0 ? 'rotate-180' : ''}`}
                         fill="currentColor"
                         viewBox="0 0 20 20"
                     >
@@ -81,7 +81,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             value: activeValidatorsCount.toString(),
             subtitle: (
                 <span className="flex items-center gap-1">
-                    <span className={`inline-block w-2 h-2 rounded-full ${activeValidatorsCount > 0 ? 'bg-[#35cd48]' : 'bg-muted-foreground/40'}`}></span>
+                    <span className={`inline-block h-2 w-2 rounded-full ${activeValidatorsCount > 0 ? 'bg-muted-foreground' : 'bg-muted-foreground/40'}`}></span>
                     {activeValidatorsCount === validatorsCount
                         ? `All ${pluralize(validatorsCount, 'validator')} active`
                         : `${pluralize(validatorsCount, 'validator')} total`}
@@ -98,7 +98,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             subtitle: (
                 <div className="flex items-center justify-between gap-3">
                     <span>Covered by {pluralize(validatorsCount, 'validator')}</span>
-                    <span className="inline-flex items-center rounded-md bg-[#35cd48]/12 px-2 py-0.5 text-[11px] font-medium text-[#35cd48] ring-1 ring-[#35cd48]/25">
+                    <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground ring-1 ring-border/60">
                         {activeValidatorsCount} active
                     </span>
                 </div>
@@ -111,28 +111,28 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
 
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {statsData.map((stat) => (
-                <motion.div
-                    key={stat.id}
-                    variants={itemVariants}
-                    className="bg-card rounded-xl p-6 border border-border relative overflow-hidden h-full"
-                >
-                    <div className="flex h-full flex-col">
-                        <div className="flex items-center gap-2">
-                            <stat.icon className={`${stat.iconColor} h-4 w-4 flex-shrink-0`} />
-                            <h3 className="wallet-card-title">
-                                {stat.title}
-                            </h3>
+                {statsData.map((stat) => (
+                    <motion.div
+                        key={stat.id}
+                        variants={itemVariants}
+                        className="bg-card rounded-xl p-6 border border-border relative overflow-hidden h-full"
+                    >
+                        <div className="flex h-full flex-col">
+                            <div className="flex items-center gap-2">
+                                <stat.icon className={`${stat.iconColor} h-4 w-4 flex-shrink-0`} />
+                                <h3 className="wallet-card-title">
+                                    {stat.title}
+                                </h3>
+                            </div>
+                            <p className={`${stat.valueColor} mt-4 text-2xl font-bold`}>
+                                {stat.value}
+                            </p>
+                            <div className="mt-auto min-h-[20px] pt-4 text-muted-foreground text-xs">
+                                {stat.subtitle}
+                            </div>
                         </div>
-                        <p className={`${stat.valueColor} mt-4 text-2xl font-bold`}>
-                            {stat.value}
-                        </p>
-                        <div className="mt-auto min-h-[20px] pt-4 text-muted-foreground text-xs">
-                            {stat.subtitle}
-                        </div>
-                    </div>
-                </motion.div>
-            ))}
+                    </motion.div>
+                ))}
         </div>
     );
 };

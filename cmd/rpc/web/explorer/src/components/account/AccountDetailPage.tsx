@@ -10,9 +10,10 @@ const AccountDetailPage: React.FC = () => {
     const { address } = useParams<{ address: string }>()
     const navigate = useNavigate()
     const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
     const [activeTab, setActiveTab] = useState<'sent' | 'received'>('sent')
 
-    const { data: accountData, isLoading, error } = useAccountWithTxs(0, address || '', currentPage)
+    const { data: accountData, isLoading, error } = useAccountWithTxs(0, address || '', currentPage, pageSize)
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page)
@@ -21,6 +22,11 @@ const AccountDetailPage: React.FC = () => {
     const handleTabChange = (tab: 'sent' | 'received') => {
         setActiveTab(tab)
         setCurrentPage(1) // Reset page when changing tabs
+    }
+
+    const handlePageSizeChange = (value: number) => {
+        setPageSize(value)
+        setCurrentPage(1)
     }
 
     if (error) {
@@ -148,6 +154,8 @@ const AccountDetailPage: React.FC = () => {
                             loading={isLoading}
                             currentPage={currentPage}
                             onPageChange={handlePageChange}
+                            pageSize={pageSize}
+                            onPageSizeChange={handlePageSizeChange}
                             type={activeTab}
                             totalCount={activeTransactionsResponse?.totalCount || activeTransactionsResponse?.count || 0}
                             totalPages={activeTransactionsResponse?.totalPages || 1}

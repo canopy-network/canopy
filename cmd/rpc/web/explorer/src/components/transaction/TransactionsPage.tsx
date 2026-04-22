@@ -118,7 +118,7 @@ const TransactionsPage: React.FC = () => {
             transition={{ duration: 0.3, ease: 'easeInOut' }}
             className="w-full"
         >
-            <div className="mb-6">
+            <div className="mb-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h1 className="explorer-page-title">{transactionsTexts.page.title}</h1>

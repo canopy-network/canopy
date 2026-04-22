@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Send } from 'lucide-react';
+import { ArrowUp, ChevronRight } from 'lucide-react';
 import { useActionModal } from '@/app/providers/ActionModalProvider';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useAccountsList, useSelectedAccount } from '@/app/providers/AccountsProvider';
@@ -50,7 +50,7 @@ const AddressRow = React.memo<{
                 }}
                 aria-label={`Send from ${address.nickname}`}
             >
-                <Send style={{ width: 12, height: 12 }} />
+                <ArrowUp style={{ width: 12, height: 12 }} />
             </button>
         </div>
     </motion.div>

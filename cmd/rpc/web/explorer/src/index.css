@@ -50,7 +50,7 @@ html {
   gap: 0.5rem;
   font-size: 1rem;
   line-height: 1.5;
-  color: #35cd48;
+  color: rgba(255, 255, 255, 0.64);
 }
 
 .explorer-page-subtitle::before {
@@ -151,40 +151,79 @@ html {
   color: rgba(255, 255, 255, 0.64);
 }
 
-@keyframes landing-confetti-fall {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, -14vh, 0) rotate(0deg);
+.explorer-overview-section {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #171717;
+  padding: 0.75rem;
+}
+
+.explorer-overview-header {
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.explorer-overview-title,
+.explorer-overview-card-label {
+  font-size: 0.625rem;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.explorer-overview-card {
+  position: relative;
+  display: flex;
+  min-height: 7.5rem;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: #232323;
+  padding: 0.75rem 0.875rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.explorer-overview-card-value {
+  font-size: 1.5rem;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+}
+
+.explorer-overview-card-subvalue {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+@media (min-width: 640px) {
+  .explorer-overview-section {
+    padding: 1rem;
   }
-  8% {
-    opacity: var(--landing-confetti-opacity, 0.7);
+
+  .explorer-overview-card {
+    padding: 0.875rem 1rem;
   }
-  22% {
-    transform: translate3d(var(--landing-confetti-x1, -10px), 24vh, 0) rotate(80deg);
-  }
-  48% {
-    transform: translate3d(var(--landing-confetti-x2, 6px), 52vh, 0) rotate(170deg);
-  }
-  74% {
-    transform: translate3d(var(--landing-confetti-x3, -5px), 82vh, 0) rotate(260deg);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(var(--landing-confetti-x4, 12px), 112vh, 0) rotate(var(--landing-confetti-rotate, 340deg));
+
+  .explorer-overview-card-value {
+    font-size: 1.75rem;
   }
 }
 
-.landing-confetti-piece {
-  position: absolute;
-  top: -14vh;
-  border-radius: 2px;
-  pointer-events: none;
-  opacity: 0;
-  box-shadow: 0 0 7px rgba(255, 255, 255, 0.12);
-  will-change: transform, opacity;
-  animation-name: landing-confetti-fall;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
+@media (min-width: 1024px) {
+  .explorer-overview-title,
+  .explorer-overview-card-label {
+    font-size: 0.75rem;
+  }
+
+  .explorer-overview-card-value {
+    font-size: 1.9rem;
+  }
 }
 
 /* DatePicker styles */
@@ -265,12 +304,6 @@ html {
 
 button {
   cursor: pointer;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing-confetti-piece {
-    animation: none !important;
-  }
 }
 
 /* General select styles - right padding for chevron */

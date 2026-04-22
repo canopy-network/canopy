@@ -4,6 +4,7 @@ import { useAllValidators, useAllBlocksCache, useCardData } from '../../hooks/us
 import AnimatedNumber from '../AnimatedNumber'
 import { Link } from 'react-router-dom'
 import { toCNPY } from '../../lib/utils'
+import CnpyColorIcon from '../ui/CnpyColorIcon'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 const desktopRowCellClass =
@@ -16,32 +17,15 @@ const LiveIndicator = () => (
     </div>
 )
 
-const CNPY_GRADIENTS = [
-    'linear-gradient(135deg, #45ca46 0%, #2f8f36 100%)',
-    'linear-gradient(135deg, #36cfc9 0%, #1677ff 100%)',
-    'linear-gradient(135deg, #faad14 0%, #d46b08 100%)',
-    'linear-gradient(135deg, #9254de 0%, #531dab 100%)',
-    'linear-gradient(135deg, #f759ab 0%, #cf1322 100%)',
-]
-
-const getCnpyGradient = (seed: string) => {
-    const total = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-    return CNPY_GRADIENTS[total % CNPY_GRADIENTS.length]
-}
-
 const CnpyBadge: React.FC<{ seed: string }> = ({ seed }) => (
-    <div
-        className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full p-[3px]"
-        style={{ background: getCnpyGradient(seed) }}
-    >
-        <img src="/canopy-symbol-white.png" alt="" className="h-full w-full object-contain" />
-    </div>
+    <CnpyColorIcon seed={seed} size={24} />
 )
 
 interface SummaryTableProps {
     title: string
     columns: string[]
     rows: React.ReactNode[][]
+    loading?: boolean
     viewAllPath: string
     emptyLabel: string
     minWidth?: string
@@ -51,6 +35,7 @@ const SummaryTable: React.FC<SummaryTableProps> = ({
     title,
     columns,
     rows,
+    loading = false,
     viewAllPath,
     emptyLabel,
     minWidth = 'min-w-[1100px]',
@@ -84,7 +69,26 @@ const SummaryTable: React.FC<SummaryTableProps> = ({
                     </tr>
                 </thead>
                 <tbody>
-                    {rows.length === 0 ? (
+                    {loading ? (
+                        Array.from({ length: 5 }).map((_, index) => (
+                            <tr key={`${title}-loading-${index}`} className="animate-pulse">
+                                {columns.map((_, cellIndex) => (
+                                    <td
+                                        key={`${title}-loading-${index}-${cellIndex}`}
+                                        className={desktopRowCellClass}
+                                        style={{
+                                            borderTopLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderBottomLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderTopRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                            borderBottomRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                        }}
+                                    >
+                                        <div className="h-3 w-20 rounded bg-white/10 sm:w-28 lg:w-32" />
+                                    </td>
+                                ))}
+                            </tr>
+                        ))
+                    ) : rows.length === 0 ? (
                         <tr>
                             <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
                                 {emptyLabel}
@@ -132,7 +136,7 @@ const SummaryTable: React.FC<SummaryTableProps> = ({
 )
 
 const ExtraTables: React.FC = () => {
-    const { data: allValidatorsData } = useAllValidators()
+    const { data: allValidatorsData, isLoading: isValidatorsLoading } = useAllValidators()
     const { data: blocksPage } = useAllBlocksCache()
     const { data: cardData } = useCardData()
 
@@ -321,6 +325,7 @@ const ExtraTables: React.FC = () => {
                     'Staking Power',
                 ]}
                 rows={validatorRows}
+                loading={isValidatorsLoading}
                 emptyLabel="No validators found"
             />
         </div>

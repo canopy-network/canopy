@@ -1,15 +1,15 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   ChevronUp,
   ChevronsUpDown,
   Copy,
   Droplets,
   Percent,
-  Scan,
   Search,
-  Send,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -506,7 +506,7 @@ export const Accounts = () => {
                             onClick={() => handleSendAction(addr.fullAddress)}
                             aria-label="Send"
                           >
-                            <Send className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[#35cd48]" />
+                            <ArrowUp className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[#35cd48]" />
                           </button>
                         </ActionTooltip>
                         <ActionTooltip
@@ -518,7 +518,7 @@ export const Accounts = () => {
                             onClick={() => handleReceiveAction(addr.fullAddress)}
                             aria-label="Receive"
                           >
-                            <Scan className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[#35cd48]" />
+                            <ArrowDown className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[#35cd48]" />
                           </button>
                         </ActionTooltip>
                       </div>

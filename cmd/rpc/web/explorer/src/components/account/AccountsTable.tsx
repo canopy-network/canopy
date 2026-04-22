@@ -1,9 +1,10 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import accountsTexts from '../../data/accounts.json'
 import AnimatedNumber from '../AnimatedNumber'
-import { formatPaginationRange } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
+import CnpyColorIcon from '../ui/CnpyColorIcon'
 
 interface Account {
     address: string
@@ -25,31 +26,13 @@ const desktopHeaderClass =
 const desktopRowCellClass =
     'bg-[#1a1a1a] px-2 py-2 align-middle transition-colors group-hover:bg-[#272729] sm:px-3 lg:px-4'
 
-const CNPY_GRADIENTS = [
-    'linear-gradient(135deg, #45ca46 0%, #2f8f36 100%)',
-    'linear-gradient(135deg, #36cfc9 0%, #1677ff 100%)',
-    'linear-gradient(135deg, #faad14 0%, #d46b08 100%)',
-    'linear-gradient(135deg, #9254de 0%, #531dab 100%)',
-    'linear-gradient(135deg, #f759ab 0%, #cf1322 100%)',
-]
-
 const truncateMiddle = (value: string, leading = 10, trailing = 6) => {
     if (!value || value.length <= leading + trailing + 1) return value || 'N/A'
     return `${value.slice(0, leading)}…${value.slice(-trailing)}`
 }
 
-const getCnpyGradient = (seed: string) => {
-    const total = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-    return CNPY_GRADIENTS[total % CNPY_GRADIENTS.length]
-}
-
 const CnpyBadge: React.FC<{ seed: string }> = ({ seed }) => (
-    <div
-        className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full p-[3px]"
-        style={{ background: getCnpyGradient(seed) }}
-    >
-        <img src="/canopy-symbol-white.png" alt="" className="h-full w-full object-contain" />
-    </div>
+    <CnpyColorIcon seed={seed} size={24} />
 )
 
 const AccountsTable: React.FC<AccountsTableProps> = ({
@@ -61,6 +44,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
     onPageChange,
     onPageSizeChange,
 }) => {
+    const navigate = useNavigate()
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
     const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
     const endIdx = Math.min(currentPage * pageSize, totalCount)
@@ -125,7 +109,22 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
                             </tr>
                         ) : (
                             accounts.map((account) => (
-                                <tr key={account.address} className="group">
+                                <tr
+                                    key={account.address}
+                                    className="group cursor-pointer"
+                                    onClick={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(`/account/${account.address}`)
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        event.preventDefault()
+                                        navigate(`/account/${account.address}`)
+                                    }}
+                                    tabIndex={0}
+                                    role="link"
+                                    aria-label={`View account ${account.address}`}
+                                >
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
@@ -160,7 +159,10 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
             {!loading && totalCount > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-3">
-                        {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalCount} />
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                            <AnimatedNumber value={totalCount} />
+                        </span>
                         {onPageSizeChange && (
                             <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
                         )}

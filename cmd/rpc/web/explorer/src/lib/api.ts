@@ -163,8 +163,8 @@ function hashRequest(hash: string) {
     return JSON.stringify({ hash: hash });
 }
 
-function pageAddrReq(page: number, addr: string) {
-    return JSON.stringify({ pageNumber: page, perPage: 10, address: addr });
+function pageAddrReq(page: number, addr: string, perPage: number = 10) {
+    return JSON.stringify({ pageNumber: page, perPage: perPage > 0 ? perPage : 10, address: addr });
 }
 
 function heightAndAddrRequest(height: number, address: string) {
@@ -671,11 +671,11 @@ export function Account(height: number, address: string) {
     return POST(rpcURL, heightAndAddrRequest(height, address), accountPath);
 }
 
-export async function AccountWithTxs(height: number, address: string, page: number) {
+export async function AccountWithTxs(height: number, address: string, page: number, perPage: number = 10) {
     const result: any = {};
     result.account = await Account(height, address);
-    result.sent_transactions = await TransactionsBySender(page, address);
-    result.rec_transactions = await TransactionsByRec(page, address);
+    result.sent_transactions = await TransactionsBySender(page, address, perPage);
+    result.rec_transactions = await TransactionsByRec(page, address, perPage);
     return result;
 }
 
@@ -703,16 +703,16 @@ export function TxByHash(hash: string) {
     return POST(rpcURL, hashRequest(hash), txByHashPath);
 }
 
-export function TransactionsBySender(page: number, sender: string) {
-    return POST(rpcURL, pageAddrReq(page, sender), txsBySender);
+export function TransactionsBySender(page: number, sender: string, perPage: number = 10) {
+    return POST(rpcURL, pageAddrReq(page, sender, perPage), txsBySender);
 }
 
-export function TransactionsByRec(page: number, rec: string) {
-    return POST(rpcURL, pageAddrReq(page, rec), txsByRec);
+export function TransactionsByRec(page: number, rec: string, perPage: number = 10) {
+    return POST(rpcURL, pageAddrReq(page, rec, perPage), txsByRec);
 }
 
-export function Pending(page: number, _: number) {
-    return POST(rpcURL, pageAddrReq(page, ""), pendingPath);
+export function Pending(page: number, perPage: number = 10) {
+    return POST(rpcURL, pageAddrReq(page, "", perPage), pendingPath);
 }
 
 export function EcoParams(chain_id: number) {

@@ -122,7 +122,6 @@ export const SparklineChart = React.memo<SparklineChartProps>(({
         return {
             width,
             viewHeight,
-            points,
             coordinates,
             currentX,
             currentY,

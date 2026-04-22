@@ -696,7 +696,11 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             {allFilteredResults.length > 0 && (
                 <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 lg:flex-row-reverse">
                     <div className="text-xs sm:text-sm text-gray-400 text-center sm:text-left">
-                        {startIndex + 1} to {Math.min(endIndex, allFilteredResults.length)} of <AnimatedNumber value={allFilteredResults.length} /> results
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{startIndex + 1} to {Math.min(endIndex, allFilteredResults.length)} of</span>
+                            <AnimatedNumber value={allFilteredResults.length} />
+                            <span>results</span>
+                        </span>
                     </div>
                     <div className="flex gap-2 flex-wrap justify-center">
                         <button
