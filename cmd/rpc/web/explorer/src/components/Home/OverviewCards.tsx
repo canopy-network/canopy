@@ -2,7 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
-import { useAllBlocksCache, useTransactionsWithRealPagination } from '../../hooks/useApi'
+import { useAllBlocksCache, useRecentTransactionsPreview } from '../../hooks/useApi'
 import { extractAmountMicro, toCNPY } from '../../lib/utils'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
 
@@ -47,8 +47,17 @@ const formatAmount = (amount: number) =>
 const normalizeList = (payload: any) => {
     if (!payload) return [] as any[]
     if (Array.isArray(payload)) return payload
-    const found = payload.transactions || payload.blocks || payload.results || payload.list || payload.data
-    return Array.isArray(found) ? found : []
+    for (const candidate of [
+        payload.results,
+        payload.transactions,
+        payload.txs,
+        payload.blocks,
+        payload.list,
+        payload.data,
+    ]) {
+        if (Array.isArray(candidate)) return candidate
+    }
+    return []
 }
 
 const LiveIndicator = () => (
@@ -192,8 +201,8 @@ const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
 }
 
 const OverviewCards: React.FC = () => {
-    const { data: txsPage, isLoading: isTransactionsLoading } = useTransactionsWithRealPagination(1, 5)
     const { data: blocksPage, isLoading: isBlocksLoading } = useAllBlocksCache()
+    const { data: txsPage, isLoading: isTransactionsLoading } = useRecentTransactionsPreview(blocksPage, 5)
 
     const txs = normalizeList(txsPage)
     const blockList = normalizeList(blocksPage)
@@ -297,7 +306,7 @@ const OverviewCards: React.FC = () => {
                 viewAllPath="/transactions"
                 columns={['Type', 'Hash', 'From', 'Amount', 'Time']}
                 rows={transactionRows}
-                loading={isTransactionsLoading}
+                loading={isBlocksLoading || isTransactionsLoading}
                 emptyLabel="No transactions found"
                 minWidth="min-w-[760px]"
             />

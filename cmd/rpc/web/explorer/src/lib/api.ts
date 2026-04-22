@@ -214,6 +214,23 @@ function getBlockTransactionCount(block: any): number {
     );
 }
 
+function getTransactionTimestampMs(tx: any): number {
+    const value = tx?.blockTime ?? tx?.time ?? tx?.timestamp;
+    if (typeof value === 'number') {
+        if (value > 1e15) return Math.floor(value / 1_000_000);
+        if (value > 1e12) return Math.floor(value);
+        return Math.floor(value * 1_000);
+    }
+    if (typeof value === 'string') {
+        if (/^\d+$/.test(value)) {
+            return getTransactionTimestampMs({ time: Number(value) });
+        }
+        const parsed = Date.parse(value);
+        return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+}
+
 function attachBlockMetadataToTransactions(transactions: any[], block: any): any[] {
     const blockHeight = getBlockHeightValue(block);
     const blockHash = getBlockHashValue(block);
@@ -252,6 +269,54 @@ async function fetchTransactionsForBlock(block: any): Promise<any[]> {
             : [];
     } catch (error) {
         console.error(`Error fetching transactions for block ${blockHeight}:`, error);
+        return [];
+    }
+}
+
+export async function getRecentTransactionsPreview(limit: number = 5, cachedBlocks?: any[]): Promise<any[]> {
+    try {
+        const fallbackBlocksResponse = Array.isArray(cachedBlocks) && cachedBlocks.length > 0
+            ? null
+            : await Blocks(1, 25);
+        const blocks = (
+            Array.isArray(cachedBlocks) && cachedBlocks.length > 0
+                ? cachedBlocks
+                : (
+                    fallbackBlocksResponse?.results ||
+                    fallbackBlocksResponse?.blocks ||
+                    fallbackBlocksResponse?.list ||
+                    []
+                )
+        ).filter((block: any) => getBlockTransactionCount(block) > 0);
+
+        if (!Array.isArray(blocks) || blocks.length === 0) return [];
+
+        const recentTransactions: any[] = [];
+
+        for (const block of blocks) {
+            const blockTransactions = await fetchTransactionsForBlock(block);
+            if (blockTransactions.length > 0) {
+                recentTransactions.push(...blockTransactions);
+            }
+            if (recentTransactions.length >= limit) break;
+        }
+
+        recentTransactions.sort((a, b) => {
+            const heightDelta = Number(b?.blockHeight ?? b?.height ?? 0) - Number(a?.blockHeight ?? a?.height ?? 0);
+            if (heightDelta !== 0) return heightDelta;
+
+            const indexDelta = Number(b?.index ?? b?.txIndex ?? b?.transactionIndex ?? -1) - Number(a?.index ?? a?.txIndex ?? a?.transactionIndex ?? -1);
+            if (indexDelta !== 0) return indexDelta;
+
+            const timeDelta = getTransactionTimestampMs(b) - getTransactionTimestampMs(a);
+            if (timeDelta !== 0) return timeDelta;
+
+            return String(b?.hash ?? b?.txHash ?? '').localeCompare(String(a?.hash ?? a?.txHash ?? ''));
+        });
+
+        return recentTransactions.slice(0, limit);
+    } catch (error) {
+        console.error('Error fetching recent transactions preview:', error);
         return [];
     }
 }
