@@ -1,10 +1,11 @@
 import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import TableCard from '../Home/TableCard'
 import blockDetailTexts from '../../data/blockDetail.json'
 import transactionsTexts from '../../data/transactions.json'
 import AnimatedNumber from '../AnimatedNumber'
-import { useParams as useParamsHook } from '../../hooks/useApi'
+import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
+import { formatPaginationRange } from '../../lib/utils'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface Transaction {
     hash: string
@@ -26,246 +27,219 @@ interface BlockTransactionsProps {
     totalTransactions: number
 }
 
+const PAGE_SIZE = 10
+
+const desktopHeaderClass =
+    'px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4'
+const desktopRowCellClass =
+    'bg-[#1a1a1a] px-2 py-2 align-middle transition-colors group-hover:bg-[#272729] sm:px-3 lg:px-4'
+
 const BlockTransactions: React.FC<BlockTransactionsProps> = ({
     transactions,
-    totalTransactions
+    totalTransactions,
 }) => {
     const navigate = useNavigate()
+    const [currentPage, setCurrentPage] = React.useState(1)
 
-    // Get params to access fee information
-    const { data: paramsData } = useParamsHook(0)
-    const feeParams = paramsData?.fee || {}
+    React.useEffect(() => {
+        setCurrentPage(1)
+    }, [transactions.length])
 
-    // Map transaction type to fee param key (directly from endpoint)
-    const getFeeParamKey = (type: string): string => {
-        const typeMap: Record<string, string> = {
-            'send': 'sendFee',
-            'stake': 'stakeFee',
-            'edit-stake': 'editStakeFee',
-            'editStake': 'editStakeFee',
-            'unstake': 'unstakeFee',
-            'pause': 'pauseFee',
-            'unpause': 'unpauseFee',
-            'changeParameter': 'changeParameterFee',
-            'daoTransfer': 'daoTransferFee',
-            'certificateResults': 'certificateResultsFee',
-            'subsidy': 'subsidyFee',
-            'createOrder': 'createOrderFee',
-            'editOrder': 'editOrderFee',
-            'deleteOrder': 'deleteOrderFee',
-        }
-        return typeMap[type.toLowerCase()] || 'sendFee'
-    }
-
-    // Get minimum fee for a transaction type
-    const getMinimumFeeForTxType = (type: string): number => {
-        const feeKey = getFeeParamKey(type)
-        return feeParams[feeKey] || feeParams.sendFee || 0
-    }
-
-    const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
-
-    const formatAmount = (amount: number) => {
-        if (!amount || amount === 0) return 'N/A'
-        return `${amount.toLocaleString()} ${transactionsTexts.table.units.cnpy}`
-    }
-
-    // Helper function to convert micro denomination to CNPY
-    const toCNPY = (micro: number): number => {
-        return micro / 1000000
+    const truncateMiddle = (value: string, leading = 10, trailing = 6) => {
+        if (!value || value.length <= leading + trailing + 1) return value || 'N/A'
+        return `${value.slice(0, leading)}…${value.slice(-trailing)}`
     }
 
     const formatFee = (fee: number) => {
         if (!fee || fee === 0) return '0 CNPY'
-        // Fee comes in micro denomination from endpoint, convert to CNPY
-        const cnpy = toCNPY(fee)
+        const cnpy = fee / 1_000_000
         return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
     }
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'success':
-                return 'bg-green-500/20 text-green-400'
-            case 'failed':
-                return 'bg-red-500/20 text-red-400'
-            case 'pending':
-                return 'bg-yellow-500/20 text-yellow-400'
-            default:
-                return 'bg-gray-500/20 text-gray-400'
-        }
-    }
-
-    const getTypeIcon = (type: string) => {
-        switch (type.toLowerCase()) {
-            case 'send':
-                return 'bi bi-send'
-            case 'transfer':
-                return 'bi bi-send'
-            case 'stake':
-                return 'bi bi-file-lock2'
-            case 'edit-stake':
-                return 'bi bi-file-lock2'
-            case 'unstake':
-                return 'fa-solid fa-unlock'
-            case 'swap':
-                return 'bi bi-arrow-left-right'
-            case 'governance':
-                return 'fa-solid fa-vote-yea'
-            case 'delegate':
-                return 'bi bi-file-lock2'
-            case 'undelegate':
-                return 'fa-solid fa-user-times'
-            case 'certificateresults':
-            case 'certificate':
-                return 'bi bi-c-circle-fill'
-            default:
-                return 'fa-solid fa-circle'
-        }
-    }
-
-    const getTypeColor = (type: string) => {
-        switch (type.toLowerCase()) {
-            case 'transfer':
-                return 'bg-blue-500/20 text-blue-400'
-            case 'stake':
-                return 'bg-green-500/20 text-green-400'
-            case 'unstake':
-                return 'bg-orange-500/20 text-orange-400'
-            case 'swap':
-                return 'bg-purple-500/20 text-purple-400'
-            case 'governance':
-                return 'bg-indigo-500/20 text-indigo-400'
-            case 'delegate':
-                return 'bg-cyan-500/20 text-cyan-400'
-            case 'undelegate':
-                return 'bg-pink-500/20 text-pink-400'
-            case 'certificateresults':
-                return 'bg-green-500/20 text-primary'
-            default:
-                return 'bg-gray-500/20 text-gray-400'
-        }
-    }
-
-    // Get transaction type from messageType or type
     const getTransactionType = (tx: Transaction): string => {
         return tx.type || tx.messageType || 'send'
     }
 
-    // Prepare columns for TableCard (same as TransactionsTable) with widths
     const columns = [
-        { label: transactionsTexts.table.headers.hash, width: 'w-[13%]' },
-        { label: transactionsTexts.table.headers.type, width: 'w-[16%]' },
-        { label: transactionsTexts.table.headers.from, width: 'w-[13%]' },
-        { label: transactionsTexts.table.headers.to, width: 'w-[13%]' },
-        { label: transactionsTexts.table.headers.amount, width: 'w-[8%]' },
-        { label: transactionsTexts.table.headers.fee, width: 'w-[8%]' },
-        { label: transactionsTexts.table.headers.status, width: 'w-[11%]' },
-        { label: transactionsTexts.table.headers.age, width: 'w-[10%]' }
+        { label: transactionsTexts.table.headers.hash },
+        { label: transactionsTexts.table.headers.type },
+        { label: transactionsTexts.table.headers.from },
+        { label: transactionsTexts.table.headers.to },
+        { label: transactionsTexts.table.headers.amount },
+        { label: transactionsTexts.table.headers.fee },
+        { label: transactionsTexts.table.headers.status },
+        { label: transactionsTexts.table.headers.age },
     ]
 
-    // Prepare rows for TableCard with same logic as TransactionsTable
-    const rows = transactions.map((tx) => {
-        const txType = getTransactionType(tx)
-        // Fee comes in micro denomination from endpoint (as per TransactionsTable logic)
-        const feeMicro = tx.fee || 0
-        const amount = tx.value || 0
+    const totalPages = Math.max(1, Math.ceil(totalTransactions / PAGE_SIZE))
+    const startIdx = totalTransactions === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+    const endIdx = Math.min(currentPage * PAGE_SIZE, totalTransactions)
+    const paginatedTransactions = React.useMemo(() => {
+        const start = (currentPage - 1) * PAGE_SIZE
+        return transactions.slice(start, start + PAGE_SIZE)
+    }, [currentPage, transactions])
 
-        return [
-            // Hash
-            <span
-                key="hash"
-                className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline"
-                onClick={() => navigate(`/transaction/${tx.hash}`)}
-            >
-                {truncate(tx.hash, 8)}
-            </span>,
+    const visiblePages = React.useMemo(() => {
+        if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
+        const pageSet = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])
+        return Array.from(pageSet).filter((page) => page >= 1 && page <= totalPages).sort((a, b) => a - b)
+    }, [currentPage, totalPages])
 
-            // Type
-            <div
-                key="type"
-                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(txType)}`}
-            >
-                <i className={`${getTypeIcon(txType)} text-xs`} style={{ fontSize: '0.875rem' }}></i>
-                <span>{txType}</span>
-            </div>,
-
-            // From
-            <Link
-                key="from"
-                to={`/account/${tx.from}`}
-                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline"
-            >
-                {truncate(tx.from, 12)}
-            </Link>,
-
-            // To
-            <Link
-                key="to"
-                to={`/account/${tx.to}`}
-                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline"
-            >
-                {tx.to === 'N/A' ? (
-                    <span className="text-gray-500">N/A</span>
-                ) : (
-                    truncate(tx.to, 12)
-                )}
-            </Link>,
-
-            // Amount
-            <span key="amount" className="text-white text-sm font-medium">
-                {typeof amount === 'number' && amount > 0 ? (
-                    <>
-                        <AnimatedNumber
-                            value={amount}
-                            format={{ maximumFractionDigits: 4 }}
-                            className="text-white"
-                        />&nbsp; {transactionsTexts.table.units.cnpy}
-                    </>
-                ) : (
-                    `0 ${transactionsTexts.table.units.cnpy}`
-                )}
-            </span>,
-
-            // Fee (in micro denomination from endpoint) with minimum fee info
-            <div key="fee" className="flex flex-col gap-1">
-                <span className="text-gray-300 text-sm">
-                    {typeof feeMicro === 'number' ? (
-                        formatFee(feeMicro)
-                    ) : (
-                        formatFee(feeMicro || 0)
-                    )}
-                </span>
-            </div>,
-
-            // Status
-            <div
-                key="status"
-                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status || 'success')}`}
-            >
-                {tx.status === 'success' && <i className="fa-solid fa-check text-xs mr-1"></i>}
-                {tx.status === 'failed' && <i className="fa-solid fa-times text-xs mr-1"></i>}
-                {tx.status === 'pending' && <i className="fa-solid fa-clock text-xs mr-1"></i>}
-                <span>{transactionsTexts.status[tx.status as keyof typeof transactionsTexts.status] || transactionsTexts.status.success}</span>
-            </div>,
-
-            // Age
-            <span key="age" className="text-gray-400 text-sm">
-                {tx.age || 'N/A'}
-            </span>
-        ]
-    })
+    const goToPage = (page: number) => {
+        setCurrentPage(Math.min(Math.max(1, page), totalPages))
+    }
 
     return (
-        <TableCard
-            title={`${blockDetailTexts.transactions.title} (${totalTransactions})`}
-            live={false}
-            columns={columns}
-            rows={rows}
-            spacing={4}
-            paginate={true}
-            pageSize={10}
-            totalCount={totalTransactions}
-        />
+        <div className="w-full rounded-xl border border-white/10 bg-card p-5">
+            <div className="mb-4">
+                <h3 className="text-lg text-white/90">
+                    {blockDetailTexts.transactions.title} ({totalTransactions})
+                </h3>
+            </div>
+
+            <div className="w-full overflow-x-auto">
+                <table
+                    className="w-full min-w-[1120px]"
+                    style={{ tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
+                >
+                    <thead>
+                        <tr>
+                            {columns.map((column) => (
+                                <th key={String(column.label)} className={desktopHeaderClass}>
+                                    {column.label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {paginatedTransactions.map((tx) => {
+                            const txType = getTransactionType(tx)
+                            const amount = tx.value || 0
+
+                            return (
+                                <tr key={tx.hash} className="group">
+                                    <td
+                                        className={desktopRowCellClass}
+                                        style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
+                                    >
+                                        <button
+                                            type="button"
+                                            className="text-sm font-medium text-white transition-colors hover:text-primary"
+                                            onClick={() => navigate(`/transaction/${tx.hash}`)}
+                                            title={tx.hash}
+                                        >
+                                            {truncateMiddle(tx.hash, 8, 4)}
+                                        </button>
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        <TransactionTypeBadge type={txType} />
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        {tx.from === 'N/A' ? (
+                                            <span className="text-sm text-white/40">N/A</span>
+                                        ) : (
+                                            <Link
+                                                to={`/account/${tx.from}`}
+                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
+                                                title={tx.from}
+                                            >
+                                                {truncateMiddle(tx.from)}
+                                            </Link>
+                                        )}
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        {tx.to === 'N/A' ? (
+                                            <span className="text-sm text-white/40">N/A</span>
+                                        ) : (
+                                            <Link
+                                                to={`/account/${tx.to}`}
+                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
+                                                title={tx.to}
+                                            >
+                                                {truncateMiddle(tx.to)}
+                                            </Link>
+                                        )}
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        <span className="text-sm text-white tabular-nums">
+                                            <AnimatedNumber value={amount} format={{ maximumFractionDigits: 4 }} className="text-white" />
+                                            <span className="ml-1 text-white/50">{transactionsTexts.table.units.cnpy}</span>
+                                        </span>
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        <span className="text-sm text-white tabular-nums">{formatFee(tx.fee || 0)}</span>
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        <span className={GREEN_BADGE_CLASS}>
+                                            {transactionsTexts.status[tx.status as keyof typeof transactionsTexts.status] || transactionsTexts.status.success}
+                                        </span>
+                                    </td>
+                                    <td
+                                        className={desktopRowCellClass}
+                                        style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
+                                    >
+                                        <span className="text-sm text-white/60">{tx.age || 'N/A'}</span>
+                                    </td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            {totalTransactions > 0 && (
+                <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                            <AnimatedNumber value={totalTransactions} />
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => goToPage(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="explorer-pagination-button px-3 py-1.5"
+                            aria-label="Previous page"
+                        >
+                            <i className="fa-solid fa-angle-left" />
+                        </button>
+
+                        {visiblePages.map((page, index, arr) => {
+                            const prevPage = arr[index - 1]
+                            const showDots = index > 0 && page - (prevPage || 0) > 1
+
+                            return (
+                                <React.Fragment key={page}>
+                                    {showDots && <span className="px-1 text-white/40">…</span>}
+                                    <button
+                                        type="button"
+                                        onClick={() => goToPage(page)}
+                                        className={`explorer-pagination-button explorer-pagination-page px-3 py-1.5 ${
+                                            currentPage === page ? 'explorer-pagination-page-active' : ''
+                                        }`}
+                                    >
+                                        {page}
+                                    </button>
+                                </React.Fragment>
+                            )
+                        })}
+
+                        <button
+                            type="button"
+                            onClick={() => goToPage(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="explorer-pagination-button px-3 py-1.5"
+                            aria-label="Next page"
+                        >
+                            <i className="fa-solid fa-angle-right" />
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
     )
 }
 

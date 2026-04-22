@@ -1,10 +1,10 @@
 import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import transactionsTexts from '../../data/transactions.json'
-import TableCard from '../Home/TableCard'
-import AnimatedNumber from '../AnimatedNumber'
-import { useParams as useParamsHook } from '../../hooks/useApi'
-import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
+import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
+import TransactionTypeBadge from './TransactionTypeBadge'
+import PageSizeSelect from '../shared/PageSizeSelect'
+import { GREEN_BADGE_CLASS, GREEN_BADGE_TONE } from '../ui/badgeStyles'
 
 interface Transaction {
     hash: string
@@ -13,342 +13,300 @@ interface Transaction {
     to: string
     amount: number
     fee: number
-    status: 'success' | 'failed' | 'pending'
-    age: string
+    status: 'confirmed' | 'failed' | 'pending'
     blockHeight?: number
-    date?: number
+    timestamp?: string
 }
 
 interface TransactionsTableProps {
     transactions: Transaction[]
     loading?: boolean
-    totalCount?: number
     currentPage?: number
+    totalCount?: number
+    pageSize?: number
     onPageChange?: (page: number) => void
-    // Props for Show/Export section
-    showEntriesSelector?: boolean
-    entriesPerPageOptions?: number[]
-    currentEntriesPerPage?: number
-    onEntriesPerPageChange?: (value: number) => void
-    showExportButton?: boolean
-    onExportButtonClick?: () => void
+    onPageSizeChange?: (value: number) => void
+}
+
+const desktopHeaderClass =
+    'px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4'
+const desktopRowCellClass =
+    'bg-[#1a1a1a] px-2 py-2 align-middle transition-colors group-hover:bg-[#272729] sm:px-3 lg:px-4'
+
+const truncateMiddle = (value: string, leading = 10, trailing = 6) => {
+    if (!value || value.length <= leading + trailing + 1) return value || 'N/A'
+    return `${value.slice(0, leading)}…${value.slice(-trailing)}`
+}
+
+const formatAmount = (amount: number) => {
+    if (!amount) return '0 CNPY'
+    return `${toCNPY(amount).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6,
+    })} CNPY`
+}
+
+const formatAge = (timestamp?: string, status?: Transaction['status']) => {
+    if (status === 'pending') return 'Pending'
+    if (!timestamp) return 'N/A'
+
+    try {
+        const date = parseISO(timestamp)
+        if (!isValid(date)) return 'N/A'
+        const diffMs = Date.now() - date.getTime()
+        if (diffMs < 60_000) return 'a few secs ago'
+        return formatDistanceToNow(date, { addSuffix: true })
+    } catch {
+        return 'N/A'
+    }
+}
+
+const statusClassName = (status: Transaction['status']) => {
+    return GREEN_BADGE_TONE
+}
+
+const statusLabel = (status: Transaction['status']) => {
+    switch (status) {
+        case 'confirmed':
+            return 'Confirmed'
+        case 'pending':
+            return 'Pending'
+        case 'failed':
+            return 'Failed'
+    }
 }
 
 const TransactionsTable: React.FC<TransactionsTableProps> = ({
     transactions,
     loading = false,
-    totalCount = 0,
     currentPage = 1,
+    totalCount = 0,
+    pageSize = 10,
     onPageChange,
-    // Destructure new props
-    showEntriesSelector = false,
-    entriesPerPageOptions = [10, 25, 50, 100],
-    currentEntriesPerPage = 10,
-    onEntriesPerPageChange,
-    showExportButton = false,
-    onExportButtonClick
+    onPageSizeChange,
 }) => {
     const navigate = useNavigate()
-    const [sortField, setSortField] = React.useState<'amount' | 'fee' | 'age' | null>(null)
-    const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('desc')
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
+    const endIdx = Math.min(currentPage * pageSize, totalCount)
 
-    // Get params to access fee information
-    const { data: paramsData } = useParamsHook(0)
-    const feeParams = paramsData?.fee || {}
+    const visiblePages = React.useMemo(() => {
+        if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
+        const pageSet = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])
+        return Array.from(pageSet).filter((page) => page >= 1 && page <= totalPages).sort((a, b) => a - b)
+    }, [currentPage, totalPages])
 
-    // Map transaction type to fee param key (directly from endpoint)
-    const getFeeParamKey = (type: string): string => {
-        const typeMap: Record<string, string> = {
-            'send': 'sendFee',
-            'stake': 'stakeFee',
-            'edit-stake': 'editStakeFee',
-            'editStake': 'editStakeFee',
-            'unstake': 'unstakeFee',
-            'pause': 'pauseFee',
-            'unpause': 'unpauseFee',
-            'changeParameter': 'changeParameterFee',
-            'daoTransfer': 'daoTransferFee',
-            'certificateResults': 'certificateResultsFee',
-            'subsidy': 'subsidyFee',
-            'createOrder': 'createOrderFee',
-            'editOrder': 'editOrderFee',
-            'deleteOrder': 'deleteOrderFee',
-        }
-        return typeMap[type.toLowerCase()] || 'sendFee'
+    const goToPage = (page: number) => {
+        if (!onPageChange) return
+        onPageChange(Math.min(Math.max(1, page), totalPages))
     }
 
-    const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
-
-    const formatAmount = (amount: number) => {
-        if (!amount || amount === 0) return 'N/A'
-        return `${amount.toLocaleString()} ${transactionsTexts.table.units.cnpy}`
-    }
-
-    // Helper function to convert micro denomination to CNPY
-    const toCNPY = (micro: number): number => {
-        return micro / 1000000
-    }
-
-    const formatFee = (fee: number) => {
-        if (!fee || fee === 0) return '0 CNPY'
-        // Fee comes in micro denomination from endpoint, convert to CNPY
-        const cnpy = toCNPY(fee)
-        return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
-    }
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'success':
-                return 'bg-green-500/20 text-green-400'
-            case 'failed':
-                return 'bg-red-500/20 text-red-400'
-            case 'pending':
-                return 'bg-yellow-500/20 text-yellow-400'
-            default:
-                return 'bg-gray-500/20 text-gray-400'
-        }
-    }
-
-    const getTypeIcon = (type: string) => {
-        switch (type.toLowerCase()) {
-            case 'send':
-                return 'bi bi-send'
-            case 'transfer':
-                return 'bi bi-send'
-            case 'stake':
-                return 'bi bi-file-lock2'
-            case 'edit-stake':
-                return 'bi bi-file-lock2'
-            case 'unstake':
-                return 'fa-solid fa-unlock'
-            case 'swap':
-                return 'bi bi-arrow-left-right'
-            case 'governance':
-                return 'fa-solid fa-vote-yea'
-            case 'delegate':
-                return 'bi bi-file-lock2' // Same as stake when delegated
-            case 'undelegate':
-                return 'fa-solid fa-user-times'
-            case 'certificateresults':
-            case 'certificate':
-                return 'bi bi-c-circle-fill'
-            default:
-                return 'fa-solid fa-circle'
-        }
-    }
-
-    const getTypeColor = (type: string) => {
-        switch (type.toLowerCase()) {
-            case 'transfer':
-                return 'bg-blue-500/20 text-blue-400'
-            case 'stake':
-                return 'bg-green-500/20 text-green-400'
-            case 'unstake':
-                return 'bg-orange-500/20 text-orange-400'
-            case 'swap':
-                return 'bg-purple-500/20 text-purple-400'
-            case 'governance':
-                return 'bg-indigo-500/20 text-indigo-400'
-            case 'delegate':
-                return 'bg-cyan-500/20 text-cyan-400'
-            case 'undelegate':
-                return 'bg-pink-500/20 text-pink-400'
-            case 'certificateresults':
-                return 'bg-green-500/20 text-primary'
-            default:
-                return 'bg-gray-500/20 text-gray-400'
-        }
-    }
-
-    const formatAge = (age: string | number | undefined) => {
-        if (!age) return 'N/A'
-
-        // If it's already a formatted string, return it
-        if (typeof age === 'string') {
-            // Check if it's already in the format "X ago" (from formatDistanceToNow)
-            if (age.includes('ago') || age === 'N/A') {
-                return age
-            }
-            // If it's a timestamp string, try to parse it
-            try {
-                const date = parseISO(age)
-                if (isValid(date)) {
-                    return formatDistanceToNow(date, { addSuffix: true })
-                }
-            } catch {
-                // If parsing fails, return as is
-                return age
-            }
-        }
-
-        // If it's a number (timestamp), format it
-        if (typeof age === 'number') {
-            try {
-                let date: Date
-                // If it's a timestamp in microseconds (like in Canopy)
-                if (age > 1e12) {
-                    date = new Date(age / 1000) // Convert microseconds to milliseconds
-                } else {
-                    date = new Date(age * 1000) // Convert seconds to milliseconds
-                }
-
-                if (isValid(date)) {
-                    return formatDistanceToNow(date, { addSuffix: true })
-                }
-            } catch {
-                return 'N/A'
-            }
-        }
-
-        return 'N/A'
-    }
-
-    const toggleSort = (field: 'amount' | 'fee' | 'age') => {
-        if (sortField === field) {
-            setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'))
-            return
-        }
-        setSortField(field)
-        setSortDirection('desc')
-    }
-
-    const getSortIconClass = (field: 'amount' | 'fee' | 'age') => {
-        if (sortField !== field) return 'fa-solid fa-sort text-gray-500'
-        return sortDirection === 'asc'
-            ? 'fa-solid fa-sort-up text-primary'
-            : 'fa-solid fa-sort-down text-primary'
-    }
-
-    const sortedTransactions = React.useMemo(() => {
-        if (!sortField) return transactions
-
-        const sorted = [...transactions]
-        sorted.sort((a, b) => {
-            const direction = sortDirection === 'asc' ? 1 : -1
-
-            if (sortField === 'amount') {
-                return (a.amount - b.amount) * direction
-            }
-
-            if (sortField === 'fee') {
-                return (a.fee - b.fee) * direction
-            }
-
-            const aDate = a.date ?? 0
-            const bDate = b.date ?? 0
-            return (aDate - bDate) * direction
-        })
-
-        return sorted
-    }, [transactions, sortField, sortDirection])
-
-    const renderSortableHeader = (label: string, field: 'amount' | 'fee' | 'age') => (
-        <button
-            type="button"
-            onClick={() => toggleSort(field)}
-            className="inline-flex items-center gap-1 hover:text-white transition-colors"
-        >
-            <span>{label}</span>
-            <i className={getSortIconClass(field)} aria-hidden="true"></i>
-        </button>
-    )
-
-    const rows = sortedTransactions.map((transaction) => [
-        // Hash
-        <span className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline"
-            onClick={() => navigate(`/transaction/${transaction.hash}`)}>
-            {truncate(transaction.hash, 12)}
-        </span>,
-
-        // Type
-        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(transaction.type)}`}>
-            <i className={`${getTypeIcon(transaction.type)} text-xs`} style={{ fontSize: '0.875rem' }}></i>
-            <span>{transaction.type}</span>
-        </div>,
-
-        // From
-        <Link to={`/account/${transaction.from}`} className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline">
-            {truncate(transaction.from, 12)}
-        </Link>,
-
-        // To
-        <Link to={`/account/${transaction.to}`} className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline">
-            {transaction.to === 'N/A' ? (
-                <span className="text-gray-500">N/A</span>
-            ) : (
-                truncate(transaction.to, 12)
-            )}
-        </Link>,
-
-        // Amount
-        <span className="text-white text-sm font-medium">
-            {typeof transaction.amount === 'number' ? (
-                <>
-                    <AnimatedNumber
-                        value={transaction.amount}
-                        format={{ maximumFractionDigits: 4 }}
-                        className="text-white"
-                    />&nbsp; {transactionsTexts.table.units.cnpy}
-                </>
-            ) : (
-                formatAmount(transaction.amount)
-            )}
-        </span>,
-
-        // Fee (in micro denomination from endpoint) with minimum fee info
-        <div className="flex flex-col gap-1">
-            <span className="text-gray-300 text-sm">
-                {typeof transaction.fee === 'number' ? (
-                    formatFee(transaction.fee)
-                ) : (
-                    formatFee(transaction.fee || 0)
-                )}
-            </span>
-        </div>,
-
-        // Status
-        <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(transaction.status)}`}>
-            {transaction.status === 'success' && <i className="fa-solid fa-check text-xs mr-1"></i>}
-            {transaction.status === 'failed' && <i className="fa-solid fa-times text-xs mr-1"></i>}
-            {transaction.status === 'pending' && <i className="fa-solid fa-clock text-xs mr-1"></i>}
-            <span>{transactionsTexts.status[transaction.status as keyof typeof transactionsTexts.status]}</span>
-        </div>,
-
-        // Age
-        <span className="text-gray-400 text-sm">
-            {formatAge(transaction.age)}
-        </span>
-    ])
-
-    const headers = [
-        { label: transactionsTexts.table.headers.hash, width: 'w-[15%]' },
-        { label: transactionsTexts.table.headers.type, width: 'w-[12%]' },
-        { label: transactionsTexts.table.headers.from, width: 'w-[13%]' },
-        { label: transactionsTexts.table.headers.to, width: 'w-[13%]' },
-        { label: renderSortableHeader(transactionsTexts.table.headers.amount, 'amount'), width: 'w-[8%]' },
-        { label: renderSortableHeader(transactionsTexts.table.headers.fee, 'fee'), width: 'w-[8%]' },
-        { label: transactionsTexts.table.headers.status, width: 'w-[11%]' },
-        { label: renderSortableHeader(transactionsTexts.table.headers.age, 'age'), width: 'w-[10%]' }
+    const columns = [
+        { label: 'Type' },
+        { label: 'Hash' },
+        { label: 'Block' },
+        { label: 'From' },
+        { label: 'To' },
+        { label: 'Amount' },
+        { label: 'Status' },
+        { label: 'Age' },
     ]
 
     return (
-        <TableCard
-            title={transactionsTexts.page.title}
-            columns={headers} // Changed from `headers` to `columns`
-            rows={rows}
-            totalCount={totalCount}
-            currentPage={currentPage}
-            onPageChange={onPageChange}
-            loading={loading}
-            paginate={true} // Enable pagination
-            spacing={4} // We use spacing of 4 to match the image design.
-            showEntriesSelector={showEntriesSelector}
-            entriesPerPageOptions={entriesPerPageOptions}
-            currentEntriesPerPage={currentEntriesPerPage}
-            onEntriesPerPageChange={onEntriesPerPageChange}
-            showExportButton={showExportButton}
-            onExportButtonClick={onExportButtonClick}
-        />
+        <div className="rounded-xl border border-white/10 bg-card p-5">
+            <div className="overflow-x-auto">
+                <table
+                    className="w-full min-w-[1120px]"
+                    style={{ tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
+                >
+                    <thead>
+                        <tr>
+                            {columns.map((column) => (
+                                <th key={column.label} className={desktopHeaderClass}>
+                                    {column.label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading ? (
+                            Array.from({ length: pageSize }).map((_, index) => (
+                                <tr key={`skeleton-${index}`} className="group animate-pulse">
+                                    {columns.map((_, columnIndex) => (
+                                        <td
+                                            key={`${index}-${columnIndex}`}
+                                            className={desktopRowCellClass}
+                                            style={{
+                                                borderTopLeftRadius: columnIndex === 0 ? '10px' : undefined,
+                                                borderBottomLeftRadius: columnIndex === 0 ? '10px' : undefined,
+                                                borderTopRightRadius: columnIndex === columns.length - 1 ? '10px' : undefined,
+                                                borderBottomRightRadius: columnIndex === columns.length - 1 ? '10px' : undefined,
+                                            }}
+                                        >
+                                            <div className={`h-4 rounded bg-white/6 ${columnIndex === 0 ? 'w-20' : columnIndex === columns.length - 1 ? 'w-24' : 'w-32'}`} />
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))
+                        ) : transactions.length === 0 ? (
+                            <tr>
+                                <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
+                                    No transactions found in this page of blocks
+                                </td>
+                            </tr>
+                        ) : (
+                            transactions.map((transaction) => (
+                                <tr
+                                    key={`${transaction.status}-${transaction.hash}`}
+                                    className="group cursor-pointer"
+                                    onClick={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(`/transaction/${transaction.hash}`)
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        event.preventDefault()
+                                        navigate(`/transaction/${transaction.hash}`)
+                                    }}
+                                    tabIndex={0}
+                                    role="link"
+                                    aria-label={`View transaction ${transaction.hash}`}
+                                >
+                                    <td
+                                        className={desktopRowCellClass}
+                                        style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
+                                    >
+                                        <TransactionTypeBadge type={transaction.type} />
+                                    </td>
+                                    <td
+                                        className={desktopRowCellClass}
+                                    >
+                                        <Link
+                                            to={`/transaction/${transaction.hash}`}
+                                            className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
+                                            title={transaction.hash}
+                                        >
+                                            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                                                {truncateMiddle(transaction.hash)}
+                                            </span>
+                                        </Link>
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        {transaction.blockHeight ? (
+                                            <Link
+                                                to={`/block/${transaction.blockHeight}`}
+                                                className="text-sm font-medium text-white transition-colors hover:text-primary"
+                                            >
+                                                {transaction.blockHeight.toLocaleString()}
+                                            </Link>
+                                        ) : (
+                                            <span className="text-sm font-medium text-yellow-400">Mempool</span>
+                                        )}
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        {transaction.from === 'N/A' ? (
+                                            <span className="text-sm text-white/40">N/A</span>
+                                        ) : (
+                                            <Link
+                                                to={`/account/${transaction.from}`}
+                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
+                                                title={transaction.from}
+                                            >
+                                                {truncateMiddle(transaction.from)}
+                                            </Link>
+                                        )}
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        {transaction.to === 'N/A' ? (
+                                            <span className="text-sm text-white/40">N/A</span>
+                                        ) : (
+                                            <Link
+                                                to={`/account/${transaction.to}`}
+                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
+                                                title={transaction.to}
+                                            >
+                                                {truncateMiddle(transaction.to)}
+                                            </Link>
+                                        )}
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        <span className="text-sm text-white tabular-nums">{formatAmount(transaction.amount)}</span>
+                                    </td>
+                                    <td className={desktopRowCellClass}>
+                                        <span
+                                            className={`${GREEN_BADGE_CLASS} ${statusClassName(transaction.status)}`}
+                                        >
+                                            {statusLabel(transaction.status)}
+                                        </span>
+                                    </td>
+                                    <td
+                                        className={desktopRowCellClass}
+                                        style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
+                                    >
+                                        <span className="text-sm text-white/60">{formatAge(transaction.timestamp, transaction.status)}</span>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {!loading && totalCount > 0 && (
+                <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
+                    <div className="flex items-center gap-3">
+                        <span>
+                            {formatPaginationRange(startIdx, endIdx)} of {totalCount.toLocaleString()} transactions
+                        </span>
+                        {onPageSizeChange && (
+                            <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => goToPage(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="explorer-pagination-button px-3 py-1.5"
+                            aria-label="Previous page"
+                        >
+                            <i className="fa-solid fa-angle-left" />
+                        </button>
+
+                        {visiblePages.map((page, index, arr) => {
+                            const prevPage = arr[index - 1]
+                            const showDots = index > 0 && page - (prevPage || 0) > 1
+
+                            return (
+                                <React.Fragment key={page}>
+                                    {showDots && <span className="px-1 text-white/40">…</span>}
+                                    <button
+                                        type="button"
+                                        onClick={() => goToPage(page)}
+                                        className={`explorer-pagination-button explorer-pagination-page px-3 py-1.5 ${
+                                            currentPage === page ? 'explorer-pagination-page-active' : ''
+                                        }`}
+                                    >
+                                        {page}
+                                    </button>
+                                </React.Fragment>
+                            )
+                        })}
+
+                        <button
+                            type="button"
+                            onClick={() => goToPage(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="explorer-pagination-button px-3 py-1.5"
+                            aria-label="Next page"
+                        >
+                            <i className="fa-solid fa-angle-right" />
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
     )
 }
 

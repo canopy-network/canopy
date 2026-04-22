@@ -9,11 +9,11 @@
   },
   "rpc": {
     "base": "http://localhost:50002",
-    "admin": "http://localhost:50003",
-    "root": "http://localhost:50002"
+    "admin": "http://localhost:50003"
   },
   "explorer": {
-    "tx": "http://localhost:50001/transaction"
+    "tx": "http://localhost:50001/transaction",
+    "order": "http://localhost:50001/order"
   },
   "address": {
     "format": "evm"
@@ -106,6 +106,33 @@
         "password": "{{password}}",
         "nickname": "{{nickname}}",
         "submit": true
+      }
+    },
+    "keystoreImportRaw": {
+      "source": {
+        "base": "admin",
+        "path": "/v1/admin/keystore-import-raw",
+        "method": "POST"
+      },
+      "body": {
+        "nickname": "{{nickname}}",
+        "password": "{{password}}",
+        "privateKey": "{{privateKey}}"
+      }
+    },
+    "keystoreImport": {
+      "source": {
+        "base": "admin",
+        "path": "/v1/admin/keystore-import",
+        "method": "POST"
+      },
+      "body": {
+        "nickname": "{{nickname}}",
+        "address": "{{address}}",
+        "publicKey": "{{publicKey}}",
+        "salt": "{{salt}}",
+        "encrypted": "{{encrypted}}",
+        "keyAddress": "{{keyAddress}}"
       }
     },
     "keystoreDelete": {
@@ -273,186 +300,6 @@
             "startPage": 1
           }
         }
-      },
-      "root": {
-        "sent": {
-          "source": {
-            "base": "root",
-            "path": "/v1/query/txs-by-sender",
-            "method": "POST"
-          },
-          "body": {
-            "pageNumber": "{{page}}",
-            "perPage": "{{perPage}}",
-            "address": "{{account.address}}"
-          },
-          "selector": "",
-          "page": {
-            "strategy": "page",
-            "param": {
-              "page": "pageNumber",
-              "perPage": "perPage"
-            },
-            "response": {
-              "items": "results",
-              "totalPages": "paging.totalPages"
-            },
-            "defaults": {
-              "perPage": 20,
-              "startPage": 1
-            }
-          }
-        },
-        "received": {
-          "source": {
-            "base": "root",
-            "path": "/v1/query/txs-by-rec",
-            "method": "POST"
-          },
-          "body": {
-            "pageNumber": "{{page}}",
-            "perPage": "{{perPage}}",
-            "address": "{{account.address}}"
-          },
-          "selector": "",
-          "page": {
-            "strategy": "page",
-            "param": {
-              "page": "pageNumber",
-              "perPage": "perPage"
-            },
-            "response": {
-              "items": "results"
-            },
-            "defaults": {
-              "perPage": 20,
-              "startPage": 1
-            }
-          }
-        },
-        "failed": {
-          "source": {
-            "base": "root",
-            "path": "/v1/query/failed-txs",
-            "method": "POST"
-          },
-          "body": {
-            "pageNumber": "{{page}}",
-            "perPage": "{{perPage}}",
-            "address": "{{account.address}}"
-          },
-          "selector": "",
-          "page": {
-            "strategy": "page",
-            "param": {
-              "page": "pageNumber",
-              "perPage": "perPage"
-            },
-            "response": {
-              "items": "results"
-            },
-            "defaults": {
-              "perPage": 20,
-              "startPage": 1
-            }
-          }
-        }
-      }
-    },
-    "orders": {
-      "bySeller": {
-        "source": {
-          "base": "rpc",
-          "path": "/v1/query/orders",
-          "method": "POST"
-        },
-        "body": {
-          "height": 0,
-          "sellersSendAddress": "{{account.address}}",
-          "pageNumber": "{{page}}",
-          "perPage": "{{perPage}}"
-        },
-        "coerce": {
-          "body": {
-            "height": "int",
-            "pageNumber": "int",
-            "perPage": "int"
-          }
-        },
-        "selector": ""
-      },
-      "byCommittee": {
-        "source": {
-          "base": "root",
-          "path": "/v1/query/orders",
-          "method": "POST"
-        },
-        "body": {
-          "height": 0,
-          "committee": "{{committee}}",
-          "pageNumber": "{{page}}",
-          "perPage": "{{perPage}}"
-        },
-        "coerce": {
-          "ctx": {
-            "committee": "int"
-          },
-          "body": {
-            "height": "int",
-            "committee": "int",
-            "pageNumber": "int",
-            "perPage": "int"
-          }
-        },
-        "selector": ""
-      },
-      "byBuyer": {
-        "source": {
-          "base": "root",
-          "path": "/v1/query/orders",
-          "method": "POST"
-        },
-        "body": {
-          "height": 0,
-          "buyerSendAddress": "{{account.address}}",
-          "committee": "{{committee}}",
-          "pageNumber": "{{page}}",
-          "perPage": "{{perPage}}"
-        },
-        "coerce": {
-          "ctx": {
-            "committee": "int"
-          },
-          "body": {
-            "height": "int",
-            "committee": "int",
-            "pageNumber": "int",
-            "perPage": "int"
-          }
-        },
-        "selector": ""
-      },
-      "single": {
-        "source": {
-          "base": "root",
-          "path": "/v1/query/order",
-          "method": "POST"
-        },
-        "body": {
-          "height": 0,
-          "orderId": "{{orderId}}",
-          "committee": "{{committee}}"
-        },
-        "coerce": {
-          "ctx": {
-            "committee": "int"
-          },
-          "body": {
-            "height": "int",
-            "committee": "int"
-          }
-        },
-        "selector": ""
       }
     },
     "activity": {
@@ -671,7 +518,6 @@
         "body": "{\"height\":0,\"address\":\"\"}"
       }
     ],
-    "avgBlockTimeSec": 50,
     "refresh": {
       "staleTimeMs": 3000,
       "refetchIntervalMs": 3000

@@ -1,20 +1,23 @@
 import { SVGProps } from "react";
-import { canopyIconSvg } from "@/lib/utils/brand";
+import { canopyIconSvg, getCanopyAccent } from "@/lib/utils/brand";
 
 /** CNPY logo in a gradient circle — used for token avatars and badges */
-export function CnpyLogo({ size = 36 }: { size?: number }) {
+export function CnpyLogo({ size = 36, seed = "cnpy" }: { size?: number; seed?: string | number }) {
   return (
     <div
-      className="rounded-full flex items-center justify-center shrink-0 overflow-hidden p-1.5"
+      className="rounded-full flex items-center justify-center shrink-0 overflow-hidden border border-[#272729] bg-[#0f0f0f]"
       style={{
         width: size,
         height: size,
-        background: "linear-gradient(135deg, #1dd13a 0%, #0fa32c 100%)",
       }}
-      dangerouslySetInnerHTML={{
-        __html: canopyIconSvg("#ffffff"),
-      }}
-    />
+    >
+      <div
+        style={{ width: size * 0.68, height: size * 0.68 }}
+        dangerouslySetInnerHTML={{
+          __html: canopyIconSvg(getCanopyAccent(seed)),
+        }}
+      />
+    </div>
   );
 }
 

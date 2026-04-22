@@ -9,9 +9,9 @@ const SupplyPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
-            className="min-h-screen bg-background"
+            className="w-full"
         >
-            <div className="container mx-auto px-4 py-8 max-w-[100rem]">
+            <div className="w-full">
                 {/* Supply Content */}
                 <SupplyView />
             </div>

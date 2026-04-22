@@ -272,34 +272,10 @@ func (s *Server) Order(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 	})
 }
 
-// Orders retrieves the order book for a committee with optional filters and pagination
+// Orders retrieves the order book for a committee with pagination
 func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
 	s.ordersParams(w, r, func(s *fsm.StateMachine, req *ordersRequest) (any, lib.ErrorI) {
-		// validate mutual exclusion: cannot filter by both seller and buyer address
-		if req.SellersSendAddress != "" && req.BuyerSendAddress != "" {
-			return nil, lib.NewError(lib.CodeInvalidArgument, lib.RPCModule, "cannot filter by both sellersSendAddress and buyerSendAddress")
-		}
-		// convert seller address if provided
-		var sellerAddr []byte
-		if req.SellersSendAddress != "" {
-			var err lib.ErrorI
-			sellerAddr, err = lib.StringToBytes(req.SellersSendAddress)
-			if err != nil {
-				return nil, err
-			}
-		}
-		// convert buyer address if provided
-		var buyerAddr []byte
-		if req.BuyerSendAddress != "" {
-			var err lib.ErrorI
-			buyerAddr, err = lib.StringToBytes(req.BuyerSendAddress)
-			if err != nil {
-				return nil, err
-			}
-		}
-		// use paginated query
-		return s.GetOrdersPaginated(sellerAddr, buyerAddr, req.Committee, req.PageParams)
+		return s.GetOrdersPaginated(req.Committee, req.PageParams)
 	})
 }
 

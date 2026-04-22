@@ -59,6 +59,7 @@ const extractServiceErrorMessage = (response: any, statusText?: string): string 
       response?.error?.reason,
       response?.error?.details,
       response?.message,
+      response?.msg,
       response?.reason,
       response?.detail,
       response?.description,
@@ -644,6 +645,30 @@ export default function ActionRunner({
     isEditMode,
   });
 
+  // _skipToConfirm: if prefilledData requests skipping, jump directly to
+  // confirm (when available) or auto-execute once all required fields are satisfied
+  const didSkipToConfirmRef = React.useRef(false);
+  React.useEffect(() => {
+    if (didSkipToConfirmRef.current) return;
+    if (!prefilledData?._skipToConfirm) return;
+    if (populatePhase !== "ready") return;
+
+    const requiredFields = allFields.filter((f: Record<string, unknown>) => f.required);
+    const allSatisfied = requiredFields.every((f: Record<string, unknown>) => {
+      const val = form[f.name as string];
+      return val != null && val !== "" && !(Array.isArray(val) && val.length === 0);
+    });
+
+    if (allSatisfied) {
+      didSkipToConfirmRef.current = true;
+      if (hasSummary) {
+        setStage("confirm");
+      } else {
+        void doExecute();
+      }
+    }
+  }, [prefilledData, populatePhase, hasSummary, allFields, form, doExecute]);
+
   const handleErrorsChange = React.useCallback(
     (errs: Record<string, string>, hasErrors: boolean) => {
       setErrorsMap(errs);
@@ -676,7 +701,6 @@ export default function ActionRunner({
   }, [visibleFieldsForStep, form, errorsMap, templatingCtx]);
 
   const isLastStep = !wizard || stepIdx >= steps.length - 1;
-  const isOrdersAction = React.useMemo(() => /^(order|dex)/i.test(actionId), [actionId]);
   const stepProgress =
     wizard && steps.length > 0 ? Math.round(((stepIdx + 1) / steps.length) * 100) : 0;
 
@@ -728,7 +752,7 @@ export default function ActionRunner({
                     </div>
                     <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-primary transition-all duration-300"
+                        className="h-full rounded-full bg-foreground/30 transition-all duration-300"
                         style={{ width: `${stepProgress}%` }}
                       />
                     </div>
@@ -742,9 +766,9 @@ export default function ActionRunner({
                             className={cx(
                               "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] border",
                               isActive
-                                ? "border-primary/60 bg-primary/15 text-primary"
+                                ? "border-white/25 bg-white/10 text-foreground"
                                 : isCompleted
-                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                                  ? "border-white/15 bg-white/5 text-foreground/75"
                                   : "border-border/70 text-muted-foreground",
                             )}
                           >
@@ -760,7 +784,7 @@ export default function ActionRunner({
                   <motion.div
                     initial={{ opacity: 0, y: -6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="rounded-xl border border-rose-500/40 bg-[linear-gradient(135deg,rgba(159,18,57,0.24),rgba(39,39,42,0.35))] p-3 sm:p-4"
+                    className="rounded-xl border border-rose-500/40 bg-rose-950/25 p-3 sm:p-4"
                   >
                     <div className="flex items-start gap-3">
                       <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-400/45 bg-rose-500/20 text-rose-200">
@@ -796,7 +820,7 @@ export default function ActionRunner({
                                 <span className="text-rose-200/75">
                                   {errorPanelCopy.statusLabel}:
                                 </span>{" "}
-                                <span className="font-mono text-rose-50">
+                                <span className="text-rose-50">
                                   {inlineError.status || "N/A"} {inlineError.statusText}
                                 </span>
                               </div>
@@ -804,7 +828,7 @@ export default function ActionRunner({
                                 <span className="text-rose-200/75">
                                   {errorPanelCopy.requestLabel}:
                                 </span>{" "}
-                                <span className="font-mono text-rose-50 break-all">
+                                <span className="text-rose-50 break-all">
                                   {inlineError.requestMethod} {inlineError.requestPath}
                                 </span>
                               </div>
@@ -836,12 +860,7 @@ export default function ActionRunner({
                 )}
                 {!showPopulateLoading && (
                   <div
-                    className={cx(
-                      "rounded-xl border p-3 sm:p-4 md:p-5",
-                      isOrdersAction
-                        ? "border-primary/25 bg-primary/[0.04]"
-                        : "border-border/70 bg-background/60",
-                    )}
+                    className="rounded-xl border border-border/70 bg-background/60 p-3 sm:p-4 md:p-5"
                   >
                     <FormRenderer
                       fields={visibleFieldsForStep}
@@ -886,9 +905,9 @@ export default function ActionRunner({
                             key={i}
                             className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm"
                           >
-                            <div className="flex items-center gap-2 text-muted-foreground font-medium text-[11px] sm:text-xs uppercase tracking-wide">
+                            <div className="flex items-center gap-2 text-foreground/75 font-medium text-sm sm:text-[15px] tracking-normal">
                               {d.icon ? (
-                                <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 text-foreground/70" />
                               ) : null}
                               <span>
                                 {d.label}
@@ -921,7 +940,7 @@ export default function ActionRunner({
                       disabled={hasStepErrors}
                       onClick={goNext}
                       className={cx(
-                        "flex-1 px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-semibold rounded-lg text-sm sm:text-base",
+                        "flex-1 rounded-xl border border-white/80 bg-black px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white hover:text-black sm:py-3 sm:text-base",
                         hasStepErrors && "opacity-50 cursor-not-allowed",
                       )}
                     >
@@ -935,12 +954,7 @@ export default function ActionRunner({
             {stage === "confirm" && (
               <motion.div className="space-y-4">
                 <div
-                  className={cx(
-                    "flex-col h-full p-3 sm:p-4 rounded-xl border",
-                    isOrdersAction
-                      ? "border-primary/25 bg-primary/[0.04]"
-                      : "border-border/70 bg-background/60",
-                  )}
+                  className="flex-col h-full p-3 sm:p-4 rounded-xl border border-border/70 bg-background/60"
                 >
                   {summaryTitle && (
                     <h4 className="text-foreground text-sm sm:text-base font-semibold mb-3">{summaryTitle}</h4>
@@ -952,9 +966,9 @@ export default function ActionRunner({
                         key={i}
                         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm"
                       >
-                        <div className="flex items-center gap-2 text-muted-foreground font-medium text-[11px] sm:text-xs uppercase tracking-wide">
+                        <div className="flex items-center gap-2 text-foreground/75 font-medium text-sm sm:text-[15px] tracking-normal">
                           {d.icon ? (
-                            <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                            <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 text-foreground/70" />
                           ) : null}
                           <span>{d.label}:</span>
                         </div>
@@ -970,7 +984,7 @@ export default function ActionRunner({
                   <div className="sticky bottom-0 z-20 -mx-3 mt-4 border-t border-border/70 bg-card/95 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-md sm:static sm:mx-0 sm:mt-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
                     <button
                       onClick={onConfirm}
-                      className="flex-1 w-full px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-semibold rounded-lg flex items-center justify-center gap-2 text-sm sm:text-base"
+                      className="flex-1 w-full px-4 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 text-sm sm:text-base bg-zinc-500 text-white hover:bg-zinc-400 hover:text-white transition-colors"
                     >
                       {confirmBtn.icon ? (
                         <LucideIcon name={confirmBtn.icon} className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -989,7 +1003,7 @@ export default function ActionRunner({
                 className="flex flex-col items-center justify-center py-12 space-y-4"
               >
                 <div className="relative">
-                  <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                  <div className="w-16 h-16 border-4 border-white/15 border-t-foreground/70 rounded-full animate-spin"></div>
                 </div>
                 <div className="text-center space-y-2">
                   <h3 className="text-lg font-semibold text-foreground">
@@ -1064,25 +1078,25 @@ function GeneratedTxResult({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4"
     >
-      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+      <div className="rounded-xl border border-white/12 bg-white/[0.04] p-4">
         <div className="flex items-center gap-2 mb-2">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-          <h4 className="text-sm font-semibold text-emerald-100">
+          <CheckCircle2 className="w-5 h-5 text-foreground/75" />
+          <h4 className="text-sm font-semibold text-foreground">
             Step 1 Complete — Proposal Generated
           </h4>
         </div>
-        <p className="text-xs text-emerald-100/80 leading-relaxed mb-3">
+        <p className="text-xs text-foreground/75 leading-relaxed mb-3">
           Copy the JSON below, then complete the remaining steps:
         </p>
-        <ol className="text-xs text-emerald-100/80 leading-relaxed space-y-1 list-decimal list-inside">
-          <li><strong>Approve</strong> — Paste this JSON into the <strong>Approve / Reject Proposal</strong> action and vote Approve. This adds it to the node's approve list.</li>
-          <li><strong>Submit</strong> — Paste this JSON into the <strong>Manual Raw TX Broadcast</strong> action to broadcast it to the network.</li>
+        <ol className="text-xs text-foreground/75 leading-relaxed space-y-1 list-decimal list-inside">
+          <li><strong>Review & Approve</strong> — Paste this JSON into the <strong>Vote on Proposal</strong> step or action and choose Approve or Reject. This saves the replica vote on the node.</li>
+          <li><strong>Submit</strong> — Paste this JSON into the <strong>Submit Payload</strong> step or action to broadcast it to the network.</li>
         </ol>
       </div>
 
       <div className="relative rounded-xl border border-border/70 bg-background/60">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+          <span className="text-sm font-medium text-foreground/80">
             Signed Transaction JSON
           </span>
           <button
@@ -1091,7 +1105,7 @@ function GeneratedTxResult({
           >
             {copied ? (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-foreground/70" />
                 Copied
               </>
             ) : (
@@ -1102,7 +1116,7 @@ function GeneratedTxResult({
             )}
           </button>
         </div>
-        <pre className="max-h-72 overflow-auto p-3 text-[11px] text-foreground/90 whitespace-pre-wrap break-words font-mono">
+        <pre className="max-h-72 overflow-auto p-3 text-[11px] text-foreground/90 whitespace-pre-wrap break-words">
           {jsonStr}
         </pre>
       </div>
@@ -1116,4 +1130,3 @@ function GeneratedTxResult({
     </motion.div>
   );
 }
-
