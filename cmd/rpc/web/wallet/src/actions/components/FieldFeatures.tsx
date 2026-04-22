@@ -78,7 +78,7 @@ export const FieldFeatures: React.FC<FieldFeaturesProps> = ({ features, ctx, set
                     key={op.id}
                     type="button"
                     onClick={() => handle(op)}
-                    className="text-xs px-2 py-1.5 sm:px-3 rounded-md font-semibold border border-primary/60 bg-primary/10 text-primary hover:bg-primary hover:text-bg-primary transition-all duration-200 shadow-sm hover:shadow-md active:scale-95 whitespace-nowrap"
+                    className="text-xs px-2 py-1.5 sm:px-3 rounded-md font-medium border border-white/15 bg-secondary/80 text-foreground/90 hover:bg-white/10 hover:text-foreground transition-colors duration-200 active:scale-[0.98] whitespace-nowrap"
                 >
                     {labelFor(op)}
                 </button>

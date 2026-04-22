@@ -44,11 +44,11 @@ export default function NetworkPeers({ networkPeers }: NetworkPeersProps): JSX.E
             <div className="space-y-3">
                 <div>
                     <div className="text-xs text-muted-foreground mb-0.5">Peer ID</div>
-                    <div className="text-sm font-mono text-foreground truncate">{networkPeers.peerId || '—'}</div>
+                    <div className="text-sm text-foreground truncate">{networkPeers.peerId || '—'}</div>
                 </div>
                 <div>
                     <div className="text-xs text-muted-foreground mb-0.5">Network Address</div>
-                    <div className="text-sm font-mono text-foreground">{networkPeers.networkAddress || '—'}</div>
+                    <div className="text-sm text-foreground">{networkPeers.networkAddress || '—'}</div>
                 </div>
             </div>
         </div>

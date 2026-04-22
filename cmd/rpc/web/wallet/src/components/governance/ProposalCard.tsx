@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Proposal } from "@/hooks/useGovernance";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 interface ProposalCardProps {
   proposal: Proposal;
@@ -8,18 +9,7 @@ interface ProposalCardProps {
 }
 
 const getStatusColor = (status: Proposal["status"]) => {
-  switch (status) {
-    case "active":
-      return "bg-primary/20 text-primary border-primary/40";
-    case "passed":
-      return "bg-green-500/20 text-green-400 border-green-500/40";
-    case "rejected":
-      return "bg-red-500/20 text-red-400 border-red-500/40";
-    case "pending":
-      return "bg-yellow-500/20 text-yellow-400 border-yellow-500/40";
-    default:
-      return "bg-muted/20 text-muted-foreground border-border/40";
-  }
+  return WALLET_BADGE_TONE;
 };
 
 const getStatusLabel = (status: Proposal["status"]) => {
@@ -65,7 +55,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
 
   return (
     <motion.div
-      className="bg-card rounded-xl p-6 border border-border hover:border-primary/40 transition-all duration-300"
+      className="bg-card rounded-xl p-6 border border-border hover:border-white/20 transition-all duration-300"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
@@ -74,12 +64,10 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-muted-foreground text-sm font-mono">
+            <span className="text-muted-foreground text-sm">
               #{proposal.id.slice(0, 8)}...
             </span>
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(proposal.status)}`}
-            >
+            <span className={`${WALLET_BADGE_CLASS} ${getStatusColor(proposal.status)}`}>
               {getStatusLabel(proposal.status)}
             </span>
           </div>
@@ -191,7 +179,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
       <div className="mt-4 pt-4 border-t border-border">
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Proposed by:</span>
-          <span className="text-foreground/80 font-mono">
+          <span className="text-foreground/80">
             {proposal.proposer.slice(0, 6)}...{proposal.proposer.slice(-4)}
           </span>
         </div>

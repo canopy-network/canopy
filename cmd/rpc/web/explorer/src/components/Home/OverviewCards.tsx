@@ -1,240 +1,308 @@
 import React from 'react'
-import TableCard from './TableCard'
-import config from '../../data/overview.json'
-import { useAllBlocksCache, useOrders, useTransactionsWithRealPagination } from '../../hooks/useApi'
-import AnimatedNumber from '../AnimatedNumber'
-import { Link } from 'react-router-dom'
-import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
+import { motion } from 'framer-motion'
+import { Link, useNavigate } from 'react-router-dom'
+import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
+import { useAllBlocksCache, useTransactionsWithRealPagination } from '../../hooks/useApi'
+import { extractAmountMicro, toCNPY } from '../../lib/utils'
+import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
 
-const truncate = (s: string, n: number = 4) => s.length <= n ? s : `${s.slice(0, n)}...${s.slice(-4)}`
+const desktopRowCellClass =
+    'px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]'
 
-const OverviewCards: React.FC = () => {
-    // Data hooks
-    const { data: txsPage } = useTransactionsWithRealPagination(1, 5) // Get 5 most recent transactions
-    const { data: blocksPage } = useAllBlocksCache()
-    const chainId = typeof window !== 'undefined' && (window as any).__CONFIG__ ? Number((window as any).__CONFIG__.chainId) : 1
-    const { data: ordersPage } = useOrders(chainId)
+const truncateMiddle = (value: string, start: number = 5, end: number = 6) =>
+    value.length <= start + end ? value : `${value.slice(0, start)}…${value.slice(-end)}`
 
-    // List normalization: accepts {transactions|blocks|results|list|data} or flat arrays
-    const normalizeList = (payload: any) => {
-        if (!payload) return [] as any[]
-        if (Array.isArray(payload)) return payload
-        const candidates = (payload as any)
-        const found = candidates.transactions || candidates.blocks || candidates.results || candidates.list || candidates.data
-        return Array.isArray(found) ? found : []
+const truncateHash = (value: string) => truncateMiddle(value, 10, 10)
+const truncateAddress = (value: string) => truncateMiddle(value, 11, 10)
+
+const formatRelativeTime = (timestamp: unknown) => {
+    if (!timestamp) return 'N/A'
+
+    try {
+        let date: Date
+
+        if (typeof timestamp === 'number') {
+            date = new Date(timestamp > 1e12 ? timestamp / 1000 : timestamp * 1000)
+        } else if (typeof timestamp === 'string') {
+            date = parseISO(timestamp)
+        } else {
+            date = new Date(timestamp as Date)
+        }
+
+        if (!isValid(date)) return 'N/A'
+        const diffMs = Date.now() - date.getTime()
+        if (diffMs < 60_000) return 'a few secs ago'
+        return formatDistanceToNow(date, { addSuffix: true })
+    } catch {
+        return 'N/A'
     }
+}
 
-    const txs = normalizeList(txsPage as any)
-    const blockList = normalizeList(blocksPage as any)
+const formatAmount = (amount: number) =>
+    toCNPY(amount).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })
 
-    const cards = (config as any[])
-        .map((c) => {
-            if (c.type === 'transactions') {
-                return (
-                    <TableCard
-                        key={c.type}
-                        title={c.title}
-                        live
-                        viewAllPath="/transactions"
-                        columns={[{ label: 'Hash' }, { label: 'From' }, { label: 'To' }, { label: 'Amount' }, { label: 'Time' }]}
-                        rows={txs.slice(0, 5).map((t: any) => {
-                            const from = t.sender || t.from || t.source || ''
+const normalizeList = (payload: any) => {
+    if (!payload) return [] as any[]
+    if (Array.isArray(payload)) return payload
+    const found = payload.transactions || payload.blocks || payload.results || payload.list || payload.data
+    return Array.isArray(found) ? found : []
+}
 
-                            // Handle different transaction types for "To" field
-                            let to = ''
-                            if (t.messageType === 'certificateResults' && t.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents) {
-                                // For certificateResults, show the first reward recipient
-                                const recipients = t.transaction.msg.qc.results.rewardRecipients.paymentPercents
-                                if (recipients.length > 0) {
-                                    to = recipients[0].address || ''
-                                }
-                            } else {
-                                // For other transaction types
-                                to = t.recipient || t.to || t.destination || ''
-                            }
+const LiveIndicator = () => (
+    <div className="relative inline-flex items-center gap-1.5 rounded-full bg-[#35cd48]/5 px-4 py-1">
+        <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#35cd48] shadow-[0_0_4px_rgba(53,205,72,0.8)]" />
+        <span className="text-sm font-medium text-[#35cd48]">Live</span>
+    </div>
+)
 
-                            const amount = t.amount ?? t.value ?? t.fee ?? 0
-                            const hash = t.hash || t.txHash || t.transactionHash || ''
+interface WalletPreviewTableProps {
+    title: string
+    columns: string[]
+    rows: Array<{
+        href?: string
+        cells: React.ReactNode[]
+    }>
+    loading?: boolean
+    viewAllPath: string
+    emptyLabel: string
+    minWidth?: string
+}
 
-                            // Format time using date-fns
-                            const timestamp = t.time || t.timestamp || t.blockTime
-                            let timeAgo = '-'
-                            if (timestamp) {
-                                try {
-                                    let date: Date
-                                    if (typeof timestamp === 'number') {
-                                        if (timestamp > 1e12) {
-                                            date = new Date(timestamp / 1000)
-                                        } else {
-                                            date = new Date(timestamp * 1000)
-                                        }
-                                    } else if (typeof timestamp === 'string') {
-                                        date = parseISO(timestamp)
-                                    } else {
-                                        date = new Date(timestamp)
-                                    }
-
-                                    if (isValid(date)) {
-                                        timeAgo = formatDistanceToNow(date, { addSuffix: true })
-                                    }
-                                } catch (error) {
-                                    timeAgo = '-'
-                                }
-                            }
-
-                            // Show "N/A" if no data available
-                            const displayTo = to || 'N/A'
-                            const displayFrom = from || 'N/A'
-
-                            return [
-                                hash ? (
-                                    <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>
-                                ) : (
-                                    <span className="text-gray-400">-</span>
-                                ),
-                                <Link to={`/account/${displayFrom}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayFrom), 8)}</Link>,
-                                <div>
-                                    {to ? (
-                                        <Link to={`/account/${displayTo}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayTo), 8)}</Link>
-                                    ) : (
-                                        <span className="text-gray-400 bg-gray-600/30 px-2 py-1 rounded-full text-xs">N/A</span>
-                                    )}
-                                </div>,
-                                <span className="text-green-400">
-                                    {typeof amount === 'number' ? (() => {
-                                        // Amount comes in micro denomination, convert to CNPY
-                                        const cnpy = amount / 1000000
-                                        return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
-                                    })() : amount}
-                                </span>,
-                                <span className="text-white">{timeAgo}</span>,
-                            ]
-                        })}
-                    />
-                )
-            }
-            if (c.type === 'blocks') {
-                return (
-                    <TableCard
-                        key={c.type}
-                        title={c.title}
-                        live
-                        viewAllPath="/blocks"
-                        columns={[{ label: 'Height' }, { label: 'Hash' }, { label: 'Txs' }, { label: 'Time' }]}
-                        rows={blockList.slice(0, 5).map((b: any) => {
-                            const height = b.blockHeader?.height ?? b.height
-                            const hash = b.blockHeader?.hash || b.hash || ''
-                            const txCount = b.txCount ?? b.numTxs ?? (b.transactions?.length ?? 0)
-                            const btime = b.blockHeader?.time || b.time || b.timestamp
-
-                            // Format time using date-fns
-                            let timeAgo = '-'
-                            if (btime) {
-                                try {
-                                    let date: Date
-                                    if (typeof btime === 'number') {
-                                        if (btime > 1e12) {
-                                            date = new Date(btime / 1000)
-                                        } else {
-                                            date = new Date(btime * 1000)
-                                        }
-                                    } else if (typeof btime === 'string') {
-                                        date = parseISO(btime)
-                                    } else {
-                                        date = new Date(btime)
-                                    }
-
-                                    if (isValid(date)) {
-                                        timeAgo = formatDistanceToNow(date, { addSuffix: true })
-                                    }
-                                } catch (error) {
-                                    timeAgo = '-'
-                                }
-                            }
-                            return [
-                                <Link to={`/block/${height}`} className="text-gray-200 flex items-center gap-2 hover:text-green-400 hover:underline">
-                                    <div className="bg-green-300/10 rounded-full py-0.5 px-1">
-                                        <i className="fa-solid fa-cube text-primary"></i>
-                                    </div>
-                                    <p>
-                                        {typeof height === 'number' ? (
-                                            <AnimatedNumber
-                                                value={height}
-                                                className="text-gray-200 hover:text-green-400 hover:underline"
-                                            />
-                                        ) : (
-                                            height
-                                        )}
-                                    </p>
-                                </Link>,
-                                <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">
-                                    {truncate(String(hash))}
-                                </Link>,
-                                <span className="text-gray-200">
-                                    {typeof txCount === 'number' ? (
-                                        <AnimatedNumber
-                                            value={txCount}
-                                            className="text-gray-200"
-                                        />
-                                    ) : (
-                                        txCount
-                                    )}
-                                </span>,
-                                <span className="text-gray-400">{timeAgo}</span>,
-                            ]
-                        })}
-                    />
-                )
-            }
-            if (c.type === 'swaps') {
-                const list = (ordersPage as any)?.orders || (ordersPage as any)?.list || (ordersPage as any)?.results || []
-                const rows = list.slice(0, 4).map((o: any) => {
-                    const action = o.action || o.side || (o.sellAmount ? 'Sell CNPY' : 'Buy CNPY')
-                    const sell = Number(o.sellAmount || o.amount || 0)
-                    const receive = Number(o.receiveAmount || o.price || 0)
-                    const rate = sell > 0 && receive > 0 ? (receive / sell) : (o.rate || 0)
-                    const hash = o.hash || o.orderId || o.id || '-'
-                    return [
-                        <span className={/sell/i.test(String(action)) ? 'text-red-400' : 'text-green-400'}>{action || 'Swap'}</span>,
-                        <span>
-                            {rate ? (
-                                <>
-                                    1 ETH = <AnimatedNumber
-                                        value={rate}
-                                        format={{ maximumSignificantDigits: 6 }}
-                                        className="text-white"
-                                    /> CNPY
-                                </>
-                            ) : (
-                                '-'
-                            )}
-                        </span>,
-                        <span>{truncate(String(hash))}</span>,
-                    ]
-                })
-
-                return (
-                    <TableCard
-                        key={c.type}
-                        title={c.title}
-                        live
-                        viewAllPath="/swaps"
-                        columns={[{ label: 'Action' }, { label: 'Exchange Rate' }, { label: 'Hash' }]}
-                        rows={rows}
-                    />
-                )
-            }
-            return null
-        })
-        .filter(Boolean) as React.ReactNode[]
+const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
+    title,
+    columns,
+    rows,
+    loading = false,
+    viewAllPath,
+    emptyLabel,
+    minWidth = 'min-w-[720px]',
+}) => {
+    const navigate = useNavigate()
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-            {cards}
+        <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="rounded-xl border border-white/10 bg-[#1a1a1a] p-5"
+        >
+        <div className="mb-5 flex items-center justify-between gap-3 leading-none">
+            <h2 className="wallet-card-title tracking-tight">{title}</h2>
+            <LiveIndicator />
+        </div>
+
+        <div className="overflow-x-auto">
+            <table
+                className={`w-full ${minWidth}`}
+                style={{ tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
+            >
+                <thead>
+                    <tr>
+                        {columns.map((label) => (
+                            <th
+                                key={label}
+                                className="px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4"
+                            >
+                                {label}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {loading ? (
+                        Array.from({ length: 5 }).map((_, index) => (
+                            <tr key={`${title}-loading-${index}`} className="animate-pulse">
+                                {columns.map((_, cellIndex) => (
+                                    <td
+                                        key={`${title}-loading-${index}-${cellIndex}`}
+                                        className={desktopRowCellClass}
+                                        style={{
+                                            borderTopLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderBottomLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderTopRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                            borderBottomRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                        }}
+                                    >
+                                        <div className="h-3 w-20 rounded bg-white/10 sm:w-28 lg:w-32" />
+                                    </td>
+                                ))}
+                            </tr>
+                        ))
+                    ) : rows.length === 0 ? (
+                        <tr>
+                            <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
+                                {emptyLabel}
+                            </td>
+                        </tr>
+                    ) : (
+                        rows.map((row, index) => (
+                            <motion.tr
+                                key={`${title}-${index}`}
+                                className={`group ${row.href ? 'cursor-pointer' : ''}`}
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.06 + index * 0.04 }}
+                                onClick={() => {
+                                    if (row.href) navigate(row.href)
+                                }}
+                                onKeyDown={(event) => {
+                                    if (!row.href) return
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault()
+                                        navigate(row.href)
+                                    }
+                                }}
+                                tabIndex={row.href ? 0 : undefined}
+                                role={row.href ? 'link' : undefined}
+                            >
+                                {row.cells.map((cell, cellIndex) => (
+                                    <td
+                                        key={`${title}-${index}-${cellIndex}`}
+                                        className={desktopRowCellClass}
+                                        style={{
+                                            borderTopLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderBottomLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderTopRightRadius: cellIndex === row.cells.length - 1 ? '10px' : undefined,
+                                            borderBottomRightRadius: cellIndex === row.cells.length - 1 ? '10px' : undefined,
+                                        }}
+                                    >
+                                        {cell}
+                                    </td>
+                                ))}
+                            </motion.tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
+        </div>
+
+        <div className="pt-4 text-center">
+            <Link
+                to={viewAllPath}
+                className="inline-flex items-center gap-1 text-sm text-white/60 transition-colors hover:text-white/80"
+            >
+                View All <i className="fa-solid fa-arrow-right-long"></i>
+            </Link>
+        </div>
+    </motion.section>
+    )
+}
+
+const OverviewCards: React.FC = () => {
+    const { data: txsPage, isLoading: isTransactionsLoading } = useTransactionsWithRealPagination(1, 5)
+    const { data: blocksPage, isLoading: isBlocksLoading } = useAllBlocksCache()
+
+    const txs = normalizeList(txsPage)
+    const blockList = normalizeList(blocksPage)
+
+    const transactionRows = txs.slice(0, 5).map((transaction: any) => {
+        const from = String(transaction.sender || transaction.from || transaction.source || 'N/A')
+        const txType = String(transaction.messageType || transaction.transaction?.type || transaction.type || 'send')
+        const amount = extractAmountMicro(transaction as Record<string, unknown>)
+        const hash = String(transaction.hash || transaction.txHash || transaction.transactionHash || '')
+        const timeAgo = formatRelativeTime(transaction.time || transaction.timestamp || transaction.blockTime)
+
+        return {
+            href: hash ? `/transaction/${hash}` : undefined,
+            cells: [
+                <TransactionTypeBadge type={txType} />,
+                hash ? (
+                    <span className="block max-w-[14rem] truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80">
+                        {truncateHash(hash)}
+                    </span>
+                ) : (
+                    <span className="text-sm text-white/60">N/A</span>
+                ),
+                from !== 'N/A' ? (
+                    <span
+                        className="block max-w-[12rem] truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80"
+                        title={from}
+                    >
+                        {truncateAddress(from)}
+                    </span>
+                ) : (
+                    <span className="text-sm text-white/60">N/A</span>
+                ),
+                amount > 0 ? (
+                    <span className="whitespace-nowrap text-sm text-white tabular-nums">{formatAmount(amount)}</span>
+                ) : (
+                    <span className="text-sm text-white/60">N/A</span>
+                ),
+                <span className="text-[11px] leading-tight text-white/60">{timeAgo}</span>,
+            ],
+        }
+    })
+
+    const blockRows = blockList.slice(0, 5).map((block: any) => {
+        const height = block.blockHeader?.height ?? block.height
+        const hash = String(block.blockHeader?.hash || block.hash || '')
+        const producer = String(block.blockHeader?.proposerAddress || block.blockHeader?.proposer || block.proposer || 'N/A')
+        const txCount = block.txCount ?? block.numTxs ?? (block.transactions?.length ?? 0)
+        const timeAgo = formatRelativeTime(block.blockHeader?.time || block.time || block.timestamp)
+
+        return {
+            href: height !== undefined && height !== null ? `/block/${height}` : undefined,
+            cells: [
+                height !== undefined && height !== null ? (
+                    <div className="flex max-w-[8rem] items-center gap-2 truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80">
+                    <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-green-300/10 text-primary">
+                        <i className="fa-solid fa-cube text-sm" />
+                    </span>
+                    <span>{height}</span>
+                    </div>
+                ) : (
+                    <span className="text-sm text-white/60">N/A</span>
+                ),
+                hash ? (
+                    <span className="block max-w-[15rem] truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80">
+                        {truncateHash(hash)}
+                    </span>
+                ) : (
+                    <span className="text-sm text-white/60">N/A</span>
+                ),
+                producer !== 'N/A' ? (
+                    <span
+                        className="block max-w-[12rem] truncate text-sm font-medium leading-tight text-white"
+                        title={producer}
+                    >
+                        {truncateAddress(producer)}
+                    </span>
+                ) : (
+                    <span className="text-sm text-white/60">N/A</span>
+                ),
+                <span className="text-sm text-white tabular-nums">
+                    {Number(txCount || 0).toLocaleString('en-US')}
+                </span>,
+                <span className="text-[11px] leading-tight text-white/60">{timeAgo}</span>,
+            ],
+        }
+    })
+
+    return (
+        <div className="flex flex-col gap-6">
+            <WalletPreviewTable
+                title="Blocks"
+                viewAllPath="/blocks"
+                columns={['Height', 'Hash', 'Producer', 'Txs', 'Time']}
+                rows={blockRows}
+                loading={isBlocksLoading}
+                emptyLabel="No blocks found"
+                minWidth="min-w-[760px]"
+            />
+            <WalletPreviewTable
+                title="Transactions"
+                viewAllPath="/transactions"
+                columns={['Type', 'Hash', 'From', 'Amount', 'Time']}
+                rows={transactionRows}
+                loading={isTransactionsLoading}
+                emptyLabel="No transactions found"
+                minWidth="min-w-[760px]"
+            />
         </div>
     )
 }
 
 export default OverviewCards
-
-

@@ -1,25 +1,62 @@
 import React, { useState, useEffect } from 'react';
 
-interface SwapFiltersProps {
-    onApplyFilters: (filters: any) => void;
-    onResetFilters: () => void;
-    filters: {
-        assetPair: string;
-        actionType: string;
-        timeRange: string;
-        minAmount: string;
-    };
-    onFiltersChange: (filters: any) => void;
+export interface SwapFilterValues {
+    minAmount: string;
+    status: 'All' | 'Active' | 'Locked';
+    committee: string;
 }
 
-const SwapFilters: React.FC<SwapFiltersProps> = ({ onApplyFilters, onResetFilters, filters, onFiltersChange }) => {
+interface SwapFiltersProps {
+    onApplyFilters: (filters: SwapFilterValues) => void;
+    onResetFilters: () => void;
+    filters: SwapFilterValues;
+    onFiltersChange: (filters: SwapFilterValues) => void;
+    availableCommittees: number[];
+    compact?: boolean;
+}
+
+const DEFAULT_FILTERS: SwapFilterValues = { minAmount: '', status: 'All', committee: 'All' };
+
+const SwapFilters: React.FC<SwapFiltersProps> = ({
+    onApplyFilters,
+    onResetFilters,
+    filters,
+    onFiltersChange,
+    availableCommittees,
+    compact = false
+}) => {
     const [localFilters, setLocalFilters] = useState(filters);
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = React.useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         setLocalFilters(filters);
     }, [filters]);
 
-    const handleFilterChange = (key: string, value: string) => {
+    useEffect(() => {
+        if (!compact || !isOpen) return;
+
+        const handlePointerDown = (event: MouseEvent) => {
+            if (!containerRef.current?.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handlePointerDown);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handlePointerDown);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [compact, isOpen]);
+
+    const handleFilterChange = <K extends keyof SwapFilterValues>(key: K, value: SwapFilterValues[K]) => {
         const newFilters = { ...localFilters, [key]: value };
         setLocalFilters(newFilters);
         onFiltersChange(newFilters);
@@ -27,99 +64,112 @@ const SwapFilters: React.FC<SwapFiltersProps> = ({ onApplyFilters, onResetFilter
 
     const handleApply = () => {
         onApplyFilters(localFilters);
+        if (compact) {
+            setIsOpen(false);
+        }
     };
 
     const handleReset = () => {
-        const resetFilters = {
-            assetPair: 'All Pairs',
-            actionType: 'All Actions',
-            timeRange: 'Last 24 Hours',
-            minAmount: ''
-        };
+        const resetFilters: SwapFilterValues = DEFAULT_FILTERS;
         setLocalFilters(resetFilters);
         onFiltersChange(resetFilters);
         onResetFilters();
     };
 
-    return (
-        <div className="bg-card p-6 rounded-xl border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200 mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {/* Asset Pair */}
-                <div>
-                    <label htmlFor="assetPair" className="block text-sm font-medium text-gray-400 mb-1">Asset Pair</label>
-                    <select
-                        id="assetPair"
-                        value={localFilters.assetPair}
-                        onChange={(e) => handleFilterChange('assetPair', e.target.value)}
-                        className="w-full p-2 bg-input border border-gray-700 rounded-lg text-white focus:ring-primary focus:border-primary"
-                    >
-                        <option>All Pairs</option>
-                        <option>CNPY/ETH</option>
-                        <option>CNPY/BTC</option>
-                        <option>CNPY/SOL</option>
-                        <option>CNPY/USDC</option>
-                        <option>CNPY/AVAX</option>
-                    </select>
-                </div>
+    const hasActiveFilters = (
+        filters.minAmount !== DEFAULT_FILTERS.minAmount ||
+        filters.status !== DEFAULT_FILTERS.status ||
+        filters.committee !== DEFAULT_FILTERS.committee
+    );
 
-                {/* Action Type */}
+    const filtersForm = (
+        <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                    <label htmlFor="actionType" className="block text-sm font-medium text-gray-400 mb-1">Action Type</label>
-                    <select
-                        id="actionType"
-                        value={localFilters.actionType}
-                        onChange={(e) => handleFilterChange('actionType', e.target.value)}
-                        className="w-full p-2 bg-input border border-gray-700 rounded-lg text-white focus:ring-primary focus:border-primary"
-                    >
-                        <option>All Actions</option>
-                        <option>Buy CNPY</option>
-                        <option>Sell CNPY</option>
-                    </select>
-                </div>
-
-                {/* Time Range */}
-                <div>
-                    <label htmlFor="timeRange" className="block text-sm font-medium text-gray-400 mb-1">Time Range</label>
-                    <select
-                        id="timeRange"
-                        value={localFilters.timeRange}
-                        onChange={(e) => handleFilterChange('timeRange', e.target.value)}
-                        className="w-full p-2 bg-input border border-gray-700 rounded-lg text-white focus:ring-primary focus:border-primary"
-                    >
-                        <option>Last 24 Hours</option>
-                        <option>Last 7 Days</option>
-                        <option>Last 30 Days</option>
-                    </select>
-                </div>
-
-                {/* Min Amount */}
-                <div>
-                    <label htmlFor="minAmount" className="block text-sm font-medium text-gray-400 mb-1">Min Amount</label>
+                    <label htmlFor="minAmount" className="mb-1 block text-sm font-medium text-gray-400">Min Amount (CNPY)</label>
                     <input
                         type="number"
                         id="minAmount"
                         value={localFilters.minAmount}
                         onChange={(e) => handleFilterChange('minAmount', e.target.value)}
                         placeholder="0.00"
-                        className="w-full p-2 bg-input border border-gray-700 rounded-lg text-white focus:ring-primary focus:border-primary"
+                        className="w-full rounded-lg border border-white/10 bg-input p-2 text-white focus:border-primary focus:ring-primary"
                     />
+                </div>
+                <div>
+                    <label htmlFor="status" className="mb-1 block text-sm font-medium text-gray-400">Status</label>
+                    <select
+                        id="status"
+                        value={localFilters.status}
+                        onChange={(e) => handleFilterChange('status', e.target.value as SwapFilterValues['status'])}
+                        className="w-full rounded-lg border border-white/10 bg-input p-2 text-white focus:border-primary focus:ring-primary"
+                    >
+                        <option value="All">All</option>
+                        <option value="Active">Active</option>
+                        <option value="Locked">Locked</option>
+                    </select>
+                </div>
+                <div className="sm:col-span-2">
+                    <label htmlFor="committee" className="mb-1 block text-sm font-medium text-gray-400">Committee</label>
+                    <select
+                        id="committee"
+                        value={localFilters.committee}
+                        onChange={(e) => handleFilterChange('committee', e.target.value)}
+                        className="w-full rounded-lg border border-white/10 bg-input p-2 text-white focus:border-primary focus:ring-primary"
+                    >
+                        <option value="All">All Committees</option>
+                        {availableCommittees.map((c) => (
+                            <option key={c} value={String(c)}>Committee {c}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
-            <div className="flex justify-end space-x-4">
+            <div className="mt-4 flex justify-end space-x-3">
                 <button
                     onClick={handleApply}
-                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-black rounded-lg transition-colors duration-200 font-medium"
+                    className="rounded-lg bg-primary px-4 py-2 font-medium text-black transition-colors duration-200 hover:bg-primary/90"
                 >
                     Apply Filters
                 </button>
                 <button
                     onClick={handleReset}
-                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200 font-medium"
+                    className="rounded-lg bg-white/10 px-4 py-2 font-medium text-white transition-colors duration-200 hover:bg-white/15"
                 >
                     Reset All
                 </button>
             </div>
+        </>
+    );
+
+    if (compact) {
+        return (
+            <div ref={containerRef} className="relative">
+                <button
+                    type="button"
+                    onClick={() => setIsOpen((open) => !open)}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors ${
+                        hasActiveFilters
+                            ? 'border-primary/30 bg-primary/12 text-primary hover:bg-primary/18'
+                            : 'border-white/10 bg-white/5 text-gray-300 hover:border-white/20 hover:bg-white/10 hover:text-white'
+                    }`}
+                    aria-label="Toggle swap filters"
+                    aria-expanded={isOpen}
+                >
+                    <i className="fa-solid fa-filter" />
+                </button>
+                {isOpen && (
+                    <div className="absolute right-0 top-full z-20 mt-2 w-[320px] rounded-xl border border-white/10 bg-card p-4 shadow-2xl">
+                        {filtersForm}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-card p-6 rounded-xl border border-white/5 hover:border-white/8 transition-colors duration-200 mb-8">
+            {filtersForm}
         </div>
     );
 };

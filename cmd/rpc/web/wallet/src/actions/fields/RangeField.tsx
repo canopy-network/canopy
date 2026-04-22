@@ -40,7 +40,7 @@ export const RangeField: React.FC<BaseFieldProps> = ({
     const progress = range > 0 ? ((clamped - min) / range) * 100 : 0
 
     const inputClass = cx(
-        'w-full h-11 sm:h-12 bg-background/60 border placeholder:text-muted-foreground/70 text-foreground rounded-xl px-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none',
+        'w-full h-11 sm:h-12 bg-background/60 border placeholder:text-muted-foreground/70 text-foreground rounded-xl px-3 focus:outline-none focus:ring-2 focus:ring-white/12 focus:border-white/20 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none',
         error ? 'border-red-600' : 'border-border/70',
         hasFeatures && showInput ? 'pr-24' : '',
     )
@@ -58,14 +58,14 @@ export const RangeField: React.FC<BaseFieldProps> = ({
             <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>{min}{suffix}</span>
-                    <span className="font-semibold text-primary">{clamped}{suffix}</span>
+                    <span className="font-semibold text-foreground">{clamped}{suffix}</span>
                     <span>{max}{suffix}</span>
                 </div>
 
                 <div className="relative py-1">
                     <div className="h-2.5 rounded-full bg-muted/50 overflow-hidden">
                         <div
-                            className="h-full bg-primary transition-all duration-200 rounded-full"
+                            className="h-full bg-foreground/35 transition-all duration-200 rounded-full"
                             style={{ width: `${progress}%` }}
                         />
                     </div>
@@ -105,8 +105,8 @@ export const RangeField: React.FC<BaseFieldProps> = ({
                                     className={cx(
                                         'px-2 py-1 text-xs rounded-md border transition-colors',
                                         active
-                                            ? 'border-primary bg-primary/15 text-primary'
-                                            : 'border-border/70 text-muted-foreground hover:text-foreground hover:border-primary/60',
+                                            ? 'border-white/25 bg-white/10 text-foreground'
+                                            : 'border-border/70 text-muted-foreground hover:text-foreground hover:border-white/20',
                                     )}
                                     onClick={() => onChange(presetValue)}
                                 >

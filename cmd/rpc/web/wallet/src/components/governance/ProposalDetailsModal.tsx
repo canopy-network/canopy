@@ -1,6 +1,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Check, Minus, X } from 'lucide-react';
 import { Proposal } from '@/hooks/useGovernance';
+import { useDenom } from '@/hooks/useDenom';
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from '@/components/ui/badgeStyles';
 
 interface ProposalDetailsModalProps {
     proposal: Proposal | null;
@@ -13,24 +16,15 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
     isOpen,
     onClose,
 }) => {
+    const { symbol, factor } = useDenom();
     if (!proposal) return null;
 
     const getCategoryColor = (category: string) => {
-        const colors: Record<string, string> = {
-            'Gov': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
-            'Subsidy': 'bg-orange-500/20 text-orange-400 border-orange-500/40',
-            'Other': 'bg-purple-500/20 text-purple-400 border-purple-500/40'
-        };
-        return colors[category] || colors.Other;
+        return WALLET_BADGE_TONE;
     };
 
     const getResultBadge = (result: string) => {
-        const colors: Record<string, string> = {
-            'Pass': 'bg-green-500/20 text-green-400 border border-green-500/40',
-            'Fail': 'bg-red-500/20 text-red-400 border border-red-500/40',
-            'Pending': 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40'
-        };
-        return colors[result] || colors.Pending;
+        return WALLET_BADGE_TONE;
     };
 
     const formatDate = (timestamp: string) => {
@@ -58,7 +52,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                 <>
                     {/* Backdrop */}
                     <motion.div
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+                        className="fixed inset-0 bg-[#0f0f0f]/80 backdrop-blur-md z-50"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -68,7 +62,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                     {/* Modal */}
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 pointer-events-none">
                         <motion.div
-                            className="bg-card rounded-xl sm:rounded-2xl border border-border shadow-2xl w-full max-w-[min(96vw,56rem)] h-[92vh] sm:h-auto sm:max-h-[88vh] overflow-hidden pointer-events-auto flex flex-col"
+                            className="bg-[#171717] rounded-xl sm:rounded-2xl border border-[#272729] shadow-[0_24px_72px_rgba(0,0,0,0.55)] w-full max-w-[min(96vw,56rem)] h-[92vh] sm:h-auto sm:max-h-[88vh] overflow-hidden pointer-events-auto flex flex-col"
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -78,10 +72,10 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                             <div className="flex items-start justify-between p-4 sm:p-6 border-b border-border shrink-0">
                                 <div className="flex-1 pr-4">
                                     <div className="flex items-center gap-3 mb-3">
-                                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(proposal.category)}`}>
+                                        <span className={`${WALLET_BADGE_CLASS} ${getCategoryColor(proposal.category)}`}>
                                             {proposal.category}
                                         </span>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getResultBadge(proposal.result)}`}>
+                                        <span className={`${WALLET_BADGE_CLASS} ${getResultBadge(proposal.result)}`}>
                                             {proposal.result}
                                         </span>
                                     </div>
@@ -89,14 +83,14 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                         {proposal.title}
                                     </h2>
                                     <p className="text-sm text-muted-foreground">
-                                        Proposal ID: <span className="font-mono">{proposal.hash.slice(0, 16)}...</span>
+                                        Proposal ID: <span>{proposal.hash.slice(0, 16)}...</span>
                                     </p>
                                 </div>
                                 <button
                                     onClick={onClose}
-                                    className="p-2 hover:bg-accent rounded-lg transition-colors"
+                                    className="rounded-lg border border-[#272729] bg-[#0f0f0f] p-2 text-white/60 hover:bg-[#272729] hover:text-white transition-colors"
                                 >
-                                    <i className="fa-solid fa-times text-muted-foreground text-xl"></i>
+                                    <X className="h-5 w-5" />
                                 </button>
                             </div>
 
@@ -120,33 +114,33 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                         </h3>
 
                                         {proposal.approve === true ? (
-                                            <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-xl p-5 flex items-center gap-4">
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20">
-                                                    <i className="fa-solid fa-check text-emerald-400 text-lg"></i>
+                                            <div className="bg-[#35cd48]/10 border border-[#35cd48]/25 rounded-xl p-5 flex items-center gap-4">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#35cd48]/20">
+                                                    <Check className="h-5 w-5 text-[#35cd48]" />
                                                 </div>
                                                 <div>
-                                                    <div className="text-base font-semibold text-emerald-300">Approved</div>
-                                                    <div className="text-xs text-emerald-300/70 mt-0.5">This node has approved this proposal.</div>
+                                                    <div className="text-base font-semibold text-[#35cd48]">Approved</div>
+                                                    <div className="text-xs text-[#35cd48]/70 mt-0.5">This node has approved this proposal.</div>
                                                 </div>
                                             </div>
                                         ) : proposal.approve === false ? (
-                                            <div className="bg-rose-500/10 border border-rose-500/25 rounded-xl p-5 flex items-center gap-4">
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/20">
-                                                    <i className="fa-solid fa-times text-rose-400 text-lg"></i>
+                                            <div className="bg-[#ff1845]/10 border border-[#ff1845]/25 rounded-xl p-5 flex items-center gap-4">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff1845]/20">
+                                                    <X className="h-5 w-5 text-[#ff1845]" />
                                                 </div>
                                                 <div>
-                                                    <div className="text-base font-semibold text-rose-300">Rejected</div>
-                                                    <div className="text-xs text-rose-300/70 mt-0.5">This node has rejected this proposal.</div>
+                                                    <div className="text-base font-semibold text-[#ff1845]">Rejected</div>
+                                                    <div className="text-xs text-[#ff1845]/70 mt-0.5">This node has rejected this proposal.</div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="bg-zinc-500/10 border border-zinc-500/25 rounded-xl p-5 flex items-center gap-4">
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-500/20">
-                                                    <i className="fa-solid fa-minus text-zinc-400 text-lg"></i>
+                                            <div className="bg-[#0f0f0f] border border-[#272729] rounded-xl p-5 flex items-center gap-4">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#272729]">
+                                                    <Minus className="h-5 w-5 text-white/60" />
                                                 </div>
                                                 <div>
-                                                    <div className="text-base font-semibold text-zinc-300">No Vote</div>
-                                                    <div className="text-xs text-zinc-400 mt-0.5">This node has not voted on this proposal.</div>
+                                                    <div className="text-base font-semibold text-white">No Vote</div>
+                                                    <div className="text-xs text-white/60 mt-0.5">This node has not voted on this proposal.</div>
                                                 </div>
                                             </div>
                                         )}
@@ -157,10 +151,10 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                         <h3 className="text-lg font-semibold text-foreground mb-4">
                                             Proposal Information
                                         </h3>
-                                        <div className="bg-background rounded-xl p-4 space-y-3">
+                                        <div className="bg-[#0f0f0f] border border-[#272729] rounded-xl p-4 space-y-3">
                                             <div className="flex justify-between items-center py-2 border-b border-border gap-3">
                                                 <span className="text-sm text-muted-foreground">Proposer</span>
-                                                <span className="text-sm text-foreground font-mono break-all text-right">
+                                                <span className="text-sm text-foreground break-all text-right">
                                                     {formatAddress(proposal.proposer)}
                                                 </span>
                                             </div>
@@ -172,13 +166,13 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             </div>
                                             <div className="flex justify-between items-center py-2 border-b border-border">
                                                 <span className="text-sm text-muted-foreground">Start Block</span>
-                                                <span className="text-sm text-foreground font-mono">
+                                                <span className="text-sm text-foreground">
                                                     #{proposal.startHeight.toLocaleString()}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center py-2 border-b border-border">
                                                 <span className="text-sm text-muted-foreground">End Block</span>
-                                                <span className="text-sm text-foreground font-mono">
+                                                <span className="text-sm text-foreground">
                                                     #{proposal.endHeight.toLocaleString()}
                                                 </span>
                                             </div>
@@ -197,8 +191,8 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             <h3 className="text-lg font-semibold text-foreground mb-4">
                                                 Technical Details
                                             </h3>
-                                            <div className="bg-background rounded-xl p-4 overflow-x-auto">
-                                                <pre className="text-xs text-foreground/80 font-mono whitespace-pre">
+                                            <div className="bg-[#0f0f0f] border border-[#272729] rounded-xl p-4 overflow-x-auto">
+                                                <pre className="text-xs text-foreground/80 whitespace-pre">
                                                     {JSON.stringify(proposal.msg, null, 2)}
                                                 </pre>
                                             </div>
@@ -211,12 +205,12 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             <h3 className="text-lg font-semibold text-foreground mb-4">
                                                 Transaction Details
                                             </h3>
-                                            <div className="bg-background rounded-xl p-4 space-y-3">
+                                            <div className="bg-[#0f0f0f] border border-[#272729] rounded-xl p-4 space-y-3">
                                                 {proposal.fee && (
                                                     <div className="flex justify-between items-center py-2 border-b border-border">
                                                         <span className="text-sm text-muted-foreground">Fee</span>
                                                         <span className="text-sm text-foreground">
-                                                            {(proposal.fee / 1000000).toFixed(6)} CNPY
+                                                            {(proposal.fee / factor).toFixed(6)} {symbol}
                                                         </span>
                                                     </div>
                                                 )}
@@ -235,11 +229,11 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                             </div>
 
                             {/* Footer with Actions */}
-                            <div className="p-4 sm:p-6 border-t border-border bg-background/50 shrink-0">
+                            <div className="p-4 sm:p-6 border-t border-border bg-[#0f0f0f] shrink-0">
                                 <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
                                     <button
                                         onClick={onClose}
-                                        className="px-4 sm:px-6 py-2 bg-accent hover:bg-accent/80 text-foreground rounded-lg font-medium transition-all duration-200"
+                                        className="px-4 sm:px-6 py-2 rounded-lg border border-[#272729] bg-[#171717] text-white hover:bg-[#272729] font-medium transition-all duration-200"
                                     >
                                         Close
                                     </button>

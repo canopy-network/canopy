@@ -5,7 +5,9 @@
 ## RPC Routes Reference
 - /v1/
 - /v1/tx
+- /v1/txs
 - /v1/query/height
+- /v1/query/indexer-blobs
 - /v1/query/account
 - /v1/query/accounts
 - /v1/query/pool
@@ -83,7 +85,7 @@
 - /v1/admin/tx-dex-liquidity-withdraw
 - /v1/admin/tx-lock-order
 - /v1/admin/tx-close-order
-- /v1/admin/subsidy
+- /v1/admin/tx-subsidy
 - /v1/admin/tx-start-poll
 - /v1/admin/tx-vote-poll
 - /v1/admin/resource-usage
@@ -166,6 +168,57 @@ $ curl -X POST localhost:50002/v1/tx \
 > "25c7216b7523fdfdb60b989b38c4b9d83a546a63029d56f2ce6f2be6bd255aa4"
 ```
 
+## Txs
+
+**Route**: `/v1/txs`
+
+**Description**: submits multiple transactions in a single request
+
+**HTTP Method**: `POST`
+
+**Request**: `array` of transactions, each with the same structure as the `/v1/tx` request:
+
+- **type**: `string` - the message name (`"send"`, `"stake"`, `"edit-stake"`, ...)
+- **msg**: `Message` - the payload of the transaction (`MessageSend`, `MessageStake`, ...)
+- **signature**: `Signature` - the authorization (public key and signature) of the transaction
+- **time**: `uint64` - the creation time of the transaction for replay protection (unix micro)
+- **createdHeight**: `uint64` - the height the transaction was created `+/- 4320` accepted
+- **fee**: `uint64`  the network fee for sending the transaction (minimum is parameterized)
+- **memo**: `string` - an embedded message in the transaction (optional)
+- **networkID**: `uint64` - the unique identifier of the network (`1` for mainnet, `2` for testnet, ...)
+- **chainID**: `uint64` - the unique identifier of the committee (`1` for canopy, `2` for canary, ...)
+
+**Response**: `array of hex strings` - the hashes of the submitted transactions
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/txs \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "type": "send",
+      "msg": {
+        "fromAddress": "b8bc466953be5f6f31954108f683d2b02b8b7453",
+        "toAddress": "08c18a0e3ef3727b42eab9eef51494f8f7f83bd0",
+        "amount": 1000000
+      },
+      "signature": {
+        "publicKey": "a5b97c05cb26c9bc118b3e2258f03101a9a427317dccd80abd4f3a82a42afc6c27ae5f63a04aaef180558b0176282f1c78a51af474036316b1c2ae826bf8c23a",
+        "signature": "89ce883843a4ebfc763e0fd377718e659063bdfee492f3fff1cfe055b9cbc1f67da580e3ad638c32d520c3db4baf94a0c4f605cb73b0ee021a330a23a93ffe99"
+      },
+      "time": 1747865418150488,
+      "createdHeight": 1,
+      "fee": 10000,
+      "memo": "hello world",
+      "networkID": 1,
+      "chainID": 1
+    }
+  ]'
+
+> ["25c7216b7523fdfdb60b989b38c4b9d83a546a63029d56f2ce6f2be6bd255aa4"]
+```
+
 ## Height
 
 **Route:** `/v1/query/height`
@@ -192,7 +245,7 @@ $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v
 
 **Route:** `/v1/query/indexer-blobs`
 
-**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. Accounts, pools, and validators are always returned as deltas between the current and previous blobs.
+**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. Accounts, pools, and validators are returned as deltas between the current and previous blobs.
 
 **HTTP Method**: `POST`
 
@@ -2540,12 +2593,8 @@ $ curl -X POST localhost:50002/v1/query/order \
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
 - **committee**: `uint64` – the unique identifier of the committee to filter by (optional: use 0 to get all committees)
-- **sellersSendAddress**: `hex-string` – the seller address to filter orders by (optional: use "" to get all seller addresses)
-- **buyerSendAddress**: `hex-string` – the buyer address to filter locked orders by (optional: use "" to get all buyer addresses)
 - **pageNumber**: `int` – the page number to retrieve (optional: starts at 1)
 - **perPage**: `int` – the number of orders per page (optional: defaults to system default)
-
-**Note**: `sellersSendAddress` and `buyerSendAddress` are mutually exclusive filters. You cannot use both in the same request.
 
 **Response**:
 - **pageNumber**: `int` - the current page number
@@ -2612,40 +2661,6 @@ $ curl -X POST localhost:50002/v1/query/orders \
         "committee": 1,
         "pageNumber": 1,
         "perPage": 20
-      }'
-```
-
-**Example 3: Filter by sellersSendAddress with pagination (uses indexed lookup)**
-```
-$ curl -X POST localhost:50002/v1/query/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe",
-        "pageNumber": 1,
-        "perPage": 10
-      }'
-```
-
-**Example 4: Filter by both committee and sellersSendAddress with pagination (most efficient)**
-```
-$ curl -X POST localhost:50002/v1/query/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-        "committee": 1,
-        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe",
-        "pageNumber": 1,
-        "perPage": 10
-      }'
-```
-
-**Example 5: Filter by buyerSendAddress with pagination (locked orders only)**
-```
-$ curl -X POST localhost:50002/v1/query/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-        "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
-        "pageNumber": 1,
-        "perPage": 10
       }'
 ```
 
