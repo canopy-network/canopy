@@ -200,7 +200,7 @@ const ValidatorDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="w-full font-sans text-white [&_*]:!font-sans [&_*]:!text-white"
+            className="explorer-detail-page w-full"
         >
             {/* Breadcrumb */}
             <div className="mb-6 sm:mb-8">

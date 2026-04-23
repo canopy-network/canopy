@@ -101,7 +101,7 @@ const AccountDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="w-full font-sans text-white [&_*]:!font-sans [&_*]:!text-white"
+            className="explorer-detail-page w-full"
         >
             <div className="w-full">
                 <div className="mb-6 sm:mb-8">
@@ -128,7 +128,7 @@ const AccountDetailPage: React.FC = () => {
                                 onClick={() => handleTabChange('sent')}
                                 className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
                                     activeTab === 'sent'
-                                        ? 'bg-[#ffffff] text-[#0f0f0f]'
+                                        ? 'bg-[#ffffff] !text-[#0f0f0f]'
                                         : 'text-white/60 hover:bg-[#171717] hover:text-[#ffffff]'
                                 }`}
                             >
@@ -139,7 +139,7 @@ const AccountDetailPage: React.FC = () => {
                                 onClick={() => handleTabChange('received')}
                                 className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
                                     activeTab === 'received'
-                                        ? 'bg-[#ffffff] text-[#0f0f0f]'
+                                        ? 'bg-[#ffffff] !text-[#0f0f0f]'
                                         : 'text-white/60 hover:bg-[#171717] hover:text-[#ffffff]'
                                 }`}
                             >

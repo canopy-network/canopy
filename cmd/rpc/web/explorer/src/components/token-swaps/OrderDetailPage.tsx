@@ -16,6 +16,11 @@ const formatAmount = (micro: number): string => {
 
 const CopySymbol = () => <Copy aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
 
+const truncateMiddle = (value: string, leading = 12, trailing = 8) => {
+    if (!value || value === 'N/A') return value || 'N/A'
+    return value.length > leading + trailing ? `${value.slice(0, leading)}…${value.slice(-trailing)}` : value
+}
+
 const OrderDetailPage: React.FC = () => {
     const { committee: committeeParam, orderId } = useParams<{ committee: string; orderId: string }>()
     const navigate = useNavigate()
@@ -105,7 +110,7 @@ const OrderDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="w-full font-sans text-white [&_*]:!font-sans [&_*]:!text-white"
+            className="explorer-detail-page w-full"
         >
             {/* Header */}
             <div className="mb-8">
@@ -355,13 +360,13 @@ const OrderDetailPage: React.FC = () => {
 
                                 <div className="space-y-6">
                                     <div className="flex flex-col items-start gap-2 bg-input rounded-lg p-3">
-                                        <div className="text-white text-sm mb-2">Seller Send Address</div>
-                                        <div className="w-full overflow-hidden">
-                                            <div className="text-gray-400 text-xs sm:text-sm truncate">
-                                                {sellersSendAddress}
+                                        <div className="text-white text-sm font-semibold mb-2">Seller Send Address</div>
+                                        <div className="flex w-full items-center gap-2 overflow-hidden">
+                                            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-gray-400 text-xs sm:text-sm" title={sellersSendAddress}>
+                                                {truncateMiddle(sellersSendAddress)}
                                             </div>
                                             {sellersSendAddress !== 'N/A' && (
-                                                <div className="flex justify-end mt-1">
+                                                <div className="shrink-0">
                                                     <button
                                                         onClick={() => copyToClipboard(sellersSendAddress)}
                                                         aria-label="Copy seller send address"
@@ -384,13 +389,13 @@ const OrderDetailPage: React.FC = () => {
                                     </div>
 
                                     <div className="flex flex-col items-start gap-2 bg-input rounded-lg p-3">
-                                        <div className="text-white text-sm mb-2">Seller Receive Address</div>
-                                        <div className="w-full overflow-hidden">
-                                            <div className="text-gray-400 text-xs sm:text-sm truncate">
-                                                {sellerReceiveAddress}
+                                        <div className="text-white text-sm font-semibold mb-2">Seller Receive Address</div>
+                                        <div className="flex w-full items-center gap-2 overflow-hidden">
+                                            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-gray-400 text-xs sm:text-sm" title={sellerReceiveAddress}>
+                                                {truncateMiddle(sellerReceiveAddress)}
                                             </div>
                                             {sellerReceiveAddress !== 'N/A' && (
-                                                <div className="flex justify-end mt-1">
+                                                <div className="shrink-0">
                                                     <button
                                                         onClick={() => copyToClipboard(sellerReceiveAddress)}
                                                         aria-label="Copy seller receive address"
