@@ -7,6 +7,7 @@ import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface ValidatorDetail {
     address: string
+    publicKey: string
     status: 'active' | 'paused' | 'unstaking' | 'delegate'
     stakedAmount: number
     committees: number[]
@@ -23,6 +24,11 @@ interface ValidatorDetailHeaderProps {
 }
 
 const CopySymbol = () => <Copy aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
+
+const truncateMiddle = (value: string, start: number = 18, end: number = 18) => {
+    if (!value || value.length <= start + end + 1) return value
+    return `${value.slice(0, start)}…${value.slice(-end)}`
+}
 
 const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator }) => {
     const getStatusColor = (status: string) => {
@@ -55,10 +61,9 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
         }
     }
 
-    const copyToClipboard = (text: string) => {
+    const copyToClipboard = (text: string, label: string = 'Address') => {
         navigator.clipboard.writeText(text)
-        // Here you could add a success notification
-        toast.success('Address copied to clipboard', {
+        toast.success(`${label} copied to clipboard`, {
             duration: 2000,
             position: 'top-right',
             style: {
@@ -126,8 +131,26 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                                 </button>
                             </div>
                             {validator.netAddress && (
-                                <div className="text-xs sm:text-sm text-white/60 break-all">
-                                    {validator.netAddress}
+                                <div className="flex min-w-0 items-start gap-2 text-xs sm:text-sm">
+                                    <span className="shrink-0 font-bold text-white">Net Address:</span>
+                                    <span className="min-w-0 break-all text-white">{validator.netAddress}</span>
+                                </div>
+                            )}
+                            {validator.publicKey && (
+                                <div className="mt-2 flex min-w-0 items-start gap-2 text-xs sm:text-sm">
+                                    <span className="shrink-0 font-bold text-white">Public Key:</span>
+                                    <span className="min-w-0 text-white" title={validator.publicKey}>
+                                        {truncateMiddle(validator.publicKey)}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(validator.publicKey, 'Public key')}
+                                        aria-label="Copy validator public key"
+                                        className="mt-0.5 flex-shrink-0 text-[#35cd48] transition-colors hover:text-white"
+                                        title="Copy public key"
+                                    >
+                                        <CopySymbol />
+                                    </button>
                                 </div>
                             )}
                         </div>
