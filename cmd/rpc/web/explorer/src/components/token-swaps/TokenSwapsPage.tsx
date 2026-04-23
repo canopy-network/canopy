@@ -24,7 +24,9 @@ export interface SwapData {
     orderId: string;
     committee: number;
     fromAddress: string;
+    fromAddressFull: string;
     toAddress: string;
+    toAddressFull: string;
     exchangeRate: string;
     exchangeRateNum: number;
     amount: string;
@@ -77,7 +79,9 @@ const TokenSwapsPage: React.FC = () => {
                 orderId: order.id,
                 committee: order.committee,
                 fromAddress: truncateAddress(order.sellersSendAddress),
+                fromAddressFull: order.sellersSendAddress,
                 toAddress: truncateAddress(order.sellerReceiveAddress),
+                toAddressFull: order.sellerReceiveAddress,
                 exchangeRate,
                 exchangeRateNum,
                 amount,

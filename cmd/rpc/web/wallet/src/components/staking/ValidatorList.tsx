@@ -4,14 +4,12 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronsUpDown,
-  Copy,
   LockOpen,
   Pause,
   Pen,
   Play,
   Scan,
 } from "lucide-react";
-import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useDenom } from "@/hooks/useDenom";
 import { getCanopySymbolByHash } from "@/lib/utils/canopySymbols";
@@ -22,6 +20,7 @@ import {
   ValidatorDetails,
   ValidatorDetailsModal,
 } from "./ValidatorDetailsModal";
+import { CopyableIdentifier } from "@/components/ui/CopyableIdentifier";
 
 interface Validator {
   address: string;
@@ -85,7 +84,6 @@ const DesktopValidatorRow: React.FC<{
   index: number;
   onViewDetails: () => void;
 }> = ({ validator, index, onViewDetails }) => {
-  const { copyToClipboard } = useCopyToClipboard();
   const { openAction } = useActionModal();
   const { symbol, factor } = useDenom();
 
@@ -142,20 +140,9 @@ const DesktopValidatorRow: React.FC<{
             alt=""
             className="h-7 w-7 rounded-lg object-contain flex-shrink-0"
           />
-          <span
-            className="text-sm font-medium text-foreground"
-            title={validator.address}
-          >
+          <CopyableIdentifier value={validator.address} label="Validator address" className="text-sm font-medium text-foreground">
             {truncateAddress(validator.address)}
-          </span>
-          <button
-            type="button"
-            className="rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/60 hover:text-primary"
-            onClick={() => copyToClipboard(validator.address, "Validator Address")}
-            title="Copy Validator Address"
-          >
-            <Copy className="h-2.5 w-2.5" />
-          </button>
+          </CopyableIdentifier>
         </div>
       </td>
       <td className={desktopRowCellClass}>

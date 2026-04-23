@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
+import { Check, Copy } from 'lucide-react'
 import AnimatedNumber from '../AnimatedNumber'
 import accountDetailTexts from '../../data/accountDetail.json'
 import { toCNPY } from '../../lib/utils'
@@ -11,6 +12,11 @@ interface Account {
 
 interface AccountDetailHeaderProps {
     account: Account
+}
+
+const CopySymbol = ({ copied }: { copied: boolean }) => {
+    const Icon = copied ? Check : Copy
+    return <Icon aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
 }
 
 const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) => {
@@ -65,10 +71,10 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                                 aria-label={copied ? 'Copied address' : 'Copy address'}
                                 title={copied ? 'Copied' : 'Copy address'}
                             >
-                                <i className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'} text-sm`}></i>
+                                <CopySymbol copied={copied} />
                             </button>
                         </div>
-                        <p className="break-all font-mono text-sm text-white">
+                        <p className="break-all text-sm text-white">
                             {account.address}
                         </p>
                     </div>
@@ -77,7 +83,7 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                         <div className="mb-2 text-sm text-white/60">
                             {accountDetailTexts.header.balance}
                         </div>
-                        <p className="font-mono text-sm text-white">
+                        <p className="text-sm text-white">
                             <AnimatedNumber
                                 value={toCNPY(account.amount)}
                                 format={{

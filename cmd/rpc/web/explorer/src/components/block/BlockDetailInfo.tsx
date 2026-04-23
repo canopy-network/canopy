@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
+import { Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import blockDetailTexts from '../../data/blockDetail.json'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
@@ -19,6 +20,8 @@ interface BlockDetailInfoProps {
     }
     blockData?: Record<string, unknown>
 }
+
+const CopySymbol = () => <Copy aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
 
 const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) => {
     const [viewMode, setViewMode] = useState<'decoded' | 'raw'>('decoded')
@@ -79,7 +82,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
 
             {viewMode === 'raw' && blockData ? (
                 <div className="border border-white/10 rounded-lg p-4">
-                    <pre className="text-xs overflow-x-auto whitespace-pre-wrap font-mono">
+                    <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
                         <code className="text-gray-300">
                             {JSON.stringify(blockData, null, 2)
                                 .split('\n')
@@ -112,7 +115,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
                 <div className="space-y-4">
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.blockHeight}</span>
-                        <span className="text-primary font-mono">{block.height.toLocaleString()}</span>
+                        <span className="text-primary">{block.height.toLocaleString()}</span>
                     </div>
 
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
@@ -124,7 +127,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
 
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.timestamp}</span>
-                        <span className="text-white font-mono text-sm">{formatTimestamp(block.timestamp)}</span>
+                        <span className="text-white text-sm">{formatTimestamp(block.timestamp)}</span>
                     </div>
 
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
@@ -144,7 +147,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
                     </div>
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.blockReward}</span>
-                        <span className="text-primary font-mono">{block.blockReward} {blockDetailTexts.blockDetails.units.cnpy}</span>
+                        <span className="text-primary">{block.blockReward} {blockDetailTexts.blockDetails.units.cnpy}</span>
                     </div>
 
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
@@ -154,7 +157,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
 
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.totalTransactionFees}</span>
-                        <span className="text-orange-400 font-mono">{block.totalTransactionFees} {blockDetailTexts.blockDetails.units.cnpy}</span>
+                        <span className="text-orange-400">{block.totalTransactionFees} {blockDetailTexts.blockDetails.units.cnpy}</span>
                     </div>
 
                 </div>
@@ -162,14 +165,15 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 border-b border-gray-400/30 pb-4 gap-2">
                     <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.blockHash}</span>
                     <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="text-gray-400 font-mono text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
+                        <span className="text-gray-400 text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
                             {block.blockHash}
                         </span>
                         <button
                             onClick={() => copyToClipboard(block.blockHash)}
+                            aria-label="Copy block hash"
                             className="text-primary hover:text-primary/80 transition-colors flex-shrink-0"
                         >
-                            <i className="fa-solid fa-copy text-xs"></i>
+                            <CopySymbol />
                         </button>
                     </div>
                 </div>
@@ -177,14 +181,15 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 gap-2">
                     <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.parentHash}</span>
                     <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="text-gray-400 font-mono text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
+                        <span className="text-gray-400 text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
                             {block.parentHash}
                         </span>
                         <button
                             onClick={() => copyToClipboard(block.parentHash)}
+                            aria-label="Copy parent hash"
                             className="text-primary hover:text-primary/80 transition-colors flex-shrink-0"
                         >
-                            <i className="fa-solid fa-copy text-xs"></i>
+                            <CopySymbol />
                         </button>
                     </div>
                 </div>

@@ -1,6 +1,7 @@
 import React from 'react'
 import validatorDetailTexts from '../../data/validatorDetail.json'
 import toast from 'react-hot-toast'
+import { Copy } from 'lucide-react'
 import CnpyColorIcon from '../ui/CnpyColorIcon'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
@@ -20,6 +21,8 @@ interface ValidatorDetail {
 interface ValidatorDetailHeaderProps {
     validator: ValidatorDetail
 }
+
+const CopySymbol = () => <Copy aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
 
 const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator }) => {
     const getStatusColor = (status: string) => {
@@ -109,12 +112,18 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                     <div className="flex-1 min-w-0">
                         <div className="mb-3">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white break-all font-mono">
+                                <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white break-all">
                                     {validator.address}
                                 </h1>
-                                <i className="fa-solid fa-copy cursor-pointer transition-colors text-[#35cd48] hover:text-white flex-shrink-0"
+                                <button
+                                    type="button"
                                     onClick={() => copyToClipboard(validator.address)}
-                                    title="Copy address"></i>
+                                    aria-label="Copy validator address"
+                                    className="flex-shrink-0 text-[#35cd48] transition-colors hover:text-white"
+                                    title="Copy address"
+                                >
+                                    <CopySymbol />
+                                </button>
                             </div>
                             {validator.netAddress && (
                                 <div className="text-xs sm:text-sm text-white/60 break-all">

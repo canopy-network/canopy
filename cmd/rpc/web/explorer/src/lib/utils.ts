@@ -1,5 +1,5 @@
 export const rowNavigationIgnoreSelector =
-    'a, button, input, select, textarea, summary, [role="button"], [role="link"], [data-row-click-ignore="true"]'
+    'a, button, input, select, textarea, summary, [role="button"], [data-row-click-ignore="true"]'
 
 export function shouldIgnoreRowNavigation(target: EventTarget | null): boolean {
     return target instanceof Element && Boolean(target.closest(rowNavigationIgnoreSelector))

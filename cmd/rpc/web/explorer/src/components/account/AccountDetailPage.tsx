@@ -101,7 +101,7 @@ const AccountDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="w-full"
+            className="w-full font-sans text-white [&_*]:!font-sans [&_*]:!text-white"
         >
             <div className="w-full">
                 <div className="mb-6 sm:mb-8">
@@ -110,7 +110,7 @@ const AccountDetailPage: React.FC = () => {
                             Accounts
                         </button>
                         <i className="fa-solid fa-chevron-right text-xs"></i>
-                        <span className="break-all font-mono text-xs text-white sm:break-normal sm:text-sm">
+                        <span className="break-all text-xs text-white sm:break-normal sm:text-sm">
                             {typeof window !== 'undefined' && window.innerWidth < 640
                                 ? truncate(account.address || '', 6, 4)
                                 : account.address || ''}

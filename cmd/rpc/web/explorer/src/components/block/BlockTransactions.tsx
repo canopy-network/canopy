@@ -1,11 +1,12 @@
 import React from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import blockDetailTexts from '../../data/blockDetail.json'
 import transactionsTexts from '../../data/transactions.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
-import { formatPaginationRange } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Transaction {
     hash: string
@@ -58,6 +59,10 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
 
     const getTransactionType = (tx: Transaction): string => {
         return tx.type || tx.messageType || 'send'
+    }
+
+    const getTransactionHash = (tx: Transaction): string => {
+        return tx.txHash || tx.hash || ''
     }
 
     const columns = [
@@ -115,21 +120,33 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                         {paginatedTransactions.map((tx) => {
                             const txType = getTransactionType(tx)
                             const amount = tx.value || 0
+                            const txHash = getTransactionHash(tx)
+                            const detailPath = txHash ? `/transaction/${txHash}` : null
 
                             return (
-                                <tr key={tx.hash} className="group">
+                                <tr
+                                    key={txHash || tx.hash}
+                                    className={`group ${detailPath ? 'cursor-pointer' : ''}`}
+                                    onClick={(event) => {
+                                        if (!detailPath || shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(detailPath)
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (!detailPath || shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        event.preventDefault()
+                                        navigate(detailPath)
+                                    }}
+                                    tabIndex={detailPath ? 0 : undefined}
+                                    role={detailPath ? 'link' : undefined}
+                                    aria-label={detailPath ? `View transaction ${txHash}` : undefined}
+                                >
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
                                     >
-                                        <button
-                                            type="button"
-                                            className="text-sm font-medium text-white transition-colors hover:text-primary"
-                                            onClick={() => navigate(`/transaction/${tx.hash}`)}
-                                            title={tx.hash}
-                                        >
-                                            {truncateMiddle(tx.hash, 8, 4)}
-                                        </button>
+                                        <CopyableIdentifier value={txHash} label="Transaction hash" to={detailPath || undefined} className="max-w-[12rem] text-sm font-medium text-white">
+                                            {truncateMiddle(txHash, 8, 4)}
+                                        </CopyableIdentifier>
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <TransactionTypeBadge type={txType} />
@@ -138,26 +155,18 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                                         {tx.from === 'N/A' ? (
                                             <span className="text-sm text-white/40">N/A</span>
                                         ) : (
-                                            <Link
-                                                to={`/account/${tx.from}`}
-                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
-                                                title={tx.from}
-                                            >
+                                            <CopyableIdentifier value={tx.from} label="From address" to={`/account/${tx.from}`} className="max-w-[13rem] text-sm text-white">
                                                 {truncateMiddle(tx.from)}
-                                            </Link>
+                                            </CopyableIdentifier>
                                         )}
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         {tx.to === 'N/A' ? (
                                             <span className="text-sm text-white/40">N/A</span>
                                         ) : (
-                                            <Link
-                                                to={`/account/${tx.to}`}
-                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
-                                                title={tx.to}
-                                            >
+                                            <CopyableIdentifier value={tx.to} label="To address" to={`/account/${tx.to}`} className="max-w-[13rem] text-sm text-white">
                                                 {truncateMiddle(tx.to)}
-                                            </Link>
+                                            </CopyableIdentifier>
                                         )}
                                     </td>
                                     <td className={desktopRowCellClass}>

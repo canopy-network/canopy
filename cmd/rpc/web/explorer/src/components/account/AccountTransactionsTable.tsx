@@ -7,6 +7,7 @@ import AnimatedNumber from '../AnimatedNumber'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
 import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Transaction {
     txHash: string
@@ -164,40 +165,26 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
 
         return [
             // Hash
-            <span
-                key="hash"
-                className="text-sm font-medium text-white transition-colors hover:text-primary"
-                title={transaction.txHash}
-            >
+            <CopyableIdentifier key="hash" value={transaction.txHash} label="Transaction hash" to={`/transaction/${transaction.txHash}`} className="max-w-[12rem] text-sm font-medium text-white">
                 {truncate(transaction.txHash)}
-            </span>,
+            </CopyableIdentifier>,
 
             // Type
             <TransactionTypeBadge key="type" type={txType} />,
 
             // From
-            <Link
-                key="from"
-                to={`/account/${fromAddress}`}
-                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
-                title={fromAddress}
-            >
+            <CopyableIdentifier key="from" value={fromAddress} label="From address" to={`/account/${fromAddress}`} className="max-w-[13rem] text-sm text-white">
                 {truncate(fromAddress)}
-            </Link>,
+            </CopyableIdentifier>,
 
             // To
-            <Link
-                key="to"
-                to={`/account/${toAddress}`}
-                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
-                title={toAddress}
-            >
-                {toAddress === 'N/A' ? (
-                    <span className="text-white/40">N/A</span>
-                ) : (
-                    truncate(toAddress)
-                )}
-            </Link>,
+            toAddress === 'N/A' ? (
+                <span key="to" className="text-sm text-white/40">N/A</span>
+            ) : (
+                <CopyableIdentifier key="to" value={toAddress} label="To address" to={`/account/${toAddress}`} className="max-w-[13rem] text-sm text-white">
+                    {truncate(toAddress)}
+                </CopyableIdentifier>
+            ),
 
             // Amount
             <span key="amount" className="text-sm text-white tabular-nums">
@@ -342,7 +329,19 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                     return (
                         <div
                             key={transaction.txHash || idx}
-                            className="rounded-xl border border-white/10 bg-[#1a1a1a] p-4"
+                            className="cursor-pointer rounded-xl border border-white/10 bg-[#1a1a1a] p-4 transition-colors hover:bg-[#272729]"
+                            onClick={(event) => {
+                                if (shouldIgnoreRowNavigation(event.target)) return
+                                navigate(`/transaction/${transaction.txHash}`)
+                            }}
+                            onKeyDown={(event) => {
+                                if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                event.preventDefault()
+                                navigate(`/transaction/${transaction.txHash}`)
+                            }}
+                            tabIndex={0}
+                            role="link"
+                            aria-label={`View transaction ${transaction.txHash}`}
                         >
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -351,33 +350,28 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                         className="flex-shrink-0"
                                         labelClassName="hidden sm:inline"
                                     />
-                                    <span
-                                        className="cursor-pointer truncate text-xs font-medium text-white transition-colors hover:text-primary"
-                                        onClick={() => navigate(`/transaction/${transaction.txHash}`)}
-                                    >
+                                    <CopyableIdentifier value={transaction.txHash} label="Transaction hash" to={`/transaction/${transaction.txHash}`} className="truncate text-xs font-medium text-white">
                                         {truncate(transaction.txHash, 8, 4)}
-                                    </span>
+                                    </CopyableIdentifier>
                                 </div>
                             </div>
 
                             <div className="space-y-2 text-xs">
                                 <div className="flex items-center justify-between">
                                     <span className="text-gray-400">From:</span>
-                                    <Link
-                                        to={`/account/${fromAddress}`}
-                                        className="ml-2 max-w-[60%] truncate font-mono text-gray-300 transition-colors hover:text-primary"
-                                    >
+                                    <CopyableIdentifier value={fromAddress} label="From address" to={`/account/${fromAddress}`} className="ml-2 max-w-[60%] font-mono text-gray-300">
                                         {truncate(fromAddress, 8, 4)}
-                                    </Link>
+                                    </CopyableIdentifier>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-gray-400">To:</span>
-                                    <Link
-                                        to={`/account/${toAddress}`}
-                                        className="ml-2 max-w-[60%] truncate font-mono text-gray-300 transition-colors hover:text-primary"
-                                    >
-                                        {toAddress === 'N/A' ? 'N/A' : truncate(toAddress, 8, 4)}
-                                    </Link>
+                                    {toAddress === 'N/A' ? (
+                                        <span className="ml-2 max-w-[60%] truncate font-mono text-gray-300">N/A</span>
+                                    ) : (
+                                        <CopyableIdentifier value={toAddress} label="To address" to={`/account/${toAddress}`} className="ml-2 max-w-[60%] font-mono text-gray-300">
+                                            {truncate(toAddress, 8, 4)}
+                                        </CopyableIdentifier>
+                                    )}
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-gray-400">Amount:</span>
