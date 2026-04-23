@@ -1,12 +1,11 @@
-// sign_tx.go — Praxis transaction signer
-// Place at: ~/praxis/plugin/go/cmd/sign/main.go
+// Praxis transaction signer — CLI tool for signing and submitting transactions
 // Build:  cd ~/praxis/plugin/go && GOTOOLCHAIN=local go build -o ~/go/bin/praxis-sign ./cmd/sign
-// Usage:  praxis-sign -key <64-char-hex> -type create_market -rpc http://localhost:50002
-//         (then fill prompts, or pipe JSON via stdin with -json flag)
+// Usage:  praxis-sign -key <64-char-hex> -type create_market [-dry]
 
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
@@ -16,10 +15,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/canopy-network/go-plugin/contract"
-"github.com/canopy-network/go-plugin/crypto"
+	"github.com/canopy-network/go-plugin/crypto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -35,8 +36,9 @@ var (
 	flagChain  = flag.Uint64("chain", 1, "chain ID")
 	flagHeight = flag.Uint64("height", 0, "created_height (0 = query from node)")
 	flagDry    = flag.Bool("dry", false, "print signed tx JSON, do not submit")
-	flagJSON   = flag.Bool("json", false, "read raw msgFields JSON from stdin instead of prompts")
 )
+
+var scanner = bufio.NewScanner(os.Stdin)
 
 func main() {
 	flag.Parse()
@@ -88,7 +90,6 @@ func main() {
 	fmt.Fprintf(os.Stderr, "✓ Signed  sig: %s (%d bytes)\n", hex.EncodeToString(sig[:8])+"...", len(sig))
 
 	// Build final transaction for RPC
-	// The RPC expects JSON with base64-encoded address fields and signature
 	finalTx := buildFinalTxJSON(*flagType, typeURL, msgProto, txTime, createdHeight, *flagFee, *flagNet, *flagChain, pubKeyBytes, sig)
 
 	txJSON, err := json.MarshalIndent(finalTx, "", "  ")
@@ -105,6 +106,33 @@ func main() {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	fmt.Printf("RPC response [%s]:\n%s\n", resp.Status, string(body))
+}
+
+// ── Prompt helpers ────────────────────────────────────────────────────────────
+
+func prompt(label string) string {
+	fmt.Fprintf(os.Stderr, "  %s: ", label)
+	scanner.Scan()
+	return strings.TrimSpace(scanner.Text())
+}
+
+func promptUint(label string) uint64 {
+	s := prompt(label)
+	v, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid number %q: %v\n", s, err)
+		os.Exit(1)
+	}
+	return v
+}
+
+func hexToBytes(h string) []byte {
+	b, err := hex.DecodeString(h)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid hex %q: %v\n", h, err)
+		os.Exit(1)
+	}
+	return b
 }
 
 // ── Message builders ──────────────────────────────────────────────────────────
@@ -124,29 +152,6 @@ func buildMessage(txType string) (proto.Message, string) {
 		os.Exit(1)
 		return nil, ""
 	}
-}
-
-func prompt(label string) string {
-	fmt.Fprintf(os.Stderr, "  %s: ", label)
-	var v string
-	fmt.Scanln(&v)
-	return v
-}
-
-func promptUint(label string) uint64 {
-	fmt.Fprintf(os.Stderr, "  %s: ", label)
-	var v uint64
-	fmt.Fscanf(os.Stdin, "%d", &v)
-	return v
-}
-
-func hexToBytes(h string) []byte {
-	b, err := hex.DecodeString(h)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid hex %q: %v\n", h, err)
-		os.Exit(1)
-	}
-	return b
 }
 
 func buildCreateMarket() *contract.MessageCreateMarket {
@@ -189,13 +194,9 @@ func buildClaimWinnings() *contract.MessageClaimWinnings {
 }
 
 // ── Final TX JSON builder ─────────────────────────────────────────────────────
-// The Canopy RPC /v1/tx expects the same JSON shape as the frontend sends,
-// with address bytes as base64 and signature fields as base64.
 
 func buildFinalTxJSON(txType, typeURL string, msg proto.Message, txTime, createdHeight, fee, netID, chainID uint64, pubKey, sig []byte) map[string]interface{} {
-	// Build msgFields as a JSON-friendly map with base64 addresses
 	msgFields := protoToJSONFields(msg)
-
 	return map[string]interface{}{
 		"type":          txType,
 		"msgTypeUrl":    typeURL,
