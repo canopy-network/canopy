@@ -167,8 +167,9 @@ body::before {
   cursor: pointer; transition: all .12s; white-space: nowrap;
 }
 .btn:hover { border-color: var(--border2); background: #1a1a1a; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
 .btn-primary { border-color: var(--green); color: var(--green); }
-.btn-primary:hover { background: var(--green-dim); box-shadow: var(--green-glow); }
+.btn-primary:hover:not(:disabled) { background: var(--green-dim); box-shadow: var(--green-glow); }
 .btn-yes { border-color: var(--yes); color: var(--yes); }
 .btn-yes.active, .btn-yes:hover { background: var(--yes-dim); box-shadow: 0 0 10px #00e5ff30; }
 .btn-no { border-color: var(--no); color: var(--no); }
@@ -183,6 +184,31 @@ body::before {
   transition: border-color .15s;
 }
 .card:hover { border-color: var(--border2); }
+
+/* ── Signer card ─────────────────────────────────────────── */
+.signer-card {
+  background: #0a0f0a; border: 1px solid #00ff8830;
+  border-radius: 8px; padding: 14px 18px;
+  margin-bottom: 18px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.signer-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px; white-space: nowrap;
+}
+.signer-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--dim); flex-shrink: 0;
+}
+.signer-dot.ready { background: var(--green); box-shadow: var(--green-glow); }
+.signer-label { color: var(--muted); font-size: 10px; letter-spacing: 1.5px; white-space: nowrap; }
+.signer-input-wrap { display: flex; gap: 8px; flex: 1; min-width: 200px; }
+.signer-input-wrap input {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text); font-family: var(--font-m);
+  font-size: 11px; padding: 6px 10px;
+}
+.signer-addr { font-size: 10px; color: var(--green); font-family: var(--font-m); word-break: break-all; }
 
 /* ── Market cards ───────────────────────────────────────── */
 .markets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
@@ -391,6 +417,10 @@ tr:hover td { background: var(--surface); }
 .badge-open   { background: var(--green-dim); color: var(--green); }
 .badge-closed { background: var(--dim); color: var(--muted); }
 .badge-resolved { background: #ffc53d18; color: var(--gold); }
+
+/* ── Spinner ─────────────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinning { display: inline-block; animation: spin .7s linear infinite; }
 </style>
 </head>
 <body>
@@ -470,6 +500,22 @@ tr:hover td { background: var(--surface); }
 
   <div class="content">
 
+    <!-- ══ SIGNER PANEL (persistent across all pages) ══ -->
+    <div class="signer-card" id="signerCard">
+      <div class="signer-status">
+        <div class="signer-dot" id="signerDot"></div>
+        <span class="signer-label">SIGNER</span>
+      </div>
+      <div class="signer-input-wrap">
+        <input type="password" id="signerKey" placeholder="Paste your BLS12-381 private key (hex, 64 chars)" oninput="onKeyInput()"/>
+        <button class="btn btn-sm btn-primary" onclick="loadSignerKey()">Load Key</button>
+      </div>
+      <div id="signerInfo" style="font-size:10px;color:var(--muted);width:100%">
+        Enter your private key to enable one-click signing and submission.
+        <span style="color:var(--dim)">Key stays in browser memory only — never sent anywhere.</span>
+      </div>
+    </div>
+
     <!-- ── Markets ────────────────────────────────────── -->
     <div class="page active" id="page-markets">
       <div class="stats-grid">
@@ -497,11 +543,8 @@ tr:hover td { background: var(--surface); }
 
       <div class="section-header">
         <div class="section-title">Active Markets</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-sm" onclick="loadMarkets()">⟳ Load from chain</button>
-        </div>
+        <button class="btn btn-sm" onclick="loadMarkets()">⟳ Load from chain</button>
       </div>
-
       <div id="marketsList">
         <div class="loading"><span class="blink">▪▪▪</span> Querying chain state...</div>
       </div>
@@ -513,7 +556,6 @@ tr:hover td { background: var(--surface); }
         <div class="section-header">
           <div class="section-title">Create Prediction Market</div>
         </div>
-
         <div class="form-grid">
           <div class="form-group full">
             <label class="form-label">QUESTION</label>
@@ -544,20 +586,15 @@ tr:hover td { background: var(--surface); }
             <input id="c_fee" type="number" value="10000"/>
           </div>
         </div>
-
         <hr class="divider"/>
-        <button class="btn btn-primary" onclick="buildCreateMarket()">Build Transaction Payload</button>
-
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="btn_create_sign" onclick="signAndSubmitCreateMarket()">⚡ Sign &amp; Submit</button>
+          <button class="btn btn-sm" onclick="buildCreateMarket()">Build Payload Only</button>
+        </div>
         <div class="output-section" id="c_output">
-          <div class="form-label" style="margin-bottom:8px">TRANSACTION PAYLOAD (sign before submitting)</div>
+          <div class="form-label" style="margin-bottom:8px">TRANSACTION PAYLOAD</div>
           <textarea class="payload-box" id="c_payload" rows="14" style="font-size:10.5px;"></textarea>
-          <div class="sign-help">
-            ⚠ Sign this payload with BLS12-381 before submitting.<br/>
-            Sign bytes = <code>proto.Marshal(Transaction{...signature: nil})</code> → BLS sign → attach <code>signature: { publicKey, signature }</code><br/>
-            See <a href="#" onclick="showPage('node',null)">Node Info</a> for the admin keystore endpoint to retrieve your private key.
-          </div>
           <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn btn-primary" onclick="submitTx('c_payload')">Submit Signed Tx → RPC</button>
             <button class="btn btn-sm" onclick="copyPayload('c_payload')">Copy Payload</button>
           </div>
         </div>
@@ -570,7 +607,6 @@ tr:hover td { background: var(--surface); }
         <div class="section-header">
           <div class="section-title">Submit Prediction</div>
         </div>
-
         <div class="form-grid">
           <div class="form-group">
             <label class="form-label">MARKET ID</label>
@@ -597,16 +633,15 @@ tr:hover td { background: var(--surface); }
             <input id="p_fee" type="number" value="10000"/>
           </div>
         </div>
-
         <hr class="divider"/>
-        <button class="btn btn-primary" onclick="buildSubmitPrediction()">Build Transaction Payload</button>
-
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="btn_predict_sign" onclick="signAndSubmitPrediction()">⚡ Sign &amp; Submit</button>
+          <button class="btn btn-sm" onclick="buildSubmitPrediction()">Build Payload Only</button>
+        </div>
         <div class="output-section" id="p_output">
           <div class="form-label" style="margin-bottom:8px">TRANSACTION PAYLOAD</div>
           <textarea class="payload-box" id="p_payload" rows="12" style="font-size:10.5px;"></textarea>
-          <div class="sign-help">⚠ Sign with BLS12-381 before submitting. See Node Info page for keystore access.</div>
           <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn btn-primary" onclick="submitTx('p_payload')">Submit Signed Tx → RPC</button>
             <button class="btn btn-sm" onclick="copyPayload('p_payload')">Copy Payload</button>
           </div>
         </div>
@@ -645,16 +680,15 @@ tr:hover td { background: var(--surface); }
             <input id="r_fee" type="number" value="10000"/>
           </div>
         </div>
-
         <hr class="divider"/>
-        <button class="btn btn-primary" onclick="buildResolveMarket()">Build Transaction Payload</button>
-
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="btn_resolve_sign" onclick="signAndSubmitResolve()">⚡ Sign &amp; Submit</button>
+          <button class="btn btn-sm" onclick="buildResolveMarket()">Build Payload Only</button>
+        </div>
         <div class="output-section" id="r_output">
           <div class="form-label" style="margin-bottom:8px">TRANSACTION PAYLOAD</div>
           <textarea class="payload-box" id="r_payload" rows="12" style="font-size:10.5px;"></textarea>
-          <div class="sign-help">⚠ Sign with BLS12-381 before submitting.</div>
           <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn btn-primary" onclick="submitTx('r_payload')">Submit Signed Tx → RPC</button>
             <button class="btn btn-sm" onclick="copyPayload('r_payload')">Copy Payload</button>
           </div>
         </div>
@@ -684,16 +718,15 @@ tr:hover td { background: var(--surface); }
             <input id="cl_fee" type="number" value="10000"/>
           </div>
         </div>
-
         <hr class="divider"/>
-        <button class="btn btn-primary" onclick="buildClaim()">Build Transaction Payload</button>
-
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="btn_claim_sign" onclick="signAndSubmitClaim()">⚡ Sign &amp; Submit</button>
+          <button class="btn btn-sm" onclick="buildClaim()">Build Payload Only</button>
+        </div>
         <div class="output-section" id="cl_output">
           <div class="form-label" style="margin-bottom:8px">TRANSACTION PAYLOAD</div>
           <textarea class="payload-box" id="cl_payload" rows="10" style="font-size:10.5px;"></textarea>
-          <div class="sign-help">⚠ Sign with BLS12-381 before submitting.</div>
           <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn btn-primary" onclick="submitTx('cl_payload')">Submit Signed Tx → RPC</button>
             <button class="btn btn-sm" onclick="copyPayload('cl_payload')">Copy Payload</button>
           </div>
         </div>
@@ -778,12 +811,13 @@ tr:hover td { background: var(--surface); }
               </div>
             </div>
             <hr class="divider"/>
-            <button class="btn btn-primary" onclick="buildSend()">Build Send Payload</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" id="btn_send_sign" onclick="signAndSubmitSend()">⚡ Sign &amp; Submit</button>
+              <button class="btn btn-sm" onclick="buildSend()">Build Payload Only</button>
+            </div>
             <div class="output-section" id="s_output">
               <textarea class="payload-box" id="s_payload" rows="10" style="font-size:10.5px;"></textarea>
-              <div class="sign-help">⚠ Sign with BLS12-381 before submitting.</div>
               <div style="display:flex;gap:8px;margin-top:10px">
-                <button class="btn btn-primary" onclick="submitTx('s_payload')">Submit → RPC</button>
                 <button class="btn btn-sm" onclick="copyPayload('s_payload')">Copy</button>
               </div>
             </div>
@@ -794,16 +828,16 @@ tr:hover td { background: var(--surface); }
 
     <!-- ── Node Info ────────────────────────────────────── -->
     <div class="page" id="page-node">
-      <div class="section-header"><div class="section-title">Node & RPC Info</div></div>
+      <div class="section-header"><div class="section-title">Node &amp; RPC Info</div></div>
 
       <div class="rpc-grid">
         <div class="rpc-item">
           <div class="rpc-item-label">PUBLIC RPC (queries + tx submit)</div>
-          <div class="rpc-item-val" id="ni_rpc">http://localhost:50002</div>
+          <div class="rpc-item-val">http://localhost:50002</div>
         </div>
         <div class="rpc-item">
           <div class="rpc-item-label">ADMIN RPC (keystore)</div>
-          <div class="rpc-item-val" id="ni_admin">http://localhost:50003</div>
+          <div class="rpc-item-val">http://localhost:50003</div>
         </div>
         <div class="rpc-item">
           <div class="rpc-item-label">CURRENT HEIGHT</div>
@@ -835,15 +869,15 @@ tr:hover td { background: var(--surface); }
       <div class="card">
         <div class="section-title" style="margin-bottom:10px;font-size:12.5px">Signing Reference</div>
         <div class="sign-help" style="margin-top:0">
-          <strong style="color:var(--gold)">BLS12-381 Signing Flow (from rpc_test.go)</strong><br/><br/>
-          1. Build <code>Transaction{}</code> proto with <code>signature = nil</code><br/>
-          2. <code>signBytes = proto.Marshal(tx)</code> — must be deterministic protobuf, not JSON<br/>
-          3. <code>sig = bls12381PrivKey.Sign(signBytes)</code><br/>
-          4. Attach <code>signature: { publicKey: hexPubKey, signature: hexSig }</code><br/>
-          5. POST to <code>/v1/tx</code> as JSON (use <code>protojson</code> encoding for bytes fields — base64)<br/><br/>
-          For plugin-specific tx types (create_market, submit_prediction, resolve_market, claim_winnings):<br/>
-          Use <code>msgTypeUrl</code> + <code>msgBytes</code> fields instead of <code>msg</code> for exact byte control.<br/><br/>
-          <strong style="color:var(--gold)">Addresses</strong>: 20 bytes = first 20 bytes of SHA256(publicKey). Pass as base64 in JSON.
+          <strong style="color:var(--gold)">BLS12-381 Signing — how this frontend does it</strong><br/><br/>
+          1. Encode inner message to protobuf bytes (manual varint encoding, field numbers from tx.proto)<br/>
+          2. Wrap in <code>google.protobuf.Any</code> with <code>type_url = /types.Message&lt;Type&gt;</code><br/>
+          3. Encode <code>Transaction{}</code> proto with <code>signature</code> field <strong>absent</strong><br/>
+          4. <code>sig = bls12_381.sign(txBytes, privateKey)</code> via @noble/curves<br/>
+          5. Attach <code>signature: { publicKey, signature }</code> as base64 and POST to <code>/v1/tx</code><br/><br/>
+          <strong style="color:var(--gold)">Get your private key:</strong><br/>
+          <code>canopy admin ks-get &lt;nickname&gt; --password &lt;pwd&gt;</code><br/>
+          Then paste the PrivateKey hex into the Signer panel above.
         </div>
       </div>
     </div>
@@ -854,46 +888,524 @@ tr:hover td { background: var(--surface); }
 
 <div id="toastWrap"></div>
 
-<script>
+<script type="importmap">
+{"imports":{"@noble/curves/bls12-381":"https://esm.run/@noble/curves/bls12-381"}}
+</script>
+
+<script type="module">
+// ════════════════════════════════════════════════════════════════════════════
+// PRAXIS FRONTEND — integrated BLS12-381 signing
+// Uses @noble/curves (pure JS, no WASM, browser-native)
+// ════════════════════════════════════════════════════════════════════════════
+
+import { bls12_381 } from '@noble/curves/bls12-381';
+
 // ── Config ────────────────────────────────────────────────────────
 const RPC   = 'http://localhost:50002';
 const ADMIN = 'http://localhost:50003';
 
 // ── State ─────────────────────────────────────────────────────────
 let currentHeight   = 0;
-let selectedOutcome = 1;       // for predict page
-let resolveOutcome  = 1;       // for resolve page
+let selectedOutcome = 1;
+let resolveOutcome  = 1;
+let signerPrivKey   = null;   // Uint8Array | null
+let signerPubKey    = null;   // Uint8Array | null
 
-// ── Navigation ────────────────────────────────────────────────────
-const PAGE_TITLES = {
-  markets:     'All Markets',
-  create:      'Create Market',
-  predict:     'Submit Prediction',
-  resolve:     'Resolve Market',
-  claim:       'Claim Winnings',
-  leaderboard: 'Leaderboard',
-  wallet:      'Wallet',
-  node:        'Node Info',
+// ════════════════════════════════════════════════════════════════════════════
+// PROTOBUF ENCODING — manual, no protobuf.js needed
+// Field numbers from tx.proto in this repo
+// ════════════════════════════════════════════════════════════════════════════
+
+function encodeVarint(value) {
+  const n = BigInt(value);
+  const out = [];
+  let v = n;
+  while (v > 127n) {
+    out.push(Number((v & 0x7fn) | 0x80n));
+    v >>= 7n;
+  }
+  out.push(Number(v));
+  return new Uint8Array(out);
+}
+
+function concat(...arrays) {
+  const len = arrays.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(len);
+  let i = 0;
+  for (const a of arrays) { out.set(a, i); i += a.length; }
+  return out;
+}
+
+function fieldTag(num, wire) {
+  return encodeVarint((BigInt(num) << 3n) | BigInt(wire));
+}
+
+function varintField(num, val) {
+  const v = BigInt(val);
+  if (v === 0n) return new Uint8Array(0);
+  return concat(fieldTag(num, 0), encodeVarint(v));
+}
+
+function bytesField(num, bytes) {
+  if (!bytes || bytes.length === 0) return new Uint8Array(0);
+  return concat(fieldTag(num, 2), encodeVarint(bytes.length), bytes);
+}
+
+function stringField(num, str) {
+  if (!str) return new Uint8Array(0);
+  const b = new TextEncoder().encode(str);
+  return concat(fieldTag(num, 2), encodeVarint(b.length), b);
+}
+
+function embedField(num, bytes) {
+  if (!bytes || bytes.length === 0) return new Uint8Array(0);
+  return concat(fieldTag(num, 2), encodeVarint(bytes.length), bytes);
+}
+
+// ── Hex / Base64 helpers ──────────────────────────────────────────
+function hexToBytes(hex) {
+  if (hex.length % 2 !== 0) throw new Error('Invalid hex length');
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++)
+    out[i] = parseInt(hex.slice(i*2, i*2+2), 16);
+  return out;
+}
+
+function bytesToHex(b) {
+  return Array.from(b).map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+function bytesToB64(b) {
+  let s = '';
+  for (const x of b) s += String.fromCharCode(x);
+  return btoa(s);
+}
+
+// Legacy helper kept for buildTxSkeleton display
+function hexToB64(hex) {
+  if (!hex) return '';
+  return bytesToB64(hexToBytes(hex));
+}
+
+// ── google.protobuf.Any encoder ───────────────────────────────────
+// Any { type_url: field 1 (string), value: field 2 (bytes) }
+function encodeAny(typeUrl, msgBytes) {
+  return concat(stringField(1, typeUrl), bytesField(2, msgBytes));
+}
+
+// ── Message encoders (field numbers from tx.proto) ────────────────
+
+function encodeMessageSend(fromHex, toHex, amount) {
+  return concat(
+    bytesField(1, hexToBytes(fromHex)),
+    bytesField(2, hexToBytes(toHex)),
+    varintField(3, BigInt(amount)),
+  );
+}
+
+function encodeCreateMarket({ creatorAddress, question, description, resolverAddress, resolutionHeight, stakeAmount }) {
+  return concat(
+    bytesField(1, hexToBytes(creatorAddress)),
+    stringField(2, question),
+    stringField(3, description || ''),
+    bytesField(4, hexToBytes(resolverAddress)),
+    varintField(5, BigInt(resolutionHeight)),
+    varintField(6, BigInt(stakeAmount)),
+  );
+}
+
+function encodeSubmitPrediction({ forecasterAddress, marketId, outcome, amount }) {
+  return concat(
+    bytesField(1, hexToBytes(forecasterAddress)),
+    varintField(2, BigInt(marketId)),
+    varintField(3, BigInt(outcome)),
+    varintField(4, BigInt(amount)),
+  );
+}
+
+function encodeResolveMarket({ resolverAddress, marketId, winningOutcome }) {
+  return concat(
+    bytesField(1, hexToBytes(resolverAddress)),
+    varintField(2, BigInt(marketId)),
+    varintField(3, BigInt(winningOutcome)),
+  );
+}
+
+function encodeClaimWinnings({ claimerAddress, marketId }) {
+  return concat(
+    bytesField(1, hexToBytes(claimerAddress)),
+    varintField(2, BigInt(marketId)),
+  );
+}
+
+// ── Transaction encoder (signature field ABSENT for signing) ──────
+// Transaction field numbers from tx.proto:
+// 1=message_type, 2=msg(Any), 3=signature(OMIT), 4=created_height,
+// 5=time, 6=fee, 7=memo, 8=network_id, 9=chain_id
+function encodeTxForSigning(messageType, typeUrl, msgBytes, meta) {
+  const anyBytes = encodeAny(typeUrl, msgBytes);
+  return concat(
+    stringField(1, messageType),
+    embedField(2, anyBytes),
+    // field 3 (signature) intentionally omitted
+    varintField(4, BigInt(meta.createdHeight || 0)),
+    varintField(5, BigInt(meta.time || BigInt(Date.now()) * 1000n)),
+    varintField(6, BigInt(meta.fee || 10000)),
+    stringField(7, meta.memo || ''),
+    varintField(8, BigInt(meta.networkId || 1)),
+    varintField(9, BigInt(meta.chainId || 1)),
+  );
+}
+
+// ── BLS12-381 sign ────────────────────────────────────────────────
+async function blsSign(txBytes) {
+  if (!signerPrivKey) throw new Error('No private key loaded — use Signer panel');
+  const sig = await bls12_381.sign(txBytes, signerPrivKey);
+  return sig;
+}
+
+// ── Build final tx JSON for POST /v1/tx ──────────────────────────
+// Canopy expects protojson: bytes fields as base64, Any as { '@type', 'value' }
+async function buildSignedTx(messageType, typeUrl, msgBytes, meta) {
+  const txBytes = encodeTxForSigning(messageType, typeUrl, msgBytes, meta);
+  const sig = await blsSign(txBytes);
+  const anyBytes = encodeAny(typeUrl, msgBytes);
+  return {
+    messageType,
+    msg: {
+      '@type': typeUrl,
+      value:   bytesToB64(anyBytes),
+    },
+    signature: {
+      publicKey: bytesToB64(signerPubKey),
+      signature: bytesToB64(sig),
+    },
+    createdHeight: meta.createdHeight || 0,
+    time:          Number(meta.time || BigInt(Date.now()) * 1000n),
+    fee:           meta.fee || 10000,
+    memo:          meta.memo || '',
+    networkID:     meta.networkId || 1,
+    chainID:       meta.chainId || 1,
+  };
+}
+
+// ── Submit to RPC ─────────────────────────────────────────────────
+async function submitSignedTx(tx) {
+  const r = await fetch(RPC + '/v1/tx', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(tx),
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${text}`);
+  return text;
+}
+
+// ── Meta helper ───────────────────────────────────────────────────
+function txMeta(fee) {
+  return {
+    createdHeight: currentHeight,
+    time: BigInt(Date.now()) * 1000n,
+    fee: fee || 10000,
+    networkId: 1,
+    chainId: 1,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SIGNER PANEL
+// ════════════════════════════════════════════════════════════════════════════
+
+window.onKeyInput = function() {
+  // clear signer state on edit
+  signerPrivKey = null;
+  signerPubKey = null;
+  updateSignerUI(false);
 };
 
-function showPage(id, btn) {
+window.loadSignerKey = function() {
+  const raw = document.getElementById('signerKey').value.trim();
+  if (!raw || raw.length !== 64) {
+    toast('Private key must be 64 hex characters', true);
+    return;
+  }
+  try {
+    const priv = hexToBytes(raw);
+    const pub  = bls12_381.getPublicKey(priv);
+    signerPrivKey = priv;
+    signerPubKey  = pub;
+    // derive address = first 20 bytes of SHA256(pubkey) — display only
+    updateSignerUI(true, bytesToHex(pub));
+    toast('✓ Key loaded — signer ready');
+  } catch(e) {
+    toast('Invalid key: ' + e.message, true);
+  }
+};
+
+function updateSignerUI(ready, pubHex) {
+  const dot  = document.getElementById('signerDot');
+  const info = document.getElementById('signerInfo');
+  dot.className = 'signer-dot' + (ready ? ' ready' : '');
+  if (ready) {
+    info.innerHTML = `<span class="signer-addr">Public key: ${pubHex}</span>`;
+  } else {
+    info.textContent = 'Enter your private key to enable one-click signing and submission. Key stays in browser memory only — never sent anywhere.';
+  }
+}
+
+function requireSigner() {
+  if (!signerPrivKey) {
+    toast('Load your private key in the Signer panel first', true);
+    return false;
+  }
+  return true;
+}
+
+async function withSpinner(btnId, fn) {
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinning">⟳</span> Signing...'; }
+  try {
+    await fn();
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '⚡ Sign &amp; Submit'; }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SIGN & SUBMIT HANDLERS
+// ════════════════════════════════════════════════════════════════════════════
+
+window.signAndSubmitCreateMarket = async function() {
+  if (!requireSigner()) return;
+  const question  = document.getElementById('c_question').value.trim();
+  const desc      = document.getElementById('c_desc').value.trim();
+  const creator   = document.getElementById('c_creator').value.trim().toLowerCase();
+  const resolver  = document.getElementById('c_resolver').value.trim().toLowerCase();
+  const resHeight = parseInt(document.getElementById('c_resHeight').value);
+  const stake     = parseInt(document.getElementById('c_stake').value);
+  const fee       = parseInt(document.getElementById('c_fee').value);
+
+  if (!question) return toast('Question is required', true);
+  if (!creator || creator.length !== 40) return toast('Creator address must be 40 hex chars', true);
+  if (!resolver || resolver.length !== 40) return toast('Resolver address must be 40 hex chars', true);
+  if (!resHeight || resHeight <= currentHeight) return toast(`Resolution height must be > ${currentHeight}`, true);
+  if (stake < 1000000) return toast('Min stake is 1,000,000 μPRX (1 $PRX)', true);
+
+  await withSpinner('btn_create_sign', async () => {
+    const msgBytes = encodeCreateMarket({ creatorAddress: creator, question, description: desc, resolverAddress: resolver, resolutionHeight: resHeight, stakeAmount: stake });
+    const tx = await buildSignedTx('create_market', '/types.MessageCreateMarket', msgBytes, txMeta(fee));
+    const result = await submitSignedTx(tx);
+    toast('✓ create_market submitted: ' + result.slice(0, 66));
+    checkRPC();
+  });
+};
+
+window.signAndSubmitPrediction = async function() {
+  if (!requireSigner()) return;
+  const marketId   = parseInt(document.getElementById('p_marketId').value);
+  const forecaster = document.getElementById('p_forecaster').value.trim().toLowerCase();
+  const amount     = parseInt(document.getElementById('p_amount').value);
+  const fee        = parseInt(document.getElementById('p_fee').value);
+
+  if (!marketId) return toast('Market ID is required', true);
+  if (!forecaster || forecaster.length !== 40) return toast('Forecaster address must be 40 hex chars', true);
+  if (amount < 100000) return toast('Minimum bet is 100,000 μPRX', true);
+
+  await withSpinner('btn_predict_sign', async () => {
+    const msgBytes = encodeSubmitPrediction({ forecasterAddress: forecaster, marketId, outcome: selectedOutcome, amount });
+    const tx = await buildSignedTx('submit_prediction', '/types.MessageSubmitPrediction', msgBytes, txMeta(fee));
+    const result = await submitSignedTx(tx);
+    toast('✓ submit_prediction submitted: ' + result.slice(0, 66));
+    checkRPC();
+  });
+};
+
+window.signAndSubmitResolve = async function() {
+  if (!requireSigner()) return;
+  const marketId = parseInt(document.getElementById('r_marketId').value);
+  const resolver = document.getElementById('r_resolver').value.trim().toLowerCase();
+  const fee      = parseInt(document.getElementById('r_fee').value);
+
+  if (!marketId) return toast('Market ID is required', true);
+  if (!resolver || resolver.length !== 40) return toast('Resolver address must be 40 hex chars', true);
+
+  await withSpinner('btn_resolve_sign', async () => {
+    const msgBytes = encodeResolveMarket({ resolverAddress: resolver, marketId, winningOutcome: resolveOutcome });
+    const tx = await buildSignedTx('resolve_market', '/types.MessageResolveMarket', msgBytes, txMeta(fee));
+    const result = await submitSignedTx(tx);
+    toast('✓ resolve_market submitted: ' + result.slice(0, 66));
+    checkRPC();
+  });
+};
+
+window.signAndSubmitClaim = async function() {
+  if (!requireSigner()) return;
+  const marketId = parseInt(document.getElementById('cl_marketId').value);
+  const addr     = document.getElementById('cl_addr').value.trim().toLowerCase();
+  const fee      = parseInt(document.getElementById('cl_fee').value);
+
+  if (!marketId) return toast('Market ID is required', true);
+  if (!addr || addr.length !== 40) return toast('Claimer address must be 40 hex chars', true);
+
+  await withSpinner('btn_claim_sign', async () => {
+    const msgBytes = encodeClaimWinnings({ claimerAddress: addr, marketId });
+    const tx = await buildSignedTx('claim_winnings', '/types.MessageClaimWinnings', msgBytes, txMeta(fee));
+    const result = await submitSignedTx(tx);
+    toast('✓ claim_winnings submitted: ' + result.slice(0, 66));
+    checkRPC();
+  });
+};
+
+window.signAndSubmitSend = async function() {
+  if (!requireSigner()) return;
+  const from   = document.getElementById('s_from').value.trim().toLowerCase();
+  const to     = document.getElementById('s_to').value.trim().toLowerCase();
+  const amount = parseInt(document.getElementById('s_amount').value);
+  const fee    = parseInt(document.getElementById('s_fee').value);
+
+  if (!from || from.length !== 40) return toast('From address must be 40 hex chars', true);
+  if (!to || to.length !== 40) return toast('To address must be 40 hex chars', true);
+  if (!amount || amount <= 0) return toast('Amount must be > 0', true);
+
+  await withSpinner('btn_send_sign', async () => {
+    const msgBytes = encodeMessageSend(from, to, amount);
+    const tx = await buildSignedTx('send', '/types.MessageSend', msgBytes, txMeta(fee));
+    const result = await submitSignedTx(tx);
+    toast('✓ send submitted: ' + result.slice(0, 66));
+    checkRPC();
+  });
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// BUILD PAYLOAD ONLY (for manual inspection / copy)
+// ════════════════════════════════════════════════════════════════════════════
+
+function buildTxSkeleton(msgType, msgFields) {
+  return {
+    type: msgType,
+    msgTypeUrl: `type.googleapis.com/types.Message${toPascal(msgType)}`,
+    msgFields,
+    signature: null,
+    time: Date.now() * 1000,
+    createdHeight: currentHeight,
+    fee: 0,
+    memo: '',
+    networkID: 1,
+    chainID: 1,
+  };
+}
+
+function toPascal(s) {
+  return s.split('_').map(w => w.charAt(0).toUpperCase()+w.slice(1)).join('');
+}
+
+window.buildCreateMarket = function() {
+  const question  = document.getElementById('c_question').value.trim();
+  const desc      = document.getElementById('c_desc').value.trim();
+  const creator   = document.getElementById('c_creator').value.trim().toLowerCase();
+  const resolver  = document.getElementById('c_resolver').value.trim().toLowerCase();
+  const resHeight = parseInt(document.getElementById('c_resHeight').value);
+  const stake     = parseInt(document.getElementById('c_stake').value);
+  const fee       = parseInt(document.getElementById('c_fee').value);
+
+  if (!question) return toast('Question is required', true);
+  if (!creator || creator.length !== 40) return toast('Creator address must be 40 hex chars', true);
+  if (!resolver || resolver.length !== 40) return toast('Resolver address must be 40 hex chars', true);
+  if (!resHeight || resHeight <= currentHeight) return toast(`Resolution height must be > ${currentHeight}`, true);
+  if (stake < 1000000) return toast('Min stake is 1,000,000 μPRX (1 $PRX)', true);
+
+  const tx = buildTxSkeleton('create_market', { creatorAddress: hexToB64(creator), question, description: desc, resolverAddress: hexToB64(resolver), resolutionHeight: resHeight, stakeAmount: stake });
+  tx.fee = fee;
+  document.getElementById('c_payload').value = JSON.stringify(tx, null, 2);
+  document.getElementById('c_output').style.display = 'block';
+  toast('Payload built — use ⚡ Sign & Submit to send');
+};
+
+window.buildSubmitPrediction = function() {
+  const marketId   = parseInt(document.getElementById('p_marketId').value);
+  const forecaster = document.getElementById('p_forecaster').value.trim().toLowerCase();
+  const amount     = parseInt(document.getElementById('p_amount').value);
+  const fee        = parseInt(document.getElementById('p_fee').value);
+
+  if (!marketId) return toast('Market ID is required', true);
+  if (!forecaster || forecaster.length !== 40) return toast('Forecaster address must be 40 hex chars', true);
+  if (amount < 100000) return toast('Minimum bet is 100,000 μPRX', true);
+
+  const tx = buildTxSkeleton('submit_prediction', { forecasterAddress: hexToB64(forecaster), marketId, outcome: selectedOutcome, amount });
+  tx.fee = fee;
+  document.getElementById('p_payload').value = JSON.stringify(tx, null, 2);
+  document.getElementById('p_output').style.display = 'block';
+  toast('Payload built — use ⚡ Sign & Submit to send');
+};
+
+window.buildResolveMarket = function() {
+  const marketId = parseInt(document.getElementById('r_marketId').value);
+  const resolver = document.getElementById('r_resolver').value.trim().toLowerCase();
+  const fee      = parseInt(document.getElementById('r_fee').value);
+
+  if (!marketId) return toast('Market ID is required', true);
+  if (!resolver || resolver.length !== 40) return toast('Resolver address must be 40 hex chars', true);
+
+  const tx = buildTxSkeleton('resolve_market', { resolverAddress: hexToB64(resolver), marketId, winningOutcome: resolveOutcome });
+  tx.fee = fee;
+  document.getElementById('r_payload').value = JSON.stringify(tx, null, 2);
+  document.getElementById('r_output').style.display = 'block';
+  toast('Payload built — use ⚡ Sign & Submit to send');
+};
+
+window.buildClaim = function() {
+  const marketId = parseInt(document.getElementById('cl_marketId').value);
+  const addr     = document.getElementById('cl_addr').value.trim().toLowerCase();
+  const fee      = parseInt(document.getElementById('cl_fee').value);
+
+  if (!marketId) return toast('Market ID is required', true);
+  if (!addr || addr.length !== 40) return toast('Claimer address must be 40 hex chars', true);
+
+  const tx = buildTxSkeleton('claim_winnings', { claimerAddress: hexToB64(addr), marketId });
+  tx.fee = fee;
+  document.getElementById('cl_payload').value = JSON.stringify(tx, null, 2);
+  document.getElementById('cl_output').style.display = 'block';
+  toast('Payload built — use ⚡ Sign & Submit to send');
+};
+
+window.buildSend = function() {
+  const from   = document.getElementById('s_from').value.trim().toLowerCase();
+  const to     = document.getElementById('s_to').value.trim().toLowerCase();
+  const amount = parseInt(document.getElementById('s_amount').value);
+  const fee    = parseInt(document.getElementById('s_fee').value);
+
+  if (!from || from.length !== 40) return toast('From address must be 40 hex chars', true);
+  if (!to || to.length !== 40)   return toast('To address must be 40 hex chars', true);
+  if (!amount || amount <= 0)    return toast('Amount must be > 0', true);
+
+  const tx = { type: 'send', msg: { fromAddress: hexToB64(from), toAddress: hexToB64(to), amount }, signature: null, time: Date.now()*1000, createdHeight: currentHeight, fee, memo: '', networkID: 1, chainID: 1 };
+  document.getElementById('s_payload').value = JSON.stringify(tx, null, 2);
+  document.getElementById('s_output').style.display = 'block';
+  toast('Send payload built — use ⚡ Sign & Submit to send');
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// NAVIGATION & RPC
+// ════════════════════════════════════════════════════════════════════════════
+
+const PAGE_TITLES = {
+  markets:'All Markets', create:'Create Market', predict:'Submit Prediction',
+  resolve:'Resolve Market', claim:'Claim Winnings', leaderboard:'Leaderboard',
+  wallet:'Wallet', node:'Node Info',
+};
+
+window.showPage = function(id, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   if (btn) btn.classList.add('active');
   document.getElementById('pageTitle').textContent = PAGE_TITLES[id] || id;
-
   if (id === 'markets')     loadMarkets();
   if (id === 'leaderboard') loadLeaderboard();
-}
+};
 
-// ── RPC helpers ───────────────────────────────────────────────────
 async function rpcPost(path, body) {
-  const r = await fetch(RPC + path, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(body)
-  });
+  const r = await fetch(RPC + path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
   return r.json();
 }
@@ -905,17 +1417,12 @@ async function rpcGet(path) {
 }
 
 async function adminPost(path, body) {
-  const r = await fetch(ADMIN + path, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(body)
-  });
+  const r = await fetch(ADMIN + path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
   return r.json();
 }
 
-// ── Health check & height ─────────────────────────────────────────
-async function checkRPC() {
+window.checkRPC = async function() {
   try {
     const data = await rpcPost('/v1/query/height', {});
     currentHeight = data.height || 0;
@@ -923,59 +1430,43 @@ async function checkRPC() {
     document.getElementById('rpcStatus').textContent = 'connected';
     document.getElementById('heightDisplay').textContent = '#' + currentHeight;
     document.getElementById('ni_height').textContent = currentHeight;
-    // pre-fill resolution height suggestion
     const resH = document.getElementById('c_resHeight');
     if (resH && !resH.value) resH.value = currentHeight + 100;
   } catch {
     document.getElementById('rpcDot').className = 'rpc-dot';
     document.getElementById('rpcStatus').textContent = 'offline';
   }
-}
+};
 
 // ── Markets ───────────────────────────────────────────────────────
-// Markets are stored at prefix 0x10 in state.
-// We do a range scan using the query/state endpoint.
-async function loadMarkets() {
+window.loadMarkets = async function() {
   const el = document.getElementById('marketsList');
   el.innerHTML = '<div class="loading"><span class="blink">▪▪▪</span> Scanning chain state...</div>';
-
   try {
-    // Range scan: market prefix = 0x10 (hex = "10")
-    const data = await rpcGet('/v1/query/state?prefix=10&limit=100&reverse=false');
+    const data    = await rpcGet('/v1/query/state?prefix=10&limit=100&reverse=false');
     const entries = data.entries || [];
-
     if (entries.length === 0) {
       el.innerHTML = '<div class="empty"><div class="empty-title">No markets yet</div>Create the first prediction market on this chain.</div>';
       updateStats([], [], []);
       return;
     }
-
-    // entries are raw protobuf bytes — display as decoded JSON if available
-    // or show raw hex with the market fields we can parse from JSON representation
     renderMarketsFromEntries(entries);
-  } catch(e) {
-    // Fallback: try to show demo data with a clear note
-    el.innerHTML = `<div style="padding:16px;background:var(--red-dim);border:1px solid var(--red)30;border-radius:6px;font-size:11.5px;color:var(--muted);margin-bottom:12px">
+  } catch {
+    el.innerHTML = `<div style="padding:16px;background:var(--red-dim);border:1px solid #ff3b3b30;border-radius:6px;font-size:11.5px;color:var(--muted);margin-bottom:12px">
       ⚠ Could not reach chain at ${RPC}. Start your local Canopy node: <code>canopy start</code>
     </div>`;
     renderDemoMarkets();
   }
-}
+};
 
 function renderMarketsFromEntries(entries) {
   const el = document.getElementById('marketsList');
-  if (!entries.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-title">No markets found</div></div>';
-    return;
-  }
-  // Real entries: protobuf-encoded Market messages
-  // We show the count and raw data note since full proto decode requires WASM or server-side decode
   el.innerHTML = `
-    <div style="padding:12px 14px;background:var(--green-dim);border:1px solid var(--green)30;border-radius:6px;font-size:11px;color:var(--green);margin-bottom:14px">
-      ✓ ${entries.length} market(s) found on-chain. Raw protobuf entries — query individual markets by key for decoded data.
+    <div style="padding:12px 14px;background:var(--green-dim);border:1px solid #00ff8830;border-radius:6px;font-size:11px;color:var(--green);margin-bottom:14px">
+      ✓ ${entries.length} market(s) found on-chain.
     </div>
     <div class="markets-grid">
-      ${entries.map((e, i) => `
+      ${entries.map((e,i) => `
         <div class="market-card open">
           <div class="market-status open"><span class="dot"></span>ON-CHAIN</div>
           <div class="market-question">Market #${i+1}</div>
@@ -984,10 +1475,8 @@ function renderMarketsFromEntries(entries) {
             <span class="market-meta">${(e.value||'').length} bytes</span>
             <button class="btn btn-sm" onclick="queryMarketByKey('${e.key}')">Decode ↗</button>
           </div>
-        </div>
-      `).join('')}
-    </div>
-  `;
+        </div>`).join('')}
+    </div>`;
   document.getElementById('statOpen').textContent = entries.length;
 }
 
@@ -997,66 +1486,49 @@ function renderDemoMarkets() {
     { id:2, question:'Will Canopy mainnet launch before block 5000?', status:0, totalYesPool:8500000, totalNoPool:3200000, resolutionHeight:5000 },
     { id:3, question:'Will BTC dominance drop below 40%?', status:2, totalYesPool:1200000, totalNoPool:6800000, resolutionHeight:1500, winningOutcome:0 },
   ];
-  const el = document.getElementById('marketsList');
-  el.innerHTML = `
+  document.getElementById('marketsList').innerHTML = `
     <div style="padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:5px;font-size:10.5px;color:var(--dim);margin-bottom:14px">
       Demo data — start your local chain to load real markets
     </div>
-    <div class="markets-grid">
-      ${demo.map(m => renderMarketCard(m)).join('')}
-    </div>`;
+    <div class="markets-grid">${demo.map(m => renderMarketCard(m)).join('')}</div>`;
   updateStats(demo, demo.filter(m=>m.status===0), demo.filter(m=>m.status===2));
 }
 
 function renderMarketCard(m) {
-  const total = m.totalYesPool + m.totalNoPool;
+  const total  = m.totalYesPool + m.totalNoPool;
   const yesPct = total > 0 ? Math.round((m.totalYesPool/total)*100) : 50;
   const noPct  = 100 - yesPct;
-  const statusClass = m.status === 0 ? 'open' : 'resolved';
-  const statusLabel = m.status === 0 ? 'OPEN' : 'RESOLVED';
-  return `
-    <div class="market-card ${statusClass}">
-      <div class="market-status ${statusClass}">
-        <span class="dot"></span>${statusLabel}
-      </div>
-      <div class="market-question">${m.question}</div>
-      <div class="pool-bars">
-        <div class="pool-row">
-          <span class="pool-label yes">YES</span>
-          <div class="pool-track"><div class="pool-fill yes" style="width:${yesPct}%"></div></div>
-          <span class="pool-pct">${yesPct}%</span>
-        </div>
-        <div class="pool-row">
-          <span class="pool-label no">NO</span>
-          <div class="pool-track"><div class="pool-fill no" style="width:${noPct}%"></div></div>
-          <span class="pool-pct">${noPct}%</span>
-        </div>
-      </div>
-      <div class="market-footer">
-        <span class="market-meta">Block ${m.resolutionHeight}</span>
-        <span class="market-vol">Vol: <span>${fmtPRX(total)} $PRX</span></span>
-      </div>
-    </div>`;
+  const sc = m.status===0 ? 'open' : 'resolved';
+  const sl = m.status===0 ? 'OPEN' : 'RESOLVED';
+  return `<div class="market-card ${sc}">
+    <div class="market-status ${sc}"><span class="dot"></span>${sl}</div>
+    <div class="market-question">${m.question}</div>
+    <div class="pool-bars">
+      <div class="pool-row"><span class="pool-label yes">YES</span><div class="pool-track"><div class="pool-fill yes" style="width:${yesPct}%"></div></div><span class="pool-pct">${yesPct}%</span></div>
+      <div class="pool-row"><span class="pool-label no">NO</span><div class="pool-track"><div class="pool-fill no" style="width:${noPct}%"></div></div><span class="pool-pct">${noPct}%</span></div>
+    </div>
+    <div class="market-footer"><span class="market-meta">Block ${m.resolutionHeight}</span><span class="market-vol">Vol: <span>${fmtPRX(total)} $PRX</span></span></div>
+  </div>`;
 }
 
 function updateStats(all, open, resolved) {
   document.getElementById('statOpen').textContent     = open.length;
   document.getElementById('statResolved').textContent = resolved.length;
-  const total = all.reduce((s,m)=>s+(m.totalYesPool||0)+(m.totalNoPool||0),0);
+  const total = all.reduce((s,m)=>s+(m.totalYesPool||0)+(m.totalNoPool||0), 0);
   document.getElementById('statStaked').textContent   = fmtPRX(total);
 }
 
-async function queryMarketByKey(key) {
+window.queryMarketByKey = async function(key) {
   try {
     const data = await rpcGet(`/v1/query/state-key?key=${key}`);
-    toast('State key queried: ' + JSON.stringify(data).substring(0,80) + '...');
+    toast('State key: ' + JSON.stringify(data).substring(0,80) + '...');
   } catch(e) {
     toast('Query failed: ' + e.message, true);
   }
-}
+};
 
 // ── Account ───────────────────────────────────────────────────────
-async function queryAccount() {
+window.queryAccount = async function() {
   const addr = document.getElementById('w_addr').value.trim();
   if (!addr) return toast('Enter an address', true);
   try {
@@ -1067,9 +1539,9 @@ async function queryAccount() {
   } catch(e) {
     toast('Query failed: ' + e.message, true);
   }
-}
+};
 
-async function listKeystore() {
+window.listKeystore = async function() {
   try {
     const r = await fetch(ADMIN + '/v1/admin/keystore');
     const data = await r.json();
@@ -1077,14 +1549,14 @@ async function listKeystore() {
     el.style.display = 'block';
     el.textContent = JSON.stringify(data, null, 2);
   } catch(e) {
-    toast('Admin RPC error (ensure node is running locally): ' + e.message, true);
+    toast('Admin RPC error: ' + e.message, true);
   }
-}
+};
 
-async function newKeystoreKey() {
+window.newKeystoreKey = async function() {
   const nick = prompt('Nickname for new key:');
   if (!nick) return;
-  const pwd = prompt('Password (leave blank for none):') || '';
+  const pwd = prompt('Password:') || '';
   try {
     const data = await adminPost('/v1/admin/keystore-new-key', { nickname: nick, password: pwd });
     toast('New key created: ' + data);
@@ -1092,237 +1564,36 @@ async function newKeystoreKey() {
   } catch(e) {
     toast('Error: ' + e.message, true);
   }
-}
+};
 
 // ── Outcome selectors ─────────────────────────────────────────────
-function selectOutcome(v) {
+window.selectOutcome = function(v) {
   selectedOutcome = v;
   document.getElementById('btn_yes').classList.toggle('active', v===1);
   document.getElementById('btn_no').classList.toggle('active',  v===0);
   document.getElementById('outcomeHint').textContent = 'Selected: ' + (v===1?'YES':'NO');
-}
+};
 
-function selectResolveOutcome(v) {
+window.selectResolveOutcome = function(v) {
   resolveOutcome = v;
   document.getElementById('rbtn_yes').classList.toggle('active', v===1);
   document.getElementById('rbtn_no').classList.toggle('active',  v===0);
   document.getElementById('resolveOutcomeHint').textContent = 'Selected: ' + (v===1?'YES wins':'NO wins');
-}
-
-// ── Transaction builders ──────────────────────────────────────────
-// Per rpc_test.go: for plugin-specific types, use msgTypeUrl + msgBytes fields.
-// Bytes (addresses) are base64-encoded in the JSON body.
-// Sign bytes = proto.Marshal(Transaction with signature=nil)
-
-function hexToB64(hex) {
-  if (!hex) return '';
-  const bytes = hex.match(/.{1,2}/g).map(b => parseInt(b,16));
-  return btoa(String.fromCharCode(...bytes));
-}
-
-function buildTxSkeleton(msgType, msgFields) {
-  return {
-    type: msgType,
-    msgTypeUrl: `type.googleapis.com/types.Message${toPascal(msgType)}`,
-    // msgBytes should be set after proto encoding the inner message
-    // For development/testing: include the fields as a readable object
-    msgFields: msgFields, // human readable; replace with msgBytes after proto encode
-    signature: null, // MUST be set before submitting: { publicKey: hexStr, signature: hexStr }
-    time: Date.now() * 1000,      // UnixMicro — matches rpc_test.go: time.Now().UnixMicro()
-    createdHeight: currentHeight,
-    fee: 0, // set per-form
-    memo: '',
-    networkID: 1,
-    chainID: 1,
-    // ──────────────────────────────────────────────────────────────
-    // SIGNING INSTRUCTIONS:
-    // 1. Encode inner message to proto bytes → set msgBytes (hex), remove msgFields
-    // 2. Build Transaction proto with signature=nil
-    // 3. signBytes = proto.Marshal(transaction)
-    // 4. sig = bls12381PrivKey.Sign(signBytes)
-    // 5. Set signature: { publicKey: hexPubKey, signature: hexSig }
-    // 6. POST to /v1/tx — bytes fields (addresses) as base64
-    // ──────────────────────────────────────────────────────────────
-  };
-}
-
-function toPascal(s) {
-  return s.split('_').map(w => w.charAt(0).toUpperCase()+w.slice(1)).join('');
-}
-
-function buildCreateMarket() {
-  const question   = document.getElementById('c_question').value.trim();
-  const desc       = document.getElementById('c_desc').value.trim();
-  const creator    = document.getElementById('c_creator').value.trim().toLowerCase();
-  const resolver   = document.getElementById('c_resolver').value.trim().toLowerCase();
-  const resHeight  = parseInt(document.getElementById('c_resHeight').value);
-  const stake      = parseInt(document.getElementById('c_stake').value);
-  const fee        = parseInt(document.getElementById('c_fee').value);
-
-  if (!question)  return toast('Question is required', true);
-  if (!creator || creator.length !== 40) return toast('Creator address must be 40 hex chars', true);
-  if (!resolver || resolver.length !== 40) return toast('Resolver address must be 40 hex chars', true);
-  if (!resHeight || resHeight <= currentHeight) return toast(`Resolution height must be > ${currentHeight}`, true);
-  if (stake < 1000000) return toast('Min stake is 1,000,000 μPRX (1 $PRX)', true);
-
-  const tx = buildTxSkeleton('create_market', {
-    creatorAddress:   hexToB64(creator),  // base64 in JSON per protojson spec
-    question:         question,
-    description:      desc,
-    resolverAddress:  hexToB64(resolver),
-    resolutionHeight: resHeight,
-    stakeAmount:      stake,
-  });
-  tx.fee = fee;
-
-  const el = document.getElementById('c_payload');
-  el.value = JSON.stringify(tx, null, 2);
-  document.getElementById('c_output').style.display = 'block';
-  toast('Payload built — sign with BLS12-381 before submitting');
-}
-
-function buildSubmitPrediction() {
-  const marketId   = parseInt(document.getElementById('p_marketId').value);
-  const forecaster = document.getElementById('p_forecaster').value.trim().toLowerCase();
-  const amount     = parseInt(document.getElementById('p_amount').value);
-  const fee        = parseInt(document.getElementById('p_fee').value);
-
-  if (!marketId)  return toast('Market ID is required', true);
-  if (!forecaster || forecaster.length !== 40) return toast('Forecaster address must be 40 hex chars', true);
-  if (amount < 100000) return toast('Minimum bet is 100,000 μPRX', true);
-
-  const tx = buildTxSkeleton('submit_prediction', {
-    forecasterAddress: hexToB64(forecaster),
-    marketId:          marketId,
-    outcome:           selectedOutcome,
-    amount:            amount,
-  });
-  tx.fee = fee;
-
-  const el = document.getElementById('p_payload');
-  el.value = JSON.stringify(tx, null, 2);
-  document.getElementById('p_output').style.display = 'block';
-  toast('Payload built — sign with BLS12-381 before submitting');
-}
-
-function buildResolveMarket() {
-  const marketId  = parseInt(document.getElementById('r_marketId').value);
-  const resolver  = document.getElementById('r_resolver').value.trim().toLowerCase();
-  const fee       = parseInt(document.getElementById('r_fee').value);
-
-  if (!marketId) return toast('Market ID is required', true);
-  if (!resolver || resolver.length !== 40) return toast('Resolver address must be 40 hex chars', true);
-
-  const tx = buildTxSkeleton('resolve_market', {
-    resolverAddress: hexToB64(resolver),
-    marketId:        marketId,
-    winningOutcome:  resolveOutcome,
-  });
-  tx.fee = fee;
-
-  const el = document.getElementById('r_payload');
-  el.value = JSON.stringify(tx, null, 2);
-  document.getElementById('r_output').style.display = 'block';
-  toast('Payload built — sign with BLS12-381 before submitting');
-}
-
-function buildClaim() {
-  const marketId = parseInt(document.getElementById('cl_marketId').value);
-  const addr     = document.getElementById('cl_addr').value.trim().toLowerCase();
-  const fee      = parseInt(document.getElementById('cl_fee').value);
-
-  if (!marketId) return toast('Market ID is required', true);
-  if (!addr || addr.length !== 40) return toast('Claimer address must be 40 hex chars', true);
-
-  const tx = buildTxSkeleton('claim_winnings', {
-    claimerAddress: hexToB64(addr),
-    marketId:       marketId,
-  });
-  tx.fee = fee;
-
-  const el = document.getElementById('cl_payload');
-  el.value = JSON.stringify(tx, null, 2);
-  document.getElementById('cl_output').style.display = 'block';
-  toast('Payload built — sign with BLS12-381 before submitting');
-}
-
-function buildSend() {
-  const from   = document.getElementById('s_from').value.trim().toLowerCase();
-  const to     = document.getElementById('s_to').value.trim().toLowerCase();
-  const amount = parseInt(document.getElementById('s_amount').value);
-  const fee    = parseInt(document.getElementById('s_fee').value);
-
-  if (!from || from.length !== 40) return toast('From address must be 40 hex chars', true);
-  if (!to || to.length !== 40)   return toast('To address must be 40 hex chars', true);
-  if (!amount || amount <= 0)    return toast('Amount must be > 0', true);
-
-  // "send" is in RegisteredMessages — use msg field (not msgBytes)
-  const tx = {
-    type: 'send',
-    msg: {
-      fromAddress: hexToB64(from),
-      toAddress:   hexToB64(to),
-      amount:      amount,
-    },
-    signature: null,
-    time:          Date.now() * 1000,
-    createdHeight: currentHeight,
-    fee:           fee,
-    memo:          '',
-    networkID:     1,
-    chainID:       1,
-  };
-
-  const el = document.getElementById('s_payload');
-  el.value = JSON.stringify(tx, null, 2);
-  document.getElementById('s_output').style.display = 'block';
-  toast('Send payload built — sign before submitting');
-}
-
-// ── Submit signed transaction ─────────────────────────────────────
-async function submitTx(payloadId) {
-  const raw = document.getElementById(payloadId).value;
-  let parsed;
-  try { parsed = JSON.parse(raw); } catch { return toast('Invalid JSON payload', true); }
-
-  if (!parsed.signature || parsed.signature === null) {
-    return toast('Transaction is unsigned. Attach BLS12-381 signature before submitting.', true);
-  }
-
-  try {
-    const result = await rpcPost('/v1/tx', parsed);
-    toast('✓ Submitted: ' + (result || JSON.stringify(result)));
-    checkRPC();
-  } catch(e) {
-    toast('Submit failed: ' + e.message, true);
-  }
-}
-
-function copyPayload(payloadId) {
-  const val = document.getElementById(payloadId).value;
-  navigator.clipboard.writeText(val).then(() => toast('Payload copied to clipboard'));
-}
+};
 
 // ── Leaderboard ───────────────────────────────────────────────────
-async function loadLeaderboard() {
+window.loadLeaderboard = async function() {
   try {
-    // ForecasterRecord prefix = 0x13
-    const data = await rpcGet('/v1/query/state?prefix=13&limit=100&reverse=false');
+    const data    = await rpcGet('/v1/query/state?prefix=13&limit=100&reverse=false');
     const entries = data.entries || [];
-    if (entries.length === 0) {
-      renderDemoLeaderboard();
-      return;
-    }
+    if (entries.length === 0) { renderDemoLeaderboard(); return; }
     renderLeaderboardRaw(entries);
-  } catch {
-    renderDemoLeaderboard();
-  }
-}
+  } catch { renderDemoLeaderboard(); }
+};
 
 function renderLeaderboardRaw(entries) {
-  const tbody = document.getElementById('leaderboardBody');
-  tbody.innerHTML = `<tr><td colspan="5" style="padding:14px;color:var(--muted);font-size:11px;">
-    ${entries.length} forecaster record(s) on-chain (protobuf encoded). Decode locally to display stats.
+  document.getElementById('leaderboardBody').innerHTML = `<tr><td colspan="5" style="padding:14px;color:var(--muted);font-size:11px;">
+    ${entries.length} forecaster record(s) on-chain (protobuf encoded).
   </td></tr>`;
 }
 
@@ -1332,20 +1603,14 @@ function renderDemoLeaderboard() {
     { address:'eed6c9dff19da7682f7fe5fde062c813b42c7abc', correct:17, total:22, earned:2900000 },
     { address:'aab1c2dff19da7682f7fe5fde062c813b11c1111', correct:11, total:18, earned:1600000 },
   ];
-  const tbody = document.getElementById('leaderboardBody');
   const rankClass = i => i===0?'gold':i===1?'silver':i===2?'bronze':'';
-  tbody.innerHTML = data.map((r,i) => {
+  document.getElementById('leaderboardBody').innerHTML = data.map((r,i) => {
     const acc = r.total > 0 ? Math.round((r.correct/r.total)*100) : 0;
     return `<tr>
       <td><span class="rank-badge ${rankClass(i)}">#${i+1}</span></td>
       <td style="font-size:10.5px;color:var(--green);font-family:var(--font-m)">${r.address.substring(0,16)}...</td>
       <td>${r.correct} / ${r.total}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="acc-bar-wrap"><div class="acc-bar-fill" style="width:${acc}%"></div></div>
-          <span style="color:var(--green)">${acc}%</span>
-        </div>
-      </td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="acc-bar-wrap"><div class="acc-bar-fill" style="width:${acc}%"></div></div><span style="color:var(--green)">${acc}%</span></div></td>
       <td style="color:var(--yes)">${fmtPRX(r.earned)} $PRX</td>
     </tr>`;
   }).join('');
@@ -1359,23 +1624,31 @@ function fmtPRX(micro) {
   return micro.toString();
 }
 
-function toast(msg, isErr=false) {
+window.toast = function(msg, isErr=false) {
   const wrap = document.getElementById('toastWrap');
   const el   = document.createElement('div');
   el.className = 'toast' + (isErr ? ' err' : '');
   el.textContent = msg;
   wrap.appendChild(el);
   setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3500);
-}
+};
 
-function refreshAll() { checkRPC(); loadMarkets(); }
+function toast(msg, isErr=false) { window.toast(msg, isErr); }
+
+window.copyPayload = function(id) {
+  navigator.clipboard.writeText(document.getElementById(id).value)
+    .then(() => toast('Payload copied to clipboard'));
+};
+
+window.refreshAll = function() { checkRPC(); loadMarkets(); };
 
 // ── Init ──────────────────────────────────────────────────────────
 selectOutcome(1);
 selectResolveOutcome(1);
 checkRPC();
-setInterval(checkRPC, 24000); // one block time
+setInterval(checkRPC, 24000);
 loadMarkets();
+
 </script>
 </body>
 </html>
