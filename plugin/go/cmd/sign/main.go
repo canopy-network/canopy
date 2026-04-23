@@ -18,8 +18,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/canopy-network/go-plugin/tutorial/contract"
-	"github.com/canopy-network/go-plugin/tutorial/crypto"
+	"github.com/canopy-network/go-plugin/contract"
+"github.com/canopy-network/go-plugin/crypto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
