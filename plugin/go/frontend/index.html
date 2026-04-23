@@ -889,14 +889,30 @@ tr:hover td { background: var(--surface); }
     <div class="page" id="page-node">
       <div class="section-header"><div class="section-title">Node &amp; RPC Info</div></div>
 
+      <!-- RPC Host Config -->
+      <div class="card" style="margin-bottom:14px;padding:14px 16px">
+        <div class="section-title" style="font-size:12px;margin-bottom:10px;letter-spacing:1.5px">RPC HOST CONFIGURATION</div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:10px;line-height:1.6">
+          Default is <code style="background:var(--bg);padding:1px 5px;border-radius:3px;color:var(--text)">localhost</code>.
+          If running on Android/Userland or a remote machine, enter the node's IP address below.
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="rpcHostInput" type="text" placeholder="e.g. 192.168.1.42 or localhost"
+            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;
+                   padding:8px 12px;color:var(--text);font-family:var(--font-mono);font-size:12px;outline:none"/>
+          <button class="btn btn-sm" onclick="saveRPCHost()" style="white-space:nowrap">Save &amp; Reconnect</button>
+        </div>
+        <div id="rpcHostStatus" style="font-size:10.5px;color:var(--dim);margin-top:7px"></div>
+      </div>
+
       <div class="rpc-grid">
         <div class="rpc-item">
           <div class="rpc-item-label">PUBLIC RPC (queries + tx submit)</div>
-          <div class="rpc-item-val">http://localhost:50002</div>
+          <div class="rpc-item-val" id="ni_rpc_public">—</div>
         </div>
         <div class="rpc-item">
           <div class="rpc-item-label">ADMIN RPC (keystore)</div>
-          <div class="rpc-item-val">http://localhost:50003</div>
+          <div class="rpc-item-val" id="ni_rpc_admin">—</div>
         </div>
         <div class="rpc-item">
           <div class="rpc-item-label">CURRENT HEIGHT</div>
@@ -960,8 +976,14 @@ tr:hover td { background: var(--surface); }
 import { bls12_381 } from '@noble/curves/bls12-381';
 
 // ── Config ────────────────────────────────────────────────────────
-const RPC   = 'http://localhost:50002';
-const ADMIN = 'http://localhost:50003';
+function getRPCHost() {
+  return localStorage.getItem('praxis_rpc_host') || 'localhost';
+}
+function getRPC()   { return `http://${getRPCHost()}:50002`; }
+function getADMIN() { return `http://${getRPCHost()}:50003`; }
+// Keep RPC/ADMIN as getters for backward compat
+Object.defineProperty(window, 'RPC',   { get: getRPC });
+Object.defineProperty(window, 'ADMIN', { get: getADMIN });
 
 // ── State ─────────────────────────────────────────────────────────
 let currentHeight   = 0;
@@ -1717,9 +1739,35 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 window.refreshAll = function() { checkRPC(); loadMarkets(); };
 
+// ── RPC Host Config ───────────────────────────────────────────────
+function updateNodeInfoURLs() {
+  const pub = document.getElementById('ni_rpc_public');
+  const adm = document.getElementById('ni_rpc_admin');
+  const inp = document.getElementById('rpcHostInput');
+  if (pub) pub.textContent = getRPC();
+  if (adm) adm.textContent = getADMIN();
+  if (inp && !inp.value) inp.value = getRPCHost();
+}
+
+window.saveRPCHost = function() {
+  const inp = document.getElementById('rpcHostInput');
+  const status = document.getElementById('rpcHostStatus');
+  const host = (inp ? inp.value : '').trim();
+  if (!host) return;
+  localStorage.setItem('praxis_rpc_host', host);
+  updateNodeInfoURLs();
+  if (status) status.textContent = `Connecting to ${host}…`;
+  checkRPC().then(() => {
+    if (status) status.textContent = `✓ Connected to ${host}`;
+  }).catch(() => {
+    if (status) status.textContent = `✗ Could not reach ${host} — check IP and try again`;
+  });
+};
+
 // ── Init ──────────────────────────────────────────────────────────
 selectOutcome(1);
 selectResolveOutcome(1);
+updateNodeInfoURLs();
 checkRPC();
 setInterval(checkRPC, 24000);
 loadMarkets();
