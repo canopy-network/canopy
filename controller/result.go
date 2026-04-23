@@ -2,11 +2,11 @@ package controller
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/fsm"
 	"slices"
 	"time"
 
 	"github.com/canopy-network/canopy/bft"
+	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 )
 

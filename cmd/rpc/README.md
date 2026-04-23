@@ -245,7 +245,7 @@ $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v
 
 **Route:** `/v1/query/indexer-blobs`
 
-**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. Accounts, pools, and validators are always returned as deltas between the current and previous blobs.
+**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. Accounts, pools, and validators are returned as deltas between the current and previous blobs.
 
 **HTTP Method**: `POST`
 
@@ -2593,12 +2593,8 @@ $ curl -X POST localhost:50002/v1/query/order \
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
 - **committee**: `uint64` – the unique identifier of the committee to filter by (optional: use 0 to get all committees)
-- **sellersSendAddress**: `hex-string` – the seller address to filter orders by (optional: use "" to get all seller addresses)
-- **buyerSendAddress**: `hex-string` – the buyer address to filter locked orders by (optional: use "" to get all buyer addresses)
 - **pageNumber**: `int` – the page number to retrieve (optional: starts at 1)
 - **perPage**: `int` – the number of orders per page (optional: defaults to system default)
-
-**Note**: `sellersSendAddress` and `buyerSendAddress` are mutually exclusive filters. You cannot use both in the same request.
 
 **Response**:
 - **pageNumber**: `int` - the current page number
@@ -2665,40 +2661,6 @@ $ curl -X POST localhost:50002/v1/query/orders \
         "committee": 1,
         "pageNumber": 1,
         "perPage": 20
-      }'
-```
-
-**Example 3: Filter by sellersSendAddress with pagination (uses indexed lookup)**
-```
-$ curl -X POST localhost:50002/v1/query/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe",
-        "pageNumber": 1,
-        "perPage": 10
-      }'
-```
-
-**Example 4: Filter by both committee and sellersSendAddress with pagination (most efficient)**
-```
-$ curl -X POST localhost:50002/v1/query/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-        "committee": 1,
-        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe",
-        "pageNumber": 1,
-        "perPage": 10
-      }'
-```
-
-**Example 5: Filter by buyerSendAddress with pagination (locked orders only)**
-```
-$ curl -X POST localhost:50002/v1/query/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-        "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
-        "pageNumber": 1,
-        "perPage": 10
       }'
 ```
 

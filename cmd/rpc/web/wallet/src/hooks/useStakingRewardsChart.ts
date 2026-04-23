@@ -76,6 +76,10 @@ export function useStakingRewardsChart({
       const safeAddress = address || "";
       const safePoints = Math.max(2, Math.floor(points));
 
+      if (secondsPerBlock == null) {
+        return { address: safeAddress, targetHeight, fromHeight: 0, blocksInRange: 0, totalRewards24h: 0, eventsCount: 0, points: [] };
+      }
+
       const { events, fromHeight, toHeight, blocksInRange } =
         await fetchRewardEventsInRange(dsFetch, {
           address: safeAddress,

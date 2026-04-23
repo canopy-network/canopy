@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useAvailableNodes, useNodeData, useNodeLogs, useChainCommitteeId } from "@/hooks/useNodes";
 import NodeStatus from "@/components/monitoring/NodeStatus";
@@ -8,12 +8,14 @@ import PerformanceMetrics from "@/components/monitoring/PerformanceMetrics";
 import SystemResources from "@/components/monitoring/SystemResources";
 import RawJSON from "@/components/monitoring/RawJSON";
 import MonitoringSkeleton from "@/components/monitoring/MonitoringSkeleton";
+import { PageHeader } from "@/components/layouts/PageHeader";
 
 export default function Monitoring(): JSX.Element {
   const [activeTab, setActiveTab] = useState<
     "quorum" | "config" | "peerInfo" | "peerBook"
   >("quorum");
   const [isPaused, setIsPaused] = useState(false);
+  const [clearedLogCount, setClearedLogCount] = useState(0);
 
   // Get the chain's committeeId first
   const { committeeId, isLoading: committeeLoading, error: committeeError } = useChainCommitteeId();
@@ -35,10 +37,6 @@ export default function Monitoring(): JSX.Element {
   const nodeStatus = {
     synced: nodeData?.consensus?.isSyncing === false,
     blockHeight: nodeData?.consensus?.view?.height || 0,
-    syncProgress:
-      nodeData?.consensus?.isSyncing === false
-        ? 100
-        : nodeData?.consensus?.syncProgress || 0,
     nodeAddress: nodeData?.consensus?.address || "",
     phase: nodeData?.consensus?.view?.phase || "",
     round: nodeData?.consensus?.view?.round || 0,
@@ -62,10 +60,20 @@ export default function Monitoring(): JSX.Element {
     peers: nodeData?.peers?.peers || [],
   };
 
-  const logs =
+  const allLogs =
     typeof rawLogs === "string"
-      ? rawLogs.split("\n").filter(Boolean).reverse()
+      ? rawLogs.split("\n").filter(Boolean)
       : [];
+
+  const logs = useMemo(() => {
+    if (clearedLogCount <= 0) return allLogs;
+    const visibleCount = Math.max(0, allLogs.length - clearedLogCount);
+    return allLogs.slice(0, visibleCount);
+  }, [allLogs, clearedLogCount]);
+
+  useEffect(() => {
+    setClearedLogCount(0);
+  }, [currentNode?.id]);
 
   const metrics = {
     processCPU: nodeData?.resources?.process?.usedCPUPercent || 0,
@@ -102,8 +110,7 @@ export default function Monitoring(): JSX.Element {
   };
 
   const handleClearLogs = () => {
-    // Logs are managed by React Query, this is just for UI state
-    console.log("Clear logs requested");
+    setClearedLogCount(allLogs.length);
   };
 
   const handleExportLogs = () => {
@@ -146,44 +153,44 @@ export default function Monitoring(): JSX.Element {
 
   return (
     <motion.div
-      className="min-h-screen bg-background"
+      className="space-y-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="px-6 py-8 h-full">
-        <NodeStatus
-          nodeStatus={nodeStatus}
-          selectedNode={currentNode?.id || ""}
-          availableNodes={availableNodes}
-          onNodeChange={handleNodeChange}
-          onCopyAddress={handleCopyAddress}
-        />
+      <PageHeader
+        title="Monitoring"
+        subtitle="Node status, peers, performance metrics, and raw network data"
+      />
 
-        {/* Two column layout for main content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-          {/* Left column */}
-          <div className="space-y-6 h-full">
-            <NetworkPeers networkPeers={networkPeers} />
-            <NodeLogs
-              logs={logs}
-              isPaused={isPaused}
-              onPauseToggle={handlePauseToggle}
-              onClearLogs={handleClearLogs}
-              onExportLogs={handleExportLogs}
-            />
-          </div>
+      <NodeStatus
+        nodeStatus={nodeStatus}
+        selectedNode={currentNode?.id || ""}
+        availableNodes={availableNodes}
+        onNodeChange={handleNodeChange}
+        onCopyAddress={handleCopyAddress}
+      />
 
-          {/* Right column */}
-          <div className="space-y-6">
-            <PerformanceMetrics metrics={metrics} />
-            <SystemResources systemResources={systemResources} />
-            <RawJSON
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              onExportLogs={handleExportLogs}
-            />
-          </div>
+      <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-6 lg:h-full">
+          <NetworkPeers networkPeers={networkPeers} />
+          <NodeLogs
+            logs={logs}
+            isPaused={isPaused}
+            onPauseToggle={handlePauseToggle}
+            onClearLogs={handleClearLogs}
+            onExportLogs={handleExportLogs}
+          />
+        </div>
+
+        <div className="space-y-6">
+          <PerformanceMetrics metrics={metrics} />
+          <SystemResources systemResources={systemResources} />
+          <RawJSON
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            onExportLogs={handleExportLogs}
+          />
         </div>
       </div>
     </motion.div>

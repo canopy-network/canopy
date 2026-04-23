@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
 import toast from 'react-hot-toast'
 import { Account, TransactionsBySender, TransactionsByRec } from '../../lib/api'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface SearchResultsProps {
     results: any
@@ -239,7 +240,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-gray-600/10 rounded-xl p-4 md:p-6 hover:border-gray-600/20 transition-colors"
+                className="bg-card border border-white/5 rounded-xl p-4 md:p-6 hover:border-white/10 transition-colors"
             >
                 <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
@@ -250,7 +251,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 </div>
                                 <span className="text-white text-lg">Address</span>
                             </div>
-                            <div className="bg-green-700/30 text-primary text-sm rounded-full px-2 py-0.5 w-fit">
+                            <div className={GREEN_BADGE_CLASS}>
                                 Address
                             </div>
                         </div>
@@ -260,7 +261,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 <span className="text-gray-400 text-sm mb-1">Address:</span>
                                 <Link
                                     to={`/account/${address}`}
-                                    className="text-white font-mono text-sm sm:text-base md:text-lg break-all hover:text-green-400 hover:underline transition-colors w-full"
+                                    className="text-white font-mono text-sm sm:text-base md:text-lg break-all hover:text-primary hover:underline transition-colors w-full"
                                 >
                                     {address || 'N/A'}
                                 </Link>
@@ -303,7 +304,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                             </Link>
                             <button
                                 onClick={() => copyToClipboard(address)}
-                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-gray-600 transition-colors"
+                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
                             >
                                 <i className="fa-solid fa-copy text-white mr-2"></i> Copy Address
                             </button>
@@ -328,7 +329,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 icon: 'fa-cube',
                 iconColor: 'text-primary',
                 bgColor: 'bg-green-700/30',
-                badgeColor: 'bg-green-700/30',
+                badgeClass: GREEN_BADGE_CLASS,
                 badgeText: 'Block',
                 title: `Block #${item.blockHeader?.height ?? item.height ?? 'N/A'}`,
                 borderColor: 'border-gray-400/10',
@@ -346,7 +347,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 icon: 'fa-arrow-right-arrow-left',
                 iconColor: 'text-blue-500',
                 bgColor: 'bg-blue-700/30',
-                badgeColor: 'bg-blue-700/30',
+                badgeClass: GREEN_BADGE_CLASS,
                 badgeText: 'Transaction',
                 title: 'Transaction',
                 borderColor: 'border-gray-400/10',
@@ -370,7 +371,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 icon: 'fa-shield-halved',
                 iconColor: (item.delegate === true) ? 'text-blue-500' : 'text-primary',
                 bgColor: 'bg-green-700/30',
-                badgeColor: (item.delegate === true) ? 'bg-blue-700/20' : 'bg-green-700/30',
+                badgeClass: GREEN_BADGE_CLASS,
                 badgeText: (item.delegate === true) ? 'Delegator' : 'Validator',
                 title: item.name || item.delegate ? 'Delegator' : 'Validator',
                 borderColor: 'border-gray-400/10',
@@ -407,7 +408,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 </div>
                                 <span className="text-white text-base sm:text-lg break-words">{config.title}</span>
                             </div>
-                            <div className={`${config.badgeColor} ${config.iconColor} text-sm rounded-full px-2 py-0.5 w-fit`}>
+                            <div className={config.badgeClass}>
                                 {config.badgeText}
                             </div>
                         </div>
@@ -442,7 +443,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                         {linkTo ? (
                                             <Link
                                                 to={linkTo}
-                                                className={`${field.fullWidth ? 'text-white font-mono text-sm sm:text-base md:text-lg break-all' : 'text-white text-sm'} ${field.truncate ? 'truncate' : field.fullWidth ? '' : 'break-all'} hover:text-green-400 hover:underline transition-colors`}
+                                                className={`${field.fullWidth ? 'text-white font-mono text-sm sm:text-base md:text-lg break-all' : 'text-white text-sm'} ${field.truncate ? 'truncate' : field.fullWidth ? '' : 'break-all'} hover:text-primary hover:underline transition-colors`}
                                             >
                                                 {linkValue}
                                             </Link>
@@ -465,7 +466,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                             </Link>
                             <button
                                 onClick={() => copyToClipboard(config.copyValue)}
-                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-gray-600 transition-colors"
+                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
                             >
                                 <i className="fa-solid fa-copy text-white mr-2"></i> {config.copyLabel}
                             </button>
@@ -696,18 +697,20 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             {allFilteredResults.length > 0 && (
                 <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 lg:flex-row-reverse">
                     <div className="text-xs sm:text-sm text-gray-400 text-center sm:text-left">
-                        Showing {startIndex + 1} to {Math.min(endIndex, allFilteredResults.length)} of <AnimatedNumber value={allFilteredResults.length} /> results
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{startIndex + 1} to {Math.min(endIndex, allFilteredResults.length)} of</span>
+                            <AnimatedNumber value={allFilteredResults.length} />
+                            <span>results</span>
+                        </span>
                     </div>
                     <div className="flex gap-2 flex-wrap justify-center">
                         <button
                             onClick={handlePrevious}
                             disabled={currentPage === 1}
-                            className={`px-3 py-1.5 rounded-md text-xs sm:text-sm transition-colors ${currentPage === 1
-                                ? 'bg-input text-gray-500 cursor-not-allowed'
-                                : 'bg-input text-white hover:bg-gray-600'
-                                }`}
+                            className="explorer-pagination-button px-3 py-1.5 text-xs sm:text-sm"
+                            aria-label="Previous page"
                         >
-                            Previous
+                            <i className="fa-solid fa-angle-left"></i>
                         </button>
 
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -716,9 +719,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 <button
                                     key={pageNum}
                                     onClick={() => handlePageChange(pageNum)}
-                                    className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${currentPage === pageNum
-                                        ? 'bg-primary text-black'
-                                        : 'bg-input text-white hover:bg-gray-600'
+                                    className={`explorer-pagination-button explorer-pagination-page px-3 py-1.5 text-xs sm:text-sm font-medium ${currentPage === pageNum
+                                        ? 'explorer-pagination-page-active'
+                                        : ''
                                         }`}
                                 >
                                     {pageNum}
@@ -729,12 +732,10 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                         <button
                             onClick={handleNext}
                             disabled={currentPage === totalPages}
-                            className={`px-3 py-1.5 rounded-md text-xs sm:text-sm transition-colors ${currentPage === totalPages
-                                ? 'bg-input text-gray-500 cursor-not-allowed'
-                                : 'bg-input text-white hover:bg-gray-600'
-                                }`}
+                            className="explorer-pagination-button px-3 py-1.5 text-xs sm:text-sm"
+                            aria-label="Next page"
                         >
-                            Next
+                            <i className="fa-solid fa-angle-right"></i>
                         </button>
                     </div>
                 </div>

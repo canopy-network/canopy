@@ -1,4 +1,5 @@
-import React, { useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import { Check, Copy, Download, Pause, Play, Trash2 } from 'lucide-react';
 
 interface NodeLogsProps {
     logs: string[];
@@ -16,11 +17,12 @@ export default function NodeLogs({
                                      onExportLogs
                                  }: NodeLogsProps): JSX.Element {
     const containerRef = useRef<HTMLDivElement>(null);
-    const ITEMS_PER_PAGE = 50;
+    const copyResetRef = useRef<number | null>(null);
     const MAX_LOGS = 1000;
+    const [copied, setCopied] = useState(false);
 
     const limitedLogs = useMemo(() => {
-        return logs.slice(-MAX_LOGS);
+        return logs.slice(0, MAX_LOGS);
     }, [logs]);
 
     const formatLogLine = useCallback((line: string) => {
@@ -77,17 +79,35 @@ export default function NodeLogs({
         return <span dangerouslySetInnerHTML={{ __html: html }} />;
     }, []);
 
-    const visibleLogs = useMemo(() => {
-        const start = Math.max(0, limitedLogs.length - ITEMS_PER_PAGE);
-        const end = limitedLogs.length;
-        return limitedLogs.slice(start, end);
-    }, [limitedLogs]);
-
     useEffect(() => {
         if (containerRef.current && !isPaused) {
-            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+            containerRef.current.scrollTop = 0;
         }
-    }, [visibleLogs, isPaused]);
+    }, [limitedLogs, isPaused]);
+
+    useEffect(() => {
+        return () => {
+            if (copyResetRef.current !== null) {
+                window.clearTimeout(copyResetRef.current);
+            }
+        };
+    }, []);
+
+    const handleCopyLogs = useCallback(async () => {
+        if (limitedLogs.length === 0 || !navigator.clipboard) return;
+
+        await navigator.clipboard.writeText(limitedLogs.join('\n'));
+        setCopied(true);
+
+        if (copyResetRef.current !== null) {
+            window.clearTimeout(copyResetRef.current);
+        }
+
+        copyResetRef.current = window.setTimeout(() => {
+            setCopied(false);
+            copyResetRef.current = null;
+        }, 1500);
+    }, [limitedLogs]);
 
     const LogLine = React.memo(({ log, index }: { log: string; index: number }) => (
         <div className="mb-1">
@@ -95,46 +115,56 @@ export default function NodeLogs({
         </div>
     ));
     return (
-        <div className="bg-card rounded-xl border border-border p-6 min-h-[48rem]">
+        <div className="bg-card rounded-xl border border-border p-6">
             <div className="flex justify-between items-center mb-4">
                 <div>
                     <h2 className="text-foreground text-lg font-bold">
                         Node Logs
                     </h2>
                     <p className="text-xs text-muted-foreground">
-                        ({limitedLogs.length} lines, showing last {ITEMS_PER_PAGE})
+                        ({limitedLogs.length} newest lines)
                     </p>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={onPauseToggle}
-                        className="p-2 hover:bg-card rounded-md transition-colors"
+                        className="rounded-md border border-[#272729] p-2 text-white/60 transition-colors hover:border-white/15 hover:bg-[#0f0f0f] hover:text-white/80"
                         title={isPaused ? "Resume" : "Pause"}
+                        aria-label={isPaused ? "Resume logs" : "Pause logs"}
                     >
-                        <i className={`fa-solid ${isPaused ? 'fa-play' : 'fa-pause'} text-muted-foreground`}></i>
+                        {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
                     </button>
                     <button
                         onClick={onClearLogs}
-                        className="p-2 hover:bg-card rounded-md transition-colors"
+                        className="rounded-md border border-[#272729] p-2 text-white/60 transition-colors hover:border-white/15 hover:bg-[#0f0f0f] hover:text-white/80"
                         title="Clear"
                     >
-                        <i className="fa-solid fa-trash text-muted-foreground"></i>
+                        <Trash2 className="h-4 w-4" />
+                    </button>
+                    <button
+                        onClick={handleCopyLogs}
+                        className="rounded-md border border-[#272729] p-2 text-white/60 transition-colors hover:border-white/15 hover:bg-[#0f0f0f] hover:text-white/80 disabled:pointer-events-none disabled:opacity-40"
+                        title={copied ? 'Copied' : 'Copy Logs'}
+                        aria-label="Copy logs"
+                        disabled={limitedLogs.length === 0}
+                    >
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </button>
                     <button
                         onClick={onExportLogs}
-                        className="p-2 hover:bg-card rounded-md transition-colors"
+                        className="rounded-md border border-[#272729] p-2 text-white/60 transition-colors hover:border-white/15 hover:bg-[#0f0f0f] hover:text-white/80"
                         title="Export Logs"
                     >
-                        <i className="fa-solid fa-download text-muted-foreground"></i>
+                        <Download className="h-4 w-4" />
                     </button>
                 </div>
             </div>
             <div
                 ref={containerRef}
-                className="bg-background rounded-lg text-muted-foreground p-4 max-h-[41rem] overflow-y-auto font-mono text-xs"
+                className="h-[26rem] overflow-y-auto rounded-lg bg-background p-4 text-xs text-muted-foreground lg:h-[34rem]"
             >
-                {visibleLogs.length > 0 ? (
-                    visibleLogs.map((log, index) => (
+                {limitedLogs.length > 0 ? (
+                    limitedLogs.map((log, index) => (
                         <LogLine key={`${index}-${log.slice(0, 20)}`} log={log} index={index} />
                     ))
                 ) : (

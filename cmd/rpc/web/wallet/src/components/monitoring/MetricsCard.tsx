@@ -69,7 +69,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
                 return (
                     <div key={metric.id} className="col-span-3">
                         <div className="text-xs text-muted-foreground">{metric.label}</div>
-                        <div className="text-foreground font-medium font-mono">{metric.value}</div>
+                        <div className="text-foreground font-medium">{metric.value}</div>
                     </div>
                 );
 

@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import blockDetailTexts from '../../data/blockDetail.json'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface BlockDetailInfoProps {
     block: {
@@ -16,17 +17,19 @@ interface BlockDetailInfoProps {
         blockHash: string
         parentHash: string
     }
+    blockData?: Record<string, unknown>
 }
 
-const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
+const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) => {
+    const [viewMode, setViewMode] = useState<'decoded' | 'raw'>('decoded')
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text)
         toast.success('Copied to clipboard!', {
             icon: '📋',
             style: {
-                background: '#1f2937',
-                color: '#f9fafb',
-                border: '1px solid #4ade80',
+                background: '#1a1a1a',
+                color: '#fafafa',
+                border: '1px solid #45ca46',
             },
         })
     }
@@ -52,12 +55,58 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-card rounded-xl border border-gray-800/60 p-6"
+            className="bg-card rounded-xl border border-white/10 p-6"
         >
-            <h2 className="text-lg font-semibold text-white mb-4">
-                {blockDetailTexts.blockDetails.title}
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white">
+                    {blockDetailTexts.blockDetails.title}
+                </h2>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setViewMode('decoded')}
+                        className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'decoded' ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5'}`}
+                    >
+                        Decoded
+                    </button>
+                    <button
+                        onClick={() => setViewMode('raw')}
+                        className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'raw' ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5'}`}
+                    >
+                        Raw
+                    </button>
+                </div>
+            </div>
 
+            {viewMode === 'raw' && blockData ? (
+                <div className="border border-white/10 rounded-lg p-4">
+                    <pre className="text-xs overflow-x-auto whitespace-pre-wrap font-mono">
+                        <code className="text-gray-300">
+                            {JSON.stringify(blockData, null, 2)
+                                .split('\n')
+                                .map((line, index) => (
+                                    <div key={index} className="flex">
+                                        <span className="text-gray-600 mr-4 select-none w-8 text-right">
+                                            {String(index + 1).padStart(2, '0')}
+                                        </span>
+                                        <span
+                                            className="flex-1"
+                                            dangerouslySetInnerHTML={{
+                                                __html: line
+                                                    .replace(/(".*?")\s*:/g, '<span class="text-blue-400">$1</span>:')
+                                                    .replace(/:\s*(".*?")/g, ': <span class="text-primary">$1</span>')
+                                                    .replace(/:\s*(\d+)/g, ': <span class="text-yellow-400">$1</span>')
+                                                    .replace(/:\s*(true|false|null)/g, ': <span class="text-purple-400">$1</span>')
+                                                    .replace(/({|}|\[|\])/g, '<span class="text-gray-500">$1</span>')
+                                                    || '&nbsp;'
+                                            }}
+                                        />
+                                    </div>
+                                ))
+                            }
+                        </code>
+                    </pre>
+                </div>
+            ) : (
             <div className="md:grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Left Column */}
                 <div className="space-y-4">
@@ -68,10 +117,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
 
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.status}</span>
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${block.status === 'confirmed'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-yellow-500/20 text-yellow-400'
-                            }`}>
+                        <span className={GREEN_BADGE_CLASS}>
                             {block.status === 'confirmed' ? blockDetailTexts.page.status.confirmed : blockDetailTexts.page.status.pending}
                         </span>
                     </div>
@@ -143,6 +189,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
                     </div>
                 </div>
             </div>
+            )}
         </motion.div>
     )
 }

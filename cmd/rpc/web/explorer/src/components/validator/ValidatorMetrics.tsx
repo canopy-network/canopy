@@ -35,28 +35,28 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
             value: stakedAmountCNPY,
             suffix: ` ${validatorDetailTexts.metrics.units.cnpy}`,
             icon: 'fa-solid fa-lock',
-            subtitle: null
+            subtitle: null,
         },
         {
-            title: 'Committees',
+            title: 'Committees Staked',
             value: validator.committees.length,
             suffix: '',
             icon: 'fa-solid fa-network-wired',
-            subtitle: validator.committees.length > 0 ? `${validator.committees.join(', ')}` : 'None'
+            subtitle: validator.committees.length > 0 ? `IDs: ${validator.committees.join(', ')}` : 'None',
         },
         {
             title: 'Max Paused Height',
             value: validator.maxPausedHeight > 0 ? validator.maxPausedHeight : 0,
             suffix: '',
             icon: 'fa-solid fa-pause-circle',
-            subtitle: validator.maxPausedHeight > 0 ? `Height: ${formatHeight(validator.maxPausedHeight)}` : 'Not paused'
+            subtitle: validator.maxPausedHeight > 0 ? `Height: ${formatHeight(validator.maxPausedHeight)}` : 'Not paused',
         },
         {
             title: 'Unstaking Height',
             value: validator.unstakingHeight > 0 ? validator.unstakingHeight : 0,
             suffix: '',
             icon: 'fa-solid fa-arrow-down',
-            subtitle: validator.unstakingHeight > 0 ? `Height: ${formatHeight(validator.unstakingHeight)}` : 'Not unstaking'
+            subtitle: validator.unstakingHeight > 0 ? `Height: ${formatHeight(validator.unstakingHeight)}` : 'Not unstaking',
         }
     ]
 
@@ -68,20 +68,20 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className="bg-card rounded-lg p-3 sm:p-4"
+                    className="rounded-lg border border-[#272729] bg-[#171717] p-3 sm:p-4"
                 >
                     <div className="flex justify-between items-center gap-3 mb-2">
-                        <div className="text-xs sm:text-sm text-gray-400 break-words">
+                        <div className="text-xs sm:text-sm text-white/60 break-words">
                             {metric.title}
                         </div>
-                        <div className="w-7 h-7 sm:w-8 sm:h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                            <i className={`${metric.icon} text-primary text-xs sm:text-sm`}></i>
+                        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-[#272729] bg-[#0f0f0f] sm:h-8 sm:w-8">
+                            <i className={`${metric.icon} text-xs text-white sm:text-sm`}></i>
                         </div>
                     </div>
                     <div className="text-lg sm:text-xl font-bold text-white break-words">
                         {(metric.title === 'Max Paused Height' || metric.title === 'Unstaking Height') ? (
                             metric.value === 0 ? (
-                                <span className="text-gray-400 text-base sm:text-lg">-</span>
+                                <span className="text-white/45 text-base sm:text-lg">-</span>
                             ) : (
                                 <AnimatedNumber
                                     value={metric.value}
@@ -99,7 +99,7 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
                         {metric.suffix}
                     </div>
                     {metric.subtitle && (
-                        <div className="text-xs mt-1 text-gray-400 break-words">
+                        <div className="mt-1 text-xs break-words text-white/60">
                             {metric.subtitle}
                         </div>
                     )}

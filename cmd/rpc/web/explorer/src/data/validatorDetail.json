@@ -2,8 +2,8 @@
   "page": {
     "title": "Validator Details",
     "description": "Complete validator information and performance metrics",
-    "breadcrumb": "Validators >",
-    "backToValidators": "Back to Validators"
+    "breadcrumb": "Staking >",
+    "backToValidators": "Back to Staking"
   },
   "header": {
     "status": {
@@ -33,7 +33,7 @@
   },
   "stakeByChains": {
     "title": "Stake by Nested Chains",
-    "totalDelegated": "Total Delegated",
+    "totalDelegated": "Total Staked",
     "totalNetworkControl": "Total Network Control",
     "chains": {
       "canopyMain": "Canopy Main Chain",

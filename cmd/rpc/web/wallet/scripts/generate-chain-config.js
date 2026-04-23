@@ -15,7 +15,6 @@ const __dirname = path.dirname(__filename);
 // Read environment variables
 const rpcTarget = process.env.VITE_WALLET_RPC_PROXY_TARGET || 'http://localhost:50002';
 const adminRpcTarget = process.env.VITE_WALLET_ADMIN_RPC_PROXY_TARGET || 'http://localhost:50003';
-const rootRpcTarget = process.env.VITE_ROOT_WALLET_RPC_PROXY_TARGET || rpcTarget;
 const explorerBasePath = process.env.VITE_EXPLORER_BASE_PATH || 'http://localhost:50001';
 
 // Path to chain.json template and output
@@ -38,13 +37,13 @@ if (fs.existsSync(templatePath)) {
 chainConfig.rpc = {
   base: rpcTarget,
   admin: adminRpcTarget,
-  root: rootRpcTarget
 };
 
 // Update explorer paths (built from the base URL)
 const trimmedExplorer = explorerBasePath.replace(/\/+$/, '');
 chainConfig.explorer = {
-  tx: `${trimmedExplorer}/transaction`
+  tx: `${trimmedExplorer}/transaction`,
+  order: `${trimmedExplorer}/order`
 };
 
 // Write the updated config
@@ -53,5 +52,4 @@ fs.writeFileSync(outputPath, JSON.stringify(chainConfig, null, 2));
 console.log(`✅ Generated chain.json with RPC targets:`);
 console.log(`   - base: ${rpcTarget}`);
 console.log(`   - admin: ${adminRpcTarget}`);
-console.log(`   - root: ${rootRpcTarget}`);
 console.log(`   - explorer: ${explorerBasePath}`);

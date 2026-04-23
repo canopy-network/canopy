@@ -1,56 +1,110 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { useManifest } from "@/hooks/useManifest";
+import { Copy, LockOpen, Pause, Pen, Play, Scan } from "lucide-react";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
-import { useValidatorRewardsHistory } from "@/hooks/useValidatorRewardsHistory";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
-import {LockOpen, Pause, Pen, Play} from "lucide-react";
+import { useDenom } from "@/hooks/useDenom";
+import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 interface ValidatorCardProps {
   validator: {
     address: string;
-    nickname?: string;
     stakedAmount: number;
     status: "Staked" | "Paused" | "Unstaking" | "Delegate";
     rewards24h: number;
-    committees?: string[];
+    committees?: number[];
     isSynced: boolean;
     delegate?: boolean;
+    netAddress?: string;
+    publicKey?: string;
+    output?: string;
   };
-  index: number;
+  onViewDetails: () => void;
 }
-
-const formatStakedAmount = (amount: number) => {
-  if (!amount && amount !== 0) return "0.00";
-  return (amount / 1000000).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-};
-
-const formatRewards = (amount: number) => {
-  if (!amount && amount !== 0) return "+0.00";
-  return `+${(amount / 1000000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
-
-const truncateAddress = (address: string) =>
-  `${address.substring(0, 4)}…${address.substring(address.length - 4)}`;
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
+const formatStakedAmount = (amount: number, factor: number) => {
+  if (!amount && amount !== 0) return "0.00";
+  return (amount / factor).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const formatRewards = (amount: number, factor: number) => {
+  if (!amount && amount !== 0) return "+0.00";
+  return `${amount >= 0 ? "+" : ""}${(amount / factor).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+const truncateAddress = (address: string) =>
+  `${address.substring(0, 8)}…${address.substring(address.length - 4)}`;
+
+const statusBadgeClass = (status: ValidatorCardProps["validator"]["status"]) => {
+  return WALLET_BADGE_TONE;
+};
+
+const actionButtonClass =
+  "inline-flex items-center justify-center rounded-lg border border-border/60 p-2 text-foreground transition-colors hover:border-white/20 hover:bg-accent";
+
+type DetailRowProps = {
+  label: string;
+  value?: string;
+  onCopy?: () => void;
+  title?: string;
+  children?: React.ReactNode;
+};
+
+const DetailRow: React.FC<DetailRowProps> = ({
+  label,
+  value,
+  onCopy,
+  title,
+  children,
+}) => (
+  <div className="flex items-start gap-2">
+    <span className="w-20 shrink-0 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-white/50">
+      {label}
+    </span>
+    <div className="min-w-0 flex-1">
+      {children ?? (
+        <div className="flex items-center gap-1.5">
+          <span
+            className="min-w-0 break-all text-xs text-muted-foreground"
+            title={title ?? value}
+          >
+            {value || "—"}
+          </span>
+          {onCopy && value ? (
+            <button
+              type="button"
+              className="rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/60 hover:text-primary"
+              onClick={onCopy}
+              title={`Copy ${label}`}
+            >
+              <Copy className="h-2.5 w-2.5" />
+            </button>
+          ) : null}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
 export const ValidatorCard: React.FC<ValidatorCardProps> = ({
   validator,
-  index,
+  onViewDetails,
 }) => {
   const { copyToClipboard } = useCopyToClipboard();
   const { openAction } = useActionModal();
-
-  // Fetch real rewards data using block height comparison
-  const { data: rewardsHistory, isLoading: rewardsLoading } =
-    useValidatorRewardsHistory(validator.address);
+  const { symbol, factor } = useDenom();
 
   const handlePauseUnpause = () => {
     const actionId =
@@ -65,6 +119,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
 
   const handleEditStake = () => {
     openAction("stake", {
+      titleOverride: "Edit Stake",
       prefilledData: {
         operator: validator.address,
         selectCommittees: validator.committees || [],
@@ -80,153 +135,128 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
     });
   };
 
+  const rewardsColor =
+    validator.rewards24h > 0
+      ? "text-primary"
+      : validator.rewards24h < 0
+        ? "text-red-400"
+        : "text-foreground";
+
   return (
     <motion.div
       variants={itemVariants}
-      className="bg-card rounded-xl border border-border/60 relative overflow-hidden"
+      className="rounded-lg border border-[#272729] bg-[#1a1a1a] p-3.5"
     >
-      <div className="p-4">
-        {/* Grid layout for responsive design */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-center">
-          {/* Validator identity - takes 3 columns on large screens */}
-          <div className="lg:col-span-3">
-            <div className="flex flex-col">
-              <div className="text-primary capitalize font-medium mb-1 flex items-center">
-                <span className="mr-2">
-                  {validator.nickname || `Node ${index + 1}`}
-                </span>
-                <button className="text-bg-accent">
-                  <i className="fa-solid fa-server text-muted-foreground text-xs"></i>
-                </button>
-              </div>
-              <div className="text-muted-foreground text-sm font-mono">
-                {truncateAddress(validator.address)}
-              </div>
-              <button
-                className="text-primary text-xs mt-1 text-left w-fit"
-                onClick={() =>
-                  copyToClipboard(
-                    validator.address,
-                    `Validator ${validator.nickname || "address"}`,
-                  )
-                }
-              >
-                <i className="fa-solid fa-copy"></i> Copy
-              </button>
-
-              {/* Chain badges */}
-              <div className="flex mt-2 gap-1 flex-wrap">
-                {(validator.committees || []).slice(0, 2).map((chain, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-0.5 text-xs bg-accent text-foreground rounded"
-                  >
-                    {chain}
-                  </span>
-                ))}
-                {(validator.committees || []).length > 2 && (
-                  <span className="text-muted-foreground text-xs">
-                    +{(validator.committees || []).length - 2} more
-                  </span>
-                )}
-              </div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid flex-1 grid-cols-3 gap-3">
+          <div>
+            <div className="text-sm font-medium text-foreground">
+              {formatStakedAmount(validator.stakedAmount, factor)} {symbol}
+            </div>
+            <div className="mt-1 text-[11px] uppercase tracking-wider text-white/50">
+              Staked
             </div>
           </div>
-
-          {/* Stats section - responsive grid */}
-          <div className="lg:col-span-6 grid grid-cols-2 sm:grid-cols-2 gap-4">
-            {/* Total Staked */}
-            <div className="flex flex-col">
-              <div className="text-foreground font-medium">
-                {formatStakedAmount(validator.stakedAmount)} CNPY
-              </div>
-              <div className="text-muted-foreground text-xs">Total Staked</div>
+          <div>
+            <div className={`text-sm font-medium ${rewardsColor}`}>
+              {formatRewards(validator.rewards24h, factor)} {symbol}
             </div>
-
-            {/* 24h Rewards */}
-            <div className="flex flex-col">
-              <div className="text-primary font-medium">
-                {rewardsLoading
-                  ? "..."
-                  : formatRewards(rewardsHistory?.change24h || 0)}
-              </div>
-              <div className="text-muted-foreground text-xs">24h Rewards</div>
+            <div className="mt-1 text-[11px] uppercase tracking-wider text-white/50">
+              Rewards 24h
             </div>
           </div>
-
-          {/* Status and Actions - takes 3 columns on large screens */}
-          <div className="lg:col-span-3 flex flex-col sm:flex-row lg:flex-col xl:flex-row items-start sm:items-center lg:items-end xl:items-center justify-between lg:justify-end gap-3">
-            {/* Status badges */}
-            <div className="flex items-center gap-2">
-              <span
-                className={`${
-                  validator.status === "Staked" || validator.status === "Delegate"
-                    ? "bg-primary/20 text-primary"
-                    : validator.status === "Paused"
-                      ? "bg-yellow-500/20 text-yellow-400"
-                      : "bg-red-500/20 text-red-400"
-                } text-xs px-3 py-1 rounded-full whitespace-nowrap`}
-              >
-                {validator.status}
-              </span>
-              <span
-                className={`w-2 h-2 ${validator.isSynced ? "bg-primary" : "bg-red-500"} rounded-full flex-shrink-0`}
-              ></span>
-            </div>
-
-            {/* Action buttons */}
-            {validator.status !== "Unstaking" && (
-              <div className="flex items-center gap-2">
-                <button
-                  className={`p-2 border border-border/60 rounded-lg transition-colors ${
-                    validator.delegate && validator.status === "Staked"
-                      ? "opacity-40 cursor-not-allowed"
-                      : "hover:bg-accent group hover:border-primary/40"
-                  }`}
-                  onClick={validator.delegate && validator.status === "Staked" ? undefined : handlePauseUnpause}
-                  title={
-                    validator.delegate && validator.status === "Staked"
-                      ? "Delegate validators cannot be paused"
-                      : validator.status === "Staked"
-                        ? "Pause Validator"
-                        : "Unpause Validator"
-                  }
-                  disabled={validator.delegate && validator.status === "Staked"}
-                >
-                    {
-                        validator.status === 'Paused' ?
-                        (<Play className={"w-4 h-4 text-foreground text-sm group-hover:text-primary"}/>) :
-                        (<Pause className={"w-4 h-4 text-foreground text-sm group-hover:text-primary"}/>)
-                    }
-
-                </button>
-                <button
-                  className="p-2 hover:bg-accent group hover:border-primary/40 border border-border/60 rounded-lg transition-colors"
-                  onClick={handleEditStake}
-                  title="Edit Stake"
-                >
-                  <Pen
-                    className={
-                      "w-4 h-4 text-foreground text-sm group-hover:text-primary"
-                    }
-                  />
-                </button>
-
-                <button
-                  className="p-2 hover:bg-accent group hover:border-red-400/40 border border-border/60 rounded-lg transition-colors"
-                  onClick={handleUnstake}
-                  title="Unstake Validator"
-                >
-                  <LockOpen
-                    className={
-                      "w-4 h-4 text-foreground text-sm group-hover:text-primary"
-                    }
-                  />
-                </button>
-              </div>
-            )}
+          <div>
+            <span className={`${WALLET_BADGE_CLASS} leading-none ${statusBadgeClass(validator.status)}`}>
+              {validator.status}
+            </span>
           </div>
         </div>
+
+        {validator.status !== "Unstaking" ? (
+          <div className="flex items-center gap-2">
+            {!validator.delegate ? (
+              <ActionTooltip
+                label={validator.status === "Staked" ? "Pause Validator" : "Resume Validator"}
+                description={validator.status === "Staked" ? "Temporarily pause validator activity." : "Resume validator activity after a pause."}
+              >
+                <button
+                  type="button"
+                  className={actionButtonClass}
+                  onClick={handlePauseUnpause}
+                  aria-label={validator.status === "Staked" ? "Pause Validator" : "Resume Validator"}
+                >
+                  {validator.status === "Paused" ? (
+                    <Play className="h-4 w-4" />
+                  ) : (
+                    <Pause className="h-4 w-4" />
+                  )}
+                </button>
+              </ActionTooltip>
+            ) : null}
+            <ActionTooltip
+              label="Edit Stake"
+              description="Adjust stake settings and committees."
+            >
+              <button
+                type="button"
+                className={actionButtonClass}
+                onClick={handleEditStake}
+                aria-label="Edit Stake"
+              >
+                <Pen className="h-4 w-4" />
+              </button>
+            </ActionTooltip>
+            <ActionTooltip
+              label="Unstake Validator"
+              description="Begin removing stake from this validator."
+            >
+              <button
+                type="button"
+                className={actionButtonClass}
+                onClick={handleUnstake}
+                aria-label="Unstake Validator"
+              >
+                <LockOpen className="h-4 w-4" />
+              </button>
+            </ActionTooltip>
+            <ActionTooltip
+              label="Validator Details"
+              description="Open validator metadata and network details."
+            >
+              <button
+                type="button"
+                className="group rounded-lg border border-[#272729] p-2 transition-all duration-150 hover:border-white/15 hover:bg-[#272729]"
+                onClick={onViewDetails}
+                aria-label="Validator Details"
+              >
+                <Scan className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[#35cd48]" />
+              </button>
+            </ActionTooltip>
+          </div>
+        ) : (
+          <ActionTooltip
+            label="Validator Details"
+            description="Open validator metadata and network details."
+          >
+            <button
+              type="button"
+              className="group rounded-lg border border-[#272729] p-2 transition-all duration-150 hover:border-white/15 hover:bg-[#272729]"
+              onClick={onViewDetails}
+              aria-label="Validator Details"
+            >
+              <Scan className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-[#35cd48]" />
+            </button>
+          </ActionTooltip>
+        )}
+      </div>
+
+      <div className="mt-3 border-t border-[#272729] pt-3">
+        <DetailRow
+          label="Address"
+          value={truncateAddress(validator.address)}
+          title={validator.address}
+          onCopy={() => copyToClipboard(validator.address, "Validator Address")}
+        />
       </div>
     </motion.div>
   );
