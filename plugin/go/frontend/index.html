@@ -421,6 +421,61 @@ tr:hover td { background: var(--surface); }
 /* ── Spinner ─────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinning { display: inline-block; animation: spin .7s linear infinite; }
+
+/* ── Mobile hamburger ────────────────────────────────────── */
+.hamburger {
+  display: none; background: none; border: none;
+  color: var(--text); font-size: 18px; cursor: pointer;
+  padding: 4px 8px; line-height: 1;
+}
+
+/* ── Mobile responsive ───────────────────────────────────── */
+@media (max-width: 700px) {
+  .shell { grid-template-columns: 1fr; }
+
+  .sidebar {
+    position: fixed; top: 0; left: -220px;
+    width: 200px; height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border2);
+    z-index: 1000;
+    transition: left .2s ease;
+  }
+  .sidebar.open { left: 0; }
+
+  .sidebar-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.6); z-index: 999;
+  }
+  .sidebar-overlay.show { display: block; }
+
+  .hamburger { display: block; }
+
+  .topbar { padding: 10px 14px; }
+  .topbar-title { font-size: 13px; }
+
+  .content { padding: 14px; }
+
+  .signer-card {
+    flex-direction: column; gap: 10px; padding: 12px;
+  }
+  .signer-input-wrap { width: 100%; }
+  .signer-input-wrap input { font-size: 11px; }
+
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-value { font-size: 17px; }
+
+  .form-grid { grid-template-columns: 1fr; }
+  .form-group.full { grid-column: 1; }
+
+  .wallet-grid { grid-template-columns: 1fr; }
+  .rpc-grid { grid-template-columns: 1fr; }
+
+  .markets-grid { grid-template-columns: 1fr; }
+
+  table { font-size: 10.5px; }
+  th, td { padding: 7px 8px; }
+}
 </style>
 </head>
 <body>
@@ -490,8 +545,12 @@ tr:hover td { background: var(--surface); }
 
 <!-- ── Main ────────────────────────────────────────────── -->
 <div class="main">
+  <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
   <div class="topbar">
-    <div class="topbar-title" id="pageTitle">All Markets</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <div class="topbar-title" id="pageTitle">All Markets</div>
+    </div>
     <div class="topbar-right">
       <span class="chain-pill">CHAIN ID 1</span>
       <button class="btn btn-sm" onclick="refreshAll()">⟳ Refresh</button>
@@ -1639,6 +1698,22 @@ window.copyPayload = function(id) {
   navigator.clipboard.writeText(document.getElementById(id).value)
     .then(() => toast('Payload copied to clipboard'));
 };
+
+window.toggleSidebar = function() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('show');
+};
+window.closeSidebar = function() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+};
+
+// Close sidebar when a nav item is tapped on mobile
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (window.innerWidth <= 700) closeSidebar();
+  });
+});
 
 window.refreshAll = function() { checkRPC(); loadMarkets(); };
 
