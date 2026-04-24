@@ -196,8 +196,7 @@ func (c *Contract) EndBlock(req *PluginEndRequest) *PluginEndResponse {
 	rangeQId := rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 		Ranges: []*PluginRangeRead{
-			{QueryId: rangeQId, Prefix: marketPrefix, Limit: 200, Reverse: false},
-		},
+			{QueryId: rangeQId, Prefix: []byte{0x01, 0x10}, Limit: 200, Reverse: false},,
 	})
 	if err != nil || resp.Error != nil {
 		return &PluginEndResponse{}
