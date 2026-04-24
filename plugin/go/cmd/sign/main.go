@@ -25,8 +25,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// ── CLI flags ─────────────────────────────────────────────────────────────────
-
 var (
 	flagKey    = flag.String("key", "", "BLS12-381 private key hex (64 chars)")
 	flagRPC    = flag.String("rpc", "http://localhost:50002", "RPC endpoint")
@@ -65,10 +63,11 @@ func main() {
 	// Build the inner proto message
 	msgProto, typeURL := buildMessage(*flagType)
 
-	// Marshal the inner message to proto bytes (for anypb.Any.Value)
+	// Marshal inner message bytes
 	msgBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(msgProto)
 	must("marshal inner message", err)
 
+	// Build anypb.Any
 	msgAny := &anypb.Any{
 		TypeUrl: typeURL,
 		Value:   msgBytes,
@@ -76,7 +75,7 @@ func main() {
 
 	txTime := uint64(time.Now().UnixNano())
 
-	// Get sign bytes (Transaction proto with nil signature, deterministic)
+	// Get sign bytes using canonical proto encoding (signature field nil)
 	signBytes, err := crypto.GetSignBytes(
 		*flagType, msgAny,
 		txTime, createdHeight,
@@ -89,8 +88,28 @@ func main() {
 	sig := privKey.Sign(signBytes)
 	fmt.Fprintf(os.Stderr, "✓ Signed  sig: %s (%d bytes)\n", hex.EncodeToString(sig[:8])+"...", len(sig))
 
-	// Build final transaction for RPC
-	finalTx := buildFinalTxJSON(*flagType, typeURL, msgProto, txTime, createdHeight, *flagFee, *flagNet, *flagChain, pubKeyBytes, sig)
+	// Encode Any for JSON payload
+	anyBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(msgAny)
+	must("marshal any", err)
+
+	// Build final tx JSON matching Canopy RPC format
+	finalTx := map[string]interface{}{
+		"messageType": *flagType,
+		"msg": map[string]string{
+			"@type": typeURL,
+			"value": base64.StdEncoding.EncodeToString(anyBytes),
+		},
+		"signature": map[string]string{
+			"publicKey": base64.StdEncoding.EncodeToString(pubKeyBytes),
+			"signature": base64.StdEncoding.EncodeToString(sig),
+		},
+		"createdHeight": createdHeight,
+		"time":          txTime,
+		"fee":           *flagFee,
+		"memo":          "",
+		"networkID":     *flagNet,
+		"chainID":       *flagChain,
+	}
 
 	txJSON, err := json.MarshalIndent(finalTx, "", "  ")
 	must("marshal final tx", err)
@@ -191,60 +210,6 @@ func buildClaimWinnings() *contract.MessageClaimWinnings {
 		ClaimerAddress: hexToBytes(prompt("claimerAddress (hex)")),
 		MarketId:       promptUint("marketId"),
 	}
-}
-
-// ── Final TX JSON builder ─────────────────────────────────────────────────────
-
-func buildFinalTxJSON(txType, typeURL string, msg proto.Message, txTime, createdHeight, fee, netID, chainID uint64, pubKey, sig []byte) map[string]interface{} {
-	msgFields := protoToJSONFields(msg)
-	return map[string]interface{}{
-		"type":          txType,
-		"msgTypeUrl":    typeURL,
-		"msgFields":     msgFields,
-		"time":          txTime,
-		"createdHeight": createdHeight,
-		"fee":           fee,
-		"networkID":     netID,
-		"chainID":       chainID,
-		"memo":          "",
-		"signature": map[string]string{
-			"publicKey": base64.StdEncoding.EncodeToString(pubKey),
-			"signature": base64.StdEncoding.EncodeToString(sig),
-		},
-	}
-}
-
-func protoToJSONFields(msg proto.Message) map[string]interface{} {
-	switch m := msg.(type) {
-	case *contract.MessageCreateMarket:
-		return map[string]interface{}{
-			"creatorAddress":   base64.StdEncoding.EncodeToString(m.CreatorAddress),
-			"question":         m.Question,
-			"description":      m.Description,
-			"resolverAddress":  base64.StdEncoding.EncodeToString(m.ResolverAddress),
-			"resolutionHeight": m.ResolutionHeight,
-			"stakeAmount":      m.StakeAmount,
-		}
-	case *contract.MessageSubmitPrediction:
-		return map[string]interface{}{
-			"forecasterAddress": base64.StdEncoding.EncodeToString(m.ForecasterAddress),
-			"marketId":          m.MarketId,
-			"outcome":           m.Outcome,
-			"amount":            m.Amount,
-		}
-	case *contract.MessageResolveMarket:
-		return map[string]interface{}{
-			"resolverAddress": base64.StdEncoding.EncodeToString(m.ResolverAddress),
-			"marketId":        m.MarketId,
-			"winningOutcome":  m.WinningOutcome,
-		}
-	case *contract.MessageClaimWinnings:
-		return map[string]interface{}{
-			"claimerAddress": base64.StdEncoding.EncodeToString(m.ClaimerAddress),
-			"marketId":       m.MarketId,
-		}
-	}
-	return nil
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
