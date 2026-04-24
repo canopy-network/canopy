@@ -1,5 +1,5 @@
 // Praxis transaction signer — CLI tool for signing and submitting transactions
-// Build:  cd ~/praxis/plugin/go && GOTOOLCHAIN=local go build -o ~/go/bin/praxis-sign ./cmd/sign
+// Build:  cd ~/praxis/plugin/go && GOTOOLCHAIN=local /usr/local/go/bin/go build -o ~/go/bin/praxis-sign ./cmd/sign
 // Usage:  praxis-sign -key <64-char-hex> -type create_market [-dry]
 
 package main
@@ -7,7 +7,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/canopy-network/go-plugin/contract"
 	"github.com/canopy-network/go-plugin/crypto"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -63,65 +63,68 @@ func main() {
 	// Build the inner proto message
 	msgProto, typeURL := buildMessage(*flagType)
 
-	// Marshal inner message bytes
-	msgBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(msgProto)
-	must("marshal inner message", err)
-
-	// Build anypb.Any
+	// Wrap in anypb.Any using anypb.New (correct proto Any format)
 	msgAny := &anypb.Any{
 		TypeUrl: typeURL,
-		Value:   msgBytes,
 	}
+	innerBytes, merr := proto.MarshalOptions{Deterministic: true}.Marshal(msgProto)
+	must("marshal inner message", merr)
+	msgAny.Value = innerBytes
 
 	txTime := uint64(time.Now().UnixNano())
 
-	// Get sign bytes using canonical proto encoding (signature field nil)
-	signBytes, err := crypto.GetSignBytes(
+	// ── Step 1: Build the Transaction with Signature = nil ──────────────────
+	// Per Canopy docs: sign proto.Marshal of the tx with signature field empty.
+	// Use GetSignBytes which handles this correctly.
+	signBytes, serr := crypto.GetSignBytes(
 		*flagType, msgAny,
 		txTime, createdHeight,
 		*flagFee, "",
 		*flagNet, *flagChain,
 	)
-	must("get sign bytes", err)
+	must("get sign bytes", serr)
 
-	// Sign with BDN/kyber
+	// ── Step 2: Sign with BLS12-381 ─────────────────────────────────────────
 	sig := privKey.Sign(signBytes)
 	fmt.Fprintf(os.Stderr, "✓ Signed  sig: %s (%d bytes)\n", hex.EncodeToString(sig[:8])+"...", len(sig))
 
-	// Encode Any for JSON payload
-	anyBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(msgAny)
-	must("marshal any", err)
-
-	// Build final tx JSON matching Canopy RPC format
-	finalTx := map[string]interface{}{
-		"messageType": *flagType,
-		"msg": map[string]string{
-			"@type": typeURL,
-			"value": base64.StdEncoding.EncodeToString(anyBytes),
+	// ── Step 3: Build full Transaction proto struct with signature attached ──
+	// This matches the Transaction message in proto/tx.proto exactly.
+	// protojson.Marshal will correctly encode []byte fields as base64
+	// and the Any msg as proper proto-JSON (with field names, not raw value).
+	tx := &contract.Transaction{
+		MessageType:   *flagType,
+		Msg:           msgAny,
+		CreatedHeight: createdHeight,
+		Time:          txTime,
+		Fee:           *flagFee,
+		Memo:          "",
+		NetworkId:     *flagNet,
+		ChainId:       *flagChain,
+		Signature: &contract.Signature{
+			PublicKey: pubKeyBytes,
+			Signature: sig,
 		},
-		"signature": map[string]string{
-			"publicKey": base64.StdEncoding.EncodeToString(pubKeyBytes),
-			"signature": base64.StdEncoding.EncodeToString(sig),
-		},
-		"createdHeight": createdHeight,
-		"time":          txTime,
-		"fee":           *flagFee,
-		"memo":          "",
-		"networkID":     *flagNet,
-		"chainID":       *flagChain,
 	}
 
-	txJSON, err := json.MarshalIndent(finalTx, "", "  ")
-	must("marshal final tx", err)
+	// ── Step 4: Marshal to JSON using protojson (NOT encoding/json) ──────────
+	// Per Canopy docs: "Use protojson.Marshal, not json.Marshal.
+	// Standard encoding/json will encode []byte fields as base64 but without
+	// the padding format that the Canopy RPC expects. protojson handles this correctly."
+	txJSON,jerr := protojson.Marshal(tx)
+	must("marshal tx to protojson", jerr)
 
 	if *flagDry {
-		fmt.Println(string(txJSON))
+		// Pretty-print for readability
+		var pretty bytes.Buffer
+		json.Indent(&pretty, txJSON, "", "  ")
+		fmt.Println(pretty.String())
 		return
 	}
 
-	// Submit to RPC
-	resp, err := http.Post(*flagRPC+"/v1/tx", "application/json", bytes.NewReader(txJSON))
-	must("post tx", err)
+	// ── Step 5: POST to /v1/tx ───────────────────────────────────────────────
+	resp, rerr := http.Post(*flagRPC+"/v1/tx", "application/json", bytes.NewReader(txJSON))
+	must("post tx", rerr)
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	fmt.Printf("RPC response [%s]:\n%s\n", resp.Status, string(body))
