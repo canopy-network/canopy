@@ -4,7 +4,7 @@ import blockDetailTexts from '../../data/blockDetail.json'
 import transactionsTexts from '../../data/transactions.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
-import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
+import { cnpyDetailFormat, formatMicroCNPY, formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 import CopyableIdentifier from '../ui/CopyableIdentifier'
 
@@ -49,12 +49,6 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
     const truncateMiddle = (value: string, leading = 10, trailing = 6) => {
         if (!value || value.length <= leading + trailing + 1) return value || 'N/A'
         return `${value.slice(0, leading)}…${value.slice(-trailing)}`
-    }
-
-    const formatFee = (fee: number) => {
-        if (!fee || fee === 0) return '0 CNPY'
-        const cnpy = fee / 1_000_000
-        return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
     }
 
     const getTransactionType = (tx: Transaction): string => {
@@ -171,12 +165,12 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <span className="text-sm text-white tabular-nums">
-                                            <AnimatedNumber value={amount} format={{ maximumFractionDigits: 4 }} className="text-white" />
+                                            <AnimatedNumber value={amount} format={cnpyDetailFormat} className="text-white" />
                                             <span className="ml-1 text-white/50">{transactionsTexts.table.units.cnpy}</span>
                                         </span>
                                     </td>
                                     <td className={desktopRowCellClass}>
-                                        <span className="text-sm text-white tabular-nums">{formatFee(tx.fee || 0)}</span>
+                                        <span className="text-sm text-white tabular-nums">{formatMicroCNPY(tx.fee || 0)}</span>
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <span className={GREEN_BADGE_CLASS}>

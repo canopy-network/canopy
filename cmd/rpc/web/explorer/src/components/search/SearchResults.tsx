@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
 import toast from 'react-hot-toast'
 import { Account, TransactionsBySender, TransactionsByRec } from '../../lib/api'
+import { toCNPY } from '../../lib/utils'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface SearchResultsProps {
@@ -22,6 +23,12 @@ interface FieldConfig {
     truncate?: boolean
     fullWidth?: boolean
 }
+
+const formatAccountBalance = (amount: number | undefined) =>
+    toCNPY(Number(amount || 0)).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })
 
 const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
     // Sync activeTab with filter.type if filter is set
@@ -234,7 +241,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             fetchAddressData()
         }, [address])
 
-        const balance = accountData?.amount ? (accountData.amount / 1000000).toFixed(2) : (initialData?.amount ? (initialData.amount / 1000000).toFixed(2) : '0.00')
+        const balance = formatAccountBalance(accountData?.amount ?? initialData?.amount)
 
         return (
             <motion.div

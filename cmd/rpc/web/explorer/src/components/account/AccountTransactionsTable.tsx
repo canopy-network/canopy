@@ -5,7 +5,7 @@ import accountDetailTexts from '../../data/accountDetail.json'
 import transactionsTexts from '../../data/transactions.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
-import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
+import { cnpyDetailFormat, formatMicroCNPY, formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
 import CopyableIdentifier from '../ui/CopyableIdentifier'
 
@@ -87,18 +87,6 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         } catch {
             return 'N/A'
         }
-    }
-
-    // Helper function to convert micro denomination to CNPY
-    const toCNPY = (micro: number): number => {
-        return micro / 1000000
-    }
-
-    const formatFee = (fee: number) => {
-        if (!fee || fee === 0) return '0'
-        // Fee comes in micro denomination from endpoint, convert to CNPY
-        const cnpy = toCNPY(fee)
-        return cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
     }
 
     const normalizeType = (type: string): string => {
@@ -191,7 +179,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                 {typeof amountCNPY === 'number' && amountCNPY > 0 ? (
                     <AnimatedNumber
                         value={amountCNPY}
-                        format={{ maximumFractionDigits: 4 }}
+                        format={cnpyDetailFormat}
                         className="text-white"
                     />
                 ) : (
@@ -201,7 +189,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
 
             // Fee (in micro denomination from endpoint) with minimum fee info
             <span key="fee" className="text-sm text-white tabular-nums">
-                {typeof feeMicro === 'number' ? formatFee(feeMicro) : formatFee(feeMicro || 0)}
+                {formatMicroCNPY(feeMicro || 0)}
             </span>,
 
             // Block
@@ -379,7 +367,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                         {typeof amountCNPY === 'number' && amountCNPY > 0 ? (
                                             <AnimatedNumber
                                                 value={amountCNPY}
-                                                format={{ maximumFractionDigits: 4 }}
+                                                format={cnpyDetailFormat}
                                                 className="text-white"
                                             />
                                         ) : (
@@ -389,7 +377,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-gray-400">Fee:</span>
-                                    <span className="text-gray-300">{formatFee(feeMicro)}</span>
+                                    <span className="text-gray-300">{formatMicroCNPY(feeMicro || 0)}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-gray-400">Block:</span>

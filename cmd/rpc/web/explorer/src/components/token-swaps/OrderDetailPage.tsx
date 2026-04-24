@@ -5,13 +5,13 @@ import { Copy } from 'lucide-react'
 import { useOrder } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 
-import { toCNPY } from '../../lib/utils'
+import { formatDecimalWithSubscript, formatLocaleNumber, formatMicroCNPY } from '../../lib/utils'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
+const SWAP_DECIMAL_PLACES = 6
+
 const formatAmount = (micro: number): string => {
-    if (micro === 0) return '0 CNPY'
-    const cnpy = toCNPY(micro)
-    return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
+    return formatMicroCNPY(micro)
 }
 
 const CopySymbol = () => <Copy aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
@@ -101,7 +101,7 @@ const OrderDetailPage: React.FC = () => {
     const status: string = buyerSendAddress ? 'Locked' : 'Active'
 
     const exchangeRate = requestedAmount > 0
-        ? (amountForSale / requestedAmount).toFixed(6)
+        ? formatDecimalWithSubscript(amountForSale / requestedAmount, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)
         : 'N/A'
 
     return (

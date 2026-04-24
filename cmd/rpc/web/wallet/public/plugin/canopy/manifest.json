@@ -327,6 +327,14 @@
             "address": "{{account.address}}"
           }
         },
+        "validator": {
+          "account": {
+            "address": "{{account.address}}"
+          },
+          "__options": {
+            "enabled": "{{account.address}}"
+          }
+        },
         "__options": {
           "staleTimeMs": 30000,
           "refetchOnMount": true,
@@ -388,6 +396,21 @@
         "info": {
           "title": "Details",
           "items": [
+            {
+              "label": "Liquid Balance",
+              "value": "{{formatToCoinPrecise<{{ds.account?.amount ?? 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Wallet"
+            },
+            {
+              "label": "Staked Balance",
+              "value": "{{formatToCoinPrecise<{{ds.validator?.stakedAmount ?? 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Lock"
+            },
+            {
+              "label": "Total Balance",
+              "value": "{{formatToCoinPrecise<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0)}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
             {
               "label": "Only send {{chain.denom.symbol}} to this address.",
               "icon": "Coins"

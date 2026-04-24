@@ -4,6 +4,7 @@ import { Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import blockDetailTexts from '../../data/blockDetail.json'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
+import { formatCNPY } from '../../lib/utils'
 
 interface BlockDetailInfoProps {
     block: {
@@ -147,7 +148,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
                     </div>
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.blockReward}</span>
-                        <span className="text-primary">{block.blockReward} {blockDetailTexts.blockDetails.units.cnpy}</span>
+                        <span className="text-primary">{formatCNPY(block.blockReward)} {blockDetailTexts.blockDetails.units.cnpy}</span>
                     </div>
 
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
@@ -157,7 +158,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
 
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.totalTransactionFees}</span>
-                        <span className="text-orange-400">{block.totalTransactionFees} {blockDetailTexts.blockDetails.units.cnpy}</span>
+                        <span className="text-orange-400">{formatCNPY(block.totalTransactionFees)} {blockDetailTexts.blockDetails.units.cnpy}</span>
                     </div>
 
                 </div>

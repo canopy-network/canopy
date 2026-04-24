@@ -2,7 +2,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import accountsTexts from '../../data/accounts.json'
 import AnimatedNumber from '../AnimatedNumber'
-import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
 import CnpyColorIcon from '../ui/CnpyColorIcon'
 import CopyableIdentifier from '../ui/CopyableIdentifier'
@@ -142,7 +142,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
                                         style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
                                     >
                                         <span className="text-sm text-white tabular-nums">
-                                            <AnimatedNumber value={account.amount} format={{ maximumFractionDigits: 4 }} className="text-white" />
+                                            <AnimatedNumber value={toCNPY(account.amount)} format={{ maximumFractionDigits: 4 }} className="text-white" />
                                             <span className="ml-1 text-white/50">CNPY</span>
                                         </span>
                                     </td>

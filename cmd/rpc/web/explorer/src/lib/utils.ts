@@ -184,6 +184,55 @@ export const formatLocaleNumber = (num: number, minFractionDigits: number = 0, m
     });
 };
 
+export const cnpyDetailFormat: Intl.NumberFormatOptions = {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+}
+
+const subscriptDigits = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉']
+
+export const formatCNPY = (cnpy: number): string =>
+    formatLocaleNumber(cnpy, cnpyDetailFormat.minimumFractionDigits, cnpyDetailFormat.maximumFractionDigits)
+
+export const formatMicroCNPY = (uCNPY: number): string => {
+    if (!uCNPY) return '0 CNPY'
+    return `${formatCNPY(toCNPY(uCNPY))} CNPY`
+}
+
+export const formatDecimalWithSubscript = (
+    value: number,
+    minFractionDigits: number = 2,
+    maxFractionDigits: number = 6,
+    significantDigits: number = 3,
+): string => {
+    if (!Number.isFinite(value) || value === 0) {
+        return formatLocaleNumber(0, minFractionDigits, maxFractionDigits)
+    }
+
+    const sign = value < 0 ? '-' : ''
+    const absolute = Math.abs(value)
+    const fixed = absolute.toFixed(Math.max(12, maxFractionDigits + significantDigits + 4))
+    const [, decimal = ''] = fixed.split('.')
+
+    let leadingZeros = 0
+    for (const digit of decimal) {
+        if (digit === '0') leadingZeros++
+        else break
+    }
+
+    if (leadingZeros < Math.max(0, maxFractionDigits - 2)) {
+        return `${sign}${formatLocaleNumber(absolute, minFractionDigits, maxFractionDigits)}`
+    }
+
+    const significant = decimal.slice(leadingZeros, leadingZeros + significantDigits).padEnd(significantDigits, '0')
+    const subscript = String(leadingZeros)
+        .split('')
+        .map((digit) => subscriptDigits[Number(digit)] ?? digit)
+        .join('')
+
+    return `${sign}0.0${subscript}${significant}`
+}
+
 // extractAmountMicro extracts the uCNPY amount from a transaction object,
 // checking both top-level fields and the nested transaction.msg structure.
 export function extractAmountMicro(tx: Record<string, unknown>): number {

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Check, Copy } from 'lucide-react'
 import AnimatedNumber from '../AnimatedNumber'
 import accountDetailTexts from '../../data/accountDetail.json'
-import { toCNPY } from '../../lib/utils'
+import { cnpyDetailFormat, toCNPY } from '../../lib/utils'
 
 interface Account {
     address: string
@@ -86,10 +86,7 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                         <p className="text-sm text-white">
                             <AnimatedNumber
                                 value={toCNPY(account.amount)}
-                                format={{
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                }}
+                                format={cnpyDetailFormat}
                                 className="text-white"
                             />
                             <span className="ml-2 text-white">CNPY</span>
