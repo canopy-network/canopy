@@ -63,19 +63,17 @@ func main() {
 	// Build the inner proto message
 	msgProto, typeURL := buildMessage(*flagType)
 
-	// Wrap in anypb.Any using anypb.New (correct proto Any format)
-	msgAny := &anypb.Any{
-		TypeUrl: typeURL,
-	}
+	// Marshal inner message bytes and wrap in Any
 	innerBytes, merr := proto.MarshalOptions{Deterministic: true}.Marshal(msgProto)
 	must("marshal inner message", merr)
-	msgAny.Value = innerBytes
+	msgAny := &anypb.Any{
+		TypeUrl: typeURL,
+		Value:   innerBytes,
+	}
 
 	txTime := uint64(time.Now().UnixNano())
 
-	// ── Step 1: Build the Transaction with Signature = nil ──────────────────
-	// Per Canopy docs: sign proto.Marshal of the tx with signature field empty.
-	// Use GetSignBytes which handles this correctly.
+	// ── Step 1: Get sign bytes (proto.Marshal of tx with nil signature) ──────
 	signBytes, serr := crypto.GetSignBytes(
 		*flagType, msgAny,
 		txTime, createdHeight,
@@ -88,37 +86,48 @@ func main() {
 	sig := privKey.Sign(signBytes)
 	fmt.Fprintf(os.Stderr, "✓ Signed  sig: %s (%d bytes)\n", hex.EncodeToString(sig[:8])+"...", len(sig))
 
-	// ── Step 3: Build full Transaction proto struct with signature attached ──
-	// This matches the Transaction message in proto/tx.proto exactly.
-	// protojson.Marshal will correctly encode []byte fields as base64
-	// and the Any msg as proper proto-JSON (with field names, not raw value).
-	tx := &contract.Transaction{
-		MessageType:   *flagType,
-		Msg:           msgAny,
-		CreatedHeight: createdHeight,
-		Time:          txTime,
-		Fee:           *flagFee,
-		Memo:          "",
-		NetworkId:     *flagNet,
-		ChainId:       *flagChain,
-		Signature: &contract.Signature{
-			PublicKey: pubKeyBytes,
-			Signature: sig,
+	// ── Step 3: Build the msg JSON using protojson on the inner message ──────
+	// AnyFromJSONForMessageType (called by UnmarshalJSON on the server) runs
+	// protojson.Unmarshal on j.Msg, so j.Msg must be the inner message fields
+	// rendered as proto-JSON (e.g. {"creatorAddress":"<base64>", "question":"..."})
+	// NOT a nested Any with a "value" blob.
+	msgJSON, mjerr := protojson.MarshalOptions{}.Marshal(msgProto)
+	must("marshal inner message to proto-JSON", mjerr)
+
+	// ── Step 4: Build the outer transaction JSON ─────────────────────────────
+	// Field names must match jsonTx struct tags in lib/tx.go:
+	//   "type"          ← messageType (NOT "messageType")
+	//   "msg"           ← json.RawMessage of the inner message fields
+	//   "signature"     ← { "publicKey": "<hex>", "signature": "<hex>" }
+	//   "createdHeight" ← uint64
+	//   "time"          ← uint64
+	//   "fee"           ← uint64
+	//   "networkID"     ← uint64
+	//   "chainID"       ← uint64
+	//
+	// Signature bytes must be HEX (not base64) — see jsonSignature in lib/tx.go.
+	// The "msg" field is passed to AnyFromJSONForMessageType which calls
+	// protojson.Unmarshal, so it must be proto-JSON (not a raw Any value blob).
+	finalTx := map[string]interface{}{
+		"type": *flagType,
+		"msg":  json.RawMessage(msgJSON),
+		"signature": map[string]string{
+			"publicKey": hex.EncodeToString(pubKeyBytes),
+			"signature": hex.EncodeToString(sig),
 		},
+		"createdHeight": createdHeight,
+		"time":          txTime,
+		"fee":           *flagFee,
+		"memo":          "",
+		"networkID":     *flagNet,
+		"chainID":       *flagChain,
 	}
 
-	// ── Step 4: Marshal to JSON using protojson (NOT encoding/json) ──────────
-	// Per Canopy docs: "Use protojson.Marshal, not json.Marshal.
-	// Standard encoding/json will encode []byte fields as base64 but without
-	// the padding format that the Canopy RPC expects. protojson handles this correctly."
-	txJSON,jerr := protojson.Marshal(tx)
-	must("marshal tx to protojson", jerr)
+	txJSON, jerr := json.MarshalIndent(finalTx, "", "  ")
+	must("marshal final tx JSON", jerr)
 
 	if *flagDry {
-		// Pretty-print for readability
-		var pretty bytes.Buffer
-		json.Indent(&pretty, txJSON, "", "  ")
-		fmt.Println(pretty.String())
+		fmt.Println(string(txJSON))
 		return
 	}
 
