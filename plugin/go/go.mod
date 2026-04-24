@@ -3,8 +3,8 @@ module github.com/canopy-network/go-plugin
 go 1.22
 
 require (
-	github.com/drand/kyber v1.2.0
-	github.com/drand/kyber-bls12381 v0.3.1
+    github.com/drand/kyber v1.3.0
+    github.com/drand/kyber-bls12381 v0.3.1
 	google.golang.org/protobuf v1.36.6
 )
 
