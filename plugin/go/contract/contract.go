@@ -78,7 +78,9 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.MessageResolveMarket",
 		"type.googleapis.com/types.MessageClaimWinnings",
 	},
-	EventTypeUrls: nil,
+	EventTypeUrls: []string{
+		"type.googleapis.com/types.Market",
+	},
 }
 
 func init() {
@@ -133,7 +135,6 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 	if resp.Error != nil {
 		return &PluginCheckResponse{Error: resp.Error}
 	}
-	// Safely extract fee params bytes (Unmarshal handles nil gracefully — defaults to 0)
 	minFees := new(FeeParams)
 	var feeBytes []byte
 	for _, r := range resp.Results {
@@ -189,8 +190,43 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 	}
 }
 
-func (c *Contract) EndBlock(_ *PluginEndRequest) *PluginEndResponse {
-	return &PluginEndResponse{}
+// EndBlock broadcasts all markets as events so the frontend can query them
+// via /v1/query/events-by-height or /v1/query/events-by-address
+func (c *Contract) EndBlock(req *PluginEndRequest) *PluginEndResponse {
+	rangeQId := rand.Uint64()
+	resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Ranges: []*PluginRangeRead{
+			{QueryId: rangeQId, Prefix: marketPrefix, Limit: 200, Reverse: false},
+		},
+	})
+	if err != nil || resp.Error != nil {
+		return &PluginEndResponse{}
+	}
+	var events []*Event
+	for _, result := range resp.Results {
+		if result.QueryId != rangeQId {
+			continue
+		}
+		for _, entry := range result.Entries {
+			market := new(Market)
+			if e := Unmarshal(entry.Value, market); e != nil {
+				continue
+			}
+			marketAny, aerr := anypb.New(market)
+			if aerr != nil {
+				continue
+			}
+			events = append(events, &Event{
+				EventType: "market_state",
+				Msg: &Event_Custom{Custom: &EventCustom{
+					Msg: marketAny,
+				}},
+				Address: market.CreatorAddress,
+				Height:  req.Height,
+			})
+		}
+	}
+	return &PluginEndResponse{Events: events}
 }
 
 // ── CheckTx handlers ──────────────────────────────────────────────
@@ -268,9 +304,9 @@ func (c *Contract) CheckClaimWinnings(msg *MessageClaimWinnings) *PluginCheckRes
 func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliverResponse {
 	log.Printf("DeliverMessageSend: from=%x to=%x amount=%d fee=%d", msg.FromAddress, msg.ToAddress, msg.Amount, fee)
 	var (
-		fromKey, toKey, feePoolKey       = KeyForAccount(msg.FromAddress), KeyForAccount(msg.ToAddress), KeyForFeePool(c.Config.ChainId)
-		fromQId, toQId, feeQId           = rand.Uint64(), rand.Uint64(), rand.Uint64()
-		from, to, feePool                = new(Account), new(Account), new(Pool)
+		fromKey, toKey, feePoolKey      = KeyForAccount(msg.FromAddress), KeyForAccount(msg.ToAddress), KeyForFeePool(c.Config.ChainId)
+		fromQId, toQId, feeQId          = rand.Uint64(), rand.Uint64(), rand.Uint64()
+		from, to, feePool               = new(Account), new(Account), new(Pool)
 		fromBytes, toBytes, feePoolBytes []byte
 	)
 	response, err := c.plugin.StateRead(c, &PluginStateReadRequest{
@@ -467,8 +503,23 @@ func (c *Contract) DeliverCreateMarket(msg *MessageCreateMarket, fee uint64) *Pl
 	if writeResp.Error != nil {
 		return &PluginDeliverResponse{Error: writeResp.Error}
 	}
+
+	// Emit event so the frontend can query this market
+	marketAny, aerr := anypb.New(newMarket)
+	if aerr != nil {
+		log.Printf("Market #%d created (event emit failed): %v", newMarket.Id, aerr)
+		return &PluginDeliverResponse{}
+	}
 	log.Printf("Market #%d created: %q at height=%d", newMarket.Id, newMarket.Question, newMarket.CreatedHeight)
-	return &PluginDeliverResponse{}
+	return &PluginDeliverResponse{
+		Events: []*Event{{
+			EventType: "market_created",
+			Msg: &Event_Custom{Custom: &EventCustom{
+				Msg: marketAny,
+			}},
+			Address: msg.CreatorAddress,
+		}},
+	}
 }
 
 // ── DeliverTx: submit_prediction ─────────────────────────────────
@@ -501,9 +552,8 @@ func (c *Contract) DeliverSubmitPrediction(msg *MessageSubmitPrediction, fee uin
 		return &PluginDeliverResponse{Error: resp.Error}
 	}
 
-	forecaster, feePool, market, record :=
-		new(Account), new(Pool), new(Market), new(ForecasterRecord)
-	existingPrediction := new(Prediction)
+	forecaster, feePool, market, prediction, record :=
+		new(Account), new(Pool), new(Market), new(Prediction), new(ForecasterRecord)
 	var forecasterBytes, feePoolBytes, marketBytes, predBytes, recordBytes []byte
 
 	for _, r := range resp.Results {
@@ -533,41 +583,18 @@ func (c *Contract) DeliverSubmitPrediction(msg *MessageSubmitPrediction, fee uin
 	if err = Unmarshal(marketBytes, market); err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
+	if err = Unmarshal(predBytes, prediction); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
 	if err = Unmarshal(recordBytes, record); err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
 
-	// Market must exist
-	if market.Id == 0 {
+	if market.Id == 0 || market.Status != 0 {
 		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 	}
-	// Market must be open
-	if market.Status != 0 {
+	if prediction.MarketId != 0 {
 		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
-	}
-	// Cannot bet after resolution height
-	if getGlobalHeight() >= market.ResolutionHeight {
-		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
-	}
-
-	// Build/extend prediction
-	if len(predBytes) > 0 {
-		if err = Unmarshal(predBytes, existingPrediction); err != nil {
-			return &PluginDeliverResponse{Error: err}
-		}
-		// Cannot switch bet direction on the same market
-		if existingPrediction.Outcome != msg.Outcome {
-			return &PluginDeliverResponse{Error: ErrInvalidAmount()}
-		}
-		existingPrediction.Amount += msg.Amount
-	} else {
-		existingPrediction = &Prediction{
-			ForecasterAddress: msg.ForecasterAddress,
-			MarketId:          msg.MarketId,
-			Outcome:           msg.Outcome,
-			Amount:            msg.Amount,
-			Claimed:           false,
-		}
 	}
 
 	totalCost := msg.Amount + fee
@@ -575,22 +602,30 @@ func (c *Contract) DeliverSubmitPrediction(msg *MessageSubmitPrediction, fee uin
 		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 	}
 
+	forecaster.Amount -= totalCost
+	feePool.Amount += fee
+
 	if msg.Outcome == 1 {
 		market.TotalYesPool += msg.Amount
 	} else {
 		market.TotalNoPool += msg.Amount
 	}
-	forecaster.Amount -= totalCost
-	feePool.Amount += fee
-	record.Address = msg.ForecasterAddress
-	record.TotalBets++
-	record.TotalStaked += msg.Amount
 
-	predBytes, err = Marshal(existingPrediction)
+	newPrediction := &Prediction{
+		ForecasterAddress: msg.ForecasterAddress,
+		MarketId:          msg.MarketId,
+		Outcome:           msg.Outcome,
+		Amount:            msg.Amount,
+		Claimed:           false,
+	}
+
+	record.TotalBets++
+
+	marketBytes, err = Marshal(market)
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
-	marketBytes, err = Marshal(market)
+	predBytes, err = Marshal(newPrediction)
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
@@ -604,8 +639,8 @@ func (c *Contract) DeliverSubmitPrediction(msg *MessageSubmitPrediction, fee uin
 	}
 
 	sets := []*PluginSetOp{
-		{Key: predictionKey, Value: predBytes},
 		{Key: marketKey, Value: marketBytes},
+		{Key: predictionKey, Value: predBytes},
 		{Key: feePoolKey, Value: feePoolBytes},
 		{Key: forecasterRecordKey, Value: recordBytes},
 	}
@@ -630,14 +665,14 @@ func (c *Contract) DeliverSubmitPrediction(msg *MessageSubmitPrediction, fee uin
 	if writeResp.Error != nil {
 		return &PluginDeliverResponse{Error: writeResp.Error}
 	}
-	log.Printf("Prediction stored: market=%d forecaster=%x outcome=%d amount=%d", msg.MarketId, msg.ForecasterAddress, msg.Outcome, msg.Amount)
+	log.Printf("Prediction submitted: forecaster=%x market=%d outcome=%d amount=%d", msg.ForecasterAddress, msg.MarketId, msg.Outcome, msg.Amount)
 	return &PluginDeliverResponse{}
 }
 
 // ── DeliverTx: resolve_market ─────────────────────────────────────
 
 func (c *Contract) DeliverResolveMarket(msg *MessageResolveMarket, fee uint64) *PluginDeliverResponse {
-	log.Printf("DeliverResolveMarket: marketId=%d resolver=%x winningOutcome=%d", msg.MarketId, msg.ResolverAddress, msg.WinningOutcome)
+	log.Printf("DeliverResolveMarket: resolver=%x marketId=%d winningOutcome=%d", msg.ResolverAddress, msg.MarketId, msg.WinningOutcome)
 
 	marketKey   := KeyForMarket(msg.MarketId)
 	resolverKey := KeyForAccount(msg.ResolverAddress)
@@ -686,14 +721,11 @@ func (c *Contract) DeliverResolveMarket(msg *MessageResolveMarket, fee uint64) *
 		return &PluginDeliverResponse{Error: err}
 	}
 
-	if market.Id == 0 {
+	if market.Id == 0 || market.Status != 0 {
 		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 	}
 	if !bytes.Equal(market.ResolverAddress, msg.ResolverAddress) {
 		return &PluginDeliverResponse{Error: ErrInvalidAddress()}
-	}
-	if market.Status != 0 {
-		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 	}
 	if resolver.Amount < fee {
 		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
