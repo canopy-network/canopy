@@ -58,10 +58,8 @@
 - /v1/query/validator-set
 - /v1/query/checkpoint
 - /v1/subscribe-rc-info
-- /debug/blocked
-- /debug/heap
-- /debug/cpu
-- /debug/routine
+- /debug/pprof
+- /debug/pprof/*name
 - /v1/eth
 - /v1/admin/keystore
 - /v1/admin/keystore-new-key
@@ -5050,11 +5048,9 @@ Jun 11 09:47:09.521 INFO: Reset BFT (NEW_HEIGHT)
 ## Golang Profiling Debug
 
 **Route:**
-- DebugBlockedRoutePath = "/debug/blocked"
-- DebugHeapRoutePath    = "/debug/heap"
-- DebugCPURoutePath     = "/debug/cpu"
-- DebugRoutineRoutePath = "/debug/routine"
+- /debug/pprof
+- /debug/pprof/*name
 
-**Description**: returns an HTTP handler that serves the named profile. Available profiles can be found in [runtime/pprof.Profile]. See https://pkg.go.dev/net/http/pprof
+**Description**: serves the Go pprof index and named pprof handlers. These routes are exposed on the profiling server bound to `ProfilingPort`, not the main RPC port. Available profiles can be found in `net/http/pprof`. See https://pkg.go.dev/net/http/pprof
 
 **HTTP Method**: `GET`
