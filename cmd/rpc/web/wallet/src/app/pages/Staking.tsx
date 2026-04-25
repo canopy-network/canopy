@@ -16,6 +16,7 @@ import { StatsCards } from "@/components/staking/StatsCards";
 import { Toolbar } from "@/components/staking/Toolbar";
 import { ValidatorList } from "@/components/staking/ValidatorList";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
+import { useSelectedAccount } from "@/app/providers/AccountsProvider";
 import { PageHeader } from "@/components/layouts/PageHeader";
 
 type ValidatorRow = {
@@ -47,6 +48,7 @@ export default function Staking(): JSX.Element {
   const { totalStaked } = useAccountData();
   const { data: validators = [] } = useValidators();
   const { openAction } = useActionModal();
+  const { selectedAccount } = useSelectedAccount();
   const dsFetch = useDSFetcher();
 
   const csvRef = useRef<HTMLAnchorElement>(null);
@@ -168,8 +170,16 @@ export default function Staking(): JSX.Element {
 
   // Handler to add stake - opens the "stake" action from manifest
   const handleAddStake = useCallback(() => {
-    openAction("stake");
-  }, [openAction]);
+    if (!selectedAccount?.address) {
+      openAction("stake");
+      return;
+    }
+    openAction("stake", {
+      prefilledData: {
+        operator: selectedAccount.address,
+      },
+    });
+  }, [openAction, selectedAccount?.address]);
 
   return (
     <motion.div
