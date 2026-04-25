@@ -7,6 +7,7 @@
 *.dll
 *.so
 *.dylib
+/main
 .cache
 # Test binary, built with `go test -c`
 *.test
@@ -28,6 +29,9 @@ go.work
 # Zed
 .zed
 
+# Emacs
+.projectile
+
 # Visual Studio Code
 .vscode
 
@@ -47,3 +51,6 @@ cmd/web/explorer/.idea
 
 rag
 node_modules
+
+# Hardhat
+cache/solidity-files-cache.json
