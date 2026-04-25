@@ -4,7 +4,7 @@ import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
 import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import TransactionTypeBadge from './TransactionTypeBadge'
 import PageSizeSelect from '../shared/PageSizeSelect'
-import { GREEN_BADGE_CLASS, GREEN_BADGE_TONE } from '../ui/badgeStyles'
+import { BADGE_BASE, GREEN_BADGE_TONE, YELLOW_BADGE_TONE, RED_BADGE_TONE } from '../ui/badgeStyles'
 import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Transaction {
@@ -27,6 +27,7 @@ interface TransactionsTableProps {
     pageSize?: number
     onPageChange?: (page: number) => void
     onPageSizeChange?: (value: number) => void
+    emptyMessage?: string
 }
 
 const desktopHeaderClass =
@@ -63,7 +64,14 @@ const formatAge = (timestamp?: string, status?: Transaction['status']) => {
 }
 
 const statusClassName = (status: Transaction['status']) => {
-    return GREEN_BADGE_TONE
+    switch (status) {
+        case 'pending':
+            return YELLOW_BADGE_TONE
+        case 'failed':
+            return RED_BADGE_TONE
+        default:
+            return GREEN_BADGE_TONE
+    }
 }
 
 const statusLabel = (status: Transaction['status']) => {
@@ -90,6 +98,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     pageSize = 10,
     onPageChange,
     onPageSizeChange,
+    emptyMessage = 'No transactions found',
 }) => {
     const navigate = useNavigate()
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
@@ -157,7 +166,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                         ) : transactions.length === 0 ? (
                             <tr>
                                 <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
-                                    No transactions found in this page of blocks
+                                    {emptyMessage}
                                 </td>
                             </tr>
                         ) : (
@@ -250,7 +259,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <span
-                                            className={`${GREEN_BADGE_CLASS} ${statusClassName(transaction.status)}`}
+                                            className={`${BADGE_BASE} ${statusClassName(transaction.status)}`}
                                         >
                                             {statusLabel(transaction.status)}
                                         </span>
