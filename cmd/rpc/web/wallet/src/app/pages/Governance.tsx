@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Vote,
   ChevronDown,
+  Send,
 } from "lucide-react";
 import { Poll, Proposal, useGovernanceData } from "@/hooks/useGovernance";
 import { ProposalTable } from "@/components/governance/ProposalTable";
@@ -180,20 +181,11 @@ export const Governance = () => {
         actions: [
           {
             id: GOVERNANCE_ACTION_IDS.submitProposal,
-            title: "1. Generate Payload",
-          },
-          {
-            id: GOVERNANCE_ACTION_IDS.addProposalVote,
-            title: "2. Review & Approve",
-          },
-          {
-            id: GOVERNANCE_ACTION_IDS.submitProposalTx,
-            title: "3. Submit to Network",
           },
         ],
         title: "Submit a Proposal",
-        description: "Generate, review, approve, and submit a protocol-change or treasury-subsidy proposal in one flow.",
-        help: "Step 1 generates the signed proposal payload. Step 2 records the replica's approve or reject vote. Step 3 broadcasts that same payload to the network.",
+        description: "Generate a signed protocol-change or treasury-subsidy proposal payload.",
+        help: "Generates the signed proposal payload for a parameter change or treasury subsidy. Once generated, use Vote on Proposal to approve and Submit to Network to broadcast.",
         icon: ScrollText,
         iconClassName: "text-[#35cd48]",
       },
@@ -207,6 +199,18 @@ export const Governance = () => {
         description: "Review a generated proposal payload and record the replica's approve or reject vote.",
         help: "Use this when a validator or replica needs to store its proposal vote preference before the payload is submitted.",
         icon: Vote,
+        iconClassName: "text-[#35cd48]",
+      },
+      {
+        actions: [
+          {
+            id: GOVERNANCE_ACTION_IDS.submitProposalTx,
+          },
+        ],
+        title: "Submit to Network",
+        description: "Broadcast an approved proposal payload to the network as a formal governance transaction.",
+        help: "Use this after a proposal has been generated and approved. Paste the signed JSON payload to submit it on-chain.",
+        icon: Send,
         iconClassName: "text-[#35cd48]",
       },
       {
@@ -238,7 +242,7 @@ export const Governance = () => {
           subtitle="Manage polls and proposals with guided, one-step submissions and explicit review details."
         />
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
             {criticalActions.map((item) => {
               const Icon = item.icon;
               return (

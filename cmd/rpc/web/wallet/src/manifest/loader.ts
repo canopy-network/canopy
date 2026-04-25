@@ -52,8 +52,7 @@ export function useEmbeddedConfig(chain = DEFAULT_CHAIN) {
     queryKey: ['manifest', base],
     enabled: !!chainQ.data,
     queryFn: () => fetchJson<Manifest>(`${base}/manifest.json`),
-    // Use the global refetch configuration every 20s
-    // The manifest can change dynamically
+    staleTime: 0,
   })
 
   // tiny bridge for places where global ctx is handy (e.g., validators)
