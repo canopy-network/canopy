@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -337,6 +338,31 @@ func (c *Controller) GetPendingPage(p lib.PageParams) (page *lib.Page, err lib.E
 	err = page.LoadArray(c.Mempool.cachedResults, &txResults, callback)
 	// exit
 	return
+}
+
+// GetPendingTxByHash() returns an unconfirmed mempool transaction by hash.
+func (c *Controller) GetPendingTxByHash(hash string) (*lib.TxResult, bool) {
+	// lock the controller for thread safety
+	c.Lock()
+	// unlock the controller when the function completes
+	defer c.Unlock()
+	if c.Mempool == nil {
+		return nil, false
+	}
+	normalizedHash := normalizeTxHash(hash)
+	for _, tx := range c.Mempool.cachedResults {
+		if tx == nil {
+			continue
+		}
+		if normalizeTxHash(tx.TxHash) == normalizedHash {
+			return tx, true
+		}
+	}
+	return nil, false
+}
+
+func normalizeTxHash(hash string) string {
+	return strings.TrimPrefix(strings.ToLower(hash), "0x")
 }
 
 // GetFailedTxsPage() returns a list of failed mempool transactions
