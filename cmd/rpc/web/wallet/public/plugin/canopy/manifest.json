@@ -1922,7 +1922,7 @@
             "allowCreate": true,
             "label": "Signer Address",
             "placeholder": "Select Signer Address",
-            "value": "{{account.address}}",
+            "value": "{{form.validatorAddress || account.address}}",
             "required": true,
             "autoPopulate": "once",
             "help": "The address that will sign this transaction",
@@ -2192,8 +2192,7 @@
             "type": "text",
             "label": "New Parameter Value",
             "required": true,
-            "value": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.parameterSpace || ''; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); return root?.[resolved]?.[form.parameterKey] ?? ''; })()}}",
-            "autoPopulate": "once",
+            "autoPopulate": false,
             "placeholder": "Enter new value",
             "help": "The new value for this parameter",
             "validation": {
@@ -2318,23 +2317,23 @@
           "value": "{{account.address}}",
           "coerce": "string"
         },
-        "parameterSpace": {
+        "paramSpace": {
           "value": "{{form.parameterSpace}}",
           "coerce": "string"
         },
-        "parameterKey": {
+        "paramKey": {
           "value": "{{form.parameterKey}}",
           "coerce": "string"
         },
-        "parameterValue": {
+        "paramValue": {
           "value": "{{form.parameterValue}}",
           "coerce": "string"
         },
-        "startHeight": {
-          "value": "{{resolveHeight(ds.height)}}",
+        "startBlock": {
+          "value": "{{(() => { const v = Number(form.startHeight); return v > 0 ? v : resolveHeight(ds.height); })()}}",
           "coerce": "number"
         },
-        "endHeight": {
+        "endBlock": {
           "value": "{{(() => { const s = Number(form.startHeight || resolveHeight(ds.height)); const eRaw = Number(form.endHeight); const e = eRaw > 0 ? eRaw : s + 1; return Math.min(Math.max(e, s + 1), s + 10000); })()}}",
           "coerce": "number"
         },
@@ -3457,8 +3456,8 @@
             "label": "New Value",
             "required": true,
             "showIf": "{{ form.proposalType !== 'treasury' }}",
-            "value": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.paramSpace || 'fee'; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); return root?.[resolved]?.[form.paramKey] ?? ''; })()}}",
-            "autoPopulate": "always",
+            "autoPopulate": false,
+            "help": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.paramSpace || 'fee'; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); const current = root?.[resolved]?.[form.paramKey] ?? ''; return current ? 'Current value: ' + current : ''; })()}}",
             "span": {
               "base": 12
             }
@@ -3603,7 +3602,7 @@
           "coerce": "string"
         },
         "startBlock": {
-          "value": "{{Number(form.startBlock || resolveHeight(ds.height) + 5)}}",
+          "value": "{{(() => { const v = Number(form.startBlock); return v > 0 ? v : resolveHeight(ds.height) + 5; })()}}",
           "coerce": "number"
         },
         "endBlock": {
@@ -3809,7 +3808,7 @@
           "coerce": "string"
         },
         "startBlock": {
-          "value": "{{Number(form.startBlock || resolveHeight(ds.height) + 5)}}",
+          "value": "{{(() => { const v = Number(form.startBlock); return v > 0 ? v : resolveHeight(ds.height) + 5; })()}}",
           "coerce": "number"
         },
         "endBlock": {

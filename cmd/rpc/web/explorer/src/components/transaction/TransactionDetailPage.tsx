@@ -206,8 +206,10 @@ const TransactionDetailPage: React.FC = () => {
     }
 
     // Extract data from the API response (using transaction already extracted above)
-    const status = transaction?.status || 'success'
     const blockHeight = transaction?.height || transaction?.blockHeight || transaction?.block || 0
+    const rawStatus = transaction?.status || ''
+    const isPending = blockHeight === 0 || rawStatus.toLowerCase() === 'pending'
+    const status = isPending ? 'pending' : (rawStatus || 'success')
     const timestamp = transaction?.transaction?.time || transaction?.timestamp || transaction?.time || new Date().toISOString()
     const fee = formatFee(transactionFeeMicro)
 
@@ -250,22 +252,19 @@ const TransactionDetailPage: React.FC = () => {
                         <div className="flex items-center gap-3">
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <i className="fa-solid fa-left-right text-background text-lg"></i>
+                                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                                        <i className="fa-solid fa-left-right text-lg text-white/80"></i>
                                     </div>
                                     <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white break-words">
                                         Transaction Details
                                     </h1>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3 mt-2">
-                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${status === 'success' || status === 'Success'
-                                        ? 'bg-primary/20 text-primary'
-                                        : 'bg-yellow-500/20 text-yellow-400'
-                                        }`}>
-                                        {status === 'success' || status === 'Success' ? 'Success' : 'Pending'}
+                                    <span className={`inline-flex min-w-[6.25rem] items-center justify-center rounded-md border px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight ${isPending ? 'border-yellow-500/30 bg-yellow-500/12 text-yellow-500' : 'border-[#35cd48]/30 bg-[#35cd48]/12 text-[#35cd48]'}`}>
+                                        {isPending ? 'Pending' : 'Success'}
                                     </span>
                                     <span className="text-gray-400 text-sm">
-                                        Confirmed {getTimeAgo(timestamp)}
+                                        {isPending ? 'Awaiting block inclusion' : `Confirmed ${getTimeAgo(timestamp)}`}
                                     </span>
                                 </div>
                             </div>
@@ -331,11 +330,8 @@ const TransactionDetailPage: React.FC = () => {
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Status</span>
-                                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium w-fit ${status === 'success' || status === 'Success'
-                                            ? 'bg-primary/20 text-primary'
-                                            : 'bg-yellow-500/20 text-yellow-400'
-                                            }`}>
-                                            {status === 'success' || status === 'Success' ? 'Success' : 'Pending'}
+                                        <span className={`inline-flex min-w-[6.25rem] items-center justify-center rounded-md border px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight ${isPending ? 'border-yellow-500/30 bg-yellow-500/12 text-yellow-500' : 'border-[#35cd48]/30 bg-[#35cd48]/12 text-[#35cd48]'}`}>
+                                            {isPending ? 'Pending' : 'Success'}
                                         </span>
                                     </div>
 

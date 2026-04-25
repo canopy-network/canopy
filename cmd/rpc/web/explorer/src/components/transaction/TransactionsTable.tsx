@@ -1,8 +1,10 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
-import { toCNPY } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import TransactionTypeBadge from './TransactionTypeBadge'
+import PageSizeSelect from '../shared/PageSizeSelect'
+import { BADGE_BASE, GREEN_BADGE_TONE, YELLOW_BADGE_TONE, RED_BADGE_TONE } from '../ui/badgeStyles'
 
 interface Transaction {
     hash: string
@@ -20,9 +22,11 @@ interface TransactionsTableProps {
     transactions: Transaction[]
     loading?: boolean
     currentPage?: number
-    totalBlockCount?: number
-    blocksPerPage?: number
+    totalCount?: number
+    pageSize?: number
     onPageChange?: (page: number) => void
+    onPageSizeChange?: (value: number) => void
+    emptyMessage?: string
 }
 
 const desktopHeaderClass =
@@ -60,12 +64,12 @@ const formatAge = (timestamp?: string, status?: Transaction['status']) => {
 
 const statusClassName = (status: Transaction['status']) => {
     switch (status) {
-        case 'confirmed':
-            return 'border-primary/25 bg-primary/12 text-primary'
         case 'pending':
-            return 'border-yellow-500/25 bg-yellow-500/12 text-yellow-400'
+            return YELLOW_BADGE_TONE
         case 'failed':
-            return 'border-red-500/25 bg-red-500/12 text-red-400'
+            return RED_BADGE_TONE
+        default:
+            return GREEN_BADGE_TONE
     }
 }
 
@@ -84,13 +88,16 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     transactions,
     loading = false,
     currentPage = 1,
-    totalBlockCount = 0,
-    blocksPerPage = 10,
+    totalCount = 0,
+    pageSize = 10,
     onPageChange,
+    onPageSizeChange,
+    emptyMessage = 'No transactions found',
 }) => {
-    const totalPages = Math.max(1, Math.ceil(totalBlockCount / blocksPerPage))
-    const startIdx = totalBlockCount === 0 ? 0 : (currentPage - 1) * blocksPerPage + 1
-    const endIdx = Math.min(currentPage * blocksPerPage, totalBlockCount)
+    const navigate = useNavigate()
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
+    const endIdx = Math.min(currentPage * pageSize, totalCount)
 
     const visiblePages = React.useMemo(() => {
         if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -104,9 +111,9 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     }
 
     const columns = [
+        { label: 'Type' },
         { label: 'Hash' },
         { label: 'Block' },
-        { label: 'Type' },
         { label: 'From' },
         { label: 'To' },
         { label: 'Amount' },
@@ -132,7 +139,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                     </thead>
                     <tbody>
                         {loading ? (
-                            Array.from({ length: 10 }).map((_, index) => (
+                            Array.from({ length: pageSize }).map((_, index) => (
                                 <tr key={`skeleton-${index}`} className="group animate-pulse">
                                     {columns.map((_, columnIndex) => (
                                         <td
@@ -153,24 +160,41 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                         ) : transactions.length === 0 ? (
                             <tr>
                                 <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
-                                    No transactions found in this page of blocks
+                                    {emptyMessage}
                                 </td>
                             </tr>
                         ) : (
                             transactions.map((transaction) => (
-                                <tr key={`${transaction.status}-${transaction.hash}`} className="group">
+                                <tr
+                                    key={`${transaction.status}-${transaction.hash}`}
+                                    className="group cursor-pointer"
+                                    onClick={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(`/transaction/${transaction.hash}`)
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        event.preventDefault()
+                                        navigate(`/transaction/${transaction.hash}`)
+                                    }}
+                                    tabIndex={0}
+                                    role="link"
+                                    aria-label={`View transaction ${transaction.hash}`}
+                                >
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
                                     >
+                                        <TransactionTypeBadge type={transaction.type} />
+                                    </td>
+                                    <td
+                                        className={desktopRowCellClass}
+                                    >
                                         <Link
                                             to={`/transaction/${transaction.hash}`}
-                                            className="flex max-w-[13rem] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
+                                            className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
                                             title={transaction.hash}
                                         >
-                                            <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-green-300/10 text-primary">
-                                                <i className="fa-solid fa-arrow-right-arrow-left text-sm" />
-                                            </span>
                                             <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                                                 {truncateMiddle(transaction.hash)}
                                             </span>
@@ -187,9 +211,6 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                         ) : (
                                             <span className="text-sm font-medium text-yellow-400">Mempool</span>
                                         )}
-                                    </td>
-                                    <td className={desktopRowCellClass}>
-                                        <TransactionTypeBadge type={transaction.type} />
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         {transaction.from === 'N/A' ? (
@@ -222,7 +243,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <span
-                                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-tight ${statusClassName(transaction.status)}`}
+                                            className={`${BADGE_BASE} ${statusClassName(transaction.status)}`}
                                         >
                                             {statusLabel(transaction.status)}
                                         </span>
@@ -240,10 +261,15 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                 </table>
             </div>
 
-            {!loading && totalBlockCount > 0 && (
+            {!loading && totalCount > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        Txs from blocks {startIdx} to {endIdx} of {totalBlockCount.toLocaleString()} blocks
+                    <div className="flex items-center gap-3">
+                        <span>
+                            {formatPaginationRange(startIdx, endIdx)} of {totalCount.toLocaleString()} transactions
+                        </span>
+                        {onPageSizeChange && (
+                            <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">

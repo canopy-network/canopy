@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Vote,
   ChevronDown,
+  Send,
 } from "lucide-react";
 import { Poll, Proposal, useGovernanceData } from "@/hooks/useGovernance";
 import { ProposalTable } from "@/components/governance/ProposalTable";
@@ -180,20 +181,11 @@ export const Governance = () => {
         actions: [
           {
             id: GOVERNANCE_ACTION_IDS.submitProposal,
-            title: "1. Generate Payload",
-          },
-          {
-            id: GOVERNANCE_ACTION_IDS.addProposalVote,
-            title: "2. Review & Approve",
-          },
-          {
-            id: GOVERNANCE_ACTION_IDS.submitProposalTx,
-            title: "3. Submit to Network",
           },
         ],
         title: "Submit a Proposal",
-        description: "Generate, review, approve, and submit a protocol-change or treasury-subsidy proposal in one flow.",
-        help: "Step 1 generates the signed proposal payload. Step 2 records the replica's approve or reject vote. Step 3 broadcasts that same payload to the network.",
+        description: "Generate a signed protocol-change or treasury-subsidy proposal payload.",
+        help: "Generates the signed proposal payload for a parameter change or treasury subsidy. Once generated, use Vote on Proposal to approve and Submit to Network to broadcast.",
         icon: ScrollText,
         iconClassName: "text-[#35cd48]",
       },
@@ -207,6 +199,18 @@ export const Governance = () => {
         description: "Review a generated proposal payload and record the replica's approve or reject vote.",
         help: "Use this when a validator or replica needs to store its proposal vote preference before the payload is submitted.",
         icon: Vote,
+        iconClassName: "text-[#35cd48]",
+      },
+      {
+        actions: [
+          {
+            id: GOVERNANCE_ACTION_IDS.submitProposalTx,
+          },
+        ],
+        title: "Submit to Network",
+        description: "Broadcast an approved proposal payload to the network as a formal governance transaction.",
+        help: "Use this after a proposal has been generated and approved. Paste the signed JSON payload to submit it on-chain.",
+        icon: Send,
         iconClassName: "text-[#35cd48]",
       },
       {
@@ -238,42 +242,42 @@ export const Governance = () => {
           subtitle="Manage polls and proposals with guided, one-step submissions and explicit review details."
         />
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {criticalActions.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <motion.button
-                key={item.title}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={() => openActions(item.actions)}
-                className="group text-left rounded-xl border border-[#272729] bg-[#171717] px-4 py-4 transition-all duration-200 hover:border-white/15 hover:bg-[#0f0f0f]"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                      <span className={`inline-flex h-7 w-7 items-center justify-center ${item.iconClassName}`}>
-                        <Icon className="w-4 h-4" />
-                      </span>
-                  <span className="text-sm font-semibold text-foreground">{item.title}</span>
-                  <ActionTooltip
-                    label={item.title}
-                    description={item.help}
-                    className="ml-auto"
-                  >
-                    <span
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#272729] text-muted-foreground hover:bg-[#272729] hover:text-foreground"
-                      tabIndex={0}
-                      aria-label={`${item.title} help`}
-                    >
-                      <CircleHelp className="w-3.5 h-3.5" />
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {criticalActions.map((item) => {
+              const Icon = item.icon;
+              return (
+                <motion.button
+                  key={item.title}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => openActions(item.actions)}
+                  className="group text-left rounded-xl border border-[#272729] bg-[#171717] px-4 py-4 transition-all duration-200 hover:border-white/15 hover:bg-[#0f0f0f]"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`inline-flex h-7 w-7 items-center justify-center ${item.iconClassName}`}>
+                      <Icon className="w-4 h-4" />
                     </span>
-                  </ActionTooltip>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed min-h-[36px]">
-                  {item.description}
-                </p>
-              </motion.button>
-            );
-          })}
+                    <span className="text-sm font-semibold text-foreground">{item.title}</span>
+                    <ActionTooltip
+                      label={item.title}
+                      description={item.help}
+                      className="ml-auto"
+                    >
+                      <span
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#272729] text-muted-foreground hover:bg-[#272729] hover:text-foreground"
+                        tabIndex={0}
+                        aria-label={`${item.title} help`}
+                      >
+                        <CircleHelp className="w-3.5 h-3.5" />
+                      </span>
+                    </ActionTooltip>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed min-h-[36px]">
+                    {item.description}
+                  </p>
+                </motion.button>
+              );
+            })}
         </div>
 
         <section
