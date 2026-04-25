@@ -8,6 +8,7 @@ import {
     Validator,
     Account
 } from '../lib/api'
+import { toCNPY } from '../lib/utils'
 
 interface SearchResult {
     type: 'block' | 'transaction' | 'address' | 'validator'
@@ -24,6 +25,9 @@ interface SearchResults {
     addresses: SearchResult[]
     validators: SearchResult[]
 }
+
+const formatAccountBalanceSubtitle = (amount: number | string | undefined) =>
+    `Balance: ${toCNPY(Number(amount || 0)).toLocaleString()} CNPY`
 
 export const useSearch = (searchTerm: string) => {
     const [results, setResults] = useState<SearchResults | null>(null)
@@ -140,7 +144,7 @@ export const useSearch = (searchTerm: string) => {
                                                 type: 'address' as const,
                                                 id: account.address,
                                                 title: 'Account',
-                                                subtitle: `Balance: ${(account.amount / 1000000).toLocaleString()} CNPY`,
+                                                subtitle: formatAccountBalanceSubtitle(account.amount),
                                                 data: account
                                             }
 
@@ -161,7 +165,7 @@ export const useSearch = (searchTerm: string) => {
                                                 type: 'address' as const,
                                                 id: account.address,
                                                 title: 'Account',
-                                                subtitle: `Balance: ${(account.amount / 1000000).toLocaleString()} CNPY`,
+                                                subtitle: formatAccountBalanceSubtitle(account.amount),
                                                 data: account
                                             }
 
@@ -204,7 +208,7 @@ export const useSearch = (searchTerm: string) => {
                                                 type: 'address' as const,
                                                 id: accountId,
                                                 title: 'Account',
-                                                subtitle: `Balance: ${(result.account.amount / 1000000).toLocaleString()} CNPY`,
+                                                subtitle: formatAccountBalanceSubtitle(result.account.amount),
                                                 data: result.account
                                             })
                                         }
@@ -275,7 +279,7 @@ export const useSearch = (searchTerm: string) => {
                                                 type: 'address' as const,
                                                 id: accountId,
                                                 title: 'Account',
-                                                subtitle: `Balance: ${(result.account.amount / 1000000).toLocaleString()} CNPY`,
+                                                subtitle: formatAccountBalanceSubtitle(result.account.amount),
                                                 data: result.account
                                             })
                                         }
@@ -316,7 +320,7 @@ export const useSearch = (searchTerm: string) => {
                                             type: 'address' as const,
                                             id: accountId,
                                             title: 'Account',
-                                            subtitle: `Balance: ${(account.amount / 1000000).toLocaleString()} CNPY`,
+                                            subtitle: formatAccountBalanceSubtitle(account.amount),
                                             data: account
                                         })
                                     }

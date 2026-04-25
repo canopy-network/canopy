@@ -2,6 +2,7 @@ import React from "react";
 import AnimatedNumber from "../AnimatedNumber";
 import { formatPaginationRange } from "../../lib/utils";
 import PageSizeSelect from "../shared/PageSizeSelect";
+import CopyableIdentifier from "../ui/CopyableIdentifier";
 
 export interface DexBatchRow {
   batchType: "Locked" | "Next";
@@ -129,9 +130,13 @@ const DexBatchesTable: React.FC<DexBatchesTableProps> = ({ rows, loading = false
                     <span className="text-sm text-white tabular-nums">{row.committee}</span>
                   </td>
                   <td className={desktopRowCellClass}>
-                    <span className="block max-w-[14rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white" title={row.receiptHash !== "N/A" ? row.receiptHash : undefined}>
-                      {row.receiptHash !== "N/A" ? truncate(row.receiptHash) : "N/A"}
-                    </span>
+                    {row.receiptHash !== "N/A" ? (
+                      <CopyableIdentifier value={row.receiptHash} label="Receipt hash" className="max-w-[14rem] text-sm text-white">
+                        {truncate(row.receiptHash)}
+                      </CopyableIdentifier>
+                    ) : (
+                      <span className="text-sm text-white">N/A</span>
+                    )}
                   </td>
                   <td className={desktopRowCellClass}>
                     <span className="text-sm text-white tabular-nums">{row.orders}</span>
