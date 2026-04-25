@@ -57,7 +57,7 @@ export const queryKeys = {
     txByHash: (hash: string) => ['txByHash', hash],
     transactionsBySender: (page: number, sender: string) => ['transactionsBySender', page, sender],
     transactionsByRec: (page: number, rec: string) => ['transactionsByRec', page, rec],
-    pending: (page: number) => ['pending', page],
+    pending: (page: number, perPage: number) => ['pending', page, perPage],
     ecoParams: (chainId: number) => ['ecoParams', chainId],
     orders: (chainId: number) => ['orders', chainId],
     config: () => ['config'],
@@ -393,11 +393,11 @@ export const useTransactionsByRec = (page: number, rec: string) => {
 };
 
 // Hooks for Pending Transactions
-export const usePending = (page: number) => {
+export const usePending = (page: number, perPage: number = 10) => {
     return useQuery({
-        queryKey: queryKeys.pending(page),
-        queryFn: () => Pending(page, 0),
-        staleTime: 10000, // Shorter stale time for pending transactions
+        queryKey: queryKeys.pending(page, perPage),
+        queryFn: () => Pending(page, perPage),
+        staleTime: 10000,
     });
 };
 

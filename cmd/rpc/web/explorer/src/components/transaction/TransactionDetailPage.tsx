@@ -243,8 +243,10 @@ const TransactionDetailPage: React.FC = () => {
     }
 
     // Extract data from the API response (using transaction already extracted above)
-    const status = transaction?.status || 'success'
     const blockHeight = transaction?.height || transaction?.blockHeight || transaction?.block || 0
+    const rawStatus = transaction?.status || ''
+    const isPending = blockHeight === 0 || rawStatus.toLowerCase() === 'pending'
+    const status = isPending ? 'pending' : (rawStatus || 'success')
     const timestamp = transaction?.transaction?.time || transaction?.timestamp || transaction?.time || new Date().toISOString()
     const fee = formatFee(transactionFeeMicro)
 
@@ -297,11 +299,11 @@ const TransactionDetailPage: React.FC = () => {
                                     </h1>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3 mt-2">
-                                    <span className="inline-flex min-w-[6.25rem] items-center justify-center rounded-md border border-[#35cd48]/30 bg-[#35cd48]/12 px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight text-[#35cd48]">
-                                        {status === 'success' || status === 'Success' ? 'Success' : 'Pending'}
+                                    <span className={`inline-flex min-w-[6.25rem] items-center justify-center rounded-md border px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight ${isPending ? 'border-yellow-500/30 bg-yellow-500/12 text-yellow-500' : 'border-[#35cd48]/30 bg-[#35cd48]/12 text-[#35cd48]'}`}>
+                                        {isPending ? 'Pending' : 'Success'}
                                     </span>
                                     <span className="text-gray-400 text-sm">
-                                        Confirmed {getTimeAgo(timestamp)}
+                                        {isPending ? 'Awaiting block inclusion' : `Confirmed ${getTimeAgo(timestamp)}`}
                                     </span>
                                 </div>
                             </div>
@@ -368,8 +370,8 @@ const TransactionDetailPage: React.FC = () => {
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Status</span>
-                                        <span className="inline-flex min-w-[6.25rem] items-center justify-center rounded-md border border-[#35cd48]/30 bg-[#35cd48]/12 px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight text-[#35cd48]">
-                                            {status === 'success' || status === 'Success' ? 'Success' : 'Pending'}
+                                        <span className={`inline-flex min-w-[6.25rem] items-center justify-center rounded-md border px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight ${isPending ? 'border-yellow-500/30 bg-yellow-500/12 text-yellow-500' : 'border-[#35cd48]/30 bg-[#35cd48]/12 text-[#35cd48]'}`}>
+                                            {isPending ? 'Pending' : 'Success'}
                                         </span>
                                     </div>
 
