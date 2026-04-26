@@ -708,7 +708,11 @@ func (s *Store) MaybeBackup() {
 		if removeErr := os.RemoveAll(prevBackupDir); removeErr != nil {
 			s.log.Warnf("failed to remove previous backup: %v", removeErr)
 		}
-		s.log.Infof("backup completed at height [%d] in %s", version, time.Since(start))
+		backupDuration := time.Since(start)
+		// log results
+		s.log.Infof("backup completed at height [%d] in %s", version, backupDuration)
+		// update metrics
+		s.metrics.UpdateStoreJobMetrics(0, 0, backupDuration)
 	}()
 }
 
@@ -727,8 +731,10 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	if err := s.db.Compact(ctx, startPrefix, endPrefix, true); err != nil {
 		return ErrCommitDB(err)
 	}
-	lssTime := time.Since(now)
-	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssTime)
+	// update LSS compaction metrics
+	lssDuration := time.Since(now)
+	s.metrics.UpdateStoreJobMetrics(lssDuration, 0, 0)
+	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssDuration)
 	// second compaction: historic state keys
 	if compactHSS {
 		startPrefix, endPrefix = historicStatePrefix, prefixEnd(historicStatePrefix)
@@ -736,9 +742,12 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 		if err := s.db.Compact(ctx, startPrefix, endPrefix, false); err != nil {
 			return ErrCommitDB(err)
 		}
+		hssDuration := time.Since(hssTime)
 		// log results
 		s.log.Debugf("key compaction finished [HSS] [%d] time: %s, total time: %s", version,
-			time.Since(hssTime), time.Since(now))
+			hssDuration, time.Since(now))
+		// update HSS compaction metrics
+		s.metrics.UpdateStoreJobMetrics(0, hssDuration, 0)
 	}
 	return nil
 }
