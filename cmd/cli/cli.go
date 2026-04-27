@@ -36,6 +36,12 @@ var rootCmd = &cobra.Command{
 			Structured: config.Structured,
 			JSON:       config.JSON,
 		})
+		if rpcURLFlag != "" {
+			config.RPCUrl = rpcURLFlag
+		}
+		if adminURLFlag != "" {
+			config.AdminRPCUrl = adminURLFlag
+		}
 		client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
 		return nil
 	},
@@ -50,8 +56,9 @@ var versionCmd = &cobra.Command{
 }
 
 var (
-	client, config, l     = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
-	DataDir, validatorKey = "", crypto.PrivateKeyI(nil)
+	client, config, l          = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
+	DataDir, validatorKey      = "", crypto.PrivateKeyI(nil)
+	rpcURLFlag, adminURLFlag   string
 )
 
 func init() {
@@ -64,6 +71,8 @@ func init() {
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
+	rootCmd.PersistentFlags().StringVar(&rpcURLFlag, "rpc-url", "", "override the RPC URL from config")
+	rootCmd.PersistentFlags().StringVar(&adminURLFlag, "admin-url", "", "override the admin RPC URL from config")
 }
 
 func Execute() {
