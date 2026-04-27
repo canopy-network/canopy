@@ -29,6 +29,16 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "canopy",
 	Short: "the canopy blockchain software",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
+		l = lib.NewLogger(lib.LoggerConfig{
+			Level:      config.GetLogLevel(),
+			Structured: config.Structured,
+			JSON:       config.JSON,
+		})
+		client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
+		return nil
+	},
 }
 
 var versionCmd = &cobra.Command{
@@ -54,13 +64,6 @@ func init() {
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
-	l = lib.NewLogger(lib.LoggerConfig{
-		Level:      config.GetLogLevel(),
-		Structured: config.Structured,
-		JSON:       config.JSON,
-	})
-	client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
 }
 
 func Execute() {
