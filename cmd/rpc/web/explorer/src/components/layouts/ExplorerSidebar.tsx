@@ -248,7 +248,7 @@ export const ExplorerSidebar = (): React.JSX.Element => {
                                                 type="text"
                                                 value={searchTerm}
                                                 onChange={(event) => setSearchTerm(event.target.value)}
-                                                placeholder="Search blocks, transactions, addresses..."
+                                                placeholder="Search blocks, transactions, addresses, orders..."
                                                 className="h-full min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
                                             />
                                             <button

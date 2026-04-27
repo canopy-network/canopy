@@ -6,16 +6,17 @@ import {
     BlockByHash,
     TxByHash,
     Validator,
-    Account
+    Account,
+    Orders,
 } from '../lib/api'
 import { toCNPY } from '../lib/utils'
 
 interface SearchResult {
-    type: 'block' | 'transaction' | 'address' | 'validator'
+    type: 'block' | 'transaction' | 'address' | 'validator' | 'order'
     id: string
     title: string
     subtitle?: string
-    data: any
+    data: Record<string, unknown>
 }
 
 interface SearchResults {
@@ -24,6 +25,7 @@ interface SearchResults {
     transactions: SearchResult[]
     addresses: SearchResult[]
     validators: SearchResult[]
+    orders: SearchResult[]
 }
 
 const formatAccountBalanceSubtitle = (amount: number | string | undefined) =>
@@ -61,7 +63,8 @@ export const useSearch = (searchTerm: string) => {
                 blocks: [],
                 transactions: [],
                 addresses: [],
-                validators: []
+                validators: [],
+                orders: []
             }
 
             // DIRECT SEARCH FOR BLOCKS, TRANSACTIONS, ACCOUNTS, AND VALIDATORS
@@ -351,6 +354,42 @@ export const useSearch = (searchTerm: string) => {
                 )
             }
 
+            // 4. Search orders by ID (uses /v1/query/orders and filters client-side)
+            searchPromises.push(
+                Orders()
+                    .then((ordersData: Record<string, unknown>) => {
+                        const ordersList = Array.isArray(ordersData?.orders)
+                            ? ordersData.orders as Record<string, unknown>[]
+                            : Array.isArray(ordersData?.results)
+                                ? ordersData.results as Record<string, unknown>[]
+                                : []
+
+                        const termLower = term.toLowerCase()
+                        const matchingOrders = ordersList.filter((order: Record<string, unknown>) => {
+                            const id = String(order.id || order.Id || '')
+                            return id.toLowerCase().includes(termLower)
+                        })
+
+                        matchingOrders.forEach((order: Record<string, unknown>) => {
+                            const id = String(order.id || order.Id || '')
+                            const committee = order.committee ?? order.Chain ?? ''
+                            const buyerSendAddress = order.buyerSendAddress || order.BuyerSendAddress || ''
+                            const status = buyerSendAddress ? 'Locked' : 'Active'
+
+                            if (!searchResults.orders.some(o => o.id === id)) {
+                                searchResults.orders.push({
+                                    type: 'order' as const,
+                                    id,
+                                    title: `Order ${id.length > 16 ? id.slice(0, 8) + '...' + id.slice(-8) : id}`,
+                                    subtitle: `Committee ${committee} · ${status}`,
+                                    data: order
+                                })
+                            }
+                        })
+                    })
+                    .catch(err => console.log('Order search error:', err))
+            )
+
             // Wait for all promises to complete
             await Promise.all(searchPromises)
 
@@ -358,7 +397,8 @@ export const useSearch = (searchTerm: string) => {
             const total = searchResults.blocks.length +
                 searchResults.transactions.length +
                 searchResults.addresses.length +
-                searchResults.validators.length
+                searchResults.validators.length +
+                searchResults.orders.length
 
             setResults({
                 ...searchResults,
