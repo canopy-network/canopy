@@ -19,7 +19,7 @@ type AccountsContextValue = {
 
     switchAccount: (id: string | null) => void
     createNewAccount: (nickname: string, password: string) => Promise<string>
-    deleteAccount: (accountId: string) => Promise<void>
+    deleteAccount: (accountId: string, password: string) => Promise<void>
     refetch: () => Promise<any>
 }
 
@@ -48,8 +48,8 @@ export function useAccounts(): AccountsContextValue {
     const selected = useSelectedAccount()
 
     // Wrap deleteAccount to integrate with switchAccount
-    const deleteAccount = useCallback(async (accountId: string): Promise<void> => {
-        await list.deleteAccount(accountId, (nextAccountId) => {
+    const deleteAccount = useCallback(async (accountId: string, password: string): Promise<void> => {
+        await list.deleteAccount(accountId, password, (nextAccountId: string | null) => {
             if (selected.selectedId === accountId && nextAccountId) {
                 selected.switchAccount(nextAccountId)
             }

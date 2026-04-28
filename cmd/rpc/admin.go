@@ -94,10 +94,12 @@ func (s *Server) KeystoreImportRaw(w http.ResponseWriter, r *http.Request, _ htt
 func (s *Server) KeystoreDelete(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the keystore handler with a callback to perform the deletion
 	s.keystoreHandler(w, r, func(k *crypto.Keystore, ptr *keystoreRequest) (any, error) {
-		k.DeleteKey(crypto.DeleteOpts{
+		if err := k.DeleteKey(ptr.Password, crypto.DeleteOpts{
 			Address:  ptr.Address,
 			Nickname: ptr.Nickname,
-		})
+		}); err != nil {
+			return nil, err
+		}
 		// Update the keystore on disk and return the account address
 		return ptr.Address, k.SaveToFile(s.config.DataDirPath)
 	})

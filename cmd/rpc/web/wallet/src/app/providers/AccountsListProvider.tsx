@@ -30,7 +30,7 @@ type AccountsListContextValue = {
     isReady: boolean
     refetch: () => Promise<any>
     createNewAccount: (nickname: string, password: string) => Promise<string>
-    deleteAccount: (accountId: string, onDeleted?: (nextAccountId: string | null) => void) => Promise<void>
+    deleteAccount: (accountId: string, password: string, onDeleted?: (nextAccountId: string | null) => void) => Promise<void>
 }
 
 const AccountsListContext = createContext<AccountsListContextValue | undefined>(undefined)
@@ -76,6 +76,7 @@ export function AccountsListProvider({ children }: { children: React.ReactNode }
 
     const deleteAccount = useCallback(async (
         accountId: string,
+        password: string,
         onDeleted?: (nextAccountId: string | null) => void
     ): Promise<void> => {
         try {
@@ -85,7 +86,8 @@ export function AccountsListProvider({ children }: { children: React.ReactNode }
             }
 
             await dsFetch('keystoreDelete', {
-                nickname: account.nickname
+                address: account.address,
+                password,
             })
 
             // Notify caller about which account to switch to

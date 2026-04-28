@@ -138,7 +138,8 @@
         "method": "POST"
       },
       "body": {
-        "nickname": "{{nickname}}"
+        "address": "{{address}}",
+        "password": "{{password}}"
       }
     },
     "validator": {
