@@ -181,8 +181,8 @@ type DeleteOpts struct {
 	Nickname string
 }
 
-// DeleteKey() removes a private key from the store given an address and/or nickname
-func (ks *Keystore) DeleteKey(opts DeleteOpts) {
+// DeleteKey() removes a private key from the store given an address and/or nickname after validating the password
+func (ks *Keystore) DeleteKey(password string, opts DeleteOpts) error {
 	var stringAddress string
 	if opts.Address != nil {
 		stringAddress = hex.EncodeToString(opts.Address)
@@ -192,10 +192,21 @@ func (ks *Keystore) DeleteKey(opts DeleteOpts) {
 	}
 
 	pKey := ks.AddressMap[stringAddress]
+	if pKey == nil {
+		return fmt.Errorf("key not found")
+	}
+	if password == "" {
+		return fmt.Errorf("invalid password")
+	}
+	if _, err := DecryptPrivateKey(pKey, []byte(password)); err != nil {
+		return err
+	}
+
 	if pKey.KeyNickname != "" {
 		delete(ks.NicknameMap, pKey.KeyNickname)
 	}
 	delete(ks.AddressMap, pKey.KeyAddress)
+	return nil
 }
 
 // SaveToFile() persists the keystore to a filepath

@@ -57,7 +57,7 @@
     },
     "keystoreDelete": {
       "source": { "base": "admin", "path": "/v1/admin/keystore-delete", "method": "POST" },
-      "body": { "nickname": "{{nickname}}" }
+      "body": { "address": "{{address}}", "password": "{{password}}" }
     },
     "validator": {
       "source": { "base": "rpc", "path": "/v1/query/validator", "method": "POST" },
