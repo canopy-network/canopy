@@ -7,7 +7,7 @@ import {
     TxByHash,
     Validator,
     Account,
-    Orders,
+    AllOrders,
 } from '../lib/api'
 import { toCNPY } from '../lib/utils'
 
@@ -354,16 +354,10 @@ export const useSearch = (searchTerm: string) => {
                 )
             }
 
-            // 4. Search orders by ID (uses /v1/query/orders and filters client-side)
+            // 4. Search orders by ID across all paginated order-book results
             searchPromises.push(
-                Orders()
-                    .then((ordersData: Record<string, unknown>) => {
-                        const ordersList = Array.isArray(ordersData?.orders)
-                            ? ordersData.orders as Record<string, unknown>[]
-                            : Array.isArray(ordersData?.results)
-                                ? ordersData.results as Record<string, unknown>[]
-                                : []
-
+                AllOrders()
+                    .then((ordersList: Record<string, unknown>[]) => {
                         const termLower = term.toLowerCase()
                         const matchingOrders = ordersList.filter((order: Record<string, unknown>) => {
                             const id = String(order.id || order.Id || '')

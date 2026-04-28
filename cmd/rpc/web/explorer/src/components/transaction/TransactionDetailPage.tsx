@@ -90,7 +90,8 @@ const TransactionDetailPage: React.FC = () => {
     const txType = transaction?.transaction?.type || transaction?.messageType || transaction?.type || 'send'
 
     const txHeight = transaction?.height || transaction?.blockHeight || transaction?.block || 0
-    const isPending = latestHeight > 0 && txHeight > latestHeight
+    const rawStatus = String(transaction?.status || '').toLowerCase()
+    const isPending = txHeight === 0 || rawStatus === 'pending' || (latestHeight > 0 && txHeight > latestHeight)
 
     // Helper function to normalize hash for comparison
     const normalizeHash = (hash: string): string => {
