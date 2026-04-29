@@ -1,0 +1,87 @@
+package canoliq
+
+import (
+	"math/big"
+)
+
+// computeMint returns the amount of cCNPY to mint for a CNPY deposit.
+// For an empty pool (first deposit) it mints 1:1; otherwise it preserves the
+// exchange rate via mint = amount * total_ccnpy / total_pooled_cnpy.
+func computeMint(amount, totalCcnpy, totalPooled uint64) uint64 {
+	if amount == 0 {
+		return 0
+	}
+	if totalCcnpy == 0 || totalPooled == 0 {
+		return amount
+	}
+	return mulDiv(amount, totalCcnpy, totalPooled)
+}
+
+// computeRedeem returns the amount of CNPY owed for a cCNPY burn at the
+// current exchange rate: cnpy = ccnpy_amount * total_pooled_cnpy / total_ccnpy.
+func computeRedeem(ccnpyAmount, totalCcnpy, totalPooled uint64) uint64 {
+	if ccnpyAmount == 0 || totalCcnpy == 0 || totalPooled == 0 {
+		return 0
+	}
+	return mulDiv(ccnpyAmount, totalPooled, totalCcnpy)
+}
+
+// mulDiv returns (a*b)/c using big.Int internally to avoid uint64 overflow.
+// Mirrors the safety properties of lib.SafeMulDiv from Canopy core.
+func mulDiv(a, b, c uint64) uint64 {
+	if c == 0 {
+		return 0
+	}
+	bigA := new(big.Int).SetUint64(a)
+	bigB := new(big.Int).SetUint64(b)
+	bigC := new(big.Int).SetUint64(c)
+	res := new(big.Int).Mul(bigA, bigB)
+	res.Quo(res, bigC)
+	if !res.IsUint64() {
+		return 0
+	}
+	return res.Uint64()
+}
+
+// FeeSplit holds the four destinations for a single block's fee skim.
+// Sum of (UserRebate, Treasury, Validators, Buyback) == feeAmount minus
+// any integer-truncation residual, which is sent to the treasury.
+type FeeSplit struct {
+	UserRebate uint64
+	Treasury   uint64
+	Validators uint64
+	Buyback    uint64
+}
+
+// SplitFee divides feeAmount into the four canonical buckets according to the
+// bps weights in params. Truncation residual is added to the treasury bucket
+// so the four parts always sum to feeAmount exactly.
+func SplitFee(feeAmount uint64, p *FeeSplitParams) FeeSplit {
+	user := mulDiv(feeAmount, p.UserRebateBps, 10_000)
+	treasury := mulDiv(feeAmount, p.TreasuryBps, 10_000)
+	validators := mulDiv(feeAmount, p.ValidatorBps, 10_000)
+	buyback := mulDiv(feeAmount, p.BuybackBps, 10_000)
+	allocated := user + treasury + validators + buyback
+	if allocated < feeAmount {
+		treasury += feeAmount - allocated
+	}
+	return FeeSplit{
+		UserRebate: user,
+		Treasury:   treasury,
+		Validators: validators,
+		Buyback:    buyback,
+	}
+}
+
+// FeeSplitParams is the slim subset of CanoliqParams needed for fee math.
+type FeeSplitParams struct {
+	UserRebateBps uint64
+	TreasuryBps   uint64
+	ValidatorBps  uint64
+	BuybackBps    uint64
+}
+
+// FeeOnReward returns the protocol fee carved out of a block's reward delta.
+func FeeOnReward(delta uint64, feeBps uint64) uint64 {
+	return mulDiv(delta, feeBps, 10_000)
+}

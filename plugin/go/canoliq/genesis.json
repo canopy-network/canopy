@@ -1,0 +1,68 @@
+{
+  "blocksPerYear": 5256000,
+  "buckets": [
+    {
+      "name": "Validators & Infrastructure",
+      "bps": 2200,
+      "cliffMonths": 6,
+      "vestMonths": 24,
+      "recipients": [
+        { "address": "00000000000000000000000000000000000000a1", "bps": 10000 }
+      ]
+    },
+    {
+      "name": "Liquidity Incentives (Farming)",
+      "bps": 1500,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        { "address": "00000000000000000000000000000000000000a2", "bps": 10000 }
+      ]
+    },
+    {
+      "name": "Community & Airdrops",
+      "bps": 2000,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        { "address": "00000000000000000000000000000000000000a3", "bps": 10000 }
+      ]
+    },
+    {
+      "name": "DAO Treasury (canoLiq)",
+      "bps": 1500,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        { "address": "00000000000000000000000000000000000000a4", "bps": 10000 }
+      ]
+    },
+    {
+      "name": "Founders & Core Team",
+      "bps": 1200,
+      "cliffMonths": 12,
+      "vestMonths": 24,
+      "recipients": [
+        { "address": "00000000000000000000000000000000000000a5", "bps": 10000 }
+      ]
+    },
+    {
+      "name": "Strategic Partners & Integrations",
+      "bps": 1000,
+      "cliffMonths": 6,
+      "vestMonths": 18,
+      "recipients": [
+        { "address": "00000000000000000000000000000000000000a6", "bps": 10000 }
+      ]
+    },
+    {
+      "name": "Plugin & Dev Grants",
+      "bps": 600,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        { "address": "00000000000000000000000000000000000000a7", "bps": 10000 }
+      ]
+    }
+  ]
+}

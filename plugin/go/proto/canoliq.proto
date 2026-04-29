@@ -1,0 +1,134 @@
+syntax = "proto3";
+package types;
+option go_package = "github.com/canopy-network/go-plugin/contract";
+
+// canoliq.proto defines transaction messages and stored types for the canoLiq
+// liquid-staking plugin. All messages live in the same `contract` Go package
+// so they share the existing plugin runtime (PluginConfig, PluginCheckRequest,
+// google.protobuf.Any registration, etc.).
+
+// MessageCanoliqDeposit deposits CNPY into the canoLiq pool and mints cCNPY
+// to the sender at the current exchange rate.
+message MessageCanoliqDeposit {
+  // from_address: the depositor (also the cCNPY recipient)
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // amount: the CNPY amount to deposit (uCNPY)
+  uint64 amount = 2;
+}
+
+// MessageCanoliqRedeem burns cCNPY and queues a CNPY redemption for the sender
+// after the standard validator unstaking cooldown.
+message MessageCanoliqRedeem {
+  // from_address: the redeemer (cCNPY holder)
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // ccnpy_amount: amount of cCNPY to burn (uCCNPY)
+  uint64 ccnpy_amount = 2; // @gotags: json:"ccnpyAmount"
+}
+
+// MessageCanoliqClaimRedemption withdraws a matured CNPY redemption to the
+// user's account.
+message MessageCanoliqClaimRedemption {
+  // from_address: the redeemer claiming the matured redemption
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // redemption_id: the id of the redemption record to claim
+  uint64 redemption_id = 2; // @gotags: json:"redemptionId"
+}
+
+// MessageCLIQTransfer transfers liquid (already-vested) CLIQ between accounts.
+message MessageCLIQTransfer {
+  // from_address: the sender
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // to_address: the recipient
+  bytes to_address = 2; // @gotags: json:"toAddress"
+  // amount: amount of CLIQ to transfer (uCLIQ)
+  uint64 amount = 3;
+}
+
+// MessageCLIQClaimVested moves any newly-unlocked CLIQ from a vesting bucket
+// into the caller's liquid CLIQ balance.
+message MessageCLIQClaimVested {
+  // from_address: the vesting recipient
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+}
+
+// CanoliqGlobals is the singleton record tracking pool-wide accounting.
+message CanoliqGlobals {
+  // total_ccnpy_supply: aggregate cCNPY in circulation (uCCNPY)
+  uint64 total_ccnpy_supply = 1; // @gotags: json:"totalCcnpySupply"
+  // total_pooled_cnpy: total CNPY backing cCNPY (uCNPY)
+  uint64 total_pooled_cnpy = 2; // @gotags: json:"totalPooledCnpy"
+  // pending_redemption_cnpy: CNPY reserved for in-flight redemptions (uCNPY)
+  uint64 pending_redemption_cnpy = 3; // @gotags: json:"pendingRedemptionCnpy"
+  // last_processed_reward_pool: pool balance observed at the last reward sweep
+  uint64 last_processed_reward_pool = 4; // @gotags: json:"lastProcessedRewardPool"
+  // cliq_total_supply: hard-cap CLIQ supply minted at genesis (uCLIQ)
+  uint64 cliq_total_supply = 5; // @gotags: json:"cliqTotalSupply"
+  // cliq_circulating_supply: CLIQ that is currently liquid (uCLIQ)
+  uint64 cliq_circulating_supply = 6; // @gotags: json:"cliqCirculatingSupply"
+  // next_redemption_id: monotonically-increasing redemption id counter
+  uint64 next_redemption_id = 7; // @gotags: json:"nextRedemptionId"
+  // genesis_complete: whether genesis distribution has run
+  bool genesis_complete = 8; // @gotags: json:"genesisComplete"
+}
+
+// Redemption is a queued cCNPY → CNPY conversion that matures after the
+// validator unstaking window.
+message Redemption {
+  // id: unique redemption identifier per address
+  uint64 id = 1;
+  // address: the redeeming user
+  bytes address = 2;
+  // cnpy_amount: CNPY owed at maturity (uCNPY)
+  uint64 cnpy_amount = 3; // @gotags: json:"cnpyAmount"
+  // unbond_complete_height: block height at which the redemption matures
+  uint64 unbond_complete_height = 4; // @gotags: json:"unbondCompleteHeight"
+}
+
+// VestingSchedule encodes a linear vesting schedule with a cliff for a CLIQ
+// allocation tranche. One schedule may exist per (address, schedule_id).
+message VestingSchedule {
+  // address: the vesting recipient
+  bytes address = 1;
+  // schedule_id: discriminator when an address has multiple tranches
+  uint64 schedule_id = 2; // @gotags: json:"scheduleId"
+  // total_amount: total CLIQ vesting under this schedule (uCLIQ)
+  uint64 total_amount = 3; // @gotags: json:"totalAmount"
+  // cliff_height: no CLIQ unlocks before this height
+  uint64 cliff_height = 4; // @gotags: json:"cliffHeight"
+  // start_height: linear vest start (typically equal to cliff_height)
+  uint64 start_height = 5; // @gotags: json:"startHeight"
+  // end_height: linear vest completion height
+  uint64 end_height = 6; // @gotags: json:"endHeight"
+  // claimed_amount: CLIQ already moved to the liquid balance
+  uint64 claimed_amount = 7; // @gotags: json:"claimedAmount"
+}
+
+// CanoliqParams holds governance-tunable parameters for the canoLiq plugin.
+// Stored under the params prefix so Phase 2 can mutate via on-chain governance.
+message CanoliqParams {
+  // fee_bps: protocol fee on staking rewards in basis points (default 1200 = 12%)
+  uint64 fee_bps = 1; // @gotags: json:"feeBps"
+  // user_rebate_bps: portion of fee returned to users in bps (default 4000 = 40%)
+  uint64 user_rebate_bps = 2; // @gotags: json:"userRebateBps"
+  // treasury_bps: portion of fee to canoLiq DAO treasury in bps (default 3000 = 30%)
+  uint64 treasury_bps = 3; // @gotags: json:"treasuryBps"
+  // validator_bps: portion of fee to validator infra in bps (default 1500 = 15%)
+  uint64 validator_bps = 4; // @gotags: json:"validatorBps"
+  // buyback_bps: portion of fee to CLIQ buyback in bps (default 1500 = 15%)
+  uint64 buyback_bps = 5; // @gotags: json:"buybackBps"
+  // deposit_fee: minimum tx fee for a deposit (uCNPY)
+  uint64 deposit_fee = 6; // @gotags: json:"depositFee"
+  // redeem_fee: minimum tx fee for a redeem (uCNPY)
+  uint64 redeem_fee = 7; // @gotags: json:"redeemFee"
+  // claim_fee: minimum tx fee for claim_redemption / cliq_claim_vested (uCNPY)
+  uint64 claim_fee = 8; // @gotags: json:"claimFee"
+  // cliq_transfer_fee: minimum tx fee for a CLIQ transfer (uCNPY)
+  uint64 cliq_transfer_fee = 9; // @gotags: json:"cliqTransferFee"
+}
+
+// VestingIndex enumerates the vesting schedule ids belonging to an address so
+// MessageCLIQClaimVested can iterate without a state-range scan.
+message VestingIndex {
+  // schedule_ids: list of schedule_ids owned by the indexed address
+  repeated uint64 schedule_ids = 1; // @gotags: json:"scheduleIds"
+}

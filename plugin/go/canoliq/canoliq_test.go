@@ -1,0 +1,393 @@
+package canoliq
+
+import (
+	"encoding/hex"
+	"encoding/json"
+	"testing"
+
+	"github.com/canopy-network/go-plugin/contract"
+)
+
+// jsonMarshal is a thin wrapper to keep encoding/json out of the package's
+// non-test code while letting tests call a package-local helper.
+func jsonMarshal(v any) ([]byte, error) { return json.Marshal(v) }
+
+// addr20 builds a 20-byte address from a single byte b for terse tests.
+func addr20(b byte) []byte {
+	out := make([]byte, 20)
+	for i := range out {
+		out[i] = b
+	}
+	return out
+}
+
+// seedAccount stores a CNPY balance for `addr` in the fake state under the
+// canopy core account prefix.
+func seedAccount(s *fakeStore, addr []byte, amount uint64) {
+	bz, _ := contract.Marshal(&contract.Account{Address: addr, Amount: amount})
+	s.set(contract.KeyForAccount(addr), bz)
+}
+
+// readAccount returns the CNPY balance for `addr`.
+func readAccount(s *fakeStore, addr []byte) uint64 {
+	bz := s.get(contract.KeyForAccount(addr))
+	if bz == nil {
+		return 0
+	}
+	a := new(contract.Account)
+	if err := contract.Unmarshal(bz, a); err != nil {
+		return 0
+	}
+	return a.Amount
+}
+
+// readPool returns the CNPY held by the canoLiq committee fee pool.
+func readPool(s *fakeStore, chainId uint64) uint64 {
+	bz := s.get(contract.KeyForFeePool(chainId))
+	if bz == nil {
+		return 0
+	}
+	p := new(contract.Pool)
+	if err := contract.Unmarshal(bz, p); err != nil {
+		return 0
+	}
+	return p.Amount
+}
+
+// readCcnpy returns the cCNPY balance for `addr` in the fake state.
+func readCcnpy(s *fakeStore, addr []byte) uint64 {
+	return DecodeUint64(s.get(KeyForCCNPYBalance(addr)))
+}
+
+func readCliq(s *fakeStore, addr []byte) uint64 {
+	return DecodeUint64(s.get(KeyForCLIQBalance(addr)))
+}
+
+func loadGlobals(t *testing.T, s *fakeStore) *contract.CanoliqGlobals {
+	t.Helper()
+	bz := s.get(KeyForGlobals())
+	g := new(contract.CanoliqGlobals)
+	if bz != nil {
+		if err := contract.Unmarshal(bz, g); err != nil {
+			t.Fatalf("unmarshal globals: %v", err)
+		}
+	}
+	return g
+}
+
+// TestDepositMintsOneToOneOnFirstDeposit verifies the bootstrap exchange rate.
+func TestDepositMintsOneToOneOnFirstDeposit(t *testing.T) {
+	c, s := newTestCanoliq()
+	user := addr20(0x01)
+	seedAccount(s, user, 1_000_000+10_000) // 1 CNPY + fee
+	resp := c.DeliverMessageCanoliqDeposit(
+		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000_000},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error != nil {
+		t.Fatalf("deposit error: %v", resp.Error)
+	}
+	if got := readCcnpy(s, user); got != 1_000_000 {
+		t.Fatalf("cCNPY mint: got %d want 1_000_000", got)
+	}
+	g := loadGlobals(t, s)
+	if g.TotalCcnpySupply != 1_000_000 || g.TotalPooledCnpy != 1_000_000 {
+		t.Fatalf("globals: ccnpy=%d pooled=%d", g.TotalCcnpySupply, g.TotalPooledCnpy)
+	}
+}
+
+// TestDepositSubsequentRatio: with pooled CNPY at 110% of cCNPY supply, a
+// 100 uCNPY deposit should mint mulDiv(100, 1000, 1100) = 90 cCNPY (truncated).
+func TestDepositSubsequentRatio(t *testing.T) {
+	c, s := newTestCanoliq()
+	// Manually set globals so the pool is hot before the test deposit.
+	g := &contract.CanoliqGlobals{TotalCcnpySupply: 1000, TotalPooledCnpy: 1100, GenesisComplete: true}
+	bz, _ := contract.Marshal(g)
+	s.set(KeyForGlobals(), bz)
+	user := addr20(0x02)
+	seedAccount(s, user, 100+10_000)
+	resp := c.DeliverMessageCanoliqDeposit(
+		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 100},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error != nil {
+		t.Fatalf("deposit error: %v", resp.Error)
+	}
+	if got := readCcnpy(s, user); got != 90 {
+		t.Fatalf("ratio mint: got %d want 90", got)
+	}
+}
+
+// TestRedeemQueuesRedemption verifies cCNPY burn and Redemption record.
+func TestRedeemQueuesRedemption(t *testing.T) {
+	c, s := newTestCanoliq()
+	user := addr20(0x03)
+	// Seed: 1000 cCNPY, 1000 pooled CNPY, 1000 fee balance, no genesis flag needed.
+	g := &contract.CanoliqGlobals{TotalCcnpySupply: 1000, TotalPooledCnpy: 1000}
+	bz, _ := contract.Marshal(g)
+	s.set(KeyForGlobals(), bz)
+	s.set(KeyForCCNPYBalance(user), EncodeUint64(1000))
+	seedAccount(s, user, 10_000)
+	resp := c.DeliverMessageCanoliqRedeem(
+		&contract.MessageCanoliqRedeem{FromAddress: user, CcnpyAmount: 400},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error != nil {
+		t.Fatalf("redeem error: %v", resp.Error)
+	}
+	if got := readCcnpy(s, user); got != 600 {
+		t.Fatalf("cCNPY remaining: got %d want 600", got)
+	}
+	g2 := loadGlobals(t, s)
+	if g2.PendingRedemptionCnpy != 400 {
+		t.Fatalf("pending redemption: got %d want 400", g2.PendingRedemptionCnpy)
+	}
+	rBz := s.get(KeyForRedemption(user, 0))
+	if rBz == nil {
+		t.Fatal("redemption record not written at id=0")
+	}
+	r := new(contract.Redemption)
+	_ = contract.Unmarshal(rBz, r)
+	if r.CnpyAmount != 400 {
+		t.Fatalf("redemption amount: got %d want 400", r.CnpyAmount)
+	}
+}
+
+// TestClaimBeforeUnbondErrors and TestClaimAfterUnbondSucceeds.
+func TestClaimRedemptionMaturity(t *testing.T) {
+	c, s := newTestCanoliq()
+	user := addr20(0x04)
+	// Pre-write a redemption that matures at height 100.
+	r := &contract.Redemption{Id: 7, Address: user, CnpyAmount: 250, UnbondCompleteHeight: 100}
+	bz, _ := contract.Marshal(r)
+	s.set(KeyForRedemption(user, 7), bz)
+	g := &contract.CanoliqGlobals{PendingRedemptionCnpy: 250}
+	gBz, _ := contract.Marshal(g)
+	s.set(KeyForGlobals(), gBz)
+	seedAccount(s, user, 10_000)
+
+	// Before maturity: error.
+	resp := c.DeliverMessageCanoliqClaimRedemption(
+		&contract.MessageCanoliqClaimRedemption{FromAddress: user, RedemptionId: 7},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error == nil {
+		t.Fatal("claim before maturity should error")
+	}
+
+	// Advance height past the unbond window.
+	c.plugin.setHeight(150)
+
+	resp = c.DeliverMessageCanoliqClaimRedemption(
+		&contract.MessageCanoliqClaimRedemption{FromAddress: user, RedemptionId: 7},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error != nil {
+		t.Fatalf("claim after maturity error: %v", resp.Error)
+	}
+	if readAccount(s, user) != 250 { // 10_000 - 10_000 fee + 250 redemption
+		t.Fatalf("user balance after claim: got %d want 250", readAccount(s, user))
+	}
+	if s.get(KeyForRedemption(user, 7)) != nil {
+		t.Fatal("redemption record should be deleted after claim")
+	}
+}
+
+// TestRewardSplitWhitepaperExample verifies the canonical 12% / 40-30-15-15
+// split for a clean X=1000 reward delta. Expected:
+//   fee  = 120
+//   net  = 880  (to user pool)
+//   user-rebate (40% of 120) = 48 (also to user pool) → 928 total to pool
+//   treasury (30%) = 36
+//   validators (15%) = 18
+//   buyback  (15%)   = 18
+func TestRewardSplitWhitepaperExample(t *testing.T) {
+	c, s := newTestCanoliq()
+	// Genesis must be marked complete so the reward sweep runs.
+	g := &contract.CanoliqGlobals{GenesisComplete: true}
+	gBz, _ := contract.Marshal(g)
+	s.set(KeyForGlobals(), gBz)
+	// Seed the committee pool with X=1000 uCNPY.
+	pool := &contract.Pool{Id: c.Config.ChainId, Amount: 1000}
+	pBz, _ := contract.Marshal(pool)
+	s.set(contract.KeyForFeePool(c.Config.ChainId), pBz)
+
+	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 1}); err != nil {
+		t.Fatalf("ProcessRewards: %v", err)
+	}
+
+	g2 := loadGlobals(t, s)
+	if g2.TotalPooledCnpy != 928 {
+		t.Errorf("total_pooled_cnpy: got %d want 928", g2.TotalPooledCnpy)
+	}
+	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 36 {
+		t.Errorf("treasury: got %d want 36", got)
+	}
+	if got := DecodeUint64(s.get(KeyForBuybackPool())); got != 18 {
+		t.Errorf("buyback: got %d want 18", got)
+	}
+	addr := c.committeeAggregatorAddr()
+	if got := DecodeUint64(s.get(KeyForValidatorIncentives(addr))); got != 18 {
+		t.Errorf("validators: got %d want 18", got)
+	}
+	if g2.LastProcessedRewardPool != 928 {
+		// LastProcessedRewardPool is whatever the pool ends up at after the
+		// sweep — 1000 originally - 1000 swept + 928 user-share returned.
+		t.Errorf("last_processed_reward_pool: got %d want 928", g2.LastProcessedRewardPool)
+	}
+	if got := readPool(s, c.Config.ChainId); got != 928 {
+		t.Errorf("post-sweep committee pool: got %d want 928", got)
+	}
+}
+
+// TestVestingLinearUnlock verifies vesting math at three sample points.
+func TestVestingLinearUnlock(t *testing.T) {
+	s := &contract.VestingSchedule{
+		TotalAmount:  1_000_000,
+		CliffHeight:  100,
+		StartHeight:  100,
+		EndHeight:    200,
+	}
+	cases := []struct {
+		height uint64
+		want   uint64
+	}{
+		{50, 0},          // before cliff
+		{100, 0},         // exactly at cliff: 0/100 elapsed
+		{150, 500_000},   // halfway
+		{200, 1_000_000}, // saturated
+		{300, 1_000_000}, // beyond end stays saturated
+	}
+	for _, tc := range cases {
+		got := unlockedAmount(s, tc.height)
+		if got != tc.want {
+			t.Errorf("unlockedAmount@%d: got %d want %d", tc.height, got, tc.want)
+		}
+	}
+}
+
+// TestCLIQTransferRespectsLiquidBalance ensures transfers fail when the
+// requested amount exceeds the liquid balance, and succeed when it does not.
+func TestCLIQTransferRespectsLiquidBalance(t *testing.T) {
+	c, s := newTestCanoliq()
+	from := addr20(0x05)
+	to := addr20(0x06)
+	seedAccount(s, from, 10_000)             // CNPY for fee
+	s.set(KeyForCLIQBalance(from), EncodeUint64(500))
+
+	// Over-transfer fails.
+	resp := c.DeliverMessageCLIQTransfer(
+		&contract.MessageCLIQTransfer{FromAddress: from, ToAddress: to, Amount: 1000},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error == nil {
+		t.Fatal("transfer of 1000 from balance 500 should fail")
+	}
+
+	// Within-balance succeeds.
+	resp = c.DeliverMessageCLIQTransfer(
+		&contract.MessageCLIQTransfer{FromAddress: from, ToAddress: to, Amount: 200},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error != nil {
+		t.Fatalf("transfer error: %v", resp.Error)
+	}
+	if readCliq(s, from) != 300 || readCliq(s, to) != 200 {
+		t.Fatalf("post-transfer balances: from=%d to=%d (want 300/200)",
+			readCliq(s, from), readCliq(s, to))
+	}
+}
+
+// TestGenesisAllocationTotals: after running genesis, sum of all liquid
+// balances + sum of all VestingSchedule.TotalAmount must equal CLIQTotalSupply.
+func TestGenesisAllocationTotals(t *testing.T) {
+	c, s := newTestCanoliq()
+	gf := miniGenesis()
+	// Inject the genesis JSON via PluginGenesisRequest.GenesisJson.
+	gfBytes := mustJSON(t, gf)
+	resp := c.Genesis(&contract.PluginGenesisRequest{GenesisJson: gfBytes})
+	if resp.Error != nil {
+		t.Fatalf("genesis: %v", resp.Error)
+	}
+	g := loadGlobals(t, s)
+	if g.CliqTotalSupply != CLIQTotalSupply {
+		t.Fatalf("cliq_total_supply: got %d want %d", g.CliqTotalSupply, CLIQTotalSupply)
+	}
+	// Sum allocations across the store.
+	var allocated uint64
+	for k, v := range s.data {
+		if hasPrefix(k, KeyForCLIQBalance(nil)) {
+			allocated += DecodeUint64(v)
+			continue
+		}
+		if hasPrefix(k, JoinLenPrefix(canoliqPrefix, domainVesting)) {
+			vs := new(contract.VestingSchedule)
+			if err := contract.Unmarshal(v, vs); err == nil {
+				allocated += vs.TotalAmount
+			}
+		}
+	}
+	if allocated != CLIQTotalSupply {
+		t.Fatalf("allocated total: got %d want %d", allocated, CLIQTotalSupply)
+	}
+}
+
+// hasPrefix is a small helper for TestGenesisAllocationTotals' iteration.
+// `keyPrefix` is the canonical prefix as built by JoinLenPrefix; both keys
+// share the same first len(keyPrefix) - len(addr) bytes.
+func hasPrefix(key string, keyPrefix []byte) bool {
+	if len(key) < len(keyPrefix) {
+		return false
+	}
+	for i, b := range keyPrefix {
+		// Stop comparing once we hit the address-length byte (variable). For
+		// our key layout, the prefix up to the canonical fixed segments is
+		// constant; the address segment that follows starts with byte 20
+		// (length=20) and we don't need to match beyond it for prefix.
+		if i >= len(key) {
+			return false
+		}
+		if key[i] != b {
+			return false
+		}
+	}
+	return true
+}
+
+// miniGenesis constructs an in-memory genesis with seven distinct addresses,
+// matching the canonical 22/15/20/15/12/10/6 split. Useful for keeping the
+// test self-contained without reading genesis.json from disk.
+func miniGenesis() *GenesisFile {
+	rec := func(addr byte) []GenesisAllocation {
+		return []GenesisAllocation{{Address: hex.EncodeToString(addr20(addr)), Bps: 10000}}
+	}
+	return &GenesisFile{
+		BlocksPerYear: 5_256_000,
+		Buckets: []GenesisBucket{
+			{Name: "validators", Bps: 2200, CliffMonths: 6, VestMonths: 24, Recipients: rec(0xa1)},
+			{Name: "liquidity", Bps: 1500, CliffMonths: 0, VestMonths: 0, Recipients: rec(0xa2)},
+			{Name: "community", Bps: 2000, CliffMonths: 0, VestMonths: 0, Recipients: rec(0xa3)},
+			{Name: "treasury", Bps: 1500, CliffMonths: 0, VestMonths: 0, Recipients: rec(0xa4)},
+			{Name: "founders", Bps: 1200, CliffMonths: 12, VestMonths: 24, Recipients: rec(0xa5)},
+			{Name: "partners", Bps: 1000, CliffMonths: 6, VestMonths: 18, Recipients: rec(0xa6)},
+			{Name: "grants", Bps: 600, CliffMonths: 0, VestMonths: 0, Recipients: rec(0xa7)},
+		},
+	}
+}
+
+// mustJSON marshals to JSON, failing the test on error.
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	bz, err := jsonMarshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return bz
+}

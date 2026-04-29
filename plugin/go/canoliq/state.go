@@ -1,0 +1,127 @@
+package canoliq
+
+import (
+	"encoding/binary"
+)
+
+// State key layout for the canoLiq plugin.
+//
+// All keys live under prefix []byte{10} to stay clear of the Canopy core
+// prefixes documented in plugin/go/AGENTS.md (1=accounts, 2=pools, 7=gov).
+// Subdomains use single-byte discriminators inside JoinLenPrefix segments to
+// keep keys compact and unambiguous.
+var (
+	canoliqPrefix = []byte{10}
+
+	domainGlobals    = []byte{1}
+	domainCcnpyBal   = []byte{2}
+	domainCliqBal    = []byte{3}
+	domainVesting    = []byte{4}
+	domainVestIndex  = []byte{5}
+	domainRedemption = []byte{6}
+	domainTreasury   = []byte{7}
+	domainBuyback    = []byte{8}
+	domainValIncent  = []byte{9}
+	domainParams     = []byte{11}
+
+	treasuryCanopy = []byte("canopy")
+	treasuryCliq   = []byte("cliq")
+	buybackPool    = []byte("pool")
+)
+
+// JoinLenPrefix mirrors contract.JoinLenPrefix to avoid an import cycle for
+// trivial key-building. Each segment is encoded as 1-byte length + segment.
+func JoinLenPrefix(parts ...[]byte) []byte {
+	total := 0
+	for _, p := range parts {
+		if p != nil {
+			total += 1 + len(p)
+		}
+	}
+	out := make([]byte, 0, total)
+	for _, p := range parts {
+		if p == nil {
+			continue
+		}
+		out = append(out, byte(len(p)))
+		out = append(out, p...)
+	}
+	return out
+}
+
+// FormatUint64 returns the big-endian 8-byte encoding of n.
+func FormatUint64(n uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, n)
+	return b
+}
+
+// KeyForGlobals returns the singleton globals record key.
+func KeyForGlobals() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainGlobals)
+}
+
+// KeyForParams returns the canoLiq parameters key.
+func KeyForParams() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainParams)
+}
+
+// KeyForCCNPYBalance returns the cCNPY balance key for an address.
+func KeyForCCNPYBalance(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainCcnpyBal, addr)
+}
+
+// KeyForCLIQBalance returns the liquid CLIQ balance key for an address.
+func KeyForCLIQBalance(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainCliqBal, addr)
+}
+
+// KeyForVesting returns the vesting schedule key for an (address, schedule_id) pair.
+func KeyForVesting(addr []byte, scheduleID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainVesting, addr, FormatUint64(scheduleID))
+}
+
+// KeyForVestingIndex returns the vesting index key listing schedule_ids per address.
+func KeyForVestingIndex(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainVestIndex, addr)
+}
+
+// KeyForRedemption returns the redemption record key for an (address, redemption_id) pair.
+func KeyForRedemption(addr []byte, redemptionID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainRedemption, addr, FormatUint64(redemptionID))
+}
+
+// KeyForTreasuryCNPY returns the canoLiq DAO CNPY treasury key.
+func KeyForTreasuryCNPY() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainTreasury, treasuryCanopy)
+}
+
+// KeyForTreasuryCLIQ returns the canoLiq DAO CLIQ treasury key.
+func KeyForTreasuryCLIQ() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainTreasury, treasuryCliq)
+}
+
+// KeyForBuybackPool returns the buyback pool (CNPY held for CLIQ buyback) key.
+func KeyForBuybackPool() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainBuyback, buybackPool)
+}
+
+// KeyForValidatorIncentives returns the per-validator infrastructure incentive key.
+func KeyForValidatorIncentives(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainValIncent, addr)
+}
+
+// EncodeUint64 returns the 8-byte big-endian encoding of n. Used for storing
+// scalar uint64 values directly under their key.
+func EncodeUint64(n uint64) []byte {
+	return FormatUint64(n)
+}
+
+// DecodeUint64 parses an 8-byte big-endian uint64. Returns 0 for nil/short input
+// so unset keys read as zero.
+func DecodeUint64(b []byte) uint64 {
+	if len(b) < 8 {
+		return 0
+	}
+	return binary.BigEndian.Uint64(b)
+}
