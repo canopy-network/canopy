@@ -117,7 +117,7 @@ Track implementation progress here. Tick boxes (`[x]`) as work lands. Keep this 
 - [ ] Localnet: redeem → matured `Redemption` → claim returns CNPY
 - [ ] Localnet: treasury / buyback / validator-incentives totals reconcile
 - [ ] Localnet: vesting tranche claims 0 before cliff, linear after
-- [ ] Whitepaper §7 reconciliation test passes (X=1000 → 881.6 user yield ± truncation)
+- [x] Whitepaper §7 reconciliation test passes (X=1000 → 881.6 user yield ± truncation)
 - [ ] Coordination: design summary posted to Canopy Discord
 
 ### Phase 2 — Governance, buyback, treasury (deferred)
