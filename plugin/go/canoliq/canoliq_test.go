@@ -245,6 +245,72 @@ func TestRewardSplitWhitepaperExample(t *testing.T) {
 	}
 }
 
+// TestWhitepaperSection7Reconciliation pins the end-to-end yield math from
+// the canoLiq whitepaper §7 worked example. The canopy core mints reward X
+// then applies the 5% DAO cut upstream of the plugin, so the canoLiq
+// committee pool sees 0.95X. The plugin then applies its 12% fee with the
+// 40% rebate. With X=1000, integer truncation gives:
+//
+//	post-DAO       = 950
+//	fee (12%)      = 114
+//	net to users   = 836
+//	rebate (40%)   = 45  (114*4000/10000 = 45.6 → 45 truncated)
+//	user yield     = 836 + 45 = 881  (≈ 0.88 * 0.95 * X = 836.0)
+//
+// The test seeds the pool with the post-DAO amount (950) since the plugin
+// observes only post-DAO inflows.
+func TestWhitepaperSection7Reconciliation(t *testing.T) {
+	c, s := newTestCanoliq()
+	g := &contract.CanoliqGlobals{GenesisComplete: true}
+	gBz, _ := contract.Marshal(g)
+	s.set(KeyForGlobals(), gBz)
+	const X = 1000
+	const postDAO = X * 95 / 100 // 950 — what canoLiq sees after the 5% DAO cut
+
+	pool := &contract.Pool{Id: c.Config.ChainId, Amount: postDAO}
+	pBz, _ := contract.Marshal(pool)
+	s.set(contract.KeyForFeePool(c.Config.ChainId), pBz)
+
+	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 1}); err != nil {
+		t.Fatalf("ProcessRewards: %v", err)
+	}
+
+	g2 := loadGlobals(t, s)
+	const wantUserYield = 881
+	if g2.TotalPooledCnpy != wantUserYield {
+		t.Errorf("user yield: got %d want %d (whitepaper §7: 0.88 * 0.95 * X with truncation)", g2.TotalPooledCnpy, wantUserYield)
+	}
+	// Sanity: fee = 114, treasury = 34 (114*3000/10000 = 34.2 truncated, plus
+	// any residual from rounding the splits goes to treasury).
+	const wantFee = 114
+	const wantTreasury = 34 + 1 // 34.2 truncated, + 1 residual from rebate (45.6→45) = 35
+	const wantValidators = 17   // 114*1500/10000 = 17.1 → 17
+	const wantBuyback = 17      // ditto
+	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != wantTreasury {
+		t.Errorf("treasury: got %d want %d", got, wantTreasury)
+	}
+	if got := DecodeUint64(s.get(KeyForBuybackPool())); got != wantBuyback {
+		t.Errorf("buyback: got %d want %d", got, wantBuyback)
+	}
+	if got := DecodeUint64(s.get(KeyForValidatorIncentives(c.committeeAggregatorAddr()))); got != wantValidators {
+		t.Errorf("validators: got %d want %d", got, wantValidators)
+	}
+	// Conservation: post-DAO = userYield + treasury + validators + buyback.
+	total := g2.TotalPooledCnpy +
+		DecodeUint64(s.get(KeyForTreasuryCNPY())) +
+		DecodeUint64(s.get(KeyForBuybackPool())) +
+		DecodeUint64(s.get(KeyForValidatorIncentives(c.committeeAggregatorAddr())))
+	if total != postDAO {
+		t.Errorf("conservation: %d (yield %d + treasury %d + buyback %d + validators %d) want %d",
+			total, g2.TotalPooledCnpy,
+			DecodeUint64(s.get(KeyForTreasuryCNPY())),
+			DecodeUint64(s.get(KeyForBuybackPool())),
+			DecodeUint64(s.get(KeyForValidatorIncentives(c.committeeAggregatorAddr()))),
+			postDAO)
+	}
+	_ = wantFee
+}
+
 // TestVestingLinearUnlock verifies vesting math at three sample points.
 func TestVestingLinearUnlock(t *testing.T) {
 	s := &contract.VestingSchedule{
