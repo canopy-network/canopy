@@ -400,8 +400,34 @@ func (s *Server) Blocks(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 
 // TransactionByHash responds with a transaction with the hash h
 func (s *Server) TransactionByHash(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.hashIndexer(w, r, func(s lib.StoreI, h lib.HexBytes) (any, lib.ErrorI) { return s.GetTxByHash(h) })
+	req := new(hashRequest)
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	hashBytes, err := lib.StringToBytes(req.Hash)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	st, ok := s.setupStore(w)
+	if !ok {
+		return
+	}
+	defer st.Discard()
+	tx, err := st.GetTxByHash(hashBytes)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	if tx != nil && tx.GetTxHash() != "" {
+		write(w, tx, http.StatusOK)
+		return
+	}
+	if pendingTx, found := s.controller.GetPendingTxByHash(req.Hash); found {
+		write(w, pendingTx, http.StatusOK)
+		return
+	}
+	write(w, map[string]string{"error": "transaction not found"}, http.StatusNotFound)
 }
 
 // TransactionsByHeight response with the transactions at block height h

@@ -144,8 +144,8 @@ export const KeyManagement = (): JSX.Element => {
                     className="max-h-[90vh] max-w-[min(96vw,56rem)] gap-0 overflow-hidden border-[#272729] bg-[#171717] p-0"
                 >
                     <div className="max-h-[90vh] overflow-y-auto p-5 sm:p-6">
-                        {activeModal === 'import' ? <ImportWallet embedded /> : null}
-                        {activeModal === 'create' ? <NewKey embedded /> : null}
+                        {activeModal === 'import' ? <ImportWallet embedded onSuccess={() => setActiveModal(null)} /> : null}
+                        {activeModal === 'create' ? <NewKey embedded onSuccess={() => setActiveModal(null)} /> : null}
                     </div>
                 </DialogContent>
             </Dialog>

@@ -3,6 +3,7 @@ import { ChevronDown, ExternalLink, Eye, Search, ThumbsDown, ThumbsUp, Filter } 
 import { Poll } from "@/hooks/useGovernance";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
 import { WALLET_BADGE_CLASS } from "@/components/ui/badgeStyles";
+import { CopyableIdentifier } from "@/components/ui/CopyableIdentifier";
 
 interface PollTableProps {
   polls: Poll[];
@@ -186,9 +187,9 @@ export const PollTable: React.FC<PollTableProps> = ({
                       <div className="mb-1 truncate text-sm font-medium text-foreground">{poll.title}</div>
                       <div className="text-xs text-muted-foreground line-clamp-1 mb-1">{poll.description}</div>
                       {!isIdentifierTitle(poll) ? (
-                        <div className="text-[11px] text-muted-foreground">
+                        <CopyableIdentifier value={normalizePollHash(poll)} label="Poll hash" className="max-w-full text-[11px] text-muted-foreground">
                           {normalizePollHash(poll).slice(0, 12)}...{normalizePollHash(poll).slice(-6)}
-                        </div>
+                        </CopyableIdentifier>
                       ) : null}
                     </td>
                     <td className="py-3 px-3 align-middle">

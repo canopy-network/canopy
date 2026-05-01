@@ -4,6 +4,7 @@ import AccountsTable from './AccountsTable'
 import { useAccounts } from '../../hooks/useApi'
 import accountsTexts from '../../data/accounts.json'
 import ExplorerOverviewCards from '../ExplorerOverviewCards'
+import { toCNPY } from '../../lib/utils'
 
 const LiveIndicator = () => (
     <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-sm text-primary">
@@ -19,7 +20,7 @@ const AccountsPage: React.FC = () => {
     const { data: accountsData, isLoading, error } = useAccounts(currentPage, pageSize)
     const accounts = accountsData?.results || []
     const largestBalance = React.useMemo(
-        () => accounts.reduce((max: number, account: { amount?: number }) => Math.max(max, Number(account.amount || 0)), 0),
+        () => toCNPY(accounts.reduce((max: number, account: { amount?: number }) => Math.max(max, Number(account.amount || 0)), 0)),
         [accounts],
     )
     const overviewCards = [

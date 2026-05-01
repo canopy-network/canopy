@@ -524,7 +524,11 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
         return;
       }
 
-      openAction("stake");
+      openAction("stake", {
+        prefilledData: {
+          operator: account.address,
+        },
+      });
     },
     [openAction, setActiveAccount],
   );
