@@ -95,6 +95,9 @@ Track implementation progress here. Tick boxes (`[x]`) as work lands. Keep this 
 - [x] CLIQ transfer respects vesting (locked → error)
 - [x] Vesting linear unlock crosses cliff correctly
 - [x] Genesis allocation totals exactly 100M CLIQ
+- [x] `DeliverMessageCLIQClaimVested` end-to-end (before cliff / halfway / idempotent / past end)
+- [x] Multi-block reward sweep (`LastProcessedRewardPool` watermark across consecutive `EndBlock`s)
+- [x] Composite deposit → reward → redeem yields a `Redemption` strictly greater than deposit
 
 #### 7. Sub-chain registration
 - [x] Create `plugin/go/canoliq/README.md` (registration + ops guide)
@@ -110,15 +113,40 @@ Track implementation progress here. Tick boxes (`[x]`) as work lands. Keep this 
 ### Phase 1 verification
 - [x] `cd plugin/go && make build` succeeds
 - [x] `cd plugin/go/canoliq && go test ./...` passes
-- [ ] Localnet: `make docker/up` starts canoLiq plugin
-- [ ] Localnet: `MessageSubsidy` enables committee rewards
-- [ ] Localnet: deposit → cCNPY balance + escrow CNPY pool growth verified
-- [ ] Localnet: `total_pooled_cnpy` matches fee-math formula
-- [ ] Localnet: redeem → matured `Redemption` → claim returns CNPY
-- [ ] Localnet: treasury / buyback / validator-incentives totals reconcile
-- [ ] Localnet: vesting tranche claims 0 before cliff, linear after
+- [x] In-process: deposit → cCNPY balance + pool accounting (`canoliq_test.go::TestDepositMintsOneToOneOnFirstDeposit`, `::TestDepositSubsequentRatio`)
+- [x] In-process: `total_pooled_cnpy` matches fee-math formula across blocks (`::TestRewardSplitWhitepaperExample`, `::TestRewardSweepMultiBlock`)
+- [x] In-process: redeem queues `Redemption` and claim after maturity returns CNPY (`::TestRedeemQueuesRedemption`, `::TestClaimRedemptionMaturity`)
+- [x] In-process: treasury / buyback / validator-incentives totals reconcile (conservation asserted in `::TestWhitepaperSection7Reconciliation` and `::TestRewardSweepMultiBlock`)
+- [x] In-process: vesting tranche claims 0 before cliff, linear after (`::TestVestingLinearUnlock`, `::TestDeliverCLIQClaimVestedFlow`)
+- [x] In-process: deposit → reward accrues → redeem returns yield (`::TestCompositeDepositRewardRedeem`)
 - [x] Whitepaper §7 reconciliation test passes (X=1000 → 881.6 user yield ± truncation)
 - [ ] Coordination: design summary posted to Canopy Discord
+
+### Phase 1.5 — Live integration (deferred)
+
+Phase 1.5 covers the verification steps that require a real Canopy node + plugin
+process pair on a unix socket — i.e., the parts the in-process `fakeStore`
+harness explicitly mocks out. These are not unit-test gaps; they exercise
+plumbing (Dockerfile, handshake, length-prefixed framing, plugin-mode env var)
+that the in-process tests cannot.
+
+Pre-reqs to land before this phase can be exercised:
+1. Compose service (or sibling container) that runs `go-plugin` with
+   `CANOPY_PLUGIN_MODE=canoliq` against the same `/tmp/plugin/plugin.sock`.
+2. Node config switched to `"plugin": "go"`, genesis amended so committee 2
+   exists and at least one validator opts in via `MessageEditStake`.
+3. Minimal `canoliqctl` (or RPC handlers in `cmd/rpc/admin.go`) so canoLiq tx
+   types can be built, signed (BLS12-381), and posted to `/v1/tx`.
+
+Checklist:
+- [ ] Plugin handshake: `go-plugin` connects to FSM, exchanges `PluginConfig`,
+      and survives one `BeginBlock`/`EndBlock` cycle on the live socket
+- [ ] `MessageSubsidy` proposal funds committee 2's reward pool; canoLiq's
+      `EndBlock` observes the inflow and applies the 12% fee on a real chain
+- [ ] Submit a real `MessageCanoliqDeposit`; verify cCNPY balance and pool
+      growth via plugin-state RPC
+- [ ] Submit `MessageCanoliqRedeem`, advance past `unbond_complete_height`,
+      submit `MessageCanoliqClaimRedemption`; verify CNPY back in user account
 
 ### Phase 2 — Governance, buyback, treasury (deferred)
 - [ ] `MessageCLIQVote` (parameter governance)
@@ -337,15 +365,19 @@ Deferred. Includes: RPC endpoints for TVL / pool health / validator uptime / ves
 End-to-end checks once Phase 1 lands:
 
 1. **Build:** `cd plugin/go && make build` succeeds with the new package; protobuf regen `./proto/_generate.sh` produces `canoliq.pb.go` cleanly.
-2. **Unit tests:** `cd plugin/go/canoliq && go test ./...` — all the cases listed in §6 pass.
-3. **Localnet integration test:**
-   - `make docker/up` to start Canopy localnet with the canoLiq plugin enabled (config `"plugin": "canoliq"`).
-   - Submit `MessageSubsidy` from a Canopy account so canoLiq starts receiving committee rewards.
-   - Submit `MessageCanoliqDeposit` — verify cCNPY balance via plugin RPC and that escrow CNPY pool grows.
-   - Wait several blocks; query `total_pooled_cnpy` — must increase exactly per the fee-math formula in Phase 1 §4.
-   - Submit `MessageCanoliqRedeem`; verify `Redemption` row appears with correct `unbond_complete_height`.
-   - Advance past the unbond height; submit `MessageCanoliqClaimRedemption`; verify CNPY back in user account.
-   - Inspect `canoliq/treasury/canoliq`, `canoliq/buyback/pool`, and `canoliq/validator/incentives/*` totals — must reconcile to 30/15/15 of accumulated fees.
-   - Inspect a vesting tranche (founders): before cliff height, `MessageCLIQClaimVested` claims 0; after cliff, claims linearly.
-4. **Whitepaper §7 reconciliation:** for total reward `X = 1000`, expect `0.95X = 950` to canoLiq pool, `fee = 114`, `net = 836` to users + `45.6` rebate from 40% of fee = `881.6` user yield (i.e., `0.88 * 0.95 * X` modulo integer truncation). Reproduce in the integration test and assert.
+2. **Unit tests:** `cd plugin/go/canoliq && go test ./...` — all cases listed in §6 pass.
+3. **In-process behavior coverage:** the `fakeStore` harness in `fakeplugin_test.go` runs the real `Canoliq` handlers against an in-memory KV, so deposit/redeem/claim/reward/vesting flows are all exercised against the production code paths. Specifically:
+   - Deposit and exchange-rate math — `TestDepositMintsOneToOneOnFirstDeposit`, `TestDepositSubsequentRatio`.
+   - Redeem queues `Redemption`, claim before/after maturity — `TestRedeemQueuesRedemption`, `TestClaimRedemptionMaturity`.
+   - Reward fee-split (single block) — `TestRewardSplitWhitepaperExample`.
+   - Reward delta watermark across blocks — `TestRewardSweepMultiBlock`.
+   - Treasury / buyback / validator-incentives reconcile against post-DAO inflow — conservation asserted in `TestWhitepaperSection7Reconciliation`.
+   - Vesting unlock math + claim handler — `TestVestingLinearUnlock`, `TestDeliverCLIQClaimVestedFlow`.
+   - Composite deposit → reward → redeem yield — `TestCompositeDepositRewardRedeem`.
+4. **Whitepaper §7 reconciliation:** for total reward `X = 1000`, expect `0.95X = 950` to canoLiq pool, `fee = 114`, `net = 836` to users + `45.6` rebate from 40% of fee = `881.6` user yield (`0.88 * 0.95 * X` modulo integer truncation). Asserted by `TestWhitepaperSection7Reconciliation`.
 5. **Coordination:** before submitting upstream, post a design summary to Canopy Discord per `CONTRIBUTING.md` "coordinate bigger changes" guidance — even though Phase 1 touches only `plugin/go/`, registering a new sub-chain is operationally significant.
+
+Live-socket integration (plugin handshake, real `EndBlock` over unix socket,
+on-chain `MessageSubsidy`/`MessageCanoliqDeposit` round-trips) is tracked in
+**Phase 1.5** above and is gated on a compose service for the plugin process
+plus a minimal `canoliqctl` for tx submission — neither exists yet.

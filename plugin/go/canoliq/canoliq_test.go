@@ -405,6 +405,255 @@ func TestGenesisAllocationTotals(t *testing.T) {
 	}
 }
 
+// TestDeliverCLIQClaimVestedFlow exercises the full vesting-claim handler:
+// before-cliff returns NothingToClaim, halfway claims the linear share, an
+// idempotent second call at the same height also returns NothingToClaim, and a
+// final call past end_height drains the schedule. Closes the gap left by
+// TestVestingLinearUnlock, which only covered the unlockedAmount math helper.
+func TestDeliverCLIQClaimVestedFlow(t *testing.T) {
+	c, s := newTestCanoliq()
+	holder := addr20(0x07)
+	seedAccount(s, holder, 100_000) // covers fees on the two successful claims
+
+	sched := &contract.VestingSchedule{
+		Address:     holder,
+		TotalAmount: 1_000_000,
+		CliffHeight: 100,
+		StartHeight: 100,
+		EndHeight:   200,
+	}
+	sBz, _ := contract.Marshal(sched)
+	s.set(KeyForVesting(holder, 0), sBz)
+
+	idx := &contract.VestingIndex{ScheduleIds: []uint64{0}}
+	iBz, _ := contract.Marshal(idx)
+	s.set(KeyForVestingIndex(holder), iBz)
+
+	// Before cliff: nothing unlocked.
+	c.plugin.setHeight(50)
+	resp := c.DeliverMessageCLIQClaimVested(
+		&contract.MessageCLIQClaimVested{FromAddress: holder},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error == nil {
+		t.Fatal("claim before cliff should error")
+	}
+	if got := readCliq(s, holder); got != 0 {
+		t.Fatalf("liquid CLIQ before cliff: got %d want 0", got)
+	}
+	if got := readAccount(s, holder); got != 100_000 {
+		t.Fatalf("CNPY untouched on failed claim: got %d want 100_000", got)
+	}
+
+	// Halfway through the vesting span (height 150 of [100,200]): expect 500_000.
+	c.plugin.setHeight(150)
+	resp = c.DeliverMessageCLIQClaimVested(
+		&contract.MessageCLIQClaimVested{FromAddress: holder},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error != nil {
+		t.Fatalf("halfway claim error: %v", resp.Error)
+	}
+	if got := readCliq(s, holder); got != 500_000 {
+		t.Fatalf("halfway liquid CLIQ: got %d want 500_000", got)
+	}
+	if got := readAccount(s, holder); got != 90_000 {
+		t.Fatalf("CNPY after fee: got %d want 90_000", got)
+	}
+
+	// Same height, second call: claimed_amount already covers what's unlocked.
+	resp = c.DeliverMessageCLIQClaimVested(
+		&contract.MessageCLIQClaimVested{FromAddress: holder},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error == nil {
+		t.Fatal("idempotent claim at same height should error (nothing to claim)")
+	}
+
+	// Past end_height: remaining 500_000 unlocks.
+	c.plugin.setHeight(250)
+	resp = c.DeliverMessageCLIQClaimVested(
+		&contract.MessageCLIQClaimVested{FromAddress: holder},
+		10_000,
+		DefaultParams(),
+	)
+	if resp.Error != nil {
+		t.Fatalf("past-end claim error: %v", resp.Error)
+	}
+	if got := readCliq(s, holder); got != 1_000_000 {
+		t.Fatalf("final liquid CLIQ: got %d want 1_000_000", got)
+	}
+
+	// claimed_amount must reflect the saturation.
+	persisted := new(contract.VestingSchedule)
+	_ = contract.Unmarshal(s.get(KeyForVesting(holder, 0)), persisted)
+	if persisted.ClaimedAmount != 1_000_000 {
+		t.Fatalf("schedule claimed_amount: got %d want 1_000_000", persisted.ClaimedAmount)
+	}
+
+	// Globals must track circulating supply.
+	g := loadGlobals(t, s)
+	if g.CliqCirculatingSupply != 1_000_000 {
+		t.Fatalf("circulating CLIQ: got %d want 1_000_000", g.CliqCirculatingSupply)
+	}
+}
+
+// TestRewardSweepMultiBlock pins down that LastProcessedRewardPool functions
+// as a per-block watermark so consecutive EndBlock invocations operate on the
+// fresh delta only — the property a real localnet would exercise across blocks
+// but was previously only tested at a single sweep.
+func TestRewardSweepMultiBlock(t *testing.T) {
+	c, s := newTestCanoliq()
+	g := &contract.CanoliqGlobals{GenesisComplete: true}
+	gBz, _ := contract.Marshal(g)
+	s.set(KeyForGlobals(), gBz)
+
+	setPool := func(amount uint64) {
+		p := &contract.Pool{Id: c.Config.ChainId, Amount: amount}
+		bz, _ := contract.Marshal(p)
+		s.set(contract.KeyForFeePool(c.Config.ChainId), bz)
+	}
+	addToPool := func(delta uint64) {
+		p := new(contract.Pool)
+		_ = contract.Unmarshal(s.get(contract.KeyForFeePool(c.Config.ChainId)), p)
+		p.Amount += delta
+		bz, _ := contract.Marshal(p)
+		s.set(contract.KeyForFeePool(c.Config.ChainId), bz)
+	}
+
+	// Block 1: 1000 inflow → fee 120 → user share 928, treasury 36, val 18, buyback 18.
+	setPool(1000)
+	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 1}); err != nil {
+		t.Fatalf("block 1: %v", err)
+	}
+	g1 := loadGlobals(t, s)
+	if g1.TotalPooledCnpy != 928 || g1.LastProcessedRewardPool != 928 {
+		t.Fatalf("block 1 globals: pooled=%d watermark=%d (want 928/928)",
+			g1.TotalPooledCnpy, g1.LastProcessedRewardPool)
+	}
+
+	// Block 2: +500 fresh inflow on top of the post-sweep pool. Delta must
+	// isolate to 500, NOT the cumulative 1428.
+	addToPool(500)
+	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 2}); err != nil {
+		t.Fatalf("block 2: %v", err)
+	}
+	g2 := loadGlobals(t, s)
+	// fee=60, net=440, rebate=24 → block 2 user share = 464; cumulative = 928+464.
+	if g2.TotalPooledCnpy != 1392 {
+		t.Fatalf("block 2 pooled: got %d want 1392", g2.TotalPooledCnpy)
+	}
+	if g2.LastProcessedRewardPool != 1392 {
+		t.Fatalf("block 2 watermark: got %d want 1392", g2.LastProcessedRewardPool)
+	}
+	// Treasury 36+18=54, validators 18+9=27, buyback 18+9=27.
+	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 54 {
+		t.Errorf("treasury cumulative: got %d want 54", got)
+	}
+	if got := DecodeUint64(s.get(KeyForBuybackPool())); got != 27 {
+		t.Errorf("buyback cumulative: got %d want 27", got)
+	}
+	if got := DecodeUint64(s.get(KeyForValidatorIncentives(c.committeeAggregatorAddr()))); got != 27 {
+		t.Errorf("validators cumulative: got %d want 27", got)
+	}
+
+	// Block 3: no inflow. Pool == watermark, so the sweep is a no-op for users
+	// and accumulators must NOT advance.
+	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 3}); err != nil {
+		t.Fatalf("block 3: %v", err)
+	}
+	g3 := loadGlobals(t, s)
+	if g3.TotalPooledCnpy != 1392 {
+		t.Fatalf("block 3 pooled drift: got %d want 1392", g3.TotalPooledCnpy)
+	}
+	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 54 {
+		t.Errorf("block 3 treasury drift: got %d want 54", got)
+	}
+}
+
+// TestCompositeDepositRewardRedeem walks one user through the full lifecycle:
+// deposit → reward injection → process → redeem. Asserts that the queued
+// Redemption pays back strictly more CNPY than was deposited, proving yield
+// actually flows to cCNPY holders end-to-end. This is the closest in-process
+// analog to the localnet "deposit, accrue, redeem" smoke test.
+func TestCompositeDepositRewardRedeem(t *testing.T) {
+	c, s := newTestCanoliq()
+	user := addr20(0x10)
+	// Seed enough CNPY for the deposit + its 10_000 fee + a later redeem fee.
+	seedAccount(s, user, 1_000_000+10_000+10_000)
+
+	g := &contract.CanoliqGlobals{GenesisComplete: true}
+	gBz, _ := contract.Marshal(g)
+	s.set(KeyForGlobals(), gBz)
+
+	// 1) Deposit 1_000_000 → mints 1_000_000 cCNPY at 1:1.
+	if resp := c.DeliverMessageCanoliqDeposit(
+		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000_000},
+		10_000,
+		DefaultParams(),
+	); resp.Error != nil {
+		t.Fatalf("deposit: %v", resp.Error)
+	}
+	if got := readCcnpy(s, user); got != 1_000_000 {
+		t.Fatalf("post-deposit cCNPY: got %d want 1_000_000", got)
+	}
+
+	// 2) Pin the watermark to the current pool balance so the upcoming reward
+	//    delta is isolated from any side effects of the deposit (its 10_000
+	//    fee accrued into the same committee pool key).
+	gAfterDeposit := loadGlobals(t, s)
+	gAfterDeposit.LastProcessedRewardPool = readPool(s, c.Config.ChainId)
+	gBz2, _ := contract.Marshal(gAfterDeposit)
+	s.set(KeyForGlobals(), gBz2)
+
+	// 3) Inject a 1_000_000 reward into the committee pool (simulates a
+	//    MessageSubsidy crediting the canoLiq committee post-DAO-cut).
+	pool := new(contract.Pool)
+	_ = contract.Unmarshal(s.get(contract.KeyForFeePool(c.Config.ChainId)), pool)
+	pool.Amount += 1_000_000
+	pBz, _ := contract.Marshal(pool)
+	s.set(contract.KeyForFeePool(c.Config.ChainId), pBz)
+
+	// 4) Process rewards. Per the canonical 12% / 40-30-15-15 split:
+	//    fee=120_000, net=880_000, rebate=48_000 → user share = 928_000.
+	//    TotalPooledCnpy: 1_000_000 → 1_928_000.
+	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 1}); err != nil {
+		t.Fatalf("rewards: %v", err)
+	}
+	gPostReward := loadGlobals(t, s)
+	if gPostReward.TotalPooledCnpy != 1_928_000 {
+		t.Fatalf("post-reward pooled: got %d want 1_928_000", gPostReward.TotalPooledCnpy)
+	}
+
+	// 5) Redeem all 1_000_000 cCNPY at the new exchange rate.
+	if resp := c.DeliverMessageCanoliqRedeem(
+		&contract.MessageCanoliqRedeem{FromAddress: user, CcnpyAmount: 1_000_000},
+		10_000,
+		DefaultParams(),
+	); resp.Error != nil {
+		t.Fatalf("redeem: %v", resp.Error)
+	}
+
+	// The Redemption record must reflect the accrued yield: 1:1 redemption
+	// before reward would be 1_000_000; after reward, the same cCNPY claims
+	// 1_928_000 CNPY.
+	rBz := s.get(KeyForRedemption(user, 0))
+	if rBz == nil {
+		t.Fatal("redemption record not written")
+	}
+	r := new(contract.Redemption)
+	_ = contract.Unmarshal(rBz, r)
+	if r.CnpyAmount <= 1_000_000 {
+		t.Fatalf("expected redemption > deposit (yield), got %d", r.CnpyAmount)
+	}
+	if r.CnpyAmount != 1_928_000 {
+		t.Fatalf("redemption amount: got %d want 1_928_000", r.CnpyAmount)
+	}
+}
+
 // hasPrefix is a small helper for TestGenesisAllocationTotals' iteration.
 // `keyPrefix` is the canonical prefix as built by JoinLenPrefix; both keys
 // share the same first len(keyPrefix) - len(addr) bytes.
