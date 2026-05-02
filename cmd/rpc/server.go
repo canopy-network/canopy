@@ -236,7 +236,7 @@ func (s *Server) submitTxs(w http.ResponseWriter, txs []lib.TransactionI) (ok bo
 // setupStateMachine creates and returns a read-only state machine
 func (s *Server) getStateMachineWithHeight(height uint64, w http.ResponseWriter) (*fsm.StateMachine, bool) {
 
-	// Investigate  memory use of state. State.Discard needs to be called
+	// Investigate memory use of state. State.Discard needs to be called
 	state, err := s.controller.FSM.TimeMachine(height)
 	if err != nil {
 		write(w, lib.ErrTimeMachine(err), http.StatusInternalServerError)
