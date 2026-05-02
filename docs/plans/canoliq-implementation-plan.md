@@ -148,12 +148,111 @@ Checklist:
 - [ ] Submit `MessageCanoliqRedeem`, advance past `unbond_complete_height`,
       submit `MessageCanoliqClaimRedemption`; verify CNPY back in user account
 
-### Phase 2 — Governance, buyback, treasury (deferred)
-- [ ] `MessageCLIQVote` (parameter governance)
-- [ ] `MessageCLIQStake` / `MessageCLIQUnstake`
-- [ ] `MessageBuybackExecute` (drains buyback pool via Canopy DEX)
-- [ ] `MessageDAOTreasurySpend` (multisig-gated)
-- [ ] Insurance fund auto-routing (1–2% of treasury credits)
+### Phase 2 — Governance, buyback, treasury
+
+Design decisions (resolved against the whitepapers):
+- **Buyback execution** = internal accounting swap at a proposal-set price. WP §6 allows "market buyback and burn **or** direct distribution governed by DAO"; a real on-chain DEX route is deferred to Phase 3 (autonomy).
+- **Governance weight** = staked CLIQ only, snapshot at proposal-creation height. WP §4: "stake/lock CLIQ for governance power and boosts." Yield boosts are mentioned but undefined — deferred.
+- **Treasury spend** = hybrid. Below `treasury_threshold`, a passing CLIQ vote alone executes. Above threshold, vote + N-of-M multisig approvals + `timelock_blocks` delay. WP §9 + Tokenomics §7: "Multisig and timelocks required for treasury spending above thresholds."
+- **Per-validator pro-rata** lands here (Phase 1 carryover). Required for the buyback "distribute to stakers" mode and for honest per-validator infra credits.
+
+#### 1. Protobuf and state types
+- [ ] Add to `plugin/go/proto/canoliq.proto`:
+  - [ ] `MessageCLIQStake` / `MessageCLIQUnstake` / `MessageCLIQClaimUnstake`
+  - [ ] `MessageCLIQProposalCreate` / `MessageCLIQVote`
+  - [ ] `MessageBuybackExecute`
+  - [ ] `MessageDAOTreasurySpend` / `MessageMultisigApprove`
+- [ ] New stored types: `CLIQStake`, `UnstakingCLIQ`, `Proposal`, `Vote`, `BuybackOrder`, `MultisigApproval`
+- [ ] `Proposal.payload` as `oneof` (param_change | buyback | treasury_spend) for typed dispatch
+- [ ] Extend `CanoliqParams`: `insurance_bps`, `treasury_threshold`, `multisig_signers`, `multisig_threshold`, `voting_period_blocks`, `quorum_bps`, `pass_threshold_bps`, `timelock_blocks`, `cliq_unstaking_blocks`, `proposal_fee`, `vote_fee`, `stake_fee`
+- [ ] Extend `CanoliqGlobals`: `total_staked_cliq`, `next_proposal_id`, `next_buyback_id`, `next_spend_id`, `next_unstake_id`
+- [ ] Update `Config.SupportedTransactions` / `TransactionTypeUrls`
+- [ ] Regenerate `canoliq.pb.go`
+
+#### 2. State key schema
+- [ ] `KeyForCLIQStake(addr)` (active stake balance)
+- [ ] `KeyForCLIQUnstaking(addr, id)` (in-flight unbond record)
+- [ ] `KeyForProposal(id)` + `KeyForProposalIndex()` (active proposal id list)
+- [ ] `KeyForVote(proposalId, voter)`
+- [ ] `KeyForBuybackOrder(id)`
+- [ ] `KeyForTreasurySpend(spendId)` + `KeyForMultisigApproval(spendId, signer)`
+- [ ] `KeyForInsurancePool()`
+- [ ] Read/write wrappers for each new stored type
+
+#### 3. CLIQ staking
+- [ ] `stake.go`: stake/unstake/claim handlers
+- [ ] `Check`/`Deliver MessageCLIQStake` — moves liquid CLIQ → `CLIQStake` record, increments `total_staked_cliq`
+- [ ] `Check`/`Deliver MessageCLIQUnstake` — debits stake, queues `UnstakingCLIQ` with `mature_height = h + cliq_unstaking_blocks`
+- [ ] `Check`/`Deliver MessageCLIQClaimUnstake` — matures record, returns CLIQ to liquid balance
+- [ ] Tests: stake/unstake/claim, unbond before maturity error, double-claim idempotency
+
+#### 4. On-chain governance
+- [ ] `governance.go`: proposal lifecycle (create / vote / tally / execute)
+- [ ] `Check`/`Deliver MessageCLIQProposalCreate` — assigns id, snapshots `total_staked_cliq` at creation height, records `expiry_height = h + voting_period_blocks`
+- [ ] `Check`/`Deliver MessageCLIQVote` — looks up the voter's `CLIQStake` *as of `proposal.creation_height`*, records weighted yes/no/abstain
+- [ ] BeginBlock hook: scan proposal index, on expiry tally yes/no/abstain weights
+- [ ] Pass rule: `(yes + no) >= quorum_bps * snapshot_total_staked / 10000` AND `yes >= pass_threshold_bps * (yes + no) / 10000`
+- [ ] On pass: execute payload (param change directly; buyback/spend mark as executable downstream)
+- [ ] On fail/expire: delete proposal + votes
+- [ ] Snapshot mechanism (read at creation height, validate at vote delivery) defeats flash-stake attacks
+- [ ] Tests: param change round-trip, quorum miss, pass-threshold edge cases, snapshot correctness
+
+#### 5. Per-validator reward pro-rata (Phase 1 carryover)
+- [ ] In `reward.go`, replace `committeeAggregatorAddr()` with a stake-weighted distribution
+- [ ] Read canoLiq committee validator set + per-validator stake from FSM state (Canopy validator prefix)
+- [ ] Distribute the 15% validator slice across the set proportional to committed stake
+- [ ] Use `mulDiv` for share-out; rounding remainder credited to the largest validator (or carried)
+- [ ] Tests: skewed two-validator stakes (e.g., 70/30) yield 70/30 split; rounding remainder accounted for
+
+#### 6. Buyback (internal accounting swap)
+- [ ] `buyback.go`: implements proposal-driven buyback
+- [ ] `MessageBuybackExecute` — references a passed `ProposalBuyback` id; idempotent (re-execute is a no-op)
+- [ ] Drain `cnpy_amount` from `canoliq/buyback/pool` (≤ available)
+- [ ] Acquire CLIQ at `proposal.price_uCnpyPerCliq`: `cliq_acquired = cnpy_amount * 10^6 / price_uCnpyPerCliq`
+- [ ] Source CLIQ from `canoliq/treasury/cliq` (DAO 15% bucket)
+- [ ] Mode `BUYBACK_BURN`: decrement `cliq_total_supply` and `cliq_circulating_supply` by `cliq_acquired`, do not credit anyone
+- [ ] Mode `BUYBACK_DISTRIBUTE_STAKERS`: pro-rata credit `CLIQStake` records by stake weight; CNPY moves to `treasury/canoliq` (the buyback "paid" the treasury)
+- [ ] Tests: burn reduces total/circulating supply; distribute credits multiple stakers proportionally; idempotent re-execute; insufficient treasury_cliq → error
+
+#### 7. DAO treasury spend
+- [ ] `treasury.go`: `MessageDAOTreasurySpend` proposal payload (recipient, amount, denomination, source bucket)
+- [ ] On vote pass: write `TreasurySpend` record with `executable_height = h + (timelock_blocks if amount > treasury_threshold else 0)`
+- [ ] `Check`/`Deliver MessageMultisigApprove` — records signer's approval per `spend_id`; signer must be in `multisig_signers`
+- [ ] BeginBlock: scan pending spends; execute when `current_height >= executable_height` AND (`amount <= threshold` OR `approvals >= multisig_threshold`)
+- [ ] Source from `treasury/canoliq` (CNPY) or `treasury/cliq` (CLIQ); credit recipient liquid balance
+- [ ] Tests: below-threshold single-step path, above-threshold full path, timelock not yet elapsed → no execution, missing approval count → no execution, replay-after-execution rejected
+
+#### 8. Insurance fund auto-routing
+- [ ] `params.DefaultParams()` adds `insurance_bps` (default 1500 = 15% of incoming treasury credit, i.e., ~1.5% of fee — within WP §11's "1–2% of treasury")
+- [ ] Modify `ProcessRewards`: skim `insurance_bps` off `split.Treasury` before crediting `treasury/canoliq`
+- [ ] New scalar key `canoliq/insurance/pool`
+- [ ] `ValidateParams` allows `insurance_bps <= 10000`
+- [ ] Tests: conservation `treasury + insurance + buyback + validator + user_rebate + net_to_users == delta`; default values match whitepaper
+
+#### 9. Tests (`plugin/go/canoliq/*_test.go`)
+- [ ] CLIQ stake / unstake / claim lifecycle
+- [ ] Proposal create → vote → tally → param mutation observed by next `ProcessRewards`
+- [ ] Voter weight snapshot defeats post-creation stake/unstake
+- [ ] Quorum miss rejects; exact-pass-threshold accepts; just-below rejects
+- [ ] Buyback burn mode: total + circulating supply decrement
+- [ ] Buyback distribute mode: multi-staker pro-rata credit, rounding remainder
+- [ ] Treasury spend below threshold (single-step)
+- [ ] Treasury spend above threshold: timelock + multisig threshold both enforced
+- [ ] Insurance skim conservation
+- [ ] Validator pro-rata under skewed stake distribution
+
+#### 10. Documentation
+- [ ] Update `plugin/go/canoliq/README.md` — proposal lifecycle, buyback workflow, multisig signer onboarding
+- [ ] Document genesis-time multisig configuration (signers + threshold) in `genesis.json`
+
+### Phase 2 verification
+- [ ] `cd plugin/go && make build` succeeds with new package
+- [ ] `cd plugin/go/canoliq && go test ./...` passes
+- [ ] In-process: governance round-trip mutates `fee_bps`, next `EndBlock` applies the new bps
+- [ ] In-process: buyback burn reduces `cliq_total_supply`; distribute credits stakers
+- [ ] In-process: above-threshold spend rejected pre-timelock and pre-multisig-quorum, accepted once both met
+- [ ] In-process: insurance pool grows by `insurance_bps * fee * treasury_bps / 10000^2` per block; full conservation holds
+- [ ] In-process: per-validator infra credits split proportionally to committee stake
 
 ### Phase 3 — Monitoring & autonomy graduation (deferred)
 - [ ] RPC endpoints (TVL, pool health, validator uptime, vesting status)
@@ -342,15 +441,159 @@ Document (in a new `plugin/go/canoliq/README.md`) how to register canoLiq as a C
 
 ---
 
-## Phase 2 — Governance, buyback, treasury operations (outline)
+## Phase 2 — Governance, buyback, treasury operations
 
-Deferred. New tx types (sketch):
+### 1. Protobuf message and state types
 
-- `MessageCLIQVote` — propose/vote on parameter changes (fee bps, buyback frequency, validator-incentives split). Quorum = stake-weighted CLIQ.
-- `MessageCLIQStake` / `MessageCLIQUnstake` — lock CLIQ for governance weight + boosts (whitepaper §4).
-- `MessageBuybackExecute` — DAO-approved swap: drains `canoliq/buyback/pool` CNPY, buys CLIQ from the existing Canopy DEX (`fsm/dex.go`), either burns or distributes to CLIQ stakers per active vote.
-- `MessageDAOTreasurySpend` — multisig-gated spend from `canoliq/treasury/canoliq` or `canoliq/treasury/cliq` above a threshold (whitepaper §9).
-- Insurance fund: 1–2% of treasury auto-routed into `canoliq/insurance` pool on each treasury credit (whitepaper §11).
+Add to `plugin/go/proto/canoliq.proto`:
+
+| Message | Fields | Purpose |
+|---|---|---|
+| `MessageCLIQStake` | `from_address`, `amount` | Locks liquid CLIQ → stake balance; counts toward governance weight |
+| `MessageCLIQUnstake` | `from_address`, `amount` | Debits stake, queues unbond record maturing after `cliq_unstaking_blocks` |
+| `MessageCLIQClaimUnstake` | `from_address`, `unstake_id` | Returns matured CLIQ to liquid balance |
+| `MessageCLIQProposalCreate` | `from_address`, `payload` (oneof: param_change, buyback, treasury_spend) | Opens a proposal; assigns id; snapshots `total_staked_cliq` |
+| `MessageCLIQVote` | `from_address`, `proposal_id`, `choice` (yes/no/abstain) | Records weighted vote using staker's snapshot weight at proposal creation height |
+| `MessageBuybackExecute` | `from_address`, `proposal_id` | Idempotently runs an approved buyback proposal |
+| `MessageDAOTreasurySpend` | `from_address`, `proposal_id` | Idempotently runs an approved spend (subject to threshold + timelock) |
+| `MessageMultisigApprove` | `from_address` (signer), `spend_id` | Per-signer approval for above-threshold spend |
+
+New stored types:
+
+| Type | Fields |
+|---|---|
+| `CLIQStake` | `address`, `amount` |
+| `UnstakingCLIQ` | `id`, `address`, `amount`, `mature_height` |
+| `Proposal` | `id`, `proposer`, `creation_height`, `expiry_height`, `snapshot_total_staked`, `payload` (oneof), `status` (active/passed/failed/executed) |
+| `Vote` | `proposal_id`, `voter`, `choice`, `weight` |
+| `ProposalParamChange` | `params` (full new `CanoliqParams`) — full-set replacement keeps `ValidateParams` semantics |
+| `ProposalBuyback` | `cnpy_amount`, `price_uCnpyPerCliq`, `mode` (BURN / DISTRIBUTE_STAKERS) |
+| `ProposalTreasurySpend` | `recipient`, `amount`, `denomination` (CNPY / CLIQ), `source` (treasury_canopy / treasury_cliq) |
+| `TreasurySpend` | `id`, `proposal_id`, `executable_height`, `payload`, `executed` |
+| `MultisigApproval` | `spend_id`, `signer`, `height` |
+
+Extend `CanoliqParams` with the governance-tunable knobs (defaults in parens):
+
+- `insurance_bps` (1500) — share of treasury credit redirected to insurance pool. WP §11 calls for 1–2% of treasury, equivalent to 1500 bps of the 30% treasury slice.
+- `treasury_threshold` (1_000_000_000 uCNPY) — spend amount above which multisig + timelock kick in
+- `multisig_signers` (repeated bytes) — set of authorized signer addresses; configured at genesis, mutable via param-change vote
+- `multisig_threshold` (3) — minimum approvals for above-threshold spends
+- `voting_period_blocks` (~7d at 6s blocks = 100_800)
+- `quorum_bps` (3300) — fraction of snapshot staked CLIQ that must participate
+- `pass_threshold_bps` (5001) — `yes` vs `(yes + no)` to pass; just-above-50% by default
+- `timelock_blocks` (~48h at 6s = 28_800)
+- `cliq_unstaking_blocks` (~7d at 6s = 100_800)
+- `proposal_fee`, `vote_fee`, `stake_fee` — minimum tx fees
+
+Extend `CanoliqGlobals`: `total_staked_cliq`, `next_proposal_id`, `next_buyback_id`, `next_spend_id`, `next_unstake_id`.
+
+### 2. State key schema
+
+```
+canoliq/cliq/stake/{addr}                    → CLIQStake
+canoliq/cliq/unstaking/{addr}/{id}           → UnstakingCLIQ
+canoliq/proposal/{id}                        → Proposal
+canoliq/proposal/index                       → list of active proposal ids
+canoliq/vote/{proposal_id}/{voter}           → Vote
+canoliq/buyback/order/{id}                   → BuybackOrder (post-execution receipt)
+canoliq/spend/{id}                           → TreasurySpend
+canoliq/multisig/approval/{spend_id}/{signer} → MultisigApproval
+canoliq/insurance/pool                       → uint64 (CNPY held)
+```
+
+### 3. CLIQ staking
+
+Stake locks liquid CLIQ into a per-address `CLIQStake` record and increments `globals.total_staked_cliq`. Unstake debits the record, writes `UnstakingCLIQ{mature_height: h + cliq_unstaking_blocks}`, and decrements `total_staked_cliq` immediately so unstaked CLIQ has zero voting weight from the moment of unstake. Claim moves matured records back to the liquid balance.
+
+The unstaking window must be ≥ `voting_period_blocks` so a voter cannot stake → vote → unstake → unwind their position before tally. With defaults both at 7d this is satisfied.
+
+### 4. On-chain governance (`governance.go`)
+
+Proposal lifecycle:
+
+1. **Create** (`MessageCLIQProposalCreate`) — caller must hold ≥ some minimum stake (read from params); plugin assigns `next_proposal_id`, snapshots `globals.total_staked_cliq` into `proposal.snapshot_total_staked`, sets `expiry_height = h + voting_period_blocks`, appends to proposal index.
+2. **Vote** (`MessageCLIQVote`) — voter's weight = the `CLIQStake` balance **at `proposal.creation_height`**. The simplest implementation: voters must have staked *before* creation (the snapshot uses the *current* `CLIQStake` reading and rejects votes whose `staked_at_height > proposal.creation_height`). Each address votes once per proposal.
+3. **Tally** (BeginBlock) — when `current_height >= proposal.expiry_height`, sum `yes/no/abstain` weights. Apply pass rule:
+   - `quorum`: `yes + no + abstain >= quorum_bps * snapshot_total_staked / 10_000`
+   - `threshold`: `yes >= pass_threshold_bps * (yes + no) / 10_000`
+4. **Execute on pass**:
+   - `param_change`: `SaveParams(payload.params)` — runs through `ValidateParams`.
+   - `buyback`: write a `BuybackOrder` keyed by id; `MessageBuybackExecute` is the trigger that drains the order.
+   - `treasury_spend`: write a `TreasurySpend` with `executable_height = h + (timelock_blocks if amount > treasury_threshold else 0)`.
+5. **Cleanup**: delete `proposal/{id}` + all `vote/{id}/*` records on either pass or fail; remove from proposal index.
+
+### 5. Per-validator pro-rata reward distribution (Phase 1 carryover)
+
+Replace `committeeAggregatorAddr()` in `reward.go`. Read the canoLiq committee validator set + per-validator stake from FSM state via `StateRead` against Canopy's validator prefix and `Validator.Committees[]`. Distribute `split.Validators` proportionally:
+
+```
+for each validator v in committee:
+  share[v] = mulDiv(split.Validators, stake[v], total_committee_stake)
+remainder credited to largest validator (or carried as `validator_remainder` on globals)
+```
+
+Tests must assert that a 70/30 stake split yields a 70/30 incentive split modulo rounding.
+
+### 6. Buyback (`buyback.go`) — internal accounting swap
+
+`MessageBuybackExecute` triggers a previously-passed `ProposalBuyback`:
+
+1. Verify `proposal.status == passed` and that buyback hasn't already executed (`BuybackOrder.executed == false`).
+2. Drain `cnpy_amount` from `canoliq/buyback/pool` (clamp to available).
+3. Compute `cliq_acquired = cnpy_amount * 10^6 / price_uCnpyPerCliq` using `mulDiv`.
+4. Source the CLIQ from `canoliq/treasury/cliq` (the DAO 15% bucket holds the supply for buybacks).
+5. **Mode = BURN**: decrement `globals.cliq_total_supply` and `globals.cliq_circulating_supply` by `cliq_acquired`; deduct from `treasury/cliq`; the drained CNPY is treated as paid into `treasury/canoliq`.
+6. **Mode = DISTRIBUTE_STAKERS**: iterate `CLIQStake` records (or use a stake-index key for efficiency), credit each staker `mulDiv(cliq_acquired, stake[s], total_staked_cliq)`; rounding remainder to the largest staker.
+7. Mark `BuybackOrder.executed = true` so re-execute is a no-op.
+
+Why this is faithful to WP §6: the whitepaper describes "market buyback and burn or direct distribution governed by DAO" — Phase 2 implements the governance + accounting spine. A real on-chain market route (via `fsm/dex.go` or `fsm/swap.go`) requires a relayer to bridge plugin state ↔ FSM tx, which is precisely the Phase 1.5 / Phase 3 plumbing. Internal swap with a vote-set price preserves the economic shape (CNPY ⇨ CLIQ extraction) without that dependency.
+
+### 7. DAO treasury spend (`treasury.go`) — multisig + timelock
+
+When a `ProposalTreasurySpend` passes, write a `TreasurySpend` record with:
+
+- `executable_height = current_height + (timelock_blocks if amount > treasury_threshold else 0)`
+- `payload` (recipient, amount, denomination, source)
+
+`MessageMultisigApprove` records a signer's approval (signer must be in `multisig_signers`). BeginBlock scans pending spends and executes when:
+
+1. `current_height >= executable_height` (timelock elapsed)
+2. EITHER `amount <= treasury_threshold` (no multisig required) OR `count(approvals) >= multisig_threshold`
+
+Below-threshold spends still pass through the proposal route (not unilaterally callable) — they just skip the timelock and multisig gate.
+
+### 8. Insurance fund auto-routing
+
+Modify `ProcessRewards` in `reward.go`. After computing `split.Treasury`, redirect `insurance = mulDiv(split.Treasury, params.InsuranceBps, 10_000)` into `canoliq/insurance/pool` and credit only `split.Treasury - insurance` to `treasury/canoliq`. With defaults (`insurance_bps = 1500`) this routes 15% of the treasury slice (= 4.5% of the protocol fee, ≈ 0.51% of post-Canopy reward) into insurance — within WP §11's "1–2% of treasury" framing when measured against ongoing treasury inflows.
+
+The insurance pool is a passive accumulator in Phase 2. Slashing-reimbursement disbursement logic is a Phase 3 concern.
+
+### 9. Tests
+
+Cover, in addition to the items in §6 of Phase 1:
+
+- Stake / unstake / claim full lifecycle.
+- Proposal create / vote / tally / execute round-trip for each payload type.
+- Voter weight uses the *creation-height* snapshot, not current stake — flash-stake post-creation has zero weight.
+- Quorum miss → proposal fails; exact pass-threshold accepts; just-below rejects.
+- Param-change proposal mutates `CanoliqParams` and the next `ProcessRewards` observes the new bps.
+- Buyback BURN reduces `cliq_total_supply` + `cliq_circulating_supply` by exactly `cliq_acquired`.
+- Buyback DISTRIBUTE credits multiple stakers pro-rata; rounding remainder accounted for.
+- Treasury spend below threshold: single-step, no multisig required.
+- Treasury spend above threshold: rejected pre-timelock, rejected with insufficient approvals, executes once both met; idempotent re-trigger.
+- Insurance skim conservation: `treasury + insurance + buyback + validators + user_rebate + net_to_users == delta`.
+- Per-validator pro-rata rounding: skewed stakes (e.g., 7M / 3M / 1M committee stake) get proportional shares.
+
+### Critical files to add/modify
+
+- **NEW:** `plugin/go/canoliq/stake.go`, `governance.go`, `buyback.go`, `treasury.go`.
+- **MODIFY:** `plugin/go/canoliq/canoliq.go` — extend `CheckTx`/`DeliverTx` switches, add `BeginBlock` proposal/spend scan.
+- **MODIFY:** `plugin/go/canoliq/reward.go` — insurance skim + per-validator pro-rata.
+- **MODIFY:** `plugin/go/canoliq/config.go` — register new tx types in `SupportedTransactions` / `TransactionTypeUrls`.
+- **MODIFY:** `plugin/go/canoliq/params.go` — `DefaultParams` adds new fields; `ValidateParams` covers new invariants.
+- **MODIFY:** `plugin/go/proto/canoliq.proto` — new tx + stored types; regenerate.
+- **MODIFY:** `plugin/go/canoliq/genesis.json` — `multisig_signers` configured at genesis.
+- **MODIFY:** `plugin/go/canoliq/README.md` — proposal workflow, multisig signer ops, buyback playbook.
 
 ---
 
