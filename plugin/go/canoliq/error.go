@@ -28,6 +28,26 @@ const (
 	codePoolMath
 	codeUnsupportedMessage
 	codeStateUnmarshal
+	codeInsufficientStakedCLIQ
+	codeUnstakeNotFound
+	codeUnstakeNotMature
+	codeProposalNotFound
+	codeProposalInactive
+	codeProposalNotPassed
+	codeProposalAlreadyExecuted
+	codeAlreadyVoted
+	codeStakeAfterCreation
+	codeUnknownProposalPayload
+	codeBuybackOrderNotFound
+	codeSpendNotFound
+	codeSpendNotReady
+	codeSpendAlreadyExecuted
+	codeNotMultisigSigner
+	codeAlreadyApproved
+	codeBelowProposalMinStake
+	codeInvalidProposalPayload
+	codeInsufficientTreasuryCLIQ
+	codeInsufficientTreasuryCNPY
 )
 
 // newError constructs a PluginError stamped with the canoLiq module.
@@ -118,4 +138,105 @@ func ErrUnsupportedMessage() *contract.PluginError {
 // ErrStateUnmarshal wraps a stored value that fails to deserialize.
 func ErrStateUnmarshal(err error) *contract.PluginError {
 	return newError(codeStateUnmarshal, fmt.Sprintf("state unmarshal failed: %s", err))
+}
+
+// ErrInsufficientStakedCLIQ reports an unstake exceeding the active stake.
+func ErrInsufficientStakedCLIQ() *contract.PluginError {
+	return newError(codeInsufficientStakedCLIQ, "insufficient staked CLIQ")
+}
+
+// ErrUnstakeNotFound reports a missing UnstakingCLIQ record.
+func ErrUnstakeNotFound() *contract.PluginError {
+	return newError(codeUnstakeNotFound, "unstake record not found")
+}
+
+// ErrUnstakeNotMature reports a claim before the unbond window has elapsed.
+func ErrUnstakeNotMature() *contract.PluginError {
+	return newError(codeUnstakeNotMature, "unstake has not yet matured")
+}
+
+// ErrProposalNotFound reports a missing Proposal record.
+func ErrProposalNotFound() *contract.PluginError {
+	return newError(codeProposalNotFound, "proposal not found")
+}
+
+// ErrProposalInactive reports a vote on a non-active proposal.
+func ErrProposalInactive() *contract.PluginError {
+	return newError(codeProposalInactive, "proposal not in active voting window")
+}
+
+// ErrProposalNotPassed reports an execute attempt on a non-passed proposal.
+func ErrProposalNotPassed() *contract.PluginError {
+	return newError(codeProposalNotPassed, "proposal has not passed")
+}
+
+// ErrProposalAlreadyExecuted reports a double-execute attempt.
+func ErrProposalAlreadyExecuted() *contract.PluginError {
+	return newError(codeProposalAlreadyExecuted, "proposal already executed")
+}
+
+// ErrAlreadyVoted reports a duplicate vote from the same address.
+func ErrAlreadyVoted() *contract.PluginError {
+	return newError(codeAlreadyVoted, "address has already voted on this proposal")
+}
+
+// ErrStakeAfterCreation reports a vote whose stake postdates the proposal.
+func ErrStakeAfterCreation() *contract.PluginError {
+	return newError(codeStakeAfterCreation, "voter stake added after proposal creation height")
+}
+
+// ErrUnknownProposalPayload reports a payload Any whose type is unsupported.
+func ErrUnknownProposalPayload() *contract.PluginError {
+	return newError(codeUnknownProposalPayload, "unknown proposal payload type")
+}
+
+// ErrBuybackOrderNotFound reports a missing BuybackOrder.
+func ErrBuybackOrderNotFound() *contract.PluginError {
+	return newError(codeBuybackOrderNotFound, "buyback order not found")
+}
+
+// ErrSpendNotFound reports a missing TreasurySpend.
+func ErrSpendNotFound() *contract.PluginError {
+	return newError(codeSpendNotFound, "treasury spend not found")
+}
+
+// ErrSpendNotReady reports an above-threshold spend lacking timelock or
+// multisig coverage.
+func ErrSpendNotReady() *contract.PluginError {
+	return newError(codeSpendNotReady, "treasury spend not ready (timelock or multisig)")
+}
+
+// ErrSpendAlreadyExecuted reports a double-execute attempt.
+func ErrSpendAlreadyExecuted() *contract.PluginError {
+	return newError(codeSpendAlreadyExecuted, "treasury spend already executed")
+}
+
+// ErrNotMultisigSigner reports an approval from a non-authorized signer.
+func ErrNotMultisigSigner() *contract.PluginError {
+	return newError(codeNotMultisigSigner, "address is not a configured multisig signer")
+}
+
+// ErrAlreadyApproved reports a duplicate approval from the same signer.
+func ErrAlreadyApproved() *contract.PluginError {
+	return newError(codeAlreadyApproved, "signer has already approved this spend")
+}
+
+// ErrBelowProposalMinStake reports a proposer below the configured minimum.
+func ErrBelowProposalMinStake() *contract.PluginError {
+	return newError(codeBelowProposalMinStake, "proposer staked CLIQ below minimum")
+}
+
+// ErrInvalidProposalPayload reports a malformed or self-inconsistent payload.
+func ErrInvalidProposalPayload() *contract.PluginError {
+	return newError(codeInvalidProposalPayload, "invalid proposal payload")
+}
+
+// ErrInsufficientTreasuryCLIQ reports a treasury_cliq draw beyond available.
+func ErrInsufficientTreasuryCLIQ() *contract.PluginError {
+	return newError(codeInsufficientTreasuryCLIQ, "insufficient CLIQ in DAO treasury")
+}
+
+// ErrInsufficientTreasuryCNPY reports a treasury_canopy draw beyond available.
+func ErrInsufficientTreasuryCNPY() *contract.PluginError {
+	return newError(codeInsufficientTreasuryCNPY, "insufficient CNPY in DAO treasury")
 }

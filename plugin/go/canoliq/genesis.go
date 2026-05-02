@@ -40,16 +40,32 @@ type GenesisAllocation struct {
 }
 
 // GenesisParamsJSON optionally overrides DefaultParams() at genesis time.
+// Phase 2 fields (insurance, governance, multisig) are honored when present
+// and fall back to DefaultParams() values otherwise.
 type GenesisParamsJSON struct {
-	FeeBps          uint64 `json:"feeBps"`
-	UserRebateBps   uint64 `json:"userRebateBps"`
-	TreasuryBps     uint64 `json:"treasuryBps"`
-	ValidatorBps    uint64 `json:"validatorBps"`
-	BuybackBps      uint64 `json:"buybackBps"`
-	DepositFee      uint64 `json:"depositFee"`
-	RedeemFee       uint64 `json:"redeemFee"`
-	ClaimFee        uint64 `json:"claimFee"`
-	CliqTransferFee uint64 `json:"cliqTransferFee"`
+	FeeBps              uint64   `json:"feeBps"`
+	UserRebateBps       uint64   `json:"userRebateBps"`
+	TreasuryBps         uint64   `json:"treasuryBps"`
+	ValidatorBps        uint64   `json:"validatorBps"`
+	BuybackBps          uint64   `json:"buybackBps"`
+	DepositFee          uint64   `json:"depositFee"`
+	RedeemFee           uint64   `json:"redeemFee"`
+	ClaimFee            uint64   `json:"claimFee"`
+	CliqTransferFee     uint64   `json:"cliqTransferFee"`
+	InsuranceBps        uint64   `json:"insuranceBps"`
+	TreasuryThreshold   uint64   `json:"treasuryThreshold"`
+	MultisigSigners     []string `json:"multisigSigners"` // hex-encoded 20-byte addresses
+	MultisigThreshold   uint64   `json:"multisigThreshold"`
+	VotingPeriodBlocks  uint64   `json:"votingPeriodBlocks"`
+	QuorumBps           uint64   `json:"quorumBps"`
+	PassThresholdBps    uint64   `json:"passThresholdBps"`
+	TimelockBlocks      uint64   `json:"timelockBlocks"`
+	CliqUnstakingBlocks uint64   `json:"cliqUnstakingBlocks"`
+	ProposalFee         uint64   `json:"proposalFee"`
+	VoteFee             uint64   `json:"voteFee"`
+	StakeFee            uint64   `json:"stakeFee"`
+	MultisigApproveFee  uint64   `json:"multisigApproveFee"`
+	MinStakeToPropose   uint64   `json:"minStakeToPropose"`
 }
 
 // runGenesis is the body of Canoliq.Genesis. It is a no-op once the globals
@@ -235,6 +251,55 @@ func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
 	}
 	if p.CliqTransferFee != 0 {
 		d.CliqTransferFee = p.CliqTransferFee
+	}
+	if p.InsuranceBps != 0 {
+		d.InsuranceBps = p.InsuranceBps
+	}
+	if p.TreasuryThreshold != 0 {
+		d.TreasuryThreshold = p.TreasuryThreshold
+	}
+	if len(p.MultisigSigners) > 0 {
+		signers := make([][]byte, 0, len(p.MultisigSigners))
+		for _, hexAddr := range p.MultisigSigners {
+			b, err := hex.DecodeString(hexAddr)
+			if err == nil && len(b) == 20 {
+				signers = append(signers, b)
+			}
+		}
+		d.MultisigSigners = signers
+	}
+	if p.MultisigThreshold != 0 {
+		d.MultisigThreshold = p.MultisigThreshold
+	}
+	if p.VotingPeriodBlocks != 0 {
+		d.VotingPeriodBlocks = p.VotingPeriodBlocks
+	}
+	if p.QuorumBps != 0 {
+		d.QuorumBps = p.QuorumBps
+	}
+	if p.PassThresholdBps != 0 {
+		d.PassThresholdBps = p.PassThresholdBps
+	}
+	if p.TimelockBlocks != 0 {
+		d.TimelockBlocks = p.TimelockBlocks
+	}
+	if p.CliqUnstakingBlocks != 0 {
+		d.CliqUnstakingBlocks = p.CliqUnstakingBlocks
+	}
+	if p.ProposalFee != 0 {
+		d.ProposalFee = p.ProposalFee
+	}
+	if p.VoteFee != 0 {
+		d.VoteFee = p.VoteFee
+	}
+	if p.StakeFee != 0 {
+		d.StakeFee = p.StakeFee
+	}
+	if p.MultisigApproveFee != 0 {
+		d.MultisigApproveFee = p.MultisigApproveFee
+	}
+	if p.MinStakeToPropose != 0 {
+		d.MinStakeToPropose = p.MinStakeToPropose
 	}
 	return d
 }

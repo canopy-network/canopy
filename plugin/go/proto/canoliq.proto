@@ -2,6 +2,8 @@ syntax = "proto3";
 package types;
 option go_package = "github.com/canopy-network/go-plugin/contract";
 
+import "google/protobuf/any.proto";
+
 // canoliq.proto defines transaction messages and stored types for the canoLiq
 // liquid-staking plugin. All messages live in the same `contract` Go package
 // so they share the existing plugin runtime (PluginConfig, PluginCheckRequest,
@@ -69,6 +71,16 @@ message CanoliqGlobals {
   uint64 next_redemption_id = 7; // @gotags: json:"nextRedemptionId"
   // genesis_complete: whether genesis distribution has run
   bool genesis_complete = 8; // @gotags: json:"genesisComplete"
+  // total_staked_cliq: aggregate CLIQ locked in stake records (uCLIQ)
+  uint64 total_staked_cliq = 9; // @gotags: json:"totalStakedCliq"
+  // next_proposal_id: monotonically-increasing proposal id counter
+  uint64 next_proposal_id = 10; // @gotags: json:"nextProposalId"
+  // next_buyback_id: monotonically-increasing buyback order id counter
+  uint64 next_buyback_id = 11; // @gotags: json:"nextBuybackId"
+  // next_spend_id: monotonically-increasing treasury spend id counter
+  uint64 next_spend_id = 12; // @gotags: json:"nextSpendId"
+  // next_unstake_id: monotonically-increasing CLIQ unstake id counter
+  uint64 next_unstake_id = 13; // @gotags: json:"nextUnstakeId"
 }
 
 // Redemption is a queued cCNPY → CNPY conversion that matures after the
@@ -124,6 +136,34 @@ message CanoliqParams {
   uint64 claim_fee = 8; // @gotags: json:"claimFee"
   // cliq_transfer_fee: minimum tx fee for a CLIQ transfer (uCNPY)
   uint64 cliq_transfer_fee = 9; // @gotags: json:"cliqTransferFee"
+  // insurance_bps: share of treasury credit redirected to insurance (default 1500 = 15% of treasury slice)
+  uint64 insurance_bps = 10; // @gotags: json:"insuranceBps"
+  // treasury_threshold: spend amount above which multisig + timelock kick in (uCNPY-equivalent)
+  uint64 treasury_threshold = 11; // @gotags: json:"treasuryThreshold"
+  // multisig_signers: authorized multisig signer addresses
+  repeated bytes multisig_signers = 12; // @gotags: json:"multisigSigners"
+  // multisig_threshold: minimum approvals for above-threshold treasury spends
+  uint64 multisig_threshold = 13; // @gotags: json:"multisigThreshold"
+  // voting_period_blocks: blocks a proposal accepts votes for
+  uint64 voting_period_blocks = 14; // @gotags: json:"votingPeriodBlocks"
+  // quorum_bps: fraction of snapshot total_staked_cliq required to participate
+  uint64 quorum_bps = 15; // @gotags: json:"quorumBps"
+  // pass_threshold_bps: yes / (yes+no) needed for a proposal to pass
+  uint64 pass_threshold_bps = 16; // @gotags: json:"passThresholdBps"
+  // timelock_blocks: delay between proposal pass and above-threshold spend execution
+  uint64 timelock_blocks = 17; // @gotags: json:"timelockBlocks"
+  // cliq_unstaking_blocks: unbond window for CLIQ stake
+  uint64 cliq_unstaking_blocks = 18; // @gotags: json:"cliqUnstakingBlocks"
+  // proposal_fee: minimum tx fee for proposal creation (uCNPY)
+  uint64 proposal_fee = 19; // @gotags: json:"proposalFee"
+  // vote_fee: minimum tx fee for vote (uCNPY)
+  uint64 vote_fee = 20; // @gotags: json:"voteFee"
+  // stake_fee: minimum tx fee for stake/unstake/claim_unstake (uCNPY)
+  uint64 stake_fee = 21; // @gotags: json:"stakeFee"
+  // multisig_approve_fee: minimum tx fee for multisig approval (uCNPY)
+  uint64 multisig_approve_fee = 22; // @gotags: json:"multisigApproveFee"
+  // min_stake_to_propose: minimum staked CLIQ a proposer must hold
+  uint64 min_stake_to_propose = 23; // @gotags: json:"minStakeToPropose"
 }
 
 // VestingIndex enumerates the vesting schedule ids belonging to an address so
@@ -131,4 +171,291 @@ message CanoliqParams {
 message VestingIndex {
   // schedule_ids: list of schedule_ids owned by the indexed address
   repeated uint64 schedule_ids = 1; // @gotags: json:"scheduleIds"
+}
+
+// === Phase 2 — governance, staking, buyback, treasury ===
+
+// MessageCLIQStake locks liquid CLIQ into a stake record granting governance
+// weight. Multiple stakes from the same address aggregate into one record.
+message MessageCLIQStake {
+  // from_address: the staker
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // amount: liquid CLIQ to lock (uCLIQ)
+  uint64 amount = 2;
+}
+
+// MessageCLIQUnstake debits the staker's CLIQStake and queues an unbond
+// record that matures after cliq_unstaking_blocks. Total staked CLIQ on
+// globals is decremented immediately so unstaked tokens carry no weight in
+// proposals created from this height onward.
+message MessageCLIQUnstake {
+  // from_address: the staker
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // amount: staked CLIQ to unbond (uCLIQ)
+  uint64 amount = 2;
+}
+
+// MessageCLIQClaimUnstake matures an unstake record by returning the CLIQ
+// to the staker's liquid balance once mature_height has passed.
+message MessageCLIQClaimUnstake {
+  // from_address: the staker
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // unstake_id: id of the UnstakingCLIQ record to claim
+  uint64 unstake_id = 2; // @gotags: json:"unstakeId"
+}
+
+// MessageCLIQProposalCreate opens a new governance proposal. The proposer
+// must hold ≥ min_stake_to_propose at creation height. The proposal payload
+// dictates the action taken if the vote passes.
+message MessageCLIQProposalCreate {
+  // from_address: the proposer
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // payload: proposal payload (oneof param_change | buyback | treasury_spend)
+  google.protobuf.Any payload = 2;
+  // description: optional human-readable description (≤ 256 bytes)
+  string description = 3;
+}
+
+// MessageCLIQVote records a yes/no/abstain vote for an active proposal. The
+// vote weight equals the voter's CLIQStake balance evaluated against the
+// proposal's creation_height — votes from stake added after creation carry
+// zero weight.
+message MessageCLIQVote {
+  // from_address: the voter
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // proposal_id: target proposal
+  uint64 proposal_id = 2; // @gotags: json:"proposalId"
+  // choice: VOTE_YES | VOTE_NO | VOTE_ABSTAIN
+  VoteChoice choice = 3;
+}
+
+// MessageBuybackExecute idempotently runs a passed ProposalBuyback by
+// referencing the proposal id. Re-execution is a no-op once the BuybackOrder
+// is marked executed.
+message MessageBuybackExecute {
+  // from_address: the trigger (any address; transactional fee applies)
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // proposal_id: passed buyback proposal to execute
+  uint64 proposal_id = 2; // @gotags: json:"proposalId"
+}
+
+// MessageDAOTreasurySpend idempotently runs a passed ProposalTreasurySpend
+// subject to multisig + timelock gating for above-threshold amounts.
+message MessageDAOTreasurySpend {
+  // from_address: the trigger
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // proposal_id: passed treasury_spend proposal to execute
+  uint64 proposal_id = 2; // @gotags: json:"proposalId"
+}
+
+// MessageMultisigApprove records a per-signer approval for an above-threshold
+// TreasurySpend. The signer must appear in CanoliqParams.multisig_signers.
+message MessageMultisigApprove {
+  // from_address: the signer
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // spend_id: id of the TreasurySpend record to approve
+  uint64 spend_id = 2; // @gotags: json:"spendId"
+}
+
+// CLIQStake is the per-address active stake record.
+message CLIQStake {
+  // address: the staker
+  bytes address = 1;
+  // amount: staked CLIQ (uCLIQ)
+  uint64 amount = 2;
+  // staked_at_height: height of the most recent stake increase. Used for
+  // proposal-vote eligibility (vote weight = 0 if staked_at_height >
+  // proposal.creation_height).
+  uint64 staked_at_height = 3; // @gotags: json:"stakedAtHeight"
+}
+
+// UnstakingCLIQ is a queued unstake awaiting maturity.
+message UnstakingCLIQ {
+  // id: per-address unstake id
+  uint64 id = 1;
+  // address: the staker
+  bytes address = 2;
+  // amount: CLIQ owed at maturity (uCLIQ)
+  uint64 amount = 3;
+  // mature_height: block height at which the unstake matures
+  uint64 mature_height = 4; // @gotags: json:"matureHeight"
+}
+
+// VoteChoice enumerates the legal vote selections.
+enum VoteChoice {
+  VOTE_UNKNOWN = 0;
+  VOTE_YES = 1;
+  VOTE_NO = 2;
+  VOTE_ABSTAIN = 3;
+}
+
+// ProposalStatus tracks proposal state through its lifecycle.
+enum ProposalStatus {
+  PROPOSAL_UNKNOWN = 0;
+  PROPOSAL_ACTIVE = 1;
+  PROPOSAL_PASSED = 2;
+  PROPOSAL_FAILED = 3;
+  PROPOSAL_EXECUTED = 4;
+}
+
+// Proposal is a governance proposal record. Payload is opaque to the
+// governance lifecycle; tally + execute dispatch on the contained Any type.
+message Proposal {
+  // id: unique proposal id
+  uint64 id = 1;
+  // proposer: address that opened the proposal
+  bytes proposer = 2;
+  // creation_height: block height at which the proposal was opened
+  uint64 creation_height = 3; // @gotags: json:"creationHeight"
+  // expiry_height: voting closes at this height
+  uint64 expiry_height = 4; // @gotags: json:"expiryHeight"
+  // snapshot_total_staked: globals.total_staked_cliq at creation_height
+  uint64 snapshot_total_staked = 5; // @gotags: json:"snapshotTotalStaked"
+  // payload: typed proposal payload
+  google.protobuf.Any payload = 6;
+  // description: optional human-readable description
+  string description = 7;
+  // status: lifecycle state
+  ProposalStatus status = 8;
+  // yes_weight: cumulative yes-vote weight
+  uint64 yes_weight = 9; // @gotags: json:"yesWeight"
+  // no_weight: cumulative no-vote weight
+  uint64 no_weight = 10; // @gotags: json:"noWeight"
+  // abstain_weight: cumulative abstain weight
+  uint64 abstain_weight = 11; // @gotags: json:"abstainWeight"
+}
+
+// ProposalIndex enumerates active proposal ids so BeginBlock can scan
+// without a state-range scan. Passed/failed proposals are removed.
+message ProposalIndex {
+  // ids: active proposal ids
+  repeated uint64 ids = 1;
+}
+
+// Vote is a single recorded vote on a proposal.
+message Vote {
+  // proposal_id: target proposal
+  uint64 proposal_id = 1; // @gotags: json:"proposalId"
+  // voter: voting address
+  bytes voter = 2;
+  // choice: yes / no / abstain
+  VoteChoice choice = 3;
+  // weight: snapshot stake at proposal.creation_height
+  uint64 weight = 4;
+}
+
+// ProposalParamChange replaces the entire CanoliqParams atomically. Full-set
+// replacement matches the existing ValidateParams invariant (split bps must
+// total 10000).
+message ProposalParamChange {
+  // params: the new parameter set
+  CanoliqParams params = 1;
+}
+
+// BuybackMode selects the post-acquisition disposition of CLIQ.
+enum BuybackMode {
+  BUYBACK_UNKNOWN = 0;
+  BUYBACK_BURN = 1;
+  BUYBACK_DISTRIBUTE_STAKERS = 2;
+}
+
+// ProposalBuyback authorizes a single buyback execution.
+message ProposalBuyback {
+  // cnpy_amount: CNPY drawn from canoliq/buyback/pool (clamped to available)
+  uint64 cnpy_amount = 1; // @gotags: json:"cnpyAmount"
+  // price_micro_cnpy_per_cliq: price denominator. cliq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cliq
+  uint64 price_micro_cnpy_per_cliq = 2; // @gotags: json:"priceMicroCnpyPerCliq"
+  // mode: BURN or DISTRIBUTE_STAKERS
+  BuybackMode mode = 3;
+}
+
+// SpendDenomination distinguishes CNPY-denominated spends from CLIQ.
+enum SpendDenomination {
+  SPEND_UNKNOWN = 0;
+  SPEND_CNPY = 1;
+  SPEND_CLIQ = 2;
+}
+
+// ProposalTreasurySpend authorizes a transfer from a treasury bucket.
+message ProposalTreasurySpend {
+  // recipient: 20-byte target address
+  bytes recipient = 1;
+  // amount: CNPY or CLIQ to send
+  uint64 amount = 2;
+  // denomination: CNPY (sourced from treasury/canoliq) or CLIQ (treasury/cliq)
+  SpendDenomination denomination = 3;
+}
+
+// BuybackOrder is the queued + post-execution record of a buyback. Carries
+// the full proposal payload so MessageBuybackExecute is self-contained after
+// the source proposal record is cleaned up at tally time.
+message BuybackOrder {
+  // proposal_id: source proposal
+  uint64 proposal_id = 1; // @gotags: json:"proposalId"
+  // cnpy_drawn: CNPY actually drained (≤ payload.cnpy_amount)
+  uint64 cnpy_drawn = 2; // @gotags: json:"cnpyDrawn"
+  // cliq_acquired: CLIQ moved out of treasury_cliq
+  uint64 cliq_acquired = 3; // @gotags: json:"cliqAcquired"
+  // mode: BURN or DISTRIBUTE_STAKERS (mirrors proposal payload)
+  BuybackMode mode = 4;
+  // executed: true once the buyback has been applied
+  bool executed = 5;
+  // executed_at_height: height at which executed flipped to true
+  uint64 executed_at_height = 6; // @gotags: json:"executedAtHeight"
+  // payload: full original proposal payload (cnpy_amount, price, mode)
+  ProposalBuyback payload = 7;
+}
+
+// TreasurySpend is a pending or completed authorized spend. BeginBlock
+// executes when current_height >= executable_height AND multisig threshold
+// satisfied (above treasury_threshold).
+message TreasurySpend {
+  // id: per-spend id
+  uint64 id = 1;
+  // proposal_id: source proposal
+  uint64 proposal_id = 2; // @gotags: json:"proposalId"
+  // executable_height: timelock-adjusted earliest execution height
+  uint64 executable_height = 3; // @gotags: json:"executableHeight"
+  // payload: ProposalTreasurySpend payload
+  ProposalTreasurySpend payload = 4;
+  // requires_multisig: true when amount > treasury_threshold at creation
+  bool requires_multisig = 5; // @gotags: json:"requiresMultisig"
+  // executed: true once the transfer has been applied
+  bool executed = 6;
+}
+
+// MultisigApproval is one signer's approval of an above-threshold spend.
+message MultisigApproval {
+  // spend_id: target TreasurySpend id
+  uint64 spend_id = 1; // @gotags: json:"spendId"
+  // signer: approving signer address (must be in params.multisig_signers)
+  bytes signer = 2;
+  // height: block at which the approval was recorded
+  uint64 height = 3;
+}
+
+// CLIQStakeIndex enumerates active CLIQ staker addresses so buyback
+// DISTRIBUTE_STAKERS can iterate without a state-range scan.
+message CLIQStakeIndex {
+  // addresses: 20-byte staker addresses with non-zero CLIQStake.amount
+  repeated bytes addresses = 1;
+}
+
+// ValidatorRegistryEntry is a per-validator stake record used to drive
+// canoLiq's pro-rata distribution of the 15% validator-incentive slice.
+// Phase 2 ships this as a plugin-internal registry (seeded at genesis or
+// via param-change governance); Phase 1.5 will later replace the source
+// with a real Canopy validator-set readback.
+message ValidatorRegistryEntry {
+  // address: 20-byte validator address
+  bytes address = 1;
+  // stake: weight used for share-out (uCNPY-equivalent)
+  uint64 stake = 2;
+}
+
+// ValidatorRegistry is the singleton list of canoLiq committee validators
+// with their stake weights. Read by reward.go::distributeValidatorShare.
+message ValidatorRegistry {
+  // entries: per-validator stake records
+  repeated ValidatorRegistryEntry entries = 1;
 }

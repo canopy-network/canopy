@@ -28,9 +28,13 @@ func (c *Canoliq) Genesis(req *contract.PluginGenesisRequest) *contract.PluginGe
 	return &contract.PluginGenesisResponse{}
 }
 
-// BeginBlock currently has no canoLiq-specific responsibilities. Phase 2 may
-// hook governance proposal expirations here.
-func (c *Canoliq) BeginBlock(_ *contract.PluginBeginRequest) *contract.PluginBeginResponse {
+// BeginBlock runs the per-block governance + treasury hooks: tally and
+// dispatch any expired proposals, then auto-execute eligible treasury spends.
+func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginBeginResponse {
+	height := req.GetHeight()
+	if err := c.processProposals(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
 	return &contract.PluginBeginResponse{}
 }
 
@@ -59,6 +63,22 @@ func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.Plugin
 		return c.CheckMessageCLIQTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCLIQClaimVested:
 		return c.CheckMessageCLIQClaimVested(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQStake:
+		return c.CheckMessageCLIQStake(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQUnstake:
+		return c.CheckMessageCLIQUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQClaimUnstake:
+		return c.CheckMessageCLIQClaimUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQProposalCreate:
+		return c.CheckMessageCLIQProposalCreate(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQVote:
+		return c.CheckMessageCLIQVote(x, request.Tx.Fee, params)
+	case *contract.MessageBuybackExecute:
+		return c.CheckMessageBuybackExecute(x, request.Tx.Fee, params)
+	case *contract.MessageDAOTreasurySpend:
+		return c.CheckMessageDAOTreasurySpend(x, request.Tx.Fee, params)
+	case *contract.MessageMultisigApprove:
+		return c.CheckMessageMultisigApprove(x, request.Tx.Fee, params)
 	default:
 		return &contract.PluginCheckResponse{Error: ErrUnsupportedMessage()}
 	}
@@ -87,6 +107,22 @@ func (c *Canoliq) DeliverTx(request *contract.PluginDeliverRequest) *contract.Pl
 		return c.DeliverMessageCLIQTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCLIQClaimVested:
 		return c.DeliverMessageCLIQClaimVested(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQStake:
+		return c.DeliverMessageCLIQStake(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQUnstake:
+		return c.DeliverMessageCLIQUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQClaimUnstake:
+		return c.DeliverMessageCLIQClaimUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQProposalCreate:
+		return c.DeliverMessageCLIQProposalCreate(x, request.Tx.Fee, params)
+	case *contract.MessageCLIQVote:
+		return c.DeliverMessageCLIQVote(x, request.Tx.Fee, params)
+	case *contract.MessageBuybackExecute:
+		return c.DeliverMessageBuybackExecute(x, request.Tx.Fee, params)
+	case *contract.MessageDAOTreasurySpend:
+		return c.DeliverMessageDAOTreasurySpend(x, request.Tx.Fee, params)
+	case *contract.MessageMultisigApprove:
+		return c.DeliverMessageMultisigApprove(x, request.Tx.Fee, params)
 	default:
 		return &contract.PluginDeliverResponse{Error: ErrUnsupportedMessage()}
 	}

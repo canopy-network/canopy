@@ -13,20 +13,31 @@ import (
 var (
 	canoliqPrefix = []byte{10}
 
-	domainGlobals    = []byte{1}
-	domainCcnpyBal   = []byte{2}
-	domainCliqBal    = []byte{3}
-	domainVesting    = []byte{4}
-	domainVestIndex  = []byte{5}
-	domainRedemption = []byte{6}
-	domainTreasury   = []byte{7}
-	domainBuyback    = []byte{8}
-	domainValIncent  = []byte{9}
-	domainParams     = []byte{11}
+	domainGlobals       = []byte{1}
+	domainCcnpyBal      = []byte{2}
+	domainCliqBal       = []byte{3}
+	domainVesting       = []byte{4}
+	domainVestIndex     = []byte{5}
+	domainRedemption    = []byte{6}
+	domainTreasury      = []byte{7}
+	domainBuyback       = []byte{8}
+	domainValIncent     = []byte{9}
+	domainParams        = []byte{11}
+	domainCliqStake     = []byte{12}
+	domainCliqUnstaking = []byte{13}
+	domainProposal      = []byte{14}
+	domainVote          = []byte{15}
+	domainBuybackOrder  = []byte{16}
+	domainSpend         = []byte{17}
+	domainMultisig      = []byte{18}
+	domainInsurance     = []byte{19}
+	domainStakeIndex    = []byte{20}
 
 	treasuryCanopy = []byte("canopy")
 	treasuryCliq   = []byte("cliq")
 	buybackPool    = []byte("pool")
+	indexSingleton = []byte("index")
+	insuranceSlot  = []byte("pool")
 )
 
 // JoinLenPrefix mirrors contract.JoinLenPrefix to avoid an import cycle for
@@ -109,6 +120,67 @@ func KeyForBuybackPool() []byte {
 // KeyForValidatorIncentives returns the per-validator infrastructure incentive key.
 func KeyForValidatorIncentives(addr []byte) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainValIncent, addr)
+}
+
+// KeyForCLIQStake returns the active stake record key for an address.
+func KeyForCLIQStake(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainCliqStake, addr)
+}
+
+// KeyForCLIQUnstaking returns the queued unstake record key for an
+// (address, unstake_id) pair.
+func KeyForCLIQUnstaking(addr []byte, unstakeID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainCliqUnstaking, addr, FormatUint64(unstakeID))
+}
+
+// KeyForCLIQStakeIndex returns the singleton key listing active staker addresses.
+func KeyForCLIQStakeIndex() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainStakeIndex, indexSingleton)
+}
+
+// KeyForProposal returns the proposal record key for a proposal id.
+func KeyForProposal(id uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainProposal, FormatUint64(id))
+}
+
+// KeyForProposalIndex returns the singleton key listing active proposal ids.
+func KeyForProposalIndex() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainProposal, indexSingleton)
+}
+
+// KeyForVote returns the per-(proposal, voter) vote record key.
+func KeyForVote(proposalID uint64, voter []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainVote, FormatUint64(proposalID), voter)
+}
+
+// KeyForBuybackOrder returns the buyback receipt key for a proposal id.
+func KeyForBuybackOrder(proposalID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainBuybackOrder, FormatUint64(proposalID))
+}
+
+// KeyForTreasurySpend returns the treasury spend record key for a spend id.
+func KeyForTreasurySpend(spendID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainSpend, FormatUint64(spendID))
+}
+
+// KeyForSpendIndex returns the singleton key listing pending spend ids.
+func KeyForSpendIndex() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainSpend, indexSingleton)
+}
+
+// KeyForMultisigApproval returns the per-(spend_id, signer) approval key.
+func KeyForMultisigApproval(spendID uint64, signer []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainMultisig, FormatUint64(spendID), signer)
+}
+
+// KeyForInsurancePool returns the insurance pool scalar key.
+func KeyForInsurancePool() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainInsurance, insuranceSlot)
+}
+
+// KeyForValidatorRegistry returns the singleton validator stake registry key.
+func KeyForValidatorRegistry() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainValIncent, indexSingleton)
 }
 
 // EncodeUint64 returns the 8-byte big-endian encoding of n. Used for storing

@@ -104,13 +104,29 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 		{Key: globalsKey, Value: gBz},
 		{Key: poolKey, Value: poolBz},
 	}
-	// Treasury & buyback go into plugin-owned scalar keys.
+	// Treasury & buyback go into plugin-owned scalar keys. WP §11 prescribes
+	// 1–2% of the treasury feed into an insurance pool: skim insurance_bps
+	// off the treasury slice so every credit auto-routes a fraction.
 	if split.Treasury > 0 {
-		treasuryKey := KeyForTreasuryCNPY()
-		sets = append(sets, &contract.PluginSetOp{
-			Key:   treasuryKey,
-			Value: EncodeUint64(c.readScalar(treasuryKey) + split.Treasury),
-		})
+		insurance := uint64(0)
+		if params.InsuranceBps > 0 {
+			insurance = mulDiv(split.Treasury, params.InsuranceBps, 10_000)
+		}
+		treasuryDelta := split.Treasury - insurance
+		if treasuryDelta > 0 {
+			treasuryKey := KeyForTreasuryCNPY()
+			sets = append(sets, &contract.PluginSetOp{
+				Key:   treasuryKey,
+				Value: EncodeUint64(c.readScalar(treasuryKey) + treasuryDelta),
+			})
+		}
+		if insurance > 0 {
+			insuranceKey := KeyForInsurancePool()
+			sets = append(sets, &contract.PluginSetOp{
+				Key:   insuranceKey,
+				Value: EncodeUint64(c.readScalar(insuranceKey) + insurance),
+			})
+		}
 	}
 	if split.Buyback > 0 {
 		buybackKey := KeyForBuybackPool()
@@ -120,14 +136,11 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 		})
 	}
 	if split.Validators > 0 {
-		// MVP: park validator share at a single committee-wide aggregator key.
-		// A future iteration will distribute pro-rata across the committee
-		// validator set once that lookup is available.
-		valKey := KeyForValidatorIncentives(c.committeeAggregatorAddr())
-		sets = append(sets, &contract.PluginSetOp{
-			Key:   valKey,
-			Value: EncodeUint64(c.readScalar(valKey) + split.Validators),
-		})
+		valSets, err := c.distributeValidatorShare(split.Validators)
+		if err != nil {
+			return err
+		}
+		sets = append(sets, valSets...)
 	}
 	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets}); err != nil {
 		return err
@@ -154,13 +167,94 @@ func (c *Canoliq) readScalar(key []byte) uint64 {
 }
 
 // committeeAggregatorAddr returns a synthetic "address" used to aggregate
-// validator-incentive accruals at the committee level. Since the canoLiq
-// MVP does not yet introspect the validator set from the FSM, this single
-// address holds the accrued share until Phase 2 wires per-validator splits.
+// validator-incentive accruals when the canoLiq committee validator set is
+// unknown (empty registry). Phase 2 prefers ValidatorRegistry-driven
+// pro-rata in distributeValidatorShare; this address is the legacy fallback.
 func (c *Canoliq) committeeAggregatorAddr() []byte {
 	addr := make([]byte, 20)
 	for i := range addr {
 		addr[i] = 0xCA
 	}
 	return addr
+}
+
+// distributeValidatorShare splits the validator-incentive slice across the
+// canoLiq committee validator set proportional to per-validator stake. Empty
+// registry falls back to a single committee-wide aggregator key — the
+// Phase 1 behavior — so Phase 1 tests continue to pass unchanged. Rounding
+// remainder is credited to the largest-stake validator so the credited
+// total exactly equals the input share.
+func (c *Canoliq) distributeValidatorShare(share uint64) ([]*contract.PluginSetOp, *contract.PluginError) {
+	if share == 0 {
+		return nil, nil
+	}
+	registry, err := c.loadValidatorRegistry()
+	if err != nil {
+		return nil, err
+	}
+	if registry == nil || len(registry.Entries) == 0 {
+		// Legacy aggregator path.
+		key := KeyForValidatorIncentives(c.committeeAggregatorAddr())
+		return []*contract.PluginSetOp{
+			{Key: key, Value: EncodeUint64(c.readScalar(key) + share)},
+		}, nil
+	}
+	totalStake := uint64(0)
+	largestIdx := 0
+	for i, e := range registry.Entries {
+		totalStake += e.Stake
+		if e.Stake > registry.Entries[largestIdx].Stake {
+			largestIdx = i
+		}
+	}
+	if totalStake == 0 {
+		key := KeyForValidatorIncentives(c.committeeAggregatorAddr())
+		return []*contract.PluginSetOp{
+			{Key: key, Value: EncodeUint64(c.readScalar(key) + share)},
+		}, nil
+	}
+	credits := make([]uint64, len(registry.Entries))
+	allocated := uint64(0)
+	for i, e := range registry.Entries {
+		credits[i] = mulDiv(share, e.Stake, totalStake)
+		allocated += credits[i]
+	}
+	if allocated < share {
+		credits[largestIdx] += share - allocated
+	}
+	sets := make([]*contract.PluginSetOp, 0, len(registry.Entries))
+	for i, e := range registry.Entries {
+		if credits[i] == 0 {
+			continue
+		}
+		key := KeyForValidatorIncentives(e.Address)
+		sets = append(sets, &contract.PluginSetOp{
+			Key:   key,
+			Value: EncodeUint64(c.readScalar(key) + credits[i]),
+		})
+	}
+	return sets, nil
+}
+
+// loadValidatorRegistry reads the singleton validator registry. Returns
+// (nil, nil) when absent.
+func (c *Canoliq) loadValidatorRegistry() (*contract.ValidatorRegistry, *contract.PluginError) {
+	q := rand.Uint64()
+	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
+		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForValidatorRegistry()}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 {
+		return nil, nil
+	}
+	reg := new(contract.ValidatorRegistry)
+	if e := contract.Unmarshal(resp.Results[0].Entries[0].Value, reg); e != nil {
+		return nil, e
+	}
+	return reg, nil
 }
