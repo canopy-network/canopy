@@ -718,7 +718,7 @@ func (s *Store) MaybeBackup() {
 
 // Compact runs Pebble range compaction over the latest and optional historic state prefixes.
 func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
-	// first compaction: latest state  keys
+	// first compaction: latest state keys
 	startPrefix, endPrefix := latestStatePrefix, prefixEnd(latestStatePrefix)
 	// track current time and version
 	now := time.Now()
