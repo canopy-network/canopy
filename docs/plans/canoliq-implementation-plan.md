@@ -135,18 +135,50 @@ Pre-reqs to land before this phase can be exercised:
    `CANOPY_PLUGIN_MODE=canoliq` against the same `/tmp/plugin/plugin.sock`.
 2. Node config switched to `"plugin": "go"`, genesis amended so committee 2
    exists and at least one validator opts in via `MessageEditStake`.
-3. Minimal `canoliqctl` (or RPC handlers in `cmd/rpc/admin.go`) so canoLiq tx
-   types can be built, signed (BLS12-381), and posted to `/v1/tx`.
+3. ~~Minimal `canoliqctl`~~ — landed at `plugin/go/canoliqctl/`. Builds with
+   `go build -o canoliqctl ./canoliqctl/`. Subcommands cover the full Phase 1
+   surface (deposit/redeem/claim/cliq-transfer/cliq-claim-vested) and the
+   Phase 2 surface minus `proposal-create` (vote, stake/unstake/claim,
+   buyback-execute, spend-execute, multisig-approve). `proposal-create` is
+   deferred because its `Any` payload needs three sub-command variants.
 
 Checklist:
-- [ ] Plugin handshake: `go-plugin` connects to FSM, exchanges `PluginConfig`,
+- [x] **canoliqctl scaffold**: build, sign with BLS12-381, POST to `/v1/tx`
+      — verified locally via `go build` and CLI usage smoke test. End-to-end
+      verification against a real socket still depends on items 1 & 2 above.
+- [x] Plugin handshake: `go-plugin` connects to FSM, exchanges `PluginConfig`,
       and survives one `BeginBlock`/`EndBlock` cycle on the live socket
+      — verified end-to-end via `.docker/compose.yaml`. Two issues surfaced
+      during integration that the in-process tests masked: (1) Alpine's
+      busybox `ps` lacks the `-p` flag `pluginctl.sh::is_running` relies on
+      → fixed by installing `procps` in the runtime image. (2) FSM
+      `StateRead` returns `Entry{Value: nil}` for missing keys (not zero
+      entries) → fixed in `LoadParams`/`LoadGlobals` to treat empty `Value`
+      as unset.
 - [ ] `MessageSubsidy` proposal funds committee 2's reward pool; canoLiq's
       `EndBlock` observes the inflow and applies the 12% fee on a real chain
-- [ ] Submit a real `MessageCanoliqDeposit`; verify cCNPY balance and pool
-      growth via plugin-state RPC
-- [ ] Submit `MessageCanoliqRedeem`, advance past `unbond_complete_height`,
-      submit `MessageCanoliqClaimRedemption`; verify CNPY back in user account
+      — *not yet directly verified* on the live chain. Committee 2 is
+      auto-subsidized via the 33% threshold (both validators opted in), so
+      `EndBlock` is observing inflow each block; explicit fee-split
+      reconciliation against on-chain state is blocked on a plugin-state
+      RPC, which is Phase 3 work.
+- [x] Submit a real `MessageCanoliqDeposit` via `canoliqctl deposit`; tx
+      accepted at height 4 (cCNPY mint proven indirectly by the subsequent
+      successful redeem).
+- [x] Submit `MessageCanoliqRedeem` via `canoliqctl redeem`, advance past
+      `unbond_complete_height`, submit `MessageCanoliqClaimRedemption` via
+      `canoliqctl claim`; an early claim at height 7 was correctly rejected
+      with "redemption has not yet matured", and the post-maturity claim
+      landed at height 11.
+
+Two server-side bugs surfaced and were fixed during Step G:
+1. `DeliverMessageCanoliqRedeem` used `height := uint64(0)` instead of
+   `c.currentHeight()`, making `unbond_complete_height` always equal to
+   the placeholder unstaking constant. Fixed.
+2. The placeholder unstaking constant was 14400 blocks (~24h) — too long
+   for localnet verification. Lowered to 5 blocks pending the proper FSM
+   `valParams.UnstakingBlocks` plumbing the original Phase 1 plan called
+   for (deferred to Phase 2).
 
 ### Phase 2 — Governance, buyback, treasury
 
