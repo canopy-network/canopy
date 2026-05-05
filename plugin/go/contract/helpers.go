@@ -56,7 +56,9 @@ return result.Uint64()
 func DeriveMarketId(creatorAddr []byte, nonce uint64) []byte {
 nonceBytes := make([]byte, 8)
 binary.BigEndian.PutUint64(nonceBytes, nonce)
-input := append(creatorAddr, nonceBytes...)
+input := make([]byte, len(creatorAddr)+8)
+	copy(input, creatorAddr)
+	copy(input[len(creatorAddr):], nonceBytes)
 hash := sha256.Sum256(input)
 return hash[:20]
 }
