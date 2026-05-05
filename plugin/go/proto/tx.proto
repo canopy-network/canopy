@@ -1,149 +1,408 @@
 syntax = "proto3";
+// ═══════════════════════════════════════════════════════════════════════════════
+// Praxis Prediction Market — Transaction & State Definitions
+// Built on Canopy Network · Native Token: $PRX
+//
+// This file is the single source of truth for every message that flows through
+// the Praxis plugin. It covers two systems:
+//
+//   ADLMSR — Automated Dynamic Logarithmic Market Scoring Rule
+//             The pricing engine. Users buy YES/NO shares in markets.
+//             Cost is computed via the LMSR cost function so liquidity is
+//             always available and prices reflect collective belief.
+//
+//   PORS   — Praxis Optimistic Resolution System
+//             The honesty layer. Staked resolvers propose outcomes.
+//             Disputes trigger a commit-reveal panel vote.
+//             Bad actors get slashed. Good resolvers earn bounties.
+//
+// Together these two systems make Praxis: a prediction market where outcomes
+// are determined by evidence, disputes are resolved by stake-weighted panels,
+// and every token is accounted for on-chain.
+//
+// Spec authority:
+//   ADLMSR v5.6.6-r2-CORRECTED
+//   PORS   v1.0-r2-CORRECTED
+// ═══════════════════════════════════════════════════════════════════════════════
 package types;
-option go_package = "github.com/canopy-network/canopy/plugin/go/contract";
+// go_package must match the actual go.mod module path exactly.
+// Wrong value here causes EOF errors on CheckTx — never use fork URLs.
+option go_package = "github.com/canopy-network/go-plugin/contract";
 import "google/protobuf/any.proto";
+// ─────────────────────────────────────────────────────────────────────────────
+// CANOPY CORE ENVELOPE TYPES
+// These are required by the Canopy FSM protocol. Do not rename or reorder.
+// ─────────────────────────────────────────────────────────────────────────────
+// Transaction is the outer envelope for every submission to the chain.
+// The inner payload lives in `msg` as a protobuf Any.
+// Sign bytes = proto.Marshal of this struct with signature set to nil.
+// Never sign JSON — the FSM will reject signature mismatches every time.
 message Transaction {
-  string              message_type   = 1;
-  google.protobuf.Any msg            = 2;
-  Signature           signature      = 3;
-  uint64              created_height = 4;
-  uint64              time           = 5;
-  uint64              fee            = 6;
-  string              memo           = 7;
-  uint64              network_id     = 8;
-  uint64              chain_id       = 9;
+  string              message_type   = 1; // e.g. "create_market" — must match ContractConfig
+  google.protobuf.Any msg            = 2; // the inner typed payload
+  Signature           signature      = 3; // nil when computing sign bytes
+  uint64              created_height = 4; // block height at time of creation
+  uint64              time           = 5; // unix nanoseconds — entropy + dedup
+  uint64              fee            = 6; // fee in micro-PRX
+  string              memo           = 7; // optional human-readable note
+  uint64              network_id     = 8; // must match node config
+  uint64              chain_id       = 9; // must match node config
 }
+// Signature carries the BLS12-381 G2 long signature (96 bytes) and public key (48 bytes).
+// Never use shortSignatures — Canopy uses G2 exclusively.
 message Signature {
-  bytes public_key = 1;
-  bytes signature  = 2;
+  bytes public_key = 1; // 48-byte BLS12-381 G2 public key
+  bytes signature  = 2; // 96-byte BLS12-381 G2 signature over sign bytes
 }
+// FeeParams holds governance-controlled minimum fees.
+// Stored at KeyForFeeParams() — prefix 0x07 (Canopy base layer).
+// Add custom fee fields at field numbers 14+ to avoid conflicts.
 message FeeParams {
-  uint64 send_fee = 1;
+  uint64 send_fee = 1; // minimum fee for a MessageSend transaction
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// CANOPY BASE TRANSACTION
+// ─────────────────────────────────────────────────────────────────────────────
+// MessageSend moves $PRX between addresses.
+// This is essential for the Praxis token economy — without it, winnings,
+// bounties, and slash proceeds have no way to leave the protocol.
+// Authorized signer: from_address
 message MessageSend {
-  bytes  from_address = 1;
-  bytes  to_address   = 2;
-  uint64 amount       = 3;
+  bytes  from_address = 1; // 20-byte sender address
+  bytes  to_address   = 2; // 20-byte recipient address
+  uint64 amount       = 3; // amount in micro-PRX
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// ADLMSR — MARKET LIFECYCLE TRANSACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+// MessageCreateMarket opens a new prediction market.
+//
+// The creator funds initial liquidity via b0 — the LMSR liquidity parameter.
+// Higher b0 = tighter spreads, more liquidity, higher capital requirement.
+// market_id is derived deterministically: SHA256(creator_address || nonce)[:20]
+// This means no sequential counter is needed — every market ID is unique by
+// construction and verifiable without reading state in CheckTx.
+//
+// expiry_time is a block height, not a timestamp. When the chain reaches
+// expiry_time, the market stops accepting predictions and enters resolution.
+// Must be <= MAX_EXPIRY_TIME to prevent uint64 overflow in post-expiry arithmetic.
+//
+// Authorized signer: creator_address
 message MessageCreateMarket {
-  bytes  creator_address = 1;
-  uint64 b0              = 2;
-  uint64 expiry_time     = 3;
-  uint64 nonce           = 4;
-  string question        = 5;
+  bytes  creator_address = 1; // 20-byte market creator
+  uint64 b0              = 2; // initial LMSR liquidity parameter (>= MIN_B0)
+  uint64 expiry_time     = 3; // block height when market expires (<= MAX_EXPIRY_TIME)
+  uint64 nonce           = 4; // random nonce for market_id derivation (non-zero)
+  string question        = 5; // the question this market resolves (e.g. "Will X happen?")
 }
+// MessageSubmitPrediction buys YES or NO shares in a market.
+//
+// This is where the LMSR cost function lives. The actual cost to the bettor
+// is C(q_new) - C(q_old) where C(q) = b_eff * ln(exp(q_yes/b_eff) + exp(q_no/b_eff)).
+// Shares are denominated in PRECISION_SCALE units, not micro-PRX directly.
+//
+// max_cost is the bettor's slippage protection — the transaction fails if the
+// computed cost exceeds this value. This matters because other transactions
+// can shift prices between mempool entry and block inclusion.
+//
+// Authorized signer: bettor_address
 message MessageSubmitPrediction {
-  bytes  bettor_address = 1;
-  bytes  market_id      = 2;
-  bool   outcome        = 3;
-  uint64 amount         = 4;
-  uint64 max_cost       = 5;
+  bytes  bettor_address = 1; // 20-byte bettor
+  bytes  market_id      = 2; // 20-byte market identifier
+  bool   outcome        = 3; // true = YES, false = NO
+  uint64 shares         = 4; // number of shares to purchase (>= PRECISION_SCALE)
+  uint64 max_cost       = 5; // maximum acceptable cost in micro-PRX (slippage guard)
 }
+// MessageResolveMarket is submitted by the registered resolver after market expiry.
+//
+// The resolver calls this within the RESOLUTION_DELAY_BLOCKS + GRACE_PERIOD_BLOCKS
+// window after expiry_time. If they miss the window, CheckAutoCancel triggers
+// and the market is cancelled — all bettors get their cost_paid back.
+//
+// On success: market moves to STATUS_RESOLVED, OutcomeState is written,
+// resolver receives bounty + bond return, all in one atomic 6-key write.
+//
+// In the combined ADLMSR + PORS plugin, STATUS_RESOLVED is an intermediate state.
+// The market must pass through PORS (propose_outcome → optional dispute → finalize)
+// before reaching STATUS_FINALIZED, which is the gate for ClaimWinnings payouts.
+//
+// Authorized signer: resolver_address
+message MessageResolveMarket {
+  bytes market_id        = 1; // 20-byte market identifier
+  bytes resolver_address = 2; // 20-byte resolver (must match 0x13 ResolverState)
+  bool  winning_outcome  = 3; // true = YES wins, false = NO wins
+}
+// MessageClaimWinnings pays out a bettor's winning position.
+//
+// Only callable after STATUS_FINALIZED (= 6). Payout is pro-rata from the
+// market pool using the overflow-safe formula:
+//   quot   = pool / totalWinShares
+//   rem    = pool % totalWinShares
+//   payout = quot * winnerShares + rem * winnerShares / totalWinShares
+//
+// Also handles STATUS_CANCELLED (cost_paid refund) and STATUS_VOIDED (full refund).
+// Surplus sweep triggers when all positions claimed or grace period ends.
+//
+// Authorized signer: claimant_address
 message MessageClaimWinnings {
-  bytes market_id        = 1;
-  bytes claimant_address = 2;
+  bytes market_id        = 1; // 20-byte market identifier
+  bytes claimant_address = 2; // 20-byte bettor claiming their winnings
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// PORS — RESOLVER REGISTRATION & DISPUTE SYSTEM TRANSACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+// MessageRegisterResolver stakes $PRX to become an eligible market resolver.
+//
+// Resolvers are the human intelligence layer of Praxis. They put stake on the
+// line to propose outcomes honestly. Their Resolver Reputation Score (RRS)
+// determines eligibility — low RRS from past slashes blocks new proposals.
+// Stake is locked until withdrawn or slashed.
+//
+// Authorized signer: resolver_address
 message MessageRegisterResolver {
-  bytes  resolver_address = 1;
-  uint64 stake_amount     = 2;
+  bytes  resolver_address = 1; // 20-byte resolver address
+  uint64 stake_amount     = 2; // amount to stake in micro-PRX
 }
+// MessageProposeOutcome is the first PORS action after market expiry.
+//
+// The registered resolver posts a bond and declares the winning outcome.
+// This triggers the optimistic resolution window — if no dispute is filed
+// within DISPUTE_BLOCKS, the outcome is accepted and the market finalizes.
+//
+// Key insight: this handler performs the STATUS_OPEN → STATUS_PROPOSED
+// inline transition when now > expiry_time. There is no separate
+// mark_expired transaction. The transition is atomic — STATUS_EXPIRED
+// is never persisted as an intermediate state (NF-6 fix).
+//
+// Also writes 0x13 ResolverState for this market — the 4th key in the
+// atomic write. Without this, resolve_market auth checks always fail (NF-5 fix).
+//
+// Authorized signer: resolver_address
 message MessageProposeOutcome {
-  bytes  market_id        = 1;
-  bytes  resolver_address = 2;
-  bool   proposed_outcome = 3;
-  uint64 proposal_bond    = 4;
+  bytes  market_id        = 1; // 20-byte market identifier
+  bytes  resolver_address = 2; // 20-byte resolver (must be registered at 0x16)
+  bool   proposed_outcome = 3; // true = YES, false = NO
+  uint64 proposal_bond    = 4; // bond amount (>= computeMinBond(market))
 }
+// MessageFileDispute opens a challenge to the proposed outcome.
+//
+// Any address can dispute by posting dispute_bond. This triggers the
+// commit-reveal panel vote. A panel of resolvers (excluding the proposer
+// and disputer) is selected using the 0x1C entropy accumulator as seed.
+// Panel size = MAX(MIN_PANEL_SIZE, ELEVATED_RISK_THRESHOLD check).
+//
+// DISPUTE_BLOCKS = MAX(34560, market_duration / 10) — minimum 48h floor.
+//
+// Authorized signer: disputer_address
 message MessageFileDispute {
-  bytes  market_id        = 1;
-  bytes  disputer_address = 2;
-  uint64 dispute_bond     = 3;
+  bytes  market_id        = 1; // 20-byte market identifier
+  bytes  disputer_address = 2; // 20-byte disputer
+  uint64 dispute_bond     = 3; // bond amount in micro-PRX
 }
+// MessageCommitVote is the first phase of the commit-reveal vote.
+//
+// Panel members submit SHA256(vote || nonce || voter_addr) — the hash commits
+// to their vote without revealing it. This prevents vote copying.
+// commit_hash must be exactly 32 bytes (SHA256 output).
+//
+// Authorized signer: voter_addr (must be a panel member)
 message MessageCommitVote {
-  bytes market_id   = 1;
-  bytes voter_addr  = 2;
-  bytes commit_hash = 3;
+  bytes market_id   = 1; // 20-byte market identifier
+  bytes voter_addr  = 2; // 20-byte panel member address
+  bytes commit_hash = 3; // 32-byte SHA256(vote || nonce || voter_addr)
 }
+// MessageRevealVote is the second phase — the actual vote is revealed.
+//
+// The voter submits their actual vote and nonce. The handler recomputes
+// SHA256(vote || nonce || voter_addr) and verifies it matches the committed hash.
+// Reveals are only accepted within the reveal window after commit deadline.
+//
+// Authorized signer: voter_addr
 message MessageRevealVote {
-  bytes market_id  = 1;
-  bytes voter_addr = 2;
-  bool  vote       = 3;
-  bytes nonce      = 4;
+  bytes market_id  = 1; // 20-byte market identifier
+  bytes voter_addr = 2; // 20-byte panel member address
+  bool  vote       = 3; // true = agree with proposed outcome, false = disagree
+  bytes nonce      = 4; // random nonce used in commit hash
 }
+// MessageTallyVotes is permissionless — anyone can call it after reveal deadline.
+//
+// Counts YES and NO votes from all revealed VoteReveal records.
+// Determines winner by majority. Slashes losing side's bonds.
+// Writes updated DisputeRecord with final vote_status.
+// Caller address is recorded but receives no reward — this is a
+// public-good transaction that unblocks market finalization.
+//
+// No AuthorizedSigners restriction — permissionless trigger (NF-1 fix).
 message MessageTallyVotes {
-  bytes market_id   = 1;
-  bytes caller_addr = 2;
+  bytes market_id   = 1; // 20-byte market identifier
+  bytes caller_addr = 2; // 20-byte caller (permissionless, any address)
 }
+// MessageFinalizeMarket moves the market to STATUS_FINALIZED and pays the bounty.
+//
+// Called after tally_votes completes. Permissionless — the caller receives
+// a 50 PRX bounty from the 0x14 TreasuryReserve as incentive for finalization.
+// After finalization, ClaimWinnings payouts are unlocked for all bettors.
+//
+// No AuthorizedSigners restriction — permissionless, bounty incentivized.
 message MessageFinalizeMarket {
-  bytes market_id   = 1;
-  bytes caller_addr = 2;
+  bytes market_id   = 1; // 20-byte market identifier
+  bytes caller_addr = 2; // 20-byte caller (receives 50 PRX bounty from 0x14)
 }
+// MessageClaimSlash lets a winning disputer claim their share of slashed funds.
+//
+// When a resolver is slashed, their stake is distributed to the disputer
+// and/or winning panel members depending on the dispute outcome tier.
+// Tier-4 (catastrophic bad actor) voids the market entirely — all bettors
+// get full cost_paid refunds from the protocol treasury.
+// All slashed funds flow to the protocol treasury first, then distributed.
+//
+// Authorized signer: claimant_address
 message MessageClaimSlash {
-  bytes market_id        = 1;
-  bytes claimant_address = 2;
+  bytes market_id        = 1; // 20-byte market identifier
+  bytes claimant_address = 2; // 20-byte address claiming slash proceeds
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE TYPES — ADLMSR
+// These are stored in the key-value store under the 0x10–0x1C prefix namespace.
+// Proto-generated Go field names are the canonical names used in all handlers.
+// ─────────────────────────────────────────────────────────────────────────────
+// MarketState is the central record for a prediction market.
+// Stored at: append([]byte{0x10}, market_id...)
+//
+// Status transitions (ADLMSR path):
+//   STATUS_OPEN(0) → STATUS_RESOLVED(2) → STATUS_FINALIZED(6) [via PORS]
+//   STATUS_OPEN(0) → STATUS_CANCELLED(1) [if resolver misses window]
+//   STATUS_FINALIZED → STATUS_VOIDED(7)  [tier-4 slash only]
+//
+// CRITICAL field names (CRIT-1 — proto-generated, use exactly as shown):
+//   q_yes       → QYes        (LMSR quantity for YES outcome)
+//   q_no        → QNo         (LMSR quantity for NO outcome)
+//   b_eff       → BEff        (effective liquidity parameter)
+//   elevated_risk → ElevatedRisk (true if pool > ELEVATED_RISK_THRESHOLD)
 message MarketState {
-  uint32 status          = 1;
-  uint64 expiry_time     = 2;
-  uint64 q_yes           = 3;
-  uint64 q_no            = 4;
-  uint64 b_eff           = 5;
-  bytes  creator         = 6;
-  uint64 claimed_count   = 7;
-  uint64 total_positions = 8;
-  uint64 open_time       = 9;
-  bool   elevated_risk   = 10;
+  uint32 status          = 1;  // current market status (use STATUS_* constants)
+  uint64 expiry_time     = 2;  // block height when market expires
+  uint64 q_yes           = 3;  // LMSR YES quantity (scaled by PRECISION_SCALE)
+  uint64 q_no            = 4;  // LMSR NO quantity (scaled by PRECISION_SCALE)
+  uint64 b_eff           = 5;  // LMSR liquidity parameter (derived from b0)
+  bytes  creator         = 6;  // 20-byte market creator address
+  uint64 claimed_count   = 7;  // number of positions that have claimed winnings
+  uint64 total_positions = 8;  // total number of positions opened
+  uint64 open_time       = 9;  // block height when market opened (for LMSR tau guard)
+  bool   elevated_risk   = 10; // true if pool exceeds ELEVATED_RISK_THRESHOLD (NF-4 fix: field 10)
 }
+// PositionState records a bettor's stake in a market.
+// Stored at: append([]byte{0x11}, append(market_id, claimant_address...)...)
+//
+// CRITICAL field names (CRIT-1 — proto-generated, use exactly as shown):
+//   shares_yes → SharesYes   (YES shares owned)
+//   shares_no  → SharesNo    (NO shares owned)
+//   cost_paid  → CostPaid    (total micro-PRX paid — used for refunds)
+//   claimed    → Claimed     (true after ClaimWinnings executes)
+//
+// A position with all-zero fields is a ghost — reject with ErrNoPosition() (AUDIT-6).
 message PositionState {
-  uint64 shares_yes = 1;
-  uint64 shares_no  = 2;
-  uint64 cost_paid  = 3;
-  bool   claimed    = 4;
+  uint64 shares_yes = 1; // YES shares (PRECISION_SCALE units)
+  uint64 shares_no  = 2; // NO shares (PRECISION_SCALE units)
+  uint64 cost_paid  = 3; // total micro-PRX paid into the market pool
+  bool   claimed    = 4; // true after successful ClaimWinnings
 }
+// OutcomeState records the winning outcome after resolution.
+// Stored at: append([]byte{0x12}, market_id...)
+// Written atomically with MarketState in the ResolveMarket 6-key write.
+// Presence of this key is the idempotency sentinel for ResolveMarket.
 message OutcomeState {
-  bool   winning_outcome = 1;
-  uint64 resolved_at     = 2;
+  bool   winning_outcome = 1; // true = YES won, false = NO won
+  uint64 resolved_at     = 2; // block height when resolved
 }
+// TreasuryReserve holds protocol-controlled funds for bounties and slash distribution.
+// Stored at: append([]byte{0x14}, market_id...)
+// locked_reserve is set at market creation and released on resolution or cancellation.
 message TreasuryReserve {
-  uint64 locked_reserve = 1;
+  uint64 locked_reserve = 1; // micro-PRX locked for bounties (finalization + resolver)
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE TYPES — PORS
+// ─────────────────────────────────────────────────────────────────────────────
+// ResolverState ties a specific resolver to a specific market.
+// Stored at: append([]byte{0x13}, market_id...)
+//
+// CRITICAL (NF-5 fix): This key is written by propose_outcome as the 4th key
+// in its atomic write. Before NF-5 was fixed, no transaction wrote 0x13,
+// making the auth check in ResolveMarket always fail — markets could never resolve.
+// The presence of this key proves propose_outcome has been called for this market.
 message ResolverState {
-  bytes resolver_address = 1;
+  bytes resolver_address = 1; // 20-byte resolver assigned to this market
 }
+// ResolverRecord is the global resolver registry entry.
+// Stored at: append([]byte{0x16}, resolver_address...)
+// Distinct from ResolverState (per-market) — this is the global profile.
+//
+// rrs_score = Resolver Reputation Score. Halved on each slash. Permanent.
+// Resolvers with rrs_score < MIN_RRS_TO_PROPOSE cannot propose outcomes.
+// This is the economic deterrent against lazy or dishonest resolution.
 message ResolverRecord {
-  bytes  resolver_address = 1;
-  uint64 stake_amount     = 2;
-  uint64 rrs_score        = 3;
-  uint64 registered_at    = 4;
+  bytes  resolver_address = 1; // 20-byte resolver address
+  uint64 stake_amount     = 2; // current staked micro-PRX (reduced by proposal bonds)
+  uint64 rrs_score        = 3; // reputation score (starts at 100, halved on slash)
+  uint64 registered_at    = 4; // block height of registration
 }
+// ProposalRecord is written atomically by propose_outcome.
+// Stored at: append([]byte{0x17}, market_id...)
+// Presence of this key is the idempotency sentinel for propose_outcome.
+// status tracks the proposal lifecycle: PROPOSAL_OPEN → PROPOSAL_DISPUTED → PROPOSAL_FINALIZED
 message ProposalRecord {
-  bytes  resolver_addr    = 1;
-  bool   proposed_outcome = 2;
-  uint64 proposal_bond    = 3;
-  uint64 proposal_block   = 4;
-  uint32 status           = 5;
+  bytes  resolver_addr    = 1; // 20-byte resolver who made the proposal
+  bool   proposed_outcome = 2; // the outcome they proposed (true=YES, false=NO)
+  uint64 proposal_bond    = 3; // bond amount locked (returned if proposal upheld)
+  uint64 proposal_block   = 4; // block height of proposal
+  uint32 status           = 5; // PROPOSAL_OPEN=0, PROPOSAL_DISPUTED=1, PROPOSAL_FINALIZED=2
 }
+// DisputeRecord is written by file_dispute.
+// Stored at: append([]byte{0x18}, market_id...)
+// vote_status tracks the panel vote: VOTE_PENDING=0, VOTE_COMMITTED=1, VOTE_REVEALED=2, VOTE_TALLIED=3
+// panel_size is set at dispute time from the entropy-seeded panel selection.
 message DisputeRecord {
-  bytes  disputer_address = 1;
-  uint64 dispute_bond     = 2;
-  uint64 dispute_block    = 3;
-  uint32 vote_status      = 4;
-  uint32 panel_size       = 5;
+  bytes  disputer_address = 1; // 20-byte address that filed the dispute
+  uint64 dispute_bond     = 2; // bond locked by disputer
+  uint64 dispute_block    = 3; // block height when dispute was filed
+  uint32 vote_status      = 4; // current phase of the commit-reveal vote
+  uint32 panel_size       = 5; // number of panel members selected
 }
+// VoteCommit stores a panel member's committed (hashed) vote.
+// Stored at: append([]byte{0x19}, append(market_id, voter_addr...)...)
+// commit_hash = SHA256(vote || nonce || voter_addr) — 32 bytes exactly.
+// committed_at used to enforce commit deadline.
 message VoteCommit {
-  bytes  voter_addr   = 1;
-  bytes  commit_hash  = 2;
-  uint64 committed_at = 3;
+  bytes  voter_addr   = 1; // 20-byte panel member
+  bytes  commit_hash  = 2; // 32-byte SHA256 commitment
+  uint64 committed_at = 3; // block height of commit
 }
+// VoteReveal stores a panel member's revealed vote after commit phase.
+// Stored at: append([]byte{0x1A}, append(market_id, voter_addr...)...)
+// The handler recomputes SHA256(vote || nonce || voter_addr) and verifies
+// it matches the VoteCommit before writing this record.
 message VoteReveal {
-  bytes  voter_addr  = 1;
-  bool   vote        = 2;
-  uint64 revealed_at = 3;
+  bytes  voter_addr  = 1; // 20-byte panel member
+  bool   vote        = 2; // true = agree with proposal, false = disagree
+  uint64 revealed_at = 3; // block height of reveal
 }
+// SlashRecord documents a resolver slash event.
+// Stored at: append([]byte{0x1B}, resolver_address...)
+// Immutable after write — slash history is permanent on-chain.
+// rrs_score is halved on each slash (floored at 0, never negative).
 message SlashRecord {
-  bytes  slashed_address = 1;
-  uint64 slash_amount    = 2;
-  uint64 slashed_at      = 3;
+  bytes  slashed_address = 1; // 20-byte resolver that was slashed
+  uint64 slash_amount    = 2; // micro-PRX slashed
+  uint64 slashed_at      = 3; // block height of slash
 }
+// PanelEntropyAccum is the rolling entropy accumulator used for panel selection.
+// Stored at a singleton key (no suffix) — only one exists per chain.
+// Updated every block in BeginBlock: acc ^= height * FIBONACCI_HASH_CONSTANT
+// This prevents validators from grinding the panel selection by manipulating
+// block content — the accumulator evolves every block regardless.
+// Note: raw bytes stored directly (uint64 big-endian), not as a proto message,
+// for efficiency. This message is defined for documentation only.
 message PanelEntropyAccum {
-  uint64 accumulator = 1;
+  uint64 accumulator = 1; // rolling XOR accumulator seeded by block heights
 }
