@@ -1,11 +1,7 @@
 syntax = "proto3";
-
 package types;
-
 option go_package = "github.com/canopy-network/canopy/plugin/go/contract";
-
 import "google/protobuf/any.proto";
-
 message Transaction {
   string              message_type   = 1;
   google.protobuf.Any msg            = 2;
@@ -17,22 +13,18 @@ message Transaction {
   uint64              network_id     = 8;
   uint64              chain_id       = 9;
 }
-
 message Signature {
   bytes public_key = 1;
   bytes signature  = 2;
 }
-
 message FeeParams {
   uint64 send_fee = 1;
 }
-
 message MessageSend {
   bytes  from_address = 1;
   bytes  to_address   = 2;
   uint64 amount       = 3;
 }
-
 message MessageCreateMarket {
   bytes  creator_address = 1;
   uint64 b0              = 2;
@@ -40,7 +32,6 @@ message MessageCreateMarket {
   uint64 nonce           = 4;
   string question        = 5;
 }
-
 message MessageSubmitPrediction {
   bytes  bettor_address = 1;
   bytes  market_id      = 2;
@@ -48,58 +39,48 @@ message MessageSubmitPrediction {
   uint64 amount         = 4;
   uint64 max_cost       = 5;
 }
-
 message MessageClaimWinnings {
   bytes market_id        = 1;
   bytes claimant_address = 2;
 }
-
 message MessageRegisterResolver {
   bytes  resolver_address = 1;
   uint64 stake_amount     = 2;
 }
-
 message MessageProposeOutcome {
   bytes  market_id        = 1;
   bytes  resolver_address = 2;
   bool   proposed_outcome = 3;
   uint64 proposal_bond    = 4;
 }
-
 message MessageFileDispute {
   bytes  market_id        = 1;
   bytes  disputer_address = 2;
   uint64 dispute_bond     = 3;
 }
-
 message MessageCommitVote {
   bytes market_id   = 1;
   bytes voter_addr  = 2;
   bytes commit_hash = 3;
 }
-
 message MessageRevealVote {
   bytes market_id  = 1;
   bytes voter_addr = 2;
   bool  vote       = 3;
   bytes nonce      = 4;
 }
-
 message MessageTallyVotes {
   bytes market_id   = 1;
   bytes caller_addr = 2;
 }
-
 message MessageFinalizeMarket {
   bytes market_id   = 1;
   bytes caller_addr = 2;
 }
-
 message MessageClaimSlash {
   bytes market_id        = 1;
   bytes claimant_address = 2;
 }
-
 message MarketState {
   uint32 status          = 1;
   uint64 expiry_time     = 2;
@@ -112,34 +93,28 @@ message MarketState {
   uint64 open_time       = 9;
   bool   elevated_risk   = 10;
 }
-
 message PositionState {
   uint64 shares_yes = 1;
   uint64 shares_no  = 2;
   uint64 cost_paid  = 3;
   bool   claimed    = 4;
 }
-
 message OutcomeState {
   bool   winning_outcome = 1;
   uint64 resolved_at     = 2;
 }
-
 message TreasuryReserve {
   uint64 locked_reserve = 1;
 }
-
 message ResolverState {
   bytes resolver_address = 1;
 }
-
 message ResolverRecord {
   bytes  resolver_address = 1;
   uint64 stake_amount     = 2;
   uint64 rrs_score        = 3;
   uint64 registered_at    = 4;
 }
-
 message ProposalRecord {
   bytes  resolver_addr    = 1;
   bool   proposed_outcome = 2;
@@ -147,7 +122,6 @@ message ProposalRecord {
   uint64 proposal_block   = 4;
   uint32 status           = 5;
 }
-
 message DisputeRecord {
   bytes  disputer_address = 1;
   uint64 dispute_bond     = 2;
@@ -155,25 +129,21 @@ message DisputeRecord {
   uint32 vote_status      = 4;
   uint32 panel_size       = 5;
 }
-
 message VoteCommit {
   bytes  voter_addr   = 1;
   bytes  commit_hash  = 2;
   uint64 committed_at = 3;
 }
-
 message VoteReveal {
   bytes  voter_addr  = 1;
   bool   vote        = 2;
   uint64 revealed_at = 3;
 }
-
 message SlashRecord {
   bytes  slashed_address = 1;
   uint64 slash_amount    = 2;
   uint64 slashed_at      = 3;
 }
-
 message PanelEntropyAccum {
   uint64 accumulator = 1;
 }
