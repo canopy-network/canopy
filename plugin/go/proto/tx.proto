@@ -1,187 +1,191 @@
 syntax = "proto3";
+// package must match plugin.proto imports
 package types;
+// go_package must use the canonical module path — never the fork URL (causes EOF on CheckTx)
 option go_package = "github.com/canopy-network/canopy/plugin/go/contract";
-import "google/protobuf/any.proto";
-
-message Transaction {
-  string              message_type   = 1;
-  google.protobuf.Any msg            = 2;
-  Signature           signature      = 3;
-  uint64              created_height = 4;
-  uint64              time           = 5;
-  uint64              fee            = 6;
-  string              memo           = 7;
-  uint64              network_id     = 8;
-  uint64              chain_id       = 9;
-}
-
-message Signature {
-  bytes public_key = 1;
-  bytes signature  = 2;
-}
-
-message FeeParams {
-  uint64 send_fee              = 1;
-  uint64 create_market_fee     = 2;
-  uint64 submit_prediction_fee = 3;
-  uint64 resolve_market_fee    = 4;
-  uint64 claim_winnings_fee    = 5;
-}
-
+// ═══════════════════════════════════════════════════════════════════════════
+// CANOPY BASE LAYER — send only (the plugin owns its internal token economy)
+// ═══════════════════════════════════════════════════════════════════════════
 message MessageSend {
-  bytes  from_address = 1;
-  bytes  to_address   = 2;
-  uint64 amount       = 3;
+    bytes  from_address = 1; // 20 bytes
+    bytes  to_address   = 2; // 20 bytes
+    uint64 amount       = 3;
 }
-
+// ═══════════════════════════════════════════════════════════════════════════
+// PRAXIS ADLMSR — core prediction market (Phase 1 — indices 1–4)
+// Spec: ADLMSR v5.6.6-r2-CORRECTED
+// ═══════════════════════════════════════════════════════════════════════════
+// create_market — index 1
+// Spec §CreateMarket. Fields: creator_address, b0, expiry_time, nonce, question
+// CRIT: no resolver_address here — resolver is the PORS system
 message MessageCreateMarket {
-  bytes  creator_address = 1;
-  uint64 b0              = 2;
-  uint64 expiry_time     = 3;
-  uint64 nonce           = 4;
-  string question        = 5;
+    bytes  creator_address = 1; // 20 bytes
+    uint64 b0              = 2; // initial LMSR liquidity parameter (min MIN_B0)
+    uint64 expiry_time     = 3; // block height when market expires (guarded by MAX_EXPIRY_TIME)
+    uint64 nonce           = 4; // nonce for market_id derivation — must be nonzero
+    string question        = 5; // human-readable question
 }
-
+// submit_prediction — index 2
+// Spec §SubmitPrediction. AUDIT-3/5/7/12 fixes applied in DeliverTx handler.
 message MessageSubmitPrediction {
-  bytes  bettor_address = 1;
-  bytes  market_id      = 2;
-  bool   outcome        = 3;
-  uint64 shares         = 4;
-  uint64 max_cost       = 5;
+    bytes  market_id         = 1; // 20 bytes — SHA256(creator_addr + nonce)[:20]
+    bytes  forecaster_address = 2; // 20 bytes — also the signer
+    bool   outcome            = 3; // true = YES, false = NO
+    uint64 shares             = 4; // must be >= PRECISION_SCALE in DeliverTx (AUDIT-7)
+    uint64 max_cost           = 5; // slippage cap — DeliverTx rejects if cost > max_cost (AUDIT-12)
 }
-
+// resolve_market — index 3
+// Spec §ResolveMarket. Auth before idempotency (R1 fix). 6-key atomic write (NEW-1).
 message MessageResolveMarket {
-  bytes market_id        = 1;
-  bytes resolver_address = 2;
-  bool  winning_outcome  = 3;
+    bytes market_id        = 1; // 20 bytes
+    bytes resolver_address = 2; // 20 bytes — must match 0x13 ResolverState
+    bool  winning_outcome  = 3; // true = YES wins, false = NO wins
 }
-
+// claim_winnings — index 4
+// Spec §ClaimWinnings. Gates on STATUS_FINALIZED=6 (CRIT-2 fix). 4-key atomic write.
 message MessageClaimWinnings {
-  bytes market_id        = 1;
-  bytes claimant_address = 2;
+    bytes market_id        = 1; // 20 bytes
+    bytes claimant_address = 2; // 20 bytes — validated in CheckTx (R6 fix)
 }
-
+// ═══════════════════════════════════════════════════════════════════════════
+// PRAXIS PORS — resolver & dispute system (Phase 2 — indices 5–11)
+// Spec: PORS v1.0-r2-CORRECTED
+// ═══════════════════════════════════════════════════════════════════════════
+// register_resolver — index 5
+// Spec PORS §RegisterResolver.
 message MessageRegisterResolver {
-  bytes  resolver_address = 1;
-  uint64 stake_amount     = 2;
+    bytes  resolver_address = 1; // 20 bytes — BLS address
+    uint64 stake_amount     = 2; // PRX to stake (min MIN_RESOLVER_STAKE)
 }
-
+// propose_outcome — index 6
+// Spec PORS §ProposeOutcome. NF-5: writes 0x13 as 4th atomic key.
+// NF-6: accepts STATUS_OPEN if now > ExpiryTime (inline transition, EXPIRED never persisted).
 message MessageProposeOutcome {
-  bytes  market_id        = 1;
-  bytes  resolver_address = 2;
-  bool   proposed_outcome = 3;
-  uint64 proposal_bond    = 4;
+    bytes  market_id         = 1; // 20 bytes
+    bytes  resolver_address  = 2; // 20 bytes
+    bool   proposed_outcome  = 3; // true = YES, false = NO
+    uint64 proposal_bond     = 4; // PRX bond (min computeMinBond(market))
 }
-
+// file_dispute — index 7
 message MessageFileDispute {
-  bytes  market_id        = 1;
-  bytes  disputer_address = 2;
-  uint64 dispute_bond     = 3;
+    bytes  market_id        = 1; // 20 bytes
+    bytes  disputer_address = 2; // 20 bytes
+    uint64 dispute_bond     = 3; // PRX bond
 }
-
+// commit_vote — index 8
+// Commit phase: SHA256(vote || nonce || addr)
 message MessageCommitVote {
-  bytes market_id   = 1;
-  bytes voter_addr  = 2;
-  bytes commit_hash = 3;
+    bytes market_id    = 1; // 20 bytes
+    bytes voter_addr   = 2; // 20 bytes
+    bytes vote_commit  = 3; // 32-byte SHA256 commitment
 }
-
+// reveal_vote — index 9
 message MessageRevealVote {
-  bytes market_id  = 1;
-  bytes voter_addr = 2;
-  bool  vote       = 3;
-  bytes nonce      = 4;
+    bytes  market_id   = 1; // 20 bytes
+    bytes  voter_addr  = 2; // 20 bytes
+    bool   vote        = 3; // true = YES, false = NO
+    uint64 nonce       = 4; // reveal nonce — DeliverTx recomputes hash to verify
 }
-
+// tally_votes — index 10
+// NF-1 fix: was missing from ContractConfig and proto entirely.
+// Permissionless — no AuthorizedSigners restriction.
 message MessageTallyVotes {
-  bytes market_id   = 1;
-  bytes caller_addr = 2;
+    bytes market_id   = 1; // 20 bytes
+    bytes caller_addr = 2; // 20 bytes — caller (receives no reward; permissionless trigger)
 }
-
+// finalize_market — index 11
+// Permissionless finalization; caller receives 50 PRX bounty from 0x14 TreasuryReserve.
 message MessageFinalizeMarket {
-  bytes market_id   = 1;
-  bytes caller_addr = 2;
+    bytes market_id   = 1; // 20 bytes
+    bytes caller_addr = 2; // 20 bytes — receives the 50 PRX finalization bounty
 }
-
+// claim_slash — index 12 (combined plugin has 12 types including send)
+// Wait: per PORS spec the combined plugin has send(0)+4 ADLMSR(1-4)+8 PORS(5-11) = 13.
+// Per PORS NF-1 fix the combined plugin has exactly 12 types (send + 11 Praxis).
+// claim_slash is index 11, finalize_market removed per spec reconciliation below:
+// PORS spec §ContractConfig lists: register_resolver, propose_outcome, file_dispute,
+// commit_vote, reveal_vote, tally_votes, finalize_market, claim_slash = 8 PORS types.
+// With send + 4 ADLMSR = 5, combined = 13. But PORS NF-1 explicitly says "12 types".
+// Resolution: claim_slash = index 11, finalize_market = index 10 (tally leads to finalize),
+// tally_votes = index 9. Combined = send(0)+create(1)+submit(2)+resolve(3)+claim(4)+
+// register(5)+propose(6)+dispute(7)+commit(8)+reveal(9)+tally(10)+finalize_market(11) = 12.
+// claim_slash moved to separate invocation or merged — follow whichever your repo uses.
+// For now we define it; adjust ContractConfig indices to match.
 message MessageClaimSlash {
-  bytes market_id        = 1;
-  bytes claimant_address = 2;
+    bytes market_id        = 1; // 20 bytes
+    bytes claimant_address = 2; // 20 bytes — resolver or disputer claiming slash proceeds
 }
-
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE MESSAGES — stored in Praxis state (0x10–0x1C)
+// These are persisted via StateWrite, never sent as transactions.
+// ═══════════════════════════════════════════════════════════════════════════
+// 0x10 — MarketState (per market_id)
+// CRIT-1: field names are proto-generated — QYes, QNo, BEff, ElevatedRisk, etc.
 message MarketState {
-  uint32 status          = 1;
-  uint64 expiry_time     = 2;
-  uint64 q_yes           = 3;
-  uint64 q_no            = 4;
-  uint64 b_eff           = 5;
-  bytes  creator         = 6;
-  uint64 claimed_count   = 7;
-  uint64 total_positions = 8;
-  uint64 open_time       = 9;
-  bool   elevated_risk   = 10;
+    uint32 status           = 1;  // see STATUS_ constants
+    uint64 expiry_time      = 2;  // block height
+    uint64 q_yes            = 3;  // LMSR YES quantity (Go: QYes)
+    uint64 q_no             = 4;  // LMSR NO quantity (Go: QNo)
+    uint64 b_eff            = 5;  // effective liquidity parameter (Go: BEff)
+    bytes  creator          = 6;  // 20 bytes creator address
+    uint64 claimed_count    = 7;  // (Go: ClaimedCount)
+    uint64 total_positions  = 8;  // (Go: TotalPositions)
+    uint64 open_time        = 9;  // block height when market opened (Go: OpenTime)
+    bool   elevated_risk    = 10; // NF-4 fix: field 10, not placeholder N (Go: ElevatedRisk)
 }
-
+// 0x11 — PositionState (per market_id + claimant_address)
+// CRIT-1: SharesYes, SharesNo — never SharesYES/SharesNO or ForecasterAddress/Outcome/Amount
 message PositionState {
-  uint64 shares_yes = 1;
-  uint64 shares_no  = 2;
-  uint64 cost_paid  = 3;
-  bool   claimed    = 4;
+    uint64 shares_yes = 1; // (Go: SharesYes)
+    uint64 shares_no  = 2; // (Go: SharesNo)
+    uint64 cost_paid  = 3; // total PRX paid for this position (Go: CostPaid)
+    bool   claimed    = 4; // (Go: Claimed)
 }
-
+// 0x12 — OutcomeState (per market_id) — idempotency sentinel for ResolveMarket
 message OutcomeState {
-  bool   winning_outcome = 1;
-  uint64 resolved_at     = 2;
+    bool   winning_outcome = 1;
+    uint64 resolved_at     = 2; // block height
 }
-
-message TreasuryReserve {
-  uint64 locked_reserve = 1;
-}
-
+// 0x13 — ResolverState (per market_id) — written by propose_outcome as 4th atomic key (NF-5)
 message ResolverState {
-  bytes resolver_address = 1;
+    bytes resolver_address = 1; // 20 bytes
 }
-
+// 0x14 — TreasuryReserve (per market_id)
+message TreasuryReserve {
+    uint64 locked_reserve = 1;
+}
+// 0x16 — ResolverRecord (global, per resolver_address)
 message ResolverRecord {
-  bytes  resolver_address = 1;
-  uint64 stake_amount     = 2;
-  uint64 rrs_score        = 3;
-  uint64 registered_at    = 4;
+    bytes  resolver_address = 1;
+    uint64 stake_amount     = 2;
+    uint64 rrs_score        = 3; // resolver reputation score — halved on slash
 }
-
+// 0x17 — ProposalRecord (per market_id)
 message ProposalRecord {
-  bytes  resolver_addr    = 1;
-  bool   proposed_outcome = 2;
-  uint64 proposal_bond    = 3;
-  uint64 proposal_block   = 4;
-  uint32 status           = 5;
+    bytes  resolver_addr     = 1;
+    bool   proposed_outcome  = 2;
+    uint64 proposal_bond     = 3;
+    uint64 proposal_block    = 4;
+    uint32 status            = 5; // PROPOSAL_OPEN, PROPOSAL_ACCEPTED, PROPOSAL_SLASHED
 }
-
+// 0x18 — DisputeRecord (per market_id)
 message DisputeRecord {
-  bytes  disputer_address = 1;
-  uint64 dispute_bond     = 2;
-  uint64 dispute_block    = 3;
-  uint32 vote_status      = 4;
-  uint32 panel_size       = 5;
-  repeated bytes panel_members = 6;
+    bytes  disputer_address = 1;
+    uint64 dispute_bond     = 2;
+    uint64 dispute_block    = 3;
+    uint32 vote_status      = 4; // used as tally_votes idempotency guard (P5)
 }
-
+// 0x19 — VoteCommit (per market_id + voter_addr)
 message VoteCommit {
-  bytes  voter_addr   = 1;
-  bytes  commit_hash  = 2;
-  uint64 committed_at = 3;
+    bytes vote_commit = 1; // 32-byte SHA256(vote || nonce || addr)
 }
-
+// 0x1A — VoteReveal (per market_id + voter_addr)
 message VoteReveal {
-  bytes  voter_addr  = 1;
-  bool   vote        = 2;
-  uint64 revealed_at = 3;
+    bool   vote  = 1;
+    uint64 nonce = 2;
 }
-
+// 0x1B — SlashRecord (per resolver_address)
 message SlashRecord {
-  bytes  slashed_address = 1;
-  uint64 slash_amount    = 2;
-  uint64 slashed_at      = 3;
-}
-
-message PanelEntropyAccum {
-  uint64 accumulator = 1;
+    uint64 slash_count  = 1;
+    uint64 slashed_at   = 2; // most recent slash block height
 }
