@@ -122,9 +122,40 @@ return &PluginGenesisResponse{}
 }
 
 // BeginBlock is called at the start of every block before any transactions.
-// Sets the global height so DeliverTx handlers can reference it (AUDIT-9).
+// Sets the global height (AUDIT-9) and updates the 0x1C entropy accumulator (NF-2).
+// Write failure is non-fatal — accumulator stays at last committed value (accepted degradation).
 func (c *Contract) BeginBlock(req *PluginBeginRequest) *PluginBeginResponse {
 SetGlobalHeight(req.Height)
+
+// NF-2: update rolling entropy accumulator at 0x1C.
+entropyQId := nextQueryId()
+entropyResp, readErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: entropyQId, Key: PANEL_ENTROPY_KEY},
+},
+})
+var acc uint64
+if readErr == nil && entropyResp != nil && entropyResp.Error == nil {
+for _, r := range entropyResp.Results {
+if r.QueryId == entropyQId && len(r.Entries) > 0 {
+accMsg := &PanelEntropyAccum{}
+if Unmarshal(r.Entries[0].Value, accMsg) == nil {
+acc = accMsg.Accumulator
+}
+}
+}
+}
+acc ^= req.Height * FIBONACCI_HASH_CONSTANT
+rawAcc, mErr := SafeMarshal(&PanelEntropyAccum{Accumulator: acc})
+if mErr == nil {
+wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+Sets: []*PluginSetOp{
+{Key: PANEL_ENTROPY_KEY, Value: rawAcc},
+},
+})
+// NF-2: capture result — non-fatal on failure, log would go here in production.
+_ = errCheckWrite(wr, werr)
+}
 return &PluginBeginResponse{}
 }
 
