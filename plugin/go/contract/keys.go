@@ -177,3 +177,10 @@ b := make([]byte, 8)
 binary.BigEndian.PutUint64(b, u)
 return b
 }
+
+// KeyForMarketPool returns the state key for a per-market liquidity pool.
+// Uses the same 0x02 prefix as the chain fee pool but keyed by market_id.
+// The JoinLenPrefix encoding ensures no collision with KeyForFeePool(chainId).
+func KeyForMarketPool(marketId []byte) []byte {
+return JoinLenPrefix(poolPrefix, marketId)
+}
