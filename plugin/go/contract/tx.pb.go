@@ -183,10 +183,14 @@ func (x *Signature) GetSignature() []byte {
 }
 
 type FeeParams struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SendFee       uint64                 `protobuf:"varint,1,opt,name=send_fee,json=sendFee,proto3" json:"send_fee,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SendFee             uint64                 `protobuf:"varint,1,opt,name=send_fee,json=sendFee,proto3" json:"send_fee,omitempty"`
+	CreateMarketFee     uint64                 `protobuf:"varint,2,opt,name=create_market_fee,json=createMarketFee,proto3" json:"create_market_fee,omitempty"`
+	SubmitPredictionFee uint64                 `protobuf:"varint,3,opt,name=submit_prediction_fee,json=submitPredictionFee,proto3" json:"submit_prediction_fee,omitempty"`
+	ResolveMarketFee    uint64                 `protobuf:"varint,4,opt,name=resolve_market_fee,json=resolveMarketFee,proto3" json:"resolve_market_fee,omitempty"`
+	ClaimWinningsFee    uint64                 `protobuf:"varint,5,opt,name=claim_winnings_fee,json=claimWinningsFee,proto3" json:"claim_winnings_fee,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *FeeParams) Reset() {
@@ -222,6 +226,34 @@ func (*FeeParams) Descriptor() ([]byte, []int) {
 func (x *FeeParams) GetSendFee() uint64 {
 	if x != nil {
 		return x.SendFee
+	}
+	return 0
+}
+
+func (x *FeeParams) GetCreateMarketFee() uint64 {
+	if x != nil {
+		return x.CreateMarketFee
+	}
+	return 0
+}
+
+func (x *FeeParams) GetSubmitPredictionFee() uint64 {
+	if x != nil {
+		return x.SubmitPredictionFee
+	}
+	return 0
+}
+
+func (x *FeeParams) GetResolveMarketFee() uint64 {
+	if x != nil {
+		return x.ResolveMarketFee
+	}
+	return 0
+}
+
+func (x *FeeParams) GetClaimWinningsFee() uint64 {
+	if x != nil {
+		return x.ClaimWinningsFee
 	}
 	return 0
 }
@@ -1801,9 +1833,13 @@ const file_tx_proto_rawDesc = "" +
 	"\tSignature\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1c\n" +
-	"\tsignature\x18\x02 \x01(\fR\tsignature\"&\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\"\xe2\x01\n" +
 	"\tFeeParams\x12\x19\n" +
-	"\bsend_fee\x18\x01 \x01(\x04R\asendFee\"g\n" +
+	"\bsend_fee\x18\x01 \x01(\x04R\asendFee\x12*\n" +
+	"\x11create_market_fee\x18\x02 \x01(\x04R\x0fcreateMarketFee\x122\n" +
+	"\x15submit_prediction_fee\x18\x03 \x01(\x04R\x13submitPredictionFee\x12,\n" +
+	"\x12resolve_market_fee\x18\x04 \x01(\x04R\x10resolveMarketFee\x12,\n" +
+	"\x12claim_winnings_fee\x18\x05 \x01(\x04R\x10claimWinningsFee\"g\n" +
 	"\vMessageSend\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
 	"\n" +
