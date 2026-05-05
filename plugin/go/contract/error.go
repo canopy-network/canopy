@@ -241,3 +241,35 @@ return nil
 func ErrCheckResp(err *PluginError) *PluginCheckResponse {
 return &PluginCheckResponse{Error: err}
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLUGIN INFRASTRUCTURE ERRORS — required by plugin.go (never modify plugin.go)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Error() satisfies the error interface so plugin.go can call err.Error().
+func (e *PluginError) Error() string {
+if e == nil {
+return ""
+}
+return e.Module + ": " + e.Msg
+}
+
+func ErrUnexpectedFSMToPlugin(t interface{}) *PluginError {
+return &PluginError{Code: 7, Module: errModule, Msg: "unexpected FSM-to-plugin message type"}
+}
+
+func ErrInvalidFSMToPluginMMessage(t interface{}) *PluginError {
+return &PluginError{Code: 8, Module: errModule, Msg: "invalid FSM-to-plugin message"}
+}
+
+func ErrInvalidPluginRespId() *PluginError {
+return &PluginError{Code: 6, Module: errModule, Msg: "invalid plugin response id"}
+}
+
+func ErrFailedPluginWrite(err error) *PluginError {
+return &PluginError{Code: 5, Module: errModule, Msg: "plugin socket write failed: " + err.Error()}
+}
+
+func ErrFailedPluginRead(err error) *PluginError {
+return &PluginError{Code: 4, Module: errModule, Msg: "plugin socket read failed: " + err.Error()}
+}
