@@ -161,6 +161,7 @@ message DisputeRecord {
   uint64 dispute_block    = 3;
   uint32 vote_status      = 4;
   uint32 panel_size       = 5;
+  repeated bytes panel_members = 6;
 }
 
 message VoteCommit {

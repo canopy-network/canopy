@@ -1521,6 +1521,7 @@ type DisputeRecord struct {
 	DisputeBlock    uint64                 `protobuf:"varint,3,opt,name=dispute_block,json=disputeBlock,proto3" json:"dispute_block,omitempty"`
 	VoteStatus      uint32                 `protobuf:"varint,4,opt,name=vote_status,json=voteStatus,proto3" json:"vote_status,omitempty"`
 	PanelSize       uint32                 `protobuf:"varint,5,opt,name=panel_size,json=panelSize,proto3" json:"panel_size,omitempty"`
+	PanelMembers    [][]byte               `protobuf:"bytes,6,rep,name=panel_members,json=panelMembers,proto3" json:"panel_members,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1588,6 +1589,13 @@ func (x *DisputeRecord) GetPanelSize() uint32 {
 		return x.PanelSize
 	}
 	return 0
+}
+
+func (x *DisputeRecord) GetPanelMembers() [][]byte {
+	if x != nil {
+		return x.PanelMembers
+	}
+	return nil
 }
 
 type VoteCommit struct {
@@ -1937,7 +1945,7 @@ const file_tx_proto_rawDesc = "" +
 	"\x10proposed_outcome\x18\x02 \x01(\bR\x0fproposedOutcome\x12#\n" +
 	"\rproposal_bond\x18\x03 \x01(\x04R\fproposalBond\x12%\n" +
 	"\x0eproposal_block\x18\x04 \x01(\x04R\rproposalBlock\x12\x16\n" +
-	"\x06status\x18\x05 \x01(\rR\x06status\"\xc2\x01\n" +
+	"\x06status\x18\x05 \x01(\rR\x06status\"\xe7\x01\n" +
 	"\rDisputeRecord\x12)\n" +
 	"\x10disputer_address\x18\x01 \x01(\fR\x0fdisputerAddress\x12!\n" +
 	"\fdispute_bond\x18\x02 \x01(\x04R\vdisputeBond\x12#\n" +
@@ -1945,7 +1953,8 @@ const file_tx_proto_rawDesc = "" +
 	"\vvote_status\x18\x04 \x01(\rR\n" +
 	"voteStatus\x12\x1d\n" +
 	"\n" +
-	"panel_size\x18\x05 \x01(\rR\tpanelSize\"o\n" +
+	"panel_size\x18\x05 \x01(\rR\tpanelSize\x12#\n" +
+	"\rpanel_members\x18\x06 \x03(\fR\fpanelMembers\"o\n" +
 	"\n" +
 	"VoteCommit\x12\x1d\n" +
 	"\n" +
