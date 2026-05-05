@@ -1,6 +1,8 @@
 module github.com/canopy-network/go-plugin/tutorial
 
-go 1.25
+go 1.24.0
+
+toolchain go1.24.2
 
 require (
 	github.com/drand/kyber v1.3.2
