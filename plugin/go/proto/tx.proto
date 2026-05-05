@@ -107,6 +107,7 @@ message MessageCreateMarket {
 //
 // Authorized signer: bettor_address
 message MessageSubmitPrediction {
+<<<<<<< Updated upstream
   bytes  bettor_address = 1; // 20-byte bettor
   bytes  market_id      = 2; // 20-byte market identifier
   bool   outcome        = 3; // true = YES, false = NO
@@ -144,6 +145,21 @@ message MessageResolveMarket {
 // Surplus sweep triggers when all positions claimed or grace period ends.
 //
 // Authorized signer: claimant_address
+=======
+  bytes  bettor_address = 1;
+  bytes  market_id      = 2;
+  bool   outcome        = 3;
+  uint64 shares         = 4;
+  uint64 max_cost       = 5;
+}
+
+message MessageResolveMarket {
+  bytes market_id        = 1;
+  bytes resolver_address = 2;
+  bool  winning_outcome  = 3;
+}
+
+>>>>>>> Stashed changes
 message MessageClaimWinnings {
   bytes market_id        = 1; // 20-byte market identifier
   bytes claimant_address = 2; // 20-byte bettor claiming their winnings

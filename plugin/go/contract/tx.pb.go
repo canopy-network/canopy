@@ -367,7 +367,7 @@ type MessageSubmitPrediction struct {
 	BettorAddress []byte                 `protobuf:"bytes,1,opt,name=bettor_address,json=bettorAddress,proto3" json:"bettor_address,omitempty"`
 	MarketId      []byte                 `protobuf:"bytes,2,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
 	Outcome       bool                   `protobuf:"varint,3,opt,name=outcome,proto3" json:"outcome,omitempty"`
-	Amount        uint64                 `protobuf:"varint,4,opt,name=amount,proto3" json:"amount,omitempty"`
+	Shares        uint64                 `protobuf:"varint,4,opt,name=shares,proto3" json:"shares,omitempty"`
 	MaxCost       uint64                 `protobuf:"varint,5,opt,name=max_cost,json=maxCost,proto3" json:"max_cost,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -424,9 +424,9 @@ func (x *MessageSubmitPrediction) GetOutcome() bool {
 	return false
 }
 
-func (x *MessageSubmitPrediction) GetAmount() uint64 {
+func (x *MessageSubmitPrediction) GetShares() uint64 {
 	if x != nil {
-		return x.Amount
+		return x.Shares
 	}
 	return 0
 }
@@ -436,6 +436,66 @@ func (x *MessageSubmitPrediction) GetMaxCost() uint64 {
 		return x.MaxCost
 	}
 	return 0
+}
+
+type MessageResolveMarket struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	ResolverAddress []byte                 `protobuf:"bytes,2,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
+	WinningOutcome  bool                   `protobuf:"varint,3,opt,name=winning_outcome,json=winningOutcome,proto3" json:"winning_outcome,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageResolveMarket) Reset() {
+	*x = MessageResolveMarket{}
+	mi := &file_tx_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageResolveMarket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageResolveMarket) ProtoMessage() {}
+
+func (x *MessageResolveMarket) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageResolveMarket.ProtoReflect.Descriptor instead.
+func (*MessageResolveMarket) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MessageResolveMarket) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageResolveMarket) GetResolverAddress() []byte {
+	if x != nil {
+		return x.ResolverAddress
+	}
+	return nil
+}
+
+func (x *MessageResolveMarket) GetWinningOutcome() bool {
+	if x != nil {
+		return x.WinningOutcome
+	}
+	return false
 }
 
 type MessageClaimWinnings struct {
@@ -448,7 +508,7 @@ type MessageClaimWinnings struct {
 
 func (x *MessageClaimWinnings) Reset() {
 	*x = MessageClaimWinnings{}
-	mi := &file_tx_proto_msgTypes[6]
+	mi := &file_tx_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -460,7 +520,7 @@ func (x *MessageClaimWinnings) String() string {
 func (*MessageClaimWinnings) ProtoMessage() {}
 
 func (x *MessageClaimWinnings) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[6]
+	mi := &file_tx_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -473,7 +533,7 @@ func (x *MessageClaimWinnings) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageClaimWinnings.ProtoReflect.Descriptor instead.
 func (*MessageClaimWinnings) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{6}
+	return file_tx_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *MessageClaimWinnings) GetMarketId() []byte {
@@ -500,7 +560,7 @@ type MessageRegisterResolver struct {
 
 func (x *MessageRegisterResolver) Reset() {
 	*x = MessageRegisterResolver{}
-	mi := &file_tx_proto_msgTypes[7]
+	mi := &file_tx_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -512,7 +572,7 @@ func (x *MessageRegisterResolver) String() string {
 func (*MessageRegisterResolver) ProtoMessage() {}
 
 func (x *MessageRegisterResolver) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[7]
+	mi := &file_tx_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -525,7 +585,7 @@ func (x *MessageRegisterResolver) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageRegisterResolver.ProtoReflect.Descriptor instead.
 func (*MessageRegisterResolver) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{7}
+	return file_tx_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *MessageRegisterResolver) GetResolverAddress() []byte {
@@ -554,7 +614,7 @@ type MessageProposeOutcome struct {
 
 func (x *MessageProposeOutcome) Reset() {
 	*x = MessageProposeOutcome{}
-	mi := &file_tx_proto_msgTypes[8]
+	mi := &file_tx_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +626,7 @@ func (x *MessageProposeOutcome) String() string {
 func (*MessageProposeOutcome) ProtoMessage() {}
 
 func (x *MessageProposeOutcome) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[8]
+	mi := &file_tx_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +639,7 @@ func (x *MessageProposeOutcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageProposeOutcome.ProtoReflect.Descriptor instead.
 func (*MessageProposeOutcome) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{8}
+	return file_tx_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *MessageProposeOutcome) GetMarketId() []byte {
@@ -621,7 +681,7 @@ type MessageFileDispute struct {
 
 func (x *MessageFileDispute) Reset() {
 	*x = MessageFileDispute{}
-	mi := &file_tx_proto_msgTypes[9]
+	mi := &file_tx_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -633,7 +693,7 @@ func (x *MessageFileDispute) String() string {
 func (*MessageFileDispute) ProtoMessage() {}
 
 func (x *MessageFileDispute) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[9]
+	mi := &file_tx_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -646,7 +706,7 @@ func (x *MessageFileDispute) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageFileDispute.ProtoReflect.Descriptor instead.
 func (*MessageFileDispute) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{9}
+	return file_tx_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *MessageFileDispute) GetMarketId() []byte {
@@ -681,7 +741,7 @@ type MessageCommitVote struct {
 
 func (x *MessageCommitVote) Reset() {
 	*x = MessageCommitVote{}
-	mi := &file_tx_proto_msgTypes[10]
+	mi := &file_tx_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -693,7 +753,7 @@ func (x *MessageCommitVote) String() string {
 func (*MessageCommitVote) ProtoMessage() {}
 
 func (x *MessageCommitVote) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[10]
+	mi := &file_tx_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -706,7 +766,7 @@ func (x *MessageCommitVote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCommitVote.ProtoReflect.Descriptor instead.
 func (*MessageCommitVote) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{10}
+	return file_tx_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *MessageCommitVote) GetMarketId() []byte {
@@ -742,7 +802,7 @@ type MessageRevealVote struct {
 
 func (x *MessageRevealVote) Reset() {
 	*x = MessageRevealVote{}
-	mi := &file_tx_proto_msgTypes[11]
+	mi := &file_tx_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -754,7 +814,7 @@ func (x *MessageRevealVote) String() string {
 func (*MessageRevealVote) ProtoMessage() {}
 
 func (x *MessageRevealVote) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[11]
+	mi := &file_tx_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -767,7 +827,7 @@ func (x *MessageRevealVote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageRevealVote.ProtoReflect.Descriptor instead.
 func (*MessageRevealVote) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{11}
+	return file_tx_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *MessageRevealVote) GetMarketId() []byte {
@@ -808,7 +868,7 @@ type MessageTallyVotes struct {
 
 func (x *MessageTallyVotes) Reset() {
 	*x = MessageTallyVotes{}
-	mi := &file_tx_proto_msgTypes[12]
+	mi := &file_tx_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -820,7 +880,7 @@ func (x *MessageTallyVotes) String() string {
 func (*MessageTallyVotes) ProtoMessage() {}
 
 func (x *MessageTallyVotes) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[12]
+	mi := &file_tx_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -833,7 +893,7 @@ func (x *MessageTallyVotes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageTallyVotes.ProtoReflect.Descriptor instead.
 func (*MessageTallyVotes) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{12}
+	return file_tx_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *MessageTallyVotes) GetMarketId() []byte {
@@ -860,7 +920,7 @@ type MessageFinalizeMarket struct {
 
 func (x *MessageFinalizeMarket) Reset() {
 	*x = MessageFinalizeMarket{}
-	mi := &file_tx_proto_msgTypes[13]
+	mi := &file_tx_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -872,7 +932,7 @@ func (x *MessageFinalizeMarket) String() string {
 func (*MessageFinalizeMarket) ProtoMessage() {}
 
 func (x *MessageFinalizeMarket) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[13]
+	mi := &file_tx_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -885,7 +945,7 @@ func (x *MessageFinalizeMarket) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageFinalizeMarket.ProtoReflect.Descriptor instead.
 func (*MessageFinalizeMarket) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{13}
+	return file_tx_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MessageFinalizeMarket) GetMarketId() []byte {
@@ -912,7 +972,7 @@ type MessageClaimSlash struct {
 
 func (x *MessageClaimSlash) Reset() {
 	*x = MessageClaimSlash{}
-	mi := &file_tx_proto_msgTypes[14]
+	mi := &file_tx_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -924,7 +984,7 @@ func (x *MessageClaimSlash) String() string {
 func (*MessageClaimSlash) ProtoMessage() {}
 
 func (x *MessageClaimSlash) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[14]
+	mi := &file_tx_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -937,7 +997,7 @@ func (x *MessageClaimSlash) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageClaimSlash.ProtoReflect.Descriptor instead.
 func (*MessageClaimSlash) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{14}
+	return file_tx_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MessageClaimSlash) GetMarketId() []byte {
@@ -972,7 +1032,7 @@ type MarketState struct {
 
 func (x *MarketState) Reset() {
 	*x = MarketState{}
-	mi := &file_tx_proto_msgTypes[15]
+	mi := &file_tx_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -984,7 +1044,7 @@ func (x *MarketState) String() string {
 func (*MarketState) ProtoMessage() {}
 
 func (x *MarketState) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[15]
+	mi := &file_tx_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -997,7 +1057,7 @@ func (x *MarketState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketState.ProtoReflect.Descriptor instead.
 func (*MarketState) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{15}
+	return file_tx_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MarketState) GetStatus() uint32 {
@@ -1082,7 +1142,7 @@ type PositionState struct {
 
 func (x *PositionState) Reset() {
 	*x = PositionState{}
-	mi := &file_tx_proto_msgTypes[16]
+	mi := &file_tx_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1094,7 +1154,7 @@ func (x *PositionState) String() string {
 func (*PositionState) ProtoMessage() {}
 
 func (x *PositionState) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[16]
+	mi := &file_tx_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1107,7 +1167,7 @@ func (x *PositionState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PositionState.ProtoReflect.Descriptor instead.
 func (*PositionState) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{16}
+	return file_tx_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PositionState) GetSharesYes() uint64 {
@@ -1148,7 +1208,7 @@ type OutcomeState struct {
 
 func (x *OutcomeState) Reset() {
 	*x = OutcomeState{}
-	mi := &file_tx_proto_msgTypes[17]
+	mi := &file_tx_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1160,7 +1220,7 @@ func (x *OutcomeState) String() string {
 func (*OutcomeState) ProtoMessage() {}
 
 func (x *OutcomeState) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[17]
+	mi := &file_tx_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1173,7 +1233,7 @@ func (x *OutcomeState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OutcomeState.ProtoReflect.Descriptor instead.
 func (*OutcomeState) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{17}
+	return file_tx_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *OutcomeState) GetWinningOutcome() bool {
@@ -1199,7 +1259,7 @@ type TreasuryReserve struct {
 
 func (x *TreasuryReserve) Reset() {
 	*x = TreasuryReserve{}
-	mi := &file_tx_proto_msgTypes[18]
+	mi := &file_tx_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1211,7 +1271,7 @@ func (x *TreasuryReserve) String() string {
 func (*TreasuryReserve) ProtoMessage() {}
 
 func (x *TreasuryReserve) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[18]
+	mi := &file_tx_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1224,7 +1284,7 @@ func (x *TreasuryReserve) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TreasuryReserve.ProtoReflect.Descriptor instead.
 func (*TreasuryReserve) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{18}
+	return file_tx_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *TreasuryReserve) GetLockedReserve() uint64 {
@@ -1243,7 +1303,7 @@ type ResolverState struct {
 
 func (x *ResolverState) Reset() {
 	*x = ResolverState{}
-	mi := &file_tx_proto_msgTypes[19]
+	mi := &file_tx_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1255,7 +1315,7 @@ func (x *ResolverState) String() string {
 func (*ResolverState) ProtoMessage() {}
 
 func (x *ResolverState) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[19]
+	mi := &file_tx_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1268,7 +1328,7 @@ func (x *ResolverState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolverState.ProtoReflect.Descriptor instead.
 func (*ResolverState) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{19}
+	return file_tx_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ResolverState) GetResolverAddress() []byte {
@@ -1290,7 +1350,7 @@ type ResolverRecord struct {
 
 func (x *ResolverRecord) Reset() {
 	*x = ResolverRecord{}
-	mi := &file_tx_proto_msgTypes[20]
+	mi := &file_tx_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1302,7 +1362,7 @@ func (x *ResolverRecord) String() string {
 func (*ResolverRecord) ProtoMessage() {}
 
 func (x *ResolverRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[20]
+	mi := &file_tx_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1315,7 +1375,7 @@ func (x *ResolverRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolverRecord.ProtoReflect.Descriptor instead.
 func (*ResolverRecord) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{20}
+	return file_tx_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ResolverRecord) GetResolverAddress() []byte {
@@ -1359,7 +1419,7 @@ type ProposalRecord struct {
 
 func (x *ProposalRecord) Reset() {
 	*x = ProposalRecord{}
-	mi := &file_tx_proto_msgTypes[21]
+	mi := &file_tx_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1371,7 +1431,7 @@ func (x *ProposalRecord) String() string {
 func (*ProposalRecord) ProtoMessage() {}
 
 func (x *ProposalRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[21]
+	mi := &file_tx_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1384,7 +1444,7 @@ func (x *ProposalRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalRecord.ProtoReflect.Descriptor instead.
 func (*ProposalRecord) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{21}
+	return file_tx_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ProposalRecord) GetResolverAddr() []byte {
@@ -1435,7 +1495,7 @@ type DisputeRecord struct {
 
 func (x *DisputeRecord) Reset() {
 	*x = DisputeRecord{}
-	mi := &file_tx_proto_msgTypes[22]
+	mi := &file_tx_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1447,7 +1507,7 @@ func (x *DisputeRecord) String() string {
 func (*DisputeRecord) ProtoMessage() {}
 
 func (x *DisputeRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[22]
+	mi := &file_tx_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1460,7 +1520,7 @@ func (x *DisputeRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisputeRecord.ProtoReflect.Descriptor instead.
 func (*DisputeRecord) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{22}
+	return file_tx_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DisputeRecord) GetDisputerAddress() []byte {
@@ -1509,7 +1569,7 @@ type VoteCommit struct {
 
 func (x *VoteCommit) Reset() {
 	*x = VoteCommit{}
-	mi := &file_tx_proto_msgTypes[23]
+	mi := &file_tx_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1521,7 +1581,7 @@ func (x *VoteCommit) String() string {
 func (*VoteCommit) ProtoMessage() {}
 
 func (x *VoteCommit) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[23]
+	mi := &file_tx_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1534,7 +1594,7 @@ func (x *VoteCommit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VoteCommit.ProtoReflect.Descriptor instead.
 func (*VoteCommit) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{23}
+	return file_tx_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *VoteCommit) GetVoterAddr() []byte {
@@ -1569,7 +1629,7 @@ type VoteReveal struct {
 
 func (x *VoteReveal) Reset() {
 	*x = VoteReveal{}
-	mi := &file_tx_proto_msgTypes[24]
+	mi := &file_tx_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1581,7 +1641,7 @@ func (x *VoteReveal) String() string {
 func (*VoteReveal) ProtoMessage() {}
 
 func (x *VoteReveal) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[24]
+	mi := &file_tx_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1594,7 +1654,7 @@ func (x *VoteReveal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VoteReveal.ProtoReflect.Descriptor instead.
 func (*VoteReveal) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{24}
+	return file_tx_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *VoteReveal) GetVoterAddr() []byte {
@@ -1629,7 +1689,7 @@ type SlashRecord struct {
 
 func (x *SlashRecord) Reset() {
 	*x = SlashRecord{}
-	mi := &file_tx_proto_msgTypes[25]
+	mi := &file_tx_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1641,7 +1701,7 @@ func (x *SlashRecord) String() string {
 func (*SlashRecord) ProtoMessage() {}
 
 func (x *SlashRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[25]
+	mi := &file_tx_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1654,7 +1714,7 @@ func (x *SlashRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SlashRecord.ProtoReflect.Descriptor instead.
 func (*SlashRecord) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{25}
+	return file_tx_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SlashRecord) GetSlashedAddress() []byte {
@@ -1687,7 +1747,7 @@ type PanelEntropyAccum struct {
 
 func (x *PanelEntropyAccum) Reset() {
 	*x = PanelEntropyAccum{}
-	mi := &file_tx_proto_msgTypes[26]
+	mi := &file_tx_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1699,7 +1759,7 @@ func (x *PanelEntropyAccum) String() string {
 func (*PanelEntropyAccum) ProtoMessage() {}
 
 func (x *PanelEntropyAccum) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[26]
+	mi := &file_tx_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1712,7 +1772,7 @@ func (x *PanelEntropyAccum) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PanelEntropyAccum.ProtoReflect.Descriptor instead.
 func (*PanelEntropyAccum) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{26}
+	return file_tx_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *PanelEntropyAccum) GetAccumulator() uint64 {
@@ -1760,8 +1820,12 @@ const file_tx_proto_rawDesc = "" +
 	"\x0ebettor_address\x18\x01 \x01(\fR\rbettorAddress\x12\x1b\n" +
 	"\tmarket_id\x18\x02 \x01(\fR\bmarketId\x12\x18\n" +
 	"\aoutcome\x18\x03 \x01(\bR\aoutcome\x12\x16\n" +
-	"\x06amount\x18\x04 \x01(\x04R\x06amount\x12\x19\n" +
-	"\bmax_cost\x18\x05 \x01(\x04R\amaxCost\"^\n" +
+	"\x06shares\x18\x04 \x01(\x04R\x06shares\x12\x19\n" +
+	"\bmax_cost\x18\x05 \x01(\x04R\amaxCost\"\x87\x01\n" +
+	"\x14MessageResolveMarket\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10resolver_address\x18\x02 \x01(\fR\x0fresolverAddress\x12'\n" +
+	"\x0fwinning_outcome\x18\x03 \x01(\bR\x0ewinningOutcome\"^\n" +
 	"\x14MessageClaimWinnings\x12\x1b\n" +
 	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
 	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"g\n" +
@@ -1880,7 +1944,7 @@ func file_tx_proto_rawDescGZIP() []byte {
 	return file_tx_proto_rawDescData
 }
 
-var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_tx_proto_goTypes = []any{
 	(*Transaction)(nil),             // 0: types.Transaction
 	(*Signature)(nil),               // 1: types.Signature
@@ -1888,31 +1952,32 @@ var file_tx_proto_goTypes = []any{
 	(*MessageSend)(nil),             // 3: types.MessageSend
 	(*MessageCreateMarket)(nil),     // 4: types.MessageCreateMarket
 	(*MessageSubmitPrediction)(nil), // 5: types.MessageSubmitPrediction
-	(*MessageClaimWinnings)(nil),    // 6: types.MessageClaimWinnings
-	(*MessageRegisterResolver)(nil), // 7: types.MessageRegisterResolver
-	(*MessageProposeOutcome)(nil),   // 8: types.MessageProposeOutcome
-	(*MessageFileDispute)(nil),      // 9: types.MessageFileDispute
-	(*MessageCommitVote)(nil),       // 10: types.MessageCommitVote
-	(*MessageRevealVote)(nil),       // 11: types.MessageRevealVote
-	(*MessageTallyVotes)(nil),       // 12: types.MessageTallyVotes
-	(*MessageFinalizeMarket)(nil),   // 13: types.MessageFinalizeMarket
-	(*MessageClaimSlash)(nil),       // 14: types.MessageClaimSlash
-	(*MarketState)(nil),             // 15: types.MarketState
-	(*PositionState)(nil),           // 16: types.PositionState
-	(*OutcomeState)(nil),            // 17: types.OutcomeState
-	(*TreasuryReserve)(nil),         // 18: types.TreasuryReserve
-	(*ResolverState)(nil),           // 19: types.ResolverState
-	(*ResolverRecord)(nil),          // 20: types.ResolverRecord
-	(*ProposalRecord)(nil),          // 21: types.ProposalRecord
-	(*DisputeRecord)(nil),           // 22: types.DisputeRecord
-	(*VoteCommit)(nil),              // 23: types.VoteCommit
-	(*VoteReveal)(nil),              // 24: types.VoteReveal
-	(*SlashRecord)(nil),             // 25: types.SlashRecord
-	(*PanelEntropyAccum)(nil),       // 26: types.PanelEntropyAccum
-	(*any1.Any)(nil),                // 27: google.protobuf.Any
+	(*MessageResolveMarket)(nil),    // 6: types.MessageResolveMarket
+	(*MessageClaimWinnings)(nil),    // 7: types.MessageClaimWinnings
+	(*MessageRegisterResolver)(nil), // 8: types.MessageRegisterResolver
+	(*MessageProposeOutcome)(nil),   // 9: types.MessageProposeOutcome
+	(*MessageFileDispute)(nil),      // 10: types.MessageFileDispute
+	(*MessageCommitVote)(nil),       // 11: types.MessageCommitVote
+	(*MessageRevealVote)(nil),       // 12: types.MessageRevealVote
+	(*MessageTallyVotes)(nil),       // 13: types.MessageTallyVotes
+	(*MessageFinalizeMarket)(nil),   // 14: types.MessageFinalizeMarket
+	(*MessageClaimSlash)(nil),       // 15: types.MessageClaimSlash
+	(*MarketState)(nil),             // 16: types.MarketState
+	(*PositionState)(nil),           // 17: types.PositionState
+	(*OutcomeState)(nil),            // 18: types.OutcomeState
+	(*TreasuryReserve)(nil),         // 19: types.TreasuryReserve
+	(*ResolverState)(nil),           // 20: types.ResolverState
+	(*ResolverRecord)(nil),          // 21: types.ResolverRecord
+	(*ProposalRecord)(nil),          // 22: types.ProposalRecord
+	(*DisputeRecord)(nil),           // 23: types.DisputeRecord
+	(*VoteCommit)(nil),              // 24: types.VoteCommit
+	(*VoteReveal)(nil),              // 25: types.VoteReveal
+	(*SlashRecord)(nil),             // 26: types.SlashRecord
+	(*PanelEntropyAccum)(nil),       // 27: types.PanelEntropyAccum
+	(*any1.Any)(nil),                // 28: google.protobuf.Any
 }
 var file_tx_proto_depIdxs = []int32{
-	27, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
+	28, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
 	1,  // 1: types.Transaction.signature:type_name -> types.Signature
 	2,  // [2:2] is the sub-list for method output_type
 	2,  // [2:2] is the sub-list for method input_type
@@ -1932,7 +1997,7 @@ func file_tx_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tx_proto_rawDesc), len(file_tx_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   27,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
