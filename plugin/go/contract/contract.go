@@ -51,6 +51,9 @@ var (
 // ═══════════════════════════════════════════════════════════════════════════
 
 var ContractConfig = &PluginConfig{
+	Name:    "praxis_prediction_market",
+	Id:      1,
+	Version: 1,
 	// Phase 1 — ADLMSR only.
 	// To enable Phase 2 (PORS), swap the commented block below.
 	SupportedTransactions: []string{
