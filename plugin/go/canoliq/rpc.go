@@ -2,27 +2,24 @@ package canoliq
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/canopy-network/go-plugin/contract"
 )
 
 // rpc.go runs an HTTP server inside the plugin process. The server is
-// read-only — every route ultimately calls a Query* helper from query.go,
-// which in turn issues plugin-side StateRead calls. The server shares the
-// long-lived *Plugin (and therefore the same FSM unix socket) with the FSM
-// dispatch loop. Per-request *Canoliq contexts are minted with a fresh
-// rand.Uint64() fsmId so concurrent HTTP requests do not collide in
-// Plugin.pending.
+// read-only and serves entirely from the plugin-side Snapshot built inside
+// EndBlock — see snapshot.go for why we cannot StateRead from outside an
+// FSM-originated lifecycle call.
+//
+// The route surface here is the singleton + index-driven subset of canoliq
+// state. Per-address composite views (account, vesting, redemption-by-id,
+// vote-by-voter, buyback-by-id) are not enumerable from a snapshot and are
+// deferred to Phase 3 §1.1.
 
 // RPCServer is the HTTP read-only query surface. It is created by
 // StartRPCServer and gracefully shut down via Shutdown.
@@ -74,91 +71,45 @@ func (s *RPCServer) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/pools", s.handlePools)
 	mux.HandleFunc("/v1/proposals", s.handleProposals)
 	mux.HandleFunc("/v1/proposal/", s.handleProposal)
-	mux.HandleFunc("/v1/vote/", s.handleVote)
-	mux.HandleFunc("/v1/buyback/", s.handleBuyback)
 	mux.HandleFunc("/v1/spends", s.handleSpends)
 	mux.HandleFunc("/v1/spend/", s.handleSpend)
 	mux.HandleFunc("/v1/validators", s.handleValidators)
-	mux.HandleFunc("/v1/account/", s.handleAccount)
-	mux.HandleFunc("/v1/redemption/", s.handleRedemption)
-	mux.HandleFunc("/v1/vesting/", s.handleVesting)
+	mux.HandleFunc("/v1/stakers", s.handleStakers)
 }
-
-// queryContext mints a per-request *Canoliq sharing the long-lived plugin.
-// The fsmId is randomized so concurrent HTTP requests do not stomp on each
-// other's response channels in Plugin.pending.
-func (s *RPCServer) queryContext() *Canoliq {
-	return &Canoliq{
-		Config:    s.plugin.config,
-		FSMConfig: s.plugin.fsmConfig,
-		plugin:    s.plugin,
-		fsmId:     rand.Uint64(),
-	}
-}
-
-// --- handlers ---
 
 func (s *RPCServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if !methodIs(w, r, http.MethodGet) {
 		return
 	}
-	view, perr := s.queryContext().QueryHealth()
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
+	writeJSON(w, http.StatusOK, s.plugin.QueryHealth())
 }
 
 func (s *RPCServer) handleGlobals(w http.ResponseWriter, r *http.Request) {
 	if !methodIs(w, r, http.MethodGet) {
 		return
 	}
-	g, perr := s.queryContext().QueryGlobals()
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	writeJSON(w, http.StatusOK, g)
+	writeJSON(w, http.StatusOK, s.plugin.QueryGlobals())
 }
 
 func (s *RPCServer) handleParams(w http.ResponseWriter, r *http.Request) {
 	if !methodIs(w, r, http.MethodGet) {
 		return
 	}
-	p, perr := s.queryContext().QueryParams()
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	writeJSON(w, http.StatusOK, p)
+	writeJSON(w, http.StatusOK, s.plugin.QueryParams())
 }
 
 func (s *RPCServer) handlePools(w http.ResponseWriter, r *http.Request) {
 	if !methodIs(w, r, http.MethodGet) {
 		return
 	}
-	view, perr := s.queryContext().QueryPools()
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
+	writeJSON(w, http.StatusOK, s.plugin.QueryPools())
 }
 
 func (s *RPCServer) handleProposals(w http.ResponseWriter, r *http.Request) {
 	if !methodIs(w, r, http.MethodGet) {
 		return
 	}
-	ids, perr := s.queryContext().QueryProposalIndex()
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	if ids == nil {
-		ids = []uint64{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"ids": ids})
+	writeJSON(w, http.StatusOK, map[string]any{"ids": s.plugin.QueryProposalIDs()})
 }
 
 func (s *RPCServer) handleProposal(w http.ResponseWriter, r *http.Request) {
@@ -171,11 +122,7 @@ func (s *RPCServer) handleProposal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	prop, perr := s.queryContext().QueryProposal(id)
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
+	prop := s.plugin.QueryProposal(id)
 	if prop == nil {
 		writeError(w, http.StatusNotFound, "proposal not found")
 		return
@@ -183,73 +130,11 @@ func (s *RPCServer) handleProposal(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, prop)
 }
 
-func (s *RPCServer) handleVote(w http.ResponseWriter, r *http.Request) {
-	if !methodIs(w, r, http.MethodGet) {
-		return
-	}
-	tail := strings.TrimPrefix(r.URL.Path, "/v1/vote/")
-	parts := strings.SplitN(tail, "/", 2)
-	if len(parts) != 2 {
-		writeError(w, http.StatusBadRequest, "expected /v1/vote/{id}/{voter}")
-		return
-	}
-	id, err := parseUint(parts[0])
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	addr, err := parseAddress(parts[1])
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	v, perr := s.queryContext().QueryVote(id, addr)
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	if v == nil {
-		writeError(w, http.StatusNotFound, "vote not found")
-		return
-	}
-	writeJSON(w, http.StatusOK, v)
-}
-
-func (s *RPCServer) handleBuyback(w http.ResponseWriter, r *http.Request) {
-	if !methodIs(w, r, http.MethodGet) {
-		return
-	}
-	tail := strings.TrimPrefix(r.URL.Path, "/v1/buyback/")
-	id, err := parseUint(tail)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	order, perr := s.queryContext().QueryBuybackOrder(id)
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	if order == nil {
-		writeError(w, http.StatusNotFound, "buyback order not found")
-		return
-	}
-	writeJSON(w, http.StatusOK, order)
-}
-
 func (s *RPCServer) handleSpends(w http.ResponseWriter, r *http.Request) {
 	if !methodIs(w, r, http.MethodGet) {
 		return
 	}
-	ids, perr := s.queryContext().QuerySpendIndex()
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	if ids == nil {
-		ids = []uint64{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"ids": ids})
+	writeJSON(w, http.StatusOK, map[string]any{"ids": s.plugin.QuerySpendIDs()})
 }
 
 // handleSpend matches both `/v1/spend/{id}` and `/v1/spend/{id}/approvals`.
@@ -265,23 +150,14 @@ func (s *RPCServer) handleSpend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(parts) == 2 && parts[1] == "approvals" {
-		view, perr := s.queryContext().QueryMultisigApprovals(id)
-		if perr != nil {
-			writePluginError(w, perr)
-			return
-		}
-		writeJSON(w, http.StatusOK, view)
+		writeJSON(w, http.StatusOK, s.plugin.QueryMultisigApprovals(id))
 		return
 	}
 	if len(parts) == 2 && parts[1] != "" {
 		writeError(w, http.StatusNotFound, "unknown spend subresource")
 		return
 	}
-	spend, perr := s.queryContext().QueryTreasurySpend(id)
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
+	spend := s.plugin.QuerySpend(id)
 	if spend == nil {
 		writeError(w, http.StatusNotFound, "spend not found")
 		return
@@ -293,83 +169,14 @@ func (s *RPCServer) handleValidators(w http.ResponseWriter, r *http.Request) {
 	if !methodIs(w, r, http.MethodGet) {
 		return
 	}
-	reg, perr := s.queryContext().QueryValidatorRegistry()
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	writeJSON(w, http.StatusOK, reg)
+	writeJSON(w, http.StatusOK, s.plugin.QueryValidatorRegistry())
 }
 
-func (s *RPCServer) handleAccount(w http.ResponseWriter, r *http.Request) {
+func (s *RPCServer) handleStakers(w http.ResponseWriter, r *http.Request) {
 	if !methodIs(w, r, http.MethodGet) {
 		return
 	}
-	tail := strings.TrimPrefix(r.URL.Path, "/v1/account/")
-	addr, err := parseAddress(tail)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	view, perr := s.queryContext().QueryAccount(addr)
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
-}
-
-func (s *RPCServer) handleRedemption(w http.ResponseWriter, r *http.Request) {
-	if !methodIs(w, r, http.MethodGet) {
-		return
-	}
-	tail := strings.TrimPrefix(r.URL.Path, "/v1/redemption/")
-	parts := strings.SplitN(tail, "/", 2)
-	if len(parts) != 2 {
-		writeError(w, http.StatusBadRequest, "expected /v1/redemption/{addr}/{id}")
-		return
-	}
-	addr, err := parseAddress(parts[0])
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	id, err := parseUint(parts[1])
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	red, perr := s.queryContext().QueryRedemption(addr, id)
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	if red == nil {
-		writeError(w, http.StatusNotFound, "redemption not found")
-		return
-	}
-	writeJSON(w, http.StatusOK, red)
-}
-
-func (s *RPCServer) handleVesting(w http.ResponseWriter, r *http.Request) {
-	if !methodIs(w, r, http.MethodGet) {
-		return
-	}
-	tail := strings.TrimPrefix(r.URL.Path, "/v1/vesting/")
-	addr, err := parseAddress(tail)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	views, perr := s.queryContext().QueryVesting(addr)
-	if perr != nil {
-		writePluginError(w, perr)
-		return
-	}
-	if views == nil {
-		views = []*VestingView{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"address": hexAddress(addr), "schedules": views})
+	writeJSON(w, http.StatusOK, map[string]any{"stakers": s.plugin.QueryStakers()})
 }
 
 // --- shared helpers ---
@@ -398,44 +205,21 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
-// writePluginError maps a *contract.PluginError to an HTTP response.
-// Address-shape failures map to 400; everything else is treated as 500.
-func writePluginError(w http.ResponseWriter, e *contract.PluginError) {
-	if e == nil {
-		writeError(w, http.StatusInternalServerError, "unknown error")
-		return
-	}
-	// Canoliq-side address validation errors carry code 100 (`ErrInvalidAddress`).
-	if e.Code == 100 {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("%s: %s", e.Module, e.Msg))
-		return
-	}
-	writeError(w, http.StatusInternalServerError, fmt.Sprintf("%s: %s", e.Module, e.Msg))
-}
-
-// parseAddress accepts a 20-byte address as 0x-prefixed or bare hex.
-func parseAddress(s string) ([]byte, error) {
-	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "0x")
-	if len(s) != 40 {
-		return nil, fmt.Errorf("address must be 20 bytes (40 hex chars)")
-	}
-	addr, err := hex.DecodeString(s)
-	if err != nil {
-		return nil, fmt.Errorf("address hex decode: %v", err)
-	}
-	return addr, nil
-}
-
 // parseUint parses a positive base-10 uint64.
 func parseUint(s string) (uint64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return 0, fmt.Errorf("expected numeric id")
+		return 0, errStr("expected numeric id")
 	}
 	n, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("id parse: %v", err)
+		return 0, errStr("id parse: " + err.Error())
 	}
 	return n, nil
 }
+
+// errStr is a tiny error wrapper avoiding a dependency on fmt for the
+// hot path.
+type errStr string
+
+func (e errStr) Error() string { return string(e) }

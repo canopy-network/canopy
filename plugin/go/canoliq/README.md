@@ -215,15 +215,13 @@ functions and key composition.
 
 ## Read-only HTTP query layer (Phase 3)
 
-The plugin owns all canoLiq-prefixed state and is the only process that can
-read it. To make plugin state visible to operators, dashboards, and
-`canoliqctl`, a small read-only HTTP server runs **inside the plugin
-process** alongside the FSM unix socket. All routes are read-only — they
-never write state.
+The plugin owns all canoLiq-prefixed state and is the only process that
+can read it. To expose plugin state to operators and dashboards, a small
+read-only HTTP server runs **inside the plugin process** alongside the
+FSM unix socket.
 
 Enable it by setting `CANOLIQ_RPC_ADDR` (or `Config.RpcAddress`) to a
-listen address. Empty/unset disables the server (the Phase 1 binary surface
-is preserved).
+listen address. Empty/unset disables the server.
 
 ```bash
 export CANOLIQ_RPC_ADDR=127.0.0.1:8587
@@ -231,8 +229,24 @@ CANOPY_PLUGIN_MODE=canoliq ./go-plugin
 ```
 
 The bundled Docker compose binds the plugin RPC to `0.0.0.0:8587` inside
-each node container; the host port forwards are `8587` (node-1) and
-`8588` (node-2).
+each container; host ports are `8587` (node-1) and `8588` (node-2).
+
+### Snapshot model
+
+The Canopy FSM rejects plugin-initiated `StateRead` calls whose request
+ID is not from an in-flight FSM lifecycle call. Freestanding reads from
+an HTTP handler therefore cannot work. Instead, the plugin builds a
+**snapshot** of canoliq-owned state inside `EndBlock` (where the
+FSM-originated request ID is valid) and HTTP handlers serve from that
+frozen snapshot — no plugin↔FSM round-trip per request. The snapshot is
+swapped atomically (`sync/atomic.Pointer[Snapshot]`).
+
+Consequence: query responses are **stale by up to one block**. For
+liquid-staking monitoring, that is acceptable — operators care about
+trends, not single-block precision.
+
+Cold start (before the first `EndBlock`) returns sane defaults: zero
+height, `genesisComplete=false`, `DefaultParams()`.
 
 ### Routes (all `GET`)
 
@@ -242,29 +256,26 @@ each node container; the host port forwards are `8587` (node-1) and
 | `/v1/globals` | `CanoliqGlobals` (singleton accounting record) |
 | `/v1/params` | `CanoliqParams` (governance-tunable knobs) |
 | `/v1/pools` | committee pool, treasury (CNPY/CLIQ), buyback, insurance, per-validator incentives |
-| `/v1/account/{addr}` | composite per-address view: CNPY + cCNPY + liquid CLIQ + stake + validator-incentive + vesting |
-| `/v1/proposals` | active proposal id list |
-| `/v1/proposal/{id}` | full `Proposal` record |
-| `/v1/vote/{id}/{voter}` | vote cast by `voter` on proposal `id` |
-| `/v1/buyback/{id}` | post-execution `BuybackOrder` for a passed buyback proposal |
-| `/v1/spends` | pending treasury-spend id list |
+| `/v1/proposals` | `{ids: [active proposal ids]}` |
+| `/v1/proposal/{id}` | full `Proposal` record (404 if not in active set) |
+| `/v1/spends` | `{ids: [pending spend ids]}` |
 | `/v1/spend/{id}` | `TreasurySpend` record |
 | `/v1/spend/{id}/approvals` | multisig approvals filtered to the *current* signer set |
-| `/v1/validators` | `ValidatorRegistry` (canoLiq committee snapshot used for pro-rata) |
-| `/v1/redemption/{addr}/{id}` | a queued cCNPY → CNPY redemption record |
-| `/v1/vesting/{addr}` | every vesting schedule for an address with cumulative unlocked-to-date |
+| `/v1/validators` | `ValidatorRegistry` (committee snapshot used for pro-rata) |
+| `/v1/stakers` | `{stakers: [{address, amount, stakedAtHeight}]}` from `CLIQStakeIndex` |
 
-Address parameters accept `0x`-prefixed or bare 40-character hex.
+Errors: `400` on malformed input, `404` on missing entity, `405` on
+non-`GET`, `500` on internal error.
 
-Errors: `400` on malformed address, `404` on missing entity, `405` on
-non-`GET`, `500` on plugin-internal failure (with a JSON error body).
+### Phase 3 §1.1 (deferred)
 
-### Known gaps
-
-There are no per-address indexes for redemptions or unstaking-CLIQ
-records. To list those for an address, the caller needs the id (returned
-by the originating tx). A future iteration can add per-address indexes if
-operator demand emerges.
+Per-address composite routes are **not** in §1: the snapshot can only
+enumerate state reachable from a singleton or an existing index, and
+canoliq has no per-address index for accounts (CNPY/cCNPY/CLIQ
+balances), vesting schedules, queued redemptions, queued unstakes, or
+votes-by-voter. These need either a per-address index added on the
+write side, or a lazy-fetch queue serviced inside `EndBlock`. Tracking
+in `docs/plans/canoliq-implementation-plan.md` Phase 3 §1.1.
 
 ## Logs
 

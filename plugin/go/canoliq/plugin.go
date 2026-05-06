@@ -35,6 +35,10 @@ type Plugin struct {
 	// rpc is the optional HTTP query server. Nil when Config.RpcAddress is
 	// empty. main.go calls Shutdown on it during graceful exit.
 	rpc *RPCServer
+	// snapshot holds the most recently published view of canoliq-owned
+	// state. Refreshed inside EndBlock by Canoliq.refreshSnapshot; read
+	// lock-free by HTTP query handlers via Plugin.Snapshot().
+	snapshot snapshotPointer
 }
 
 // RPC returns the active HTTP query server, or nil if disabled.

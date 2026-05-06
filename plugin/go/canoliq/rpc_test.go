@@ -4,21 +4,24 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
 
 // rpc_test.go exercises the read-only HTTP query layer end-to-end against
-// the in-process fakeStore. It covers (a) per-helper query correctness on
-// seeded state, (b) HTTP route → JSON shape, and (c) the conservation
-// equation visible through /v1/pools after a reward sweep.
+// the in-process fakeStore. Each test seeds state via fakeStore, ticks
+// EndBlock to publish a snapshot, and then asserts the HTTP route output.
+//
+// Tests that depend on per-address routes (account composite, vesting,
+// redemption, vote, buyback) are intentionally absent — those routes are
+// deferred to Phase 3 §1.1; per-address records are not enumerable from
+// a snapshot built off canoliq's existing indexes.
 
 // newTestRPC mounts the canoliq mux backed by the same fakeStore-driven
-// *Plugin used elsewhere in the test suite. Returns the test server, the
-// plugin (so callers can adjust height), and the underlying store.
-func newTestRPC(t *testing.T) (*httptest.Server, *Plugin, *fakeStore) {
+// *Plugin used elsewhere in the test suite. Tests must call refresh() to
+// populate the snapshot before issuing HTTP requests.
+func newTestRPC(t *testing.T) (*httptest.Server, *Canoliq, *fakeStore, func(uint64)) {
 	t.Helper()
 	c, store := newTestCanoliq()
 	rpc := &RPCServer{plugin: c.plugin}
@@ -26,11 +29,17 @@ func newTestRPC(t *testing.T) (*httptest.Server, *Plugin, *fakeStore) {
 	rpc.registerRoutes(mux)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return srv, c.plugin, store
+	refresh := func(h uint64) {
+		c.plugin.setHeight(h)
+		if err := c.refreshSnapshot(h); err != nil {
+			t.Fatalf("refreshSnapshot: %v", err)
+		}
+	}
+	return srv, c, store, refresh
 }
 
 // getJSON issues a GET against the test server and decodes into out.
-// Asserts the expected status code so failure modes surface a clear message.
+// Asserts the expected status code so failure modes surface clearly.
 func getJSON(t *testing.T, srv *httptest.Server, path string, wantStatus int, out any) {
 	t.Helper()
 	resp, err := http.Get(srv.URL + path)
@@ -49,8 +58,18 @@ func getJSON(t *testing.T, srv *httptest.Server, path string, wantStatus int, ou
 	}
 }
 
-func TestRPCHealthAndGlobals(t *testing.T) {
-	srv, p, s := newTestRPC(t)
+func TestRPCHealthBeforeSnapshot(t *testing.T) {
+	srv, _, _, _ := newTestRPC(t)
+	// No snapshot yet: should still answer with sane defaults.
+	var health HealthView
+	getJSON(t, srv, "/v1/health", http.StatusOK, &health)
+	if health.Height != 0 || health.GenesisComplete || health.ChainID != 2 {
+		t.Fatalf("cold-start health: %+v", health)
+	}
+}
+
+func TestRPCHealthAndGlobalsAfterRefresh(t *testing.T) {
+	srv, _, s, refresh := newTestRPC(t)
 	g := &contract.CanoliqGlobals{
 		TotalCcnpySupply: 1_500_000,
 		TotalPooledCnpy:  2_000_000,
@@ -58,14 +77,13 @@ func TestRPCHealthAndGlobals(t *testing.T) {
 		CliqTotalSupply:  CLIQTotalSupply,
 	}
 	s.set(KeyForGlobals(), mustMarshal(g))
-	p.setHeight(42)
+	refresh(42)
 
 	var health HealthView
 	getJSON(t, srv, "/v1/health", http.StatusOK, &health)
 	if health.Height != 42 || !health.GenesisComplete || health.ChainID != 2 {
 		t.Fatalf("health: %+v", health)
 	}
-
 	var got contract.CanoliqGlobals
 	getJSON(t, srv, "/v1/globals", http.StatusOK, &got)
 	if got.TotalCcnpySupply != g.TotalCcnpySupply || got.TotalPooledCnpy != g.TotalPooledCnpy {
@@ -74,10 +92,11 @@ func TestRPCHealthAndGlobals(t *testing.T) {
 }
 
 func TestRPCParamsRoundTrip(t *testing.T) {
-	srv, _, s := newTestRPC(t)
+	srv, _, s, refresh := newTestRPC(t)
 	p := DefaultParams()
-	p.FeeBps = 2000 // override to a non-default so we can spot it
+	p.FeeBps = 2000
 	s.set(KeyForParams(), mustMarshal(p))
+	refresh(1)
 
 	var got contract.CanoliqParams
 	getJSON(t, srv, "/v1/params", http.StatusOK, &got)
@@ -89,54 +108,12 @@ func TestRPCParamsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRPCAccountComposite(t *testing.T) {
-	srv, _, s := newTestRPC(t)
-	user := addr20(0x42)
-	seedAccount(s, user, 7_000_000)
-	s.set(KeyForCCNPYBalance(user), EncodeUint64(500_000))
-	s.set(KeyForCLIQBalance(user), EncodeUint64(123_456))
-	s.set(KeyForCLIQStake(user), mustMarshal(&contract.CLIQStake{
-		Address: user, Amount: 999_999, StakedAtHeight: 5,
-	}))
-	s.set(KeyForValidatorIncentives(user), EncodeUint64(7_777))
-
-	hex := "0x" + strings.Repeat("42", 20)
-	var view AccountView
-	getJSON(t, srv, "/v1/account/"+hex, http.StatusOK, &view)
-	if view.Address != hex || view.CNPY != 7_000_000 || view.CCNPY != 500_000 ||
-		view.CLIQLiquid != 123_456 || view.ValidatorIncentive != 7_777 {
-		t.Fatalf("account view: %+v", view)
-	}
-	if view.CLIQStake == nil || view.CLIQStake.Amount != 999_999 {
-		t.Fatalf("stake missing or wrong: %+v", view.CLIQStake)
-	}
-}
-
-func TestRPCAccountRejectsBadAddress(t *testing.T) {
-	srv, _, _ := newTestRPC(t)
-	resp, err := http.Get(srv.URL + "/v1/account/notahexaddr")
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status: got %d want 400", resp.StatusCode)
-	}
-	var body map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if body["error"] == "" {
-		t.Fatalf("missing error body: %+v", body)
-	}
-}
-
 func TestRPCPoolsConservationAfterReward(t *testing.T) {
-	srv, p, s := newTestRPC(t)
+	srv, c, s, refresh := newTestRPC(t)
 	// Same setup pattern as TestWhitepaperSection7Reconciliation: fund the
-	// committee pool with the post-DAO 0.95X amount, run EndBlock, and
-	// verify the HTTP /v1/pools view satisfies the same conservation
-	// equation enforced by TestInsuranceConservationFullSplit.
+	// committee pool with the post-DAO 0.95X amount, run EndBlock (which
+	// applies the fee split AND refreshes the snapshot), then verify the
+	// HTTP /v1/pools view satisfies conservation.
 	const X uint64 = 1000
 	const postDao = X - X/20 // 950
 	g := &contract.CanoliqGlobals{GenesisComplete: true}
@@ -144,16 +121,15 @@ func TestRPCPoolsConservationAfterReward(t *testing.T) {
 	s.set(KeyForParams(), mustMarshal(DefaultParams()))
 	s.set(contract.KeyForFeePool(2), mustMarshal(&contract.Pool{Id: 2, Amount: postDao}))
 
-	c := &Canoliq{Config: Config{ChainId: 2}, plugin: p, fsmId: 1}
-	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 1}); err != nil {
-		t.Fatalf("ProcessRewards: %v", err)
+	resp := c.EndBlock(&contract.PluginEndRequest{Height: 1})
+	if resp.Error != nil {
+		t.Fatalf("EndBlock: %v", resp.Error)
 	}
+	_ = refresh // EndBlock already published; refresh helper unused here.
 
 	var pools PoolsView
 	getJSON(t, srv, "/v1/pools", http.StatusOK, &pools)
 	gAfter := loadGlobals(t, s)
-	// User accrual lives on globals.TotalPooledCnpy; the rest splits across
-	// the plugin scalars surfaced through /v1/pools.
 	valSum := uint64(0)
 	for _, v := range pools.ValidatorIncentives {
 		valSum += v.Amount
@@ -167,7 +143,7 @@ func TestRPCPoolsConservationAfterReward(t *testing.T) {
 }
 
 func TestRPCProposalLifecycle(t *testing.T) {
-	srv, _, s := newTestRPC(t)
+	srv, _, s, refresh := newTestRPC(t)
 	prop := &contract.Proposal{
 		Id:                  3,
 		Proposer:            addr20(0xAA),
@@ -178,6 +154,7 @@ func TestRPCProposalLifecycle(t *testing.T) {
 	}
 	s.set(KeyForProposal(3), mustMarshal(prop))
 	s.set(KeyForProposalIndex(), mustMarshal(&contract.ProposalIndex{Ids: []uint64{3}}))
+	refresh(50)
 
 	var idx struct {
 		Ids []uint64 `json:"ids"`
@@ -192,13 +169,11 @@ func TestRPCProposalLifecycle(t *testing.T) {
 	if got.Id != 3 || got.SnapshotTotalStaked != 10_000 {
 		t.Fatalf("proposal round-trip: %+v", &got)
 	}
-
-	// Missing id returns 404.
 	getJSON(t, srv, "/v1/proposal/9999", http.StatusNotFound, nil)
 }
 
 func TestRPCSpendAndApprovals(t *testing.T) {
-	srv, _, s := newTestRPC(t)
+	srv, _, s, refresh := newTestRPC(t)
 	signer := addr20(0xBB)
 	params := DefaultParams()
 	params.MultisigSigners = [][]byte{signer}
@@ -221,6 +196,7 @@ func TestRPCSpendAndApprovals(t *testing.T) {
 	s.set(KeyForMultisigApproval(5, signer), mustMarshal(&contract.MultisigApproval{
 		SpendId: 5, Signer: signer, Height: 50,
 	}))
+	refresh(100)
 
 	var idx struct {
 		Ids []uint64 `json:"ids"`
@@ -243,69 +219,43 @@ func TestRPCSpendAndApprovals(t *testing.T) {
 	}
 }
 
-func TestRPCBuybackOrder(t *testing.T) {
-	srv, _, s := newTestRPC(t)
-	order := &contract.BuybackOrder{
-		ProposalId:   7,
-		CnpyDrawn:    100_000,
-		CliqAcquired: 500_000,
-		Mode:         contract.BuybackMode_BUYBACK_BURN,
-		Executed:     true,
+func TestRPCValidatorsAndStakers(t *testing.T) {
+	srv, _, s, refresh := newTestRPC(t)
+	val := addr20(0xEE)
+	staker := addr20(0xFF)
+	registry := &contract.ValidatorRegistry{
+		Entries: []*contract.ValidatorRegistryEntry{
+			{Address: val, Stake: 1_000_000},
+		},
 	}
-	s.set(KeyForBuybackOrder(7), mustMarshal(order))
+	s.set(KeyForValidatorRegistry(), mustMarshal(registry))
+	s.set(KeyForValidatorIncentives(val), EncodeUint64(42))
+	s.set(KeyForCLIQStake(staker), mustMarshal(&contract.CLIQStake{
+		Address: staker, Amount: 500_000, StakedAtHeight: 7,
+	}))
+	s.set(KeyForCLIQStakeIndex(), mustMarshal(&contract.CLIQStakeIndex{
+		Addresses: [][]byte{staker},
+	}))
+	refresh(100)
 
-	var got contract.BuybackOrder
-	getJSON(t, srv, "/v1/buyback/7", http.StatusOK, &got)
-	if got.ProposalId != 7 || got.CnpyDrawn != 100_000 || !got.Executed {
-		t.Fatalf("buyback round-trip: %+v", &got)
-	}
-	getJSON(t, srv, "/v1/buyback/8888", http.StatusNotFound, nil)
-}
-
-func TestRPCRedemptionAndVesting(t *testing.T) {
-	srv, p, s := newTestRPC(t)
-	user := addr20(0xDD)
-
-	// Redemption
-	red := &contract.Redemption{
-		Id: 4, Address: user, CnpyAmount: 250_000, UnbondCompleteHeight: 1000,
-	}
-	s.set(KeyForRedemption(user, 4), mustMarshal(red))
-	hex := "0x" + strings.Repeat("dd", 20)
-	var got contract.Redemption
-	getJSON(t, srv, "/v1/redemption/"+hex+"/4", http.StatusOK, &got)
-	if got.Id != 4 || got.CnpyAmount != 250_000 {
-		t.Fatalf("redemption: %+v", &got)
+	var reg contract.ValidatorRegistry
+	getJSON(t, srv, "/v1/validators", http.StatusOK, &reg)
+	if len(reg.Entries) != 1 || reg.Entries[0].Stake != 1_000_000 {
+		t.Fatalf("validators: %+v", reg.Entries)
 	}
 
-	// Vesting: cliff at 100, end at 200, current height 150 ⇒ 50% unlocked.
-	sched := &contract.VestingSchedule{
-		Address:     user,
-		TotalAmount: 1_000_000,
-		CliffHeight: 100,
-		StartHeight: 100,
-		EndHeight:   200,
+	var stakers struct {
+		Stakers []*StakerView `json:"stakers"`
 	}
-	s.set(KeyForVesting(user, 0), mustMarshal(sched))
-	s.set(KeyForVestingIndex(user), mustMarshal(&contract.VestingIndex{ScheduleIds: []uint64{0}}))
-	p.setHeight(150)
-
-	var vbody struct {
-		Address   string         `json:"address"`
-		Schedules []*VestingView `json:"schedules"`
-	}
-	getJSON(t, srv, "/v1/vesting/"+hex, http.StatusOK, &vbody)
-	if vbody.Address != hex || len(vbody.Schedules) != 1 {
-		t.Fatalf("vesting body: %+v", vbody)
-	}
-	got0 := vbody.Schedules[0]
-	if got0.UnlockedToDate != 500_000 || got0.ClaimableNow != 500_000 || got0.CurrentHeight != 150 {
-		t.Fatalf("vesting math: %+v", got0)
+	getJSON(t, srv, "/v1/stakers", http.StatusOK, &stakers)
+	if len(stakers.Stakers) != 1 || stakers.Stakers[0].Amount != 500_000 ||
+		stakers.Stakers[0].StakedAtHeight != 7 {
+		t.Fatalf("stakers: %+v", stakers.Stakers)
 	}
 }
 
 func TestRPCMethodNotAllowed(t *testing.T) {
-	srv, _, _ := newTestRPC(t)
+	srv, _, _, _ := newTestRPC(t)
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/health", nil)
 	if err != nil {
 		t.Fatalf("new req: %v", err)

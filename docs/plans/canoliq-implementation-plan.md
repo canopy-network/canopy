@@ -290,65 +290,67 @@ Design decisions (resolved against the whitepapers):
 
 ### Phase 3 — Monitoring & autonomy graduation
 
-#### 1. Read-only query layer (HTTP-in-plugin)
+#### 1. Read-only query layer (HTTP-in-plugin, snapshot model)
 
 The plugin process owns all canoLiq-prefixed state. Phase 1.5 left
 fee-split reconciliation against the live chain blocked on a way to
 read that state from outside the plugin. Phase 3 §1 fills that gap by
-running an HTTP server inside the plugin process, alongside the FSM
-unix socket. All routes are read-only — they call `StateRead` only.
+running an HTTP server inside the plugin process, serving from a
+snapshot of canoliq-owned state refreshed inside `EndBlock`.
 
-##### 1a. Query helpers (`plugin/go/canoliq/query.go`)
-- [x] `QueryGlobals()` → `*contract.CanoliqGlobals`
-- [x] `QueryParams()` → `*contract.CanoliqParams`
-- [x] `QueryAccount(addr)` → composite view: CNPY, cCNPY, liquid CLIQ,
-      staked CLIQ, validator-incentive accrual, vesting schedules
-      (with cumulative unlocked-to-date). Pending unstakes and open
-      redemptions are *not* in the composite view because there is no
-      per-address index — callers fetch individual records by id via
-      the dedicated routes.
-- [x] `QueryPools()` → treasury (CNPY/CLIQ), buyback, insurance,
-      validator-incentives ledger (iterate `ValidatorRegistry` →
-      per-address `KeyForValidatorIncentives`; falls back to legacy
-      aggregator address when registry is empty)
-- [x] `QueryProposal(id)` → `*contract.Proposal` (or 404)
-- [x] `QueryProposalIndex()` → list of active proposal ids
-- [x] `QueryVote(proposalId, voter)` → `*contract.Vote` (or 404)
-- [x] `QueryBuybackOrder(id)` → `*contract.BuybackOrder`
-- [x] `QueryTreasurySpend(id)` → `*contract.TreasurySpend`
-- [x] `QuerySpendIndex()` → list of pending spend ids
-- [x] `QueryMultisigApprovals(spendId)` → list of approvals filtered
-      against current `params.multisig_signers`
-- [x] `QueryValidatorRegistry()` → `*contract.ValidatorRegistry`
-- [x] `QueryRedemption(addr, id)` → `*contract.Redemption` (or 404)
-- [x] `QueryVesting(addr)` → list of `VestingSchedule` + cumulative
-      unlocked-at-current-height (uses `Plugin.CurrentHeight()`)
+**Why a snapshot.** An early design issued plugin-initiated `StateRead`
+calls from the HTTP handler with a random fsmId. The Canopy FSM
+rejected those (`code 107: plugin response id is invalid`) because the
+fsmId did not match an in-flight FSM lifecycle context — the FSM only
+holds a state-context for the duration of a Check/Deliver/Begin/End
+call. The `fakeStore` test path bypassed the protocol so the bug went
+undetected until live docker compose. The fix: build the snapshot
+inside `EndBlock` (where `c.fsmId` is the FSM-originated EndBlock id,
+valid for arbitrary state reads), atomically swap it into
+`Plugin.snapshot`, and answer HTTP requests from there. Stale by up to
+one block; that's acceptable for monitoring.
+
+##### 1a. Snapshot type + refresh (`plugin/go/canoliq/snapshot.go`)
+- [x] `Snapshot` struct holding the singleton + index-driven view of
+      canoliq-owned state.
+- [x] `(*Canoliq).refreshSnapshot(height)` — three batched StateReads:
+      (1) singletons + indexes, (2) per-id reads for active proposals
+      / pending spends / stakers / validator incentives, (3) multisig
+      approvals (per-spend × per-signer).
+- [x] Atomic publish via `Plugin.snapshot` (`atomic.Pointer`).
+- [x] `EndBlock` calls `refreshSnapshot` after `ProcessRewards`.
+
+##### 1a-bis. Query helpers (`plugin/go/canoliq/query.go`)
+- [x] `(*Plugin).QueryHealth()` → `{height, genesisComplete, chainId}`
+- [x] `(*Plugin).QueryGlobals()` → `*contract.CanoliqGlobals`
+- [x] `(*Plugin).QueryParams()` → `*contract.CanoliqParams`
+- [x] `(*Plugin).QueryPools()` → committee pool, treasury (CNPY/CLIQ),
+      buyback, insurance, per-validator incentives
+- [x] `(*Plugin).QueryProposalIDs()` / `QueryProposal(id)`
+- [x] `(*Plugin).QuerySpendIDs()` / `QuerySpend(id)` /
+      `QueryMultisigApprovals(id)`
+- [x] `(*Plugin).QueryValidatorRegistry()`
+- [x] `(*Plugin).QueryStakers()` (from `CLIQStakeIndex`)
 
 ##### 1b. HTTP server (`plugin/go/canoliq/rpc.go`)
 - [x] `net/http` mux gated by `Config.RpcAddress` (or env
       `CANOLIQ_RPC_ADDR`); empty disables the listener so the Phase 1
       binary surface is preserved.
-- [x] Route table:
+- [x] Route table (singleton + index-driven only):
+  - `GET /v1/health` (`{height, genesisComplete, chainId}`)
   - `GET /v1/globals`
   - `GET /v1/params`
-  - `GET /v1/account/{addr}` (hex address, with or without `0x`)
   - `GET /v1/pools`
   - `GET /v1/proposals` (active id list)
   - `GET /v1/proposal/{id}`
-  - `GET /v1/vote/{id}/{voter}`
-  - `GET /v1/buyback/{id}`
   - `GET /v1/spends` (pending id list)
   - `GET /v1/spend/{id}`
   - `GET /v1/spend/{id}/approvals`
   - `GET /v1/validators`
-  - `GET /v1/redemption/{addr}/{id}`
-  - `GET /v1/vesting/{addr}`
-  - `GET /v1/health` (liveness — `{height, genesisComplete, chainId}`)
+  - `GET /v1/stakers`
 - [x] Encode responses as JSON; proto `@gotags` keep field names
       consistent with `canoliqctl`.
-- [x] 404 with `{"error":"..."}` on missing keys; 400 on malformed
-      address; 405 on non-GET; 500 on plugin-internal error mapped
-      from `*contract.PluginError` (address-shape errors map to 400).
+- [x] 404 on missing entity, 400 on malformed input, 405 on non-GET.
 - [x] Graceful shutdown via `(*RPCServer).Shutdown` driven by
       `main.go`'s signal context (5s timeout).
 
@@ -364,21 +366,19 @@ unix socket. All routes are read-only — they call `StateRead` only.
 
 ##### 1d. Tests
 - [x] Per-route HTTP tests against `fakeStore` via `httptest.Server`
-      (`rpc_test.go::TestRPCHealthAndGlobals`,
-      `TestRPCParamsRoundTrip`,
-      `TestRPCAccountComposite`, `TestRPCProposalLifecycle`,
-      `TestRPCSpendAndApprovals`, `TestRPCBuybackOrder`,
-      `TestRPCRedemptionAndVesting`).
-- [x] 400 on malformed address (`TestRPCAccountRejectsBadAddress`),
-      405 on non-GET (`TestRPCMethodNotAllowed`), and an
-      empty-addr-disables-server case
-      (`TestRPCStartRPCServerEmptyAddrDisabled`).
-- [x] Conservation cross-check: `TestRPCPoolsConservationAfterReward`
-      injects a 950-uCNPY post-DAO reward, runs `ProcessRewards`, and
-      asserts the `/v1/pools` view + `globals.TotalPooledCnpy` sum
-      back to the seeded delta — the same conservation equation as
-      `TestInsuranceConservationFullSplit` but observed through the
-      HTTP layer.
+      (`rpc_test.go::TestRPCHealthBeforeSnapshot`,
+      `TestRPCHealthAndGlobalsAfterRefresh`, `TestRPCParamsRoundTrip`,
+      `TestRPCProposalLifecycle`, `TestRPCSpendAndApprovals`,
+      `TestRPCValidatorsAndStakers`).
+- [x] 405 on non-GET (`TestRPCMethodNotAllowed`); empty-addr disables
+      the server (`TestRPCStartRPCServerEmptyAddrDisabled`); cold
+      start serves sane defaults (`TestRPCHealthBeforeSnapshot`).
+- [x] Conservation cross-check via the HTTP layer:
+      `TestRPCPoolsConservationAfterReward` injects a 950-uCNPY post-DAO
+      reward, runs the full `EndBlock` (which exercises both
+      `ProcessRewards` and `refreshSnapshot`), and asserts the
+      `/v1/pools` view + `globals.TotalPooledCnpy` reconcile to the
+      seeded delta.
 
 ##### 1e. Documentation
 - [x] `plugin/go/canoliq/README.md` — added "Read-only HTTP query
@@ -398,6 +398,32 @@ unix socket. All routes are read-only — they call `StateRead` only.
 - [ ] Live integration: hit `/v1/globals` and `/v1/pools` against
       the running canoliq plugin in `.docker/compose.yaml` and
       reconcile a fee split — closes the open Phase 1.5 item.
+
+#### 1.1 Per-address query routes (deferred)
+
+Per-address composite views are not snapshot-friendly because canoliq
+has no per-address index for accounts (CNPY/cCNPY/CLIQ balances),
+vesting schedules, queued redemptions, queued unstakes, votes-by-voter,
+or buyback orders.
+
+Two viable designs when this is picked up:
+
+a. **Index-on-write.** Maintain new `*Index` records on the write side
+   (e.g. `RedemptionIndex(addr) → []uint64`). Snapshot then enumerates.
+   Adds one index per per-address record kind; small but invasive.
+
+b. **Lazy queue inside `EndBlock`.** HTTP handlers enqueue address
+   lookups; `EndBlock` services the queue and stores results into the
+   snapshot. Latency = up to one block per request; no schema changes.
+
+Routes to land:
+- [ ] `GET /v1/account/{addr}` — composite CNPY + cCNPY + liquid CLIQ +
+      stake + validator-incentive + vesting + redemptions + unstakes
+- [ ] `GET /v1/vesting/{addr}` — schedules + cumulative unlocked-to-date
+- [ ] `GET /v1/redemption/{addr}/{id}` (after either approach)
+- [ ] `GET /v1/vote/{id}/{voter}`
+- [ ] `GET /v1/buyback/{id}` (needs a buyback id index since proposal
+      records are deleted at tally cleanup)
 
 #### 2. Alerting hooks (deferred)
 - [ ] Threshold-driven webhook for buyback pool drain rate

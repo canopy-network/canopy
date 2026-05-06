@@ -227,37 +227,63 @@ used for "instant unlock at cliff" tranches.
 batch read for every schedule listed. Two FSM round-trips per claim is
 intentional — needed because we cannot range-scan.
 
-## Query layer (Phase 3)
+## Query layer (Phase 3 §1)
 
 `rpc.go` runs a small `net/http` mux **inside the plugin process** so
 operators can read plugin-owned state without going through the FSM.
-All routes are read-only — they go through `query.go` helpers, which
-issue point `StateRead` calls and never write.
+All routes are read-only.
 
-The HTTP server is gated by `Config.RpcAddress` (or env
-`CANOLIQ_RPC_ADDR`). Empty disables it. `StartPlugin` returns the
-long-lived `*Plugin` so `main.go` can drive `RPCServer.Shutdown`
-during graceful exit.
+### Why a snapshot, not freestanding reads
 
-Per-HTTP-request context is built by `(*RPCServer).queryContext()`,
-which mints a fresh `*Canoliq` with `rand.Uint64()` as `fsmId`. This
-matters because `Plugin.pending` is keyed by request id; FSM-originated
-ids are guaranteed unique by the FSM, but plugin-originated reads
-(state lookups inside an HTTP handler) need their own unique id to
-avoid response-channel collisions under concurrency.
+The Canopy FSM enforces that every plugin-initiated `StateRead` carries
+a request ID from an in-flight FSM-originated lifecycle call
+(`CheckTx`/`Deliver`/`Begin`/`End`). The FSM uses that ID to look up its
+side of the request context. Outside that window the context does not
+exist and the FSM rejects the read with `state_machine code 107` and
+tears down the unix socket. **An earlier design that minted random
+fsmIds for HTTP requests crashed the node every time** — the
+`fakeStore` test path bypasses the protocol so the bug only appeared
+under live docker integration. See
+`memory/feedback_plugin_stateread_constraint.md`.
 
-Collection routes depend on the existing indexes — `ProposalIndex`,
-`SpendIndex`, `VestingIndex`, `CLIQStakeIndex`, `ValidatorRegistry`.
-Anything that lacks an index (per-address redemption list, per-address
-unstake list) is a point lookup by id, *not* a sweep. If you want a
-new collection route, add the index alongside it on the write path
-first — the FSM does not support range scans.
+The current design builds a `Snapshot` (`snapshot.go`) inside
+`EndBlock`, atomically swaps it into `Plugin.snapshot`
+(`atomic.Pointer[Snapshot]`), and serves HTTP queries from that frozen
+value. No plugin↔FSM round-trip per request, no concurrency on `pending`,
+and no shared-state contention. Snapshots are stale by up to one block.
 
-JSON encoding piggybacks on `@gotags` already attached to the proto
-types, so the wire format matches what `canoliqctl` already produces.
-Fields that are `google.protobuf.Any` (e.g. `Proposal.Payload`)
-serialize as `{typeUrl, value}` — opaque to JSON consumers but
-sufficient for reconciliation.
+### What's snapshotted
+
+Only state reachable from a singleton or an existing index:
+
+- Singletons: `CanoliqGlobals`, `CanoliqParams`, committee pool,
+  treasury CNPY/CLIQ, buyback pool, insurance pool.
+- `ValidatorRegistry` → per-validator incentive accruals.
+- `ProposalIndex` → active `Proposal` records.
+- `SpendIndex` → pending `TreasurySpend` records.
+- `CLIQStakeIndex` → active `CLIQStake` records.
+- For each pending spend × each `MultisigSigners` entry → live
+  `MultisigApproval` records.
+
+Per-address records (Account, cCNPY/CLIQ balances, vesting, queued
+redemptions, queued unstakes, votes-by-voter, buyback orders) have no
+index that would let a snapshot enumerate them. These are deferred to
+Phase 3 §1.1.
+
+### Adding a new route
+
+1. If the entity has a singleton or index already, add it to
+   `Snapshot` + `refreshSnapshot` and write a `Plugin.QueryX` accessor
+   in `query.go`.
+2. If not, add the index on the *write side* first (mirroring how
+   `ProposalIndex` / `SpendIndex` / `CLIQStakeIndex` are maintained).
+   Snapshot enumeration is bounded by the index size; never try to
+   sweep state from a route handler.
+
+JSON encoding piggybacks on `@gotags` on the proto types so the wire
+shape matches `canoliqctl`. `google.protobuf.Any` fields (e.g.
+`Proposal.Payload`) serialize as `{typeUrl, value}` — opaque to JSON
+consumers but sufficient for reconciliation.
 
 ## Per-request Canoliq, long-lived Plugin
 
