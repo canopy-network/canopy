@@ -181,15 +181,17 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 	globals.NextRedemptionId++
 	from.Amount -= fee
 	feePool.Amount += fee
-	height := uint64(0)
-	// Unstaking window comes from the FSM gov params; for the MVP we use a
-	// sensible default and let Phase 2 plumb governance reads.
-	unstaking := uint64(60 * 60 * 24 / 6) // ~24h at 6s blocks; placeholder
+	// Unstaking window: the original Phase 1 plan called for reading
+	// valParams.UnstakingBlocks from the FSM gov-params prefix, which never
+	// landed. Until that plumbing exists, use a short fixed window so
+	// localnet verification (Phase 1.5) can exercise claim-after-maturity
+	// without waiting on a 14400-block placeholder.
+	const redemptionUnstakingBlocks uint64 = 5
 	redemption := &contract.Redemption{
 		Id:                   id,
 		Address:              msg.FromAddress,
 		CnpyAmount:           cnpyOwed,
-		UnbondCompleteHeight: height + unstaking,
+		UnbondCompleteHeight: c.currentHeight() + redemptionUnstakingBlocks,
 	}
 	rBz, e := contract.Marshal(redemption)
 	if e != nil {

@@ -15,6 +15,13 @@ services:
     networks:
       - canopy
     command: ["start"]
+    # CANOPY_PLUGIN_MODE selects which plugin implementation the go-plugin
+    # binary serves. The canopy controller starts the plugin via
+    # plugin/go/pluginctl.sh, which inherits this env var; the binary's main()
+    # at plugin/go/main.go switches on it to dispatch to canoliq.StartPlugin.
+    environment:
+      - CANOPY_PLUGIN_MODE=canoliq
+      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.json
     volumes:
       - ./volumes/node_1:/root/.canopy
   #    deploy:
@@ -39,6 +46,9 @@ services:
     networks:
       - canopy
     command: ["start"]
+    environment:
+      - CANOPY_PLUGIN_MODE=canoliq
+      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.json
     volumes:
       - ./volumes/node_2:/root/.canopy
 #    deploy:

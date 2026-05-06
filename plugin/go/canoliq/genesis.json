@@ -7,7 +7,10 @@
       "cliffMonths": 6,
       "vestMonths": 24,
       "recipients": [
-        { "address": "00000000000000000000000000000000000000a1", "bps": 10000 }
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
       ]
     },
     {
@@ -16,7 +19,10 @@
       "cliffMonths": 0,
       "vestMonths": 0,
       "recipients": [
-        { "address": "00000000000000000000000000000000000000a2", "bps": 10000 }
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
       ]
     },
     {
@@ -25,7 +31,10 @@
       "cliffMonths": 0,
       "vestMonths": 0,
       "recipients": [
-        { "address": "00000000000000000000000000000000000000a3", "bps": 10000 }
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
       ]
     },
     {
@@ -34,7 +43,10 @@
       "cliffMonths": 0,
       "vestMonths": 0,
       "recipients": [
-        { "address": "00000000000000000000000000000000000000a4", "bps": 10000 }
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
       ]
     },
     {
@@ -43,7 +55,10 @@
       "cliffMonths": 12,
       "vestMonths": 24,
       "recipients": [
-        { "address": "00000000000000000000000000000000000000a5", "bps": 10000 }
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
       ]
     },
     {
@@ -52,7 +67,10 @@
       "cliffMonths": 6,
       "vestMonths": 18,
       "recipients": [
-        { "address": "00000000000000000000000000000000000000a6", "bps": 10000 }
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
       ]
     },
     {
@@ -61,7 +79,10 @@
       "cliffMonths": 0,
       "vestMonths": 0,
       "recipients": [
-        { "address": "00000000000000000000000000000000000000a7", "bps": 10000 }
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
       ]
     }
   ],

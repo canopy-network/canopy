@@ -15,7 +15,8 @@ implementation plan at `docs/plans/canoliq-implementation-plan.md`.
 
 ```bash
 cd plugin/go
-make build
+make build                        # builds the plugin process: ./go-plugin
+go build -o canoliqctl ./canoliqctl/   # builds the operator CLI: ./canoliqctl
 ```
 
 The same `go-plugin` binary serves either the send tutorial or canoLiq based
@@ -28,6 +29,56 @@ on the `CANOPY_PLUGIN_MODE` environment variable:
 
 Optionally point `CANOLIQ_CONFIG` at a JSON file with `chainId`, `dataDirPath`,
 and `genesisPath` overrides.
+
+## canoliqctl — operator CLI
+
+`canoliqctl` builds, signs, and submits canoLiq plugin transactions to a
+running Canopy node. It uses the node's admin keystore (`/v1/admin/keystore-get`)
+to fetch the BLS12-381 signer key and POSTs the signed envelope to `/v1/tx`.
+
+Global flags (also configurable via env vars `CANOLIQCTL_RPC_URL`,
+`CANOLIQCTL_ADMIN_URL`, `CANOLIQCTL_NETWORK_ID`, `CANOLIQCTL_CHAIN_ID`,
+`CANOLIQCTL_FEE`, `CANOLIQCTL_PASSWORD`):
+
+```
+--rpc-url      node query RPC (default http://localhost:50002)
+--admin-url    node admin RPC, hosts the keystore (default http://localhost:50003)
+--network-id   Canopy network id (default 1)
+--chain-id     canoLiq committee chain id (default 2)
+--fee          tx fee in uCNPY (default 10000)
+--password     keystore password — required
+```
+
+Phase 1 worked example (deposit → redeem → claim once unbond matures):
+
+```bash
+export CANOLIQCTL_PASSWORD=hunter2
+./canoliqctl deposit alice 1000000           # 1 CNPY → cCNPY
+./canoliqctl redeem  alice 250000            # burn 0.25 cCNPY, queue redemption
+# advance past unbond_complete_height (Canopy's UnstakingBlocks param)
+./canoliqctl claim   alice 0                 # claim redemption #0
+```
+
+Phase 2 commands (governance, staking, buyback, treasury):
+
+```bash
+./canoliqctl cliq-stake          alice 5000000
+./canoliqctl cliq-unstake        alice 1000000
+./canoliqctl cliq-claim-unstake  alice 0
+./canoliqctl vote                alice <proposal-id> yes
+./canoliqctl buyback-execute     alice <proposal-id>
+./canoliqctl spend-execute       alice <proposal-id>
+./canoliqctl multisig-approve    signer1 <spend-id>
+./canoliqctl cliq-transfer       alice <to-hex> 1000000
+./canoliqctl cliq-claim-vested   alice
+```
+
+`proposal-create` is intentionally not yet wired: its payload is a
+`google.protobuf.Any` carrying one of three sub-types (param_change, buyback,
+treasury_spend), each with a distinct argument surface. Until that lands,
+construct proposals via in-process tests or hand-built JSON. The `vote`,
+`buyback-execute`, and `spend-execute` commands work against any proposal id
+regardless of how it was created.
 
 ## Registering canoLiq as a Canopy committee
 

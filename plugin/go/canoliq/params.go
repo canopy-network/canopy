@@ -20,7 +20,12 @@ func (c *Canoliq) LoadParams() (*contract.CanoliqParams, *contract.PluginError) 
 	if resp.Error != nil {
 		return nil, resp.Error
 	}
-	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 {
+	// FSM StateRead returns Entry{Value: nil} for missing keys (not zero
+	// entries), so we must check the value length too. Unmarshaling an empty
+	// byte slice yields a zero-valued CanoliqParams that ValidateParams would
+	// (correctly) reject with "split sum 0 != 10000".
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 ||
+		len(resp.Results[0].Entries[0].Value) == 0 {
 		return DefaultParams(), nil
 	}
 	params := new(contract.CanoliqParams)
@@ -64,7 +69,8 @@ func (c *Canoliq) LoadGlobals() (*contract.CanoliqGlobals, *contract.PluginError
 		return nil, resp.Error
 	}
 	g := new(contract.CanoliqGlobals)
-	if len(resp.Results) > 0 && len(resp.Results[0].Entries) > 0 {
+	if len(resp.Results) > 0 && len(resp.Results[0].Entries) > 0 &&
+		len(resp.Results[0].Entries[0].Value) > 0 {
 		if e := contract.Unmarshal(resp.Results[0].Entries[0].Value, g); e != nil {
 			return nil, e
 		}
