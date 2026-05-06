@@ -11,6 +11,175 @@ The plugin is a sibling of `plugin/go/contract/`; it reuses the proto types
 generated in `contract` package and runs its own FSM connection. See the full
 implementation plan at `docs/plans/canoliq-implementation-plan.md`.
 
+## Quick start (localhost via Docker)
+
+The fastest path to a running canoLiq chain on your machine — two
+Canopy nodes plus a plugin process per node, built and signed by the
+bundled `.docker/compose.yaml`. The validator set is pre-seeded so
+both nodes are committee-2 (canoLiq) participants out of the box; the
+plugin self-bootstraps Genesis on its first `BeginBlock` so 100M CLIQ
+supply is minted before you can hit the RPC.
+
+Prerequisites: Docker (Compose v2) and `curl`. Optional: `jq` for the
+JSON examples (or pipe through `python3 -m json.tool`).
+
+### 1. Build the images
+
+From repo root:
+
+```bash
+cd .docker
+docker compose build
+```
+
+This compiles `go-plugin`, `canoliq`, and the canopy node binary into
+two images, one per node. First build takes a couple of minutes;
+incremental rebuilds are seconds because Go module caching.
+
+### 2. Start the nodes
+
+```bash
+docker compose up -d
+```
+
+Both nodes start, the plugin attaches to its FSM unix socket
+(`/tmp/plugin/plugin.sock` inside the container), Genesis runs once,
+and rewards begin flowing into the canoLiq committee pool.
+
+### 3. Wait for plugin Genesis
+
+The plugin's `BeginBlock` self-bootstraps Genesis when chain
+genesis.json carries no plugin section (which the bundled localnet
+does not). Poll until `genesisComplete: true`:
+
+```bash
+until [ "$(curl -fsS http://127.0.0.1:8587/v1/health 2>/dev/null \
+  | grep -o '"genesisComplete":true')" ]; do sleep 2; done
+echo "ready"
+```
+
+This typically takes 6–12s (one to two blocks).
+
+### 4. Probe the read-only RPC
+
+The plugin exposes a read-only HTTP query surface on host port 8587
+(node-1) and 8588 (node-2). Both serve the same routes; pick either.
+
+```bash
+curl -sS http://127.0.0.1:8587/v1/health   | jq
+curl -sS http://127.0.0.1:8587/v1/globals  | jq
+curl -sS http://127.0.0.1:8587/v1/params   | jq
+curl -sS http://127.0.0.1:8587/v1/pools    | jq
+```
+
+After a few blocks of subsidy you should see non-zero `treasuryCnpy`,
+`insurancePool`, `buybackPool`, and `validatorIncentives` reflecting
+the 12% fee with the canonical 40/30/15/15 split (15% of treasury skim
+→ insurance). Conservation: `globals.totalPooledCnpy + treasuryCnpy +
+insurancePool + buybackPool + Σ validatorIncentives` equals the
+cumulative post-DAO inflow.
+
+The complete route list (snapshot-served + lazy-fulfilled) is in
+[Read-only HTTP query layer](#read-only-http-query-layer-phase-3)
+below.
+
+### 5. Build `canoliqctl` (for tx submission)
+
+The HTTP query layer is read-only. To submit transactions (deposit,
+redeem, stake, vote, etc.) build the operator CLI from the host:
+
+```bash
+cd ../plugin/go
+go build -o canoliqctl ./canoliqctl/
+```
+
+### 6. Submit a deposit
+
+`canoliqctl` fetches the BLS12-381 signer key from the node's admin
+keystore (`/v1/admin/keystore-get`), signs, and POSTs the envelope to
+`/v1/tx`. It needs the keystore password.
+
+```bash
+export CANOLIQCTL_PASSWORD=test   # adjust for your keystore
+./canoliqctl deposit <address-hex> 1000000
+```
+
+`<address-hex>` is the 40-char hex address for the keystore entry you
+want to draft from. The default `--rpc-url=http://localhost:50002`
+and `--admin-url=http://localhost:50003` line up with node-1's
+exposed ports.
+
+### 7. Verify the tx landed
+
+Re-query the address through the lazy account route:
+
+```bash
+curl -sS http://127.0.0.1:8587/v1/account/0x<address-hex> | jq
+```
+
+You should see `ccnpy` non-zero (depositor received cCNPY) and `cnpy`
+debited by `amount + fee`. The route blocks up to one block (~6s)
+while EndBlock fulfills the lookup.
+
+### 8. Tear down
+
+```bash
+cd ../../.docker
+docker compose down
+```
+
+State persists in `.docker/volumes/node_*/canopy/` between restarts.
+
+### Resetting to a fresh chain
+
+Plugin Genesis runs once and short-circuits on subsequent boots
+(idempotent on `globals.GenesisComplete`). To force a clean re-run
+(regenerates 100M CLIQ supply, zeroes pools, replays subsidies from
+height 1):
+
+```bash
+docker compose down
+rm -rf volumes/node_*/canopy volumes/node_*/logs
+rm -f  volumes/node_*/book.json volumes/node_*/polls.json
+docker compose build   # if you changed code
+docker compose up -d
+```
+
+Keep the other files (`config.json`, `genesis.json`, `keystore.json`,
+`validator_key.json`, `proposals.json`) — those are config/identity,
+not mutable state.
+
+### Ports
+
+| Service | node-1 | node-2 |
+|---|---:|---:|
+| Wallet | 50000 | 40000 |
+| Explorer | 50001 | 40001 |
+| RPC | 50002 | 40002 |
+| Admin RPC | 50003 | 40003 |
+| canoLiq plugin RPC | 8587 | 8588 |
+| Debug pprof | 6060 | 6061 |
+| Metrics | 9090 | 9091 |
+| TCP P2P | 9001 | 9002 |
+
+### Common pitfalls
+
+- **`/v1/health` returns `genesisComplete: false` forever.** Either
+  the plugin can't read its `genesis.json` (check `CANOLIQ_CONFIG`
+  env var inside the container) or `Config.GenesisPath` is empty. The
+  bundled compose sets both correctly; check
+  `docker compose logs node-1 | grep -i canoliq` for plugin errors.
+- **Empty reply from `/v1/...`.** Plugin process probably crashed.
+  Check `docker compose logs node-1 | grep -iE 'fatal|panic|code:.*107'`.
+  A `code 107: plugin response id is invalid` indicates a
+  freestanding StateRead from outside an FSM lifecycle window — this
+  was an early-design bug fixed by the snapshot model; if it
+  reappears, see `AGENTS.md` and the saved memory.
+- **Lazy routes time out (504).** Chain has stalled — `EndBlock` is
+  not firing. Check that committee 2 has at least one validator
+  opted in (the bundled genesis seeds two; if you've edited it,
+  confirm `MessageEditStake` ran).
+
 ## Building
 
 ```bash
