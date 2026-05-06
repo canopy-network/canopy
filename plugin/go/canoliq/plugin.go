@@ -32,7 +32,13 @@ type Plugin struct {
 	// answer from the in-memory store instead of round-tripping to the
 	// FSM over the unix socket. Always nil in production builds.
 	fakeStore fakeStoreHook
+	// rpc is the optional HTTP query server. Nil when Config.RpcAddress is
+	// empty. main.go calls Shutdown on it during graceful exit.
+	rpc *RPCServer
 }
+
+// RPC returns the active HTTP query server, or nil if disabled.
+func (p *Plugin) RPC() *RPCServer { return p.rpc }
 
 // fakeStoreHook is the test-only contract for in-memory state. The concrete
 // implementation lives in fakeplugin_test.go (build-tagged out of release
@@ -65,9 +71,10 @@ type isFSMResponse = any
 const socketPath = "plugin.sock"
 
 // StartPlugin establishes the unix-socket connection to the FSM, performs
-// the handshake, and starts the inbound dispatch loop. It is the canoliq
-// equivalent of contract.StartPlugin.
-func StartPlugin(c Config) {
+// the handshake, starts the inbound dispatch loop, and (if configured)
+// brings up the read-only HTTP query server. It returns the long-lived
+// *Plugin so the caller can drive graceful shutdown of the HTTP listener.
+func StartPlugin(c Config) *Plugin {
 	sockPath := filepath.Join(c.DataDirPath, socketPath)
 	var conn net.Conn
 	for range time.Tick(time.Second) {
@@ -90,6 +97,14 @@ func StartPlugin(c Config) {
 	if err := p.Handshake(); err != nil {
 		log.Fatal(err.Error())
 	}
+	if c.RpcAddress != "" {
+		srv, err := StartRPCServer(p, c.RpcAddress)
+		if err != nil {
+			log.Fatalf("canoliq: rpc start failed: %v", err)
+		}
+		p.rpc = srv
+	}
+	return p
 }
 
 // Handshake sends CanoliqConfig to the FSM and stores its response.

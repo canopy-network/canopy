@@ -77,19 +77,27 @@ func init() {
 // Config is the canoLiq plugin runtime configuration. It mirrors
 // contract.Config but adds the chainId of the canoLiq committee (used to
 // derive the committee reward pool key) and the path to genesis.json.
+//
+// RpcAddress optionally turns on the read-only HTTP query layer
+// (`plugin/go/canoliq/rpc.go`). Empty disables it. CANOLIQ_RPC_ADDR
+// environment variable overrides whatever the JSON config provides at
+// startup so operators can flip the listener on without editing the file.
 type Config struct {
 	ChainId     uint64 `json:"chainId"`
 	DataDirPath string `json:"dataDirPath"`
 	GenesisPath string `json:"genesisPath"`
+	RpcAddress  string `json:"rpcAddress"`
 }
 
 // DefaultConfig returns reasonable defaults: the next free committee chainId
-// and the standard plugin socket directory.
+// and the standard plugin socket directory. The HTTP query layer ships
+// disabled by default — operators opt in by setting RpcAddress.
 func DefaultConfig() Config {
 	return Config{
 		ChainId:     2,
 		DataDirPath: filepath.Join("/tmp/plugin/"),
 		GenesisPath: "",
+		RpcAddress:  "",
 	}
 }
 

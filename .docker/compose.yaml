@@ -12,6 +12,7 @@ services:
       - 9001:9001 # TCP P2P
       - 6060:6060 # Debug
       - 9090:9090 # Metrics
+      - 8587:8587 # canoLiq plugin read-only query RPC
     networks:
       - canopy
     command: ["start"]
@@ -19,9 +20,12 @@ services:
     # binary serves. The canopy controller starts the plugin via
     # plugin/go/pluginctl.sh, which inherits this env var; the binary's main()
     # at plugin/go/main.go switches on it to dispatch to canoliq.StartPlugin.
+    # CANOLIQ_RPC_ADDR turns on the read-only query HTTP server in the
+    # plugin process. Bind to 0.0.0.0 so the host port forward sees it.
     environment:
       - CANOPY_PLUGIN_MODE=canoliq
       - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.json
+      - CANOLIQ_RPC_ADDR=0.0.0.0:8587
     volumes:
       - ./volumes/node_1:/root/.canopy
   #    deploy:
@@ -43,12 +47,14 @@ services:
       - 9002:9002 # TCP P2P
       - 6061:6060 # Debug
       - 9091:9091 # Metrics
+      - 8588:8587 # canoLiq plugin read-only query RPC
     networks:
       - canopy
     command: ["start"]
     environment:
       - CANOPY_PLUGIN_MODE=canoliq
       - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.json
+      - CANOLIQ_RPC_ADDR=0.0.0.0:8587
     volumes:
       - ./volumes/node_2:/root/.canopy
 #    deploy:

@@ -288,10 +288,125 @@ Design decisions (resolved against the whitepapers):
 - [x] In-process: insurance pool grows by `insurance_bps * fee * treasury_bps / 10000^2` per block; full conservation holds
 - [x] In-process: per-validator infra credits split proportionally to committee stake
 
-### Phase 3 — Monitoring & autonomy graduation (deferred)
-- [ ] RPC endpoints (TVL, pool health, validator uptime, vesting status)
-- [ ] Alerting hooks
-- [ ] Graduation snapshot / migration tooling
+### Phase 3 — Monitoring & autonomy graduation
+
+#### 1. Read-only query layer (HTTP-in-plugin)
+
+The plugin process owns all canoLiq-prefixed state. Phase 1.5 left
+fee-split reconciliation against the live chain blocked on a way to
+read that state from outside the plugin. Phase 3 §1 fills that gap by
+running an HTTP server inside the plugin process, alongside the FSM
+unix socket. All routes are read-only — they call `StateRead` only.
+
+##### 1a. Query helpers (`plugin/go/canoliq/query.go`)
+- [x] `QueryGlobals()` → `*contract.CanoliqGlobals`
+- [x] `QueryParams()` → `*contract.CanoliqParams`
+- [x] `QueryAccount(addr)` → composite view: CNPY, cCNPY, liquid CLIQ,
+      staked CLIQ, validator-incentive accrual, vesting schedules
+      (with cumulative unlocked-to-date). Pending unstakes and open
+      redemptions are *not* in the composite view because there is no
+      per-address index — callers fetch individual records by id via
+      the dedicated routes.
+- [x] `QueryPools()` → treasury (CNPY/CLIQ), buyback, insurance,
+      validator-incentives ledger (iterate `ValidatorRegistry` →
+      per-address `KeyForValidatorIncentives`; falls back to legacy
+      aggregator address when registry is empty)
+- [x] `QueryProposal(id)` → `*contract.Proposal` (or 404)
+- [x] `QueryProposalIndex()` → list of active proposal ids
+- [x] `QueryVote(proposalId, voter)` → `*contract.Vote` (or 404)
+- [x] `QueryBuybackOrder(id)` → `*contract.BuybackOrder`
+- [x] `QueryTreasurySpend(id)` → `*contract.TreasurySpend`
+- [x] `QuerySpendIndex()` → list of pending spend ids
+- [x] `QueryMultisigApprovals(spendId)` → list of approvals filtered
+      against current `params.multisig_signers`
+- [x] `QueryValidatorRegistry()` → `*contract.ValidatorRegistry`
+- [x] `QueryRedemption(addr, id)` → `*contract.Redemption` (or 404)
+- [x] `QueryVesting(addr)` → list of `VestingSchedule` + cumulative
+      unlocked-at-current-height (uses `Plugin.CurrentHeight()`)
+
+##### 1b. HTTP server (`plugin/go/canoliq/rpc.go`)
+- [x] `net/http` mux gated by `Config.RpcAddress` (or env
+      `CANOLIQ_RPC_ADDR`); empty disables the listener so the Phase 1
+      binary surface is preserved.
+- [x] Route table:
+  - `GET /v1/globals`
+  - `GET /v1/params`
+  - `GET /v1/account/{addr}` (hex address, with or without `0x`)
+  - `GET /v1/pools`
+  - `GET /v1/proposals` (active id list)
+  - `GET /v1/proposal/{id}`
+  - `GET /v1/vote/{id}/{voter}`
+  - `GET /v1/buyback/{id}`
+  - `GET /v1/spends` (pending id list)
+  - `GET /v1/spend/{id}`
+  - `GET /v1/spend/{id}/approvals`
+  - `GET /v1/validators`
+  - `GET /v1/redemption/{addr}/{id}`
+  - `GET /v1/vesting/{addr}`
+  - `GET /v1/health` (liveness — `{height, genesisComplete, chainId}`)
+- [x] Encode responses as JSON; proto `@gotags` keep field names
+      consistent with `canoliqctl`.
+- [x] 404 with `{"error":"..."}` on missing keys; 400 on malformed
+      address; 405 on non-GET; 500 on plugin-internal error mapped
+      from `*contract.PluginError` (address-shape errors map to 400).
+- [x] Graceful shutdown via `(*RPCServer).Shutdown` driven by
+      `main.go`'s signal context (5s timeout).
+
+##### 1c. Config + main wiring
+- [x] Extended `Config` with `RpcAddress string`; honors
+      `CANOLIQ_RPC_ADDR` env var override at startup.
+- [x] `main.go` captures the long-lived `*Plugin` and calls
+      `rpc.Shutdown` on signal cancellation.
+- [x] `.docker/compose.yaml` exposes the RPC port: `8587:8587` for
+      node-1 and `8588:8587` for node-2; both containers set
+      `CANOLIQ_RPC_ADDR=0.0.0.0:8587` so the host port forwards see
+      the listener.
+
+##### 1d. Tests
+- [x] Per-route HTTP tests against `fakeStore` via `httptest.Server`
+      (`rpc_test.go::TestRPCHealthAndGlobals`,
+      `TestRPCParamsRoundTrip`,
+      `TestRPCAccountComposite`, `TestRPCProposalLifecycle`,
+      `TestRPCSpendAndApprovals`, `TestRPCBuybackOrder`,
+      `TestRPCRedemptionAndVesting`).
+- [x] 400 on malformed address (`TestRPCAccountRejectsBadAddress`),
+      405 on non-GET (`TestRPCMethodNotAllowed`), and an
+      empty-addr-disables-server case
+      (`TestRPCStartRPCServerEmptyAddrDisabled`).
+- [x] Conservation cross-check: `TestRPCPoolsConservationAfterReward`
+      injects a 950-uCNPY post-DAO reward, runs `ProcessRewards`, and
+      asserts the `/v1/pools` view + `globals.TotalPooledCnpy` sum
+      back to the seeded delta — the same conservation equation as
+      `TestInsuranceConservationFullSplit` but observed through the
+      HTTP layer.
+
+##### 1e. Documentation
+- [x] `plugin/go/canoliq/README.md` — added "Read-only HTTP query
+      layer (Phase 3)" section listing all routes, the env-var knob,
+      docker port mapping, and known gaps.
+- [x] `plugin/go/canoliq/AGENTS.md` — added "Query layer" section
+      covering the per-request `*Canoliq` minting pattern, the
+      gating config, and why collection routes depend on existing
+      indexes.
+
+##### Phase 3 §1 verification
+- [x] `cd plugin/go && go build ./...` succeeds with the new
+      `query.go` / `rpc.go` files; `contract` mode unchanged.
+- [x] In-process: every route returns 200/JSON for seeded state and
+      4xx for missing/malformed inputs (`go test ./canoliq/ -run
+      TestRPC` — 11 tests).
+- [ ] Live integration: hit `/v1/globals` and `/v1/pools` against
+      the running canoliq plugin in `.docker/compose.yaml` and
+      reconcile a fee split — closes the open Phase 1.5 item.
+
+#### 2. Alerting hooks (deferred)
+- [ ] Threshold-driven webhook for buyback pool drain rate
+- [ ] Stuck-redemption alert (queue length above threshold)
+- [ ] Validator-incentives starvation alert (registry stake skew)
+
+#### 3. Graduation snapshot / migration tooling (deferred)
+Snapshot tooling for whitepaper §10 thresholds (TVL, validator
+count, DAO maturity).
 
 ---
 

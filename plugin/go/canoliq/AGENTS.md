@@ -227,6 +227,38 @@ used for "instant unlock at cliff" tranches.
 batch read for every schedule listed. Two FSM round-trips per claim is
 intentional — needed because we cannot range-scan.
 
+## Query layer (Phase 3)
+
+`rpc.go` runs a small `net/http` mux **inside the plugin process** so
+operators can read plugin-owned state without going through the FSM.
+All routes are read-only — they go through `query.go` helpers, which
+issue point `StateRead` calls and never write.
+
+The HTTP server is gated by `Config.RpcAddress` (or env
+`CANOLIQ_RPC_ADDR`). Empty disables it. `StartPlugin` returns the
+long-lived `*Plugin` so `main.go` can drive `RPCServer.Shutdown`
+during graceful exit.
+
+Per-HTTP-request context is built by `(*RPCServer).queryContext()`,
+which mints a fresh `*Canoliq` with `rand.Uint64()` as `fsmId`. This
+matters because `Plugin.pending` is keyed by request id; FSM-originated
+ids are guaranteed unique by the FSM, but plugin-originated reads
+(state lookups inside an HTTP handler) need their own unique id to
+avoid response-channel collisions under concurrency.
+
+Collection routes depend on the existing indexes — `ProposalIndex`,
+`SpendIndex`, `VestingIndex`, `CLIQStakeIndex`, `ValidatorRegistry`.
+Anything that lacks an index (per-address redemption list, per-address
+unstake list) is a point lookup by id, *not* a sweep. If you want a
+new collection route, add the index alongside it on the write path
+first — the FSM does not support range scans.
+
+JSON encoding piggybacks on `@gotags` already attached to the proto
+types, so the wire format matches what `canoliqctl` already produces.
+Fields that are `google.protobuf.Any` (e.g. `Proposal.Payload`)
+serialize as `{typeUrl, value}` — opaque to JSON consumers but
+sufficient for reconciliation.
+
 ## Per-request Canoliq, long-lived Plugin
 
 Every inbound FSM lifecycle message creates a fresh `*Canoliq` carrying the

@@ -49,9 +49,10 @@ func (s *fakeStore) write(req *contract.PluginStateWriteRequest) *contract.Plugi
 // resulting state after handlers run.
 func newTestCanoliq() (*Canoliq, *fakeStore) {
 	store := newFakeStore()
-	p := &Plugin{fakeStore: store}
+	cfg := Config{ChainId: 2, DataDirPath: "/tmp/canoliq-test"}
+	p := &Plugin{fakeStore: store, config: cfg}
 	c := &Canoliq{
-		Config: Config{ChainId: 2, DataDirPath: "/tmp/canoliq-test"},
+		Config: cfg,
 		plugin: p,
 		fsmId:  1,
 	}

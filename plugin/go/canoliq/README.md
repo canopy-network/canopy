@@ -213,6 +213,59 @@ All canoLiq keys live under prefix `[]byte{10}` to stay clear of Canopy core
 prefixes (`1`=accounts, `2`=pools, `7`=gov). See `state.go` for the helper
 functions and key composition.
 
+## Read-only HTTP query layer (Phase 3)
+
+The plugin owns all canoLiq-prefixed state and is the only process that can
+read it. To make plugin state visible to operators, dashboards, and
+`canoliqctl`, a small read-only HTTP server runs **inside the plugin
+process** alongside the FSM unix socket. All routes are read-only — they
+never write state.
+
+Enable it by setting `CANOLIQ_RPC_ADDR` (or `Config.RpcAddress`) to a
+listen address. Empty/unset disables the server (the Phase 1 binary surface
+is preserved).
+
+```bash
+export CANOLIQ_RPC_ADDR=127.0.0.1:8587
+CANOPY_PLUGIN_MODE=canoliq ./go-plugin
+```
+
+The bundled Docker compose binds the plugin RPC to `0.0.0.0:8587` inside
+each node container; the host port forwards are `8587` (node-1) and
+`8588` (node-2).
+
+### Routes (all `GET`)
+
+| Path | Returns |
+|---|---|
+| `/v1/health` | `{height, genesisComplete, chainId}` |
+| `/v1/globals` | `CanoliqGlobals` (singleton accounting record) |
+| `/v1/params` | `CanoliqParams` (governance-tunable knobs) |
+| `/v1/pools` | committee pool, treasury (CNPY/CLIQ), buyback, insurance, per-validator incentives |
+| `/v1/account/{addr}` | composite per-address view: CNPY + cCNPY + liquid CLIQ + stake + validator-incentive + vesting |
+| `/v1/proposals` | active proposal id list |
+| `/v1/proposal/{id}` | full `Proposal` record |
+| `/v1/vote/{id}/{voter}` | vote cast by `voter` on proposal `id` |
+| `/v1/buyback/{id}` | post-execution `BuybackOrder` for a passed buyback proposal |
+| `/v1/spends` | pending treasury-spend id list |
+| `/v1/spend/{id}` | `TreasurySpend` record |
+| `/v1/spend/{id}/approvals` | multisig approvals filtered to the *current* signer set |
+| `/v1/validators` | `ValidatorRegistry` (canoLiq committee snapshot used for pro-rata) |
+| `/v1/redemption/{addr}/{id}` | a queued cCNPY → CNPY redemption record |
+| `/v1/vesting/{addr}` | every vesting schedule for an address with cumulative unlocked-to-date |
+
+Address parameters accept `0x`-prefixed or bare 40-character hex.
+
+Errors: `400` on malformed address, `404` on missing entity, `405` on
+non-`GET`, `500` on plugin-internal failure (with a JSON error body).
+
+### Known gaps
+
+There are no per-address indexes for redemptions or unstaking-CLIQ
+records. To list those for an address, the caller needs the id (returned
+by the originating tx). A future iteration can add per-address indexes if
+operator demand emerges.
+
 ## Logs
 
 ```bash

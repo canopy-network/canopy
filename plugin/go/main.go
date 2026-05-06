@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/canopy-network/go-plugin/canoliq"
 	"github.com/canopy-network/go-plugin/contract"
@@ -16,8 +17,14 @@ import (
 // "canoliq"        → the canoLiq liquid-staking plugin.
 const pluginModeEnv = "CANOPY_PLUGIN_MODE"
 
+// CANOLIQ_RPC_ADDR overrides the read-only HTTP query listener address,
+// taking precedence over Config.RpcAddress from CANOLIQ_CONFIG. Empty/unset
+// keeps whatever the JSON config provides (default: disabled).
+const canoliqRpcAddrEnv = "CANOLIQ_RPC_ADDR"
+
 func main() {
 	mode := os.Getenv(pluginModeEnv)
+	var canoliqPlugin *canoliq.Plugin
 	switch mode {
 	case "", "contract":
 		log.Println("starting plugin in 'contract' mode (send tutorial)")
@@ -32,11 +39,23 @@ func main() {
 			}
 			cfg = loaded
 		}
-		canoliq.StartPlugin(cfg)
+		if addr := os.Getenv(canoliqRpcAddrEnv); addr != "" {
+			cfg.RpcAddress = addr
+		}
+		canoliqPlugin = canoliq.StartPlugin(cfg)
 	default:
 		log.Fatalf("unknown %s value %q (want '', 'contract', or 'canoliq')", pluginModeEnv, mode)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	<-ctx.Done()
+	if canoliqPlugin != nil {
+		if rpc := canoliqPlugin.RPC(); rpc != nil {
+			shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := rpc.Shutdown(shutCtx); err != nil {
+				log.Printf("canoliq: rpc shutdown error: %v", err)
+			}
+		}
+	}
 }
