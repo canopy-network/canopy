@@ -3,6 +3,38 @@ syntax = "proto3";
 package types;
 // go_package must use the canonical module path — never the fork URL (causes EOF on CheckTx)
 option go_package = "github.com/canopy-network/canopy/plugin/go/contract";
+import "google/protobuf/any.proto";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CANOPY BASE LAYER — Transaction envelope (required by plugin.proto)
+// DO NOT remove — plugin.proto references Transaction directly.
+// ═══════════════════════════════════════════════════════════════════════════
+
+message Signature {
+    bytes public_key = 1;
+    bytes signature  = 2;
+}
+
+message Transaction {
+    string              message_type   = 1;
+    google.protobuf.Any msg            = 2;
+    Signature           signature      = 3;
+    uint64              created_height = 4;
+    uint64              time           = 5;
+    uint64              fee            = 6;
+    string              memo           = 7;
+    uint64              network_id     = 8;
+    uint64              chain_id       = 9;
+}
+
+message FeeParams {
+    uint64 send_fee              = 1;
+    uint64 create_market_fee     = 2;
+    uint64 submit_prediction_fee = 3;
+    uint64 resolve_market_fee    = 4;
+    uint64 claim_winnings_fee    = 5;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CANOPY BASE LAYER — send only (the plugin owns its internal token economy)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -29,7 +61,7 @@ message MessageCreateMarket {
 // Spec §SubmitPrediction. AUDIT-3/5/7/12 fixes applied in DeliverTx handler.
 message MessageSubmitPrediction {
     bytes  market_id         = 1; // 20 bytes — SHA256(creator_addr + nonce)[:20]
-    bytes  forecaster_address = 2; // 20 bytes — also the signer
+    bytes  bettor_address = 2; // 20 bytes — also the signer
     bool   outcome            = 3; // true = YES, false = NO
     uint64 shares             = 4; // must be >= PRECISION_SCALE in DeliverTx (AUDIT-7)
     uint64 max_cost           = 5; // slippage cap — DeliverTx rejects if cost > max_cost (AUDIT-12)
@@ -77,14 +109,14 @@ message MessageFileDispute {
 message MessageCommitVote {
     bytes market_id    = 1; // 20 bytes
     bytes voter_addr   = 2; // 20 bytes
-    bytes vote_commit  = 3; // 32-byte SHA256 commitment
+    bytes commit_hash  = 3; // 32-byte SHA256 commitment
 }
 // reveal_vote — index 9
 message MessageRevealVote {
     bytes  market_id   = 1; // 20 bytes
     bytes  voter_addr  = 2; // 20 bytes
     bool   vote        = 3; // true = YES, false = NO
-    uint64 nonce       = 4; // reveal nonce — DeliverTx recomputes hash to verify
+    bytes  nonce       = 4; // reveal nonce — DeliverTx recomputes hash to verify
 }
 // tally_votes — index 10
 // NF-1 fix: was missing from ContractConfig and proto entirely.
@@ -158,7 +190,8 @@ message TreasuryReserve {
 message ResolverRecord {
     bytes  resolver_address = 1;
     uint64 stake_amount     = 2;
-    uint64 rrs_score        = 3; // resolver reputation score — halved on slash
+    uint64 rrs_score        = 3;
+    uint64 registered_at    = 4;
 }
 // 0x17 — ProposalRecord (per market_id)
 message ProposalRecord {
@@ -170,22 +203,32 @@ message ProposalRecord {
 }
 // 0x18 — DisputeRecord (per market_id)
 message DisputeRecord {
-    bytes  disputer_address = 1;
-    uint64 dispute_bond     = 2;
-    uint64 dispute_block    = 3;
-    uint32 vote_status      = 4; // used as tally_votes idempotency guard (P5)
+    bytes    disputer_address = 1;
+    uint64   dispute_bond     = 2;
+    uint64   dispute_block    = 3;
+    uint32   vote_status      = 4;
+    uint32   panel_size       = 5;
+    repeated bytes panel_members = 6;
 }
 // 0x19 — VoteCommit (per market_id + voter_addr)
 message VoteCommit {
-    bytes vote_commit = 1; // 32-byte SHA256(vote || nonce || addr)
+    bytes  voter_addr   = 1;
+    bytes  commit_hash  = 2;
+    uint64 committed_at = 3;
 }
 // 0x1A — VoteReveal (per market_id + voter_addr)
 message VoteReveal {
-    bool   vote  = 1;
-    uint64 nonce = 2;
+    bytes  voter_addr  = 1;
+    bool   vote        = 2;
+    uint64 revealed_at = 3;
 }
 // 0x1B — SlashRecord (per resolver_address)
 message SlashRecord {
-    uint64 slash_count  = 1;
-    uint64 slashed_at   = 2; // most recent slash block height
+    bytes  slashed_address = 1;
+    uint64 slash_amount    = 2;
+    uint64 slashed_at      = 3;
+}
+// 0x1C — PanelEntropyAccum (singleton rolling entropy accumulator)
+message PanelEntropyAccum {
+    uint64 accumulator = 1;
 }
