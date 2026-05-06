@@ -120,7 +120,13 @@ Track implementation progress here. Tick boxes (`[x]`) as work lands. Keep this 
 - [x] In-process: vesting tranche claims 0 before cliff, linear after (`::TestVestingLinearUnlock`, `::TestDeliverCLIQClaimVestedFlow`)
 - [x] In-process: deposit → reward accrues → redeem returns yield (`::TestCompositeDepositRewardRedeem`)
 - [x] Whitepaper §7 reconciliation test passes (X=1000 → 881.6 user yield ± truncation)
-- [ ] Coordination: design summary posted to Canopy Discord
+- [ ] Coordination: design summary posted to Canopy Discord. Should
+      include: chainId selection (2), 12% fee + 40/30/15/15 split,
+      CLIQ supply 100M with the seven-bucket distribution and vesting
+      shape, validator opt-in via `MessageEditStake`, and the plugin
+      runtime contract (`CANOPY_PLUGIN_MODE=canoliq`,
+      `/tmp/plugin/plugin.sock`). Link the live-reconciliation result
+      from Phase 1.5 (36M-uCNPY inflow → exact whitepaper §7 split).
 
 ### Phase 1.5 — Live integration (deferred)
 
@@ -436,19 +442,245 @@ Tests (`rpc_test.go`):
 - [x] `TestRPCBuybackPointLookup` (200 + 404)
 - [x] `TestLazyQueueTimeout` — handler aborts on client disconnect
 
-Future work (deferred, not blocking §1.1):
-- [ ] `RedemptionIndex(addr)` write-side index → lets `/v1/account/{addr}`
-      include the per-address redemption list
-- [ ] `UnstakingIndex(addr)` write-side index → ditto for unstakes
+##### 1.1-bis. Per-address collection indexes (follow-up)
 
-#### 2. Alerting hooks (deferred)
-- [ ] Threshold-driven webhook for buyback pool drain rate
-- [ ] Stuck-redemption alert (queue length above threshold)
-- [ ] Validator-incentives starvation alert (registry stake skew)
+Today `/v1/account/{addr}` cannot list pending redemptions or
+unstakes for a user — there is no per-address index that names
+those records. Add lightweight indexes mirroring `VestingIndex`.
 
-#### 3. Graduation snapshot / migration tooling (deferred)
-Snapshot tooling for whitepaper §10 thresholds (TVL, validator
-count, DAO maturity).
+###### Proto + state
+- [ ] Reuse `VestingIndex`'s shape (`repeated uint64 ids`) — no new
+      proto types needed. Just two new key helpers in `state.go`:
+      `KeyForRedemptionIndex(addr)`, `KeyForUnstakingIndex(addr)`.
+      Pick fresh domain bytes (next free after 20 = 21, 22).
+
+###### Write-side maintenance
+- [ ] `DeliverMessageCanoliqRedeem` — append the new redemption id
+      to `KeyForRedemptionIndex(addr)`
+- [ ] `DeliverMessageCanoliqClaimRedemption` — remove the matured
+      id from the index alongside the existing record delete
+- [ ] `DeliverMessageCLIQUnstake` — append unstake id to
+      `KeyForUnstakingIndex(addr)`
+- [ ] `DeliverMessageCLIQClaimUnstake` — remove the matured id
+
+###### Read-side
+- [ ] Extend `buildAccountView` to load both indexes, batch-read
+      the records, and add `Redemptions []*contract.Redemption`
+      and `Unstakes []*contract.UnstakingCLIQ` to `AccountView`
+- [ ] Optional dedicated routes: `/v1/account/{addr}/redemptions`,
+      `/v1/account/{addr}/unstakes` (lazy, same queue)
+
+###### Tests
+- [ ] Index append/remove invariants under all four flows
+      (redeem → claim, unstake → claim, plus partial / out-of-order
+      claims — index must end empty when no records remain)
+- [ ] `/v1/account/{addr}` reflects the new lists in correct order
+- [ ] Idempotency: re-applying a deletion of a non-present id is
+      a no-op
+
+#### 2. Alerting hooks
+
+The snapshot already gives operators a pull surface; alerting adds a
+push surface for unattended monitoring. Each `EndBlock`, after the
+snapshot publishes, the plugin evaluates a small set of conditions
+and POSTs to a configured webhook. Alerts are debounced and
+dedup-persisted so a process restart does not re-fire conditions
+that were already acknowledged.
+
+Whitepaper §11 requirement: "monitoring dashboards & alerts for
+validator behavior, committee health, and TVL movement." This
+section satisfies the alerting half; dashboards consume the
+existing `/v1` surface.
+
+##### 2a. Webhook delivery (`plugin/go/canoliq/alerts.go`)
+- [ ] `AlertConfig` struct — `WebhookURL`, `AuthHeader` (optional),
+      `Enabled`, per-kind `MinIntervalBlocks` debounce, payload
+      `Format` (json | slack | discord), 5s POST timeout
+- [ ] `Config.Alerts *AlertConfig` plumbed via JSON +
+      `CANOLIQ_ALERT_URL` env override; empty disables (mirrors
+      the `RpcAddress` pattern)
+- [ ] Dispatcher fans out POSTs on a goroutine so EndBlock never
+      blocks on network IO; failures logged at WARN, never panic
+- [ ] Deduplication: each alert kind has a last-fired-height entry
+      under `KeyForAlertState(kind)` (new domain byte). Skip when
+      `current_height - last_fired < MinIntervalBlocks`. Kind
+      transitions to "resolved" emit a single resolution event then
+      clear the watermark
+- [ ] Persistence rationale: webhook delivery is best-effort, but
+      dedup state lives in plugin state so a restart-during-incident
+      doesn't double-page
+
+##### 2b. Conditions (evaluated each EndBlock from the snapshot)
+- [ ] **Buyback drain rate.** Track `BuybackPool` deltas across
+      a rolling window (default 100 blocks). Fire when the
+      window-sum drain exceeds `drain_alert_bps` of the prior
+      window-start balance (default 5000 = 50%). Window stored as
+      a small ring on `Plugin` (in-memory; bounded so no proto
+      change). Resolution: drain falls below `drain_resolve_bps`
+- [ ] **Stuck redemption queue.** Count redemptions where
+      `unbond_complete_height + grace < current_height` (mature,
+      unclaimed). Fire when count > `stuck_redemption_threshold`
+      (default 10). **Depends on §1.1-bis `RedemptionIndex(addr)`
+      *plus* a global `StuckRedemptionIndex` of un-claimed
+      mature ids** — without enumeration, the alert can't compute.
+      Block this sub-bullet on §1.1-bis landing first
+- [ ] **Validator-incentive starvation.** Compute
+      `max_validator_stake / total_committee_stake` from
+      `snapshot.ValidatorRegistry`. Fire when ratio >
+      `concentration_alert_bps` (default 6600 = 66%). Resolution:
+      ratio falls below `concentration_resolve_bps`
+- [ ] **TVL drop** (whitepaper §11 explicit ask). Track
+      `globals.TotalPooledCnpy` rolling window. Fire on > N% drop
+      in M blocks. Default thresholds tunable via `AlertConfig`
+
+##### 2c. Payload schema
+- [ ] Generic JSON envelope:
+      `{kind, height, severity (warn|crit), message, details: {...}}`
+- [ ] Slack/Discord adapters: convert envelope to that platform's
+      format. Slack uses `text` + `blocks`; Discord uses `content` +
+      `embeds`. Pick by `Format` config field
+- [ ] Stable schema versioned under `details.schemaVersion` so
+      downstream consumers can evolve
+
+##### 2d. Tests
+- [ ] `httptest.Server` mock receiver; each kind fires once with
+      expected payload shape under a seeded condition
+- [ ] Debounce: same condition seeded across two consecutive
+      EndBlocks fires only once when interval > 1 block
+- [ ] Dedup persistence: simulate process restart by reloading
+      `Plugin.snapshot` and asserting no re-fire
+- [ ] Resilience: webhook returns 500 → EndBlock still completes,
+      retry happens on next firing window (no infinite-retry loop)
+- [ ] Threshold edge cases: exactly-at-threshold doesn't fire;
+      just-above-threshold fires
+
+##### 2e. Documentation
+- [ ] `README.md` — alert payload schema, configuration knobs,
+      Slack/Discord webhook setup, debounce semantics
+- [ ] `AGENTS.md` — design rationale (push vs pull, why dedup
+      state lives in plugin state, why the dispatcher is a
+      goroutine)
+- [ ] `MEMORY.md` entry if any new gotchas surface during the work
+
+##### Phase 3 §2 verification
+- [ ] In-process: each kind fires exactly once on threshold cross
+- [ ] In-process: debounce + resolution events sequence correctly
+- [ ] Live: point `CANOLIQ_ALERT_URL` at a local sink, induce a
+      buyback drain via a `MessageBuybackExecute`, observe the
+      alert envelope land in the sink
+
+#### 3. Graduation snapshot / migration tooling
+
+Whitepaper §10 describes graduation to a standalone L1 once
+objective thresholds are met (TVL, active validator count, DAO
+maturity). The mechanics decompose into four pieces: threshold
+tracking, point-in-time state export, fresh-chain import, and
+governance-gated coordination flow.
+
+This is the largest of the Phase 3 sub-projects. Recommend landing
+3a + 3b first as standalone deliverables — they're useful even
+without graduation (3a feeds dashboards, 3b is operational backup
+infrastructure).
+
+##### 3a. Threshold tracking
+- [ ] Extend `CanoliqParams` with three governance-tunable fields:
+      `graduation_min_tvl` (uCNPY), `graduation_min_validators`
+      (count), `graduation_min_passed_proposals` (count).
+      Defaults from whitepaper §10 (TBD with the team — placeholder
+      seeds in `DefaultParams`)
+- [ ] Add `GraduationStatus` to `Snapshot` and a new field on
+      `/v1/health` (or dedicated `/v1/graduation`). Surface:
+      current TVL, current validator count, cumulative passed
+      proposal count, ratio against each threshold, and a
+      composite `eligible bool`
+- [ ] Track `globals.PassedProposalCount` — incremented in
+      `dispatchPassed`. Tests: counter advances on each pass;
+      failed proposals don't increment
+- [ ] Tests: thresholds met / partial / unmet → eligible flag
+      flips correctly
+
+##### 3b. State export (`plugin/go/canoliq/export.go`)
+- [ ] Define `GenesisExport` proto extending `GenesisFile` with
+      live state slots: per-address cCNPY/CLIQ liquid balances,
+      `CLIQStake` records (with `staked_at_height`),
+      `UnstakingCLIQ` records, `Redemption` records,
+      `VestingSchedule.ClaimedAmount`, treasury / buyback /
+      insurance scalars, validator registry, active
+      proposals/spends/votes, full `CanoliqParams`,
+      `globals.PassedProposalCount`. Versioned via
+      `export_schema_version`
+- [ ] Implementation: walk all canoliq-prefixed keys via the
+      plugin's existing index helpers + per-address indexes
+      from §1.1-bis (so this depends on those landing). Encode
+      addresses as hex for JSON readability
+- [ ] CLI: `canoliqctl export-genesis --rpc <url> --output
+      genesis-export.json`. Pull state via the read-only RPC
+      (snapshot is sufficient; per-address data via lazy queue).
+      No new plugin tx surface needed
+- [ ] Determinism: same height + state → identical bytes. Sort
+      collections by stable keys (addresses lex-ordered, ids
+      ascending) before encoding
+- [ ] Tests: round-trip — seed a small chain via fakeStore, export,
+      re-import into a fresh fakeStore, assert state-tree
+      equivalence (every canoliq-prefixed key matches)
+
+##### 3c. Migration import
+- [ ] Extend `runGenesis` to detect `GenesisExport` payloads (via
+      `export_schema_version` presence) and seed *all* live state,
+      not just the bucket distribution. Treat bucket math as
+      already applied (the export captures the post-distribution
+      state, not the original allocation tree)
+- [ ] Validation: `cliq_total_supply` preserved (sum of liquid +
+      stake + unstaking + remaining-vesting matches the cap);
+      treasury balances non-negative; per-validator stake totals
+      match the registry; `CLIQStakeIndex` matches the set of
+      stake records. Refuse to import if any check fails
+- [ ] Tests: export from a non-trivial chain (genesis + several
+      blocks of activity) → restart fresh node with the exported
+      genesis → query the new node and assert the same `/v1/...`
+      responses (modulo height, which restarts at 1)
+
+##### 3d. Coordination flow (graduation message)
+- [ ] New proposal payload `ProposalGraduate` (Phase 2-style
+      governance) — when passed, the plugin marks
+      `globals.GraduationLockedHeight = h + grace_blocks` and
+      stops accepting new deposits. Existing redemptions and
+      vesting claims continue to work through the grace window
+- [ ] After `GraduationLockedHeight`, deposits return
+      `ErrGraduationLocked`. Redemptions force-mature so users
+      can exit before the export
+- [ ] Tests: pre-graduation → all flows work; post-lock pre-grace
+      → deposits rejected, redemptions accepted; post-grace →
+      export captures a fully-quiesced state
+- [ ] Cross-chain coordination doc (separate to whitepaper):
+      pre-graduation Canopy DAO proposal to deprecate the canoLiq
+      committee; post-export, publish the export hash on Canopy
+      and the new L1; cCNPY/CLIQ holders' continuity guarantee
+      (same addresses, same balances, same vesting schedules)
+
+##### 3e. Documentation
+- [ ] `README.md` — graduation playbook: thresholds, export
+      command, sequencing, fallback / abort path. Include the
+      `eligible` flag semantics (advisory; governance is the
+      actual trigger)
+- [ ] `AGENTS.md` — invariants the export must preserve, the
+      determinism contract, why `runGenesis` short-circuits on
+      `genesis_complete=true` (regular path) vs. how
+      `GenesisExport` overrides the bucket math
+- [ ] Migration runbook in `docs/` — step-by-step for the
+      operations team: pause deposits, wait grace, run export,
+      verify hash, hand off to new-L1 genesis, deprecate committee
+
+##### Phase 3 §3 verification
+- [ ] In-process: round-trip export/import preserves every
+      canoliq-prefixed key
+- [ ] In-process: graduation lock blocks deposits, allows
+      redemptions, force-matures pending redemptions at end of
+      grace window
+- [ ] Live: run a docker-compose chain through to graduation
+      (with shortened thresholds for testability), export, spin
+      up a fresh canopy node from the exported genesis, observe
+      identical RPC responses
 
 ---
 
@@ -788,9 +1020,14 @@ Cover, in addition to the items in §6 of Phase 1:
 
 ---
 
-## Phase 3 — Monitoring, autonomy graduation (outline)
+## Phase 3 — Monitoring, autonomy graduation
 
-Deferred. Includes: RPC endpoints for TVL / pool health / validator uptime / vesting status; alerting hooks; graduation tooling that snapshots state for migration to a standalone L1 once whitepaper §10 thresholds are met (TVL, validator count, DAO maturity).
+The detailed Phase 3 plan lives in the **Progress checklist** above
+(§1 query layer, §1.1 per-address routes, §1.1-bis collection
+indexes, §2 alerting hooks, §3 graduation tooling). §1 and §1.1 are
+landed and verified live; §1.1-bis, §2, and §3 are scoped and
+ready to pick up — the alerting "stuck redemption" condition
+specifically depends on §1.1-bis indexes landing first.
 
 ---
 
