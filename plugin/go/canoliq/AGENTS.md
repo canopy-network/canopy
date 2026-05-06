@@ -120,7 +120,19 @@ fail if you forget it.
 `Canoliq.Genesis` is **idempotent** — re-runs short-circuit on
 `globals.GenesisComplete`. The genesis source order is
 `req.GenesisJson` → `Config.GenesisPath` → error. Tests inject via
-`PluginGenesisRequest.GenesisJson`; production injects via the configured path.
+`PluginGenesisRequest.GenesisJson`; production injects via the configured
+path.
+
+**The Canopy FSM does not currently dispatch `PluginGenesisRequest` for
+the canoliq plugin** because chain genesis.json carries no plugin section
+for plugin id 2. Without a trigger, plugin Genesis would never run and
+`ProcessRewards` is a permanent no-op (it bails on
+`!globals.GenesisComplete`). To fix this, `BeginBlock` calls
+`bootstrapGenesisIfNeeded` on every block: if `GenesisComplete=false` and
+`Config.GenesisPath` is set, it runs `runGenesis(nil)` which loads the
+configured file. This means the plugin self-bootstraps on its first
+BeginBlock after deploy. Tests with empty `Config.GenesisPath` skip the
+branch cleanly. See `TestBeginBlockSelfBootstrapsGenesis`.
 
 Bucket bps must sum to 10_000, **and** recipients within each bucket must
 also sum to 10_000. Both are validated by `validateGenesis`. Liquid tranches

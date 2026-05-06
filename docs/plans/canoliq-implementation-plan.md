@@ -155,13 +155,16 @@ Checklist:
       `StateRead` returns `Entry{Value: nil}` for missing keys (not zero
       entries) → fixed in `LoadParams`/`LoadGlobals` to treat empty `Value`
       as unset.
-- [ ] `MessageSubsidy` proposal funds committee 2's reward pool; canoLiq's
-      `EndBlock` observes the inflow and applies the 12% fee on a real chain
-      — *not yet directly verified* on the live chain. Committee 2 is
-      auto-subsidized via the 33% threshold (both validators opted in), so
-      `EndBlock` is observing inflow each block; explicit fee-split
-      reconciliation against on-chain state is blocked on a plugin-state
-      RPC, which is Phase 3 work.
+- [x] `MessageSubsidy` proposal funds committee 2's reward pool; canoLiq's
+      `EndBlock` observes the inflow and applies the 12% fee on a real chain.
+      Verified live in `.docker/compose.yaml` after wiping volumes: with
+      the BeginBlock self-bootstrap (so plugin Genesis runs even when chain
+      genesis.json has no plugin section), an inflow of 36,000,000 uCNPY
+      reconciled exactly via `/v1/globals` + `/v1/pools`:
+      `pool=33,408,000 + treasury=1,101,600 + insurance=194,400 +
+      validators=648,000 + buyback=648,000 = 36,000,000`, matching the
+      whitepaper §7 fee math (12% × 36M = 4.32M split 40/30/15/15 with
+      15% of treasury skim → insurance).
 - [x] Submit a real `MessageCanoliqDeposit` via `canoliqctl deposit`; tx
       accepted at height 4 (cCNPY mint proven indirectly by the subsequent
       successful redeem).
@@ -395,9 +398,12 @@ one block; that's acceptable for monitoring.
 - [x] In-process: every route returns 200/JSON for seeded state and
       4xx for missing/malformed inputs (`go test ./canoliq/ -run
       TestRPC` — 11 tests).
-- [ ] Live integration: hit `/v1/globals` and `/v1/pools` against
-      the running canoliq plugin in `.docker/compose.yaml` and
-      reconcile a fee split — closes the open Phase 1.5 item.
+- [x] Live integration: hit `/v1/globals` and `/v1/pools` against the
+      running canoliq plugin in `.docker/compose.yaml` and reconcile a
+      fee split. Result: 36M-uCNPY inflow reconciles exactly across
+      pool / treasury / insurance / validator / buyback per the
+      whitepaper §7 split. Snapshot height tracks the live chain;
+      no `code 107` regressions across 100+ blocks.
 
 #### 1.1 Per-address query routes (deferred)
 

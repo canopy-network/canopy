@@ -3,6 +3,7 @@ package canoliq
 import (
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/canopy-network/go-plugin/contract"
@@ -416,6 +417,48 @@ func TestGenesisAllocationTotals(t *testing.T) {
 	}
 	if allocated != CLIQTotalSupply {
 		t.Fatalf("allocated total: got %d want %d", allocated, CLIQTotalSupply)
+	}
+}
+
+// TestBeginBlockSelfBootstrapsGenesis verifies that BeginBlock runs the
+// plugin Genesis when Config.GenesisPath is set and globals.GenesisComplete
+// is false. This is the path used in production when the FSM does not
+// dispatch a PluginGenesisRequest (chain genesis.json has no canoliq
+// plugin section). Without it, ProcessRewards bails as a no-op forever.
+func TestBeginBlockSelfBootstrapsGenesis(t *testing.T) {
+	c, s := newTestCanoliq()
+	gfBytes := mustJSON(t, miniGenesis())
+	tmp, err := os.CreateTemp(t.TempDir(), "genesis*.json")
+	if err != nil {
+		t.Fatalf("temp: %v", err)
+	}
+	if _, err := tmp.Write(gfBytes); err != nil {
+		t.Fatalf("write genesis: %v", err)
+	}
+	tmp.Close()
+	c.Config.GenesisPath = tmp.Name()
+	// Sanity: globals starts un-initialized.
+	if g := loadGlobals(t, s); g.GenesisComplete {
+		t.Fatalf("precondition: genesis already complete")
+	}
+	resp := c.BeginBlock(&contract.PluginBeginRequest{Height: 1})
+	if resp.Error != nil {
+		t.Fatalf("BeginBlock: %v", resp.Error)
+	}
+	g := loadGlobals(t, s)
+	if !g.GenesisComplete {
+		t.Fatalf("genesis did not run; globals=%+v", g)
+	}
+	if g.CliqTotalSupply != CLIQTotalSupply {
+		t.Fatalf("supply: got %d want %d", g.CliqTotalSupply, CLIQTotalSupply)
+	}
+	// Re-run is idempotent.
+	resp = c.BeginBlock(&contract.PluginBeginRequest{Height: 2})
+	if resp.Error != nil {
+		t.Fatalf("idempotent BeginBlock: %v", resp.Error)
+	}
+	if g2 := loadGlobals(t, s); g2.CliqTotalSupply != CLIQTotalSupply {
+		t.Fatalf("idempotent supply changed: %d", g2.CliqTotalSupply)
 	}
 }
 

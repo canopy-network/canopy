@@ -28,14 +28,45 @@ func (c *Canoliq) Genesis(req *contract.PluginGenesisRequest) *contract.PluginGe
 	return &contract.PluginGenesisResponse{}
 }
 
-// BeginBlock runs the per-block governance + treasury hooks: tally and
-// dispatch any expired proposals, then auto-execute eligible treasury spends.
+// BeginBlock runs the per-block governance + treasury hooks: self-bootstrap
+// genesis if the FSM never sent a PluginGenesisRequest (chain genesis.json
+// has no canoliq plugin section), then tally and dispatch any expired
+// proposals.
 func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginBeginResponse {
+	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
 	height := req.GetHeight()
 	if err := c.processProposals(height); err != nil {
 		return &contract.PluginBeginResponse{Error: err}
 	}
 	return &contract.PluginBeginResponse{}
+}
+
+// bootstrapGenesisIfNeeded runs runGenesis exactly once when the plugin
+// detects it has not been initialized. The Canopy FSM only sends a
+// PluginGenesisRequest if the chain-genesis.json carries a plugin section
+// for this plugin id; in localnet/Docker setups that section is typically
+// absent, so without this self-bootstrap the plugin runs forever with
+// genesis_complete=false and ProcessRewards is a no-op.
+//
+// runGenesis is idempotent (short-circuits on globals.GenesisComplete), so
+// running it from BeginBlock is safe whether or not the FSM also dispatches
+// the explicit Genesis call.
+func (c *Canoliq) bootstrapGenesisIfNeeded() *contract.PluginError {
+	g, err := c.LoadGlobals()
+	if err != nil {
+		return err
+	}
+	if g.GenesisComplete {
+		return nil
+	}
+	if c.Config.GenesisPath == "" {
+		// No genesis source configured. Tests that drive BeginBlock
+		// without a genesis file rely on this branch to skip cleanly.
+		return nil
+	}
+	return c.runGenesis(nil)
 }
 
 // CheckTx statelessly validates a transaction and returns the authorized
