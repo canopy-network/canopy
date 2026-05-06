@@ -11,11 +11,14 @@ package tutorial
 //   - Ports: 50002 (query RPC), 50003 (admin RPC)
 //
 // Key design decisions:
-//   - Test accounts created with testPassword so keystore-get can decrypt them.
+//   - Validator key (no password) is hardcoded — keystore-get returns {} for passwordless keys.
+//   - New test accounts use testPassword so keystore-get can decrypt and return private key.
 //   - Sign bytes = proto.Marshal(tx with nil Signature) — binary, deterministic.
-//   - TX body = JSON with camelCase fields, base64-encoded []byte fields.
+//   - TX body = JSON matching TypeScript rpc_test.ts format confirmed by Canopy CEO Adam.
 //   - BLS12-381 G2 (kyber/bdn) — 96-byte signatures matching Canopy verification.
-//   - The "type" field in the tx JSON body must match ContractConfig.SupportedTransactions.
+//   - "type" field = short name from ContractConfig.SupportedTransactions.
+//   - []byte fields in msg = base64. Signature fields = hex.
+//   - Numeric fields (time, height, fee, networkID, chainID) = JSON numbers, not strings.
 
 import (
 	"bytes"
@@ -41,22 +44,13 @@ import (
 // ─────────────────────────────────────────────────────────────────────────────
 
 const (
-	queryRPCURL  = "http://localhost:50002"
-	adminRPCURL  = "http://localhost:50003"
+	queryRPCURL   = "http://localhost:50002"
+	adminRPCURL   = "http://localhost:50003"
 	testNetworkID = uint64(1)
 	testChainID   = uint64(1)
 	testPassword  = "testpassword123"
 	testFee       = uint64(10000)
 )
-
-// typeURLShortName maps protobuf typeURLs to the short names in ContractConfig.
-var typeURLShortName = map[string]string{
-	"type.googleapis.com/types.MessageSend":             "send",
-	"type.googleapis.com/types.MessageCreateMarket":     "create_market",
-	"type.googleapis.com/types.MessageSubmitPrediction": "submit_prediction",
-	"type.googleapis.com/types.MessageResolveMarket":    "resolve_market",
-	"type.googleapis.com/types.MessageClaimWinnings":    "claim_winnings",
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -97,7 +91,6 @@ func keystoreNewKey(nickname, password string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Response is a JSON-quoted hex string
 	var addr string
 	if err := json.Unmarshal(data, &addr); err != nil {
 		addr = string(bytes.Trim(data, `"`+"\n\r "))
@@ -108,20 +101,38 @@ func keystoreNewKey(nickname, password string) (string, error) {
 	return addr, nil
 }
 
-// keystoreGetKey decrypts and returns key material for address.
-// Only works for keys created with a non-empty password.
+// keystoreGetKey returns key material for an address.
+//
+// The Canopy validator key is created without a password, so keystore-get
+// returns {} for it. We hardcode the known validator private key here.
+// For test keys created with testPassword, keystore-get works normally.
 func keystoreGetKey(address, password string) (*keyGroup, error) {
+	// Hardcoded no-password validator keys.
+	// keystore-get returns {} for keys created without a password.
+	knownKeys := map[string]keyGroup{
+		"e7c7dad131a03f7ea0cc09a637ad096eb3495f77": {
+			Address:    "e7c7dad131a03f7ea0cc09a637ad096eb3495f77",
+			PublicKey:  "ae13ea1c3a3a180b821b961561fedab3864fe037c7e159ef79c606c4399210f76f8bbb2ef7fe580c335a02cb48441b32",
+			PrivateKey: "14f43ca8c7f31a63d144564e8826186383844b5da679dfc2c9352d665d69f0f6",
+		},
+	}
+
+	if kg, ok := knownKeys[address]; ok {
+		return &kg, nil
+	}
+
+	// For test accounts created with a password, use keystore-get.
 	body := fmt.Sprintf(`{"addressOrNickname":%q,"password":%q}`, address, password)
 	data, err := postJSON(adminRPCURL+"/v1/admin/keystore-get", body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("keystore-get: %w", err)
 	}
 	var kg keyGroup
 	if err := json.Unmarshal(data, &kg); err != nil {
-		return nil, fmt.Errorf("parse: %w (body: %s)", err, data)
+		return nil, fmt.Errorf("parse keystore-get: %w (body: %s)", err, data)
 	}
 	if kg.PrivateKey == "" {
-		return nil, fmt.Errorf("no private key returned (wrong password, or key created without one)")
+		return nil, fmt.Errorf("no private key for %s (wrong password, or key created without one)", address)
 	}
 	return &kg, nil
 }
@@ -207,29 +218,28 @@ func blsSign(privKeyHex string, msg []byte) (sig, pubKey []byte, err error) {
 
 // submitSendTx builds, signs, and submits a MessageSend transaction.
 //
-// Sign bytes: proto.Marshal(Transaction{..., Signature: nil}) — binary, deterministic.
+// Sign bytes rule: proto.Marshal(Transaction with Signature = nil).
+// This is binary protobuf, deterministic. NEVER sign JSON.
 //
-// The Canopy RPC JSON body format (from rpc_test.ts analysis):
-//   {
-//     "type": "send",                      // short name from ContractConfig
-//     "msg": { "fromAddress": "<b64>", "toAddress": "<b64>", "amount": N },
-//     "signature": { "publicKey": "<hex>", "signature": "<hex>" },
-//     "time": N,
-//     "createdHeight": N,
-//     "fee": N,
-//     "memo": "",
-//     "networkID": N,
-//     "chainID": N
-//   }
+// TX body format (confirmed from TypeScript rpc_test.ts, Canopy CEO Adam):
 //
-// Note: For send (a registered Canopy base type), "msg" is inlined as JSON.
-// For plugin-only types (create_market, etc.), use "msgTypeUrl" + "msgBytes" pattern.
+//	{
+//	  "type": "send",
+//	  "msg": { "fromAddress": "<base64>", "toAddress": "<base64>", "amount": <number> },
+//	  "signature": { "publicKey": "<hex>", "signature": "<hex>" },
+//	  "time": <number>,          // nanoseconds (UnixNano)
+//	  "createdHeight": <number>,
+//	  "fee": <number>,
+//	  "memo": "",
+//	  "networkID": <number>,     // capital ID
+//	  "chainID": <number>        // capital ID
+//	}
 func submitSendTx(t *testing.T, kg *keyGroup, from, to []byte, amount uint64, height uint64) string {
 	t.Helper()
 
 	typeURL := "type.googleapis.com/types.MessageSend"
 
-	// Wrap in protobuf Any for sign-bytes construction
+	// Build the inner message and wrap in Any for sign-bytes construction.
 	sendMsg := &contract.MessageSend{
 		FromAddress: from,
 		ToAddress:   to,
@@ -240,9 +250,10 @@ func submitSendTx(t *testing.T, kg *keyGroup, from, to []byte, amount uint64, he
 		t.Fatalf("anypb.New: %v", err)
 	}
 
+	// txTime in nanoseconds — same value used for both sign bytes and JSON body.
 	txTime := uint64(time.Now().UnixNano())
 
-	// Build tx with nil Signature — this is what gets signed
+	// Build Transaction with nil Signature — this is the sign-bytes input.
 	tx := &contract.Transaction{
 		MessageType:   typeURL,
 		Msg:           anyMsg,
@@ -254,19 +265,19 @@ func submitSendTx(t *testing.T, kg *keyGroup, from, to []byte, amount uint64, he
 		ChainId:       testChainID,
 	}
 
-	// Compute sign bytes (deterministic binary encoding)
+	// Sign bytes = deterministic binary proto encoding.
 	signBytes, err := proto.Marshal(tx)
 	if err != nil {
 		t.Fatalf("marshal sign bytes: %v", err)
 	}
 
-	// Sign
+	// BLS12-381 G2 longSignatures — 96-byte output.
 	sig, pubKey, err := blsSign(kg.PrivateKey, signBytes)
 	if err != nil {
 		t.Fatalf("blsSign: %v", err)
 	}
 
-	// Build JSON body — base64 for []byte fields, hex for sig/pubkey
+	// JSON body: []byte fields as base64, signature fields as hex, numerics as numbers.
 	fromB64 := base64.StdEncoding.EncodeToString(from)
 	toB64 := base64.StdEncoding.EncodeToString(to)
 
@@ -295,9 +306,11 @@ func submitSendTx(t *testing.T, kg *keyGroup, from, to []byte, amount uint64, he
 		testNetworkID, testChainID,
 	)
 
+	t.Logf("TX body: %s", body)
+
 	data, err := postJSON(queryRPCURL+"/v1/tx", body)
 	if err != nil {
-		t.Fatalf("post /v1/tx: %v", err)
+		t.Fatalf("post tx: %v", err)
 	}
 
 	var txHash string
@@ -311,13 +324,13 @@ func submitSendTx(t *testing.T, kg *keyGroup, from, to []byte, amount uint64, he
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TestSend
+// TestSend — validates the full signing + RPC submission path
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestSend(t *testing.T) {
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano()%1000000)
 
-	// Step 1: Create two fresh test accounts with a password
+	// Step 1: Create two fresh test accounts with a password.
 	t.Logf("Creating accounts (suffix=%s)...", suffix)
 	senderAddr, err := keystoreNewKey("praxis_s_"+suffix, testPassword)
 	if err != nil {
@@ -330,21 +343,21 @@ func TestSend(t *testing.T) {
 	t.Logf("Sender:   %s", senderAddr)
 	t.Logf("Receiver: %s", receiverAddr)
 
-	// Step 2: Retrieve sender key material
+	// Step 2: Retrieve sender key material (password-protected, keystore-get works).
 	senderKey, err := keystoreGetKey(senderAddr, testPassword)
 	if err != nil {
 		t.Fatalf("get sender key: %v", err)
 	}
 	t.Logf("PubKey: %s", senderKey.PublicKey)
 
-	// Step 3: Get current height
+	// Step 3: Get current height.
 	height, err := getHeight()
 	if err != nil {
 		t.Fatalf("get height: %v", err)
 	}
 	t.Logf("Height: %d", height)
 
-	// Step 4: Decode addresses
+	// Step 4: Decode addresses from hex to bytes.
 	fromBytes, err := hex.DecodeString(senderAddr)
 	if err != nil {
 		t.Fatalf("decode sender addr: %v", err)
@@ -354,22 +367,77 @@ func TestSend(t *testing.T) {
 		t.Fatalf("decode receiver addr: %v", err)
 	}
 
-	// Step 5: Submit send transaction
-	// Sender has 0 balance so DeliverTx will fail with ErrInsufficientFunds,
-	// but this validates the full signing + RPC submission path.
-	t.Log("Submitting send tx (sender has 0 balance — DeliverTx will fail, CheckTx should pass)...")
+	// Step 5: Submit send transaction.
+	// Sender has 0 balance — DeliverTx will fail with ErrInsufficientFunds,
+	// but this validates the full signing + RPC submission path end-to-end.
+	t.Log("Submitting send tx (0 balance — DeliverTx expected fail, CheckTx must pass)...")
 	txHash := submitSendTx(t, senderKey, fromBytes, toBytes, 1000000, height)
-	t.Logf("TX: %s", txHash)
+	t.Logf("TX hash: %s", txHash)
 
-	// Step 6: Wait for inclusion
-	t.Log("Waiting for inclusion (up to 60s)...")
+	// Step 6: Wait for block inclusion (up to 60s).
+	t.Log("Waiting for tx inclusion...")
 	if err := waitForTx(senderAddr, txHash, 60*time.Second); err != nil {
 		t.Logf("Note: %v", err)
 	} else {
-		t.Log("TX included!")
+		t.Log("TX included in block!")
 	}
 
-	// Step 7: Report
+	// Step 7: Report final balances.
 	t.Logf("Sender balance:   %d", getBalance(senderAddr))
 	t.Logf("Receiver balance: %d", getBalance(receiverAddr))
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TestValidatorSend — sends from the funded validator account to test full flow
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestValidatorSend(t *testing.T) {
+	// Use the hardcoded validator key (no password, keystore-get returns {}).
+	validatorAddr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+	validatorKey, err := keystoreGetKey(validatorAddr, "")
+	if err != nil {
+		t.Fatalf("get validator key: %v", err)
+	}
+	t.Logf("Validator pubkey: %s", validatorKey.PublicKey)
+
+	// Create a recipient account.
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano()%1000000)
+	recipientAddr, err := keystoreNewKey("praxis_recv_"+suffix, testPassword)
+	if err != nil {
+		t.Fatalf("create recipient: %v", err)
+	}
+	t.Logf("Recipient: %s", recipientAddr)
+
+	height, err := getHeight()
+	if err != nil {
+		t.Fatalf("get height: %v", err)
+	}
+
+	fromBytes, err := hex.DecodeString(validatorAddr)
+	if err != nil {
+		t.Fatalf("decode validator addr: %v", err)
+	}
+	toBytes, err := hex.DecodeString(recipientAddr)
+	if err != nil {
+		t.Fatalf("decode recipient addr: %v", err)
+	}
+
+	// Send 1,000,000 units from validator to recipient.
+	sendAmount := uint64(1_000_000)
+	t.Logf("Sending %d from validator to recipient...", sendAmount)
+	txHash := submitSendTx(t, validatorKey, fromBytes, toBytes, sendAmount, height)
+	t.Logf("TX hash: %s", txHash)
+
+	t.Log("Waiting for tx inclusion...")
+	if err := waitForTx(validatorAddr, txHash, 60*time.Second); err != nil {
+		t.Fatalf("tx not included: %v", err)
+	}
+	t.Log("TX included!")
+
+	recipientBal := getBalance(recipientAddr)
+	t.Logf("Recipient balance after send: %d", recipientBal)
+	if recipientBal != sendAmount {
+		t.Errorf("expected recipient balance %d, got %d", sendAmount, recipientBal)
+	}
+}
+
