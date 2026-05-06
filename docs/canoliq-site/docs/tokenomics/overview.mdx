@@ -1,0 +1,41 @@
+---
+sidebar_label: Overview
+---
+
+# Tokenomics Overview
+
+canoLiq manages two tokens alongside CNPY:
+
+## cCNPY — Liquid Staking Receipt
+
+cCNPY is minted 1:1 against deposited CNPY at the current exchange rate. It represents the holder's share of the total pooled CNPY backing.
+
+- **Minting**: Users deposit CNPY via `MessageCanoliqDeposit`, receiving cCNPY at the current rate
+- **Redemption**: Users burn cCNPY via `MessageCanoliqRedeem`, queuing a CNPY redemption
+- **Claim**: After the unstaking window, users claim matured redemptions via `MessageCanoliqClaimRedemption`
+
+The exchange rate fluctuates as staking rewards accrue:
+
+```
+exchangeRate = totalPooledCNPY / totalCCNPYSupply
+```
+
+## CLIQ — Governance Token
+
+CLIQ is a **fixed-supply** (100M) governance and value-capture token.
+
+- **Total Supply**: 100,000,000 CLIQ (100,000,000,000,000 uCLIQ with 6-decimal precision)
+- **Minting**: Entire supply minted at genesis, distributed across vesting buckets
+- **Governance**: CLIQ holders stake for governance weight; voting weight is snapshotted at proposal creation
+- **Vesting**: Allocations follow cliff + linear vesting schedules; recipients must call `MessageCLIQClaimVested` to unlock
+
+### Genesis Distribution Buckets
+
+| Bucket | BPS | Vesting |
+|--------|-----|---------|
+| Community | Varies | Cliff + linear |
+| Team | Varies | Cliff + linear |
+| DAO Treasury | Varies | Immediate (liquid) |
+| Liquidity | Varies | Varies |
+
+Configure your specific distribution in `genesis.json`.

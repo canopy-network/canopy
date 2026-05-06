@@ -1,0 +1,277 @@
+---
+sidebar_label: Types
+---
+
+# Protobuf Types
+
+Stored types used by the canoLiq plugin.
+
+## CanoliqGlobals
+
+Singleton accounting record.
+
+```protobuf
+message CanoliqGlobals {
+  uint64 total_ccnpy_supply = 1;
+  uint64 total_pooled_cnpy = 2;
+  uint64 pending_redemption_cnpy = 3;
+  uint64 last_processed_reward_pool = 4;
+  uint64 cliq_total_supply = 5;
+  uint64 cliq_circulating_supply = 6;
+  uint64 next_redemption_id = 7;
+  bool genesis_complete = 8;
+  uint64 total_staked_cliq = 9;
+  uint64 next_proposal_id = 10;
+  uint64 next_buyback_id = 11;
+  uint64 next_spend_id = 12;
+  uint64 next_unstake_id = 13;
+}
+```
+
+## CanoliqParams
+
+Governance-tunable parameters.
+
+```protobuf
+message CanoliqParams {
+  uint64 fee_bps = 1;                    // Default 1200 (12%)
+  uint64 user_rebate_bps = 2;            // Default 4000 (40%)
+  uint64 treasury_bps = 3;               // Default 3000 (30%)
+  uint64 validator_bps = 4;              // Default 1500 (15%)
+  uint64 buyback_bps = 5;                // Default 1500 (15%)
+  uint64 deposit_fee = 6;
+  uint64 redeem_fee = 7;
+  uint64 claim_fee = 8;
+  uint64 cliq_transfer_fee = 9;
+  uint64 insurance_bps = 10;             // Default 1500
+  uint64 treasury_threshold = 11;
+  repeated bytes multisig_signers = 12;
+  uint64 multisig_threshold = 13;
+  uint64 voting_period_blocks = 14;
+  uint64 quorum_bps = 15;                // Default 3300 (33%)
+  uint64 pass_threshold_bps = 16;        // Default 5001 (50%+1)
+  uint64 timelock_blocks = 17;
+  uint64 cliq_unstaking_blocks = 18;
+  uint64 proposal_fee = 19;
+  uint64 vote_fee = 20;
+  uint64 stake_fee = 21;
+  uint64 multisig_approve_fee = 22;
+  uint64 min_stake_to_propose = 23;
+}
+```
+
+## Redemption
+
+Queued cCNPY → CNPY conversion.
+
+```protobuf
+message Redemption {
+  uint64 id = 1;
+  bytes address = 2;
+  uint64 cnpy_amount = 3;
+  uint64 unbond_complete_height = 4;
+}
+```
+
+## VestingSchedule
+
+Linear vesting schedule with cliff.
+
+```protobuf
+message VestingSchedule {
+  bytes address = 1;
+  uint64 schedule_id = 2;
+  uint64 total_amount = 3;
+  uint64 cliff_height = 4;
+  uint64 start_height = 5;
+  uint64 end_height = 6;
+  uint64 claimed_amount = 7;
+}
+```
+
+## CLIQStake
+
+Per-address active stake record.
+
+```protobuf
+message CLIQStake {
+  bytes address = 1;
+  uint64 amount = 2;
+  uint64 staked_at_height = 3;
+}
+```
+
+## UnstakingCLIQ
+
+Queued CLIQ unstake awaiting maturity.
+
+```protobuf
+message UnstakingCLIQ {
+  uint64 id = 1;
+  bytes address = 2;
+  uint64 amount = 3;
+  uint64 mature_height = 4;
+}
+```
+
+## Proposal
+
+Governance proposal record.
+
+```protobuf
+message Proposal {
+  uint64 id = 1;
+  bytes proposer = 2;
+  uint64 creation_height = 3;
+  uint64 expiry_height = 4;
+  uint64 snapshot_total_staked = 5;
+  google.protobuf.Any payload = 6;
+  string description = 7;
+  ProposalStatus status = 8;
+  uint64 yes_weight = 9;
+  uint64 no_weight = 10;
+  uint64 abstain_weight = 11;
+}
+```
+
+## Vote
+
+Single recorded vote.
+
+```protobuf
+message Vote {
+  uint64 proposal_id = 1;
+  bytes voter = 2;
+  VoteChoice choice = 3;
+  uint64 weight = 4;
+}
+```
+
+## BuybackOrder
+
+Post-execution buyback record.
+
+```protobuf
+message BuybackOrder {
+  uint64 proposal_id = 1;
+  uint64 cnpy_drawn = 2;
+  uint64 cliq_acquired = 3;
+  BuybackMode mode = 4;
+  bool executed = 5;
+  uint64 executed_at_height = 6;
+  ProposalBuyback payload = 7;
+}
+```
+
+## TreasurySpend
+
+Pending or completed spend.
+
+```protobuf
+message TreasurySpend {
+  uint64 id = 1;
+  uint64 proposal_id = 2;
+  uint64 executable_height = 3;
+  ProposalTreasurySpend payload = 4;
+  bool requires_multisig = 5;
+  bool executed = 6;
+}
+```
+
+## MultisigApproval
+
+Per-signer spend approval.
+
+```protobuf
+message MultisigApproval {
+  uint64 spend_id = 1;
+  bytes signer = 2;
+  uint64 height = 3;
+}
+```
+
+## ValidatorRegistry
+
+Per-validator stake records for pro-rata distribution.
+
+```protobuf
+message ValidatorRegistry {
+  repeated ValidatorRegistryEntry entries = 1;
+}
+
+message ValidatorRegistryEntry {
+  bytes address = 1;
+  uint64 stake = 2;
+}
+```
+
+## Indexes
+
+### VestingIndex
+
+```protobuf
+message VestingIndex {
+  repeated uint64 schedule_ids = 1;
+}
+```
+
+### ProposalIndex
+
+```protobuf
+message ProposalIndex {
+  repeated uint64 ids = 1;
+}
+```
+
+### CLIQStakeIndex
+
+```protobuf
+message CLIQStakeIndex {
+  repeated bytes addresses = 1;
+}
+```
+
+## Enums
+
+### VoteChoice
+
+```protobuf
+enum VoteChoice {
+  VOTE_UNKNOWN = 0;
+  VOTE_YES = 1;
+  VOTE_NO = 2;
+  VOTE_ABSTAIN = 3;
+}
+```
+
+### ProposalStatus
+
+```protobuf
+enum ProposalStatus {
+  PROPOSAL_UNKNOWN = 0;
+  PROPOSAL_ACTIVE = 1;
+  PROPOSAL_PASSED = 2;
+  PROPOSAL_FAILED = 3;
+  PROPOSAL_EXECUTED = 4;
+}
+```
+
+### BuybackMode
+
+```protobuf
+enum BuybackMode {
+  BUYBACK_UNKNOWN = 0;
+  BUYBACK_BURN = 1;
+  BUYBACK_DISTRIBUTE_STAKERS = 2;
+}
+```
+
+### SpendDenomination
+
+```protobuf
+enum SpendDenomination {
+  SPEND_UNKNOWN = 0;
+  SPEND_CNPY = 1;
+  SPEND_CLIQ = 2;
+}
+```

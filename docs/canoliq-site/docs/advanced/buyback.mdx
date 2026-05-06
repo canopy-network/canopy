@@ -1,0 +1,47 @@
+---
+sidebar_label: Buyback
+---
+
+# Buyback Workflow
+
+The buyback mechanism allows the DAO to acquire CLIQ from the treasury and either burn it or distribute it to stakers.
+
+## Flow
+
+1. **Propose**: A `ProposalBuyback` is created via governance, carrying `cnpy_amount`, `price_micro_cnpy_per_cliq`, and `mode`
+2. **Vote**: CLIQ stakers vote; proposal must meet quorum and pass threshold
+3. **Execute**: `MessageBuybackExecute` triggers the buyback
+
+## Execution Details
+
+On execution:
+
+1. Drains up to `cnpy_amount` from `canoliq/buyback/pool` and credits `canoliq/treasury/canoliq`
+2. Computes `cliq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cliq`
+3. Debts `canoliq/treasury/cliq` (DAO 15% bucket)
+4. Applies the selected mode
+
+### Burn Mode
+
+```
+globals.cliq_total_supply -= cliq_acquired
+globals.cliq_circulating_supply -= cliq_acquired
+```
+
+CLIQ is permanently removed from supply. No recipient address.
+
+### Distribute Stakers Mode
+
+- Iterates `CLIQStakeIndex.Addresses`
+- Computes `mulDiv(cliqAcquired, stake[s], totalStake)` per staker
+- Credits liquid CLIQ balances
+- Rounding remainder credited to the largest staker
+- Empty staker set → re-credit `treasury/cliq` (no-op)
+
+## Self-Contained Order
+
+The `BuybackOrder` stores the **full** `ProposalBuyback` payload because the source proposal record is deleted at tally cleanup. Execute is independent of the proposal's lifetime.
+
+## Idempotency
+
+Re-execution is rejected with `ErrProposalAlreadyExecuted`.

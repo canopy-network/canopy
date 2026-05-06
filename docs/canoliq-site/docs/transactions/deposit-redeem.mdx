@@ -1,0 +1,64 @@
+---
+sidebar_label: Deposit & Redeem
+---
+
+# Deposit & Redeem Flow
+
+## Deposit CNPY → Mint cCNPY
+
+Users deposit CNPY into the canoLiq pool and receive cCNPY at the current exchange rate.
+
+```bash
+canoliqctl deposit <address> <amount_uCNPY>
+```
+
+**Effect**:
+1. CNPY is debited from the user's Canopy `Account`
+2. cCNPY is minted to the user's canoLiq balance: `ccnpyMinted = depositAmount × totalCCNPYSupply / totalPooledCNPY`
+3. `CanoliqGlobals.totalPooledCNPY` and `CanoliqGlobals.totalCCNPYSupply` are updated
+4. A protocol fee is charged and split
+
+## Redeem cCNPY → Queue CNPY
+
+Users burn cCNPY and queue a CNPY redemption that matures after the validator unstaking window.
+
+```bash
+canoliqctl redeem <address> <amount_uCCNPY>
+```
+
+**Effect**:
+1. cCNPY is burned from the user's balance
+2. A `Redemption` record is created with:
+   - `cnpy_amount`: CNPY owed at maturity
+   - `unbond_complete_height`: Current height + `UnstakingBlocks`
+3. `CanoliqGlobals.pendingRedemptionCNPY` is incremented
+4. `CanoliqGlobals.nextRedemptionId` is incremented
+
+## Claim Matured Redemption
+
+After the unbond period, users claim their CNPY.
+
+```bash
+canoliqctl claim <address> <redemption_id>
+```
+
+**Effect**:
+1. Validates the redemption exists and has matured (`current_height >= unbond_complete_height`)
+2. CNPY is credited to the user's Canopy `Account`
+3. `CanoliqGlobals.pendingRedemptionCNPY` is decremented
+4. The redemption record is deleted
+
+## Worked Example
+
+```bash
+export CANOLIQCTL_PASSWORD=hunter2
+
+# Deposit 1 CNPY (1,000,000 uCNPY)
+./canoliqctl deposit alice 1000000
+
+# Redeem 0.25 cCNPY (250,000 uCCNPY)
+./canoliqctl redeem alice 250000
+
+# After unstaking window (~UnstakingBlocks blocks)
+./canoliqctl claim alice 0
+```

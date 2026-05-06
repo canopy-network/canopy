@@ -1,0 +1,50 @@
+---
+sidebar_label: Treasury Spend
+---
+
+# Treasury Spend with Multisig & Timelock
+
+Treasury spends allow the DAO to transfer CNPY or CLIQ from treasury buckets to designated recipients.
+
+## Threshold Gating
+
+`ProposalTreasurySpend` carries `recipient`, `amount`, and `denomination` (CNPY or CLIQ):
+
+| Condition | Behavior |
+|-----------|----------|
+| Below `treasury_threshold` | Executes directly after proposal passes |
+| Above threshold | Requires timelock + multisig approvals |
+
+## Above-Threshold Execution
+
+Queued spends have:
+
+- `executable_height = creation_height + timelock_blocks` (delay before execution)
+- `requires_multisig = true` (multisig approval needed)
+
+Execution via `MessageDAOTreasurySpend` requires:
+
+1. **Timelock elapsed**: `current_height >= executable_height`
+2. **Multisig threshold met**: `count(approvals) >= multisig_threshold`
+
+Each approval comes from a signer in `params.multisig_signers` **at execute time**. Approvals from signers later removed from the params set are ignored.
+
+## Multisig Approvals
+
+Signers record approvals via `MessageMultisigApprove`:
+
+```bash
+canoliqctl multisig-approve <signer> <spend-id>
+```
+
+- Approval record is per-(spend_id, signer)
+- Duplicate approvals from the same signer are rejected
+- Non-signers are rejected up-front
+
+:::warning
+The decision (threshold vs. non-threshold) is **frozen at queue time**. Later raising the threshold via governance does not re-classify queued spends.
+:::
+
+## Idempotency
+
+Re-execution is rejected via `TreasurySpend.executed` flag.

@@ -1,0 +1,57 @@
+---
+sidebar_label: Introduction
+---
+
+# canoLiq Documentation
+
+canoLiq is a **liquid staking protocol** built as a Canopy Network plugin. It enables users to deposit CNPY, receive a yield-bearing receipt token (cCNPY), and earn staking rewards — while also participating in governance through CLIQ, a fixed-supply governance token.
+
+## Key Features
+
+- **Liquid Staking**: Deposit CNPY, mint cCNPY at the current exchange rate. cCNPY represents your share of the pooled CNPY backing.
+- **Reward Distribution**: A 12% protocol fee on staking rewards is split across users (40%), the canoLiq DAO treasury (30%), validators (15%), and CLIQ buyback (15%).
+- **CLIQ Governance Token**: A fixed supply of 100M CLIQ distributed at genesis with cliff + linear vesting schedules. CLIQ holders stake for governance weight.
+- **On-Chain Governance**: All protocol parameters are tunable through proposals — fee splits, buyback mechanics, multisig membership, and more.
+- **Buyback Mechanism**: The protocol can buy back and burn CLIQ or distribute acquired CLIQ to stakers, governed by DAO vote.
+
+## Architecture
+
+canoLiq runs as a **Go plugin** alongside the Canopy FSM (Finite State Machine). It communicates via length-prefixed protobuf messages over a Unix socket, implementing the standard `CheckTx` / `DeliverTx` lifecycle.
+
+```
+┌─────────────────────────────────────────────┐
+│                  Canopy FSM                  │
+│  ┌─────────┐  ┌──────────┐  ┌────────────┐  │
+│  │Controller│→│   BFT    │→│  Consensus  │  │
+│  └────┬────┘  └──────────┘  └──────┬─────┘  │
+│       │                            │         │
+│       └────────────┬───────────────┘         │
+│                    │ Unix socket              │
+└────────────────────┼─────────────────────────┘
+                     │
+┌────────────────────┼─────────────────────────┐
+│          canoLiq Plugin                       │
+│  ┌─────────┐  ┌──────────┐  ┌────────────┐  │
+│  │ CheckTx │→│ DeliverTx │→│  EndBlock   │  │
+│  └─────────┘  └──────────┘  └──────┬─────┘  │
+│                                    │         │
+│                          ┌─────────▼──────┐  │
+│                          │  ProcessRewards│  │
+│                          └────────────────┘  │
+└─────────────────────────────────────────────┘
+```
+
+## Phased Rollout
+
+| Phase | Status | Features |
+|-------|--------|----------|
+| **Phase 1** | ✅ Complete | Deposit/redeem, cCNPY minting, fee split, CLIQ genesis + vesting |
+| **Phase 2** | ✅ Complete | CLIQ staking, governance proposals, buyback, treasury spend with multisig |
+| **Phase 3** | 🚧 In Progress | Read-only HTTP query layer, insurance disbursement, validator registry automation |
+
+## Quick Links
+
+- [Getting Started](./getting-started/overview.mdx) — Build, run, and register as a committee
+- [Transaction Reference](./transactions/reference.mdx) — All supported message types
+- [API Reference](./api/endpoints.mdx) — HTTP query endpoints (Phase 3)
+- [Implementation Plan](./implementation-plan.mdx) — Phased rollout tracker

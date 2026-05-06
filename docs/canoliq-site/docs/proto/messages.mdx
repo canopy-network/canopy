@@ -1,0 +1,158 @@
+---
+sidebar_label: Messages
+---
+
+# Protobuf Messages
+
+All messages are defined in `plugin/go/proto/canoliq.proto`.
+
+## Deposit & Redeem
+
+### MessageCanoliqDeposit
+
+Deposits CNPY into the canoLiq pool and mints cCNPY.
+
+```protobuf
+message MessageCanoliqDeposit {
+  bytes from_address = 1;  // 20-byte address
+  uint64 amount = 2;       // CNPY amount (uCNPY)
+}
+```
+
+### MessageCanoliqRedeem
+
+Burns cCNPY and queues a CNPY redemption.
+
+```protobuf
+message MessageCanoliqRedeem {
+  bytes from_address = 1;  // 20-byte address
+  uint64 ccnpy_amount = 2; // cCNPY to burn (uCCNPY)
+}
+```
+
+### MessageCanoliqClaimRedemption
+
+Withdraws a matured CNPY redemption.
+
+```protobuf
+message MessageCanoliqClaimRedemption {
+  bytes from_address = 1;  // 20-byte address
+  uint64 redemption_id = 2;
+}
+```
+
+## CLIQ Operations
+
+### MessageCLIQTransfer
+
+Transfers liquid CLIQ.
+
+```protobuf
+message MessageCLIQTransfer {
+  bytes from_address = 1;
+  bytes to_address = 2;
+  uint64 amount = 3;       // CLIQ amount (uCLIQ)
+}
+```
+
+### MessageCLIQClaimVested
+
+Unlocks vested CLIQ.
+
+```protobuf
+message MessageCLIQClaimVested {
+  bytes from_address = 1;
+}
+```
+
+### MessageCLIQStake
+
+Locks CLIQ for governance weight.
+
+```protobuf
+message MessageCLIQStake {
+  bytes from_address = 1;
+  uint64 amount = 2;
+}
+```
+
+### MessageCLIQUnstake
+
+Queues CLIQ unstaking.
+
+```protobuf
+message MessageCLIQUnstake {
+  bytes from_address = 1;
+  uint64 amount = 2;
+}
+```
+
+### MessageCLIQClaimUnstake
+
+Claims matured CLIQ unstake.
+
+```protobuf
+message MessageCLIQClaimUnstake {
+  bytes from_address = 1;
+  uint64 unstake_id = 2;
+}
+```
+
+## Governance
+
+### MessageCLIQProposalCreate
+
+Opens a governance proposal.
+
+```protobuf
+message MessageCLIQProposalCreate {
+  bytes from_address = 1;
+  google.protobuf.Any payload = 2;  // param_change | buyback | treasury_spend
+  string description = 3;           // ≤ 256 bytes
+}
+```
+
+### MessageCLIQVote
+
+Votes on a proposal.
+
+```protobuf
+message MessageCLIQVote {
+  bytes from_address = 1;
+  uint64 proposal_id = 2;
+  VoteChoice choice = 3;  // VOTE_YES | VOTE_NO | VOTE_ABSTAIN
+}
+```
+
+### MessageBuybackExecute
+
+Executes a passed buyback proposal.
+
+```protobuf
+message MessageBuybackExecute {
+  bytes from_address = 1;
+  uint64 proposal_id = 2;
+}
+```
+
+### MessageDAOTreasurySpend
+
+Executes a passed treasury spend.
+
+```protobuf
+message MessageDAOTreasurySpend {
+  bytes from_address = 1;
+  uint64 proposal_id = 2;
+}
+```
+
+### MessageMultisigApprove
+
+Approves an above-threshold spend.
+
+```protobuf
+message MessageMultisigApprove {
+  bytes from_address = 1;
+  uint64 spend_id = 2;
+}
+```

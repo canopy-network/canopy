@@ -1,0 +1,33 @@
+---
+sidebar_label: Overview
+---
+
+# Governance Overview
+
+CLIQ holders stake CLIQ for governance weight. All material protocol parameters flow through the same proposal pipeline.
+
+## Key Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `voting_period_blocks` | — | Blocks a proposal accepts votes |
+| `quorum_bps` | 3300 | Fraction of snapshot staked CLIQ required to participate (33%) |
+| `pass_threshold_bps` | 5001 | Yes / (yes + no) needed to pass (50%+1) |
+| `min_stake_to_propose` | — | Minimum staked CLIQ a proposer must hold |
+| `treasury_threshold` | — | Spend amount above which multisig + timelock kick in |
+| `multisig_signers` | — | Authorized multisig signer addresses |
+| `multisig_threshold` | — | Minimum approvals for above-threshold spends |
+| `timelock_blocks` | — | Delay between proposal pass and execution |
+| `cliq_unstaking_blocks` | — | Unbond window for CLIQ stake |
+
+## Voting Weight
+
+Voting weight is **snapshotted by stake-time**, not by proposal-time read:
+
+- A voter's weight = `CLIQStake.amount` as of the proposal's `creation_height`
+- Votes are rejected if `staked_at_height > proposal.creation_height`
+- This defeats flash-stake attacks without storing per-(proposal, voter) snapshot balances
+
+:::note
+A staker who **increases** stake after a proposal opens will have a new `staked_at_height` and lose voting eligibility on that proposal. Re-staking cleanly resets eligibility.
+:::

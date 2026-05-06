@@ -1,0 +1,46 @@
+---
+sidebar_label: Overview
+---
+
+# Transactions Overview
+
+canoLiq accepts a range of transaction messages for liquid staking, CLIQ operations, governance, and treasury management.
+
+## Transaction Categories
+
+### Phase 1 — Liquid Staking
+
+| Message | Description |
+|---------|-------------|
+| `MessageCanoliqDeposit` | Deposits CNPY, mints cCNPY |
+| `MessageCanoliqRedeem` | Burns cCNPY, queues redemption |
+| `MessageCanoliqClaimRedemption` | Claims matured CNPY redemption |
+| `MessageCLIQTransfer` | Transfers liquid CLIQ |
+| `MessageCLIQClaimVested` | Unlocks vested CLIQ |
+
+### Phase 2 — Governance & Treasury
+
+| Message | Description |
+|---------|-------------|
+| `MessageCLIQStake` | Locks CLIQ for governance weight |
+| `MessageCLIQUnstake` | Queues CLIQ unstaking |
+| `MessageCLIQClaimUnstake` | Claims matured CLIQ unstake |
+| `MessageCLIQProposalCreate` | Opens a governance proposal |
+| `MessageCLIQVote` | Votes on a proposal |
+| `MessageBuybackExecute` | Executes a passed buyback proposal |
+| `MessageDAOTreasurySpend` | Executes a passed treasury spend |
+| `MessageMultisigApprove` | Approves an above-threshold spend |
+
+### Standard
+
+| Message | Description |
+|---------|-------------|
+| `MessageSend` | Standard CNPY transfer (accepted as drop-in compatibility) |
+
+## Transaction Lifecycle
+
+Each transaction goes through:
+
+1. **CheckTx** — Stateless validation (fee check, address validation, authorized signers)
+2. **DeliverTx** — Stateful execution (read state, apply logic, write state)
+3. **EndBlock** (if applicable) — Reward sweep, proposal tally, spend execution

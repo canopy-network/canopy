@@ -1,0 +1,37 @@
+---
+sidebar_label: Insurance Fund
+---
+
+# Insurance Fund
+
+The insurance fund is a passive accumulator that receives a portion of the treasury slice from each reward sweep.
+
+## Auto-Routing
+
+`ProcessRewards` skims a fraction of the treasury credit into `canoliq/insurance/pool`:
+
+```
+insurance = mulDiv(treasuryCredit, insurance_bps, 10_000)
+```
+
+### Default Configuration
+
+- **Insurance BPS**: 1500 (15% of treasury slice ≈ 1.5% of total fee)
+- This falls within the whitepaper §11 framing of "1–2% of treasury"
+
+## Purpose
+
+| Phase | Usage |
+|-------|-------|
+| Phase 2 | Passive accumulation only |
+| Phase 3 | Slashing-reimbursement disbursement |
+
+## Conservation Equation
+
+When extending the reward sweep, the full conservation equation must hold:
+
+```
+treasury + insurance + buyback + validators + user_rebate + net_to_users = delta
+```
+
+Any test asserting conservation must include the insurance line item.

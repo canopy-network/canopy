@@ -1,0 +1,50 @@
+---
+sidebar_label: Fee Structure
+---
+
+# Fee Structure
+
+canoLiq applies a **12% protocol fee** on staking rewards, split across four destinations:
+
+## Fee Split (40/30/15/15)
+
+| Destination | BPS | Percentage | Description |
+|-------------|-----|------------|-------------|
+| User Rebate | 4000 | 40% | Returned to cCNPY holders via the pool |
+| DAO Treasury | 3000 | 30% | Credited to `treasury/canoliq` |
+| Validators | 1500 | 15% | Distributed pro-rata across canoLiq committee validators |
+| Buyback | 1500 | 15% | Funded into `buyback/pool` for CLIQ buyback |
+
+## Insurance Auto-Routing (Phase 2)
+
+A portion of the treasury slice is auto-routed to an insurance pool:
+
+- **Insurance BPS**: Default 1500 (15% of treasury slice ≈ 1.5% of total fee)
+- **Purpose**: Future slashing-reimbursement disbursement (Phase 3)
+
+## Fee Conservation
+
+All fee components must sum exactly to the original fee amount. Integer truncation residuals are added to the treasury to ensure conservation:
+
+```
+userRebate + treasury + insurance + validators + buyback = feeAmount
+```
+
+## Reference Values
+
+For a 1000 uCNPY reward with 12% fee and Phase 2 defaults:
+
+| Component | Amount (uCNPY) |
+|-----------|----------------|
+| Post-DAO (5% cut applied upstream) | 950 |
+| Fee (12% of 950) | 114 |
+| User Rebate (40%) | 45 |
+| Treasury (30%) | 30 |
+| Insurance (15% of treasury) | 5 |
+| Validators (15%) | 17 |
+| Buyback (15%) | 17 |
+| **Sum** | **114** |
+
+:::note
+The 5% DAO cut is applied **upstream** by Canopy core. The plugin's pool sees only `0.95 × X`. Do not double-apply the DAO cut inside the plugin.
+:::
