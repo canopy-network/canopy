@@ -2,24 +2,6 @@ package contract
 
 import "bytes"
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// handler_send.go — MessageSend
-// Spec authority: ADLMSR v5.6.6-r2-CORRECTED
-//
-// Moves $PRX between addresses. Essential for the Praxis token economy —
-// without send, winnings, bounties, and slash proceeds cannot leave the protocol.
-//
-// CheckTx:  validates addresses (20 bytes each), non-zero amount
-// DeliverTx: reads sender + recipient + fee pool, deducts amount+fee from
-//            sender, credits amount to recipient, credits fee to pool.
-//            Deletes sender account if balance reaches zero (state minimisation).
-//            Self-transfer handled separately to avoid pointer aliasing.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CHECKTX
-// ─────────────────────────────────────────────────────────────────────────────
-
 func (c *Contract) CheckMessageSend(msg *MessageSend) *PluginCheckResponse {
 if len(msg.FromAddress) != 20 {
 return ErrCheckResp(ErrInvalidAddress())
@@ -36,10 +18,6 @@ AuthorizedSigners: [][]byte{msg.FromAddress},
 }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DELIVERTX
-// ─────────────────────────────────────────────────────────────────────────────
-
 func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliverResponse {
 isSelfTransfer := bytes.Equal(msg.FromAddress, msg.ToAddress)
 
@@ -51,19 +29,17 @@ fromKey    := KeyForAccount(msg.FromAddress)
 toKey      := KeyForAccount(msg.ToAddress)
 feePoolKey := KeyForFeePool(c.Config.ChainId)
 
-// For self-transfers only read two keys — avoids pointer aliasing on
-// the underlying account bytes when from and to are the same address.
 var readKeys []*PluginKeyRead
 if isSelfTransfer {
 readKeys = []*PluginKeyRead{
 {QueryId: fromQId, Key: fromKey},
-{QueryId: feeQId, Key: feePoolKey},
+{QueryId: feeQId,  Key: feePoolKey},
 }
 } else {
 readKeys = []*PluginKeyRead{
 {QueryId: fromQId, Key: fromKey},
-{QueryId: toQId, Key: toKey},
-{QueryId: feeQId, Key: feePoolKey},
+{QueryId: toQId,   Key: toKey},
+{QueryId: feeQId,  Key: feePoolKey},
 }
 }
 
@@ -99,7 +75,7 @@ return &PluginDeliverResponse{Error: pe}
 }
 }
 
-// ── Self-transfer: sender pays fee only, amount stays in same account ──
+// Self-transfer: pay fee only, amount stays
 if isSelfTransfer {
 if from.Amount < fee {
 return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
@@ -136,8 +112,7 @@ return &PluginDeliverResponse{Error: pe}
 return &PluginDeliverResponse{}
 }
 
-// ── Normal transfer ────────────────────────────────────────────────────
-// Guard against overflow: amount + fee could wrap if amount is near MaxUint64.
+// Normal transfer
 if fee > 0 && msg.Amount > ^uint64(0)-fee {
 return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 }
@@ -163,14 +138,10 @@ if pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 
-// Delete sender account if drained — keeps state minimal.
 var wr *PluginStateWriteResponse
 if from.Amount == 0 {
 wr, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
-Sets: []*PluginSetOp{
-{Key: toKey, Value: rawTo},
-{Key: feePoolKey, Value: rawFee},
-},
+Sets:    []*PluginSetOp{{Key: toKey, Value: rawTo}, {Key: feePoolKey, Value: rawFee}},
 Deletes: []*PluginDeleteOp{{Key: fromKey}},
 })
 } else {

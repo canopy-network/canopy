@@ -1,15 +1,5 @@
 package contract
 
-// handler_register_resolver.go — MessageRegisterResolver
-// Spec: PORS v1.0-r2-CORRECTED
-//
-// Registers a resolver by staking PRX. Creates or updates a ResolverRecord
-// at the global 0x16 key keyed by resolver_address.
-// Initial RRS score set to RRS_INITIAL (100).
-//
-// CheckTx:  resolver_address 20 bytes, stake_amount non-zero. Zero StateRead.
-// DeliverTx: read resolver record + resolver account, deduct stake, write 2-key atomic.
-
 func (c *Contract) CheckMessageRegisterResolver(msg *MessageRegisterResolver) *PluginCheckResponse {
 if len(msg.ResolverAddress) != 20 {
 return ErrCheckResp(ErrInvalidAddress())
@@ -75,7 +65,6 @@ return &PluginDeliverResponse{Error: pe}
 }
 }
 
-// Overflow guard on stake + fee.
 if fee > 0 && msg.StakeAmount > ^uint64(0)-fee {
 return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 }
@@ -89,11 +78,9 @@ feePool.Amount += fee
 
 var record *ResolverRecord
 if existing != nil {
-// Top-up existing registration — add stake, preserve RRS score.
 existing.StakeAmount += msg.StakeAmount
 record = existing
 } else {
-// New registration.
 record = &ResolverRecord{
 ResolverAddress: msg.ResolverAddress,
 StakeAmount:     msg.StakeAmount,
@@ -103,13 +90,9 @@ RegisteredAt:    now,
 }
 
 rawRec, pe := SafeMarshal(record)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawFee, pe := SafeMarshal(feePool)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
 sets := []*PluginSetOp{
 {Key: recKey,     Value: rawRec},
@@ -120,9 +103,7 @@ if account.Amount == 0 {
 deletes = []*PluginDeleteOp{{Key: accKey}}
 } else {
 rawAcc, pe := SafeMarshal(account)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 sets = append(sets, &PluginSetOp{Key: accKey, Value: rawAcc})
 }
 

@@ -1,22 +1,5 @@
 package contract
 
-// handler_reveal_vote.go — MessageRevealVote
-// Spec: PORS v1.0-r2-CORRECTED (P5)
-//
-// Panel members reveal their vote during the reveal phase.
-// The revealed vote must match the previously committed hash:
-//   commit_hash == SHA256(vote_byte || nonce || voter_addr)
-//
-// CheckTx:  market_id 20 bytes, voter_addr 20 bytes, nonce non-empty.
-//           Zero StateRead (AUDIT-8).
-// DeliverTx:
-//   Read market + dispute + VoteCommit + VoteReveal
-//   Validate STATUS_DISPUTED and within reveal phase window
-//   Validate voter is a panel member
-//   Validate VoteCommit exists and VoteReveal does not
-//   Verify commit hash matches SHA256(vote || nonce || voter_addr)
-//   1-key atomic write: VoteReveal
-
 func (c *Contract) CheckMessageRevealVote(msg *MessageRevealVote) *PluginCheckResponse {
 if len(msg.MarketId) != 20 {
 return ErrCheckResp(ErrInvalidParam())
@@ -82,7 +65,6 @@ return &PluginDeliverResponse{Error: pe}
 }
 case commitQId:
 if len(r.Entries) == 0 {
-// Cannot reveal without first committing.
 return &PluginDeliverResponse{Error: ErrNotAPanelMember()}
 }
 vc = &VoteCommit{}
@@ -90,7 +72,6 @@ if pe := Unmarshal(r.Entries[0].Value, vc); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case revealQId:
-// Already revealed.
 if len(r.Entries) > 0 {
 return &PluginDeliverResponse{Error: ErrAlreadyRevealed()}
 }
@@ -110,7 +91,6 @@ if vc == nil {
 return &PluginDeliverResponse{Error: ErrNotAPanelMember()}
 }
 
-// Reveal phase window: after commit phase ends, before reveal phase ends.
 revealStart := dispute.DisputeBlock + COMMIT_PHASE_BLOCKS
 revealEnd   := revealStart + REVEAL_PHASE_BLOCKS
 if now <= revealStart {
@@ -120,18 +100,15 @@ if now > revealEnd {
 return &PluginDeliverResponse{Error: ErrRevealPhaseOver()}
 }
 
-// Verify voter is a panel member.
 if !isPanelMember(msg.VoterAddr, dispute.PanelMembers) {
 return &PluginDeliverResponse{Error: ErrNotAPanelMember()}
 }
 
-// Verify commit hash: SHA256(vote_byte || nonce || voter_addr).
 expectedHash := ComputeCommitHash(msg.Vote, msg.Nonce, msg.VoterAddr)
 if !bytesEqual(expectedHash, vc.CommitHash) {
 return &PluginDeliverResponse{Error: ErrCommitHashMismatch()}
 }
 
-// Write VoteReveal — single atomic key.
 vr := &VoteReveal{
 VoterAddr:  msg.VoterAddr,
 Vote:       msg.Vote,

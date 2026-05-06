@@ -11,7 +11,10 @@ require (
 )
 
 require (
+	github.com/canopy-network/canopy/plugin/go v0.0.0
 	github.com/kilic/bls12-381 v0.1.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 )
+
+replace github.com/canopy-network/canopy/plugin/go => ../.

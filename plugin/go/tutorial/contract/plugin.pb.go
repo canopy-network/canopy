@@ -446,11 +446,11 @@ type PluginConfig struct {
 	// supported_transactions: a list of custom transaction names that are supported (order must match transaction_type_urls)
 	SupportedTransactions []string `protobuf:"bytes,4,rep,name=supported_transactions,json=supportedTransactions,proto3" json:"supported_transactions,omitempty"`
 	// file_descriptor_protos: serialized FileDescriptorProto bytes
-	FileDescriptorProtos [][]byte `protobuf:"bytes,5,rep,name=file_descriptor_protos,json=fileDescriptorProtos,proto3" json:"file_descriptor_protos,omitempty"` // @gotags: json:"fileDescriptorProtos"
+	FileDescriptorProtos [][]byte `protobuf:"bytes,5,rep,name=file_descriptor_protos,json=fileDescriptorProtos,proto3" json:"fileDescriptorProtos"` // @gotags: json:"fileDescriptorProtos"
 	// transaction_type_urls: protobuf type URLs for transaction messages (aligned by index with supported_transactions)
-	TransactionTypeUrls []string `protobuf:"bytes,6,rep,name=transaction_type_urls,json=transactionTypeUrls,proto3" json:"transaction_type_urls,omitempty"` // @gotags: json:"transactionTypeUrls"
+	TransactionTypeUrls []string `protobuf:"bytes,6,rep,name=transaction_type_urls,json=transactionTypeUrls,proto3" json:"transactionTypeUrls"` // @gotags: json:"transactionTypeUrls"
 	// event_type_urls: protobuf type URLs for event messages
-	EventTypeUrls []string `protobuf:"bytes,7,rep,name=event_type_urls,json=eventTypeUrls,proto3" json:"event_type_urls,omitempty"` // @gotags: json:"eventTypeUrls"
+	EventTypeUrls []string `protobuf:"bytes,7,rep,name=event_type_urls,json=eventTypeUrls,proto3" json:"eventTypeUrls"` // @gotags: json:"eventTypeUrls"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -816,7 +816,7 @@ func (x *PluginCheckRequest) GetTx() *Transaction {
 type PluginCheckResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// authorized_signers: addresses who are authorized to sign the transaction
-	AuthorizedSigners [][]byte `protobuf:"bytes,1,rep,name=authorized_signers,json=authorizedSigners,proto3" json:"authorized_signers,omitempty"` // @gotags: json:"authorizedSigners"
+	AuthorizedSigners [][]byte `protobuf:"bytes,1,rep,name=authorized_signers,json=authorizedSigners,proto3" json:"authorizedSigners"` // @gotags: json:"authorizedSigners"
 	// recipient: address of the recipient of the transaction (nil if not applicable)
 	Recipient []byte `protobuf:"bytes,2,opt,name=recipient,proto3" json:"recipient,omitempty"`
 	// error: an error occurred when checking the transaction
@@ -1200,7 +1200,7 @@ func (x *PluginStateReadRequest) GetRanges() []*PluginRangeRead {
 type PluginKeyRead struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// query_id to correlate requests and responses
-	QueryId uint64 `protobuf:"varint,1,opt,name=query_id,json=queryId,proto3" json:"query_id,omitempty"` // @gotags: json:"queryId"
+	QueryId uint64 `protobuf:"varint,1,opt,name=query_id,json=queryId,proto3" json:"queryId"` // @gotags: json:"queryId"
 	// key to read from state
 	Key           []byte `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1255,7 +1255,7 @@ func (x *PluginKeyRead) GetKey() []byte {
 type PluginRangeRead struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// query_id to correlate requests and responses
-	QueryId uint64 `protobuf:"varint,1,opt,name=query_id,json=queryId,proto3" json:"query_id,omitempty"` // @gotags: json:"queryId"
+	QueryId uint64 `protobuf:"varint,1,opt,name=query_id,json=queryId,proto3" json:"queryId"` // @gotags: json:"queryId"
 	// prefix: the prefix to iterate over
 	Prefix []byte `protobuf:"bytes,2,opt,name=prefix,proto3" json:"prefix,omitempty"`
 	// limit: maximum number of entries to return
@@ -1383,7 +1383,7 @@ func (x *PluginStateReadResponse) GetError() *PluginError {
 type PluginReadResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// query_id: matching the original read request
-	QueryId uint64 `protobuf:"varint,1,opt,name=query_id,json=queryId,proto3" json:"query_id,omitempty"` // @gotags: json:"queryId"
+	QueryId uint64 `protobuf:"varint,1,opt,name=query_id,json=queryId,proto3" json:"queryId"` // @gotags: json:"queryId"
 	// entries: returned for this query
 	Entries       []*PluginStateEntry `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
 	unknownFields protoimpl.UnknownFields

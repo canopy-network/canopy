@@ -1,21 +1,5 @@
 package contract
 
-// handler_commit_vote.go — MessageCommitVote
-// Spec: PORS v1.0-r2-CORRECTED (P5)
-//
-// Panel members submit a blinded vote during the commit phase.
-// commit_hash = SHA256(vote_byte || nonce || voter_addr)
-// The hash is stored but not revealed until the reveal phase.
-//
-// CheckTx:  market_id 20 bytes, voter_addr 20 bytes, commit_hash 32 bytes.
-//           Zero StateRead (AUDIT-8).
-// DeliverTx:
-//   Read market + dispute + existing VoteCommit
-//   Validate STATUS_DISPUTED and within commit phase window
-//   Validate voter is a panel member
-//   Reject if already committed
-//   1-key atomic write: VoteCommit
-
 func (c *Contract) CheckMessageCommitVote(msg *MessageCommitVote) *PluginCheckResponse {
 if len(msg.MarketId) != 20 {
 return ErrCheckResp(ErrInvalidParam())
@@ -23,7 +7,6 @@ return ErrCheckResp(ErrInvalidParam())
 if len(msg.VoterAddr) != 20 {
 return ErrCheckResp(ErrInvalidAddress())
 }
-// commit_hash must be exactly 32 bytes (SHA256 output).
 if len(msg.CommitHash) != 32 {
 return ErrCheckResp(ErrInvalidCommitHash())
 }
@@ -78,7 +61,6 @@ if pe := Unmarshal(r.Entries[0].Value, dispute); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case commitQId:
-// Already committed if this key exists.
 if len(r.Entries) > 0 {
 return &PluginDeliverResponse{Error: ErrAlreadyCommitted()}
 }
@@ -95,18 +77,15 @@ if dispute == nil {
 return &PluginDeliverResponse{Error: ErrNotDisputed()}
 }
 
-// Commit phase window: dispute_block to dispute_block + COMMIT_PHASE_BLOCKS.
 commitDeadline := dispute.DisputeBlock + COMMIT_PHASE_BLOCKS
 if now > commitDeadline {
 return &PluginDeliverResponse{Error: ErrCommitPhaseOver()}
 }
 
-// Verify voter is a panel member.
 if !isPanelMember(msg.VoterAddr, dispute.PanelMembers) {
 return &PluginDeliverResponse{Error: ErrNotAPanelMember()}
 }
 
-// Write VoteCommit — single atomic key.
 vc := &VoteCommit{
 VoterAddr:   msg.VoterAddr,
 CommitHash:  msg.CommitHash,
@@ -128,7 +107,6 @@ return &PluginDeliverResponse{Error: pe}
 return &PluginDeliverResponse{}
 }
 
-// isPanelMember returns true if addr is in the panelMembers list.
 func isPanelMember(addr []byte, panelMembers [][]byte) bool {
 for _, m := range panelMembers {
 if bytesEqual(addr, m) {

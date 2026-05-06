@@ -1,16 +1,5 @@
 package contract
 
-// handler_create_market.go — MessageCreateMarket
-// Spec: ADLMSR v5.6.6-r2-CORRECTED
-//
-// Creates a new prediction market with LMSR liquidity.
-// market_id = SHA256(creator_address || nonce)[:20] — deterministic, no counter needed.
-//
-// CheckTx: address 20 bytes, b0 >= MIN_B0, expiry_time non-zero and <= MAX_EXPIRY_TIME,
-//          nonce non-zero, question non-empty. Zero StateRead (AUDIT-8, R8).
-// DeliverTx: derive market_id, check not duplicate, deduct b0+fee from creator,
-//            write MarketState + Pool + TreasuryReserve atomically. (R8, AUDIT-11)
-
 func (c *Contract) CheckMessageCreateMarket(msg *MessageCreateMarket) *PluginCheckResponse {
 if len(msg.CreatorAddress) != 20 {
 return ErrCheckResp(ErrInvalidAddress())
@@ -21,7 +10,6 @@ return ErrCheckResp(ErrInvalidB0())
 if msg.ExpiryTime == 0 {
 return ErrCheckResp(ErrInvalidParam())
 }
-// R8 + AUDIT-11: stateless upper-bound guard — reject before gossip.
 if msg.ExpiryTime > MAX_EXPIRY_TIME {
 return ErrCheckResp(ErrExpiryTooLarge())
 }
@@ -41,13 +29,10 @@ now := GetGlobalHeight()
 if now == 0 {
 return &PluginDeliverResponse{Error: ErrHeightNotSet()}
 }
-
-// AUDIT-11: DeliverTx redundant guard (belt-and-suspenders).
 if msg.ExpiryTime > MAX_EXPIRY_TIME {
 return &PluginDeliverResponse{Error: ErrExpiryTooLarge()}
 }
 
-// Derive the deterministic market_id.
 marketId := DeriveMarketId(msg.CreatorAddress, msg.Nonce)
 
 marketQId  := nextQueryId()
@@ -83,8 +68,7 @@ continue
 }
 switch r.QueryId {
 case marketQId:
-// Market already exists — nonce collision or replay.
-return &PluginDeliverResponse{Error: ErrInvalidParam()}
+return &PluginDeliverResponse{Error: ErrInvalidParam()} // already exists
 case creatorQId:
 if pe := Unmarshal(r.Entries[0].Value, creator); pe != nil {
 return &PluginDeliverResponse{Error: pe}
@@ -96,7 +80,6 @@ return &PluginDeliverResponse{Error: pe}
 }
 }
 
-// Total cost to creator: initial liquidity (b0) + fee.
 if fee > 0 && msg.B0 > ^uint64(0)-fee {
 return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 }
@@ -108,8 +91,6 @@ return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 creator.Amount -= totalCost
 feePool.Amount += fee
 
-// Initial LMSR state: q_yes = q_no = b0/2 (balanced start).
-// b_eff = b0 — the liquidity parameter.
 halfB0 := msg.B0 / 2
 market := &MarketState{
 Status:        STATUS_OPEN,
@@ -124,47 +105,30 @@ OpenTime:      now,
 ElevatedRisk:  false,
 }
 
-// Per-market pool seeded with b0 (the initial liquidity).
 pool := &Pool{Id: c.Config.ChainId, Amount: msg.B0}
-
-// TreasuryReserve initialised to zero — filled by protocol fee on predictions.
 treasury := &TreasuryReserve{LockedReserve: 0}
 
 rawMarket, pe := SafeMarshal(market)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawCreator, pe := SafeMarshal(creator)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawFee, pe := SafeMarshal(feePool)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawPool, pe := SafeMarshal(pool)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawTreasury, pe := SafeMarshal(treasury)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
-// 5-key atomic write: market state, creator account debit, fee pool credit,
-// per-market pool seeded, treasury reserve initialised.
 sets := []*PluginSetOp{
 {Key: marketKey,  Value: rawMarket},
 {Key: poolKey,    Value: rawPool},
 {Key: treasKey,   Value: rawTreasury},
 {Key: feePoolKey, Value: rawFee},
 }
-// Only write creator account if balance remains non-zero.
+var deletes []*PluginDeleteOp
 if creator.Amount > 0 {
 sets = append(sets, &PluginSetOp{Key: creatorKey, Value: rawCreator})
-}
-var deletes []*PluginDeleteOp
-if creator.Amount == 0 {
+} else {
 deletes = []*PluginDeleteOp{{Key: creatorKey}}
 }
 

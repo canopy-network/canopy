@@ -1,29 +1,9 @@
 package contract
 
-// handler_claim_winnings.go — MessageClaimWinnings
-// Spec: ADLMSR v5.6.6-r2-CORRECTED
-//
-// Claims payout for a winning (or cancelled/voided) position.
-// CRIT-2: gates on STATUS_FINALIZED (= 6), never STATUS_RESOLVED.
-// CRIT-1: uses market.QYes/QNo and position.SharesYes/SharesNo (proto names).
-// R2: surplus sweep re-reads pool from state after atomic write.
-// R6: ClaimantAddress validated in CheckTx AND DeliverTx.
-// AUDIT-1: overflow-safe payout formula (ComputePayout).
-// AUDIT-6: ghost claimant guard — reject zero position.
-//
-// CheckTx: market_id 20 bytes, claimant_address 20 bytes. Zero StateRead (AUDIT-8).
-// DeliverTx:
-//   CheckAutoCancel first
-//   Batch read: market, position, pool, claimant account
-//   Compute payout based on market status
-//   4-key atomic write
-//   R2: surplus sweep via fresh pool re-read after write
-
 func (c *Contract) CheckMessageClaimWinnings(msg *MessageClaimWinnings) *PluginCheckResponse {
 if len(msg.MarketId) != 20 {
 return ErrCheckResp(ErrInvalidParam())
 }
-// R6: ClaimantAddress must be validated in CheckTx.
 if len(msg.ClaimantAddress) != 20 {
 return ErrCheckResp(ErrInvalidAddress())
 }
@@ -37,17 +17,13 @@ now := GetGlobalHeight()
 if now == 0 {
 return &PluginDeliverResponse{Error: ErrHeightNotSet()}
 }
-
-// R6: re-validate in DeliverTx.
 if len(msg.ClaimantAddress) != 20 {
 return &PluginDeliverResponse{Error: ErrInvalidAddress()}
 }
-
 if pe := c.CheckAutoCancel(msg.MarketId); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 
-// ── Batch read ────────────────────────────────────────────────────────────
 marketQId   := nextQueryId()
 posQId      := nextQueryId()
 poolQId     := nextQueryId()
@@ -106,8 +82,6 @@ return &PluginDeliverResponse{Error: pe}
 if market == nil {
 return &PluginDeliverResponse{Error: ErrMarketNotFound()}
 }
-
-// AUDIT-6: ghost claimant guard — reject zero position.
 if position.SharesYes == 0 && position.SharesNo == 0 && position.CostPaid == 0 {
 return &PluginDeliverResponse{Error: ErrNoPosition()}
 }
@@ -115,13 +89,9 @@ if position.Claimed {
 return &PluginDeliverResponse{Error: ErrAlreadyClaimed()}
 }
 
-// ── Compute payout ────────────────────────────────────────────────────────
 var payout uint64
-
 switch market.Status {
 case STATUS_FINALIZED:
-// CRIT-2: gate on STATUS_FINALIZED, never STATUS_RESOLVED.
-// Read outcome to determine winning side.
 outQId := nextQueryId()
 outResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
@@ -151,7 +121,6 @@ if outcome == nil {
 return &PluginDeliverResponse{Error: ErrInternal()}
 }
 
-// CRIT-1: market.QYes/QNo, position.SharesYes/SharesNo (proto names).
 var winnerShares, totalWinShares uint64
 if outcome.WinningOutcome {
 winnerShares   = position.SharesYes
@@ -164,7 +133,6 @@ if winnerShares > 0 {
 if totalWinShares == 0 {
 return &PluginDeliverResponse{Error: ErrInternal()}
 }
-// AUDIT-1: overflow-safe payout formula.
 payout = ComputePayout(marketPool.Amount, winnerShares, totalWinShares)
 }
 
@@ -172,7 +140,6 @@ case STATUS_CANCELLED:
 payout = position.CostPaid
 
 case STATUS_VOIDED:
-// Tier-4 void: full refund to all bettors.
 payout = position.CostPaid
 
 default:
@@ -183,31 +150,20 @@ if payout > marketPool.Amount {
 return &PluginDeliverResponse{Error: ErrInsufficientPoolFunds()}
 }
 
-// ── Mutate in memory ──────────────────────────────────────────────────────
 position.Claimed     = true
 market.ClaimedCount++
 marketPool.Amount   -= payout
 claimantAcc.Amount  += payout
 
-// ── Marshal all ───────────────────────────────────────────────────────────
 rawPos, pe := SafeMarshal(position)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawMkt, pe := SafeMarshal(market)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawMP, pe := SafeMarshal(marketPool)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawAcc, pe := SafeMarshal(claimantAcc)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
-// ── 4-key atomic write ────────────────────────────────────────────────────
 wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
 Sets: []*PluginSetOp{
 {Key: posKey,    Value: rawPos},
@@ -220,15 +176,10 @@ if pe := errCheckWrite(wr, werr); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 
-// ── R2: surplus sweep — re-read pool from state after atomic write ────────
-// Never use in-memory marketPool.Amount here — R2 fix.
-graceEnd := market.ExpiryTime + RESOLUTION_DELAY_BLOCKS +
-GRACE_PERIOD_BLOCKS + CLAIM_GRACE_PERIOD
-shouldSweep :=
-(market.Status == STATUS_FINALIZED &&
+graceEnd := market.ExpiryTime + RESOLUTION_DELAY_BLOCKS + GRACE_PERIOD_BLOCKS + CLAIM_GRACE_PERIOD
+shouldSweep := (market.Status == STATUS_FINALIZED &&
 (market.ClaimedCount == market.TotalPositions || now > graceEnd)) ||
 (market.Status == STATUS_CANCELLED && now > graceEnd)
-
 if shouldSweep {
 sweepQId := nextQueryId()
 sweepResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
@@ -253,7 +204,6 @@ return &PluginDeliverResponse{Error: pe}
 }
 
 if sweepPool.Amount > 0 {
-// Move remaining pool balance to treasury.
 sweepPool.Amount = 0
 rawSweep, pe := SafeMarshal(sweepPool)
 if pe != nil {
