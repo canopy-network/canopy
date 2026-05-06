@@ -250,6 +250,8 @@ height, `genesisComplete=false`, `DefaultParams()`.
 
 ### Routes (all `GET`)
 
+Snapshot-served (sub-millisecond, stale by ≤1 block):
+
 | Path | Returns |
 |---|---|
 | `/v1/health` | `{height, genesisComplete, chainId}` |
@@ -264,18 +266,25 @@ height, `genesisComplete=false`, `DefaultParams()`.
 | `/v1/validators` | `ValidatorRegistry` (committee snapshot used for pro-rata) |
 | `/v1/stakers` | `{stakers: [{address, amount, stakedAtHeight}]}` from `CLIQStakeIndex` |
 
-Errors: `400` on malformed input, `404` on missing entity, `405` on
-non-`GET`, `500` on internal error.
+Lazy-fulfilled per-address (latency: up to one block ≈ 6s on localnet):
 
-### Phase 3 §1.1 (deferred)
+| Path | Returns |
+|---|---|
+| `/v1/account/{addr}` | composite: CNPY + cCNPY + liquid CLIQ + stake + validator-incentive + vesting |
+| `/v1/vesting/{addr}` | every vesting schedule with cumulative unlocked-to-date |
+| `/v1/redemption/{addr}/{id}` | one redemption record |
+| `/v1/vote/{id}/{voter}` | one vote record |
+| `/v1/buyback/{id}` | post-execution `BuybackOrder` |
 
-Per-address composite routes are **not** in §1: the snapshot can only
-enumerate state reachable from a singleton or an existing index, and
-canoliq has no per-address index for accounts (CNPY/cCNPY/CLIQ
-balances), vesting schedules, queued redemptions, queued unstakes, or
-votes-by-voter. These need either a per-address index added on the
-write side, or a lazy-fetch queue serviced inside `EndBlock`. Tracking
-in `docs/plans/canoliq-implementation-plan.md` Phase 3 §1.1.
+Errors: `400` malformed input, `404` missing entity, `405` non-`GET`,
+`500` internal error, `503` lazy queue saturated, `504` lazy drain
+timed out (chain stalled).
+
+The lazy routes block the HTTP request until the next `EndBlock`
+drains the query queue. Client disconnects (e.g. via `ctx` timeout)
+cancel the wait promptly. Pending unstakes and per-address
+redemption listings are *not yet* exposed — they'd need new
+write-side indexes; tracked as future work.
 
 ## Logs
 

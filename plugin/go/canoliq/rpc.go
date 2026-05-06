@@ -2,6 +2,7 @@ package canoliq
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log"
@@ -75,6 +76,13 @@ func (s *RPCServer) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/spend/", s.handleSpend)
 	mux.HandleFunc("/v1/validators", s.handleValidators)
 	mux.HandleFunc("/v1/stakers", s.handleStakers)
+	// Phase 3 §1.1 per-address routes — fulfilled via the lazy queue
+	// drained in EndBlock (see lazy_query.go for the rationale).
+	mux.HandleFunc("/v1/account/", s.handleAccount)
+	mux.HandleFunc("/v1/vesting/", s.handleVesting)
+	mux.HandleFunc("/v1/redemption/", s.handleRedemption)
+	mux.HandleFunc("/v1/vote/", s.handleVote)
+	mux.HandleFunc("/v1/buyback/", s.handleBuyback)
 }
 
 func (s *RPCServer) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +187,162 @@ func (s *RPCServer) handleStakers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"stakers": s.plugin.QueryStakers()})
 }
 
+// handleAccount serves /v1/account/{addr}. Fulfilled via the lazy queue —
+// blocks the HTTP request until EndBlock drains the query (worst case
+// one block ≈ 6s on localnet).
+func (s *RPCServer) handleAccount(w http.ResponseWriter, r *http.Request) {
+	if !methodIs(w, r, http.MethodGet) {
+		return
+	}
+	tail := strings.TrimPrefix(r.URL.Path, "/v1/account/")
+	addr, err := parseAddress(tail)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	res := s.plugin.enqueueLazy(r.Context(), &lazyQuery{kind: lazyKindAccount, addr: addr})
+	if res.err != nil {
+		writeLazyError(w, res.err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res.view)
+}
+
+// handleVesting serves /v1/vesting/{addr}. 404 when the address has no
+// VestingIndex entry at all (vs. an entry with zero schedules — that's
+// 200 with an empty list).
+func (s *RPCServer) handleVesting(w http.ResponseWriter, r *http.Request) {
+	if !methodIs(w, r, http.MethodGet) {
+		return
+	}
+	tail := strings.TrimPrefix(r.URL.Path, "/v1/vesting/")
+	addr, err := parseAddress(tail)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	res := s.plugin.enqueueLazy(r.Context(), &lazyQuery{kind: lazyKindVesting, addr: addr})
+	if res.err != nil {
+		writeLazyError(w, res.err)
+		return
+	}
+	if !res.found {
+		writeError(w, http.StatusNotFound, "no vesting schedules for address")
+		return
+	}
+	views := res.views
+	if views == nil {
+		views = []*VestingView{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"address":   hexAddress(addr),
+		"schedules": views,
+	})
+}
+
+// handleRedemption serves /v1/redemption/{addr}/{id}.
+func (s *RPCServer) handleRedemption(w http.ResponseWriter, r *http.Request) {
+	if !methodIs(w, r, http.MethodGet) {
+		return
+	}
+	tail := strings.TrimPrefix(r.URL.Path, "/v1/redemption/")
+	parts := strings.SplitN(tail, "/", 2)
+	if len(parts) != 2 {
+		writeError(w, http.StatusBadRequest, "expected /v1/redemption/{addr}/{id}")
+		return
+	}
+	addr, err := parseAddress(parts[0])
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	id, err := parseUint(parts[1])
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	res := s.plugin.enqueueLazy(r.Context(), &lazyQuery{kind: lazyKindRedemption, addr: addr, id: id})
+	if res.err != nil {
+		writeLazyError(w, res.err)
+		return
+	}
+	if !res.found {
+		writeError(w, http.StatusNotFound, "redemption not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, res.redemption)
+}
+
+// handleVote serves /v1/vote/{proposalId}/{voter}.
+func (s *RPCServer) handleVote(w http.ResponseWriter, r *http.Request) {
+	if !methodIs(w, r, http.MethodGet) {
+		return
+	}
+	tail := strings.TrimPrefix(r.URL.Path, "/v1/vote/")
+	parts := strings.SplitN(tail, "/", 2)
+	if len(parts) != 2 {
+		writeError(w, http.StatusBadRequest, "expected /v1/vote/{id}/{voter}")
+		return
+	}
+	id, err := parseUint(parts[0])
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	voter, err := parseAddress(parts[1])
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	res := s.plugin.enqueueLazy(r.Context(), &lazyQuery{kind: lazyKindVote, id: id, voter: voter})
+	if res.err != nil {
+		writeLazyError(w, res.err)
+		return
+	}
+	if !res.found {
+		writeError(w, http.StatusNotFound, "vote not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, res.vote)
+}
+
+// handleBuyback serves /v1/buyback/{id}.
+func (s *RPCServer) handleBuyback(w http.ResponseWriter, r *http.Request) {
+	if !methodIs(w, r, http.MethodGet) {
+		return
+	}
+	tail := strings.TrimPrefix(r.URL.Path, "/v1/buyback/")
+	id, err := parseUint(tail)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	res := s.plugin.enqueueLazy(r.Context(), &lazyQuery{kind: lazyKindBuyback, id: id})
+	if res.err != nil {
+		writeLazyError(w, res.err)
+		return
+	}
+	if !res.found {
+		writeError(w, http.StatusNotFound, "buyback order not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, res.buyback)
+}
+
+// writeLazyError maps lazy-queue failure modes to HTTP status. Queue
+// saturation → 503 (caller should retry), drain timeout → 504 (chain
+// stalled), anything else → 500.
+func writeLazyError(w http.ResponseWriter, err error) {
+	switch err {
+	case errLazyQueueFull:
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+	case errLazyQueryTimeout:
+		writeError(w, http.StatusGatewayTimeout, err.Error())
+	default:
+		writeError(w, http.StatusInternalServerError, err.Error())
+	}
+}
+
 // --- shared helpers ---
 
 func methodIs(w http.ResponseWriter, r *http.Request, want string) bool {
@@ -203,6 +367,20 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// parseAddress accepts a 20-byte address as 0x-prefixed or bare hex.
+func parseAddress(s string) ([]byte, error) {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "0x")
+	if len(s) != 40 {
+		return nil, errStr("address must be 20 bytes (40 hex chars)")
+	}
+	addr, err := hex.DecodeString(s)
+	if err != nil {
+		return nil, errStr("address hex decode: " + err.Error())
+	}
+	return addr, nil
 }
 
 // parseUint parses a positive base-10 uint64.

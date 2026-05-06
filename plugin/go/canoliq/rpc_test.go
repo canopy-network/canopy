@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
@@ -20,10 +22,13 @@ import (
 
 // newTestRPC mounts the canoliq mux backed by the same fakeStore-driven
 // *Plugin used elsewhere in the test suite. Tests must call refresh() to
-// populate the snapshot before issuing HTTP requests.
+// populate the snapshot before issuing HTTP requests. A background
+// goroutine drains the lazy-query channel every 10ms so per-address
+// route tests do not have to wire EndBlock manually around each call.
 func newTestRPC(t *testing.T) (*httptest.Server, *Canoliq, *fakeStore, func(uint64)) {
 	t.Helper()
 	c, store := newTestCanoliq()
+	c.plugin.pendingQueries = make(chan *lazyQuery, lazyQueueCapacity)
 	rpc := &RPCServer{plugin: c.plugin}
 	mux := http.NewServeMux()
 	rpc.registerRoutes(mux)
@@ -35,6 +40,20 @@ func newTestRPC(t *testing.T) (*httptest.Server, *Canoliq, *fakeStore, func(uint
 			t.Fatalf("refreshSnapshot: %v", err)
 		}
 	}
+	stop := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				c.drainLazyQueries()
+			}
+		}
+	}()
+	t.Cleanup(func() { close(stop) })
 	return srv, c, store, refresh
 }
 
@@ -267,6 +286,161 @@ func TestRPCMethodNotAllowed(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("status: got %d want 405", resp.StatusCode)
+	}
+}
+
+// TestRPCAccountComposite seeds a single address with every kind of
+// canoliq-owned record and asserts the composite view assembles them all.
+func TestRPCAccountComposite(t *testing.T) {
+	srv, _, s, refresh := newTestRPC(t)
+	user := addr20(0x42)
+	seedAccount(s, user, 7_000_000)
+	s.set(KeyForCCNPYBalance(user), EncodeUint64(500_000))
+	s.set(KeyForCLIQBalance(user), EncodeUint64(123_456))
+	s.set(KeyForCLIQStake(user), mustMarshal(&contract.CLIQStake{
+		Address: user, Amount: 999_999, StakedAtHeight: 5,
+	}))
+	s.set(KeyForValidatorIncentives(user), EncodeUint64(7_777))
+	// Add a vesting schedule + index so the composite picks it up.
+	sched := &contract.VestingSchedule{
+		Address: user, TotalAmount: 1_000_000,
+		CliffHeight: 100, StartHeight: 100, EndHeight: 200,
+	}
+	s.set(KeyForVesting(user, 0), mustMarshal(sched))
+	s.set(KeyForVestingIndex(user), mustMarshal(&contract.VestingIndex{ScheduleIds: []uint64{0}}))
+	refresh(150)
+
+	hex := "0x" + strings.Repeat("42", 20)
+	var view AccountView
+	getJSON(t, srv, "/v1/account/"+hex, http.StatusOK, &view)
+	if view.Address != hex || view.CNPY != 7_000_000 || view.CCNPY != 500_000 ||
+		view.CLIQLiquid != 123_456 || view.ValidatorIncentive != 7_777 {
+		t.Fatalf("account view: %+v", view)
+	}
+	if view.CLIQStake == nil || view.CLIQStake.Amount != 999_999 {
+		t.Fatalf("stake missing or wrong: %+v", view.CLIQStake)
+	}
+	if len(view.Vestings) != 1 || view.Vestings[0].UnlockedToDate != 500_000 {
+		t.Fatalf("vesting in composite: %+v", view.Vestings)
+	}
+}
+
+func TestRPCAccountRejectsBadAddress(t *testing.T) {
+	srv, _, _, _ := newTestRPC(t)
+	resp, err := http.Get(srv.URL + "/v1/account/notahex")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestRPCVestingDedicated(t *testing.T) {
+	srv, _, s, refresh := newTestRPC(t)
+	user := addr20(0x55)
+	sched := &contract.VestingSchedule{
+		Address: user, TotalAmount: 2_000_000,
+		CliffHeight: 100, StartHeight: 100, EndHeight: 300, ClaimedAmount: 100_000,
+	}
+	s.set(KeyForVesting(user, 0), mustMarshal(sched))
+	s.set(KeyForVestingIndex(user), mustMarshal(&contract.VestingIndex{ScheduleIds: []uint64{0}}))
+	refresh(200) // halfway through vest
+
+	hex := "0x" + strings.Repeat("55", 20)
+	var body struct {
+		Address   string         `json:"address"`
+		Schedules []*VestingView `json:"schedules"`
+	}
+	getJSON(t, srv, "/v1/vesting/"+hex, http.StatusOK, &body)
+	if len(body.Schedules) != 1 {
+		t.Fatalf("schedules: %+v", body.Schedules)
+	}
+	v := body.Schedules[0]
+	if v.UnlockedToDate != 1_000_000 || v.ClaimableNow != 900_000 || v.CurrentHeight != 200 {
+		t.Fatalf("vesting view: %+v", v)
+	}
+
+	// Address with no vesting → 404.
+	getJSON(t, srv, "/v1/vesting/0x"+strings.Repeat("aa", 20), http.StatusNotFound, nil)
+}
+
+func TestRPCRedemptionPointLookup(t *testing.T) {
+	srv, _, s, refresh := newTestRPC(t)
+	user := addr20(0xDD)
+	red := &contract.Redemption{
+		Id: 4, Address: user, CnpyAmount: 250_000, UnbondCompleteHeight: 1000,
+	}
+	s.set(KeyForRedemption(user, 4), mustMarshal(red))
+	refresh(50)
+
+	hex := "0x" + strings.Repeat("dd", 20)
+	var got contract.Redemption
+	getJSON(t, srv, "/v1/redemption/"+hex+"/4", http.StatusOK, &got)
+	if got.Id != 4 || got.CnpyAmount != 250_000 {
+		t.Fatalf("redemption: %+v", &got)
+	}
+
+	// Missing id → 404.
+	getJSON(t, srv, "/v1/redemption/"+hex+"/9999", http.StatusNotFound, nil)
+}
+
+func TestRPCVotePointLookup(t *testing.T) {
+	srv, _, s, refresh := newTestRPC(t)
+	voter := addr20(0xEE)
+	s.set(KeyForVote(7, voter), mustMarshal(&contract.Vote{
+		ProposalId: 7, Voter: voter, Choice: contract.VoteChoice_VOTE_YES, Weight: 100_000,
+	}))
+	refresh(10)
+
+	hex := "0x" + strings.Repeat("ee", 20)
+	var got contract.Vote
+	getJSON(t, srv, "/v1/vote/7/"+hex, http.StatusOK, &got)
+	if got.ProposalId != 7 || got.Choice != contract.VoteChoice_VOTE_YES || got.Weight != 100_000 {
+		t.Fatalf("vote: %+v", &got)
+	}
+	getJSON(t, srv, "/v1/vote/9999/"+hex, http.StatusNotFound, nil)
+}
+
+func TestRPCBuybackPointLookup(t *testing.T) {
+	srv, _, s, refresh := newTestRPC(t)
+	order := &contract.BuybackOrder{
+		ProposalId:   3,
+		CnpyDrawn:    100_000,
+		CliqAcquired: 500_000,
+		Mode:         contract.BuybackMode_BUYBACK_BURN,
+		Executed:     true,
+	}
+	s.set(KeyForBuybackOrder(3), mustMarshal(order))
+	refresh(10)
+
+	var got contract.BuybackOrder
+	getJSON(t, srv, "/v1/buyback/3", http.StatusOK, &got)
+	if got.ProposalId != 3 || !got.Executed {
+		t.Fatalf("buyback: %+v", &got)
+	}
+	getJSON(t, srv, "/v1/buyback/9999", http.StatusNotFound, nil)
+}
+
+// TestLazyQueueTimeout: when the drain goroutine is paused (no EndBlock
+// firing), enqueueing a query times out with 504.
+func TestLazyQueueTimeout(t *testing.T) {
+	c, _ := newTestCanoliq()
+	c.plugin.pendingQueries = make(chan *lazyQuery, lazyQueueCapacity)
+	rpc := &RPCServer{plugin: c.plugin}
+	mux := http.NewServeMux()
+	rpc.registerRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	// No drainer started — queue will never fulfill. Use a tight client
+	// timeout so the test itself doesn't wait the full 15s; we just want
+	// to confirm the request blocks rather than returning instantly.
+	client := &http.Client{Timeout: 200 * time.Millisecond}
+	resp, err := client.Get(srv.URL + "/v1/buyback/1")
+	if err == nil {
+		resp.Body.Close()
+		t.Fatalf("expected client timeout (would block on lazy queue)")
 	}
 }
 

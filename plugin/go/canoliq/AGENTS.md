@@ -277,10 +277,37 @@ Only state reachable from a singleton or an existing index:
 - For each pending spend × each `MultisigSigners` entry → live
   `MultisigApproval` records.
 
-Per-address records (Account, cCNPY/CLIQ balances, vesting, queued
-redemptions, queued unstakes, votes-by-voter, buyback orders) have no
-index that would let a snapshot enumerate them. These are deferred to
-Phase 3 §1.1.
+### Lazy-fulfilled per-address routes (Phase 3 §1.1)
+
+Per-address routes (`/v1/account/{addr}`, `/v1/vesting/{addr}`,
+`/v1/redemption/{addr}/{id}`, `/v1/vote/{id}/{voter}`,
+`/v1/buyback/{id}`) cannot be snapshotted because canoliq has no
+global "all addresses ever seen" index. Instead, `lazy_query.go`
+implements a queue: HTTP handlers build a `*lazyQuery`, push it onto
+`Plugin.pendingQueries`, and block on the per-query result channel
+(with the request context). `EndBlock` drains the queue *after*
+`refreshSnapshot` (so `c.fsmId` is still a valid FSM context for
+state reads), reading each address's records in turn and sending
+results back.
+
+Worst-case HTTP latency = one block (~6s on localnet). Client
+context cancellation (`r.Context()`) aborts the wait promptly so
+disconnected requests don't pin a goroutine. Queue capacity is
+`lazyQueueCapacity = 256`; saturated → 503. Drain timeout =
+`lazyQueryTimeout = 15s` (≈2.5× block time); exceeded → 504.
+
+When adding a new lazy route:
+
+1. Add a new `lazyKindX` constant.
+2. Add a `readX` helper in `lazy_query.go` that does the StateRead
+   work. Stay synchronous; the drain is single-threaded.
+3. Wire it into `fulfillLazy`'s switch.
+4. Add a route handler in `rpc.go` that builds the `*lazyQuery` and
+   passes `r.Context()` to `enqueueLazy`.
+
+Don't try to satisfy a lazy query from outside `EndBlock` — the FSM
+will reject the StateRead with code 107 (see
+`memory/feedback_plugin_stateread_constraint.md`).
 
 ### Adding a new route
 

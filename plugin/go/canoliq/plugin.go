@@ -39,6 +39,11 @@ type Plugin struct {
 	// state. Refreshed inside EndBlock by Canoliq.refreshSnapshot; read
 	// lock-free by HTTP query handlers via Plugin.Snapshot().
 	snapshot snapshotPointer
+	// pendingQueries is the per-address lazy-fulfill channel. HTTP routes
+	// that need point reads (account/vesting/redemption/vote/buyback) push
+	// a *lazyQuery here and block on its result channel; EndBlock drains
+	// it after refreshSnapshot. See lazy_query.go for the rationale.
+	pendingQueries chan *lazyQuery
 }
 
 // RPC returns the active HTTP query server, or nil if disabled.
@@ -96,6 +101,7 @@ func StartPlugin(c Config) *Plugin {
 		requestContract: map[uint64]*Canoliq{},
 		l:               sync.Mutex{},
 		config:          c,
+		pendingQueries:  make(chan *lazyQuery, lazyQueueCapacity),
 	}
 	go p.ListenForInbound()
 	if err := p.Handshake(); err != nil {

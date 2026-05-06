@@ -160,11 +160,10 @@ func (c *Canoliq) DeliverTx(request *contract.PluginDeliverRequest) *contract.Pl
 }
 
 // EndBlock runs the per-block reward sweep that applies the 12% protocol fee
-// and the 40/30/15/15 split to canoLiq's committee reward pool, then
-// refreshes the read-only snapshot used by the HTTP query layer. The
-// snapshot refresh runs inside EndBlock because that is the one place
-// where c.fsmId is a valid FSM context for arbitrary state reads — see
-// snapshot.go for the rationale.
+// and the 40/30/15/15 split to canoLiq's committee reward pool, refreshes
+// the read-only snapshot used by the HTTP query layer, and drains any
+// pending per-address lazy queries. All of these need an active FSM
+// context for state reads — see snapshot.go and lazy_query.go.
 func (c *Canoliq) EndBlock(req *contract.PluginEndRequest) *contract.PluginEndResponse {
 	if err := c.ProcessRewards(req); err != nil {
 		return &contract.PluginEndResponse{Error: err}
@@ -172,6 +171,7 @@ func (c *Canoliq) EndBlock(req *contract.PluginEndRequest) *contract.PluginEndRe
 	if err := c.refreshSnapshot(req.GetHeight()); err != nil {
 		return &contract.PluginEndResponse{Error: err}
 	}
+	c.drainLazyQueries()
 	return &contract.PluginEndResponse{}
 }
 

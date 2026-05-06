@@ -405,31 +405,41 @@ one block; that's acceptable for monitoring.
       whitepaper §7 split. Snapshot height tracks the live chain;
       no `code 107` regressions across 100+ blocks.
 
-#### 1.1 Per-address query routes (deferred)
+#### 1.1 Per-address query routes (lazy-fulfill queue)
 
-Per-address composite views are not snapshot-friendly because canoliq
-has no per-address index for accounts (CNPY/cCNPY/CLIQ balances),
-vesting schedules, queued redemptions, queued unstakes, votes-by-voter,
-or buyback orders.
+Per-address composite views were dropped from §1 because the snapshot
+can only enumerate state reachable from a singleton or an existing
+index, and canoliq has no global "all addresses ever seen" index.
 
-Two viable designs when this is picked up:
+**Implementation: lazy-fulfill queue.** The plugin owns a bounded
+channel of `*lazyQuery`. HTTP handlers build a query (kind + address +
+optional id/voter), push it onto the channel, and block on the per-query
+result with the request `ctx`. `EndBlock` drains the queue after
+`refreshSnapshot` (so `c.fsmId` is a valid FSM context for arbitrary
+StateReads), executes each query, and sends results back. Worst-case
+latency: one block (~6s localnet). Client disconnect cancels the wait.
 
-a. **Index-on-write.** Maintain new `*Index` records on the write side
-   (e.g. `RedemptionIndex(addr) → []uint64`). Snapshot then enumerates.
-   Adds one index per per-address record kind; small but invasive.
+Routes landed:
+- [x] `GET /v1/account/{addr}` — composite CNPY + cCNPY + liquid CLIQ
+      + stake + validator-incentive + vesting (no redemption/unstake
+      list yet — needs a write-side index)
+- [x] `GET /v1/vesting/{addr}` — schedules + cumulative unlocked-to-date
+- [x] `GET /v1/redemption/{addr}/{id}` — point lookup
+- [x] `GET /v1/vote/{id}/{voter}` — point lookup
+- [x] `GET /v1/buyback/{id}` — point lookup against `KeyForBuybackOrder`
 
-b. **Lazy queue inside `EndBlock`.** HTTP handlers enqueue address
-   lookups; `EndBlock` services the queue and stores results into the
-   snapshot. Latency = up to one block per request; no schema changes.
+Tests (`rpc_test.go`):
+- [x] `TestRPCAccountComposite`, `TestRPCAccountRejectsBadAddress`
+- [x] `TestRPCVestingDedicated` (404 on no-index)
+- [x] `TestRPCRedemptionPointLookup` (200 + 404)
+- [x] `TestRPCVotePointLookup` (200 + 404)
+- [x] `TestRPCBuybackPointLookup` (200 + 404)
+- [x] `TestLazyQueueTimeout` — handler aborts on client disconnect
 
-Routes to land:
-- [ ] `GET /v1/account/{addr}` — composite CNPY + cCNPY + liquid CLIQ +
-      stake + validator-incentive + vesting + redemptions + unstakes
-- [ ] `GET /v1/vesting/{addr}` — schedules + cumulative unlocked-to-date
-- [ ] `GET /v1/redemption/{addr}/{id}` (after either approach)
-- [ ] `GET /v1/vote/{id}/{voter}`
-- [ ] `GET /v1/buyback/{id}` (needs a buyback id index since proposal
-      records are deleted at tally cleanup)
+Future work (deferred, not blocking §1.1):
+- [ ] `RedemptionIndex(addr)` write-side index → lets `/v1/account/{addr}`
+      include the per-address redemption list
+- [ ] `UnstakingIndex(addr)` write-side index → ditto for unstakes
 
 #### 2. Alerting hooks (deferred)
 - [ ] Threshold-driven webhook for buyback pool drain rate
