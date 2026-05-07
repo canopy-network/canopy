@@ -43,7 +43,7 @@ var dispute  *DisputeRecord
 for _, r := range resp.Results {
 switch r.QueryId {
 case marketQId:
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrMarketNotFound()}
 }
 market = &MarketState{}
@@ -51,7 +51,7 @@ if pe := Unmarshal(r.Entries[0].Value, market); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case proposalQId:
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrInternal()}
 }
 proposal = &ProposalRecord{}
@@ -59,7 +59,7 @@ if pe := Unmarshal(r.Entries[0].Value, proposal); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case disputeQId:
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrInternal()}
 }
 dispute = &DisputeRecord{}
@@ -110,7 +110,7 @@ treasury := &TreasuryReserve{}
 for _, r := range resp2.Results {
 switch r.QueryId {
 case slashQId:
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrNoSlashToClaim()}
 }
 slash = &SlashRecord{}

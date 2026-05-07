@@ -55,7 +55,7 @@ marketPool  := &Pool{}
 claimantAcc := &Account{}
 
 for _, r := range resp.Results {
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 continue
 }
 switch r.QueryId {
@@ -108,7 +108,7 @@ return &PluginDeliverResponse{Error: outResp.Error}
 var outcome *OutcomeState
 for _, r := range outResp.Results {
 if r.QueryId == outQId {
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrInternal()}
 }
 outcome = &OutcomeState{}

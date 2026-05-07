@@ -65,7 +65,7 @@ bettor    := &Account{}
 feePool   := &Pool{}
 
 for _, r := range resp.Results {
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 continue
 }
 switch r.QueryId {

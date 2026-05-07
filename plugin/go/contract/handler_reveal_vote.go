@@ -48,7 +48,7 @@ var vc      *VoteCommit
 for _, r := range resp.Results {
 switch r.QueryId {
 case marketQId:
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrMarketNotFound()}
 }
 market = &MarketState{}
@@ -56,7 +56,7 @@ if pe := Unmarshal(r.Entries[0].Value, market); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case disputeQId:
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrNotDisputed()}
 }
 dispute = &DisputeRecord{}
@@ -64,7 +64,7 @@ if pe := Unmarshal(r.Entries[0].Value, dispute); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case commitQId:
-if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrNotAPanelMember()}
 }
 vc = &VoteCommit{}
