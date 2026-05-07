@@ -46,7 +46,7 @@ treasury    := &TreasuryReserve{}
 for _, r := range resp.Results {
 switch r.QueryId {
 case marketQId:
-if len(r.Entries) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrMarketNotFound()}
 }
 market = &MarketState{}
@@ -136,7 +136,7 @@ proposerAcc := &Account{}
 disputerAcc := &Account{}
 
 for _, r := range resp2.Results {
-if len(r.Entries) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 || len(r.Entries[0].Value) == 0 {
 continue
 }
 switch r.QueryId {

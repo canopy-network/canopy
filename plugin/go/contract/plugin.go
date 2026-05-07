@@ -98,14 +98,11 @@ func (p *Plugin) StateRead(c *Contract, request *PluginStateReadRequest) (*Plugi
 		return nil, err
 	}
 	// get the response
-	println("PRAXIS StateRead got response type:", reflect.TypeOf(response).String())
 	wrapper, ok := response.(*FSMToPlugin_StateRead)
 	if !ok {
-		println("PRAXIS StateRead type mismatch!")
 		return nil, ErrUnexpectedFSMToPlugin(reflect.TypeOf(response))
 	}
 	// return the unwrapped response
-	println("PRAXIS StateRead returning, wrapper.StateRead nil?", wrapper.StateRead == nil)
 return wrapper.StateRead, nil
 }
 
@@ -178,10 +175,8 @@ func (p *Plugin) handleFSMResponse(msg *FSMToPlugin) *PluginError {
 	p.l.Lock()
 	defer p.l.Unlock()
 	// get the requester channel
-	println("PRAXIS handleFSMResponse: id=", msg.Id, "pending_count=", len(p.pending), "found=", func() bool { _, ok := p.pending[msg.Id]; return ok }())
 	ch, ok := p.pending[msg.Id]
 	if !ok {
-		println("PRAXIS handleFSMResponse: NOT FOUND")
 		return ErrInvalidPluginRespId()
 	}
 	// remove the message from the pending list and FSM context

@@ -30,7 +30,6 @@ Name:    "praxis_prediction_market",
 Id:      1,
 Version: 1,
 SupportedTransactions: []string{
-"send",
 "create_market",
 "submit_prediction",
 "resolve_market",
@@ -45,7 +44,6 @@ SupportedTransactions: []string{
 "claim_slash",
 },
 TransactionTypeUrls: []string{
-"type.googleapis.com/types.MessageSend",
 "type.googleapis.com/types.MessageCreateMarket",
 "type.googleapis.com/types.MessageSubmitPrediction",
 "type.googleapis.com/types.MessageResolveMarket",

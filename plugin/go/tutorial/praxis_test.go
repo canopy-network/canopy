@@ -157,6 +157,77 @@ func blsSign(t *testing.T, privKeyHex string, msg []byte) (sig, pubKey []byte, e
 	return sig, pubKey, nil
 }
 
+// submitSendTx handles the built-in send tx which uses msg field not msgTypeUrl/msgBytes
+func submitSendTx(t *testing.T, kg *keyGroup, msg *contract.MessageSend, height uint64) string {
+	t.Helper()
+
+	typeURL := "type.googleapis.com/types.MessageSend"
+	msgBytes, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatalf("marshal msg: %v", err)
+	}
+
+	txTime := uint64(time.Now().UnixMicro())
+
+	tx := &contract.Transaction{
+		MessageType:   "send",
+		Msg:           &anypb.Any{TypeUrl: typeURL, Value: msgBytes},
+		Signature:     nil,
+		CreatedHeight: height,
+		Time:          txTime,
+		Fee:           testFee,
+		NetworkId:     testNetworkID,
+		ChainId:       testChainID,
+	}
+
+	signBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(tx)
+	if err != nil {
+		t.Fatalf("marshal sign bytes: %v", err)
+	}
+
+	sig, pubKey, err := blsSign(t, kg.PrivateKey, signBytes)
+	if err != nil {
+		t.Fatalf("bls sign: %v", err)
+	}
+
+	body := fmt.Sprintf(`{
+  "type": "send",
+  "msg": {
+    "fromAddress": %q,
+    "toAddress": %q,
+    "amount": %d
+  },
+  "signature": {
+    "publicKey": %q,
+    "signature": %q
+  },
+  "time": %d,
+  "createdHeight": %d,
+  "fee": %d,
+  "memo": "",
+  "networkID": %d,
+  "chainID": %d
+}`,
+		hex.EncodeToString(msg.FromAddress),
+		hex.EncodeToString(msg.ToAddress),
+		msg.Amount,
+		hex.EncodeToString(pubKey),
+		hex.EncodeToString(sig),
+		txTime, height, testFee,
+		testNetworkID, testChainID,
+	)
+
+	data, err := postJSON(queryRPCURL+"/v1/tx", body)
+	if err != nil {
+		t.Fatalf("post tx: %v", err)
+	}
+	var hash string
+	if err := json.Unmarshal(data, &hash); err != nil {
+		t.Fatalf("parse hash: %v: %s", err, data)
+	}
+	return hash
+}
+
 // submitTx builds sign bytes by marshaling a Transaction proto with Signature=nil,
 // signs it, then POSTs the JSON body to /v1/tx.
 func submitTx(t *testing.T, kg *keyGroup, shortType, msgName string, msg proto.Message, height uint64) string {
@@ -270,7 +341,7 @@ func TestValidatorSend(t *testing.T) {
 		ToAddress:   hexDecode(recipientAddr),
 		Amount:      1_000_000,
 	}
-	txHash := submitTx(t, validatorKey, "send", "MessageSend", msg, height)
+	txHash := submitSendTx(t, validatorKey, msg, height)
 	if err := waitForTx(validatorAddr, txHash, 60*time.Second); err != nil {
 		t.Fatal(err)
 	}
