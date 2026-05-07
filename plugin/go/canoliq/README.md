@@ -300,6 +300,431 @@ required fields) runs separately inside `validateGenesis`.
 
 Localnet (or empty) profiles skip the check entirely.
 
+## Production deployment
+
+Production rollout is the testnet flow + audit + key-management
+discipline + Canopy-DAO coordination + day-2 ops. The plugin code is
+the same binary; the rigor goes into the inputs (addresses, signers,
+chainId, redemption window) and the surrounding process. This section
+is the runbook a release captain follows, in order.
+
+### Phase 0 — Readiness gate (do not start without these)
+
+Stop and resolve any unchecked item. Each one is a real foot-gun in
+production:
+
+- [ ] **Audit complete.** Whitepaper §11 calls this out: "Audits &
+      formal verification: mandatory before mainnet launch." Run a
+      canoliq-specific audit, not just a Canopy-core audit. The
+      tokenomics math (12% fee + 40/30/15/15 split, insurance skim,
+      vesting curves, governance snapshot semantics, multisig +
+      timelock for above-threshold spends) is the high-value target.
+- [ ] **Multisig key ceremony executed.** Each signer holds their key
+      in cold storage; signers are operationally independent (no two
+      under the same physical/legal authority). Document signer
+      identities, public addresses, and recovery procedures off-chain.
+- [ ] **Bucket recipient addresses finalized.** All seven buckets must
+      point at multisig wallets or time-lock contracts owned by the
+      named beneficiary class — never an EOA, never the same address
+      twice, never the localnet placeholder. The safety check refuses
+      `851e90…d123` automatically; you still have to verify the *real*
+      addresses are correct.
+- [ ] **Validator opt-in confirmed.** Every validator that should be
+      on the canoLiq committee has run `MessageEditStake` adding the
+      target chainId to its `Validator.Committees[]`. Cross-check
+      against the validator list you'll seed into
+      `validatorRegistry`.
+- [ ] **chainId reserved with the Canopy team.** No collision with
+      any existing committee.
+- [ ] **`MessageSubsidy` proposal queued or passed** on the Canopy
+      DAO so the canoLiq committee pool will fund on first block.
+- [ ] **Redemption window matches Canopy.** Set
+      `redemptionUnstakingBlocks` to the live chain's
+      `valParams.UnstakingBlocks` (typically thousands of blocks).
+      Document the value with a citation to the chain it was read
+      from.
+- [ ] **Discord summary posted** announcing chainId, fee/split, CLIQ
+      supply + bucket distribution, multisig signer set, plugin
+      runtime contract.
+- [ ] **Monitoring + on-call rotation in place.** At minimum: a
+      uptime check on `/v1/health` per node, an alert when
+      `genesisComplete` flips false (impossible normally → indicates
+      state corruption), and a periodic snapshot of `/v1/pools` for
+      anomaly review. Phase 3 §2 alerting is not required to ship,
+      but if you don't have it, an operator must be paid to read
+      `/v1/pools` daily.
+- [ ] **Disaster recovery plan written.** What do you do if (a) a
+      multisig signer is compromised, (b) the plugin crashes
+      mid-block, (c) a buyback executes at a stale price, (d) you
+      need to roll back? Decisions made in advance are decisions
+      made well.
+
+### Phase 1 — Build the production genesis + config
+
+Treat both files as **release artifacts**: version-controlled, code-
+reviewed, hash-anchored. Don't edit on the live host.
+
+#### 1.1. Make a `genesis.production.json`
+
+Copy `genesis.testnet.json` to `genesis.production.json` and edit:
+
+```json
+{
+  "blocksPerYear": 5256000,
+  "buckets": [
+    { "name": "Validators & Infrastructure", "bps": 2200, "cliffMonths": 6,  "vestMonths": 24,
+      "recipients": [{ "address": "<multisig-validators>",   "bps": 10000 }]},
+    { "name": "Liquidity Incentives",        "bps": 1500, "cliffMonths": 0,  "vestMonths": 0,
+      "recipients": [{ "address": "<multisig-liquidity>",    "bps": 10000 }]},
+    { "name": "Community & Airdrops",        "bps": 2000, "cliffMonths": 0,  "vestMonths": 0,
+      "recipients": [{ "address": "<multisig-community>",    "bps": 10000 }]},
+    { "name": "DAO Treasury",                "bps": 1500, "cliffMonths": 0,  "vestMonths": 0,
+      "recipients": [{ "address": "<multisig-dao>",          "bps": 10000 }]},
+    { "name": "Founders & Core Team",        "bps": 1200, "cliffMonths": 12, "vestMonths": 24,
+      "recipients": [{ "address": "<timelock-founders>",     "bps": 10000 }]},
+    { "name": "Strategic Partners",          "bps": 1000, "cliffMonths": 6,  "vestMonths": 18,
+      "recipients": [{ "address": "<timelock-partners>",     "bps": 10000 }]},
+    { "name": "Plugin & Dev Grants",         "bps": 600,  "cliffMonths": 0,  "vestMonths": 0,
+      "recipients": [{ "address": "<multisig-grants>",       "bps": 10000 }]}
+  ],
+  "params": {
+    "multisigSigners": [
+      "<signer-1>", "<signer-2>", "<signer-3>",
+      "<signer-4>", "<signer-5>", "<signer-6>", "<signer-7>"
+    ],
+    "multisigThreshold": 4,
+    "treasuryThreshold": 1000000000
+  },
+  "validatorRegistry": [
+    { "address": "<validator-1>", "stake": <validator-1-stakedAmount> },
+    { "address": "<validator-2>", "stake": <validator-2-stakedAmount> }
+  ]
+}
+```
+
+Production multisig usually wants more signers and a higher threshold
+than the localnet 5-of-3 example — 7-of-4 or 9-of-5 is typical. The
+threshold must be ≤ `len(multisigSigners)`; `ValidateParams` rejects
+the inverse.
+
+Recipients within a bucket can be split across multiple addresses
+(e.g., founders divided across N partners) — bps within a bucket must
+sum to 10000 just like at the top level.
+
+#### 1.2. Make a `canoliq-config.production.json`
+
+```json
+{
+  "profile": "mainnet",
+  "chainId": <reserved-chainId>,
+  "dataDirPath": "/tmp/plugin",
+  "genesisPath": "/app/plugin/go/canoliq/genesis.production.json",
+  "rpcAddress": "127.0.0.1:8587",
+  "redemptionUnstakingBlocks": <Canopy-valParams-UnstakingBlocks>
+}
+```
+
+Key choices:
+
+- **`profile: "mainnet"`** — activates the same safety check as
+  `testnet` (refuses the localnet placeholder address) plus signals
+  intent in the startup banner.
+- **`rpcAddress: "127.0.0.1:8587"`** — bind to loopback only.
+  Production should expose the query layer behind a reverse proxy
+  with rate limiting + TLS, *not* directly to the internet. The lazy
+  routes will block the calling goroutine for up to one block under
+  load — an unauthenticated public endpoint is a trivial DoS surface.
+- **`redemptionUnstakingBlocks`** — must match Canopy's
+  `valParams.UnstakingBlocks` so cCNPY redemptions and Canopy's
+  validator unbonding are consistent. Mismatch → users either
+  redeem before the unbonding window (slashing exposure) or wait
+  longer than necessary (UX regression).
+
+#### 1.3. Hash-anchor both artifacts
+
+```bash
+sha256sum plugin/go/canoliq/genesis.production.json
+sha256sum plugin/go/canoliq/canoliq-config.production.json
+```
+
+Publish the hashes alongside the Discord announcement so signers,
+validators, and any third-party reviewer can independently verify the
+files match what the team agreed to.
+
+### Phase 2 — Pre-flight verification
+
+Stand up a private chain with the production genesis before touching
+the real Canopy network. This catches typos in addresses, signers,
+and chainId that would otherwise create a permanent on-chain mistake.
+
+#### 2.1. Build with the production files
+
+Add a temporary `compose.production.yaml` that mounts the production
+config:
+
+```yaml
+# Same shape as .docker/compose.yaml; only the env line changes.
+environment:
+  - CANOPY_PLUGIN_MODE=canoliq
+  - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.production.json
+  - CANOLIQ_RPC_ADDR=0.0.0.0:8587
+```
+
+Make sure the Dockerfile is updated to also `COPY` the
+`genesis.production.json` and `canoliq-config.production.json` into
+the image. Build:
+
+```bash
+docker compose -f .docker/compose.production.yaml build
+docker compose -f .docker/compose.production.yaml up -d
+```
+
+#### 2.2. Confirm safety banner + check
+
+```bash
+docker compose -f .docker/compose.production.yaml logs node-1 | grep -i canoliq
+```
+
+Expect a banner line:
+```
+canoliq: profile="mainnet" chainId=<your-chainId> genesis="…production.json" rpc="0.0.0.0:8587" redemptionUnstakingBlocks=<your-window>
+```
+
+If the safety check rejects the genesis (placeholder address, invalid
+hex), the process exits before binding to the FSM socket — fix the
+file and rebuild. **Do not** edit files on the live host to make the
+check pass; rebuild from source.
+
+#### 2.3. Reconcile the bucket distribution
+
+Wait for `genesisComplete: true`, then verify every bucket recipient
+got the expected balance (uCLIQ):
+
+```bash
+for ADDR in <multisig-validators> <multisig-liquidity> <multisig-community> \
+            <multisig-dao> <timelock-founders> <timelock-partners> <multisig-grants>; do
+  echo "=== 0x$ADDR ==="
+  curl -sS http://127.0.0.1:8587/v1/account/0x$ADDR | jq '{cliqLiquid, vestings: .vestings | map({totalAmount: .schedule.totalAmount, cliffHeight: .schedule.cliffHeight, endHeight: .schedule.endHeight})}'
+done
+```
+
+Expected totals (in uCLIQ, where 1 CLIQ = 10⁶ uCLIQ):
+
+| Bucket | uCLIQ | Liquid | Vesting |
+|---|---:|:---:|:---:|
+| Validators | 22,000,000,000,000 | — | ✓ (24mo) |
+| Liquidity | 15,000,000,000,000 | ✓ | — |
+| Community | 20,000,000,000,000 | ✓ | — |
+| DAO Treasury | 15,000,000,000,000 | ✓ | — |
+| Founders | 12,000,000,000,000 | — | ✓ (24mo + 12mo cliff) |
+| Partners | 10,000,000,000,000 | — | ✓ (18mo + 6mo cliff) |
+| Grants | 6,000,000,000,000 | ✓ | — |
+| **Total** | **100,000,000,000,000** | | |
+
+Sum the per-bucket totals across `/v1/account/{addr}` results and
+confirm exactly 100M × 10⁶ uCLIQ. Off-by-one in the sum means a
+recipient list misallocates and the genesis is wrong.
+
+#### 2.4. Smoke-test the full lifecycle
+
+Use canoliqctl on the private chain to exercise:
+
+```bash
+# Deposit
+./canoliqctl --rpc-url http://localhost:50002 \
+  deposit <test-account> 1000000
+
+# Redeem (will queue with the production unstaking window)
+./canoliqctl redeem <test-account> 250000
+
+# Wait redemptionUnstakingBlocks blocks, then claim
+./canoliqctl claim <test-account> 0
+
+# Stake CLIQ + propose a no-op param-change to verify governance
+./canoliqctl cliq-stake <test-account> 5000000
+./canoliqctl proposal-create param-change <test-account> ./params-noop.json \
+  --description "production smoke test"
+./canoliqctl vote <test-account> 1 yes
+# Wait votingPeriodBlocks; verify proposal tallies + executes
+```
+
+Anything that fails on the private chain will fail on production —
+fix it now, not later.
+
+#### 2.5. Multisig flow rehearsal
+
+Stand up the multisig signers on the private chain (real signing keys,
+not test keys). Run an above-`treasuryThreshold` `proposal-create
+treasury-spend`, vote it through, and walk it across the timelock +
+multisig path:
+
+```bash
+# After proposal passes:
+./canoliqctl --password=<signer-1-pw> multisig-approve <signer-1> <spend-id>
+./canoliqctl --password=<signer-2-pw> multisig-approve <signer-2> <spend-id>
+./canoliqctl --password=<signer-3-pw> multisig-approve <signer-3> <spend-id>
+./canoliqctl --password=<signer-4-pw> multisig-approve <signer-4> <spend-id>
+# 4-of-7 reached; wait for executable_height (timelock_blocks past pass);
+# then execute
+./canoliqctl --password=<exec-pw> spend-execute <executor> <proposal-id>
+```
+
+Verify (a) below-threshold approvals are rejected with a clear error,
+(b) execution before timelock is rejected, (c) execution after both
+timelock and quorum succeeds, (d) re-execution returns
+`spend already executed`. Only after all four flows are confirmed
+should the production multisig signers be considered ready.
+
+### Phase 3 — Cutover
+
+Once Phase 0–2 are green, the actual production cutover is short.
+Two patterns depending on your existing infrastructure:
+
+#### Path A — fresh chain (recommended for new sub-chains)
+
+1. **Reserve the chainId** with the Canopy team. Confirm no other
+   committee uses it.
+2. **Land `MessageSubsidy`** on the Canopy DAO so the committee pool
+   funds when the first block lands.
+3. **Deploy the production image** to validator hosts (canoliq plugin
+   only — no canopy code change). Each validator runs the canopy node
+   binary with `CANOPY_PLUGIN_MODE=canoliq` and
+   `CANOLIQ_CONFIG=/path/to/canoliq-config.production.json`.
+4. **Validator opt-in** via `MessageEditStake` adding chainId — must
+   land before the first canoliq block to avoid an empty validator
+   set.
+5. **First-block bootstrap.** The plugin's `BeginBlock` self-bootstrap
+   runs on first observation, mints 100M CLIQ to the production
+   bucket addresses, and seeds the validator registry. There is no
+   second chance — if the genesis file is wrong, you start over from
+   step 1 with a new chainId. (This is why Phase 2 is non-negotiable.)
+6. **Verify.** Run `Phase 2.3` reconciliation against the real chain.
+   Verify `/v1/health.genesisComplete=true`, `/v1/validators` matches
+   the seeded set, and `/v1/pools.committeePool` is growing as the
+   subsidy accrues.
+
+#### Path B — migrating an existing canoLiq deployment
+
+This implies you already have canoLiq state on the chain (running
+under `profile=localnet` or similar dev config). **There is currently
+no in-place migration tool** (Phase 3 §3 of the implementation plan
+covers this). Until then: treat existing state as throwaway, take a
+fresh chainId, deploy as Path A.
+
+### Phase 4 — Day-2 operations
+
+#### Routine queries
+
+The full read surface lives at `:8587/v1/...` — see
+[Read-only HTTP query layer](#read-only-http-query-layer-phase-3) for
+the route list. Production dashboards typically poll:
+
+- `/v1/health` (every 30s) — liveness
+- `/v1/globals` (every 5m) — `totalPooledCnpy`, CLIQ supply,
+  `pendingRedemptionCnpy`
+- `/v1/pools` (every 5m) — fee-split health, treasury / buyback /
+  insurance balances
+- `/v1/proposals` (every block) — active governance
+- `/v1/spends` (every block) — pending treasury spends
+
+#### Routine governance
+
+Every parameter change, buyback, and treasury spend goes through
+`canoliqctl proposal-create`. The CLI requires the proposer's
+keystore password — use a CI service account or a hardware-key
+signer; never hardcode passwords.
+
+For above-threshold treasury spends, the multisig signers each run
+`canoliqctl multisig-approve` from their own host with their own
+keystore. Track which signer has signed via
+`/v1/spend/{id}/approvals`.
+
+#### Upgrades
+
+Plugin binary upgrades (e.g., bug fixes, new routes) are coordinated
+with the validator set:
+
+1. Audit the diff. Re-run the test suite + safety checks against the
+   production genesis.
+2. Tag a release; publish the image hash.
+3. Validators upgrade their plugin process — canopy node stays up
+   throughout because the plugin is a separate process. The plugin
+   re-attaches to the FSM socket on restart and resumes from the
+   stored state.
+
+Param changes go through governance, never via config edit. The only
+config knobs that don't have a governance-mutable equivalent are
+`profile`, `chainId`, `dataDirPath`, `genesisPath` — all of which
+are immutable post-deploy.
+
+### Phase 5 — Incident response
+
+#### A multisig signer is compromised
+
+1. Submit `proposal-create param-change` with a new
+   `multisigSigners` list excluding the compromised key.
+2. Vote it through. The new signer set takes effect immediately on
+   pass — `countMultisigApprovals` filters approvals against the
+   *current* signer set, so any pending approvals from the removed
+   signer become inert (see `AGENTS.md`, "Treasury spend").
+
+#### Suspicious buyback or treasury spend
+
+Both go through governance. There is no admin override. The defense
+is the multisig + timelock — if a malicious proposal passes,
+multisig signers can refuse to approve the resulting spend, and the
+timelock buys time to coordinate.
+
+#### Plugin crashes / unix-socket disconnect
+
+The plugin is a separate process; restart it with the same config.
+On reconnect it re-handshakes with the FSM and resumes. Snapshot is
+empty until the next `EndBlock` (cold start serves zeros — see
+"Snapshot model"); HTTP queries during that window return defaults.
+No state is lost — everything lives in the FSM-managed state DB.
+
+If `Plugin.snapshot` returns stale data after a long outage, the
+fix is one block of activity — `EndBlock` will refresh.
+
+#### State corruption suspected
+
+Plugin-owned state is point-read only; suspicious values surface in
+`/v1/globals` or `/v1/pools` first. Cross-check by enumerating
+buckets via the address routes and summing CLIQ. If the supply
+doesn't equal 100M × 10⁶ minus circulating, escalate to a Canopy
+core engineer — the FSM's state DB is the canonical source of truth.
+
+There is no rollback button. Recovery requires either (a) a
+governance-passed `param_change` that compensates for the
+divergence, (b) a Canopy-core state-machine fix, or (c) graduation
+to a new chain (Phase 3 §3 — not yet built). Build a snapshot
+export tool *before* you need it.
+
+### Production deployment checklist
+
+A condensed pre-flight you can paste into a release ticket:
+
+```
+[ ] Audit complete; signoff on file
+[ ] genesis.production.json reviewed + sha256 hash published
+[ ] canoliq-config.production.json reviewed + sha256 hash published
+[ ] All seven bucket addresses verified against named beneficiaries
+[ ] Multisig signers identified, keys in cold storage, threshold set
+[ ] redemptionUnstakingBlocks matches Canopy live valParams
+[ ] chainId reserved with Canopy team
+[ ] MessageSubsidy proposal queued/passed
+[ ] Validators opted into committee via MessageEditStake
+[ ] Validator registry block matches opted-in set
+[ ] Private-chain bucket reconciliation: 100M × 10⁶ uCLIQ exact
+[ ] Private-chain lifecycle smoke test: deposit → redeem → claim
+[ ] Private-chain governance smoke test: propose → vote → execute
+[ ] Private-chain multisig rehearsal: 4 flows verified
+[ ] Discord announcement posted with hashes + chainId
+[ ] Monitoring + on-call rotation live
+[ ] Disaster recovery runbook reviewed by team
+[ ] Image tagged + signed; deployment artifacts immutable
+```
+
 ## Building
 
 ```bash
