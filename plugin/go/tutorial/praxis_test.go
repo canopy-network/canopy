@@ -380,3 +380,45 @@ func TestCreateMarket(t *testing.T) {
 	}
 	t.Log("Market created successfully!")
 }
+
+
+func TestSubmitPrediction(t *testing.T) {
+addr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+key, err := keystoreGetKey(addr, "")
+if err != nil { t.Fatalf("key: %v", err) }
+
+// 1. Create a market first
+h, _ := getHeight()
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(addr),
+B0:             1_000_000,
+ExpiryTime:     h + 50000,
+Nonce:          uint64(time.Now().UnixMicro()),
+Question:       "Prediction test market",
+}
+marketHash := submitTx(t, key, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(addr, marketHash, 60*time.Second); err != nil {
+t.Fatalf("create market failed: %v", err)
+}
+t.Logf("Market created: %s", marketHash)
+
+// 2. Get the market state to know the market ID
+
+marketId := contract.DeriveMarketId(hexDecode(addr), createMsg.Nonce)
+t.Logf("Derived market ID: %x", marketId)
+
+// 3. Submit a YES prediction (1 share = 1 PRX precision unit)
+h2, _ := getHeight()
+predMsg := &contract.MessageSubmitPrediction{
+MarketId: marketId,
+BettorAddress: hexDecode(addr),
+Outcome:  true,
+Shares:   contract.PRECISION_SCALE,
+MaxCost:  10_000_000, // enough for a small trade
+}
+txHash := submitTx(t, key, "submit_prediction", "MessageSubmitPrediction", predMsg, h2)
+if err := waitForTx(addr, txHash, 60*time.Second); err != nil {
+t.Fatalf("submit prediction failed: %v", err)
+}
+t.Log("Prediction submitted!")
+}
