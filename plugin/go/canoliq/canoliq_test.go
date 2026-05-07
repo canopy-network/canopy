@@ -767,3 +767,119 @@ func mustJSON(t *testing.T, v any) []byte {
 	}
 	return bz
 }
+
+// TestGenesisValidatorRegistrySeedsState confirms that a genesis file
+// carrying a validatorRegistry block writes the expected
+// ValidatorRegistry record under KeyForValidatorRegistry. The next
+// reward sweep then routes the validator slice via the registry rather
+// than the legacy aggregator address.
+func TestGenesisValidatorRegistrySeedsState(t *testing.T) {
+	c, s := newTestCanoliq()
+	gf := miniGenesis()
+	gf.ValidatorRegistry = []GenesisValidatorRegistryEntry{
+		{Address: hex.EncodeToString(addr20(0xb1)), Stake: 7_000_000},
+		{Address: "0x" + hex.EncodeToString(addr20(0xb2)), Stake: 3_000_000},
+	}
+	resp := c.Genesis(&contract.PluginGenesisRequest{GenesisJson: mustJSON(t, gf)})
+	if resp.Error != nil {
+		t.Fatalf("genesis: %v", resp.Error)
+	}
+	bz := s.get(KeyForValidatorRegistry())
+	if len(bz) == 0 {
+		t.Fatalf("validator registry not written to state")
+	}
+	got := new(contract.ValidatorRegistry)
+	if err := contract.Unmarshal(bz, got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got.Entries) != 2 {
+		t.Fatalf("entries: got %d want 2", len(got.Entries))
+	}
+	if got.Entries[0].Stake != 7_000_000 || got.Entries[1].Stake != 3_000_000 {
+		t.Fatalf("stakes: %+v", got.Entries)
+	}
+	// 0x-prefix accepted on the second address but stripped during seed.
+	if len(got.Entries[1].Address) != 20 {
+		t.Fatalf("address[1] should be 20 raw bytes, got %d", len(got.Entries[1].Address))
+	}
+}
+
+// TestGenesisValidatorRegistryEmptyKeepsLegacyPath confirms a genesis
+// with no validatorRegistry block doesn't write the key — preserving
+// the legacy aggregator fallback for Phase 1 deployments that don't
+// care about per-validator pro-rata yet.
+func TestGenesisValidatorRegistryEmptyKeepsLegacyPath(t *testing.T) {
+	c, s := newTestCanoliq()
+	gf := miniGenesis()
+	resp := c.Genesis(&contract.PluginGenesisRequest{GenesisJson: mustJSON(t, gf)})
+	if resp.Error != nil {
+		t.Fatalf("genesis: %v", resp.Error)
+	}
+	if bz := s.get(KeyForValidatorRegistry()); len(bz) != 0 {
+		t.Fatalf("expected no registry key when genesis omits it; got %d bytes", len(bz))
+	}
+}
+
+// TestGenesisValidatorRegistryRejectsBadAddress confirms malformed
+// hex / wrong-length addresses fail genesis cleanly so a typo in the
+// registry block doesn't silently corrupt the per-validator ledger.
+func TestGenesisValidatorRegistryRejectsBadAddress(t *testing.T) {
+	c, _ := newTestCanoliq()
+	gf := miniGenesis()
+	gf.ValidatorRegistry = []GenesisValidatorRegistryEntry{
+		{Address: "0xnope", Stake: 1},
+	}
+	resp := c.Genesis(&contract.PluginGenesisRequest{GenesisJson: mustJSON(t, gf)})
+	if resp.Error == nil {
+		t.Fatalf("expected genesis to reject malformed validator address")
+	}
+
+	// Wrong-length (19 bytes) also rejected.
+	c, _ = newTestCanoliq()
+	gf = miniGenesis()
+	gf.ValidatorRegistry = []GenesisValidatorRegistryEntry{
+		{Address: hex.EncodeToString(make([]byte, 19)), Stake: 1},
+	}
+	resp = c.Genesis(&contract.PluginGenesisRequest{GenesisJson: mustJSON(t, gf)})
+	if resp.Error == nil {
+		t.Fatalf("expected genesis to reject 19-byte validator address")
+	}
+}
+
+// TestBundledLocalnetGenesisSeedsTwoValidators verifies the committed
+// genesis.localnet.json carries the two real localnet validator
+// addresses (851e90… and 02cd4e…), each with stake matching the chain
+// genesis. This anchors the live-docker reconciliation to the registry
+// path rather than the legacy aggregator.
+func TestBundledLocalnetGenesisSeedsTwoValidators(t *testing.T) {
+	data, err := os.ReadFile("genesis.localnet.json")
+	if err != nil {
+		t.Skipf("genesis.localnet.json not present: %v", err)
+	}
+	gf := new(GenesisFile)
+	if err := json.Unmarshal(data, gf); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(gf.ValidatorRegistry) != 2 {
+		t.Fatalf("expected 2 seed validators in localnet genesis, got %d", len(gf.ValidatorRegistry))
+	}
+	wantAddrs := map[string]bool{
+		"851e90eaef1fa27debaee2c2591503bdeec1d123": false,
+		"02cd4e5eb53ea665702042a6ed6d31d616054dc5": false,
+	}
+	for _, e := range gf.ValidatorRegistry {
+		if _, ok := wantAddrs[e.Address]; !ok {
+			t.Errorf("unexpected validator %q in localnet seed", e.Address)
+			continue
+		}
+		wantAddrs[e.Address] = true
+		if e.Stake != 1_000_000_000 {
+			t.Errorf("validator %q stake: got %d want 1_000_000_000", e.Address, e.Stake)
+		}
+	}
+	for addr, seen := range wantAddrs {
+		if !seen {
+			t.Errorf("missing validator %q in localnet seed", addr)
+		}
+	}
+}

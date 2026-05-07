@@ -98,5 +98,16 @@
     ],
     "multisigThreshold": 3,
     "treasuryThreshold": 1000000000
-  }
+  },
+  "_validatorRegistryComment": "Seed the canoLiq committee validator set so the per-validator pro-rata reward distribution is honest from block 1. Replace each address with a real opted-in validator's account address (matches Canopy's Validator.Address). Stake should mirror that validator's StakedAmount in uCNPY-equivalent. Leaving validatorRegistry empty falls back to a single committee aggregator key — fine for bring-up but obscures per-validator credit.",
+  "validatorRegistry": [
+    {
+      "address": "0000000000000000000000000000000000000c01",
+      "stake": 1000000000
+    },
+    {
+      "address": "0000000000000000000000000000000000000c02",
+      "stake": 1000000000
+    }
+  ]
 }

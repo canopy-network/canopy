@@ -515,12 +515,28 @@ add slashing-reimbursement disbursement; Phase 2 only seeds the pool.
 
 ## Per-validator pro-rata
 
-The 15% validator-incentive slice is now distributed proportionally across
+The 15% validator-incentive slice is distributed proportionally across
 the canoLiq committee validator set, sourced from a plugin-internal
-`ValidatorRegistry` singleton. Phase 1.5 will replace the registry source
-with a real Canopy validator-set readback. When the registry is empty the
-legacy aggregator key (`KeyForValidatorIncentives(committeeAggregatorAddr)`)
-holds the full share — Phase 1 baseline behavior.
+`ValidatorRegistry` singleton. The registry is **seeded at genesis** via
+the `validatorRegistry` block in `genesis.localnet.json` /
+`genesis.testnet.json`:
+
+```json
+"validatorRegistry": [
+  { "address": "851e90eaef1fa27debaee2c2591503bdeec1d123", "stake": 1000000000 },
+  { "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5", "stake": 1000000000 }
+]
+```
+
+Each entry is `(address, stake)` where `stake` is the share-out weight
+(typically the validator's `StakedAmount` in uCNPY-equivalent). Future
+work is a live readback from Canopy's validator set so additions /
+removals via `MessageEditStake` propagate without a param-change vote.
+
+When the registry is **empty or omitted**, the legacy aggregator key
+(`KeyForValidatorIncentives(committeeAggregatorAddr)`) holds the full
+share — Phase 1 baseline behavior, useful for bring-up but obscures
+per-validator credit.
 
 ## State key layout
 

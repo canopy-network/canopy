@@ -17,10 +17,27 @@ const CLIQTotalSupply uint64 = 100_000_000 * 1_000_000
 // GenesisFile is the JSON shape persisted at plugin/go/canoliq/genesis.json.
 // Each Bucket lists the recipient addresses and the bps weights summing to
 // 10_000 across the seven canonical buckets.
+//
+// ValidatorRegistry seeds the canoLiq committee validator set used by
+// reward.go::distributeValidatorShare for per-validator pro-rata. When
+// present and non-empty, the 15% validator-incentive slice is split
+// proportional to per-validator stake. When absent or empty, the legacy
+// committee aggregator path stays in effect (Phase 1 baseline).
 type GenesisFile struct {
-	BlocksPerYear uint64           `json:"blocksPerYear"`
-	Buckets       []GenesisBucket  `json:"buckets"`
-	Params        *GenesisParamsJSON `json:"params,omitempty"`
+	BlocksPerYear     uint64                       `json:"blocksPerYear"`
+	Buckets           []GenesisBucket              `json:"buckets"`
+	Params            *GenesisParamsJSON           `json:"params,omitempty"`
+	ValidatorRegistry []GenesisValidatorRegistryEntry `json:"validatorRegistry,omitempty"`
+}
+
+// GenesisValidatorRegistryEntry pairs a validator address with the stake
+// weight used to share out the per-validator reward slice. Stake is in
+// the same uCNPY-equivalent unit as Canopy's `Validator.StakedAmount`,
+// so operators can copy it directly from the chain's existing validator
+// set or seed it manually.
+type GenesisValidatorRegistryEntry struct {
+	Address string `json:"address"` // hex-encoded 20-byte address (with or without 0x)
+	Stake   uint64 `json:"stake"`   // share-out weight
 }
 
 // GenesisBucket describes one of the CLIQ allocation tranches.
@@ -100,8 +117,50 @@ func (c *Canoliq) runGenesis(req *contract.PluginGenesisRequest) *contract.Plugi
 	if err := c.applyGenesisBuckets(gf, g); err != nil {
 		return err
 	}
+	if err := c.applyGenesisValidatorRegistry(gf); err != nil {
+		return err
+	}
 	g.GenesisComplete = true
 	return c.SaveGlobals(g)
+}
+
+// applyGenesisValidatorRegistry writes the seeded validator set when
+// genesis carries one. No-op for empty/missing entries — the legacy
+// aggregator path in distributeValidatorShare keeps working.
+func (c *Canoliq) applyGenesisValidatorRegistry(gf *GenesisFile) *contract.PluginError {
+	if len(gf.ValidatorRegistry) == 0 {
+		return nil
+	}
+	reg := &contract.ValidatorRegistry{
+		Entries: make([]*contract.ValidatorRegistryEntry, 0, len(gf.ValidatorRegistry)),
+	}
+	for _, e := range gf.ValidatorRegistry {
+		raw := e.Address
+		if len(raw) >= 2 && (raw[:2] == "0x" || raw[:2] == "0X") {
+			raw = raw[2:]
+		}
+		addr, err := hex.DecodeString(raw)
+		if err != nil {
+			return ErrStateUnmarshal(fmt.Errorf("validator address %q: %w", e.Address, err))
+		}
+		if len(addr) != 20 {
+			return ErrStateUnmarshal(fmt.Errorf("validator address %q must be 20 bytes", e.Address))
+		}
+		reg.Entries = append(reg.Entries, &contract.ValidatorRegistryEntry{
+			Address: addr,
+			Stake:   e.Stake,
+		})
+	}
+	bz, e := contract.Marshal(reg)
+	if e != nil {
+		return e
+	}
+	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
+		Sets: []*contract.PluginSetOp{{Key: KeyForValidatorRegistry(), Value: bz}},
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func loadGenesisFile(path string, req *contract.PluginGenesisRequest) (*GenesisFile, *contract.PluginError) {

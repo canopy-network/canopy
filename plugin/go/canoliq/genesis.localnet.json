@@ -96,5 +96,15 @@
     ],
     "multisigThreshold": 3,
     "treasuryThreshold": 1000000000
-  }
+  },
+  "validatorRegistry": [
+    {
+      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+      "stake": 1000000000
+    },
+    {
+      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+      "stake": 1000000000
+    }
+  ]
 }
