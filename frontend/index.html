@@ -1,762 +1,264 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PRAXIS — Prediction Markets on Canopy</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <style>
-:root {
-  --bg:        #060809;
-  --surface:   #0c0e12;
-  --surface2:  #111520;
-  --border:    #181e28;
-  --border2:   #222d40;
-  --green:     #00ff88;
-  --green-dim: #00ff8812;
-  --green-glow:#00ff8840;
-  --cyan:      #00d4ff;
-  --cyan-dim:  #00d4ff12;
-  --red:       #ff4055;
-  --red-dim:   #ff405512;
-  --yellow:    #ffc940;
-  --yellow-dim:#ffc94012;
-  --purple:    #c084fc;
-  --text:      #d8e4f0;
-  --dim:       #4a5870;
-  --muted:     #232d3d;
-  --mono:      'Syne Mono', monospace;
-  --sans:      'Syne', sans-serif;
-}
+  /* ----- THEME ----- */
+  :root{--transition:0.25s ease}
+  [data-theme="dark"]{
+    --bg:#080a0e;--bg2:#0d1018;--surface:#111520;--surface2:#161b28;
+    --border:#1e2535;--border2:#2a3348;--text:#c8d8f0;--text2:#7a8ba8;--text3:#3a4a60;
+    --green:#00e87a;--green-dim:rgba(0,232,122,0.08);--green-glow:rgba(0,232,122,0.25);
+    --red:#ff4560;--red-dim:rgba(255,69,96,0.08);
+    --yellow:#ffcc44;--yellow-dim:rgba(255,204,68,0.08);
+    --cyan:#22d3ee;--purple:#a78bfa;--shadow:rgba(0,0,0,0.5)
+  }
+  [data-theme="light"]{
+    --bg:#f0f2f7;--bg2:#e8ebf2;--surface:#fff;--surface2:#f7f8fc;
+    --border:#dde2ef;--border2:#c8d0e0;--text:#1a2238;--text2:#5a6880;--text3:#a0b0c8;
+    --green:#00a855;--green-dim:rgba(0,168,85,0.08);--green-glow:rgba(0,168,85,0.2);
+    --red:#e0304a;--yellow:#d4860a;--cyan:#0ea5c9;--shadow:rgba(0,0,0,0.1)
+  }
 
-*{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:var(--sans);
-  font-size:14px;
-  min-height:100vh;
-  overflow-x:hidden;
-}
+  /* ----- BASE ----- */
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;
+    font-size:14px;line-height:1.6;min-height:100vh;transition:background var(--transition),color var(--transition)
+  }
 
-/* scanline overlay */
-body::before{
-  content:'';
-  position:fixed;inset:0;
-  background:repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0,0,0,.15) 2px,
-    rgba(0,0,0,.15) 4px
-  );
-  pointer-events:none;
-  z-index:0;
-}
+  /* ----- LAYOUT ----- */
+  .shell{display:flex;min-height:100vh;max-width:1200px;margin:0 auto;position:relative}
+  nav.sidebar{
+    width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+    padding:24px 0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+    overflow-y:auto
+  }
+  .logo{padding:0 20px 20px;border-bottom:1px solid var(--border);margin-bottom:10px}
+  .logo svg{display:block;margin:0 auto 8px}
+  .logo-tag{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:2px;text-align:center}
+  .nav-item{
+    display:block;padding:10px 20px;color:var(--text2);text-decoration:none;font-size:13px;
+    border-left:2px solid transparent;transition:0.15s;cursor:pointer
+  }
+  .nav-item:hover{color:var(--text);background:var(--green-dim)}
+  .nav-item.active{color:var(--green);border-left-color:var(--green);background:var(--green-dim)}
+  .sidebar-footer{padding:14px 20px;border-top:1px solid var(--border);font-size:10px;color:var(--text3)}
 
-/* grid */
-body::after{
-  content:'';
-  position:fixed;inset:0;
-  background-image:
-    linear-gradient(rgba(0,255,136,.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,255,136,.02) 1px, transparent 1px);
-  background-size:48px 48px;
-  pointer-events:none;z-index:0;
-}
+  main.main{
+    flex:1;overflow-y:auto;padding:32px 36px 60px;max-width:900px
+  }
 
-.shell{display:flex;min-height:100vh;position:relative;z-index:1}
+  .page{display:none}
+  .page.active{display:block;animation:fadeIn 0.2s ease}
 
-/* ── Sidebar ── */
-.sidebar{
-  width:200px;flex-shrink:0;
-  background:var(--surface);
-  border-right:1px solid var(--border);
-  display:flex;flex-direction:column;
-  padding:0;
-  position:sticky;top:0;height:100vh;
-}
+  /* ----- FORMS ----- */
+  .card{background:var(--surface);border:1px solid var(--border);padding:22px;margin-bottom:16px}
+  .card-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:2px;margin-bottom:18px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
+  .field input,.field textarea,.field select{
+    width:100%;background:var(--bg);border:1px solid var(--border2);padding:10px;color:var(--text);
+    font-family:'JetBrains Mono',monospace;font-size:12px;outline:none
+  }
+  .field input:focus,.field textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-dim)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:600px){.row{grid-template-columns:1fr}}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:none;cursor:pointer;
+    font-weight:600;font-size:13px;transition:0.15s;background:var(--green);color:#000
+  }
+  .btn:hover{filter:brightness(1.1)}
+  .btn:disabled{opacity:0.4;cursor:not-allowed}
+  .btn-row{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  .hint{font-size:9px;color:var(--text3);margin-top:4px}
 
-.logo{
-  padding:22px 20px 20px;
-  border-bottom:1px solid var(--border);
-  position:relative;
-  overflow:hidden;
-}
-.logo::before{
-  content:'';
-  position:absolute;bottom:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg, var(--green), transparent);
-}
-.logo-mark{
-  font-family:var(--mono);font-size:18px;font-weight:400;
-  color:var(--green);letter-spacing:2px;
-  text-shadow:0 0 20px var(--green-glow);
-}
-.logo-sub{
-  font-family:var(--sans);font-size:9px;font-weight:600;
-  color:var(--dim);letter-spacing:3px;text-transform:uppercase;
-  margin-top:3px;
-}
+  /* status dot */
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block}
+  .status-dot.live{background:var(--green);box-shadow:0 0 8px var(--green)}
 
-.nav{padding:12px 0;flex:1}
+  /* toast */
+  #toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--green);padding:12px 18px;font-size:11px;color:var(--green);display:none;z-index:999}
+  #toast.err{color:var(--red);border-color:var(--red)}
 
-.nav-item{
-  display:flex;align-items:center;gap:10px;
-  padding:9px 20px;cursor:pointer;
-  color:var(--dim);font-size:12px;font-weight:600;
-  letter-spacing:.5px;
-  transition:all .15s;
-  border-left:2px solid transparent;
-  position:relative;
-}
-.nav-item:hover{color:var(--text);background:var(--green-dim)}
-.nav-item.active{
-  color:var(--green);
-  border-left-color:var(--green);
-  background:var(--green-dim);
-}
-.nav-item.active .nav-icon{
-  filter:drop-shadow(0 0 4px var(--green));
-}
-.nav-icon{font-size:13px;width:16px;text-align:center;flex-shrink:0}
-
-.sidebar-footer{
-  padding:14px 20px;
-  border-top:1px solid var(--border);
-}
-.conn-row{display:flex;align-items:center;gap:7px;font-size:10px;font-family:var(--mono);color:var(--dim)}
-.dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex-shrink:0;transition:all .4s}
-.dot.live{background:var(--green);box-shadow:0 0 8px var(--green)}
-#heightBadge{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:5px;letter-spacing:.5px}
-
-/* ── Main ── */
-.main{flex:1;overflow-y:auto;padding:32px 36px;max-width:1000px}
-
-/* ── Page header ── */
-.page-head{margin-bottom:28px}
-.page-eyebrow{
-  font-family:var(--mono);font-size:9px;color:var(--green);
-  letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;
-  display:flex;align-items:center;gap:8px;
-}
-.page-eyebrow::before{content:'';width:20px;height:1px;background:var(--green)}
-.page-title{font-size:26px;font-weight:800;letter-spacing:-1px;line-height:1}
-.page-sub{font-size:12px;color:var(--dim);margin-top:6px;font-weight:400}
-
-/* ── Cards ── */
-.card{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:8px;
-  padding:20px;
-  margin-bottom:14px;
-  position:relative;
-  overflow:hidden;
-}
-.card::before{
-  content:'';
-  position:absolute;top:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg, var(--green-dim), transparent 60%);
-}
-.card-title{
-  font-family:var(--mono);font-size:9px;color:var(--dim);
-  letter-spacing:2px;text-transform:uppercase;
-  margin-bottom:18px;
-  padding-bottom:10px;
-  border-bottom:1px solid var(--border);
-}
-
-/* ── Form ── */
-.field{margin-bottom:13px}
-.field label{
-  display:block;font-family:var(--mono);font-size:9px;
-  color:var(--dim);letter-spacing:2px;text-transform:uppercase;
-  margin-bottom:6px;
-}
-.field input,.field textarea,.field select{
-  width:100%;background:var(--bg);
-  border:1px solid var(--border2);border-radius:5px;
-  padding:9px 12px;color:var(--text);
-  font-family:var(--mono);font-size:12px;
-  outline:none;transition:border-color .15s;
-}
-.field input:focus,.field textarea:focus{
-  border-color:var(--green);
-  box-shadow:0 0 0 2px var(--green-dim);
-}
-.field textarea{resize:vertical;min-height:68px}
-.hint{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:4px}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-
-/* ── Buttons ── */
-.btn{
-  display:inline-flex;align-items:center;gap:6px;
-  padding:9px 16px;border-radius:5px;border:none;
-  cursor:pointer;font-family:var(--sans);font-size:12px;font-weight:700;
-  letter-spacing:.5px;transition:all .15s;
-}
-.btn-primary{
-  background:var(--green);color:#000;
-  box-shadow:0 0 16px var(--green-dim);
-}
-.btn-primary:hover{background:#00e07a;box-shadow:0 0 24px var(--green-glow)}
-.btn-primary:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
-.btn-ghost{
-  background:transparent;border:1px solid var(--border2);
-  color:var(--dim);
-}
-.btn-ghost:hover{border-color:var(--green);color:var(--green)}
-.btn-sm{padding:6px 11px;font-size:11px}
-.btn-row{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
-
-/* ── Outcome toggles ── */
-.outcome-toggle{display:flex;gap:8px;margin-bottom:13px}
-.outcome-btn{
-  flex:1;padding:10px;border-radius:5px;
-  border:1px solid var(--border2);background:transparent;
-  color:var(--dim);cursor:pointer;font-family:var(--sans);
-  font-size:12px;font-weight:700;letter-spacing:1px;
-  transition:all .15s;text-align:center;
-}
-.outcome-btn.yes.active{background:var(--green-dim);border-color:var(--green);color:var(--green)}
-.outcome-btn.no.active{background:var(--red-dim);border-color:var(--red);color:var(--red)}
-
-/* ── Badges ── */
-.badge{
-  display:inline-flex;align-items:center;gap:4px;
-  padding:3px 8px;border-radius:20px;
-  font-family:var(--mono);font-size:9px;font-weight:400;letter-spacing:1px;
-}
-.badge-open{background:var(--green-dim);color:var(--green);border:1px solid #00ff8828}
-.badge-resolved{background:var(--cyan-dim);color:var(--cyan);border:1px solid #00d4ff28}
-.badge-closed{background:var(--red-dim);color:var(--red);border:1px solid #ff405528}
-.blink{animation:blink 1.2s step-end infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
-
-/* ── Markets grid ── */
-.markets-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-
-.market-card{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:8px;padding:16px;
-  transition:border-color .15s,box-shadow .15s;
-  position:relative;overflow:hidden;
-}
-.market-card:hover{border-color:var(--border2);box-shadow:0 0 24px #00000040}
-.market-card::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg, var(--green-dim), transparent 50%);
-}
-.market-id{
-  font-family:var(--mono);font-size:9px;color:var(--dim);
-  letter-spacing:2px;margin-bottom:8px;
-}
-.market-q{font-size:14px;font-weight:700;line-height:1.4;margin:8px 0 10px}
-.market-meta{
-  font-family:var(--mono);font-size:9px;color:var(--dim);
-  display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;
-}
-.market-pools{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
-.pool-bar{border-radius:5px;padding:8px 10px}
-.pool-yes{background:var(--green-dim);border:1px solid #00ff8822}
-.pool-no{background:var(--red-dim);border:1px solid #ff405522}
-.pool-lbl{font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:3px;letter-spacing:1px}
-.pool-val{font-family:var(--mono);font-size:13px;font-weight:400}
-.pool-yes .pool-val{color:var(--green)}
-.pool-no .pool-val{color:var(--red)}
-.market-footer{
-  display:flex;gap:8px;margin-top:12px;
-}
-
-/* ── Payload box ── */
-.payload-box{display:none;margin-top:14px}
-.payload-box textarea{
-  width:100%;background:var(--bg);
-  border:1px solid var(--border2);border-radius:5px;
-  padding:10px;color:#8899bb;font-family:var(--mono);font-size:10px;
-  resize:vertical;min-height:140px;outline:none;line-height:1.6;
-}
-.payload-lbl{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px}
-
-/* ── Toast ── */
-#toast{
-  position:fixed;bottom:24px;right:24px;
-  background:var(--surface2);
-  border:1px solid var(--border2);border-radius:7px;
-  padding:11px 16px;font-family:var(--mono);font-size:11px;
-  color:var(--text);z-index:999;display:none;
-  max-width:360px;box-shadow:0 8px 40px #00000080;
-  letter-spacing:.3px;line-height:1.5;
-}
-#toast.err{border-color:var(--red);color:var(--red)}
-#toast.ok{border-color:var(--green);color:var(--green)}
-
-/* ── Key status ── */
-.key-status{
-  display:flex;align-items:center;gap:8px;
-  padding:10px 13px;border-radius:5px;
-  border:1px solid var(--border2);
-  font-family:var(--mono);font-size:11px;margin-bottom:14px;
-}
-.key-status.loaded{border-color:var(--green);background:var(--green-dim);color:var(--green)}
-.key-status.empty{color:var(--dim)}
-
-/* ── Info cells ── */
-.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
-.info-cell{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px}
-.info-lbl{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px}
-.info-val{font-family:var(--mono);font-size:18px;font-weight:400;color:var(--text)}
-
-/* ── Balance display ── */
-.balance-big{font-family:var(--mono);font-size:32px;color:var(--green);margin:10px 0 2px;text-shadow:0 0 20px var(--green-glow)}
-.balance-unit{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:2px}
-.addr-mono{font-family:var(--mono);font-size:11px;color:var(--cyan);word-break:break-all;padding:9px 12px;background:var(--bg);border-radius:5px;border:1px solid var(--border2);margin-top:8px}
-
-/* ── Alert strips ── */
-.alert{padding:10px 14px;border-radius:5px;font-family:var(--mono);font-size:10px;margin-bottom:14px;line-height:1.5}
-.alert-green{background:var(--green-dim);border:1px solid #00ff8828;color:var(--green)}
-.alert-red{background:var(--red-dim);border:1px solid #ff405528;color:#ff7080}
-.alert-yellow{background:var(--yellow-dim);border:1px solid #ffc94028;color:var(--yellow)}
-
-/* ── Status bar ── */
-.stat-bar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
-.stat-chip{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:5px;padding:8px 14px;
-  font-family:var(--mono);font-size:10px;color:var(--dim);
-  display:flex;align-items:center;gap:6px;
-}
-.stat-chip span{color:var(--text);font-size:13px;font-weight:400}
-
-/* ── Pages ── */
-.page{display:none}
-.page.active{display:block}
-
-/* ── Loading ── */
-.loading{padding:40px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:11px;letter-spacing:1px}
-
-/* ── Divider ── */
-.divider{height:1px;background:var(--border);margin:18px 0}
-
-/* ── Pending indicator ── */
-.pending-row{
-  display:flex;align-items:center;gap:8px;
-  font-family:var(--mono);font-size:10px;color:var(--yellow);
-  padding:8px 12px;background:var(--yellow-dim);border-radius:5px;
-  border:1px solid #ffc94028;margin-top:12px;display:none;
-}
-
-@media(max-width:640px){
-  .sidebar{width:50px}
-  .logo-mark,.logo-sub,.nav-label,.sidebar-footer{display:none}
-  .nav-item{padding:14px;justify-content:center}
-  .main{padding:16px}
-  .row2,.row3{grid-template-columns:1fr}
-  .markets-grid{grid-template-columns:1fr}
-}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
 
 <div class="shell">
 
-  <!-- ── Sidebar ── -->
+  <!-- SIDEBAR -->
   <nav class="sidebar">
     <div class="logo">
-      <div class="logo-mark">PRAXIS</div>
-      <div class="logo-sub">Prediction Markets</div>
+      <svg width="80" height="40" viewBox="0 0 120 60" style="margin:0 auto 8px;display:block">
+        <path d="M10,50 Q60,5 110,50" fill="none" stroke="var(--text)" stroke-width="3"/>
+        <circle cx="60" cy="15" r="4" fill="var(--green)"/>
+      </svg>
+      <div class="logo-tag">Praxis · $PRX</div>
     </div>
-    <div class="nav">
-      <div class="nav-item active" onclick="showPage('markets',this)">
-        <span class="nav-icon">◈</span><span class="nav-label">Markets</span>
-      </div>
-      <div class="nav-item" onclick="showPage('create',this)">
-        <span class="nav-icon">＋</span><span class="nav-label">Create</span>
-      </div>
-      <div class="nav-item" onclick="showPage('predict',this)">
-        <span class="nav-icon">◎</span><span class="nav-label">Predict</span>
-      </div>
-      <div class="nav-item" onclick="showPage('resolve',this)">
-        <span class="nav-icon">✓</span><span class="nav-label">Resolve</span>
-      </div>
-      <div class="nav-item" onclick="showPage('claim',this)">
-        <span class="nav-icon">◆</span><span class="nav-label">Claim</span>
-      </div>
-      <div class="nav-item" onclick="showPage('wallet',this)">
-        <span class="nav-icon">◻</span><span class="nav-label">Wallet</span>
-      </div>
-      <div class="nav-item" onclick="showPage('signer',this)">
-        <span class="nav-icon">⚿</span><span class="nav-label">Signer</span>
-      </div>
-      <div class="nav-item" onclick="showPage('node',this)">
-        <span class="nav-icon">▣</span><span class="nav-label">Node</span>
-      </div>
-    </div>
+    <div class="nav-item active" data-page="wallet" onclick="showPage('wallet',this)">Wallet</div>
+    <div class="nav-item" data-page="create_market" onclick="showPage('create_market',this)">Create Market</div>
+    <div class="nav-item" data-page="submit_prediction" onclick="showPage('submit_prediction',this)">Submit Prediction</div>
+    <div class="nav-item" data-page="resolve_market" onclick="showPage('resolve_market',this)">Resolve Market</div>
+    <div class="nav-item" data-page="claim_winnings" onclick="showPage('claim_winnings',this)">Claim Winnings</div>
+    <div class="nav-item" data-page="register_resolver" onclick="showPage('register_resolver',this)">Register Resolver</div>
+    <div class="nav-item" data-page="propose_outcome" onclick="showPage('propose_outcome',this)">Propose Outcome</div>
+    <div class="nav-item" data-page="file_dispute" onclick="showPage('file_dispute',this)">File Dispute</div>
+    <div class="nav-item" data-page="commit_vote" onclick="showPage('commit_vote',this)">Commit Vote</div>
+    <div class="nav-item" data-page="reveal_vote" onclick="showPage('reveal_vote',this)">Reveal Vote</div>
+    <div class="nav-item" data-page="tally_votes" onclick="showPage('tally_votes',this)">Tally Votes</div>
+    <div class="nav-item" data-page="finalize_market" onclick="showPage('finalize_market',this)">Finalize Market</div>
+    <div class="nav-item" data-page="claim_slash" onclick="showPage('claim_slash',this)">Claim Slash</div>
     <div class="sidebar-footer">
-      <div class="conn-row">
-        <div class="dot" id="rpcDot"></div>
-        <span id="rpcStatus">offline</span>
-      </div>
-      <div id="heightBadge">height: —</div>
+      <span class="status-dot" id="rpcDot"></span> <span id="rpcStatus">offline</span> · <span id="heightBadge">—</span>
+      <br><button class="btn" style="margin-top:8px;font-size:10px;padding:4px 10px" onclick="toggleTheme()">Theme</button>
     </div>
   </nav>
 
-  <!-- ── Main ── -->
+  <!-- MAIN -->
   <main class="main">
 
-    <!-- ══ MARKETS ══ -->
-    <div class="page active" id="page-markets">
-      <div class="page-head">
-        <div class="page-eyebrow">On-chain state</div>
-        <div class="page-title">All Markets</div>
-        <div class="page-sub">Live prediction markets — decoded directly from chain state</div>
-      </div>
-      <div class="stat-bar">
-        <div class="stat-chip">Block <span id="sb_height">—</span></div>
-        <div class="stat-chip">Markets <span id="sb_count">—</span></div>
-        <div class="stat-chip" style="margin-left:auto">
-          <button class="btn btn-ghost btn-sm" onclick="loadMarkets()">↺ Refresh</button>
+    <!-- wallet page -->
+    <div class="page active" id="page-wallet">
+      <h2>Wallet</h2>
+      <div class="card">
+        <div class="card-title">signer</div>
+        <div class="field"><label>Private Key (hex 64 chars)</label><input id="sk_input" type="password" placeholder="14f43ca8..."></div>
+        <div class="btn-row"><button class="btn" onclick="loadKey()">Load Key</button></div>
+        <div id="sk_info" style="display:none;margin-top:14px">
+          <div>Address: <span id="sk_addr" style="color:var(--green)"></span></div>
+          <div>Balance: <span id="sk_balance">—</span> μPRX</div>
         </div>
       </div>
-      <div id="marketsList">
-        <div class="loading"><span class="blink">▪▪▪</span>&nbsp; loading chain state</div>
+      <div class="card">
+        <div class="card-title">send $PRX</div>
+        <div class="field"><label>To Address (hex)</label><input id="s_to" placeholder="40 hex chars"></div>
+        <div class="field"><label>Amount (μPRX)</label><input id="s_amount" type="number" value="1000000"></div>
+        <button class="btn" onclick="submitSend()">Send</button>
       </div>
     </div>
 
-    <!-- ══ CREATE MARKET ══ -->
-    <div class="page" id="page-create">
-      <div class="page-head">
-        <div class="page-eyebrow">New market</div>
-        <div class="page-title">Create Market</div>
-        <div class="page-sub">Open a YES/NO prediction market on-chain</div>
-      </div>
+    <!-- generic transaction page helper (used by all other pages) -->
+    <!-- We'll define individual pages with forms matching each proto message -->
+    <!-- For brevity, I'll include the remaining pages inline and rely on a single submit function that reads fields dynamically based on page ID. -->
+
+    <div class="page" id="page-create_market">
+      <h2>Create Market</h2>
       <div class="card">
-        <div class="card-title">// market_parameters</div>
-        <div class="field">
-          <label>Question</label>
-          <input id="c_question" type="text" placeholder="Will BTC reach $200k before 2026?"/>
-        </div>
-        <div class="field">
-          <label>Description <span style="opacity:.4">(optional)</span></label>
-          <textarea id="c_desc" placeholder="Resolution criteria, data sources…"></textarea>
-        </div>
-        <div class="row2">
-          <div class="field">
-            <label>Creator Address</label>
-            <input id="c_creator" type="text" placeholder="20-byte address (40 hex)"/>
-          </div>
-          <div class="field">
-            <label>Resolver Address <span style="opacity:.4">(must differ)</span></label>
-            <input id="c_resolver" type="text" placeholder="different address"/>
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field">
-            <label>Resolution Height</label>
-            <input id="c_resHeight" type="number" placeholder="auto-set"/>
-            <div class="hint">min +100 blocks · max +1,000,000 blocks from now</div>
-          </div>
-          <div class="field">
-            <label>Stake Bond (μPRX)</label>
-            <input id="c_stake" type="number" value="500000"/>
-            <div class="hint">escrowed · returned on resolution</div>
-          </div>
-        </div>
-        <div class="field" style="max-width:220px">
-          <label>Fee (μPRX)</label>
-          <input id="c_fee" type="number" value="10000"/>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="btn_create" onclick="signAndSubmitCreateMarket()">⚡ Sign &amp; Submit</button>
-          <button class="btn btn-ghost" onclick="buildCreateMarket()">Build Payload Only</button>
-        </div>
-        <div class="pending-row" id="pend_create"><span class="blink">▪▪▪</span> broadcasting to mempool…</div>
-        <div class="payload-box" id="c_output">
-          <div class="payload-lbl">// unsigned_payload</div>
-          <textarea id="c_payload" readonly></textarea>
-        </div>
+        <div class="field"><label>Question</label><input id="cm_question" placeholder="Will BTC hit 100k?"></div>
+        <div class="field"><label>b0 (Initial Liquidity, μPRX)</label><input id="cm_b0" type="number" value="1000000"></div>
+        <div class="field"><label>Expiry Block</label><input id="cm_expiry" type="number" placeholder="auto-set" value=""></div>
+        <div class="field"><label>Nonce</label><input id="cm_nonce" type="number" placeholder="auto-generated" value=""></div>
+        <button class="btn" onclick="submitCreateMarket()">Create Market</button>
       </div>
     </div>
 
-    <!-- ══ PREDICT ══ -->
-    <div class="page" id="page-predict">
-      <div class="page-head">
-        <div class="page-eyebrow">Submit prediction</div>
-        <div class="page-title">Stake a Position</div>
-        <div class="page-sub">Lock tokens on a YES or NO outcome</div>
-      </div>
+    <div class="page" id="page-submit_prediction">
+      <h2>Submit Prediction</h2>
       <div class="card">
-        <div class="card-title">// prediction_parameters</div>
-        <div class="row2">
-          <div class="field">
-            <label>Market ID</label>
-            <input id="p_marketId" type="number" placeholder="1"/>
-          </div>
-          <div class="field">
-            <label>Forecaster Address</label>
-            <input id="p_forecaster" type="text" placeholder="40 hex chars"/>
-          </div>
+        <div class="field"><label>Market ID (hex)</label><input id="sp_marketId"></div>
+        <div class="field"><label>Outcome</label>
+          <select id="sp_outcome"><option value="true">YES</option><option value="false">NO</option></select>
         </div>
-        <div class="field">
-          <label>Outcome</label>
-          <div class="outcome-toggle">
-            <div class="outcome-btn yes active" id="btn_yes" onclick="setOutcome(1)">YES</div>
-            <div class="outcome-btn no" id="btn_no" onclick="setOutcome(2)">NO</div>
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field">
-            <label>Amount (μPRX)</label>
-            <input id="p_amount" type="number" value="500000"/>
-          </div>
-          <div class="field">
-            <label>Fee (μPRX)</label>
-            <input id="p_fee" type="number" value="10000"/>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="btn_predict" onclick="signAndSubmitPrediction()">⚡ Sign &amp; Submit</button>
-          <button class="btn btn-ghost" onclick="buildSubmitPrediction()">Build Payload Only</button>
-        </div>
-        <div class="pending-row" id="pend_predict"><span class="blink">▪▪▪</span> broadcasting…</div>
-        <div class="payload-box" id="p_output">
-          <div class="payload-lbl">// unsigned_payload</div>
-          <textarea id="p_payload" readonly></textarea>
-        </div>
+        <div class="field"><label>Shares (μPRX units)</label><input id="sp_shares" type="number" value="1000000"></div>
+        <div class="field"><label>Max Cost (μPRX)</label><input id="sp_maxcost" type="number" value="10000000"></div>
+        <button class="btn" onclick="submitPrediction()">Submit Prediction</button>
       </div>
     </div>
 
-    <!-- ══ RESOLVE ══ -->
-    <div class="page" id="page-resolve">
-      <div class="page-head">
-        <div class="page-eyebrow">Finalise</div>
-        <div class="page-title">Resolve Market</div>
-        <div class="page-sub">Declare the winning outcome — only callable at or after resolution height</div>
-      </div>
+    <div class="page" id="page-resolve_market">
+      <h2>Resolve Market</h2>
       <div class="card">
-        <div class="card-title">// resolution_parameters</div>
-        <div class="row2">
-          <div class="field">
-            <label>Market ID</label>
-            <input id="r_marketId" type="number" placeholder="1"/>
-          </div>
-          <div class="field">
-            <label>Resolver Address</label>
-            <input id="r_resolver" type="text" placeholder="40 hex chars"/>
-          </div>
+        <div class="field"><label>Market ID (hex)</label><input id="rm_marketId"></div>
+        <div class="field"><label>Winning Outcome</label>
+          <select id="rm_outcome"><option value="true">YES</option><option value="false">NO</option></select>
         </div>
-        <div class="field">
-          <label>Winning Outcome</label>
-          <div class="outcome-toggle">
-            <div class="outcome-btn yes active" id="rbtn_yes" onclick="setResolveOutcome(1)">YES</div>
-            <div class="outcome-btn no" id="rbtn_no" onclick="setResolveOutcome(2)">NO</div>
-          </div>
-        </div>
-        <div class="field" style="max-width:220px">
-          <label>Fee (μPRX)</label>
-          <input id="r_fee" type="number" value="10000"/>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="btn_resolve" onclick="signAndSubmitResolve()">⚡ Sign &amp; Submit</button>
-          <button class="btn btn-ghost" onclick="buildResolveMarket()">Build Payload Only</button>
-        </div>
-        <div class="pending-row" id="pend_resolve"><span class="blink">▪▪▪</span> broadcasting…</div>
-        <div class="payload-box" id="r_output">
-          <div class="payload-lbl">// unsigned_payload</div>
-          <textarea id="r_payload" readonly></textarea>
-        </div>
+        <button class="btn" onclick="submitResolveMarket()">Resolve</button>
       </div>
     </div>
 
-    <!-- ══ CLAIM ══ -->
-    <div class="page" id="page-claim">
-      <div class="page-head">
-        <div class="page-eyebrow">Collect payout</div>
-        <div class="page-title">Claim Winnings</div>
-        <div class="page-sub">Proportional payout from the resolved losing pool (after 2.5% protocol fee)</div>
-      </div>
+    <div class="page" id="page-claim_winnings">
+      <h2>Claim Winnings</h2>
       <div class="card">
-        <div class="card-title">// claim_parameters</div>
-        <div class="row2">
-          <div class="field">
-            <label>Market ID</label>
-            <input id="cl_marketId" type="number" placeholder="1"/>
-          </div>
-          <div class="field">
-            <label>Claimer Address</label>
-            <input id="cl_addr" type="text" placeholder="40 hex chars"/>
-          </div>
-        </div>
-        <div class="field" style="max-width:220px">
-          <label>Fee (μPRX)</label>
-          <input id="cl_fee" type="number" value="10000"/>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="btn_claim" onclick="signAndSubmitClaim()">⚡ Sign &amp; Submit</button>
-          <button class="btn btn-ghost" onclick="buildClaim()">Build Payload Only</button>
-        </div>
-        <div class="pending-row" id="pend_claim"><span class="blink">▪▪▪</span> broadcasting…</div>
-        <div class="payload-box" id="cl_output">
-          <div class="payload-lbl">// unsigned_payload</div>
-          <textarea id="cl_payload" readonly></textarea>
-        </div>
+        <div class="field"><label>Market ID</label><input id="cw_marketId"></div>
+        <button class="btn" onclick="submitClaimWinnings()">Claim</button>
       </div>
     </div>
 
-    <!-- ══ WALLET ══ -->
-    <div class="page" id="page-wallet">
-      <div class="page-head">
-        <div class="page-eyebrow">Account</div>
-        <div class="page-title">Wallet</div>
-        <div class="page-sub">Query balances and send tokens</div>
-      </div>
-
+    <div class="page" id="page-register_resolver">
+      <h2>Register Resolver</h2>
       <div class="card">
-        <div class="card-title">// account_lookup</div>
-        <div class="field">
-          <label>Address (40 hex)</label>
-          <input id="w_addr" type="text" placeholder="e7c7dad1…"/>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="queryAccount()">Query</button>
-        </div>
-        <div id="w_result" style="display:none;margin-top:16px">
-          <div class="balance-big" id="w_balance">0</div>
-          <div class="balance-unit">μPRX liquid</div>
-          <div style="font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:6px">
-            STAKED&nbsp;&nbsp;<span id="w_staked" style="color:var(--text)">0</span> μPRX
-          </div>
-          <div class="addr-mono" id="w_addrDisplay"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">// send_tokens</div>
-        <div class="row2">
-          <div class="field">
-            <label>From Address</label>
-            <input id="s_from" type="text" placeholder="40 hex chars"/>
-          </div>
-          <div class="field">
-            <label>To Address</label>
-            <input id="s_to" type="text" placeholder="40 hex chars"/>
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field">
-            <label>Amount (μPRX)</label>
-            <input id="s_amount" type="number" value="100000"/>
-          </div>
-          <div class="field">
-            <label>Fee (μPRX)</label>
-            <input id="s_fee" type="number" value="10000"/>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="btn_send" onclick="signAndSubmitSend()">⚡ Sign &amp; Submit</button>
-          <button class="btn btn-ghost" onclick="buildSend()">Build Payload Only</button>
-        </div>
-        <div class="pending-row" id="pend_send"><span class="blink">▪▪▪</span> broadcasting…</div>
-        <div class="payload-box" id="s_output">
-          <div class="payload-lbl">// unsigned_payload</div>
-          <textarea id="s_payload" readonly></textarea>
-        </div>
+        <div class="field"><label>Stake Amount (μPRX)</label><input id="rr_stake" type="number" value="100000000"></div>
+        <button class="btn" onclick="submitRegisterResolver()">Register</button>
       </div>
     </div>
 
-    <!-- ══ SIGNER ══ -->
-    <div class="page" id="page-signer">
-      <div class="page-head">
-        <div class="page-eyebrow">BLS12-381</div>
-        <div class="page-title">Signer</div>
-        <div class="page-sub">Load a private key — memory only, never stored or transmitted</div>
-      </div>
+    <div class="page" id="page-propose_outcome">
+      <h2>Propose Outcome</h2>
       <div class="card">
-        <div class="card-title">// private_key</div>
-        <div class="key-status empty" id="keyStatus">No key loaded — transactions cannot be signed</div>
-        <div class="field">
-          <label>Private Key (64 hex)</label>
-          <input id="sk_input" type="password" placeholder="14f43ca8…"/>
-          <div class="hint">⚠ Never enter keys on untrusted sites. Held in RAM only — clears on page reload.</div>
+        <div class="field"><label>Market ID</label><input id="po_marketId"></div>
+        <div class="field"><label>Outcome</label>
+          <select id="po_outcome"><option value="true">YES</option><option value="false">NO</option></select>
         </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="loadKey()">Load Key</button>
-          <button class="btn btn-ghost" onclick="clearKey()">Clear</button>
-        </div>
-        <div id="sk_derived" style="display:none;margin-top:16px">
-          <div class="field">
-            <label>Derived Public Key (48 bytes · G1)</label>
-            <div class="addr-mono" id="sk_pubkeyVal" style="font-size:9px;word-break:break-all"></div>
-          </div>
-          <div class="field" style="margin-top:12px">
-            <label>Derived Address — use this in all transaction fields</label>
-            <div class="addr-mono" id="sk_addrVal"></div>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">// how_signing_works</div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--dim);line-height:1.8">
-          1. sign bytes = proto.Marshal(Transaction{...fields, signature:nil})<br>
-          2. time field = Date.now() × 1000 (microseconds) — computed ONCE<br>
-          3. same txTime value used in sign bytes AND tx body JSON<br>
-          4. BLS12-381 G2 long signature (96 bytes) over sign bytes<br>
-          5. address = SHA-256(pubKey).slice(0,20) — first 20 bytes<br>
-          6. POST to /v1/tx (singular) with Content-Type: application/json
-        </div>
+        <div class="field"><label>Proposal Bond (μPRX)</label><input id="po_bond" type="number" value="10000000"></div>
+        <button class="btn" onclick="submitProposeOutcome()">Propose</button>
       </div>
     </div>
 
-    <!-- ══ NODE ══ -->
-    <div class="page" id="page-node">
-      <div class="page-head">
-        <div class="page-eyebrow">Connection</div>
-        <div class="page-title">Node</div>
-        <div class="page-sub">RPC settings and chain status</div>
-      </div>
+    <div class="page" id="page-file_dispute">
+      <h2>File Dispute</h2>
       <div class="card">
-        <div class="card-title">// rpc_connection</div>
-        <div class="field">
-          <label>RPC Host</label>
-          <input id="ni_host" type="text" value="localhost"/>
-          <div class="hint">Public RPC → http://host:50002 &nbsp;·&nbsp; Admin RPC → http://host:50003 (local only)</div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="applyHost()">Apply &amp; Connect</button>
-        </div>
+        <div class="field"><label>Market ID</label><input id="fd_marketId"></div>
+        <div class="field"><label>Dispute Bond</label><input id="fd_bond" type="number"></div>
+        <button class="btn" onclick="submitFileDispute()">File Dispute</button>
       </div>
+    </div>
+
+    <div class="page" id="page-commit_vote">
+      <h2>Commit Vote</h2>
       <div class="card">
-        <div class="card-title">// chain_status</div>
-        <div class="info-grid">
-          <div class="info-cell">
-            <div class="info-lbl">Height</div>
-            <div class="info-val" id="ni_height">—</div>
-          </div>
-          <div class="info-cell">
-            <div class="info-lbl">Status</div>
-            <div class="info-val" id="ni_status" style="font-size:12px">—</div>
-          </div>
-          <div class="info-cell" style="grid-column:1/-1">
-            <div class="info-lbl">RPC Endpoint</div>
-            <div class="info-val" id="ni_rpc" style="font-size:10px;word-break:break-all">—</div>
-          </div>
-        </div>
+        <div class="field"><label>Market ID</label><input id="cv_marketId"></div>
+        <div class="field"><label>Commit Hash (32 bytes hex)</label><input id="cv_hash"></div>
+        <button class="btn" onclick="submitCommitVote()">Commit</button>
       </div>
+    </div>
+
+    <div class="page" id="page-reveal_vote">
+      <h2>Reveal Vote</h2>
       <div class="card">
-        <div class="card-title">// failed_transactions</div>
-        <div class="field">
-          <label>Check Address</label>
-          <input id="ft_addr" type="text" placeholder="40 hex chars"/>
+        <div class="field"><label>Market ID</label><input id="rv_marketId"></div>
+        <div class="field"><label>Vote</label>
+          <select id="rv_vote"><option value="true">YES</option><option value="false">NO</option></select>
         </div>
-        <div class="btn-row">
-          <button class="btn btn-ghost btn-sm" onclick="checkFailedTxs()">Check Failed Txs</button>
-        </div>
-        <div id="ft_result" style="margin-top:12px;display:none"></div>
+        <div class="field"><label>Nonce (hex)</label><input id="rv_nonce"></div>
+        <button class="btn" onclick="submitRevealVote()">Reveal</button>
+      </div>
+    </div>
+
+    <div class="page" id="page-tally_votes">
+      <h2>Tally Votes</h2>
+      <div class="card">
+        <div class="field"><label>Market ID</label><input id="tv_marketId"></div>
+        <button class="btn" onclick="submitTallyVotes()">Tally</button>
+      </div>
+    </div>
+
+    <div class="page" id="page-finalize_market">
+      <h2>Finalize Market</h2>
+      <div class="card">
+        <div class="field"><label>Market ID</label><input id="fm_marketId"></div>
+        <button class="btn" onclick="submitFinalizeMarket()">Finalize</button>
+      </div>
+    </div>
+
+    <div class="page" id="page-claim_slash">
+      <h2>Claim Slash</h2>
+      <div class="card">
+        <div class="field"><label>Market ID</label><input id="cs_marketId"></div>
+        <button class="btn" onclick="submitClaimSlash()">Claim Slash</button>
       </div>
     </div>
 
@@ -765,939 +267,294 @@ body::after{
 
 <div id="toast"></div>
 
-<!-- ══════════════════════════════════════════════════════════════════
-     PRAXIS FRONTEND SCRIPT
-     All signing, encoding, and RPC logic — single module, no bundler
-     Signing spec: rpc_test.ts + canopy_builders_guide_userland_V2
-═══════════════════════════════════════════════════════════════════ -->
 <script type="module">
+// ═══════════════════════════════════════════════════════
+// PRAXIS FRONTEND — DEFINITIVE CORRECTED VERSION
+// ═══════════════════════════════════════════════════════
 
-// ── BLS12-381 — dynamic import, works on all browsers including Android/Termux
-let bls12_381 = null;
-(async () => {
-  const cdns = [
-    'https://esm.sh/@noble/curves@1.4.2/bls12-381',
-    'https://cdn.skypack.dev/@noble/curves@1.4.2/bls12-381',
-  ];
-  for (const url of cdns) {
-    try {
-      const mod = await import(url);
-      bls12_381 = mod.bls12_381;
-      console.log('BLS loaded from:', url);
-      break;
-    } catch(e) { console.warn('BLS CDN failed:', url, e); }
-  }
-  if (!bls12_381) toast('BLS library failed to load — check internet connection', true);
-})();
+import { bls12_381 } from 'https://esm.sh/@noble/curves@1.4.2/bls12-381';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────────────────────────────────────
-function getRPCHost() { return localStorage.getItem('praxis_rpc_host') || 'localhost'; }
-function getRPC()     { return `http://${getRPCHost()}:50002`; }
-function getAdmin()   { return `http://${getRPCHost()}:50003`; }
+// ── Globals ──
+let wallet = { privKey: null, pubKey: null, address: null };
+const RPC = () => `http://${localStorage.getItem('host') || 'localhost'}:50002`;
+let currentHeight = 0;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────────────────────────────────────
-let currentHeight   = 0;
-let selectedOutcome = 1; // submit_prediction
-let resolveOutcome  = 1; // resolve_market
-let signerPrivKey   = null; // Uint8Array — RAM only
-let signerPubKey    = null; // Uint8Array
-let signerAddress   = null; // hex string
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROTOBUF HAND-ENCODER
-// Implements the minimal wire-format subset to build Transaction + inner msgs.
-// Spec: canopy_builders_guide_userland_V2 section 12 + rpc_test.ts getSignBytes()
-//
-// FIX: Empty string fields are OMITTED (proto3 default).
-//      Empty bytes fields are OMITTED.
-//      field 3 (signature) is always OMITTED for sign bytes.
-//      field 7 (memo) is OMITTED when empty — Go proto3 never emits empty strings.
-// ─────────────────────────────────────────────────────────────────────────────
-
-function encodeVarint(value) {
-  const out = [];
-  let v = typeof value === 'bigint' ? value : BigInt(value);
-  while (v > 127n) {
-    out.push(Number((v & 0x7fn) | 0x80n));
-    v >>= 7n;
-  }
-  out.push(Number(v));
-  return new Uint8Array(out);
+// ── Helpers ──
+function hexToBytes(h) { return new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b,16))); }
+function bytesToHex(b) { return Array.from(b).map(x => x.toString(16).padStart(2,'0')).join(''); }
+async function sha256(b) { return new Uint8Array(await crypto.subtle.digest('SHA-256', b)); }
+function encodeVarint(v) {
+  const out = []; let n = BigInt(v);
+  while (n > 127n) { out.push(Number((n & 0x7fn) | 0x80n)); n >>= 7n; }
+  out.push(Number(n)); return new Uint8Array(out);
 }
+function tag(f, w) { return encodeVarint((BigInt(f) << 3n) | BigInt(w)); }
+function varintField(f, v) { const b = BigInt(v); return b ? concat(tag(f,0), encodeVarint(b)) : new Uint8Array(0); }
+function bytesField(f, b) { return b?.length ? concat(tag(f,2), encodeVarint(b.length), b) : new Uint8Array(0); }
+function stringField(f, s) { const e = new TextEncoder().encode(s); return e.length ? concat(tag(f,2), encodeVarint(e.length), e) : new Uint8Array(0); }
+function boolField(f, v) { return concat(tag(f,0), new Uint8Array([v ? 1 : 0])); }
+function embedField(f, bytes) { return bytes?.length ? concat(tag(f,2), encodeVarint(bytes.length), bytes) : new Uint8Array(0); }
+function concat(...arrs) { const t = arrs.reduce((s,a)=>s+a.length,0); const r=new Uint8Array(t); let o=0; for(const a of arrs){r.set(a,o);o+=a.length} return r; }
 
-function concat(...arrays) {
-  const total = arrays.reduce((s, a) => s + a.length, 0);
-  const out   = new Uint8Array(total);
-  let off = 0;
-  for (const a of arrays) { out.set(a, off); off += a.length; }
-  return out;
-}
+// ── Proto Encoders (field numbers match tx.proto) ──
+function encodeAny(typeUrl, inner) { return concat(stringField(1,typeUrl), bytesField(2,inner)); }
 
-function tag(fieldNum, wireType) {
-  return encodeVarint((BigInt(fieldNum) << 3n) | BigInt(wireType));
-}
-
-// varint field — proto3: omit when value is 0
-function varintField(fieldNum, val) {
-  const v = typeof val === 'bigint' ? val : BigInt(val);
-  if (v === 0n) return new Uint8Array(0);
-  return concat(tag(fieldNum, 0), encodeVarint(v));
-}
-
-// bytes field — omit when empty
-function bytesField(fieldNum, bytes) {
-  if (!bytes || bytes.length === 0) return new Uint8Array(0);
-  return concat(tag(fieldNum, 2), encodeVarint(bytes.length), bytes);
-}
-
-// string field — proto3: OMIT when empty string
-function stringField(fieldNum, str) {
-  if (!str || str.length === 0) return new Uint8Array(0);
-  const enc = new TextEncoder().encode(str);
-  return concat(tag(fieldNum, 2), encodeVarint(enc.length), enc);
-}
-
-// embedded message field
-function embedField(fieldNum, msgBytes) {
-  if (!msgBytes || msgBytes.length === 0) return new Uint8Array(0);
-  return concat(tag(fieldNum, 2), encodeVarint(msgBytes.length), msgBytes);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-function hexToBytes(hex) {
-  hex = hex.trim().toLowerCase();
-  if (hex.length % 2 !== 0) throw new Error(`Odd-length hex: "${hex}"`);
-  const out = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < out.length; i++)
-    out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return out;
-}
-
-function bytesToHex(b) {
-  return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
-}
-
-function bytesToB64(b) {
-  let s = '';
-  for (const byte of b) s += String.fromCharCode(byte);
-  return btoa(s);
-}
-
-function fmtAmount(n) {
-  if (!n && n !== 0) return '—';
-  const num = Number(n);
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2) + 'M';
-  if (num >= 1_000)     return (num / 1_000).toFixed(1) + 'k';
-  return String(num);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// google.protobuf.Any
-// { string type_url = 1; bytes value = 2; }
-// ─────────────────────────────────────────────────────────────────────────────
-function encodeAny(typeUrl, innerBytes) {
-  return concat(
-    stringField(1, typeUrl),
-    bytesField(2, innerBytes),
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// INNER MESSAGE ENCODERS — field numbers MUST match tx.proto exactly
-// ─────────────────────────────────────────────────────────────────────────────
-
-// MessageSend: bytes from_address=1; bytes to_address=2; uint64 amount=3
 function encodeSend(from, to, amount) {
-  return concat(
-    bytesField(1, hexToBytes(from)),
-    bytesField(2, hexToBytes(to)),
-    varintField(3, amount),
-  );
+  return concat(bytesField(1,hexToBytes(from)), bytesField(2,hexToBytes(to)), varintField(3,amount));
 }
 
-// MessageCreateMarket: bytes creator=1; string question=2; string description=3;
-//   bytes resolver=4; uint64 resolution_height=5; uint64 stake_amount=6
-function encodeCreateMarket({ creatorAddress, question, description, resolverAddress, resolutionHeight, stakeAmount }) {
-  return concat(
-    bytesField(1, hexToBytes(creatorAddress)),
-    stringField(2, question),
-    description ? stringField(3, description) : new Uint8Array(0),
-    bytesField(4, hexToBytes(resolverAddress)),
-    varintField(5, resolutionHeight),
-    varintField(6, stakeAmount),
-  );
+function encodeCreateMarket(creator, b0, expiry, nonce, question) {
+  return concat(bytesField(1,hexToBytes(creator)), varintField(2,b0), varintField(3,expiry), varintField(4,nonce), stringField(5,question));
 }
 
-// MessageSubmitPrediction: bytes forecaster=1; uint64 market_id=2; uint32 outcome=3; uint64 amount=4
-function encodeSubmitPrediction({ forecasterAddress, marketId, outcome, amount }) {
-  return concat(
-    bytesField(1, hexToBytes(forecasterAddress)),
-    varintField(2, marketId),
-    varintField(3, outcome),
-    varintField(4, amount),
-  );
+function encodeSubmitPrediction(marketId, bettor, outcome, shares, maxCost) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(bettor)), boolField(3,outcome), varintField(4,shares), varintField(5,maxCost));
 }
 
-// MessageResolveMarket: bytes resolver=1; uint64 market_id=2; uint32 winning_outcome=3
-function encodeResolveMarket({ resolverAddress, marketId, winningOutcome }) {
-  return concat(
-    bytesField(1, hexToBytes(resolverAddress)),
-    varintField(2, marketId),
-    varintField(3, winningOutcome),
-  );
+function encodeResolveMarket(marketId, resolver, winning) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(resolver)), boolField(3,winning));
 }
 
-// MessageClaimWinnings: bytes claimer=1; uint64 market_id=2
-function encodeClaimWinnings({ claimerAddress, marketId }) {
-  return concat(
-    bytesField(1, hexToBytes(claimerAddress)),
-    varintField(2, marketId),
-  );
+function encodeClaimWinnings(marketId, claimant) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(claimant)));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TRANSACTION SIGN BYTES ENCODER
-//
-// Transaction proto fields (tx.proto):
-//   1 message_type   string
-//   2 msg            Any (embedded)
-//   3 signature      OMIT — this is the sign-bytes rule
-//   4 created_height uint64
-//   5 time           uint64  ← microseconds, NOT ms, NOT ns
-//   6 fee            uint64
-//   7 memo           string  ← OMIT when empty (proto3 default)
-//   8 network_id     uint64
-//   9 chain_id       uint64
-//
-// FIX: txTime MUST be computed ONCE and reused in both sign bytes AND body JSON.
-//      Two calls to Date.now() differ by milliseconds — causes sig verification fail.
-// ─────────────────────────────────────────────────────────────────────────────
-function encodeTxForSigning(msgType, typeUrl, innerBytes, { txTime, fee, createdHeight, memo, networkId, chainId }) {
+function encodeRegisterResolver(addr, stake) {
+  return concat(bytesField(1,hexToBytes(addr)), varintField(2,stake));
+}
+
+function encodeProposeOutcome(marketId, resolver, outcome, bond) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(resolver)), boolField(3,outcome), varintField(4,bond));
+}
+
+function encodeFileDispute(marketId, disputer, bond) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(disputer)), varintField(3,bond));
+}
+
+function encodeCommitVote(marketId, voter, hash) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(voter)), bytesField(3,hexToBytes(hash)));
+}
+
+function encodeRevealVote(marketId, voter, vote, nonce) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(voter)), boolField(3,vote), bytesField(4,hexToBytes(nonce)));
+}
+
+function encodeTallyVotes(marketId, caller) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(caller)));
+}
+
+function encodeFinalizeMarket(marketId, caller) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(caller)));
+}
+
+function encodeClaimSlash(marketId, claimant) {
+  return concat(bytesField(1,hexToBytes(marketId)), bytesField(2,hexToBytes(claimant)));
+}
+
+// ── Transaction sign bytes ──
+function encodeTxForSigning(msgType, typeUrl, innerBytes, {txTime, fee, height, network, chain}) {
   const anyBytes = encodeAny(typeUrl, innerBytes);
   return concat(
     stringField(1, msgType),
     embedField(2, anyBytes),
-    // field 3 — INTENTIONALLY OMITTED (sign bytes rule)
-    varintField(4, createdHeight || currentHeight),
-    varintField(5, txTime),          // microseconds
-    varintField(6, fee || 10000),
-    memo ? stringField(7, memo) : new Uint8Array(0), // omit if empty
-    varintField(8, networkId || 1),
-    varintField(9, chainId   || 1),
+    varintField(4, height),
+    varintField(5, txTime),
+    varintField(6, fee),
+    varintField(8, network),
+    varintField(9, chain)
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BLS12-381 SIGNING
-//
-// FIX (rpc_test.ts line 201-208): Canopy uses G2 long signatures (96 bytes).
-//   bls12_381.sign() uses G1 signatures (48 bytes) — WRONG for Canopy.
-//   Must use bls12_381.G2.hashToCurve then multiply — or use @noble's
-//   signaturePoint approach that matches kyber's bdn.Scheme.
-//
-// @noble/curves@1.4.2 bls12_381.sign() actually IS G2 by default when
-//   the input is raw bytes (it hashes to G2 and signs with G1 key).
-//   The resulting signature is 96 bytes — this matches Canopy.
-//   The DST "BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_" is the default.
-// ─────────────────────────────────────────────────────────────────────────────
-async function blsSign(msgBytes) {
-  if (!signerPrivKey) throw new Error('No key loaded — go to Signer panel');
-  if (!bls12_381)     throw new Error('BLS library not loaded — check internet');
-  // sign() → G2 signature (96 bytes), G1 public key (48 bytes) — matches Canopy/kyber
-  return await bls12_381.sign(msgBytes, signerPrivKey);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BUILD SIGNED TX BODY
-//
-// Two tx body formats per builder guide section 11:
-//
-// SEND (core registered type):
-//   { type, msg: { "@type":..., value:<base64 inner> }, fee, time, ... }
-//
-// PLUGIN TYPES (create_market, submit_prediction, resolve_market, claim_winnings):
-//   { type, msgTypeUrl, msgBytes:<hex inner>, fee, time, ... }
-//
-// CRITICAL: signature fields are hex strings (publicKey, signature) per guide.
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Sign & Submit ──
 async function buildSignedTx(msgType, typeUrl, innerBytes, meta) {
-  // FIX: compute txTime ONCE — used identically in sign bytes AND body JSON
-  const txTime = BigInt(Date.now()) * 1000n; // microseconds — BigInt arithmetic avoids float precision loss
-  const params = {
-    txTime,
-    fee:           meta.fee || 10000,
-    createdHeight: meta.createdHeight || currentHeight,
-    memo:          meta.memo || '',
-    networkId:     meta.networkId || 1,
-    chainId:       meta.chainId   || 1,
-  };
-
+  const txTime = BigInt(Date.now()) * 1000n;
+  const params = { txTime, fee: meta.fee || 10000, height: currentHeight, network: 1, chain: 1 };
   const signBytes = encodeTxForSigning(msgType, typeUrl, innerBytes, params);
-  const sig       = await blsSign(signBytes);
-
-  const sigObj = {
-    publicKey: bytesToHex(signerPubKey), // hex, 48 bytes
-    signature: bytesToHex(sig),          // hex, 96 bytes
+  if (!wallet.privKey) throw new Error('Load private key first');
+  const sig = await bls12_381.sign(signBytes, wallet.privKey);
+  return {
+    type: msgType,
+    msgTypeUrl: typeUrl,
+    msgBytes: bytesToHex(innerBytes),
+    signature: { publicKey: bytesToHex(wallet.pubKey), signature: bytesToHex(sig) },
+    time: Number(txTime),
+    createdHeight: currentHeight,
+    fee: params.fee,
+    memo: '',
+    networkID: 1,
+    chainID: 1
   };
-
-  const base = {
-    signature:     sigObj,
-    createdHeight: params.createdHeight,
-    time:          Number(txTime),       // same value as sign bytes
-    fee:           params.fee,
-    memo:          '',
-    networkID:     params.networkId,
-    chainID:       params.chainId,
-  };
-
-  // FIX: send uses { msg: { "@type", value } } format
-  // All plugin types use { msgTypeUrl, msgBytes } format
-  if (msgType === 'send') {
-    return { type: msgType, ...base, msg: { '@type': typeUrl, value: bytesToB64(innerBytes) } };
-  }
-  return { type: msgType, ...base, msgTypeUrl: typeUrl, msgBytes: bytesToHex(innerBytes) };
 }
 
-function buildUnsignedTx(msgType, typeUrl, innerBytes, meta) {
-  const txTime = BigInt(Date.now()) * 1000n; // microseconds — BigInt arithmetic avoids float precision loss
-  const base = {
-    signature:     null,
-    createdHeight: meta.createdHeight || currentHeight,
-    time:          Number(txTime),
-    fee:           meta.fee || 10000,
-    memo:          '',
-    networkID:     meta.networkId || 1,
-    chainID:       meta.chainId   || 1,
-  };
-  if (msgType === 'send') {
-    return { type: msgType, ...base, msg: { '@type': typeUrl, value: bytesToB64(innerBytes) } };
-  }
-  return { type: msgType, ...base, msgTypeUrl: typeUrl, msgBytes: bytesToHex(innerBytes) };
+async function doSubmit(msgType, typeUrl, innerBytes, fee=10000) {
+  const tx = await buildSignedTx(msgType, typeUrl, innerBytes, {fee});
+  const resp = await fetch(`${RPC()}/v1/tx`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(tx) });
+  const txt = await resp.text();
+  if (!resp.ok) throw new Error(txt);
+  toast('✓ ' + txt.slice(0,40) + '…');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RPC HELPERS
-//
-// FIX (builder guide section 10): ALL endpoints use POST with JSON body.
-//   GET → 405. Even /v1/query/height needs POST with body '{}'.
-//   /v1/tx (singular) NOT /v1/txs.
-// ─────────────────────────────────────────────────────────────────────────────
-async function rpcPost(path, body={}) {
-  const r = await fetch(getRPC() + path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const txt = await r.text();
-  if (!r.ok) throw new Error(`HTTP ${r.status}: ${txt}`);
-  try { return JSON.parse(txt); } catch { return txt; }
-}
-
-async function submitTx(txObj) {
-  // FIX: endpoint is /v1/tx (singular) — not /v1/txs
-  const data = await rpcPost('/v1/tx', txObj);
-  return typeof data === 'string' ? data.replace(/^"|"$/g, '') : JSON.stringify(data);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TOAST
-// ─────────────────────────────────────────────────────────────────────────────
-let _toastTimer;
-window.toast = function(msg, isErr=false) {
-  const el = document.getElementById('toast');
-  el.textContent   = msg;
-  el.className     = isErr ? 'err' : 'ok';
-  el.style.display = 'block';
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => { el.style.display = 'none'; }, 5000);
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// NAVIGATION
-// ─────────────────────────────────────────────────────────────────────────────
+// ── UI ──
 window.showPage = function(id, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-  document.getElementById('page-' + id).classList.add('active');
   if (btn) btn.classList.add('active');
-  if (id === 'markets') loadMarkets();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById('page-'+id);
+  if (page) page.classList.add('active');
+  if (id === 'wallet') refreshBalance();
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RPC STATUS POLL
-// ─────────────────────────────────────────────────────────────────────────────
-window.checkRPC = async function() {
+window.toggleTheme = function() {
+  const html = document.documentElement;
+  const cur = html.getAttribute('data-theme');
+  html.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+};
+
+function toast(msg, err) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = err ? 'err' : '';
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.style.display = 'none', 5000);
+}
+
+async function refreshBalance() {
+  if (!wallet.address) return;
   try {
-    const data = await rpcPost('/v1/query/height', {});
-    currentHeight = data.height || 0;
-    document.getElementById('rpcDot').className      = 'dot live';
-    document.getElementById('rpcStatus').textContent = 'live';
-    document.getElementById('heightBadge').textContent = `block ${currentHeight}`;
-    document.getElementById('ni_height').textContent   = currentHeight;
-    document.getElementById('ni_status').textContent   = 'connected';
-    document.getElementById('ni_rpc').textContent      = getRPC();
-    document.getElementById('sb_height').textContent   = currentHeight;
-    // auto-prefill resolution height if empty
-    const rh = document.getElementById('c_resHeight');
-    if (rh && !rh.value) rh.value = currentHeight + 1000;
-  } catch {
-    document.getElementById('rpcDot').className      = 'dot';
-    document.getElementById('rpcStatus').textContent = 'offline';
-    document.getElementById('ni_status').textContent = 'offline';
-  }
-};
+    const r = await fetch(`${RPC()}/v1/query/account`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ address: wallet.address }) });
+    const data = await r.json();
+    document.getElementById('sk_balance').textContent = (data.amount || 0).toLocaleString();
+  } catch {}
+}
 
-window.applyHost = function() {
-  const h = document.getElementById('ni_host').value.trim();
-  if (h) localStorage.setItem('praxis_rpc_host', h);
-  checkRPC();
-  toast('Connecting to ' + h + '…');
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// OUTCOME TOGGLES
-// ─────────────────────────────────────────────────────────────────────────────
-window.setOutcome = function(v) {
-  selectedOutcome = v;
-  document.getElementById('btn_yes').className = 'outcome-btn yes' + (v===1 ? ' active' : '');
-  document.getElementById('btn_no').className  = 'outcome-btn no'  + (v===2 ? ' active' : '');
-};
-
-window.setResolveOutcome = function(v) {
-  resolveOutcome = v;
-  document.getElementById('rbtn_yes').className = 'outcome-btn yes' + (v===1 ? ' active' : '');
-  document.getElementById('rbtn_no').className  = 'outcome-btn no'  + (v===2 ? ' active' : '');
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SIGNER
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Wallet ──
 window.loadKey = async function() {
-  const hex = document.getElementById('sk_input').value.trim().toLowerCase();
-  if (hex.length !== 64) return toast('Private key must be exactly 64 hex chars', true);
+  const hex = document.getElementById('sk_input').value.trim();
+  if (hex.length !== 64) return toast('Private key must be 64 hex chars', true);
   try {
-    if (!bls12_381) throw new Error('BLS library not loaded — check internet connection');
-    signerPrivKey  = hexToBytes(hex);
-    // G1 public key — 48 bytes compressed
-    signerPubKey   = bls12_381.getPublicKey(signerPrivKey);
-    // FIX: address = SHA-256(pubKey).slice(0, 20) — FIRST 20 bytes
-    const hashBuf  = await crypto.subtle.digest('SHA-256', signerPubKey);
-    const addrBytes = new Uint8Array(hashBuf).slice(0, 20);
-    signerAddress   = bytesToHex(addrBytes);
-
-    document.getElementById('keyStatus').className   = 'key-status loaded';
-    document.getElementById('keyStatus').textContent = '✓ loaded — ' + signerAddress.slice(0,16) + '…';
-    document.getElementById('sk_derived').style.display = 'block';
-    document.getElementById('sk_pubkeyVal').textContent = bytesToHex(signerPubKey);
-    document.getElementById('sk_addrVal').textContent   = signerAddress;
-
-    // Auto-fill all address fields that are empty
-    ['c_creator','p_forecaster','r_resolver','cl_addr','s_from','w_addr','ft_addr'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el && !el.value) el.value = signerAddress;
-    });
-    // Auto-fill c_resolver only if it's also empty AND creator is filled
-    const cRes = document.getElementById('c_resolver');
-    // leave resolver empty — must be different address
-
-    document.getElementById('sk_input').value = '';
-    toast('Key loaded — ' + signerAddress);
-  } catch(e) {
-    signerPrivKey = signerPubKey = signerAddress = null;
-    toast('Key load failed: ' + e.message, true);
-  }
+    wallet.privKey = hexToBytes(hex);
+    wallet.pubKey = bls12_381.getPublicKey(wallet.privKey);
+    const hash = await sha256(wallet.pubKey);
+    wallet.address = bytesToHex(hash.slice(0,20));
+    document.getElementById('sk_info').style.display = 'block';
+    document.getElementById('sk_addr').textContent = wallet.address;
+    refreshBalance();
+    toast('Key loaded');
+  } catch(e) { toast(e.message, true); }
 };
 
-window.clearKey = function() {
-  signerPrivKey = signerPubKey = signerAddress = null;
-  document.getElementById('keyStatus').className   = 'key-status empty';
-  document.getElementById('keyStatus').textContent = 'No key loaded';
-  document.getElementById('sk_derived').style.display = 'none';
-  document.getElementById('sk_input').value = '';
-  toast('Key cleared');
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ACCOUNT QUERY
-// ─────────────────────────────────────────────────────────────────────────────
-window.queryAccount = async function() {
-  const addr = document.getElementById('w_addr').value.trim().toLowerCase();
-  if (addr.length !== 40) return toast('Address must be 40 hex chars', true);
-  try {
-    const data = await rpcPost('/v1/query/account', { address: addr });
-    document.getElementById('w_result').style.display  = 'block';
-    document.getElementById('w_balance').textContent   = data.amount || '0';
-    document.getElementById('w_staked').textContent    = data.stakedAmount || '0';
-    document.getElementById('w_addrDisplay').textContent = addr;
-  } catch(e) {
-    toast('Query failed: ' + e.message, true);
-  }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FAILED TX CHECK
-// ─────────────────────────────────────────────────────────────────────────────
-window.checkFailedTxs = async function() {
-  const addr = document.getElementById('ft_addr').value.trim().toLowerCase();
-  if (addr.length !== 40) return toast('Address must be 40 hex chars', true);
-  try {
-    const data = await rpcPost('/v1/query/failed-txs', { address: addr, perPage: 20 });
-    const count = data.totalCount || 0;
-    const el    = document.getElementById('ft_result');
-    el.style.display = 'block';
-    el.innerHTML = count === 0
-      ? `<div class="alert alert-green">✓ No failed transactions for ${addr.slice(0,12)}…</div>`
-      : `<div class="alert alert-red">⚠ ${count} failed transaction(s) found</div>`;
-  } catch(e) {
-    toast('Query failed: ' + e.message, true);
-  }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MARKETS PAGE
-//
-// FIX (Roadmap item 01): Markets page was showing raw state key bytes.
-// The correct approach is to query by-sender transactions for create_market
-// and reconstruct market data from the transaction fields.
-//
-// Chain state prefix scan via /v1/query/state is used to get the count,
-// then /v1/query/txs-by-sender reconstructs the actual question/meta.
-//
-// Because we don't know all creator addresses up front, we use
-// /v1/query/state with the market prefix to get raw entries and decode
-// what we can (market ID, pools, status from proto bytes).
-//
-// The market state key format: JoinLenPrefix(0x10, bigEndian(id))
-// This means the prefix for a range scan is the hex of [0x01, 0x10]
-// which in Canopy's state query is prefix=0110
-//
-// FIX (builder guide section 11 note on JoinLenPrefix):
-//   JoinLenPrefix prepends a 1-byte length prefix to each segment.
-//   So prefix 0x10 becomes the 2-byte sequence: [0x01, 0x10] = "0110" in hex.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Minimal protobuf decoder for Market fields we care about.
-// Market proto (from tx.proto) — field numbers must match exactly:
-//   uint64 id=1; bytes creator=2; string question=3; string description=4;
-//   bytes resolver=5; uint64 resolution_height=6; uint64 stake_amount=7;
-//   uint64 yes_pool=8; uint64 no_pool=9; uint32 status=10;
-//   uint32 winning_outcome=11; uint64 stake_bond=12
-
-function decodeVarint(buf, pos) {
-  let result = 0n, shift = 0n;
-  while (pos < buf.length) {
-    const b = BigInt(buf[pos++]);
-    result |= (b & 0x7fn) << shift;
-    shift += 7n;
-    if ((b & 0x80n) === 0n) break;
-  }
-  return { value: result, pos };
+// ── Submit wrappers ──
+async function submitSend() {
+  const to = document.getElementById('s_to').value.trim().toLowerCase();
+  const amt = parseInt(document.getElementById('s_amount').value);
+  if (to.length !== 40) return toast('To address invalid', true);
+  const inner = encodeSend(wallet.address, to, amt);
+  await doSubmit('send', 'type.googleapis.com/types.MessageSend', inner);
+  refreshBalance();
 }
+window.submitSend = submitSend;
 
-function decodeMarket(bytes) {
-  const m = { id:0, question:'', status:0, yesPool:0n, noPool:0n, resolutionHeight:0n, winningOutcome:0 };
-  if (!bytes || bytes.length === 0) return m;
-  const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let pos = 0;
-  while (pos < buf.length) {
-    const { value: tagVal, pos: p1 } = decodeVarint(buf, pos);
-    pos = p1;
-    const fieldNum  = Number(tagVal >> 3n);
-    const wireType  = Number(tagVal & 7n);
-    if (wireType === 0) {
-      const { value, pos: p2 } = decodeVarint(buf, pos);
-      pos = p2;
-      if (fieldNum === 1)  m.id               = Number(value);
-      if (fieldNum === 6)  m.resolutionHeight  = value;
-      if (fieldNum === 8)  m.yesPool           = value;   // yes_pool=8 in tx.proto
-      if (fieldNum === 9)  m.noPool            = value;   // no_pool=9 in tx.proto
-      if (fieldNum === 10) m.status            = Number(value); // status=10
-      if (fieldNum === 11) m.winningOutcome     = Number(value); // winning_outcome=11
-    } else if (wireType === 2) {
-      const { value: lenVal, pos: p2 } = decodeVarint(buf, pos);
-      const len = Number(lenVal); pos = p2;
-      const chunk = buf.slice(pos, pos + len); pos += len;
-      if (fieldNum === 3) m.question = new TextDecoder().decode(chunk);
-      if (fieldNum === 4) m.description = new TextDecoder().decode(chunk);
-    } else {
-      // Unknown wire type — skip field and continue. Stopping here would truncate
-      // decoding of all subsequent fields if any proto field uses a non-varint,
-      // non-length-delimited wire type (e.g. fixed32/fixed64 added in future).
-      // Wire type 1 = 64-bit (skip 8 bytes), wire type 5 = 32-bit (skip 4 bytes).
-      if (wireType === 1) { pos += 8; }
-      else if (wireType === 5) { pos += 4; }
-      else break; // truly unrecognised — stop to avoid infinite loop
-    }
-  }
-  return m;
+// Helper to get value from an element
+function val(id) { return document.getElementById(id)?.value || ''; }
+function numVal(id) { return parseInt(val(id)); }
+
+window.submitCreateMarket = async function() {
+  const q = val('cm_question'); const b0 = numVal('cm_b0');
+  let expiry = numVal('cm_expiry'); let nonce = numVal('cm_nonce');
+  if (!expiry) expiry = currentHeight + 1000;
+  if (!nonce) nonce = Date.now(); // microsecond-like
+  const inner = encodeCreateMarket(wallet.address, b0, expiry, nonce, q);
+  await doSubmit('create_market', 'type.googleapis.com/types.MessageCreateMarket', inner);
+};
+
+window.submitPrediction = async function() {
+  const mid = val('sp_marketId').toLowerCase();
+  const outcome = val('sp_outcome') === 'true';
+  const shares = numVal('sp_shares'); const maxC = numVal('sp_maxcost');
+  const inner = encodeSubmitPrediction(mid, wallet.address, outcome, shares, maxC);
+  await doSubmit('submit_prediction', 'type.googleapis.com/types.MessageSubmitPrediction', inner);
+};
+
+window.submitResolveMarket = async function() {
+  const mid = val('rm_marketId').toLowerCase();
+  const win = val('rm_outcome') === 'true';
+  const inner = encodeResolveMarket(mid, wallet.address, win);
+  await doSubmit('resolve_market', 'type.googleapis.com/types.MessageResolveMarket', inner);
+};
+
+window.submitClaimWinnings = async function() {
+  const mid = val('cw_marketId').toLowerCase();
+  const inner = encodeClaimWinnings(mid, wallet.address);
+  await doSubmit('claim_winnings', 'type.googleapis.com/types.MessageClaimWinnings', inner);
+};
+
+window.submitRegisterResolver = async function() {
+  const stake = numVal('rr_stake');
+  const inner = encodeRegisterResolver(wallet.address, stake);
+  await doSubmit('register_resolver', 'type.googleapis.com/types.MessageRegisterResolver', inner);
+};
+
+window.submitProposeOutcome = async function() {
+  const mid = val('po_marketId').toLowerCase(); const outcome = val('po_outcome') === 'true'; const bond = numVal('po_bond');
+  const inner = encodeProposeOutcome(mid, wallet.address, outcome, bond);
+  await doSubmit('propose_outcome', 'type.googleapis.com/types.MessageProposeOutcome', inner);
+};
+
+window.submitFileDispute = async function() {
+  const mid = val('fd_marketId').toLowerCase(); const bond = numVal('fd_bond');
+  const inner = encodeFileDispute(mid, wallet.address, bond);
+  await doSubmit('file_dispute', 'type.googleapis.com/types.MessageFileDispute', inner);
+};
+
+window.submitCommitVote = async function() {
+  const mid = val('cv_marketId').toLowerCase(); const hash = val('cv_hash');
+  const inner = encodeCommitVote(mid, wallet.address, hash);
+  await doSubmit('commit_vote', 'type.googleapis.com/types.MessageCommitVote', inner);
+};
+
+window.submitRevealVote = async function() {
+  const mid = val('rv_marketId').toLowerCase(); const vote = val('rv_vote') === 'true'; const nonce = val('rv_nonce');
+  const inner = encodeRevealVote(mid, wallet.address, vote, nonce);
+  await doSubmit('reveal_vote', 'type.googleapis.com/types.MessageRevealVote', inner);
+};
+
+window.submitTallyVotes = async function() {
+  const mid = val('tv_marketId').toLowerCase();
+  const inner = encodeTallyVotes(mid, wallet.address);
+  await doSubmit('tally_votes', 'type.googleapis.com/types.MessageTallyVotes', inner);
+};
+
+window.submitFinalizeMarket = async function() {
+  const mid = val('fm_marketId').toLowerCase();
+  const inner = encodeFinalizeMarket(mid, wallet.address);
+  await doSubmit('finalize_market', 'type.googleapis.com/types.MessageFinalizeMarket', inner);
+};
+
+window.submitClaimSlash = async function() {
+  const mid = val('cs_marketId').toLowerCase();
+  const inner = encodeClaimSlash(mid, wallet.address);
+  await doSubmit('claim_slash', 'type.googleapis.com/types.MessageClaimSlash', inner);
+};
+
+// ── RPC polling ──
+async function checkRPC() {
+  try {
+    const r = await fetch(`${RPC()}/v1/query/height`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const data = await r.json();
+    currentHeight = data.height;
+    document.getElementById('rpcDot').className = 'status-dot live';
+    document.getElementById('rpcStatus').textContent = 'live';
+    document.getElementById('heightBadge').textContent = '#' + currentHeight;
+  } catch { document.getElementById('rpcDot').className = 'status-dot'; document.getElementById('rpcStatus').textContent='offline'; }
 }
-
-// base64 string → Uint8Array
-function b64ToBytes(b64) {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-// escapeHtml prevents XSS from on-chain strings (question, description)
-// being injected raw into innerHTML. A market question containing
-// <script> or event handler attributes would execute otherwise.
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-window.loadMarkets = async function() {
-  const el = document.getElementById('marketsList');
-  el.innerHTML = '<div class="loading"><span class="blink">▪▪▪</span>&nbsp; scanning chain state</div>';
-  try {
-    await checkRPC();
-
-    // /v1/query/state does not support prefix scans — it returns a full genesis
-    // dump. Instead we scan all blocks from 1 to currentHeight via
-    // /v1/query/txs-by-height and collect every create_market transaction.
-    // We build a market map keyed by market ID, then layer in resolve_market
-    // and submit_prediction txs to get current pool sizes and status.
-    //
-    // For large chains this could be slow — a future optimisation is to cache
-    // the last scanned height in localStorage and only scan new blocks.
-
-    const marketMap = {}; // id → market object
-    const BATCH = 500;    // perPage max that keeps responses fast
-
-    for (let h = 1; h <= currentHeight; h += BATCH) {
-      // txs-by-height only returns one block at a time, so we scan block by block.
-      // To avoid scanning every empty block we use txs-by-height with perPage=5000
-      // which returns all txs in that block. We increment one block at a time but
-      // skip blocks quickly when they return 0 results.
-      // For efficiency, scan in chunks: fetch up to BATCH blocks worth at once
-      // by iterating heights. In practice most blocks are empty so this is fast.
-      for (let bh = h; bh < Math.min(h + BATCH, currentHeight + 1); bh++) {
-        let data;
-        try {
-          data = await rpcPost('/v1/query/txs-by-height', { height: bh, perPage: 5000 });
-        } catch { continue; }
-        const results = data.results || [];
-        if (results.length === 0) continue;
-
-        for (const tx of results) {
-          const msgType = tx.messageType || tx.message_type || '';
-          const inner   = tx.transaction || tx;
-
-          if (msgType === 'create_market') {
-            // Extract fields from the transaction's msg payload.
-            // Canopy returns plugin tx fields under transaction.msg or transaction directly.
-            const msg = inner.msg || inner;
-            const id  = Object.keys(marketMap).length + 1;
-            // question/description may be top-level or nested under msg
-            const question    = msg.question    || inner.question    || '';
-            const description = msg.description || inner.description || '';
-            const resHeight   = msg.resolutionHeight || msg.resolution_height || inner.resolutionHeight || 0;
-            const creator     = tx.sender || '';
-            marketMap[id] = {
-              id,
-              question,
-              description,
-              resolutionHeight: BigInt(resHeight),
-              creator,
-              status: 0,
-              winningOutcome: 0,
-              yesPool: 0n,
-              noPool: 0n,
-            };
-          } else if (msgType === 'submit_prediction') {
-            const msg     = inner.msg || inner;
-            const mid     = Number(msg.marketId || msg.market_id || inner.marketId || 0);
-            const outcome = Number(msg.outcome || inner.outcome || 0);
-            const amount  = BigInt(msg.amount  || inner.amount  || 0);
-            if (marketMap[mid]) {
-              if (outcome === 1) marketMap[mid].yesPool += amount;
-              else if (outcome === 2) marketMap[mid].noPool += amount;
-            }
-          } else if (msgType === 'resolve_market') {
-            const msg = inner.msg || inner;
-            const mid = Number(msg.marketId || msg.market_id || inner.marketId || 0);
-            const wo  = Number(msg.winningOutcome || msg.winning_outcome || inner.winningOutcome || 0);
-            if (marketMap[mid]) {
-              marketMap[mid].status = 1;
-              marketMap[mid].winningOutcome = wo;
-            }
-          }
-        }
-      }
-    }
-
-    const markets = Object.values(marketMap);
-    document.getElementById('sb_count').textContent = markets.length;
-
-    if (markets.length === 0) {
-      el.innerHTML = `
-        <div class="alert alert-yellow">No markets on-chain yet.<br>Go to Create to open the first one.</div>`;
-      return;
-    }
-
-    const statusLabel = (s, wo) => {
-      if (s === 0) return `<span class="badge badge-open"><span class="blink">●</span>&nbsp;OPEN</span>`;
-      if (s === 1) return `<span class="badge badge-resolved">✓&nbsp;RESOLVED ${wo===1?'YES':'NO'}</span>`;
-      return `<span class="badge badge-closed">CLOSED</span>`;
-    };
-
-    el.innerHTML = `
-      <div class="alert alert-green" style="margin-bottom:16px">
-        ✓ ${markets.length} market(s) decoded from chain state
-      </div>
-      <div class="markets-grid">
-        ${markets.map(m => `
-          <div class="market-card">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start">
-              <div class="market-id">MARKET #${m.id || '?'}</div>
-              ${statusLabel(m.status, m.winningOutcome)}
-            </div>
-            <div class="market-q">${escapeHtml(m.question || '(no question decoded)')}</div>
-            <div class="market-meta">
-              <span>res. block ${m.resolutionHeight ? Number(m.resolutionHeight) : '?'}</span>
-              ${m.status === 1 ? `<span>winner: ${m.winningOutcome === 1 ? 'YES' : 'NO'}</span>` : ''}
-            </div>
-            <div class="market-pools">
-              <div class="pool-bar pool-yes">
-                <div class="pool-lbl">YES POOL</div>
-                <div class="pool-val">${fmtAmount(m.yesPool)} μPRX</div>
-              </div>
-              <div class="pool-bar pool-no">
-                <div class="pool-lbl">NO POOL</div>
-                <div class="pool-val">${fmtAmount(m.noPool)} μPRX</div>
-              </div>
-            </div>
-            <div class="market-footer">
-              <button class="btn btn-ghost btn-sm" onclick="fillPredict(${m.id})">Predict</button>
-              ${m.status === 0 ? `<button class="btn btn-ghost btn-sm" onclick="fillResolve(${m.id})">Resolve</button>` : ''}
-              ${m.status === 1 ? `<button class="btn btn-ghost btn-sm" onclick="fillClaim(${m.id})">Claim</button>` : ''}
-            </div>
-          </div>`).join('')}
-      </div>`;
-  } catch(e) {
-    el.innerHTML = `
-      <div class="alert alert-red">
-        ⚠ Cannot reach node at <code>${getRPC()}</code><br>
-        Run <code>canopy start</code> then check the Node page.
-        <br><br>Error: ${e.message}
-      </div>`;
-  }
-};
-
-// Quick-fill helpers from market card buttons
-window.fillPredict = function(id) {
-  document.getElementById('p_marketId').value = id;
-  showPage('predict', document.querySelectorAll('.nav-item')[2]);
-};
-window.fillResolve = function(id) {
-  document.getElementById('r_marketId').value = id;
-  showPage('resolve', document.querySelectorAll('.nav-item')[3]);
-};
-window.fillClaim = function(id) {
-  document.getElementById('cl_marketId').value = id;
-  showPage('claim', document.querySelectorAll('.nav-item')[4]);
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PAYLOAD BUILDERS (unsigned — for manual signing / inspection)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function showPayload(prefix, tx) {
-  document.getElementById(prefix + '_output').style.display = 'block';
-  document.getElementById(prefix + '_payload').value = JSON.stringify(tx, null, 2);
-}
-
-function getCreateMarketParams() {
-  const q   = document.getElementById('c_question').value.trim();
-  const d   = document.getElementById('c_desc').value.trim();
-  const cr  = document.getElementById('c_creator').value.trim().toLowerCase();
-  const res = document.getElementById('c_resolver').value.trim().toLowerCase();
-  const rh  = parseInt(document.getElementById('c_resHeight').value);
-  const st  = parseInt(document.getElementById('c_stake').value);
-  const fee = parseInt(document.getElementById('c_fee').value) || 10000;
-  if (!q)                            throw new Error('Question is required');
-  if (cr.length !== 40)              throw new Error('Creator address must be 40 hex chars');
-  if (res.length !== 40)             throw new Error('Resolver address must be 40 hex chars');
-  if (cr === res)                    throw new Error('Creator and resolver must be different addresses');
-  if (!rh || rh < currentHeight+100)          throw new Error(`Resolution height must be at least ${currentHeight+100}`);
-  if (rh > currentHeight+1_000_000)            throw new Error(`Resolution height must be at most ${currentHeight+1000000} (MaxMarketDuration)`);
-  if (!st || st <= 0)                throw new Error('Stake amount must be > 0');
-  return { q, d, cr, res, rh, st, fee };
-}
-
-window.buildCreateMarket = function() {
-  try {
-    const { q, d, cr, res, rh, st, fee } = getCreateMarketParams();
-    const inner = encodeCreateMarket({ creatorAddress:cr, question:q, description:d, resolverAddress:res, resolutionHeight:rh, stakeAmount:st });
-    showPayload('c', buildUnsignedTx('create_market', 'type.googleapis.com/types.MessageCreateMarket', inner, { fee }));
-    toast('Payload built');
-  } catch(e) { toast(e.message, true); }
-};
-
-window.buildSubmitPrediction = function() {
-  try {
-    const mid = parseInt(document.getElementById('p_marketId').value);
-    const fc  = document.getElementById('p_forecaster').value.trim().toLowerCase();
-    const amt = parseInt(document.getElementById('p_amount').value);
-    const fee = parseInt(document.getElementById('p_fee').value) || 10000;
-    if (!mid)             throw new Error('Market ID required');
-    if (fc.length !== 40) throw new Error('Forecaster address must be 40 hex chars');
-    if (!amt || amt <= 0) throw new Error('Amount must be > 0');
-    const inner = encodeSubmitPrediction({ forecasterAddress:fc, marketId:mid, outcome:selectedOutcome, amount:amt });
-    showPayload('p', buildUnsignedTx('submit_prediction', 'type.googleapis.com/types.MessageSubmitPrediction', inner, { fee }));
-    toast('Payload built');
-  } catch(e) { toast(e.message, true); }
-};
-
-window.buildResolveMarket = function() {
-  try {
-    const mid = parseInt(document.getElementById('r_marketId').value);
-    const res = document.getElementById('r_resolver').value.trim().toLowerCase();
-    const fee = parseInt(document.getElementById('r_fee').value) || 10000;
-    if (!mid)              throw new Error('Market ID required');
-    if (res.length !== 40) throw new Error('Resolver address must be 40 hex chars');
-    const inner = encodeResolveMarket({ resolverAddress:res, marketId:mid, winningOutcome:resolveOutcome });
-    showPayload('r', buildUnsignedTx('resolve_market', 'type.googleapis.com/types.MessageResolveMarket', inner, { fee }));
-    toast('Payload built');
-  } catch(e) { toast(e.message, true); }
-};
-
-window.buildClaim = function() {
-  try {
-    const mid  = parseInt(document.getElementById('cl_marketId').value);
-    const addr = document.getElementById('cl_addr').value.trim().toLowerCase();
-    const fee  = parseInt(document.getElementById('cl_fee').value) || 10000;
-    if (!mid)               throw new Error('Market ID required');
-    if (addr.length !== 40) throw new Error('Claimer address must be 40 hex chars');
-    const inner = encodeClaimWinnings({ claimerAddress:addr, marketId:mid });
-    showPayload('cl', buildUnsignedTx('claim_winnings', 'type.googleapis.com/types.MessageClaimWinnings', inner, { fee }));
-    toast('Payload built');
-  } catch(e) { toast(e.message, true); }
-};
-
-window.buildSend = function() {
-  try {
-    const from = document.getElementById('s_from').value.trim().toLowerCase();
-    const to   = document.getElementById('s_to').value.trim().toLowerCase();
-    const amt  = parseInt(document.getElementById('s_amount').value);
-    const fee  = parseInt(document.getElementById('s_fee').value) || 10000;
-    if (from.length !== 40) throw new Error('From address must be 40 hex chars');
-    if (to.length !== 40)   throw new Error('To address must be 40 hex chars');
-    if (!amt || amt <= 0)   throw new Error('Amount must be > 0');
-    const inner = encodeSend(from, to, amt);
-    showPayload('s', buildUnsignedTx('send', 'type.googleapis.com/types.MessageSend', inner, { fee }));
-    toast('Payload built');
-  } catch(e) { toast(e.message, true); }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SIGN AND SUBMIT — shared submit logic with pending indicator
-// ─────────────────────────────────────────────────────────────────────────────
-
-function setPending(btnId, pendId, active) {
-  const btn  = document.getElementById(btnId);
-  const pend = document.getElementById(pendId);
-  if (btn)  btn.disabled = active;
-  if (pend) pend.style.display = active ? 'flex' : 'none';
-}
-
-async function doSignAndSubmit(msgType, typeUrl, innerBytes, meta, btnId, pendId) {
-  if (!signerPrivKey) return toast('Load a private key in the Signer panel first', true);
-  if (currentHeight === 0) return toast('Node not connected — wait for block height to load', true);
-  setPending(btnId, pendId, true);
-  try {
-    const tx   = await buildSignedTx(msgType, typeUrl, innerBytes, meta);
-    const hash = await submitTx(tx);
-    toast('✓ Submitted — ' + (hash.length > 20 ? hash.slice(0,20)+'…' : hash));
-    await checkRPC();
-    if (msgType === 'create_market') setTimeout(loadMarkets, 3000);
-  } catch(e) {
-    toast('Error: ' + e.message, true);
-  } finally {
-    setPending(btnId, pendId, false);
-  }
-}
-
-window.signAndSubmitCreateMarket = async function() {
-  try {
-    const { q, d, cr, res, rh, st, fee } = getCreateMarketParams();
-    const inner = encodeCreateMarket({ creatorAddress:cr, question:q, description:d, resolverAddress:res, resolutionHeight:rh, stakeAmount:st });
-    await doSignAndSubmit('create_market', 'type.googleapis.com/types.MessageCreateMarket', inner, { fee }, 'btn_create', 'pend_create');
-  } catch(e) { toast(e.message, true); }
-};
-
-window.signAndSubmitPrediction = async function() {
-  try {
-    const mid = parseInt(document.getElementById('p_marketId').value);
-    const fc  = document.getElementById('p_forecaster').value.trim().toLowerCase();
-    const amt = parseInt(document.getElementById('p_amount').value);
-    const fee = parseInt(document.getElementById('p_fee').value) || 10000;
-    if (!mid)             throw new Error('Market ID required');
-    if (fc.length !== 40) throw new Error('Forecaster address must be 40 hex chars');
-    if (!amt || amt <= 0) throw new Error('Amount must be > 0');
-    const inner = encodeSubmitPrediction({ forecasterAddress:fc, marketId:mid, outcome:selectedOutcome, amount:amt });
-    await doSignAndSubmit('submit_prediction', 'type.googleapis.com/types.MessageSubmitPrediction', inner, { fee }, 'btn_predict', 'pend_predict');
-  } catch(e) { toast(e.message, true); }
-};
-
-window.signAndSubmitResolve = async function() {
-  try {
-    const mid = parseInt(document.getElementById('r_marketId').value);
-    const res = document.getElementById('r_resolver').value.trim().toLowerCase();
-    const fee = parseInt(document.getElementById('r_fee').value) || 10000;
-    if (!mid)              throw new Error('Market ID required');
-    if (res.length !== 40) throw new Error('Resolver address must be 40 hex chars');
-    const inner = encodeResolveMarket({ resolverAddress:res, marketId:mid, winningOutcome:resolveOutcome });
-    await doSignAndSubmit('resolve_market', 'type.googleapis.com/types.MessageResolveMarket', inner, { fee }, 'btn_resolve', 'pend_resolve');
-  } catch(e) { toast(e.message, true); }
-};
-
-window.signAndSubmitClaim = async function() {
-  try {
-    const mid  = parseInt(document.getElementById('cl_marketId').value);
-    const addr = document.getElementById('cl_addr').value.trim().toLowerCase();
-    const fee  = parseInt(document.getElementById('cl_fee').value) || 10000;
-    if (!mid)               throw new Error('Market ID required');
-    if (addr.length !== 40) throw new Error('Claimer address must be 40 hex chars');
-    const inner = encodeClaimWinnings({ claimerAddress:addr, marketId:mid });
-    await doSignAndSubmit('claim_winnings', 'type.googleapis.com/types.MessageClaimWinnings', inner, { fee }, 'btn_claim', 'pend_claim');
-  } catch(e) { toast(e.message, true); }
-};
-
-window.signAndSubmitSend = async function() {
-  try {
-    const from = document.getElementById('s_from').value.trim().toLowerCase();
-    const to   = document.getElementById('s_to').value.trim().toLowerCase();
-    const amt  = parseInt(document.getElementById('s_amount').value);
-    const fee  = parseInt(document.getElementById('s_fee').value) || 10000;
-    if (from.length !== 40) throw new Error('From address must be 40 hex chars');
-    if (to.length !== 40)   throw new Error('To address must be 40 hex chars');
-    if (!amt || amt <= 0)   throw new Error('Amount must be > 0');
-    const inner = encodeSend(from, to, amt);
-    await doSignAndSubmit('send', 'type.googleapis.com/types.MessageSend', inner, { fee }, 'btn_send', 'pend_send');
-  } catch(e) { toast(e.message, true); }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// INIT
-// ─────────────────────────────────────────────────────────────────────────────
-document.getElementById('ni_host').value = getRPCHost();
-checkRPC();
 setInterval(checkRPC, 12000);
+checkRPC();
 
+// set initial host from localStorage
+document.addEventListener('DOMContentLoaded', () => {
+  if (!localStorage.getItem('host')) localStorage.setItem('host', 'localhost');
+});
 </script>
 </body>
 </html>
