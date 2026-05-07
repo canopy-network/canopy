@@ -15,79 +15,111 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)](https://go.dev)
-[![Canopy](https://img.shields.io/badge/Canopy-Betanet-00ff88)](https://canopynetwork.org)
-[![Plugin](https://img.shields.io/badge/Plugin-Go-00d4ff)](plugin/go)
-[![Status](https://img.shields.io/badge/Status-Betanet-ffc940)](https://canopynetwork.org)
+[![Network](https://img.shields.io/badge/Canopy-Betanet-00ff88)]()
+[![Plugin](https://img.shields.io/badge/Plugin-Go-00d4ff)]()
+[![Status](https://img.shields.io/badge/Status-Betanet-ffc940)]()
 
 </div>
 
 ---
 
-## ▶ Praxis is a sovereign prediction market protocol built as a Canopy Nested Chain
-
-Praxis ($PRX) lets anyone create YES/NO prediction markets, stake on outcomes, and claim proportional winnings — entirely on-chain, with no platform extraction and no central authority. It is implemented as a Go plugin on the Canopy Network, meaning it runs as an application-specific blockchain with its own state, its own token, and its own transaction types.
-
-[![architecture](https://img.shields.io/badge/architecture-appchain-00ff88)]()
-[![consensus](https://img.shields.io/badge/consensus-NestBFT-00d4ff)]()
-[![signing](https://img.shields.io/badge/signing-BLS12--381-b48eff)]()
-[![state](https://img.shields.io/badge/state-key--value-ffc940)]()
-
----
-
 ## Overview
 
-Praxis implements four on-chain transaction types:
+**Praxis** is a sovereign prediction market protocol built as a Canopy Nested Chain. It combines the **ADLMSR** logarithmic market scoring rule with the **PORS** (Praxis Optimistic Resolution System), supporting 13 on-chain transaction types across the full market lifecycle — creation, prediction, resolution, and settlement.
 
-| Transaction | Description |
-|---|---|
-| `create_market` | Open a new YES/NO prediction market with a question, resolver, and resolution height |
-| `submit_prediction` | Stake tokens on a YES or NO outcome for an open market |
-| `resolve_market` | The designated resolver finalises a market with the winning outcome |
-| `claim_winnings` | Winners claim their proportional payout from the resolved market pool |
+The plugin runs as an application-specific blockchain with its own state, token ($PRX), and custom transaction logic.
 
-All state is stored on-chain in the plugin's key-value store. No database, no backend, no off-chain oracle required for basic operation.
+[![Architecture](https://img.shields.io/badge/architecture-appchain-00ff88)]()
+[![Consensus](https://img.shields.io/badge/consensus-NestBFT-00d4ff)]()
+[![Signing](https://img.shields.io/badge/signing-BLS12--381-b48eff)]()
+[![State](https://img.shields.io/badge/state-key--value-ffc940)]()
 
 ---
 
-## Architecture
+## Transaction Types
 
-Praxis follows the standard Canopy plugin architecture. The plugin runs as a separate process alongside the Canopy node and communicates over a Unix socket using Protocol Buffers.
+| # | Name | Description |
+|---|------|-------------|
+| 0 | `send` | Transfer $PRX between accounts |
+| 1 | `create_market` | Open a YES/NO prediction market with LMSR liquidity |
+| 2 | `submit_prediction` | Purchase shares on YES or NO using LMSR pricing |
+| 4 | `claim_winnings` | Claim pro-rata payout from a finalised or cancelled/voided market |
+| 5 | `register_resolver` | Stake $PRX to become a registered resolver |
+| 6 | `propose_outcome` | Propose the winning outcome after a market expires |
+| 7 | `file_dispute` | Challenge a proposed outcome with a bond |
+| 8 | `commit_vote` | Panel members submit a blinded vote |
+| 9 | `reveal_vote` | Panel members reveal their vote |
+| 10 | `tally_votes` | Tally revealed votes and determine dispute outcome |
+| 11 | `finalize_market` | Finalise a market — caller receives a 50 PRX bounty |
+| 12 | `claim_slash` | Claim the slashed bond of a losing disputer |
+
+---
+
+## Architecture — ADLMSR + PORS
+
+The core LMSR market-maker is augmented by the Praxis Optimistic Resolution System (PORS):
+
+1. A market expires at its configured block height
+2. A registered **resolver** proposes the winning outcome
+3. A **dispute window** opens — any other resolver can challenge by posting a bond
+4. A **panel** of independent resolvers is randomly selected and runs a commit-reveal vote
+5. Tallying slashes the losing party and rewards the winner
+6. Any account can call `finalize_market` to close the market and earn a **50 PRX bounty**
+
+Proto file-descriptor registration is handled by `z_descriptor.go`, which exposes all proto definitions to the Canopy node during the handshake.
+
+---
+
+## State Model
+
+Praxis state is stored in the Canopy KV store with byte-prefixed keys:
+
+| Prefix | Type | Description |
+|--------|------|-------------|
+| `0x10` | `MarketState` | Per-market record (status, LMSR quantities, creator, expiry) |
+| `0x11` | `PositionState` | Per-bettor position (shares YES/NO, cost paid) |
+| `0x12` | `OutcomeState` | Winning outcome and resolution height |
+| `0x13` | `ResolverState` | Per-market assigned resolver |
+| `0x14` | `TreasuryReserve` | Locked PRX for bounties and bonds |
+| `0x16` | `ResolverRecord` | Global resolver profile (stake, RRS score) |
+| `0x17` | `ProposalRecord` | Outcome proposal for a market |
+| `0x18` | `DisputeRecord` | Dispute details, panel, vote status |
+| `0x19` | `VoteCommit` | Blinded vote commitment per panel member |
+| `0x1A` | `VoteReveal` | Revealed vote per panel member |
+| `0x1B` | `SlashRecord` | Record of a slashed resolver |
+| `0x1C` | `PanelEntropyAccum` | Rolling entropy accumulator for panel selection |
+
+> Built-in prefixes `0x01` (Account), `0x02` (Pool), and `0x07` (FeeParams) are preserved.
+
+---
+
+## ADLMSR Parameters
+
+| Constant | Value | Meaning |
+|----------|-------|---------|
+| `PRECISION_SCALE` | 1,000,000 | Fixed-point scaling for LMSR quantities |
+| `MIN_B0` | 1,000,000 | Minimum initial liquidity (1 PRX) |
+| `ELEVATED_RISK_THRESHOLD` | 25,000,000,000 | Pool size at which markets become elevated-risk |
+| `RESOLUTION_DELAY_BLOCKS` | 100 | Blocks after expiry before resolution can begin |
+| `GRACE_PERIOD_BLOCKS` | 200 | Resolution window |
+| `CLAIM_GRACE_PERIOD` | 1,000 | Time window to claim winnings |
+
+**LMSR cost function:**
 
 ```
-┌─────────────────────────────────────────┐
-│           CANOPY NODE PROCESS           │
-│                                         │
-│  ┌──────────┐  ┌────────────────────┐   │
-│  │ NestBFT  │  │   FSM / Controller │   │
-│  │ Consensus│  │  (block lifecycle) │   │
-│  └──────────┘  └────────┬───────────┘   │
-│                         │ Unix socket   │
-└─────────────────────────┼───────────────┘
-                          │
-          ┌───────────────▼──────────────┐
-          │        PRAXIS PLUGIN         │
-          │                              │
-          │  Genesis()                   │
-          │  BeginBlock()                │
-          │  CheckTx()   ← validate      │
-          │  DeliverTx() ← execute       │
-          │  EndBlock()                  │
-          │                              │
-          │  Transactions:               │
-          │  - create_market             │
-          │  - submit_prediction         │
-          │  - resolve_market            │
-          │  - claim_winnings            │
-          └──────────────────────────────┘
-                          ▲
-                          │ HTTP RPC :50002 / :50003
-                          │
-          ┌───────────────┴──────────────┐
-          │     PRAXIS FRONTEND          │
-          │  Single-file HTML/JS         │
-          │  BLS12-381 signing           │
-          │  Hand-encoded protobuf       │
-          └──────────────────────────────┘
+C(qYes, qNo) = bEff · ln( exp(qYes/bEff) + exp(qNo/bEff) )
+```
+
+**Payout:** overflow-safe pro-rata via `quot·winnerShares + rem·winnerShares / totalWinShares`
+
+### Payout Example
+
+```
+YES pool: 600,000 μPRX  (bettor contributed 200,000)
+NO pool:  400,000 μPRX  (losing side)
+
+Bettor share of YES pool : 200,000 / 600,000 = 33.3%
+Bettor payout            : 200,000 + (400,000 × 33.3%) = 333,333 μPRX
 ```
 
 ---
@@ -96,248 +128,99 @@ Praxis follows the standard Canopy plugin architecture. The plugin runs as a sep
 
 ```
 plugin/go/
-├── main.go                  # Entry point — calls contract.StartPlugin()
-├── chain.json               # Chain metadata: name, symbol, chainId, networkId
-├── Makefile                 # Build targets
-├── pluginctl.sh             # Plugin lifecycle (start/stop/restart/status)
-├── AGENTS.md                # AI assistant context for this plugin
+├── main.go
+├── chain.json
+├── Makefile
+├── pluginctl.sh
+├── AGENTS.md
+├── README.md
+├── go.mod / go.sum
 │
 ├── contract/
-│   ├── contract.go          # Application logic — all transaction handlers
-│   ├── errors.go            # Error codes (built-in 1–14, Praxis 15–29)
-│   ├── plugin.go            # Socket protocol — do not modify
-│   └── tx.pb.go             # Generated Go structs from tx.proto
+│   ├── contract.go              ← ContractConfig + lifecycle methods
+│   ├── constants.go             ← All named constants
+│   ├── error.go                 ← Praxis error codes 100–199
+│   ├── helpers.go               ← mulDiv, DeriveMarketId, ComputeCommitHash
+│   ├── keys.go                  ← All state key constructors
+│   ├── lmsr.go                  ← LMSR cost, trade, payout, min bond
+│   ├── height.go                ← Global height with RWMutex
+│   ├── plugin.go                ← Socket protocol (never modify)
+│   ├── z_descriptor.go          ← Proto file descriptor registration
+│   ├── handler_*.go (17 files)  ← CheckTx + DeliverTx for all tx types
+│   ├── tx.pb.go                 ← Generated (never edit)
+│   ├── event.pb.go              ← Generated
+│   ├── account.pb.go            ← Generated
+│   └── plugin.pb.go             ← Generated
 │
-└── proto/
-    ├── tx.proto             # Transaction and state message definitions
-    ├── account.proto        # Account and Pool types
-    ├── plugin.proto         # FSM communication protocol
-    └── _generate.sh         # Regenerates Go structs from .proto files
+├── crypto/
+│   ├── bls.go                   ← BLS12-381 signing (kyber/bdn)
+│   └── signing.go               ← GetSignBytes helper
+│
+├── proto/
+│   ├── tx.proto                 ← Message & state definitions
+│   ├── account.proto
+│   ├── plugin.proto
+│   ├── event.proto
+│   └── _generate.sh
+│
+└── tutorial/
+    ├── main.go
+    ├── go.mod / go.sum
+    ├── praxis_test.go           ← Integration test for send + create_market
+    └── contract/                ← Tutorial-local generated copies
 
 frontend/
-└── index.html               # Single-file frontend — no build step required
-```
-
----
-
-## State Model
-
-Praxis stores all on-chain data in the Canopy key-value store using byte-prefixed keys:
-
-| Prefix | Type | Description |
-|---|---|---|
-| `0x10` | `Market` | One record per prediction market |
-| `0x11` | `MarketCounter` | Singleton — tracks the next market ID |
-| `0x12` | `Prediction` | One record per (forecaster, market) pair |
-
-Built-in Canopy prefixes (`0x01` Account, `0x02` Pool, `0x07` FeeParams) are preserved unchanged.
-
----
-
-## Transaction Types
-
-### create_market
-
-Opens a new YES/NO prediction market. The creator bonds a stake amount and designates a resolver address. The creator and resolver must be different addresses. The market remains open for predictions until the resolution height is reached.
-
-Resolution height must be at least `MinMarketDuration` (100) blocks in the future and no more than `MaxMarketDuration` (1,000,000) blocks in the future.
-
-```protobuf
-message MessageCreateMarket {
-  bytes  creator_address   = 1;
-  string question          = 2;
-  string description       = 3;
-  bytes  resolver_address  = 4;
-  uint64 resolution_height = 5;
-  uint64 stake_amount      = 6;
-}
-```
-
-### submit_prediction
-
-Stakes tokens on a YES (outcome=1) or NO (outcome=2) outcome. Each forecaster may only submit one prediction per market. The staked amount is added to the corresponding pool. The market creator and designated resolver are blocked from predicting on their own markets.
-
-Predictions are accepted only while the market is open (`status=0`) and before `resolutionHeight` is reached.
-
-```protobuf
-message MessageSubmitPrediction {
-  bytes  forecaster_address = 1;
-  uint64 market_id          = 2;
-  uint32 outcome            = 3;
-  uint64 amount             = 4;
-}
-```
-
-### resolve_market
-
-Finalises the market. Only the designated resolver address may call this, and only on or after the declared `resolutionHeight`. Sets the winning outcome and closes the market to further predictions.
-
-```protobuf
-message MessageResolveMarket {
-  bytes  resolver_address = 1;
-  uint64 market_id        = 2;
-  uint32 winning_outcome  = 3;
-}
-```
-
-### claim_winnings
-
-Pays out a winner's original stake plus their proportional share of the losing pool (after the 2% treasury cut). Each prediction can only be claimed once.
-
-```protobuf
-message MessageClaimWinnings {
-  bytes  claimer_address = 1;
-  uint64 market_id       = 2;
-}
-```
-
-Payout formula:
-```
-treasuryCut      = losingPool × 2%
-losingPoolNet    = losingPool − treasuryCut
-payout           = stake + (stake × losingPoolNet) / winningPool
+└── index.html                   ← Single-file HTML/JS dashboard
 ```
 
 ---
 
 ## Getting Started
 
-### Prerequisites
-
-- Go 1.24 or later
-- `protoc` and `protoc-gen-go` (for proto regeneration only)
-- A running Canopy node
-
-See the [Canopy Builder Docs](https://canopynetwork.org) for full prerequisites.
-
 ### Build
 
 ```bash
-# Clone and switch to the Praxis branch
 git clone https://github.com/Makaveli912/canopy.git
 cd canopy
 git checkout feat/praxis-prediction-markets
 
-# Build the Canopy node binary
+# Build Canopy node
 go build -o ~/go/bin/canopy ./cmd/main
 
-# Build the Praxis plugin binary
+# Build Praxis plugin
 cd plugin/go
-go build -o go-plugin .
+GOTOOLCHAIN=local go build -o go-plugin .
 ```
 
 ### Run
 
 ```bash
-# From repo root
+cd ~/canopy
 canopy start
 ```
 
 Watch for:
+
 ```
 Plugin go started: go-plugin started successfully
 Plugin service listening on socket: /tmp/plugin/plugin.sock
 ```
 
-### Frontend
+> **Note:** The node takes ~12–15 seconds to boot before RPC is available on port `50002`.
+
+### Test
 
 ```bash
-python3 -m http.server 8080 --directory frontend
+cd plugin/go/tutorial
+GOTOOLCHAIN=local go test -v -run TestCreateMarket -timeout 120s
 ```
-
-Open `http://localhost:8080`. Go to **Node** → set host to `localhost` → Apply. The green dot confirms connection.
-
-Go to **Signer** → paste your BLS12-381 private key → Load Key. Your address will be auto-derived and filled into all transaction forms.
-
----
-
-## Payout Model
-
-Praxis uses an AMM-style proportional payout. Winners split the losing pool (net of the 2% treasury cut) in proportion to their contribution to the winning pool.
-
-```
-Example:
-  YES pool: 600,000 μPRX (forecaster contributed 200,000)
-  NO pool:  400,000 μPRX (losing side)
-
-  Treasury cut (2%):    400,000 × 2% = 8,000 μPRX
-  Losing pool net:      400,000 − 8,000 = 392,000 μPRX
-
-  Forecaster share of YES pool: 200,000 / 600,000 = 33.3%
-  Forecaster payout: 200,000 + (392,000 × 33.3%) = 330,533 μPRX
-```
-
-If no one bet on the losing side, the winner's original stake is returned unchanged.
-
----
-
-## Protocol Constants
-
-| Constant | Value | Description |
-|---|---|---|
-| `MinMarketDuration` | 100 blocks | Minimum gap between creation and resolution height |
-| `MaxMarketDuration` | 1,000,000 blocks | Maximum gap — prevents indefinitely locked bonds |
-| `TreasuryFeeBps` | 200 (2%) | Protocol cut taken from the losing pool on each claim |
-
----
-
-## Security Model
-
-Praxis enforces the following constraints to prevent market manipulation:
-
-| Rule | Where enforced |
-|---|---|
-| Creator ≠ Resolver | `CheckCreateMarket` |
-| Creator cannot predict on own market | `DeliverSubmitPrediction` |
-| Resolver cannot predict on markets they resolve | `DeliverSubmitPrediction` |
-| Predictions blocked at or after `resolutionHeight` | `DeliverSubmitPrediction` |
-| Resolver blocked before `resolutionHeight` | `DeliverResolveMarket` |
-| One prediction per (forecaster, market) pair | `DeliverSubmitPrediction` |
-| One claim per prediction | `DeliverClaimWinnings` |
-| Payout arithmetic uses overflow-safe `mulDiv` | `DeliverClaimWinnings` |
-
----
-
-## Error Codes
-
-| Code | Name | Description |
-|---|---|---|
-| 1 | `ErrPluginTimeout` | Plugin did not respond within timeout |
-| 2 | `ErrMarshal` | Failed to serialize a protobuf message |
-| 3 | `ErrUnmarshal` | Failed to deserialize a protobuf message |
-| 4 | `ErrFailedPluginRead` | State read operation failed |
-| 5 | `ErrFailedPluginWrite` | State write operation failed |
-| 6 | `ErrInvalidPluginRespId` | Response ID did not match any pending request |
-| 7 | `ErrUnexpectedFSMToPlugin` | FSM sent an unexpected message type |
-| 8 | `ErrInvalidFSMToPluginMMessage` | FSM message could not be parsed |
-| 9 | `ErrInsufficientFunds` | Sender balance is below the required amount |
-| 10 | `ErrFromAny` | Failed to unpack a protobuf Any value |
-| 11 | `ErrInvalidMessageCast` | Message type did not match any registered type |
-| 12 | `ErrInvalidAddress` | Address is not exactly 20 bytes |
-| 13 | `ErrInvalidAmount` | Amount is zero or otherwise invalid |
-| 14 | `ErrTxFeeBelowStateLimit` | Transaction fee is below the minimum set in state |
-| 15 | `ErrWrongOutcome` | Claimer's prediction did not match the winning outcome |
-| 16 | `ErrDuplicatePrediction` | Forecaster already submitted a prediction for this market |
-| 17 | `ErrEmptyQuestion` | Market question must not be empty |
-| 18 | `ErrInvalidOutcome` | Outcome must be 1 (YES) or 2 (NO) |
-| 19 | `ErrMarketNotFound` | Market ID does not exist in state |
-| 20 | `ErrMarketClosed` | Market is not open (resolved, cancelled, or past resolution height) |
-| 21 | `ErrResolutionTooEarly` | Resolution height has not been reached yet |
-| 22 | `ErrMarketNotResolved` | Market has not been resolved yet |
-| 23 | `ErrNoPredictionFound` | No prediction found for this claimer and market |
-| 24 | `ErrAlreadyClaimed` | Winnings have already been claimed for this prediction |
-| 25 | `ErrCreatorIsResolver` | Creator and resolver must be different addresses |
-| 26 | `ErrCreatorCannotPredict` | Market creator cannot predict on their own market |
-| 27 | `ErrResolverCannotPredict` | Designated resolver cannot predict on markets they will resolve |
-| 28 | `ErrInvalidMarketId` | Market ID must be non-zero |
-| 29 | `ErrInvalidResolutionHeight` | Resolution height out of allowed range |
 
 ---
 
 ## Token
 
 | Property | Value |
-|---|---|
+|----------|-------|
 | Name | Praxis |
 | Symbol | $PRX |
 | Denomination | μPRX (micro-PRX) |
@@ -346,6 +229,18 @@ Praxis enforces the following constraints to prevent market manipulation:
 
 ---
 
+## Error Codes
+
+| Range | Description |
+|-------|-------------|
+| 1–14 | Standard Canopy built-in errors |
+| 100–199 | Praxis-specific errors (market, position, resolution, dispute, etc.) |
+
+See [`contract/error.go`](plugin/go/contract/error.go) for the full list.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
+
