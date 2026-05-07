@@ -144,9 +144,9 @@ Pre-reqs to land before this phase can be exercised:
 3. ~~Minimal `canoliqctl`~~ — landed at `plugin/go/canoliqctl/`. Builds with
    `go build -o canoliqctl ./canoliqctl/`. Subcommands cover the full Phase 1
    surface (deposit/redeem/claim/cliq-transfer/cliq-claim-vested) and the
-   Phase 2 surface minus `proposal-create` (vote, stake/unstake/claim,
-   buyback-execute, spend-execute, multisig-approve). `proposal-create` is
-   deferred because its `Any` payload needs three sub-command variants.
+   full Phase 2 surface (vote, stake/unstake/claim, buyback-execute,
+   spend-execute, multisig-approve, **proposal-create with param-change /
+   buyback / treasury-spend sub-commands**).
 
 Checklist:
 - [x] **canoliqctl scaffold**: build, sign with BLS12-381, POST to `/v1/tx`

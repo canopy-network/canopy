@@ -362,12 +362,38 @@ Phase 2 commands (governance, staking, buyback, treasury):
 ./canoliqctl cliq-claim-vested   alice
 ```
 
-`proposal-create` is intentionally not yet wired: its payload is a
-`google.protobuf.Any` carrying one of three sub-types (param_change, buyback,
-treasury_spend), each with a distinct argument surface. Until that lands,
-construct proposals via in-process tests or hand-built JSON. The `vote`,
-`buyback-execute`, and `spend-execute` commands work against any proposal id
-regardless of how it was created.
+### Creating proposals
+
+`proposal-create` dispatches `MessageCLIQProposalCreate` with one of three
+`google.protobuf.Any` payload types. The proposer must hold ≥
+`min_stake_to_propose` CLIQ at creation height.
+
+```bash
+# 1. Param change — full-set CanoliqParams replacement (loaded from JSON)
+./canoliqctl proposal-create param-change alice ./new-params.json \
+    --description "lower fee from 12% to 8%"
+
+# 2. Buyback — CNPY → CLIQ extraction at a vote-set price
+./canoliqctl proposal-create buyback alice 100000000 1500000 burn \
+    --description "Q4 buyback and burn"
+# args: cnpy-amount  price-uCNPY-per-CLIQ  mode (burn|distribute)
+
+# 3. Treasury spend — transfer from canoliq treasury to a recipient
+./canoliqctl proposal-create treasury-spend alice 0xabc...123 50000000 cnpy \
+    --description "infrastructure grant"
+# args: recipient-hex  amount  denomination (cnpy|cliq)
+```
+
+The `param-change` JSON file uses the same shape as the `params` block
+in `genesis.localnet.json` / `genesis.testnet.json`; copy that block to
+a file, edit, and pass the path. `multisigSigners` are accepted as hex
+strings (with or without `0x` prefix), exactly like the genesis files.
+
+The plugin's `dispatchPassed` runs `ValidateParams` on the payload only
+when the proposal passes — so an invalid bps split or signer/threshold
+mismatch in your JSON survives `proposal-create` but fails at execution.
+Pre-validate by ensuring the four split bps fields total 10000 and
+`multisigThreshold ≤ len(multisigSigners)`.
 
 ## Registering canoLiq as a Canopy committee
 

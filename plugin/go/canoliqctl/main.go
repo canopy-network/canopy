@@ -40,6 +40,7 @@ var commands = map[string]func([]string, globalFlags) error{
 	"buyback-execute":    cmdBuybackExecute,
 	"spend-execute":      cmdSpendExecute,
 	"multisig-approve":   cmdMultisigApprove,
+	"proposal-create":    cmdProposalCreate,
 }
 
 var commandUsages = map[string]string{
@@ -55,6 +56,7 @@ var commandUsages = map[string]string{
 	"buyback-execute":    "buyback-execute <nickname> <proposal-id>",
 	"spend-execute":      "spend-execute <nickname> <proposal-id>",
 	"multisig-approve":   "multisig-approve <signer-nickname> <spend-id>",
+	"proposal-create":    "proposal-create <param-change|buyback|treasury-spend> <args> [--description …]",
 }
 
 func main() {
