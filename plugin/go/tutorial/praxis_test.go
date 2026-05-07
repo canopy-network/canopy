@@ -422,3 +422,89 @@ t.Fatalf("submit prediction failed: %v", err)
 }
 t.Log("Prediction submitted!")
 }
+
+
+func TestRegisterResolver(t *testing.T) {
+addr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+key, _ := keystoreGetKey(addr, "")
+h, _ := getHeight()
+
+msg := &contract.MessageRegisterResolver{
+ResolverAddress: hexDecode(addr),
+StakeAmount:     100_000_000, // 100 PRX
+}
+txHash := submitTx(t, key, "register_resolver", "MessageRegisterResolver", msg, h)
+if err := waitForTx(addr, txHash, 60*time.Second); err != nil {
+t.Fatalf("register resolver failed: %v", err)
+}
+t.Log("Resolver registered!")
+}
+
+func TestProposeAndResolve(t *testing.T) {
+addr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+key, _ := keystoreGetKey(addr, "")
+
+// 1. Create a market that expires in 2 blocks
+h, _ := getHeight()
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(addr),
+B0:             1_000_000,
+ExpiryTime:     h + 2,
+Nonce:          uint64(time.Now().UnixMicro()),
+Question:       "Will the resolve test pass?",
+}
+createHash := submitTx(t, key, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(addr, createHash, 60*time.Second); err != nil {
+t.Fatalf("create market: %v", err)
+}
+marketId := contract.DeriveMarketId(hexDecode(addr), createMsg.Nonce)
+t.Logf("Market created: %x, waiting for expiry...", marketId)
+
+// 2. Wait until the market expires (ExpiryTime = h+2)
+for {
+h2, _ := getHeight()
+if h2 > createMsg.ExpiryTime {
+break
+}
+time.Sleep(2 * time.Second)
+}
+hx, _ := getHeight(); t.Logf("Market expired at height %d", hx)
+
+// 3. Register as resolver (if not already)
+regMsg := &contract.MessageRegisterResolver{
+ResolverAddress: hexDecode(addr),
+StakeAmount:     100_000_000,
+}
+regHash := submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
+if err := waitForTx(addr, regHash, 60*time.Second); err != nil {
+t.Fatalf("register: %v", err)
+}
+t.Log("Resolver registered")
+
+// 4. Propose outcome
+h3, _ := getHeight()
+proposeMsg := &contract.MessageProposeOutcome{
+MarketId:        marketId,
+ResolverAddress: hexDecode(addr),
+ProposedOutcome: true,
+ProposalBond:    10_000_000,
+}
+propHash := submitTx(t, key, "propose_outcome", "MessageProposeOutcome", proposeMsg, h3)
+if err := waitForTx(addr, propHash, 60*time.Second); err != nil {
+t.Fatalf("propose: %v", err)
+}
+t.Log("Outcome proposed")
+
+// 5. Resolve market (ADLMSR path — resolver calls resolve_market directly)
+h4, _ := getHeight()
+resolveMsg := &contract.MessageResolveMarket{
+MarketId:        marketId,
+ResolverAddress: hexDecode(addr),
+WinningOutcome:  true,
+}
+resHash := submitTx(t, key, "resolve_market", "MessageResolveMarket", resolveMsg, h4)
+if err := waitForTx(addr, resHash, 60*time.Second); err != nil {
+t.Fatalf("resolve: %v", err)
+}
+t.Log("Market resolved!")
+}
