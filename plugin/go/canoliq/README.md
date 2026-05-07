@@ -11,14 +11,37 @@ The plugin is a sibling of `plugin/go/contract/`; it reuses the proto types
 generated in `contract` package and runs its own FSM connection. See the full
 implementation plan at `docs/plans/canoliq-implementation-plan.md`.
 
-## Quick start (localhost via Docker)
+## Deployment profiles
+
+canoLiq ships two pre-built deployment profiles. The plugin's
+`Config.Profile` field selects which is active and unlocks
+profile-specific safety behavior at startup.
+
+| Profile | Config file | Genesis file | Notes |
+|---|---|---|---|
+| `localnet` | `canoliq-config.localnet.json` | `genesis.localnet.json` | Placeholder addresses (every bucket → single localnet key), 5-block redemption window |
+| `testnet` | `canoliq-config.testnet.json` | `genesis.testnet.json` | TODO addresses (must be filled in before deploy), 14400-block redemption window template |
+
+The plugin **refuses to start** with `profile=testnet` (or `mainnet`)
+if any genesis bucket recipient still equals the well-known localnet
+placeholder address. This catches the most common foot-gun: shipping
+the localnet genesis into a real environment by mistake.
+
+The bundled docker compose pins `localnet`. To run against a real
+testnet, edit `genesis.testnet.json` with real recipient addresses
+and override `CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.testnet.json`
+in your runtime environment — see "Configuring a testnet deployment"
+below.
+
+## Quick start (localnet via Docker)
 
 The fastest path to a running canoLiq chain on your machine — two
 Canopy nodes plus a plugin process per node, built and signed by the
 bundled `.docker/compose.yaml`. The validator set is pre-seeded so
 both nodes are committee-2 (canoLiq) participants out of the box; the
 plugin self-bootstraps Genesis on its first `BeginBlock` so 100M CLIQ
-supply is minted before you can hit the RPC.
+supply is minted (to the localnet placeholder address) before you can
+hit the RPC.
 
 Prerequisites: Docker (Compose v2) and `curl`. Optional: `jq` for the
 JSON examples (or pipe through `python3 -m json.tool`).
@@ -179,6 +202,103 @@ not mutable state.
   not firing. Check that committee 2 has at least one validator
   opted in (the bundled genesis seeds two; if you've edited it,
   confirm `MessageEditStake` ran).
+
+## Configuring a testnet deployment
+
+The localnet quick-start above mints 100M CLIQ to one placeholder key
+and uses a 5-block redemption window. Both are wrong for any shared
+chain. The testnet profile keeps the same plugin binary but loads a
+distinct genesis + runtime config, with safety checks that refuse to
+start until placeholders are replaced.
+
+### 1. Replace bucket recipient addresses
+
+Edit `plugin/go/canoliq/genesis.testnet.json`. The seven buckets must
+sum to 10000 bps; recipients within each bucket must also sum to
+10000 bps. Replace each `address` (currently
+`0000…0001` … `0000…0007`) with the real owner address (multisig,
+custody wallet, etc.) for that bucket.
+
+### 2. Replace multisig signers
+
+In the same file's `params` block, swap the placeholder
+`00000000…b1` … `00000000…b5` for the real signer addresses, and
+adjust `multisigThreshold` if you list a different number. These
+signers control above-`treasuryThreshold` DAO spends — pick them
+carefully.
+
+### 3. Set the redemption window
+
+Edit `canoliq-config.testnet.json` `redemptionUnstakingBlocks` to
+match the live Canopy chain's `valParams.UnstakingBlocks`. The
+template ships with `14400` (~24h at 6s blocks); adjust if Canopy
+testnet runs at a different block time or unstaking length.
+
+### 4. Pick a chainId
+
+Coordinate with the Canopy team to pick a free committee chainId for
+canoLiq on the target chain. Update `chainId` in
+`canoliq-config.testnet.json` (default `2`).
+
+### 5. Verify safety locally
+
+Build and run the plugin briefly with the testnet config to confirm
+the startup banner reports your edits and the safety check passes:
+
+```bash
+cd plugin/go && go build -o go-plugin .
+CANOPY_PLUGIN_MODE=canoliq \
+  CANOLIQ_CONFIG=$PWD/canoliq/canoliq-config.testnet.json \
+  ./go-plugin
+# Expect first log line: canoliq: profile="testnet" chainId=… genesis=…
+# If any placeholder address remains, the process exits with:
+# canoliq: refusing to start profile="testnet" with localnet placeholder
+# address in bucket "<name>" (set real bucket recipient addresses in …)
+```
+
+The plugin will block trying to connect to the FSM socket — that's
+fine for the safety-check verification. Kill with Ctrl-C.
+
+### 6. Deploy
+
+Two paths, depending on how you run Canopy nodes:
+
+- **Direct (recommended for testnet):** start the canopy binary with
+  `CANOLIQ_CONFIG=/path/to/canoliq-config.testnet.json` in its
+  process env. The plugin loads the testnet config on first
+  `BeginBlock`.
+- **Docker, custom compose:** copy `.docker/compose.yaml` to e.g.
+  `compose.testnet.yaml`, swap the `CANOLIQ_CONFIG` line to
+  `…/canoliq-config.testnet.json`, and bring up via
+  `docker compose -f compose.testnet.yaml up -d`. The Dockerfile
+  already bundles both genesis + config variants, so no rebuild is
+  needed — only the env-var override.
+
+### 7. Coordinate with Canopy
+
+Before the chain processes its first canoLiq block:
+
+1. Validators add `chainId` to their `Validator.Committees[]` via
+   `MessageEditStake` (Canopy's existing restaking flow).
+2. Submit a `MessageSubsidy` proposal so the Canopy DAO funds the
+   committee reward pool. Until this passes, the canoLiq pool stays
+   empty and `ProcessRewards` is a no-op.
+3. Post a design summary (chainId, fee/split, bucket distribution,
+   plugin runtime contract) to the Canopy Discord per
+   `CONTRIBUTING.md`.
+
+### Profile safety check details
+
+`SafetyCheck` runs immediately after the startup banner. Under
+`profile=testnet` or `mainnet` it parses the genesis file and refuses
+to proceed if any bucket recipient address (case- and prefix-folded)
+matches the localnet placeholder
+`851e90eaef1fa27debaee2c2591503bdeec1d123`. The check does not
+validate that addresses are *correct* — only that they're not the
+known-bad localnet seed. Genesis-schema validation (bps sums,
+required fields) runs separately inside `validateGenesis`.
+
+Localnet (or empty) profiles skip the check entirely.
 
 ## Building
 

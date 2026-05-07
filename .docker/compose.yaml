@@ -24,7 +24,11 @@ services:
     # plugin process. Bind to 0.0.0.0 so the host port forward sees it.
     environment:
       - CANOPY_PLUGIN_MODE=canoliq
-      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.json
+      # Localnet config: 5-block redemption window, placeholder bucket
+      # addresses, profile=localnet (placeholder safety check disabled).
+      # For testnet, swap to canoliq-config.testnet.json (real addresses
+      # required; safety check refuses placeholders).
+      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.localnet.json
       - CANOLIQ_RPC_ADDR=0.0.0.0:8587
     volumes:
       - ./volumes/node_1:/root/.canopy
@@ -53,7 +57,11 @@ services:
     command: ["start"]
     environment:
       - CANOPY_PLUGIN_MODE=canoliq
-      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.json
+      # Localnet config: 5-block redemption window, placeholder bucket
+      # addresses, profile=localnet (placeholder safety check disabled).
+      # For testnet, swap to canoliq-config.testnet.json (real addresses
+      # required; safety check refuses placeholders).
+      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.localnet.json
       - CANOLIQ_RPC_ADDR=0.0.0.0:8587
     volumes:
       - ./volumes/node_2:/root/.canopy

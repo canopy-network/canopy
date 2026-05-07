@@ -33,12 +33,16 @@ COPY --from=builder /go/src/github.com/canopy-network/canopy/bin ./
 RUN mkdir -p /app/plugin/go/canoliq
 COPY --from=builder /go-plugin /app/plugin/go/go-plugin
 COPY plugin/go/pluginctl.sh /app/plugin/go/pluginctl.sh
-COPY plugin/go/canoliq/genesis.json /app/plugin/go/canoliq/genesis.json
-# Plugin config consumed by plugin/go/main.go when CANOLIQ_CONFIG is set in
-# the canopy process env. Points the canoLiq plugin at the bundled genesis
-# file so its one-shot Genesis() can mint the 100M CLIQ supply.
-RUN printf '{"chainId":2,"dataDirPath":"/tmp/plugin","genesisPath":"/app/plugin/go/canoliq/genesis.json"}\n' \
-    > /app/plugin/go/canoliq/canoliq-config.json
+# Bundle both genesis variants and both runtime configs so a single image
+# can be redeployed against either environment by switching CANOLIQ_CONFIG.
+COPY plugin/go/canoliq/genesis.localnet.json     /app/plugin/go/canoliq/genesis.localnet.json
+COPY plugin/go/canoliq/genesis.testnet.json      /app/plugin/go/canoliq/genesis.testnet.json
+COPY plugin/go/canoliq/canoliq-config.localnet.json /app/plugin/go/canoliq/canoliq-config.localnet.json
+COPY plugin/go/canoliq/canoliq-config.testnet.json  /app/plugin/go/canoliq/canoliq-config.testnet.json
+# Default canoliq-config.json points at localnet; testnet/mainnet
+# deployments override CANOLIQ_CONFIG to canoliq-config.testnet.json.
+RUN cp /app/plugin/go/canoliq/canoliq-config.localnet.json \
+       /app/plugin/go/canoliq/canoliq-config.json
 RUN chmod +x /app/plugin/go/pluginctl.sh /app/plugin/go/go-plugin
 
 # Install canoliqctl on PATH so operators can run it inside the container or

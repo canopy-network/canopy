@@ -2,8 +2,11 @@ package canoliq
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/canopy-network/go-plugin/contract"
 
@@ -74,35 +77,65 @@ func init() {
 	CanoliqConfig.FileDescriptorProtos = fds
 }
 
-// Config is the canoLiq plugin runtime configuration. It mirrors
-// contract.Config but adds the chainId of the canoLiq committee (used to
-// derive the committee reward pool key) and the path to genesis.json.
+// Config is the canoLiq plugin runtime configuration.
 //
-// RpcAddress optionally turns on the read-only HTTP query layer
-// (`plugin/go/canoliq/rpc.go`). Empty disables it. CANOLIQ_RPC_ADDR
-// environment variable overrides whatever the JSON config provides at
-// startup so operators can flip the listener on without editing the file.
+// Profile selects the deployment environment so genesis/parameter values
+// can be sanity-checked at startup. Recognized values: "localnet"
+// (placeholder addresses are OK), "testnet" / "mainnet" (loading the
+// localnet placeholder address into a bucket recipient is refused). Empty
+// is treated as "localnet" for backwards compatibility with existing
+// docker compose deployments.
+//
+// RedemptionUnstakingBlocks is the cooldown applied to a queued redemption
+// before it can be claimed. Localnet uses 5 (~30s) for fast testing;
+// testnet/mainnet should set this to match Canopy's
+// `valParams.UnstakingBlocks` (typically thousands of blocks). Reading
+// the live value from FSM gov-params is tracked as future work.
+//
+// RpcAddress optionally turns on the read-only HTTP query layer. Empty
+// disables it. CANOLIQ_RPC_ADDR env var overrides this at startup.
 type Config struct {
-	ChainId     uint64 `json:"chainId"`
-	DataDirPath string `json:"dataDirPath"`
-	GenesisPath string `json:"genesisPath"`
-	RpcAddress  string `json:"rpcAddress"`
+	Profile                   string `json:"profile"`
+	ChainId                   uint64 `json:"chainId"`
+	DataDirPath               string `json:"dataDirPath"`
+	GenesisPath               string `json:"genesisPath"`
+	RpcAddress                string `json:"rpcAddress"`
+	RedemptionUnstakingBlocks uint64 `json:"redemptionUnstakingBlocks"`
 }
 
-// DefaultConfig returns reasonable defaults: the next free committee chainId
-// and the standard plugin socket directory. The HTTP query layer ships
-// disabled by default — operators opt in by setting RpcAddress.
+// localnetPlaceholderAddress is the single hex address every bundled
+// genesis.localnet.json bucket points at — the validator key shipped in
+// .docker/volumes. Refusing this address under non-localnet profiles
+// prevents the most common foot-gun: shipping the localnet genesis.json
+// into a real environment.
+const localnetPlaceholderAddress = "851e90eaef1fa27debaee2c2591503bdeec1d123"
+
+// Profile constants. Empty string is normalized to ProfileLocalnet for
+// backwards compatibility.
+const (
+	ProfileLocalnet = "localnet"
+	ProfileTestnet  = "testnet"
+	ProfileMainnet  = "mainnet"
+)
+
+// DefaultConfig returns reasonable defaults for localnet: chainId 2, the
+// standard plugin socket directory, the 5-block fast redemption window.
+// The HTTP query layer ships disabled by default — operators opt in by
+// setting RpcAddress.
 func DefaultConfig() Config {
 	return Config{
-		ChainId:     2,
-		DataDirPath: filepath.Join("/tmp/plugin/"),
-		GenesisPath: "",
-		RpcAddress:  "",
+		Profile:                   ProfileLocalnet,
+		ChainId:                   2,
+		DataDirPath:               filepath.Join("/tmp/plugin/"),
+		GenesisPath:               "",
+		RpcAddress:                "",
+		RedemptionUnstakingBlocks: 5,
 	}
 }
 
 // NewConfigFromFile populates a Config from a JSON file, falling back to
-// DefaultConfig values for any missing fields.
+// DefaultConfig values for any missing fields. The Profile field is
+// normalized to ProfileLocalnet when empty for backwards compatibility.
 func NewConfigFromFile(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -112,7 +145,60 @@ func NewConfigFromFile(path string) (Config, error) {
 	if err = json.Unmarshal(data, &c); err != nil {
 		return Config{}, err
 	}
+	if c.Profile == "" {
+		c.Profile = ProfileLocalnet
+	}
+	if c.RedemptionUnstakingBlocks == 0 {
+		c.RedemptionUnstakingBlocks = 5
+	}
 	return c, nil
+}
+
+// LogProfileBanner prints a single line at startup announcing which
+// profile is loaded and which genesis file the plugin will read. Helps
+// operators catch a "wrong file mounted" mistake before genesis runs.
+func (c Config) LogProfileBanner() {
+	log.Printf("canoliq: profile=%q chainId=%d genesis=%q rpc=%q redemptionUnstakingBlocks=%d",
+		c.Profile, c.ChainId, c.GenesisPath, c.RpcAddress, c.RedemptionUnstakingBlocks)
+}
+
+// SafetyCheck validates a non-localnet profile against the genesis file's
+// recipient addresses. The single-address localnet placeholder
+// (851e90…d123) being routed 100% of every bucket is safe on localnet
+// (it's just a test key), but disastrous on testnet/mainnet — every CLIQ
+// bucket would mint to one external party. This check refuses to proceed
+// when any bucket recipient matches the placeholder under a non-localnet
+// profile.
+//
+// Localnet (or empty/unrecognized) profiles are skipped — this is a
+// guard rail, not a strict validator. Genesis schema correctness is
+// enforced separately by validateGenesis.
+func (c Config) SafetyCheck() error {
+	if c.Profile == ProfileLocalnet || c.Profile == "" {
+		return nil
+	}
+	if c.GenesisPath == "" {
+		return nil
+	}
+	data, err := os.ReadFile(c.GenesisPath)
+	if err != nil {
+		// Genesis loading errors surface later in runGenesis with a
+		// clearer message; don't double-report here.
+		return nil
+	}
+	var gf GenesisFile
+	if err := json.Unmarshal(data, &gf); err != nil {
+		return nil
+	}
+	for _, b := range gf.Buckets {
+		for _, r := range b.Recipients {
+			if strings.EqualFold(strings.TrimPrefix(r.Address, "0x"), localnetPlaceholderAddress) {
+				return fmt.Errorf("canoliq: refusing to start profile=%q with localnet placeholder address in bucket %q (set real bucket recipient addresses in %s)",
+					c.Profile, b.Name, c.GenesisPath)
+			}
+		}
+	}
+	return nil
 }
 
 // DefaultParams returns the canonical canoLiq fee/split parameters from the

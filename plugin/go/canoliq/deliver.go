@@ -182,16 +182,20 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 	from.Amount -= fee
 	feePool.Amount += fee
 	// Unstaking window: the original Phase 1 plan called for reading
-	// valParams.UnstakingBlocks from the FSM gov-params prefix, which never
-	// landed. Until that plumbing exists, use a short fixed window so
-	// localnet verification (Phase 1.5) can exercise claim-after-maturity
-	// without waiting on a 14400-block placeholder.
-	const redemptionUnstakingBlocks uint64 = 5
+	// valParams.UnstakingBlocks from the FSM gov-params prefix, which
+	// never landed. Until that plumbing exists, use Config.RedemptionUnstakingBlocks
+	// — defaults to 5 for localnet so claim-after-maturity exercises in
+	// reasonable time, but testnet/mainnet configs must set this to
+	// something approximating Canopy's real UnstakingBlocks (thousands).
+	window := c.Config.RedemptionUnstakingBlocks
+	if window == 0 {
+		window = 5
+	}
 	redemption := &contract.Redemption{
 		Id:                   id,
 		Address:              msg.FromAddress,
 		CnpyAmount:           cnpyOwed,
-		UnbondCompleteHeight: c.currentHeight() + redemptionUnstakingBlocks,
+		UnbondCompleteHeight: c.currentHeight() + window,
 	}
 	rBz, e := contract.Marshal(redemption)
 	if e != nil {

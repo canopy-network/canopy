@@ -83,7 +83,17 @@ const socketPath = "plugin.sock"
 // the handshake, starts the inbound dispatch loop, and (if configured)
 // brings up the read-only HTTP query server. It returns the long-lived
 // *Plugin so the caller can drive graceful shutdown of the HTTP listener.
+//
+// The profile banner is logged before any IO happens so operators can
+// see which environment they're in even when the FSM socket isn't yet
+// reachable. The safety check (which refuses non-localnet profiles
+// loading the localnet placeholder address) runs immediately after; a
+// failure here is fatal.
 func StartPlugin(c Config) *Plugin {
+	c.LogProfileBanner()
+	if err := c.SafetyCheck(); err != nil {
+		log.Fatal(err)
+	}
 	sockPath := filepath.Join(c.DataDirPath, socketPath)
 	var conn net.Conn
 	for range time.Tick(time.Second) {

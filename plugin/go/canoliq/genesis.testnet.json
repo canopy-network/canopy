@@ -1,0 +1,102 @@
+{
+  "_comment": "TESTNET GENESIS TEMPLATE — every address below is a TODO placeholder. Fill in real bucket-recipient addresses before pointing a node at this file. The plugin's safety check (config.go::SafetyCheck) refuses to start under profile=\"testnet\" or \"mainnet\" if any recipient still matches the localnet placeholder (851e90eaef1fa27debaee2c2591503bdeec1d123); the addresses below are pre-distinct so the check passes, but they still must be replaced.",
+  "blocksPerYear": 5256000,
+  "buckets": [
+    {
+      "name": "Validators & Infrastructure",
+      "bps": 2200,
+      "cliffMonths": 6,
+      "vestMonths": 24,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000001",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Liquidity Incentives (Farming)",
+      "bps": 1500,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000002",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Community & Airdrops",
+      "bps": 2000,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000003",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "DAO Treasury (canoLiq)",
+      "bps": 1500,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000004",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Founders & Core Team",
+      "bps": 1200,
+      "cliffMonths": 12,
+      "vestMonths": 24,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000005",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Strategic Partners & Integrations",
+      "bps": 1000,
+      "cliffMonths": 6,
+      "vestMonths": 18,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000006",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Plugin & Dev Grants",
+      "bps": 600,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000007",
+          "bps": 10000
+        }
+      ]
+    }
+  ],
+  "params": {
+    "_comment": "Fill in the real testnet multisig signer addresses before deploy. Threshold of 3 is the default and matches the bundled five-signer pattern; raise it if you list more signers.",
+    "multisigSigners": [
+      "00000000000000000000000000000000000000b1",
+      "00000000000000000000000000000000000000b2",
+      "00000000000000000000000000000000000000b3",
+      "00000000000000000000000000000000000000b4",
+      "00000000000000000000000000000000000000b5"
+    ],
+    "multisigThreshold": 3,
+    "treasuryThreshold": 1000000000
+  }
+}
