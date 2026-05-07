@@ -203,54 +203,141 @@ not mutable state.
   opted in (the bundled genesis seeds two; if you've edited it,
   confirm `MessageEditStake` ran).
 
-## Configuring a testnet deployment
+## Testnet deployment
 
-The localnet quick-start above mints 100M CLIQ to one placeholder key
-and uses a 5-block redemption window. Both are wrong for any shared
-chain. The testnet profile keeps the same plugin binary but loads a
-distinct genesis + runtime config, with safety checks that refuse to
-start until placeholders are replaced.
+Testnet rollout follows the same six-phase shape as production but
+with the rigor dialed down where the cost of a mistake is recoverable:
+audits are encouraged but not blocking, multisig signers can be
+team-controlled, and "spin up a fresh testnet" is a viable recovery
+path. The localnet quick-start above mints 100M CLIQ to one
+placeholder key and uses a 5-block redemption window — both wrong
+for any shared chain. The testnet profile keeps the same plugin
+binary but loads a distinct genesis + runtime config, with safety
+checks that refuse to start until placeholders are replaced.
 
-### 1. Replace bucket recipient addresses
+### Phase 0 — Readiness gate
 
-Edit `plugin/go/canoliq/genesis.testnet.json`. The seven buckets must
-sum to 10000 bps; recipients within each bucket must also sum to
-10000 bps. Replace each `address` (currently
-`0000…0001` … `0000…0007`) with the real owner address (multisig,
-custody wallet, etc.) for that bucket.
+Lighter than production but skip these at your peril — most of them
+are coordination tasks that can't be undone after first-block:
 
-### 2. Replace multisig signers
+- [ ] **chainId reserved with the Canopy team.** No collision with
+      any existing committee on the target testnet.
+- [ ] **`MessageSubsidy` proposal queued or passed** on the Canopy
+      DAO so the canoLiq committee pool will fund. Until it passes,
+      `ProcessRewards` is a no-op.
+- [ ] **Validator opt-in confirmed.** Every validator that should be
+      on the canoLiq committee has run `MessageEditStake` adding
+      `chainId` to its `Validator.Committees[]`. Cross-check against
+      the addresses you'll seed into `validatorRegistry`.
+- [ ] **Bucket recipient addresses identified.** Test wallets are
+      fine, but they must not be the localnet placeholder
+      (`851e90…d123`) — the safety check refuses that automatically.
+      Document who controls each bucket so the team can recover keys
+      if a tester rotates out.
+- [ ] **Multisig signers chosen.** A test signer set is acceptable
+      (e.g., five team members each with their own keystore). Pick
+      a threshold (default 3) and document the password-recovery
+      story.
+- [ ] **Redemption window decided.** Set
+      `redemptionUnstakingBlocks` to match the testnet's
+      `valParams.UnstakingBlocks`. The template ships with `14400`
+      (~24h at 6s blocks); raise or lower based on the actual
+      testnet's block time and unstaking length.
+- [ ] **Discord summary posted** with chainId, fee/split, CLIQ
+      bucket distribution, plugin runtime contract.
+- [ ] **Monitoring sketched out.** Even on testnet you want a
+      uptime check on `/v1/health` per node — silent failure during
+      a multi-day soak test wastes everyone's time.
 
-In the same file's `params` block, swap the placeholder
-`00000000…b1` … `00000000…b5` for the real signer addresses, and
-adjust `multisigThreshold` if you list a different number. These
-signers control above-`treasuryThreshold` DAO spends — pick them
-carefully.
+### Phase 1 — Build the testnet genesis + config
 
-### 3. Set the redemption window
+Treat both files as **release artifacts** even on testnet — easier
+to debug a soak failure six days in if you can pin to a specific
+file pair than if someone hand-edited a file on the live host.
 
-Edit `canoliq-config.testnet.json` `redemptionUnstakingBlocks` to
-match the live Canopy chain's `valParams.UnstakingBlocks`. The
-template ships with `14400` (~24h at 6s blocks); adjust if Canopy
-testnet runs at a different block time or unstaking length.
+#### 1.1. Edit `genesis.testnet.json`
 
-### 4. Pick a chainId
+Replace each bucket `address` (currently `0000…0001` … `0000…0007`)
+with the real testnet bucket-owner address. Within a bucket,
+recipient bps must sum to 10000; the seven bucket bps must also sum
+to 10000. The validator and partner buckets carry vesting
+(`cliffMonths > 0` or `vestMonths > 0`) — leave those numbers
+alone unless governance has a reason to alter them.
 
-Coordinate with the Canopy team to pick a free committee chainId for
-canoLiq on the target chain. Update `chainId` in
-`canoliq-config.testnet.json` (default `2`).
+In the same file's `params` block:
 
-### 5. Verify safety locally
+- Swap `multisigSigners` from the `00000000…b1`–`00000000…b5`
+  placeholders to real testnet signer addresses. Hex with or without
+  `0x` prefix is accepted.
+- Adjust `multisigThreshold` if you've listed more or fewer than
+  five signers. The constraint is `multisigThreshold ≤
+  len(multisigSigners)`; `ValidateParams` rejects the inverse.
+- `treasuryThreshold` defaults to `1000000000` uCNPY (1k CNPY-eq).
+  Below this, treasury spends execute single-step on a passing
+  vote; above, multisig + timelock kicks in. Lower the threshold
+  during testnet soak so multisig flow gets exercised on smaller
+  spends.
 
-Build and run the plugin briefly with the testnet config to confirm
-the startup banner reports your edits and the safety check passes:
+In the same file's `validatorRegistry` block:
+
+- Replace each entry with `(address, stake)` for a real opted-in
+  testnet validator. Stake should mirror that validator's
+  `Validator.StakedAmount`. Leaving the registry empty falls back
+  to a single committee aggregator key — fine for bring-up but
+  obscures per-validator credit, so you'll fix it eventually.
+
+#### 1.2. Edit `canoliq-config.testnet.json`
+
+```json
+{
+  "profile": "testnet",
+  "chainId": <reserved-chainId>,
+  "dataDirPath": "/tmp/plugin",
+  "genesisPath": "/app/plugin/go/canoliq/genesis.testnet.json",
+  "rpcAddress": "0.0.0.0:8587",
+  "redemptionUnstakingBlocks": <Canopy-testnet-valParams-UnstakingBlocks>
+}
+```
+
+Two notes specific to testnet (production differs):
+
+- **`rpcAddress: "0.0.0.0:8587"`** is acceptable on a private testnet
+  behind a VPN or firewall. On a shared testnet exposed to the
+  internet, prefer `127.0.0.1:8587` and front it with a reverse
+  proxy + rate limit (the lazy routes can block a goroutine for up
+  to one block).
+- **`redemptionUnstakingBlocks` is profile-bound, not protocol-bound.**
+  Pick the value that matches the chain you're deploying against;
+  there's no "testnet default" because testnets vary.
+
+#### 1.3. Hash-anchor (optional but recommended)
+
+```bash
+sha256sum plugin/go/canoliq/genesis.testnet.json
+sha256sum plugin/go/canoliq/canoliq-config.testnet.json
+```
+
+Drop the hashes into the Discord announcement so signers and
+validators can verify they're running the same files.
+
+### Phase 2 — Pre-flight verification
+
+Always exercise the production-shaped flow on a private chain
+before the actual testnet — the tooling is identical and the cost
+of a typo on testnet is "spin up a fresh chainId" which is annoying.
+
+#### 2.1. Confirm safety banner + check
+
+Build and run the plugin briefly to confirm the startup banner
+reports your edits and the safety check passes:
 
 ```bash
 cd plugin/go && go build -o go-plugin .
 CANOPY_PLUGIN_MODE=canoliq \
   CANOLIQ_CONFIG=$PWD/canoliq/canoliq-config.testnet.json \
   ./go-plugin
-# Expect first log line: canoliq: profile="testnet" chainId=… genesis=…
+# Expect first log line:
+# canoliq: profile="testnet" chainId=… genesis="…testnet.json" rpc="0.0.0.0:8587" redemptionUnstakingBlocks=…
 # If any placeholder address remains, the process exits with:
 # canoliq: refusing to start profile="testnet" with localnet placeholder
 # address in bucket "<name>" (set real bucket recipient addresses in …)
@@ -259,33 +346,164 @@ CANOPY_PLUGIN_MODE=canoliq \
 The plugin will block trying to connect to the FSM socket — that's
 fine for the safety-check verification. Kill with Ctrl-C.
 
-### 6. Deploy
+#### 2.2. Bucket reconciliation on a private chain
 
-Two paths, depending on how you run Canopy nodes:
+Bring up a local testnet image (copy `.docker/compose.yaml` to
+`compose.testnet.yaml` and switch the `CANOLIQ_CONFIG` line to point
+at `canoliq-config.testnet.json`):
 
-- **Direct (recommended for testnet):** start the canopy binary with
-  `CANOLIQ_CONFIG=/path/to/canoliq-config.testnet.json` in its
-  process env. The plugin loads the testnet config on first
-  `BeginBlock`.
-- **Docker, custom compose:** copy `.docker/compose.yaml` to e.g.
-  `compose.testnet.yaml`, swap the `CANOLIQ_CONFIG` line to
-  `…/canoliq-config.testnet.json`, and bring up via
-  `docker compose -f compose.testnet.yaml up -d`. The Dockerfile
-  already bundles both genesis + config variants, so no rebuild is
-  needed — only the env-var override.
+```bash
+docker compose -f .docker/compose.testnet.yaml up -d --build
+until curl -fsS http://127.0.0.1:8587/v1/health 2>/dev/null \
+  | grep -q '"genesisComplete":true'; do sleep 2; done
+```
 
-### 7. Coordinate with Canopy
+Verify each bucket recipient got the expected balance, summing to
+exactly 100M × 10⁶ uCLIQ:
 
-Before the chain processes its first canoLiq block:
+```bash
+for ADDR in <validators> <liquidity> <community> <dao> <founders> <partners> <grants>; do
+  echo "=== 0x$ADDR ==="
+  curl -sS http://127.0.0.1:8587/v1/account/0x$ADDR | jq '{cliqLiquid, vestings: .vestings | map({totalAmount: .schedule.totalAmount, cliffHeight: .schedule.cliffHeight})}'
+done
+```
 
-1. Validators add `chainId` to their `Validator.Committees[]` via
-   `MessageEditStake` (Canopy's existing restaking flow).
-2. Submit a `MessageSubsidy` proposal so the Canopy DAO funds the
-   committee reward pool. Until this passes, the canoLiq pool stays
-   empty and `ProcessRewards` is a no-op.
-3. Post a design summary (chainId, fee/split, bucket distribution,
-   plugin runtime contract) to the Canopy Discord per
-   `CONTRIBUTING.md`.
+Expected totals (in uCLIQ):
+
+| Bucket | uCLIQ | Liquid | Vesting |
+|---|---:|:---:|:---:|
+| Validators | 22,000,000,000,000 | — | ✓ |
+| Liquidity | 15,000,000,000,000 | ✓ | — |
+| Community | 20,000,000,000,000 | ✓ | — |
+| DAO Treasury | 15,000,000,000,000 | ✓ | — |
+| Founders | 12,000,000,000,000 | — | ✓ |
+| Partners | 10,000,000,000,000 | — | ✓ |
+| Grants | 6,000,000,000,000 | ✓ | — |
+
+#### 2.3. Lifecycle smoke test
+
+```bash
+# Deposit
+./canoliqctl --rpc-url http://localhost:50002 deposit <test-acct> 1000000
+
+# Redeem (queues with the testnet-configured unstaking window)
+./canoliqctl redeem <test-acct> 250000
+
+# Wait redemptionUnstakingBlocks blocks; then claim
+./canoliqctl claim <test-acct> 0
+
+# Stake CLIQ + propose a no-op param-change to verify governance
+./canoliqctl cliq-stake <test-acct> 5000000
+./canoliqctl proposal-create param-change <test-acct> ./params-noop.json \
+  --description "testnet smoke test"
+./canoliqctl vote <test-acct> 1 yes
+# Wait votingPeriodBlocks; verify the proposal tallies + executes via /v1/proposals
+```
+
+Anything that fails here will fail on the actual testnet; fix it
+before cutover.
+
+#### 2.4. Multisig flow rehearsal (lighter than production)
+
+Submit one above-`treasuryThreshold` `proposal-create
+treasury-spend`, vote it through, walk it across the timelock +
+multisig path. You only need to confirm two things on testnet:
+
+1. Below-threshold approvals → 503 / clear error.
+2. Execution after both timelock and quorum succeeds.
+
+Production rehearses all four failure modes (pre-timelock rejection,
+replay rejection, etc.); testnet can defer those to the actual
+testnet soak.
+
+### Phase 3 — Cutover
+
+Testnet supports only the fresh-chain path — there's no in-place
+migration tool yet (Phase 3 §3 of the implementation plan).
+
+1. **Confirm Canopy DAO state.** chainId reserved, `MessageSubsidy`
+   proposal passed (or about to pass), validators opted in.
+2. **Distribute the production-shaped image** to validator hosts:
+   each canopy node runs with
+   `CANOPY_PLUGIN_MODE=canoliq` and
+   `CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.testnet.json`.
+   Two paths:
+   - **Direct:** set the env vars on the canopy process directly.
+   - **Docker:** copy `.docker/compose.yaml` to
+     `compose.testnet.yaml`, swap the `CANOLIQ_CONFIG` line, bring
+     up with `docker compose -f compose.testnet.yaml up -d`. The
+     Dockerfile already bundles both genesis + config variants, so
+     no rebuild needed.
+3. **First-block bootstrap.** Plugin's `BeginBlock` self-bootstrap
+   mints 100M CLIQ to the testnet bucket addresses on first block
+   observation. There is no second chance — if the genesis is
+   wrong, you reserve a new chainId and start over.
+4. **Verify on real chain.** Re-run §2.2 reconciliation against
+   the testnet RPC. Confirm `/v1/health.genesisComplete=true`,
+   `/v1/validators` matches the seeded set, `/v1/pools.committeePool`
+   grows as the subsidy accrues.
+
+### Phase 4 — Day-2 operations
+
+Mostly identical to production:
+
+- **Routine queries.** Poll `/v1/health` (every 30s),
+  `/v1/globals` + `/v1/pools` (every 5m), `/v1/proposals` +
+  `/v1/spends` (every block).
+- **Routine governance.** Every parameter change, buyback, and
+  treasury spend goes through `canoliqctl proposal-create`. The CLI
+  needs the proposer's keystore password — testnet can use a shared
+  service account; production cannot.
+- **Plugin upgrades** are expected to be more frequent on testnet
+  (it's where you find bugs). Each upgrade: tag a release, validators
+  restart their plugin process. Canopy node stays up; plugin
+  re-attaches to the FSM socket and resumes from stored state.
+
+### Phase 5 — Incident response
+
+Testnet's escape hatch — "spin up a fresh testnet chainId" — is
+genuinely available and changes how you handle several incident
+classes:
+
+- **Compromised signer.** Submit `proposal-create param-change`
+  removing the compromised key from `multisigSigners`. New signer
+  set takes effect immediately on pass.
+- **Suspicious proposal.** No admin override. Multisig + timelock
+  is the defense — signers can refuse to approve, the timelock
+  buys coordination time. Same as production.
+- **Plugin crashes / unix-socket disconnect.** Restart the plugin
+  with the same config. On reconnect it re-handshakes with the FSM
+  and resumes; snapshot is empty until the next `EndBlock`. No
+  state is lost.
+- **State corruption suspected.** On testnet the right answer is
+  often "spin up a fresh chainId rather than spend a week
+  diagnosing". Document what you learned in the post-mortem so
+  production benefits.
+- **Stuck redemptions.** Check `/v1/redemption/{addr}/{id}` for the
+  ones you know about; until §1.1-bis lands there's no enumeration
+  surface, so users have to surface stuck ids themselves.
+
+### Testnet deployment checklist
+
+Paste-ready for a release ticket:
+
+```
+[ ] chainId reserved with Canopy team
+[ ] MessageSubsidy proposal queued/passed
+[ ] Validators opted into committee via MessageEditStake
+[ ] Validator registry block matches opted-in set
+[ ] genesis.testnet.json reviewed; bucket addresses replaced
+[ ] params block: multisigSigners + threshold replaced
+[ ] canoliq-config.testnet.json: chainId + redemptionUnstakingBlocks set
+[ ] Hashes of both files recorded
+[ ] Local safety-check verification passed (banner + safety check)
+[ ] Private-chain bucket reconciliation: 100M × 10⁶ uCLIQ exact
+[ ] Private-chain lifecycle smoke test: deposit → redeem → claim
+[ ] Private-chain governance smoke test: propose → vote → execute
+[ ] Private-chain multisig rehearsal: above-threshold flow
+[ ] Discord announcement posted (chainId, fee/split, hashes)
+[ ] Monitoring + on-call sketched
+```
 
 ### Profile safety check details
 
