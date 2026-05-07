@@ -6,10 +6,6 @@ import (
 "google.golang.org/protobuf/types/known/anypb"
 )
 
-// ═══════════════════════════════════════════════════════════════════════════
-// STATE KEY PREFIXES — Praxis 0x10–0x1C
-// ═══════════════════════════════════════════════════════════════════════════
-
 var (
 PREFIX_MARKET_STATE    = []byte{0x10}
 PREFIX_POSITION_STATE  = []byte{0x11}
@@ -29,28 +25,24 @@ PREFIX_ACCOUNT  = []byte{0x01}
 PREFIX_FEE_POOL = []byte{0x02}
 )
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CONTRACT CONFIG — 12 types (send + 11 Praxis)
-// ═══════════════════════════════════════════════════════════════════════════
-
 var ContractConfig = &PluginConfig{
 Name:    "praxis_prediction_market",
 Id:      1,
 Version: 1,
 SupportedTransactions: []string{
-"send",               // index 0
-"create_market",      // index 1
-"submit_prediction",  // index 2
-"resolve_market",     // index 3
-"claim_winnings",     // index 4
-"register_resolver",  // index 5
-"propose_outcome",    // index 6
-"file_dispute",       // index 7
-"commit_vote",        // index 8
-"reveal_vote",        // index 9
-"tally_votes",        // index 10
-"finalize_market",    // index 11
-"claim_slash",        // index 12
+"send",
+"create_market",
+"submit_prediction",
+"resolve_market",
+"claim_winnings",
+"register_resolver",
+"propose_outcome",
+"file_dispute",
+"commit_vote",
+"reveal_vote",
+"tally_votes",
+"finalize_market",
+"claim_slash",
 },
 TransactionTypeUrls: []string{
 "type.googleapis.com/types.MessageSend",
@@ -69,9 +61,7 @@ TransactionTypeUrls: []string{
 },
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CONTRACT — main struct
-// ═══════════════════════════════════════════════════════════════════════════
+
 
 type Contract struct {
 Config    Config
@@ -79,10 +69,6 @@ FSMConfig *PluginFSMConfig
 plugin    *Plugin
 fsmId     uint64
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PRIVATE KEY HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
 
 func marketKey(prefix, marketId []byte) []byte {
 return append(append([]byte{}, prefix...), marketId...)
@@ -95,8 +81,6 @@ func addrKey(prefix, addr []byte) []byte {
 return append(append([]byte{}, prefix...), addr...)
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-
 func (c *Contract) Genesis(req *PluginGenesisRequest) *PluginGenesisResponse {
 return &PluginGenesisResponse{}
 }
@@ -104,7 +88,6 @@ return &PluginGenesisResponse{}
 func (c *Contract) BeginBlock(req *PluginBeginRequest) *PluginBeginResponse {
 SetGlobalHeight(req.Height)
 
-// Rolling entropy accumulator (P4 fix: plugin-accessible entropy, not block_hash).
 entropyQId := rand.Uint64()
 entropyResp, readErr := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
@@ -149,10 +132,6 @@ func (c *Contract) EndBlock(req *PluginEndRequest) *PluginEndResponse {
 return &PluginEndResponse{}
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CheckTx ROUTER
-// ═══════════════════════════════════════════════════════════════════════════
-
 func (c *Contract) CheckTx(req *PluginCheckRequest) *PluginCheckResponse {
 msg, err := FromAny(req.Tx.Msg)
 if err != nil {
@@ -189,10 +168,6 @@ default:
 return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// DeliverTx ROUTER
-// ═══════════════════════════════════════════════════════════════════════════
 
 func (c *Contract) DeliverTx(req *PluginDeliverRequest) *PluginDeliverResponse {
 msg, err := FromAny(req.Tx.Msg)

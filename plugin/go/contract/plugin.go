@@ -19,6 +19,8 @@ import (
 /* This file contains boilerplate logic to interact with the Canopy FSM via socket file */
 
 // Plugin defines the 'VM-less' extension of the Finite State Machine
+var globalReqCounter uint64
+
 type Plugin struct {
 	fsmConfig       *PluginFSMConfig                      // the FSM configuration
 	pluginConfig    *PluginConfig                         // the plugin configuration
@@ -96,12 +98,15 @@ func (p *Plugin) StateRead(c *Contract, request *PluginStateReadRequest) (*Plugi
 		return nil, err
 	}
 	// get the response
+	println("PRAXIS StateRead got response type:", reflect.TypeOf(response).String())
 	wrapper, ok := response.(*FSMToPlugin_StateRead)
 	if !ok {
+		println("PRAXIS StateRead type mismatch!")
 		return nil, ErrUnexpectedFSMToPlugin(reflect.TypeOf(response))
 	}
 	// return the unwrapped response
-	return wrapper.StateRead, nil
+	println("PRAXIS StateRead returning, wrapper.StateRead nil?", wrapper.StateRead == nil)
+return wrapper.StateRead, nil
 }
 
 func (p *Plugin) StateWrite(c *Contract, request *PluginStateWriteRequest) (*PluginStateWriteResponse, *PluginError) {
@@ -127,7 +132,7 @@ func (p *Plugin) ListenForInbound() {
 		if err := p.receiveProtoMsg(msg); err != nil {
 			log.Fatal(err.Error())
 		}
-		go func() {
+		go func(msg *FSMToPlugin) {
 			if err := func() *PluginError {
 				// create a new instance of a contract
 				response, c := isPluginToFSM_Payload(nil), &Contract{Config: p.config, FSMConfig: p.fsmConfig, plugin: p, fsmId: msg.Id}
@@ -163,7 +168,7 @@ func (p *Plugin) ListenForInbound() {
 			}(); err != nil {
 				log.Fatal(err.Error())
 			}
-		}()
+		}(msg)
 	}
 }
 
@@ -173,15 +178,17 @@ func (p *Plugin) handleFSMResponse(msg *FSMToPlugin) *PluginError {
 	p.l.Lock()
 	defer p.l.Unlock()
 	// get the requester channel
+	println("PRAXIS handleFSMResponse: id=", msg.Id, "pending_count=", len(p.pending), "found=", func() bool { _, ok := p.pending[msg.Id]; return ok }())
 	ch, ok := p.pending[msg.Id]
 	if !ok {
+		println("PRAXIS handleFSMResponse: NOT FOUND")
 		return ErrInvalidPluginRespId()
 	}
 	// remove the message from the pending list and FSM context
 	delete(p.pending, msg.Id)
 	delete(p.requestContract, msg.Id)
-	// forward the message to the requester
-	go func() { ch <- msg.Payload }()
+	// forward the message to the requester (channel is buffered, safe to send while holding lock)
+	ch <- msg.Payload
 	// exit without error
 	return nil
 }
@@ -204,16 +211,14 @@ func (p *Plugin) sendToPluginSync(c *Contract, request isPluginToFSM_Payload) (i
 
 // sendToPluginAsync() sends to the plugin but doesn't wait for a response, tracking FSM context
 func (p *Plugin) sendToPluginAsync(c *Contract, request isPluginToFSM_Payload) (ch chan isFSMToPlugin_Payload, requestId uint64, err *PluginError) {
-	// generate the request UUID
+	// Use c.fsmId as request ID - FSM stores context under this ID
 	requestId = c.fsmId
 	// make a channel to receive the response
 	ch = make(chan isFSMToPlugin_Payload, 1)
-	// add to the pending list and FSM context map
 	p.l.Lock()
 	p.pending[requestId] = ch
-	p.requestContract[requestId] = c // Track contract for this request
+	p.requestContract[requestId] = c
 	p.l.Unlock()
-	// send the payload with the request ID
 	err = p.sendProtoMsg(&PluginToFSM{Id: requestId, Payload: request})
 	// exit
 	return
