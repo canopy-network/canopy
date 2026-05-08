@@ -1078,7 +1078,6 @@ window.checkRPC=async function(){
     const nr=document.getElementById('ni_rpc');if(nr)nr.textContent=getRPC();
     const sh=document.getElementById('sb_h');if(sh)sh.textContent=currentHeight;
     const ce=document.getElementById('c_expiry');if(ce&&!ce.value)ce.value=currentHeight+1000;
-    // auto-generate nonce for create market
     const nonceEl=document.getElementById('c_nonce');if(nonceEl&&!nonceEl.value)nonceEl.value=BigInt(Date.now())*1000n;
   }catch{
     ['rpcDot','rpcDotM'].forEach(id=>{const e=document.getElementById(id);if(e)e.className='dot';});
@@ -1403,87 +1402,86 @@ window.signAndSubmit_slash=async function(){try{
 }catch(e){toast(e.message,true);}};
 
 // ═══════════════════════════════════════════
-// MARKETS PAGE — scan chain for create_market txs
+// MARKETS PAGE — fetch real create_market txs from validator
 // ═══════════════════════════════════════════
 function decVarint(buf,pos){let r=0n,s=0n;while(pos<buf.length){const b=BigInt(buf[pos++]);r|=(b&0x7fn)<<s;s+=7n;if(!(b&0x80n))break;}return{v:r,p:pos};}
-window.loadMarkets=async function(){
-  const el=document.getElementById('marketsList');
-  el.innerHTML='<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;scanning chain state</div>';
-  try{
+window.loadMarkets = async function () {
+  const el = document.getElementById('marketsList');
+  const countEl = document.getElementById('sb_c');
+  el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;scanning chain state</div>';
+  try {
     await checkRPC();
-    const mm={};
-    const BATCH=200;
-    for(let h=1;h<=currentHeight;h+=BATCH){
-      for(let bh=h;bh<Math.min(h+BATCH,currentHeight+1);bh++){
-        let d;try{d=await rpc('/v1/query/txs-by-height',{height:bh,perPage:5000});}catch{continue;}
-        const res=d.results||[];if(!res.length)continue;
-        for(const tx of res){
-          const t=tx.transaction||tx;const type=t.type||t.messageType||'';const msg=t.msg||t;
-          if(type==='create_market'){
-            let q='',creator='',b0=0n,expiry=0n;
-            if(t.msgBytes){
-              const bytes=h2b(t.msgBytes);let pos=0;
-              while(pos<bytes.length){
-                const {v:tagV,p:p1}=decVarint(bytes,pos);pos=p1;const fn=Number(tagV>>3n),wt=Number(tagV&7n);
-                if(wt===0){const{v,p:p2}=decVarint(bytes,pos);pos=p2;if(fn===2)b0=v;if(fn===3)expiry=v;}
-                else if(wt===2){const{v:lv,p:p2}=decVarint(bytes,pos);const len=Number(lv);pos=p2;const chunk=bytes.slice(pos,pos+len);pos+=len;if(fn===1)creator=b2h(chunk);if(fn===5)q=new TextDecoder().decode(chunk);}
-                else if(wt===1){pos+=8;}else if(wt===5){pos+=4;}else break;
-              }
-            }else{q=msg.question||'';creator=msg.creatorAddress||tx.sender||'';b0=BigInt(msg.b0||0);expiry=BigInt(msg.expiryTime||msg.expiry_time||0);}
-            const key=tx.txHash||(creator+b0);
-            if(!mm[key])mm[key]={key,txHash:tx.txHash||'',q:q||'(no question)',creator,b0,expiry,status:0,qYes:b0/2n,qNo:b0/2n};
-          }
+    const validatorAddr = 'e7c7dad131a03f7ea0cc09a637ad096eb3495f77';
+    const data = await rpc('/v1/query/txs-by-sender', { address: validatorAddr, perPage: 500 });
+    const results = data.results || [];
+    const markets = [];
+
+    for (const tx of results) {
+      const t = tx.transaction || tx;
+      const type = t.type || t.messageType || '';
+      if (type !== 'create_market') continue;
+      const msg = t.msg || t;
+      let question = '', creator = '', b0 = 0n, expiry = 0n;
+      if (t.msgBytes) {
+        const bytes = h2b(t.msgBytes);
+        let pos = 0;
+        while (pos < bytes.length) {
+          const { v: tagV, p: p1 } = decVarint(bytes, pos);
+          pos = p1;
+          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
+          if (wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; if (fn === 2) b0 = v; if (fn === 3) expiry = v; }
+          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); const len = Number(lenV); pos = p2; const chunk = bytes.slice(pos, pos + len); pos += len; if (fn === 1) creator = b2h(chunk); if (fn === 5) question = new TextDecoder().decode(chunk); }
+          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; } else break;
         }
+      } else {
+        question = msg.question || '';
+        creator = msg.creatorAddress || tx.sender || '';
+        b0 = BigInt(msg.b0 || 0);
+        expiry = BigInt(msg.expiryTime || msg.expiry_time || 0);
+      }
+      const key = tx.txHash || (creator + b0);
+      if (!markets.some(m => m.txHash === key)) {
+        markets.push({ txHash: tx.txHash || '', question: question || '(no question)', creator, b0, expiry, status: 0, qYes: b0 / 2n, qNo: b0 / 2n });
       }
     }
-    const mkts=Object.values(mm);
-    document.getElementById('sb_c').textContent=mkts.length;
 
-    if(!mkts.length){
-      el.innerHTML=`<div class="alert ay">No markets on-chain yet.<br>Go to <b>Create Market</b> to open the first one.</div>`;return;
-    }
+    if (countEl) countEl.textContent = markets.length;
+    if (markets.length === 0) { el.innerHTML = '<div class="alert ay">No markets on-chain yet.<br>Go to <b>Create Market</b> to open the first one.</div>'; return; }
 
-    const statusBadge=s=>{
-      if(s===0)return`<span class="badge b-open"><span class="blink">●</span>&nbsp;OPEN</span>`;
-      if(s===1)return`<span class="badge b-prop">◎&nbsp;PROPOSED</span>`;
-      if(s===2)return`<span class="badge b-res">✓&nbsp;RESOLVED</span>`;
-      return`<span class="badge b-canc">✕&nbsp;CANCELLED</span>`;
+    const statusBadge = (s) => {
+      if (s === 0) return '<span class="badge b-open"><span class="blink">●</span>&nbsp;OPEN</span>';
+      if (s === 1) return '<span class="badge b-prop">◎&nbsp;PROPOSED</span>';
+      if (s === 2) return '<span class="badge b-res">✓&nbsp;RESOLVED</span>';
+      return '<span class="badge b-canc">✕&nbsp;CANCELLED</span>';
     };
 
-    el.innerHTML=`
-      <div class="alert ag" style="margin-bottom:16px">✓ ${mkts.length} market(s) found on-chain</div>
+    el.innerHTML = `
+      <div class="alert ag" style="margin-bottom:16px">✓ ${markets.length} market(s) found on-chain</div>
       <div class="mgrid">
-        ${mkts.map((m,i)=>`
+        ${markets.map((m, i) => `
           <div class="mcard">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-              <div class="mid">MKT #${i+1}</div>
+              <div class="mid">MKT #${i + 1}</div>
               ${statusBadge(m.status)}
             </div>
-            <div class="mq">${esc(m.q)}</div>
-            <div class="mmeta">
-              <span>expiry: ${m.expiry?Number(m.expiry):'?'}</span>
-              <span>b0: ${fmtA(m.b0)} μPRX</span>
-              ${m.creator?`<span>${m.creator.slice(0,8)}…</span>`:''}
-            </div>
-            <div class="pools">
-              <div class="pbar pyes"><div class="plbl">YES</div><div class="pval">${fmtA(m.qYes)}</div></div>
-              <div class="pbar pno"><div class="plbl">NO</div><div class="pval">${fmtA(m.qNo)}</div></div>
-            </div>
+            <div class="mq">${esc(m.question)}</div>
+            <div class="mmeta"><span>expiry: ${m.expiry ? Number(m.expiry) : '?'}</span><span>b0: ${fmtA(m.b0)} μPRX</span>${m.creator ? `<span>${m.creator.slice(0, 8)}…</span>` : ''}</div>
+            <div class="pools"><div class="pbar pyes"><div class="plbl">YES</div><div class="pval">${fmtA(m.qYes)}</div></div><div class="pbar pno"><div class="plbl">NO</div><div class="pval">${fmtA(m.qNo)}</div></div></div>
             <div class="mfooter">
               <button class="btn bg bsm" onclick="fillP('${m.txHash}')">Predict</button>
-              ${m.status===0?`<button class="btn bg bsm" onclick="fillR('${m.txHash}')">Resolve</button>`:''}
-              ${m.status===2?`<button class="btn bg bsm" onclick="fillC('${m.txHash}')">Claim</button>`:''}
+              ${m.status === 0 ? `<button class="btn bg bsm" onclick="fillR('${m.txHash}')">Resolve</button>` : ''}
+              ${m.status === 2 ? `<button class="btn bg bsm" onclick="fillC('${m.txHash}')">Claim</button>` : ''}
             </div>
           </div>`).join('')}
       </div>`;
-  }catch(e){
-    el.innerHTML=`<div class="alert ar">⚠ Cannot reach node at <code>${getRPC()}</code><br>${esc(e.message)}</div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert ar">⚠ Cannot reach node at <code>${getRPC()}</code><br>${esc(e.message)}</div>`;
   }
 };
 
-window.fillP=id=>{document.getElementById('p_mid').value=id;showPage('predict',null);};
-window.fillR=id=>{document.getElementById('r_mid').value=id;showPage('resolve',null);};
-window.fillC=id=>{document.getElementById('cl_mid').value=id;showPage('claim',null);};
+window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
+window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
+window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };
 
 // ═══════════════════════════════════════════
 // INIT
@@ -1494,4 +1492,4 @@ checkRPC();
 setInterval(checkRPC,12000);
 </script>
 </body>
-       </html>
+</html>
