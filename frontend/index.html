@@ -1,895 +1,1497 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PRAXIS — On‑Chain Prediction Markets</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PRAXIS — Prediction Markets on Canopy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&family=Unbounded:wght@700;900&display=swap" rel="stylesheet"/>
 <style>
-/* ═══════════════════════════════════════════════════════
-   PRAXIS — PRODUCTION FRONTEND
-   Polymarket‑inspired · Clean · Professional
-═══════════════════════════════════════════════════════ */
-:root {
-  --transition: 0.2s ease;
-}
-
+/* ══════════════════════════════════════════════
+   THEME
+══════════════════════════════════════════════ */
 [data-theme="dark"] {
-  --bg: #0a0b0f;
-  --bg2: #11131a;
-  --surface: #161922;
-  --surface2: #1c1f2b;
-  --border: #252836;
-  --border2: #2f3344;
-  --text: #e8ecf1;
-  --text2: #8d95a8;
-  --text3: #4e5466;
-  --green: #00e676;
-  --green-dim: rgba(0,230,118,0.08);
-  --green-glow: rgba(0,230,118,0.25);
-  --red: #ff5252;
-  --red-dim: rgba(255,82,82,0.08);
-  --yellow: #ffb300;
-  --yellow-dim: rgba(255,179,0,0.08);
-  --cyan: #00b8d4;
-  --purple: #7c4dff;
-  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  --bg:       #07090d;
+  --bg2:      #0b0e16;
+  --surface:  #0f1320;
+  --surf2:    #141929;
+  --border:   #1c2236;
+  --border2:  #263048;
+  --text:     #c4d4ec;
+  --text2:    #6a7d9c;
+  --text3:    #2e3d58;
+  --green:    #00e87a;
+  --gdim:     rgba(0,232,122,.07);
+  --gglow:    rgba(0,232,122,.22);
+  --red:      #ff3d5a;
+  --rdim:     rgba(255,61,90,.07);
+  --yellow:   #ffcc44;
+  --ydim:     rgba(255,204,68,.08);
+  --cyan:     #22d3ee;
+  --cdim:     rgba(34,211,238,.07);
+  --purple:   #a78bfa;
+  --shadow:   rgba(0,0,0,.55);
 }
-
 [data-theme="light"] {
-  --bg: #f4f6fa;
-  --bg2: #e8ecf2;
-  --surface: #ffffff;
-  --surface2: #f7f9fc;
-  --border: #dde1ed;
-  --border2: #c5cad8;
-  --text: #1a1f2e;
-  --text2: #5a6072;
-  --text3: #8e94a5;
-  --green: #00c853;
-  --green-dim: rgba(0,200,83,0.08);
-  --green-glow: rgba(0,200,83,0.2);
-  --red: #e53935;
-  --yellow: #f57c00;
-  --cyan: #0097a7;
-  --shadow: 0 8px 32px rgba(0,0,0,0.08);
+  --bg:       #eef1f8;
+  --bg2:      #e4e8f2;
+  --surface:  #ffffff;
+  --surf2:    #f5f7fc;
+  --border:   #dae0ee;
+  --border2:  #c4cedf;
+  --text:     #18253a;
+  --text2:    #526070;
+  --text3:    #a0b0c8;
+  --green:    #00a352;
+  --gdim:     rgba(0,163,82,.07);
+  --gglow:    rgba(0,163,82,.18);
+  --red:      #e02040;
+  --rdim:     rgba(224,32,64,.07);
+  --yellow:   #c47d00;
+  --ydim:     rgba(196,125,0,.08);
+  --cyan:     #0891b2;
+  --cdim:     rgba(8,145,178,.07);
+  --purple:   #7c3aed;
+  --shadow:   rgba(0,0,0,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Space Grotesk',sans-serif;
+  font-size:14px;line-height:1.6;
+  min-height:100vh;overflow-x:hidden;
+  transition:background .25s,color .25s;
+}
+[data-theme="dark"] body::before{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.1) 3px,rgba(0,0,0,.1) 4px);
+  pointer-events:none;z-index:0;
+}
+[data-theme="dark"] body::after{
+  content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(0,232,122,.012) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,232,122,.012) 1px,transparent 1px);
+  background-size:44px 44px;pointer-events:none;z-index:0;
 }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ══ LAYOUT ══ */
+.shell{display:flex;min-height:100vh;position:relative;z-index:1}
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  line-height: 1.6;
-  min-height: 100vh;
-  transition: background var(--transition), color var(--transition);
+/* ══ SIDEBAR ══ */
+.sidebar{
+  width:218px;flex-shrink:0;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;
+  transition:background .25s,border-color .25s;
+  overflow:hidden;
 }
-
-/* ═══════════════════════════════ SHELL ═══════════════ */
-.shell { display: flex; min-height: 100vh; }
-
-/* ═══════════════════════════════ SIDEBAR ═══════════════ */
-.sidebar {
-  width: 240px;
-  flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow-y: auto;
-  z-index: 10;
-  transition: background var(--transition), border-color var(--transition);
+.logo{
+  padding:20px 18px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  position:relative;
 }
-
-.logo {
-  padding: 28px 24px 24px;
-  border-bottom: 1px solid var(--border);
+.logo-svg{flex-shrink:0;width:32px;height:32px}
+.logo-text .wordmark{
+  font-family:'Unbounded',sans-serif;
+  font-size:14px;font-weight:900;
+  letter-spacing:2px;color:var(--green);
+  text-shadow:0 0 16px var(--gglow);
 }
-
-.logo-svg {
-  display: block;
-  margin: 0 auto 10px;
+.logo-text .tagline{
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;color:var(--text3);
+  letter-spacing:2px;text-transform:uppercase;
+  margin-top:1px;
 }
-
-.logo-tag {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  color: var(--text2);
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  text-align: center;
+.nav{padding:8px 0;flex:1;overflow-y:auto}
+.nav-group{
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;letter-spacing:2.5px;
+  text-transform:uppercase;color:var(--text3);
+  padding:14px 18px 5px;
 }
-
-.nav {
-  flex: 1;
-  padding: 8px 0;
-  overflow-y: auto;
+.nav-item{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 18px;cursor:pointer;
+  color:var(--text2);font-size:12px;font-weight:500;
+  transition:all .15s;
+  border-left:2px solid transparent;
+  user-select:none;
 }
-
-.nav-section {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 8px;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  padding: 16px 24px 4px;
+.nav-item:hover{color:var(--text);background:var(--gdim)}
+.nav-item.active{color:var(--green);border-left-color:var(--green);background:var(--gdim)}
+.nav-icon{width:16px;text-align:center;font-size:13px;flex-shrink:0}
+.sb-foot{
+  padding:12px 16px;
+  border-top:1px solid var(--border);
+  display:flex;flex-direction:column;gap:8px;
 }
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 24px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text2);
-  border-left: 2px solid transparent;
-  transition: all 0.15s;
-  white-space: nowrap;
+.conn-row{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:all .4s}
+.dot.live{background:var(--green);box-shadow:0 0 8px var(--green);animation:dp 2s ease-in-out infinite}
+@keyframes dp{0%,100%{opacity:1}50%{opacity:.4}}
+#heightBadge{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3)}
+.theme-btn{
+  display:flex;align-items:center;gap:8px;
+  cursor:pointer;padding:6px 10px;
+  background:var(--bg2);border:1px solid var(--border);
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text2);
+  transition:all .15s;
 }
+.theme-btn:hover{border-color:var(--green);color:var(--green)}
+.ttrack{width:26px;height:13px;background:var(--border2);border-radius:7px;position:relative;transition:background .2s;flex-shrink:0}
+[data-theme="light"] .ttrack{background:var(--green)}
+.tthumb{position:absolute;top:2px;left:2px;width:9px;height:9px;border-radius:50%;background:var(--text2);transition:transform .2s,background .2s}
+[data-theme="light"] .tthumb{transform:translateX(13px);background:#fff}
 
-.nav-item:hover { background: var(--green-dim); color: var(--text); }
-.nav-item.active { color: var(--green); border-left-color: var(--green); background: var(--green-dim); }
-
-.nav-icon { width: 18px; text-align: center; font-size: 13px; flex-shrink: 0; }
-
-.sidebar-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--border);
-  font-size: 10px;
-  color: var(--text3);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* ══ MOBILE HEADER ══ */
+.mob-head{
+  display:none;position:sticky;top:0;z-index:100;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:11px 16px;align-items:center;justify-content:space-between;
 }
-
-.status-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--text3);
-  display: inline-block;
-  transition: background 0.3s;
+.mob-logo{font-family:'Unbounded',sans-serif;font-size:13px;font-weight:900;letter-spacing:2px;color:var(--green)}
+.mob-right{display:flex;align-items:center;gap:10px}
+.ham{background:none;border:none;cursor:pointer;color:var(--text);font-size:20px;line-height:1;padding:2px}
+.mob-nav{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6)}
+.mob-nav.open{display:block}
+.mob-panel{
+  position:absolute;left:0;top:0;bottom:0;width:260px;
+  background:var(--surface);border-right:1px solid var(--border);
+  overflow-y:auto;transform:translateX(-100%);transition:transform .28s ease;
 }
+.mob-nav.open .mob-panel{transform:translateX(0)}
+.mob-close{position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:var(--text2);line-height:1}
 
-.status-dot.live {
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green);
+/* ══ MAIN ══ */
+.main{flex:1;overflow-y:auto;padding:28px 32px 64px;max-width:940px}
+
+/* ══ PAGE HEAD ══ */
+.ph{margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.ph-eye{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--green);letter-spacing:3px;text-transform:uppercase;margin-bottom:7px;display:flex;align-items:center;gap:9px}
+.ph-eye::before{content:'';width:16px;height:1px;background:var(--green)}
+.ph-title{font-family:'Unbounded',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.5px;line-height:1.2}
+.ph-sub{font-size:12px;color:var(--text2);margin-top:5px}
+
+/* ══ STAT BAR ══ */
+.stat-bar{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap;align-items:center}
+.chip{background:var(--surface);border:1px solid var(--border);padding:6px 13px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.chip b{color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600}
+
+/* ══ CARD ══ */
+.card{background:var(--surface);border:1px solid var(--border);padding:20px;margin-bottom:14px;position:relative;transition:background .25s,border-color .25s}
+[data-theme="dark"] .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,var(--gdim),transparent 65%)}
+.ct{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;padding-bottom:11px;border-bottom:1px solid var(--border)}
+
+/* ══ FORM ══ */
+.field{margin-bottom:13px}
+.field label{display:block;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text2);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.field input,.field textarea,.field select{
+  width:100%;background:var(--bg);border:1px solid var(--border2);
+  padding:9px 12px;color:var(--text);
+  font-family:'JetBrains Mono',monospace;font-size:12px;
+  outline:none;transition:border-color .15s,box-shadow .15s,background .25s;
+  appearance:none;
 }
+.field input:focus,.field textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--gdim)}
+.field textarea{resize:vertical;min-height:68px;line-height:1.6}
+.field select{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236a7d9c'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.hint{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);margin-top:4px;line-height:1.5}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
 
-/* ═══════════════════════════════ MAIN ═══════════════ */
-.main {
-  flex: 1;
-  padding: 40px 48px 80px;
-  max-width: 960px;
-  overflow-y: auto;
+/* ══ BUTTONS ══ */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 17px;border:none;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;letter-spacing:.3px;transition:all .15s;position:relative}
+.bp{background:var(--green);color:#000}
+.bp:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 4px 18px var(--gglow)}
+.bp:active{transform:translateY(0)}
+.bp:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.bg{background:transparent;border:1px solid var(--border2);color:var(--text2)}
+.bg:hover{border-color:var(--green);color:var(--green);background:var(--gdim)}
+.bsm{padding:6px 11px;font-size:11px}
+.btn-row{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px;align-items:center}
+
+/* ══ OUTCOME TOGGLE ══ */
+.otoggle{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:13px}
+.obtn{padding:11px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-family:'Unbounded',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;transition:all .15s;text-align:center}
+.obtn.yes:hover{border-color:var(--green);color:var(--green)}
+.obtn.no:hover{border-color:var(--red);color:var(--red)}
+.obtn.yes.active{background:var(--gdim);border-color:var(--green);color:var(--green)}
+.obtn.no.active{background:var(--rdim);border-color:var(--red);color:var(--red)}
+
+/* ══ BADGES ══ */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px}
+.b-open{background:var(--gdim);color:var(--green);border:1px solid rgba(0,232,122,.18)}
+.b-res{background:var(--cdim);color:var(--cyan);border:1px solid rgba(34,211,238,.18)}
+.b-canc{background:var(--rdim);color:var(--red);border:1px solid rgba(255,61,90,.18)}
+.b-prop{background:var(--ydim);color:var(--yellow);border:1px solid rgba(255,204,68,.18)}
+.blink{animation:blink 1.4s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+
+/* ══ MARKETS GRID ══ */
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:13px}
+.mcard{background:var(--surface);border:1px solid var(--border);padding:16px;position:relative;overflow:hidden;transition:border-color .15s,transform .15s,box-shadow .15s}
+.mcard:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 28px var(--shadow)}
+[data-theme="dark"] .mcard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--green),transparent);opacity:.25}
+.mid{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:2px}
+.mq{font-size:13px;font-weight:600;line-height:1.45;margin:8px 0 11px}
+.mmeta{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text2);display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.pools{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px}
+.pbar{padding:9px 11px}
+.pyes{background:var(--gdim);border:1px solid rgba(0,232,122,.13)}
+.pno{background:var(--rdim);border:1px solid rgba(255,61,90,.13)}
+.plbl{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text3);letter-spacing:1.5px;margin-bottom:3px}
+.pval{font-family:'JetBrains Mono',monospace;font-size:13px}
+.pyes .pval{color:var(--green)}.pno .pval{color:var(--red)}
+.mfooter{display:flex;gap:7px;flex-wrap:wrap}
+
+/* ══ KEY STATUS ══ */
+.key-status{display:flex;align-items:center;gap:9px;padding:10px 13px;border:1px solid var(--border2);font-family:'JetBrains Mono',monospace;font-size:11px;margin-bottom:14px;color:var(--text2)}
+.key-status.loaded{border-color:var(--green);background:var(--gdim);color:var(--green)}
+
+/* ══ INFO GRID ══ */
+.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:9px}
+.icell{background:var(--bg);border:1px solid var(--border);padding:13px}
+.ilbl{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.ival{font-family:'JetBrains Mono',monospace;font-size:17px;color:var(--text)}
+
+/* ══ BALANCE ══ */
+.bal-wrap{padding:18px;background:var(--bg);border:1px solid var(--border);margin-bottom:14px}
+.bal-num{font-family:'Unbounded',sans-serif;font-size:32px;font-weight:700;color:var(--green);line-height:1;margin-bottom:3px}
+.bal-unit{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:2px}
+.addr-mono{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cyan);word-break:break-all;padding:9px 12px;background:var(--bg);border:1px solid var(--border2);margin-top:9px}
+
+/* ══ ALERTS ══ */
+.alert{padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;margin-bottom:14px;line-height:1.6}
+.ag{background:var(--gdim);border:1px solid rgba(0,232,122,.18);color:var(--green)}
+.ar{background:var(--rdim);border:1px solid rgba(255,61,90,.18);color:var(--red)}
+.ay{background:var(--ydim);border:1px solid rgba(255,204,68,.18);color:var(--yellow)}
+.ac{background:var(--cdim);border:1px solid rgba(34,211,238,.18);color:var(--cyan)}
+
+/* ══ PAYLOAD BOX ══ */
+.payload-box{display:none;margin-top:14px}
+.plbl2{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.payload-box textarea{width:100%;background:var(--bg);border:1px solid var(--border2);padding:11px;color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:10px;resize:vertical;min-height:140px;outline:none;line-height:1.7}
+
+/* ══ PENDING ══ */
+.pending{display:none;align-items:center;gap:9px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--yellow);padding:9px 13px;background:var(--ydim);border:1px solid rgba(255,204,68,.18);margin-top:12px}
+
+/* ══ DIVIDER ══ */
+.div{height:1px;background:var(--border);margin:18px 0}
+
+/* ══ LOADING ══ */
+.loading{padding:48px;text-align:center;color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1px}
+
+/* ══ TOAST ══ */
+#toast{position:fixed;bottom:22px;right:22px;background:var(--surf2);border:1px solid var(--border2);padding:11px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);z-index:999;display:none;max-width:360px;box-shadow:0 12px 40px var(--shadow);letter-spacing:.3px;line-height:1.5}
+#toast.ok{border-color:var(--green);color:var(--green)}
+#toast.err{border-color:var(--red);color:var(--red)}
+
+/* ══ PAGES ══ */
+.page{display:none}.page.active{display:block;animation:fi .2s ease}
+@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ══ SIGN INFO ══ */
+.sign-info{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2);line-height:2}
+.sign-info em{color:var(--green);font-style:normal}
+
+code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2);padding:1px 6px;border:1px solid var(--border);color:var(--cyan)}
+
+/* ══ BOTTOM NAV (mobile) ══ */
+.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);z-index:100;padding:0 6px;justify-content:space-around;align-items:center;height:54px}
+.bni{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 8px;cursor:pointer;color:var(--text3);font-size:8px;font-family:'JetBrains Mono',monospace;letter-spacing:.5px;transition:color .15s;flex:1;text-align:center;user-select:none}
+.bni.active{color:var(--green)}
+.bni svg{width:17px;height:17px}
+
+/* ══ RESPONSIVE ══ */
+@media(max-width:768px){
+  .sidebar{display:none}
+  .mob-head{display:flex}
+  .bnav{display:flex}
+  .main{padding:14px 14px 72px;max-width:100%}
+  .r2,.r3{grid-template-columns:1fr}
+  .mgrid{grid-template-columns:1fr}
+  .ph-title{font-size:19px}
+  .bal-num{font-size:26px}
 }
-
-.page { display: none; animation: fadeIn 0.2s ease; }
-.page.active { display: block; }
-
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-/* ═══════════════════════════════ HEADINGS ═══════════════ */
-.page-head {
-  margin-bottom: 32px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
+@media(max-width:380px){
+  .btn-row{flex-direction:column}
+  .btn{width:100%;justify-content:center}
+  .otoggle{grid-template-columns:1fr}
 }
-
-.page-eyebrow {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  color: var(--green);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.page-eyebrow::before {
-  content: '';
-  display: inline-block;
-  width: 16px; height: 1px;
-  background: var(--green);
-}
-
-.page-title {
-  font-weight: 800;
-  font-size: 28px;
-  letter-spacing: -0.5px;
-  line-height: 1.2;
-}
-
-.page-sub {
-  font-size: 13px;
-  color: var(--text2);
-  margin-top: 4px;
-}
-
-/* ═══════════════════════════════ CARDS ═══════════════ */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 24px;
-  margin-bottom: 16px;
-  border-radius: 4px;
-  transition: background var(--transition), border-color var(--transition);
-}
-
-.card-title {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  color: var(--text3);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-/* ═══════════════════════════════ FORMS ═══════════════ */
-.field { margin-bottom: 16px; }
-
-.field label {
-  display: block;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  color: var(--text2);
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  margin-bottom: 6px;
-}
-
-.field input,
-.field textarea,
-.field select {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border2);
-  padding: 10px 14px;
-  color: var(--text);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  outline: none;
-  border-radius: 2px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.field input:focus,
-.field textarea:focus,
-.field select:focus {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px var(--green-dim);
-}
-
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 600px) { .row2 { grid-template-columns: 1fr; } }
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border: none;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 13px;
-  font-family: 'Inter', sans-serif;
-  border-radius: 4px;
-  transition: all 0.15s;
-  background: var(--green);
-  color: #000;
-}
-
-.btn:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 4px 16px var(--green-glow); }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
-
-.btn-ghost {
-  background: transparent;
-  border: 1px solid var(--border2);
-  color: var(--text2);
-}
-
-.btn-ghost:hover { border-color: var(--green); color: var(--green); background: var(--green-dim); }
-
-.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
-
-/* ═══════════════════════════════ MARKETS GRID ═══════════════ */
-.markets-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-}
-
-.market-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 18px;
-  border-radius: 4px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.market-card:hover {
-  border-color: var(--border2);
-  box-shadow: var(--shadow);
-}
-
-.market-question {
-  font-weight: 600;
-  font-size: 15px;
-  margin-bottom: 10px;
-}
-
-.market-meta {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  color: var(--text2);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.market-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* ═══════════════════════════════ TOAST ═══════════════ */
-#toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  background: var(--surface2);
-  border: 1px solid var(--green);
-  padding: 12px 18px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--green);
-  display: none;
-  z-index: 999;
-  border-radius: 4px;
-  max-width: 400px;
-  word-break: break-all;
-}
-
-#toast.err { color: var(--red); border-color: var(--red); }
-
-.theme-toggle {
-  background: none;
-  border: 1px solid var(--border2);
-  color: var(--text2);
-  padding: 4px 10px;
-  font-size: 10px;
-  cursor: pointer;
-  border-radius: 2px;
-  margin-top: 6px;
-  transition: all 0.15s;
-}
-
-.theme-toggle:hover { border-color: var(--green); color: var(--green); }
 </style>
 </head>
 <body>
 
+<!-- MOBILE HEADER -->
+<header class="mob-head">
+  <div style="display:flex;align-items:center;gap:10px">
+    <svg width="24" height="24" viewBox="0 0 100 100" fill="none">
+      <path d="M5 80 Q20 80 35 40 Q50 0 65 40 Q80 80 95 80" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/>
+      <circle cx="50" cy="18" r="9" fill="#00e87a"/>
+    </svg>
+    <span class="mob-logo">PRAXIS</span>
+  </div>
+  <div class="mob-right">
+    <div class="conn-row"><div class="dot" id="rpcDotM"></div><span id="hbM" style="font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--text2)">—</span></div>
+    <button class="ham" onclick="openNav()">☰</button>
+  </div>
+</header>
+
+<!-- MOBILE NAV DRAWER -->
+<div class="mob-nav" id="mobNav" onclick="closeNav(event)">
+  <div class="mob-panel">
+    <button class="mob-close" onclick="closeNav()">✕</button>
+    <div style="padding:18px 18px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)">
+      <svg width="26" height="26" viewBox="0 0 100 100" fill="none"><path d="M5 80 Q20 80 35 40 Q50 0 65 40 Q80 80 95 80" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/><circle cx="50" cy="18" r="9" fill="#00e87a"/></svg>
+      <div><div class="mob-logo" style="font-size:12px">PRAXIS</div><div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text3);letter-spacing:2px">$PRX · CANOPY</div></div>
+    </div>
+    <div id="mobNavBody"></div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);margin-top:8px">
+      <div class="theme-btn" onclick="toggleTheme()">
+        <div class="ttrack"><div class="tthumb"></div></div>
+        <span id="tlM">Light mode</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SHELL -->
 <div class="shell">
 
-  <!-- ═══════════════════ SIDEBAR ═══════════════ -->
-  <nav class="sidebar">
-    <div class="logo">
-      <svg class="logo-svg" width="90" height="45" viewBox="0 0 120 60">
-        <path d="M10,50 Q60,5 110,50" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-        <circle cx="60" cy="15" r="4" fill="var(--green)"/>
-      </svg>
-      <div class="logo-tag">Praxis · $PRX</div>
+<!-- ══ SIDEBAR ══ -->
+<nav class="sidebar">
+  <div class="logo">
+    <svg class="logo-svg" viewBox="0 0 100 100" fill="none">
+      <path d="M5 80 Q20 80 35 40 Q50 0 65 40 Q80 80 95 80" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/>
+      <circle cx="50" cy="18" r="9" fill="#00e87a"/>
+    </svg>
+    <div class="logo-text">
+      <div class="wordmark">PRAXIS</div>
+      <div class="tagline">$PRX · Canopy</div>
     </div>
+  </div>
 
-    <div class="nav">
-      <div class="nav-section">Overview</div>
-      <div class="nav-item active" data-page="markets" onclick="showPage('markets',this)">
-        <span class="nav-icon">◈</span> Markets
-      </div>
+  <div class="nav" id="deskNav">
+    <div class="nav-group">Overview</div>
+    <div class="nav-item active" data-p="markets" onclick="showPage('markets',this)"><span class="nav-icon">◈</span>Markets</div>
 
-      <div class="nav-section">Trading</div>
-      <div class="nav-item" data-page="create_market" onclick="showPage('create_market',this)">
-        <span class="nav-icon">＋</span> Create Market
-      </div>
-      <div class="nav-item" data-page="submit_prediction" onclick="showPage('submit_prediction',this)">
-        <span class="nav-icon">◎</span> Submit Prediction
-      </div>
+    <div class="nav-group">Core</div>
+    <div class="nav-item" data-p="create"  onclick="showPage('create',this)"><span class="nav-icon">＋</span>Create Market</div>
+    <div class="nav-item" data-p="predict" onclick="showPage('predict',this)"><span class="nav-icon">◎</span>Submit Prediction</div>
+    <div class="nav-item" data-p="resolve" onclick="showPage('resolve',this)"><span class="nav-icon">✓</span>Resolve Market</div>
+    <div class="nav-item" data-p="claim"   onclick="showPage('claim',this)"><span class="nav-icon">◆</span>Claim Winnings</div>
 
-      <div class="nav-section">Settlement</div>
-      <div class="nav-item" data-page="resolve_market" onclick="showPage('resolve_market',this)">
-        <span class="nav-icon">✓</span> Resolve Market
-      </div>
-      <div class="nav-item" data-page="claim_winnings" onclick="showPage('claim_winnings',this)">
-        <span class="nav-icon">◆</span> Claim Winnings
-      </div>
-      <div class="nav-item" data-page="finalize_market" onclick="showPage('finalize_market',this)">
-        <span class="nav-icon">⬡</span> Finalize Market
-      </div>
+    <div class="nav-group">Resolution</div>
+    <div class="nav-item" data-p="register" onclick="showPage('register',this)"><span class="nav-icon">⊕</span>Register Resolver</div>
+    <div class="nav-item" data-p="propose"  onclick="showPage('propose',this)"><span class="nav-icon">⊞</span>Propose Outcome</div>
+    <div class="nav-item" data-p="dispute"  onclick="showPage('dispute',this)"><span class="nav-icon">⚡</span>File Dispute</div>
 
-      <div class="nav-section">PORS</div>
-      <div class="nav-item" data-page="register_resolver" onclick="showPage('register_resolver',this)">
-        <span class="nav-icon">⚇</span> Register Resolver
-      </div>
-      <div class="nav-item" data-page="propose_outcome" onclick="showPage('propose_outcome',this)">
-        <span class="nav-icon">◉</span> Propose Outcome
-      </div>
-      <div class="nav-item" data-page="file_dispute" onclick="showPage('file_dispute',this)">
-        <span class="nav-icon">⚡</span> File Dispute
-      </div>
-      <div class="nav-item" data-page="commit_vote" onclick="showPage('commit_vote',this)">
-        <span class="nav-icon">◐</span> Commit Vote
-      </div>
-      <div class="nav-item" data-page="reveal_vote" onclick="showPage('reveal_vote',this)">
-        <span class="nav-icon">◑</span> Reveal Vote
-      </div>
-      <div class="nav-item" data-page="tally_votes" onclick="showPage('tally_votes',this)">
-        <span class="nav-icon">◒</span> Tally Votes
-      </div>
-      <div class="nav-item" data-page="claim_slash" onclick="showPage('claim_slash',this)">
-        <span class="nav-icon">◆</span> Claim Slash
-      </div>
+    <div class="nav-group">Voting</div>
+    <div class="nav-item" data-p="commit"   onclick="showPage('commit',this)"><span class="nav-icon">◉</span>Commit Vote</div>
+    <div class="nav-item" data-p="reveal"   onclick="showPage('reveal',this)"><span class="nav-icon">◐</span>Reveal Vote</div>
+    <div class="nav-item" data-p="tally"    onclick="showPage('tally',this)"><span class="nav-icon">≡</span>Tally Votes</div>
+    <div class="nav-item" data-p="finalize" onclick="showPage('finalize',this)"><span class="nav-icon">⬛</span>Finalize Market</div>
+    <div class="nav-item" data-p="slash"    onclick="showPage('slash',this)"><span class="nav-icon">✂</span>Claim Slash</div>
+
+    <div class="nav-group">Account</div>
+    <div class="nav-item" data-p="wallet"   onclick="showPage('wallet',this)"><span class="nav-icon">◻</span>Wallet</div>
+    <div class="nav-item" data-p="signer"   onclick="showPage('signer',this)"><span class="nav-icon">⚿</span>Signer</div>
+    <div class="nav-item" data-p="node"     onclick="showPage('node',this)"><span class="nav-icon">▣</span>Node</div>
+  </div>
+
+  <div class="sb-foot">
+    <div class="conn-row"><div class="dot" id="rpcDot"></div><span id="rpcStatus">offline</span></div>
+    <div id="heightBadge">height: —</div>
+    <div class="theme-btn" onclick="toggleTheme()">
+      <div class="ttrack"><div class="tthumb"></div></div>
+      <span id="tlD">Light mode</span>
     </div>
+  </div>
+</nav>
 
-    <div class="sidebar-footer">
-      <div><span class="status-dot" id="rpcDot"></span> <span id="rpcStatus">offline</span></div>
-      <div id="heightBadge">height: —</div>
-      <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+<!-- ══ MAIN ══ -->
+<main class="main">
+
+<!-- ══════ MARKETS ══════ -->
+<div class="page active" id="page-markets">
+  <div class="ph">
+    <div class="ph-eye">On-chain state</div>
+    <div class="ph-title">All Markets</div>
+    <div class="ph-sub">Live prediction markets decoded from chain state</div>
+  </div>
+  <div class="stat-bar">
+    <div class="chip">Block <b id="sb_h">—</b></div>
+    <div class="chip">Markets <b id="sb_c">—</b></div>
+    <div class="chip" style="margin-left:auto"><button class="btn bg bsm" onclick="loadMarkets()">↺ Refresh</button></div>
+  </div>
+  <div id="marketsList"><div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading chain state</div></div>
+</div>
+
+<!-- ══════ CREATE MARKET ══════ -->
+<div class="page" id="page-create">
+  <div class="ph">
+    <div class="ph-eye">New market</div>
+    <div class="ph-title">Create Market</div>
+    <div class="ph-sub">Open a YES / NO prediction market on Canopy</div>
+  </div>
+  <div class="card">
+    <div class="ct">// market_parameters</div>
+    <div class="field"><label>Question</label><input id="c_question" type="text" placeholder="Will BTC reach $200k before 2026?"/></div>
+    <div class="r3">
+      <div class="field"><label>B0 Liquidity (μPRX)</label><input id="c_b0" type="number" value="1000000"/><div class="hint">min 1 PRX</div></div>
+      <div class="field"><label>Expiry Height</label><input id="c_expiry" type="number" placeholder="auto"/><div class="hint">min +100 blocks</div></div>
+      <div class="field"><label>Fee (μPRX)</label><input id="c_fee" type="number" value="10000"/></div>
     </div>
-  </nav>
-
-  <!-- ═══════════════════ MAIN ═══════════════ -->
-  <main class="main">
-
-    <!-- ──────── MARKETS PAGE ──────── -->
-    <div class="page active" id="page-markets">
-      <div class="page-head">
-        <div class="page-eyebrow">Live Markets</div>
-        <div class="page-title">Prediction Markets</div>
-        <div class="page-sub">All markets discovered on‑chain</div>
-      </div>
-      <div class="btn-row" style="margin-bottom:20px">
-        <button class="btn" onclick="loadMarkets()">↻ Refresh Markets</button>
-        <span id="marketCount" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);align-self:center"></span>
-      </div>
-      <div id="marketsList">
-        <div style="padding:40px;text-align:center;color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">
-          Loading markets…
-        </div>
-      </div>
+    <input id="c_nonce" type="hidden"/>
+    <input id="c_creator" type="hidden"/>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_create" onclick="signAndSubmit_create()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_create()">Build Payload</button>
     </div>
+    <div class="pending" id="pend_create"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="co"><div class="plbl2">// unsigned_payload</div><textarea id="cp" readonly></textarea></div>
+  </div>
+</div>
 
-    <!-- ──────── WALLET PAGE (embedded in sidebar) ──────── -->
-    <!-- We'll make wallet a sidebar item too, but the signer is global -->
-    <!-- We'll add a wallet section at the bottom of the sidebar? No, let's keep wallet as a page for balance and send -->
-    <div class="page" id="page-wallet">
-      <div class="page-head">
-        <div class="page-eyebrow">Account</div>
-        <div class="page-title">Wallet</div>
-        <div class="page-sub">Manage your key and send $PRX</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Signer</div>
-        <div class="field"><label>Private Key (64 hex)</label><input id="sk_input" type="password" placeholder="14f43ca8…"></div>
-        <button class="btn" onclick="loadKey()">Load Key</button>
-        <div id="sk_info" style="display:none;margin-top:14px">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:12px">Address: <span id="sk_addr" style="color:var(--green)"></span></div>
-          <div style="margin-top:4px">Balance: <span id="sk_balance">—</span> μPRX</div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Send $PRX</div>
-        <div class="field"><label>To Address</label><input id="s_to" placeholder="40 hex chars"></div>
-        <div class="field"><label>Amount (μPRX)</label><input id="s_amount" type="number" value="1000000"></div>
-        <button class="btn" onclick="submitSend()">Send</button>
-      </div>
+<!-- ══════ SUBMIT PREDICTION ══════ -->
+<div class="page" id="page-predict">
+  <div class="ph">
+    <div class="ph-eye">Submit prediction</div>
+    <div class="ph-title">Stake a Position</div>
+    <div class="ph-sub">Lock tokens on YES or NO using LMSR pricing</div>
+  </div>
+  <div class="card">
+    <div class="ct">// prediction_parameters</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="p_mid" type="text" placeholder="0b5203…407c"/></div>
+      <div class="field"><label>Bettor Address</label><input id="p_bettor" type="text" placeholder="40 hex chars"/></div>
     </div>
-
-    <!-- ──────── CREATE MARKET ──────── -->
-    <div class="page" id="page-create_market">
-      <div class="page-head">
-        <div class="page-eyebrow">New Market</div>
-        <div class="page-title">Create Market</div>
-        <div class="page-sub">Open a YES/NO prediction market</div>
-      </div>
-      <div class="card">
-        <div class="field"><label>Question</label><input id="cm_question" placeholder="Will BTC hit $200k by end of 2026?"></div>
-        <div class="field"><label>b0 (Initial Liquidity, μPRX)</label><input id="cm_b0" type="number" value="1000000"></div>
-        <div class="field"><label>Expiry Block</label><input id="cm_expiry" type="number" placeholder="auto-set if empty"></div>
-        <div class="field"><label>Nonce (auto)</label><input id="cm_nonce" type="number" placeholder="auto-generated" readonly style="opacity:0.6"></div>
-        <button class="btn" onclick="submitCreateMarket()">Create Market</button>
+    <div class="field"><label>Outcome</label>
+      <div class="otoggle">
+        <div class="obtn yes active" id="btn_yes" onclick="setOut(true)">YES</div>
+        <div class="obtn no" id="btn_no" onclick="setOut(false)">NO</div>
       </div>
     </div>
+    <div class="r3">
+      <div class="field"><label>Shares (μPRX units)</label><input id="p_shares" type="number" value="1000000"/><div class="hint">min 1,000,000</div></div>
+      <div class="field"><label>Max Cost (μPRX)</label><input id="p_maxcost" type="number" value="10000000"/><div class="hint">slippage guard</div></div>
+      <div class="field"><label>Fee (μPRX)</label><input id="p_fee" type="number" value="10000"/></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_predict" onclick="signAndSubmit_predict()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_predict()">Build Payload</button>
+    </div>
+    <div class="pending" id="pend_predict"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="po"><div class="plbl2">// unsigned_payload</div><textarea id="pp" readonly></textarea></div>
+  </div>
+</div>
 
-    <!-- ──────── SUBMIT PREDICTION ──────── -->
-    <div class="page" id="page-submit_prediction">
-      <div class="page-head">
-        <div class="page-eyebrow">Place Stake</div>
-        <div class="page-title">Submit Prediction</div>
-      </div>
-      <div class="card">
-        <div class="field"><label>Market ID (hex)</label><input id="sp_marketId"></div>
-        <div class="field"><label>Outcome</label>
-          <select id="sp_outcome"><option value="true">YES</option><option value="false">NO</option></select>
-        </div>
-        <div class="row2">
-          <div class="field"><label>Shares (μPRX units)</label><input id="sp_shares" type="number" value="1000000"></div>
-          <div class="field"><label>Max Cost (μPRX)</label><input id="sp_maxcost" type="number" value="10000000"></div>
-        </div>
-        <button class="btn" onclick="submitPrediction()">Submit Prediction</button>
+<!-- ══════ RESOLVE MARKET ══════ -->
+<div class="page" id="page-resolve">
+  <div class="ph">
+    <div class="ph-eye">Finalise</div>
+    <div class="ph-title">Resolve Market</div>
+    <div class="ph-sub">Declare winning outcome — valid within ExpiryTime+100 to ExpiryTime+300 blocks</div>
+  </div>
+  <div class="alert ay">⚠ Only callable in the resolution window (100–300 blocks after expiry).</div>
+  <div class="card">
+    <div class="ct">// resolution_parameters</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="r_mid" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Resolver Address</label><input id="r_resolver" type="text" placeholder="40 hex chars"/></div>
+    </div>
+    <div class="field"><label>Winning Outcome</label>
+      <div class="otoggle">
+        <div class="obtn yes active" id="rbtn_yes" onclick="setResOut(true)">YES</div>
+        <div class="obtn no" id="rbtn_no" onclick="setResOut(false)">NO</div>
       </div>
     </div>
+    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="r_fee" type="number" value="10000"/></div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_resolve" onclick="signAndSubmit_resolve()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_resolve()">Build Payload</button>
+    </div>
+    <div class="pending" id="pend_resolve"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="ro"><div class="plbl2">// unsigned_payload</div><textarea id="rp" readonly></textarea></div>
+  </div>
+</div>
 
-    <!-- ──────── RESOLVE MARKET ──────── -->
-    <div class="page" id="page-resolve_market">
-      <div class="page-head">
-        <div class="page-eyebrow">Resolution</div>
-        <div class="page-title">Resolve Market</div>
-      </div>
-      <div class="card">
-        <div class="field"><label>Market ID</label><input id="rm_marketId"></div>
-        <div class="field"><label>Winning Outcome</label>
-          <select id="rm_outcome"><option value="true">YES</option><option value="false">NO</option></select>
-        </div>
-        <button class="btn" onclick="submitResolveMarket()">Resolve</button>
+<!-- ══════ CLAIM WINNINGS ══════ -->
+<div class="page" id="page-claim">
+  <div class="ph">
+    <div class="ph-eye">Collect payout</div>
+    <div class="ph-title">Claim Winnings</div>
+    <div class="ph-sub">Proportional payout from the losing pool after resolution</div>
+  </div>
+  <div class="card">
+    <div class="ct">// claim_parameters</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="cl_mid" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Claimant Address</label><input id="cl_addr" type="text" placeholder="40 hex chars"/></div>
+    </div>
+    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="cl_fee" type="number" value="10000"/></div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_claim" onclick="signAndSubmit_claim()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_claim()">Build Payload</button>
+    </div>
+    <div class="pending" id="pend_claim"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="clo"><div class="plbl2">// unsigned_payload</div><textarea id="clp" readonly></textarea></div>
+  </div>
+</div>
+
+<!-- ══════ REGISTER RESOLVER ══════ -->
+<div class="page" id="page-register">
+  <div class="ph">
+    <div class="ph-eye">Resolution</div>
+    <div class="ph-title">Register Resolver</div>
+    <div class="ph-sub">Stake $PRX to become an eligible market resolver</div>
+  </div>
+  <div class="card">
+    <div class="ct">// resolver_registration</div>
+    <div class="r2">
+      <div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Stake Amount (μPRX)</label><input id="reg_stake" type="number" value="100000000"/><div class="hint">min 100,000,000 (= 100 PRX)</div></div>
+    </div>
+    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="reg_fee" type="number" value="10000"/></div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_register" onclick="signAndSubmit_register()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_register()">Build Payload</button>
+    </div>
+    <div class="pending" id="pend_register"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="rego"><div class="plbl2">// unsigned_payload</div><textarea id="regp" readonly></textarea></div>
+  </div>
+</div>
+
+<!-- ══════ PROPOSE OUTCOME ══════ -->
+<div class="page" id="page-propose">
+  <div class="ph">
+    <div class="ph-eye">Resolution</div>
+    <div class="ph-title">Propose Outcome</div>
+    <div class="ph-sub">Resolver proposes the winning outcome after market expiry</div>
+  </div>
+  <div class="card">
+    <div class="ct">// proposal_parameters</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="prop_mid" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Resolver Address</label><input id="prop_resolver" type="text" placeholder="40 hex chars"/></div>
+    </div>
+    <div class="field"><label>Proposed Outcome</label>
+      <div class="otoggle">
+        <div class="obtn yes active" id="pbtn_yes" onclick="setPropOut(true)">YES</div>
+        <div class="obtn no" id="pbtn_no" onclick="setPropOut(false)">NO</div>
       </div>
     </div>
+    <div class="r2">
+      <div class="field"><label>Proposal Bond (μPRX)</label><input id="prop_bond" type="number" value="10000000"/><div class="hint">10 PRX minimum</div></div>
+      <div class="field"><label>Fee (μPRX)</label><input id="prop_fee" type="number" value="10000"/></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_propose" onclick="signAndSubmit_propose()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_propose()">Build Payload</button>
+    </div>
+    <div class="pending" id="pend_propose"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="propo"><div class="plbl2">// unsigned_payload</div><textarea id="propp" readonly></textarea></div>
+  </div>
+</div>
 
-    <!-- ──────── CLAIM WINNINGS ──────── -->
-    <div class="page" id="page-claim_winnings">
-      <div class="page-head"><div class="page-eyebrow">Payout</div><div class="page-title">Claim Winnings</div></div>
-      <div class="card">
-        <div class="field"><label>Market ID</label><input id="cw_marketId"></div>
-        <button class="btn" onclick="submitClaimWinnings()">Claim</button>
+<!-- ══════ FILE DISPUTE ══════ -->
+<div class="page" id="page-dispute">
+  <div class="ph">
+    <div class="ph-eye">Dispute</div>
+    <div class="ph-title">File Dispute</div>
+    <div class="ph-sub">Challenge a proposed outcome during the dispute window</div>
+  </div>
+  <div class="card">
+    <div class="ct">// dispute_parameters</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="dis_mid" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Disputer Address</label><input id="dis_addr" type="text" placeholder="40 hex chars"/></div>
+    </div>
+    <div class="r2">
+      <div class="field"><label>Dispute Bond (μPRX)</label><input id="dis_bond" type="number" value="10000000"/><div class="hint">must match proposal bond</div></div>
+      <div class="field"><label>Fee (μPRX)</label><input id="dis_fee" type="number" value="10000"/></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_dispute" onclick="signAndSubmit_dispute()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_dispute()">Build Payload</button>
+    </div>
+    <div class="pending" id="pend_dispute"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="diso"><div class="plbl2">// unsigned_payload</div><textarea id="disp" readonly></textarea></div>
+  </div>
+</div>
+
+<!-- ══════ COMMIT VOTE ══════ -->
+<div class="page" id="page-commit">
+  <div class="ph">
+    <div class="ph-eye">Voting</div>
+    <div class="ph-title">Commit Vote</div>
+    <div class="ph-sub">Submit a blinded vote hash during the commit phase</div>
+  </div>
+  <div class="card">
+    <div class="ct">// commit_parameters</div>
+    <div class="alert ac">Compute commit_hash = SHA256(vote_byte || nonce || voter_addr). vote_byte: 0x01=YES, 0x00=NO.</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="cv_mid" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Voter Address</label><input id="cv_voter" type="text" placeholder="40 hex chars"/></div>
+    </div>
+    <div class="r2">
+      <div class="field"><label>Commit Hash (64 hex)</label><input id="cv_hash" type="text" placeholder="SHA256 of vote || nonce || addr"/></div>
+      <div class="field"><label>Fee (μPRX)</label><input id="cv_fee" type="number" value="10000"/></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_commit" onclick="signAndSubmit_commit()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_commit()">Build Payload</button>
+    </div>
+    <div class="pending" id="pend_commit"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="cvo"><div class="plbl2">// unsigned_payload</div><textarea id="cvp" readonly></textarea></div>
+  </div>
+</div>
+
+<!-- ══════ REVEAL VOTE ══════ -->
+<div class="page" id="page-reveal">
+  <div class="ph">
+    <div class="ph-eye">Voting</div>
+    <div class="ph-title">Reveal Vote</div>
+    <div class="ph-sub">Reveal your blinded vote during the reveal phase</div>
+  </div>
+  <div class="card">
+    <div class="ct">// reveal_parameters</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="rv_mid" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Voter Address</label><input id="rv_voter" type="text" placeholder="40 hex chars"/></div>
+    </div>
+    <div class="field"><label>Vote</label>
+      <div class="otoggle">
+        <div class="obtn yes active" id="rvbtn_yes" onclick="setRevOut(true)">YES</div>
+        <div class="obtn no" id="rvbtn_no" onclick="setRevOut(false)">NO</div>
       </div>
     </div>
-
-    <!-- ──────── REGISTER RESOLVER ──────── -->
-    <div class="page" id="page-register_resolver">
-      <div class="page-head"><div class="page-eyebrow">Registry</div><div class="page-title">Register Resolver</div></div>
-      <div class="card">
-        <div class="field"><label>Stake Amount (μPRX)</label><input id="rr_stake" type="number" value="100000000"></div>
-        <button class="btn" onclick="submitRegisterResolver()">Register</button>
-      </div>
+    <div class="r2">
+      <div class="field"><label>Nonce (hex, 32 bytes)</label><input id="rv_nonce" type="text" placeholder="64 hex chars used in commit"/></div>
+      <div class="field"><label>Fee (μPRX)</label><input id="rv_fee" type="number" value="10000"/></div>
     </div>
-
-    <!-- ──────── PROPOSE OUTCOME ──────── -->
-    <div class="page" id="page-propose_outcome">
-      <div class="page-head"><div class="page-eyebrow">Proposal</div><div class="page-title">Propose Outcome</div></div>
-      <div class="card">
-        <div class="field"><label>Market ID</label><input id="po_marketId"></div>
-        <div class="field"><label>Outcome</label>
-          <select id="po_outcome"><option value="true">YES</option><option value="false">NO</option></select>
-        </div>
-        <div class="field"><label>Proposal Bond (μPRX)</label><input id="po_bond" type="number" value="10000000"></div>
-        <button class="btn" onclick="submitProposeOutcome()">Propose</button>
-      </div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_reveal" onclick="signAndSubmit_reveal()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_reveal()">Build Payload</button>
     </div>
+    <div class="pending" id="pend_reveal"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="rvo"><div class="plbl2">// unsigned_payload</div><textarea id="rvp" readonly></textarea></div>
+  </div>
+</div>
 
-    <!-- ──────── FILE DISPUTE ──────── -->
-    <div class="page" id="page-file_dispute">
-      <div class="page-head"><div class="page-eyebrow">Challenge</div><div class="page-title">File Dispute</div></div>
-      <div class="card">
-        <div class="field"><label>Market ID</label><input id="fd_marketId"></div>
-        <div class="field"><label>Dispute Bond (μPRX)</label><input id="fd_bond" type="number"></div>
-        <button class="btn" onclick="submitFileDispute()">File Dispute</button>
-      </div>
+<!-- ══════ TALLY VOTES ══════ -->
+<div class="page" id="page-tally">
+  <div class="ph">
+    <div class="ph-eye">Voting</div>
+    <div class="ph-title">Tally Votes</div>
+    <div class="ph-sub">Trigger vote tally after reveal phase ends</div>
+  </div>
+  <div class="card">
+    <div class="ct">// tally_parameters</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="tal_mid" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Caller Address</label><input id="tal_addr" type="text" placeholder="40 hex chars"/></div>
     </div>
-
-    <!-- ──────── COMMIT VOTE ──────── -->
-    <div class="page" id="page-commit_vote">
-      <div class="page-head"><div class="page-eyebrow">Panel</div><div class="page-title">Commit Vote</div></div>
-      <div class="card">
-        <div class="field"><label>Market ID</label><input id="cv_marketId"></div>
-        <div class="field"><label>Commit Hash (32 bytes hex)</label><input id="cv_hash"></div>
-        <button class="btn" onclick="submitCommitVote()">Commit</button>
-      </div>
+    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="tal_fee" type="number" value="10000"/></div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_tally" onclick="signAndSubmit_tally()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_tally()">Build Payload</button>
     </div>
+    <div class="pending" id="pend_tally"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="talo"><div class="plbl2">// unsigned_payload</div><textarea id="talp" readonly></textarea></div>
+  </div>
+</div>
 
-    <!-- ──────── REVEAL VOTE ──────── -->
-    <div class="page" id="page-reveal_vote">
-      <div class="page-head"><div class="page-eyebrow">Panel</div><div class="page-title">Reveal Vote</div></div>
-      <div class="card">
-        <div class="field"><label>Market ID</label><input id="rv_marketId"></div>
-        <div class="field"><label>Vote</label>
-          <select id="rv_vote"><option value="true">YES</option><option value="false">NO</option></select>
-        </div>
-        <div class="field"><label>Nonce (hex)</label><input id="rv_nonce"></div>
-        <button class="btn" onclick="submitRevealVote()">Reveal</button>
-      </div>
+<!-- ══════ FINALIZE MARKET ══════ -->
+<div class="page" id="page-finalize">
+  <div class="ph">
+    <div class="ph-eye">Finalization</div>
+    <div class="ph-title">Finalize Market</div>
+    <div class="ph-sub">Seal the market after vote tally — enables claim_winnings</div>
+  </div>
+  <div class="card">
+    <div class="ct">// finalize_parameters</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="fin_mid" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Caller Address</label><input id="fin_addr" type="text" placeholder="40 hex chars"/></div>
     </div>
-
-    <!-- ──────── TALLY VOTES ──────── -->
-    <div class="page" id="page-tally_votes">
-      <div class="page-head"><div class="page-eyebrow">Panel</div><div class="page-title">Tally Votes</div></div>
-      <div class="card">
-        <div class="field"><label>Market ID</label><input id="tv_marketId"></div>
-        <button class="btn" onclick="submitTallyVotes()">Tally</button>
-      </div>
+    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="fin_fee" type="number" value="10000"/></div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_finalize" onclick="signAndSubmit_finalize()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_finalize()">Build Payload</button>
     </div>
+    <div class="pending" id="pend_finalize"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="fino"><div class="plbl2">// unsigned_payload</div><textarea id="finp" readonly></textarea></div>
+  </div>
+</div>
 
-    <!-- ──────── FINALIZE MARKET ──────── -->
-    <div class="page" id="page-finalize_market">
-      <div class="page-head"><div class="page-eyebrow">Settlement</div><div class="page-title">Finalize Market</div></div>
-      <div class="card">
-        <div class="field"><label>Market ID</label><input id="fm_marketId"></div>
-        <button class="btn" onclick="submitFinalizeMarket()">Finalize</button>
-      </div>
+<!-- ══════ CLAIM SLASH ══════ -->
+<div class="page" id="page-slash">
+  <div class="ph">
+    <div class="ph-eye">Enforcement</div>
+    <div class="ph-title">Claim Slash</div>
+    <div class="ph-sub">Claim the slash reward from a dishonest resolver's forfeited bond</div>
+  </div>
+  <div class="card">
+    <div class="ct">// slash_parameters</div>
+    <div class="r2">
+      <div class="field"><label>Market ID (40 hex)</label><input id="sl_mid" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Claimant Address</label><input id="sl_addr" type="text" placeholder="40 hex chars"/></div>
     </div>
-
-    <!-- ──────── CLAIM SLASH ──────── -->
-    <div class="page" id="page-claim_slash">
-      <div class="page-head"><div class="page-eyebrow">Recover</div><div class="page-title">Claim Slash</div></div>
-      <div class="card">
-        <div class="field"><label>Market ID</label><input id="cs_marketId"></div>
-        <button class="btn" onclick="submitClaimSlash()">Claim</button>
-      </div>
+    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="sl_fee" type="number" value="10000"/></div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_slash" onclick="signAndSubmit_slash()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_slash()">Build Payload</button>
     </div>
+    <div class="pending" id="pend_slash"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="slo"><div class="plbl2">// unsigned_payload</div><textarea id="slp" readonly></textarea></div>
+  </div>
+</div>
 
-  </main>
+<!-- ══════ WALLET ══════ -->
+<div class="page" id="page-wallet">
+  <div class="ph">
+    <div class="ph-eye">Account</div>
+    <div class="ph-title">Wallet</div>
+    <div class="ph-sub">Query balances and send $PRX tokens</div>
+  </div>
+  <div class="card">
+    <div class="ct">// account_lookup</div>
+    <div class="field"><label>Address (40 hex)</label><input id="w_addr" type="text" placeholder="e7c7dad1…"/></div>
+    <div class="btn-row"><button class="btn bp" onclick="queryAccount()">Query Balance</button></div>
+    <div id="w_result" style="display:none;margin-top:16px">
+      <div class="bal-wrap"><div class="bal-num" id="w_balance">0</div><div class="bal-unit">μPRX LIQUID</div></div>
+      <div class="addr-mono" id="w_addrD"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">// send_tokens (MessageSend)</div>
+    <div class="r2">
+      <div class="field"><label>From Address</label><input id="s_from" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>To Address</label><input id="s_to" type="text" placeholder="40 hex chars"/></div>
+    </div>
+    <div class="r2">
+      <div class="field"><label>Amount (μPRX)</label><input id="s_amount" type="number" value="1000000"/></div>
+      <div class="field"><label>Fee (μPRX)</label><input id="s_fee" type="number" value="10000"/></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn_send" onclick="signAndSubmit_send()">⚡ Sign &amp; Submit</button>
+      <button class="btn bg" onclick="build_send()">Build Payload</button>
+    </div>
+    <div class="pending" id="pend_send"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="payload-box" id="so"><div class="plbl2">// unsigned_payload</div><textarea id="sp" readonly></textarea></div>
+  </div>
+</div>
+
+<!-- ══════ SIGNER ══════ -->
+<div class="page" id="page-signer">
+  <div class="ph">
+    <div class="ph-eye">BLS12-381</div>
+    <div class="ph-title">Signer</div>
+    <div class="ph-sub">Load your private key — held in RAM only, never stored or sent</div>
+  </div>
+  <div class="card">
+    <div class="ct">// private_key</div>
+    <div class="key-status" id="keyStatus">○ No key loaded — transactions cannot be signed</div>
+    <div class="field"><label>Private Key (64 hex)</label><input id="sk_input" type="password" placeholder="64 hex characters…"/><div class="hint">⚠ Only enter on trusted instances. Clears on page reload.</div></div>
+    <div class="btn-row">
+      <button class="btn bp" onclick="loadKey()">Load Key</button>
+      <button class="btn bg" onclick="clearKey()">Clear</button>
+    </div>
+    <div id="sk_derived" style="display:none;margin-top:16px">
+      <div class="div"></div>
+      <div class="field"><label>Derived Public Key (48 bytes · G1)</label><div class="addr-mono" id="sk_pub" style="font-size:9px;word-break:break-all"></div></div>
+      <div class="field" style="margin-top:10px"><label>Derived Address — use in all tx fields</label><div class="addr-mono" id="sk_addr" style="color:var(--green)"></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">// signing_spec</div>
+    <div class="sign-info">
+      1. sign_bytes = proto.Marshal(Transaction{...fields, <em>signature:nil</em>})<br>
+      2. time = <em>BigInt(Date.now()) * 1000n</em> — microseconds, computed ONCE<br>
+      3. same txTime used in sign bytes AND tx body JSON<br>
+      4. BLS12-381 <em>G2 signature (96 bytes)</em> — @noble/curves bls12_381.sign()<br>
+      5. address = <em>SHA256(pubKey).slice(0,20)</em> — first 20 bytes<br>
+      6. Plugin format: <em>msgTypeUrl + msgBytes (hex)</em> for all types including send
+    </div>
+  </div>
+</div>
+
+<!-- ══════ NODE ══════ -->
+<div class="page" id="page-node">
+  <div class="ph">
+    <div class="ph-eye">Connection</div>
+    <div class="ph-title">Node</div>
+    <div class="ph-sub">RPC settings and chain status</div>
+  </div>
+  <div class="card">
+    <div class="ct">// rpc_connection</div>
+    <div class="field"><label>RPC Host</label><input id="ni_host" type="text" value="localhost"/><div class="hint">Public RPC → :50002 &nbsp;·&nbsp; Admin → :50003 (local only)</div></div>
+    <div class="btn-row"><button class="btn bp" onclick="applyHost()">Apply &amp; Connect</button></div>
+  </div>
+  <div class="card">
+    <div class="ct">// chain_status</div>
+    <div class="igrid">
+      <div class="icell"><div class="ilbl">Height</div><div class="ival" id="ni_height">—</div></div>
+      <div class="icell"><div class="ilbl">Status</div><div class="ival" id="ni_status" style="font-size:12px">—</div></div>
+      <div class="icell" style="grid-column:1/-1"><div class="ilbl">RPC Endpoint</div><div class="ival" id="ni_rpc" style="font-size:10px;word-break:break-all">—</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">// failed_transactions</div>
+    <div class="field"><label>Check Address</label><input id="ft_addr" type="text" placeholder="40 hex chars"/></div>
+    <div class="btn-row"><button class="btn bg bsm" onclick="checkFailedTxs()">Check Failed Txs</button></div>
+    <div id="ft_result" style="margin-top:12px;display:none"></div>
+  </div>
+</div>
+
+</main>
+</div><!-- /shell -->
+
+<!-- BOTTOM NAV (mobile) -->
+<div class="bnav" id="bnav">
+  <div class="bni active" data-p="markets" onclick="showPage('markets',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    Markets
+  </div>
+  <div class="bni" data-p="create" onclick="showPage('create',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+    Create
+  </div>
+  <div class="bni" data-p="predict" onclick="showPage('predict',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+    Predict
+  </div>
+  <div class="bni" data-p="wallet" onclick="showPage('wallet',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1" fill="currentColor"/></svg>
+    Wallet
+  </div>
+  <div class="bni" data-p="signer" onclick="showPage('signer',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+    Signer
+  </div>
 </div>
 
 <div id="toast"></div>
 
 <script type="module">
-// ═══════════════════════════════════════════════════════
-// PRAXIS — LOGIC
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════
+// BLS
+// ═══════════════════════════════════════════
+let bls12_381 = null;
+(async () => {
+  for (const url of ['https://esm.sh/@noble/curves@1.4.2/bls12-381','https://cdn.skypack.dev/@noble/curves@1.4.2/bls12-381']) {
+    try { const m = await import(url); bls12_381 = m.bls12_381; break; } catch {}
+  }
+  if (!bls12_381) toast('BLS library failed to load — check internet', true);
+})();
 
-import { bls12_381 } from 'https://esm.sh/@noble/curves@1.4.2/bls12-381';
+// ═══════════════════════════════════════════
+// CONFIG & STATE
+// ═══════════════════════════════════════════
+const getRPCHost = () => localStorage.getItem('praxis_rpc_host') || 'localhost';
+const getRPC     = () => `http://${getRPCHost()}:50002`;
 
-let wallet = { privKey: null, pubKey: null, address: null };
-const RPC = () => `http://${localStorage.getItem('host') || 'localhost'}:50002`;
 let currentHeight = 0;
+let selectedOut   = true;
+let resolveOut    = true;
+let propOut       = true;
+let revOut        = true;
+let signerPrivKey = null, signerPubKey = null, signerAddress = null;
 
-// ── Helpers ──
-function hexToBytes(h) { return new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b,16))); }
-function bytesToHex(b) { return Array.from(b).map(x => x.toString(16).padStart(2,'0')).join(''); }
-async function sha256(b) { return new Uint8Array(await crypto.subtle.digest('SHA-256', b)); }
-function encodeVarint(v) { const out=[]; let n=BigInt(v); while(n>127n){out.push(Number((n&0x7fn)|0x80n));n>>=7n;} out.push(Number(n)); return new Uint8Array(out); }
-function tag(f,w){ return encodeVarint((BigInt(f)<<3n)|BigInt(w)); }
-function varintField(f,v){ const b=BigInt(v); return b ? concat(tag(f,0),encodeVarint(b)) : new Uint8Array(0); }
-function bytesField(f,b){ return b?.length ? concat(tag(f,2),encodeVarint(b.length),b) : new Uint8Array(0); }
-function stringField(f,s){ const e=new TextEncoder().encode(s); return e.length ? concat(tag(f,2),encodeVarint(e.length),e) : new Uint8Array(0); }
-function boolField(f,v){ return concat(tag(f,0), new Uint8Array([v?1:0])); }
-function embedField(f,b){ return b?.length ? concat(tag(f,2),encodeVarint(b.length),b) : new Uint8Array(0); }
-function concat(...arrs){ const t=arrs.reduce((s,a)=>s+a.length,0); const r=new Uint8Array(t); let o=0; for(const a of arrs){r.set(a,o);o+=a.length} return r; }
+// ═══════════════════════════════════════════
+// PROTO ENCODER
+// ═══════════════════════════════════════════
+function encV(value) {
+  const out = []; let v = typeof value==='bigint'?value:BigInt(value);
+  while(v>127n){out.push(Number((v&0x7fn)|0x80n));v>>=7n;}out.push(Number(v));return new Uint8Array(out);
+}
+function cat(...a){const t=a.reduce((s,x)=>s+x.length,0);const o=new Uint8Array(t);let off=0;for(const x of a){o.set(x,off);off+=x.length;}return o;}
+function tag(f,w){return encV((BigInt(f)<<3n)|BigInt(w));}
+function vf(f,v){const x=typeof v==='bigint'?v:BigInt(v);if(x===0n)return new Uint8Array(0);return cat(tag(f,0),encV(x));}
+function bf(f,b){if(!b||!b.length)return new Uint8Array(0);return cat(tag(f,2),encV(b.length),b);}
+function sf(f,s){if(!s||!s.length)return new Uint8Array(0);const e=new TextEncoder().encode(s);return cat(tag(f,2),encV(e.length),e);}
+function ef(f,m){if(!m||!m.length)return new Uint8Array(0);return cat(tag(f,2),encV(m.length),m);}
+function boolF(f,v){return cat(tag(f,0),new Uint8Array([v?1:0]));}
 
-// ── Proto Encoders ──
-function encodeAny(url, inner){ return concat(stringField(1,url), bytesField(2,inner)); }
-function encodeSend(from,to,amt){ return concat(bytesField(1,hexToBytes(from)), bytesField(2,hexToBytes(to)), varintField(3,amt)); }
-function encodeCreateMarket(creator,b0,exp,n,question){ return concat(bytesField(1,hexToBytes(creator)), varintField(2,b0), varintField(3,exp), varintField(4,n), stringField(5,question)); }
-function encodeSubmitPrediction(mid,bettor,outcome,shares,maxC){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(bettor)), boolField(3,outcome), varintField(4,shares), varintField(5,maxC)); }
-function encodeResolveMarket(mid,resolver,win){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(resolver)), boolField(3,win)); }
-function encodeClaimWinnings(mid,claimant){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(claimant))); }
-function encodeRegisterResolver(addr,stake){ return concat(bytesField(1,hexToBytes(addr)), varintField(2,stake)); }
-function encodeProposeOutcome(mid,resolver,outcome,bond){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(resolver)), boolField(3,outcome), varintField(4,bond)); }
-function encodeFileDispute(mid,disputer,bond){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(disputer)), varintField(3,bond)); }
-function encodeCommitVote(mid,voter,hash){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(voter)), bytesField(3,hexToBytes(hash))); }
-function encodeRevealVote(mid,voter,vote,nonce){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(voter)), boolField(3,vote), bytesField(4,hexToBytes(nonce))); }
-function encodeTallyVotes(mid,caller){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(caller))); }
-function encodeFinalizeMarket(mid,caller){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(caller))); }
-function encodeClaimSlash(mid,claimant){ return concat(bytesField(1,hexToBytes(mid)), bytesField(2,hexToBytes(claimant))); }
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+function h2b(hex){hex=hex.trim().toLowerCase();if(hex.length%2)throw new Error('Odd hex');const o=new Uint8Array(hex.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(hex.slice(i*2,i*2+2),16);return o;}
+function b2h(b){return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');}
+function b2b64(b){let s='';for(const x of b)s+=String.fromCharCode(x);return btoa(s);}
+function fmtA(n){if(!n&&n!==0)return'—';const x=Number(n);if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1e3)return(x/1e3).toFixed(1)+'k';return String(x);}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function addr40(s,label){if(!s||s.length!==40)throw new Error(`${label||'Address'} must be 40 hex chars`);}
+function mid40(s){addr40(s,'Market ID');}
 
-// ── Transaction sign bytes ──
-function encodeTxForSigning(type, url, innerBytes, {txTime,fee,height,network,chain}){
-  const any = encodeAny(url, innerBytes);
-  return concat(
-    stringField(1, type), embedField(2, any),
-    varintField(4, height), varintField(5, txTime), varintField(6, fee),
-    varintField(8, network), varintField(9, chain)
+// ═══════════════════════════════════════════
+// google.protobuf.Any
+// ═══════════════════════════════════════════
+function encAny(typeUrl,inner){return cat(sf(1,typeUrl),bf(2,inner));}
+
+// ═══════════════════════════════════════════
+// INNER MESSAGE ENCODERS — field numbers match tx.proto
+// ═══════════════════════════════════════════
+function encSend(from,to,amt){return cat(bf(1,h2b(from)),bf(2,h2b(to)),vf(3,amt));}
+function encCreate(creator,b0,expiry,nonce,question){return cat(bf(1,h2b(creator)),vf(2,b0),vf(3,expiry),vf(4,nonce),sf(5,question));}
+function encPredict(mid,bettor,outcome,shares,maxcost){return cat(bf(1,h2b(mid)),bf(2,h2b(bettor)),boolF(3,outcome),vf(4,shares),vf(5,maxcost));}
+function encResolve(mid,resolver,outcome){return cat(bf(1,h2b(mid)),bf(2,h2b(resolver)),boolF(3,outcome));}
+function encClaim(mid,claimant){return cat(bf(1,h2b(mid)),bf(2,h2b(claimant)));}
+function encRegister(addr,stake){return cat(bf(1,h2b(addr)),vf(2,stake));}
+function encPropose(mid,resolver,outcome,bond){return cat(bf(1,h2b(mid)),bf(2,h2b(resolver)),boolF(3,outcome),vf(4,bond));}
+function encDispute(mid,addr,bond){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)),vf(3,bond));}
+function encCommit(mid,voter,hash){return cat(bf(1,h2b(mid)),bf(2,h2b(voter)),bf(3,h2b(hash)));}
+function encReveal(mid,voter,vote,nonce){return cat(bf(1,h2b(mid)),bf(2,h2b(voter)),boolF(3,vote),bf(4,h2b(nonce)));}
+function encTally(mid,addr){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)));}
+function encFinalize(mid,addr){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)));}
+function encSlash(mid,addr){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)));}
+
+// ═══════════════════════════════════════════
+// TX SIGN BYTES ENCODER
+// ═══════════════════════════════════════════
+function encSignBytes(msgType,typeUrl,inner,{txTime,fee,height,memo,netId,chainId}){
+  const any=encAny(typeUrl,inner);
+  return cat(
+    sf(1,msgType),ef(2,any),
+    vf(4,height||currentHeight),
+    vf(5,txTime),vf(6,fee||10000),
+    memo?sf(7,memo):new Uint8Array(0),
+    vf(8,netId||1),vf(9,chainId||1),
   );
 }
 
-// ── Sign & Submit ──
-async function buildSignedTx(type, url, innerBytes, meta={}){
-  const txTime = BigInt(Date.now()) * 1000n;
-  const params = { txTime, fee: meta.fee||10000, height: currentHeight, network:1, chain:1 };
-  const signBytes = encodeTxForSigning(type, url, innerBytes, params);
-  if (!wallet.privKey) throw new Error('Load private key first');
-  const sig = await bls12_381.sign(signBytes, wallet.privKey);
-  return {
-    type, msgTypeUrl: url, msgBytes: bytesToHex(innerBytes),
-    signature: { publicKey: bytesToHex(wallet.pubKey), signature: bytesToHex(sig) },
-    time: Number(txTime), createdHeight: currentHeight, fee: params.fee,
-    memo: '', networkID: 1, chainID: 1
-  };
+// ═══════════════════════════════════════════
+// BLS SIGN
+// ═══════════════════════════════════════════
+async function blsSign(msg){
+  if(!signerPrivKey)throw new Error('No key loaded — go to Signer');
+  if(!bls12_381)throw new Error('BLS library not loaded');
+  return await bls12_381.sign(msg,signerPrivKey);
 }
 
-async function doSubmit(type, url, inner, fee=10000){
-  const tx = await buildSignedTx(type, url, inner, {fee});
-  const resp = await fetch(`${RPC()}/v1/tx`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(tx) });
-  const txt = await resp.text();
-  if (!resp.ok) throw new Error(txt);
-  toast('✓ ' + txt.slice(0,40) + '…');
+// ═══════════════════════════════════════════
+// BUILD SIGNED TX
+// ═══════════════════════════════════════════
+async function buildSigned(msgType,typeUrl,inner,meta){
+  const txTime=BigInt(Date.now())*1000n;
+  const p={txTime,fee:meta.fee||10000,height:meta.height||currentHeight,memo:'',netId:1,chainId:1};
+  const sb=encSignBytes(msgType,typeUrl,inner,p);
+  const sig=await blsSign(sb);
+  const sigObj={publicKey:b2h(signerPubKey),signature:b2h(sig)};
+  const base={signature:sigObj,createdHeight:p.height,time:Number(txTime),fee:p.fee,memo:'',networkID:1,chainID:1};
+  return{type:msgType,...base,msgTypeUrl:typeUrl,msgBytes:b2h(inner)};
 }
 
-// ── UI ──
-window.showPage = function(id, btn){
-  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
+function buildUnsigned(msgType,typeUrl,inner,meta){
+  const txTime=BigInt(Date.now())*1000n;
+  const base={signature:null,createdHeight:meta.height||currentHeight,time:Number(txTime),fee:meta.fee||10000,memo:'',networkID:1,chainID:1};
+  return{type:msgType,...base,msgTypeUrl:typeUrl,msgBytes:b2h(inner)};
+}
+
+// ═══════════════════════════════════════════
+// RPC
+// ═══════════════════════════════════════════
+async function rpc(path,body={}){
+  const r=await fetch(getRPC()+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const t=await r.text();if(!r.ok)throw new Error(`HTTP ${r.status}: ${t}`);
+  try{return JSON.parse(t);}catch{return t;}
+}
+async function submitTxRPC(obj){const d=await rpc('/v1/tx',obj);return typeof d==='string'?d.replace(/^"|"$/g,''):JSON.stringify(d);}
+
+// ═══════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════
+let _tt;
+window.toast=function(msg,isErr=false){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className=isErr?'err':'ok';el.style.display='block';
+  clearTimeout(_tt);_tt=setTimeout(()=>el.style.display='none',5000);
+};
+
+// ═══════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════
+window.showPage=function(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  const page = document.getElementById('page-'+id);
-  if(page) page.classList.add('active');
-  if(id==='markets') loadMarkets();
-  if(id==='wallet' && wallet.address) refreshBalance();
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelectorAll('#deskNav .nav-item').forEach(b=>b.classList.remove('active'));
+  const dm=document.querySelector(`#deskNav [data-p="${id}"]`);if(dm)dm.classList.add('active');
+  document.querySelectorAll('#bnav .bni').forEach(b=>b.classList.remove('active'));
+  const bm=document.querySelector(`#bnav [data-p="${id}"]`);if(bm)bm.classList.add('active');
+  if(id==='markets')loadMarkets();
+  closeNav();
 };
 
-window.toggleTheme = function(){
-  const html = document.documentElement;
-  html.setAttribute('data-theme', html.getAttribute('data-theme')==='dark'? 'light':'dark');
-};
+// ═══════════════════════════════════════════
+// MOBILE NAV
+// ═══════════════════════════════════════════
+window.openNav=function(){document.getElementById('mobNav').classList.add('open');};
+window.closeNav=function(e){if(e&&e.target!==document.getElementById('mobNav'))return;document.getElementById('mobNav').classList.remove('open');};
 
-function toast(msg, err){
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.className = err?'err':''; el.style.display='block';
-  clearTimeout(el._t); el._t = setTimeout(()=>el.style.display='none', 6000);
+function buildMobNav(){
+  const body=document.getElementById('mobNavBody');
+  if(!body)return;
+  body.innerHTML=document.getElementById('deskNav').innerHTML;
+  body.querySelectorAll('.nav-item').forEach(item=>{
+    const p=item.getAttribute('data-p');
+    if(p)item.setAttribute('onclick',`showPage('${p}',this)`);
+  });
 }
 
-async function refreshBalance(){
-  if(!wallet.address) return;
+// ═══════════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════════
+window.toggleTheme=function(){
+  const html=document.documentElement;
+  const d=html.getAttribute('data-theme')==='dark';
+  html.setAttribute('data-theme',d?'light':'dark');
+  localStorage.setItem('praxis_theme',d?'light':'dark');
+  updateTL();
+};
+function updateTL(){
+  const d=document.documentElement.getAttribute('data-theme')==='dark';
+  const lbl=d?'Light mode':'Dark mode';
+  ['tlD','tlM'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=lbl;});
+}
+const st=localStorage.getItem('praxis_theme');
+if(st)document.documentElement.setAttribute('data-theme',st);
+updateTL();
+
+// ═══════════════════════════════════════════
+// RPC STATUS
+// ═══════════════════════════════════════════
+window.checkRPC=async function(){
   try{
-    const r = await fetch(`${RPC()}/v1/query/account`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({address:wallet.address}) });
-    const d = await r.json();
-    document.getElementById('sk_balance').textContent = (d.amount||0).toLocaleString();
-  }catch{}
+    const d=await rpc('/v1/query/height',{});currentHeight=d.height||0;
+    ['rpcDot','rpcDotM'].forEach(id=>{const e=document.getElementById(id);if(e)e.className='dot live';});
+    const el=document.getElementById('rpcStatus');if(el)el.textContent='live';
+    const hb=document.getElementById('heightBadge');if(hb)hb.textContent=`block ${currentHeight}`;
+    const hm=document.getElementById('hbM');if(hm)hm.textContent=`#${currentHeight}`;
+    ['ni_height'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=currentHeight;});
+    const ns=document.getElementById('ni_status');if(ns)ns.textContent='connected';
+    const nr=document.getElementById('ni_rpc');if(nr)nr.textContent=getRPC();
+    const sh=document.getElementById('sb_h');if(sh)sh.textContent=currentHeight;
+    const ce=document.getElementById('c_expiry');if(ce&&!ce.value)ce.value=currentHeight+1000;
+    // auto-generate nonce for create market
+    const nonceEl=document.getElementById('c_nonce');if(nonceEl&&!nonceEl.value)nonceEl.value=BigInt(Date.now())*1000n;
+  }catch{
+    ['rpcDot','rpcDotM'].forEach(id=>{const e=document.getElementById(id);if(e)e.className='dot';});
+    const el=document.getElementById('rpcStatus');if(el)el.textContent='offline';
+    const ns=document.getElementById('ni_status');if(ns)ns.textContent='offline';
+  }
+};
+window.applyHost=function(){const h=document.getElementById('ni_host').value.trim();if(h)localStorage.setItem('praxis_rpc_host',h);checkRPC();toast('Connecting to '+h+'…');};
+
+// ═══════════════════════════════════════════
+// OUTCOME TOGGLES
+// ═══════════════════════════════════════════
+window.setOut=function(v){selectedOut=v;document.getElementById('btn_yes').className='obtn yes'+(v?' active':'');document.getElementById('btn_no').className='obtn no'+(!v?' active':'');};
+window.setResOut=function(v){resolveOut=v;document.getElementById('rbtn_yes').className='obtn yes'+(v?' active':'');document.getElementById('rbtn_no').className='obtn no'+(!v?' active':'');};
+window.setPropOut=function(v){propOut=v;document.getElementById('pbtn_yes').className='obtn yes'+(v?' active':'');document.getElementById('pbtn_no').className='obtn no'+(!v?' active':'');};
+window.setRevOut=function(v){revOut=v;document.getElementById('rvbtn_yes').className='obtn yes'+(v?' active':'');document.getElementById('rvbtn_no').className='obtn no'+(!v?' active':'');};
+
+// ═══════════════════════════════════════════
+// SIGNER
+// ═══════════════════════════════════════════
+window.loadKey=async function(){
+  const hex=document.getElementById('sk_input').value.trim().toLowerCase();
+  if(hex.length!==64)return toast('Private key must be exactly 64 hex chars',true);
+  try{
+    if(!bls12_381)throw new Error('BLS library not loaded');
+    signerPrivKey=h2b(hex);
+    signerPubKey=bls12_381.getPublicKey(signerPrivKey);
+    const hb=await crypto.subtle.digest('SHA-256',signerPubKey);
+    signerAddress=b2h(new Uint8Array(hb).slice(0,20));
+    document.getElementById('keyStatus').className='key-status loaded';
+    document.getElementById('keyStatus').textContent='✓ loaded — '+signerAddress.slice(0,16)+'…';
+    document.getElementById('sk_derived').style.display='block';
+    document.getElementById('sk_pub').textContent=b2h(signerPubKey);
+    document.getElementById('sk_addr').textContent=signerAddress;
+    ['c_creator','p_bettor','r_resolver','cl_addr','s_from','w_addr','ft_addr',
+     'reg_addr','prop_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr'].forEach(id=>{
+      const el=document.getElementById(id);if(el&&!el.value)el.value=signerAddress;
+    });
+    document.getElementById('sk_input').value='';
+    toast('Key loaded — '+signerAddress);
+  }catch(e){signerPrivKey=signerPubKey=signerAddress=null;toast('Key load failed: '+e.message,true);}
+};
+window.clearKey=function(){
+  signerPrivKey=signerPubKey=signerAddress=null;
+  document.getElementById('keyStatus').className='key-status';
+  document.getElementById('keyStatus').textContent='○ No key loaded';
+  document.getElementById('sk_derived').style.display='none';
+  document.getElementById('sk_input').value='';
+  toast('Key cleared');
+};
+
+// ═══════════════════════════════════════════
+// ACCOUNT QUERY
+// ═══════════════════════════════════════════
+window.queryAccount=async function(){
+  const addr=document.getElementById('w_addr').value.trim().toLowerCase();
+  addr40(addr,'Address');
+  try{
+    const d=await rpc('/v1/query/account',{address:addr});
+    document.getElementById('w_result').style.display='block';
+    document.getElementById('w_balance').textContent=Number(d.amount||0).toLocaleString();
+    document.getElementById('w_addrD').textContent=addr;
+  }catch(e){toast('Query failed: '+e.message,true);}
+};
+
+// ═══════════════════════════════════════════
+// FAILED TX
+// ═══════════════════════════════════════════
+window.checkFailedTxs=async function(){
+  const addr=document.getElementById('ft_addr').value.trim().toLowerCase();
+  addr40(addr,'Address');
+  try{
+    const d=await rpc('/v1/query/failed-txs',{address:addr,perPage:20});
+    const c=d.totalCount||0;const el=document.getElementById('ft_result');el.style.display='block';
+    if(c===0){el.innerHTML=`<div class="alert ag">✓ No failed transactions for ${addr.slice(0,12)}…</div>`;return;}
+    const rows=(d.results||[]).map(r=>`<div style="margin-bottom:8px;padding:8px;background:var(--bg);border:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:10px"><span style="color:var(--red)">${esc(r.error?.msg||'?')} (${r.error?.code})</span><br><span style="color:var(--text3)">${r.txHash?.slice(0,24)}…</span></div>`).join('');
+    el.innerHTML=`<div class="alert ar">⚠ ${c} failed tx(s)</div>${rows}`;
+  }catch(e){toast('Query failed: '+e.message,true);}
+};
+
+// ═══════════════════════════════════════════
+// PENDING HELPER
+// ═══════════════════════════════════════════
+function setPend(btnId,pendId,on){
+  const b=document.getElementById(btnId);const p=document.getElementById(pendId);
+  if(b)b.disabled=on;if(p)p.style.display=on?'flex':'none';
 }
 
-// ── Wallet ──
-window.loadKey = async function(){
-  const hex = document.getElementById('sk_input').value.trim();
-  if(hex.length!==64) return toast('Private key must be 64 hex chars', true);
+async function doSubmit(msgType,typeUrl,inner,meta,btnId,pendId){
+  if(!signerPrivKey)return toast('Load a private key in Signer first',true);
+  if(!currentHeight)return toast('Node not connected',true);
+  setPend(btnId,pendId,true);
   try{
-    wallet.privKey = hexToBytes(hex);
-    wallet.pubKey = bls12_381.getPublicKey(wallet.privKey);
-    const hash = await sha256(wallet.pubKey);
-    wallet.address = bytesToHex(hash.slice(0,20));
-    document.getElementById('sk_info').style.display='block';
-    document.getElementById('sk_addr').textContent = wallet.address;
-    refreshBalance();
-    toast('Key loaded');
-  }catch(e){ toast(e.message, true); }
-};
+    const tx=await buildSigned(msgType,typeUrl,inner,meta);
+    const hash=await submitTxRPC(tx);
+    toast('✓ Submitted — '+(hash.length>20?hash.slice(0,20)+'…':hash));
+    checkRPC();
+    if(msgType==='create_market')setTimeout(loadMarkets,3000);
+  }catch(e){toast('Error: '+e.message,true);}
+  finally{setPend(btnId,pendId,false);}
+}
 
-function val(id){ return document.getElementById(id)?.value||''; }
-function numVal(id){ return parseInt(val(id)); }
+function showPL(outId,payId,tx){
+  document.getElementById(outId).style.display='block';
+  document.getElementById(payId).value=JSON.stringify(tx,null,2);
+}
 
-// ── Submit wrappers ──
-window.submitSend = async function(){
-  const to = val('s_to').toLowerCase(); const amt = numVal('s_amount');
-  if(to.length!==40) return toast('To address invalid', true);
-  await doSubmit('send', 'type.googleapis.com/types.MessageSend', encodeSend(wallet.address, to, amt));
-  refreshBalance();
-};
-window.submitCreateMarket = async function(){
-  const q = val('cm_question'); const b0 = numVal('cm_b0');
-  let exp = numVal('cm_expiry'); let nonce = numVal('cm_nonce');
-  if(!exp) exp = currentHeight + 1000;
-  if(!nonce) nonce = Date.now();
-  await doSubmit('create_market', 'type.googleapis.com/types.MessageCreateMarket', encodeCreateMarket(wallet.address, b0, exp, nonce, q));
-};
-window.submitPrediction = async function(){
-  const mid=val('sp_marketId').toLowerCase(), outcome=val('sp_outcome')==='true', shares=numVal('sp_shares'), maxC=numVal('sp_maxcost');
-  await doSubmit('submit_prediction', 'type.googleapis.com/types.MessageSubmitPrediction', encodeSubmitPrediction(mid, wallet.address, outcome, shares, maxC));
-};
-window.submitResolveMarket = async function(){
-  const mid=val('rm_marketId').toLowerCase(), win=val('rm_outcome')==='true';
-  await doSubmit('resolve_market', 'type.googleapis.com/types.MessageResolveMarket', encodeResolveMarket(mid, wallet.address, win));
-};
-window.submitClaimWinnings = async function(){
-  const mid=val('cw_marketId').toLowerCase();
-  await doSubmit('claim_winnings', 'type.googleapis.com/types.MessageClaimWinnings', encodeClaimWinnings(mid, wallet.address));
-};
-window.submitRegisterResolver = async function(){
-  await doSubmit('register_resolver', 'type.googleapis.com/types.MessageRegisterResolver', encodeRegisterResolver(wallet.address, numVal('rr_stake')));
-};
-window.submitProposeOutcome = async function(){
-  const mid=val('po_marketId').toLowerCase(), outcome=val('po_outcome')==='true', bond=numVal('po_bond');
-  await doSubmit('propose_outcome', 'type.googleapis.com/types.MessageProposeOutcome', encodeProposeOutcome(mid, wallet.address, outcome, bond));
-};
-window.submitFileDispute = async function(){
-  const mid=val('fd_marketId').toLowerCase(), bond=numVal('fd_bond');
-  await doSubmit('file_dispute', 'type.googleapis.com/types.MessageFileDispute', encodeFileDispute(mid, wallet.address, bond));
-};
-window.submitCommitVote = async function(){
-  const mid=val('cv_marketId').toLowerCase(), hash=val('cv_hash');
-  await doSubmit('commit_vote', 'type.googleapis.com/types.MessageCommitVote', encodeCommitVote(mid, wallet.address, hash));
-};
-window.submitRevealVote = async function(){
-  const mid=val('rv_marketId').toLowerCase(), vote=val('rv_vote')==='true', nonce=val('rv_nonce');
-  await doSubmit('reveal_vote', 'type.googleapis.com/types.MessageRevealVote', encodeRevealVote(mid, wallet.address, vote, nonce));
-};
-window.submitTallyVotes = async function(){
-  const mid=val('tv_marketId').toLowerCase();
-  await doSubmit('tally_votes', 'type.googleapis.com/types.MessageTallyVotes', encodeTallyVotes(mid, wallet.address));
-};
-window.submitFinalizeMarket = async function(){
-  const mid=val('fm_marketId').toLowerCase();
-  await doSubmit('finalize_market', 'type.googleapis.com/types.MessageFinalizeMarket', encodeFinalizeMarket(mid, wallet.address));
-};
-window.submitClaimSlash = async function(){
-  const mid=val('cs_marketId').toLowerCase();
-  await doSubmit('claim_slash', 'type.googleapis.com/types.MessageClaimSlash', encodeClaimSlash(mid, wallet.address));
-};
+// ═══════════════════════════════════════════
+// ── SEND
+// ═══════════════════════════════════════════
+window.build_send=function(){try{
+  const from=document.getElementById('s_from').value.trim().toLowerCase();
+  const to=document.getElementById('s_to').value.trim().toLowerCase();
+  const amt=parseInt(document.getElementById('s_amount').value);
+  const fee=parseInt(document.getElementById('s_fee').value)||10000;
+  addr40(from,'From');addr40(to,'To');if(!amt||amt<=0)throw new Error('Amount > 0 required');
+  showPL('so','sp',buildUnsigned('send','type.googleapis.com/types.MessageSend',encSend(from,to,amt),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_send=async function(){try{
+  const from=document.getElementById('s_from').value.trim().toLowerCase();
+  const to=document.getElementById('s_to').value.trim().toLowerCase();
+  const amt=parseInt(document.getElementById('s_amount').value);
+  const fee=parseInt(document.getElementById('s_fee').value)||10000;
+  addr40(from,'From');addr40(to,'To');if(!amt||amt<=0)throw new Error('Amount > 0');
+  await doSubmit('send','type.googleapis.com/types.MessageSend',encSend(from,to,amt),{fee},'btn_send','pend_send');
+}catch(e){toast(e.message,true);}};
 
-// ── Markets Loader ──
-window.loadMarkets = async function(){
-  const el = document.getElementById('marketsList');
-  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3);font-family:JetBrains Mono,monospace;font-size:11px">Scanning chain…</div>';
-  const markets = [];
+// ── CREATE MARKET
+window.build_create=function(){try{
+  const q=document.getElementById('c_question').value.trim();
+  const cr=document.getElementById('c_creator').value.trim().toLowerCase();
+  const b0=parseInt(document.getElementById('c_b0').value);
+  const exp=parseInt(document.getElementById('c_expiry').value)||currentHeight+1000;
+  const fee=parseInt(document.getElementById('c_fee').value)||10000;
+  let nonce=document.getElementById('c_nonce').value;
+  if(!nonce)nonce=BigInt(Date.now())*1000n;
+  else nonce=parseInt(nonce);
+  if(!q)throw new Error('Question required');addr40(cr,'Creator');
+  showPL('co','cp',buildUnsigned('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_create=async function(){try{
+  const q=document.getElementById('c_question').value.trim();
+  const cr=document.getElementById('c_creator').value.trim().toLowerCase();
+  const b0=parseInt(document.getElementById('c_b0').value);
+  const exp=parseInt(document.getElementById('c_expiry').value)||currentHeight+1000;
+  const fee=parseInt(document.getElementById('c_fee').value)||10000;
+  let nonce=document.getElementById('c_nonce').value;
+  if(!nonce)nonce=BigInt(Date.now())*1000n;
+  else nonce=parseInt(nonce);
+  if(!q)throw new Error('Question required');addr40(cr,'Creator');
+  await doSubmit('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q),{fee},'btn_create','pend_create');
+}catch(e){toast(e.message,true);}};
+
+// ── SUBMIT PREDICTION
+window.build_predict=function(){try{
+  const mid=document.getElementById('p_mid').value.trim().toLowerCase();mid40(mid);
+  const bettor=document.getElementById('p_bettor').value.trim().toLowerCase();addr40(bettor,'Bettor');
+  const shares=parseInt(document.getElementById('p_shares').value);
+  const mc=parseInt(document.getElementById('p_maxcost').value);
+  const fee=parseInt(document.getElementById('p_fee').value)||10000;
+  if(shares<1000000)throw new Error('Shares min 1,000,000');
+  showPL('po','pp',buildUnsigned('submit_prediction','type.googleapis.com/types.MessageSubmitPrediction',encPredict(mid,bettor,selectedOut,shares,mc),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_predict=async function(){try{
+  const mid=document.getElementById('p_mid').value.trim().toLowerCase();mid40(mid);
+  const bettor=document.getElementById('p_bettor').value.trim().toLowerCase();addr40(bettor,'Bettor');
+  const shares=parseInt(document.getElementById('p_shares').value);
+  const mc=parseInt(document.getElementById('p_maxcost').value);
+  const fee=parseInt(document.getElementById('p_fee').value)||10000;
+  if(shares<1000000)throw new Error('Shares min 1,000,000');
+  await doSubmit('submit_prediction','type.googleapis.com/types.MessageSubmitPrediction',encPredict(mid,bettor,selectedOut,shares,mc),{fee},'btn_predict','pend_predict');
+}catch(e){toast(e.message,true);}};
+
+// ── RESOLVE MARKET
+window.build_resolve=function(){try{
+  const mid=document.getElementById('r_mid').value.trim().toLowerCase();mid40(mid);
+  const res=document.getElementById('r_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
+  const fee=parseInt(document.getElementById('r_fee').value)||10000;
+  showPL('ro','rp',buildUnsigned('resolve_market','type.googleapis.com/types.MessageResolveMarket',encResolve(mid,res,resolveOut),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_resolve=async function(){try{
+  const mid=document.getElementById('r_mid').value.trim().toLowerCase();mid40(mid);
+  const res=document.getElementById('r_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
+  const fee=parseInt(document.getElementById('r_fee').value)||10000;
+  await doSubmit('resolve_market','type.googleapis.com/types.MessageResolveMarket',encResolve(mid,res,resolveOut),{fee},'btn_resolve','pend_resolve');
+}catch(e){toast(e.message,true);}};
+
+// ── CLAIM WINNINGS
+window.build_claim=function(){try{
+  const mid=document.getElementById('cl_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('cl_addr').value.trim().toLowerCase();addr40(addr,'Claimant');
+  const fee=parseInt(document.getElementById('cl_fee').value)||10000;
+  showPL('clo','clp',buildUnsigned('claim_winnings','type.googleapis.com/types.MessageClaimWinnings',encClaim(mid,addr),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_claim=async function(){try{
+  const mid=document.getElementById('cl_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('cl_addr').value.trim().toLowerCase();addr40(addr,'Claimant');
+  const fee=parseInt(document.getElementById('cl_fee').value)||10000;
+  await doSubmit('claim_winnings','type.googleapis.com/types.MessageClaimWinnings',encClaim(mid,addr),{fee},'btn_claim','pend_claim');
+}catch(e){toast(e.message,true);}};
+
+// ── REGISTER RESOLVER
+window.build_register=function(){try{
+  const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
+  const stake=parseInt(document.getElementById('reg_stake').value);
+  const fee=parseInt(document.getElementById('reg_fee').value)||10000;
+  if(stake<100000000)throw new Error('Stake min 100,000,000 μPRX');
+  showPL('rego','regp',buildUnsigned('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_register=async function(){try{
+  const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
+  const stake=parseInt(document.getElementById('reg_stake').value);
+  const fee=parseInt(document.getElementById('reg_fee').value)||10000;
+  if(stake<100000000)throw new Error('Stake min 100,000,000 μPRX');
+  await doSubmit('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee},'btn_register','pend_register');
+}catch(e){toast(e.message,true);}};
+
+// ── PROPOSE OUTCOME
+window.build_propose=function(){try{
+  const mid=document.getElementById('prop_mid').value.trim().toLowerCase();mid40(mid);
+  const res=document.getElementById('prop_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
+  const bond=parseInt(document.getElementById('prop_bond').value);
+  const fee=parseInt(document.getElementById('prop_fee').value)||10000;
+  showPL('propo','propp',buildUnsigned('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_propose=async function(){try{
+  const mid=document.getElementById('prop_mid').value.trim().toLowerCase();mid40(mid);
+  const res=document.getElementById('prop_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
+  const bond=parseInt(document.getElementById('prop_bond').value);
+  const fee=parseInt(document.getElementById('prop_fee').value)||10000;
+  await doSubmit('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee},'btn_propose','pend_propose');
+}catch(e){toast(e.message,true);}};
+
+// ── FILE DISPUTE
+window.build_dispute=function(){try{
+  const mid=document.getElementById('dis_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('dis_addr').value.trim().toLowerCase();addr40(addr,'Disputer');
+  const bond=parseInt(document.getElementById('dis_bond').value);
+  const fee=parseInt(document.getElementById('dis_fee').value)||10000;
+  showPL('diso','disp',buildUnsigned('file_dispute','type.googleapis.com/types.MessageFileDispute',encDispute(mid,addr,bond),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_dispute=async function(){try{
+  const mid=document.getElementById('dis_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('dis_addr').value.trim().toLowerCase();addr40(addr,'Disputer');
+  const bond=parseInt(document.getElementById('dis_bond').value);
+  const fee=parseInt(document.getElementById('dis_fee').value)||10000;
+  await doSubmit('file_dispute','type.googleapis.com/types.MessageFileDispute',encDispute(mid,addr,bond),{fee},'btn_dispute','pend_dispute');
+}catch(e){toast(e.message,true);}};
+
+// ── COMMIT VOTE
+window.build_commit=function(){try{
+  const mid=document.getElementById('cv_mid').value.trim().toLowerCase();mid40(mid);
+  const voter=document.getElementById('cv_voter').value.trim().toLowerCase();addr40(voter,'Voter');
+  const hash=document.getElementById('cv_hash').value.trim().toLowerCase();if(hash.length!==64)throw new Error('Commit hash must be 64 hex chars');
+  const fee=parseInt(document.getElementById('cv_fee').value)||10000;
+  showPL('cvo','cvp',buildUnsigned('commit_vote','type.googleapis.com/types.MessageCommitVote',encCommit(mid,voter,hash),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_commit=async function(){try{
+  const mid=document.getElementById('cv_mid').value.trim().toLowerCase();mid40(mid);
+  const voter=document.getElementById('cv_voter').value.trim().toLowerCase();addr40(voter,'Voter');
+  const hash=document.getElementById('cv_hash').value.trim().toLowerCase();if(hash.length!==64)throw new Error('Commit hash must be 64 hex chars');
+  const fee=parseInt(document.getElementById('cv_fee').value)||10000;
+  await doSubmit('commit_vote','type.googleapis.com/types.MessageCommitVote',encCommit(mid,voter,hash),{fee},'btn_commit','pend_commit');
+}catch(e){toast(e.message,true);}};
+
+// ── REVEAL VOTE
+window.build_reveal=function(){try{
+  const mid=document.getElementById('rv_mid').value.trim().toLowerCase();mid40(mid);
+  const voter=document.getElementById('rv_voter').value.trim().toLowerCase();addr40(voter,'Voter');
+  const nonce=document.getElementById('rv_nonce').value.trim().toLowerCase();if(nonce.length!==64)throw new Error('Nonce must be 64 hex chars');
+  const fee=parseInt(document.getElementById('rv_fee').value)||10000;
+  showPL('rvo','rvp',buildUnsigned('reveal_vote','type.googleapis.com/types.MessageRevealVote',encReveal(mid,voter,revOut,nonce),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_reveal=async function(){try{
+  const mid=document.getElementById('rv_mid').value.trim().toLowerCase();mid40(mid);
+  const voter=document.getElementById('rv_voter').value.trim().toLowerCase();addr40(voter,'Voter');
+  const nonce=document.getElementById('rv_nonce').value.trim().toLowerCase();if(nonce.length!==64)throw new Error('Nonce must be 64 hex chars');
+  const fee=parseInt(document.getElementById('rv_fee').value)||10000;
+  await doSubmit('reveal_vote','type.googleapis.com/types.MessageRevealVote',encReveal(mid,voter,revOut,nonce),{fee},'btn_reveal','pend_reveal');
+}catch(e){toast(e.message,true);}};
+
+// ── TALLY VOTES
+window.build_tally=function(){try{
+  const mid=document.getElementById('tal_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('tal_addr').value.trim().toLowerCase();addr40(addr,'Caller');
+  const fee=parseInt(document.getElementById('tal_fee').value)||10000;
+  showPL('talo','talp',buildUnsigned('tally_votes','type.googleapis.com/types.MessageTallyVotes',encTally(mid,addr),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_tally=async function(){try{
+  const mid=document.getElementById('tal_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('tal_addr').value.trim().toLowerCase();addr40(addr,'Caller');
+  const fee=parseInt(document.getElementById('tal_fee').value)||10000;
+  await doSubmit('tally_votes','type.googleapis.com/types.MessageTallyVotes',encTally(mid,addr),{fee},'btn_tally','pend_tally');
+}catch(e){toast(e.message,true);}};
+
+// ── FINALIZE MARKET
+window.build_finalize=function(){try{
+  const mid=document.getElementById('fin_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('fin_addr').value.trim().toLowerCase();addr40(addr,'Caller');
+  const fee=parseInt(document.getElementById('fin_fee').value)||10000;
+  showPL('fino','finp',buildUnsigned('finalize_market','type.googleapis.com/types.MessageFinalizeMarket',encFinalize(mid,addr),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_finalize=async function(){try{
+  const mid=document.getElementById('fin_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('fin_addr').value.trim().toLowerCase();addr40(addr,'Caller');
+  const fee=parseInt(document.getElementById('fin_fee').value)||10000;
+  await doSubmit('finalize_market','type.googleapis.com/types.MessageFinalizeMarket',encFinalize(mid,addr),{fee},'btn_finalize','pend_finalize');
+}catch(e){toast(e.message,true);}};
+
+// ── CLAIM SLASH
+window.build_slash=function(){try{
+  const mid=document.getElementById('sl_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('sl_addr').value.trim().toLowerCase();addr40(addr,'Claimant');
+  const fee=parseInt(document.getElementById('sl_fee').value)||10000;
+  showPL('slo','slp',buildUnsigned('claim_slash','type.googleapis.com/types.MessageClaimSlash',encSlash(mid,addr),{fee}));toast('Payload built');
+}catch(e){toast(e.message,true);}};
+window.signAndSubmit_slash=async function(){try{
+  const mid=document.getElementById('sl_mid').value.trim().toLowerCase();mid40(mid);
+  const addr=document.getElementById('sl_addr').value.trim().toLowerCase();addr40(addr,'Claimant');
+  const fee=parseInt(document.getElementById('sl_fee').value)||10000;
+  await doSubmit('claim_slash','type.googleapis.com/types.MessageClaimSlash',encSlash(mid,addr),{fee},'btn_slash','pend_slash');
+}catch(e){toast(e.message,true);}};
+
+// ═══════════════════════════════════════════
+// MARKETS PAGE — scan chain for create_market txs
+// ═══════════════════════════════════════════
+function decVarint(buf,pos){let r=0n,s=0n;while(pos<buf.length){const b=BigInt(buf[pos++]);r|=(b&0x7fn)<<s;s+=7n;if(!(b&0x80n))break;}return{v:r,p:pos};}
+window.loadMarkets=async function(){
+  const el=document.getElementById('marketsList');
+  el.innerHTML='<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;scanning chain state</div>';
   try{
-    // Query recent tx by sender (validator) to find create_market txs
-    const data = await (await fetch(`${RPC()}/v1/query/txs-by-sender`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({address:'e7c7dad131a03f7ea0cc09a637ad096eb3495f77', perPage:200})
-    })).json();
-    if(data.results){
-      for(const tx of data.results){
-        const t = tx.transaction || tx;
-        const type = t.type || t.messageType || '';
-        if(type==='create_market'){
-          const msg = t.msg || {};
-          markets.push({
-            txHash: tx.txHash,
-            question: msg.question || '(no question)',
-            creator: msg.creatorAddress || '',
-            b0: msg.b0 || 0,
-            expiry: msg.expiryTime || 0,
-          });
+    await checkRPC();
+    const mm={};
+    const BATCH=200;
+    for(let h=1;h<=currentHeight;h+=BATCH){
+      for(let bh=h;bh<Math.min(h+BATCH,currentHeight+1);bh++){
+        let d;try{d=await rpc('/v1/query/txs-by-height',{height:bh,perPage:5000});}catch{continue;}
+        const res=d.results||[];if(!res.length)continue;
+        for(const tx of res){
+          const t=tx.transaction||tx;const type=t.type||t.messageType||'';const msg=t.msg||t;
+          if(type==='create_market'){
+            let q='',creator='',b0=0n,expiry=0n;
+            if(t.msgBytes){
+              const bytes=h2b(t.msgBytes);let pos=0;
+              while(pos<bytes.length){
+                const {v:tagV,p:p1}=decVarint(bytes,pos);pos=p1;const fn=Number(tagV>>3n),wt=Number(tagV&7n);
+                if(wt===0){const{v,p:p2}=decVarint(bytes,pos);pos=p2;if(fn===2)b0=v;if(fn===3)expiry=v;}
+                else if(wt===2){const{v:lv,p:p2}=decVarint(bytes,pos);const len=Number(lv);pos=p2;const chunk=bytes.slice(pos,pos+len);pos+=len;if(fn===1)creator=b2h(chunk);if(fn===5)q=new TextDecoder().decode(chunk);}
+                else if(wt===1){pos+=8;}else if(wt===5){pos+=4;}else break;
+              }
+            }else{q=msg.question||'';creator=msg.creatorAddress||tx.sender||'';b0=BigInt(msg.b0||0);expiry=BigInt(msg.expiryTime||msg.expiry_time||0);}
+            const key=tx.txHash||(creator+b0);
+            if(!mm[key])mm[key]={key,txHash:tx.txHash||'',q:q||'(no question)',creator,b0,expiry,status:0,qYes:b0/2n,qNo:b0/2n};
+          }
         }
       }
     }
-    document.getElementById('marketCount').textContent = `${markets.length} markets`;
-    if(markets.length===0){
-      el.innerHTML = '<div class="card" style="text-align:center;padding:40px;color:var(--text3)">No markets found. Create the first one!</div>';
-      return;
+    const mkts=Object.values(mm);
+    document.getElementById('sb_c').textContent=mkts.length;
+
+    if(!mkts.length){
+      el.innerHTML=`<div class="alert ay">No markets on-chain yet.<br>Go to <b>Create Market</b> to open the first one.</div>`;return;
     }
-    el.innerHTML = `<div class="markets-grid">${markets.map(m=>`
-      <div class="market-card">
-        <div class="market-question">${m.question}</div>
-        <div class="market-meta">
-          <span>b0: ${(Number(m.b0)/1e6).toFixed(1)}M</span>
-          <span>expiry: ${Number(m.expiry)}</span>
-        </div>
-        <div class="market-actions">
-          <button class="btn btn-ghost" onclick="document.getElementById('sp_marketId').value='${m.txHash}';showPage('submit_prediction',document.querySelector('[data-page=submit_prediction]'))">Predict</button>
-          <button class="btn btn-ghost" onclick="document.getElementById('rm_marketId').value='${m.txHash}';showPage('resolve_market',document.querySelector('[data-page=resolve_market]'))">Resolve</button>
-        </div>
-      </div>`).join('')}</div>`;
+
+    const statusBadge=s=>{
+      if(s===0)return`<span class="badge b-open"><span class="blink">●</span>&nbsp;OPEN</span>`;
+      if(s===1)return`<span class="badge b-prop">◎&nbsp;PROPOSED</span>`;
+      if(s===2)return`<span class="badge b-res">✓&nbsp;RESOLVED</span>`;
+      return`<span class="badge b-canc">✕&nbsp;CANCELLED</span>`;
+    };
+
+    el.innerHTML=`
+      <div class="alert ag" style="margin-bottom:16px">✓ ${mkts.length} market(s) found on-chain</div>
+      <div class="mgrid">
+        ${mkts.map((m,i)=>`
+          <div class="mcard">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <div class="mid">MKT #${i+1}</div>
+              ${statusBadge(m.status)}
+            </div>
+            <div class="mq">${esc(m.q)}</div>
+            <div class="mmeta">
+              <span>expiry: ${m.expiry?Number(m.expiry):'?'}</span>
+              <span>b0: ${fmtA(m.b0)} μPRX</span>
+              ${m.creator?`<span>${m.creator.slice(0,8)}…</span>`:''}
+            </div>
+            <div class="pools">
+              <div class="pbar pyes"><div class="plbl">YES</div><div class="pval">${fmtA(m.qYes)}</div></div>
+              <div class="pbar pno"><div class="plbl">NO</div><div class="pval">${fmtA(m.qNo)}</div></div>
+            </div>
+            <div class="mfooter">
+              <button class="btn bg bsm" onclick="fillP('${m.txHash}')">Predict</button>
+              ${m.status===0?`<button class="btn bg bsm" onclick="fillR('${m.txHash}')">Resolve</button>`:''}
+              ${m.status===2?`<button class="btn bg bsm" onclick="fillC('${m.txHash}')">Claim</button>`:''}
+            </div>
+          </div>`).join('')}
+      </div>`;
   }catch(e){
-    el.innerHTML = `<div class="card" style="text-align:center;padding:40px;color:var(--red)">Error: ${e.message}</div>`;
+    el.innerHTML=`<div class="alert ar">⚠ Cannot reach node at <code>${getRPC()}</code><br>${esc(e.message)}</div>`;
   }
 };
 
-// ── RPC poll ──
-async function checkRPC(){
-  try{
-    const r = await fetch(`${RPC()}/v1/query/height`, {method:'POST',headers:{'Content-Type':'application/json'}, body:'{}'});
-    const d = await r.json();
-    currentHeight = d.height;
-    document.getElementById('rpcDot').className = 'status-dot live';
-    document.getElementById('rpcStatus').textContent = 'live';
-    document.getElementById('heightBadge').textContent = '#'+currentHeight;
-  }catch{
-    document.getElementById('rpcDot').className = 'status-dot';
-    document.getElementById('rpcStatus').textContent = 'offline';
-  }
-}
-setInterval(checkRPC,12000);
+window.fillP=id=>{document.getElementById('p_mid').value=id;showPage('predict',null);};
+window.fillR=id=>{document.getElementById('r_mid').value=id;showPage('resolve',null);};
+window.fillC=id=>{document.getElementById('cl_mid').value=id;showPage('claim',null);};
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+document.getElementById('ni_host').value=getRPCHost();
+buildMobNav();
 checkRPC();
-loadMarkets();
+setInterval(checkRPC,12000);
 </script>
 </body>
-</html>
+       </html>
