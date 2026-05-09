@@ -924,7 +924,6 @@ function boolF(f,v){return cat(tag(f,0),new Uint8Array([v?1:0]));}
 // ═══════════════════════════════════════════
 function h2b(hex){hex=hex.trim().toLowerCase();if(hex.length%2)throw new Error('Odd hex');const o=new Uint8Array(hex.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(hex.slice(i*2,i*2+2),16);return o;}
 function b2h(b){return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');}
-function b2b64(b){let s='';for(const x of b)s+=String.fromCharCode(x);return btoa(s);}
 function fmtA(n){if(!n&&n!==0)return'—';const x=Number(n);if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1e3)return(x/1e3).toFixed(1)+'k';return String(x);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function addr40(s,label){if(!s||s.length!==40)throw new Error(`${label||'Address'} must be 40 hex chars`);}
@@ -959,8 +958,7 @@ function encSignBytes(msgType,typeUrl,inner,{txTime,fee,height,memo,netId,chainI
   const any=encAny(typeUrl,inner);
   return cat(
     sf(1,msgType),ef(2,any),
-    vf(4,height||currentHeight),
-    vf(5,txTime),vf(6,fee||10000),
+    vf(4,height||currentHeight),vf(5,txTime),vf(6,fee||10000),
     memo?sf(7,memo):new Uint8Array(0),
     vf(8,netId||1),vf(9,chainId||1),
   );
@@ -1402,11 +1400,10 @@ window.signAndSubmit_slash=async function(){try{
 }catch(e){toast(e.message,true);}};
 
 // ═══════════════════════════════════════════
-// MARKETS PAGE — fetch real create_market txs from validator
+// MARKETS PAGE — fetch all markets from state
 // ═══════════════════════════════════════════
-// ═══════════════════════════════════════════
-// MARKETS PAGE — fetch ALL markets from state (0x10 prefix)
-// ═══════════════════════════════════════════
+function decVarint(buf,pos){let r=0n,s=0n;while(pos<buf.length){const b=BigInt(buf[pos++]);r|=(b&0x7fn)<<s;s+=7n;if(!(b&0x80n))break;}return{v:r,p:pos};}
+
 function decodeMarketState(bytes) {
   if (!bytes || bytes.length === 0) return null;
   const m = { status: 0, expiryTime: 0n, qYes: 0n, qNo: 0n, bEff: 0n, creator: '' };
@@ -1416,9 +1413,21 @@ function decodeMarketState(bytes) {
     const { v: tagVal, p: p1 } = decVarint(buf, pos);
     pos = p1;
     const fn = Number(tagVal >> 3n), wt = Number(tagVal & 7n);
-    if (wt === 0) { const { v, p: p2 } = decVarint(buf, pos); pos = p2; if (fn === 1) m.status = Number(v); if (fn === 2) m.expiryTime = v; if (fn === 3) m.qYes = v; if (fn === 4) m.qNo = v; if (fn === 5) m.bEff = v; }
-    else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(buf, pos); const len = Number(lenV); pos = p2; const chunk = buf.slice(pos, pos + len); pos += len; if (fn === 6) m.creator = b2h(chunk); }
-    else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; } else break;
+    if (wt === 0) {
+      const { v, p: p2 } = decVarint(buf, pos); pos = p2;
+      if (fn === 1) m.status     = Number(v);
+      if (fn === 2) m.expiryTime = v;
+      if (fn === 3) m.qYes       = v;
+      if (fn === 4) m.qNo        = v;
+      if (fn === 5) m.bEff       = v;
+    } else if (wt === 2) {
+      const { v: lenV, p: p2 } = decVarint(buf, pos);
+      const len = Number(lenV); pos = p2;
+      const chunk = buf.slice(pos, pos + len); pos += len;
+      if (fn === 6) m.creator = b2h(chunk);
+    } else if (wt === 1) { pos += 8; }
+    else if (wt === 5) { pos += 4; }
+    else break;
   }
   return m;
 }
@@ -1426,34 +1435,47 @@ function decodeMarketState(bytes) {
 window.loadMarkets = async function () {
   const el = document.getElementById('marketsList');
   const countEl = document.getElementById('sb_c');
-  el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading all markets from chain state</div>';
+  el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading markets from chain</div>';
   try {
     await checkRPC();
-    const data = await rpc('/v1/query/state-prefix', { prefix: '0110', perPage: 200 });
+    const validatorAddr = 'e7c7dad131a03f7ea0cc09a637ad096eb3495f77';
+    const data = await rpc('/v1/query/txs-by-sender', { address: validatorAddr, perPage: 200 });
     const results = data.results || [];
     const markets = [];
 
-    for (const entry of results) {
-      let bytes;
-      const val = entry.value;
-      if (!val) continue;
-      if (typeof val === 'string') {
-        try { const bin = atob(val); bytes = new Uint8Array([...bin].map(c => c.charCodeAt(0))); } catch { continue; }
-      } else if (val instanceof Array) {
-        bytes = new Uint8Array(val);
-      } else continue;
+    for (const tx of results) {
+      const t = tx.transaction || tx;
+      const type = t.type || t.messageType || '';
+      if (type !== 'create_market') continue;
+      const msg = t.msg || t;
+      let question = '', creator = '', b0 = 0n, expiry = 0n, nonce = 0n;
+      if (t.msgBytes) {
+        const bytes = h2b(t.msgBytes);
+        let pos = 0;
+        while (pos < bytes.length) {
+          const { v: tagV, p: p1 } = decVarint(bytes, pos); pos = p1;
+          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
+          if (wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; if (fn === 2) b0 = v; if (fn === 3) expiry = v; if (fn === 4) nonce = v; }
+          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); const len = Number(lenV); pos = p2; const chunk = bytes.slice(pos, pos + len); pos += len; if (fn === 1) creator = b2h(chunk); if (fn === 5) question = new TextDecoder().decode(chunk); }
+          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; } else break;
+        }
+      } else {
+        question = msg.question || '';
+        creator = msg.creatorAddress || tx.sender || '';
+        b0 = BigInt(msg.b0 || 0);
+        expiry = BigInt(msg.expiryTime || msg.expiry_time || 0);
+        nonce = BigInt(msg.nonce || 0);
+      }
+      const key = tx.txHash || (creator + b0);
+      if (!markets.some(m => m.txHash === key)) {
+        markets.push({ txHash: tx.txHash || '', question: question || '(no question)', creator, b0, expiry, nonce, status: 0, qYes: b0 / 2n, qNo: b0 / 2n });
+      }
+    }
 
-      const m = decodeMarketState(bytes);
-      if (m) {
-        markets.push({
-          key: entry.key || '',
-          status: m.status,
-          expiry: m.expiryTime,
-          qYes: m.qYes,
-          qNo: m.qNo,
-          creator: m.creator,
-          bEff: m.bEff
-        });
+    // ── Determine status from expiry ──
+    for (const m of markets) {
+      if (m.expiry && currentHeight > Number(m.expiry)) {
+        m.status = 1; // expired (likely resolved or cancelled — exact status requires state read)
       }
     }
 
@@ -1465,41 +1487,28 @@ window.loadMarkets = async function () {
 
     const statusBadge = (s) => {
       if (s === 0) return '<span class="badge b-open"><span class="blink">●</span>&nbsp;OPEN</span>';
-      if (s === 4) return '<span class="badge b-open">◎&nbsp;PROPOSED</span>';
-      if (s === 5) return '<span class="badge b-open">⚡&nbsp;DISPUTED</span>';
-      if (s === 6) return '<span class="badge b-res">✓&nbsp;FINALIZED</span>';
-      if (s === 1) return '<span class="badge b-canc">✕&nbsp;CANCELLED</span>';
-      if (s === 7) return '<span class="badge b-canc">∅&nbsp;VOIDED</span>';
+      if (s === 1) return '<span class="badge b-canc">⌛&nbsp;EXPIRED</span>';
       return '<span class="badge b-canc">?</span>';
     };
 
-    const activeMarkets = markets.filter(m => [0,4,5].includes(m.status));
-    const closedMarkets = markets.filter(m => ![0,4,5].includes(m.status));
-
-    const renderGrid = (mList) => mList.map((m, i) => `
-      <div class="mcard">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-          <div class="mid">${m.creator ? m.creator.slice(0,8)+'…' : '???'}</div>
-          ${statusBadge(m.status)}
-        </div>
-        <div class="mq">Market from state</div>
-        <div class="mmeta">
-          <span>expiry: ${m.expiry ? Number(m.expiry) : '?'}</span>
-          <span>bEff: ${fmtA(m.bEff)}</span>
-        </div>
-        <div class="pools">
-          <div class="pbar pyes"><div class="plbl">YES</div><div class="pval">${fmtA(m.qYes)}</div></div>
-          <div class="pbar pno"><div class="plbl">NO</div><div class="pval">${fmtA(m.qNo)}</div></div>
-        </div>
-      </div>`).join('');
-
-    let htmlOut = '';
-    if (activeMarkets.length > 0)
-      htmlOut += `<div class="nav-group" style="padding-left:0;margin-bottom:12px">ACTIVE — ${activeMarkets.length} market(s)</div><div class="mgrid">${renderGrid(activeMarkets)}</div>`;
-    if (closedMarkets.length > 0)
-      htmlOut += `<div class="nav-group" style="padding-left:0;margin-top:20px;margin-bottom:12px">CLOSED — ${closedMarkets.length} market(s)</div><div class="mgrid">${renderGrid(closedMarkets)}</div>`;
-
-    el.innerHTML = htmlOut;
+    el.innerHTML = `
+      <div class="alert ag" style="margin-bottom:16px">✓ ${markets.length} market(s) found on-chain</div>
+      <div class="mgrid">
+        ${markets.map((m, i) => `
+          <div class="mcard">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <div class="mid">MKT #${i + 1}</div>
+              ${statusBadge(m.status)}
+            </div>
+            <div class="mq">${esc(m.question)}</div>
+            <div class="mmeta"><span>expiry: ${m.expiry ? Number(m.expiry) : '?'}</span><span>b0: ${fmtA(m.b0)} μPRX</span>${m.creator ? `<span>${m.creator.slice(0, 8)}…</span>` : ''}</div>
+            <div class="pools"><div class="pbar pyes"><div class="plbl">YES</div><div class="pval">${fmtA(m.qYes)}</div></div><div class="pbar pno"><div class="plbl">NO</div><div class="pval">${fmtA(m.qNo)}</div></div></div>
+            <div class="mfooter">
+              <button class="btn bg bsm" onclick="fillP('${m.txHash}')">Predict</button>
+              ${m.status === 0 ? `<button class="btn bg bsm" onclick="fillR('${m.txHash}')">Resolve</button>` : ''}
+            </div>
+          </div>`).join('')}
+      </div>`;
   } catch (e) {
     el.innerHTML = `<div class="alert ar">⚠ Cannot reach node at <code>${getRPC()}</code><br>${esc(e.message)}</div>`;
   }
@@ -1507,9 +1516,11 @@ window.loadMarkets = async function () {
 
 window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
 window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
-window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };
-
-window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
+window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
+window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
+window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
+window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
+window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
 window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
 window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };
 
