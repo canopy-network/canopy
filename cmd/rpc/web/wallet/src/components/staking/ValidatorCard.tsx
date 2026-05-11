@@ -1,15 +1,17 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Copy, LockOpen, Pause, Pen, Play, Scan } from "lucide-react";
-import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { LockOpen, Pause, Pen, Play, Scan } from "lucide-react";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useDenom } from "@/hooks/useDenom";
+import { getCanopySymbolByHash } from "@/lib/utils/canopySymbols";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { CopyableIdentifier } from "@/components/ui/CopyableIdentifier";
 import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 interface ValidatorCardProps {
   validator: {
     address: string;
+    nickname?: string;
     stakedAmount: number;
     status: "Staked" | "Paused" | "Unstaking" | "Delegate";
     rewards24h: number;
@@ -54,55 +56,10 @@ const statusBadgeClass = (status: ValidatorCardProps["validator"]["status"]) => 
 const actionButtonClass =
   "inline-flex items-center justify-center rounded-lg border border-border/60 p-2 text-foreground transition-colors hover:border-white/20 hover:bg-accent";
 
-type DetailRowProps = {
-  label: string;
-  value?: string;
-  onCopy?: () => void;
-  title?: string;
-  children?: React.ReactNode;
-};
-
-const DetailRow: React.FC<DetailRowProps> = ({
-  label,
-  value,
-  onCopy,
-  title,
-  children,
-}) => (
-  <div className="flex items-start gap-2">
-    <span className="w-20 shrink-0 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-white/50">
-      {label}
-    </span>
-    <div className="min-w-0 flex-1">
-      {children ?? (
-        <div className="flex items-center gap-1.5">
-          <span
-            className="min-w-0 break-all text-xs text-muted-foreground"
-            title={title ?? value}
-          >
-            {value || "—"}
-          </span>
-          {onCopy && value ? (
-            <button
-              type="button"
-              className="rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/60 hover:text-primary"
-              onClick={onCopy}
-              title={`Copy ${label}`}
-            >
-              <Copy className="h-2.5 w-2.5" />
-            </button>
-          ) : null}
-        </div>
-      )}
-    </div>
-  </div>
-);
-
 export const ValidatorCard: React.FC<ValidatorCardProps> = ({
   validator,
   onViewDetails,
 }) => {
-  const { copyToClipboard } = useCopyToClipboard();
   const { openAction } = useActionModal();
   const { symbol, factor } = useDenom();
 
@@ -251,12 +208,23 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
       </div>
 
       <div className="mt-3 border-t border-[#272729] pt-3">
-        <DetailRow
-          label="Address"
-          value={truncateAddress(validator.address)}
-          title={validator.address}
-          onCopy={() => copyToClipboard(validator.address, "Validator Address")}
-        />
+        <div className="flex items-center gap-3">
+          <img
+            src={getCanopySymbolByHash(validator.address)}
+            alt=""
+            className="h-7 w-7 rounded-lg object-contain flex-shrink-0"
+          />
+          <div>
+            <div className="text-sm font-medium text-foreground leading-tight">
+              {validator.nickname || truncateAddress(validator.address)}
+            </div>
+            <div className="flex items-center gap-1 mt-0.5">
+              <CopyableIdentifier value={validator.address} label="Validator Address" className="max-w-[13rem] text-[11px] text-muted-foreground leading-tight">
+                {truncateAddress(validator.address)}
+              </CopyableIdentifier>
+            </div>
+          </div>
+        </div>
       </div>
     </motion.div>
   );

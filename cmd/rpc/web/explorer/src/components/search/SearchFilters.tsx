@@ -15,7 +15,8 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({ filters, onFilterChange }
         { value: 'blocks', label: 'Blocks' },
         { value: 'transactions', label: 'Transactions' },
         { value: 'addresses', label: 'Addresses' },
-        { value: 'validators', label: 'Validators' }
+        { value: 'validators', label: 'Validators' },
+        { value: 'orders', label: 'Orders' }
     ]
 
     const dateOptions = [

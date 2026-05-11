@@ -861,8 +861,40 @@ export function EcoParams(chain_id: number) {
     return POST(rpcURL, chainRequest(chain_id), ecoParamsPath);
 }
 
-export function Orders() {
-    return POST(rpcURL, JSON.stringify({ height: 0 }), ordersPath);
+export function Orders(page: number = 1, perPage: number = 10, committee: number = 0, height: number = 0) {
+    return POST(rpcURL, JSON.stringify({
+        committee,
+        height,
+        pageNumber: page,
+        perPage,
+    }), ordersPath);
+}
+
+export async function AllOrders(perPage: number = 5000) {
+    const firstPage = await Orders(1, perPage);
+    const firstPageResults = Array.isArray(firstPage?.results)
+        ? firstPage.results
+        : Array.isArray(firstPage?.orders)
+            ? firstPage.orders
+            : [];
+    const totalPages = Math.max(Number(firstPage?.totalPages || 1), 1);
+
+    if (totalPages === 1) {
+        return firstPageResults;
+    }
+
+    const remainingPages = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) => Orders(index + 2, perPage))
+    );
+
+    return remainingPages.reduce<any[]>((allOrders, page) => {
+        const pageResults = Array.isArray(page?.results)
+            ? page.results
+            : Array.isArray(page?.orders)
+                ? page.orders
+                : [];
+        return allOrders.concat(pageResults);
+    }, [...firstPageResults]);
 }
 
 export function Order(committee: number, order_id: string, height: number = 0) {

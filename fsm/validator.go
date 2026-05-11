@@ -656,7 +656,7 @@ type nonSignerJSON struct {
 	Counter uint64       `protobuf:"varint,2,opt,name=counter,proto3" json:"counter,omitempty"`
 }
 
-// UnmarshalJSON() is the json.Unmarshaler implementation for the non signers object
+// MarshalJSON() is the json.MarshalJSON implementation for the non signers object
 func (x *NonSigner) MarshalJSON() (bz []byte, err error) {
 	if x == nil {
 		return nil, nil

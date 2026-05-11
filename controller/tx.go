@@ -242,13 +242,16 @@ func (m *Mempool) CheckMempool() {
 		rcBuildHeight = m.FSM.Height()
 	} else {
 		// Use mempool FSM snapshot to avoid races with controller FSM resets.
-		if rootChainID, e := m.FSM.GetRootChainId(); e != nil {
+		var rootChainID uint64
+		var e lib.ErrorI
+		if rootChainID, e = m.FSM.GetRootChainId(); e != nil {
 			m.log.Error(e.Error())
 		} else {
 			rcBuildHeight = m.controller.RCManager.GetHeight(rootChainID)
 		}
 		// for nested chains fetch and cache the DEX root batch, liveness is handled on the certificate results
-		rootDexBatch, err := m.controller.getDexRootBatch(rcBuildHeight)
+		rootDexBatch, err := m.controller.RCManager.GetDexBatch(rootChainID,
+			rcBuildHeight, m.controller.Config.ChainId, false)
 		if err != nil {
 			m.log.Warnf("Check Mempool error: %s", err.Error())
 		}
