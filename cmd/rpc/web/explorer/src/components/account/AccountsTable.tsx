@@ -1,10 +1,11 @@
 import React from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import accountsTexts from '../../data/accounts.json'
 import AnimatedNumber from '../AnimatedNumber'
-import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
 import CnpyColorIcon from '../ui/CnpyColorIcon'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Account {
     address: string
@@ -129,23 +130,19 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
                                     >
-                                        <Link
-                                            to={`/account/${account.address}`}
-                                            className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
-                                            title={account.address}
-                                        >
+                                        <div className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white">
                                             <CnpyBadge seed={account.address} />
-                                            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                                            <CopyableIdentifier value={account.address} label="Address" to={`/account/${account.address}`} className="text-sm font-medium text-white">
                                                 {truncateMiddle(account.address)}
-                                            </span>
-                                        </Link>
+                                            </CopyableIdentifier>
+                                        </div>
                                     </td>
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
                                     >
                                         <span className="text-sm text-white tabular-nums">
-                                            <AnimatedNumber value={account.amount} format={{ maximumFractionDigits: 4 }} className="text-white" />
+                                            <AnimatedNumber value={toCNPY(account.amount)} format={{ maximumFractionDigits: 4 }} className="text-white" />
                                             <span className="ml-1 text-white/50">CNPY</span>
                                         </span>
                                     </td>

@@ -20,6 +20,16 @@ interface TransactionRow {
     timestamp?: string
 }
 
+const getTransactionHash = (txRecord: Record<string, unknown>): string => {
+    return String(
+        txRecord.txHash ??
+        txRecord.hash ??
+        txRecord.transactionHash ??
+        txRecord.id ??
+        ''
+    )
+}
+
 const LiveIndicator = () => (
     <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-sm text-primary">
         <i className="fa-solid fa-circle animate-pulse text-[6px]"></i>
@@ -47,9 +57,10 @@ const TransactionsPage: React.FC = () => {
         return list.map((tx) => {
             const txRecord = tx as Record<string, unknown>
             const rawStatus = String(txRecord.status ?? 'success').toLowerCase()
+            const hash = getTransactionHash(txRecord)
 
             return {
-                hash: String(txRecord.txHash ?? txRecord.hash ?? 'N/A'),
+                hash,
                 type: String(txRecord.messageType ?? txRecord.type ?? 'send'),
                 from: String(txRecord.sender ?? txRecord.from ?? 'N/A'),
                 to: String(txRecord.recipient ?? txRecord.to ?? 'N/A'),
@@ -71,8 +82,9 @@ const TransactionsPage: React.FC = () => {
 
         return list.map((tx) => {
             const txRecord = tx as Record<string, unknown>
+            const hash = getTransactionHash(txRecord)
             return {
-                hash: String(txRecord.txHash ?? txRecord.hash ?? 'N/A'),
+                hash,
                 type: String(txRecord.messageType ?? txRecord.type ?? 'send'),
                 from: String(txRecord.sender ?? txRecord.from ?? 'N/A'),
                 to: String(txRecord.recipient ?? txRecord.to ?? 'N/A'),

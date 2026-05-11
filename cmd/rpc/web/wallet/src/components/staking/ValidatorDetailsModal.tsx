@@ -5,6 +5,7 @@ import { Copy, Globe, Scan, X } from "lucide-react";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useDenom } from "@/hooks/useDenom";
 import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
+import { formatTokenAmount } from "@/core/format";
 
 export interface ValidatorDetails {
   address: string;
@@ -26,10 +27,7 @@ const truncateMiddle = (value: string, start = 12, end = 8) => {
 };
 
 const formatAmount = (amount: number, factor: number) =>
-  (amount / factor).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  formatTokenAmount(amount, factor);
 
 const formatRewards = (amount: number, factor: number) =>
   `${amount >= 0 ? "+" : ""}${formatAmount(amount, factor)}`;

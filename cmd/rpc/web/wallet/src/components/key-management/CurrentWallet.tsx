@@ -36,7 +36,8 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
   const [passwordError, setPasswordError] = useState("");
   const [isFetchingKey, setIsFetchingKey] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletePasswordError, setDeletePasswordError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [renameNickname, setRenameNickname] = useState("");
@@ -217,7 +218,8 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
       return;
     }
 
-    setDeleteConfirmation("");
+    setDeletePassword("");
+    setDeletePasswordError("");
     setShowDeleteModal(true);
   };
 
@@ -271,20 +273,20 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
   const handleConfirmDelete = async () => {
     if (!selectedAccount) return;
 
-    const nickname = selectedKeyEntry?.keyNickname || selectedAccount.nickname;
-    if (deleteConfirmation !== nickname) {
-      toast.error({
-        title: "Confirmation Failed",
-        description: `Please type "${nickname}" to confirm deletion`,
-      });
+    if (!deletePassword) {
+      setDeletePasswordError("Password is required.");
       return;
     }
 
     setIsDeleting(true);
+    setDeletePasswordError("");
 
     try {
+      const nickname = selectedKeyEntry?.keyNickname || selectedAccount.nickname;
+
       await dsFetch("keystoreDelete", {
-        nickname: nickname,
+        address: selectedKeyEntry?.keyAddress ?? selectedAccount.address,
+        password: deletePassword,
       });
 
       await invalidateKeystore();
@@ -295,9 +297,8 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
       });
 
       setShowDeleteModal(false);
-      setDeleteConfirmation("");
+      setDeletePassword("");
 
-      // Switch to another account
       const otherAccounts = accounts.filter((acc) => acc.id !== selectedAccount.id);
       if (otherAccounts.length > 0) {
         setTimeout(() => {
@@ -307,6 +308,7 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
         switchAccount(null);
       }
     } catch (error) {
+      setDeletePasswordError("Unable to delete with that password.");
       toast.error({
         title: "Delete Failed",
         description: error instanceof Error ? error.message : String(error),
@@ -591,25 +593,29 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
             </div>
 
             <p className="text-sm text-muted-foreground mb-4">
-              Type <span className="font-semibold text-foreground">
+              Enter your wallet password to confirm deletion of <span className="font-semibold text-foreground">
                 {selectedKeyEntry?.keyNickname || selectedAccount?.nickname}
-              </span> to confirm deletion:
+              </span>:
             </p>
 
             <input
-              type="text"
-              value={deleteConfirmation}
-              onChange={(e) => setDeleteConfirmation(e.target.value)}
-              placeholder="Type wallet name to confirm"
-              className="w-full bg-[#0f0f0f] text-foreground border border-[#272729] rounded-lg px-3 py-2.5 mb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff1845]/25"
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Password"
+              className="w-full bg-[#0f0f0f] text-foreground border border-[#272729] rounded-lg px-3 py-2.5 mb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff1845]/25"
               autoFocus
             />
+            {deletePasswordError && (
+              <div className="text-sm text-[#ff1845] mb-2">{deletePasswordError}</div>
+            )}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 mt-2">
               <button
                 onClick={() => {
                   setShowDeleteModal(false);
-                  setDeleteConfirmation("");
+                  setDeletePassword("");
+                  setDeletePasswordError("");
                 }}
                 className="px-4 py-2 rounded-lg border border-[#272729] bg-[#0f0f0f] text-white hover:bg-[#272729]"
                 disabled={isDeleting}
@@ -619,7 +625,7 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
               <button
                 onClick={handleConfirmDelete}
                 className="px-4 py-2 rounded-lg bg-[#ff1845] text-white hover:bg-[#ff1845]/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isDeleting || deleteConfirmation !== (selectedKeyEntry?.keyNickname || selectedAccount?.nickname)}
+                disabled={isDeleting || !deletePassword}
               >
                 {isDeleting ? "Deleting..." : "Delete Permanently"}
               </button>

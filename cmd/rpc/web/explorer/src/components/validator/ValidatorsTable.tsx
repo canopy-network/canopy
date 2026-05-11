@@ -7,6 +7,7 @@ import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, t
 import PageSizeSelect from '../shared/PageSizeSelect'
 import CnpyColorIcon from '../ui/CnpyColorIcon'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Validator {
     rank: number
@@ -167,11 +168,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
         }
 
         cells.push(
-            <Link
-                to={`/validator/${validator.address}?rank=${validator.rank}`}
-                className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-sm font-medium text-white transition-colors hover:text-primary"
-                title={identifier}
-            >
+            <div className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-sm font-medium text-white">
                 {useCnpyBadge ? (
                     <CnpyBadge seed={validator.address} />
                 ) : (
@@ -179,10 +176,19 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
                         <i className={`${getValidatorIcon(validator.address)} text-xs`} />
                     </span>
                 )}
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                <CopyableIdentifier value={validator.address} label="Validator address" to={`/validator/${validator.address}?rank=${validator.rank}`} className="text-sm font-medium text-white">
                     {truncateMiddle(identifier)}
-                </span>
-            </Link>
+                </CopyableIdentifier>
+                <Link
+                    to={`/validator/${validator.address}?rank=${validator.rank}`}
+                    data-row-click-ignore="true"
+                    className="shrink-0 text-white/35 transition-colors hover:text-primary"
+                    title="Open validator details"
+                    aria-label="Open validator details"
+                >
+                    <i className="fa-solid fa-arrow-up-right-from-square text-[10px]" aria-hidden="true" />
+                </Link>
+            </div>
         )
 
         cells.push(formatActivityScore(validator.activityScore))

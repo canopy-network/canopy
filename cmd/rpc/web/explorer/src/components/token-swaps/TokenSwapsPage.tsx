@@ -5,7 +5,7 @@ import SwapFilters from './SwapFilters';
 import type { SwapFilterValues } from './SwapFilters';
 import RecentSwapsTable from './RecentSwapsTable';
 import { useOrders } from '../../hooks/useApi'
-import { toCNPY } from '../../lib/utils';
+import { formatDecimalWithSubscript, formatLocaleNumber, toCNPY } from '../../lib/utils';
 import ExplorerOverviewCards from '../ExplorerOverviewCards';
 
 interface Order {
@@ -24,7 +24,9 @@ export interface SwapData {
     orderId: string;
     committee: number;
     fromAddress: string;
+    fromAddressFull: string;
     toAddress: string;
+    toAddressFull: string;
     exchangeRate: string;
     exchangeRateNum: number;
     amount: string;
@@ -36,6 +38,7 @@ export type SortKey = 'committee' | 'exchangeRate' | 'amount' | 'status';
 export type SortDir = 'asc' | 'desc';
 
 const DEFAULT_FILTERS: SwapFilterValues = { minAmount: '', status: 'All', committee: 'All' };
+const SWAP_DECIMAL_PLACES = 2;
 
 const TokenSwapsPage: React.FC = () => {
     const navigate = useNavigate();
@@ -66,18 +69,20 @@ const TokenSwapsPage: React.FC = () => {
                 ? order.amountForSale / order.requestedAmount
                 : 0;
             const exchangeRate = exchangeRateNum > 0
-                ? `1 : ${exchangeRateNum.toFixed(6)}`
+                ? `1 : ${formatDecimalWithSubscript(exchangeRateNum, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)}`
                 : 'N/A';
 
             const status: 'Active' | 'Locked' = order.buyerSendAddress ? 'Locked' : 'Active';
             const amountRaw = toCNPY(order.amountForSale);
-            const amount = `${amountRaw.toFixed(6)} CNPY`;
+            const amount = `${formatLocaleNumber(amountRaw, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)} CNPY`;
 
             return {
                 orderId: order.id,
                 committee: order.committee,
                 fromAddress: truncateAddress(order.sellersSendAddress),
+                fromAddressFull: order.sellersSendAddress,
                 toAddress: truncateAddress(order.sellerReceiveAddress),
+                toAddressFull: order.sellerReceiveAddress,
                 exchangeRate,
                 exchangeRateNum,
                 amount,

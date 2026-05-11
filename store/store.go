@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -76,6 +77,7 @@ type Store struct {
 	config     lib.Config    // config
 	mu         *sync.Mutex   // mutex for concurrent commits
 	compaction atomic.Bool   // atomic boolean for compaction status
+	backup     atomic.Bool   // atomic boolean for backup status
 	isTxn      bool          // flag indicating if the store is in transaction mode
 }
 
@@ -176,6 +178,7 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 		config:     config,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
+		backup:     atomic.Bool{},
 	}, nil
 }
 
@@ -203,6 +206,7 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
+		backup:     atomic.Bool{},
 	}, nil
 }
 
@@ -225,6 +229,7 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
+		backup:     atomic.Bool{},
 	}, nil
 }
 
@@ -269,6 +274,8 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	s.Reset()
 	// compact if necessary
 	s.MaybeCompact()
+	// backup if enabled
+	s.MaybeBackup()
 	// return the root
 	return
 }
@@ -627,6 +634,88 @@ func (s *Store) MaybeCompact() {
 	}
 }
 
+// MaybeBackup() checks if it is time to backup the current state of the database
+func (s *Store) MaybeBackup() {
+	// helper variables
+	backupInterval := s.config.StoreConfig.BackupInterval
+	backupDir := s.config.StoreConfig.BackupDirectory
+	// ensure only complete backups exists on the actual backup directory
+	tempBackupDir := backupDir + "_temp"
+	// retrieve the current version
+	version := s.Version()
+	// verify that backups are enabled in the config
+	if backupInterval == 0 || backupDir == "" {
+		return
+	}
+	// check if the current version is a multiple of the backup block interval
+	if version%backupInterval != 0 {
+		return
+	}
+	// ensure that only one backup can run at a time to avoid overlapping backups
+	if s.backup.Load() {
+		s.log.Debugf("data backup skipped [%d]: already in progress", version)
+		return
+	}
+	s.backup.Store(true)
+	// perform the backup in a separate goroutine to avoid blocking the main thread
+	go func() {
+		var err error
+		start := time.Now()
+		defer func() {
+			s.backup.Store(false)
+			if err == nil {
+				return
+			}
+			s.log.Errorf("backup failed at height [%d]: %v", version, err)
+		}()
+		// delete current backup files as pebbleDB expects an empty directory
+		if err = os.RemoveAll(tempBackupDir); err != nil {
+			err = fmt.Errorf("remove temporary backup: %w", err)
+			return
+		}
+		// flush the memtable to SST before checkpointing so the backup does not
+		// depend on WAL replay for recovery (commits use NoSync so WAL records
+		// may not be durable on disk at checkpoint time)
+		if err = s.db.Flush(); err != nil {
+			err = fmt.Errorf("flush before checkpoint: %w", err)
+			return
+		}
+		// perform the backup using pebble's checkpointing mechanism which creates a
+		// consistent snapshot of the database at the specified directory
+		if err = s.db.Checkpoint(tempBackupDir); err != nil {
+			err = fmt.Errorf("checkpoint creation: %w", err)
+			return
+		}
+		// write the current height to a separate file
+		heightFile := filepath.Join(tempBackupDir, "height.txt")
+		if err = os.WriteFile(heightFile, fmt.Appendf(nil, "%d", version), 0644); err != nil {
+			err = fmt.Errorf("write height file: %w", err)
+			return
+		}
+		// rotate: atomically move current backup to a previous slot so there is
+		// always at least one valid backup on disk during the swap
+		prevBackupDir := backupDir + "_prev"
+		if err = os.Rename(backupDir, prevBackupDir); err != nil && !os.IsNotExist(err) {
+			err = fmt.Errorf("rotate backup: %w", err)
+			return
+		}
+		// promote: atomically move the temp backup into the active slot
+		if err = os.Rename(tempBackupDir, backupDir); err != nil {
+			err = fmt.Errorf("finalize backup: %w", err)
+			return
+		}
+		// clean up the previous backup now that the new one is safely in place
+		if removeErr := os.RemoveAll(prevBackupDir); removeErr != nil {
+			s.log.Warnf("failed to remove previous backup: %v", removeErr)
+		}
+		backupDuration := time.Since(start)
+		// log results
+		s.log.Infof("backup completed at height [%d] in %s", version, backupDuration)
+		// update metrics
+		s.metrics.UpdateStoreJobMetrics(0, 0, backupDuration)
+	}()
+}
+
 // Compact runs Pebble range compaction over the latest and optional historic state prefixes.
 func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	// first compaction: latest state  keys
@@ -642,8 +731,10 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	if err := s.db.Compact(ctx, startPrefix, endPrefix, true); err != nil {
 		return ErrCommitDB(err)
 	}
-	lssTime := time.Since(now)
-	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssTime)
+	// update LSS compaction metrics
+	lssDuration := time.Since(now)
+	s.metrics.UpdateStoreJobMetrics(lssDuration, 0, 0)
+	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssDuration)
 	// second compaction: historic state keys
 	if compactHSS {
 		startPrefix, endPrefix = historicStatePrefix, prefixEnd(historicStatePrefix)
@@ -651,9 +742,12 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 		if err := s.db.Compact(ctx, startPrefix, endPrefix, false); err != nil {
 			return ErrCommitDB(err)
 		}
+		hssDuration := time.Since(hssTime)
 		// log results
 		s.log.Debugf("key compaction finished [HSS] [%d] time: %s, total time: %s", version,
-			time.Since(hssTime), time.Since(now))
+			hssDuration, time.Since(now))
+		// update HSS compaction metrics
+		s.metrics.UpdateStoreJobMetrics(0, hssDuration, 0)
 	}
 	return nil
 }

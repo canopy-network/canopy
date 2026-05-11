@@ -9,12 +9,14 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getCanopySymbol } from '@/lib/utils/canopySymbols';
 import { useDenom } from '@/hooks/useDenom';
+import { CopyableIdentifier } from '@/components/ui/CopyableIdentifier';
 
 const shortAddr = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 interface AddressData {
     id: string;
     address: string;
+    fullAddress: string;
     nickname: string;
     totalValue: string;
 }
@@ -36,7 +38,9 @@ const AddressRow = React.memo<{
 
         <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-foreground truncate leading-tight">{address.nickname}</div>
-            <div className="text-xs text-muted-foreground/60 mt-0.5">{address.address}</div>
+            <CopyableIdentifier value={address.fullAddress} label="Address" className="mt-0.5 max-w-full text-xs text-muted-foreground/60">
+                {address.address}
+            </CopyableIdentifier>
         </div>
 
         <div className="ml-auto flex items-center gap-2.5 flex-shrink-0">
@@ -84,6 +88,7 @@ export const AllAddressesCard = React.memo(() => {
             return {
                 id: account.address,
                 address: shortAddr(account.address),
+                fullAddress: account.address,
                 nickname: account.nickname || 'Unnamed',
                 totalValue: formatBalance(balance),
             };

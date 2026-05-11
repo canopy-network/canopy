@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronsUpDown,
-  Copy,
   Droplets,
   Percent,
   Search,
@@ -19,12 +18,12 @@ import { useStakedBalanceHistory } from "@/hooks/useStakedBalanceHistory";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
-import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
 import { PageHeader } from "@/components/layouts/PageHeader";
 import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 import { getCanopySymbol } from "@/lib/utils/canopySymbols";
+import { CopyableIdentifier } from "@/components/ui/CopyableIdentifier";
 
 const desktopRowCellClass =
   "px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]";
@@ -59,7 +58,6 @@ export const Accounts = () => {
     useStakedBalanceHistory();
   const { openAction } = useActionModal();
   const { chain } = useConfig();
-  const { copyToClipboard } = useCopyToClipboard();
 
   const symbol   = chain?.denom?.symbol   || "CNPY";
   const decimals = chain?.denom?.decimals ?? 6;
@@ -447,15 +445,9 @@ export const Accounts = () => {
                             {addr.nickname}
                           </div>
                           <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-[11px] text-muted-foreground leading-tight">
+                            <CopyableIdentifier value={addr.fullAddress} label="Address" className="max-w-[13rem] text-[11px] text-muted-foreground leading-tight">
                               {addr.address}
-                            </span>
-                            <button
-                              onClick={() => copyToClipboard(addr.fullAddress, "Address")}
-                              className="rounded p-0.5 text-white/40 transition-colors hover:bg-[#272729] hover:text-white"
-                            >
-                              <Copy style={{ width: 10, height: 10 }} />
-                            </button>
+                            </CopyableIdentifier>
                           </div>
                         </div>
                       </div>
