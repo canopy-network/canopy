@@ -1,17 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import ValidatorsFilters from '../validator/ValidatorsFilters'
 import ValidatorsTable from '../validator/ValidatorsTable'
-import { useAllValidators, useAllDelegators, useAllBlocksCache } from '../../hooks/useApi'
+import { useAllDelegators, useAllValidators, useParams as useChainParams } from '../../hooks/useApi'
+import ExplorerOverviewCards from '../ExplorerOverviewCards'
 
 interface OverviewCardProps {
     title: string
     value: string | number
     subValue?: string
-    icon?: string
-    progressBar?: number
-    valueColor?: string
-    subValueColor?: string
+    icon: string
 }
 
 interface Validator {
@@ -37,78 +34,78 @@ interface Validator {
     stakingPower: number
 }
 
-const StakingPage: React.FC = () => {
-    const [allStakers, setAllStakers] = useState<Validator[]>([])
-    const [filteredStakers, setFilteredStakers] = useState<Validator[]>([])
-    const [loading, setLoading] = useState(true)
-    const [currentPage, setCurrentPage] = useState(1)
+const LiveIndicator = () => (
+    <div className="relative inline-flex items-center gap-1.5 rounded-full bg-[#35cd48]/5 px-4 py-1">
+        <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#35cd48] shadow-[0_0_4px_rgba(53,205,72,0.8)]" />
+        <span className="text-sm font-medium text-[#35cd48]">Live</span>
+    </div>
+)
 
-    // Get both validators and delegators data
-    const { data: allValidatorsData, isLoading: isLoadingValidators, refetch: refetchValidators } = useAllValidators()
-    const { data: delegatorsData, isLoading: isLoadingDelegators, refetch: refetchDelegators } = useAllDelegators()
-    const { data: blocksData, refetch: refetchBlocks } = useAllBlocksCache()
+const StakingPage: React.FC = () => {
+    const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
+    const [statusFilter, setStatusFilter] = useState('all')
+    const [sortBy, setSortBy] = useState('stake')
+    const [filtersOpen, setFiltersOpen] = useState(false)
+
+    const { data: allValidatorsData, isLoading: isLoadingValidators } = useAllValidators()
+    const { data: delegatorsData, isLoading: isLoadingDelegators } = useAllDelegators()
+    const { data: paramsData } = useChainParams(0)
+
+    const delegateRewardPercentage = useMemo(() => {
+        const validator = (paramsData as Record<string, unknown>)?.validator as Record<string, unknown> | undefined
+        return Number(validator?.delegateRewardPercentage ?? 0)
+    }, [paramsData])
 
     const isLoading = isLoadingValidators || isLoadingDelegators
 
-    // Function to get validator name from API
-    const getValidatorName = (validator: any): string => {
-        // Use address as name (netAddress will be shown separately in table)
-        if (validator.address && validator.address !== 'N/A') {
+    const getValidatorName = (validator: Record<string, unknown>): string => {
+        if (typeof validator.address === 'string' && validator.address !== 'N/A') {
             return validator.address
         }
         return 'Unknown Validator'
     }
 
-    // Combine validators and delegators into a single list
-    const normalizedStakers = React.useMemo(() => {
+    const allStakers = useMemo<Validator[]>(() => {
         const validatorsList = allValidatorsData?.results || []
         const delegatorsList = delegatorsData?.results || []
-        
-        // Create a map to track unique addresses and avoid duplicates
-        const stakersMap = new Map<string, any>()
-        
-        // Add all validators first
-        validatorsList.forEach((validator: any) => {
+        const stakersMap = new Map<string, Record<string, any>>()
+
+        validatorsList.forEach((validator: Record<string, any>) => {
             if (validator.address) {
                 stakersMap.set(validator.address, validator)
             }
         })
-        
-        // Add delegators, only if they're not already in the map
-        delegatorsList.forEach((delegator: any) => {
+
+        delegatorsList.forEach((delegator: Record<string, any>) => {
             if (delegator.address && !stakersMap.has(delegator.address)) {
                 stakersMap.set(delegator.address, delegator)
             }
         })
-        
-        // Convert map to array
+
         const combinedList = Array.from(stakersMap.values())
-        
-        if (!Array.isArray(combinedList) || combinedList.length === 0) return []
+        if (combinedList.length === 0) return []
 
-        // Calculate total stake for percentages
-        const totalStake = combinedList.reduce((sum: number, staker: any) =>
-            sum + (staker.stakedAmount || 0), 0)
+        const totalStake = combinedList.reduce((sum, staker) => sum + Number(staker.stakedAmount || 0), 0)
 
-        // Process all stakers
-        const stakersWithData = combinedList.map((staker: any) => {
+        const stakersWithData = combinedList.map((staker) => {
             const address = staker.address || 'N/A'
             const name = getValidatorName(staker)
             const publicKey = staker.publicKey || 'N/A'
             const committees = staker.committees || []
             const netAddress = staker.netAddress || ''
-            const stakedAmount = staker.stakedAmount || 0
-            const maxPausedHeight = staker.maxPausedHeight || 0
-            const unstakingHeight = staker.unstakingHeight || 0
+            const stakedAmount = Number(staker.stakedAmount || 0)
+            const maxPausedHeight = Number(staker.maxPausedHeight || 0)
+            const unstakingHeight = Number(staker.unstakingHeight || 0)
             const output = staker.output || 'N/A'
-            const delegate = staker.delegate || false
-            const compound = staker.compound || false
+            const delegate = Boolean(staker.delegate)
+            const compound = Boolean(staker.compound)
 
             const stakeWeight = totalStake > 0 ? (stakedAmount / totalStake) * 100 : 0
-            const chainsRestaked = committees.length
-            
-            const isUnstaking = unstakingHeight && unstakingHeight > 0
-            const isPaused = maxPausedHeight && maxPausedHeight > 0
+            const chainsRestaked = Array.isArray(committees) ? committees.length : 0
+
+            const isUnstaking = unstakingHeight > 0
+            const isPaused = maxPausedHeight > 0
             const isDelegate = delegate === true
             const isActive = !isUnstaking && !isPaused && !isDelegate
 
@@ -123,7 +120,9 @@ const StakingPage: React.FC = () => {
                 activityScore = 'Active'
             }
 
-            const baseRewardRate = stakeWeight * 0.1
+            const baseRewardRate = delegateRewardPercentage > 0
+                ? (stakeWeight * delegateRewardPercentage) / 100
+                : stakeWeight
             const estimatedRewardRate = Math.max(0, baseRewardRate)
 
             const statusMultiplier = isActive ? 1.0 : 0.5
@@ -148,68 +147,87 @@ const StakingPage: React.FC = () => {
                 isUnstaking,
                 activityScore,
                 estimatedRewardRate: Math.round(estimatedRewardRate * 100) / 100,
-                stakingPower: Math.round(stakingPower * 100) / 100
+                stakingPower: Math.round(stakingPower * 100) / 100,
+                rank: 0,
             }
         })
 
-        // Sort by staking power (descending) and assign ranks
-        const sortedStakers = stakersWithData.sort((a, b) => b.stakingPower - a.stakingPower)
+        return stakersWithData
+            .sort((a, b) => b.stakingPower - a.stakingPower)
+            .map((staker, index) => ({
+                ...staker,
+                rank: index + 1,
+            }))
+    }, [allValidatorsData, delegatorsData, delegateRewardPercentage])
 
-        return sortedStakers.map((staker, index) => ({
-            rank: index + 1,
-            ...staker
-        }))
-    }, [allValidatorsData, delegatorsData])
+    const filteredStakers = useMemo(() => {
+        const next = [...allStakers]
 
-    // Effect to update stakers when data changes
+        const filtered = statusFilter === 'all'
+            ? next
+            : next.filter((validator) => {
+                switch (statusFilter) {
+                    case 'active':
+                        return validator.activityScore === 'Active'
+                    case 'paused':
+                        return validator.activityScore === 'Paused'
+                    case 'unstaking':
+                        return validator.activityScore === 'Unstaking'
+                    case 'delegate':
+                        return validator.activityScore === 'Delegate'
+                    default:
+                        return true
+                }
+            })
+
+        filtered.sort((a, b) => {
+            switch (sortBy) {
+                case 'stake':
+                    return b.stakedAmount - a.stakedAmount
+                case 'reward':
+                    return b.estimatedRewardRate - a.estimatedRewardRate
+                case 'chains':
+                    return b.chainsRestaked - a.chainsRestaked
+                case 'weight':
+                    return b.stakeWeight - a.stakeWeight
+                case 'power':
+                    return b.stakingPower - a.stakingPower
+                case 'name':
+                    return a.name.localeCompare(b.name)
+                default:
+                    return a.rank - b.rank
+            }
+        })
+
+        return filtered
+    }, [allStakers, sortBy, statusFilter])
+
+    const paginatedStakers = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize
+        return filteredStakers.slice(startIndex, startIndex + pageSize)
+    }, [currentPage, filteredStakers, pageSize])
+
     useEffect(() => {
-        if (normalizedStakers.length > 0) {
-            setAllStakers(normalizedStakers)
-            setLoading(false)
-        }
-    }, [normalizedStakers])
+        setCurrentPage(1)
+    }, [sortBy, statusFilter])
 
-    // Effect to handle pagination of filtered stakers
     useEffect(() => {
-        if (allStakers.length > 0) {
-            const pageSize = 10
-            const startIndex = (currentPage - 1) * pageSize
-            const endIndex = startIndex + pageSize
-            const pageStakers = allStakers.slice(startIndex, endIndex)
-            setFilteredStakers(pageStakers)
+        const totalPages = Math.max(1, Math.ceil(filteredStakers.length / pageSize))
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages)
         }
-    }, [allStakers, currentPage])
+    }, [currentPage, filteredStakers.length, pageSize])
 
-    // Handle filtered stakers from filters component
-    const handleFilteredStakers = (filtered: Validator[]) => {
-        setFilteredStakers(filtered)
-    }
+    const stats = useMemo(() => {
+        const validators = allStakers.filter((staker) => !staker.delegate)
+        const delegators = allStakers.filter((staker) => staker.delegate)
+        const paused = allStakers.filter((staker) => staker.isPaused || staker.activityScore === 'Paused')
 
-    // Handle refresh
-    const handleRefresh = () => {
-        setLoading(true)
-        refetchValidators()
-        refetchDelegators()
-        refetchBlocks()
-    }
-
-    const totalStakers = allStakers.length
-
-    const handlePageChange = (page: number) => {
-        setCurrentPage(page)
-    }
-
-    // Calculate stats for overview cards
-    const stats = React.useMemo(() => {
-        const validators = allStakers.filter(staker => !staker.delegate)
-        const delegators = allStakers.filter(staker => staker.delegate === true)
-        const paused = allStakers.filter(staker => staker.isPaused || staker.activityScore === 'Paused')
-        
         return {
             validators: validators.length,
             delegators: delegators.length,
             paused: paused.length,
-            total: allStakers.length
+            total: allStakers.length,
         }
     }, [allStakers])
 
@@ -218,84 +236,122 @@ const StakingPage: React.FC = () => {
             title: 'Validators',
             value: stats.validators.toLocaleString(),
             subValue: 'Active validators',
-            icon: 'fa-solid fa-shield-halved text-primary',
-            valueColor: 'text-white',
-            subValueColor: 'text-primary',
+            icon: 'fa-solid fa-shield-halved',
         },
         {
             title: 'Delegators',
             value: stats.delegators.toLocaleString(),
-            subValue: 'Total delegators',
-            icon: 'fa-solid fa-users text-primary',
-            valueColor: 'text-white',
-            subValueColor: 'text-gray-400',
+            subValue: 'Active delegators',
+            icon: 'fa-solid fa-users',
         },
         {
             title: 'Paused',
             value: stats.paused.toLocaleString(),
             subValue: 'Paused validators',
-            icon: 'fa-solid fa-pause text-primary',
-            valueColor: 'text-white',
-            subValueColor: 'text-gray-400',
+            icon: 'fa-solid fa-pause',
         },
         {
             title: 'Total Stakers',
             value: stats.total.toLocaleString(),
             subValue: 'All stakeholders',
-            icon: 'fa-solid fa-network-wired text-primary',
-            valueColor: 'text-white',
-            subValueColor: 'text-gray-400',
+            icon: 'fa-solid fa-network-wired',
         },
     ]
+
+    const hasActiveFilters = statusFilter !== 'all' || sortBy !== 'stake'
+
+    const tableHeaderActions = (
+        <div className="relative">
+            <button
+                type="button"
+                onClick={() => setFiltersOpen((open) => !open)}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors ${
+                    hasActiveFilters
+                        ? 'border-primary/30 bg-primary/12 text-primary hover:bg-primary/18'
+                        : 'border-white/10 bg-white/5 text-gray-300 hover:border-white/20 hover:bg-white/10 hover:text-white'
+                }`}
+                aria-label="Toggle staking filters"
+                aria-expanded={filtersOpen}
+            >
+                <i className="fa-solid fa-filter" />
+            </button>
+
+            {filtersOpen && (
+                <div className="absolute right-0 top-full z-20 mt-2 w-[320px] rounded-xl border border-white/10 bg-card p-4 shadow-2xl">
+                    <div className="flex flex-col gap-3">
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="rounded-lg border border-white/10 bg-input px-3 py-2 text-sm text-white outline-none transition-colors focus:border-primary focus:ring-primary"
+                        >
+                            <option value="all">All Stakers</option>
+                            <option value="active">Active</option>
+                            <option value="paused">Paused</option>
+                            <option value="unstaking">Unstaking</option>
+                            <option value="delegate">Delegate</option>
+                        </select>
+
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            className="rounded-lg border border-white/10 bg-input px-3 py-2 text-sm text-white outline-none transition-colors focus:border-primary focus:ring-primary"
+                        >
+                            <option value="stake">Sort by Stake</option>
+                            <option value="reward">Sort by Reward Rate</option>
+                            <option value="chains">Sort by Chains</option>
+                            <option value="weight">Sort by Weight</option>
+                            <option value="power">Sort by Power</option>
+                            <option value="name">Sort by Name</option>
+                        </select>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
 
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className="w-full"
         >
-            <ValidatorsFilters
-                totalValidators={totalStakers}
-                validators={allStakers}
-                onFilteredValidators={handleFilteredStakers}
-                onRefresh={handleRefresh}
-                initialFilter="all"
-                pageTitle="Staking"
-                overviewCards={
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {overviewCards.map((card, index) => (
-                            <div key={index} className="bg-card p-4 rounded-lg border border-gray-800/60 flex flex-col gap-2 justify-between">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-gray-400 text-sm">{card.title}</span>
-                                    <i className={`${card.icon} text-gray-500`}></i>
-                                </div>
-                                <div className="flex items-end justify-between">
-                                    <span className={`text-white text-3xl font-bold ${card.valueColor}`}>{card.value}</span>
-                                </div>
-                                {card.subValue && <span className={`text-sm ${card.subValueColor}`}>{card.subValue}</span>}
-                                {card.progressBar !== undefined && (
-                                    <div className="w-full bg-gray-700 h-2 rounded-full mt-4">
-                                        <div
-                                            className="h-2 rounded-full bg-primary"
-                                            style={{ width: `${card.progressBar}%` }}
-                                        ></div>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+            <div className="mb-6">
+                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <h1 className="explorer-page-title">Staking</h1>
+                        <p className="explorer-page-subtitle">
+                            Complete list of Canopy network validators and delegators
+                        </p>
                     </div>
-                }
-            />
+
+                    <div className="flex items-center gap-3">
+                        {tableHeaderActions}
+                        <LiveIndicator />
+                    </div>
+                </div>
+
+                <ExplorerOverviewCards cards={overviewCards} />
+            </div>
 
             <ValidatorsTable
-                validators={filteredStakers}
-                loading={loading || isLoading}
-                totalCount={totalStakers}
+                validators={paginatedStakers}
+                loading={isLoading}
+                totalCount={filteredStakers.length}
                 currentPage={currentPage}
-                onPageChange={handlePageChange}
-                pageTitle="Staking"
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(value) => {
+                    setPageSize(value)
+                    setCurrentPage(1)
+                }}
+                variant="accounts"
+                showRank={false}
+                useCnpyBadge={true}
+                stakingPowerAsText={true}
+                showLiveIndicator={false}
+                showTitle={false}
             />
         </motion.div>
     )

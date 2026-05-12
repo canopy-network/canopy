@@ -17,6 +17,7 @@
     "@tanstack/react-query-devtools": "^5.85.6",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.12",
+    "lucide-react": "^1.8.0",
     "react": "^19.1.1",
     "react-datepicker": "^8.7.0",
     "react-dom": "^19.1.1",

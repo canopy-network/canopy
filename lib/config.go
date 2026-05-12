@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -60,18 +61,18 @@ func DefaultConfig() Config {
 // MAIN CONFIG BELOW
 
 type MainConfig struct {
-	LogLevel         string             `json:"logLevel"`         // any level includes the levels above it: debug < info < warning < error
-	ChainId          uint64             `json:"chainId"`          // the identifier of this particular chain within a single 'network id'
-	SleepUntil       uint64             `json:"sleepUntil"`       // allows coordinated 'wake-ups' for genesis or chain halt events
-	RootChain        []RootChain        `json:"rootChain"`        // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
-	RunVDF           bool               `json:"runVDF"`           // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
-	Headless         bool               `json:"headless"`         // turn off the web wallet and block explorer 'web' front ends
-	AutoUpdate           bool   `json:"autoUpdate"`           // check for new versions of software each X time
-	AutoUpdateRepoOwner  string `json:"autoUpdateRepoOwner"`  // GitHub repo owner for core auto-updates (e.g., "canopy-network")
-	AutoUpdateRepoName   string `json:"autoUpdateRepoName"`   // GitHub repo name for core auto-updates (e.g., "canopy")
-	Plugin               string `json:"plugin"`               // the configured plugin to use
-	PluginTimeoutMS  int                `json:"pluginTimeoutMS"`  // plugin request timeout in milliseconds
-	PluginAutoUpdate PluginAutoUpdateConfig `json:"pluginAutoUpdate"` // plugin auto-update configuration
+	LogLevel            string                 `json:"logLevel"`            // any level includes the levels above it: debug < info < warning < error
+	ChainId             uint64                 `json:"chainId"`             // the identifier of this particular chain within a single 'network id'
+	SleepUntil          uint64                 `json:"sleepUntil"`          // allows coordinated 'wake-ups' for genesis or chain halt events
+	RootChain           []RootChain            `json:"rootChain"`           // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
+	RunVDF              bool                   `json:"runVDF"`              // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
+	Headless            bool                   `json:"headless"`            // turn off the web wallet and block explorer 'web' front ends
+	AutoUpdate          bool                   `json:"autoUpdate"`          // check for new versions of software each X time
+	AutoUpdateRepoOwner string                 `json:"autoUpdateRepoOwner"` // GitHub repo owner for core auto-updates (e.g., "canopy-network")
+	AutoUpdateRepoName  string                 `json:"autoUpdateRepoName"`  // GitHub repo name for core auto-updates (e.g., "canopy")
+	Plugin              string                 `json:"plugin"`              // the configured plugin to use
+	PluginTimeoutMS     int                    `json:"pluginTimeoutMS"`     // plugin request timeout in milliseconds
+	PluginAutoUpdate    PluginAutoUpdateConfig `json:"pluginAutoUpdate"`    // plugin auto-update configuration
 }
 
 // PluginAutoUpdateConfig holds configuration for plugin auto-updates
@@ -122,6 +123,7 @@ type RPCConfig struct {
 	ExplorerPort               string `json:"explorerPort"`               // the port where the block explorer is hosted
 	RPCPort                    string `json:"rpcPort"`                    // the port where the rpc server is hosted
 	AdminPort                  string `json:"adminPort"`                  // the port where the admin rpc server is hosted
+	ProfilingPort              string `json:"profilingPort"`              // the port where the pprof profiling server is hosted
 	RPCUrl                     string `json:"rpcURL"`                     // the url where the rpc server is hosted
 	AdminRPCUrl                string `json:"adminRPCUrl"`                // the url where the admin rpc server is hosted
 	TimeoutS                   int    `json:"timeoutS"`                   // the rpc request timeout in seconds
@@ -147,6 +149,7 @@ func DefaultRPCConfig() RPCConfig {
 		ExplorerPort:               "50001",                    // find the explorer on localhost:50001
 		RPCPort:                    "50002",                    // the rpc is served on localhost:50002
 		AdminPort:                  "50003",                    // the admin rpc is served on localhost:50003
+		ProfilingPort:              "6060",                     // the pprof profiling server is served on localhost:6060
 		RPCUrl:                     "http://localhost:50002",   // use a local rpc by default
 		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
 		TimeoutS:                   3,                          // the rpc timeout is 3 seconds
@@ -274,6 +277,8 @@ type StoreConfig struct {
 	// sync. Lower values also increase the risk of data loss due to a pebble issue where batches are
 	// returned before commit completion when compaction runs concurrently with commits.
 	LSSCompactionInterval uint64 `json:"lssCompactionInterval"` // interval for compacting latest store data
+	BackupDirectory       string `json:"backupDirectory"`       // directory where backups of the database are stored
+	BackupInterval        uint64 `json:"backupInterval"`        // interval in blocks for creating backups of the database (0 to disable automatic backups)
 }
 
 // DefaultDataDirPath() is $USERHOME/.canopy
@@ -294,11 +299,13 @@ func DefaultDataDirPath() string {
 // DefaultStoreConfig() returns the developer recommended store configuration
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		DataDirPath:           DefaultDataDirPath(),           // use the default data dir path
-		DBName:                "canopy",                       // 'canopy' database name
-		IndexByAccount:        true,                           // index transactions by account
-		InMemory:              false,                          // persist to disk, not memory
-		LSSCompactionInterval: uint64(rand.Int32N(101) + 500), // clean every 500-600 blocks (random)
+		DataDirPath:           DefaultDataDirPath(),                      // use the default data dir path
+		DBName:                "canopy",                                  // 'canopy' database name
+		IndexByAccount:        true,                                      // index transactions by account
+		InMemory:              false,                                     // persist to disk, not memory
+		LSSCompactionInterval: uint64(rand.Int32N(101) + 500),            // clean every 500-600 blocks (random)
+		BackupDirectory:       path.Join(DefaultDataDirPath(), "backup"), // backup directory name
+		BackupInterval:        0,                                         // backups disabled by default
 	}
 }
 

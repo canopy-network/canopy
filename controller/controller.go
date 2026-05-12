@@ -3,10 +3,12 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -81,7 +83,9 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	controller.loadCheckpointsFile()
 	// setup plugin if enabled
 	if c.Plugin != "" {
-		controller.PluginExecute(c.Plugin)
+		if err = controller.PluginExecute(c.Plugin); err != nil {
+			return nil, err
+		}
 		controller.PluginConnectSync()
 	}
 	// initialize the consensus in the controller, passing a reference to itself
@@ -176,6 +180,12 @@ func (c *Controller) Stop() {
 	}
 	// stop the p2p module
 	c.P2P.Stop()
+	// stop the plugin process if configured
+	if c.Config.Plugin != "" {
+		if err := c.PluginStop(c.Config.Plugin); err != nil {
+			c.log.Error(err.Error())
+		}
+	}
 }
 
 // ROOT CHAIN CALLS BELOW
@@ -251,25 +261,44 @@ func (c *Controller) IsValidDoubleSigner(rootChainId, rootHeight uint64, address
 const socketDir = "/tmp/plugin"
 const socketFile = "plugin.sock"
 
-// PluginExecute() executes the plugin control script to start the plugin process
-func (c *Controller) PluginExecute(plugin string) {
+// runPluginCtl() executes a plugin control script action and returns the command output
+func (c *Controller) runPluginCtl(plugin, action string) ([]byte, lib.ErrorI) {
 	if plugin == "" || strings.Contains(plugin, "..") || strings.ContainsRune(plugin, os.PathSeparator) {
-		c.log.Errorf("Invalid plugin name %q", plugin)
-		return
+		return nil, lib.NewError(lib.NoCode, lib.MainModule, fmt.Sprintf("invalid plugin name %q", plugin))
 	}
-	// construct the shell command path: plugin/<plugin>/pluginctl.sh start
-	cmdPath := filepath.Join("plugin", plugin, "pluginctl.sh")
-	// create the command to execute the plugin control script with 'start' argument
-	cmd := exec.Command(cmdPath, "start")
+	// resolve the control script path
+	cmdPath, err := resolvePluginCtlPath(plugin)
+	if err != nil {
+		return nil, lib.NewError(lib.NoCode, lib.MainModule, err.Error())
+	}
+	// create the command using the requested action
+	cmd := exec.Command(cmdPath, action)
 	// execute the command and capture output
 	output, err := cmd.CombinedOutput()
-	// if an error occurred during execution
 	if err != nil {
-		// log the error and exit
-		c.log.Errorf("Failed to execute plugin %s: %v, output: %s", plugin, err, string(output))
+		return nil, lib.NewError(lib.NoCode, lib.MainModule, fmt.Sprintf("failed to execute plugin %s (%s): %v, output: %s", plugin, action, err, string(output)))
 	}
-	// log successful plugin execution
+	return output, nil
+}
+
+// PluginExecute() executes the plugin control script to start the plugin process
+func (c *Controller) PluginExecute(plugin string) lib.ErrorI {
+	output, err := c.runPluginCtl(plugin, "start")
+	if err != nil {
+		return err
+	}
 	c.log.Infof("Plugin %s started: %s", plugin, string(output))
+	return nil
+}
+
+// PluginStop() executes the plugin control script to stop the plugin process
+func (c *Controller) PluginStop(plugin string) lib.ErrorI {
+	output, err := c.runPluginCtl(plugin, "stop")
+	if err != nil {
+		return err
+	}
+	c.log.Infof("Plugin %s stopped: %s", plugin, string(output))
+	return nil
 }
 
 // PluginConnectSync() blocking: enables a unix socket file where plugins can interact with the Canopy FSM
@@ -300,6 +329,38 @@ func (c *Controller) PluginConnectSync() {
 	c.Plugin = lib.NewPlugin(conn, c.log, time.Duration(c.Config.PluginTimeoutMS)*time.Millisecond)
 	// set plugin in FSM and mempool FSM
 	c.FSM.Plugin, c.Mempool.FSM.Plugin = c.Plugin, c.Plugin
+}
+
+// resolvePluginCtlPath() locates the plugin control script from common startup locations
+func resolvePluginCtlPath(plugin string) (string, error) {
+	// construct the relative path for the plugin control script
+	relPath := filepath.Join("plugin", plugin, "pluginctl.sh")
+	// try the current working directory first
+	candidates := []string{
+		relPath,
+	}
+	// add paths relative to the running executable if available
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		candidates = append(candidates,
+			filepath.Join(exeDir, relPath),
+			filepath.Join(filepath.Dir(exeDir), relPath),
+		)
+	}
+	// add a path relative to the source tree for local development
+	if _, sourceFile, _, ok := runtime.Caller(0); ok {
+		repoRoot := filepath.Dir(filepath.Dir(sourceFile))
+		candidates = append(candidates, filepath.Join(repoRoot, relPath))
+	}
+	// return the first existing file path
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() {
+			return candidate, nil
+		}
+	}
+	// exit with a descriptive error containing all attempted paths
+	return "", fmt.Errorf("plugin launcher not found for %q; checked: %s", plugin, strings.Join(candidates, ", "))
 }
 
 // INTERNAL CALLS BELOW

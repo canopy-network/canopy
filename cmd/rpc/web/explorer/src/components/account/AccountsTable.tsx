@@ -1,8 +1,11 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import TableCard from '../Home/TableCard'
 import accountsTexts from '../../data/accounts.json'
 import AnimatedNumber from '../AnimatedNumber'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
+import PageSizeSelect from '../shared/PageSizeSelect'
+import CnpyColorIcon from '../ui/CnpyColorIcon'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Account {
     address: string
@@ -14,111 +17,198 @@ interface AccountsTableProps {
     loading?: boolean
     totalCount?: number
     currentPage?: number
+    pageSize?: number
     onPageChange?: (page: number) => void
-    // Props for Show/Export section
-    showEntriesSelector?: boolean
-    entriesPerPageOptions?: number[]
-    currentEntriesPerPage?: number
-    onEntriesPerPageChange?: (value: number) => void
-    showExportButton?: boolean
-    onExportButtonClick?: () => void
-    stakingTypeMap?: Map<string, 'validator' | 'delegator' | 'unstaked'>
+    onPageSizeChange?: (value: number) => void
 }
+
+const desktopHeaderClass =
+    'px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4'
+const desktopRowCellClass =
+    'bg-[#1a1a1a] px-2 py-2 align-middle transition-colors group-hover:bg-[#272729] sm:px-3 lg:px-4'
+
+const truncateMiddle = (value: string, leading = 10, trailing = 6) => {
+    if (!value || value.length <= leading + trailing + 1) return value || 'N/A'
+    return `${value.slice(0, leading)}…${value.slice(-trailing)}`
+}
+
+const CnpyBadge: React.FC<{ seed: string }> = ({ seed }) => (
+    <CnpyColorIcon seed={seed} size={28} />
+)
 
 const AccountsTable: React.FC<AccountsTableProps> = ({
     accounts,
     loading = false,
     totalCount = 0,
     currentPage = 1,
+    pageSize = 10,
     onPageChange,
-    // Destructure the new props
-    showEntriesSelector = false,
-    entriesPerPageOptions = [10, 25, 50, 100],
-    currentEntriesPerPage = 10,
-    onEntriesPerPageChange,
-    showExportButton = false,
-    onExportButtonClick,
-    stakingTypeMap
+    onPageSizeChange,
 }) => {
     const navigate = useNavigate()
-    const truncateLong = (s: string, start: number = 10, end: number = 8) => {
-        if (s.length <= start + end) return s
-        return `${s.slice(0, start)}…${s.slice(-end)}`
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
+    const endIdx = Math.min(currentPage * pageSize, totalCount)
+
+    const visiblePages = React.useMemo(() => {
+        if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
+        const pageSet = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])
+        return Array.from(pageSet).filter((page) => page >= 1 && page <= totalPages).sort((a, b) => a - b)
+    }, [currentPage, totalPages])
+
+    const goToPage = (page: number) => {
+        if (!onPageChange) return
+        onPageChange(Math.min(Math.max(1, page), totalPages))
     }
-
-
-    // Get staking type for an account
-    const getStakingType = (address: string): 'validator' | 'delegator' | 'unstaked' | null => {
-        if (!stakingTypeMap) return null
-        return stakingTypeMap.get(address.toLowerCase()) || null
-    }
-
-    const rows = accounts.length > 0 ? accounts.map((account) => {
-        const stakingType = getStakingType(account.address)
-
-        return [
-            // Address
-            <span
-                className="text-primary cursor-pointer hover:underline font-mono text-sm"
-                onClick={() => navigate(`/account/${account.address}`)}
-                title={account.address}
-            >
-                {truncateLong(account.address, 16, 12)}
-            </span>,
-
-            // Amount
-            <span className="text-white font-medium">
-                <AnimatedNumber value={account.amount} format={{ maximumFractionDigits: 4 }} className="text-white" />
-                <span className="text-gray-400 ml-1">CNPY</span>
-            </span>,
-
-            // Staking Type
-            <span className="text-gray-300 text-sm">
-                {stakingType === 'validator' && <span className="text-green-400">Validator</span>}
-                {stakingType === 'delegator' && <span className="text-blue-400">Delegator</span>}
-                {stakingType === 'unstaked' && <span className="text-orange-400">Unstaked</span>}
-                {!stakingType && <span className="text-gray-500">—</span>}
-            </span>
-        ]
-    }) : []
 
     const columns = [
-        { label: accountsTexts.table.headers.address, width: 'w-[30%]' },
-        { label: accountsTexts.table.headers.balance, width: 'w-[25%]' },
-        { label: 'Staking', width: 'w-[20%]' }
+        { label: accountsTexts.table.headers.address },
+        { label: accountsTexts.table.headers.balance },
     ]
 
-    // Show message when no data
-    if (!loading && accounts.length === 0) {
-        return (
-            <div className="bg-card rounded-lg p-8 text-center">
-                <div className="text-gray-400 text-lg mb-2">
-                    <i className="fa-solid fa-wallet"></i>
-                </div>
-                <h3 className="text-white text-xl font-semibold mb-2">No accounts found</h3>
-                <p className="text-gray-400">There are no accounts to display at the moment.</p>
-            </div>
-        )
-    }
-
     return (
-        <TableCard
-            title={accountsTexts.table.title}
-            columns={columns}
-            rows={rows}
-            totalCount={totalCount}
-            currentPage={currentPage}
-            onPageChange={onPageChange}
-            loading={loading}
-            spacing={4}
-            paginate={true}
-            showEntriesSelector={showEntriesSelector}
-            entriesPerPageOptions={entriesPerPageOptions}
-            currentEntriesPerPage={currentEntriesPerPage}
-            onEntriesPerPageChange={onEntriesPerPageChange}
-            showExportButton={showExportButton}
-            onExportButtonClick={onExportButtonClick}
-        />
+        <div className="rounded-xl border border-white/10 bg-card p-5">
+            <div className="overflow-x-auto">
+                <table
+                    className="w-full min-w-[720px]"
+                    style={{ tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
+                >
+                    <thead>
+                        <tr>
+                            {columns.map((column) => (
+                                <th key={column.label} className={desktopHeaderClass}>
+                                    {column.label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading ? (
+                            Array.from({ length: pageSize }).map((_, index) => (
+                                <tr key={`skeleton-${index}`} className="group animate-pulse">
+                                    {columns.map((_, columnIndex) => (
+                                        <td
+                                            key={`${index}-${columnIndex}`}
+                                            className={desktopRowCellClass}
+                                            style={{
+                                                borderTopLeftRadius: columnIndex === 0 ? '10px' : undefined,
+                                                borderBottomLeftRadius: columnIndex === 0 ? '10px' : undefined,
+                                                borderTopRightRadius: columnIndex === columns.length - 1 ? '10px' : undefined,
+                                                borderBottomRightRadius: columnIndex === columns.length - 1 ? '10px' : undefined,
+                                            }}
+                                        >
+                                            <div className={`h-4 rounded bg-white/6 ${columnIndex === 0 ? 'w-40' : 'w-28'}`} />
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))
+                        ) : accounts.length === 0 ? (
+                            <tr>
+                                <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
+                                    No accounts found
+                                </td>
+                            </tr>
+                        ) : (
+                            accounts.map((account) => (
+                                <tr
+                                    key={account.address}
+                                    className="group cursor-pointer"
+                                    onClick={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(`/account/${account.address}`)
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        event.preventDefault()
+                                        navigate(`/account/${account.address}`)
+                                    }}
+                                    tabIndex={0}
+                                    role="link"
+                                    aria-label={`View account ${account.address}`}
+                                >
+                                    <td
+                                        className={desktopRowCellClass}
+                                        style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
+                                    >
+                                        <div className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white">
+                                            <CnpyBadge seed={account.address} />
+                                            <CopyableIdentifier value={account.address} label="Address" to={`/account/${account.address}`} className="text-sm font-medium text-white">
+                                                {truncateMiddle(account.address)}
+                                            </CopyableIdentifier>
+                                        </div>
+                                    </td>
+                                    <td
+                                        className={desktopRowCellClass}
+                                        style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
+                                    >
+                                        <span className="text-sm text-white tabular-nums">
+                                            <AnimatedNumber value={toCNPY(account.amount)} format={{ maximumFractionDigits: 4 }} className="text-white" />
+                                            <span className="ml-1 text-white/50">CNPY</span>
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {!loading && totalCount > 0 && (
+                <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                            <AnimatedNumber value={totalCount} />
+                        </span>
+                        {onPageSizeChange && (
+                            <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => goToPage(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="explorer-pagination-button px-3 py-1.5"
+                            aria-label="Previous page"
+                        >
+                            <i className="fa-solid fa-angle-left" />
+                        </button>
+
+                        {visiblePages.map((page, index, arr) => {
+                            const prevPage = arr[index - 1]
+                            const showDots = index > 0 && page - (prevPage || 0) > 1
+
+                            return (
+                                <React.Fragment key={page}>
+                                    {showDots && <span className="px-1 text-white/40">…</span>}
+                                    <button
+                                        type="button"
+                                        onClick={() => goToPage(page)}
+                                        className={`explorer-pagination-button explorer-pagination-page px-3 py-1.5 ${
+                                            currentPage === page ? 'explorer-pagination-page-active' : ''
+                                        }`}
+                                    >
+                                        {page}
+                                    </button>
+                                </React.Fragment>
+                            )
+                        })}
+
+                        <button
+                            type="button"
+                            onClick={() => goToPage(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="explorer-pagination-button px-3 py-1.5"
+                            aria-label="Next page"
+                        >
+                            <i className="fa-solid fa-angle-right" />
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
     )
 }
 

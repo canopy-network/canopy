@@ -28,6 +28,8 @@ function applyWindowConfig<T extends Record<string, unknown>>(chain: T): T {
   if (typeof window === 'undefined' || !window.__CONFIG__) return chain
 
   const rpc = (chain.rpc ?? {}) as Record<string, string>
+  const explorer = (chain.explorer ?? {}) as Record<string, string>
+  const explorerBaseURL = window.__CONFIG__.explorerBaseURL?.replace(/\/+$/, '')
   return {
     ...chain,
     chainId: String(window.__CONFIG__.chainId),
@@ -35,8 +37,14 @@ function applyWindowConfig<T extends Record<string, unknown>>(chain: T): T {
       ...rpc,
       base: window.__CONFIG__.rpcURL,
       admin: window.__CONFIG__.adminRPCURL,
-      root: window.__CONFIG__.rpcURL,
     },
+    explorer: explorerBaseURL
+      ? {
+          ...explorer,
+          tx: `${explorerBaseURL}/transaction`,
+          order: `${explorerBaseURL}/order`,
+        }
+      : explorer,
   }
 }
 
@@ -53,8 +61,7 @@ export function useEmbeddedConfig(chain = DEFAULT_CHAIN) {
     queryKey: ['manifest', base],
     enabled: !!chainQ.data,
     queryFn: () => fetchJson<Manifest>(`${base}/manifest.json`),
-    // Use the global refetch configuration every 20s
-    // The manifest can change dynamically
+    staleTime: 0,
   })
 
   // tiny bridge for places where global ctx is handy (e.g., validators)

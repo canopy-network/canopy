@@ -10,9 +10,10 @@ const AccountDetailPage: React.FC = () => {
     const { address } = useParams<{ address: string }>()
     const navigate = useNavigate()
     const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
     const [activeTab, setActiveTab] = useState<'sent' | 'received'>('sent')
 
-    const { data: accountData, isLoading, error } = useAccountWithTxs(0, address || '', currentPage)
+    const { data: accountData, isLoading, error } = useAccountWithTxs(0, address || '', currentPage, pageSize)
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page)
@@ -21,6 +22,11 @@ const AccountDetailPage: React.FC = () => {
     const handleTabChange = (tab: 'sent' | 'received') => {
         setActiveTab(tab)
         setCurrentPage(1) // Reset page when changing tabs
+    }
+
+    const handlePageSizeChange = (value: number) => {
+        setPageSize(value)
+        setCurrentPage(1)
     }
 
     if (error) {
@@ -78,70 +84,85 @@ const AccountDetailPage: React.FC = () => {
     }
 
     const account = accountData.account
-    const sentTransactions = accountData.sent_transactions?.results || accountData.sent_transactions?.data || accountData.sent_transactions || []
-    const receivedTransactions = accountData.rec_transactions?.results || accountData.rec_transactions?.data || accountData.rec_transactions || []
+    const sentTransactionsResponse = accountData.sent_transactions
+    const receivedTransactionsResponse = accountData.rec_transactions
+    const sentTransactions = sentTransactionsResponse?.results || sentTransactionsResponse?.data || sentTransactionsResponse || []
+    const receivedTransactions = receivedTransactionsResponse?.results || receivedTransactionsResponse?.data || receivedTransactionsResponse || []
+    const activeTransactionsResponse = activeTab === 'sent' ? sentTransactionsResponse : receivedTransactionsResponse
+
+    const truncate = (value: string, leading: number = 10, trailing: number = 6) => {
+        if (!value || value.length <= leading + trailing + 1) return value
+        return `${value.slice(0, leading)}…${value.slice(-trailing)}`
+    }
 
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className="min-h-screen bg-background"
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="explorer-detail-page w-full"
         >
-            <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
-                {/* Header */}
+            <div className="w-full">
+                <div className="mb-6 sm:mb-8">
+                    <nav className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/60 sm:text-sm">
+                        <button onClick={() => navigate('/accounts')} className="transition-colors hover:text-[#35cd48]">
+                            Accounts
+                        </button>
+                        <i className="fa-solid fa-chevron-right text-xs"></i>
+                        <span className="break-all text-xs text-white sm:break-normal sm:text-sm">
+                            {typeof window !== 'undefined' && window.innerWidth < 640
+                                ? truncate(account.address || '', 6, 4)
+                                : account.address || ''}
+                        </span>
+                    </nav>
+                </div>
+
                 <AccountDetailHeader account={account} />
 
-                {/* Navigation Tabs */}
-                <motion.div
-                    className="mb-4 sm:mb-6"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.4 }}
-                >
-                    <div className="flex gap-1 border-b border-gray-700 overflow-x-auto">
-                        <motion.button
-                            onClick={() => handleTabChange('sent')}
-                            className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-colors rounded-t-lg whitespace-nowrap ${activeTab === 'sent'
-                                    ? 'bg-primary text-black'
-                                    : 'text-gray-400 hover:text-white'
+                {(() => {
+                    const tableToggle = (
+                        <div className="inline-flex gap-1 rounded-xl border border-[#272729] bg-[#0f0f0f] p-1">
+                            <button
+                                type="button"
+                                onClick={() => handleTabChange('sent')}
+                                className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
+                                    activeTab === 'sent'
+                                        ? 'bg-[#ffffff] !text-[#0f0f0f]'
+                                        : 'text-white/60 hover:bg-[#171717] hover:text-[#ffffff]'
                                 }`}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            animate={{
-                                backgroundColor: activeTab === 'sent' ? '#4ADE80' : 'transparent',
-                                color: activeTab === 'sent' ? '#000000' : '#9CA3AF'
-                            }}
-                        >
-                            {accountDetailTexts.tabs.sentTransactions}
-                        </motion.button>
-                        <motion.button
-                            onClick={() => handleTabChange('received')}
-                            className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-colors rounded-t-lg whitespace-nowrap ${activeTab === 'received'
-                                    ? 'bg-primary text-black'
-                                    : 'text-gray-400 hover:text-white'
+                            >
+                                {accountDetailTexts.tabs.sentTransactions}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleTabChange('received')}
+                                className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
+                                    activeTab === 'received'
+                                        ? 'bg-[#ffffff] !text-[#0f0f0f]'
+                                        : 'text-white/60 hover:bg-[#171717] hover:text-[#ffffff]'
                                 }`}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            animate={{
-                                backgroundColor: activeTab === 'received' ? '#4ADE80' : 'transparent',
-                                color: activeTab === 'received' ? '#000000' : '#9CA3AF'
-                            }}
-                        >
-                            {accountDetailTexts.tabs.receivedTransactions}
-                        </motion.button>
-                    </div>
-                </motion.div>
+                            >
+                                {accountDetailTexts.tabs.receivedTransactions}
+                            </button>
+                        </div>
+                    )
 
-                {/* Transactions Table */}
-                <AccountTransactionsTable
-                    transactions={activeTab === 'sent' ? sentTransactions : receivedTransactions}
-                    loading={isLoading}
-                    currentPage={currentPage}
-                    onPageChange={handlePageChange}
-                    type={activeTab}
-                />
+                    return (
+                        <AccountTransactionsTable
+                            transactions={activeTab === 'sent' ? sentTransactions : receivedTransactions}
+                            loading={isLoading}
+                            currentPage={currentPage}
+                            onPageChange={handlePageChange}
+                            pageSize={pageSize}
+                            onPageSizeChange={handlePageSizeChange}
+                            type={activeTab}
+                            totalCount={activeTransactionsResponse?.totalCount || activeTransactionsResponse?.count || 0}
+                            totalPages={activeTransactionsResponse?.totalPages || 1}
+                            titleActions={tableToggle}
+                        />
+                    )
+                })()}
             </div>
         </motion.div>
     )

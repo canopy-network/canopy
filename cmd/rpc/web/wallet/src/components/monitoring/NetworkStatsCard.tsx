@@ -51,11 +51,11 @@ export const NetworkStatsCard: React.FC<NetworkStatsCardProps> = ({
             <div className="space-y-2">
                 <div>
                     <div className="text-muted-foreground text-sm">Peer ID</div>
-                    <div className="text-foreground font-mono text-xs break-all">{peerId}</div>
+                    <div className="text-foreground text-xs break-all">{peerId}</div>
                 </div>
                 <div>
                     <div className="text-muted-foreground text-sm">Network Address</div>
-                    <div className="text-foreground font-mono text-sm">{networkAddress}</div>
+                    <div className="text-foreground text-sm">{networkAddress}</div>
                 </div>
             </div>
         </motion.div>
