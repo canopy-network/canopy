@@ -10,8 +10,16 @@ const HomePage = () => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className='mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col gap-8'
+      className='w-full flex flex-col gap-8'
     >
+      <div className="flex flex-col gap-2">
+        <h1 className="explorer-page-title">
+          Explorer
+        </h1>
+        <p className="explorer-page-subtitle max-w-2xl">
+          Live network overview, blocks, transactions, and validators.
+        </p>
+      </div>
       <Stages />
       <OverviewCards />
       <ExtraTables />

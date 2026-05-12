@@ -9,7 +9,7 @@ const inputVariants = cva(
     variants: {
       variant: {
         default:
-          "border-input/85 bg-secondary/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:border-primary/35 focus-visible:border-primary focus-visible:ring-primary/25 focus-visible:ring-[3px]",
+          "border-input/85 bg-secondary/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:border-white/20 focus-visible:border-primary focus-visible:ring-primary/25 focus-visible:ring-[3px]",
         wallet:
           "border-none bg-transparent focus-visible:outline-none focus-visible:ring-0",
         ghost:

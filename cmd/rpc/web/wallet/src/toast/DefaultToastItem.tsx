@@ -10,27 +10,27 @@ const VARIANT_STYLES: Record<NonNullable<ToastRenderData["variant"]>, {
     iconBg: string;
 }> = {
     success: {
-        container: "bg-gradient-to-r from-bg-secondary to-bg-tertiary border-l-4 border-l-primary shadow-lg shadow-primary/20",
+        container: "bg-card border border-white/10 border-l-4 border-l-primary",
         icon: <CheckCircle2 className="h-5 w-5 text-primary" />,
         iconBg: "bg-primary/20"
     },
     error: {
-        container: "bg-gradient-to-r from-bg-secondary to-bg-tertiary border-l-4 border-l-red-500 shadow-lg shadow-red-500/20",
+        container: "bg-card border border-white/10 border-l-4 border-l-red-500",
         icon: <XCircle className="h-5 w-5 text-red-500" />,
         iconBg: "bg-red-500/20"
     },
     warning: {
-        container: "bg-gradient-to-r from-bg-secondary to-bg-tertiary border-l-4 border-l-orange-500 shadow-lg shadow-orange-500/20",
+        container: "bg-card border border-white/10 border-l-4 border-l-orange-500",
         icon: <AlertTriangle className="h-5 w-5 text-orange-500" />,
         iconBg: "bg-orange-500/20"
     },
     info: {
-        container: "bg-gradient-to-r from-bg-secondary to-bg-tertiary border-l-4 border-l-blue-500 shadow-lg shadow-blue-500/20",
+        container: "bg-card border border-white/10 border-l-4 border-l-blue-500",
         icon: <Info className="h-5 w-5 text-blue-500" />,
         iconBg: "bg-blue-500/20"
     },
     neutral: {
-        container: "bg-gradient-to-r from-bg-secondary to-bg-tertiary border-l-4 border-l-gray-500 shadow-lg shadow-gray-500/10",
+        container: "bg-card border border-white/10 border-l-4 border-l-zinc-500",
         icon: <Bell className="h-5 w-5 text-muted-foreground" />,
         iconBg: "bg-gray-500/20"
     },

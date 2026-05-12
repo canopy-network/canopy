@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -82,6 +83,7 @@ func (s *Server) Start() {
 	// Start the Query and Admin RPC servers concurrently
 	go s.startRPC(createRouter(s), hostport[0], s.config.RPCPort)
 	go s.startRPC(createAdminRouter(s), hostport[0], s.config.AdminPort)
+	go s.startRPC(createDebugRouter(), hostport[0], s.config.ProfilingPort)
 
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
@@ -373,7 +375,7 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 			}
 
 			// Inject the configuration into the HTML file content
-			injectedHTML := injectConfig(string(htmlBytes), conf)
+			injectedHTML := injectConfig(string(htmlBytes), conf, r)
 
 			// Set the response header as HTML and write the injected content to the response
 			w.Header().Set("Content-Type", "text/html")
@@ -422,14 +424,38 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 }
 
 // injectConfig() injects the config.json into the HTML file
-func injectConfig(html string, config lib.Config) string {
+func injectConfig(html string, config lib.Config, r *http.Request) string {
+	forwardedHost := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Host"), ",")[0])
+	if forwardedHost == "" {
+		forwardedHost = r.Host
+	}
+
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if forwardedProto := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]); forwardedProto != "" {
+		scheme = forwardedProto
+	}
+
+	hostname := forwardedHost
+	if host, _, err := net.SplitHostPort(forwardedHost); err == nil {
+		hostname = host
+	}
+
+	injectedConfig, err := json.Marshal(map[string]any{
+		"rpcURL":          config.RPCUrl,
+		"adminRPCURL":     config.AdminRPCUrl,
+		"explorerBaseURL": fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(hostname, config.ExplorerPort)),
+		"chainId":         config.ChainId,
+	})
+	if err != nil {
+		injectedConfig = []byte("{}")
+	}
+
 	script := fmt.Sprintf(`<script>
-		window.__CONFIG__ = {
-            rpcURL: "%s",
-            adminRPCURL: "%s",
-            chainId: %d
-        };
-	</script>`, config.RPCUrl, config.AdminRPCUrl, config.ChainId)
+		window.__CONFIG__ = %s;
+	</script>`, injectedConfig)
 
 	// inject the script just before </head>
 	return strings.Replace(html, "</head>", script+"</head>", 1)

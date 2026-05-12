@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"net/http"
+	"net/http/pprof"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -64,11 +65,6 @@ const (
 	ValidatorSetRoutePath          = "/v1/query/validator-set"
 	CheckpointRoutePath            = "/v1/query/checkpoint"
 	SubscribeRCInfoPath            = "/v1/subscribe-rc-info"
-	// debug
-	DebugBlockedRoutePath   = "/debug/blocked"
-	DebugHeapRoutePath      = "/debug/heap"
-	DebugCPURoutePath       = "/debug/cpu"
-	DebugGoroutineRoutePath = "/debug/goroutine"
 	// eth
 	EthereumRoutePath = "/v1/eth"
 	// admin
@@ -270,11 +266,6 @@ var routePaths = routes{
 	RootChainInfoRouteName:         {Method: http.MethodPost, Path: RootChainInfoRoutePath},
 	ValidatorSetRouteName:          {Method: http.MethodPost, Path: ValidatorSetRoutePath},
 	CheckpointRouteName:            {Method: http.MethodPost, Path: CheckpointRoutePath},
-	// debug
-	DebugBlockedRouteName:   {Method: http.MethodGet, Path: DebugBlockedRoutePath},
-	DebugHeapRouteName:      {Method: http.MethodGet, Path: DebugHeapRoutePath},
-	DebugCPURouteName:       {Method: http.MethodGet, Path: DebugCPURoutePath},
-	DebugGoroutineRouteName: {Method: http.MethodGet, Path: DebugGoroutineRoutePath},
 	// eth
 	EthereumRouteName: {Method: http.MethodPost, Path: EthereumRoutePath},
 	// admin
@@ -429,11 +420,6 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		LogsRouteName:                   logsHandler(s),
 		AddVoteRouteName:                s.AddVote,
 		DelVoteRouteName:                s.DelVote,
-		// debug
-		DebugBlockedRouteName:   debugHandler(DebugBlockedRouteName),
-		DebugHeapRouteName:      debugHandler(DebugHeapRouteName),
-		DebugCPURouteName:       debugHandler(DebugCPURouteName),
-		DebugGoroutineRouteName: debugHandler(DebugGoroutineRouteName),
 	}
 
 	// Initialize a new router using the httprouter package.
@@ -447,5 +433,19 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		router.Handle(path.Method, path.Path, logHandler{path.Path, handler}.Handle)
 	}
 
+	return router
+}
+
+func createDebugRouter() *httprouter.Router {
+	httpRoute := func(f http.HandlerFunc) httprouter.Handle {
+		return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			f(w, r)
+		}
+	}
+
+	router := httprouter.New()
+	router.GET("/debug/pprof", httpRoute(pprof.Index))
+	// importing "net/http/pprof" auto-registers all handlers on DefaultServeMux via init().
+	router.GET("/debug/pprof/*name", httpRoute(http.DefaultServeMux.ServeHTTP))
 	return router
 }

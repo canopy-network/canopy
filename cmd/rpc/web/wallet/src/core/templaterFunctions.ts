@@ -13,31 +13,57 @@ const resolveHeightInput = (v: any): number => {
     return 0
 }
 
+let _denomFactor = 1_000_000
+const DETAIL_MIN_FRACTION_DIGITS = 2
+const DETAIL_MAX_FRACTION_DIGITS = 6
+
+export function setDenomDecimals(decimals: number) {
+    _denomFactor = Math.pow(10, decimals)
+}
+
+export function getDenomFactor(): number {
+    return _denomFactor
+}
+
 export const templateFns = {
-    // Convert from base denom (micro) to display denom - returns formatted string
+    slice: (v: any, start: any, end?: any) => {
+        const value = String(v ?? "")
+        const startIndex = Number(start)
+        const endIndex = end == null || end === "" ? undefined : Number(end)
+        if (!Number.isFinite(startIndex)) return ""
+        if (endIndex != null && !Number.isFinite(endIndex)) return ""
+        return value.slice(startIndex, endIndex)
+    },
+
     formatToCoin: (v: any) => {
         if (v === '' || v == null) return ''
         const n = Number(v)
         if (!Number.isFinite(n)) return ''
-        return (n / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 3 })
+        return (n / _denomFactor).toLocaleString(undefined, { maximumFractionDigits: 3 })
     },
 
-    // Convert from base denom (micro) to display denom - returns NUMBER (not string)
-    // Use this for field values, min, max, etc.
+    formatToCoinPrecise: (v: any) => {
+        if (v === '' || v == null) return ''
+        const n = Number(v)
+        if (!Number.isFinite(n)) return ''
+        return (n / _denomFactor).toLocaleString(undefined, {
+            minimumFractionDigits: DETAIL_MIN_FRACTION_DIGITS,
+            maximumFractionDigits: DETAIL_MAX_FRACTION_DIGITS,
+        })
+    },
+
     fromMicroDenom: (v: any) => {
         if (v === '' || v == null) return 0
         const n = Number(v)
         if (!Number.isFinite(n)) return 0
-        return n / 1_000_000
+        return n / _denomFactor
     },
 
-    // Convert from display denom to base denom (micro) - returns NUMBER
-    // Use this for payload values that need to be sent to RPC
     toMicroDenom: (v: any) => {
         if (v === '' || v == null) return 0
         const n = Number(v)
         if (!Number.isFinite(n)) return 0
-        return Math.floor(n * 1_000_000)
+        return Math.floor(n * _denomFactor)
     },
 
     // DEPRECATED: Use fromMicroDenom instead
@@ -54,7 +80,7 @@ export const templateFns = {
         if (v === '' || v == null) return ''
         const n = Number(v)
         if (!Number.isFinite(n)) return ''
-        return (n * 1_000_000).toFixed(0)
+        return (n * _denomFactor).toFixed(0)
     },
 
     numberToLocaleString: (v: any) => {
@@ -63,7 +89,16 @@ export const templateFns = {
         if (!Number.isFinite(n)) return ''
         return n.toLocaleString(undefined, { maximumFractionDigits: 3 })
     },
+    numberToLocaleStringPrecise: (v: any) => {
+        if (v === '' || v == null) return ''
+        const n = Number(v)
+        if (!Number.isFinite(n)) return ''
+        return n.toLocaleString(undefined, {
+            minimumFractionDigits: DETAIL_MIN_FRACTION_DIGITS,
+            maximumFractionDigits: DETAIL_MAX_FRACTION_DIGITS,
+        })
+    },
     resolveHeight: (v: any) => resolveHeightInput(v),
     toUpper: (v: any) => String(v ?? "")?.toUpperCase(),
-    shortAddress: (v: any) => String(v ?? "")?.slice(0, 6) + "..." + String(v ?? "")?.slice(-6),
+    shortAddress: (v: any) => String(v ?? "")?.slice(0, 10) + "..." + String(v ?? "")?.slice(-10),
 }

@@ -121,7 +121,7 @@ var (
 		Short: "delete the key associated with the address or nickname from the keystore",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			writeToConsole(client.KeystoreDelete(argGetAddrOrNickname(args[0])))
+			writeToConsole(client.KeystoreDelete(argGetAddrOrNickname(args[0]), getPassword()))
 		},
 	}
 

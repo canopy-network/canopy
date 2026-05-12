@@ -3,6 +3,7 @@ package fsm
 import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/drand/kyber"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/anypb"
 	"math"
@@ -268,6 +269,62 @@ func TestCheckTx(t *testing.T) {
 			require.EqualExportedValues(t, test.expected, got)
 		})
 	}
+}
+
+func TestCheckTxAcceptsSerializedMultiBLSSigner(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 1}))
+
+	signers := newTestKeyGroups(t, 3)
+	points := make([]kyber.Point, 0, len(signers))
+	for _, kg := range signers {
+		point, err := crypto.BytesToBLS12381Point(kg.PublicKey.Bytes())
+		require.NoError(t, err)
+		points = append(points, point)
+	}
+
+	multiKey, err := crypto.NewAccountAuthMultiBLSFromPoints(points, nil, 2)
+	require.NoError(t, err)
+
+	msg := &MessageSend{
+		FromAddress: multiKey.Address().Bytes(),
+		ToAddress:   newTestAddressBytes(t, 4),
+		Amount:      100,
+	}
+	a, err := lib.NewAny(msg)
+	require.NoError(t, err)
+
+	tx := &lib.Transaction{
+		MessageType:   msg.Name(),
+		Msg:           a,
+		CreatedHeight: sm.Height(),
+		Time:          uint64(time.Now().UnixMicro()),
+		Fee:           1,
+		NetworkId:     uint64(sm.NetworkID),
+		ChainId:       sm.Config.ChainId,
+	}
+	signBytes, err := tx.GetSignBytes()
+	require.NoError(t, err)
+
+	require.NoError(t, multiKey.AddSigner(signers[0].PrivateKey.Sign(signBytes), 0))
+	require.NoError(t, multiKey.AddSigner(signers[2].PrivateKey.Sign(signBytes), 2))
+	aggregateSignature, err := multiKey.AggregateSignatures()
+	require.NoError(t, err)
+	tx.Signature = &lib.Signature{
+		PublicKey: multiKey.Bytes(),
+		Signature: aggregateSignature,
+	}
+
+	txBytes, err := lib.Marshal(tx)
+	require.NoError(t, err)
+
+	got, err := sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, tx, got.tx)
+	require.Equal(t, multiKey.Address().Bytes(), got.sender.Bytes())
+	gotMsg, ok := got.msg.(*MessageSend)
+	require.True(t, ok)
+	require.EqualExportedValues(t, msg, gotMsg)
 }
 
 func TestCheckTxRejectsReversedGovernanceRange(t *testing.T) {

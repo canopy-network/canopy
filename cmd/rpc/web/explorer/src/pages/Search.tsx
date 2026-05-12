@@ -83,16 +83,16 @@ const SearchPage: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-background">
-            <div className="container mx-auto p-8 md:my-8 bg-card md:rounded-xl">
+        <div className="w-full">
+            <div className="w-full bg-card p-8 md:rounded-xl">
                 {/* Header */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-8"
                 >
-                    <h1 className="text-3xl font-bold text-white mb-2">Search Results</h1>
-                    <p className="text-gray-400">Find blocks, transactions, addresses, and validators</p>
+                    <h1 className="explorer-page-title">Search Results</h1>
+                    <p className="explorer-page-subtitle">Find blocks, transactions, addresses, validators, and orders</p>
                 </motion.div>
 
                 {/* Search Input */}
@@ -107,8 +107,8 @@ const SearchPage: React.FC = () => {
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Search blocks, transactions, addresses..."
-                            className="w-full bg-input border border-gray-800/50 rounded-lg px-4 py-3 pl-12 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring focus:ring-primary/50 focus:border-primary"
+                            placeholder="Search blocks, transactions, addresses, orders..."
+                            className="w-full bg-input border border-white/8 rounded-lg px-4 py-3 pl-12 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring focus:ring-primary/50 focus:border-primary"
                         />
                         {searchTerm && (
                             <button
@@ -187,7 +187,7 @@ const SearchPage: React.FC = () => {
                         >
                             <i className="fa-solid fa-search text-4xl text-gray-600 mb-4"></i>
                             <h3 className="text-xl font-semibold text-white mb-2">Start searching</h3>
-                            <p className="text-gray-400">Enter a block height, transaction hash, address, or validator name</p>
+                            <p className="text-gray-400">Enter a block height, transaction hash, address, validator name, or order ID</p>
                         </motion.div>
                     )}
                 </AnimatePresence>

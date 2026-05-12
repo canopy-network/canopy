@@ -1,5 +1,6 @@
 import React from 'react'
 import { motion } from 'framer-motion'
+import { Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import blockDetailTexts from '../../data/blockDetail.json'
 
@@ -15,6 +16,8 @@ interface BlockSidebarProps {
     }
     blockData?: any // Add complete block data
 }
+
+const CopySymbol = () => <Copy aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
 
 const BlockSidebar: React.FC<BlockSidebarProps> = ({
     networkInfo,
@@ -42,7 +45,7 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
-                className="bg-card rounded-xl border border-gray-800/60 p-6"
+                className="bg-card rounded-xl border border-white/10 p-6"
             >
                 <h3 className="text-lg font-semibold text-white mb-4">
                     {blockDetailTexts.networkInfo.title}
@@ -51,11 +54,11 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                 <div className="space-y-3">
                     <div className="flex flex-wrap justify-between items-center">
                         <span className="text-gray-400 text-sm mr-2">Network ID</span>
-                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.networkID || 'N/A'}</span>
+                        <span className="text-white text-sm">{blockData?.blockHeader?.networkID || 'N/A'}</span>
                     </div>
                     <div className="flex flex-wrap justify-between items-center">
                         <span className="text-gray-400 text-sm mr-2">Chain ID</span>
-                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.chainId || 'N/A'}</span>
+                        <span className="text-white text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.chainId || 'N/A'}</span>
                     </div>
                     <div className="flex flex-wrap justify-between items-center">
                         <span className="text-gray-400 text-sm mr-2">{blockDetailTexts.networkInfo.fields.extraData}</span>
@@ -69,7 +72,7 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: 0.2 }}
-                className="bg-card rounded-xl border border-gray-800/60 p-6"
+                className="bg-card rounded-xl border border-white/10 p-6"
             >
                 <h3 className="text-lg font-semibold text-white mb-4">
                     {blockDetailTexts.validatorInfo.title}
@@ -85,14 +88,14 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                             {validatorInfo.name !== proposerAddress && proposerAddress && (
                                 <button
                                     onClick={() => copyToClipboard(validatorInfo.name, 'Validator name')}
+                                    aria-label="Copy validator name"
                                     className="text-gray-400 hover:text-primary transition-colors p-1"
                                     title="Copy validator name"
                                 >
-                                    <i className="fa-solid fa-copy text-xs"></i>
+                                    <CopySymbol />
                                 </button>
                             )}
                         </div>
-                        <div className="text-gray-400 text-sm">Proposer Address</div>
                     </div>
                 </div>
 
@@ -100,31 +103,20 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                     <div className="flex flex-wrap justify-between items-center gap-2">
                         <span className="text-gray-400 text-sm mr-2">Proposer Address</span>
                         <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-                            <span className="text-white font-mono text-sm truncate max-w-[200px] sm:max-w-[300px]" title={proposerAddress || 'N/A'}>
+                            <span className="text-white text-sm truncate max-w-[200px] sm:max-w-[300px]" title={proposerAddress || 'N/A'}>
                                 {proposerAddress ? truncateAddress(proposerAddress) : 'N/A'}
                             </span>
                             {proposerAddress && (
                                 <button
                                     onClick={() => copyToClipboard(proposerAddress, 'Proposer address')}
+                                    aria-label="Copy proposer address"
                                     className="text-gray-400 hover:text-primary transition-colors p-1 flex-shrink-0"
                                     title="Copy proposer address"
                                 >
-                                    <i className="fa-solid fa-copy text-sm"></i>
+                                    <CopySymbol />
                                 </button>
                             )}
                         </div>
-                    </div>
-                    <div className="flex flex-wrap justify-between items-center">
-                        <span className="text-gray-400 text-sm mr-2">Committee Height</span>
-                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.committeeHeight?.toLocaleString() ?? '0'}</span>
-                    </div>
-                    <div className="flex flex-wrap justify-between items-center">
-                        <span className="text-gray-400 text-sm mr-2">Round</span>
-                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.round ?? 0}</span>
-                    </div>
-                    <div className="flex flex-wrap justify-between items-center">
-                        <span className="text-gray-400 text-sm mr-2">Phase</span>
-                        <span className="text-white text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.phase || 'N/A'}</span>
                     </div>
                 </div>
             </motion.div>
@@ -133,4 +125,3 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
 }
 
 export default BlockSidebar
-

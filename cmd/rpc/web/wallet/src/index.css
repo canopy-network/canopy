@@ -1,65 +1,66 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 9%;
+  --background: 0 0% 6%;
   --foreground: 0 0% 98%;
-  --card: 0 0% 15%;
-  --card-foreground: 0 0% 99%;
-  --popover: 0 0% 15%;
-  --popover-foreground: 0 0% 99%;
+  --card: 0 0% 9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 9%;
+  --popover-foreground: 0 0% 98%;
   --primary: 128 60% 51%;
-  --primary-foreground: 0 0% 8%;
-  --secondary: 0 0% 18%;
-  --secondary-foreground: 0 0% 99%;
-  --muted: 0 0% 18%;
-  --muted-foreground: 0 0% 78%;
-  --accent: 0 0% 20%;
-  --accent-foreground: 0 0% 99%;
-  --destructive: 0 84% 60%;
+  --primary-foreground: 0 0% 6%;
+  --secondary: 0 0% 9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 0 0% 16%;
+  --muted-foreground: 0 0% 64%;
+  --accent: 0 0% 16%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 348 100% 55%;
   --destructive-foreground: 0 0% 100%;
-  --border: 132 10% 34%;
-  --input: 132 10% 38%;
-  --border-accent: 128 34% 52%;
-  --border-subtle: 132 8% 28%;
+  --border: 0 0% 16%;
+  --input: 0 0% 16%;
+  --border-accent: 128 60% 51%;
+  --border-subtle: 0 0% 16%;
   --ring: 128 60% 51%;
   --radius: 0.625rem;
   --sidebar-width: 220px;
   --topbar-height: 52px;
-  --font-display: 'Syne', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  --font-body: 'Plus Jakarta Sans', sans-serif;
-  --surface-base: linear-gradient(145deg, hsl(0 0% 17% / 0.92), hsl(0 0% 13% / 0.95));
-  --surface-elevated: linear-gradient(145deg, hsl(0 0% 19% / 0.92), hsl(0 0% 14% / 0.96));
-  --surface-sheen: linear-gradient(180deg, hsl(0 0% 100% / 0.12), hsl(0 0% 100% / 0) 42%);
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  /* Flat surfaces (aligned with canopy-frontend explorer cards) */
+  --surface-base: hsl(0 0% 10%);
+  --surface-elevated: hsl(0 0% 10%);
+  --surface-sheen: transparent;
   --glow-primary: 0 0 0 1px hsl(var(--primary) / 0.22), 0 0 26px hsl(var(--primary) / 0.25);
   --glow-soft: 0 0 12px hsl(var(--primary) / 0.25);
 }
 
 .dark {
-  --background: 0 0% 9%;
+  --background: 0 0% 6%;
   --foreground: 0 0% 98%;
-  --card: 0 0% 15%;
-  --card-foreground: 0 0% 99%;
-  --popover: 0 0% 15%;
-  --popover-foreground: 0 0% 99%;
+  --card: 0 0% 9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 9%;
+  --popover-foreground: 0 0% 98%;
   --primary: 128 60% 51%;
-  --primary-foreground: 0 0% 8%;
-  --secondary: 0 0% 18%;
-  --secondary-foreground: 0 0% 99%;
-  --muted: 0 0% 18%;
-  --muted-foreground: 0 0% 78%;
-  --accent: 0 0% 20%;
-  --accent-foreground: 0 0% 99%;
-  --destructive: 0 84% 60%;
+  --primary-foreground: 0 0% 6%;
+  --secondary: 0 0% 9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 0 0% 16%;
+  --muted-foreground: 0 0% 64%;
+  --accent: 0 0% 16%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 348 100% 55%;
   --destructive-foreground: 0 0% 100%;
-  --border: 132 10% 34%;
-  --input: 132 10% 38%;
-  --border-accent: 128 34% 52%;
-  --border-subtle: 132 8% 28%;
+  --border: 0 0% 16%;
+  --input: 0 0% 16%;
+  --border-accent: 128 60% 51%;
+  --border-subtle: 0 0% 16%;
   --ring: 128 60% 51%;
 }
 
@@ -77,10 +78,7 @@ body,
 
 body {
   color: hsl(var(--foreground));
-  background:
-    radial-gradient(120% 85% at 84% -8%, hsl(var(--primary) / 0.17), transparent 58%),
-    radial-gradient(100% 70% at 8% 0%, hsl(var(--primary) / 0.08), transparent 55%),
-    hsl(var(--background));
+  background: hsl(var(--background));
   position: relative;
 }
 
@@ -95,28 +93,6 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   outline-color: hsl(var(--ring) / 0.4);
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background-image:
-    linear-gradient(hsl(var(--border) / 0.2) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--border) / 0.2) 1px, transparent 1px);
-  background-size: 34px 34px;
-  mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 78%);
-}
-
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(100% 90% at 50% 100%, transparent 45%, hsl(0 0% 0% / 0.2) 100%);
 }
 
 ::-webkit-scrollbar {
@@ -155,96 +131,85 @@ body::after {
   font-family: var(--font-body);
 }
 
-.surface-panel {
-  background: var(--surface-base);
-  border: 1px solid hsl(var(--border) / 0.78);
-  backdrop-filter: blur(14px);
+.wallet-card-title {
+  font-size: 0.9375rem;
+  line-height: 1.35;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
 }
 
+.wallet-page-title {
+  font-size: 1.875rem;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: hsl(var(--foreground));
+}
+
+.wallet-page-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+}
+
+.wallet-page-subtitle::before {
+  content: "\f1c0";
+  flex-shrink: 0;
+  font-family: "Font Awesome 7 Free";
+  font-size: 0.875rem;
+  font-weight: 900;
+  line-height: 1;
+  color: inherit;
+}
+
+.wallet-page-title + .wallet-page-subtitle {
+  margin-top: 0.5rem;
+}
+
+@media (min-width: 768px) {
+  .wallet-page-title {
+    font-size: 2.25rem;
+  }
+}
+
+.surface-panel {
+  background: hsl(var(--card));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Flat panels — canopy-frontend explorer-style (solid card, subtle border, no sheen) */
 .surface-card,
 .canopy-card {
   position: relative;
   overflow: hidden;
-  border-radius: 0.875rem;
-  border: 1px solid hsl(var(--border) / 0.75);
-  background: var(--surface-elevated);
-  box-shadow:
-    inset 0 1px 0 hsl(0 0% 100% / 0.05),
-    0 18px 30px hsl(0 0% 0% / 0.26);
-  transition:
-    border-color 220ms ease,
-    box-shadow 220ms ease,
-    transform 220ms ease;
-}
-
-.surface-card::before,
-.canopy-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: var(--surface-sheen);
-  opacity: 0.75;
-}
-
-.surface-card::after,
-.canopy-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  border: 1px solid transparent;
-  background: linear-gradient(135deg, hsl(var(--primary) / 0.2), transparent 25%) border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: hsl(var(--card));
+  box-shadow: none;
+  transition: border-color 180ms ease, background-color 180ms ease;
 }
 
 .surface-card:hover,
 .canopy-card:hover {
-  transform: translateY(-1px);
-  border-color: hsl(var(--border-accent) / 0.52);
-  box-shadow: var(--glow-primary), 0 20px 34px hsl(0 0% 0% / 0.28);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .canopy-card-soft {
   position: relative;
   overflow: hidden;
-  border-radius: 0.875rem;
-  border: 1px solid hsl(var(--border) / 0.82);
-  background: linear-gradient(
-    180deg,
-    hsl(0 0% 100% / 0.08) 0%,
-    hsl(0 0% 100% / 0.05) 55%,
-    hsl(0 0% 100% / 0.035) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 hsl(0 0% 100% / 0.08),
-    0 14px 30px hsl(0 0% 0% / 0.3);
-  backdrop-filter: blur(12px);
-  transition:
-    border-color 220ms ease,
-    box-shadow 220ms ease,
-    transform 220ms ease;
-}
-
-.canopy-card-soft::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(165deg, hsl(var(--primary) / 0.11), transparent 38%);
-  opacity: 0.52;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: hsl(var(--card));
+  box-shadow: none;
+  backdrop-filter: none;
+  transition: border-color 180ms ease, background-color 180ms ease;
 }
 
 .canopy-card-soft:hover {
-  transform: translateY(-1px);
-  border-color: hsl(var(--primary) / 0.38);
-  box-shadow:
-    inset 0 1px 0 hsl(0 0% 100% / 0.12),
-    0 16px 34px hsl(0 0% 0% / 0.34),
-    0 0 0 1px hsl(var(--primary) / 0.16);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .btn-glow {
@@ -305,10 +270,6 @@ body::after {
   );
   background-size: 200% 100%;
   animation: shimmer 1.4s ease infinite;
-}
-
-.text-glow {
-  text-shadow: 0 0 18px hsl(var(--primary) / 0.46);
 }
 
 @keyframes accordion-down {
