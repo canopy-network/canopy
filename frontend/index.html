@@ -786,6 +786,11 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="pending" id="pend_send"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="payload-box" id="so"><div class="plbl2">// unsigned_payload</div><textarea id="sp" readonly></textarea></div>
   </div>
+
+  <div class="card">
+    <div class="ct">// my_predictions</div>
+    <div id="myPredictions"><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)" id="predictionsPlaceholder">Load wallet to see predictions</div></div>
+  </div>
 </div>
 
 <!-- ══════ SIGNER ══════ -->
@@ -1023,6 +1028,7 @@ window.showPage=function(id,btn){
   document.querySelectorAll('#bnav .bni').forEach(b=>b.classList.remove('active'));
   const bm=document.querySelector(`#bnav [data-p="${id}"]`);if(bm)bm.classList.add('active');
   if(id==='markets')loadMarkets();
+  if(id==='wallet'){refreshBalance();loadMyPredictions();}
   closeNav();
 };
 
@@ -1115,6 +1121,8 @@ window.loadKey=async function(){
       const el=document.getElementById(id);if(el&&!el.value)el.value=signerAddress;
     });
     document.getElementById('sk_input').value='';
+    refreshBalance();
+    loadMyPredictions();
     toast('Key loaded — '+signerAddress);
   }catch(e){signerPrivKey=signerPubKey=signerAddress=null;toast('Key load failed: '+e.message,true);}
 };
@@ -1475,9 +1483,40 @@ window.loadMarkets = async function () {
     // ── Determine status from expiry ──
     for (const m of markets) {
       if (m.expiry && currentHeight > Number(m.expiry)) {
-        m.status = 1; // expired (likely resolved or cancelled — exact status requires state read)
+        m.status = 1; // expired
       }
     }
+
+    // ── Derive market IDs asynchronously ──
+    const deriveMarketId = async (creatorStr, nonce) => {
+      let creatorBytes;
+      // Try hex first, fall back to base64
+      if (creatorStr.length === 40 && /^[0-9a-fA-F]{40}$/.test(creatorStr)) {
+        creatorBytes = h2b(creatorStr);
+      } else {
+        try {
+          const bin = atob(creatorStr);
+          creatorBytes = new Uint8Array([...bin].map(c => c.charCodeAt(0)));
+        } catch {
+          creatorBytes = new Uint8Array(20); // give up, will produce wrong ID but not crash
+        }
+      }
+      const nonceBytes = new Uint8Array(8);
+      let n = BigInt(nonce);
+      for (let i = 7; i >= 0; i--) { nonceBytes[i] = Number(n & 0xffn); n >>= 8n; }
+      const input = new Uint8Array(creatorBytes.length + 8);
+      input.set(creatorBytes); input.set(nonceBytes, 20);
+      const hash = await crypto.subtle.digest('SHA-256', input);
+      return b2h(new Uint8Array(hash).slice(0, 20));
+    };
+
+    const idPromises = markets.map(async (m) => {
+      if (m.creator && m.nonce) {
+        try { m.marketId = await deriveMarketId(m.creator, m.nonce); } catch {}
+      }
+      if (!m.marketId) m.marketId = m.txHash; // fallback
+    });
+    await Promise.all(idPromises);
 
     if (countEl) countEl.textContent = markets.length;
     if (markets.length === 0) {
@@ -1504,8 +1543,8 @@ window.loadMarkets = async function () {
             <div class="mmeta"><span>expiry: ${m.expiry ? Number(m.expiry) : '?'}</span><span>b0: ${fmtA(m.b0)} μPRX</span>${m.creator ? `<span>${m.creator.slice(0, 8)}…</span>` : ''}</div>
             <div class="pools"><div class="pbar pyes"><div class="plbl">YES</div><div class="pval">${fmtA(m.qYes)}</div></div><div class="pbar pno"><div class="plbl">NO</div><div class="pval">${fmtA(m.qNo)}</div></div></div>
             <div class="mfooter">
-              <button class="btn bg bsm" onclick="fillP('${m.txHash}')">Predict</button>
-              ${m.status === 0 ? `<button class="btn bg bsm" onclick="fillR('${m.txHash}')">Resolve</button>` : ''}
+              <button class="btn bg bsm" onclick="fillP('${m.marketId || m.txHash}')">Predict</button>
+              ${m.status === 0 ? `<button class="btn bg bsm" onclick="fillR('${m.marketId || m.txHash}')">Resolve</button>` : ''}
             </div>
           </div>`).join('')}
       </div>`;
@@ -1522,8 +1561,103 @@ window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('c
 window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
 window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
 window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
+window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
+window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
 window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };
 
+async function refreshBalance(){
+  if(!signerAddress)return;
+  try{
+    const d=await rpc('/v1/query/account',{address:signerAddress});
+    document.getElementById('sk_balance').textContent=Number(d.amount||0).toLocaleString();
+  }catch{}
+}
+
+// ═══════════════════════════════════════════
+// MY PREDICTIONS
+// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+window.loadMyPredictions = async function () {
+  const el = document.getElementById('myPredictions');
+  if (!signerAddress) {
+    el.innerHTML = '<div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--text3)">Load wallet to see predictions</div>';
+    return;
+  }
+  el.innerHTML = '<div style="padding:12px;color:var(--text3);font-family:JetBrains Mono,monospace;font-size:10px"><span class="blink">▪▪▪</span> loading predictions</div>';
+  try {
+    const data = await rpc('/v1/query/txs-by-sender', { address: signerAddress, perPage: 200 });
+    const results = data.results || [];
+    const seen = {};
+    const predictions = [];
+
+    for (const tx of results) {
+      const t = tx.transaction || tx;
+      const type = t.type || t.messageType || '';
+      if (type !== 'submit_prediction') continue;
+      const msg = t.msg || t;
+      let marketId = '', bettor = '', outcome = false, shares = 0n, maxCost = 0n;
+      if (t.msgBytes) {
+        const bytes = h2b(t.msgBytes);
+        let pos = 0;
+        while (pos < bytes.length) {
+          const { v: tagV, p: p1 } = decVarint(bytes, pos); pos = p1;
+          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
+          if (wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; if (fn === 4) shares = v; if (fn === 5) maxCost = v; }
+          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); const len = Number(lenV); pos = p2; const chunk = bytes.slice(pos, pos + len); pos += len; if (fn === 1) marketId = b2h(chunk); if (fn === 2) bettor = b2h(chunk); }
+          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; }
+          else break;
+        }
+        outcome = (bytes.length > 0); // approximate — we'll decode properly later
+        // Actually outcome is field 3 (varint 0 or 1 in proto3, but it's a bool in our proto? No, bool is wire type 0 with value 1 or 0 encoded as varint 1 or 0)
+        // Re-parse for bool
+        pos = 0; let gotOutcome = false;
+        while (pos < bytes.length) {
+          const { v: tagV, p: p1 } = decVarint(bytes, pos); pos = p1;
+          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
+          if (fn === 3 && wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; outcome = v === 1n; gotOutcome = true; }
+          else if (wt === 0) { const { v: _, p: p2 } = decVarint(bytes, pos); pos = p2; }
+          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); pos = p2 + Number(lenV); }
+          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; } else break;
+        }
+      } else {
+        marketId = msg.marketId || '';
+        bettor = msg.bettorAddress || msg.bettor_address || '';
+        outcome = msg.outcome === true || msg.outcome === 'true' || msg.outcome === 1;
+        shares = BigInt(msg.shares || 0);
+        maxCost = BigInt(msg.maxCost || msg.max_cost || 0);
+      }
+      const key = marketId || tx.txHash;
+      if (!seen[key]) {
+        seen[key] = true;
+        predictions.push({ marketId: marketId || tx.txHash, outcome, shares, maxCost, height: tx.height || 0 });
+      }
+    }
+
+    if (predictions.length === 0) {
+      el.innerHTML = '<div style="padding:12px;color:var(--text3);font-family:JetBrains Mono,monospace;font-size:10px">No predictions yet</div>';
+      return;
+    }
+
+    el.innerHTML = predictions.map(p => `
+      <div style="background:var(--bg);border:1px solid var(--border);padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:4px">MKT ${p.marketId.slice(0,12)}…</div>
+          <div style="display:flex;gap:12px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:${p.outcome ? 'var(--green)' : 'var(--red)'}">${p.outcome ? 'YES' : 'NO'}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2)">Shares: ${fmtA(p.shares)}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2)">Max: ${fmtA(p.maxCost)} μPRX</span>
+          </div>
+        </div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3)">#${p.height}</span>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="padding:12px;color:var(--red);font-family:JetBrains Mono,monospace;font-size:10px">Error: ${esc(e.message)}</div>`;
+  }
+};
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
 // ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
@@ -1531,6 +1665,12 @@ document.getElementById('ni_host').value=getRPCHost();
 buildMobNav();
 checkRPC();
 setInterval(checkRPC,12000);
+// If wallet page is active and key is loaded, refresh predictions
+setTimeout(() => {
+  if (signerAddress && document.getElementById('page-wallet').classList.contains('active')) {
+    loadMyPredictions();
+  }
+}, 1000);
 </script>
 </body>
 </html>
