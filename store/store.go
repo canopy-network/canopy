@@ -97,7 +97,7 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		BlockSize:      64 << 10, // 64 KB data blocks
 		IndexBlockSize: 32 << 10, // 32 KB index blocks
 		Compression: func() *sstable.CompressionProfile {
-			return sstable.ZstdCompression // biggest compression at the expense of more CPU resources
+			return getCompressionProfile(config.CompressionProfile)
 		},
 	}
 	db, err := pebble.Open(path, &pebble.Options{
