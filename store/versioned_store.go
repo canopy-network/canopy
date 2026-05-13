@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/cockroachdb/pebble/v2"
@@ -640,4 +641,24 @@ func newTargetWindowFilter(low, high uint64) sstable.BlockPropertyFilter {
 		high+1,
 		nil,
 	)
+}
+
+// getCompressionProfile returns the compression profile (algorithm) to use for the versioned store
+func getCompressionProfile(profile string) *sstable.CompressionProfile {
+	switch strings.ToLower(profile) {
+	case "zstd":
+		return sstable.ZstdCompression
+	case "snappy":
+		return sstable.SnappyCompression
+	case "nocompression":
+		return sstable.NoCompression
+	case "fastest":
+		return sstable.FastestCompression
+	case "balanced":
+		return sstable.BalancedCompression
+	case "good":
+		return sstable.GoodCompression
+	default:
+		return sstable.ZstdCompression
+	}
 }

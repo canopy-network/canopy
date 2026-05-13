@@ -279,6 +279,7 @@ type StoreConfig struct {
 	LSSCompactionInterval uint64 `json:"lssCompactionInterval"` // interval for compacting latest store data
 	BackupDirectory       string `json:"backupDirectory"`       // directory where backups of the database are stored
 	BackupInterval        uint64 `json:"backupInterval"`        // interval in blocks for creating backups of the database (0 to disable automatic backups)
+	CompressionProfile    string `json:"compressionProfile"`    // the pebbledb compression profile to use.
 }
 
 // DefaultDataDirPath() is $USERHOME/.canopy
@@ -306,6 +307,7 @@ func DefaultStoreConfig() StoreConfig {
 		LSSCompactionInterval: uint64(rand.Int32N(101) + 500),            // clean every 500-600 blocks (random)
 		BackupDirectory:       path.Join(DefaultDataDirPath(), "backup"), // backup directory name
 		BackupInterval:        0,                                         // backups disabled by default
+		CompressionProfile:    "zstd",
 	}
 }
 
