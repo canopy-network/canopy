@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/canopy-network/canopy/fsm"
 
@@ -23,7 +24,7 @@ type Client struct {
 }
 
 func NewClient(rpcURL, adminRPCUrl string) *Client {
-	return &Client{rpcURL: rpcURL, adminRpcUrl: adminRPCUrl, client: http.Client{}}
+	return &Client{rpcURL: rpcURL, adminRpcUrl: adminRPCUrl, client: http.Client{Timeout: 10 * time.Second}}
 }
 
 func (c *Client) Version() (version *string, err lib.ErrorI) {
