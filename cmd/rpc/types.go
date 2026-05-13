@@ -2,6 +2,8 @@ package rpc
 
 import (
 	"encoding/json"
+	"github.com/canopy-network/canopy/fsm"
+	"sync"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -14,14 +16,24 @@ type heightRequest struct {
 	Height uint64 `json:"height"`
 }
 
+type indexerBlobsRequest struct {
+	heightRequest
+}
+
 type chainRequest struct {
 	ChainId uint64 `json:"chainId"`
 }
 
 type orderRequest struct {
-	ChainId uint64 `json:"chainId"`
-	OrderId string `json:"orderId"`
+	Committee uint64 `json:"committee"`
+	OrderId   string `json:"orderId"`
 	heightRequest
+}
+
+type ordersRequest struct {
+	Committee uint64 `json:"committee"`
+	heightRequest
+	lib.PageParams
 }
 
 type heightsRequest struct {
@@ -57,6 +69,11 @@ type paginatedHeightRequest struct {
 	lib.ValidatorFilters
 }
 
+type paginatedIdRequest struct {
+	idRequest
+	lib.PageParams
+}
+
 type heightAndAddressRequest struct {
 	heightRequest
 	addressRequest
@@ -65,6 +82,11 @@ type heightAndAddressRequest struct {
 type heightAndIdRequest struct {
 	heightRequest
 	idRequest
+}
+
+type heightIdAndPointsRequest struct {
+	heightAndIdRequest
+	Points bool `json:"points"`
 }
 
 type keystoreRequest struct {
@@ -247,6 +269,37 @@ type txDeleteOrder struct {
 	committeesRequest
 }
 
+type txDexLimitOrder struct {
+	Fee           uint64 `json:"fee"`
+	Amount        uint64 `json:"amount"`
+	ReceiveAmount uint64 `json:"receiveAmount"`
+	Submit        bool   `json:"submit"`
+	Password      string `json:"password"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txDexLiquidityDeposit struct {
+	Fee      uint64 `json:"fee"`
+	Amount   uint64 `json:"amount"`
+	Submit   bool   `json:"submit"`
+	Password string `json:"password"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txDexLiquidityWithdraw struct {
+	Fee      uint64 `json:"fee"`
+	Percent  int    `json:"percent"`
+	Submit   bool   `json:"submit"`
+	Password string `json:"password"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
 type txLockOrder struct {
 	Fee            uint64       `json:"fee"`
 	OrderId        string       `json:"orderId"`
@@ -317,6 +370,7 @@ type txRequest struct {
 	Submit          bool            `json:"submit"`
 	ReceiveAmount   uint64          `json:"receiveAmount"`
 	ReceiveAddress  lib.HexBytes    `json:"receiveAddress"`
+	Percent         uint64          `json:"percent"`
 	OrderId         string          `json:"orderId"`
 	Memo            string          `json:"memo"`
 	PollJSON        json.RawMessage `json:"pollJSON"`
@@ -328,4 +382,98 @@ type txRequest struct {
 	passwordRequest
 	txChangeParamRequest
 	committeesRequest
+}
+
+const defaultIndexerBlobCacheEntries = 64
+
+type indexerBlobCacheEntry struct {
+	height     uint64
+	current    *fsm.IndexerBlob
+	deltaBlobs *fsm.IndexerBlobs
+	deltaBytes []byte
+}
+
+type indexerBlobCache struct {
+	mu         sync.RWMutex
+	maxEntries int
+	entries    map[uint64]*indexerBlobCacheEntry
+	order      []uint64
+}
+
+func newIndexerBlobCache(maxEntries int) *indexerBlobCache {
+	if maxEntries <= 0 {
+		maxEntries = defaultIndexerBlobCacheEntries
+	}
+	return &indexerBlobCache{
+		maxEntries: maxEntries,
+		entries:    make(map[uint64]*indexerBlobCacheEntry),
+		order:      make([]uint64, 0, maxEntries),
+	}
+}
+
+func (c *indexerBlobCache) get(height uint64) (*indexerBlobCacheEntry, bool) {
+	c.mu.RLock()
+	entry, ok := c.entries[height]
+	c.mu.RUnlock()
+	return entry, ok
+}
+
+func (c *indexerBlobCache) getCurrent(height uint64) (*fsm.IndexerBlob, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, ok := c.entries[height]
+	if !ok || entry == nil || entry.current == nil {
+		return nil, false
+	}
+	return entry.current, true
+}
+
+func (c *indexerBlobCache) put(height uint64, entry *indexerBlobCacheEntry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, ok := c.entries[height]; ok {
+		c.entries[height] = entry
+		c.touch(height)
+		c.retainLatestCurrent(height)
+		return
+	}
+
+	c.entries[height] = entry
+	c.order = append(c.order, height)
+	if len(c.order) <= c.maxEntries {
+		c.retainLatestCurrent(height)
+		return
+	}
+
+	evictHeight := c.order[0]
+	c.order = c.order[1:]
+	delete(c.entries, evictHeight)
+	c.retainLatestCurrent(height)
+}
+
+func (c *indexerBlobCache) touch(height uint64) {
+	for i, h := range c.order {
+		if h == height {
+			c.order = append(c.order[:i], c.order[i+1:]...)
+			c.order = append(c.order, height)
+			return
+		}
+	}
+}
+
+// retainLatestCurrent keeps only the newest full snapshot in memory.
+// Older cached heights retain their delta payloads, but their full
+// current blobs are dropped because they are only needed to compute the
+// next sequential height delta.
+func (c *indexerBlobCache) retainLatestCurrent(latestHeight uint64) {
+	for _, h := range c.order {
+		if h == latestHeight {
+			continue
+		}
+		if entry := c.entries[h]; entry != nil {
+			entry.current = nil
+		}
+	}
 }

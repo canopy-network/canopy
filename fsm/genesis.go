@@ -22,10 +22,27 @@ func (s *StateMachine) NewFromGenesisFile() (err lib.ErrorI) {
 	if err = s.NewStateFromGenesis(genesis); err != nil {
 		return
 	}
+	// if plugin isn't nil
+	if s.Plugin != nil {
+		// execute plugin genesis
+		resp, e := s.Plugin.Genesis(s, &lib.PluginGenesisRequest{
+			GenesisJson: lib.MustMarshalJSON(genesis),
+		})
+		// handle error
+		if e != nil {
+			return e
+		}
+		// handle plugin error
+		if err = resp.Error.E(); err != nil {
+			return err
+		}
+	}
 	// commit the genesis state to persistence (database)
 	if _, err = s.store.(lib.StoreI).Commit(); err != nil {
 		return
 	}
+	// log the application
+	s.log.Infof("Applied the genesis file with %d validators", len(genesis.Validators))
 	// update the height from 0 to 1
 	s.height += 1
 	// exit
@@ -56,6 +73,10 @@ func (s *StateMachine) ReadGenesisFromFile() (genesis *GenesisState, e lib.Error
 func (s *StateMachine) NewStateFromGenesis(genesis *GenesisState) (err lib.ErrorI) {
 	// create a new supply tracker object reference
 	supply := new(Supply)
+	// set params first so any protocol-gated genesis writes use the intended version.
+	if err = s.SetParams(genesis.Params); err != nil {
+		return
+	}
 	// set the accounts from the genesis object in state
 	if err = s.SetAccounts(genesis.Accounts, supply); err != nil {
 		return
@@ -80,8 +101,7 @@ func (s *StateMachine) NewStateFromGenesis(genesis *GenesisState) (err lib.Error
 	if err = s.SetRetiredCommittees(genesis.RetiredCommittees); err != nil {
 		return
 	}
-	// set the governance params from the genesis object in state
-	return s.SetParams(genesis.Params)
+	return nil
 }
 
 // ValidateGenesisState() validates a GenesisState object

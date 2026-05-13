@@ -69,6 +69,8 @@ message ConsensusParams {
   uint64 root_chain_id = 3; // @gotags: json:"rootChainID"
   // retired: have the validators agreed to stop this chain and mark it as 'forever un-subsidized' in the base chain
   uint64 retired = 4;
+  // reset_committee: clears committee data for the provided committee id
+  uint64 reset_committee = 5; // @gotags: json:"resetCommittee"
 }
 
 // ValidatorParams is the parameter space that defines the rules and criteria for validators in the blockchain
@@ -156,6 +158,12 @@ message FeeParams {
   uint64 edit_order_fee = 12; // @gotags: json:"editOrderFee"
   // delete_order_fee: is the fee amount (in uCNPY) for Message Delete Order
   uint64 delete_order_fee = 13; // @gotags: json:"deleteOrderFee"
+  // dex_limit_order_fee: is the fee amount (in uCNPY) for Message Dex Limit Order
+  uint64 dex_limit_order_fee = 14; // @gotags: json:"dexLimitOrderFee"
+  // dex_liquidity_deposit_fee: is the fee amount (in uCNPY) for Message Dex Liquidity Deposit
+  uint64 dex_liquidity_deposit_fee = 15; // @gotags: json:"dexLiquidityDeposit"
+  // dex_liquidity_withdraw: is the fee amount (in uCNPY) for Message Dex Liquidity Withdraw
+  uint64 dex_liquidity_withdraw_fee = 16; // @gotags: json:"dexLiquidityWithdraw"
 }
 
 // GovernanceParams is the parameter space that define the rules that enable decentralized and autonomous

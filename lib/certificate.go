@@ -18,6 +18,12 @@ const (
 	GlobalMaxBlockSize = int(256 * units.MB)
 	// ensures developers are aware of a change to the header size (which is a consensus breaking change)
 	ExpectedMaxBlockHeaderSize = 1652
+	// maximums
+	MaxDepositsPerDexBatch  = 5_000
+	MaxWithdrawsPerDexBatch = 5_000
+	MaxOrdersPerDexBatch    = 10_000
+	MaxReceipts             = MaxOrdersPerDexBatch
+	MaxLiquidityProviders   = 50_000
 )
 
 // MaxBlockHeaderSize is a consensus breaking change because it affects how the state machine
@@ -117,8 +123,17 @@ func (x *QuorumCertificate) Check(vs ValidatorSet, maxBlockSize int, view *View,
 		// exit with error
 		return false, err
 	}
-	// enforce 'max block size'
-	if len(x.Block) > maxBlockSize {
+	// enforce 'max block size' - check only transaction bytes, not the full serialized block
+	// because the mempool transaction size limit is built using the size of the transactions
+	block := new(Block)
+	if err := Unmarshal(x.Block, block); err != nil {
+		return false, err
+	}
+	txsSize := 0
+	for _, tx := range block.Transactions {
+		txsSize += len(tx)
+	}
+	if txsSize > maxBlockSize {
 		// exit with error
 		return false, ErrExpectedMaxBlockSize()
 	}
@@ -165,7 +180,7 @@ func (x *QuorumCertificate) CheckProposalBasic(height, networkId, chainId uint64
 		return nil, ErrMismatchHeaderBlockHash()
 	}
 	// ensure the results aren't empty
-	if x.Results == nil && x.Results.RewardRecipients != nil {
+	if x.Results == nil {
 		return nil, ErrNilCertResults()
 	}
 	// exit
@@ -323,6 +338,20 @@ func (x *CertificateResult) CheckBasic() (err ErrorI) {
 		// exit with error
 		return
 	}
+	// do basic sanity checks on dex batch
+	if err = x.DexBatch.CheckBasic(); err != nil {
+		// exit with error
+		return
+	}
+	// ensure dex pool points is empty
+	if x.DexBatch != nil && x.DexBatch.PoolPoints != nil {
+		return ErrNonNilPoolPoints()
+	}
+	// do basic sanity checks on the root dex batch
+	if err = x.RootDexBatch.CheckBasic(); err != nil {
+		// exit with error
+		return
+	}
 	// do basic sanity check on the 'checkpoint'
 	return x.Checkpoint.CheckBasic()
 }
@@ -351,6 +380,16 @@ func (x *CertificateResult) Equals(y *CertificateResult) bool {
 	}
 	// if checkpoints aren't equal
 	if !x.Checkpoint.Equals(y.Checkpoint) {
+		// return unequal
+		return false
+	}
+	// if dex batch aren't equal
+	if !x.DexBatch.Equals(y.DexBatch) {
+		// return unequal
+		return false
+	}
+	// if dex batch aren't equal
+	if !x.RootDexBatch.Equals(y.RootDexBatch) {
 		// return unequal
 		return false
 	}
@@ -402,6 +441,9 @@ func (x *RewardRecipients) CheckBasic() (err ErrorI) {
 			return ErrInvalidAddress()
 		}
 		// add to total percent
+		if chainMap[pp.ChainId] > math.MaxUint64-pp.Percent {
+			return ErrInvalidPercentAllocation()
+		}
 		chainMap[pp.ChainId] += pp.Percent
 		// ensure the percent doesn't exceed 100
 		if chainMap[pp.ChainId] > 100 {
@@ -613,6 +655,10 @@ func (x *Orders) CheckBasic() (err ErrorI) {
 		// exit with no error
 		return
 	}
+	// enforce caps for all certificate order lists
+	if len(x.LockOrders) > MaxOrdersPerDexBatch || len(x.ResetOrders) > MaxOrdersPerDexBatch || len(x.CloseOrders) > MaxOrdersPerDexBatch {
+		return ErrTooManyDexOrders()
+	}
 	// for each lock order
 	for _, lock := range x.LockOrders {
 		// if the lock order is empty
@@ -629,6 +675,10 @@ func (x *Orders) CheckBasic() (err ErrorI) {
 		if len(lock.BuyerReceiveAddress) != crypto.AddressSize {
 			// exit with address error
 			return ErrInvalidBuyerReceiveAddress()
+		}
+		// ensure deadline is non-zero
+		if lock.BuyerChainDeadline == 0 {
+			return ErrInvalidBuyerDeadline()
 		}
 	}
 	// ensure no duplicates in the resets
@@ -817,6 +867,181 @@ func (x *CloseOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
 	return
 }
 
+// DEX BATCH CODE BELOW
+
+// CheckBasic() performs stateless validation on a DexBatch object
+func (x *DexBatch) CheckBasic() (err ErrorI) {
+	// if the dex batch is empty
+	if x == nil {
+		// exit without error
+		return
+	}
+	// ensure there's not too many deposits
+	if len(x.Deposits) > MaxDepositsPerDexBatch {
+		return ErrTooManyDexDeposits()
+	}
+	// ensure each deposit is valid
+	for _, deposit := range x.Deposits {
+		if deposit == nil {
+			return ErrInvalidArgument()
+		}
+	}
+	// ensure there's not too many withdrawals
+	if len(x.Withdrawals) > MaxWithdrawsPerDexBatch {
+		return ErrTooManyDexWithdraws()
+	}
+	// ensure each withdrawal percent is valid
+	for _, withdrawal := range x.Withdrawals {
+		if withdrawal == nil || withdrawal.Percent == 0 || withdrawal.Percent > 100 {
+			return ErrInvalidPercentAllocation()
+		}
+	}
+	// ensure there's not too many orders
+	if len(x.Orders) > MaxOrdersPerDexBatch {
+		return ErrTooManyDexOrders()
+	}
+	// ensure each order is valid
+	for _, order := range x.Orders {
+		if order == nil {
+			return ErrInvalidArgument()
+		}
+	}
+	// ensure there's not too many receipts
+	if len(x.Receipts) > MaxReceipts {
+		return ErrTooManyDexReceipts()
+	}
+	// ensure there's not too many receipts
+	if len(x.PoolPoints) > MaxLiquidityProviders {
+		return ErrTooManyDexReceipts()
+	}
+	// ensure each pool point is valid
+	for _, point := range x.PoolPoints {
+		if point == nil {
+			return ErrInvalidArgument()
+		}
+		if len(point.Address) != crypto.AddressSize {
+			return ErrInvalidAddress()
+		}
+	}
+	// if the block hash size is larger than 100
+	if len(x.ReceiptHash) > 100 {
+		// exit with error
+		return ErrInvalidBlockHash()
+	}
+	// exit
+	return
+}
+
+// Equals() performs equality checks on two dex batch objects
+func (x *DexBatch) Equals(y *DexBatch) bool {
+	// if both are empty
+	if x == nil && y == nil {
+		return true
+	}
+	// if one is empty
+	if x == nil || y == nil {
+		return false
+	}
+	// compare committee ids
+	if x.Committee != y.Committee {
+		return false
+	}
+	// compare locked height
+	if x.LockedHeight != y.LockedHeight {
+		return false
+	}
+	// compare total pool points
+	if x.TotalPoolPoints != y.TotalPoolPoints {
+		return false
+	}
+	// compare total pool points
+	if x.CounterPoolSize != y.CounterPoolSize {
+		return false
+	}
+	// compare total pool points
+	if x.PoolSize != y.PoolSize {
+		return false
+	}
+	// ensure deposit len equality
+	if len(x.Deposits) != len(y.Deposits) {
+		return false
+	}
+	// ensure deposit equality
+	for i, a := range x.Deposits {
+		b := y.Deposits[i]
+		if a.Amount != b.Amount {
+			return false
+		}
+		if !bytes.Equal(a.Address, b.Address) {
+			return false
+		}
+		if !bytes.Equal(a.OrderId, b.OrderId) {
+			return false
+		}
+	}
+	// ensure withdrawal len equality
+	if len(x.Withdrawals) != len(y.Withdrawals) {
+		return false
+	}
+	// ensure withdrawal equality
+	for i, a := range x.Withdrawals {
+		b := y.Withdrawals[i]
+		if a.Percent != b.Percent {
+			return false
+		}
+		if !bytes.Equal(a.Address, b.Address) {
+			return false
+		}
+		if !bytes.Equal(a.OrderId, b.OrderId) {
+			return false
+		}
+	}
+	// ensure orders len equality
+	if len(x.Orders) != len(y.Orders) {
+		return false
+	}
+	// ensure orders equality
+	for i, a := range x.Orders {
+		b := y.Orders[i]
+		if a.AmountForSale != b.AmountForSale {
+			return false
+		}
+		if a.RequestedAmount != b.RequestedAmount {
+			return false
+		}
+		if !bytes.Equal(a.Address, b.Address) {
+			return false
+		}
+		if !bytes.Equal(a.OrderId, b.OrderId) {
+			return false
+		}
+	}
+	// ensure receipts equality
+	if !slices.Equal(x.Receipts, y.Receipts) {
+		return false
+	}
+	// ensure pool points len equality
+	if len(x.PoolPoints) != len(y.PoolPoints) {
+		return false
+	}
+	// ensure orders equality
+	for i, a := range x.PoolPoints {
+		b := y.PoolPoints[i]
+		if a.Points != b.Points {
+			return false
+		}
+		if !bytes.Equal(a.Address, b.Address) {
+			return false
+		}
+	}
+	// ensure liveness fallback is equal
+	if x.LivenessFallback != y.LivenessFallback {
+		return false
+	}
+	// exit
+	return true
+}
+
 // CHECKPOINT CODE BELOW
 
 // CheckBasic() performs stateless validation on a Checkpoint object
@@ -856,6 +1081,31 @@ func (x *Checkpoint) Equals(y *Checkpoint) bool {
 	return x.Height == y.Height
 }
 
+// checkpointJSON is a helper struct for JSON marshalling/unmarshalling with hex-encoded block hash
+type checkpointJSON struct {
+	Height    uint64   `json:"height,omitempty"`
+	BlockHash HexBytes `json:"blockHash,omitempty"`
+}
+
+// MarshalJSON marshals the checkpoint with a hex-encoded block hash
+func (x Checkpoint) MarshalJSON() ([]byte, error) {
+	return json.Marshal(checkpointJSON{
+		Height:    x.Height,
+		BlockHash: HexBytes(x.BlockHash),
+	})
+}
+
+// UnmarshalJSON unmarshals the checkpoint with a hex-encoded block hash
+func (x *Checkpoint) UnmarshalJSON(jsonBytes []byte) (err error) {
+	j := new(checkpointJSON)
+	if err = json.Unmarshal(jsonBytes, j); err != nil {
+		return
+	}
+	x.Height = j.Height
+	x.BlockHash = j.BlockHash
+	return
+}
+
 // Combine() merges the Reward Recipients' Payment Percents of the current Proposal with those of another Proposal
 // such that the Payment Percentages may be equally weighted when performing reward distribution calculations
 // NOTE: merging percents will exceed 100% over multiple samples, but are normalized using the NumberOfSamples field
@@ -872,12 +1122,17 @@ func (x *CommitteeData) Combine(data *CommitteeData, chainId uint64) (err ErrorI
 		if p.ChainId == chainId {
 			// combine the percents with the existing stubs
 			// percents can/will exceed 100 but are re-normalized using NumberOfSamples later
-			x.addPercents(p.Address, p.Percent, chainId)
+			if err = x.addPercents(p.Address, p.Percent, chainId); err != nil {
+				return
+			}
 		}
 	}
 	// new Proposal purposefully overwrites the Block and Meta of the current Proposal
 	// this is to ensure both Proposals have the latest Block and Meta information
 	// in the case where the caller uses a pattern where there may be a stale Block/Meta
+	if x.NumberOfSamples == math.MaxUint64 {
+		return ErrInvalidPercentAllocation()
+	}
 	*x = CommitteeData{
 		PaymentPercents:        x.PaymentPercents,           // maintain the payment percents
 		NumberOfSamples:        x.NumberOfSamples + 1,       // add to the number of samples
@@ -890,20 +1145,23 @@ func (x *CommitteeData) Combine(data *CommitteeData, chainId uint64) (err ErrorI
 }
 
 // addPercents() is a helper function that adds reward distribution percents on behalf of an address
-func (x *CommitteeData) addPercents(address []byte, percent, chainId uint64) {
+func (x *CommitteeData) addPercents(address []byte, percent, chainId uint64) ErrorI {
 	// if payment percent is 0 simply exit
 	if percent == 0 {
 		// exit
-		return
+		return nil
 	}
 	// check to see if the address already exists
 	for i, p := range x.PaymentPercents {
 		// if already exists
 		if bytes.Equal(address, p.Address) {
 			// simply add the percent to the previous
+			if x.PaymentPercents[i].Percent > math.MaxUint64-percent {
+				return ErrInvalidPercentAllocation()
+			}
 			x.PaymentPercents[i].Percent += percent
 			// exit
-			return
+			return nil
 		}
 	}
 	// if the address doesn't already exist, append a sample to PaymentPercents
@@ -912,6 +1170,7 @@ func (x *CommitteeData) addPercents(address []byte, percent, chainId uint64) {
 		Percent: percent,
 		ChainId: chainId,
 	})
+	return nil
 }
 
 // jsonDoubleSigner implements the json.Marshaller and json.Unmarshaler interfaces for double signers

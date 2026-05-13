@@ -4,6 +4,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"math"
 	"time"
 )
 
@@ -13,35 +14,73 @@ import (
 const BlockAcceptanceRange = 4320
 
 // ApplyTransaction() processes the transaction within the state machine, returning the corresponding TxResult.
-func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (*lib.TxResult, lib.ErrorI) {
+func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (*lib.TxResult, []*lib.Event, lib.ErrorI) {
+	s.events.Refer(txHash)
 	// validate the transaction and get the check result
 	result, err := s.CheckTx(transaction, txHash, batchVerifier)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	// deduct fees for the transaction
-	if err = s.AccountDeductFees(result.sender, result.tx.Fee); err != nil {
-		return nil, err
-	}
-	// handle the message (payload)
-	if err = s.HandleMessage(result.msg); err != nil {
-		return nil, err
+	// if the transaction is meant for the plugin
+	if result.plugin && s.Plugin != nil {
+		// route to plugin
+		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: result.tx})
+		// handle error
+		if e != nil {
+			return nil, nil, e
+		}
+		// if the response contains an error
+		if err = resp.Error.E(); err != nil {
+			return nil, nil, err
+		}
+		if err = s.addPluginEvents(resp.Events); err != nil {
+			return nil, nil, err
+		}
+	} else {
+		// faucet mode: ensure "send" txs from the faucet address never fail due to insufficient funds.
+		if send, ok := result.msg.(*MessageSend); ok {
+			required := send.Amount
+			if required > math.MaxUint64-result.tx.Fee {
+				return nil, nil, ErrInvalidAmount()
+			}
+			if err = s.maybeFaucetTopUpForSendTx(result.sender, required+result.tx.Fee); err != nil {
+				return nil, nil, err
+			}
+		}
+		// deduct fees for the transaction
+		if err = s.AccountDeductFees(result.sender, result.tx.Fee); err != nil {
+			return nil, nil, err
+		}
+		// handle the message (payload)
+		if err = s.HandleMessage(result.msg); err != nil {
+			return nil, nil, err
+		}
 	}
 	// return the tx result
+	messageType := result.tx.MessageType
+	if result.msg != nil {
+		messageType = result.msg.Name()
+	}
 	return &lib.TxResult{
 		Sender:      result.sender.Bytes(),
-		Recipient:   result.msg.Recipient(),
-		MessageType: result.msg.Name(),
+		Recipient:   result.recipient,
+		MessageType: messageType,
 		Height:      s.Height(),
 		Index:       index,
 		Transaction: result.tx,
 		TxHash:      txHash,
-	}, nil
+	}, s.events.Reset(), nil
 }
 
 // CheckTx() validates the transaction object
 func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (result *CheckTxResult, err lib.ErrorI) {
-	// create a new transaction object reference to ensure a non-nil transaction
+	// create various result variables
+	var (
+		authorizedSigners [][]byte
+		msg               lib.MessageI
+		recipient         []byte
+		plugin            bool
+	)
 	tx := new(lib.Transaction)
 	// populate the object ref with the bytes of the transaction
 	if err = lib.Unmarshal(transaction, tx); err != nil {
@@ -55,37 +94,65 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	if err = s.CheckReplay(tx, txHash); err != nil {
 		return
 	}
-	// perform basic validations against the message payload
-	msg, err := s.CheckMessage(tx.Msg)
-	if err != nil {
-		return
+	// if the transaction is meant for the plugin
+	if s.Plugin != nil && s.Plugin.SupportsTransaction(tx.MessageType) {
+		// execute check tx on the plugin
+		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: tx})
+		if e != nil {
+			return nil, e
+		}
+		// check if response errored
+		if err = resp.Error.E(); err != nil {
+			return
+		}
+		// set various result variables
+		authorizedSigners, recipient, plugin = resp.AuthorizedSigners, resp.Recipient, true
+	} else {
+		// perform basic validations against the message payload
+		msg, err = s.CheckMessage(tx.Msg)
+		if err != nil {
+			return
+		}
+		// validate the fee associated with the transaction
+		if err = s.CheckFee(tx.Fee, msg); err != nil {
+			return
+		}
+		// check the authorized signers for the message
+		authorizedSigners, err = s.GetAuthorizedSignersFor(msg)
+		if err != nil {
+			return
+		}
+		// set recipient
+		recipient = msg.Recipient()
 	}
 	// validate the signature of the transaction
-	sender, err := s.CheckSignature(msg, tx, batchVerifier)
+	sender, err := s.CheckSignature(tx, authorizedSigners, batchVerifier)
 	if err != nil {
 		return
 	}
-	// validate the fee associated with the transaction
-	if err = s.CheckFee(tx.Fee, msg); err != nil {
-		return
-	}
+	// populate special message fields (if applicable)
+	s.PopulateSpecialMessageFields(tx, sender, msg)
 	// return the result
 	return &CheckTxResult{
-		tx:     tx,
-		msg:    msg,
-		sender: sender,
+		tx:        tx,
+		msg:       msg,
+		sender:    sender,
+		recipient: recipient,
+		plugin:    plugin,
 	}, nil
 }
 
 // CheckTxResult is the result object from CheckTx()
 type CheckTxResult struct {
-	tx     *lib.Transaction // the transaction object
-	msg    lib.MessageI     // the payload message in the transaction
-	sender crypto.AddressI  // the sender address of the transaction
+	tx        *lib.Transaction // the transaction object
+	msg       lib.MessageI     // the payload message in the transaction
+	sender    crypto.AddressI  // the sender address of the transaction
+	recipient []byte           // the recipient of the transaction (if applicable)
+	plugin    bool             // if the transaction is handled by the plugin
 }
 
 // CheckSignature() validates the signer and the digital signature associated with the transaction object
-func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, batchSignatureVerifier *crypto.BatchVerifier) (crypto.AddressI, lib.ErrorI) {
+func (s *StateMachine) CheckSignature(tx *lib.Transaction, authorizedSigners [][]byte, batchSigVerifier *crypto.BatchVerifier) (crypto.AddressI, lib.ErrorI) {
 	// validate the actual signature bytes
 	if tx.Signature == nil || len(tx.Signature.Signature) == 0 {
 		return nil, ErrEmptySignature()
@@ -107,8 +174,8 @@ func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, bat
 		}
 	} else {
 		// if using a batch verifier
-		if batchSignatureVerifier != nil {
-			if e = batchSignatureVerifier.Add(publicKey, tx.Signature.PublicKey, signBytes, tx.Signature.Signature); e != nil {
+		if batchSigVerifier != nil {
+			if e = batchSigVerifier.Add(publicKey, tx.Signature.PublicKey, signBytes, tx.Signature.Signature); e != nil {
 				return nil, ErrInvalidPublicKey(e)
 			}
 		} else {
@@ -120,36 +187,10 @@ func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, bat
 	}
 	// calculate the corresponding address from the public key
 	address := publicKey.Address()
-	// check the authorized signers for the message
-	authorizedSigners, er := s.GetAuthorizedSignersFor(msg)
-	if er != nil {
-		return nil, er
-	}
 	// for each authorized signer
 	for _, authorized := range authorizedSigners {
 		// if the address that signed the transaction matches one of the authorized signers
 		if address.Equals(crypto.NewAddressFromBytes(authorized)) {
-			// handle special fields for transactions
-			switch x := msg.(type) {
-			case *MessageStake:
-				// populate the signer field for stake
-				x.Signer = authorized
-			case *MessageEditStake:
-				// populate the signer field for edit-stake
-				x.Signer = authorized
-			case *MessageChangeParameter:
-				// populate the proposal hash for change parameter
-				hash, _ := tx.GetHash()
-				x.ProposalHash = lib.BytesToString(hash)
-			case *MessageDAOTransfer:
-				// populate the proposal hash for dao transfer
-				hash, _ := tx.GetHash()
-				x.ProposalHash = lib.BytesToString(hash)
-			case *MessageCreateOrder:
-				// populate the order id for the create order
-				hash, _ := tx.GetHash()
-				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
-			}
 			// return the signer address
 			return address, nil
 		}
@@ -254,6 +295,46 @@ func (s *StateMachine) CheckFee(fee uint64, msg lib.MessageI) (err lib.ErrorI) {
 	}
 	// exit
 	return
+}
+
+// HandleSpecialMessageFields() populates special message fields based on the message type
+func (s *StateMachine) PopulateSpecialMessageFields(tx lib.TransactionI, signer crypto.AddressI, msg lib.MessageI) {
+	// if message isn't nil
+	if msg != nil {
+		// handle special fields for transactions
+		switch x := msg.(type) {
+		case *MessageStake:
+			// populate the signer field for stake
+			x.Signer = signer.Bytes()
+		case *MessageEditStake:
+			// populate the signer field for edit-stake
+			x.Signer = signer.Bytes()
+		case *MessageChangeParameter:
+			// populate the proposal hash for change parameter
+			hash, _ := tx.GetHash()
+			x.ProposalHash = lib.BytesToString(hash)
+		case *MessageDAOTransfer:
+			// populate the proposal hash for dao transfer
+			hash, _ := tx.GetHash()
+			x.ProposalHash = lib.BytesToString(hash)
+		case *MessageCreateOrder:
+			// populate the order id
+			hash, _ := tx.GetHash()
+			x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+		case *MessageDexLimitOrder:
+			// populate the order id
+			hash, _ := tx.GetHash()
+			x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+		case *MessageDexLiquidityDeposit:
+			// populate the order id
+			hash, _ := tx.GetHash()
+			x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+		case *MessageDexLiquidityWithdraw:
+			// populate the order id
+			hash, _ := tx.GetHash()
+			x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+		}
+	}
 }
 
 // NewSendTransaction() creates a SendTransaction object in the interface form of TransactionI
@@ -399,6 +480,34 @@ func NewDeleteOrderTx(from crypto.PrivateKeyI, orderId string, committeeId uint6
 	return NewTransaction(from, &MessageDeleteOrder{
 		OrderId: oId,
 		ChainId: committeeId,
+	}, networkId, chainId, fee, height, memo)
+}
+
+// NewDexLimitOrder() creates a DexLimitOrder object in the interface form of TransactionI
+func NewDexLimitOrder(from crypto.PrivateKeyI, amountForSale, requestedAmount, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageDexLimitOrder{
+		ChainId:         committeeId,
+		AmountForSale:   amountForSale,
+		RequestedAmount: requestedAmount,
+		Address:         from.PublicKey().Address().Bytes(),
+	}, networkId, chainId, fee, height, memo)
+}
+
+// NewDexLiquidityDeposit() creates a DexLiquidityDeposit object in the interface form of TransactionI
+func NewDexLiquidityDeposit(from crypto.PrivateKeyI, amount, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageDexLiquidityDeposit{
+		ChainId: committeeId,
+		Amount:  amount,
+		Address: from.PublicKey().Address().Bytes(),
+	}, networkId, chainId, fee, height, memo)
+}
+
+// NewDexLiquidityWithdraw() creates a DexLiquidityWithdrawal object in the interface form of TransactionI
+func NewDexLiquidityWithdraw(from crypto.PrivateKeyI, percent uint64, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageDexLiquidityWithdraw{
+		ChainId: committeeId,
+		Percent: percent,
+		Address: from.PublicKey().Address().Bytes(),
 	}, networkId, chainId, fee, height, memo)
 }
 

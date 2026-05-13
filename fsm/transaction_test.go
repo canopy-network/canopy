@@ -3,8 +3,10 @@ package fsm
 import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/drand/kyber"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/anypb"
+	"math"
 	"testing"
 	"time"
 )
@@ -84,7 +86,7 @@ func TestApplyTransaction(t *testing.T) {
 				},
 			}))
 			// execute the function call
-			got, err := sm.ApplyTransaction(0, tx, test.expected.TxHash, nil)
+			got, _, err := sm.ApplyTransaction(0, tx, test.expected.TxHash, nil)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
@@ -97,6 +99,64 @@ func TestApplyTransaction(t *testing.T) {
 	}
 }
 
+func TestApplyTransaction_FaucetSendNeverFails(t *testing.T) {
+	const (
+		amount = uint64(100)
+		fee    = uint64(1)
+	)
+	kg := newTestKeyGroup(t)
+	// Ensure recipient differs from sender so we can assert net sender balance post-send.
+	to := newTestAddress(t, 1)
+	sendTx, err := NewSendTransaction(kg.PrivateKey, to, amount-1, 1, 1, fee, 1, "")
+	require.NoError(t, err)
+
+	sm := newTestStateMachine(t)
+	s := sm.store.(lib.StoreI)
+
+	// Enable faucet mode for the sender.
+	sm.Config.StateMachineConfig.FaucetAddress = kg.Address.String()
+
+	// Preset state fee (consistent with other tests).
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: fee}))
+
+	// Preset last block for timestamp verification.
+	require.NoError(t, s.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 1,
+			Hash:   crypto.Hash([]byte("block_hash")),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+	}))
+
+	txBytes, err := lib.Marshal(sendTx)
+	require.NoError(t, err)
+	txHash := crypto.HashString(txBytes)
+
+	// No preset sender funds. Without faucet mode this would fail (fee + amount).
+	_, _, applyErr := sm.ApplyTransaction(0, txBytes, txHash, nil)
+	require.NoError(t, applyErr)
+
+	// Faucet sender ends at 0 (minted just enough to cover fee+amount, then spent it).
+	balSender, err := sm.GetAccountBalance(kg.Address)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), balSender)
+
+	// Recipient received the transfer.
+	balRecipient, err := sm.GetAccountBalance(to)
+	require.NoError(t, err)
+	require.Equal(t, amount-1, balRecipient)
+
+	// Fee went to the chain's reward pool.
+	rewardPoolBal, err := sm.GetPoolBalance(sm.Config.ChainId)
+	require.NoError(t, err)
+	require.Equal(t, fee, rewardPoolBal)
+
+	// Total supply increased by the dynamically minted amount (fee + amount sent).
+	sup, err := sm.GetSupply()
+	require.NoError(t, err)
+	require.Equal(t, fee+(amount-1), sup.Total)
+}
+
 func TestCheckTx(t *testing.T) {
 	const amount = uint64(100)
 	// predefine a keygroup for signing the transaction
@@ -104,26 +164,34 @@ func TestCheckTx(t *testing.T) {
 	// predefine a send-transaction to insert into the block
 	sendTx, e := NewSendTransaction(kg.PrivateKey, newTestAddress(t), amount-1, 1, 1, 1, 1, "")
 	require.NoError(t, e)
+	cloneTx := func(t *testing.T, tx lib.TransactionI) *lib.Transaction {
+		t.Helper()
+		txBytes, err := lib.Marshal(tx)
+		require.NoError(t, err)
+		out := new(lib.Transaction)
+		require.NoError(t, lib.Unmarshal(txBytes, out))
+		return out
+	}
 	// convert the object to bytes
 	tx, e := lib.Marshal(sendTx)
 	require.NoError(t, e)
 	// define a version with a bad height
-	sendTxBadHeight := sendTx.(*lib.Transaction)
+	sendTxBadHeight := cloneTx(t, sendTx)
 	sendTxBadHeight.CreatedHeight = 4320 + 3
 	require.NoError(t, sendTxBadHeight.Sign(kg.PrivateKey))
 	// convert the object to bytes
 	txBadHeight, e := lib.Marshal(sendTxBadHeight)
 	require.NoError(t, e)
 	// define a version with a bad fee (below state limit)
-	sendTxBadFee := sendTx.(*lib.Transaction)
-	sendTxBadHeight.CreatedHeight = 4320
+	sendTxBadFee := cloneTx(t, sendTx)
+	sendTxBadFee.CreatedHeight = 4320
 	sendTxBadFee.Fee = 0
 	require.NoError(t, sendTxBadFee.Sign(kg.PrivateKey))
 	// convert the object to bytes
 	txBadFee, e := lib.Marshal(sendTxBadFee)
 	require.NoError(t, e)
 	// define a version without a bad signature
-	sendTxBadSig := sendTx.(*lib.Transaction)
+	sendTxBadSig := cloneTx(t, sendTx)
 	sendTxBadSig.Signature.Signature = []byte("bad sig")
 	// convert the object to bytes
 	txBadSig, e := lib.Marshal(sendTxBadSig)
@@ -201,6 +269,143 @@ func TestCheckTx(t *testing.T) {
 			require.EqualExportedValues(t, test.expected, got)
 		})
 	}
+}
+
+func TestCheckTxAcceptsSerializedMultiBLSSigner(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 1}))
+
+	signers := newTestKeyGroups(t, 3)
+	points := make([]kyber.Point, 0, len(signers))
+	for _, kg := range signers {
+		point, err := crypto.BytesToBLS12381Point(kg.PublicKey.Bytes())
+		require.NoError(t, err)
+		points = append(points, point)
+	}
+
+	multiKey, err := crypto.NewAccountAuthMultiBLSFromPoints(points, nil, 2)
+	require.NoError(t, err)
+
+	msg := &MessageSend{
+		FromAddress: multiKey.Address().Bytes(),
+		ToAddress:   newTestAddressBytes(t, 4),
+		Amount:      100,
+	}
+	a, err := lib.NewAny(msg)
+	require.NoError(t, err)
+
+	tx := &lib.Transaction{
+		MessageType:   msg.Name(),
+		Msg:           a,
+		CreatedHeight: sm.Height(),
+		Time:          uint64(time.Now().UnixMicro()),
+		Fee:           1,
+		NetworkId:     uint64(sm.NetworkID),
+		ChainId:       sm.Config.ChainId,
+	}
+	signBytes, err := tx.GetSignBytes()
+	require.NoError(t, err)
+
+	require.NoError(t, multiKey.AddSigner(signers[0].PrivateKey.Sign(signBytes), 0))
+	require.NoError(t, multiKey.AddSigner(signers[2].PrivateKey.Sign(signBytes), 2))
+	aggregateSignature, err := multiKey.AggregateSignatures()
+	require.NoError(t, err)
+	tx.Signature = &lib.Signature{
+		PublicKey: multiKey.Bytes(),
+		Signature: aggregateSignature,
+	}
+
+	txBytes, err := lib.Marshal(tx)
+	require.NoError(t, err)
+
+	got, err := sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, tx, got.tx)
+	require.Equal(t, multiKey.Address().Bytes(), got.sender.Bytes())
+	gotMsg, ok := got.msg.(*MessageSend)
+	require.True(t, ok)
+	require.EqualExportedValues(t, msg, gotMsg)
+}
+
+func TestCheckTxRejectsReversedGovernanceRange(t *testing.T) {
+	sm := newTestStateMachine(t)
+	kg := newTestKeyGroup(t)
+	proposalValue, err := lib.NewAny(&lib.UInt64Wrapper{Value: 1})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		msg  lib.MessageI
+	}{
+		{
+			name: "dao transfer",
+			msg: &MessageDAOTransfer{
+				Address:     kg.Address.Bytes(),
+				Amount:      1,
+				StartHeight: math.MaxUint64 - 5,
+				EndHeight:   3,
+			},
+		},
+		{
+			name: "change parameter",
+			msg: &MessageChangeParameter{
+				ParameterSpace: ParamSpaceVal,
+				ParameterKey:   ParamUnstakingBlocks,
+				ParameterValue: proposalValue,
+				StartHeight:    math.MaxUint64 - 5,
+				EndHeight:      3,
+				Signer:         kg.Address.Bytes(),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fee, e := sm.GetFeeForMessageName(tt.msg.Name())
+			require.NoError(t, e)
+			tx, e := NewTransaction(kg.PrivateKey, tt.msg, uint64(sm.NetworkID), sm.Config.ChainId, fee, sm.Height(), "")
+			require.NoError(t, e)
+			txBz, e := lib.Marshal(tx)
+			require.NoError(t, e)
+
+			_, err = sm.CheckTx(txBz, crypto.HashString(txBz), nil)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "proposal block range is invalid")
+		})
+	}
+}
+
+func TestCheckTxCreateOrderNilSellerSignerDoesNotPanic(t *testing.T) {
+	sm := newTestStateMachine(t)
+	s := sm.store.(lib.StoreI)
+	kg := newTestKeyGroup(t)
+
+	require.NoError(t, sm.UpdateParam("fee", ParamCreateOrderFee, &lib.UInt64Wrapper{Value: 1}))
+	require.NoError(t, s.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 1,
+			Hash:   crypto.Hash([]byte("block_hash")),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+	}))
+
+	tx, err := NewTransaction(kg.PrivateKey, &MessageCreateOrder{
+		ChainId:              lib.CanopyChainId,
+		AmountForSale:        1,
+		RequestedAmount:      1,
+		SellerReceiveAddress: newTestAddressBytes(t, 1),
+		SellersSendAddress:   nil,
+	}, 1, lib.CanopyChainId, 1, 2, "")
+	require.NoError(t, err)
+
+	txBytes, err := lib.Marshal(tx)
+	require.NoError(t, err)
+
+	var checkErr lib.ErrorI
+	require.NotPanics(t, func() {
+		_, checkErr = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	})
+	require.Error(t, checkErr)
+	require.ErrorContains(t, checkErr, "address")
 }
 
 func TestCheckSignature(t *testing.T) {
@@ -315,8 +520,10 @@ func TestCheckSignature(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
+			authorizedSigners, err := sm.GetAuthorizedSignersFor(test.msg)
+			require.NoError(t, err)
 			// execute the function call
-			signer, err := sm.CheckSignature(test.msg, test.transaction, nil)
+			signer, err := sm.CheckSignature(test.transaction, authorizedSigners, nil)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {

@@ -1,9 +1,11 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -75,6 +77,7 @@ type Store struct {
 	config     lib.Config    // config
 	mu         *sync.Mutex   // mutex for concurrent commits
 	compaction atomic.Bool   // atomic boolean for compaction status
+	backup     atomic.Bool   // atomic boolean for backup status
 	isTxn      bool          // flag indicating if the store is in transaction mode
 }
 
@@ -175,6 +178,7 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 		config:     config,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
+		backup:     atomic.Bool{},
 	}, nil
 }
 
@@ -202,6 +206,7 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
+		backup:     atomic.Bool{},
 	}, nil
 }
 
@@ -224,6 +229,7 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
+		backup:     atomic.Bool{},
 	}, nil
 }
 
@@ -247,9 +253,14 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if err = s.setCommitID(s.version, root); err != nil {
 		return nil, err
 	}
+	// collect LSS tombstones before Flush() clears the txn operations
+	lssDeleteKeys := s.collectLssDeleteKeys()
 	// commit the in-memory txn to the pebbleDB batch
 	if e := s.Flush(); e != nil {
 		return nil, e
+	}
+	if err = s.purgeLssTombstones(lssDeleteKeys); err != nil {
+		return nil, err
 	}
 	// extract the internal metrics from the pebble batch
 	size, count := len(s.writer.Repr()), s.writer.Count()
@@ -263,8 +274,152 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	s.Reset()
 	// compact if necessary
 	s.MaybeCompact()
+	// backup if enabled
+	s.MaybeBackup()
 	// return the root
 	return
+}
+
+// Rollback rewinds the store to a previous version (height).
+//
+// It removes all versioned entries above targetVersion, rebuilds the latest state
+// view from historical state at targetVersion, and resets the latest commit pointer.
+// NOTE: Rollback is an offline maintenance operation and must only run while the node is stopped.
+func (s *Store) Rollback(targetVersion uint64) lib.ErrorI {
+	if s.isTxn {
+		return ErrCommitDB(fmt.Errorf("rollback is not supported for nested transactions"))
+	}
+	if targetVersion == 0 {
+		return ErrCommitDB(fmt.Errorf("rollback target height must be >= 1"))
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	currentVersion := s.version
+	if targetVersion > currentVersion {
+		return ErrCommitDB(fmt.Errorf("rollback target height %d exceeds current height %d", targetVersion, currentVersion))
+	}
+	if targetVersion == currentVersion {
+		return nil
+	}
+
+	snapshot := s.db.NewSnapshot()
+	defer snapshot.Close()
+
+	// Ensure the target commit exists so we can repoint the latest commit id.
+	targetReader := NewVersionedStore(snapshot, nil, targetVersion)
+	targetTx := NewTxn(targetReader, nil, nil, false, false, true)
+	targetCommitID, err := targetTx.Get(s.commitIDKey(targetVersion))
+	if err != nil {
+		return err
+	}
+	if len(targetCommitID) == 0 {
+		return ErrStoreGet(fmt.Errorf("missing commit id at height %d", targetVersion))
+	}
+
+	batch := s.db.NewBatch()
+	defer batch.Close()
+
+	minVersion := targetVersion + 1
+	affectedStateKeys := make(map[string][]byte)
+	for _, prefix := range [][]byte{
+		historicStatePrefix,
+		indexerPrefix,
+		stateCommitmentPrefix,
+		stateCommitIDPrefix,
+	} {
+		if err = s.pruneVersionWindow(
+			snapshot,
+			batch,
+			prefix,
+			minVersion,
+			currentVersion,
+			bytes.Equal(prefix, historicStatePrefix),
+			affectedStateKeys,
+		); err != nil {
+			return err
+		}
+	}
+
+	// Patch only the affected latest-state keys from the target historical view.
+	hssReader := NewVersionedStore(snapshot, nil, targetVersion)
+	lssWriter := NewVersionedStore(nil, batch, lssVersion)
+	for _, stateKey := range affectedStateKeys {
+		hssKey := lib.Append(historicStatePrefix, stateKey)
+		value, tombstone, found, getErr := hssReader.getRaw(hssKey)
+		if getErr != nil {
+			return getErr
+		}
+		lssKey := lib.Append(latestStatePrefix, stateKey)
+		if !found || tombstone == DeadTombstone {
+			versionedLSSKey := lssWriter.makeVersionedKey(lssKey, lssVersion)
+			if e := batch.Delete(versionedLSSKey, nil); e != nil {
+				return ErrCommitDB(e)
+			}
+			continue
+		}
+		if err = lssWriter.SetAt(lssKey, value, lssVersion); err != nil {
+			return err
+		}
+	}
+
+	// Update latest commit id pointer.
+	if err = lssWriter.SetAt(lastCommitIDPrefix, targetCommitID, lssVersion); err != nil {
+		return err
+	}
+	if applyErr := s.db.Apply(batch, pebble.Sync); applyErr != nil {
+		return ErrCommitDB(applyErr)
+	}
+
+	// Rebuild writer/snapshots to the rolled-back height.
+	s.version = targetVersion
+	s.Reset()
+	blockCache.Purge()
+	s.log.Infof("Rolled back store from height %d to %d", currentVersion, targetVersion)
+	return nil
+}
+
+func (s *Store) pruneVersionWindow(
+	snapshot *pebble.Snapshot,
+	batch *pebble.Batch,
+	prefix []byte,
+	minVersion, maxVersion uint64,
+	collectStateKeys bool,
+	stateKeys map[string][]byte,
+) lib.ErrorI {
+	it, err := snapshot.NewIter(&pebble.IterOptions{
+		LowerBound:      prefix,
+		UpperBound:      prefixEnd(prefix),
+		KeyTypes:        pebble.IterKeyTypePointsOnly,
+		PointKeyFilters: []pebble.BlockPropertyFilter{newTargetWindowFilter(minVersion, maxVersion)},
+		UseL6Filters:    false,
+	})
+	if err != nil {
+		return ErrStoreGet(err)
+	}
+	for valid := it.First(); valid; valid = it.Next() {
+		versionedKey := it.Key()
+		version := parseVersion(versionedKey)
+		if version < minVersion || version > maxVersion {
+			continue
+		}
+		keyCopy := bytes.Clone(versionedKey)
+		if collectStateKeys {
+			userKey, _, parseErr := parseVersionedKey(keyCopy, false)
+			if parseErr == nil && bytes.HasPrefix(userKey, historicStatePrefix) {
+				stateKey := bytes.Clone(removePrefix(userKey, historicStatePrefix))
+				stateKeys[string(stateKey)] = stateKey
+			}
+		}
+		if err = batch.Delete(keyCopy, nil); err != nil {
+			_ = it.Close()
+			return ErrCommitDB(err)
+		}
+	}
+	if err = it.Close(); err != nil {
+		return ErrCloseDB(err)
+	}
+	return nil
 }
 
 // Flush() writes the current state to the batch writer without actually committing it
@@ -479,8 +634,89 @@ func (s *Store) MaybeCompact() {
 	}
 }
 
-// Compact deletes all entries marked for compaction on the given prefix range.
-// it iterates over the prefix, deletes tombstone entries, and performs DB compaction
+// MaybeBackup() checks if it is time to backup the current state of the database
+func (s *Store) MaybeBackup() {
+	// helper variables
+	backupInterval := s.config.StoreConfig.BackupInterval
+	backupDir := s.config.StoreConfig.BackupDirectory
+	// ensure only complete backups exists on the actual backup directory
+	tempBackupDir := backupDir + "_temp"
+	// retrieve the current version
+	version := s.Version()
+	// verify that backups are enabled in the config
+	if backupInterval == 0 || backupDir == "" {
+		return
+	}
+	// check if the current version is a multiple of the backup block interval
+	if version%backupInterval != 0 {
+		return
+	}
+	// ensure that only one backup can run at a time to avoid overlapping backups
+	if s.backup.Load() {
+		s.log.Debugf("data backup skipped [%d]: already in progress", version)
+		return
+	}
+	s.backup.Store(true)
+	// perform the backup in a separate goroutine to avoid blocking the main thread
+	go func() {
+		var err error
+		start := time.Now()
+		defer func() {
+			s.backup.Store(false)
+			if err == nil {
+				return
+			}
+			s.log.Errorf("backup failed at height [%d]: %v", version, err)
+		}()
+		// delete current backup files as pebbleDB expects an empty directory
+		if err = os.RemoveAll(tempBackupDir); err != nil {
+			err = fmt.Errorf("remove temporary backup: %w", err)
+			return
+		}
+		// flush the memtable to SST before checkpointing so the backup does not
+		// depend on WAL replay for recovery (commits use NoSync so WAL records
+		// may not be durable on disk at checkpoint time)
+		if err = s.db.Flush(); err != nil {
+			err = fmt.Errorf("flush before checkpoint: %w", err)
+			return
+		}
+		// perform the backup using pebble's checkpointing mechanism which creates a
+		// consistent snapshot of the database at the specified directory
+		if err = s.db.Checkpoint(tempBackupDir); err != nil {
+			err = fmt.Errorf("checkpoint creation: %w", err)
+			return
+		}
+		// write the current height to a separate file
+		heightFile := filepath.Join(tempBackupDir, "height.txt")
+		if err = os.WriteFile(heightFile, fmt.Appendf(nil, "%d", version), 0644); err != nil {
+			err = fmt.Errorf("write height file: %w", err)
+			return
+		}
+		// rotate: atomically move current backup to a previous slot so there is
+		// always at least one valid backup on disk during the swap
+		prevBackupDir := backupDir + "_prev"
+		if err = os.Rename(backupDir, prevBackupDir); err != nil && !os.IsNotExist(err) {
+			err = fmt.Errorf("rotate backup: %w", err)
+			return
+		}
+		// promote: atomically move the temp backup into the active slot
+		if err = os.Rename(tempBackupDir, backupDir); err != nil {
+			err = fmt.Errorf("finalize backup: %w", err)
+			return
+		}
+		// clean up the previous backup now that the new one is safely in place
+		if removeErr := os.RemoveAll(prevBackupDir); removeErr != nil {
+			s.log.Warnf("failed to remove previous backup: %v", removeErr)
+		}
+		backupDuration := time.Since(start)
+		// log results
+		s.log.Infof("backup completed at height [%d] in %s", version, backupDuration)
+		// update metrics
+		s.metrics.UpdateStoreJobMetrics(0, 0, backupDuration)
+	}()
+}
+
+// Compact runs Pebble range compaction over the latest and optional historic state prefixes.
 func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	// first compaction: latest state  keys
 	startPrefix, endPrefix := latestStatePrefix, prefixEnd(latestStatePrefix)
@@ -491,50 +727,14 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	// create a batch to set the keys to be removed by the compaction
-	batch := s.db.NewBatch()
-	// set metrics to log
-	total, toDelete := 0, 0
-	// collect and delete tombstone entries
-	err := s.withIterator(startPrefix, endPrefix, func(it *pebble.Iterator) {
-		tombstone, _ := parseValueWithTombstone(it.Value())
-		if tombstone == DeadTombstone {
-			batch.Delete(it.Key(), pebble.NoSync)
-			toDelete++
-		} else {
-			total++
-		}
-	})
-	if err != nil {
-		batch.Close()
-		return ErrCommitDB(err)
-	}
-	// if nothing to delete, skip compaction
-	if batch.Empty() {
-		batch.Close()
-		s.log.Debugf("key compaction finished [%d], no values to delete", version)
-		return nil
-	}
-	// commit the batch
-	s.mu.Lock() // lock commit op
-	if err := batch.Commit(pebble.Sync); err != nil {
-		batch.Close()
-		s.mu.Unlock() // unlock commit op
-		return ErrCommitDB(err)
-	}
-	s.mu.Unlock() // unlock commit op
-	batchTime := time.Since(now)
-	// perform a flush to ensure memtables are flushed to disk
-	if err := s.db.Flush(); err != nil {
-		return ErrCommitDB(fmt.Errorf("failed to flush memtables: %v", err))
-	}
 	// flush and compact the range
 	if err := s.db.Compact(ctx, startPrefix, endPrefix, true); err != nil {
 		return ErrCommitDB(err)
 	}
-	lssTime := time.Since(now)
-	s.log.Debugf("key compaction finished [LSS] [%d], total keys: %d, deleted: %d batch: %s elapsed: %s",
-		version, total, toDelete, batchTime, lssTime)
+	// update LSS compaction metrics
+	lssDuration := time.Since(now)
+	s.metrics.UpdateStoreJobMetrics(lssDuration, 0, 0)
+	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssDuration)
 	// second compaction: historic state keys
 	if compactHSS {
 		startPrefix, endPrefix = historicStatePrefix, prefixEnd(historicStatePrefix)
@@ -542,24 +742,48 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 		if err := s.db.Compact(ctx, startPrefix, endPrefix, false); err != nil {
 			return ErrCommitDB(err)
 		}
+		hssDuration := time.Since(hssTime)
 		// log results
 		s.log.Debugf("key compaction finished [HSS] [%d] time: %s, total time: %s", version,
-			time.Since(hssTime), time.Since(now))
+			hssDuration, time.Since(now))
+		// update HSS compaction metrics
+		s.metrics.UpdateStoreJobMetrics(0, hssDuration, 0)
 	}
 	return nil
 }
 
-// withIterator iterates over the keys in the given range with the provided callback function.
-func (s *Store) withIterator(startPrefix, endPrefix []byte, cb func(it *pebble.Iterator)) lib.ErrorI {
-	db := s.db.NewSnapshot()
-	defer db.Close()
-	it, err := db.NewIter(&pebble.IterOptions{LowerBound: startPrefix, UpperBound: endPrefix})
-	if err != nil {
-		return ErrOpenDB(err)
+// collectLssDeleteKeys collects state deletes from the current txn before Flush() clears them.
+func (s *Store) collectLssDeleteKeys() [][]byte {
+	s.ss.txn.l.Lock()
+	defer s.ss.txn.l.Unlock()
+	if len(s.ss.txn.ops) == 0 {
+		return nil
 	}
-	defer it.Close()
-	for it.First(); it.Valid(); it.Next() {
-		cb(it)
+	keys := make([][]byte, 0)
+	for _, op := range s.ss.txn.ops {
+		if op.op != opDelete {
+			continue
+		}
+		keys = append(keys, bytes.Clone(op.key))
+	}
+	return keys
+}
+
+// purgeLssTombstones removes LSS tombstone entries using the current commit batch.
+func (s *Store) purgeLssTombstones(keys [][]byte) lib.ErrorI {
+	if len(keys) == 0 {
+		return nil
+	}
+	reader, ok := s.ss.reader.(*VersionedStore)
+	if !ok {
+		return nil
+	}
+	for _, key := range keys {
+		userKey := lib.Append(latestStatePrefix, key)
+		versionedKey := reader.makeVersionedKey(userKey, lssVersion)
+		if err := s.writer.Delete(versionedKey, nil); err != nil {
+			return ErrCommitDB(err)
+		}
 	}
 	return nil
 }

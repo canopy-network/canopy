@@ -1,0 +1,237 @@
+#!/bin/bash
+# pluginctl.sh - Control script for managing the go-plugin binary
+# Usage: ./pluginctl.sh {start|stop|status|restart}
+# Configuration variables for paths and files
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BINARY_PATH="$SCRIPT_DIR/go-plugin"
+PID_FILE="/tmp/plugin/go-plugin.pid"
+LOG_FILE="/tmp/plugin/go-plugin.log"
+PLUGIN_DIR="/tmp/plugin"
+# Timeout in seconds for graceful shutdown
+STOP_TIMEOUT=10
+
+# Detect system architecture
+get_arch() {
+    local arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64)
+            echo "amd64"
+            ;;
+        aarch64|arm64)
+            echo "arm64"
+            ;;
+        *)
+            echo "amd64"  # Default to amd64
+            ;;
+    esac
+}
+
+# Extract tarball if binary doesn't exist
+extract_if_needed() {
+    # If binary already exists, nothing to do
+    if [ -f "$BINARY_PATH" ]; then
+        return 0
+    fi
+    
+    # Check for architecture-specific tarball
+    local arch=$(get_arch)
+    local tarball="$SCRIPT_DIR/go-plugin-linux-${arch}.tar.gz"
+    
+    if [ -f "$tarball" ]; then
+        echo "Extracting $tarball..."
+        tar -xzf "$tarball" -C "$SCRIPT_DIR"
+        if [ $? -eq 0 ] && [ -f "$BINARY_PATH" ]; then
+            chmod +x "$BINARY_PATH"
+            echo "Extraction complete"
+            return 0
+        else
+            echo "Error: Failed to extract binary from $tarball"
+            return 1
+        fi
+    fi
+    
+    return 1
+}
+
+# get_process_cmd returns the process command using a portable ps invocation
+get_process_cmd() {
+    local pid="$1"
+    ps -p "$pid" -o args= 2>/dev/null || ps -p "$pid" -o command= 2>/dev/null
+}
+
+# find_matching_pids finds all running go-plugin pids by binary path
+find_matching_pids() {
+    ps ax -o pid= -o args= 2>/dev/null | grep -F "$BINARY_PATH" | awk '{print $1}'
+}
+
+# stop_pid stops a process gracefully and force kills it on timeout
+stop_pid() {
+    local pid="$1"
+    if ! ps -p "$pid" > /dev/null 2>&1; then
+        return 0
+    fi
+    kill -TERM "$pid" 2>/dev/null
+    local count=0
+    while [ $count -lt $STOP_TIMEOUT ]; do
+        if ! ps -p "$pid" > /dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+    kill -KILL "$pid" 2>/dev/null
+    sleep 1
+    ! ps -p "$pid" > /dev/null 2>&1
+}
+
+# cleanup_orphaned_processes stops any matching go-plugin process not tracked by the pid file
+cleanup_orphaned_processes() {
+    local found=0
+    for pid in $(find_matching_pids); do
+        if [ -f "$PID_FILE" ] && [ "$pid" = "$(cat "$PID_FILE" 2>/dev/null)" ]; then
+            continue
+        fi
+        found=1
+        echo "Cleaning up orphaned go-plugin process (PID: $pid)..."
+        if ! stop_pid "$pid"; then
+            echo "Error: Failed to stop orphaned go-plugin process $pid"
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Check if the process is running based on PID file
+is_running() {
+    # Return 1 if PID file doesn't exist
+    if [ ! -f "$PID_FILE" ]; then
+        return 1
+    fi
+    # Read PID from file
+    local pid=$(cat "$PID_FILE" 2>/dev/null)
+    # Return 1 if PID is empty or not a number
+    if [ -z "$pid" ] || ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    # Check if process exists and is the go-plugin binary
+    if ps -p "$pid" > /dev/null 2>&1; then
+        # Verify it's actually our binary
+        if get_process_cmd "$pid" | grep -q "go-plugin"; then
+            return 0
+        fi
+    fi
+    # Process not running
+    return 1
+}
+# Clean up stale PID file
+cleanup_pid() {
+    # Remove PID file if it exists
+    if [ -f "$PID_FILE" ]; then
+        rm -f "$PID_FILE"
+    fi
+}
+# Start the go-plugin binary
+start() {
+    # Check if already running
+    if is_running; then
+        echo "go-plugin is already running (PID: $(cat "$PID_FILE"))"
+        return 1
+    fi
+    # Clean up any orphaned processes left behind by an earlier failed run
+    cleanup_orphaned_processes || return 1
+    # Clean up any stale PID file
+    cleanup_pid
+    # Try to extract from tarball if binary doesn't exist
+    extract_if_needed
+    # Check if binary exists and is executable
+    if [ ! -x "$BINARY_PATH" ]; then
+        echo "Error: Binary not found or not executable at $BINARY_PATH"
+        echo "Run 'make build' to build the plugin or download go-plugin-linux-$(get_arch).tar.gz"
+        return 1
+    fi
+    # Ensure plugin directory exists
+    mkdir -p "$PLUGIN_DIR"
+    # Start the binary in background with nohup
+    echo "Starting go-plugin..."
+    nohup "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
+    local pid=$!
+    # Save PID to file
+    echo "$pid" > "$PID_FILE"
+    # Give it a moment to start
+    sleep 1
+    # Verify it started successfully
+    if is_running; then
+        echo "go-plugin started successfully (PID: $pid)"
+        echo "Log file: $LOG_FILE"
+        return 0
+    else
+        echo "Error: go-plugin failed to start"
+        cleanup_pid
+        return 1
+    fi
+}
+# Stop the go-plugin binary
+stop() {
+    # Check if running
+    if ! is_running; then
+        if cleanup_orphaned_processes; then
+            echo "go-plugin is not running"
+        fi
+        cleanup_pid
+        return 0
+    fi
+    # Read PID from file
+    local pid=$(cat "$PID_FILE")
+    echo "Stopping go-plugin (PID: $pid)..."
+    if stop_pid "$pid"; then
+        cleanup_orphaned_processes || return 1
+        echo "go-plugin stopped successfully"
+        cleanup_pid
+        return 0
+    else
+        echo "Error: Failed to stop go-plugin"
+        return 1
+    fi
+}
+# Check status of go-plugin binary
+status() {
+    # Check if running
+    if is_running; then
+        local pid=$(cat "$PID_FILE")
+        echo "go-plugin is running (PID: $pid)"
+        return 0
+    else
+        echo "go-plugin is not running"
+        cleanup_pid
+        return 3
+    fi
+}
+# Restart the go-plugin binary
+restart() {
+    echo "Restarting go-plugin..."
+    # Stop the process
+    stop
+    # Brief pause between stop and start
+    sleep 2
+    # Start the process
+    start
+}
+# Main command routing
+case "${1:-}" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    status)
+        status
+        ;;
+    restart)
+        restart
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status|restart}"
+        exit 1
+        ;;
+esac

@@ -7,10 +7,13 @@
 *.dll
 *.so
 *.dylib
-
+/main
+.cache
 # Test binary, built with `go test -c`
 *.test
-
+tmp
+audit
+.llm
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
@@ -19,12 +22,15 @@
 
 # Go workspace file
 go.work
-
+.gocache
 # Jetbrains
 .idea
 
 # Zed
 .zed
+
+# Emacs
+.projectile
 
 # Visual Studio Code
 .vscode
@@ -42,3 +48,9 @@ vendor
 cmd/web/explorer/.idea
 **/.DS_Store
 /cmd/tps/data
+
+rag
+node_modules
+
+# Hardhat
+cache/solidity-files-cache.json

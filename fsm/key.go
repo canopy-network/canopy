@@ -15,7 +15,17 @@ var ReservedIDs = []uint64{
 
 // EscrowPoolAddend is used to translate a chainId into the id for the 'swap' escrow pool
 // Example: pools[chainId] -> stake pool && pools[chainId+EscrowPoolAddend] -> escrow pool for token swaps
-const EscrowPoolAddend = math.MaxUint16
+
+var (
+	MaxChainId          = uint64(math.MaxUint16 / 4)
+	HoldingPoolAddend   = uint64(1 * math.MaxUint16 / 4)
+	LiquidityPoolAddend = uint64(2 * math.MaxUint16 / 4)
+	Unused1PoolAddend   = uint64(3 * math.MaxUint16 / 4)
+	EscrowPoolAddend    = uint64(4 * math.MaxUint16 / 4)
+	Unused2PoolAddend   = uint64(5 * math.MaxUint16 / 4)
+	Unused3PoolAddend   = uint64(6 * math.MaxUint16 / 4)
+	Unused4PoolAddend   = uint64(7 * math.MaxUint16 / 4)
+)
 
 var (
 	accountPrefix          = []byte{1}  // store key prefix for accounts
@@ -32,6 +42,9 @@ var (
 	committeesDataPrefix   = []byte{12} // store key prefix for Quorum Certificate proposals before they are paid
 	orderBookPrefix        = []byte{13} // store key prefix for 'sell orders' before they are bid on
 	retiredCommitteePrefix = []byte{14} // store key prefix for 'retired' (dead) committees
+	dexPrefix              = []byte{15} // store key prefix for 'dex' functionality
+	lockedBatchSegment = []byte{1}
+	nextBatchSement    = []byte{2}
 )
 
 /*
@@ -64,6 +77,7 @@ func OrderBookPrefix(cId uint64) []byte { return lib.JoinLenPrefix(orderBookPref
 func KeyForOrder(chainId uint64, orderId []byte) []byte {
 	return append(OrderBookPrefix(chainId), lib.JoinLenPrefix(orderId)...)
 }
+
 func KeyForUnstaking(height uint64, address crypto.AddressI) []byte {
 	return append(UnstakingPrefix(height), lib.JoinLenPrefix(address.Bytes())...)
 }
@@ -89,17 +103,44 @@ func KeyForParams(s string) []byte {
 	return lib.JoinLenPrefix(paramsPrefix, []byte(prefixForParamSpace(s)))
 }
 
+func KeyForLockedBatch(chainId uint64) []byte {
+	return lib.JoinLenPrefix(dexPrefix, lockedBatchSegment, formatUint64(chainId))
+}
+
+func KeyForNextBatch(chainId uint64) []byte {
+	return lib.JoinLenPrefix(dexPrefix, nextBatchSement, formatUint64(chainId))
+}
+
 func AddressFromKey(k []byte) (crypto.AddressI, lib.ErrorI) {
-	segments := lib.DecodeLengthPrefixed(k)
+	segments, err := decodeLengthPrefixedSafe(k)
+	if err != nil {
+		return nil, err
+	}
 	return crypto.NewAddressFromBytes(segments[len(segments)-1]), nil
 }
 
 func IdFromKey(k []byte) (uint64, lib.ErrorI) {
-	segments := lib.DecodeLengthPrefixed(k)
-	if len(segments) < 2 {
+	segments, err := decodeLengthPrefixedSafe(k)
+	if err != nil {
+		return 0, err
+	}
+	if len(segments) < 2 || len(segments[1]) != 8 {
 		return 0, ErrInvalidKey(k)
 	}
 	return binary.BigEndian.Uint64(segments[1]), nil
+}
+
+func decodeLengthPrefixedSafe(k []byte) (segments [][]byte, err lib.ErrorI) {
+	defer func() {
+		if recover() != nil {
+			segments, err = nil, ErrInvalidKey(k)
+		}
+	}()
+	segments = lib.DecodeLengthPrefixed(k)
+	if len(segments) == 0 {
+		return nil, ErrInvalidKey(k)
+	}
+	return segments, nil
 }
 
 func formatUint64(u uint64) []byte {

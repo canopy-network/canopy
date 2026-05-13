@@ -1,0 +1,131 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/canopy-network/canopy/lib";
+
+// *****************************************************************************************************
+// This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
+//
+// Protobuf is a language-neutral, platform-neutral serialization format. It allows users
+// to define objects in a way that’s both efficient to store and fast to transmit over the network.
+// These definitions are compiled into code that *enables different systems and programming languages
+// to communicate in a byte-perfect manner*
+//
+// To update these structures, make changes to the source .proto files, then recompile
+// to regenerate this file.
+// These auto-generated files are easily recognized by checking for a `.pb.go` ending
+// *****************************************************************************************************
+//_
+//_
+//_
+// CANOPY DEX PROTOCOL:
+// Facilitates cross-chain token swaps between Token A (Nested) and Token B (Root) chains using an AMM model.
+// Each chain maintains its own validator set and liquid pools, with cross-chain communication for coordination.
+//
+// Token A -> Token B SWAP:
+// 1. Alice submits a 'sell intent' on Token A (chain, locking Token A tokens in a holding pool and specifying
+//    minimum Token B tokens she'll accept (min_receive_tokens limit).
+//
+// 2. Token A validators package Alice's sell intent with current liquid pool balance and send transaction
+//    to Token B validators.
+//
+// 3. Token B validators process the intent using AMM curve formula (constant product with fees), distribute
+//    Token B from their liquid pool to Alice if successful, and save a receipt to state.
+//
+// 4. Token A validators read Token B receipts - if successful, move Alice's locked Token A to liquid pool;
+//    otherwise revert tokens back to Alice.
+//
+// Token B (ROOT) -> Token A (NESTED) SWAP (reverse process):
+// 1. Bob locks Token B tokens and specifies minimum Token A acceptance threshold.
+// 2. Token A validators process intent, distribute Token A if successful, send transaction to Token B.
+// 3. Token B validators process receipts and either move Bob's Token B to liquid pool or revert.
+//
+// BATCH PROCESSING: Uses Uniform Clearing Price (UCP) algorithm that sorts orders by surplus metric
+// (add_amount² / min_ask) and finds the price that maximizes surplus while satisfying all
+// accepted orders' constraints.
+//
+// SAFETY: Implements locking mechanism where one chain waits for receipts before processing new intents,
+// with automatic resubmission (up to 3 times) if receipts aren't received within 5 blocks.
+
+// DexLimitOrder is the core structure holding AMM token swap data - created when user submits intent, processed
+// through cross-chain validation, and resolved when both chains confirm the atomic swap completion.
+message DexLimitOrder {
+  // amount_for_sale: amount of asset for sale
+  uint64 amountForSale = 1; // @gotags: json:"amountForSale"
+  // requested_amount: the minimum requested amount of 'counter-asset' to receive
+  uint64 requestedAmount = 2; // @gotags: json:"requestedAmount"
+  // address: the address where the funds are transferred from and to
+  bytes address = 3; // @gotags: json:"address"
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
+}
+
+// DexLiquidityDeposit a liquidity deposit command
+message DexLiquidityDeposit {
+  // address: the address where the funds are deposited from
+  bytes address = 1;
+  // amount: the amount of the deposit
+  uint64 amount = 2;
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
+}
+
+// DexLiquidityWithdraw a liquidity withdraw command
+message DexLiquidityWithdraw {
+  // address: the address where the funds are withdrawn to
+  bytes address = 1;
+  // percent: the percent of points being withdrawn
+  uint64 percent = 2;
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
+}
+
+// DexBatch is a group of limit orders that must be processed atomically
+message DexBatch {
+  // committee: the id of the 'counter asset'
+  uint64 Committee = 1; // @gotags: json:"committee"
+  // receipt_hash: the hash of the counter chain batch that the receipts correspond to
+  bytes receipt_hash = 2; // @gotags: json:"receiptHash"
+  // orders: the list of dex limit orders
+  repeated DexLimitOrder orders = 3; // @gotags: json:"orders"
+  // deposits: the liquidity provider 'deposit' command
+  repeated DexLiquidityDeposit deposits = 4;
+  // withdrawals: the liquidity provider 'withdraw' command
+  repeated DexLiquidityWithdraw withdrawals = 5;
+  // pool_size: contains the current balance of the liquidity pool
+  uint64 pool_size = 6; // @gotags: json:"poolSize"
+  // counter_pool_size: the last computed 'counter pool' size of the liquidity pool on the counter chain
+  uint64 counter_pool_size = 7;  // @gotags: json:"counterPoolSize"
+  // pool_points: (typically omitted due to LP mirrored design) - contains the current liquidity points of the pool
+  repeated PoolPoints pool_points = 8; // @gotags: json:"poolPoints"
+  // total_pool_points: (typically omitted due to LP mirrored design)  - contains the current liquidity points of the pool
+  uint64 total_pool_points = 9; // @gotags: json:"totalPoolPoints"
+  // receipts: the amount distributed (dY) for each order <0 is fail>
+  repeated uint64 receipts = 10;
+  // locked_height: the height when the batch was locked
+  uint64 locked_height = 11;
+  // liveness_fallback: a boolean directing if the action is a 'liveness fallback'
+  bool liveness_fallback = 12;  // @gotags: json:"livenessFallback"
+}
+
+// DexPrice represents the computed swap price between two chains.
+message DexPrice {
+  // local_chain_id: the local chain id
+  uint64 local_chain_id = 1; // @gotags: json:"chainId"
+  // remote_chain_id: the remote chain id
+  uint64 remote_chain_id = 2; // @gotags: json:"remoteChainId"
+  // local_pool: the local pool size
+  uint64 local_pool = 3; // @gotags: json:"localPool"
+  // remote_pool: the remote pool size
+  uint64 remote_pool = 4; // @gotags: json:"remotePool"
+  // e6_scaled_price: price scaled by 1e6
+  uint64 e6_scaled_price = 5; // @gotags: json:"e6ScaledPrice"
+}
+
+// PoolPoints represents an ownership 'share' of the pool
+message PoolPoints {
+  // address: the recipient address of the points
+  bytes address = 1; // @gotags: json:"address"
+  // points: the amount of points owned
+  uint64 points = 2; // @gotags: json:"points"
+}

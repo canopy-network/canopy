@@ -29,13 +29,6 @@ const (
 	RejectAllProposals  = GovProposalVoteConfig_REJECT_ALL
 )
 
-var (
-	// the number of tokens in micro denomination that are initially (before halvenings) minted per block
-	InitialTokensPerBlock = 80 * 1000000 // 80 CNPY
-	// the number of blocks between each halvening (block reward is cut in half) event
-	BlocksPerHalvening = 3150000 // ~ 2 years - 20 second blocks
-)
-
 // ParamSpace is a distinct, isolated category within the overarching Params structure
 type ParamSpace interface {
 	Check() lib.ErrorI
@@ -74,19 +67,22 @@ func DefaultParams() *Params {
 			MaximumDelegatesPerCommittee:       0,
 		},
 		Fee: &FeeParams{
-			SendFee:               10000,
-			StakeFee:              10000,
-			EditStakeFee:          10000,
-			UnstakeFee:            10000,
-			PauseFee:              10000,
-			UnpauseFee:            10000,
-			ChangeParameterFee:    10000,
-			DaoTransferFee:        10000,
-			CertificateResultsFee: 0,
-			SubsidyFee:            10000,
-			CreateOrderFee:        10000,
-			EditOrderFee:          10000,
-			DeleteOrderFee:        10000,
+			SendFee:                 10000,
+			StakeFee:                10000,
+			EditStakeFee:            10000,
+			UnstakeFee:              10000,
+			PauseFee:                10000,
+			UnpauseFee:              10000,
+			ChangeParameterFee:      10000,
+			DaoTransferFee:          10000,
+			CertificateResultsFee:   0,
+			SubsidyFee:              10000,
+			CreateOrderFee:          10000,
+			EditOrderFee:            10000,
+			DeleteOrderFee:          10000,
+			DexLimitOrderFee:        0,
+			DexLiquidityDepositFee:  0,
+			DexLiquidityWithdrawFee: 0,
 		},
 		Governance: &GovernanceParams{
 			DaoRewardPercentage: 5,
@@ -96,6 +92,9 @@ func DefaultParams() *Params {
 
 // Check() validates the Params object
 func (x *Params) Check() lib.ErrorI {
+	if x == nil {
+		return ErrEmptyConsParams()
+	}
 	if err := x.Consensus.Check(); err != nil {
 		return err
 	}
@@ -115,12 +114,16 @@ const (
 	ParamProtocolVersion = "protocolVersion" // current protocol version (upgrade enforcement)
 	ParamRetired         = "retired"         // if the chain is marking itself as 'retired' to the root-chain making it forever un-subsidized
 	ParamRootChainId     = "rootChainID"     // the chain id of the root chain (source of the validator set)
+	ParamResetCommittee  = "resetCommittee"  // committee id to reset its committee data
 )
 
 var _ ParamSpace = &ConsensusParams{}
 
 // Check() validates the consensus params
 func (x *ConsensusParams) Check() lib.ErrorI {
+	if x.BlockSize < lib.MaxBlockHeaderSize {
+		return ErrInvalidParam(ParamBlockSize)
+	}
 	if _, err := x.ParseProtocolVersion(); err != nil {
 		return err
 	}
@@ -136,6 +139,8 @@ func (x *ConsensusParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.Retired = value
 	case ParamRootChainId:
 		x.RootChainId = value
+	case ParamResetCommittee:
+		x.ResetCommittee = value
 	default:
 		return ErrUnknownParam()
 	}
@@ -156,8 +161,8 @@ func (x *ConsensusParams) SetString(paramName string, value string) lib.ErrorI {
 		if err != nil {
 			return err
 		}
-		// ensure new version isn't less than old version
-		if newVersion.Version <= oldVersion.Version || newVersion.Height <= oldVersion.Height {
+		// enforce sequential upgrades and strictly increasing activation heights.
+		if newVersion.Version != oldVersion.Version+1 || newVersion.Height <= oldVersion.Height {
 			return ErrInvalidProtocolVersion()
 		}
 		x.ProtocolVersion = value
@@ -179,15 +184,15 @@ func checkProtocolVersion(v string) (*ProtocolVersion, lib.ErrorI) {
 	if len(arr) != 2 {
 		return nil, ErrInvalidProtocolVersion()
 	}
-	version, err := strconv.Atoi(arr[0])
+	version, err := strconv.ParseUint(arr[0], 10, 64)
 	if err != nil {
 		return nil, ErrInvalidProtocolVersion()
 	}
-	height, err := strconv.Atoi(arr[1])
+	height, err := strconv.ParseUint(arr[1], 10, 64)
 	if err != nil {
 		return nil, ErrInvalidProtocolVersion()
 	}
-	ptr.Height, ptr.Version = uint64(height), uint64(version)
+	ptr.Height, ptr.Version = height, version
 	return ptr, nil
 }
 
@@ -345,59 +350,26 @@ func (x *ValidatorParams) SetString(_ string, _ string) lib.ErrorI {
 var _ ParamSpace = &FeeParams{}
 
 const (
-	ParamSendFee               = "sendFee"               // transaction fee for MessageSend
-	ParamStakeFee              = "stakeFee"              // transaction fee for MessageStake
-	ParamEditStakeFee          = "editStakeFee"          // transaction fee for MessageEditStake
-	ParamUnstakeFee            = "unstakeFee"            // transaction fee for MessageUnstake
-	ParamPauseFee              = "pauseFee"              // transaction fee for MessagePause
-	ParamUnpauseFee            = "unpauseFee"            // transaction fee for MessageUnpause
-	ParamChangeParameterFee    = "changeParameterFee"    // transaction fee for MessageChangeParameter
-	ParamDAOTransferFee        = "daoTransferFee"        // transaction fee for MessageDAOTransfer
-	ParamCertificateResultsFee = "certificateResultsFee" // transaction fee for MessageCertificateResults
-	ParamSubsidyFee            = "subsidyFee"            // transaction fee for MessageSubsidy
-	ParamCreateOrderFee        = "createOrderFee"        // transaction fee for MessageCreateOrder
-	ParamEditOrderFee          = "editOrderFee"          // transaction fee for MessageEditOrder
-	ParamDeleteOrderFee        = "deleteOrderFee"        // transaction fee for MessageDeleteOrder
+	ParamSendFee                 = "sendFee"                 // transaction fee for MessageSend
+	ParamStakeFee                = "stakeFee"                // transaction fee for MessageStake
+	ParamEditStakeFee            = "editStakeFee"            // transaction fee for MessageEditStake
+	ParamUnstakeFee              = "unstakeFee"              // transaction fee for MessageUnstake
+	ParamPauseFee                = "pauseFee"                // transaction fee for MessagePause
+	ParamUnpauseFee              = "unpauseFee"              // transaction fee for MessageUnpause
+	ParamChangeParameterFee      = "changeParameterFee"      // transaction fee for MessageChangeParameter
+	ParamDAOTransferFee          = "daoTransferFee"          // transaction fee for MessageDAOTransfer
+	ParamCertificateResultsFee   = "certificateResultsFee"   // transaction fee for MessageCertificateResults
+	ParamSubsidyFee              = "subsidyFee"              // transaction fee for MessageSubsidy
+	ParamCreateOrderFee          = "createOrderFee"          // transaction fee for MessageCreateOrder
+	ParamEditOrderFee            = "editOrderFee"            // transaction fee for MessageEditOrder
+	ParamDeleteOrderFee          = "deleteOrderFee"          // transaction fee for MessageDeleteOrder
+	ParamDexLimitOrderFee        = "dexLimitOrderFee"        // transaction fee for MessageDexLimitOrder
+	ParamDexLiquidityDepositFee  = "dexLiquidityDepositFee"  // transaction fee for MessageDexLiquidityDeposit
+	ParamDexLiquidityWithdrawFee = "dexLiquidityWithdrawFee" // transaction fee for MessageDexLiquidityWithdraw
 )
 
 // Check() validates the Fee params
 func (x *FeeParams) Check() lib.ErrorI {
-	if x.SendFee == 0 {
-		return ErrInvalidParam(ParamSendFee)
-	}
-	if x.StakeFee == 0 {
-		return ErrInvalidParam(ParamStakeFee)
-	}
-	if x.EditStakeFee == 0 {
-		return ErrInvalidParam(ParamEditStakeFee)
-	}
-	if x.UnstakeFee == 0 {
-		return ErrInvalidParam(ParamUnstakeFee)
-	}
-	if x.PauseFee == 0 {
-		return ErrInvalidParam(ParamPauseFee)
-	}
-	if x.UnpauseFee == 0 {
-		return ErrInvalidParam(ParamUnpauseFee)
-	}
-	if x.ChangeParameterFee == 0 {
-		return ErrInvalidParam(ParamChangeParameterFee)
-	}
-	if x.DaoTransferFee == 0 {
-		return ErrInvalidParam(ParamDAOTransferFee)
-	}
-	if x.SubsidyFee == 0 {
-		return ErrInvalidParam(ParamSubsidyFee)
-	}
-	if x.CreateOrderFee == 0 {
-		return ErrInvalidParam(ParamCreateOrderFee)
-	}
-	if x.EditOrderFee == 0 {
-		return ErrInvalidParam(ParamEditOrderFee)
-	}
-	if x.DeleteOrderFee == 0 {
-		return ErrInvalidParam(ParamDeleteOrderFee)
-	}
 	return nil
 }
 
@@ -435,6 +407,12 @@ func (x *FeeParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.DeleteOrderFee = value
 	case ParamEditOrderFee:
 		x.EditOrderFee = value
+	case ParamDexLimitOrderFee:
+		x.DexLimitOrderFee = value
+	case ParamDexLiquidityDepositFee:
+		x.DexLiquidityDepositFee = value
+	case ParamDexLiquidityWithdrawFee:
+		x.DexLiquidityWithdrawFee = value
 	default:
 		return ErrUnknownParam()
 	}

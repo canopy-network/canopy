@@ -1,0 +1,112 @@
+import React from 'react'
+import { motion } from 'framer-motion'
+import validatorDetailTexts from '../../data/validatorDetail.json'
+import AnimatedNumber from '../AnimatedNumber'
+import { cnpyDetailFormat, toCNPY } from '../../lib/utils'
+
+interface ValidatorDetail {
+    stakedAmount: number // in micro denomination
+    committees: number[]
+    maxPausedHeight: number
+    unstakingHeight: number
+}
+
+interface ValidatorMetricsProps {
+    validator: ValidatorDetail
+}
+
+const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
+    const stakedAmountCNPY = toCNPY(validator.stakedAmount)
+
+    // Format height display
+    const formatHeight = (height: number) => {
+        if (height === 0) return 'Not set'
+        return height.toLocaleString()
+    }
+
+    // Array with metrics information (using real data only from endpoint)
+    const metricsData = [
+        {
+            title: validatorDetailTexts.metrics.totalStake,
+            value: stakedAmountCNPY,
+            suffix: ` ${validatorDetailTexts.metrics.units.cnpy}`,
+            icon: 'fa-solid fa-lock',
+            subtitle: null,
+            format: cnpyDetailFormat,
+        },
+        {
+            title: 'Committees Staked',
+            value: validator.committees.length,
+            suffix: '',
+            icon: 'fa-solid fa-network-wired',
+            subtitle: validator.committees.length > 0 ? `IDs: ${validator.committees.join(', ')}` : 'None',
+            format: { maximumFractionDigits: 0, minimumFractionDigits: 0 },
+        },
+        {
+            title: 'Max Paused Height',
+            value: validator.maxPausedHeight > 0 ? validator.maxPausedHeight : 0,
+            suffix: '',
+            icon: 'fa-solid fa-pause-circle',
+            subtitle: validator.maxPausedHeight > 0 ? `Height: ${formatHeight(validator.maxPausedHeight)}` : 'Not paused',
+            format: { maximumFractionDigits: 0, minimumFractionDigits: 0 },
+        },
+        {
+            title: 'Unstaking Height',
+            value: validator.unstakingHeight > 0 ? validator.unstakingHeight : 0,
+            suffix: '',
+            icon: 'fa-solid fa-arrow-down',
+            subtitle: validator.unstakingHeight > 0 ? `Height: ${formatHeight(validator.unstakingHeight)}` : 'Not unstaking',
+            format: { maximumFractionDigits: 0, minimumFractionDigits: 0 },
+        }
+    ]
+
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            {metricsData.map((metric, index) => (
+                <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.1 }}
+                    className="rounded-lg border border-[#272729] bg-[#171717] p-3 sm:p-4"
+                >
+                    <div className="flex justify-between items-center gap-3 mb-2">
+                        <div className="text-xs sm:text-sm text-white/60 break-words">
+                            {metric.title}
+                        </div>
+                        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-[#272729] bg-[#0f0f0f] sm:h-8 sm:w-8">
+                            <i className={`${metric.icon} text-xs text-white sm:text-sm`}></i>
+                        </div>
+                    </div>
+                    <div className="text-lg sm:text-xl font-bold text-white break-words">
+                        {(metric.title === 'Max Paused Height' || metric.title === 'Unstaking Height') ? (
+                            metric.value === 0 ? (
+                                <span className="text-white/45 text-base sm:text-lg">-</span>
+                            ) : (
+                                <AnimatedNumber
+                                    value={metric.value}
+                                    format={{ maximumFractionDigits: 0, minimumFractionDigits: 0 }}
+                                    className="text-white"
+                                />
+                            )
+                        ) : (
+                            <AnimatedNumber
+                                value={metric.value}
+                                format={metric.format}
+                                className="text-white"
+                            />
+                        )}
+                        {metric.suffix}
+                    </div>
+                    {metric.subtitle && (
+                        <div className="mt-1 text-xs break-words text-white/60">
+                            {metric.subtitle}
+                        </div>
+                    )}
+                </motion.div>
+            ))}
+        </div>
+    )
+}
+
+export default ValidatorMetrics

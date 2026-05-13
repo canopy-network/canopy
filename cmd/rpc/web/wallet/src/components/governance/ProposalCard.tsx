@@ -1,0 +1,189 @@
+import React from "react";
+import { motion } from "framer-motion";
+import { Proposal } from "@/hooks/useGovernance";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
+
+interface ProposalCardProps {
+  proposal: Proposal;
+  onVote?: (proposalId: string, vote: "yes" | "no" | "abstain") => void;
+}
+
+const getStatusColor = (status: Proposal["status"]) => {
+  return WALLET_BADGE_TONE;
+};
+
+const getStatusLabel = (status: Proposal["status"]) => {
+  switch (status) {
+    case "active":
+      return "Active";
+    case "passed":
+      return "Passed";
+    case "rejected":
+      return "Rejected";
+    case "pending":
+      return "Pending";
+    default:
+      return status;
+  }
+};
+
+export const ProposalCard: React.FC<ProposalCardProps> = ({
+  proposal,
+  onVote,
+}) => {
+  const totalVotes =
+    proposal.yesVotes + proposal.noVotes + proposal.abstainVotes;
+  const yesPercentage =
+    totalVotes > 0 ? (proposal.yesVotes / totalVotes) * 100 : 0;
+  const noPercentage =
+    totalVotes > 0 ? (proposal.noVotes / totalVotes) * 100 : 0;
+  const abstainPercentage =
+    totalVotes > 0 ? (proposal.abstainVotes / totalVotes) * 100 : 0;
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A";
+    try {
+      return new Date(dateString).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  return (
+    <motion.div
+      className="bg-card rounded-xl p-6 border border-border hover:border-white/20 transition-all duration-300"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2 }}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-muted-foreground text-sm">
+              #{proposal.id.slice(0, 8)}...
+            </span>
+            <span className={`${WALLET_BADGE_CLASS} ${getStatusColor(proposal.status)}`}>
+              {getStatusLabel(proposal.status)}
+            </span>
+          </div>
+          <h3 className="text-foreground text-lg font-semibold mb-2">
+            {proposal.title}
+          </h3>
+          <p className="text-muted-foreground text-sm line-clamp-2">
+            {proposal.description}
+          </p>
+        </div>
+      </div>
+
+      {/* Voting Progress */}
+      <div className="mb-4">
+        <div className="flex justify-between text-xs text-muted-foreground mb-2">
+          <span>Voting Progress</span>
+          <span>{totalVotes.toLocaleString()} votes</span>
+        </div>
+
+        {/* Progress bars */}
+        <div className="space-y-2">
+          {/* Yes votes */}
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-green-400">Yes</span>
+              <span className="text-muted-foreground">
+                {yesPercentage.toFixed(1)}%
+              </span>
+            </div>
+            <div className="h-2 bg-accent rounded-full overflow-hidden">
+              <div
+                className="h-full bg-green-500 transition-all duration-500"
+                style={{ width: `${yesPercentage}%` }}
+              />
+            </div>
+          </div>
+
+          {/* No votes */}
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-red-400">No</span>
+              <span className="text-muted-foreground">
+                {noPercentage.toFixed(1)}%
+              </span>
+            </div>
+            <div className="h-2 bg-accent rounded-full overflow-hidden">
+              <div
+                className="h-full bg-red-500 transition-all duration-500"
+                style={{ width: `${noPercentage}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Abstain votes */}
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-yellow-400">Abstain</span>
+              <span className="text-muted-foreground">
+                {abstainPercentage.toFixed(1)}%
+              </span>
+            </div>
+            <div className="h-2 bg-accent rounded-full overflow-hidden">
+              <div
+                className="h-full bg-yellow-500 transition-all duration-500"
+                style={{ width: `${abstainPercentage}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground mb-4 pb-4 border-b border-border">
+        <div>
+          <span className="block text-foreground/80 mb-1">Voting Start</span>
+          <span>{formatDate(proposal.votingStartTime || "")}</span>
+        </div>
+        <div className="text-right">
+          <span className="block text-foreground/80 mb-1">Voting End</span>
+          <span>{formatDate(proposal.votingEndTime || "")}</span>
+        </div>
+      </div>
+
+      {/* Vote Buttons */}
+      {proposal.status === "active" && onVote && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => onVote(proposal.id, "yes")}
+            className="flex-1 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-sm font-medium transition-all duration-200 border border-green-500/40"
+          >
+            Vote Yes
+          </button>
+          <button
+            onClick={() => onVote(proposal.id, "no")}
+            className="flex-1 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-all duration-200 border border-red-500/40"
+          >
+            Vote No
+          </button>
+          <button
+            onClick={() => onVote(proposal.id, "abstain")}
+            className="flex-1 px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-lg text-sm font-medium transition-all duration-200 border border-yellow-500/40"
+          >
+            Abstain
+          </button>
+        </div>
+      )}
+
+      {/* Proposer info */}
+      <div className="mt-4 pt-4 border-t border-border">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Proposed by:</span>
+          <span className="text-foreground/80">
+            {proposal.proposer.slice(0, 6)}...{proposal.proposer.slice(-4)}
+          </span>
+        </div>
+      </div>
+    </motion.div>
+  );
+};

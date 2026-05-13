@@ -67,17 +67,23 @@ func NewPeerBook(publicKey []byte, c lib.Config, l lib.LoggerI) *PeerBook {
 // SendPeerBookRequests() is the requesting service of the peer exchange
 // Sends a peer request out to a random peer and waits PeerBookRequestTimeoutS for a response
 func (p *P2P) SendPeerBookRequests() {
-	// sleep time is roundUp(window / request per window), round up to ensure there's never a situation where we exceed the send rate
-	secondsPerReq := int(math.Ceil(float64(PeerBookRequestWindowS) / float64(MaxPeerBookRequestsPerWindow)))
-	for sleepTime := 0; ; sleepTime = secondsPerReq {
-		// rate limit with sleep timer
-		time.Sleep(time.Duration(sleepTime) * time.Second)
-		// send the request
-		if err := p.SendToPeers(lib.Topic_PEERS_REQUEST, &PeerBookRequestMessage{}); err != nil {
+	// keep the interval strictly above the per-window rate limit to avoid fixed-window collisions
+	secondsPerReq := int(math.Floor(float64(PeerBookRequestWindowS)/float64(MaxPeerBookRequestsPerWindow))) + 1
+	if secondsPerReq < 1 {
+		secondsPerReq = 1
+	}
+	ticker := time.NewTicker(time.Duration(secondsPerReq) * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		peerInfo, err := p.SendToRandPeer(lib.Topic_PEERS_REQUEST, &PeerBookRequestMessage{})
+		if err != nil {
 			p.log.Errorf("Error %s happened in send peer book requests", err.Error())
 			continue
 		}
-		p.log.Debugf("Sent peer book request to all peers")
+		if peerInfo == nil || peerInfo.Address == nil {
+			continue
+		}
+		p.log.Debugf("Sent peer book request to %s", lib.BytesToTruncatedString(peerInfo.Address.PublicKey))
 	}
 }
 
@@ -137,6 +143,9 @@ func (p *P2P) ListenForPeerBookResponses() {
 				go func(address *lib.PeerAddress) {
 					if err := p.DialAndDisconnect(address, true); err == nil {
 						p.book.Add(bp)
+						if p.metrics != nil && p.metrics.PeerBookAdd != nil {
+							p.metrics.PeerBookAdd.WithLabelValues(expectedPortLabel(address.NetAddress, p.meta.ChainId)).Inc()
+						}
 					}
 				}(bp.Address)
 			}
@@ -179,7 +188,7 @@ func (p *P2P) ListenForPeerBookRequests() {
 			}
 			var response []*BookPeer
 			// grab up to MaxPeerExchangePerChain number of peers for that specific chain
-			for i := 0; i <= MaxPeersExchanged; i++ {
+			for i := 0; i < MaxPeersExchanged; i++ {
 				toBeAdded := p.book.GetRandom()
 				if toBeAdded == nil {
 					//p.log.Warnf("nil to be added from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))

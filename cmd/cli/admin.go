@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/canopy-network/canopy/store"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -56,6 +58,9 @@ func init() {
 	adminCmd.AddCommand(txCreateOrderCmd)
 	adminCmd.AddCommand(txEditOrderCmd)
 	adminCmd.AddCommand(txDeleteOrderCmd)
+	adminCmd.AddCommand(txDexLimitOrderCmd)
+	adminCmd.AddCommand(txDexLiquidityDepositCmd)
+	adminCmd.AddCommand(txDexLiquidityWithdrawCmd)
 	adminCmd.AddCommand(txLockOrderCmd)
 	adminCmd.AddCommand(txStartPollCmd)
 	adminCmd.AddCommand(approveTxVotePoll)
@@ -69,6 +74,7 @@ func init() {
 	adminCmd.AddCommand(approveProposalCmd)
 	adminCmd.AddCommand(rejectProposalCmd)
 	adminCmd.AddCommand(deleteVoteCmd)
+	adminCmd.AddCommand(rollbackCmd)
 }
 
 var (
@@ -115,7 +121,7 @@ var (
 		Short: "delete the key associated with the address or nickname from the keystore",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			writeToConsole(client.KeystoreDelete(argGetAddrOrNickname(args[0])))
+			writeToConsole(client.KeystoreDelete(argGetAddrOrNickname(args[0]), getPassword()))
 		},
 	}
 
@@ -236,11 +242,38 @@ var (
 	}
 
 	txDeleteOrderCmd = &cobra.Command{
-		Use:   "tx-delete-order <address or nickname> <order-id> <chain-id>--fee=10000 --simulate=true",
+		Use:   "tx-delete-order <address or nickname> <order-id> <chain-id> --fee=10000 --simulate=true",
 		Short: "delete an existing sell order - use the simulate flag to generate json only",
 		Args:  cobra.MinimumNArgs(3),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeTxResultToConsole(client.TxDeleteOrder(argGetAddrOrNickname(args[0]), args[1], uint64(argToInt(args[2])), getPassword(), !sim, fee))
+		},
+	}
+
+	txDexLimitOrderCmd = &cobra.Command{
+		Use:   "tx-dex-limit-order <address or nickname> <amount> <receive-amount> <chain-id> --fee=10000 --simulate=true",
+		Short: "create a new dex limit order - use the simulate flag to generate json only",
+		Args:  cobra.MinimumNArgs(4),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxDexLimitOrder(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), getPassword(), !sim, fee))
+		},
+	}
+
+	txDexLiquidityDepositCmd = &cobra.Command{
+		Use:   "tx-dex-liquidity-deposit <address or nickname> <amount> <chain-id> --fee=10000 --simulate=true",
+		Short: "executes a dex liquidity deposit - use the simulate flag to generate json only",
+		Args:  cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxDexLiquidityDeposit(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), getPassword(), !sim, fee))
+		},
+	}
+
+	txDexLiquidityWithdrawCmd = &cobra.Command{
+		Use:   "tx-dex-liquidity-withdraw <address or nickname> <percent> <chain-id> --fee=10000 --simulate=true",
+		Short: "executes a dex liquidity withdraw - use the simulate flag to generate json only",
+		Args:  cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxDexLiquidityWithdraw(argGetAddrOrNickname(args[0]), argToInt(args[1]), uint64(argToInt(args[2])), getPassword(), !sim, fee))
 		},
 	}
 
@@ -361,6 +394,36 @@ var (
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.DelVote(args[0]))
+		},
+	}
+
+	rollbackCmd = &cobra.Command{
+		Use:   "rollback <height>",
+		Short: "rollback local blockchain state to a specific height (node must be stopped)",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			targetHeight, err := strconv.ParseUint(args[0], 10, 64)
+			if err != nil {
+				l.Fatal(err.Error())
+			}
+			db, err := store.New(config, nil, l)
+			if err != nil {
+				l.Fatal(err.Error())
+			}
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					l.Errorf(closeErr.Error())
+				}
+			}()
+			st, ok := db.(*store.Store)
+			if !ok {
+				l.Fatal("unexpected store type for rollback")
+			}
+			currentHeight := st.Version()
+			if err = st.Rollback(targetHeight); err != nil {
+				l.Fatal(err.Error())
+			}
+			writeToConsole(fmt.Sprintf("Rolled back local chain from height %d to %d", currentHeight, targetHeight), nil)
 		},
 	}
 )

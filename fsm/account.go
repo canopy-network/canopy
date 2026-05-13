@@ -1,7 +1,11 @@
 package fsm
 
 import (
+	"bytes"
 	"encoding/json"
+	"math"
+	"strings"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"sort"
@@ -103,6 +107,10 @@ func (s *StateMachine) SetAccount(account *Account) lib.ErrorI {
 func (s *StateMachine) SetAccounts(accounts []*Account, supply *Supply) (err lib.ErrorI) {
 	// for each account
 	for _, acc := range accounts {
+		// ensure add operation is safe from uint64 overflow
+		if supply.Total > math.MaxUint64-acc.Amount {
+			return ErrInvalidAmount()
+		}
 		// add the account amount to the supply object
 		supply.Total += acc.Amount
 		// set the account in state
@@ -134,6 +142,10 @@ func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) l
 	if err != nil {
 		return err
 	}
+	// ensure add operation is safe from uint64 overflow
+	if account.Amount > math.MaxUint64-amountToAdd {
+		return ErrInvalidAmount()
+	}
 	// add the tokens to the account structure
 	account.Amount += amountToAdd
 	// set the account back in state
@@ -159,6 +171,36 @@ func (s *StateMachine) AccountSub(address crypto.AddressI, amountToSub uint64) l
 	account.Amount -= amountToSub
 	// set the account in state
 	return s.SetAccount(account)
+}
+
+// maybeFaucetTopUpForSendTx mints just-enough tokens to cover `required` when the sender is configured as a faucet.
+// Faucet mode is disabled when config.faucetAddress is empty or omitted.
+func (s *StateMachine) maybeFaucetTopUpForSendTx(sender crypto.AddressI, required uint64) lib.ErrorI {
+	faucetStr := strings.TrimSpace(s.Config.StateMachineConfig.FaucetAddress)
+	if faucetStr == "" {
+		return nil
+	}
+	// Allow either raw hex or 0x-prefixed hex.
+	faucetStr = strings.TrimPrefix(strings.ToLower(faucetStr), "0x")
+
+	faucetAddr, err := crypto.NewAddressFromString(faucetStr)
+	if err != nil {
+		return lib.ErrInvalidAddress()
+	}
+	if len(faucetAddr.Bytes()) != crypto.AddressSize {
+		return ErrAddressSize()
+	}
+	if !sender.Equals(faucetAddr) {
+		return nil
+	}
+	bal, e := s.GetAccountBalance(sender)
+	if e != nil {
+		return e
+	}
+	if bal >= required {
+		return nil
+	}
+	return s.MintToAccount(sender, required-bal)
 }
 
 // unmarshalAccount() converts bytes into an Account structure
@@ -273,6 +315,10 @@ func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
 func (s *StateMachine) SetPools(pools []*Pool, supply *Supply) (err lib.ErrorI) {
 	// for each pool
 	for _, pool := range pools {
+		// ensure add operation is safe from uint64 overflow
+		if supply.Total > math.MaxUint64-pool.Amount {
+			return ErrInvalidAmount()
+		}
 		// add the pool amount to the total supply
 		supply.Total += pool.Amount
 		// set the pool in state
@@ -291,6 +337,21 @@ func (s *StateMachine) MintToPool(id uint64, amount uint64) lib.ErrorI {
 	}
 	// update the pools balance with the new inflation
 	return s.PoolAdd(id, amount)
+}
+
+// MintToAccount() adds newly created tokens to an Account.
+// NOTE: This should only be used in deterministic, consensus-safe paths.
+func (s *StateMachine) MintToAccount(address crypto.AddressI, amount uint64) lib.ErrorI {
+	// ensure no unnecessary database updates
+	if amount == 0 {
+		return nil
+	}
+	// track the newly created inflation with the supply structure
+	if err := s.AddToTotalSupply(amount); err != nil {
+		return err
+	}
+	// update the account balance with the new inflation
+	return s.AccountAdd(address, amount)
 }
 
 // PoolAdd() adds tokens to the Pool structure
@@ -319,6 +380,19 @@ func (s *StateMachine) PoolSub(id uint64, amountToSub uint64) lib.ErrorI {
 	pool.Amount -= amountToSub
 	// update the pool in state
 	return s.SetPool(pool)
+}
+
+// SetPoolPoints() updates the pool points with correct values
+func (s *StateMachine) SetPoolPoints(chainId uint64, points []*lib.PoolPoints, totalPoolPoints uint64) lib.ErrorI {
+	lPool, err := s.GetPool(chainId)
+	if err != nil {
+		return err
+	}
+	// update points
+	lPool.Points = points
+	lPool.TotalPoolPoints = totalPoolPoints
+	// set pool back
+	return s.SetPool(lPool)
 }
 
 // unmarshalPool() coverts bytes into a Pool structure
@@ -365,6 +439,10 @@ func (s *StateMachine) AddToStakedSupply(amount uint64) lib.ErrorI {
 	if err != nil {
 		return err
 	}
+	// ensure add operation is safe from uint64 overflow
+	if supply.Staked > math.MaxUint64-amount {
+		return ErrInvalidAmount()
+	}
 	// add to the staked amount in the supply tracker
 	supply.Staked += amount
 	// set the supply tracker back in state
@@ -377,6 +455,10 @@ func (s *StateMachine) AddToDelegateSupply(amount uint64) lib.ErrorI {
 	supply, err := s.GetSupply()
 	if err != nil {
 		return err
+	}
+	// ensure add operation is safe from uint64 overflow
+	if supply.DelegatedOnly > math.MaxUint64-amount {
+		return ErrInvalidAmount()
 	}
 	// add to the delegation only amount in the supply tracker
 	supply.DelegatedOnly += amount
@@ -510,6 +592,10 @@ func (s *StateMachine) marshalSupply(supply *Supply) ([]byte, lib.ErrorI) {
 func (s *StateMachine) addToSupplyPool(chainId, amount uint64, targetType SupplyPoolType) lib.ErrorI {
 	// execute the callback on the supply pool that has a certain chainID and type
 	return s.executeOnSupplyPool(chainId, targetType, func(s *Supply, p *Pool) (err lib.ErrorI) {
+		// ensure add operation is safe from uint64 overflow
+		if p.Amount > math.MaxUint64-amount {
+			return ErrInvalidAmount()
+		}
 		// add to the supply pool amount
 		p.Amount += amount
 		return
@@ -686,15 +772,109 @@ func (x *Account) UnmarshalJSON(bz []byte) (err error) {
 	return
 }
 
+// GetPointsFor() returns the amount of points an address has
+func (x *Pool) GetPointsFor(address []byte) (points uint64, err lib.ErrorI) {
+	// add to existing if found
+	for _, lp := range x.Points {
+		// if the address is found
+		if bytes.Equal(lp.Address, address) {
+			// exit
+			return lp.Points, nil
+		}
+	}
+	// exit
+	return 0, lib.ErrPointHolderNotFound()
+}
+
+// AddPoints() converts a 'percent control' to points using N = (t × P) / (1 - t)
+// Where N is new_points, t = the desired ownership fraction, and P is the initial pool size
+func (x *Pool) AddPoints(address []byte, points uint64) lib.ErrorI {
+	// zero-point updates are no-ops; do not create ghost LP entries
+	if points == 0 {
+		return nil
+	}
+	// add to existing if found
+	for _, lp := range x.Points {
+		// if the address is found
+		if bytes.Equal(lp.Address, address) {
+			// preflight both adds before mutating to preserve atomicity
+			if x.TotalPoolPoints > math.MaxUint64-points {
+				return ErrInvalidAmount()
+			}
+			// add points
+			if lp.Points > math.MaxUint64-points {
+				return ErrInvalidAmount()
+			}
+			x.TotalPoolPoints += points
+			lp.Points += points
+			// exit
+			return nil
+		}
+	}
+	// add to total points
+	if x.TotalPoolPoints > math.MaxUint64-points {
+		return ErrInvalidAmount()
+	}
+	if len(x.Points) >= lib.MaxLiquidityProviders {
+		return ErrInvalidLiquidityPool()
+	}
+	x.TotalPoolPoints += points
+	// add to the points
+	x.Points = append(x.Points, &lib.PoolPoints{Address: address, Points: points})
+	// exit
+	return nil
+}
+
+// RemovePoints() removes liquidity points for a certain provider in the pool
+func (x *Pool) RemovePoints(address []byte, points uint64) (err lib.ErrorI) {
+	// add to existing if found
+	for i, lp := range x.Points {
+		// if the address is found
+		if bytes.Equal(lp.Address, address) {
+			// update total points
+			x.TotalPoolPoints -= points
+			// calculate the remaining lp points
+			x.Points[i].Points -= points
+			// check if should evict from slice
+			if x.Points[i].Points == 0 {
+				// remove from the slice
+				x.Points = append(x.Points[:i], x.Points[i+1:]...)
+			}
+			// check for zero pool
+			if x.TotalPoolPoints == 0 {
+				return lib.ErrZeroLiquidityPool()
+			}
+			// exit
+			return
+		}
+	}
+	// exit
+	return lib.ErrPointHolderNotFound()
+}
+
 // pool is the json.Marshaller and json.Unmarshaler implementation for the Pool object
 type pool struct {
-	ID     uint64 `json:"id"`
-	Amount uint64 `json:"amount"`
+	ID          uint64       `json:"id"`
+	Amount      uint64       `json:"amount"`
+	Points      []poolPoints `json:"points"`
+	TotalPoints uint64       `json:"totalPoints"`
+}
+
+type poolPoints struct {
+	Address lib.HexBytes `json:"address"`
+	Points  uint64       `json:"points"`
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the Pool object
 func (x *Pool) MarshalJSON() ([]byte, error) {
-	return json.Marshal(pool{x.Id, x.Amount})
+	var points []poolPoints
+	for _, p := range x.Points {
+		points = append(points, poolPoints{
+			Address: p.Address,
+			Points:  p.Points,
+		})
+	}
+	return json.Marshal(pool{x.Id, x.Amount, points, x.TotalPoolPoints})
 }
 
 // UnmarshalJSON() is the json.Unmarshaler implementation for the Pool object
@@ -703,6 +883,13 @@ func (x *Pool) UnmarshalJSON(bz []byte) (err error) {
 	if err = json.Unmarshal(bz, a); err != nil {
 		return err
 	}
-	x.Id, x.Amount = a.ID, a.Amount
+	var points []*lib.PoolPoints
+	for _, p := range a.Points {
+		points = append(points, &lib.PoolPoints{
+			Address: p.Address,
+			Points:  p.Points,
+		})
+	}
+	x.Id, x.Amount, x.Points, x.TotalPoolPoints = a.ID, a.Amount, points, a.TotalPoints
 	return
 }

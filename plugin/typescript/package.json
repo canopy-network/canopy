@@ -1,0 +1,31 @@
+{
+    "name": "canopy-plugin-typescript",
+    "version": "1.0.0",
+    "description": "TypeScript implementation of the Canopy blockchain plugin",
+    "type": "module",
+    "main": "dist/main.js",
+    "types": "dist/main.d.ts",
+    "scripts": {
+        "build": "tsc -p tsconfig.json && npm run copy:proto",
+        "copy:proto": "cp src/proto/index.js src/proto/index.cjs src/proto/index.d.ts dist/proto/",
+        "start": "node dist/main.js",
+        "dev": "nodemon --exec 'node --loader ts-node/esm src/main.ts'",
+        "build:proto": "pbjs -t static-module -w commonjs -o src/proto/index.js proto/*.proto && pbts -o src/proto/index.d.ts src/proto/index.js && cp src/proto/index.js src/proto/index.cjs",
+        "build:descriptors": "node scripts/generate-descriptors.cjs",
+        "build:all": "npm run build:proto && npm run build:descriptors && npm run build"
+    },
+    "dependencies": {
+        "long": "^5.2.3",
+        "protobufjs": "^7.5.4"
+    },
+    "devDependencies": {
+        "@types/node": "^20.19.11",
+        "nodemon": "^3.0.2",
+        "protobufjs-cli": "^1.1.1",
+        "ts-node": "^10.9.1",
+        "typescript": "^5.3.2"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

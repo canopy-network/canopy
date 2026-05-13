@@ -13,6 +13,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
+	"google.golang.org/protobuf/proto"
 )
 
 type Client struct {
@@ -37,6 +38,34 @@ func (c *Client) Height() (p *lib.HeightResult, err lib.ErrorI) {
 	return
 }
 
+// IndexerBlobs retrieves the indexer blob protobuf and unmarshals it.
+func (c *Client) IndexerBlobs(height uint64) (p *fsm.IndexerBlobs, err lib.ErrorI) {
+	p = new(fsm.IndexerBlobs)
+	req := indexerBlobsRequest{
+		heightRequest: heightRequest{Height: height},
+	}
+	bz, err := lib.MarshalJSON(req)
+	if err != nil {
+		return nil, err
+	}
+	resp, e := c.client.Post(c.url(IndexerBlobsRouteName, ""), ApplicationJSON, bytes.NewBuffer(bz))
+	if e != nil {
+		return nil, lib.ErrPostRequest(e)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, e := io.ReadAll(resp.Body)
+	if e != nil {
+		return nil, lib.ErrReadBody(e)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, lib.ErrHttpStatus(resp.Status, resp.StatusCode, body)
+	}
+	if err := proto.Unmarshal(body, p); err != nil {
+		return nil, lib.ErrUnmarshal(err)
+	}
+	return p, nil
+}
+
 func (c *Client) BlockByHeight(height uint64) (p *lib.BlockResult, err lib.ErrorI) {
 	p = new(lib.BlockResult)
 	err = c.heightRequest(BlockByHeightRouteName, height, p)
@@ -52,6 +81,24 @@ func (c *Client) BlockByHash(hash string) (p *lib.BlockResult, err lib.ErrorI) {
 func (c *Client) Blocks(params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
 	p = new(lib.Page)
 	err = c.paginatedHeightRequest(BlocksRouteName, 0, params, p)
+	return
+}
+
+func (c *Client) EventsByHeight(height uint64, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
+	p = new(lib.Page)
+	err = c.paginatedHeightRequest(EventsByHeightRouteName, height, params, p)
+	return
+}
+
+func (c *Client) EventsByAddress(address string, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
+	p = new(lib.Page)
+	err = c.paginatedAddrRequest(EventsByAddressRouteName, address, params, p)
+	return
+}
+
+func (c *Client) EventsByChainId(id uint64, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
+	p = new(lib.Page)
+	err = c.paginatedIdRequest(EventsByChainRouteName, id, params, p)
 	return
 }
 
@@ -158,12 +205,6 @@ func (c *Client) Validators(height uint64, params lib.PageParams, filter lib.Val
 	return
 }
 
-func (c *Client) Committee(height uint64, id uint64, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
-	p = new(lib.Page)
-	err = c.paginatedHeightRequest(CommitteeRouteName, height, params, p, lib.ValidatorFilters{Committee: id})
-	return
-}
-
 func (c *Client) CommitteeData(height uint64, id uint64) (p *lib.CommitteeData, err lib.ErrorI) {
 	p = new(lib.CommitteeData)
 	err = c.heightAndIdRequest(CommitteeDataRouteName, height, id, p)
@@ -201,8 +242,44 @@ func (c *Client) Order(height uint64, orderId string, chainId uint64) (p *lib.Se
 }
 
 func (c *Client) Orders(height, chainId uint64) (p *lib.OrderBooks, err lib.ErrorI) {
-	p = new(lib.OrderBooks)
-	err = c.heightAndIdRequest(OrdersRouteName, height, chainId, p)
+	// send ordersRequest matching the paginated server handler
+	bz, err := lib.MarshalJSON(ordersRequest{
+		Committee:     chainId,
+		heightRequest: heightRequest{height},
+		PageParams:    lib.PageParams{PageNumber: 1, PerPage: 10000},
+	})
+	if err != nil {
+		return nil, err
+	}
+	// unmarshal into a Page (server returns paginated results)
+	page := new(lib.Page)
+	if err = c.post(OrdersRouteName, bz, page); err != nil {
+		return nil, err
+	}
+	// extract SellOrders from the page results
+	orders, ok := page.Results.(*lib.SellOrders)
+	if !ok || orders == nil {
+		return &lib.OrderBooks{OrderBooks: []*lib.OrderBook{{ChainId: chainId, Orders: nil}}}, nil
+	}
+	// convert to OrderBooks for backward compatibility
+	return &lib.OrderBooks{OrderBooks: []*lib.OrderBook{{ChainId: chainId, Orders: []*lib.SellOrder(*orders)}}}, nil
+}
+
+func (c *Client) DexPrice(height, chainId uint64) (p *lib.DexPrice, err lib.ErrorI) {
+	p = new(lib.DexPrice)
+	err = c.heightAndIdRequest(DexPriceRouteName, height, chainId, p)
+	return
+}
+
+func (c *Client) DexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
+	p = new(lib.DexBatch)
+	err = c.heightIdAndPointsRequest(DexBatchRouteName, height, chainId, withPoints, p)
+	return
+}
+
+func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
+	p = new(lib.DexBatch)
+	err = c.heightIdAndPointsRequest(NextDexBatchRouteName, height, chainId, withPoints, p)
 	return
 }
 
@@ -336,6 +413,16 @@ func (c *Client) Transaction(tx lib.TransactionI) (hash *string, err lib.ErrorI)
 	return
 }
 
+func (c *Client) Transactions(txs []lib.TransactionI) (hash *string, err lib.ErrorI) {
+	bz, err := lib.MarshalJSON(txs)
+	if err != nil {
+		return nil, err
+	}
+	hash = new(string)
+	err = c.post(TxsRouteName, bz, hash)
+	return
+}
+
 func (c *Client) Keystore() (keystore *crypto.Keystore, err lib.ErrorI) {
 	keystore = new(crypto.Keystore)
 	err = c.get(KeystoreRouteName, "", keystore, true)
@@ -383,7 +470,7 @@ type AddrOrNickname struct {
 	Nickname string
 }
 
-func (c *Client) KeystoreDelete(addrOrNickname AddrOrNickname) (returned crypto.AddressI, err lib.ErrorI) {
+func (c *Client) KeystoreDelete(addrOrNickname AddrOrNickname, password string) (returned crypto.AddressI, err lib.ErrorI) {
 	returned = new(crypto.Address)
 
 	if addrOrNickname.Address != "" {
@@ -393,7 +480,8 @@ func (c *Client) KeystoreDelete(addrOrNickname AddrOrNickname) (returned crypto.
 			return
 		}
 		err = c.keystoreRequest(KeystoreDeleteRouteName, keystoreRequest{
-			addressRequest: addressRequest{bz},
+			addressRequest:  addressRequest{bz},
+			passwordRequest: passwordRequest{password},
 		}, returned)
 		return
 	}
@@ -401,6 +489,7 @@ func (c *Client) KeystoreDelete(addrOrNickname AddrOrNickname) (returned crypto.
 	if addrOrNickname.Nickname != "" {
 		err = c.keystoreRequest(KeystoreDeleteRouteName, keystoreRequest{
 			nicknameRequest: nicknameRequest{addrOrNickname.Nickname},
+			passwordRequest: passwordRequest{password},
 		}, returned)
 		return
 	}
@@ -627,6 +716,61 @@ func (c *Client) TxDeleteOrder(from AddrOrNickname, orderId string, chainId uint
 	return c.transactionRequest(TxDeleteOrderRouteName, txReq, submit)
 }
 
+func (c *Client) TxDexLimitOrder(from AddrOrNickname, amount, receiveAmount, chainId uint64,
+	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txDexLimitOrder{
+		Fee:               optFee,
+		Amount:            amount,
+		ReceiveAmount:     receiveAmount,
+		Submit:            submit,
+		Password:          pwd,
+		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
+	}
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxDexLimitOrderRouteName, txReq, submit)
+}
+
+func (c *Client) TxDexLiquidityDeposit(from AddrOrNickname, amount, chainId uint64,
+	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txDexLiquidityDeposit{
+		Fee:               optFee,
+		Amount:            amount,
+		Submit:            submit,
+		Password:          pwd,
+		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
+	}
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxDexLiquidityDepositRouteName, txReq, submit)
+}
+
+func (c *Client) TxDexLiquidityWithdraw(from AddrOrNickname, percent int, chainId uint64,
+	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txDexLiquidityWithdraw{
+		Fee:               optFee,
+		Percent:           percent,
+		Submit:            submit,
+		Password:          pwd,
+		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
+	}
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxDexLiquidityWithdrawRouteName, txReq, submit)
+}
+
 func (c *Client) TxLockOrder(from AddrOrNickname, receiveAddress string, orderId string,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	receiveHex, err := lib.NewHexBytesFromString(receiveAddress)
@@ -838,6 +982,20 @@ func (c *Client) paginatedHeightRequest(routeName string, height uint64, p lib.P
 	return
 }
 
+func (c *Client) paginatedIdRequest(routeName string, id uint64, p lib.PageParams, ptr any) (err lib.ErrorI) {
+	bz, err := lib.MarshalJSON(paginatedIdRequest{
+		idRequest: idRequest{
+			ID: id,
+		},
+		PageParams: p,
+	})
+	if err != nil {
+		return
+	}
+	err = c.post(routeName, bz, ptr)
+	return
+}
+
 func (c *Client) paginatedAddrRequest(routeName string, address string, p lib.PageParams, ptr any) (err lib.ErrorI) {
 	addr, err := lib.StringToBytes(address)
 	if err != nil {
@@ -863,10 +1021,10 @@ func (c *Client) heightRequest(routeName string, height uint64, ptr any) (err li
 	return
 }
 
-func (c *Client) orderRequest(routeName string, height uint64, orderId string, chainId uint64, ptr any) (err lib.ErrorI) {
+func (c *Client) orderRequest(routeName string, height uint64, orderId string, committee uint64, ptr any) (err lib.ErrorI) {
 	bz, err := lib.MarshalJSON(orderRequest{
-		ChainId: chainId,
-		OrderId: orderId,
+		Committee: committee,
+		OrderId:   orderId,
 		heightRequest: heightRequest{
 			Height: height,
 		},
@@ -907,6 +1065,21 @@ func (c *Client) heightAndIdRequest(routeName string, height, id uint64, ptr any
 	bz, err := lib.MarshalJSON(heightAndIdRequest{
 		heightRequest: heightRequest{height},
 		idRequest:     idRequest{id},
+	})
+	if err != nil {
+		return
+	}
+	err = c.post(routeName, bz, ptr)
+	return
+}
+
+func (c *Client) heightIdAndPointsRequest(routeName string, height, id uint64, points bool, ptr any) (err lib.ErrorI) {
+	bz, err := lib.MarshalJSON(heightIdAndPointsRequest{
+		heightAndIdRequest: heightAndIdRequest{
+			heightRequest: heightRequest{height},
+			idRequest:     idRequest{id},
+		},
+		Points: points,
 	})
 	if err != nil {
 		return

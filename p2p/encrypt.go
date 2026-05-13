@@ -4,6 +4,7 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"io"
+	"log"
 	"math"
 	"net"
 	"sync"
@@ -233,7 +234,24 @@ func (c *EncryptedConn) holdUnread(bytesRead int, chunk []byte) {
 }
 
 // EncryptedConn satisfies the net.conn interface
-func (c *EncryptedConn) Close() error                       { return c.conn.Close() }
+func (c *EncryptedConn) Close() error {
+	var firstErr error
+	if tcpConn, ok := c.conn.(*net.TCPConn); ok {
+		if err := tcpConn.CloseRead(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		if err := tcpConn.CloseWrite(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if err := c.conn.Close(); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if firstErr != nil {
+		log.Printf("encrypted conn close error: %v", firstErr)
+	}
+	return firstErr
+}
 func (c *EncryptedConn) LocalAddr() net.Addr                { return c.conn.LocalAddr() }
 func (c *EncryptedConn) RemoteAddr() net.Addr               { return c.conn.RemoteAddr() }
 func (c *EncryptedConn) SetDeadline(t time.Time) error      { return c.conn.SetDeadline(t) }

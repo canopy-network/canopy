@@ -67,6 +67,7 @@ type Metrics struct {
 	NodeMetrics    // general telemetry about the node
 	BlockMetrics   // block telemetry
 	PeerMetrics    // peer telemetry
+	P2PMetrics     // p2p performance telemetry
 	BFTMetrics     // bft telemetry
 	FSMMetrics     // fsm telemetry
 	StoreMetrics   // persistence telemetry
@@ -102,6 +103,36 @@ type PeerMetrics struct {
 	OutboundPeers prometheus.Gauge // number of peers that this node dialed
 }
 
+// P2PMetrics represents detailed performance telemetry for P2P message sending and receiving
+type P2PMetrics struct {
+	SendQueueTime       prometheus.Histogram   // time a packet spends waiting in the send queue
+	SendWireTime        prometheus.Histogram   // time to write a packet to the wire
+	SendTotalTime       prometheus.Histogram   // total time from Send() call to wire write completion
+	ReceiveWireTime     prometheus.Histogram   // time to read a packet from the wire TODO Review as this one is not reliable in all scenarios
+	ReceiveAssemblyTime prometheus.Histogram   // time to assemble packets into a complete message
+	SendQueueDepth      *prometheus.GaugeVec   // current depth of send queue by topic
+	InboxQueueDepth     *prometheus.GaugeVec   // current depth of inbox queue by topic
+	MessageSize         prometheus.Histogram   // size of messages in bytes
+	PacketsPerMessage   prometheus.Histogram   // number of packets per message
+	SendQueueTimeout    prometheus.Counter     // count of send queue timeout errors
+	SendQueueFull       *prometheus.CounterVec // count of send queue full events by topic
+
+	// Heartbeat / liveness telemetry (low-cardinality; no per-peer labels)
+	HeartbeatPingSent prometheus.Counter   // heartbeat ping packets queued for send
+	HeartbeatPingRecv prometheus.Counter   // heartbeat ping packets received from wire
+	HeartbeatPongSent prometheus.Counter   // heartbeat pong packets queued for send
+	HeartbeatPongRecv prometheus.Counter   // heartbeat pong packets received from wire
+	HeartbeatRTT      prometheus.Histogram // approximate RTT based on last ping send -> pong receive
+	HeartbeatTimeout  prometheus.Counter   // heartbeat timeouts that caused peer disconnect
+
+	// Dial / peer-book churn telemetry.
+	// expected_port=true means the address uses the chain's expected P2P port (e.g. 9001 for chain 1).
+	DialAttempt *prometheus.CounterVec // dial attempts by expected_port
+	DialSuccess *prometheus.CounterVec // successful dials by expected_port
+	DialTimeout *prometheus.CounterVec // dial timeouts by expected_port
+	PeerBookAdd *prometheus.CounterVec // peer book additions by expected_port
+}
+
 // BFTMetrics represents the telemetry for the BFT module
 type BFTMetrics struct {
 	Height            prometheus.Gauge     // what's the height of this chain?
@@ -116,6 +147,7 @@ type BFTMetrics struct {
 	CommitTime        prometheus.Histogram // how long did the commit phase take?
 	CommitProcessTime prometheus.Histogram // how long did the commit process phase take?
 	RootHeight        prometheus.Gauge     // what's the height of the root-chain?
+	RootChainId       prometheus.Gauge     // what's the chain id of the root-chain?
 }
 
 // FSMMetrics represents the telemetry of the FSM module for the node's address
@@ -129,6 +161,7 @@ type FSMMetrics struct {
 	ValidatorNonSignerCount    *prometheus.GaugeVec // was any validator a non signer?
 	ValidatorDoubleSigner      *prometheus.GaugeVec // was this validator a double signer?
 	ValidatorDoubleSignerCount *prometheus.GaugeVec // was any validator a double signer?
+	ValidatorCount             *prometheus.GaugeVec // how many validators are there?
 }
 
 // StoreMetrics represents the telemetry of the 'store' package
@@ -140,6 +173,9 @@ type StoreMetrics struct {
 	DBCommitTime         prometheus.Histogram // how long does the db commit take?
 	DBCommitEntries      prometheus.Gauge     // how many entries in the commit batch?
 	DBCommitSize         prometheus.Gauge     // how big is the commit batch?
+	DBBackupTime         prometheus.Histogram // how long does the db backup take?
+	DBLSSCompactionTime  prometheus.Histogram // how long does the db LSS compaction take?
+	DBHSSCompactionTime  prometheus.Histogram // how long does the db HSS compaction take?
 }
 
 // MempoolMetrics represents the telemetry of the memory pool of pending transactions
@@ -236,6 +272,103 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Help: "Number of outbound peers",
 			}),
 		},
+		// P2P Performance
+		P2PMetrics: P2PMetrics{
+			SendQueueTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_send_queue_time_seconds",
+				Help:    "Time a packet spends waiting in the send queue before being sent",
+				Buckets: prometheus.DefBuckets,
+			}),
+			SendWireTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_send_wire_time_seconds",
+				Help:    "Time to write a packet to the wire (network)",
+				Buckets: prometheus.DefBuckets,
+			}),
+			SendTotalTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_send_total_time_seconds",
+				Help:    "Total time from Send() call to wire write completion",
+				Buckets: prometheus.DefBuckets,
+			}),
+			ReceiveWireTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_receive_wire_time_seconds",
+				Help:    "Time to read a packet from the wire (network)",
+				Buckets: prometheus.DefBuckets,
+			}),
+			ReceiveAssemblyTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_receive_assembly_time_seconds",
+				Help:    "Time to assemble packets into a complete message",
+				Buckets: prometheus.DefBuckets,
+			}),
+			SendQueueDepth: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_p2p_send_queue_depth",
+				Help: "Current depth of send queue by topic",
+			}, []string{"topic"}),
+			InboxQueueDepth: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_p2p_inbox_queue_depth",
+				Help: "Current depth of inbox queue by topic",
+			}, []string{"topic"}),
+			MessageSize: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_message_size_bytes",
+				Help:    "Size of messages in bytes",
+				Buckets: prometheus.ExponentialBuckets(100, 10, 8), // 100B to ~100MB
+			}),
+			PacketsPerMessage: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_packets_per_message",
+				Help:    "Number of packets per message",
+				Buckets: prometheus.LinearBuckets(1, 1, 20), // 1 to 20 packets
+			}),
+			SendQueueTimeout: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_p2p_send_queue_timeout_total",
+				Help: "Total count of send queue timeout errors",
+			}),
+			SendQueueFull: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_p2p_send_queue_full_total",
+				Help: "Total count of send queue full events by topic",
+			}, []string{"topic"}),
+
+			HeartbeatPingSent: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_p2p_heartbeat_ping_sent_total",
+				Help: "Total heartbeat ping packets queued for send",
+			}),
+			HeartbeatPingRecv: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_p2p_heartbeat_ping_recv_total",
+				Help: "Total heartbeat ping packets received",
+			}),
+			HeartbeatPongSent: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_p2p_heartbeat_pong_sent_total",
+				Help: "Total heartbeat pong packets queued for send",
+			}),
+			HeartbeatPongRecv: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_p2p_heartbeat_pong_recv_total",
+				Help: "Total heartbeat pong packets received",
+			}),
+			HeartbeatRTT: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_heartbeat_rtt_seconds",
+				Help:    "Approximate heartbeat RTT (last ping send -> pong receive)",
+				Buckets: prometheus.DefBuckets,
+			}),
+			HeartbeatTimeout: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_p2p_heartbeat_timeout_total",
+				Help: "Total heartbeat timeouts that caused a peer disconnect",
+			}),
+
+			DialAttempt: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_p2p_dial_attempt_total",
+				Help: "Total P2P dial attempts by expected_port",
+			}, []string{"expected_port"}),
+			DialSuccess: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_p2p_dial_success_total",
+				Help: "Total successful P2P dials by expected_port",
+			}, []string{"expected_port"}),
+			DialTimeout: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_p2p_dial_timeout_total",
+				Help: "Total P2P dial timeouts by expected_port",
+			}, []string{"expected_port"}),
+			PeerBookAdd: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_p2p_peer_book_add_total",
+				Help: "Total peer book additions by expected_port",
+			}, []string{"expected_port"}),
+		},
 		// BFT
 		BFTMetrics: BFTMetrics{
 			Height: promauto.NewGauge(prometheus.GaugeOpts{
@@ -286,6 +419,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_bft_root_height",
 				Help: "Current height of the `root_chain` the quorum is operating on",
 			}),
+			RootChainId: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_root_chain_id",
+				Help: "The chain ID of the root chain this node is operating on",
+			}),
 		},
 		// FSM
 		FSMMetrics: FSMMetrics{
@@ -325,6 +462,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_validator_double_signer_count",
 				Help: "Count of double signers for the last block",
 			}, []string{"type"}),
+			ValidatorCount: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_validator_count",
+				Help: "Count of validators",
+			}, []string{"type"}),
 		},
 		// STORE
 		StoreMetrics: StoreMetrics{
@@ -355,6 +496,18 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			DBCommitSize: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_store_commit_size",
 				Help: "Number of bytes in the commit batch",
+			}),
+			DBBackupTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_backup_time",
+				Help: "Execution time of the database backup",
+			}),
+			DBLSSCompactionTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_lss_compaction_time",
+				Help: "Execution time of LSS database compaction",
+			}),
+			DBHSSCompactionTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_hss_compaction_time",
+				Help: "Execution time of HSS database compaction",
 			}),
 		},
 		// MEMPOOL
@@ -440,7 +593,7 @@ func (m *Metrics) UpdatePeerMetrics(total, inbound, outbound int) {
 }
 
 // UpdateBFTMetrics() is a setter for the BFT metrics
-func (m *Metrics) UpdateBFTMetrics(height, rootHeight, round uint64, phase Phase, phaseStartTime time.Time) {
+func (m *Metrics) UpdateBFTMetrics(height, rootHeight, rootChainId, round uint64, phase Phase, phaseStartTime time.Time) {
 	// exit if empty
 	if m == nil {
 		return
@@ -449,6 +602,8 @@ func (m *Metrics) UpdateBFTMetrics(height, rootHeight, round uint64, phase Phase
 	m.Height.Set(float64(height))
 	// set the height of the root chain
 	m.RootHeight.Set(float64(rootHeight))
+	// set the chain id of the root chain
+	m.RootChainId.Set(float64(rootChainId))
 	// set the round
 	m.Round.Set(float64(round))
 	// set the phase
@@ -580,6 +735,26 @@ func (m *Metrics) UpdateStoreMetrics(size, entries int64, startTime time.Time, s
 	}
 }
 
+// UpdateStoreJobMetrics() updates the store jobs telemery
+func (m *Metrics) UpdateStoreJobMetrics(LSScompactionTime, HSSCompactionTime, backupTime time.Duration) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	if LSScompactionTime > 0 {
+		// update the compaction time metric
+		m.DBLSSCompactionTime.Observe(LSScompactionTime.Seconds())
+	}
+	if HSSCompactionTime > 0 {
+		// update the compaction time metric
+		m.DBHSSCompactionTime.Observe(HSSCompactionTime.Seconds())
+	}
+	if backupTime > 0 {
+		// update the backup time metric
+		m.DBBackupTime.Observe(backupTime.Seconds())
+	}
+}
+
 // UpdateBlockMetrics() updates the metrics about the last block
 func (m *Metrics) UpdateBlockMetrics(proposerAddress []byte, blockSize, txCount, vdfIterations uint64, duration time.Duration) {
 	// exit if empty
@@ -659,4 +834,13 @@ func (m *Metrics) SetStartupBlock(blockHeight uint64) {
 		m.StartupBlock.Set(float64(blockHeight))
 		m.startupBlockSet = true
 	}
+}
+
+func (m *Metrics) UpdateValidatorCount(count int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	// update the metric
+	m.ValidatorCount.WithLabelValues("total").Set(float64(count))
 }

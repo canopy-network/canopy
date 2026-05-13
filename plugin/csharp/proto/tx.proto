@@ -1,0 +1,77 @@
+syntax = "proto3";
+package types;
+option go_package = "github.com/canopy-network/go-plugin/contract";
+
+import "google/protobuf/any.proto";
+// Transaction represents a request or action submitted to the network like transfer assets or perform other operations
+// within the blockchain system - THIS MUST MATCH lib.Transaction EXACTLY for signing
+message Transaction {
+  // message_type: The type of the transaction like 'send' or 'stake'
+  string message_type = 1; // @gotags: json:"messageType"
+  // msg: The actual transaction message payload, which is encapsulated in a generic message format
+  google.protobuf.Any msg = 2;
+  // signature: The cryptographic signature used to verify the authenticity of the transaction
+  Signature signature = 3;
+  // created_height: The height when the transaction was created - allows 'safe pruning'
+  uint64 created_height = 4; // @gotags: json:"createdHeight"
+  // time: The timestamp when the transaction was created - used as temporal entropy to prevent hash collisions in txs
+  uint64 time = 5;
+  // fee: The fee associated with processing the transaction
+  uint64 fee = 6;
+  // memo: An optional message or note attached to the transaction
+  string memo = 7;
+  // network_id: The identity of the network the transaction is intended for
+  uint64 network_id = 8; // @gotags: json:"networkID"
+  // chain_id: The identity of the committee the transaction is intended for
+  uint64 chain_id = 9; // @gotags: json:"chainID"
+  // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
+  // NO CONFLICT STARTING AT FIELD = 10
+}
+
+// MessageSend is a standard transfer transaction, taking tokens from the sender and transferring
+// them to the recipient
+message MessageSend {
+  // from_address: is the sender of the funds
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // to_address: is the recipient of the funds
+  bytes to_address = 2; // @gotags: json:"toAddress"
+  // amount: is the amount of tokens in micro-denomination (uCNPY)
+  uint64 amount = 3;
+}
+
+// FeeParams is the parameter space that defines various amounts for transaction fees
+message FeeParams {
+  // send_fee: is the fee amount (in uCNPY) for Message Send
+  uint64 send_fee = 1; // @gotags: json:"sendFee"
+  // NO CONFLICT STARTING AT FIELD = 14
+}
+
+// A Signature is a digital signature is a cryptographic "fingerprint" created with a private key,
+// allowing others to verify the authenticity and integrity of a message using the corresponding public key
+message Signature {
+  // public_key: is a cryptographic code shared openly, used to verify digital signatures
+  bytes public_key = 1; // @gotags: json:"publicKey"
+  // signature: the bytes of the signature output from a private key which may be verified with the message and public
+  bytes signature = 2;
+}
+
+// MessageReward mints tokens to a recipient (admin must sign)
+message MessageReward {
+  // admin_address: the admin authorizing the reward
+  bytes admin_address = 1; // @gotags: json:"adminAddress"
+  // recipient_address: who receives the reward
+  bytes recipient_address = 2; // @gotags: json:"recipientAddress"
+  // amount: tokens to mint
+  uint64 amount = 3;
+}
+
+// MessageFaucet is a test-only transaction that mints tokens to any address
+// No balance check required - just mints tokens for testing purposes
+message MessageFaucet {
+  // signer_address: the address signing this transaction (for auth)
+  bytes signer_address = 1; // @gotags: json:"signerAddress"
+  // recipient_address: who receives the tokens
+  bytes recipient_address = 2; // @gotags: json:"recipientAddress"
+  // amount: tokens to mint
+  uint64 amount = 3;
+}

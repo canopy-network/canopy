@@ -12,12 +12,11 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	pprof2 "runtime/pprof"
 
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/controller"
@@ -33,12 +32,12 @@ const (
 
 	// uses golang's semver naming convention
 	// https://pkg.go.dev/golang.org/x/mod/semver
-	SoftwareVersion = "v0.1.13-beta"
+	SoftwareVersion = "v0.1.18+beta"
 	ContentType     = "Content-MessageType"
 	ApplicationJSON = "application/json; charset=utf-8"
 
 	walletStaticDir   = "web/wallet/out"
-	explorerStaticDir = "web/explorer/out"
+	explorerStaticDir = "web/explorer/dist"
 )
 
 // Server represents a Canopy RPC server with configuration options.
@@ -58,46 +57,42 @@ type Server struct {
 	// handles interactions with the root chain rpc
 	rcManager *RCManager
 
+	// handles the indexer blob caching
+	indexerBlobCache *indexerBlobCache
+
 	logger lib.LoggerI
 }
 
 // NewServer constructs and returns a new Canopy RPC server
 func NewServer(controller *controller.Controller, config lib.Config, logger lib.LoggerI) *Server {
 	return &Server{
-		controller: controller,
-		config:     config,
-		logger:     logger,
-		rcManager:  NewRCManager(controller, config, logger),
-		poll:       make(fsm.Poll),
-		pollMux:    &sync.RWMutex{},
+		controller:       controller,
+		config:           config,
+		logger:           logger,
+		rcManager:        NewRCManager(controller, config, logger),
+		poll:             make(fsm.Poll),
+		pollMux:          &sync.RWMutex{},
+		indexerBlobCache: newIndexerBlobCache(100),
 	}
 }
 
 // Start initializes the Canopy RPC servers
 func (s *Server) Start() {
+	hostport := strings.Split(s.config.ListenAddress, ":")
 	// Start the Query and Admin RPC servers concurrently
-	go s.startRPC(createRouter(s), s.config.RPCPort)
-	go s.startRPC(createAdminRouter(s), s.config.AdminPort)
+	go s.startRPC(createRouter(s), hostport[0], s.config.RPCPort)
+	go s.startRPC(createAdminRouter(s), hostport[0], s.config.AdminPort)
+	go s.startRPC(createDebugRouter(), hostport[0], s.config.ProfilingPort)
 
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
 	go s.rcManager.Start()
 	go s.startEthRPCService()
-	go func() { // TODO remove DEBUG ONLY
-		fileName := "heap1.out"
-		for range time.Tick(time.Second * 10) {
-			f, err := os.Create(filepath.Join(s.config.DataDirPath, fileName))
-			if err != nil {
-				s.logger.Fatalf("could not create memory profile: ", err)
-			}
-			runtime.GC() // get up-to-date statistics
-			if err = pprof2.WriteHeapProfile(f); err != nil {
-				s.logger.Fatalf("could not write memory profile: ", err)
-			}
-			f.Close()
-			fileName = "heap2.out"
-		}
-	}()
+
+	// Start heap profiler if enabled (warning: causes GC pauses which may affect RPC latency)
+	if s.config.HeapProfilingEnabled {
+		go s.startHeapProfiler()
+	}
 
 	if s.config.Headless {
 		return
@@ -108,7 +103,7 @@ func (s *Server) Start() {
 }
 
 // startRPC starts an RPC server with the provided router and port
-func (s *Server) startRPC(router *httprouter.Router, port string) {
+func (s *Server) startRPC(router *httprouter.Router, host, port string) {
 
 	// Create CORS policy
 	cor := cors.New(cors.Options{
@@ -120,9 +115,9 @@ func (s *Server) startRPC(router *httprouter.Router, port string) {
 	timeout := time.Duration(s.config.TimeoutS) * time.Second
 
 	// Start RPC server
-	s.logger.Infof("Starting RPC server at 0.0.0.0:%s", port)
+	s.logger.Infof("Starting RPC server at %s:%s", host, port)
 	s.logger.Fatal((&http.Server{
-		Addr:              colon + port,
+		Addr:              host + colon + port,
 		ReadHeaderTimeout: timeout,
 		ReadTimeout:       timeout,
 		WriteTimeout:      timeout,
@@ -161,7 +156,7 @@ func (s *Server) updatePollResults() {
 			return nil
 
 		}(); err != nil {
-			s.logger.Error(err.Error())
+			// s.logger.Error(err.Error())
 		}
 		time.Sleep(time.Second * 3)
 	}
@@ -169,30 +164,72 @@ func (s *Server) updatePollResults() {
 
 // startStaticFileServers starts a file server for the wallet and explorer
 func (s *Server) startStaticFileServers() {
-	s.logger.Infof("Starting Web Wallet 🔑 http://localhost:%s ⬅️", s.config.WalletPort)
+	hostport := strings.Split(s.config.ListenAddress, ":")
+	s.logger.Infof("Starting Web Wallet 🔑 http://%s:%s ⬅️", hostport[0], s.config.WalletPort)
+
 	s.runStaticFileServer(walletFS, walletStaticDir, s.config.WalletPort, s.config)
-	s.logger.Infof("Starting Block Explorer 🔍️ http://localhost:%s ⬅️", s.config.ExplorerPort)
+	s.logger.Infof("Starting Block Explorer 🔍️ http://%s:%s ⬅️", hostport[0], s.config.ExplorerPort)
 	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
 }
 
-// submitTx submits a transaction to the controller and writes http response
-func (s *Server) submitTx(w http.ResponseWriter, tx any) (ok bool) {
+// startHeapProfiler writes periodic heap profiles to the data directory
+// Warning: This calls runtime.GC() which causes pauses and may affect RPC latency
+func (s *Server) startHeapProfiler() {
+	interval := time.Duration(s.config.HeapProfilingIntervalS) * time.Second
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	s.logger.Infof("Starting heap profiler with %s interval", interval)
+	fileName := "heap1.out"
+	for range time.Tick(interval) {
+		f, err := os.Create(filepath.Join(s.config.DataDirPath, fileName))
+		if err != nil {
+			s.logger.Errorf("could not create memory profile: %v", err)
+			continue
+		}
+		runtime.GC() // get up-to-date statistics
+		if err = pprof.WriteHeapProfile(f); err != nil {
+			s.logger.Errorf("could not write memory profile: %v", err)
+		}
+		f.Close()
+		// Alternate between two files
+		if fileName == "heap1.out" {
+			fileName = "heap2.out"
+		} else {
+			fileName = "heap1.out"
+		}
+	}
+}
 
-	// Marshal the transaction
-	bz, err := lib.Marshal(tx)
-	if err != nil {
+// submitTxs submits transactions to the controller and writes http response
+func (s *Server) submitTxs(w http.ResponseWriter, txs []lib.TransactionI) (ok bool) {
+	// marshal each transaction to bytes
+	var txBytes [][]byte
+	for _, tx := range txs {
+		bz, err := lib.Marshal(tx)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		txBytes = append(txBytes, bz)
+	}
+	// send transactions to controller
+	if err := s.controller.SendTxMsgs(txBytes); err != nil {
 		write(w, err, http.StatusBadRequest)
 		return
 	}
-
-	// Send transaction to controller
-	if err = s.controller.SendTxMsg(bz); err != nil {
-		write(w, err, http.StatusBadRequest)
+	// return hashes of all submitted transactions
+	var hashes []string
+	for _, bz := range txBytes {
+		hashes = append(hashes, crypto.HashString(bz))
+	}
+	// if only one transaction was submitted, return the hash as a string
+	if len(hashes) == 1 {
+		write(w, hashes[0], http.StatusOK)
 		return
 	}
-
-	// Write transaction to http response
-	write(w, crypto.HashString(bz), http.StatusOK)
+	// if multiple transactions were submitted, return the hashes as an array
+	write(w, hashes, http.StatusOK)
 	return true
 }
 
@@ -302,13 +339,13 @@ func (h logHandler) Handle(resp http.ResponseWriter, req *http.Request, p httpro
 	h.h(resp, req, p)
 }
 
-//go:embed all:web/explorer/out
+//go:embed all:web/explorer/dist
 var explorerFS embed.FS
 
 //go:embed all:web/wallet/out
 var walletFS embed.FS
 
-// runStaticFileServer creates a web server serving static files
+// runStaticFileServer creates a web server serving static files with SPA fallback
 func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.Config) {
 	// Attempt to get a sub-filesystem rooted at the specified directory
 	distFS, err := fs.Sub(fileSys, dir)
@@ -322,19 +359,12 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 
 	// Define a handler function for the root path
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// serve `index.html` with dynamic config injection
-		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
+		requestedPath := r.URL.Path
 
+		// Helper function to serve index.html with config injection
+		serveIndexHTML := func() {
 			// Construct the file path for `index.html`
 			filePath := path.Join(dir, "index.html")
-
-			// Open the file and defer closing until the function exits
-			data, e := fileSys.Open(filePath)
-			if e != nil {
-				http.NotFound(w, r)
-				return
-			}
-			defer data.Close()
 
 			// Read the content of `index.html` into a byte slice
 			htmlBytes, e := fs.ReadFile(fileSys, filePath)
@@ -344,17 +374,45 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 			}
 
 			// Inject the configuration into the HTML file content
-			injectedHTML := injectConfig(string(htmlBytes), conf)
+			injectedHTML := injectConfig(string(htmlBytes), conf, r)
 
 			// Set the response header as HTML and write the injected content to the response
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(injectedHTML))
+		}
+
+		// Serve index.html for root path
+		if requestedPath == "/" || requestedPath == "/index.html" {
+			serveIndexHTML()
 			return
 		}
 
-		// For all other requests, serve the files directly from the file system
-		http.FileServer(http.FS(distFS)).ServeHTTP(w, r)
+		// Check if the requested path has a file extension (indicates static asset)
+		// Common static asset extensions: .js, .css, .svg, .png, .jpg, .jpeg, .gif, .ico, .woff, .woff2, .ttf, .eot, .map
+		ext := path.Ext(requestedPath)
+		isStaticAsset := ext != ""
+
+		if isStaticAsset {
+			// Try to serve the static asset from the file system
+			// Remove leading slash for fs.Open
+			assetPath := strings.TrimPrefix(requestedPath, "/")
+
+			// Check if the file exists in the embedded filesystem
+			if _, err := distFS.Open(assetPath); err == nil {
+				// File exists, serve it
+				http.FileServer(http.FS(distFS)).ServeHTTP(w, r)
+				return
+			}
+
+			// Static asset not found, return 404
+			http.NotFound(w, r)
+			return
+		}
+
+		// For all other requests (no file extension = HTML navigation),
+		// serve index.html to enable SPA client-side routing
+		serveIndexHTML()
 	})
 
 	// Start the HTTP server in a new goroutine and listen on the specified port
@@ -365,14 +423,19 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 }
 
 // injectConfig() injects the config.json into the HTML file
-func injectConfig(html string, config lib.Config) string {
+func injectConfig(html string, config lib.Config, r *http.Request) string {
+	injectedConfig, err := json.Marshal(map[string]any{
+		"rpcURL":      config.RPCUrl,
+		"adminRPCURL": config.AdminRPCUrl,
+		"chainId":     config.ChainId,
+	})
+	if err != nil {
+		injectedConfig = []byte("{}")
+	}
+
 	script := fmt.Sprintf(`<script>
-		window.__CONFIG__ = {
-            rpcURL: "%s",
-            adminRPCURL: "%s",
-            chainId: %d
-        };
-	</script>`, config.RPCUrl, config.AdminRPCUrl, config.ChainId)
+		window.__CONFIG__ = %s;
+	</script>`, injectedConfig)
 
 	// inject the script just before </head>
 	return strings.Replace(html, "</head>", script+"</head>", 1)

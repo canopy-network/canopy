@@ -5,14 +5,15 @@
 ## RPC Routes Reference
 - /v1/
 - /v1/tx
+- /v1/txs
 - /v1/query/height
+- /v1/query/indexer-blobs
 - /v1/query/account
 - /v1/query/accounts
 - /v1/query/pool
 - /v1/query/pools
 - /v1/query/validator
 - /v1/query/validators
-- /v1/query/committee
 - /v1/query/committee-data
 - /v1/query/committees-data
 - /v1/query/subsidized-committees
@@ -36,8 +37,14 @@
 - /v1/query/txs-by-sender
 - /v1/query/txs-by-rec
 - /v1/query/tx-by-hash
+- /v1/query/events-by-height
+- /v1/query/events-by-address
+- /v1/query/events-by-chain
 - /v1/query/order
 - /v1/query/orders
+- /v1/query/dex-batch
+- /v1/query/next-dex-batch
+- /v1/query/dex-price
 - /v1/query/last-proposers
 - /v1/query/valid-double-signer
 - /v1/query/double-signers
@@ -51,10 +58,8 @@
 - /v1/query/validator-set
 - /v1/query/checkpoint
 - /v1/subscribe-rc-info
-- /debug/blocked
-- /debug/heap
-- /debug/cpu
-- /debug/routine
+- /debug/pprof
+- /debug/pprof/*name
 - /v1/eth
 - /v1/admin/keystore
 - /v1/admin/keystore-new-key
@@ -73,9 +78,12 @@
 - /v1/admin/tx-create-order
 - /v1/admin/tx-edit-order
 - /v1/admin/tx-delete-order
+- /v1/admin/tx-dex-limit-order
+- /v1/admin/tx-dex-liquidity-deposit
+- /v1/admin/tx-dex-liquidity-withdraw
 - /v1/admin/tx-lock-order
 - /v1/admin/tx-close-order
-- /v1/admin/subsidy
+- /v1/admin/tx-subsidy
 - /v1/admin/tx-start-poll
 - /v1/admin/tx-vote-poll
 - /v1/admin/resource-usage
@@ -158,6 +166,57 @@ $ curl -X POST localhost:50002/v1/tx \
 > "25c7216b7523fdfdb60b989b38c4b9d83a546a63029d56f2ce6f2be6bd255aa4"
 ```
 
+## Txs
+
+**Route**: `/v1/txs`
+
+**Description**: submits multiple transactions in a single request
+
+**HTTP Method**: `POST`
+
+**Request**: `array` of transactions, each with the same structure as the `/v1/tx` request:
+
+- **type**: `string` - the message name (`"send"`, `"stake"`, `"edit-stake"`, ...)
+- **msg**: `Message` - the payload of the transaction (`MessageSend`, `MessageStake`, ...)
+- **signature**: `Signature` - the authorization (public key and signature) of the transaction
+- **time**: `uint64` - the creation time of the transaction for replay protection (unix micro)
+- **createdHeight**: `uint64` - the height the transaction was created `+/- 4320` accepted
+- **fee**: `uint64`  the network fee for sending the transaction (minimum is parameterized)
+- **memo**: `string` - an embedded message in the transaction (optional)
+- **networkID**: `uint64` - the unique identifier of the network (`1` for mainnet, `2` for testnet, ...)
+- **chainID**: `uint64` - the unique identifier of the committee (`1` for canopy, `2` for canary, ...)
+
+**Response**: `array of hex strings` - the hashes of the submitted transactions
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/txs \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "type": "send",
+      "msg": {
+        "fromAddress": "b8bc466953be5f6f31954108f683d2b02b8b7453",
+        "toAddress": "08c18a0e3ef3727b42eab9eef51494f8f7f83bd0",
+        "amount": 1000000
+      },
+      "signature": {
+        "publicKey": "a5b97c05cb26c9bc118b3e2258f03101a9a427317dccd80abd4f3a82a42afc6c27ae5f63a04aaef180558b0176282f1c78a51af474036316b1c2ae826bf8c23a",
+        "signature": "89ce883843a4ebfc763e0fd377718e659063bdfee492f3fff1cfe055b9cbc1f67da580e3ad638c32d520c3db4baf94a0c4f605cb73b0ee021a330a23a93ffe99"
+      },
+      "time": 1747865418150488,
+      "createdHeight": 1,
+      "fee": 10000,
+      "memo": "hello world",
+      "networkID": 1,
+      "chainID": 1
+    }
+  ]'
+
+> ["25c7216b7523fdfdb60b989b38c4b9d83a546a63029d56f2ce6f2be6bd255aa4"]
+```
+
 ## Height
 
 **Route:** `/v1/query/height`
@@ -178,6 +237,55 @@ $ curl -X POST localhost:50002/v1/tx \
 $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v1/query/height
 
 > 9157
+```
+
+## Indexer Blobs
+
+**Route:** `/v1/query/indexer-blobs`
+
+**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. Accounts, pools, and validators are returned as deltas between the current and previous blobs.
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+
+**Response**: raw protobuf bytes (`application/x-protobuf`) representing an `IndexerBlobs` message containing:
+- **current**: `IndexerBlob` - the indexer blob at the requested height
+  - **block**: `bytes` - the block data
+  - **accounts**: `[]bytes` - the account entries
+  - **pools**: `[]bytes` - the pool entries
+  - **validators**: `[]bytes` - the validator entries
+  - **dexPrices**: `[]bytes` - the DEX price entries
+  - **nonSigners**: `[]bytes` - the non-signer entries
+  - **doubleSigners**: `[]bytes` - the double-signer entries
+  - **orders**: `bytes` - the order book data
+  - **params**: `bytes` - the protocol parameters
+  - **dexBatches**: `[]bytes` - the DEX batch entries
+  - **nextDexBatches**: `[]bytes` - the next DEX batch entries
+  - **committeesData**: `bytes` - the committees data
+  - **subsidizedCommittees**: `[]uint64` - the subsidized committee IDs
+  - **retiredCommittees**: `[]uint64` - the retired committee IDs
+  - **supply**: `bytes` - the token supply data
+  - **totalValidatorsActive**: `uint32` - count of active validators
+  - **totalValidatorsPaused**: `uint32` - count of paused validators
+  - **totalValidatorsUnstaking**: `uint32` - count of unstaking validators
+  - **validatorsDelta**: `bool` - whether validators are returned as a delta
+  - **totalDelegatesActive**: `uint32` - count of active delegates
+  - **totalDelegatesPaused**: `uint32` - count of paused delegates
+  - **totalDelegatesUnstaking**: `uint32` - count of unstaking delegates
+- **previous**: `IndexerBlob` - the indexer blob at the previous height (same structure as current, absent for heights ≤ 2)
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/query/indexer-blobs \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 100
+      }'
+
+> <binary protobuf response>
 ```
 
 ## Account
@@ -288,7 +396,10 @@ $ curl -X POST localhost:50002/v1/query/accounts \
 
 - **id**: `string` - the unique identifier
 - **amount**:`uint64` - the balance of funds the pool has in micro denomination
-
+- **poolPoints**: `array` - a list of pool points
+  - **address**: `hex-string` - the recipient address of the points
+  - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
 **Example**:
 
 ```
@@ -300,9 +411,16 @@ $ curl -X POST localhost:50002/v1/query/pool \
       }'
 
 > {
-      "id": "1",
-      "amount": 969
-  }
+  "id": "1",
+  "amount": 969,
+  "poolPoints": [
+    {
+      "address": "551f21e333012027b81701a35023efc88b864975",
+      "points": 100
+    }
+  ],
+  "totalPoolPoints": 100
+}
 ```
 
 ## Pools
@@ -324,6 +442,10 @@ $ curl -X POST localhost:50002/v1/query/pool \
 - **results**: `array` - the list of result objects
   - **id**: - `string` the unique identifier of the pool
   - **amount**: - `uint64` the balance of funds the pool has in micro denomination
+  - **poolPoints**: `array` - a list of pool points
+    - **address**: `hex-string` - the recipient address of the points
+    - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
 - **type**: `string` - the type of results
 - **count**: `int` - length of results
 - **totalPages**: `int` - number of pages
@@ -346,7 +468,14 @@ $ curl -X POST localhost:50002/v1/query/pools \
     "results": [
       {
         "id": "1",
-        "amount": 969
+        "amount": 969,
+        "poolPoints": [
+          {
+            "address": "551f21e333012027b81701a35023efc88b864975",
+            "points": 100
+          }
+        ],
+        "totalPoolPoints": 100
       }
     ],
     "type": "pools",
@@ -535,76 +664,6 @@ $ curl -X POST localhost:50002/v1/query/validator-set \
     }
   ]
 }
-```
-
-## Committee
-
-**Route:** `/v1/query/committee`
-
-**Description**: responds with a page of non-delegate validators for a specific committee id
-
-**HTTP Method**: `POST`
-
-**Request**:
-
-- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
-- **committee**: `uint64` – the unique identifier of the committee
-- **perPage**: `int` - the number of elements per page (the default is 10 and max is 5,000)
-- **pageNumber**: `int` - the number of the page (the default is 1)
-
-**Response**:
-- **perPage**: `int` - the number of elements per page
-- **pageNumber**: `int` - the number of the page
-- **results**: `array` - the list of result objects
-  - **address**: `uint64` - the 20 byte identifier
-  - **publicKey**: `hex string` - the unique public identifier of the validator that is used to validate digital signatures
-  - **stakedAmount**: `uint64` - the locked balance of funds the address has in micro denomination
-  - **committees**: `[]uint64` - list of chain ids the validator is staked on behalf
-  - **netAddress**: `url` - the public peer-to-peer address of the validator
-  - **maxPausedHeight**: `uint64` - the height the validator will be automatically begin unstaking if not unpaused (0 is not paused)
-  - **unstakingHeight**: `uint64` - the height the validator's locked funds are returned (0 is not unstaking)
-  - **output**: `hex string` - the 20 byte unique identifier of the account where rewards and locked funds are distributed
-  - **delegate**: `bool` - is the validator a delegate only
-  - **compound**: `bool` - is the validator automatically compounding their rewards
-- **type**: `string` - the type of results
-- **count**: `int` - length of results
-- **totalPages**: `int` - number of pages
-- **totalCount**: `int` - total number of items that exist in all pages
-
-**Example**:
-
-```
-$ curl -X POST localhost:50002/v1/query/committee \
-  -H "Content-Type: application/json" \
-  -d '{
-        "height": 1000,
-        "committee": 1
-      }'
-
-> {
-    "pageNumber": 1,
-    "perPage": 10,
-    "results": [
-      {
-        "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
-        "publicKey": "b2947db37385bb43c46244cef15f2451a446cea011fc1a2e1d52b1cecc7a50a8924e0e062555793bbd55a91a685017ee",
-        "committees": [
-          1
-        ],
-        "netAddress": "tcp://localhost",
-        "stakedAmount": 2000,
-        "maxPausedHeight": 0,
-        "unstakingHeight": 0,
-        "output": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
-        "delegate": false,
-        "compound": false
-      }
-    ],
-    "type": "validators",
-    "count": 1,
-    "totalPages": 1,
-    "totalCount": 1
-  }
 ```
 
 ## Committee-Data
@@ -889,6 +948,65 @@ $ curl -X POST localhost:50002/v1/query/params \
   "governance": {
     "daoRewardPercentage": 5
   }
+}
+```
+
+## Supply
+
+**Route:** `/v1/query/supply`
+
+**Description**: responds with the token supply information for the blockchain
+
+**HTTP Method**: `POST`
+
+**Request**:
+
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+
+**Response**:
+- **total**: `uint64` - the total tokens existing in the system (minted tokens are added, burned tokens are removed)
+- **staked**: `uint64` - the total locked tokens in the protocol (includes delegated)
+- **delegatedOnly**: `uint64` - the total locked tokens that are delegated only
+- **committeeStaked**: `array` - a list of committees and their committed (staked + delegated) tokens, sorted by stake
+  - **id**: `uint64` - the unique identifier of the committee
+  - **amount**: `uint64` - the total amount of tokens committed to this committee
+  - **poolPoints**: `array` - the list of pool share holders and their respective points
+  - **totalPoolPoints**: `uint64` - the total number of pool points for this committee
+- **committeeDelegatedOnly**: `array` - a list of committees and their delegated only tokens, sorted by stake
+  - **id**: `uint64` - the unique identifier of the committee
+  - **amount**: `uint64` - the total amount of delegated tokens to this committee
+  - **poolPoints**: `array` - the list of pool share holders and their respective points
+  - **totalPoolPoints**: `uint64` - the total number of pool points for this committee
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/query/supply \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000
+      }'
+
+> {
+  "total": 1000000000000,
+  "staked": 500000000000,
+  "delegatedOnly": 100000000000,
+  "committeeStaked": [
+    {
+      "id": 1,
+      "amount": 150000000000,
+      "poolPoints": [],
+      "totalPoolPoints": 0
+    }
+  ],
+  "committeeDelegatedOnly": [
+    {
+      "id": 1,
+      "amount": 100000000000,
+      "poolPoints": [],
+      "totalPoolPoints": 0
+    }
+  ]
 }
 ```
 
@@ -1734,6 +1852,297 @@ $ curl -X POST localhost:50002/v1/query/block-by-hash \
 }
 ```
 
+## Events By Height
+
+**Route:** `/v1/query/events-by-height`
+
+**Description**: view the events at a specific block height
+
+**HTTP Method**: `POST`
+
+**Request**:
+
+- **height**: `uint64` – the block height to query events for (optional: use 0 to read from the latest block)
+- **perPage**: `int` - the number of elements per page (the default is 10 and max is 5,000)
+- **pageNumber**: `int` - the number of the page (the default is 1)
+
+**Response**:
+- **perPage**: `int` - the number of elements per page
+- **pageNumber**: `int` - the number of the page
+- **results**: `array` - the list of result objects
+  - **eventType**: `string` - the type of the event: 'reward', 'slash', 'dex-liquidity-deposit', 'dex-liquidity-withdraw', 'dex-swap', 'order-book-swap', 'automatic-pause', 'automatic-begin-unstaking', or 'automatic-finish-unstaking'
+  - **msg**: `object` - the actual event message payload, which varies by event type:
+    - **reward**: `{ "amount": uint64 }` - amount of reward
+    - **slash**: `{ "amount": uint64 }` - amount of slash
+    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string, "points": uint64 }` - deposit amount, whether it was made on this chain or the counter, unique order identifier, and amount of points created
+    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string, "pointsBurned": uint64 }` - amount of liquidity received on local and remote chains, unique order identifier, and amount of points burned
+    - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool, "orderId": hex string }` - amounts sold/bought, direction, success status, and unique order identifier
+    - **order-book-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "data": hex string, "sellerReceiveAddress": hex string, "buyerReceiveAddress": hex string, "sellersSendAddress": hex string, "orderId": hex string }` - order book swap details including addresses and order information
+    - **automatic-pause**: `{}` - empty object
+    - **automatic-begin-unstaking**: `{}` - empty object
+    - **automatic-finish-unstaking**: `{}` - empty object
+  - **height**: `uint64` - the block height at which the event occurred
+  - **reference**: `string` - the reference for the event: 'begin_block', transaction hash, or 'end_block'
+  - **chainId**: `uint64` - the chain id associated with the event
+  - **address**: `hex string` - the address the event is indexed for
+- **type**: `string` - the type of results
+- **count**: `int` - length of results
+- **totalPages**: `int` - number of pages
+- **totalCount**: `int` - total number of items that exist in all pages
+
+```
+$ curl -X POST localhost:50002/v1/query/events-by-height \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000
+      }'
+
+> {
+  "pageNumber": 1,
+  "perPage": 10,
+  "results": [
+    {
+      "eventType": "reward",
+      "msg": {
+        "amount": 10000
+      },
+      "height": 1000,
+      "reference": "end_block",
+      "chainId": 1,
+      "address": "551f21e333012027b81701a35023efc88b864975"
+    },
+    {
+      "eventType": "dex-swap",
+      "msg": {
+        "soldAmount": 1000000,
+        "boughtAmount": 950000,
+        "localOrigin": true,
+        "success": true,
+        "orderId": "ff22f214f5f300d315a5"
+      },
+      "height": 1000,
+      "reference": "ff22f214f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
+      "chainId": 1,
+      "address": "551f21e333012027b81701a35023efc88b864975"
+    },
+    {
+      "eventType": "order-book-swap",
+      "msg": {
+        "soldAmount": 500000,
+        "boughtAmount": 475000,
+        "data": "",
+        "sellerReceiveAddress": "551f21e333012027b81701a35023efc88b864975",
+        "sellerReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+        "sellersSendAddress": "551f21e333012027b81701a35023efc88b864975",
+        "orderId": "a1b2c3d4e5f6"
+      },
+      "height": 1000,
+      "reference": "a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0",
+      "chainId": 1,
+      "address": "551f21e333012027b81701a35023efc88b864975"
+    }
+  ],
+  "type": "event-results-page",
+  "count": 3,
+  "totalPages": 1,
+  "totalCount": 3
+}
+```
+
+## Events By Address
+
+**Route:** `/v1/query/events-by-address`
+
+**Description**: view the events for a specific address
+
+**HTTP Method**: `POST`
+
+**Request**:
+
+- **address**: `hex string` – the address to query events for
+- **perPage**: `int` - the number of elements per page (the default is 10 and max is 5,000)
+- **pageNumber**: `int` - the number of the page (the default is 1)
+
+**Response**:
+- **perPage**: `int` - the number of elements per page
+- **pageNumber**: `int` - the number of the page
+- **results**: `array` - the list of result objects
+  - **eventType**: `string` - the type of the event: 'reward', 'slash', 'dex-liquidity-deposit', 'dex-liquidity-withdraw', 'dex-swap', 'order-book-swap', 'automatic-pause', 'automatic-begin-unstaking', or 'automatic-finish-unstaking'
+  - **msg**: `object` - the actual event message payload, which varies by event type:
+    - **reward**: `{ "amount": uint64 }` - amount of reward
+    - **slash**: `{ "amount": uint64 }` - amount of slash
+    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string, "points": uint64 }` - deposit amount, whether it was made on this chain or the counter, unique order identifier, and amount of points created
+    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string, "pointsBurned": uint64 }` - amount of liquidity received on local and remote chains, unique order identifier, and amount of points burned
+    - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool, "orderId": hex string }` - amounts sold/bought, direction, success status, and unique order identifier
+    - **order-book-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "data": hex string, "sellerReceiveAddress": hex string, "buyerReceiveAddress": hex string, "sellersSendAddress": hex string, "orderId": hex string }` - order book swap details including addresses and order information
+    - **automatic-pause**: `{}` - empty object
+    - **automatic-begin-unstaking**: `{}` - empty object
+    - **automatic-finish-unstaking**: `{}` - empty object
+  - **height**: `uint64` - the block height at which the event occurred
+  - **reference**: `string` - the reference for the event: 'begin_block', transaction hash, or 'end_block'
+  - **chainId**: `uint64` - the chain id associated with the event
+  - **address**: `hex string` - the address the event is indexed for
+- **type**: `string` - the type of results
+- **count**: `int` - length of results
+- **totalPages**: `int` - number of pages
+- **totalCount**: `int` - total number of items that exist in all pages
+
+```
+$ curl -X POST localhost:50002/v1/query/events-by-address \
+  -H "Content-Type: application/json" \
+  -d '{
+        "address": "551f21e333012027b81701a35023efc88b864975"
+      }'
+
+> {
+  "pageNumber": 1,
+  "perPage": 10,
+  "results": [
+    {
+      "eventType": "reward",
+      "msg": {
+        "amount": 10000
+      },
+      "height": 1000,
+      "reference": "end_block",
+      "chainId": 1,
+      "address": "551f21e333012027b81701a35023efc88b864975"
+    },
+    {
+      "eventType": "dex-swap",
+      "msg": {
+        "soldAmount": 1000000,
+        "boughtAmount": 950000,
+        "localOrigin": true,
+        "success": true,
+        "orderId": "ff22f214f5f300d315a5"
+      },
+      "height": 1000,
+      "reference": "ff22f214f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
+      "chainId": 1,
+      "address": "551f21e333012027b81701a35023efc88b864975"
+    },
+    {
+      "eventType": "order-book-swap",
+      "msg": {
+        "soldAmount": 500000,
+        "boughtAmount": 475000,
+        "data": "0x",
+        "sellerReceiveAddress": "551f21e333012027b81701a35023efc88b864975",
+        "sellerReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+        "sellersSendAddress": "551f21e333012027b81701a35023efc88b864975",
+        "orderId": "a1b2c3d4e5f6"
+      },
+      "height": 1000,
+      "reference": "a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0",
+      "chainId": 1,
+      "address": "551f21e333012027b81701a35023efc88b864975"
+    }
+  ],
+  "type": "event-results-page",
+  "count": 3,
+  "totalPages": 1,
+  "totalCount": 3
+}
+```
+
+## Events By Chain
+
+**Route:** `/v1/query/events-by-chain`
+
+**Description**: view the events for a specific chain id
+
+**HTTP Method**: `POST`
+
+**Request**:
+
+- **chainId**: `uint64` – the chain id to query events for
+- **perPage**: `int` - the number of elements per page (the default is 10 and max is 5,000)
+- **pageNumber**: `int` - the number of the page (the default is 1)
+
+**Response**:
+- **perPage**: `int` - the number of elements per page
+- **pageNumber**: `int` - the number of the page
+- **results**: `array` - the list of result objects
+  - **eventType**: `string` - the type of the event: 'reward', 'slash', 'dex-liquidity-deposit', 'dex-liquidity-withdraw', 'dex-swap', 'order-book-swap', 'automatic-pause', 'automatic-begin-unstaking', or 'automatic-finish-unstaking'
+  - **msg**: `object` - the actual event message payload, which varies by event type:
+    - **reward**: `{ "amount": uint64 }` - amount of reward
+    - **slash**: `{ "amount": uint64 }` - amount of slash
+    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string, "points": uint64 }` - deposit amount, whether it was made on this chain or the counter, unique order identifier, and amount of points created
+    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string, "pointsBurned": uint64 }` - amount of liquidity received on local and remote chains, unique order identifier, and amount of points burned
+    - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool, "orderId": hex string }` - amounts sold/bought, direction, success status, and unique order identifier
+    - **order-book-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "data": hex string, "sellerReceiveAddress": hex string, "buyerReceiveAddress": hex string, "sellersSendAddress": hex string, "orderId": hex string }` - order book swap details including addresses and order information
+    - **automatic-pause**: `{}` - empty object
+    - **automatic-begin-unstaking**: `{}` - empty object
+    - **automatic-finish-unstaking**: `{}` - empty object
+  - **height**: `uint64` - the block height at which the event occurred
+  - **reference**: `string` - the reference for the event: 'begin_block', transaction hash, or 'end_block'
+  - **chainId**: `uint64` - the chain id associated with the event
+  - **address**: `hex string` - the address the event is indexed for
+- **type**: `string` - the type of results
+- **count**: `int` - length of results
+- **totalPages**: `int` - number of pages
+- **totalCount**: `int` - total number of items that exist in all pages
+
+```
+$ curl -X POST localhost:50002/v1/query/events-by-chain \
+  -H "Content-Type: application/json" \
+  -d '{
+        "chainId": 1
+      }'
+
+> {
+  "pageNumber": 1,
+  "perPage": 10,
+  "results": [
+    {
+      "eventType": "reward",
+      "msg": {
+        "amount": 10000
+      },
+      "height": 1000,
+      "reference": "end_block",
+      "chainId": 1,
+      "address": "551f21e333012027b81701a35023efc88b864975"
+    },
+    {
+      "eventType": "dex-swap",
+      "msg": {
+        "soldAmount": 1000000,
+        "boughtAmount": 950000,
+        "localOrigin": true,
+        "success": true,
+        "orderId": "ff22f214f5f300d315a5"
+      },
+      "height": 1000,
+      "reference": "ff22f214f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
+      "chainId": 1,
+      "address": "551f21e333012027b81701a35023efc88b864975"
+    },
+    {
+      "eventType": "order-book-swap",
+      "msg": {
+        "soldAmount": 500000,
+        "boughtAmount": 475000,
+        "data": "",
+        "sellerReceiveAddress": "551f21e333012027b81701a35023efc88b864975",
+        "sellerReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+        "sellersSendAddress": "551f21e333012027b81701a35023efc88b864975",
+        "orderId": "a1b2c3d4e5f6"
+      },
+      "height": 1000,
+      "reference": "a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0",
+      "chainId": 1,
+      "address": "551f21e333012027b81701a35023efc88b864975"
+    }
+  ],
+  "type": "event-results-page",
+  "count": 3,
+  "totalPages": 1,
+  "totalCount": 3
+}
+```
+
 ## Transactions By Height
 
 **Route:** `/v1/query/txs-by-height`
@@ -2126,14 +2535,14 @@ $ curl -X POST localhost:50002/v1/query/tx-by-hash \
 
 **Route:** `/v1/query/order`
 
-**Description**: view a sell order by its unique idnetifier
+**Description**: view a sell order by its unique identifier
 
 **HTTP Method**: `POST`
 
 **Request**:
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
-- **chainId**: `uint64` – the unique identifier of the committee
+- **committee**: `uint64` – the unique identifier of the committee
 - **orderId**: `hex-string` – the unique identifier of the order
 
 **Response**:
@@ -2152,7 +2561,7 @@ $ curl -X POST localhost:50002/v1/query/tx-by-hash \
 $ curl -X POST localhost:50002/v1/query/order \
   -H "Content-Type: application/json" \
   -d '{
-        "chainId": 1,
+        "committee": 1,
         "orderId": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
         "height": 1000
       }'
@@ -2174,53 +2583,262 @@ $ curl -X POST localhost:50002/v1/query/order \
 
 **Route:** `/v1/query/orders`
 
-**Description**: view all sell orders for a counter-asset pair
+**Description**: view all sell orders for a counter-asset pair with optional filters and pagination
 
 **HTTP Method**: `POST`
 
 **Request**:
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
-- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+- **committee**: `uint64` – the unique identifier of the committee to filter by (optional: use 0 to get all committees)
+- **pageNumber**: `int` – the page number to retrieve (optional: starts at 1)
+- **perPage**: `int` – the number of orders per page (optional: defaults to system default)
 
 **Response**:
-- **orders**: `object` - the swap order book from the 'root chain' for the 'nested chain'
-  - **chainId**: `uint64` - the unique identifier of the committee
-  - **orders**: `sell order array` - the actual list of sell orders
-    - **id**: `hex string` - the 20 byte identifier of the order
-    - **committee**: `uint64` - the id of the committee that is in-charge of escrow for the swap
-    - **data**: `hex-string` - a generic data field which can allow a committee to execute specific functionality for the swap
-    - **amountForSale**: `uint64` - amount of 'root-chain-asset' for sale
-    - **requestedAmount**: `uint64` - amount of 'counter-asset' the seller of the 'root-chain-asset' receives
-    - **sellerReceiveAddress**: `hex-string` - the external chain address to receive the 'counter-asset'
-    - **buyerSendAddress**: `hex-string` - if reserved (locked): the address the buyer will be transferring the funds from
-    - **buyerChainDeadline**: `hex-string` - the external chain height deadline to send the 'tokens' to SellerReceiveAddress
-    - **sellersSendAddress**: `hex-string` - the signing address of seller who is selling the CNPY
+- **pageNumber**: `int` - the current page number
+- **perPage**: `int` - the number of items per page
+- **results**: `sell order array` - the paginated list of sell orders
+  - **id**: `hex string` - the 20 byte identifier of the order
+  - **committee**: `uint64` - the id of the committee that is in-charge of escrow for the swap
+  - **data**: `hex-string` - a generic data field which can allow a committee to execute specific functionality for the swap
+  - **amountForSale**: `uint64` - amount of 'root-chain-asset' for sale
+  - **requestedAmount**: `uint64` - amount of 'counter-asset' the seller of the 'root-chain-asset' receives
+  - **sellerReceiveAddress**: `hex-string` - the external chain address to receive the 'counter-asset'
+  - **buyerSendAddress**: `hex-string` - if reserved (locked): the address the buyer will be transferring the funds from
+  - **buyerChainDeadline**: `hex-string` - the external chain height deadline to send the 'tokens' to SellerReceiveAddress
+  - **sellersSendAddress**: `hex-string` - the signing address of seller who is selling the CNPY
+- **type**: `string` - the type of paginated results ("orders")
+- **count**: `int` - the number of items in this page
+- **totalPages**: `int` - the total number of pages available
+- **totalCount**: `int` - the total number of orders matching the filters
 
-
+**Example 1: Basic pagination**
 ```
 $ curl -X POST localhost:50002/v1/query/orders \
   -H "Content-Type: application/json" \
   -d '{
-        "chainId": 1,
-        "height": 1000
+        "pageNumber": 1,
+        "perPage": 10
       }'
 
 > {
-    "chainID": 1,
+    "pageNumber": 1,
+    "perPage": 10,
+    "results": [
+        {
+            "id": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
+            "committee": 1,
+            "amountForSale": 1000000000000,
+            "requestedAmount": 2000000000000,
+            "sellerReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe"
+        },
+        {
+            "id": "ccd2f425f6f411e426b67692ddc1f21gf2776ga1d9g1a777g8d69bcdbacddfec",
+            "committee": 1,
+            "amountForSale": 500000000000,
+            "requestedAmount": 1000000000000,
+            "sellerReceiveAddress": "613d1c4e7dde2d7g275bb6647c3cb3dc0f91d822",
+            "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
+            "buyerChainDeadline": 17585,
+            "sellersSendAddress": "cc54d57355dfg26g3562b557dfb122gd2b3feegh"
+        }
+    ],
+    "type": "orders",
+    "count": 2,
+    "totalPages": 1,
+    "totalCount": 2
+}
+```
+
+**Example 2: Filter by committee with pagination**
+```
+$ curl -X POST localhost:50002/v1/query/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+        "committee": 1,
+        "pageNumber": 1,
+        "perPage": 20
+      }'
+```
+
+## Dex Batch
+**Route:** `/v1/query/dex-batch`
+**Description**: view the locked dex batch for a committee or all dex batches
+**HTTP Method**: `POST`
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+- **points**: `bool` - return all point holders for the liquidity pool and total points
+**Response**:
+- **committee**: `uint64` - the id of the 'counter asset'
+- **receiptHash**: `hex-string` - the hash of the counter batch this locked batch corresponds to
+- **orders**: `dex limit order array` - the list of dex limit orders
+  - **amountForSale**: `uint64` - amount of asset for sale
+  - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
+  - **address**: `hex string` - the address where the funds are transferred from and to
+  - **orderId**: `hex string` - unique identifier for the order (20 bytes, derived from transaction hash)
+- **deposits**: `dex deposit array` - the list of dex limit orders
+  - **amount**: `uint64` - amount of asset being deposited
+  - **address**: `hex string` - the address where the funds are transferred from
+  - **orderId**: `hex string` - unique identifier for the deposit (20 bytes, derived from transaction hash)
+- **withdraws**: `dex withdraw array` - the list of dex limit orders
+  - **percent**: `uint64` - the percent of liquidity being withdrawn
+  - **address**: `hex string` - the address where the funds are transferred from
+  - **orderId**: `hex string` - unique identifier for the withdrawal (20 bytes, derived from transaction hash)
+- **poolPoints**: `array` - a list of pool points
+  - **address**: `hex-string` - the recipient address of the points
+  - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
+- **poolSize**: `uint64` - contains the current balance of the liquidity pool
+- **counterPoolSize**: `uint64` - the last computed 'counter pool' size of the liquidity pool on the counter chain
+- **receipts**: `uint64 array` - the amount distributed (dY) for each order
+```
+$ curl -X POST localhost:50002/v1/query/dex-batch \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000,
+        "id": 1
+      }'
+> {
+    "committee": 1,
+    "receiptHash": "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78",
     "orders": [
         {
-        "id": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
-        "committee": "1",
-        "data": "",
-        "amountForSale": 1000000000000,
-        "requestedAmount": 2000000000000,
-        "sellersReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
-        "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
-        "buyerChainDeadline": 17585,
-        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe"
+            "amountForSale": 1000000000000,
+            "requestedAmount": 2000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "a1b2c3d4e5f67890abcd"
+        }
+    ],
+    "deposits": [
+        {
+            "amount": 1000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "1234567890abcdef1234"
+        }
+    ],
+    "withdraws": [
+        {
+            "amount": 100,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "fedcba0987654321fedc"
+        }
+    ],
+    "poolPoints": [
+      {
+        "address": "551f21e333012027b81701a35023efc88b864975",
+        "points": 100
       }
-    ]
+    ],
+    "totalPoolPoints": 100,
+    "poolSize": 5000000000000,
+    "counterPoolSize": 3000000000000,
+    "receipts": [1000000, 0, 950000]
+}
+```
+
+## Next Dex Batch
+**Route:** `/v1/query/next-dex-batch`
+**Description**: view the up-next dex batch for a committee or all upcoming dex batches
+**HTTP Method**: `POST`
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+  **Response**:
+- **committee**: `uint64` - the id of the 'counter asset'
+- **receiptHash**: `hex-string` - the hash of the counter batch this locked batch corresponds to
+- **orders**: `dex limit order array` - the list of dex limit orders
+  - **amountForSale**: `uint64` - amount of asset for sale
+  - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
+  - **address**: `hex string` - the address where the funds are transferred from and to
+  - **orderId**: `hex string` - unique identifier for the order (20 bytes, derived from transaction hash)
+- **deposits**: `dex deposit array` - the list of dex limit orders
+  - **amount**: `uint64` - amount of asset being deposited
+  - **address**: `hex string` - the address where the funds are transferred from
+  - **orderId**: `hex string` - unique identifier for the deposit (20 bytes, derived from transaction hash)
+- **withdraws**: `dex withdraw array` - the list of dex limit orders
+  - **percent**: `uint64` - the percent of liquidity being withdrawn
+  - **address**: `hex string` - the address where the funds are transferred from
+  - **orderId**: `hex string` - unique identifier for the withdrawal (20 bytes, derived from transaction hash)
+- **poolPoints**: `array` - a list of pool points
+  - **address**: `hex-string` - the recipient address of the points
+  - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
+- **poolSize**: `uint64` - contains the current balance of the liquidity pool
+- **counterPoolSize**: `uint64` - the last computed 'counter pool' size of the liquidity pool on the counter chain
+- **receipts**: `uint64 array` - the amount distributed (dY) for each order
+```
+$ curl -X POST localhost:50002/v1/query/next-dex-batch \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000,
+        "id": 1
+      }'
+> {
+    "committee": 1,
+    "receiptHash": "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78",
+    "orders": [
+        {
+            "amountForSale": 1000000000000,
+            "requestedAmount": 2000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "a1b2c3d4e5f67890abcd"
+        }
+    ],
+    "deposits": [
+        {
+            "amount": 1000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "1234567890abcdef1234"
+        }
+    ],
+    "withdraws": [
+        {
+            "amount": 100,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "fedcba0987654321fedc"
+        }
+    ],
+    "poolPoints": [
+      {
+        "address": "551f21e333012027b81701a35023efc88b864975",
+        "points": 100
+      }
+    ],
+    "totalPoolPoints": 100,
+    "poolSize": 5000000000000,
+    "counterPoolSize": 3000000000000,
+    "receipts": [1000000, 0, 950000]
+}
+```
+
+## Dex Price
+**Route:** `/v1/query/dex-price`
+**Description**: retrieves the latest dex price for a committee or all dex prices
+**HTTP Method**: `POST`
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+**Response**:
+- **chainId**: `uint64` - the id of the local chain
+- **remoteChainId**: `uint64` - the id of the remote chain
+- **localPool**: `uint64` - the current balance of the local liquidity pool
+- **remotePool**: `uint64` - the current balance of the remote liquidity pool
+- **e6ScaledPrice**: `uint64` - the price scaled by 1e6 (1,000,000)
+```
+$ curl -X POST localhost:50002/v1/query/dex-price \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000,
+        "id": 1
+      }'
+> {
+    "chainId": 1,
+    "remoteChainId": 2,
+    "localPool": 5000000000000,
+    "remotePool": 3000000000000,
+    "e6ScaledPrice": 600000
 }
 ```
 
@@ -2923,13 +3541,14 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-import-raw \
 
 **Route:** `/v1/admin/keystore-delete`
 
-**Description**: removes a key from the keystore using either the address or nickname
+**Description**: removes a key from the keystore using either the address or nickname after validating the password
 
 **HTTP Method**: `POST`
 
 **Request**:
 - **nickname**: `string` - the nickname associated with the key
 - **address**: `string` - the address associated with the key
+- **password**: `string` - **(required)** the plain-text password used to encrypt the key
 
 **Response**: `hex-string` - the 20 byte address of the newly imported key
 
@@ -2938,7 +3557,8 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-import-raw \
 $ curl -X POST http://localhost:50003/v1/admin/keystore-delete \
   -H "Content-Type: application/json" \
   -d '{
-    "nickname":"my_key_2"
+    "nickname":"my_key_2",
+    "password":"my_password"
     }'
 
 > "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
@@ -3465,6 +4085,159 @@ $ curl -X POST http://localhost:50003/v1/admin/tx-delete-order \
   "signature": {
     "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
     "signature": "8043f0c6827aea8449a238811af800dec35cc78222cd3f3b0c830323c22902920f7b19d963d6ff76165bf3754f6dfb6504ddd20368b32169720880fd928e7ccbbfd628cd4c2c065c280fa51bc2d4b0b23d88fe9ffa6088b5d19e1b3e80463783"
+  },
+  "time": 1749644810582870,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Dex Limit Order
+
+**Route:** `/v1/admin/tx-dex-limit-order`
+
+**Description**: generates/submits a DEX limit order transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the from address
+- **amount**: `uint64` - the amount to sell in smallest denomination
+- **receiveAmount**: `uint64` - the amount to receive in smallest denomination
+- **committees**: `string` - the committee id of the counter asset
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageDexLimitOrder)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-dex-limit-order \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "amount": 1000000,
+    "receiveAmount": 2000000,
+    "committees":"1",
+    "fee":0,
+    "submit":false,
+    "password":"test"
+    }'
+  
+> {
+  "type": "dexLimitOrder",
+  "msg": {
+    "chainID": 1,
+    "amountForSale": 1000000,
+    "requestedAmount": 2000000,
+    "sellerReceiveAddress": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  },
+  "signature": {
+    "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
+    "signature": "835dfa9e5a370233369d1e955620a1512f9a5c31702e718e52d6cc60f40a91a0f142ae8e35c1dadd3213b17f881fbe6413c64103e27a7336296d963daf9a6e91cc9625d470248db009a9cde63c55cb6f4282f96b936bde547756e85e9ed84bb5"
+  },
+  "time": 1749644810582870,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Dex Liquidity Deposit
+
+**Route:** `/v1/admin/tx-dex-liquidity-deposit`
+
+**Description**: generates/submits a DEX liquidity deposit transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the from address
+- **amount**: `uint64` - the amount to deposit in smallest denomination
+- **committees**: `string` -  the committee id of the counter asset
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageDexLiquidityDeposit)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-dex-liquidity-deposit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "amount": 1000000,
+    "committees":"1",
+    "fee":0,
+    "submit":false,
+    "password":"test"
+    }'
+  
+> {
+  "type": "dexLiquidityDeposit",
+  "msg": {
+    "chainID": 1,
+    "amount": 1000000,
+    "address": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  },
+  "signature": {
+    "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
+    "signature": "835dfa9e5a370233369d1e955620a1512f9a5c31702e718e52d6cc60f40a91a0f142ae8e35c1dadd3213b17f881fbe6413c64103e27a7336296d963daf9a6e91cc9625d470248db009a9cde63c55cb6f4282f96b936bde547756e85e9ed84bb5"
+  },
+  "time": 1749644810582870,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Dex Liquidity Withdraw
+
+**Route:** `/v1/admin/tx-dex-liquidity-withdraw`
+
+**Description**: generates/submits a DEX liquidity withdraw transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the from address
+- **percent**: `int` - the percentage of liquidity to withdraw (1-100)
+- **committees**: `string` - the committee id of the counter asset
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageDexLiquidityWithdraw)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-dex-liquidity-withdraw \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "percent": 50,
+    "committees":"1",
+    "fee":0,
+    "submit":false,
+    "password":"test"
+    }'
+  
+> {
+  "type": "dexLiquidityWithdraw",
+  "msg": {
+    "chainID": 1,
+    "percent": 50,
+    "address": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  },
+  "signature": {
+    "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
+    "signature": "835dfa9e5a370233369d1e955620a1512f9a5c31702e718e52d6cc60f40a91a0f142ae8e35c1dadd3213b17f881fbe6413c64103e27a7336296d963daf9a6e91cc9625d470248db009a9cde63c55cb6f4282f96b936bde547756e85e9ed84bb5"
   },
   "time": 1749644810582870,
   "createdHeight": 196596,
@@ -4277,11 +5050,9 @@ Jun 11 09:47:09.521 INFO: Reset BFT (NEW_HEIGHT)
 ## Golang Profiling Debug
 
 **Route:**
-- DebugBlockedRoutePath = "/debug/blocked"
-- DebugHeapRoutePath    = "/debug/heap"
-- DebugCPURoutePath     = "/debug/cpu"
-- DebugRoutineRoutePath = "/debug/routine"
+- /debug/pprof
+- /debug/pprof/*name
 
-**Description**: returns an HTTP handler that serves the named profile. Available profiles can be found in [runtime/pprof.Profile]. See https://pkg.go.dev/net/http/pprof
+**Description**: serves the Go pprof index and named pprof handlers. These routes are exposed on the profiling server bound to `ProfilingPort`, not the main RPC port. Available profiles can be found in `net/http/pprof`. See https://pkg.go.dev/net/http/pprof
 
 **HTTP Method**: `GET`

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/canopy-network/canopy/lib/crypto"
 
+	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -23,6 +23,7 @@ const (
 	TxResultsPageName      = "tx-results-page"      // the name of a page of transactions
 	PendingResultsPageName = "pending-results-page" //  the name of a page of mempool pending transactions
 	FailedTxsPageName      = "failed-txs-page"      // the name of a page of failed transactions
+	EventsPageName         = "events-page"
 )
 
 // Messages must be pre-registered for Transaction JSON unmarshalling
@@ -183,6 +184,8 @@ func (x *Transaction) Sign(pk crypto.PrivateKeyI) (err ErrorI) {
 type jsonTx struct {
 	Type          string          `json:"type,omitempty"`
 	Msg           json.RawMessage `json:"msg,omitempty"`
+	MsgTypeURL    string          `json:"msgTypeUrl,omitempty"`
+	MsgBytes      string          `json:"msgBytes,omitempty"`
 	Signature     *Signature      `json:"signature,omitempty"`
 	Time          uint64          `json:"time,omitempty"`
 	CreatedHeight uint64          `json:"createdHeight,omitempty"`
@@ -194,31 +197,26 @@ type jsonTx struct {
 
 // MarshalJSON() implements the json.Marshaller interface for the Transaction type
 func (x Transaction) MarshalJSON() (jsonBytes []byte, err error) {
-	// convert the payload from a proto.Any to a proto.Message
-	payload, err := FromAny(x.Msg)
-	// if an error occurred during the conversion
-	if err != nil {
-		// exit with error
-		return
+	if x.Msg == nil {
+		return nil, fmt.Errorf("transaction message is nil")
 	}
-	// cast the payload to a Message interface type
-	msg, castSucceeded := payload.(MessageI)
-	// if the cast failed
-	if !castSucceeded {
-		// exit with conversion error
-		return nil, fmt.Errorf("couldn't convert %T to type MessageI", payload)
-	}
-	// convert the message to json bytes
-	messageRawJSON, err := MarshalJSON(msg)
-	// if an error occurred during the conversion
+	var (
+		messageRawJSON json.RawMessage
+		msgTypeURL     string
+		msgBytes       string
+	)
+	// convert the payload from a proto.Any to a JSON object when possible
+	messageRawJSON, err = MarshalAnypbJSON(x.Msg)
 	if err != nil {
-		// exit with error
-		return
+		msgTypeURL = x.Msg.TypeUrl
+		msgBytes = BytesToString(x.Msg.Value)
 	}
 	// exit by converting a new json object into json bytes
 	return json.Marshal(jsonTx{
 		Type:          x.MessageType,
 		Msg:           messageRawJSON,
+		MsgTypeURL:    msgTypeURL,
+		MsgBytes:      msgBytes,
 		Signature:     x.Signature,
 		Time:          x.Time,
 		CreatedHeight: x.CreatedHeight,
@@ -237,12 +235,54 @@ func (x *Transaction) UnmarshalJSON(jsonBytes []byte) (err error) {
 	if err = json.Unmarshal(jsonBytes, j); err != nil {
 		return err
 	}
+	// first try unmarshalling using the global plugin registration
+	if len(j.Msg) > 0 {
+		anyMsg, e := AnyFromJSONForMessageType(j.Type, j.Msg)
+		if e == nil {
+			*x = Transaction{
+				MessageType:   j.Type,
+				Msg:           anyMsg,
+				Signature:     j.Signature,
+				CreatedHeight: j.CreatedHeight,
+				Time:          j.Time,
+				Fee:           j.Fee,
+				Memo:          j.Memo,
+				NetworkId:     j.NetworkId,
+				ChainId:       j.ChainId,
+			}
+			return nil
+		} else if e.Code() != CodeUnknownMsgName {
+			return e
+		}
+	}
 	// get the type of the message payload based on the 'message types' that were globally registered upon app start
 	m, found := RegisteredMessages[j.Type]
 	// if the message type is not found among the registered messages
 	if !found {
-		// exit with error
-		return ErrUnknownMessageName(j.Type)
+		if j.MsgTypeURL == "" && j.MsgBytes == "" {
+			// exit with error
+			return ErrUnknownMessageName(j.Type)
+		}
+		var msgValue []byte
+		if j.MsgBytes != "" {
+			msgValue, err = StringToBytes(j.MsgBytes)
+			if err != nil {
+				return err
+			}
+		}
+		// populate the underlying transaction object using raw any bytes
+		*x = Transaction{
+			MessageType:   j.Type,
+			Msg:           &anypb.Any{TypeUrl: j.MsgTypeURL, Value: msgValue},
+			Signature:     j.Signature,
+			CreatedHeight: j.CreatedHeight,
+			Time:          j.Time,
+			Fee:           j.Fee,
+			Memo:          j.Memo,
+			NetworkId:     j.NetworkId,
+			ChainId:       j.ChainId,
+		}
+		return nil
 	}
 	// create a new instance of the message
 	msg := m.New()
@@ -329,6 +369,60 @@ func (x *TxResult) UnmarshalJSON(jsonBytes []byte) (err error) {
 	}
 	// exit
 	return
+}
+
+// APPLY TXS RESULTS CODE BELOW
+
+// ApplyBlockResults() represents the information returned by the ApplyTransactions function
+type ApplyBlockResults struct {
+	// included
+	Txs       [][]byte    // the bytes of the transactions 'included' in the block
+	Results   []*TxResult // the results of the transactions 'included' in the block
+	ResultsBz [][]byte    // the bytes of the transaction results 'included' in the block
+	Events    []*Event    // the events of the transactions 'included' in the block
+	TxRoot    []byte      // the root of the 'included' transaction results
+	Count     int         // the count of transactions 'included' in the block
+	BlockSize uint64      // the size of the current block
+	LargestTx uint64      // the size of the largest transaction (for metrics)
+	// excluded
+	Oversized []*TxResult // the results of the transactions 'excluded' from the block due to block size
+	Failed    []*FailedTx // the results of the failed transactions 'excluded' from the block
+}
+
+// Add() adds a valid transaction to the results
+func (a *ApplyBlockResults) Add(tx, txResult []byte, result *TxResult, events []*Event, oversized bool) {
+	if oversized {
+		a.Oversized = append(a.Oversized, result)
+		return
+	}
+	a.Results = append(a.Results, result)
+	a.Events = append(a.Events, events...)
+	a.Txs = append(a.Txs, tx)
+	a.ResultsBz = append(a.ResultsBz, txResult)
+	a.Count++
+	txSize := uint64(len(tx))
+	a.BlockSize += txSize
+	if txSize > a.LargestTx {
+		a.LargestTx = txSize
+	}
+}
+
+// AddFailed() adds a failed transaction to the results
+func (a *ApplyBlockResults) AddFailed(f *FailedTx) {
+	a.Failed = append(a.Failed, f)
+}
+
+// AddEvent() adds a failed transaction to the results
+func (a *ApplyBlockResults) AddEvent(e ...*Event) {
+	a.Events = append(a.Events, e...)
+}
+
+// TransactionRoot() returns the transaction results root
+func (a *ApplyBlockResults) TransactionRoot() (root []byte, err ErrorI) {
+	if a.TxRoot == nil {
+		a.TxRoot, _, err = MerkleTree(a.ResultsBz)
+	}
+	return a.TxRoot, err
 }
 
 // SIGNATURE CODE BELOW
