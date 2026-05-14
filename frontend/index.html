@@ -9,7 +9,7 @@
 <style>
 /* ══════════════════════════════════════════════
    THEME
-══════════════════════════════════════════════ */
+ */
 [data-theme="dark"] {
   --bg:       #07090d;
   --bg2:      #0b0e16;
@@ -183,8 +183,8 @@ body{
 .chip b{color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600}
 
 /* ══ CARD ══ */
-.card{background:var(--surface);border:1px solid var(--border);padding:20px;margin-bottom:14px;position:relative;transition:background .25s,border-color .25s}
-[data-theme="dark"] .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,var(--gdim),transparent 65%)}
+.card{background:var(--surface);border:1px solid var(--border);padding:0;margin-bottom:14px;position:relative;transition:background .25s,border-color .25s;overflow:hidden}
+[data-theme="dark"] .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--green),transparent);opacity:.25}
 .ct{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;padding-bottom:11px;border-bottom:1px solid var(--border)}
 
 /* ══ FORM ══ */
@@ -234,20 +234,6 @@ body{
 
 /* ══ MARKETS GRID ══ */
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:13px}
-.mcard{background:var(--surface);border:1px solid var(--border);padding:16px;position:relative;overflow:hidden;transition:border-color .15s,transform .15s,box-shadow .15s}
-.mcard:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 28px var(--shadow)}
-[data-theme="dark"] .mcard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--green),transparent);opacity:.25}
-.mid{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:2px}
-.mq{font-size:13px;font-weight:600;line-height:1.45;margin:8px 0 11px}
-.mmeta{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text2);display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
-.pools{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px}
-.pbar{padding:9px 11px}
-.pyes{background:var(--gdim);border:1px solid rgba(0,232,122,.13)}
-.pno{background:var(--rdim);border:1px solid rgba(255,61,90,.13)}
-.plbl{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text3);letter-spacing:1.5px;margin-bottom:3px}
-.pval{font-family:'JetBrains Mono',monospace;font-size:13px}
-.pyes .pval{color:var(--green)}.pno .pval{color:var(--red)}
-.mfooter{display:flex;gap:7px;flex-wrap:wrap}
 
 /* ══ KEY STATUS ══ */
 .key-status{display:flex;align-items:center;gap:9px;padding:10px 13px;border:1px solid var(--border2);font-family:'JetBrains Mono',monospace;font-size:11px;margin-bottom:14px;color:var(--text2)}
@@ -307,6 +293,55 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
 .bni.active{color:var(--green)}
 .bni svg{width:17px;height:17px}
 
+/* ══ PREMIUM CARD DESIGN ══ */
+.card-head { padding: 14px 16px 10px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border); }
+.question { font-family: 'Unbounded', sans-serif; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.4; flex: 1; }
+.status-pill { flex-shrink: 0; display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 1px; font-size: 9px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; }
+.status-pill .dot { width: 5px; height: 5px; border-radius: 50%; }
+.pill-open { background: rgba(0,232,122,0.08); color: var(--green); border: 1px solid rgba(0,232,122,0.2); }
+.pill-open .dot { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+.pill-expired { background: rgba(255,154,60,0.08); color: var(--yellow); border: 1px solid rgba(255,154,60,0.2); }
+.pill-expired .dot { background: var(--yellow); }
+.pill-disputed { background: rgba(255,61,90,0.08); color: var(--red); border: 1px solid rgba(255,61,90,0.2); }
+.pill-disputed .dot { background: var(--red); }
+.pill-finalized { background: rgba(120,120,120,0.08); color: #888; border: 1px solid rgba(120,120,120,0.2); }
+.pill-finalized .dot { background: #888; }
+.prob-section { padding: 12px 16px 10px; }
+.prob-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+.prob-label { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); }
+.prob-values { display: flex; gap: 14px; }
+.prob-yes { font-family: 'Unbounded', sans-serif; font-size: 20px; font-weight: 800; color: var(--green); letter-spacing: -0.03em; }
+.prob-no { font-family: 'Unbounded', sans-serif; font-size: 20px; font-weight: 800; color: var(--red); letter-spacing: -0.03em; }
+.bar-track { height: 4px; background: rgba(255,255,255,0.05); border-radius: 0; overflow: hidden; display: flex; }
+.bar-yes { height: 100%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+.bar-no { height: 100%; background: var(--red); flex: 1; }
+.shares-row { display: flex; gap: 6px; padding: 0 16px 12px; }
+.share-chip { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border: 1px solid; border-radius: 1px; font-size: 11px; }
+.chip-yes { background: rgba(0,232,122,0.08); border-color: rgba(0,232,122,0.2); color: var(--green); }
+.chip-no { background: rgba(255,61,90,0.08); border-color: rgba(255,61,90,0.2); color: var(--red); }
+.chip-label { font-size: 9px; letter-spacing: 0.1em; opacity: 0.7; }
+.chip-val { font-weight: 500; font-size: 12px; }
+.card-foot { padding: 9px 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.meta { display: flex; gap: 16px; }
+.meta-item { display: flex; flex-direction: column; gap: 2px; }
+.meta-lbl { font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); }
+.meta-val { font-size: 11px; color: var(--text2); font-weight: 400; }
+.meta-val.green { color: var(--green); }
+.market-id { font-size: 9px; color: var(--text3); letter-spacing: 0.05em; }
+.bet-row { display: flex; gap: 6px; padding: 0 16px 14px; }
+.btn-yes, .btn-no { flex: 1; padding: 9px 0; border: 1px solid; background: transparent; border-radius: 1px; font-family: 'Unbounded', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.btn-yes { border-color: rgba(0,232,122,0.4); color: var(--green); }
+.btn-yes:hover { background: rgba(0,232,122,0.12); }
+.btn-no { border-color: rgba(255,61,90,0.4); color: var(--red); }
+.btn-no:hover { background: rgba(255,61,90,0.12); }
+.resolver-banner { margin: 0 16px 12px; padding: 8px 12px; background: rgba(255,154,60,0.06); border: 1px solid rgba(255,154,60,0.2); border-radius: 1px; display: flex; align-items: center; gap: 8px; }
+.resolver-banner .text { font-size: 10px; color: var(--yellow); letter-spacing: 0.05em; line-height: 1.4; }
+.winner-banner { margin: 0 16px 12px; padding: 10px 12px; background: rgba(0,232,122,0.05); border: 1px solid rgba(0,232,122,0.15); border-radius: 1px; display: flex; align-items: center; justify-content: space-between; }
+.winner-label { font-size: 9px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; }
+.winner-val { font-family: 'Unbounded', sans-serif; font-size: 15px; font-weight: 800; color: var(--green); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
 /* ══ RESPONSIVE ══ */
 @media(max-width:768px){
   .sidebar{display:none}
@@ -323,6 +358,60 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
   .btn{width:100%;justify-content:center}
   .otoggle{grid-template-columns:1fr}
 }
+
+/* ═══════════════════════════════════
+   PREMIUM THEME OVERRIDE
+   Colour palette & fonts from the
+   reference design – safe overlay
+ */
+[data-theme="dark"] {
+  --bg:       #080c0a;
+  --bg2:      #0c100d;
+  --surface:  #0d1410;
+  --surf2:    #111a15;
+  --border:   #1a2a1e;
+  --border2:  #243528;
+  --text:     #e8f0ea;
+  --text2:    #7a9a82;
+  --text3:    #3a5a42;
+  --green:    #00e87a;
+  --gdim:     rgba(0,232,122,0.07);
+  --gglow:    rgba(0,232,122,0.22);
+  --red:      #ff3d5a;
+  --rdim:     rgba(255,61,90,0.07);
+  --yellow:   #ffcc44;
+  --ydim:     rgba(255,204,68,0.08);
+  --cyan:     #22d3ee;
+  --cdim:     rgba(34,211,238,0.07);
+}
+
+/* premium body background effects */
+[data-theme="dark"] body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,232,122,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,232,122,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+[data-theme="dark"] body::after {
+  background-image: none; /* disable scanlines */
+}
+
+/* Premium fonts override */
+.question, .ph-title, .obtn, .bal-num, .prob-yes, .prob-no, .winner-val, .btn-yes, .btn-no {
+  font-family: 'Syne', 'Unbounded', sans-serif !important;
+}
+
+/* market id and meta remain monospace */
+.market-id, .meta-val, .meta-lbl, .chip-label, .chip-val, .status-pill {
+  font-family: 'DM Mono', 'JetBrains Mono', monospace !important;
+}
+
+/* Import premium fonts */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+
 </style>
 </head>
 <body>
@@ -439,7 +528,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Create Market</div>
     <div class="ph-sub">Open a YES / NO prediction market on Canopy</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// market_parameters</div>
     <div class="field"><label>Question</label><input id="c_question" type="text" placeholder="Will BTC reach $200k before 2026?"/></div>
     <div class="r3">
@@ -465,7 +554,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Stake a Position</div>
     <div class="ph-sub">Lock tokens on YES or NO using LMSR pricing</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// prediction_parameters</div>
     <div class="r2">
       <div class="field"><label>Market ID (40 hex)</label><input id="p_mid" type="text" placeholder="0b5203…407c"/></div>
@@ -499,7 +588,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-sub">Declare winning outcome — valid within ExpiryTime+100 to ExpiryTime+300 blocks</div>
   </div>
   <div class="alert ay">⚠ Only callable in the resolution window (100–300 blocks after expiry).</div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// resolution_parameters</div>
     <div class="r2">
       <div class="field"><label>Market ID (40 hex)</label><input id="r_mid" type="text" placeholder="40 hex chars"/></div>
@@ -528,7 +617,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Claim Winnings</div>
     <div class="ph-sub">Proportional payout from the losing pool after resolution</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// claim_parameters</div>
     <div class="r2">
       <div class="field"><label>Market ID (40 hex)</label><input id="cl_mid" type="text" placeholder="40 hex chars"/></div>
@@ -551,7 +640,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Register Resolver</div>
     <div class="ph-sub">Stake $PRX to become an eligible market resolver</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// resolver_registration</div>
     <div class="r2">
       <div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div>
@@ -574,7 +663,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Propose Outcome</div>
     <div class="ph-sub">Resolver proposes the winning outcome after market expiry</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// proposal_parameters</div>
     <div class="r2">
       <div class="field"><label>Market ID (40 hex)</label><input id="prop_mid" type="text" placeholder="40 hex chars"/></div>
@@ -606,7 +695,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">File Dispute</div>
     <div class="ph-sub">Challenge a proposed outcome during the dispute window</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// dispute_parameters</div>
     <div class="r2">
       <div class="field"><label>Market ID (40 hex)</label><input id="dis_mid" type="text" placeholder="40 hex chars"/></div>
@@ -632,7 +721,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Commit Vote</div>
     <div class="ph-sub">Submit a blinded vote hash during the commit phase</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// commit_parameters</div>
     <div class="alert ac">Compute commit_hash = SHA256(vote_byte || nonce || voter_addr). vote_byte: 0x01=YES, 0x00=NO.</div>
     <div class="r2">
@@ -659,7 +748,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Reveal Vote</div>
     <div class="ph-sub">Reveal your blinded vote during the reveal phase</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// reveal_parameters</div>
     <div class="r2">
       <div class="field"><label>Market ID (40 hex)</label><input id="rv_mid" type="text" placeholder="40 hex chars"/></div>
@@ -691,7 +780,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Tally Votes</div>
     <div class="ph-sub">Trigger vote tally after reveal phase ends</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// tally_parameters</div>
     <div class="r2">
       <div class="field"><label>Market ID (40 hex)</label><input id="tal_mid" type="text" placeholder="40 hex chars"/></div>
@@ -714,7 +803,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Finalize Market</div>
     <div class="ph-sub">Seal the market after vote tally — enables claim_winnings</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// finalize_parameters</div>
     <div class="r2">
       <div class="field"><label>Market ID (40 hex)</label><input id="fin_mid" type="text" placeholder="40 hex chars"/></div>
@@ -737,7 +826,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Claim Slash</div>
     <div class="ph-sub">Claim the slash reward from a dishonest resolver's forfeited bond</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// slash_parameters</div>
     <div class="r2">
       <div class="field"><label>Market ID (40 hex)</label><input id="sl_mid" type="text" placeholder="40 hex chars"/></div>
@@ -760,7 +849,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Wallet</div>
     <div class="ph-sub">Query balances and send $PRX tokens</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// account_lookup</div>
     <div class="field"><label>Address (40 hex)</label><input id="w_addr" type="text" placeholder="e7c7dad1…"/></div>
     <div class="btn-row"><button class="btn bp" onclick="queryAccount()">Query Balance</button></div>
@@ -769,7 +858,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="addr-mono" id="w_addrD"></div>
     </div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// send_tokens (MessageSend)</div>
     <div class="r2">
       <div class="field"><label>From Address</label><input id="s_from" type="text" placeholder="40 hex chars"/></div>
@@ -786,10 +875,9 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="pending" id="pend_send"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="payload-box" id="so"><div class="plbl2">// unsigned_payload</div><textarea id="sp" readonly></textarea></div>
   </div>
-
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// my_predictions</div>
-    <div id="myPredictions"><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)" id="predictionsPlaceholder">Load wallet to see predictions</div></div>
+    <div id="myPredictions"><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">Load wallet to see predictions</div></div>
   </div>
 </div>
 
@@ -800,7 +888,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Signer</div>
     <div class="ph-sub">Load your private key — held in RAM only, never stored or sent</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// private_key</div>
     <div class="key-status" id="keyStatus">○ No key loaded — transactions cannot be signed</div>
     <div class="field"><label>Private Key (64 hex)</label><input id="sk_input" type="password" placeholder="64 hex characters…"/><div class="hint">⚠ Only enter on trusted instances. Clears on page reload.</div></div>
@@ -814,7 +902,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="field" style="margin-top:10px"><label>Derived Address — use in all tx fields</label><div class="addr-mono" id="sk_addr" style="color:var(--green)"></div></div>
     </div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// signing_spec</div>
     <div class="sign-info">
       1. sign_bytes = proto.Marshal(Transaction{...fields, <em>signature:nil</em>})<br>
@@ -834,12 +922,12 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ph-title">Node</div>
     <div class="ph-sub">RPC settings and chain status</div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// rpc_connection</div>
     <div class="field"><label>RPC Host</label><input id="ni_host" type="text" value="localhost"/><div class="hint">Public RPC → :50002 &nbsp;·&nbsp; Admin → :50003 (local only)</div></div>
     <div class="btn-row"><button class="btn bp" onclick="applyHost()">Apply &amp; Connect</button></div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// chain_status</div>
     <div class="igrid">
       <div class="icell"><div class="ilbl">Height</div><div class="ival" id="ni_height">—</div></div>
@@ -847,7 +935,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="icell" style="grid-column:1/-1"><div class="ilbl">RPC Endpoint</div><div class="ival" id="ni_rpc" style="font-size:10px;word-break:break-all">—</div></div>
     </div>
   </div>
-  <div class="card">
+  <div class="card" style="padding:20px">
     <div class="ct">// failed_transactions</div>
     <div class="field"><label>Check Address</label><input id="ft_addr" type="text" placeholder="40 hex chars"/></div>
     <div class="btn-row"><button class="btn bg bsm" onclick="checkFailedTxs()">Check Failed Txs</button></div>
@@ -1192,6 +1280,228 @@ function showPL(outId,payId,tx){
 }
 
 // ═══════════════════════════════════════════
+// MY PREDICTIONS
+// ═══════════════════════════════════════════
+async function refreshBalance(){
+  if(!signerAddress)return;
+  try{
+    const d=await rpc('/v1/query/account',{address:signerAddress});
+    document.getElementById('sk_balance').textContent=Number(d.amount||0).toLocaleString();
+  }catch{}
+}
+
+window.loadMyPredictions = async function () {
+  const el = document.getElementById('myPredictions');
+  if (!signerAddress) {
+    el.innerHTML = '<div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--text3)">Load wallet to see predictions</div>';
+    return;
+  }
+  el.innerHTML = '<div style="padding:12px;color:var(--text3);font-family:JetBrains Mono,monospace;font-size:10px"><span class="blink">▪▪▪</span> loading predictions</div>';
+  try {
+    const data = await rpc('/v1/query/txs-by-sender', { address: signerAddress, perPage: 200 });
+    const results = data.results || [];
+    const seen = {};
+    const predictions = [];
+
+    for (const tx of results) {
+      const t = tx.transaction || tx;
+      const type = t.type || t.messageType || '';
+      if (type !== 'submit_prediction') continue;
+      const msg = t.msg || t;
+      let marketId = '', outcome = false, shares = 0n, maxCost = 0n;
+      if (t.msgBytes) {
+        const bytes = h2b(t.msgBytes);
+        let pos = 0;
+        while (pos < bytes.length) {
+          const { v: tagV, p: p1 } = decVarint(bytes, pos); pos = p1;
+          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
+          if (fn === 3 && wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; outcome = v === 1n; }
+          else if (wt === 0) { const { v: _, p: p2 } = decVarint(bytes, pos); pos = p2; if (fn === 4) shares = _; if (fn === 5) maxCost = _; }
+          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); pos = p2 + Number(lenV); if (fn === 1) marketId = b2h(bytes.slice(p2 - Number(lenV), pos)); }
+          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; } else break;
+        }
+      } else {
+        marketId = msg.marketId || '';
+        outcome = msg.outcome === true || msg.outcome === 'true' || msg.outcome === 1;
+        shares = BigInt(msg.shares || 0);
+        maxCost = BigInt(msg.maxCost || msg.max_cost || 0);
+      }
+      const key = marketId || tx.txHash;
+      if (!seen[key]) {
+        seen[key] = true;
+        predictions.push({ marketId: marketId || tx.txHash, outcome, shares, maxCost, height: tx.height || 0 });
+      }
+    }
+
+    if (predictions.length === 0) {
+      el.innerHTML = '<div style="padding:12px;color:var(--text3);font-family:JetBrains Mono,monospace;font-size:10px">No predictions yet</div>';
+      return;
+    }
+
+    el.innerHTML = predictions.map(p =>
+      '<div style="background:var(--bg);border:1px solid var(--border);padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">' +
+        '<div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--text3);margin-bottom:4px">MKT ' + p.marketId.slice(0,12) + '…</div>' +
+          '<div style="display:flex;gap:12px">' +
+            '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:' + (p.outcome ? 'var(--green)' : 'var(--red)') + '">' + (p.outcome ? 'YES' : 'NO') + '</span>' +
+            '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Shares: ' + fmtA(p.shares) + '</span>' +
+            '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Max: ' + fmtA(p.maxCost) + ' μPRX</span>' +
+          '</div>' +
+        '</div>' +
+        '<span style="font-family:JetBrains Mono,monospace;font-size:9px;color:var(--text3)">#' + p.height + '</span>' +
+      '</div>').join('');
+  } catch (e) {
+    el.innerHTML = '<div style="padding:12px;color:var(--red);font-family:JetBrains Mono,monospace;font-size:10px">Error: ' + esc(e.message) + '</div>';
+  }
+};
+
+// ═══════════════════════════════════════════
+// RENDER MARKET CARDS — Premium Design
+// ═══════════════════════════════════════════
+function renderMarketCards(markets) {
+  var parts = [];
+  parts.push('<div class="alert ag" style="margin-bottom:16px">✓ ' + markets.length + ' market(s) found on-chain</div>');
+  parts.push('<div class="mgrid">');
+  for (var i = 0; i < markets.length; i++) {
+    var m = markets[i];
+    var open = m.status === 0;
+    var expired = m.status === 1;
+    var disputed = m.status === 5;
+    var finalized = m.status === 6;
+    var statusClass = open ? 'pill-open' : expired ? 'pill-expired' : disputed ? 'pill-disputed' : 'pill-finalized';
+    var statusLabel = open ? 'Open' : expired ? 'Expired' : disputed ? 'Disputed' : finalized ? 'Finalized' : 'Closed';
+    var resolverBanner = expired ? '<div class="resolver-banner"><span class="icon">⏳</span><span class="text">Awaiting resolver proposal</span></div>' : '';
+    var disputeBanner = disputed ? '<div class="resolver-banner" style="background:rgba(255,61,90,0.05); border-color:rgba(255,61,90,0.2);"><span class="icon">⚡</span><span class="text" style="color:var(--red)">Dispute active · panel vote in progress</span></div>' : '';
+    var winnerBanner = finalized ? '<div class="winner-banner"><div><div class="winner-label">Winning outcome</div></div><div class="winner-val">—</div></div>' : '';
+    var mid = m.marketId || m.txHash;
+    var betYes = open ? '<button class="btn btn-yes" onclick="fillP(\x27' + mid + '\x27, true)">Bet YES</button>' : '<button class="btn btn-yes" disabled>Bet YES</button>';
+    var betNo  = open ? '<button class="btn btn-no" onclick="fillP(\x27' + mid + '\x27, false)">Bet NO</button>'   : '<button class="btn btn-no" disabled>Bet NO</button>';
+    var cardStyle = finalized ? ' style="opacity:0.7;"' : '';
+    var cardClass = 'card' + (expired ? ' expired' : '') + (disputed ? ' disputed' : '');
+    parts.push('<div class="' + cardClass + '"' + cardStyle + '>');
+    parts.push('<div class="card-head"><div class="question">' + esc(m.question) + '</div><div class="status-pill ' + statusClass + '"><span class="dot"></span> ' + statusLabel + '</div></div>');
+    parts.push('<div class="prob-section"><div class="prob-row"><span class="prob-label">Liquidity</span><div class="prob-values"><span class="prob-yes">' + fmtA(m.qYes) + '</span><span class="prob-no">' + fmtA(m.qNo) + '</span></div></div><div class="bar-track"><div class="bar-yes" style="width:50%;' + (finalized ? 'box-shadow:none; background:#4a4a4a;' : '') + '"></div><div class="bar-no" style="' + (finalized ? 'background:#2a2a2a;' : '') + '"></div></div></div>');
+    parts.push('<div class="shares-row"><div class="share-chip chip-yes"><span class="chip-label">YES pool</span><span class="chip-val">' + fmtA(m.qYes) + '</span></div><div class="share-chip chip-no"><span class="chip-label">NO pool</span><span class="chip-val">' + fmtA(m.qNo) + '</span></div></div>');
+    parts.push(resolverBanner);
+    parts.push(disputeBanner);
+    parts.push(winnerBanner);
+    parts.push('<div class="bet-row">' + betYes + betNo + '</div>');
+    parts.push('<div class="card-foot"><div class="meta">');
+    parts.push('<div class="meta-item"><span class="meta-lbl">Total pool</span><span class="meta-val green">' + fmtA(m.qYes + m.qNo) + ' PRX</span></div>');
+    parts.push('<div class="meta-item"><span class="meta-lbl">' + (open ? 'Expires' : expired ? 'Expired' : 'Finalized') + '</span><span class="meta-val">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
+    parts.push('<div class="meta-item"><span class="meta-lbl">Creator</span><span class="meta-val">' + (m.creator ? m.creator.slice(0,8) + '…' : '???') + '</span></div>');
+    parts.push('</div><span class="market-id">' + mid.slice(0,8) + '…</span></div>');
+    parts.push('</div>');
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+window.fillP = (id, outcome) => {
+  document.getElementById('p_mid').value = id;
+  if (outcome !== undefined) { setOut(outcome); }
+  showPage('predict', null);
+};
+window.fillR = (id, outcome) => {
+  document.getElementById('r_mid').value = id;
+  if (outcome !== undefined) { setResOut(outcome); }
+  showPage('resolve', null);
+};
+window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };
+
+// ═══════════════════════════════════════════
+// MARKETS PAGE
+// ═══════════════════════════════════════════
+function decVarint(buf,pos){let r=0n,s=0n;while(pos<buf.length){const b=BigInt(buf[pos++]);r|=(b&0x7fn)<<s;s+=7n;if(!(b&0x80n))break;}return{v:r,p:pos};}
+
+window.loadMarkets = async function () {
+  const el = document.getElementById('marketsList');
+  const countEl = document.getElementById('sb_c');
+  el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading markets from chain</div>';
+  try {
+    await checkRPC();
+    const validatorAddr = 'e7c7dad131a03f7ea0cc09a637ad096eb3495f77';
+    const data = await rpc('/v1/query/txs-by-sender', { address: validatorAddr, perPage: 200 });
+    const results = data.results || [];
+    const markets = [];
+
+    for (const tx of results) {
+      const t = tx.transaction || tx;
+      const type = t.type || t.messageType || '';
+      if (type !== 'create_market') continue;
+      const msg = t.msg || t;
+      let question = '', creator = '', b0 = 0n, expiry = 0n, nonce = 0n;
+      if (t.msgBytes) {
+        const bytes = h2b(t.msgBytes);
+        let pos = 0;
+        while (pos < bytes.length) {
+          const { v: tagV, p: p1 } = decVarint(bytes, pos); pos = p1;
+          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
+          if (wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; if (fn === 2) b0 = v; if (fn === 3) expiry = v; if (fn === 4) nonce = v; }
+          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); const len = Number(lenV); pos = p2; const chunk = bytes.slice(pos, pos + len); pos += len; if (fn === 1) creator = b2h(chunk); if (fn === 5) question = new TextDecoder().decode(chunk); }
+          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; } else break;
+        }
+      } else {
+        question = msg.question || '';
+        creator = msg.creatorAddress || tx.sender || '';
+        b0 = BigInt(msg.b0 || 0);
+        expiry = BigInt(msg.expiryTime || msg.expiry_time || 0);
+        nonce = BigInt(msg.nonce || 0);
+      }
+      const key = tx.txHash || (creator + b0);
+      if (!markets.some(m => m.txHash === key)) {
+        markets.push({ txHash: tx.txHash || '', question: question || '(no question)', creator, b0, expiry, nonce, status: 0, qYes: b0 / 2n, qNo: b0 / 2n });
+      }
+    }
+
+    for (const m of markets) {
+      if (m.expiry && currentHeight > Number(m.expiry)) {
+        m.status = 1;
+      }
+    }
+
+    const deriveMarketId = async (creatorStr, nonce) => {
+      var creatorBytes;
+      if (creatorStr.length === 40 && /^[0-9a-fA-F]{40}$/.test(creatorStr)) {
+        creatorBytes = h2b(creatorStr);
+      } else {
+        try {
+          var bin = atob(creatorStr);
+          creatorBytes = new Uint8Array([...bin].map(function(c) { return c.charCodeAt(0); }));
+        } catch (e) {
+          creatorBytes = new Uint8Array(20);
+        }
+      }
+      var nonceBytes = new Uint8Array(8);
+      var n = BigInt(nonce);
+      for (var i = 7; i >= 0; i--) { nonceBytes[i] = Number(n & 0xffn); n >>= 8n; }
+      var input = new Uint8Array(creatorBytes.length + 8);
+      input.set(creatorBytes); input.set(nonceBytes, 20);
+      var hash = await crypto.subtle.digest('SHA-256', input);
+      return b2h(new Uint8Array(hash).slice(0, 20));
+    };
+
+    var idPromises = markets.map(async function(m) {
+      if (m.creator && m.nonce) {
+        try { m.marketId = await deriveMarketId(m.creator, m.nonce); } catch (e) {}
+      }
+      if (!m.marketId) m.marketId = m.txHash;
+    });
+    await Promise.all(idPromises);
+
+    if (countEl) countEl.textContent = markets.length;
+    if (markets.length === 0) {
+      el.innerHTML = '<div class="alert ay">No markets on-chain yet.<br>Create the first one!</div>';
+      return;
+    }
+
+    el.innerHTML = renderMarketCards(markets);
+  } catch (e) {
+    el.innerHTML = '<div class="alert ar">⚠ Cannot reach node at <code>' + getRPC() + '</code><br>' + esc(e.message) + '</div>';
+  }
+};
+
+// ═══════════════════════════════════════════
 // ── SEND
 // ═══════════════════════════════════════════
 window.build_send=function(){try{
@@ -1408,269 +1718,12 @@ window.signAndSubmit_slash=async function(){try{
 }catch(e){toast(e.message,true);}};
 
 // ═══════════════════════════════════════════
-// MARKETS PAGE — fetch all markets from state
-// ═══════════════════════════════════════════
-function decVarint(buf,pos){let r=0n,s=0n;while(pos<buf.length){const b=BigInt(buf[pos++]);r|=(b&0x7fn)<<s;s+=7n;if(!(b&0x80n))break;}return{v:r,p:pos};}
-
-function decodeMarketState(bytes) {
-  if (!bytes || bytes.length === 0) return null;
-  const m = { status: 0, expiryTime: 0n, qYes: 0n, qNo: 0n, bEff: 0n, creator: '' };
-  const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let pos = 0;
-  while (pos < buf.length) {
-    const { v: tagVal, p: p1 } = decVarint(buf, pos);
-    pos = p1;
-    const fn = Number(tagVal >> 3n), wt = Number(tagVal & 7n);
-    if (wt === 0) {
-      const { v, p: p2 } = decVarint(buf, pos); pos = p2;
-      if (fn === 1) m.status     = Number(v);
-      if (fn === 2) m.expiryTime = v;
-      if (fn === 3) m.qYes       = v;
-      if (fn === 4) m.qNo        = v;
-      if (fn === 5) m.bEff       = v;
-    } else if (wt === 2) {
-      const { v: lenV, p: p2 } = decVarint(buf, pos);
-      const len = Number(lenV); pos = p2;
-      const chunk = buf.slice(pos, pos + len); pos += len;
-      if (fn === 6) m.creator = b2h(chunk);
-    } else if (wt === 1) { pos += 8; }
-    else if (wt === 5) { pos += 4; }
-    else break;
-  }
-  return m;
-}
-
-window.loadMarkets = async function () {
-  const el = document.getElementById('marketsList');
-  const countEl = document.getElementById('sb_c');
-  el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading markets from chain</div>';
-  try {
-    await checkRPC();
-    const validatorAddr = 'e7c7dad131a03f7ea0cc09a637ad096eb3495f77';
-    const data = await rpc('/v1/query/txs-by-sender', { address: validatorAddr, perPage: 200 });
-    const results = data.results || [];
-    const markets = [];
-
-    for (const tx of results) {
-      const t = tx.transaction || tx;
-      const type = t.type || t.messageType || '';
-      if (type !== 'create_market') continue;
-      const msg = t.msg || t;
-      let question = '', creator = '', b0 = 0n, expiry = 0n, nonce = 0n;
-      if (t.msgBytes) {
-        const bytes = h2b(t.msgBytes);
-        let pos = 0;
-        while (pos < bytes.length) {
-          const { v: tagV, p: p1 } = decVarint(bytes, pos); pos = p1;
-          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
-          if (wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; if (fn === 2) b0 = v; if (fn === 3) expiry = v; if (fn === 4) nonce = v; }
-          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); const len = Number(lenV); pos = p2; const chunk = bytes.slice(pos, pos + len); pos += len; if (fn === 1) creator = b2h(chunk); if (fn === 5) question = new TextDecoder().decode(chunk); }
-          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; } else break;
-        }
-      } else {
-        question = msg.question || '';
-        creator = msg.creatorAddress || tx.sender || '';
-        b0 = BigInt(msg.b0 || 0);
-        expiry = BigInt(msg.expiryTime || msg.expiry_time || 0);
-        nonce = BigInt(msg.nonce || 0);
-      }
-      const key = tx.txHash || (creator + b0);
-      if (!markets.some(m => m.txHash === key)) {
-        markets.push({ txHash: tx.txHash || '', question: question || '(no question)', creator, b0, expiry, nonce, status: 0, qYes: b0 / 2n, qNo: b0 / 2n });
-      }
-    }
-
-    // ── Determine status from expiry ──
-    for (const m of markets) {
-      if (m.expiry && currentHeight > Number(m.expiry)) {
-        m.status = 1; // expired
-      }
-    }
-
-    // ── Derive market IDs asynchronously ──
-    const deriveMarketId = async (creatorStr, nonce) => {
-      let creatorBytes;
-      // Try hex first, fall back to base64
-      if (creatorStr.length === 40 && /^[0-9a-fA-F]{40}$/.test(creatorStr)) {
-        creatorBytes = h2b(creatorStr);
-      } else {
-        try {
-          const bin = atob(creatorStr);
-          creatorBytes = new Uint8Array([...bin].map(c => c.charCodeAt(0)));
-        } catch {
-          creatorBytes = new Uint8Array(20); // give up, will produce wrong ID but not crash
-        }
-      }
-      const nonceBytes = new Uint8Array(8);
-      let n = BigInt(nonce);
-      for (let i = 7; i >= 0; i--) { nonceBytes[i] = Number(n & 0xffn); n >>= 8n; }
-      const input = new Uint8Array(creatorBytes.length + 8);
-      input.set(creatorBytes); input.set(nonceBytes, 20);
-      const hash = await crypto.subtle.digest('SHA-256', input);
-      return b2h(new Uint8Array(hash).slice(0, 20));
-    };
-
-    const idPromises = markets.map(async (m) => {
-      if (m.creator && m.nonce) {
-        try { m.marketId = await deriveMarketId(m.creator, m.nonce); } catch {}
-      }
-      if (!m.marketId) m.marketId = m.txHash; // fallback
-    });
-    await Promise.all(idPromises);
-
-    if (countEl) countEl.textContent = markets.length;
-    if (markets.length === 0) {
-      el.innerHTML = '<div class="alert ay">No markets on-chain yet.<br>Create the first one!</div>';
-      return;
-    }
-
-    const statusBadge = (s) => {
-      if (s === 0) return '<span class="badge b-open"><span class="blink">●</span>&nbsp;OPEN</span>';
-      if (s === 1) return '<span class="badge b-canc">⌛&nbsp;EXPIRED</span>';
-      return '<span class="badge b-canc">?</span>';
-    };
-
-    el.innerHTML = `
-      <div class="alert ag" style="margin-bottom:16px">✓ ${markets.length} market(s) found on-chain</div>
-      <div class="mgrid">
-        ${markets.map((m, i) => `
-          <div class="mcard">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-              <div class="mid">MKT #${i + 1}</div>
-              ${statusBadge(m.status)}
-            </div>
-            <div class="mq">${esc(m.question)}</div>
-            <div class="mmeta"><span>expiry: ${m.expiry ? Number(m.expiry) : '?'}</span><span>b0: ${fmtA(m.b0)} μPRX</span>${m.creator ? `<span>${m.creator.slice(0, 8)}…</span>` : ''}</div>
-            <div class="pools"><div class="pbar pyes"><div class="plbl">YES</div><div class="pval">${fmtA(m.qYes)}</div></div><div class="pbar pno"><div class="plbl">NO</div><div class="pval">${fmtA(m.qNo)}</div></div></div>
-            <div class="mfooter">
-              <button class="btn bg bsm" onclick="fillP('${m.marketId || m.txHash}')">Predict</button>
-              ${m.status === 0 ? `<button class="btn bg bsm" onclick="fillR('${m.marketId || m.txHash}')">Resolve</button>` : ''}
-            </div>
-          </div>`).join('')}
-      </div>`;
-  } catch (e) {
-    el.innerHTML = `<div class="alert ar">⚠ Cannot reach node at <code>${getRPC()}</code><br>${esc(e.message)}</div>`;
-  }
-};
-
-window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
-window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
-window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
-window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
-window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
-window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
-window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
-window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
-window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };window.fillP = id => { document.getElementById('p_mid').value = id; showPage('predict', null); };
-window.fillR = id => { document.getElementById('r_mid').value = id; showPage('resolve', null); };
-window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };
-
-async function refreshBalance(){
-  if(!signerAddress)return;
-  try{
-    const d=await rpc('/v1/query/account',{address:signerAddress});
-    document.getElementById('sk_balance').textContent=Number(d.amount||0).toLocaleString();
-  }catch{}
-}
-
-// ═══════════════════════════════════════════
-// MY PREDICTIONS
-// ═══════════════════════════════════════════
-// ═══════════════════════════════════════════
-window.loadMyPredictions = async function () {
-  const el = document.getElementById('myPredictions');
-  if (!signerAddress) {
-    el.innerHTML = '<div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--text3)">Load wallet to see predictions</div>';
-    return;
-  }
-  el.innerHTML = '<div style="padding:12px;color:var(--text3);font-family:JetBrains Mono,monospace;font-size:10px"><span class="blink">▪▪▪</span> loading predictions</div>';
-  try {
-    const data = await rpc('/v1/query/txs-by-sender', { address: signerAddress, perPage: 200 });
-    const results = data.results || [];
-    const seen = {};
-    const predictions = [];
-
-    for (const tx of results) {
-      const t = tx.transaction || tx;
-      const type = t.type || t.messageType || '';
-      if (type !== 'submit_prediction') continue;
-      const msg = t.msg || t;
-      let marketId = '', bettor = '', outcome = false, shares = 0n, maxCost = 0n;
-      if (t.msgBytes) {
-        const bytes = h2b(t.msgBytes);
-        let pos = 0;
-        while (pos < bytes.length) {
-          const { v: tagV, p: p1 } = decVarint(bytes, pos); pos = p1;
-          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
-          if (wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; if (fn === 4) shares = v; if (fn === 5) maxCost = v; }
-          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); const len = Number(lenV); pos = p2; const chunk = bytes.slice(pos, pos + len); pos += len; if (fn === 1) marketId = b2h(chunk); if (fn === 2) bettor = b2h(chunk); }
-          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; }
-          else break;
-        }
-        outcome = (bytes.length > 0); // approximate — we'll decode properly later
-        // Actually outcome is field 3 (varint 0 or 1 in proto3, but it's a bool in our proto? No, bool is wire type 0 with value 1 or 0 encoded as varint 1 or 0)
-        // Re-parse for bool
-        pos = 0; let gotOutcome = false;
-        while (pos < bytes.length) {
-          const { v: tagV, p: p1 } = decVarint(bytes, pos); pos = p1;
-          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
-          if (fn === 3 && wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; outcome = v === 1n; gotOutcome = true; }
-          else if (wt === 0) { const { v: _, p: p2 } = decVarint(bytes, pos); pos = p2; }
-          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); pos = p2 + Number(lenV); }
-          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; } else break;
-        }
-      } else {
-        marketId = msg.marketId || '';
-        bettor = msg.bettorAddress || msg.bettor_address || '';
-        outcome = msg.outcome === true || msg.outcome === 'true' || msg.outcome === 1;
-        shares = BigInt(msg.shares || 0);
-        maxCost = BigInt(msg.maxCost || msg.max_cost || 0);
-      }
-      const key = marketId || tx.txHash;
-      if (!seen[key]) {
-        seen[key] = true;
-        predictions.push({ marketId: marketId || tx.txHash, outcome, shares, maxCost, height: tx.height || 0 });
-      }
-    }
-
-    if (predictions.length === 0) {
-      el.innerHTML = '<div style="padding:12px;color:var(--text3);font-family:JetBrains Mono,monospace;font-size:10px">No predictions yet</div>';
-      return;
-    }
-
-    el.innerHTML = predictions.map(p => `
-      <div style="background:var(--bg);border:1px solid var(--border);padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:4px">MKT ${p.marketId.slice(0,12)}…</div>
-          <div style="display:flex;gap:12px">
-            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:${p.outcome ? 'var(--green)' : 'var(--red)'}">${p.outcome ? 'YES' : 'NO'}</span>
-            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2)">Shares: ${fmtA(p.shares)}</span>
-            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2)">Max: ${fmtA(p.maxCost)} μPRX</span>
-          </div>
-        </div>
-        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3)">#${p.height}</span>
-      </div>`).join('');
-  } catch (e) {
-    el.innerHTML = `<div style="padding:12px;color:var(--red);font-family:JetBrains Mono,monospace;font-size:10px">Error: ${esc(e.message)}</div>`;
-  }
-};
-
-// ═══════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════
-// ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
 document.getElementById('ni_host').value=getRPCHost();
 buildMobNav();
 checkRPC();
 setInterval(checkRPC,12000);
-// If wallet page is active and key is loaded, refresh predictions
-setTimeout(() => {
-  if (signerAddress && document.getElementById('page-wallet').classList.contains('active')) {
-    loadMyPredictions();
-  }
-}, 1000);
 </script>
 </body>
 </html>
