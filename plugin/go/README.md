@@ -1,4 +1,6 @@
 # PRAXIS
+[![Status](https://img.shields.io/badge/status-live-brightgreen)](https://github.com/Makaveli912/canopy)
+
 
 <div align="center">
 
