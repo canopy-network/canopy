@@ -253,28 +253,27 @@ func TestRewardSplitWhitepaperExample(t *testing.T) {
 }
 
 // TestWhitepaperSection7Reconciliation pins the end-to-end yield math from
-// the canoLiq whitepaper §7 worked example. The canopy core mints reward X
-// then applies the 5% DAO cut upstream of the plugin, so the canoLiq
-// committee pool sees 0.95X. The plugin then applies its 12% fee with the
-// 40% rebate. With X=1000, integer truncation gives:
+// the canoLiq Whitepaper v1.1 §7 worked example. Under v1.1, Canopy does NOT
+// apply a protocol-level DAO tax on top of rewards before distribution
+// (WP §3.3), so canoLiq receives its committee share R directly. With a
+// non-round R=950 exercising integer truncation:
 //
-//	post-DAO       = 950
+//	R              = 950
 //	fee (12%)      = 114
 //	net to users   = 836
 //	rebate (40%)   = 45  (114*4000/10000 = 45.6 → 45 truncated)
-//	user yield     = 836 + 45 = 881  (≈ 0.88 * 0.95 * X = 836.0)
+//	user yield     = 836 + 45 = 881  (= 0.88 * R = 836.0 + rebate)
 //
-// The test seeds the pool with the post-DAO amount (950) since the plugin
-// observes only post-DAO inflows.
+// Effective user yield matches Tokenomics v1.1 §4.1 "Effective user yield =
+// 88% × Rewards Received."
 func TestWhitepaperSection7Reconciliation(t *testing.T) {
 	c, s := newTestCanoliq()
 	g := &contract.CanoliqGlobals{GenesisComplete: true}
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
-	const X = 1000
-	const postDAO = X * 95 / 100 // 950 — what canoLiq sees after the 5% DAO cut
+	const R = 950 // canoLiq's committee share — non-round to exercise truncation
 
-	pool := &contract.Pool{Id: c.Config.ChainId, Amount: postDAO}
+	pool := &contract.Pool{Id: c.Config.ChainId, Amount: R}
 	pBz, _ := contract.Marshal(pool)
 	s.set(contract.KeyForFeePool(c.Config.ChainId), pBz)
 
@@ -285,7 +284,7 @@ func TestWhitepaperSection7Reconciliation(t *testing.T) {
 	g2 := loadGlobals(t, s)
 	const wantUserYield = 881
 	if g2.TotalPooledCnpy != wantUserYield {
-		t.Errorf("user yield: got %d want %d (whitepaper §7: 0.88 * 0.95 * X with truncation)", g2.TotalPooledCnpy, wantUserYield)
+		t.Errorf("user yield: got %d want %d (Tokenomics v1.1 §4.1: 0.88 * R with truncation)", g2.TotalPooledCnpy, wantUserYield)
 	}
 	// Sanity: fee = 114, treasury = 34 (114*3000/10000 = 34.2 truncated, plus
 	// any residual from rounding the splits goes to treasury). insurance_bps=500
@@ -308,20 +307,20 @@ func TestWhitepaperSection7Reconciliation(t *testing.T) {
 	if got := DecodeUint64(s.get(KeyForValidatorIncentives(c.committeeAggregatorAddr()))); got != wantValidators {
 		t.Errorf("validators: got %d want %d", got, wantValidators)
 	}
-	// Conservation: post-DAO = userYield + treasury + insurance + validators + buyback.
+	// Conservation: R = userYield + treasury + insurance + validators + buyback.
 	total := g2.TotalPooledCnpy +
 		DecodeUint64(s.get(KeyForTreasuryCNPY())) +
 		DecodeUint64(s.get(KeyForInsurancePool())) +
 		DecodeUint64(s.get(KeyForBuybackPool())) +
 		DecodeUint64(s.get(KeyForValidatorIncentives(c.committeeAggregatorAddr())))
-	if total != postDAO {
+	if total != R {
 		t.Errorf("conservation: %d (yield %d + treasury %d + insurance %d + buyback %d + validators %d) want %d",
 			total, g2.TotalPooledCnpy,
 			DecodeUint64(s.get(KeyForTreasuryCNPY())),
 			DecodeUint64(s.get(KeyForInsurancePool())),
 			DecodeUint64(s.get(KeyForBuybackPool())),
 			DecodeUint64(s.get(KeyForValidatorIncentives(c.committeeAggregatorAddr()))),
-			postDAO)
+			R)
 	}
 	_ = wantFee
 }
@@ -672,7 +671,7 @@ func TestCompositeDepositRewardRedeem(t *testing.T) {
 	s.set(KeyForGlobals(), gBz2)
 
 	// 3) Inject a 1_000_000 reward into the committee pool (simulates a
-	//    MessageSubsidy crediting the canoLiq committee post-DAO-cut).
+	//    MessageSubsidy crediting the canoLiq committee).
 	pool := new(contract.Pool)
 	_ = contract.Unmarshal(s.get(contract.KeyForFeePool(c.Config.ChainId)), pool)
 	pool.Amount += 1_000_000

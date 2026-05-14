@@ -15,7 +15,7 @@
       ]
     },
     {
-      "name": "Liquidity Incentives (Farming)",
+      "name": "Liquidity Incentives",
       "bps": 1500,
       "cliffMonths": 0,
       "vestMonths": 0,
@@ -75,7 +75,7 @@
       ]
     },
     {
-      "name": "Plugin & Dev Grants",
+      "name": "Developer Grants & Ecosystem",
       "bps": 600,
       "cliffMonths": 0,
       "vestMonths": 0,

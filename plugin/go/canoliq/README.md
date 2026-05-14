@@ -602,7 +602,7 @@ Copy `genesis.testnet.json` to `genesis.production.json` and edit:
       "recipients": [{ "address": "<timelock-founders>",     "bps": 10000 }]},
     { "name": "Strategic Partners",          "bps": 1000, "cliffMonths": 6,  "vestMonths": 12,
       "recipients": [{ "address": "<timelock-partners>",     "bps": 10000 }]},
-    { "name": "Plugin & Dev Grants",         "bps": 600,  "cliffMonths": 0,  "vestMonths": 0,
+    { "name": "Developer Grants & Ecosystem","bps": 600,  "cliffMonths": 0,  "vestMonths": 0,
       "recipients": [{ "address": "<multisig-grants>",       "bps": 10000 }]}
   ],
   "params": {

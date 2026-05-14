@@ -130,15 +130,15 @@ func TestRPCParamsRoundTrip(t *testing.T) {
 func TestRPCPoolsConservationAfterReward(t *testing.T) {
 	srv, c, s, refresh := newTestRPC(t)
 	// Same setup pattern as TestWhitepaperSection7Reconciliation: fund the
-	// committee pool with the post-DAO 0.95X amount, run EndBlock (which
+	// committee pool with canoLiq's received share R, run EndBlock (which
 	// applies the fee split AND refreshes the snapshot), then verify the
-	// HTTP /v1/pools view satisfies conservation.
-	const X uint64 = 1000
-	const postDao = X - X/20 // 950
+	// HTTP /v1/pools view satisfies conservation. Non-round R=950 exercises
+	// truncation.
+	const R uint64 = 950
 	g := &contract.CanoliqGlobals{GenesisComplete: true}
 	s.set(KeyForGlobals(), mustMarshal(g))
 	s.set(KeyForParams(), mustMarshal(DefaultParams()))
-	s.set(contract.KeyForFeePool(2), mustMarshal(&contract.Pool{Id: 2, Amount: postDao}))
+	s.set(contract.KeyForFeePool(2), mustMarshal(&contract.Pool{Id: 2, Amount: R}))
 
 	resp := c.EndBlock(&contract.PluginEndRequest{Height: 1})
 	if resp.Error != nil {
@@ -155,9 +155,9 @@ func TestRPCPoolsConservationAfterReward(t *testing.T) {
 	}
 	total := gAfter.TotalPooledCnpy + pools.TreasuryCNPY + pools.InsurancePool +
 		valSum + pools.BuybackPool
-	if total != postDao {
+	if total != R {
 		t.Fatalf("conservation: %d != %d (pooled=%d treasury=%d insurance=%d val=%d buyback=%d)",
-			total, postDao, gAfter.TotalPooledCnpy, pools.TreasuryCNPY, pools.InsurancePool, valSum, pools.BuybackPool)
+			total, R, gAfter.TotalPooledCnpy, pools.TreasuryCNPY, pools.InsurancePool, valSum, pools.BuybackPool)
 	}
 }
 

@@ -100,20 +100,21 @@ Canopy core. Always use it for `(a*b)/c` over uint64 amounts.
 
 ## Whitepaper §7 reconciliation
 
-The whitepaper's worked example assumes Canopy applies the 5% DAO cut
-**upstream** of the plugin. canoliq's pool sees only `0.95 * X` already. Any
-test that pins the whitepaper number (e.g., `TestWhitepaperSection7Reconciliation`)
-must seed the pool with the post-DAO amount, not gross X. Don't double-apply
-the DAO cut inside the plugin.
+Under Whitepaper v1.1 §3.3, Canopy does **not** apply a protocol-level DAO
+tax on top of rewards before distribution. canoliq's pool sees the full
+committee share `R` directly. Any test that pins the whitepaper number
+(e.g., `TestWhitepaperSection7Reconciliation`) seeds the pool with `R`.
+Effective user yield per Tokenomics v1.1 §4.1 is `0.88 × R` (modulo
+truncation), since the plugin applies its 12% fee on `R` with no upstream
+cut to back out.
 
-For X=1000 / 12% fee / 40-30-15-15 split with truncation **and Phase 2
-defaults including `insurance_bps=1500`**, the reference output is:
-yield=881, treasury=30, insurance=5, validators=17, buyback=17, sum=950.
-Pre-Phase-2 baseline (insurance off) was treasury=35; the 5 uCNPY
-delta is the auto-skim into `canoliq/insurance/pool`. Conservation
-includes the insurance line — any new test that asserts the equation
-`yield + treasury + insurance + validators + buyback == post-DAO` will
-fail if you forget it.
+For `R=950` / 12% fee / 40-30-15-15 split with truncation **and v1.1
+defaults including `insurance_bps=500`** (5% of treasury slice per
+Tokenomics §8), the reference output is: yield=881, treasury=34,
+insurance=1, validators=17, buyback=17, sum=950. Conservation includes
+the insurance line — any new test that asserts the equation
+`yield + treasury + insurance + validators + buyback == R` will fail
+if you forget it.
 
 ## Genesis
 

@@ -146,7 +146,7 @@ Genesis JSON + one validator path. All P0 blocking spec violations. ~1 day.
 No behaviour change; removes the v2 "0.95 X Canopy pre-cut" narrative that
 will otherwise contradict every line of v1.1 doc anyone reads.
 
-- [ ] **F6.** Rewrite `plugin/go/canoliq/AGENTS.md:101-116` (the
+- [x] **F6.** Rewrite `plugin/go/canoliq/AGENTS.md:101-116` (the
       "Whitepaper §7 reconciliation" section) to describe the v1.1 model:
       canoLiq receives `R` directly from committee distribution, applies
       12 % fee on `R`, user yield = `0.88 × R`. Update test comments in
@@ -154,18 +154,17 @@ will otherwise contradict every line of v1.1 doc anyone reads.
       `0.95` factor — **test inputs do not change** (the 1000 uCNPY input
       stays the same, but the narrative becomes "given R = 1000" rather
       than "given gross X = 1053 with 0.95X reaching the pool").
-- [ ] **F14.** Rename genesis bucket `"Plugin & Dev Grants"` → `"Developer
+- [x] **F14.** Rename genesis bucket `"Plugin & Dev Grants"` → `"Developer
       Grants & Ecosystem"` in `genesis.localnet.json:78`,
       `genesis.testnet.json:79` (Tokenomics v1.1 §6).
-- [ ] **F15.** Rename `"Liquidity Incentives (Farming)"` → `"Liquidity
+- [x] **F15.** Rename `"Liquidity Incentives (Farming)"` → `"Liquidity
       Incentives"` in `genesis.localnet.json:17`, `genesis.testnet.json:18`
       (v1.1 drops the "(Farming)" suffix).
 
 ### L2 verification
-- [ ] `cd plugin/go && go test ./canoliq/...` — nothing should reference
-      the old bucket names by string match. Run a localnet bring-up and
-      confirm `/v1/globals` reports the new names where the genesis files
-      surface them.
+- [x] `cd plugin/go && go test ./canoliq/...` — nothing should reference
+      the old bucket names by string match. (README production-template
+      block also updated to v1.1 vesting numbers + new bucket names.)
 
 ## L3. Per-address collection indexes (Phase 3 §1.1-bis carryover)
 
