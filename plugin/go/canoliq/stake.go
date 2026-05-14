@@ -202,7 +202,8 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 	stakeKey := KeyForCLIQStake(msg.FromAddress)
 	idxKey := KeyForCLIQStakeIndex()
 	gKey := KeyForGlobals()
-	cQ, fQ, sQ, iQ, gQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	unstIdxKey := KeyForUnstakingIndex(msg.FromAddress)
+	cQ, fQ, sQ, iQ, gQ, uiQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -210,6 +211,7 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 			{QueryId: sQ, Key: stakeKey},
 			{QueryId: iQ, Key: idxKey},
 			{QueryId: gQ, Key: gKey},
+			{QueryId: uiQ, Key: unstIdxKey},
 		},
 	})
 	if err != nil {
@@ -223,6 +225,7 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 	stake := new(contract.CLIQStake)
 	idx := new(contract.CLIQStakeIndex)
 	globals := new(contract.CanoliqGlobals)
+	unstIdx := new(contract.UnstakingIndex)
 	stakePresent := false
 	for _, r := range resp.Results {
 		if len(r.Entries) == 0 {
@@ -248,6 +251,10 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 			}
 		case gQ:
 			if e := contract.Unmarshal(r.Entries[0].Value, globals); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
+		case uiQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, unstIdx); e != nil {
 				return &contract.PluginDeliverResponse{Error: e}
 			}
 		}
@@ -291,8 +298,14 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 	if e != nil {
 		return &contract.PluginDeliverResponse{Error: e}
 	}
+	unstIdx.Ids = append(unstIdx.Ids, id)
+	unstIdxBz, e := contract.Marshal(unstIdx)
+	if e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
 	sets := []*contract.PluginSetOp{
 		{Key: KeyForCLIQUnstaking(msg.FromAddress, id), Value: uBz},
+		{Key: unstIdxKey, Value: unstIdxBz},
 		{Key: gKey, Value: gBz},
 		{Key: feePoolKey, Value: feeBz},
 	}
@@ -331,13 +344,15 @@ func (c *Canoliq) DeliverMessageCLIQClaimUnstake(msg *contract.MessageCLIQClaimU
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
 	uKey := KeyForCLIQUnstaking(msg.FromAddress, msg.UnstakeId)
 	balKey := KeyForCLIQBalance(msg.FromAddress)
-	cQ, fQ, uQ, bQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	unstIdxKey := KeyForUnstakingIndex(msg.FromAddress)
+	cQ, fQ, uQ, bQ, uiQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
 			{QueryId: fQ, Key: feePoolKey},
 			{QueryId: uQ, Key: uKey},
 			{QueryId: bQ, Key: balKey},
+			{QueryId: uiQ, Key: unstIdxKey},
 		},
 	})
 	if err != nil {
@@ -349,6 +364,7 @@ func (c *Canoliq) DeliverMessageCLIQClaimUnstake(msg *contract.MessageCLIQClaimU
 	cnpy := new(contract.Account)
 	feePool := new(contract.Pool)
 	unstake := new(contract.UnstakingCLIQ)
+	unstIdx := new(contract.UnstakingIndex)
 	var balBz []byte
 	uPresent := false
 	for _, r := range resp.Results {
@@ -371,6 +387,10 @@ func (c *Canoliq) DeliverMessageCLIQClaimUnstake(msg *contract.MessageCLIQClaimU
 			uPresent = unstake.Address != nil
 		case bQ:
 			balBz = r.Entries[0].Value
+		case uiQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, unstIdx); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
 		}
 	}
 	if !uPresent {
@@ -402,6 +422,16 @@ func (c *Canoliq) DeliverMessageCLIQClaimUnstake(msg *contract.MessageCLIQClaimU
 		deletes = append(deletes, &contract.PluginDeleteOp{Key: cnpyKey})
 	} else {
 		sets = append(sets, &contract.PluginSetOp{Key: cnpyKey, Value: cnpyBz})
+	}
+	unstIdx.Ids = removeUint64(unstIdx.Ids, msg.UnstakeId)
+	if len(unstIdx.Ids) == 0 {
+		deletes = append(deletes, &contract.PluginDeleteOp{Key: unstIdxKey})
+	} else {
+		uiBz, e := contract.Marshal(unstIdx)
+		if e != nil {
+			return &contract.PluginDeliverResponse{Error: e}
+		}
+		sets = append(sets, &contract.PluginSetOp{Key: unstIdxKey, Value: uiBz})
 	}
 	if _, e := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets, Deletes: deletes}); e != nil {
 		return &contract.PluginDeliverResponse{Error: e}

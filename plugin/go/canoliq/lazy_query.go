@@ -78,21 +78,19 @@ type lazyResult struct {
 
 // AccountView is the composite per-address response. CNPY comes from
 // the core Account record; cCNPY/CLIQ are scalar plugin keys; CLIQStake
-// and validator-incentive are direct lookups; vesting is enumerated via
-// VestingIndex (the only existing per-address index).
-//
-// Pending redemptions and unstakes are *not* in the composite because
-// canoliq has no per-address index for them. They can be fetched
-// individually via /v1/redemption/{addr}/{id}; per-address listing is
-// a future addition that requires a write-side index.
+// and validator-incentive are direct lookups; vesting / pending
+// redemptions / pending unstakes are enumerated via per-address
+// indexes maintained by their respective Deliver handlers.
 type AccountView struct {
-	Address           string                    `json:"address"`
-	CNPY              uint64                    `json:"cnpy"`
-	CCNPY             uint64                    `json:"ccnpy"`
-	CLIQLiquid        uint64                    `json:"cliqLiquid"`
-	CLIQStake         *contract.CLIQStake       `json:"cliqStake,omitempty"`
-	ValidatorIncentive uint64                   `json:"validatorIncentive"`
-	Vestings          []*VestingView            `json:"vestings,omitempty"`
+	Address            string                    `json:"address"`
+	CNPY               uint64                    `json:"cnpy"`
+	CCNPY              uint64                    `json:"ccnpy"`
+	CLIQLiquid         uint64                    `json:"cliqLiquid"`
+	CLIQStake          *contract.CLIQStake       `json:"cliqStake,omitempty"`
+	ValidatorIncentive uint64                    `json:"validatorIncentive"`
+	Vestings           []*VestingView            `json:"vestings,omitempty"`
+	Redemptions        []*contract.Redemption    `json:"redemptions,omitempty"`
+	Unstakes           []*contract.UnstakingCLIQ `json:"unstakes,omitempty"`
 }
 
 // VestingView is one schedule annotated with the cumulative unlocked
@@ -216,7 +214,9 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 	stakeKey := KeyForCLIQStake(addr)
 	valIncentKey := KeyForValidatorIncentives(addr)
 	vestIdxKey := KeyForVestingIndex(addr)
-	cQ, ccQ, lcQ, sQ, viQ, vQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	redemIdxKey := KeyForRedemptionIndex(addr)
+	unstIdxKey := KeyForUnstakingIndex(addr)
+	cQ, ccQ, lcQ, sQ, viQ, vQ, riQ, uiQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -225,6 +225,8 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 			{QueryId: sQ, Key: stakeKey},
 			{QueryId: viQ, Key: valIncentKey},
 			{QueryId: vQ, Key: vestIdxKey},
+			{QueryId: riQ, Key: redemIdxKey},
+			{QueryId: uiQ, Key: unstIdxKey},
 		},
 	})
 	if err != nil {
@@ -234,7 +236,7 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 		return nil, resp.Error
 	}
 	view := &AccountView{Address: hexAddress(addr)}
-	var vestIdxBz []byte
+	var vestIdxBz, redemIdxBz, unstIdxBz []byte
 	for _, r := range resp.Results {
 		if len(r.Entries) == 0 {
 			continue
@@ -263,6 +265,10 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 			view.ValidatorIncentive = DecodeUint64(raw)
 		case vQ:
 			vestIdxBz = raw
+		case riQ:
+			redemIdxBz = raw
+		case uiQ:
+			unstIdxBz = raw
 		}
 	}
 	if len(vestIdxBz) > 0 {
@@ -276,7 +282,98 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 		}
 		view.Vestings = views
 	}
+	if len(redemIdxBz) > 0 {
+		idx := new(contract.RedemptionIndex)
+		if e := contract.Unmarshal(redemIdxBz, idx); e != nil {
+			return nil, e
+		}
+		reds, err := c.readRedemptions(addr, idx.Ids)
+		if err != nil {
+			return nil, err
+		}
+		view.Redemptions = reds
+	}
+	if len(unstIdxBz) > 0 {
+		idx := new(contract.UnstakingIndex)
+		if e := contract.Unmarshal(unstIdxBz, idx); e != nil {
+			return nil, e
+		}
+		uns, err := c.readUnstakings(addr, idx.Ids)
+		if err != nil {
+			return nil, err
+		}
+		view.Unstakes = uns
+	}
 	return view, nil
+}
+
+// readRedemptions batch-reads Redemption records for the given ids.
+// Missing entries are skipped silently — the index may briefly contain
+// an id that has been claimed concurrently in the same block, though
+// the write-side index maintenance keeps this rare.
+func (c *Canoliq) readRedemptions(addr []byte, ids []uint64) ([]*contract.Redemption, *contract.PluginError) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	keys := make([]*contract.PluginKeyRead, 0, len(ids))
+	for _, id := range ids {
+		keys = append(keys, &contract.PluginKeyRead{QueryId: rand.Uint64(), Key: KeyForRedemption(addr, id)})
+	}
+	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+	out := make([]*contract.Redemption, 0, len(ids))
+	for _, r := range resp.Results {
+		if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
+			continue
+		}
+		red := new(contract.Redemption)
+		if e := contract.Unmarshal(r.Entries[0].Value, red); e != nil {
+			return nil, e
+		}
+		if red.Address == nil {
+			continue
+		}
+		out = append(out, red)
+	}
+	return out, nil
+}
+
+// readUnstakings batch-reads UnstakingCLIQ records for the given ids.
+func (c *Canoliq) readUnstakings(addr []byte, ids []uint64) ([]*contract.UnstakingCLIQ, *contract.PluginError) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	keys := make([]*contract.PluginKeyRead, 0, len(ids))
+	for _, id := range ids {
+		keys = append(keys, &contract.PluginKeyRead{QueryId: rand.Uint64(), Key: KeyForCLIQUnstaking(addr, id)})
+	}
+	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+	out := make([]*contract.UnstakingCLIQ, 0, len(ids))
+	for _, r := range resp.Results {
+		if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
+			continue
+		}
+		u := new(contract.UnstakingCLIQ)
+		if e := contract.Unmarshal(r.Entries[0].Value, u); e != nil {
+			return nil, e
+		}
+		if u.Address == nil {
+			continue
+		}
+		out = append(out, u)
+	}
+	return out, nil
 }
 
 // buildVestingView returns every vesting schedule for an address.

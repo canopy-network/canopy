@@ -122,13 +122,15 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
 	balKey := KeyForCCNPYBalance(msg.FromAddress)
 	globalsKey := KeyForGlobals()
-	fQ, gQ, bQ, feeQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	redemIdxKey := KeyForRedemptionIndex(msg.FromAddress)
+	fQ, gQ, bQ, feeQ, riQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: fQ, Key: fromKey},
 			{QueryId: gQ, Key: globalsKey},
 			{QueryId: bQ, Key: balKey},
 			{QueryId: feeQ, Key: feePoolKey},
+			{QueryId: riQ, Key: redemIdxKey},
 		},
 	})
 	if err != nil {
@@ -140,6 +142,7 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 	from := new(contract.Account)
 	globals := new(contract.CanoliqGlobals)
 	feePool := new(contract.Pool)
+	redemIdx := new(contract.RedemptionIndex)
 	var balBz []byte
 	for _, r := range resp.Results {
 		if len(r.Entries) == 0 {
@@ -158,6 +161,10 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 			balBz = r.Entries[0].Value
 		case feeQ:
 			if e := contract.Unmarshal(r.Entries[0].Value, feePool); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
+		case riQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, redemIdx); e != nil {
 				return &contract.PluginDeliverResponse{Error: e}
 			}
 		}
@@ -209,9 +216,15 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 	if e != nil {
 		return &contract.PluginDeliverResponse{Error: e}
 	}
+	redemIdx.Ids = append(redemIdx.Ids, id)
+	riBz, e := contract.Marshal(redemIdx)
+	if e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
 	sets := []*contract.PluginSetOp{
 		{Key: globalsKey, Value: gBz},
 		{Key: KeyForRedemption(msg.FromAddress, id), Value: rBz},
+		{Key: redemIdxKey, Value: riBz},
 		{Key: feePoolKey, Value: feeBz},
 	}
 	var deletes []*contract.PluginDeleteOp
@@ -244,13 +257,15 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	fromKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
 	globalsKey := KeyForGlobals()
-	rQ, fQ, gQ, feeQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	redemIdxKey := KeyForRedemptionIndex(msg.FromAddress)
+	rQ, fQ, gQ, feeQ, riQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: rQ, Key: rKey},
 			{QueryId: fQ, Key: fromKey},
 			{QueryId: gQ, Key: globalsKey},
 			{QueryId: feeQ, Key: feePoolKey},
+			{QueryId: riQ, Key: redemIdxKey},
 		},
 	})
 	if err != nil {
@@ -263,6 +278,7 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	from := new(contract.Account)
 	globals := new(contract.CanoliqGlobals)
 	feePool := new(contract.Pool)
+	redemIdx := new(contract.RedemptionIndex)
 	var rPresent bool
 	for _, r := range resp.Results {
 		if len(r.Entries) == 0 {
@@ -284,6 +300,10 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 			}
 		case feeQ:
 			if e := contract.Unmarshal(r.Entries[0].Value, feePool); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
+		case riQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, redemIdx); e != nil {
 				return &contract.PluginDeliverResponse{Error: e}
 			}
 		}
@@ -317,13 +337,25 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	if e != nil {
 		return &contract.PluginDeliverResponse{Error: e}
 	}
+	sets := []*contract.PluginSetOp{
+		{Key: fromKey, Value: fromBz},
+		{Key: globalsKey, Value: gBz},
+		{Key: feePoolKey, Value: feeBz},
+	}
+	deletes := []*contract.PluginDeleteOp{{Key: rKey}}
+	redemIdx.Ids = removeUint64(redemIdx.Ids, msg.RedemptionId)
+	if len(redemIdx.Ids) == 0 {
+		deletes = append(deletes, &contract.PluginDeleteOp{Key: redemIdxKey})
+	} else {
+		riBz, e := contract.Marshal(redemIdx)
+		if e != nil {
+			return &contract.PluginDeliverResponse{Error: e}
+		}
+		sets = append(sets, &contract.PluginSetOp{Key: redemIdxKey, Value: riBz})
+	}
 	if _, e := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
-		Sets: []*contract.PluginSetOp{
-			{Key: fromKey, Value: fromBz},
-			{Key: globalsKey, Value: gBz},
-			{Key: feePoolKey, Value: feeBz},
-		},
-		Deletes: []*contract.PluginDeleteOp{{Key: rKey}},
+		Sets:    sets,
+		Deletes: deletes,
 	}); e != nil {
 		return &contract.PluginDeliverResponse{Error: e}
 	}

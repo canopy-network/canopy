@@ -174,38 +174,52 @@ there is no per-address index that names those records. This blocks the
 (M1).
 
 ### Proto + state
-- [ ] Reuse `VestingIndex`'s shape (`repeated uint64 ids`). No new proto
-      types — add two key helpers in `state.go`:
-      `KeyForRedemptionIndex(addr)`, `KeyForUnstakingIndex(addr)`. Pick
-      fresh domain bytes (next free after 20 = 21, 22).
+- [x] Added typed `RedemptionIndex` and `UnstakingIndex` proto messages
+      (mirrors the established `VestingIndex` / `ProposalIndex` /
+      `CLIQStakeIndex` pattern; named-type readability over wire-format
+      reuse of `VestingIndex.ScheduleIds`). Two new key helpers:
+      `KeyForRedemptionIndex(addr)` (domain byte 21),
+      `KeyForUnstakingIndex(addr)` (domain byte 22), plus a
+      `removeUint64` helper.
 
 ### Write-side maintenance
-- [ ] `DeliverMessageCanoliqRedeem` appends to `KeyForRedemptionIndex(addr)`.
-- [ ] `DeliverMessageCanoliqClaimRedemption` removes the matured id from
-      the index alongside the existing record delete.
-- [ ] `DeliverMessageCLIQUnstake` appends to `KeyForUnstakingIndex(addr)`.
-- [ ] `DeliverMessageCLIQClaimUnstake` removes the matured id.
+- [x] `DeliverMessageCanoliqRedeem` appends to `KeyForRedemptionIndex(addr)`.
+- [x] `DeliverMessageCanoliqClaimRedemption` removes the matured id from
+      the index alongside the existing record delete; deletes the index
+      key entirely when the last id is claimed.
+- [x] `DeliverMessageCLIQUnstake` appends to `KeyForUnstakingIndex(addr)`.
+- [x] `DeliverMessageCLIQClaimUnstake` removes the matured id; deletes
+      the index key when empty.
 
 ### Read-side
-- [ ] Extend `buildAccountView` to load both indexes, batch-read the
-      records, and add `Redemptions []*contract.Redemption` and `Unstakes
-      []*contract.UnstakingCLIQ` to `AccountView`.
+- [x] Extended `buildAccountView` to load both indexes, batch-read the
+      records, and add `Redemptions []*contract.Redemption` and
+      `Unstakes []*contract.UnstakingCLIQ` to `AccountView`.
 - [ ] Optional dedicated routes: `/v1/account/{addr}/redemptions`,
       `/v1/account/{addr}/unstakes` (lazy queue, same pattern as vesting).
+      Deferred — composite `/v1/account/{addr}` already exposes both
+      lists; standalone routes are nice-to-have and can land alongside
+      T6 stuck-redemption alerts if needed.
 
 ### L3 tests
-- [ ] Index append/remove invariants under all four flows (redeem → claim,
-      unstake → claim, partial / out-of-order claims). Index must end empty
+- [x] Index append/remove invariants under all four flows
+      (`TestRedemptionIndexAppendOnRedeem`, `TestRedemptionIndexRemoveOnClaim`,
+      `TestRedemptionIndexOutOfOrderClaims`,
+      `TestUnstakingIndexAppendOnUnstake`, `TestUnstakingIndexRemoveOnClaim`,
+      `TestUnstakingIndexOutOfOrderClaims`). Index ends empty / deleted
       when no records remain.
-- [ ] `/v1/account/{addr}` reflects the new lists in correct order.
-- [ ] Idempotency: re-applying a deletion of a non-present id is a no-op.
+- [x] `buildAccountView` reflects the new lists in correct order
+      (`TestAccountViewIncludesRedemptionsAndUnstakes`).
+- [x] Idempotency: `removeUint64` is a no-op when the id is absent
+      (`TestRemoveUint64Idempotent`).
 
 ## Localnet exit criteria
-- [ ] L1 + L2 + L3 all landed and tested.
+- [x] L1 + L2 + L3 all landed and tested.
 - [ ] `.docker/compose.yaml` chain reconciles a 36 M-uCNPY inflow against
-      v1.1 fee math.
-- [ ] `/v1/account/{addr}` returns redemption + unstake collections.
-- [ ] No production-path file references "0.95 X" or "DAO 5 % pre-cut" or
+      v1.1 fee math. (In-process reward tests pass; live docker-compose
+      re-verification still pending.)
+- [x] `/v1/account/{addr}` returns redemption + unstake collections.
+- [x] No production-path file references "0.95 X" or "DAO 5 % pre-cut" or
       "Liquidity Incentives (Farming)" or "Plugin & Dev Grants".
 - [ ] Coordination message to Canopy Discord (from old plan): chainId
       selection, fee + split, supply + distribution, validator opt-in,

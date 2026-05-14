@@ -32,6 +32,8 @@ var (
 	domainMultisig      = []byte{18}
 	domainInsurance     = []byte{19}
 	domainStakeIndex    = []byte{20}
+	domainRedeemIndex   = []byte{21}
+	domainUnstakeIndex  = []byte{22}
 
 	treasuryCanopy = []byte("canopy")
 	treasuryCliq   = []byte("cliq")
@@ -102,6 +104,12 @@ func KeyForRedemption(addr []byte, redemptionID uint64) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainRedemption, addr, FormatUint64(redemptionID))
 }
 
+// KeyForRedemptionIndex returns the per-address redemption index key listing
+// pending redemption ids.
+func KeyForRedemptionIndex(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainRedeemIndex, addr)
+}
+
 // KeyForTreasuryCNPY returns the canoLiq DAO CNPY treasury key.
 func KeyForTreasuryCNPY() []byte {
 	return JoinLenPrefix(canoliqPrefix, domainTreasury, treasuryCanopy)
@@ -131,6 +139,24 @@ func KeyForCLIQStake(addr []byte) []byte {
 // (address, unstake_id) pair.
 func KeyForCLIQUnstaking(addr []byte, unstakeID uint64) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainCliqUnstaking, addr, FormatUint64(unstakeID))
+}
+
+// KeyForUnstakingIndex returns the per-address unstake index key listing
+// pending unstake ids.
+func KeyForUnstakingIndex(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainUnstakeIndex, addr)
+}
+
+// removeUint64 returns a copy of s with the first occurrence of id removed.
+// If id is not present the input is returned unchanged. Used to drop matured
+// ids from per-address Redemption / Unstaking indexes.
+func removeUint64(s []uint64, id uint64) []uint64 {
+	for i, v := range s {
+		if v == id {
+			return append(s[:i:i], s[i+1:]...)
+		}
+	}
+	return s
 }
 
 // KeyForCLIQStakeIndex returns the singleton key listing active staker addresses.

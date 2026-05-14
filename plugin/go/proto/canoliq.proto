@@ -96,6 +96,13 @@ message Redemption {
   uint64 unbond_complete_height = 4; // @gotags: json:"unbondCompleteHeight"
 }
 
+// RedemptionIndex enumerates pending redemption ids per address so the
+// account view can list them without a state-range scan.
+message RedemptionIndex {
+  // ids: pending redemption ids owned by the indexed address
+  repeated uint64 ids = 1;
+}
+
 // VestingSchedule encodes a linear vesting schedule with a cliff for a CLIQ
 // allocation tranche. One schedule may exist per (address, schedule_id).
 message VestingSchedule {
@@ -279,6 +286,13 @@ message UnstakingCLIQ {
   uint64 amount = 3;
   // mature_height: block height at which the unstake matures
   uint64 mature_height = 4; // @gotags: json:"matureHeight"
+}
+
+// UnstakingIndex enumerates pending unstake ids per address so the
+// account view can list them without a state-range scan.
+message UnstakingIndex {
+  // ids: pending unstake ids owned by the indexed address
+  repeated uint64 ids = 1;
 }
 
 // VoteChoice enumerates the legal vote selections.
