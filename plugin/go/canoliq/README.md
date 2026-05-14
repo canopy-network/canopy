@@ -590,7 +590,7 @@ Copy `genesis.testnet.json` to `genesis.production.json` and edit:
 {
   "blocksPerYear": 5256000,
   "buckets": [
-    { "name": "Validators & Infrastructure", "bps": 2200, "cliffMonths": 6,  "vestMonths": 24,
+    { "name": "Validators & Infrastructure", "bps": 2200, "cliffMonths": 12, "vestMonths": 24,
       "recipients": [{ "address": "<multisig-validators>",   "bps": 10000 }]},
     { "name": "Liquidity Incentives",        "bps": 1500, "cliffMonths": 0,  "vestMonths": 0,
       "recipients": [{ "address": "<multisig-liquidity>",    "bps": 10000 }]},
@@ -598,9 +598,9 @@ Copy `genesis.testnet.json` to `genesis.production.json` and edit:
       "recipients": [{ "address": "<multisig-community>",    "bps": 10000 }]},
     { "name": "DAO Treasury",                "bps": 1500, "cliffMonths": 0,  "vestMonths": 0,
       "recipients": [{ "address": "<multisig-dao>",          "bps": 10000 }]},
-    { "name": "Founders & Core Team",        "bps": 1200, "cliffMonths": 12, "vestMonths": 24,
+    { "name": "Founders & Core Team",        "bps": 1200, "cliffMonths": 12, "vestMonths": 36,
       "recipients": [{ "address": "<timelock-founders>",     "bps": 10000 }]},
-    { "name": "Strategic Partners",          "bps": 1000, "cliffMonths": 6,  "vestMonths": 18,
+    { "name": "Strategic Partners",          "bps": 1000, "cliffMonths": 6,  "vestMonths": 12,
       "recipients": [{ "address": "<timelock-partners>",     "bps": 10000 }]},
     { "name": "Plugin & Dev Grants",         "bps": 600,  "cliffMonths": 0,  "vestMonths": 0,
       "recipients": [{ "address": "<multisig-grants>",       "bps": 10000 }]}

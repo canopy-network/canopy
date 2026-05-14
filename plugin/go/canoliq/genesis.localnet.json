@@ -4,7 +4,7 @@
     {
       "name": "Validators & Infrastructure",
       "bps": 2200,
-      "cliffMonths": 6,
+      "cliffMonths": 12,
       "vestMonths": 24,
       "recipients": [
         {
@@ -53,7 +53,7 @@
       "name": "Founders & Core Team",
       "bps": 1200,
       "cliffMonths": 12,
-      "vestMonths": 24,
+      "vestMonths": 36,
       "recipients": [
         {
           "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
@@ -65,7 +65,7 @@
       "name": "Strategic Partners & Integrations",
       "bps": 1000,
       "cliffMonths": 6,
-      "vestMonths": 18,
+      "vestMonths": 12,
       "recipients": [
         {
           "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",

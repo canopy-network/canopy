@@ -200,14 +200,14 @@ func TestClaimRedemptionMaturity(t *testing.T) {
 }
 
 // TestRewardSplitWhitepaperExample verifies the canonical 12% / 40-30-15-15
-// split for a clean X=1000 reward delta. With Phase 2 defaults the 30%
-// treasury slice is further skimmed by insurance_bps=1500 (15% of treasury
-// → 1.5% of fee), per WP §11. Expected:
+// split for a clean X=1000 reward delta. With v1.1 defaults the 30%
+// treasury slice is skimmed by insurance_bps=500 (5% of treasury → 0.15%
+// of fee) per Tokenomics v1.1 §8. Expected:
 //   fee  = 120
 //   net  = 880  (to user pool)
 //   user-rebate (40% of 120) = 48 (also to user pool) → 928 total to pool
-//   treasury (30%) = 36 → 31 after insurance skim (mulDiv(36,1500,10000)=5)
-//   insurance pool                                   = 5
+//   treasury (30%) = 36 → 35 after insurance skim (mulDiv(36,500,10000)=1)
+//   insurance pool                                   = 1
 //   validators (15%) = 18
 //   buyback  (15%)   = 18
 func TestRewardSplitWhitepaperExample(t *testing.T) {
@@ -229,11 +229,11 @@ func TestRewardSplitWhitepaperExample(t *testing.T) {
 	if g2.TotalPooledCnpy != 928 {
 		t.Errorf("total_pooled_cnpy: got %d want 928", g2.TotalPooledCnpy)
 	}
-	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 31 {
-		t.Errorf("treasury: got %d want 31 (36 - 5 insurance skim)", got)
+	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 35 {
+		t.Errorf("treasury: got %d want 35 (36 - 1 insurance skim)", got)
 	}
-	if got := DecodeUint64(s.get(KeyForInsurancePool())); got != 5 {
-		t.Errorf("insurance: got %d want 5 (15%% of 36 treasury slice)", got)
+	if got := DecodeUint64(s.get(KeyForInsurancePool())); got != 1 {
+		t.Errorf("insurance: got %d want 1 (5%% of 36 treasury slice, truncated)", got)
 	}
 	if got := DecodeUint64(s.get(KeyForBuybackPool())); got != 18 {
 		t.Errorf("buyback: got %d want 18", got)
@@ -288,11 +288,11 @@ func TestWhitepaperSection7Reconciliation(t *testing.T) {
 		t.Errorf("user yield: got %d want %d (whitepaper §7: 0.88 * 0.95 * X with truncation)", g2.TotalPooledCnpy, wantUserYield)
 	}
 	// Sanity: fee = 114, treasury = 34 (114*3000/10000 = 34.2 truncated, plus
-	// any residual from rounding the splits goes to treasury). Phase 2 then
-	// skims insurance_bps=1500 off the treasury credit per WP §11.
+	// any residual from rounding the splits goes to treasury). insurance_bps=500
+	// skims 5% off the treasury credit per Tokenomics v1.1 §8.
 	const wantFee = 114
 	const wantTreasuryRaw = 34 + 1 // 35 before insurance skim
-	const wantInsurance = 5        // mulDiv(35, 1500, 10000) = 5
+	const wantInsurance = 1        // mulDiv(35, 500, 10000) = 1
 	const wantTreasury = wantTreasuryRaw - wantInsurance
 	const wantValidators = 17 // 114*1500/10000 = 17.1 → 17
 	const wantBuyback = 17    // ditto
@@ -606,13 +606,14 @@ func TestRewardSweepMultiBlock(t *testing.T) {
 	if g2.LastProcessedRewardPool != 1392 {
 		t.Fatalf("block 2 watermark: got %d want 1392", g2.LastProcessedRewardPool)
 	}
-	// Per-block: treasury 36→31 + insurance 5; on block 2 treasury 18→16 +
-	// insurance 2. Cumulative: treasury 47, insurance 7, validators 27, buyback 27.
-	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 47 {
-		t.Errorf("treasury cumulative: got %d want 47", got)
+	// Per-block under insurance_bps=500: treasury 36→35 + insurance 1; block 2
+	// treasury 18→18 + insurance 0 (mulDiv(18,500,10000)=0.9 → 0). Cumulative:
+	// treasury 53, insurance 1, validators 27, buyback 27.
+	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 53 {
+		t.Errorf("treasury cumulative: got %d want 53", got)
 	}
-	if got := DecodeUint64(s.get(KeyForInsurancePool())); got != 7 {
-		t.Errorf("insurance cumulative: got %d want 7", got)
+	if got := DecodeUint64(s.get(KeyForInsurancePool())); got != 1 {
+		t.Errorf("insurance cumulative: got %d want 1", got)
 	}
 	if got := DecodeUint64(s.get(KeyForBuybackPool())); got != 27 {
 		t.Errorf("buyback cumulative: got %d want 27", got)
@@ -630,8 +631,8 @@ func TestRewardSweepMultiBlock(t *testing.T) {
 	if g3.TotalPooledCnpy != 1392 {
 		t.Fatalf("block 3 pooled drift: got %d want 1392", g3.TotalPooledCnpy)
 	}
-	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 47 {
-		t.Errorf("block 3 treasury drift: got %d want 47", got)
+	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 53 {
+		t.Errorf("block 3 treasury drift: got %d want 53", got)
 	}
 }
 

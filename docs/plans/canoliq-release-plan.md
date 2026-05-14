@@ -108,32 +108,34 @@ on-chain numbers right and remove every trace of v2 from the docs/tests.
 
 Genesis JSON + one validator path. All P0 blocking spec violations. ~1 day.
 
-- [ ] **F1.** `plugin/go/canoliq/genesis.localnet.json:6-8` and
+- [x] **F1.** `plugin/go/canoliq/genesis.localnet.json:6-8` and
       `genesis.testnet.json:6-9` — validator vesting `cliffMonths: 6,
       vestMonths: 24` → `cliffMonths: 12, vestMonths: 24` (Tokenomics
       v1.1 §2.1: 3-yr linear, 12-mo cliff).
-- [ ] **F2.** `genesis.localnet.json:55-56` and `genesis.testnet.json:56-57`
+- [x] **F2.** `genesis.localnet.json:55-56` and `genesis.testnet.json:56-57`
       — founders `cliffMonths: 12, vestMonths: 24` → `cliffMonths: 12,
       vestMonths: 36` (Tokenomics v1.1 §2.5: 4-yr linear, 12-mo cliff).
-- [ ] **F3.** `genesis.localnet.json:67-68` and `genesis.testnet.json:68-69`
+- [x] **F3.** `genesis.localnet.json:67-68` and `genesis.testnet.json:68-69`
       — strategic partners `cliffMonths: 6, vestMonths: 18` → `cliffMonths:
       6, vestMonths: 12` (Tokenomics v1.1 §2.6 summary table: 18-mo total
       span; under "Duration includes cliff" reading the current code is
       wrong).
-- [ ] **F4.** `plugin/go/canoliq/config.go::ValidateParams` (~line 243)
+- [x] **F4.** `plugin/go/canoliq/config.go::ValidateParams` (~line 243)
       currently only rejects `FeeBps > 10_000`. Add `if p.FeeBps < 500 ||
       p.FeeBps > 2000 { return ErrInvalidParams() }`. Any `param-change`
       proposal violating this must fail validation, not pass through.
       (Tokenomics v1.1 §3.3 / WP §4.1: 5 %–20 %.)
-- [ ] **F5.** `config.go:219` `InsuranceBps: 1500 → 500` (matches the "5 %
+- [x] **F5.** `config.go:219` `InsuranceBps: 1500 → 500` (matches the "5 %
       of DAO treasury inflow" reading of Tokenomics §8). Track the
       5 %-of-peak-TVL *cap* as a peak-TVL tracker in **T4** (testnet wave);
       for now this is the continuous-skim correction only.
 
 ### L1 verification
-- [ ] `cd plugin/go && go test ./canoliq/...` — vesting unit tests assert
+- [x] `cd plugin/go && go test ./canoliq/...` — vesting unit tests assert
       against configured `cliffMonths`/`vestMonths`, so F1–F3 should pass
-      unchanged. F4/F5 may need one or two fixture updates.
+      unchanged. F4/F5 may need one or two fixture updates. (Three reward
+      tests updated to match the new 5 % insurance skim arithmetic;
+      no other fixtures touched.)
 - [ ] Spin localnet via `.docker/compose.yaml`, send a 36 M-uCNPY inflow,
       hit `/v1/pools` + `/v1/globals` and assert the split now uses the
       corrected insurance bps and that a 25-% `param-change` proposal is

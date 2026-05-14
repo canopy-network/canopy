@@ -216,7 +216,7 @@ func DefaultParams() *contract.CanoliqParams {
 		RedeemFee:          10_000,
 		ClaimFee:           10_000,
 		CliqTransferFee:    10_000,
-		InsuranceBps:       1500,        // 15% of treasury slice ≈ 1.5% of fee — within WP §11
+		InsuranceBps:       500,         // 5% of treasury slice — matches Tokenomics v1.1 §8 "5% of DAO treasury inflow" reading
 		TreasuryThreshold:  1_000_000_000, // 1k CNPY-equivalent in uCNPY
 		MultisigSigners:    nil,         // populated at genesis (genesis.json) or via param-change vote
 		MultisigThreshold:  3,
@@ -240,7 +240,7 @@ func ValidateParams(p *contract.CanoliqParams) *contract.PluginError {
 	if p == nil {
 		return ErrInvalidParams()
 	}
-	if p.FeeBps > 10_000 {
+	if p.FeeBps < 500 || p.FeeBps > 2000 {
 		return ErrInvalidParams()
 	}
 	if p.UserRebateBps+p.TreasuryBps+p.ValidatorBps+p.BuybackBps != 10_000 {
