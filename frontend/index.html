@@ -459,7 +459,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
 .confirm-btns{display:flex;gap:9px}
 .confirm-btns .btn{flex:1;justify-content:center}
 
-/* μPRX inline display */
+/* PRX inline display (legacy, kept for CSS rule) */
 .prx-display{
   font-family:'JetBrains Mono',monospace;font-size:9px;
   color:var(--green);margin-top:3px;letter-spacing:.5px;
@@ -648,9 +648,9 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ct">// market_parameters</div>
     <div class="field"><label>Question</label><input id="c_question" type="text" placeholder="Will BTC reach $200k before 2026?"/></div>
     <div class="r3">
-      <div class="field"><label>B0 Liquidity (μPRX)</label><input id="c_b0" type="number" value="1000000" oninput="prxDisp(this,'c_b0_prx')"/><div class="prx-display" id="c_b0_prx">= 1.00 PRX</div><div class="hint">min 1 PRX</div></div>
+      <div class="field"><label>B0 Liquidity (PRX)</label><input id="c_b0" type="number" value="1000"/><div class="hint">min 1 PRX</div></div>
       <div class="field"><label>Expiry Height</label><input id="c_expiry" type="number" placeholder="auto"/><div class="hint">min +100 blocks</div></div>
-      <div class="field"><label>Fee (μPRX)</label><input id="c_fee" type="number" value="10000"/></div>
+      <div class="field"><label>Fee (PRX)</label><input id="c_fee" type="number" value="10"/></div>
     </div>
     <input id="c_nonce" type="hidden"/>
     <input id="c_creator" type="hidden"/>
@@ -683,9 +683,9 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       </div>
     </div>
     <div class="r3">
-      <div class="field"><label>Shares (μPRX units)</label><input id="p_shares" type="number" value="1000000" oninput="prxDisp(this,'p_shares_prx')"/><div class="prx-display" id="p_shares_prx">= 1.00 PRX</div><div class="hint">min 1,000,000</div></div>
-      <div class="field"><label>Max Cost (μPRX)</label><input id="p_maxcost" type="number" value="10000000" oninput="prxDisp(this,'p_maxcost_prx')"/><div class="prx-display" id="p_maxcost_prx">= 10.00 PRX</div><div class="hint">slippage guard</div></div>
-      <div class="field"><label>Fee (μPRX)</label><input id="p_fee" type="number" value="10000"/></div>
+      <div class="field"><label>Shares (PRX)</label><input id="p_shares" type="number" value="1"/><div class="hint">min 1 PRX</div></div>
+      <div class="field"><label>Max Cost (PRX)</label><input id="p_maxcost" type="number" value="10"/><div class="hint">slippage guard</div></div>
+      <div class="field"><label>Fee (PRX)</label><input id="p_fee" type="number" value="10"/></div>
     </div>
     <div class="btn-row">
       <button class="btn bp" id="btn_predict" onclick="signAndSubmit_predict()">⚡ Sign &amp; Submit</button>
@@ -716,7 +716,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
         <div class="obtn no" id="rbtn_no" onclick="setResOut(false)">NO</div>
       </div>
     </div>
-    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="r_fee" type="number" value="10000"/></div>
+    <div class="field" style="max-width:210px"><label>Fee (PRX)</label><input id="r_fee" type="number" value="10"/></div>
     <div class="btn-row">
       <button class="btn bp" id="btn_resolve" onclick="signAndSubmit_resolve()">⚡ Sign &amp; Submit</button>
       <button class="btn bg" onclick="build_resolve()">Build Payload</button>
@@ -739,7 +739,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="field"><label>Market ID (40 hex)</label><input id="cl_mid" type="text" placeholder="40 hex chars"/></div>
       <div class="field"><label>Claimant Address</label><input id="cl_addr" type="text" placeholder="40 hex chars"/></div>
     </div>
-    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="cl_fee" type="number" value="10000"/></div>
+    <div class="field" style="max-width:210px"><label>Fee (PRX)</label><input id="cl_fee" type="number" value="10"/></div>
     <div class="btn-row">
       <button class="btn bp" id="btn_claim" onclick="signAndSubmit_claim()">⚡ Sign &amp; Submit</button>
       <button class="btn bg" onclick="build_claim()">Build Payload</button>
@@ -760,9 +760,9 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ct">// resolver_registration</div>
     <div class="r2">
       <div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div>
-      <div class="field"><label>Stake Amount (μPRX)</label><input id="reg_stake" type="number" value="100000000" oninput="prxDisp(this,'reg_stake_prx')"/><div class="prx-display" id="reg_stake_prx">= 100.00 PRX</div><div class="hint">min 100,000,000 (= 100 PRX)</div></div>
+      <div class="field"><label>Stake Amount (PRX)</label><input id="reg_stake" type="number" value="100"/><div class="hint">min 100 PRX</div></div>
     </div>
-    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="reg_fee" type="number" value="10000"/></div>
+    <div class="field" style="max-width:210px"><label>Fee (PRX)</label><input id="reg_fee" type="number" value="10"/></div>
     <div class="btn-row">
       <button class="btn bp" id="btn_register" onclick="signAndSubmit_register()">⚡ Sign &amp; Submit</button>
       <button class="btn bg" onclick="build_register()">Build Payload</button>
@@ -792,8 +792,8 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       </div>
     </div>
     <div class="r2">
-      <div class="field"><label>Proposal Bond (μPRX)</label><input id="prop_bond" type="number" value="10000000"/><div class="hint">10 PRX minimum</div></div>
-      <div class="field"><label>Fee (μPRX)</label><input id="prop_fee" type="number" value="10000"/></div>
+      <div class="field"><label>Proposal Bond (PRX)</label><input id="prop_bond" type="number" value="10"/><div class="hint">10 PRX minimum</div></div>
+      <div class="field"><label>Fee (PRX)</label><input id="prop_fee" type="number" value="10"/></div>
     </div>
     <div class="btn-row">
       <button class="btn bp" id="btn_propose" onclick="signAndSubmit_propose()">⚡ Sign &amp; Submit</button>
@@ -818,8 +818,8 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="field"><label>Disputer Address</label><input id="dis_addr" type="text" placeholder="40 hex chars"/></div>
     </div>
     <div class="r2">
-      <div class="field"><label>Dispute Bond (μPRX)</label><input id="dis_bond" type="number" value="10000000"/><div class="hint">must match proposal bond</div></div>
-      <div class="field"><label>Fee (μPRX)</label><input id="dis_fee" type="number" value="10000"/></div>
+      <div class="field"><label>Dispute Bond (PRX)</label><input id="dis_bond" type="number" value="10"/><div class="hint">must match proposal bond</div></div>
+      <div class="field"><label>Fee (PRX)</label><input id="dis_fee" type="number" value="10"/></div>
     </div>
     <div class="btn-row">
       <button class="btn bp" id="btn_dispute" onclick="signAndSubmit_dispute()">⚡ Sign &amp; Submit</button>
@@ -846,7 +846,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     </div>
     <div class="r2">
       <div class="field"><label>Commit Hash (64 hex)</label><input id="cv_hash" type="text" placeholder="SHA256 of vote || nonce || addr"/></div>
-      <div class="field"><label>Fee (μPRX)</label><input id="cv_fee" type="number" value="10000"/></div>
+      <div class="field"><label>Fee (PRX)</label><input id="cv_fee" type="number" value="10"/></div>
     </div>
     <div class="btn-row">
       <button class="btn bp" id="btn_commit" onclick="signAndSubmit_commit()">⚡ Sign &amp; Submit</button>
@@ -878,7 +878,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     </div>
     <div class="r2">
       <div class="field"><label>Nonce (hex, 32 bytes)</label><input id="rv_nonce" type="text" placeholder="64 hex chars used in commit"/></div>
-      <div class="field"><label>Fee (μPRX)</label><input id="rv_fee" type="number" value="10000"/></div>
+      <div class="field"><label>Fee (PRX)</label><input id="rv_fee" type="number" value="10"/></div>
     </div>
     <div class="btn-row">
       <button class="btn bp" id="btn_reveal" onclick="signAndSubmit_reveal()">⚡ Sign &amp; Submit</button>
@@ -902,7 +902,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="field"><label>Market ID (40 hex)</label><input id="tal_mid" type="text" placeholder="40 hex chars"/></div>
       <div class="field"><label>Caller Address</label><input id="tal_addr" type="text" placeholder="40 hex chars"/></div>
     </div>
-    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="tal_fee" type="number" value="10000"/></div>
+    <div class="field" style="max-width:210px"><label>Fee (PRX)</label><input id="tal_fee" type="number" value="10"/></div>
     <div class="btn-row">
       <button class="btn bp" id="btn_tally" onclick="signAndSubmit_tally()">⚡ Sign &amp; Submit</button>
       <button class="btn bg" onclick="build_tally()">Build Payload</button>
@@ -925,7 +925,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="field"><label>Market ID (40 hex)</label><input id="fin_mid" type="text" placeholder="40 hex chars"/></div>
       <div class="field"><label>Caller Address</label><input id="fin_addr" type="text" placeholder="40 hex chars"/></div>
     </div>
-    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="fin_fee" type="number" value="10000"/></div>
+    <div class="field" style="max-width:210px"><label>Fee (PRX)</label><input id="fin_fee" type="number" value="10"/></div>
     <div class="btn-row">
       <button class="btn bp" id="btn_finalize" onclick="signAndSubmit_finalize()">⚡ Sign &amp; Submit</button>
       <button class="btn bg" onclick="build_finalize()">Build Payload</button>
@@ -948,7 +948,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="field"><label>Market ID (40 hex)</label><input id="sl_mid" type="text" placeholder="40 hex chars"/></div>
       <div class="field"><label>Claimant Address</label><input id="sl_addr" type="text" placeholder="40 hex chars"/></div>
     </div>
-    <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="sl_fee" type="number" value="10000"/></div>
+    <div class="field" style="max-width:210px"><label>Fee (PRX)</label><input id="sl_fee" type="number" value="10"/></div>
     <div class="btn-row">
       <button class="btn bp" id="btn_slash" onclick="signAndSubmit_slash()">⚡ Sign &amp; Submit</button>
       <button class="btn bg" onclick="build_slash()">Build Payload</button>
@@ -970,7 +970,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="field"><label>Address (40 hex)</label><input id="w_addr" type="text" placeholder="e7c7dad1…"/></div>
     <div class="btn-row"><button class="btn bp" onclick="queryAccount()">Query Balance</button></div>
     <div id="w_result" style="display:none;margin-top:16px">
-      <div class="bal-wrap"><div class="bal-num" id="w_balance">0</div><div class="bal-unit">μPRX LIQUID</div></div>
+      <div class="bal-wrap"><div class="bal-num" id="w_balance">0</div><div class="bal-unit">PRX LIQUID</div><div id="sk_balance" style="display:none"></div></div>
       <div class="addr-mono" id="w_addrD"></div>
     </div>
   </div>
@@ -981,8 +981,8 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="field"><label>To Address</label><input id="s_to" type="text" placeholder="40 hex chars"/></div>
     </div>
     <div class="r2">
-      <div class="field"><label>Amount (μPRX)</label><input id="s_amount" type="number" value="1000000" oninput="prxDisp(this,'s_amount_prx')"/><div class="prx-display" id="s_amount_prx">= 1.00 PRX</div></div>
-      <div class="field"><label>Fee (μPRX)</label><input id="s_fee" type="number" value="10000"/></div>
+      <div class="field"><label>Amount (PRX)</label><input id="s_amount" type="number" value="1"/></div>
+      <div class="field"><label>Fee (PRX)</label><input id="s_fee" type="number" value="10"/></div>
     </div>
     <div class="btn-row">
       <button class="btn bp" id="btn_send" onclick="signAndSubmit_send()">⚡ Sign &amp; Submit</button>
@@ -1136,7 +1136,7 @@ function boolF(f,v){return cat(tag(f,0),new Uint8Array([v?1:0]));}
 // ═══════════════════════════════════════════
 function h2b(hex){hex=hex.trim().toLowerCase();if(hex.length%2)throw new Error('Odd hex');const o=new Uint8Array(hex.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(hex.slice(i*2,i*2+2),16);return o;}
 function b2h(b){return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');}
-function fmtA(n){if(!n&&n!==0)return'—';const x=Number(n);if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1e3)return(x/1e3).toFixed(1)+'k';return String(x);}
+function fmtA(n){if(!n&&n!==0)return'—';const x=Number(n);if(x>=1e9)return(x/1e9).toFixed(2)+'B';if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1e3)return(x/1e3).toFixed(1)+'k';return String(x);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function addr40(s,label){if(!s||s.length!==40)throw new Error(`${label||'Address'} must be 40 hex chars`);}
 function mid40(s){addr40(s,'Market ID');}
@@ -1405,7 +1405,11 @@ async function refreshBalance(){
   if(!signerAddress)return;
   try{
     const d=await rpc('/v1/query/account',{address:signerAddress});
-    document.getElementById('sk_balance').textContent=Number(d.amount||0).toLocaleString();
+    const bal=Number(d.amount||0);
+    const wbal=document.getElementById('w_balance');if(wbal)wbal.textContent=bal.toLocaleString();
+    const wres=document.getElementById('w_result');if(wres)wres.style.display='block';
+    const wadr=document.getElementById('w_addrD');if(wadr)wadr.textContent=signerAddress;
+    const waddr=document.getElementById('w_addr');if(waddr&&!waddr.value)waddr.value=signerAddress;
   }catch{}
 }
 
@@ -1464,7 +1468,7 @@ window.loadMyPredictions = async function () {
           '<div style="display:flex;gap:12px">' +
             '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:' + (p.outcome ? 'var(--green)' : 'var(--red)') + '">' + (p.outcome ? 'YES' : 'NO') + '</span>' +
             '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Shares: ' + fmtA(p.shares) + '</span>' +
-            '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Max: ' + fmtA(p.maxCost) + ' μPRX</span>' +
+            '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Max: ' + fmtA(p.maxCost) + ' PRX</span>' +
           '</div>' +
         '</div>' +
         '<span style="font-family:JetBrains Mono,monospace;font-size:9px;color:var(--text3)">#' + p.height + '</span>' +
@@ -1673,7 +1677,7 @@ window.build_predict=function(){try{
   const shares=parseInt(document.getElementById('p_shares').value);
   const mc=parseInt(document.getElementById('p_maxcost').value);
   const fee=parseInt(document.getElementById('p_fee').value)||10000;
-  if(shares<1000000)throw new Error('Shares min 1,000,000');
+  if(shares<1)throw new Error('Shares min 1 PRX');
   showPL('po','pp',buildUnsigned('submit_prediction','type.googleapis.com/types.MessageSubmitPrediction',encPredict(mid,bettor,selectedOut,shares,mc),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_predict=async function(){try{
@@ -1682,7 +1686,7 @@ window.signAndSubmit_predict=async function(){try{
   const shares=parseInt(document.getElementById('p_shares').value);
   const mc=parseInt(document.getElementById('p_maxcost').value);
   const fee=parseInt(document.getElementById('p_fee').value)||10000;
-  if(shares<1000000)throw new Error('Shares min 1,000,000');
+  if(shares<1)throw new Error('Shares min 1 PRX');
   await doSubmit('submit_prediction','type.googleapis.com/types.MessageSubmitPrediction',encPredict(mid,bettor,selectedOut,shares,mc),{fee},'btn_predict','pend_predict');
 }catch(e){toast(e.message,true);}};
 
@@ -1719,14 +1723,14 @@ window.build_register=function(){try{
   const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
   const stake=parseInt(document.getElementById('reg_stake').value);
   const fee=parseInt(document.getElementById('reg_fee').value)||10000;
-  if(stake<100000000)throw new Error('Stake min 100,000,000 μPRX');
+  if(stake<100)throw new Error('Stake min 100 PRX');
   showPL('rego','regp',buildUnsigned('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_register=async function(){try{
   const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
   const stake=parseInt(document.getElementById('reg_stake').value);
   const fee=parseInt(document.getElementById('reg_fee').value)||10000;
-  if(stake<100000000)throw new Error('Stake min 100,000,000 μPRX');
+  if(stake<100)throw new Error('Stake min 100 PRX');
   await doSubmit('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee},'btn_register','pend_register');
 }catch(e){toast(e.message,true);}};
 
@@ -1840,19 +1844,7 @@ window.signAndSubmit_slash=async function(){try{
 // MAINNET POLISH — UI ONLY, NO CHAIN LOGIC
 // ═══════════════════════════════════════════
 
-// μPRX → PRX display
-window.prxDisp = function(input, targetId) {
-  const el = document.getElementById(targetId);
-  if (!el) return;
-  const v = parseFloat(input.value);
-  if (!isNaN(v) && v > 0) {
-    el.textContent = '= ' + (v / 1e6).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:6}) + ' PRX';
-    el.style.opacity = '1';
-  } else {
-    el.textContent = '';
-    el.style.opacity = '0';
-  }
-};
+// PRX denomination — 1 PRX = 1 PRX (no micro conversion)
 
 // Copy to clipboard
 window.copyText = async function(text, btn) {
@@ -1947,20 +1939,21 @@ function showConfirm(title, rows) {
 // Patch signAndSubmit_* functions with confirm gate
 // We wrap — originals are preserved, just called after confirmation
 (function() {
+  const v = id => parseInt(document.getElementById(id)?.value)||0;
   const patches = {
     signAndSubmit_create:  () => [
       'Create Market', [
         ['Question',    document.getElementById('c_question')?.value || '—', ''],
-        ['B0 Liquidity', ((parseInt(document.getElementById('c_b0')?.value)||0)/1e6).toFixed(2)+' PRX', 'green'],
-        ['Fee',         ((parseInt(document.getElementById('c_fee')?.value)||10000)/1e6).toFixed(4)+' PRX', ''],
+        ['B0 Liquidity', v('c_b0').toLocaleString()+' PRX', 'green'],
+        ['Fee',         v('c_fee')+' PRX', ''],
       ]
     ],
     signAndSubmit_predict: () => [
       'Submit Prediction', [
         ['Market ID',   (document.getElementById('p_mid')?.value||'').slice(0,16)+'…', ''],
         ['Outcome',     (window._selectedOut!==false?'YES':'NO'), window._selectedOut!==false?'green':'red'],
-        ['Shares',      ((parseInt(document.getElementById('p_shares')?.value)||0)/1e6).toFixed(2)+' PRX', ''],
-        ['Max Cost',    ((parseInt(document.getElementById('p_maxcost')?.value)||0)/1e6).toFixed(2)+' PRX', ''],
+        ['Shares',      v('p_shares').toLocaleString()+' PRX', ''],
+        ['Max Cost',    v('p_maxcost').toLocaleString()+' PRX', ''],
       ]
     ],
     signAndSubmit_resolve: () => [
@@ -1978,20 +1971,20 @@ function showConfirm(title, rows) {
     signAndSubmit_register: () => [
       'Register Resolver', [
         ['Address',     (document.getElementById('reg_addr')?.value||'').slice(0,16)+'…', ''],
-        ['Stake',       ((parseInt(document.getElementById('reg_stake')?.value)||0)/1e6).toFixed(2)+' PRX', 'green'],
+        ['Stake',       v('reg_stake').toLocaleString()+' PRX', 'green'],
       ]
     ],
     signAndSubmit_propose: () => [
       'Propose Outcome', [
         ['Market ID',   (document.getElementById('prop_mid')?.value||'').slice(0,16)+'…', ''],
         ['Outcome',     (window._propOut!==false?'YES':'NO'), window._propOut!==false?'green':'red'],
-        ['Bond',        ((parseInt(document.getElementById('prop_bond')?.value)||0)/1e6).toFixed(2)+' PRX', ''],
+        ['Bond',        v('prop_bond').toLocaleString()+' PRX', ''],
       ]
     ],
     signAndSubmit_dispute: () => [
       'File Dispute', [
         ['Market ID',   (document.getElementById('dis_mid')?.value||'').slice(0,16)+'…', ''],
-        ['Bond',        ((parseInt(document.getElementById('dis_bond')?.value)||0)/1e6).toFixed(2)+' PRX', ''],
+        ['Bond',        v('dis_bond').toLocaleString()+' PRX', ''],
       ]
     ],
     signAndSubmit_commit: () => [
@@ -2025,7 +2018,7 @@ function showConfirm(title, rows) {
     signAndSubmit_send: () => [
       'Send $PRX', [
         ['To',    (document.getElementById('s_to')?.value||'').slice(0,16)+'…', ''],
-        ['Amount', ((parseInt(document.getElementById('s_amount')?.value)||0)/1e6).toFixed(2)+' PRX', 'green'],
+        ['Amount', v('s_amount').toLocaleString()+' PRX', 'green'],
       ]
     ],
   };
