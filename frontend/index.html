@@ -412,9 +412,124 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
 /* Import premium fonts */
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
 
+/* ══════════════════════════════════════════════
+   MAINNET POLISH — additive only, no overrides
+ */
+
+/* Confirm Modal */
+.confirm-overlay{
+  display:none;position:fixed;inset:0;z-index:500;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(2px);
+  align-items:center;justify-content:center;
+}
+.confirm-overlay.open{display:flex}
+.confirm-box{
+  background:var(--surface);border:1px solid var(--border2);
+  width:min(420px,92vw);padding:24px;position:relative;
+}
+[data-theme="dark"] .confirm-box::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--green),transparent);
+}
+.confirm-title{
+  font-family:'Unbounded',sans-serif;font-size:13px;font-weight:700;
+  color:var(--text);margin-bottom:4px;letter-spacing:.5px;
+}
+.confirm-subtitle{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--text3);letter-spacing:2px;text-transform:uppercase;
+  margin-bottom:16px;
+}
+.confirm-rows{margin-bottom:18px}
+.confirm-row{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:7px 0;border-bottom:1px solid var(--border);
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+}
+.confirm-row:last-child{border-bottom:none}
+.confirm-lbl{color:var(--text3);font-size:9px;letter-spacing:1.5px;text-transform:uppercase}
+.confirm-val{color:var(--text);word-break:break-all;text-align:right;max-width:60%}
+.confirm-val.green{color:var(--green)}
+.confirm-val.red{color:var(--red)}
+.confirm-warn{
+  background:var(--ydim);border:1px solid rgba(255,204,68,.18);
+  padding:8px 11px;font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--yellow);margin-bottom:16px;line-height:1.6;
+}
+.confirm-btns{display:flex;gap:9px}
+.confirm-btns .btn{flex:1;justify-content:center}
+
+/* μPRX inline display */
+.prx-display{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--green);margin-top:3px;letter-spacing:.5px;
+  min-height:13px;transition:opacity .15s;
+}
+
+/* Copy button on addr/payload */
+.copy-wrap{position:relative;display:flex;align-items:stretch}
+.copy-wrap input,.copy-wrap .addr-mono{flex:1;min-width:0}
+.copy-btn{
+  flex-shrink:0;padding:0 10px;
+  background:var(--bg2);border:1px solid var(--border2);border-left:none;
+  color:var(--text3);cursor:pointer;font-size:11px;
+  transition:color .15s,border-color .15s;line-height:1;
+  display:flex;align-items:center;
+}
+.copy-btn:hover{color:var(--green);border-color:var(--green)}
+.copy-btn.ok{color:var(--green)}
+
+/* Session badge on signer */
+.session-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;background:var(--rdim);
+  border:1px solid rgba(255,61,90,.25);
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--red);cursor:pointer;transition:all .15s;margin-top:8px;
+}
+.session-badge:hover{background:rgba(255,61,90,.15);border-color:var(--red)}
+.session-badge.hidden{display:none}
+
+/* Offline banner */
+.offline-banner{
+  display:none;position:sticky;top:0;z-index:90;
+  background:var(--ydim);border-bottom:1px solid rgba(255,204,68,.25);
+  padding:7px 32px;font-family:'JetBrains Mono',monospace;
+  font-size:10px;color:var(--yellow);letter-spacing:.5px;
+  align-items:center;gap:10px;
+}
+.offline-banner.show{display:flex}
+
+/* Mobile r3 fix */
+@media(max-width:600px){
+  .r3{grid-template-columns:1fr 1fr}
+}
+@media(max-width:420px){
+  .r3{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
+
+<!-- OFFLINE BANNER -->
+<div class="offline-banner" id="offlineBanner">
+  ⚠ &nbsp; Node offline — connect via <strong style="cursor:pointer;text-decoration:underline" onclick="showPage('node',null)">Node settings</strong> to submit transactions
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-title" id="confirmTitle">Confirm Transaction</div>
+    <div class="confirm-subtitle" id="confirmSubtitle">review before signing</div>
+    <div class="confirm-rows" id="confirmRows"></div>
+    <div class="confirm-warn">⚡ This will broadcast a signed transaction to the Canopy network. Action cannot be undone.</div>
+    <div class="confirm-btns">
+      <button class="btn bp" id="confirmOk">Sign &amp; Submit</button>
+      <button class="btn bg" onclick="closeConfirm()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- MOBILE HEADER -->
 <header class="mob-head">
@@ -533,7 +648,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ct">// market_parameters</div>
     <div class="field"><label>Question</label><input id="c_question" type="text" placeholder="Will BTC reach $200k before 2026?"/></div>
     <div class="r3">
-      <div class="field"><label>B0 Liquidity (μPRX)</label><input id="c_b0" type="number" value="1000000"/><div class="hint">min 1 PRX</div></div>
+      <div class="field"><label>B0 Liquidity (μPRX)</label><input id="c_b0" type="number" value="1000000" oninput="prxDisp(this,'c_b0_prx')"/><div class="prx-display" id="c_b0_prx">= 1.00 PRX</div><div class="hint">min 1 PRX</div></div>
       <div class="field"><label>Expiry Height</label><input id="c_expiry" type="number" placeholder="auto"/><div class="hint">min +100 blocks</div></div>
       <div class="field"><label>Fee (μPRX)</label><input id="c_fee" type="number" value="10000"/></div>
     </div>
@@ -568,8 +683,8 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       </div>
     </div>
     <div class="r3">
-      <div class="field"><label>Shares (μPRX units)</label><input id="p_shares" type="number" value="1000000"/><div class="hint">min 1,000,000</div></div>
-      <div class="field"><label>Max Cost (μPRX)</label><input id="p_maxcost" type="number" value="10000000"/><div class="hint">slippage guard</div></div>
+      <div class="field"><label>Shares (μPRX units)</label><input id="p_shares" type="number" value="1000000" oninput="prxDisp(this,'p_shares_prx')"/><div class="prx-display" id="p_shares_prx">= 1.00 PRX</div><div class="hint">min 1,000,000</div></div>
+      <div class="field"><label>Max Cost (μPRX)</label><input id="p_maxcost" type="number" value="10000000" oninput="prxDisp(this,'p_maxcost_prx')"/><div class="prx-display" id="p_maxcost_prx">= 10.00 PRX</div><div class="hint">slippage guard</div></div>
       <div class="field"><label>Fee (μPRX)</label><input id="p_fee" type="number" value="10000"/></div>
     </div>
     <div class="btn-row">
@@ -645,7 +760,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="ct">// resolver_registration</div>
     <div class="r2">
       <div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div>
-      <div class="field"><label>Stake Amount (μPRX)</label><input id="reg_stake" type="number" value="100000000"/><div class="hint">min 100,000,000 (= 100 PRX)</div></div>
+      <div class="field"><label>Stake Amount (μPRX)</label><input id="reg_stake" type="number" value="100000000" oninput="prxDisp(this,'reg_stake_prx')"/><div class="prx-display" id="reg_stake_prx">= 100.00 PRX</div><div class="hint">min 100,000,000 (= 100 PRX)</div></div>
     </div>
     <div class="field" style="max-width:210px"><label>Fee (μPRX)</label><input id="reg_fee" type="number" value="10000"/></div>
     <div class="btn-row">
@@ -866,7 +981,7 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
       <div class="field"><label>To Address</label><input id="s_to" type="text" placeholder="40 hex chars"/></div>
     </div>
     <div class="r2">
-      <div class="field"><label>Amount (μPRX)</label><input id="s_amount" type="number" value="1000000"/></div>
+      <div class="field"><label>Amount (μPRX)</label><input id="s_amount" type="number" value="1000000" oninput="prxDisp(this,'s_amount_prx')"/><div class="prx-display" id="s_amount_prx">= 1.00 PRX</div></div>
       <div class="field"><label>Fee (μPRX)</label><input id="s_fee" type="number" value="10000"/></div>
     </div>
     <div class="btn-row">
@@ -896,6 +1011,9 @@ code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg2)
     <div class="btn-row">
       <button class="btn bp" onclick="loadKey()">Load Key</button>
       <button class="btn bg" onclick="clearKey()">Clear</button>
+    </div>
+    <div class="session-badge hidden" id="sessionClearBadge" onclick="clearKey()">
+      ✕ &nbsp; Clear session — wipe key from RAM
     </div>
     <div id="sk_derived" style="display:none;margin-top:16px">
       <div class="div"></div>
@@ -1717,6 +1835,255 @@ window.signAndSubmit_slash=async function(){try{
   const fee=parseInt(document.getElementById('sl_fee').value)||10000;
   await doSubmit('claim_slash','type.googleapis.com/types.MessageClaimSlash',encSlash(mid,addr),{fee},'btn_slash','pend_slash');
 }catch(e){toast(e.message,true);}};
+
+// ═══════════════════════════════════════════
+// MAINNET POLISH — UI ONLY, NO CHAIN LOGIC
+// ═══════════════════════════════════════════
+
+// μPRX → PRX display
+window.prxDisp = function(input, targetId) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  const v = parseFloat(input.value);
+  if (!isNaN(v) && v > 0) {
+    el.textContent = '= ' + (v / 1e6).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:6}) + ' PRX';
+    el.style.opacity = '1';
+  } else {
+    el.textContent = '';
+    el.style.opacity = '0';
+  }
+};
+
+// Copy to clipboard
+window.copyText = async function(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+    if (btn) { btn.textContent = '✓'; btn.classList.add('ok'); setTimeout(() => { btn.textContent = '⎘'; btn.classList.remove('ok'); }, 1800); }
+    toast('Copied');
+  } catch { toast('Copy failed', true); }
+};
+
+// Wire copy buttons to derived address and pubkey after key load
+function wireCopyBtns() {
+  const pairs = [
+    ['sk_addr', 'copy_sk_addr'],
+    ['sk_pub',  'copy_sk_pub'],
+  ];
+  pairs.forEach(([srcId, btnId]) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.onclick = function() {
+      const el = document.getElementById(srcId);
+      copyText(el ? el.textContent.trim() : '', this);
+    };
+  });
+  // payload boxes
+  document.querySelectorAll('.payload-box textarea').forEach(ta => {
+    const box = ta.closest('.payload-box');
+    if (!box || box.querySelector('.copy-payload-btn')) return;
+    const b = document.createElement('button');
+    b.className = 'btn bg bsm copy-payload-btn';
+    b.style.cssText = 'margin-top:6px;font-size:10px';
+    b.textContent = '⎘ Copy payload';
+    b.onclick = function() { copyText(ta.value, this); };
+    box.appendChild(b);
+  });
+}
+
+// Inject copy buttons into derived key display
+function injectKeyboardCopyBtns() {
+  const addrEl = document.getElementById('sk_addr');
+  const pubEl  = document.getElementById('sk_pub');
+  if (addrEl && !document.getElementById('copy_sk_addr')) {
+    const wrap = document.createElement('div');
+    wrap.className = 'copy-wrap';
+    addrEl.parentNode.insertBefore(wrap, addrEl);
+    wrap.appendChild(addrEl);
+    const btn = document.createElement('button');
+    btn.id = 'copy_sk_addr'; btn.className = 'copy-btn'; btn.textContent = '⎘';
+    btn.title = 'Copy address';
+    wrap.appendChild(btn);
+  }
+  if (pubEl && !document.getElementById('copy_sk_pub')) {
+    const wrap = document.createElement('div');
+    wrap.className = 'copy-wrap';
+    pubEl.parentNode.insertBefore(wrap, pubEl);
+    wrap.appendChild(pubEl);
+    const btn = document.createElement('button');
+    btn.id = 'copy_sk_pub'; btn.className = 'copy-btn'; btn.textContent = '⎘';
+    btn.title = 'Copy pubkey';
+    wrap.appendChild(btn);
+  }
+  wireCopyBtns();
+}
+
+// Confirm modal
+let _confirmResolve = null;
+window.closeConfirm = function() {
+  document.getElementById('confirmOverlay').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(false); _confirmResolve = null; }
+};
+document.getElementById('confirmOk').onclick = function() {
+  document.getElementById('confirmOverlay').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(true); _confirmResolve = null; }
+};
+document.getElementById('confirmOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeConfirm();
+});
+
+function showConfirm(title, rows) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmSubtitle').textContent = 'review before signing · canopy network';
+    const rowsEl = document.getElementById('confirmRows');
+    rowsEl.innerHTML = rows.map(([l, v, cls]) =>
+      `<div class="confirm-row"><span class="confirm-lbl">${l}</span><span class="confirm-val ${cls||''}">${v}</span></div>`
+    ).join('');
+    document.getElementById('confirmOverlay').classList.add('open');
+  });
+}
+
+// Patch signAndSubmit_* functions with confirm gate
+// We wrap — originals are preserved, just called after confirmation
+(function() {
+  const patches = {
+    signAndSubmit_create:  () => [
+      'Create Market', [
+        ['Question',    document.getElementById('c_question')?.value || '—', ''],
+        ['B0 Liquidity', ((parseInt(document.getElementById('c_b0')?.value)||0)/1e6).toFixed(2)+' PRX', 'green'],
+        ['Fee',         ((parseInt(document.getElementById('c_fee')?.value)||10000)/1e6).toFixed(4)+' PRX', ''],
+      ]
+    ],
+    signAndSubmit_predict: () => [
+      'Submit Prediction', [
+        ['Market ID',   (document.getElementById('p_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Outcome',     (window._selectedOut!==false?'YES':'NO'), window._selectedOut!==false?'green':'red'],
+        ['Shares',      ((parseInt(document.getElementById('p_shares')?.value)||0)/1e6).toFixed(2)+' PRX', ''],
+        ['Max Cost',    ((parseInt(document.getElementById('p_maxcost')?.value)||0)/1e6).toFixed(2)+' PRX', ''],
+      ]
+    ],
+    signAndSubmit_resolve: () => [
+      'Resolve Market', [
+        ['Market ID',   (document.getElementById('r_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Outcome',     (window._resolveOut!==false?'YES':'NO'), window._resolveOut!==false?'green':'red'],
+      ]
+    ],
+    signAndSubmit_claim: () => [
+      'Claim Winnings', [
+        ['Market ID',   (document.getElementById('cl_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Claimant',    (document.getElementById('cl_addr')?.value||'').slice(0,16)+'…', ''],
+      ]
+    ],
+    signAndSubmit_register: () => [
+      'Register Resolver', [
+        ['Address',     (document.getElementById('reg_addr')?.value||'').slice(0,16)+'…', ''],
+        ['Stake',       ((parseInt(document.getElementById('reg_stake')?.value)||0)/1e6).toFixed(2)+' PRX', 'green'],
+      ]
+    ],
+    signAndSubmit_propose: () => [
+      'Propose Outcome', [
+        ['Market ID',   (document.getElementById('prop_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Outcome',     (window._propOut!==false?'YES':'NO'), window._propOut!==false?'green':'red'],
+        ['Bond',        ((parseInt(document.getElementById('prop_bond')?.value)||0)/1e6).toFixed(2)+' PRX', ''],
+      ]
+    ],
+    signAndSubmit_dispute: () => [
+      'File Dispute', [
+        ['Market ID',   (document.getElementById('dis_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Bond',        ((parseInt(document.getElementById('dis_bond')?.value)||0)/1e6).toFixed(2)+' PRX', ''],
+      ]
+    ],
+    signAndSubmit_commit: () => [
+      'Commit Vote', [
+        ['Market ID',   (document.getElementById('cv_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Commit Hash', (document.getElementById('cv_hash')?.value||'').slice(0,16)+'…', ''],
+      ]
+    ],
+    signAndSubmit_reveal: () => [
+      'Reveal Vote', [
+        ['Market ID',   (document.getElementById('rv_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Vote',        (window._revOut!==false?'YES':'NO'), window._revOut!==false?'green':'red'],
+      ]
+    ],
+    signAndSubmit_tally: () => [
+      'Tally Votes', [
+        ['Market ID',   (document.getElementById('tal_mid')?.value||'').slice(0,16)+'…', ''],
+      ]
+    ],
+    signAndSubmit_finalize: () => [
+      'Finalize Market', [
+        ['Market ID',   (document.getElementById('fin_mid')?.value||'').slice(0,16)+'…', ''],
+      ]
+    ],
+    signAndSubmit_slash: () => [
+      'Claim Slash', [
+        ['Market ID',   (document.getElementById('sl_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Claimant',    (document.getElementById('sl_addr')?.value||'').slice(0,16)+'…', ''],
+      ]
+    ],
+    signAndSubmit_send: () => [
+      'Send $PRX', [
+        ['To',    (document.getElementById('s_to')?.value||'').slice(0,16)+'…', ''],
+        ['Amount', ((parseInt(document.getElementById('s_amount')?.value)||0)/1e6).toFixed(2)+' PRX', 'green'],
+      ]
+    ],
+  };
+
+  // Expose outcome vars so patches can read them
+  // (they already exist as module-level vars; we shadow-expose via a getter trick)
+  Object.defineProperty(window, '_selectedOut', { get: () => typeof selectedOut !== 'undefined' ? selectedOut : true });
+  Object.defineProperty(window, '_resolveOut',  { get: () => typeof resolveOut !== 'undefined' ? resolveOut : true });
+  Object.defineProperty(window, '_propOut',     { get: () => typeof propOut !== 'undefined' ? propOut : true });
+  Object.defineProperty(window, '_revOut',      { get: () => typeof revOut !== 'undefined' ? revOut : true });
+
+  Object.keys(patches).forEach(name => {
+    const orig = window[name];
+    if (!orig) return;
+    window[name] = async function() {
+      const [title, rows] = patches[name]();
+      const ok = await showConfirm(title, rows);
+      if (ok) await orig();
+    };
+  });
+})();
+
+// Offline banner wired to RPC status
+const _origCheckRPC = window.checkRPC;
+window.checkRPC = async function() {
+  try {
+    await _origCheckRPC();
+    document.getElementById('offlineBanner').classList.remove('show');
+  } catch {
+    document.getElementById('offlineBanner').classList.add('show');
+  }
+};
+
+// Session badge visibility
+const _origLoadKey = window.loadKey;
+window.loadKey = async function() {
+  await _origLoadKey();
+  const badge = document.getElementById('sessionClearBadge');
+  if (badge) badge.classList.remove('hidden');
+  injectKeyboardCopyBtns();
+  setTimeout(wireCopyBtns, 100);
+};
+const _origClearKey = window.clearKey;
+window.clearKey = function() {
+  _origClearKey();
+  const badge = document.getElementById('sessionClearBadge');
+  if (badge) badge.classList.add('hidden');
+};
+
+// Wire payload copy buttons when pages are shown
+const _origShowPage = window.showPage;
+window.showPage = function(id, btn) {
+  _origShowPage(id, btn);
+  setTimeout(wireCopyBtns, 50);
+};
+
+// Init copy btn injection
+injectKeyboardCopyBtns();
 
 // ═══════════════════════════════════════════
 // INIT
