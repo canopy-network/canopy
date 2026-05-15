@@ -190,79 +190,93 @@ func (s *SMT) Commit(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 
 // CommitParallel() executes deferred operations in parallel by partitioning them into
 // 8 subtrees based on their 3-bit prefix (000-111), avoiding conflicts between operations
-// that would modify overlapping tree regions. Each subtree is processed independently,
-// then the results are merged back into the main tree.
+// that would modify overlapping tree regions. Each subtree is processed independently
+// with its own Txn copy to avoid lock contention, then the results are merged back into
+// the main tree.
 func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 	// if there are too few operations, fall back to sequential processing
 	// if len(unsortedOps) < NumSubtrees*2 {
 	// 	return s.Commit(unsortedOps)
 	// }
 
-	// sort operations by their 3-bit prefix to avoid conflicts
+	parentTxn, ok := s.store.(*Txn)
+	if !ok {
+		return s.Commit(unsortedOps)
+	}
+
 	groups, err := s.sortOperationsByPrefix(unsortedOps)
 	if err != nil {
 		return err
 	}
 
-	// add synthetic borders to enable safe parallel processing
 	cleanup, err := s.addSyntheticBorders()
 	if err != nil {
 		return err
 	}
 	defer func() {
-		// cleanup synthetic borders regardless of success/failure
 		if cleanupErr := cleanup(); cleanupErr != nil && err == nil {
 			err = cleanupErr
 		}
 	}()
 
-	// get subtree roots for parallel processing
 	subtreeRoots, err := s.getSubtreeRoots()
 	if err != nil {
 		return err
 	}
 
-	// process subtrees in parallel using goroutines
 	type subtreeResult struct {
 		index int
+		store *subtreeStore
 		err   lib.ErrorI
 	}
 
 	resultChan := make(chan subtreeResult, NumSubtrees)
 	activeSubtrees := 0
 
-	// launch goroutines for each subtree that has operations
 	for i := 0; i < NumSubtrees; i++ {
 		if len(groups[i]) == 0 {
-			continue // skip empty groups
+			continue
 		}
-
 		activeSubtrees++
-		go func(idx int, ops []*node, root *node) {
-			// create an isolated subtree for this prefix
-			subtree := s.createSubtree(root, ops)
-			// reset subtree state for processing
+		st := parentTxn.newSubtreeStore()
+
+		go func(idx int, ops []*node, root *node, store *subtreeStore) {
+			subtree := &SMT{
+				store:        store,
+				root:         root,
+				keyBitLength: s.keyBitLength,
+				nodeCache:    make(map[string]*node),
+				operations:   ops,
+				minKey:       s.minKey,
+				maxKey:       s.maxKey,
+			}
 			subtree.reset()
-			// process operations in this subtree
-			err := subtree.commit(true)
-			// send result back
-			resultChan <- subtreeResult{index: idx, err: err}
-		}(i, groups[i], subtreeRoots[i])
+			commitErr := subtree.commit(true)
+			resultChan <- subtreeResult{
+				index: idx,
+				store: store,
+				err:   commitErr,
+			}
+		}(i, groups[i], subtreeRoots[i], st)
 	}
 
-	// collect results from all active subtrees
+	results := make([]subtreeResult, 0, activeSubtrees)
 	for completed := 0; completed < activeSubtrees; completed++ {
 		result := <-resultChan
 		if result.err != nil {
-			// if any subtree fails, we need to return the error
-			// the cleanup function will handle synthetic border removal
+			// Drain remaining results before returning so goroutines
+			// finish and don't race with the deferred cleanup.
+			for completed++; completed < activeSubtrees; completed++ {
+				<-resultChan
+			}
 			return result.err
 		}
+		results = append(results, result)
+	}
+	for _, result := range results {
+		parentTxn.mergeSubtreeOps(result.store)
 	}
 
-	// after all subtrees are processed, the tree state is already consistent
-	// because each subtree operation updated the shared store
-	// we just need to refresh our in-memory view of the root
 	s.root, err = s.getNode(s.root.Key.bytes())
 	if err != nil {
 		return err
@@ -545,19 +559,6 @@ func (s *SMT) getSubtreeRoots() (roots []*node, err lib.ErrorI) {
 		}
 	}
 	return
-}
-
-// createSubtree() initializes the subtree structure
-func (s *SMT) createSubtree(root *node, operations []*node) *SMT {
-	return &SMT{
-		store:        s.store,
-		root:         root,
-		keyBitLength: s.keyBitLength,
-		nodeCache:    make(map[string]*node),
-		operations:   operations,
-		minKey:       s.minKey,
-		maxKey:       s.maxKey,
-	}
 }
 
 // sortOperationsByPrefix returns 8 sorted slices grouped by 3-bit prefix: 000 to 111

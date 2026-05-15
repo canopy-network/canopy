@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 
 	"github.com/canopy-network/canopy/lib"
@@ -272,6 +273,100 @@ func (t *Txn) NewIterator(prefix []byte, reverse bool, seek bool) (lib.IteratorI
 	}
 	// create a merged iterator for the parent and in-memory txn
 	return newTxnIterator(parentIterator, t.txn, prefix, t.prefix, reverse), nil
+}
+
+// newSubtreeStore creates a lightweight store for a parallel SMT subtree.
+// Reads check: (1) the subtree's own ops, (2) the parent Txn's ops, then
+// (3) an independent PebbleDB reader. Writes go only to the subtree's ops.
+// After the goroutine completes, call mergeSubtreeOps to fold the subtree
+// writes back into the parent Txn.
+func (t *Txn) newSubtreeStore() *subtreeStore {
+	var reader *VersionedStore
+	if vs, ok := t.reader.(*VersionedStore); ok {
+		reader = vs.NewParallelReader()
+	}
+	t.txn.l.Lock()
+	parentOps := make(map[uint64]valueOp, len(t.txn.ops))
+	for k, v := range t.txn.ops {
+		parentOps[k] = v
+	}
+	t.txn.l.Unlock()
+	return &subtreeStore{
+		ops:       make(map[uint64]valueOp),
+		parentOps: parentOps,
+		reader:    reader,
+		prefix:    t.prefix,
+		version:   t.writeVersion,
+	}
+}
+
+// mergeSubtreeOps copies all operations from a subtreeStore into the Txn.
+// Must only be called when no goroutines are accessing the subtreeStore.
+func (t *Txn) mergeSubtreeOps(s *subtreeStore) {
+	for k, v := range s.ops {
+		if _, exists := t.txn.ops[k]; !exists && t.sort {
+			t.addToSorted(v.key, k)
+		}
+		t.txn.ops[k] = v
+	}
+}
+
+// subtreeStore implements lib.RWStoreI for a parallel SMT subtree. It
+// provides three-layer reads (own ops → parent ops snapshot → PebbleDB) with
+// independent snapshot access to avoid lock contention on the DB path.
+// The parent ops are snapshotted at creation time so reads are lock-free.
+type subtreeStore struct {
+	l         sync.Mutex
+	ops       map[uint64]valueOp
+	parentOps map[uint64]valueOp
+	reader    *VersionedStore
+	prefix    []byte
+	version   uint64
+}
+
+func (s *subtreeStore) Get(key []byte) ([]byte, lib.ErrorI) {
+	h := lib.MemHash(key)
+	s.l.Lock()
+	if v, found := s.ops[h]; found {
+		s.l.Unlock()
+		if v.op == opDelete {
+			return nil, nil
+		}
+		return v.value, nil
+	}
+	s.l.Unlock()
+	if v, found := s.parentOps[h]; found {
+		if v.op == opDelete {
+			return nil, nil
+		}
+		return v.value, nil
+	}
+	if s.reader == nil {
+		return nil, nil
+	}
+	return s.reader.Get(lib.Append(s.prefix, key))
+}
+
+func (s *subtreeStore) Set(key, value []byte) lib.ErrorI {
+	s.l.Lock()
+	s.ops[lib.MemHash(key)] = valueOp{key: key, value: value, version: s.version, op: opSet}
+	s.l.Unlock()
+	return nil
+}
+
+func (s *subtreeStore) Delete(key []byte) lib.ErrorI {
+	s.l.Lock()
+	s.ops[lib.MemHash(key)] = valueOp{key: key, version: s.version, op: opDelete}
+	s.l.Unlock()
+	return nil
+}
+
+func (s *subtreeStore) Iterator([]byte) (lib.IteratorI, lib.ErrorI) {
+	return nil, ErrStoreGet(fmt.Errorf("iterator not supported on subtree store"))
+}
+
+func (s *subtreeStore) RevIterator([]byte) (lib.IteratorI, lib.ErrorI) {
+	return nil, ErrStoreGet(fmt.Errorf("reverse iterator not supported on subtree store"))
 }
 
 // Copy creates a new Txn with the same configuration and txn as the original

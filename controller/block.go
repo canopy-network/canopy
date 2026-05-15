@@ -277,12 +277,15 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// exit with error
 		return
 	}
-	// delete each transaction from the mempool
-	c.Mempool.DeleteTransaction(block.Transactions...)
+	syncing := c.isSyncing.Load()
+	if !syncing {
+		// delete each transaction from the mempool
+		c.Mempool.DeleteTransaction(block.Transactions...)
+	}
 	// parse committed block for straw polls
 	c.FSM.ParsePollTransactions(blockResult)
 	// if self was the proposer
-	if bytes.Equal(qc.ProposerKey, c.PublicKey) && !c.isSyncing.Load() {
+	if bytes.Equal(qc.ProposerKey, c.PublicKey) && !syncing {
 		// send the certificate results transaction on behalf of the quorum
 		c.SendCertificateResultsTx(qc)
 	}
@@ -301,35 +304,38 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// exit with error
 		return err
 	}
-	// reset the current mempool store to prepare for the next height
-	c.Mempool.FSM.Discard()
-	// set up the mempool with the actual new FSM for the next height
-	// this makes c.Mempool.FSM.Reset() is unnecessary
-	if c.Mempool.FSM, err = c.FSM.Copy(); err != nil {
-		// exit with error
-		return err
+	if !syncing {
+		// reset the current mempool store to prepare for the next height
+		c.Mempool.FSM.Discard()
+		// set up the mempool with the actual new FSM for the next height
+		if c.Mempool.FSM, err = c.FSM.Copy(); err != nil {
+			// exit with error
+			return err
+		}
+		// check the mempool to cache a proposal block and validate the mempool itself
+		c.Mempool.CheckMempool()
+		// reset mempool FSM
+		c.Mempool.FSM.Reset()
 	}
-	// check the mempool to cache a proposal block and validate the mempool itself
-	c.Mempool.CheckMempool()
-	// reset mempool FSM
-	c.Mempool.FSM.Reset()
 	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
 	defer c.UpdateTelemetry(qc, block, time.Since(start))
-	// publish root chain information to all nested chain subscribers.
-	for _, id := range c.RCManager.ChainIds() {
-		// get the root chain info
-		info, e := c.FSM.LoadRootChainInfo(id, 0)
-		if e != nil {
-			// don't log 'no-validators' error as this is possible
-			if e.Error() != lib.ErrNoValidators().Error() {
-				c.log.Error(e.Error())
+	if !syncing {
+		// publish root chain information to all nested chain subscribers
+		for _, id := range c.RCManager.ChainIds() {
+			// get the root chain info
+			info, e := c.FSM.LoadRootChainInfo(id, 0)
+			if e != nil {
+				// don't log 'no-validators' error as this is possible
+				if e.Error() != lib.ErrNoValidators().Error() {
+					c.log.Error(e.Error())
+				}
+				continue
 			}
-			continue
+			// set the timestamp
+			info.Timestamp = ts
+			// publish root chain information
+			go c.RCManager.Publish(id, info)
 		}
-		// set the timestamp
-		info.Timestamp = ts
-		// publish root chain information
-		go c.RCManager.Publish(id, info)
 	}
 	// exit
 	return

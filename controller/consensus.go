@@ -740,6 +740,16 @@ func (c *Controller) finishSyncing() {
 	c.Lock()
 	// when function completes, unlock
 	defer c.Unlock()
+	// reinitialize the mempool now that sync is complete
+	c.Mempool.L.Lock()
+	c.Mempool.Clear()
+	c.Mempool.FSM.Discard()
+	if mFSM, err := c.FSM.Copy(); err == nil {
+		c.Mempool.FSM = mFSM
+	}
+	c.Mempool.CheckMempool()
+	c.Mempool.FSM.Reset()
+	c.Mempool.L.Unlock()
 	// set the startup block metric (block height when first sync completed)
 	c.Metrics.SetStartupBlock(c.FSM.Height())
 	// signal a reset of bft for the chain

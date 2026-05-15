@@ -77,6 +77,18 @@ func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) *V
 	}
 }
 
+// NewParallelReader creates a read-only VersionedStore sharing the same
+// underlying database (snapshot) but with its own buffers, safe for concurrent
+// use from a separate goroutine. The returned store must NOT be closed, as it
+// does not own the underlying reader.
+func (vs *VersionedStore) NewParallelReader() *VersionedStore {
+	return &VersionedStore{
+		db:           vs.db,
+		version:      vs.version,
+		decodeBuffer: make([][]byte, 0, 5),
+	}
+}
+
 // Set() stores a key-value pair at the current version
 func (vs *VersionedStore) Set(key, value []byte) (err lib.ErrorI) {
 	return vs.SetAt(key, value, vs.version)
