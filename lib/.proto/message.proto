@@ -30,6 +30,12 @@ message MessageSend {
   bytes to_address = 2; // @gotags: json:"toAddress"
   // amount: is the amount of tokens in micro-denomination (uCNPY)
   uint64 amount = 3;
+  // vesting_start_height: the block height when linear vesting begins accruing
+  uint64 vesting_start_height = 4; // @gotags: json:"vestingStartHeight,omitempty"
+  // vesting_cliff_height: the block height before which vested funds are not withdrawable
+  uint64 vesting_cliff_height = 5; // @gotags: json:"vestingCliffHeight,omitempty"
+  // vesting_end_height: the block height when the vesting amount is fully unlocked
+  uint64 vesting_end_height = 6; // @gotags: json:"vestingEndHeight,omitempty"
 }
 
 // MessageStake is the Validator registration message, locking up a certain amount of tokens.

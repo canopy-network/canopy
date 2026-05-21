@@ -62,7 +62,19 @@ func (x *MessageSend) Check() lib.ErrorI {
 	if len(x.ToAddress) != crypto.AddressSize {
 		return ErrRecipientAddressSize()
 	}
-	return checkAmount(x.Amount)
+	if err := checkAmount(x.Amount); err != nil {
+		return err
+	}
+	if x.VestingStartHeight == 0 && x.VestingCliffHeight == 0 && x.VestingEndHeight == 0 {
+		return nil
+	}
+	if x.VestingEndHeight <= x.VestingStartHeight {
+		return ErrInvalidVesting()
+	}
+	if x.VestingCliffHeight < x.VestingStartHeight || x.VestingCliffHeight > x.VestingEndHeight {
+		return ErrInvalidVesting()
+	}
+	return nil
 }
 
 func (x *MessageSend) Name() string      { return MessageSendName }
@@ -72,9 +84,12 @@ func (x *MessageSend) Recipient() []byte { return crypto.NewAddressFromBytes(x.T
 // MarshalJSON() is the json.Marshaller implementation for MessageSend
 func (x MessageSend) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jsonMessageSend{
-		FromAddress: x.FromAddress,
-		ToAddress:   x.ToAddress,
-		Amount:      x.Amount,
+		FromAddress:        x.FromAddress,
+		ToAddress:          x.ToAddress,
+		Amount:             x.Amount,
+		VestingStartHeight: x.VestingStartHeight,
+		VestingCliffHeight: x.VestingCliffHeight,
+		VestingEndHeight:   x.VestingEndHeight,
 	})
 }
 
@@ -85,17 +100,23 @@ func (x *MessageSend) UnmarshalJSON(b []byte) (err error) {
 		return
 	}
 	*x = MessageSend{
-		FromAddress: j.FromAddress,
-		ToAddress:   j.ToAddress,
-		Amount:      j.Amount,
+		FromAddress:        j.FromAddress,
+		ToAddress:          j.ToAddress,
+		Amount:             j.Amount,
+		VestingStartHeight: j.VestingStartHeight,
+		VestingCliffHeight: j.VestingCliffHeight,
+		VestingEndHeight:   j.VestingEndHeight,
 	}
 	return
 }
 
 type jsonMessageSend struct {
-	FromAddress lib.HexBytes `json:"fromAddress"`
-	ToAddress   lib.HexBytes `json:"toAddress"`
-	Amount      uint64       `json:"amount"`
+	FromAddress        lib.HexBytes `json:"fromAddress"`
+	ToAddress          lib.HexBytes `json:"toAddress"`
+	Amount             uint64       `json:"amount"`
+	VestingStartHeight uint64       `json:"vestingStartHeight,omitempty"`
+	VestingCliffHeight uint64       `json:"vestingCliffHeight,omitempty"`
+	VestingEndHeight   uint64       `json:"vestingEndHeight,omitempty"`
 }
 
 var _ lib.MessageI = &MessageStake{} // interface enforcement

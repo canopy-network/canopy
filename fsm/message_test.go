@@ -699,6 +699,93 @@ func TestHandleMessageSend(t *testing.T) {
 	}
 }
 
+func TestHandleMessageSendWithVesting(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 4
+	sender := newTestAddress(t)
+	recipient := newTestAddress(t, 1)
+	require.NoError(t, sm.AccountAdd(sender, 10))
+
+	msg := &MessageSend{
+		FromAddress:        sender.Bytes(),
+		ToAddress:          recipient.Bytes(),
+		Amount:             10,
+		VestingStartHeight: 4,
+		VestingCliffHeight: 8,
+		VestingEndHeight:   14,
+	}
+	require.NoError(t, sm.HandleMessageSend(msg))
+
+	got, err := sm.GetAccount(recipient)
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), got.Amount)
+	require.Equal(t, uint64(10), got.VestingAmount)
+	require.Zero(t, sm.AccountSpendableAmount(got))
+}
+
+func TestHandleMessageSendWithIncompatibleVesting(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sender := newTestAddress(t)
+	recipient := newTestAddress(t, 1)
+	require.NoError(t, sm.AccountAdd(sender, 5))
+	require.NoError(t, sm.SetAccount(&Account{
+		Address:            recipient.Bytes(),
+		Amount:             10,
+		VestingAmount:      4,
+		VestingStartHeight: 4,
+		VestingCliffHeight: 6,
+		VestingEndHeight:   10,
+	}))
+
+	msg := &MessageSend{
+		FromAddress:        sender.Bytes(),
+		ToAddress:          recipient.Bytes(),
+		Amount:             5,
+		VestingStartHeight: 4,
+		VestingCliffHeight: 7,
+		VestingEndHeight:   11,
+	}
+	require.ErrorContains(t, sm.HandleMessageSend(msg), "incompatible vesting schedule")
+
+	senderAccount, err := sm.GetAccount(sender)
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), senderAccount.Amount)
+}
+
+func TestHandleMessageSendWithVestingReusesFullyVestedAccount(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 20
+	sender := newTestAddress(t)
+	recipient := newTestAddress(t, 1)
+	require.NoError(t, sm.AccountAdd(sender, 5))
+	require.NoError(t, sm.SetAccount(&Account{
+		Address:            recipient.Bytes(),
+		Amount:             10,
+		VestingAmount:      4,
+		VestingStartHeight: 4,
+		VestingCliffHeight: 6,
+		VestingEndHeight:   10,
+	}))
+
+	msg := &MessageSend{
+		FromAddress:        sender.Bytes(),
+		ToAddress:          recipient.Bytes(),
+		Amount:             5,
+		VestingStartHeight: 20,
+		VestingCliffHeight: 22,
+		VestingEndHeight:   30,
+	}
+	require.NoError(t, sm.HandleMessageSend(msg))
+
+	got, err := sm.GetAccount(recipient)
+	require.NoError(t, err)
+	require.Equal(t, uint64(15), got.Amount)
+	require.Equal(t, uint64(5), got.VestingAmount)
+	require.Equal(t, uint64(20), got.VestingStartHeight)
+	require.Equal(t, uint64(22), got.VestingCliffHeight)
+	require.Equal(t, uint64(30), got.VestingEndHeight)
+}
+
 func TestHandleMessageStake(t *testing.T) {
 	tests := []struct {
 		name            string

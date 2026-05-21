@@ -564,6 +564,27 @@ func (c *Client) TxSend(from AddrOrNickname, rec string, amt uint64, pwd string,
 	return c.transactionRequest(TxSendRouteName, txReq, submit)
 }
 
+func (c *Client) TxSendVesting(from AddrOrNickname, rec string, amt, vestingStartHeight, vestingCliffHeight, vestingEndHeight uint64, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txSendVesting{
+		Fee:                optFee,
+		Amount:             amt,
+		Output:             rec,
+		VestingStartHeight: vestingStartHeight,
+		VestingCliffHeight: vestingCliffHeight,
+		VestingEndHeight:   vestingEndHeight,
+		Submit:             submit,
+		Password:           pwd,
+	}
+
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxSendVestingRouteName, txReq, submit)
+}
+
 func (c *Client) TxStake(addrOrNick AddrOrNickname, netAddr string, amt uint64, committees, output string, signer AddrOrNickname, delegate, earlyWithdrawal bool, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	return c.txStake(addrOrNick, netAddr, amt, committees, output, delegate, earlyWithdrawal, signer, pwd, submit, false, optFee)
 }

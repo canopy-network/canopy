@@ -61,7 +61,11 @@ func (s *Server) Height(w http.ResponseWriter, _ *http.Request, _ httprouter.Par
 func (s *Server) Account(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
 	s.heightAndAddressParams(w, r, func(s *fsm.StateMachine, a lib.HexBytes) (interface{}, lib.ErrorI) {
-		return s.GetAccount(crypto.NewAddressFromBytes(a))
+		account, err := s.GetAccount(crypto.NewAddressFromBytes(a))
+		if err != nil {
+			return nil, err
+		}
+		return spendableAccountView(s, account), nil
 	})
 }
 
@@ -69,7 +73,11 @@ func (s *Server) Account(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 func (s *Server) Accounts(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
 	s.heightPaginated(w, r, func(s *fsm.StateMachine, p *paginatedHeightRequest) (interface{}, lib.ErrorI) {
-		return s.GetAccountsPaginated(p.PageParams)
+		page, err := s.GetAccountsPaginated(p.PageParams)
+		if err != nil {
+			return nil, err
+		}
+		return spendableAccountPageView(s, page), nil
 	})
 }
 
@@ -729,6 +737,32 @@ func (s *Server) heightAndAddressParams(w http.ResponseWriter, r *http.Request, 
 		write(w, p, http.StatusOK)
 		return
 	})
+}
+
+func spendableAccountView(sm *fsm.StateMachine, account *fsm.Account) *fsm.Account {
+	if account == nil {
+		return nil
+	}
+	view := *account
+	view.Amount = sm.AccountSpendableAmount(account)
+	return &view
+}
+
+func spendableAccountPageView(sm *fsm.StateMachine, page *lib.Page) *lib.Page {
+	if page == nil {
+		return nil
+	}
+	view := *page
+	accounts, ok := page.Results.(*fsm.AccountPage)
+	if !ok || accounts == nil {
+		return &view
+	}
+	result := make(fsm.AccountPage, 0, len(*accounts))
+	for _, account := range *accounts {
+		result = append(result, spendableAccountView(sm, account))
+	}
+	view.Results = &result
+	return &view
 }
 
 // heightAndIdParams is a helper function to execute a callback with a state machine and ID as parameters

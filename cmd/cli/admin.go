@@ -47,6 +47,7 @@ func init() {
 	adminCmd.AddCommand(ksDeleteCmd)
 	adminCmd.AddCommand(ksGetCmd)
 	adminCmd.AddCommand(txSendCmd)
+	adminCmd.AddCommand(txSendVestingCmd)
 	adminCmd.AddCommand(txStakeCmd)
 	adminCmd.AddCommand(txEditStakeCmd)
 	adminCmd.AddCommand(txUnstakeCmd)
@@ -141,6 +142,26 @@ var (
 		Args:    cobra.MinimumNArgs(3),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeTxResultToConsole(client.TxSend(argGetAddrOrNickname(args[0]), argGetAddr(args[1]), uint64(argToInt(args[2])), getPassword(), !sim, fee))
+		},
+	}
+
+	txSendVestingCmd = &cobra.Command{
+		Use:     "tx-send-vesting <address or nickname> <to-address> <amount> <vesting-start-height> <vesting-cliff-height> <vesting-end-height> --fee=10000 --simulate=true",
+		Short:   "send an amount to another address with a recipient vesting schedule",
+		Example: "tx-send-vesting dfd3c8dff19da7682f7fe5fde062c813b55c9eee eed6c9dff19da7682f7fe5fde062c813b42c7abc 10000 100 120 200",
+		Args:    cobra.MinimumNArgs(6),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxSendVesting(
+				argGetAddrOrNickname(args[0]),
+				argGetAddr(args[1]),
+				uint64(argToInt(args[2])),
+				uint64(argToInt(args[3])),
+				uint64(argToInt(args[4])),
+				uint64(argToInt(args[5])),
+				getPassword(),
+				!sim,
+				fee,
+			))
 		},
 	}
 

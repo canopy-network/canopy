@@ -346,6 +346,18 @@ func NewSendTransaction(from crypto.PrivateKeyI, to crypto.AddressI, amount, net
 	}, networkId, chainId, fee, height, memo)
 }
 
+// NewSendTransactionWithVesting() creates a SendTransaction whose full amount is subject to the recipient vesting schedule
+func NewSendTransactionWithVesting(from crypto.PrivateKeyI, to crypto.AddressI, amount, vestingStartHeight, vestingCliffHeight, vestingEndHeight, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageSend{
+		FromAddress:        from.PublicKey().Address().Bytes(),
+		ToAddress:          to.Bytes(),
+		Amount:             amount,
+		VestingStartHeight: vestingStartHeight,
+		VestingCliffHeight: vestingCliffHeight,
+		VestingEndHeight:   vestingEndHeight,
+	}, networkId, chainId, fee, height, memo)
+}
+
 // NewStakeTx() creates a StakeTransaction object in the interface form of TransactionI
 func NewStakeTx(signer crypto.PrivateKeyI, from lib.HexBytes, outputAddress crypto.AddressI, netAddress string, committees []uint64, amount, networkId, chainId, fee, height uint64, delegate, earlyWithdrawal bool, memo string) (lib.TransactionI, lib.ErrorI) {
 	return NewTransaction(signer, &MessageStake{

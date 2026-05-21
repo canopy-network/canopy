@@ -58,6 +58,10 @@ func (s *StateMachine) HandleMessageSend(msg *MessageSend) lib.ErrorI {
 	if err := s.AccountSub(crypto.NewAddressFromBytes(msg.FromAddress), msg.Amount); err != nil {
 		return err
 	}
+	// if special vesting send
+	if msg.VestingStartHeight != 0 || msg.VestingEndHeight != 0 {
+		return s.AccountAddWithVesting(msg)
+	}
 	// add to recipient
 	return s.AccountAdd(crypto.NewAddressFromBytes(msg.ToAddress), msg.Amount)
 }
