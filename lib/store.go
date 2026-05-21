@@ -103,7 +103,7 @@ type ProveStoreI interface {
 // IteratorI defines an interface for iterating over key-value pairs in a data store
 type IteratorI interface {
 	Valid() bool           // if the item the iterator is pointing at is valid
-	Next()                 // move to next item
+	Next()                 // move to next itema
 	Key() (key []byte)     // retrieve key
 	Value() (value []byte) // retrieve value
 	Close()                // close the iterator when done, ensuring proper resource management
