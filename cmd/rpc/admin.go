@@ -289,7 +289,7 @@ func (s *Server) TransactionDAOTransfer(w http.ResponseWriter, r *http.Request, 
 			return nil, err
 		}
 		// Create and return the transaction to be sent
-		return fsm.NewDAOTransferTx(p, ptr.Amount, ptr.StartBlock, ptr.EndBlock, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+		return fsm.NewDAOTransferTx(p, ptr.Amount, ptr.StartBlock, ptr.EndBlock, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Mint, ptr.Memo)
 	})
 }
 

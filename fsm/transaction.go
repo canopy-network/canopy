@@ -431,10 +431,11 @@ func NewChangeParamTxString(from crypto.PrivateKeyI, space, key, value string, s
 }
 
 // NewDAOTransferTx() creates a DAOTransferTransaction object in the interface form of TransactionI
-func NewDAOTransferTx(from crypto.PrivateKeyI, amount, start, end, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+func NewDAOTransferTx(from crypto.PrivateKeyI, amount, start, end, networkId, chainId, fee, height uint64, mint bool, memo string) (lib.TransactionI, lib.ErrorI) {
 	return NewTransaction(from, &MessageDAOTransfer{
 		Address:     from.PublicKey().Address().Bytes(),
 		Amount:      amount,
+		Mint:        mint,
 		StartHeight: start,
 		EndHeight:   end,
 	}, networkId, chainId, fee, height, memo)

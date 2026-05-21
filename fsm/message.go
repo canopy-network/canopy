@@ -313,6 +313,12 @@ func (s *StateMachine) HandleMessageDAOTransfer(msg *MessageDAOTransfer) lib.Err
 	if err := s.ApproveProposal(msg); err != nil {
 		return ErrRejectProposal()
 	}
+	// optionally mint the transfer amount into the DAO pool before distributing the grant
+	if msg.Mint {
+		if err := s.MintToPool(lib.DAOPoolID, msg.Amount); err != nil {
+			return err
+		}
+	}
 	// remove from DAO fund
 	if err := s.PoolSub(lib.DAOPoolID, msg.Amount); err != nil {
 		return err

@@ -1913,6 +1913,19 @@ func TestHandleMessageDAOTransfer(t *testing.T) {
 				EndHeight:   3,
 			},
 		},
+		{
+			name:           "successful mint and transfer",
+			detail:         "a successful dao transfer was completed after minting to the treasury",
+			proposalConfig: AcceptAllProposals,
+			height:         2,
+			msg: &MessageDAOTransfer{
+				Address:     newTestAddressBytes(t),
+				Amount:      1,
+				Mint:        true,
+				StartHeight: 2,
+				EndHeight:   3,
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1936,10 +1949,21 @@ func TestHandleMessageDAOTransfer(t *testing.T) {
 			got, err := sm.GetPoolBalance(lib.DAOPoolID)
 			require.NoError(t, err)
 			// validate the transfer
-			require.Equal(t, test.daoPreset-test.msg.Amount, got)
+			expectedDAOBalance := test.daoPreset - test.msg.Amount
+			if test.msg.Mint {
+				expectedDAOBalance = test.daoPreset
+			}
+			require.Equal(t, expectedDAOBalance, got)
 			// get the recipient account
 			got, err = sm.GetAccountBalance(crypto.NewAddress(test.msg.Address))
 			require.Equal(t, test.msg.Amount, got)
+			supply, err := sm.GetSupply()
+			require.NoError(t, err)
+			var expectedTotal uint64
+			if test.msg.Mint {
+				expectedTotal = test.msg.Amount
+			}
+			require.Equal(t, expectedTotal, supply.Total)
 		})
 	}
 }

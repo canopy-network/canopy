@@ -142,6 +142,8 @@ message MessageDAOTransfer {
   bytes address = 1;
   // amount: is the amount of
   uint64 amount = 2;
+  // mint: when true, mint the transfer amount into the DAO pool before the transfer executes
+  bool mint = 3;
   // start_height: is the beginning height where the parameter must be sent
   // this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
   uint64 start_height = 4; // @gotags: json:"startHeight"

@@ -437,6 +437,7 @@ func (x MessageDAOTransfer) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jsonMessageDaoTransfer{
 		Address:      x.Address,
 		Amount:       x.Amount,
+		Mint:         x.Mint,
 		StartHeight:  x.StartHeight,
 		EndHeight:    x.EndHeight,
 		ProposalHash: x.ProposalHash,
@@ -452,6 +453,7 @@ func (x *MessageDAOTransfer) UnmarshalJSON(b []byte) (err error) {
 	*x = MessageDAOTransfer{
 		Address:      j.Address,
 		Amount:       j.Amount,
+		Mint:         j.Mint,
 		StartHeight:  j.StartHeight,
 		EndHeight:    j.EndHeight,
 		ProposalHash: j.ProposalHash,
@@ -462,6 +464,7 @@ func (x *MessageDAOTransfer) UnmarshalJSON(b []byte) (err error) {
 type jsonMessageDaoTransfer struct {
 	Address      lib.HexBytes `json:"address"`
 	Amount       uint64       `json:"amount"`
+	Mint         bool         `json:"mint,omitempty"`
 	StartHeight  uint64       `json:"startHeight"`
 	EndHeight    uint64       `json:"endHeight"`
 	ProposalHash string       `json:"proposalHash,omitempty"`

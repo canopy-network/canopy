@@ -608,6 +608,8 @@ type MessageDAOTransfer struct {
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// amount: is the amount of
 	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	// mint: when true, mint the transfer amount into the DAO pool before the transfer executes
+	Mint bool `protobuf:"varint,3,opt,name=mint,proto3" json:"mint,omitempty"`
 	// start_height: is the beginning height where the parameter must be sent
 	// this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
 	StartHeight uint64 `protobuf:"varint,4,opt,name=start_height,json=startHeight,proto3" json:"startHeight"` // @gotags: json:"startHeight"
@@ -662,6 +664,13 @@ func (x *MessageDAOTransfer) GetAmount() uint64 {
 		return x.Amount
 	}
 	return 0
+}
+
+func (x *MessageDAOTransfer) GetMint() bool {
+	if x != nil {
+		return x.Mint
+	}
+	return false
 }
 
 func (x *MessageDAOTransfer) GetStartHeight() uint64 {
@@ -1339,10 +1348,11 @@ const file_message_proto_rawDesc = "" +
 	"\n" +
 	"end_height\x18\x05 \x01(\x04R\tendHeight\x12\x16\n" +
 	"\x06signer\x18\x06 \x01(\fR\x06signer\x12#\n" +
-	"\rproposal_hash\x18\a \x01(\tR\fproposalHash\"\xad\x01\n" +
+	"\rproposal_hash\x18\a \x01(\tR\fproposalHash\"\xc1\x01\n" +
 	"\x12MessageDAOTransfer\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12!\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12\x12\n" +
+	"\x04mint\x18\x03 \x01(\bR\x04mint\x12!\n" +
 	"\fstart_height\x18\x04 \x01(\x04R\vstartHeight\x12\x1d\n" +
 	"\n" +
 	"end_height\x18\x05 \x01(\x04R\tendHeight\x12#\n" +

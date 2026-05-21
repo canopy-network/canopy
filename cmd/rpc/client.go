@@ -630,12 +630,13 @@ func (c *Client) TxChangeParam(from AddrOrNickname, pSpace, pKey, pValue string,
 }
 
 func (c *Client) TxDaoTransfer(from AddrOrNickname, amt, startBlk, endBlk uint64,
-	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	pwd string, submit bool, optFee uint64, mint bool) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	txReq := txDaoTransfer{
 		Fee:      optFee,
 		Submit:   submit,
 		Password: pwd,
 		Amount:   amt,
+		Mint:     mint,
 		txChangeParamRequest: txChangeParamRequest{
 			StartBlock: startBlk,
 			EndBlock:   endBlk,

@@ -228,6 +228,7 @@ type txChangeParam struct {
 type txDaoTransfer struct {
 	Fee      uint64 `json:"fee"`
 	Amount   uint64 `json:"amount"`
+	Mint     bool   `json:"mint"`
 	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
 	fromFields
@@ -380,6 +381,7 @@ type txRequest struct {
 	OpCode             lib.HexBytes    `json:"opCode"`
 	Data               lib.HexBytes    `json:"data"`
 	Fee                uint64          `json:"fee"`
+	Mint               bool            `json:"mint"`
 	Delegate           bool            `json:"delegate"`
 	EarlyWithdrawal    bool            `json:"earlyWithdrawal"`
 	Submit             bool            `json:"submit"`
