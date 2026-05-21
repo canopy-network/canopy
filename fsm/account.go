@@ -211,6 +211,23 @@ func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) l
 	return s.SetAccount(account)
 }
 
+// ValidateAccountAddWithVesting() ensures an account can receive the send under the provided vesting schedule.
+func (s *StateMachine) ValidateAccountAddWithVesting(msg *MessageSend) lib.ErrorI {
+	acc, err := s.GetAccount(crypto.NewAddress(msg.ToAddress))
+	if err != nil {
+		return err
+	}
+	// if account has active vesting - the vesting terms must match *exactly* to enable another send
+	if acc.VestingAmount != 0 && s.AccountLockedAmount(acc) != 0 {
+		if acc.VestingStartHeight != msg.VestingStartHeight ||
+			acc.VestingCliffHeight != msg.VestingCliffHeight ||
+			acc.VestingEndHeight != msg.VestingEndHeight {
+			return ErrIncompatibleVesting()
+		}
+	}
+	return nil
+}
+
 // AccountAddWithVesting() adds tokens to an Account and applies the send's vesting schedule to the full amount.
 func (s *StateMachine) AccountAddWithVesting(msg *MessageSend) lib.ErrorI {
 	acc, err := s.GetAccount(crypto.NewAddress(msg.ToAddress))
@@ -224,13 +241,10 @@ func (s *StateMachine) AccountAddWithVesting(msg *MessageSend) lib.ErrorI {
 	// update amount
 	acc.Amount += msg.Amount
 	// if account has active vesting - the vesting terms must match *exactly* to enable another send
-	if acc.VestingAmount != 0 && s.AccountLockedAmount(acc) != 0 {
-		if acc.VestingStartHeight != msg.VestingStartHeight ||
-			acc.VestingCliffHeight != msg.VestingCliffHeight ||
-			acc.VestingEndHeight != msg.VestingEndHeight {
-			return ErrIncompatibleVesting()
-		}
-	} else { // no vesting terms set yet
+	if err = s.ValidateAccountAddWithVesting(msg); err != nil {
+		return err
+	}
+	if acc.VestingAmount == 0 || s.AccountLockedAmount(acc) == 0 {
 		acc.VestingAmount = msg.Amount
 		acc.VestingStartHeight = msg.VestingStartHeight
 		acc.VestingCliffHeight = msg.VestingCliffHeight

@@ -54,6 +54,12 @@ func (s *StateMachine) HandleMessage(msg lib.MessageI) lib.ErrorI {
 
 // HandleMessageSend() is the proper handler for a `Send` message
 func (s *StateMachine) HandleMessageSend(msg *MessageSend) lib.ErrorI {
+	// vesting sends must preflight recipient compatibility before mutating sender state
+	if msg.VestingStartHeight != 0 || msg.VestingEndHeight != 0 {
+		if err := s.ValidateAccountAddWithVesting(msg); err != nil {
+			return err
+		}
+	}
 	// subtract from sender
 	if err := s.AccountSub(crypto.NewAddressFromBytes(msg.FromAddress), msg.Amount); err != nil {
 		return err
