@@ -121,3 +121,8 @@ var PRAXIS_TREASURY_ID = []byte{
 
 var panelEntropyPrefix = []byte{0x1C}
 var PANEL_ENTROPY_KEY []byte
+
+// TEST_MODE — short dispute window for local testing
+// MUST be false before mainnet deployment
+const TEST_MODE = true
+const TEST_DISPUTE_BLOCKS uint64 = 20

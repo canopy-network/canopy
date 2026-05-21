@@ -64,7 +64,7 @@ if pe := Unmarshal(r.Entries[0].Value, resolver); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case outcomeQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 outcomeRaw = r.Entries[0].Value
 }
 }
@@ -101,7 +101,7 @@ if resp2.Error != nil {
 return &PluginDeliverResponse{Error: resp2.Error}
 }
 for _, r := range resp2.Results {
-if r.QueryId == refreshQId && len(r.Entries) > 0 {
+if r.QueryId == refreshQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 if pe := Unmarshal(r.Entries[0].Value, market); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }

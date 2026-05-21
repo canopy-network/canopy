@@ -439,3 +439,136 @@ t.Fatalf("register resolver failed: %v", err)
 }
 t.Log("Resolver registered!")
 }
+
+func TestPORSFullFlow(t *testing.T) {
+        addr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+        key, err := keystoreGetKey(addr, "")
+        if err != nil {
+                t.Fatalf("key: %v", err)
+        }
+
+        // Step 1: Create market with short expiry
+        h, _ := getHeight()
+        t.Logf("Starting height: %d", h)
+
+        nonce := uint64(time.Now().UnixMicro())
+        createMsg := &contract.MessageCreateMarket{
+                CreatorAddress: hexDecode(addr),
+                B0:             1_000_000,
+                ExpiryTime:     h + 30,
+                Nonce:          nonce,
+                Question:       "PORS full flow demo - Will Praxis launch on mainnet?",
+        }
+        t.Logf("Creating market: ExpiryTime=%d", createMsg.ExpiryTime)
+        hash := submitTx(t, key, "create_market", "MessageCreateMarket", createMsg, h)
+        if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+                t.Fatalf("create_market failed: %v", err)
+        }
+        marketId := contract.DeriveMarketId(hexDecode(addr), nonce)
+        t.Logf("Market created. ID: %x", marketId)
+
+        // Step 2: Submit prediction
+        h, _ = getHeight()
+        predMsg := &contract.MessageSubmitPrediction{
+                MarketId:      marketId,
+                BettorAddress: hexDecode(addr),
+                Outcome:       true,
+                Shares:        contract.PRECISION_SCALE,
+                MaxCost:       10_000_000,
+        }
+        hash = submitTx(t, key, "submit_prediction", "MessageSubmitPrediction", predMsg, h)
+        if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+                t.Fatalf("submit_prediction failed: %v", err)
+        }
+        t.Log("Prediction submitted")
+
+        // Step 3: Register resolver
+        h, _ = getHeight()
+        regMsg := &contract.MessageRegisterResolver{
+                ResolverAddress: hexDecode(addr),
+                StakeAmount:     100_000_000,
+        }
+        hash = submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
+        if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+                t.Fatalf("register_resolver failed: %v", err)
+        }
+        t.Log("Resolver registered")
+
+        // Wait for market to expire
+        t.Logf("Waiting for expiry (height %d)...", createMsg.ExpiryTime+2)
+        for {
+                h, _ = getHeight()
+                if h > createMsg.ExpiryTime+2 {
+                        break
+                }
+                t.Logf("Height %d / need %d", h, createMsg.ExpiryTime+2)
+                time.Sleep(4 * time.Second)
+        }
+        t.Logf("Market expired at height %d", h)
+
+        // Step 4: Propose outcome
+        h, _ = getHeight()
+        propMsg := &contract.MessageProposeOutcome{
+                MarketId:        marketId,
+                ResolverAddress: hexDecode(addr),
+                ProposedOutcome: true,
+                ProposalBond:    100_000_000,
+        }
+        hash = submitTx(t, key, "propose_outcome", "MessageProposeOutcome", propMsg, h)
+        if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+                t.Fatalf("propose_outcome failed: %v", err)
+        }
+        t.Log("Outcome proposed")
+
+        // Wait for dispute window (TEST_MODE = 20 blocks)
+        disputeEnd := h + 22
+        t.Logf("Waiting for dispute window (height %d)...", disputeEnd)
+        for {
+                h, _ = getHeight()
+                if h > disputeEnd {
+                        break
+                }
+                t.Logf("Height %d / need %d", h, disputeEnd)
+                time.Sleep(4 * time.Second)
+        }
+        t.Log("Dispute window closed")
+
+        // Step 5: Finalize market
+        h, _ = getHeight()
+        finalMsg := &contract.MessageFinalizeMarket{
+                MarketId:   marketId,
+                CallerAddr: hexDecode(addr),
+        }
+        hash = submitTx(t, key, "finalize_market", "MessageFinalizeMarket", finalMsg, h)
+        if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+                t.Fatalf("finalize_market failed: %v", err)
+        }
+        t.Log("Market finalized")
+
+        // Step 6: Claim winnings
+        balBefore := getBalance(addr)
+        t.Logf("Balance before claim: %d", balBefore)
+
+        h, _ = getHeight()
+        claimMsg := &contract.MessageClaimWinnings{
+                MarketId:        marketId,
+                ClaimantAddress: hexDecode(addr),
+        }
+        hash = submitTx(t, key, "claim_winnings", "MessageClaimWinnings", claimMsg, h)
+        if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+                t.Fatalf("claim_winnings failed: %v", err)
+        }
+
+        balAfter := getBalance(addr)
+        t.Logf("Balance after claim: %d", balAfter)
+
+        if balAfter <= balBefore {
+                t.Errorf("Payout not received: before=%d after=%d", balBefore, balAfter)
+        } else {
+                t.Logf("Payout received: +%d uPRX", balAfter-balBefore)
+        }
+
+        t.Log("========================================")
+        t.Log("PORS FULL FLOW COMPLETE")
+        t.Log("========================================")
+}

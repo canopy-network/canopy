@@ -196,7 +196,7 @@ return &PluginDeliverResponse{Error: sweepResp.Error}
 
 sweepPool := &Pool{}
 for _, r := range sweepResp.Results {
-if r.QueryId == sweepQId && len(r.Entries) > 0 {
+if r.QueryId == sweepQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 if pe := Unmarshal(r.Entries[0].Value, sweepPool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }

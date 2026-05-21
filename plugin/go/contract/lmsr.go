@@ -147,6 +147,9 @@ return poolAmount >= ELEVATED_RISK_THRESHOLD
 // DISPUTE_BLOCKS = MAX(MIN_DISPUTE_BLOCKS, market_duration / 10)
 // Minimum 48h floor — longer markets get proportionally longer challenge windows.
 func ComputeDisputeBlocks(openTime, expiryTime uint64) uint64 {
+if TEST_MODE {
+return TEST_DISPUTE_BLOCKS
+}
 if expiryTime <= openTime {
 return MIN_DISPUTE_BLOCKS
 }

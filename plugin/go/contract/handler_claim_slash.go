@@ -118,13 +118,13 @@ if pe := Unmarshal(r.Entries[0].Value, slash); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case claimAccQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 if pe := Unmarshal(r.Entries[0].Value, claimAcc); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 }
 case treasQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 if pe := Unmarshal(r.Entries[0].Value, treasury); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }

@@ -72,7 +72,7 @@ if pe := Unmarshal(r.Entries[0].Value, vc); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case revealQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 return &PluginDeliverResponse{Error: ErrAlreadyRevealed()}
 }
 }

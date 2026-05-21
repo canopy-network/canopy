@@ -73,13 +73,13 @@ if pe := Unmarshal(r.Entries[0].Value, proposal); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case dispAccQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 if pe := Unmarshal(r.Entries[0].Value, disputer); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 }
 case entropyQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 acc := &PanelEntropyAccum{}
 if pe := Unmarshal(r.Entries[0].Value, acc); pe != nil {
 return &PluginDeliverResponse{Error: pe}
@@ -87,7 +87,7 @@ return &PluginDeliverResponse{Error: pe}
 entropyVal = acc.Accumulator
 }
 case feeQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 if pe := Unmarshal(r.Entries[0].Value, feePool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }

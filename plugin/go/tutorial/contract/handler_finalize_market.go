@@ -71,7 +71,7 @@ treasury    := &TreasuryReserve{}
 for _, r := range resp.Results {
 switch r.QueryId {
 case marketQId:
-if len(r.Entries) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrMarketNotFound()}
 }
 market = &MarketState{}
@@ -79,21 +79,21 @@ if pe := Unmarshal(r.Entries[0].Value, market); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case disputeQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 dispute = &DisputeRecord{}
 if pe := Unmarshal(r.Entries[0].Value, dispute); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 }
 case proposalQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 proposal = &ProposalRecord{}
 if pe := Unmarshal(r.Entries[0].Value, proposal); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 }
 case treasQId:
-if len(r.Entries) > 0 {
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 if pe := Unmarshal(r.Entries[0].Value, treasury); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
@@ -176,7 +176,7 @@ proposerAcc := &Account{}
 disputerAcc := &Account{}
 
 for _, r := range resp2.Results {
-if len(r.Entries) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 continue
 }
 switch r.QueryId {
