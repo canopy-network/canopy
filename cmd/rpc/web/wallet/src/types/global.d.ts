@@ -3,7 +3,6 @@ declare global {
         __CONFIG__?: {
             rpcURL: string;
             adminRPCURL: string;
-            explorerBaseURL?: string;
             chainId: number;
         };
     }

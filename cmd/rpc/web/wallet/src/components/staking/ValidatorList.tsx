@@ -134,15 +134,22 @@ const DesktopValidatorRow: React.FC<{
         className={desktopRowCellClass}
         style={{ borderTopLeftRadius: "10px", borderBottomLeftRadius: "10px" }}
       >
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-3">
           <img
             src={getCanopySymbolByHash(validator.address)}
             alt=""
             className="h-7 w-7 rounded-lg object-contain flex-shrink-0"
           />
-          <CopyableIdentifier value={validator.address} label="Validator address" className="text-sm font-medium text-foreground">
-            {truncateAddress(validator.address)}
-          </CopyableIdentifier>
+          <div>
+            <div className="text-sm font-medium text-foreground leading-tight">
+              {validator.nickname || truncateAddress(validator.address)}
+            </div>
+            <div className="flex items-center gap-1 mt-0.5">
+              <CopyableIdentifier value={validator.address} label="Validator address" className="max-w-[13rem] text-[11px] text-muted-foreground leading-tight">
+                {truncateAddress(validator.address)}
+              </CopyableIdentifier>
+            </div>
+          </div>
         </div>
       </td>
       <td className={desktopRowCellClass}>

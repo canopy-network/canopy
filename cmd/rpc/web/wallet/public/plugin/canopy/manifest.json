@@ -305,15 +305,7 @@
         "onSuccess": {
           "variant": "success",
           "title": "Send!",
-          "description": "{{result}}",
-          "actions": [
-            {
-              "type": "link",
-              "label": "Explorer",
-              "href": "{{chain.explorer.tx}}/{{result}}",
-              "newTab": true
-            }
-          ]
+          "description": "Transaction ID: {{result}}"
         }
       }
     },
@@ -891,15 +883,7 @@
         "onSuccess": {
           "variant": "success",
           "title": "Send!",
-          "description": "{{result}}",
-          "actions": [
-            {
-              "type": "link",
-              "label": "Explorer",
-              "href": "{{chain.explorer.tx}}/{{result}}",
-              "newTab": true
-            }
-          ]
+          "description": "Transaction ID: {{result}}"
         }
       }
     },
@@ -2083,15 +2067,7 @@
         "onSuccess": {
           "variant": "success",
           "title": "Unstake Successful!",
-          "description": "Your validator has been unstaked. Funds will be available after the unstaking period",
-          "actions": [
-            {
-              "type": "link",
-              "label": "View Transaction",
-              "href": "{{chain.explorer.tx}}/{{result}}",
-              "newTab": true
-            }
-          ]
+          "description": "Your validator has been unstaked. Funds will be available after the unstaking period.\nTransaction ID: {{result}}"
         },
         "onError": {
           "variant": "error",
@@ -4161,7 +4137,10 @@
         "admin.config": {},
         "account": {
           "account": {
-            "address": "{{account.address}}"
+            "address": "{{form.address || account.address}}"
+          },
+          "__options": {
+            "enabled": "{{ form.address || account.address }}"
           }
         },
         "keystore": {},
@@ -4427,21 +4406,7 @@
         "onSuccess": {
           "variant": "success",
           "title": "Order Submitted",
-          "description": "Node accepted transaction: {{result}}",
-          "actions": [
-            {
-              "type": "link",
-              "label": "View Order",
-              "href": "{{chain.explorer.order}}/{{form.committees}}/{{slice<{{result}}, 0, 40>}}",
-              "newTab": true
-            },
-            {
-              "type": "link",
-              "label": "View Transaction",
-              "href": "{{chain.explorer.tx}}/{{result}}",
-              "newTab": true
-            }
-          ]
+          "description": "Order ID: {{slice<{{result}}, 0, 40>}}\nTransaction ID: {{result}}"
         }
       }
     },

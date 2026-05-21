@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Copy } from 'lucide-react'
-import { useTxByHash, useBlockByHeight } from '../../hooks/useApi'
+import { useTxByHash, useBlockByHeight, useLatestBlock } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
@@ -69,6 +69,17 @@ const TransactionDetailPage: React.FC = () => {
     // Use the real hook to get transaction data
     const { data: transactionData, isLoading, error } = useTxByHash(transactionHash || '')
 
+    // Get the latest confirmed block height to detect pending transactions.
+    // If the tx height is ahead of the current chain height, it hasn't been
+    // included in a block yet — it's a pending (mempool) transaction.
+    const { data: latestBlockData } = useLatestBlock()
+    const latestHeight = Number(
+        latestBlockData?.results?.[0]?.blockHeader?.height
+        ?? latestBlockData?.results?.[0]?.height
+        ?? latestBlockData?.height
+        ?? 0
+    )
+
     // Get block data to find all transactions in the same block
     const txBlockHeight = transactionData?.result?.height || transactionData?.height || 0
     const { data: blockData } = useBlockByHeight(txBlockHeight)
@@ -78,10 +89,13 @@ const TransactionDetailPage: React.FC = () => {
     const transactionFeeMicro = transaction?.transaction?.fee || transaction?.fee || 0
     const txType = transaction?.transaction?.type || transaction?.messageType || transaction?.type || 'send'
 
+    const txHeight = transaction?.height || transaction?.blockHeight || transaction?.block || 0
+    const rawStatus = String(transaction?.status || '').toLowerCase()
+    const isPending = txHeight === 0 || rawStatus === 'pending' || (latestHeight > 0 && txHeight > latestHeight)
+
     // Helper function to normalize hash for comparison
     const normalizeHash = (hash: string): string => {
         if (!hash) return ''
-        // Remove '0x' prefix if present and convert to lowercase
         return hash.replace(/^0x/i, '').toLowerCase()
     }
 
@@ -243,10 +257,7 @@ const TransactionDetailPage: React.FC = () => {
     }
 
     // Extract data from the API response (using transaction already extracted above)
-    const blockHeight = transaction?.height || transaction?.blockHeight || transaction?.block || 0
-    const rawStatus = transaction?.status || ''
-    const isPending = blockHeight === 0 || rawStatus.toLowerCase() === 'pending'
-    const status = isPending ? 'pending' : (rawStatus || 'success')
+    const blockHeight = txHeight
     const timestamp = transaction?.transaction?.time || transaction?.timestamp || transaction?.time || new Date().toISOString()
     const fee = formatFee(transactionFeeMicro)
 
@@ -377,12 +388,20 @@ const TransactionDetailPage: React.FC = () => {
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Block</span>
-                                        <span className="text-primary">{blockHeight.toLocaleString()}</span>
+                                        {isPending ? (
+                                            <span className="text-sm font-medium text-yellow-400">Mempool</span>
+                                        ) : (
+                                            <span className="text-primary">{blockHeight.toLocaleString()}</span>
+                                        )}
                                     </div>
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Timestamp</span>
-                                        <span className="text-white text-sm">{formatTimestamp(timestamp)}</span>
+                                        {isPending ? (
+                                            <span className="text-sm font-medium text-yellow-400">Pending</span>
+                                        ) : (
+                                            <span className="text-white text-sm">{formatTimestamp(timestamp)}</span>
+                                        )}
                                     </div>
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
@@ -535,7 +554,7 @@ const TransactionDetailPage: React.FC = () => {
                                         <span className="text-gray-400 text-sm">Transaction Type</span>
                                         <TransactionTypeBadge type={txType} />
                                     </div>
-                                    {position !== null && (
+                                    {position !== null && !isPending && (
                                         <div className="flex justify-between items-center">
                                             <span className="text-gray-400 text-sm">Position in Block</span>
                                             <span className="text-white text-sm">{position}</span>

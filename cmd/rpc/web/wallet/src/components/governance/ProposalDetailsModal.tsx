@@ -17,6 +17,16 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
     onClose,
 }) => {
     const { symbol, factor } = useDenom();
+
+    React.useEffect(() => {
+        if (!isOpen) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [isOpen, onClose]);
+
     if (!proposal) return null;
 
     const getCategoryColor = (category: string) => {

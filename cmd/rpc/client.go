@@ -470,7 +470,7 @@ type AddrOrNickname struct {
 	Nickname string
 }
 
-func (c *Client) KeystoreDelete(addrOrNickname AddrOrNickname) (returned crypto.AddressI, err lib.ErrorI) {
+func (c *Client) KeystoreDelete(addrOrNickname AddrOrNickname, password string) (returned crypto.AddressI, err lib.ErrorI) {
 	returned = new(crypto.Address)
 
 	if addrOrNickname.Address != "" {
@@ -480,7 +480,8 @@ func (c *Client) KeystoreDelete(addrOrNickname AddrOrNickname) (returned crypto.
 			return
 		}
 		err = c.keystoreRequest(KeystoreDeleteRouteName, keystoreRequest{
-			addressRequest: addressRequest{bz},
+			addressRequest:  addressRequest{bz},
+			passwordRequest: passwordRequest{password},
 		}, returned)
 		return
 	}
@@ -488,6 +489,7 @@ func (c *Client) KeystoreDelete(addrOrNickname AddrOrNickname) (returned crypto.
 	if addrOrNickname.Nickname != "" {
 		err = c.keystoreRequest(KeystoreDeleteRouteName, keystoreRequest{
 			nicknameRequest: nicknameRequest{addrOrNickname.Nickname},
+			passwordRequest: passwordRequest{password},
 		}, returned)
 		return
 	}

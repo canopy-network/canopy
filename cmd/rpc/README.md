@@ -3541,13 +3541,14 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-import-raw \
 
 **Route:** `/v1/admin/keystore-delete`
 
-**Description**: removes a key from the keystore using either the address or nickname
+**Description**: removes a key from the keystore using either the address or nickname after validating the password
 
 **HTTP Method**: `POST`
 
 **Request**:
 - **nickname**: `string` - the nickname associated with the key
 - **address**: `string` - the address associated with the key
+- **password**: `string` - **(required)** the plain-text password used to encrypt the key
 
 **Response**: `hex-string` - the 20 byte address of the newly imported key
 
@@ -3556,7 +3557,8 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-import-raw \
 $ curl -X POST http://localhost:50003/v1/admin/keystore-delete \
   -H "Content-Type: application/json" \
   -d '{
-    "nickname":"my_key_2"
+    "nickname":"my_key_2",
+    "password":"my_password"
     }'
 
 > "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"

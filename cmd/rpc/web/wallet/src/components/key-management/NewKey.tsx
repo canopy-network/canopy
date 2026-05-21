@@ -7,7 +7,7 @@ import { useToast } from '@/toast/ToastContext';
 import { useDSFetcher } from '@/core/dsFetch';
 import { useQueryClient } from '@tanstack/react-query';
 
-export const NewKey = ({ embedded = false }: { embedded?: boolean }): JSX.Element => {
+export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; onSuccess?: () => void }): JSX.Element => {
     const { switchAccount } = useAccounts();
     const toast = useToast();
     const dsFetch = useDSFetcher();
@@ -59,6 +59,7 @@ export const NewKey = ({ embedded = false }: { embedded?: boolean }): JSX.Elemen
             });
 
             setNewKeyForm({ password: '', walletName: '' });
+            onSuccess?.();
 
             const newAddress = typeof response === 'string' ? response : (response as any)?.address;
             if (newAddress) {

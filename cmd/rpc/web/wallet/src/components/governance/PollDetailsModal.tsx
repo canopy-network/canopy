@@ -40,6 +40,15 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
   onClose,
   onVote,
 }) => {
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, onClose]);
+
   if (!poll) return null;
 
   const normalizedHash = poll.proposalHash || poll.hash;
