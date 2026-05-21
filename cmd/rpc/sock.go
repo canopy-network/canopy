@@ -50,6 +50,17 @@ type dexBatchCache struct {
 	result    *lib.DexBatch
 }
 
+// ordersCache holds a single cached order book result keyed by (height, id).
+// The root chain order book at a given height is immutable — it changes only when
+// the root chain commits a new block (~20s). CheckMempool calls GetOrders every 2s
+// with the same (height, id) pair; without this cache each miss triggers a full
+// HTTP round-trip + TimeMachine SST read.
+type ordersCache struct {
+	height uint64
+	id     uint64
+	result *lib.OrderBook
+}
+
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
@@ -62,6 +73,7 @@ type RCManager struct {
 	log           lib.LoggerI                   // stdout log
 	lottery       lotteryCache                  // per-height cache for GetLotteryWinner
 	dexBatch      dexBatchCache                 // per-height cache for GetDexBatch
+	orders        ordersCache                   // per-height cache for GetOrders
 	// rc subscriber limits
 	rcSubscriberReadLimitBytes int64
 	rcSubscriberWriteTimeout   time.Duration
@@ -249,6 +261,11 @@ func (r *RCManager) GetOrders(rootChainId, rootHeight, id uint64) (*lib.OrderBoo
 		// exit with the order books from memory
 		return sub.Info.Orders, nil
 	}
+	// return cached result if height and id match — the order book at a given root chain
+	// height is immutable; it changes only when the root chain commits a new block (~20s).
+	if r.orders.height == rootHeight && r.orders.id == id {
+		return r.orders.result, nil
+	}
 	// warn of the remote RPC call to the root chain API
 	r.log.Warnf("Executing remote GetOrders call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, sub.Info.Height)
 	// execute the remote call
@@ -263,8 +280,10 @@ func (r *RCManager) GetOrders(rootChainId, rootHeight, id uint64) (*lib.OrderBoo
 		// exit with error
 		return nil, lib.ErrEmptyOrderBook()
 	}
+	result := books.OrderBooks[0]
+	r.orders = ordersCache{height: rootHeight, id: id, result: result}
 	// exit with the first (and only) order book in the list
-	return books.OrderBooks[0], nil
+	return result, nil
 }
 
 // Order() returns a specific order from the root order book
