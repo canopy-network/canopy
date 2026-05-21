@@ -310,9 +310,11 @@ func (m *Mempool) CheckMempool() {
 
 // GetPendingPage() returns a page of unconfirmed mempool transactions
 func (c *Controller) GetPendingPage(p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
-	// lock the controller for thread safety
-	c.Lock()
-	// unlock the controller when the function completes
+	// try to acquire the lock without blocking — if block processing holds it, return empty
+	// rather than queuing (100+/sec callers queueing cause TCP write timeouts)
+	if !c.TryLock() {
+		return lib.NewPage(p, lib.PendingResultsPageName), nil
+	}
 	defer c.Unlock()
 	// create a new page and transaction results list to populate
 	page, txResults := lib.NewPage(p, lib.PendingResultsPageName), make(lib.TxResults, 0)
@@ -338,9 +340,10 @@ func (c *Controller) GetPendingPage(p lib.PageParams) (page *lib.Page, err lib.E
 
 // GetPendingTxByHash() returns an unconfirmed mempool transaction by hash.
 func (c *Controller) GetPendingTxByHash(hash string) (*lib.TxResult, bool) {
-	// lock the controller for thread safety
-	c.Lock()
-	// unlock the controller when the function completes
+	// try to acquire the lock without blocking — return not-found if block processing holds it
+	if !c.TryLock() {
+		return nil, false
+	}
 	defer c.Unlock()
 	if c.Mempool == nil {
 		return nil, false
@@ -363,9 +366,10 @@ func normalizeTxHash(hash string) string {
 
 // GetFailedTxsPage() returns a list of failed mempool transactions
 func (c *Controller) GetFailedTxsPage(address string, p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
-	// lock the controller for thread safety
-	c.Lock()
-	// unlock the controller when the function completes
+	// try to acquire the lock without blocking — return empty if block processing holds it
+	if !c.TryLock() {
+		return lib.NewPage(p, lib.FailedTxsPageName), nil
+	}
 	defer c.Unlock()
 	// create a new page and failed transaction results list to populate
 	page, failedTxs := lib.NewPage(p, lib.FailedTxsPageName), make(lib.FailedTxs, 0)
