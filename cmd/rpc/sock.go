@@ -30,6 +30,16 @@ const (
 	defaultMaxRCSubscribersPerChain   = 128
 )
 
+// lotteryCache holds a single cached lottery result keyed by (height, id).
+// The lottery winner is derived from chain height and last proposers — it changes
+// once per block (~20s). CheckMempool calls GetLotteryWinner every 2s, so without
+// this cache every call triggers a full HTTP round-trip + TimeMachine SST read.
+type lotteryCache struct {
+	height uint64
+	id     uint64
+	result *lib.LotteryWinner
+}
+
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
@@ -40,6 +50,7 @@ type RCManager struct {
 	afterRCUpdate func(info *lib.RootChainInfo) // callback after the root chain info update
 	upgrader      websocket.Upgrader            // upgrade http connection to ws
 	log           lib.LoggerI                   // stdout log
+	lottery       lotteryCache                  // per-height cache for GetLotteryWinner
 	// rc subscriber limits
 	rcSubscriberReadLimitBytes int64
 	rcSubscriberWriteTimeout   time.Duration
@@ -311,8 +322,20 @@ func (r *RCManager) GetLotteryWinner(rootChainId, height, id uint64) (*lib.Lotte
 		// exit with the lottery winner
 		return sub.Info.LotteryWinner, nil
 	}
-	// exit with the results of the remote RPC call to the API of the 'root chain'
-	return sub.Lottery(height, id)
+	// return cached result if height and id match — the lottery winner is derived from
+	// chain height and last proposers, so it is constant for the duration of a block (~20s).
+	// CheckMempool calls this every 2s, so without the cache each call triggers a full
+	// HTTP round-trip and TimeMachine SST read for the same (height, id) pair.
+	if r.lottery.height == height && r.lottery.id == id {
+		return r.lottery.result, nil
+	}
+	// cache miss: fetch from root chain and cache for this height
+	result, err := sub.Lottery(height, id)
+	if err != nil {
+		return nil, err
+	}
+	r.lottery = lotteryCache{height: height, id: id, result: result}
+	return result, nil
 }
 
 // Transaction() executes a transaction on the root chain
