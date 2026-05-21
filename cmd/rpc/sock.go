@@ -40,6 +40,16 @@ type lotteryCache struct {
 	result *lib.LotteryWinner
 }
 
+// dexBatchCache holds a single cached dex batch result keyed by (height, committee).
+// The locked batch is set at block commit and does not change between blocks (~20s).
+// CheckMempool calls GetDexBatch every 2s with the same (height, committee) pair,
+// so without this cache each call triggers a full HTTP round-trip + TimeMachine SST read.
+type dexBatchCache struct {
+	height    uint64
+	committee uint64
+	result    *lib.DexBatch
+}
+
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
@@ -51,6 +61,7 @@ type RCManager struct {
 	upgrader      websocket.Upgrader            // upgrade http connection to ws
 	log           lib.LoggerI                   // stdout log
 	lottery       lotteryCache                  // per-height cache for GetLotteryWinner
+	dexBatch      dexBatchCache                 // per-height cache for GetDexBatch
 	// rc subscriber limits
 	rcSubscriberReadLimitBytes int64
 	rcSubscriberWriteTimeout   time.Duration
@@ -359,7 +370,19 @@ func (r *RCManager) GetDexBatch(rootChainId, height, committee uint64, withPoint
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
 	}
-	return sub.DexBatch(height, committee, withPoints)
+	// only cache the withPoints=false path used by CheckMempool — withPoints=true adds
+	// pool points that could differ if called at different times within a block
+	if !withPoints && r.dexBatch.height == height && r.dexBatch.committee == committee {
+		return r.dexBatch.result, nil
+	}
+	result, err := sub.DexBatch(height, committee, withPoints)
+	if err != nil {
+		return nil, err
+	}
+	if !withPoints {
+		r.dexBatch = dexBatchCache{height: height, committee: committee, result: result}
+	}
+	return result, nil
 }
 
 // SUBSCRIPTION CODE BELOW (OUTBOUND)
