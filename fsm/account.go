@@ -238,12 +238,12 @@ func (s *StateMachine) AccountAddWithVesting(msg *MessageSend) lib.ErrorI {
 	if acc.Amount > math.MaxUint64-msg.Amount || acc.VestingAmount > math.MaxUint64-msg.Amount {
 		return ErrInvalidAmount()
 	}
-	// update amount
-	acc.Amount += msg.Amount
 	// if account has active vesting - the vesting terms must match *exactly* to enable another send
 	if err = s.ValidateAccountAddWithVesting(msg); err != nil {
 		return err
 	}
+	// update amount
+	acc.Amount += msg.Amount
 	if acc.VestingAmount == 0 || s.AccountLockedAmount(acc) == 0 {
 		acc.VestingAmount = msg.Amount
 		acc.VestingStartHeight = msg.VestingStartHeight
