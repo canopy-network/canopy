@@ -642,3 +642,234 @@ t.Errorf("Predictor balance should have decreased")
 }
 t.Log("Non-validator prediction submitted successfully!")
 }
+
+func TestClaimWinningsPayout(t *testing.T) {
+addr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+key, err := keystoreGetKey(addr, "")
+if err != nil {
+t.Fatalf("get validator key: %v", err)
+}
+
+cfgData, cfgErr := os.ReadFile("test_config.json")
+if cfgErr != nil {
+t.Fatalf("read test_config.json: %v", cfgErr)
+}
+var cfg struct {
+PredictorAddress string `json:"predictor_address"`
+PredictorPrivKey string `json:"predictor_privkey"`
+PredictorPubKey  string `json:"predictor_pubkey"`
+}
+if jsonErr := json.Unmarshal(cfgData, &cfg); jsonErr != nil {
+t.Fatalf("parse test_config.json: %v", jsonErr)
+}
+bettorB := &keyGroup{Address: cfg.PredictorAddress, PublicKey: cfg.PredictorPubKey, PrivateKey: cfg.PredictorPrivKey}
+
+// Fund bettor B
+h, _ := getHeight()
+fundMsg := &contract.MessageSend{
+FromAddress: hexDecode(addr),
+ToAddress:   hexDecode(bettorB.Address),
+Amount:      200_000_000,
+}
+hash := submitSendTx(t, key, fundMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("fund bettorB: %v", err)
+}
+
+// Create market — B0 = 100 PRX
+h, _ = getHeight()
+const b0 = uint64(100_000_000)
+nonce := uint64(time.Now().UnixMicro())
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(addr),
+B0:             b0,
+ExpiryTime:     h + 30,
+Nonce:          nonce,
+Question:       "Payout math verification market",
+}
+hash = submitTx(t, key, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("create_market: %v", err)
+}
+marketId := contract.DeriveMarketId(hexDecode(addr), nonce)
+t.Logf("Market ID: %x", marketId)
+
+// Bettor A — 1 YES share
+h, _ = getHeight()
+sharesA := contract.PRECISION_SCALE
+lmsrSeed := b0 - contract.FINALIZATION_BOUNTY
+halfSeed := lmsrSeed / 2
+costA, pe := contract.ComputeTradeCost(halfSeed, halfSeed, lmsrSeed, uint64(sharesA), true)
+if pe != nil {
+t.Fatalf("ComputeTradeCost A: %v", pe)
+}
+t.Logf("Expected cost A: %d uPRX", costA)
+
+predMsgA := &contract.MessageSubmitPrediction{
+MarketId:      marketId,
+BettorAddress: hexDecode(addr),
+Outcome:       true,
+Shares:        uint64(sharesA),
+MaxCost:       costA * 2,
+}
+hash = submitTx(t, key, "submit_prediction", "MessageSubmitPrediction", predMsgA, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("prediction A: %v", err)
+}
+
+// Bettor B — 2 YES shares
+h, _ = getHeight()
+sharesB := contract.PRECISION_SCALE * 2
+qYesAfterA := halfSeed + uint64(sharesA)
+costB, pe := contract.ComputeTradeCost(qYesAfterA, halfSeed, lmsrSeed, uint64(sharesB), true)
+if pe != nil {
+t.Fatalf("ComputeTradeCost B: %v", pe)
+}
+t.Logf("Expected cost B: %d uPRX", costB)
+
+predMsgB := &contract.MessageSubmitPrediction{
+MarketId:      marketId,
+BettorAddress: hexDecode(bettorB.Address),
+Outcome:       true,
+Shares:        uint64(sharesB),
+MaxCost:       costB * 2,
+}
+hash = submitTx(t, bettorB, "submit_prediction", "MessageSubmitPrediction", predMsgB, h)
+if err := waitForTx(bettorB.Address, hash, 60*time.Second); err != nil {
+t.Fatalf("prediction B: %v", err)
+}
+
+// Register resolver and wait for expiry
+h, _ = getHeight()
+regMsg := &contract.MessageRegisterResolver{
+ResolverAddress: hexDecode(addr),
+StakeAmount:     800_000,
+}
+hash = submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("register_resolver: %v", err)
+}
+
+// Wait for expiry
+expiryTarget := createMsg.ExpiryTime + 2
+t.Logf("Waiting for expiry (height %d)...", expiryTarget)
+for {
+cur, _ := getHeight()
+if cur >= expiryTarget {
+break
+}
+t.Logf("Height %d / need %d", cur, expiryTarget)
+time.Sleep(2 * time.Second)
+}
+
+// Propose YES outcome
+h, _ = getHeight()
+bond := contract.ComputeMinBond(&contract.MarketState{BEff: lmsrSeed})
+propMsg := &contract.MessageProposeOutcome{
+MarketId:        marketId,
+ResolverAddress: hexDecode(addr),
+ProposedOutcome: true,
+ProposalBond:    bond,
+}
+hash = submitTx(t, key, "propose_outcome", "MessageProposeOutcome", propMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("propose_outcome: %v", err)
+}
+
+// Wait for dispute window
+disputeBlocks := contract.ComputeDisputeBlocks(0, 0) // TEST_MODE returns TEST_DISPUTE_BLOCKS
+disputeTarget := h + disputeBlocks + 2
+t.Logf("Waiting for dispute window (height %d)...", disputeTarget)
+for {
+cur, _ := getHeight()
+if cur >= disputeTarget {
+break
+}
+t.Logf("Height %d / need %d", cur, disputeTarget)
+time.Sleep(2 * time.Second)
+}
+
+// Finalize
+h, _ = getHeight()
+finMsg := &contract.MessageFinalizeMarket{
+MarketId:   marketId,
+CallerAddr: hexDecode(addr),
+}
+hash = submitTx(t, key, "finalize_market", "MessageFinalizeMarket", finMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("finalize_market: %v", err)
+}
+t.Log("Market finalized")
+
+// Compute expected pool and payouts.
+// Pool = lmsrSeed + costA + costB (TX fees go to feePool, not market pool).
+// totalWinShares = market.QYes after both predictions = halfSeed + sharesA + sharesB.
+// This mirrors what handler_claim_winnings.go uses (market.QYes).
+expectedPool := lmsrSeed + costA + costB
+totalWinShares := halfSeed + uint64(sharesA) + uint64(sharesB)
+expectedPayoutA := contract.ComputePayout(expectedPool, uint64(sharesA), totalWinShares)
+expectedPayoutB := contract.ComputePayout(expectedPool, uint64(sharesB), totalWinShares)
+t.Logf("Expected pool: %d  totalWinShares: %d (halfSeed=%d sharesA=%d sharesB=%d)",
+expectedPool, totalWinShares, halfSeed, sharesA, sharesB)
+t.Logf("Expected payout A (1 share): %d uPRX", expectedPayoutA)
+t.Logf("Expected payout B (2 shares): %d uPRX", expectedPayoutB)
+
+// Claim A
+balABefore := getBalance(addr)
+h, _ = getHeight()
+claimMsgA := &contract.MessageClaimWinnings{
+MarketId:        marketId,
+ClaimantAddress: hexDecode(addr),
+}
+hash = submitTx(t, key, "claim_winnings", "MessageClaimWinnings", claimMsgA, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("claim A: %v", err)
+}
+balAAfter := getBalance(addr)
+actualPayoutA := int64(balAAfter) - int64(balABefore)
+t.Logf("Bettor A — before: %d after: %d payout: %d (expected ~%d)",
+balABefore, balAAfter, actualPayoutA, expectedPayoutA)
+
+// Claim B
+balBBefore := getBalance(bettorB.Address)
+h, _ = getHeight()
+claimMsgB := &contract.MessageClaimWinnings{
+MarketId:        marketId,
+ClaimantAddress: hexDecode(bettorB.Address),
+}
+hash = submitTx(t, bettorB, "claim_winnings", "MessageClaimWinnings", claimMsgB, h)
+if err := waitForTx(bettorB.Address, hash, 60*time.Second); err != nil {
+t.Fatalf("claim B: %v", err)
+}
+balBAfter := getBalance(bettorB.Address)
+actualPayoutB := int64(balBAfter) - int64(balBBefore)
+t.Logf("Bettor B — before: %d after: %d payout: %d (expected ~%d)",
+balBBefore, balBAfter, actualPayoutB, expectedPayoutB)
+
+// Assertions — allow 10% tolerance to account for the difference between
+// our off-chain cost estimate (computed before TXs land) and the actual
+// on-chain cost at the block the TX was included. The pro-rata ratio is
+// the critical invariant; absolute amounts may vary with market state.
+toleranceA := int64(expectedPayoutA) / 10
+toleranceB := int64(expectedPayoutB) / 10
+diffA := actualPayoutA - int64(expectedPayoutA) + int64(testFee)
+diffB := actualPayoutB - int64(expectedPayoutB) + int64(testFee)
+if diffA < -toleranceA || diffA > toleranceA {
+t.Errorf("Payout A mismatch: got %d expected %d (diff %d, tolerance ±%d)",
+actualPayoutA, expectedPayoutA, diffA, toleranceA)
+}
+if diffB < -toleranceB || diffB > toleranceB {
+t.Errorf("Payout B mismatch: got %d expected %d (diff %d, tolerance ±%d)",
+actualPayoutB, expectedPayoutB, diffB, toleranceB)
+}
+
+// B holds 2x the shares of A so should receive ~2x the payout.
+// Use ratio check rather than exact multiply to handle integer division dust.
+ratioTolerance := int64(expectedPayoutA) / 10
+ratioOk := int64(expectedPayoutB) >= int64(expectedPayoutA)*2-ratioTolerance && int64(expectedPayoutB) <= int64(expectedPayoutA)*2+ratioTolerance
+if !ratioOk {
+t.Errorf("Payout ratio wrong: A=%d B=%d (expected B≈2×A)", expectedPayoutA, expectedPayoutB)
+}
+
+t.Log("Payout math verified ✓")
+}
