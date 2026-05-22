@@ -367,7 +367,7 @@ func TestCreateMarket(t *testing.T) {
 
 	msg := &contract.MessageCreateMarket{
 		CreatorAddress: hexDecode(validatorAddr),
-		B0:             contract.PRECISION_SCALE * 10, // 10_000_000
+		B0:             60_000_000, // MIN_B0
 		ExpiryTime:     height + 1000,
 		Nonce:          uint64(time.Now().UnixMicro()),
 		Question:       "Will Praxis launch on mainnet?",
@@ -392,7 +392,7 @@ if err != nil { t.Fatalf("key: %v", err) }
 h, _ := getHeight()
 createMsg := &contract.MessageCreateMarket{
 CreatorAddress: hexDecode(addr),
-B0:             1_000_000,
+B0:             60_000_000,
 ExpiryTime:     h + 50000,
 Nonce:          uint64(time.Now().UnixMicro()),
 Question:       "Prediction test market",
@@ -455,7 +455,7 @@ func TestPORSFullFlow(t *testing.T) {
         nonce := uint64(time.Now().UnixMicro())
         createMsg := &contract.MessageCreateMarket{
                 CreatorAddress: hexDecode(addr),
-                B0:             1_000_000,
+                B0:             60_000_000,
                 ExpiryTime:     h + 30,
                 Nonce:          nonce,
                 Question:       "PORS full flow demo - Will Praxis launch on mainnet?",
@@ -609,7 +609,7 @@ h, _ = getHeight()
 nonce := uint64(time.Now().UnixMicro())
 createMsg := &contract.MessageCreateMarket{
 CreatorAddress: hexDecode(addr),
-B0:             1_000_000,
+B0:             60_000_000,
 ExpiryTime:     h + 30,
 Nonce:          nonce,
 Question:       "Will non-validator predict successfully?",
