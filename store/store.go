@@ -510,6 +510,14 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
 			return nil, err
 		}
+		s.metrics.UpdateStoreRootStats(
+			len(s.ss.txn.ops),
+			s.sc.stats.NodeReads,
+			s.sc.stats.NodeCacheHits,
+			s.sc.stats.NodeCacheMisses,
+			s.sc.stats.TraverseSteps,
+			s.sc.stats.Rehashes,
+		)
 	}
 	// return the root
 	return s.sc.Root(), nil

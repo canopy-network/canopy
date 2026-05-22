@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -15,6 +16,12 @@ import (
 
 // GetAccount() returns an Account structure for a specific address
 func (s *StateMachine) GetAccount(address crypto.AddressI) (*Account, lib.ErrorI) {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("get_account").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// check cache
 	if acc, found := s.cache.accounts[lib.MemHash(address.Bytes())]; found {
 		return acc, nil
@@ -83,6 +90,12 @@ func (s *StateMachine) GetAccountBalance(address crypto.AddressI) (uint64, lib.E
 
 // SetAccount() upserts an account into the state
 func (s *StateMachine) SetAccount(account *Account) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("set_account").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// add to cache
 	s.cache.accounts[lib.MemHash(account.Address)] = account
 	// convert bytes to the address object
@@ -133,6 +146,12 @@ func (s *StateMachine) AccountDeductFees(address crypto.AddressI, fee uint64) li
 
 // AccountAdd() adds tokens to an Account
 func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("account_add").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// ensure no unnecessary database updates
 	if amountToAdd == 0 {
 		return nil
@@ -154,6 +173,12 @@ func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) l
 
 // AccountSub() removes tokens from an Account
 func (s *StateMachine) AccountSub(address crypto.AddressI, amountToSub uint64) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("account_sub").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// ensure no unnecessary database updates
 	if amountToSub == 0 {
 		return nil
@@ -230,6 +255,12 @@ func (s *StateMachine) marshalAccount(account *Account) ([]byte, lib.ErrorI) {
 
 // GetPool() returns a Pool structure for a specific ID
 func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("get_pool").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// get the pool bytes from the state using the Key a specific id
 	bz, err := s.Get(KeyForPool(id))
 	if err != nil {
@@ -295,6 +326,12 @@ func (s *StateMachine) GetPoolBalance(id uint64) (uint64, lib.ErrorI) {
 
 // SetPool() upserts a Pool structure into the state
 func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("set_pool").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// if the pool has a 0 balance
 	if pool.Amount == 0 {
 		return s.Delete(KeyForPool(pool.Id))
@@ -356,6 +393,12 @@ func (s *StateMachine) MintToAccount(address crypto.AddressI, amount uint64) lib
 
 // PoolAdd() adds tokens to the Pool structure
 func (s *StateMachine) PoolAdd(id uint64, amountToAdd uint64) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("pool_add").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// get the pool from the
 	pool, err := s.GetPool(id)
 	if err != nil {

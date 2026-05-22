@@ -15,15 +15,30 @@ const BlockAcceptanceRange = 4320
 
 // ApplyTransaction() processes the transaction within the state machine, returning the corresponding TxResult.
 func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (*lib.TxResult, []*lib.Event, lib.ErrorI) {
+	applyTransactionStartTime := time.Now()
 	s.events.Refer(txHash)
 	// validate the transaction and get the check result
+	checkTxStartTime := time.Now()
 	result, err := s.CheckTx(transaction, txHash, batchVerifier)
 	if err != nil {
 		return nil, nil, err
 	}
+	messageType := result.tx.MessageType
+	if result.msg != nil {
+		messageType = result.msg.Name()
+	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyTransactionStageTime.WithLabelValues("check_tx", messageType).Observe(time.Since(checkTxStartTime).Seconds())
+	}
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("total", messageType).Observe(time.Since(applyTransactionStartTime).Seconds())
+		}
+	}()
 	// if the transaction is meant for the plugin
 	if result.plugin && s.Plugin != nil {
 		// route to plugin
+		pluginDeliverStartTime := time.Now()
 		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: result.tx})
 		// handle error
 		if e != nil {
@@ -35,6 +50,9 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 		}
 		if err = s.addPluginEvents(resp.Events); err != nil {
 			return nil, nil, err
+		}
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("plugin_deliver", messageType).Observe(time.Since(pluginDeliverStartTime).Seconds())
 		}
 	} else {
 		// faucet mode: ensure "send" txs from the faucet address never fail due to insufficient funds.
@@ -48,19 +66,23 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 			}
 		}
 		// deduct fees for the transaction
+		deductFeesStartTime := time.Now()
 		if err = s.AccountDeductFees(result.sender, result.tx.Fee); err != nil {
 			return nil, nil, err
 		}
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("deduct_fees", messageType).Observe(time.Since(deductFeesStartTime).Seconds())
+		}
 		// handle the message (payload)
+		handleMessageStartTime := time.Now()
 		if err = s.HandleMessage(result.msg); err != nil {
 			return nil, nil, err
 		}
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("handle_message", messageType).Observe(time.Since(handleMessageStartTime).Seconds())
+		}
 	}
 	// return the tx result
-	messageType := result.tx.MessageType
-	if result.msg != nil {
-		messageType = result.msg.Name()
-	}
 	return &lib.TxResult{
 		Sender:      result.sender.Bytes(),
 		Recipient:   result.recipient,
@@ -249,9 +271,13 @@ func (s *StateMachine) CheckReplay(tx *lib.Transaction, txHash string) lib.Error
 		}
 		// ensure the tx doesn't already exist in the indexer
 		// same block replays are protected at a higher level
+		replayLookupStartTime := time.Now()
 		txResult, err := store.GetTxByHash(hashBz)
 		if err != nil {
 			return err
+		}
+		if s.Metrics != nil {
+			s.Metrics.CheckTxReplayLookupTime.Observe(time.Since(replayLookupStartTime).Seconds())
 		}
 		// if the tx transaction result isn't nil, and it has a hash
 		if txResult != nil && txResult.TxHash == txHash {
