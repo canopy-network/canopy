@@ -85,8 +85,8 @@ return &PluginDeliverResponse{Error: ErrUnauthorized()}
 withinWindow := now >= market.ExpiryTime+RESOLUTION_DELAY_BLOCKS &&
 now <= market.ExpiryTime+RESOLUTION_DELAY_BLOCKS+GRACE_PERIOD_BLOCKS
 if !withinWindow {
-if pe := c.CheckAutoCancel(msg.MarketId); pe != nil {
-return &PluginDeliverResponse{Error: pe}
+if _, cancelErr := c.CheckAutoCancel(msg.MarketId); cancelErr != nil {
+return &PluginDeliverResponse{Error: cancelErr}
 }
 refreshQId := nextQueryId()
 resp2, err := c.plugin.StateRead(c, &PluginStateReadRequest{

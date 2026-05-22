@@ -1,85 +1,62 @@
 package contract
 
-func (c *Contract) CheckAutoCancel(marketId []byte) *PluginError {
+// CheckAutoCancel checks if the market should be auto-cancelled and returns
+// the updated MarketState if so (status set to STATUS_CANCELLED), or nil if not.
+// NO StateWrite is performed here — the caller must include the updated market
+// in its own atomic StateWrite to avoid multiple writes per deliver context.
+func (c *Contract) CheckAutoCancel(marketId []byte) (*MarketState, *PluginError) {
 now := GetGlobalHeight()
 if now == 0 {
-return ErrHeightNotSet()
+return nil, ErrHeightNotSet()
 }
 
 marketQId := nextQueryId()
-poolQId   := nextQueryId()
-
 marketKey := KeyForMarket(marketId)
-poolKey   := KeyForMarketPool(marketId)
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
 {QueryId: marketQId, Key: marketKey},
-{QueryId: poolQId,   Key: poolKey},
 },
 })
 if err != nil {
-return err
+return nil, err
 }
 if resp.Error != nil {
-return resp.Error
+return nil, resp.Error
 }
 
 var market *MarketState
-var pool   *Pool
-
 for _, r := range resp.Results {
 if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 continue
 }
-switch r.QueryId {
-case marketQId:
+if r.QueryId == marketQId {
 market = &MarketState{}
 if pe := Unmarshal(r.Entries[0].Value, market); pe != nil {
-return pe
-}
-case poolQId:
-pool = &Pool{}
-if pe := Unmarshal(r.Entries[0].Value, pool); pe != nil {
-return pe
+return nil, pe
 }
 }
 }
 
 if market == nil {
-return nil
+return nil, nil
 }
 if market.Status != STATUS_OPEN {
-return nil
+return nil, nil
 }
 
-cancelThreshold := market.ExpiryTime + RESOLUTION_DELAY_BLOCKS + GRACE_PERIOD_BLOCKS
+resolutionDelay := RESOLUTION_DELAY_BLOCKS
+gracePeriod     := GRACE_PERIOD_BLOCKS
+if TEST_MODE {
+resolutionDelay = TEST_RESOLUTION_DELAY
+gracePeriod     = TEST_GRACE_PERIOD
+}
+cancelThreshold := market.ExpiryTime + resolutionDelay + gracePeriod
 if now <= cancelThreshold {
-return nil
+return nil, nil
 }
 
+// Return the cancelled market — caller writes it atomically with other state.
 market.Status = STATUS_CANCELLED
-
-rawMarket, pe := SafeMarshal(market)
-if pe != nil {
-return pe
-}
-
-sets := []*PluginSetOp{
-{Key: marketKey, Value: rawMarket},
-}
-
-if pool != nil && pool.Amount > 0 {
-pool.Amount = 0
-rawPool, pe := SafeMarshal(pool)
-if pe != nil {
-return pe
-}
-sets = append(sets, &PluginSetOp{Key: poolKey, Value: rawPool})
-}
-
-wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-Sets: sets,
-})
-return errCheckWrite(wr, werr)
+return market, nil
 }

@@ -125,4 +125,7 @@ var PANEL_ENTROPY_KEY []byte
 // TEST_MODE — set to true to use short dispute window for local testing
 // MUST be false before mainnet deployment
 const TEST_MODE = true
-const TEST_DISPUTE_BLOCKS uint64 = 20
+const TEST_DISPUTE_BLOCKS        uint64 = 20
+const TEST_RESOLUTION_DELAY      uint64 = 2
+const TEST_GRACE_PERIOD          uint64 = 2
+const TEST_CLAIM_GRACE_PERIOD    uint64 = 5

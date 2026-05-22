@@ -1016,3 +1016,96 @@ actualPayout, expectedPayout, diff, tolerance)
 
 t.Log("All-one-side payout verified ✓")
 }
+
+func TestCancelledMarketRefund(t *testing.T) {
+addr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+key, err := keystoreGetKey(addr, "")
+if err != nil {
+t.Fatalf("get validator key: %v", err)
+}
+
+// Create market
+h, _ := getHeight()
+const b0 = uint64(60_000_000)
+nonce := uint64(time.Now().UnixMicro())
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(addr),
+B0:             b0,
+ExpiryTime:     h + 30,
+Nonce:          nonce,
+Question:       "Cancelled market refund test",
+}
+hash := submitTx(t, key, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("create_market: %v", err)
+}
+marketId := contract.DeriveMarketId(hexDecode(addr), nonce)
+t.Logf("Market ID: %x", marketId)
+
+// Submit prediction
+h, _ = getHeight()
+lmsrSeed := b0 - contract.FINALIZATION_BOUNTY
+halfSeed := lmsrSeed / 2
+shares := contract.PRECISION_SCALE
+cost, pe := contract.ComputeTradeCost(halfSeed, halfSeed, lmsrSeed, shares, true)
+if pe != nil {
+t.Fatalf("ComputeTradeCost: %v", pe)
+}
+predMsg := &contract.MessageSubmitPrediction{
+MarketId:      marketId,
+BettorAddress: hexDecode(addr),
+Outcome:       true,
+Shares:        shares,
+MaxCost:       cost * 2,
+}
+hash = submitTx(t, key, "submit_prediction", "MessageSubmitPrediction", predMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("submit_prediction: %v", err)
+}
+t.Logf("Prediction cost: %d uPRX", cost)
+
+// Wait past cancel threshold: ExpiryTime + TEST_RESOLUTION_DELAY + TEST_GRACE_PERIOD + margin
+// TEST_RESOLUTION_DELAY=2, TEST_GRACE_PERIOD=2, so cancelThreshold = ExpiryTime + 4
+cancelTarget := createMsg.ExpiryTime + contract.TEST_RESOLUTION_DELAY + contract.TEST_GRACE_PERIOD + 2
+t.Logf("Waiting for cancel threshold (height %d)...", cancelTarget)
+for {
+cur, _ := getHeight()
+if cur >= cancelTarget {
+break
+}
+t.Logf("Height %d / need %d", cur, cancelTarget)
+time.Sleep(2 * time.Second)
+}
+t.Log("Cancel threshold passed — market should auto-cancel on next claim")
+
+// Claim — should trigger auto-cancel and return CostPaid
+balBefore := getBalance(addr)
+h, _ = getHeight()
+claimMsg := &contract.MessageClaimWinnings{
+MarketId:        marketId,
+ClaimantAddress: hexDecode(addr),
+}
+hash = submitTx(t, key, "claim_winnings", "MessageClaimWinnings", claimMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("claim_winnings: %v", err)
+}
+balAfter := getBalance(addr)
+actualRefund := int64(balAfter) - int64(balBefore)
+t.Logf("Balance before: %d after: %d refund: %d (expected cost ~%d)",
+balBefore, balAfter, actualRefund, cost)
+
+// Refund must be positive
+if actualRefund <= 0 {
+t.Errorf("Expected positive refund, got %d", actualRefund)
+}
+
+// Refund should be close to original cost paid (within 15%)
+tolerance := int64(cost) * 15 / 100
+diff := actualRefund - int64(cost) + int64(testFee)
+if diff < -tolerance || diff > tolerance {
+t.Errorf("Refund mismatch: got %d expected ~%d (diff %d, tolerance ±%d)",
+actualRefund, cost, diff, tolerance)
+}
+
+t.Log("Cancelled market refund verified ✓")
+}

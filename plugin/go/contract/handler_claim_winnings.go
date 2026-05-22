@@ -20,8 +20,9 @@ return &PluginDeliverResponse{Error: ErrHeightNotSet()}
 if len(msg.ClaimantAddress) != 20 {
 return &PluginDeliverResponse{Error: ErrInvalidAddress()}
 }
-if pe := c.CheckAutoCancel(msg.MarketId); pe != nil {
-return &PluginDeliverResponse{Error: pe}
+cancelledMarket, cancelErr := c.CheckAutoCancel(msg.MarketId)
+if cancelErr != nil {
+return &PluginDeliverResponse{Error: cancelErr}
 }
 
 marketQId   := nextQueryId()
@@ -81,6 +82,10 @@ return &PluginDeliverResponse{Error: pe}
 
 if market == nil {
 return &PluginDeliverResponse{Error: ErrMarketNotFound()}
+}
+// Apply auto-cancel if triggered — status will be STATUS_CANCELLED.
+if cancelledMarket != nil {
+market = cancelledMarket
 }
 if position.SharesYes == 0 && position.SharesNo == 0 && position.CostPaid == 0 {
 return &PluginDeliverResponse{Error: ErrNoPosition()}
@@ -176,7 +181,15 @@ if pe := errCheckWrite(wr, werr); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 
-graceEnd := market.ExpiryTime + RESOLUTION_DELAY_BLOCKS + GRACE_PERIOD_BLOCKS + CLAIM_GRACE_PERIOD
+resolutionDelay := RESOLUTION_DELAY_BLOCKS
+gracePeriod     := GRACE_PERIOD_BLOCKS
+claimGrace      := CLAIM_GRACE_PERIOD
+if TEST_MODE {
+resolutionDelay = TEST_RESOLUTION_DELAY
+gracePeriod     = TEST_GRACE_PERIOD
+claimGrace      = TEST_CLAIM_GRACE_PERIOD
+}
+graceEnd := market.ExpiryTime + resolutionDelay + gracePeriod + claimGrace
 shouldSweep := (market.Status == STATUS_FINALIZED &&
 (market.ClaimedCount == market.TotalPositions || now > graceEnd)) ||
 (market.Status == STATUS_CANCELLED && now > graceEnd)

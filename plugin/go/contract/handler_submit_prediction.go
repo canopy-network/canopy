@@ -26,8 +26,8 @@ return &PluginDeliverResponse{Error: ErrHeightNotSet()}
 if msg.Shares < PRECISION_SCALE {
 return &PluginDeliverResponse{Error: ErrSharesBelowMinimum()}
 }
-if pe := c.CheckAutoCancel(msg.MarketId); pe != nil {
-return &PluginDeliverResponse{Error: pe}
+if _, cancelErr := c.CheckAutoCancel(msg.MarketId); cancelErr != nil {
+return &PluginDeliverResponse{Error: cancelErr}
 }
 
 marketQId  := nextQueryId()
