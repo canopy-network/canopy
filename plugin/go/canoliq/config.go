@@ -230,6 +230,31 @@ func DefaultParams() *contract.CanoliqParams {
 		StakeFee:           10_000,
 		MultisigApproveFee: 10_000,
 		MinStakeToPropose:  1_000_000, // 1 CLIQ minimum to deter spam
+		Governance:         defaultGovernanceTiers(),
+	}
+}
+
+// Block-count constants for governance timing at the 6s localnet block time.
+const (
+	blocks24h = 14_400  // ~24h at 6s blocks
+	blocks48h = 28_800  // ~48h
+	blocks7d  = 100_800 // ~7d
+	blocks14d = 201_600 // ~14d
+)
+
+// defaultGovernanceTiers returns the 7-row per-action governance matrix from
+// Tokenomics v1.1 §7. quorum/approval are in bps; voting/timelock in blocks.
+// Non-emergency actions use the standard 7-day voting window; the emergency
+// tier uses a 24h fast-track vote with zero timelock (F13).
+func defaultGovernanceTiers() []*contract.GovernanceTier {
+	return []*contract.GovernanceTier{
+		{Action: contract.ActionType_ACTION_FEE_CHANGE, QuorumBps: 500, ApprovalBps: 5100, TimelockBlocks: blocks48h, VotingPeriodBlocks: blocks7d},
+		{Action: contract.ActionType_ACTION_TREASURY_SPEND_SMALL, QuorumBps: 500, ApprovalBps: 5100, TimelockBlocks: blocks48h, VotingPeriodBlocks: blocks7d},
+		{Action: contract.ActionType_ACTION_TREASURY_SPEND_LARGE, QuorumBps: 1000, ApprovalBps: 6700, TimelockBlocks: blocks7d, VotingPeriodBlocks: blocks7d},
+		{Action: contract.ActionType_ACTION_EMERGENCY, QuorumBps: 800, ApprovalBps: 6700, TimelockBlocks: 0, VotingPeriodBlocks: blocks24h},
+		{Action: contract.ActionType_ACTION_VALIDATOR_EJECT, QuorumBps: 500, ApprovalBps: 5100, TimelockBlocks: blocks48h, VotingPeriodBlocks: blocks7d},
+		{Action: contract.ActionType_ACTION_PROTOCOL_UPGRADE, QuorumBps: 1000, ApprovalBps: 6700, TimelockBlocks: blocks7d, VotingPeriodBlocks: blocks7d},
+		{Action: contract.ActionType_ACTION_AUTONOMY_GRADUATE, QuorumBps: 1500, ApprovalBps: 7500, TimelockBlocks: blocks14d, VotingPeriodBlocks: blocks7d},
 	}
 }
 
@@ -263,6 +288,33 @@ func ValidateParams(p *contract.CanoliqParams) *contract.PluginError {
 	// is unset (zero) so DefaultParams loaded by older state still validates.
 	if p.VotingPeriodBlocks > 0 && p.CliqUnstakingBlocks > 0 && p.CliqUnstakingBlocks < p.VotingPeriodBlocks {
 		return ErrInvalidParams()
+	}
+	// Every governance tier must carry a known action and in-range bps. An
+	// empty list is valid (callers fall back to the scalar knobs above).
+	seen := make(map[contract.ActionType]bool, len(p.Governance))
+	for _, t := range p.Governance {
+		if t == nil || t.Action == contract.ActionType_ACTION_UNKNOWN {
+			return ErrInvalidParams()
+		}
+		if seen[t.Action] {
+			return ErrInvalidParams()
+		}
+		seen[t.Action] = true
+		if t.QuorumBps > 10_000 || t.ApprovalBps > 10_000 {
+			return ErrInvalidParams()
+		}
+	}
+	return nil
+}
+
+// tierFor returns the governance tier matching action, or nil when no tier is
+// configured for it (callers then fall back to the scalar quorum / approval /
+// timelock / voting-period knobs on CanoliqParams).
+func tierFor(p *contract.CanoliqParams, action contract.ActionType) *contract.GovernanceTier {
+	for _, t := range p.Governance {
+		if t != nil && t.Action == action {
+			return t
+		}
 	}
 	return nil
 }

@@ -173,7 +173,9 @@ func TestCLIQStakeUnstakeClaim(t *testing.T) {
 
 // === §4 governance ===
 
-// shortGovParams returns DefaultParams() tuned for fast test cycles.
+// shortGovParams returns DefaultParams() tuned for fast test cycles. The
+// per-action governance tiers override the scalar voting period, so shorten
+// every tier's voting window too (T1).
 func shortGovParams() *contract.CanoliqParams {
 	p := DefaultParams()
 	p.VotingPeriodBlocks = 5
@@ -181,6 +183,9 @@ func shortGovParams() *contract.CanoliqParams {
 	p.QuorumBps = 3300
 	p.PassThresholdBps = 5001
 	p.MinStakeToPropose = 1_000_000
+	for _, tier := range p.Governance {
+		tier.VotingPeriodBlocks = 5
+	}
 	return p
 }
 
@@ -724,7 +729,7 @@ func TestInsuranceConservationFullSplit(t *testing.T) {
 			yield, treasury, insurance, buyback, validators, total, X)
 	}
 	if insurance == 0 {
-		t.Error("insurance should be non-zero with default insurance_bps=1500")
+		t.Error("insurance should be non-zero with default insurance_bps=500")
 	}
 }
 

@@ -29,9 +29,16 @@ func (c *Canoliq) queueTreasurySpend(prop *contract.Proposal, payload *contract.
 	if payload.Denomination != contract.SpendDenomination_SPEND_CNPY && payload.Denomination != contract.SpendDenomination_SPEND_CLIQ {
 		return ErrInvalidProposalPayload()
 	}
+	// Multisig is still gated purely on amount vs the treasury threshold.
 	requires := payload.Amount > params.TreasuryThreshold
+	// Timelock comes from the proposal's recorded tier (so a small spend's 48h
+	// and a large spend's 7d coexist); a tier timelock of 0 means immediate.
+	// Legacy proposals (nil tier) keep the old rule: timelock only when the
+	// spend requires multisig.
 	executable := height
-	if requires {
+	if prop.Tier != nil {
+		executable = height + prop.Tier.TimelockBlocks
+	} else if requires {
 		executable = height + params.TimelockBlocks
 	}
 	g, err := c.LoadGlobals()

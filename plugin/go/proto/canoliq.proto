@@ -171,6 +171,39 @@ message CanoliqParams {
   uint64 multisig_approve_fee = 22; // @gotags: json:"multisigApproveFee"
   // min_stake_to_propose: minimum staked CLIQ a proposer must hold
   uint64 min_stake_to_propose = 23; // @gotags: json:"minStakeToPropose"
+  // governance: per-action governance tiers (Tokenomics v1.1 §7). When a
+  // tier matches a proposal's ActionType it overrides the scalar
+  // quorum_bps / pass_threshold_bps / timelock_blocks / voting_period_blocks
+  // above; an empty list (or unmatched action) falls back to those scalars.
+  repeated GovernanceTier governance = 24; // @gotags: json:"governance"
+}
+
+// ActionType classifies a proposal so per-action governance tiers can apply
+// distinct quorum / approval / timelock / voting-period rules (Tokenomics
+// v1.1 §7). Inferred from the proposal payload at creation time.
+enum ActionType {
+  ACTION_UNKNOWN = 0;
+  ACTION_FEE_CHANGE = 1;
+  ACTION_TREASURY_SPEND_SMALL = 2;
+  ACTION_TREASURY_SPEND_LARGE = 3;
+  ACTION_EMERGENCY = 4;
+  ACTION_VALIDATOR_EJECT = 5;
+  ACTION_PROTOCOL_UPGRADE = 6;
+  ACTION_AUTONOMY_GRADUATE = 7;
+}
+
+// GovernanceTier carries the governance rules for a single ActionType.
+message GovernanceTier {
+  // action: the ActionType this tier governs
+  ActionType action = 1;
+  // quorum_bps: fraction of snapshot total_staked_cliq required to participate
+  uint64 quorum_bps = 2; // @gotags: json:"quorumBps"
+  // approval_bps: yes / (yes+no) needed for the proposal to pass
+  uint64 approval_bps = 3; // @gotags: json:"approvalBps"
+  // timelock_blocks: delay between proposal pass and execution
+  uint64 timelock_blocks = 4; // @gotags: json:"timelockBlocks"
+  // voting_period_blocks: blocks the proposal accepts votes
+  uint64 voting_period_blocks = 5; // @gotags: json:"votingPeriodBlocks"
 }
 
 // VestingIndex enumerates the vesting schedule ids belonging to an address so
@@ -337,6 +370,12 @@ message Proposal {
   uint64 no_weight = 10; // @gotags: json:"noWeight"
   // abstain_weight: cumulative abstain weight
   uint64 abstain_weight = 11; // @gotags: json:"abstainWeight"
+  // action_type: classification inferred from the payload at creation
+  ActionType action_type = 12; // @gotags: json:"actionType"
+  // tier: governance tier snapshotted at creation. Quorum / approval are
+  // read from here at tally; timelock from here at spend-queue time. Nil for
+  // proposals created before T1 — callers fall back to the scalar params.
+  GovernanceTier tier = 13; // @gotags: json:"tier"
 }
 
 // ProposalIndex enumerates active proposal ids so BeginBlock can scan
@@ -398,6 +437,32 @@ message ProposalTreasurySpend {
   uint64 amount = 2;
   // denomination: CNPY (sourced from treasury/canoliq) or CLIQ (treasury/cliq)
   SpendDenomination denomination = 3;
+}
+
+// ProposalValidatorEject removes a validator from the canoLiq committee
+// registry on pass (F12). Future reward sweeps skip the ejected address and
+// its accrued validator-incentive balance is cleared.
+message ProposalValidatorEject {
+  // validator_address: 20-byte address to remove from ValidatorRegistry
+  bytes validator_address = 1; // @gotags: json:"validatorAddress"
+}
+
+// ProposalEmergency is a security-critical action on the fast-track tier
+// (F13). It optionally carries a param diff applied immediately on pass.
+message ProposalEmergency {
+  // description: human-readable rationale for the emergency action
+  string description = 1;
+  // param_change: optional CanoliqParams replacement applied on pass
+  ProposalParamChange param_change = 2; // @gotags: json:"paramChange"
+}
+
+// ProposalProtocolUpgrade signals an off-chain coordinated upgrade. The
+// payload is opaque to the plugin (recorded for audit; no on-chain dispatch).
+message ProposalProtocolUpgrade {
+  // version: target version string
+  string version = 1;
+  // payload: opaque upgrade descriptor
+  bytes payload = 2;
 }
 
 // BuybackOrder is the queued + post-execution record of a buyback. Carries

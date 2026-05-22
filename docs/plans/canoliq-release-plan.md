@@ -25,6 +25,15 @@ plugin (no Canopy core consensus changes). The plugin:
 `canoLiq_Tokenomics_v1.1.pdf` (May 2025). The earlier v2 draft is referenced
 only when describing what changed.
 
+> **Known doc conflict — validator cliff (verified 2026-05-21):** Whitepaper
+> §5.2 mis-states the Validators & Infrastructure cliff as **6 months**.
+> Tokenomics §2.1 governs and is explicit: **3-year linear with a 12-month
+> cliff**, and it directly rejects the shorter figure ("A 6-month cliff is
+> insufficient given the operational commitment required"); §6's summary
+> table likewise lists 12 months. The genesis files use the correct 12-month
+> cliff (`cliffMonths: 12, vestMonths: 24`). For vesting numbers, Tokenomics
+> is authoritative over the whitepaper's §5.2 summary table.
+
 **Vesting `Duration` interpretation (resolved with user):** Duration columns
 in v1.1 mean **total span including cliff**. So `cliffMonths + vestMonths`
 must equal the documented duration.
@@ -40,9 +49,11 @@ inventory lives in the prior plan; the relevant pre-existing facts for the
 remaining work are:
 
 - **Plugin handshake & live reward sweep** — verified in
-  `.docker/compose.yaml`. A 36 M-uCNPY inflow reconciles exactly across
-  pool / treasury / insurance / validator-incentives / buyback per WP §7
-  fee math.
+  `.docker/compose.yaml`. Reward inflow reconciles exactly across
+  pool / treasury / insurance / validator-incentives / buyback per the
+  v1.1 fee math (WP §3.3–§4.3, Tokenomics §3). Re-verified live 2026-05-21
+  at cumulative R = 216 M uCNPY with the corrected 5 % insurance skim
+  (see Localnet L1 verification).
 - **Tx surface** covers Phase 1 (deposit / redeem / claim / cliq-transfer /
   cliq-claim-vested) and Phase 2 (vote / stake / unstake / claim /
   buyback-execute / spend-execute / multisig-approve / proposal-create with
@@ -136,10 +147,20 @@ Genesis JSON + one validator path. All P0 blocking spec violations. ~1 day.
       unchanged. F4/F5 may need one or two fixture updates. (Three reward
       tests updated to match the new 5 % insurance skim arithmetic;
       no other fixtures touched.)
-- [ ] Spin localnet via `.docker/compose.yaml`, send a 36 M-uCNPY inflow,
-      hit `/v1/pools` + `/v1/globals` and assert the split now uses the
-      corrected insurance bps and that a 25-% `param-change` proposal is
-      rejected at `CheckTx`.
+- [x] Spin localnet via `.docker/compose.yaml`, let subsidy rewards flow,
+      hit `/v1/pools` + `/v1/globals` and assert the split uses the
+      corrected 5 % insurance bps. **Verified live (2026-05-21):** a
+      cumulative R = 216 M-uCNPY inflow reconciles exactly —
+      pool 200.448 M / treasury-net 7.3872 M / insurance 0.3888 M /
+      buyback 3.888 M / validators 3.888 M (Σ = 216 M). Insurance is the
+      v1.1 5 %-of-treasury skim (388 800), **not** the old 15 % (1 166 400).
+      Param-change bound: the F4 5 %–20 % rejection is **not** enforced at
+      `CheckTx` — `CheckMessageCLIQProposalCreate` is stateless and never
+      unpacks the param payload. `ValidateParams` (rejecting FeeBps 2500)
+      runs in `dispatchPassed` when a proposal *passes*, so an out-of-bound
+      param-change is queued but cannot apply. Covered by the new
+      `TestValidateParamsFeeBpsBounds` unit test rather than a 100 800-block
+      live vote.
 
 ## L2. Doc / narrative cleanup (audit Wave 2)
 
@@ -215,9 +236,9 @@ there is no per-address index that names those records. This blocks the
 
 ## Localnet exit criteria
 - [x] L1 + L2 + L3 all landed and tested.
-- [ ] `.docker/compose.yaml` chain reconciles a 36 M-uCNPY inflow against
-      v1.1 fee math. (In-process reward tests pass; live docker-compose
-      re-verification still pending.)
+- [x] `.docker/compose.yaml` chain reconciles its reward inflow against
+      v1.1 fee math. **Verified live 2026-05-21** (cumulative R = 216 M
+      uCNPY; 5 % insurance skim confirmed; conservation exact).
 - [x] `/v1/account/{addr}` returns redemption + unstake collections.
 - [x] No production-path file references "0.95 X" or "DAO 5 % pre-cut" or
       "Liquidity Incentives (Farming)" or "Plugin & Dev Grants".
@@ -236,9 +257,13 @@ audits and the old plan deferred. Multi-week.
 
 ## T1. Per-action governance matrix (audit F7 + F12 + F13)
 
-Replaces today's one-size-fits-all `quorum_bps / pass_threshold_bps /
-timelock_blocks` with a 7-row matrix from Tokenomics v1.1 §7. F12 (validator
-ejection) and F13 (emergency fast-track) fall out for free once T1 is in.
+Adds a 7-row per-action matrix from Tokenomics v1.1 §7 on top of today's
+one-size-fits-all `quorum_bps / pass_threshold_bps / timelock_blocks`
+(kept as the fallback — see Proto + state). F12 (validator ejection) and
+F13 (emergency fast-track) fall out for free once T1 is in.
+
+**Status: landed and tested (2026-05-22).** Full suite green; see the
+checked items below for the as-built notes.
 
 | Action | Quorum | Approval | Timelock |
 |---|---|---|---|
@@ -251,50 +276,64 @@ ejection) and F13 (emergency fast-track) fall out for free once T1 is in.
 | Autonomy graduation | 15 % | 75 % | 14 d |
 
 ### Proto + state
-- [ ] `proto/canoliq.proto` — add `ActionType` enum (`ACTION_FEE_CHANGE`,
-      `ACTION_TREASURY_SPEND_SMALL`, `ACTION_TREASURY_SPEND_LARGE`,
-      `ACTION_EMERGENCY`, `ACTION_VALIDATOR_EJECT`, `ACTION_PROTOCOL_UPGRADE`,
-      `ACTION_AUTONOMY_GRADUATE`).
-- [ ] Add `ProposalValidatorEject{validator_address}`,
-      `ProposalEmergency{description, params_diff oneof}`,
-      `ProposalProtocolUpgrade{version, payload}` payloads as oneof members
-      on `Proposal.payload`.
-- [ ] `CanoliqParams` — replace the three scalar governance knobs with a
-      `repeated GovernanceTier governance` field, one entry per action type
-      (each tier carries quorum / approval / timelock / voting_period).
-      Migration path: `DefaultParams` seeds all seven from Tokenomics §7
-      numbers; `ValidateParams` checks every tier.
+- [x] `proto/canoliq.proto` — added `ActionType` enum (all 7 values) and
+      `GovernanceTier{action, quorum_bps, approval_bps, timelock_blocks,
+      voting_period_blocks}`. Regenerated via `proto/_generate.sh`.
+- [x] Added `ProposalValidatorEject{validator_address}`,
+      `ProposalEmergency{description, param_change}`,
+      `ProposalProtocolUpgrade{version, payload}`. (Resolved by `FromAny`
+      via the global proto registry — no oneof; `Proposal.payload` stays a
+      generic `Any`, matching the existing param-change / buyback / spend
+      pattern.)
+- [x] `CanoliqParams` — **decision (with user): additive + fallback rather
+      than the literal "replace".** Added `repeated GovernanceTier
+      governance = 24`; kept the scalar `quorum_bps / pass_threshold_bps /
+      timelock_blocks / voting_period_blocks` as the fallback when a tier is
+      unset or unmatched (e.g. buyback). Lower blast radius, backward-compatible
+      with stored params, per-action enforcement fully delivered. `DefaultParams`
+      seeds all seven from Tokenomics §7; `ValidateParams` checks every tier
+      (known action, unique, bps ≤ 10000). `Proposal` also gained `action_type`
+      + a snapshotted `tier`.
 
 ### Behaviour
-- [ ] `MessageCLIQProposalCreate` infers `ActionType` from the payload oneof
-      tag and snapshots the right tier into the `Proposal` record.
-- [ ] BeginBlock tally uses the proposal's recorded tier (not the global
-      default) for quorum + approval gating.
-- [ ] BeginBlock spend execution scan uses the proposal-recorded timelock
-      (so emergency-action 24 h fast-track and large-spend 7 d coexist with
-      the small-spend 48 h path).
-- [ ] **F12** — `dispatchPassed` for `ProposalValidatorEject` removes the
-      address from `ValidatorRegistry` and zeros their accrued
-      `validator/incentives/{addr}` (forwarded to the next sweep's remainder
-      credit).
-- [ ] **F13** — emergency action proposals share the proposal-tier timing
-      infrastructure; payload is "param-change with voting_period = 24h
-      equivalent blocks and timelock = 0".
+- [x] `DeliverMessageCLIQProposalCreate` infers `ActionType` via
+      `actionTypeForPayload` (treasury small/large split at the 1M-CLIQ
+      boundary) and snapshots the resolved tier + voting period into the
+      `Proposal` record.
+- [x] `proposalPasses` reads quorum + approval from the proposal's recorded
+      tier (scalar fallback for nil-tier / pre-T1 proposals).
+- [x] `queueTreasurySpend` uses the proposal-recorded tier timelock (small
+      48 h, large 7 d, emergency 0); legacy nil-tier path unchanged. Multisig
+      gating stays independent (amount vs `treasury_threshold`).
+- [x] **F12** — `dispatchPassed` for `ProposalValidatorEject` calls
+      `ejectValidator`: removes the address from `ValidatorRegistry` and
+      deletes its accrued `validator/incentives/{addr}`. Idempotent (no-op if
+      absent) so a passed eject can never halt BeginBlock; future sweeps
+      redistribute pro-rata over survivors.
+- [x] **F13** — `ProposalEmergency` runs on the fast-track tier (24h vote,
+      0 timelock); an optional `param_change` is validated + applied
+      immediately on pass. `ProposalProtocolUpgrade` is recorded only (no
+      on-chain dispatch).
 
 ### CLI
-- [ ] `canoliqctl proposal-create` gains `validator-eject` and `emergency`
-      sub-commands; existing sub-commands tag themselves with the correct
-      `ActionType` automatically.
+- [x] `canoliqctl proposal-create` gained `validator-eject` and `emergency`
+      sub-commands; existing sub-commands are auto-tagged plugin-side via
+      `actionTypeForPayload` (no CLI change needed for tagging).
 
 ### T1 tests
-- [ ] Each tier's quorum / approval / timelock independently enforced
-      (7 round-trips).
-- [ ] Validator ejection: pre-ejection rewards distribute pro-rata including
-      the ejected validator; post-ejection rewards skip them.
-- [ ] Emergency proposal: 24 h fast-track timing accepted; same payload
-      submitted as a normal `param-change` keeps the 48 h timing.
-- [ ] Mixed-flight: two proposals from different tiers active in the same
-      window tally independently against the right thresholds.
+- [x] Tier quorum / approval / timelock independently enforced
+      (`TestT1ProposalPassesUsesTier`, `TestT1TreasuryTimelockFromTier`,
+      `TestT1DefaultTiersMatchSpec`, `TestT1ActionTypeInference`).
+- [x] Validator ejection: pre-ejection split 9/9, post-ejection the survivor
+      takes the full validator share, ejected gets nothing
+      (`TestT1ValidatorEjectSkipsRewards`).
+- [x] Emergency 24 h fast-track vs the same diff as a 7 d param-change
+      (`TestT1CreateSnapshotsTierAndVotingPeriod`); emergency param diff
+      applies with zero timelock (`TestT1EmergencyParamDiffApplied`).
+- [x] Mixed-flight: a fee-change (51%) and a large treasury spend (67%) in
+      the same window with an identical 60% yes ratio — the fee-change passes
+      and applies, the large spend fails, both cleaned up
+      (`TestT1MixedFlightIndependentTally`).
 
 ## T2. Vote-escrow lock multipliers (audit F8)
 
@@ -397,9 +436,12 @@ grows past the next threshold.
 
 ## T5. Autonomy graduation tracking (audit F11)
 
-The graduation **proposal type** (`ACTION_AUTONOMY_GRADUATE`) already arrives
-with T1. T5 adds the threshold tracking and surface so the DAO knows when to
-vote.
+T1 landed the `ACTION_AUTONOMY_GRADUATE` **ActionType + governance tier**
+(15 % / 75 % / 14 d, seeded in `defaultGovernanceTiers`). The graduation
+**payload** (`ProposalAutonomyGraduate`), its create path, and dispatch are
+still T5/M3 work — `actionTypeForPayload` has no case for it yet, so a
+graduation proposal cannot be created until then. T5 adds the threshold
+tracking and surface so the DAO knows when to vote.
 
 Whitepaper §10 thresholds:
 

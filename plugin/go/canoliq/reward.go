@@ -1,6 +1,7 @@
 package canoliq
 
 import (
+	"bytes"
 	"math/rand"
 
 	"github.com/canopy-network/go-plugin/contract"
@@ -234,6 +235,40 @@ func (c *Canoliq) distributeValidatorShare(share uint64) ([]*contract.PluginSetO
 		})
 	}
 	return sets, nil
+}
+
+// ejectValidator removes addr from the committee registry and clears its
+// accrued validator-incentive balance (F12). Idempotent: a no-op when addr is
+// absent so a passed eject proposal can never halt BeginBlock. Future reward
+// sweeps redistribute pro-rata over the remaining registry entries, so the
+// ejected validator simply stops receiving a share.
+func (c *Canoliq) ejectValidator(addr []byte) *contract.PluginError {
+	registry, err := c.loadValidatorRegistry()
+	if err != nil {
+		return err
+	}
+	// Always clear any accrued incentives for the ejected address.
+	deletes := []*contract.PluginDeleteOp{{Key: KeyForValidatorIncentives(addr)}}
+	var sets []*contract.PluginSetOp
+	if registry != nil {
+		kept := registry.Entries[:0]
+		for _, e := range registry.Entries {
+			if bytes.Equal(e.Address, addr) {
+				continue
+			}
+			kept = append(kept, e)
+		}
+		registry.Entries = kept
+		bz, e := contract.Marshal(registry)
+		if e != nil {
+			return e
+		}
+		sets = append(sets, &contract.PluginSetOp{Key: KeyForValidatorRegistry(), Value: bz})
+	}
+	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets, Deletes: deletes}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // loadValidatorRegistry reads the singleton validator registry. Returns

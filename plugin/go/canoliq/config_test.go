@@ -160,6 +160,35 @@ func TestBundledTestnetGenesisIsSafetyCheckClean(t *testing.T) {
 	}
 }
 
+// TestValidateParamsFeeBpsBounds pins the F4 fee-rate bound (Tokenomics
+// v1.1 §3.3 / WP §4.1: 5%–20%). ValidateParams must reject any FeeBps
+// outside [500, 2000] and accept the edges. This is the enforcement a
+// passed param-change proposal hits in dispatchPassed before SaveParams.
+func TestValidateParamsFeeBpsBounds(t *testing.T) {
+	cases := []struct {
+		feeBps uint64
+		ok     bool
+	}{
+		{499, false},  // just below 5%
+		{500, true},   // 5% floor
+		{1200, true},  // default 12%
+		{2000, true},  // 20% ceiling
+		{2001, false}, // just above 20%
+		{2500, false}, // 25% — the localnet reconciliation case
+	}
+	for _, tc := range cases {
+		p := DefaultParams()
+		p.FeeBps = tc.feeBps
+		err := ValidateParams(p)
+		if tc.ok && err != nil {
+			t.Errorf("FeeBps=%d: want accepted, got %v", tc.feeBps, err)
+		}
+		if !tc.ok && err == nil {
+			t.Errorf("FeeBps=%d: want rejected, got nil", tc.feeBps)
+		}
+	}
+}
+
 // --- helpers ---
 
 // writeGenesisFixture writes a minimal one-bucket GenesisFile with the

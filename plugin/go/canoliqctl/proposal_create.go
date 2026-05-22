@@ -37,10 +37,14 @@ func cmdProposalCreate(args []string, gf globalFlags) error {
 		return cmdProposalBuyback(args[1:], gf)
 	case "treasury-spend":
 		return cmdProposalTreasurySpend(args[1:], gf)
+	case "validator-eject":
+		return cmdProposalValidatorEject(args[1:], gf)
+	case "emergency":
+		return cmdProposalEmergency(args[1:], gf)
 	case "help", "-h", "--help":
 		return printProposalCreateHelp()
 	default:
-		return fmt.Errorf("unknown proposal-create subcommand %q (want param-change|buyback|treasury-spend)", args[0])
+		return fmt.Errorf("unknown proposal-create subcommand %q (want param-change|buyback|treasury-spend|validator-eject|emergency)", args[0])
 	}
 }
 
@@ -51,6 +55,8 @@ func printProposalCreateHelp() error {
 	fmt.Println("  param-change    full-set CanoliqParams replacement (read from JSON file)")
 	fmt.Println("  buyback         CNPY → CLIQ buyback at a vote-set price (BURN or DISTRIBUTE_STAKERS)")
 	fmt.Println("  treasury-spend  authorize a transfer from treasury_canoliq (CNPY) or treasury_cliq (CLIQ)")
+	fmt.Println("  validator-eject remove a validator from the committee registry (F12)")
+	fmt.Println("  emergency       security-critical fast-track action with optional param diff (F13)")
 	return nil
 }
 
@@ -171,6 +177,69 @@ func cmdProposalTreasurySpend(args []string, gf globalFlags) error {
 		return fmt.Errorf("wrap treasury-spend payload: %w", err)
 	}
 	return submitProposalCreate(gf, signer, from, payload, description, "treasury-spend")
+}
+
+// cmdProposalValidatorEject submits a ProposalValidatorEject removing a
+// validator from the committee registry on pass (F12). The plugin infers the
+// ACTION_VALIDATOR_EJECT tier (5% quorum / 51% / 48h) from the payload type.
+func cmdProposalValidatorEject(args []string, gf globalFlags) error {
+	usage := "proposal-create validator-eject <nickname> <validator-hex> [--description \"…\"]"
+	rest, description := parseDescriptionFlag(args)
+	if len(rest) < 2 {
+		return fmt.Errorf("expected 2 positional args (usage: %s)", usage)
+	}
+	signer, err := fetchSigner(gf.adminURL, rest[0], gf.password)
+	if err != nil {
+		return err
+	}
+	from, err := addrFromHex(signer.Address)
+	if err != nil {
+		return err
+	}
+	validator, err := addrFromHex(strings.TrimPrefix(rest[1], "0x"))
+	if err != nil {
+		return fmt.Errorf("validator: %w", err)
+	}
+	if len(validator) != 20 {
+		return fmt.Errorf("validator must be 20 bytes (40 hex chars), got %d bytes", len(validator))
+	}
+	payload, err := anypb.New(&contract.ProposalValidatorEject{ValidatorAddress: validator})
+	if err != nil {
+		return fmt.Errorf("wrap validator-eject payload: %w", err)
+	}
+	return submitProposalCreate(gf, signer, from, payload, description, "validator-eject")
+}
+
+// cmdProposalEmergency submits a ProposalEmergency on the fast-track tier
+// (ACTION_EMERGENCY: 8% quorum / 67% / 24h vote / no timelock). An optional
+// params-json-file is included as the emergency param diff applied on pass.
+func cmdProposalEmergency(args []string, gf globalFlags) error {
+	usage := "proposal-create emergency <nickname> [params-json-file] [--description \"…\"]"
+	rest, description := parseDescriptionFlag(args)
+	if len(rest) < 1 {
+		return fmt.Errorf("expected at least 1 positional arg (usage: %s)", usage)
+	}
+	signer, err := fetchSigner(gf.adminURL, rest[0], gf.password)
+	if err != nil {
+		return err
+	}
+	from, err := addrFromHex(signer.Address)
+	if err != nil {
+		return err
+	}
+	emergency := &contract.ProposalEmergency{Description: description}
+	if len(rest) >= 2 {
+		params, err := loadParamsFromFile(rest[1])
+		if err != nil {
+			return err
+		}
+		emergency.ParamChange = &contract.ProposalParamChange{Params: params}
+	}
+	payload, err := anypb.New(emergency)
+	if err != nil {
+		return fmt.Errorf("wrap emergency payload: %w", err)
+	}
+	return submitProposalCreate(gf, signer, from, payload, description, "emergency")
 }
 
 // submitProposalCreate is the shared submit path: build the outer

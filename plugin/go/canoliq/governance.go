@@ -113,7 +113,8 @@ func (c *Canoliq) DeliverMessageCLIQProposalCreate(msg *contract.MessageCLIQProp
 	}
 	// Validate payload type up-front; ExecuteProposal does the same check on
 	// pass, but rejecting at create avoids accumulating undispatchable proposals.
-	if _, err := unwrapPayload(msg.Payload); err != nil {
+	payload, err := unwrapPayload(msg.Payload)
+	if err != nil {
 		return &contract.PluginDeliverResponse{Error: err}
 	}
 	cnpy.Amount -= fee
@@ -121,15 +122,27 @@ func (c *Canoliq) DeliverMessageCLIQProposalCreate(msg *contract.MessageCLIQProp
 	height := c.currentHeight()
 	id := globals.NextProposalId + 1
 	globals.NextProposalId = id
+	// Classify the proposal and snapshot its governance tier so tally,
+	// timelock, and voting window are fixed at creation even if params change
+	// mid-flight. Unmatched actions (e.g. buyback) leave tier nil and fall
+	// back to the scalar voting-period / quorum / timelock knobs.
+	action := actionTypeForPayload(payload)
+	tier := tierFor(params, action)
+	votingPeriod := params.VotingPeriodBlocks
+	if tier != nil && tier.VotingPeriodBlocks > 0 {
+		votingPeriod = tier.VotingPeriodBlocks
+	}
 	prop := &contract.Proposal{
 		Id:                  id,
 		Proposer:            msg.FromAddress,
 		CreationHeight:      height,
-		ExpiryHeight:        height + params.VotingPeriodBlocks,
+		ExpiryHeight:        height + votingPeriod,
 		SnapshotTotalStaked: globals.TotalStakedCliq,
 		Payload:             msg.Payload,
 		Description:         msg.Description,
 		Status:              contract.ProposalStatus_PROPOSAL_ACTIVE,
+		ActionType:          action,
+		Tier:                tier,
 	}
 	idx.Ids = append(idx.Ids, id)
 	pBz, e := contract.Marshal(prop)
@@ -395,8 +408,14 @@ func (c *Canoliq) loadProposal(id uint64) (*contract.Proposal, *contract.PluginE
 // Threshold: yes >= pass_threshold_bps * (yes + no) / 10000. Empty (yes+no)
 // fails by default.
 func proposalPasses(p *contract.Proposal, params *contract.CanoliqParams) bool {
+	// Prefer the tier snapshotted at creation; fall back to the scalar knobs
+	// for proposals created before T1 (nil tier) or unmatched actions.
+	quorumBps, approvalBps := params.QuorumBps, params.PassThresholdBps
+	if p.Tier != nil {
+		quorumBps, approvalBps = p.Tier.QuorumBps, p.Tier.ApprovalBps
+	}
 	total := p.YesWeight + p.NoWeight + p.AbstainWeight
-	required := mulDiv(p.SnapshotTotalStaked, params.QuorumBps, 10_000)
+	required := mulDiv(p.SnapshotTotalStaked, quorumBps, 10_000)
 	if total < required {
 		return false
 	}
@@ -404,7 +423,7 @@ func proposalPasses(p *contract.Proposal, params *contract.CanoliqParams) bool {
 	if denom == 0 {
 		return false
 	}
-	threshold := mulDiv(denom, params.PassThresholdBps, 10_000)
+	threshold := mulDiv(denom, approvalBps, 10_000)
 	return p.YesWeight >= threshold
 }
 
@@ -447,6 +466,23 @@ func (c *Canoliq) dispatchPassed(prop *contract.Proposal, params *contract.Canol
 		return nil
 	case *contract.ProposalTreasurySpend:
 		return c.queueTreasurySpend(prop, p, params, height)
+	case *contract.ProposalValidatorEject:
+		// F12: drop the validator from the committee registry and clear its
+		// accrued incentives. Idempotent.
+		return c.ejectValidator(p.ValidatorAddress)
+	case *contract.ProposalEmergency:
+		// F13: emergency actions run on the fast-track tier (24h vote, no
+		// timelock). The optional param diff applies immediately on pass.
+		if p.ParamChange != nil && p.ParamChange.Params != nil {
+			if err := ValidateParams(p.ParamChange.Params); err != nil {
+				return err
+			}
+			return c.SaveParams(p.ParamChange.Params)
+		}
+		return nil
+	case *contract.ProposalProtocolUpgrade:
+		// Coordinated off-chain; recorded for audit, no on-chain dispatch.
+		return nil
 	default:
 		return ErrUnknownProposalPayload()
 	}
@@ -478,9 +514,37 @@ func unwrapPayload(any *anypb.Any) (interface{}, *contract.PluginError) {
 		return nil, err
 	}
 	switch msg.(type) {
-	case *contract.ProposalParamChange, *contract.ProposalBuyback, *contract.ProposalTreasurySpend:
+	case *contract.ProposalParamChange, *contract.ProposalBuyback, *contract.ProposalTreasurySpend,
+		*contract.ProposalValidatorEject, *contract.ProposalEmergency, *contract.ProposalProtocolUpgrade:
 		return msg, nil
 	default:
 		return nil, ErrUnknownProposalPayload()
+	}
+}
+
+// largeSpendCliqThreshold is the "> 1M CLIQ" boundary (in uCLIQ) separating
+// the small- and large-treasury-spend governance tiers (Tokenomics §7).
+const largeSpendCliqThreshold = 1_000_000 * 1_000_000
+
+// actionTypeForPayload classifies an unwrapped proposal payload into its
+// governance ActionType. ProposalBuyback has no §7 tier and maps to
+// ACTION_UNKNOWN so tier resolution falls back to the scalar knobs.
+func actionTypeForPayload(payload interface{}) contract.ActionType {
+	switch p := payload.(type) {
+	case *contract.ProposalParamChange:
+		return contract.ActionType_ACTION_FEE_CHANGE
+	case *contract.ProposalTreasurySpend:
+		if p.Denomination == contract.SpendDenomination_SPEND_CLIQ && p.Amount > largeSpendCliqThreshold {
+			return contract.ActionType_ACTION_TREASURY_SPEND_LARGE
+		}
+		return contract.ActionType_ACTION_TREASURY_SPEND_SMALL
+	case *contract.ProposalValidatorEject:
+		return contract.ActionType_ACTION_VALIDATOR_EJECT
+	case *contract.ProposalEmergency:
+		return contract.ActionType_ACTION_EMERGENCY
+	case *contract.ProposalProtocolUpgrade:
+		return contract.ActionType_ACTION_PROTOCOL_UPGRADE
+	default:
+		return contract.ActionType_ACTION_UNKNOWN
 	}
 }

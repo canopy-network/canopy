@@ -56,7 +56,7 @@ var commandUsages = map[string]string{
 	"buyback-execute":    "buyback-execute <nickname> <proposal-id>",
 	"spend-execute":      "spend-execute <nickname> <proposal-id>",
 	"multisig-approve":   "multisig-approve <signer-nickname> <spend-id>",
-	"proposal-create":    "proposal-create <param-change|buyback|treasury-spend> <args> [--description …]",
+	"proposal-create":    "proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency> <args> [--description …]",
 }
 
 func main() {

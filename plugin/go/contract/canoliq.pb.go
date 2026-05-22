@@ -22,6 +22,73 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// ActionType classifies a proposal so per-action governance tiers can apply
+// distinct quorum / approval / timelock / voting-period rules (Tokenomics
+// v1.1 §7). Inferred from the proposal payload at creation time.
+type ActionType int32
+
+const (
+	ActionType_ACTION_UNKNOWN              ActionType = 0
+	ActionType_ACTION_FEE_CHANGE           ActionType = 1
+	ActionType_ACTION_TREASURY_SPEND_SMALL ActionType = 2
+	ActionType_ACTION_TREASURY_SPEND_LARGE ActionType = 3
+	ActionType_ACTION_EMERGENCY            ActionType = 4
+	ActionType_ACTION_VALIDATOR_EJECT      ActionType = 5
+	ActionType_ACTION_PROTOCOL_UPGRADE     ActionType = 6
+	ActionType_ACTION_AUTONOMY_GRADUATE    ActionType = 7
+)
+
+// Enum value maps for ActionType.
+var (
+	ActionType_name = map[int32]string{
+		0: "ACTION_UNKNOWN",
+		1: "ACTION_FEE_CHANGE",
+		2: "ACTION_TREASURY_SPEND_SMALL",
+		3: "ACTION_TREASURY_SPEND_LARGE",
+		4: "ACTION_EMERGENCY",
+		5: "ACTION_VALIDATOR_EJECT",
+		6: "ACTION_PROTOCOL_UPGRADE",
+		7: "ACTION_AUTONOMY_GRADUATE",
+	}
+	ActionType_value = map[string]int32{
+		"ACTION_UNKNOWN":              0,
+		"ACTION_FEE_CHANGE":           1,
+		"ACTION_TREASURY_SPEND_SMALL": 2,
+		"ACTION_TREASURY_SPEND_LARGE": 3,
+		"ACTION_EMERGENCY":            4,
+		"ACTION_VALIDATOR_EJECT":      5,
+		"ACTION_PROTOCOL_UPGRADE":     6,
+		"ACTION_AUTONOMY_GRADUATE":    7,
+	}
+)
+
+func (x ActionType) Enum() *ActionType {
+	p := new(ActionType)
+	*p = x
+	return p
+}
+
+func (x ActionType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ActionType) Descriptor() protoreflect.EnumDescriptor {
+	return file_canoliq_proto_enumTypes[0].Descriptor()
+}
+
+func (ActionType) Type() protoreflect.EnumType {
+	return &file_canoliq_proto_enumTypes[0]
+}
+
+func (x ActionType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ActionType.Descriptor instead.
+func (ActionType) EnumDescriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{0}
+}
+
 // VoteChoice enumerates the legal vote selections.
 type VoteChoice int32
 
@@ -59,11 +126,11 @@ func (x VoteChoice) String() string {
 }
 
 func (VoteChoice) Descriptor() protoreflect.EnumDescriptor {
-	return file_canoliq_proto_enumTypes[0].Descriptor()
+	return file_canoliq_proto_enumTypes[1].Descriptor()
 }
 
 func (VoteChoice) Type() protoreflect.EnumType {
-	return &file_canoliq_proto_enumTypes[0]
+	return &file_canoliq_proto_enumTypes[1]
 }
 
 func (x VoteChoice) Number() protoreflect.EnumNumber {
@@ -72,7 +139,7 @@ func (x VoteChoice) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VoteChoice.Descriptor instead.
 func (VoteChoice) EnumDescriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{0}
+	return file_canoliq_proto_rawDescGZIP(), []int{1}
 }
 
 // ProposalStatus tracks proposal state through its lifecycle.
@@ -115,11 +182,11 @@ func (x ProposalStatus) String() string {
 }
 
 func (ProposalStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_canoliq_proto_enumTypes[1].Descriptor()
+	return file_canoliq_proto_enumTypes[2].Descriptor()
 }
 
 func (ProposalStatus) Type() protoreflect.EnumType {
-	return &file_canoliq_proto_enumTypes[1]
+	return &file_canoliq_proto_enumTypes[2]
 }
 
 func (x ProposalStatus) Number() protoreflect.EnumNumber {
@@ -128,7 +195,7 @@ func (x ProposalStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProposalStatus.Descriptor instead.
 func (ProposalStatus) EnumDescriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{1}
+	return file_canoliq_proto_rawDescGZIP(), []int{2}
 }
 
 // BuybackMode selects the post-acquisition disposition of CLIQ.
@@ -165,11 +232,11 @@ func (x BuybackMode) String() string {
 }
 
 func (BuybackMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_canoliq_proto_enumTypes[2].Descriptor()
+	return file_canoliq_proto_enumTypes[3].Descriptor()
 }
 
 func (BuybackMode) Type() protoreflect.EnumType {
-	return &file_canoliq_proto_enumTypes[2]
+	return &file_canoliq_proto_enumTypes[3]
 }
 
 func (x BuybackMode) Number() protoreflect.EnumNumber {
@@ -178,7 +245,7 @@ func (x BuybackMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use BuybackMode.Descriptor instead.
 func (BuybackMode) EnumDescriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{2}
+	return file_canoliq_proto_rawDescGZIP(), []int{3}
 }
 
 // SpendDenomination distinguishes CNPY-denominated spends from CLIQ.
@@ -215,11 +282,11 @@ func (x SpendDenomination) String() string {
 }
 
 func (SpendDenomination) Descriptor() protoreflect.EnumDescriptor {
-	return file_canoliq_proto_enumTypes[3].Descriptor()
+	return file_canoliq_proto_enumTypes[4].Descriptor()
 }
 
 func (SpendDenomination) Type() protoreflect.EnumType {
-	return &file_canoliq_proto_enumTypes[3]
+	return &file_canoliq_proto_enumTypes[4]
 }
 
 func (x SpendDenomination) Number() protoreflect.EnumNumber {
@@ -228,7 +295,7 @@ func (x SpendDenomination) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SpendDenomination.Descriptor instead.
 func (SpendDenomination) EnumDescriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{3}
+	return file_canoliq_proto_rawDescGZIP(), []int{4}
 }
 
 // MessageCanoliqDeposit deposits CNPY into the canoLiq pool and mints cCNPY
@@ -936,8 +1003,13 @@ type CanoliqParams struct {
 	MultisigApproveFee uint64 `protobuf:"varint,22,opt,name=multisig_approve_fee,json=multisigApproveFee,proto3" json:"multisigApproveFee"` // @gotags: json:"multisigApproveFee"
 	// min_stake_to_propose: minimum staked CLIQ a proposer must hold
 	MinStakeToPropose uint64 `protobuf:"varint,23,opt,name=min_stake_to_propose,json=minStakeToPropose,proto3" json:"minStakeToPropose"` // @gotags: json:"minStakeToPropose"
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// governance: per-action governance tiers (Tokenomics v1.1 §7). When a
+	// tier matches a proposal's ActionType it overrides the scalar
+	// quorum_bps / pass_threshold_bps / timelock_blocks / voting_period_blocks
+	// above; an empty list (or unmatched action) falls back to those scalars.
+	Governance    []*GovernanceTier `protobuf:"bytes,24,rep,name=governance,proto3" json:"governance"` // @gotags: json:"governance"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CanoliqParams) Reset() {
@@ -1131,6 +1203,95 @@ func (x *CanoliqParams) GetMinStakeToPropose() uint64 {
 	return 0
 }
 
+func (x *CanoliqParams) GetGovernance() []*GovernanceTier {
+	if x != nil {
+		return x.Governance
+	}
+	return nil
+}
+
+// GovernanceTier carries the governance rules for a single ActionType.
+type GovernanceTier struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// action: the ActionType this tier governs
+	Action ActionType `protobuf:"varint,1,opt,name=action,proto3,enum=types.ActionType" json:"action,omitempty"`
+	// quorum_bps: fraction of snapshot total_staked_cliq required to participate
+	QuorumBps uint64 `protobuf:"varint,2,opt,name=quorum_bps,json=quorumBps,proto3" json:"quorumBps"` // @gotags: json:"quorumBps"
+	// approval_bps: yes / (yes+no) needed for the proposal to pass
+	ApprovalBps uint64 `protobuf:"varint,3,opt,name=approval_bps,json=approvalBps,proto3" json:"approvalBps"` // @gotags: json:"approvalBps"
+	// timelock_blocks: delay between proposal pass and execution
+	TimelockBlocks uint64 `protobuf:"varint,4,opt,name=timelock_blocks,json=timelockBlocks,proto3" json:"timelockBlocks"` // @gotags: json:"timelockBlocks"
+	// voting_period_blocks: blocks the proposal accepts votes
+	VotingPeriodBlocks uint64 `protobuf:"varint,5,opt,name=voting_period_blocks,json=votingPeriodBlocks,proto3" json:"votingPeriodBlocks"` // @gotags: json:"votingPeriodBlocks"
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GovernanceTier) Reset() {
+	*x = GovernanceTier{}
+	mi := &file_canoliq_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GovernanceTier) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GovernanceTier) ProtoMessage() {}
+
+func (x *GovernanceTier) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GovernanceTier.ProtoReflect.Descriptor instead.
+func (*GovernanceTier) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GovernanceTier) GetAction() ActionType {
+	if x != nil {
+		return x.Action
+	}
+	return ActionType_ACTION_UNKNOWN
+}
+
+func (x *GovernanceTier) GetQuorumBps() uint64 {
+	if x != nil {
+		return x.QuorumBps
+	}
+	return 0
+}
+
+func (x *GovernanceTier) GetApprovalBps() uint64 {
+	if x != nil {
+		return x.ApprovalBps
+	}
+	return 0
+}
+
+func (x *GovernanceTier) GetTimelockBlocks() uint64 {
+	if x != nil {
+		return x.TimelockBlocks
+	}
+	return 0
+}
+
+func (x *GovernanceTier) GetVotingPeriodBlocks() uint64 {
+	if x != nil {
+		return x.VotingPeriodBlocks
+	}
+	return 0
+}
+
 // VestingIndex enumerates the vesting schedule ids belonging to an address so
 // MessageCLIQClaimVested can iterate without a state-range scan.
 type VestingIndex struct {
@@ -1143,7 +1304,7 @@ type VestingIndex struct {
 
 func (x *VestingIndex) Reset() {
 	*x = VestingIndex{}
-	mi := &file_canoliq_proto_msgTypes[10]
+	mi := &file_canoliq_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1155,7 +1316,7 @@ func (x *VestingIndex) String() string {
 func (*VestingIndex) ProtoMessage() {}
 
 func (x *VestingIndex) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[10]
+	mi := &file_canoliq_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1168,7 +1329,7 @@ func (x *VestingIndex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VestingIndex.ProtoReflect.Descriptor instead.
 func (*VestingIndex) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{10}
+	return file_canoliq_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *VestingIndex) GetScheduleIds() []uint64 {
@@ -1192,7 +1353,7 @@ type MessageCLIQStake struct {
 
 func (x *MessageCLIQStake) Reset() {
 	*x = MessageCLIQStake{}
-	mi := &file_canoliq_proto_msgTypes[11]
+	mi := &file_canoliq_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1204,7 +1365,7 @@ func (x *MessageCLIQStake) String() string {
 func (*MessageCLIQStake) ProtoMessage() {}
 
 func (x *MessageCLIQStake) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[11]
+	mi := &file_canoliq_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1217,7 +1378,7 @@ func (x *MessageCLIQStake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQStake.ProtoReflect.Descriptor instead.
 func (*MessageCLIQStake) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{11}
+	return file_canoliq_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *MessageCLIQStake) GetFromAddress() []byte {
@@ -1250,7 +1411,7 @@ type MessageCLIQUnstake struct {
 
 func (x *MessageCLIQUnstake) Reset() {
 	*x = MessageCLIQUnstake{}
-	mi := &file_canoliq_proto_msgTypes[12]
+	mi := &file_canoliq_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1262,7 +1423,7 @@ func (x *MessageCLIQUnstake) String() string {
 func (*MessageCLIQUnstake) ProtoMessage() {}
 
 func (x *MessageCLIQUnstake) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[12]
+	mi := &file_canoliq_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1275,7 +1436,7 @@ func (x *MessageCLIQUnstake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQUnstake.ProtoReflect.Descriptor instead.
 func (*MessageCLIQUnstake) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{12}
+	return file_canoliq_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *MessageCLIQUnstake) GetFromAddress() []byte {
@@ -1306,7 +1467,7 @@ type MessageCLIQClaimUnstake struct {
 
 func (x *MessageCLIQClaimUnstake) Reset() {
 	*x = MessageCLIQClaimUnstake{}
-	mi := &file_canoliq_proto_msgTypes[13]
+	mi := &file_canoliq_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1318,7 +1479,7 @@ func (x *MessageCLIQClaimUnstake) String() string {
 func (*MessageCLIQClaimUnstake) ProtoMessage() {}
 
 func (x *MessageCLIQClaimUnstake) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[13]
+	mi := &file_canoliq_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1331,7 +1492,7 @@ func (x *MessageCLIQClaimUnstake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQClaimUnstake.ProtoReflect.Descriptor instead.
 func (*MessageCLIQClaimUnstake) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{13}
+	return file_canoliq_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MessageCLIQClaimUnstake) GetFromAddress() []byte {
@@ -1365,7 +1526,7 @@ type MessageCLIQProposalCreate struct {
 
 func (x *MessageCLIQProposalCreate) Reset() {
 	*x = MessageCLIQProposalCreate{}
-	mi := &file_canoliq_proto_msgTypes[14]
+	mi := &file_canoliq_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1377,7 +1538,7 @@ func (x *MessageCLIQProposalCreate) String() string {
 func (*MessageCLIQProposalCreate) ProtoMessage() {}
 
 func (x *MessageCLIQProposalCreate) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[14]
+	mi := &file_canoliq_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1390,7 +1551,7 @@ func (x *MessageCLIQProposalCreate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQProposalCreate.ProtoReflect.Descriptor instead.
 func (*MessageCLIQProposalCreate) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{14}
+	return file_canoliq_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MessageCLIQProposalCreate) GetFromAddress() []byte {
@@ -1432,7 +1593,7 @@ type MessageCLIQVote struct {
 
 func (x *MessageCLIQVote) Reset() {
 	*x = MessageCLIQVote{}
-	mi := &file_canoliq_proto_msgTypes[15]
+	mi := &file_canoliq_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1444,7 +1605,7 @@ func (x *MessageCLIQVote) String() string {
 func (*MessageCLIQVote) ProtoMessage() {}
 
 func (x *MessageCLIQVote) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[15]
+	mi := &file_canoliq_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1457,7 +1618,7 @@ func (x *MessageCLIQVote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQVote.ProtoReflect.Descriptor instead.
 func (*MessageCLIQVote) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{15}
+	return file_canoliq_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MessageCLIQVote) GetFromAddress() []byte {
@@ -1496,7 +1657,7 @@ type MessageBuybackExecute struct {
 
 func (x *MessageBuybackExecute) Reset() {
 	*x = MessageBuybackExecute{}
-	mi := &file_canoliq_proto_msgTypes[16]
+	mi := &file_canoliq_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1508,7 +1669,7 @@ func (x *MessageBuybackExecute) String() string {
 func (*MessageBuybackExecute) ProtoMessage() {}
 
 func (x *MessageBuybackExecute) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[16]
+	mi := &file_canoliq_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1521,7 +1682,7 @@ func (x *MessageBuybackExecute) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageBuybackExecute.ProtoReflect.Descriptor instead.
 func (*MessageBuybackExecute) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{16}
+	return file_canoliq_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *MessageBuybackExecute) GetFromAddress() []byte {
@@ -1552,7 +1713,7 @@ type MessageDAOTreasurySpend struct {
 
 func (x *MessageDAOTreasurySpend) Reset() {
 	*x = MessageDAOTreasurySpend{}
-	mi := &file_canoliq_proto_msgTypes[17]
+	mi := &file_canoliq_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1564,7 +1725,7 @@ func (x *MessageDAOTreasurySpend) String() string {
 func (*MessageDAOTreasurySpend) ProtoMessage() {}
 
 func (x *MessageDAOTreasurySpend) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[17]
+	mi := &file_canoliq_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1577,7 +1738,7 @@ func (x *MessageDAOTreasurySpend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageDAOTreasurySpend.ProtoReflect.Descriptor instead.
 func (*MessageDAOTreasurySpend) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{17}
+	return file_canoliq_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *MessageDAOTreasurySpend) GetFromAddress() []byte {
@@ -1608,7 +1769,7 @@ type MessageMultisigApprove struct {
 
 func (x *MessageMultisigApprove) Reset() {
 	*x = MessageMultisigApprove{}
-	mi := &file_canoliq_proto_msgTypes[18]
+	mi := &file_canoliq_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1620,7 +1781,7 @@ func (x *MessageMultisigApprove) String() string {
 func (*MessageMultisigApprove) ProtoMessage() {}
 
 func (x *MessageMultisigApprove) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[18]
+	mi := &file_canoliq_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1633,7 +1794,7 @@ func (x *MessageMultisigApprove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageMultisigApprove.ProtoReflect.Descriptor instead.
 func (*MessageMultisigApprove) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{18}
+	return file_canoliq_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *MessageMultisigApprove) GetFromAddress() []byte {
@@ -1667,7 +1828,7 @@ type CLIQStake struct {
 
 func (x *CLIQStake) Reset() {
 	*x = CLIQStake{}
-	mi := &file_canoliq_proto_msgTypes[19]
+	mi := &file_canoliq_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1679,7 +1840,7 @@ func (x *CLIQStake) String() string {
 func (*CLIQStake) ProtoMessage() {}
 
 func (x *CLIQStake) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[19]
+	mi := &file_canoliq_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1692,7 +1853,7 @@ func (x *CLIQStake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CLIQStake.ProtoReflect.Descriptor instead.
 func (*CLIQStake) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{19}
+	return file_canoliq_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CLIQStake) GetAddress() []byte {
@@ -1733,7 +1894,7 @@ type UnstakingCLIQ struct {
 
 func (x *UnstakingCLIQ) Reset() {
 	*x = UnstakingCLIQ{}
-	mi := &file_canoliq_proto_msgTypes[20]
+	mi := &file_canoliq_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1745,7 +1906,7 @@ func (x *UnstakingCLIQ) String() string {
 func (*UnstakingCLIQ) ProtoMessage() {}
 
 func (x *UnstakingCLIQ) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[20]
+	mi := &file_canoliq_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1758,7 +1919,7 @@ func (x *UnstakingCLIQ) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnstakingCLIQ.ProtoReflect.Descriptor instead.
 func (*UnstakingCLIQ) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{20}
+	return file_canoliq_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *UnstakingCLIQ) GetId() uint64 {
@@ -1801,7 +1962,7 @@ type UnstakingIndex struct {
 
 func (x *UnstakingIndex) Reset() {
 	*x = UnstakingIndex{}
-	mi := &file_canoliq_proto_msgTypes[21]
+	mi := &file_canoliq_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1813,7 +1974,7 @@ func (x *UnstakingIndex) String() string {
 func (*UnstakingIndex) ProtoMessage() {}
 
 func (x *UnstakingIndex) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[21]
+	mi := &file_canoliq_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1826,7 +1987,7 @@ func (x *UnstakingIndex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnstakingIndex.ProtoReflect.Descriptor instead.
 func (*UnstakingIndex) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{21}
+	return file_canoliq_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UnstakingIndex) GetIds() []uint64 {
@@ -1862,13 +2023,19 @@ type Proposal struct {
 	NoWeight uint64 `protobuf:"varint,10,opt,name=no_weight,json=noWeight,proto3" json:"noWeight"` // @gotags: json:"noWeight"
 	// abstain_weight: cumulative abstain weight
 	AbstainWeight uint64 `protobuf:"varint,11,opt,name=abstain_weight,json=abstainWeight,proto3" json:"abstainWeight"` // @gotags: json:"abstainWeight"
+	// action_type: classification inferred from the payload at creation
+	ActionType ActionType `protobuf:"varint,12,opt,name=action_type,json=actionType,proto3,enum=types.ActionType" json:"actionType"` // @gotags: json:"actionType"
+	// tier: governance tier snapshotted at creation. Quorum / approval are
+	// read from here at tally; timelock from here at spend-queue time. Nil for
+	// proposals created before T1 — callers fall back to the scalar params.
+	Tier          *GovernanceTier `protobuf:"bytes,13,opt,name=tier,proto3" json:"tier"` // @gotags: json:"tier"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Proposal) Reset() {
 	*x = Proposal{}
-	mi := &file_canoliq_proto_msgTypes[22]
+	mi := &file_canoliq_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1880,7 +2047,7 @@ func (x *Proposal) String() string {
 func (*Proposal) ProtoMessage() {}
 
 func (x *Proposal) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[22]
+	mi := &file_canoliq_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1893,7 +2060,7 @@ func (x *Proposal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Proposal.ProtoReflect.Descriptor instead.
 func (*Proposal) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{22}
+	return file_canoliq_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *Proposal) GetId() uint64 {
@@ -1973,6 +2140,20 @@ func (x *Proposal) GetAbstainWeight() uint64 {
 	return 0
 }
 
+func (x *Proposal) GetActionType() ActionType {
+	if x != nil {
+		return x.ActionType
+	}
+	return ActionType_ACTION_UNKNOWN
+}
+
+func (x *Proposal) GetTier() *GovernanceTier {
+	if x != nil {
+		return x.Tier
+	}
+	return nil
+}
+
 // ProposalIndex enumerates active proposal ids so BeginBlock can scan
 // without a state-range scan. Passed/failed proposals are removed.
 type ProposalIndex struct {
@@ -1985,7 +2166,7 @@ type ProposalIndex struct {
 
 func (x *ProposalIndex) Reset() {
 	*x = ProposalIndex{}
-	mi := &file_canoliq_proto_msgTypes[23]
+	mi := &file_canoliq_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1997,7 +2178,7 @@ func (x *ProposalIndex) String() string {
 func (*ProposalIndex) ProtoMessage() {}
 
 func (x *ProposalIndex) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[23]
+	mi := &file_canoliq_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2010,7 +2191,7 @@ func (x *ProposalIndex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalIndex.ProtoReflect.Descriptor instead.
 func (*ProposalIndex) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{23}
+	return file_canoliq_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ProposalIndex) GetIds() []uint64 {
@@ -2037,7 +2218,7 @@ type Vote struct {
 
 func (x *Vote) Reset() {
 	*x = Vote{}
-	mi := &file_canoliq_proto_msgTypes[24]
+	mi := &file_canoliq_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2049,7 +2230,7 @@ func (x *Vote) String() string {
 func (*Vote) ProtoMessage() {}
 
 func (x *Vote) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[24]
+	mi := &file_canoliq_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2062,7 +2243,7 @@ func (x *Vote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Vote.ProtoReflect.Descriptor instead.
 func (*Vote) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{24}
+	return file_canoliq_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *Vote) GetProposalId() uint64 {
@@ -2106,7 +2287,7 @@ type ProposalParamChange struct {
 
 func (x *ProposalParamChange) Reset() {
 	*x = ProposalParamChange{}
-	mi := &file_canoliq_proto_msgTypes[25]
+	mi := &file_canoliq_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2118,7 +2299,7 @@ func (x *ProposalParamChange) String() string {
 func (*ProposalParamChange) ProtoMessage() {}
 
 func (x *ProposalParamChange) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[25]
+	mi := &file_canoliq_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2131,7 +2312,7 @@ func (x *ProposalParamChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalParamChange.ProtoReflect.Descriptor instead.
 func (*ProposalParamChange) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{25}
+	return file_canoliq_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ProposalParamChange) GetParams() *CanoliqParams {
@@ -2156,7 +2337,7 @@ type ProposalBuyback struct {
 
 func (x *ProposalBuyback) Reset() {
 	*x = ProposalBuyback{}
-	mi := &file_canoliq_proto_msgTypes[26]
+	mi := &file_canoliq_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2168,7 +2349,7 @@ func (x *ProposalBuyback) String() string {
 func (*ProposalBuyback) ProtoMessage() {}
 
 func (x *ProposalBuyback) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[26]
+	mi := &file_canoliq_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2181,7 +2362,7 @@ func (x *ProposalBuyback) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalBuyback.ProtoReflect.Descriptor instead.
 func (*ProposalBuyback) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{26}
+	return file_canoliq_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ProposalBuyback) GetCnpyAmount() uint64 {
@@ -2220,7 +2401,7 @@ type ProposalTreasurySpend struct {
 
 func (x *ProposalTreasurySpend) Reset() {
 	*x = ProposalTreasurySpend{}
-	mi := &file_canoliq_proto_msgTypes[27]
+	mi := &file_canoliq_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2232,7 +2413,7 @@ func (x *ProposalTreasurySpend) String() string {
 func (*ProposalTreasurySpend) ProtoMessage() {}
 
 func (x *ProposalTreasurySpend) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[27]
+	mi := &file_canoliq_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2245,7 +2426,7 @@ func (x *ProposalTreasurySpend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalTreasurySpend.ProtoReflect.Descriptor instead.
 func (*ProposalTreasurySpend) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{27}
+	return file_canoliq_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ProposalTreasurySpend) GetRecipient() []byte {
@@ -2267,6 +2448,166 @@ func (x *ProposalTreasurySpend) GetDenomination() SpendDenomination {
 		return x.Denomination
 	}
 	return SpendDenomination_SPEND_UNKNOWN
+}
+
+// ProposalValidatorEject removes a validator from the canoLiq committee
+// registry on pass (F12). Future reward sweeps skip the ejected address and
+// its accrued validator-incentive balance is cleared.
+type ProposalValidatorEject struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// validator_address: 20-byte address to remove from ValidatorRegistry
+	ValidatorAddress []byte `protobuf:"bytes,1,opt,name=validator_address,json=validatorAddress,proto3" json:"validatorAddress"` // @gotags: json:"validatorAddress"
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ProposalValidatorEject) Reset() {
+	*x = ProposalValidatorEject{}
+	mi := &file_canoliq_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProposalValidatorEject) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProposalValidatorEject) ProtoMessage() {}
+
+func (x *ProposalValidatorEject) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProposalValidatorEject.ProtoReflect.Descriptor instead.
+func (*ProposalValidatorEject) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *ProposalValidatorEject) GetValidatorAddress() []byte {
+	if x != nil {
+		return x.ValidatorAddress
+	}
+	return nil
+}
+
+// ProposalEmergency is a security-critical action on the fast-track tier
+// (F13). It optionally carries a param diff applied immediately on pass.
+type ProposalEmergency struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// description: human-readable rationale for the emergency action
+	Description string `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
+	// param_change: optional CanoliqParams replacement applied on pass
+	ParamChange   *ProposalParamChange `protobuf:"bytes,2,opt,name=param_change,json=paramChange,proto3" json:"paramChange"` // @gotags: json:"paramChange"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProposalEmergency) Reset() {
+	*x = ProposalEmergency{}
+	mi := &file_canoliq_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProposalEmergency) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProposalEmergency) ProtoMessage() {}
+
+func (x *ProposalEmergency) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProposalEmergency.ProtoReflect.Descriptor instead.
+func (*ProposalEmergency) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ProposalEmergency) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *ProposalEmergency) GetParamChange() *ProposalParamChange {
+	if x != nil {
+		return x.ParamChange
+	}
+	return nil
+}
+
+// ProposalProtocolUpgrade signals an off-chain coordinated upgrade. The
+// payload is opaque to the plugin (recorded for audit; no on-chain dispatch).
+type ProposalProtocolUpgrade struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// version: target version string
+	Version string `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	// payload: opaque upgrade descriptor
+	Payload       []byte `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProposalProtocolUpgrade) Reset() {
+	*x = ProposalProtocolUpgrade{}
+	mi := &file_canoliq_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProposalProtocolUpgrade) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProposalProtocolUpgrade) ProtoMessage() {}
+
+func (x *ProposalProtocolUpgrade) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProposalProtocolUpgrade.ProtoReflect.Descriptor instead.
+func (*ProposalProtocolUpgrade) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ProposalProtocolUpgrade) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *ProposalProtocolUpgrade) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
 }
 
 // BuybackOrder is the queued + post-execution record of a buyback. Carries
@@ -2294,7 +2635,7 @@ type BuybackOrder struct {
 
 func (x *BuybackOrder) Reset() {
 	*x = BuybackOrder{}
-	mi := &file_canoliq_proto_msgTypes[28]
+	mi := &file_canoliq_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2306,7 +2647,7 @@ func (x *BuybackOrder) String() string {
 func (*BuybackOrder) ProtoMessage() {}
 
 func (x *BuybackOrder) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[28]
+	mi := &file_canoliq_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2319,7 +2660,7 @@ func (x *BuybackOrder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuybackOrder.ProtoReflect.Descriptor instead.
 func (*BuybackOrder) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{28}
+	return file_canoliq_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *BuybackOrder) GetProposalId() uint64 {
@@ -2394,7 +2735,7 @@ type TreasurySpend struct {
 
 func (x *TreasurySpend) Reset() {
 	*x = TreasurySpend{}
-	mi := &file_canoliq_proto_msgTypes[29]
+	mi := &file_canoliq_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2406,7 +2747,7 @@ func (x *TreasurySpend) String() string {
 func (*TreasurySpend) ProtoMessage() {}
 
 func (x *TreasurySpend) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[29]
+	mi := &file_canoliq_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2419,7 +2760,7 @@ func (x *TreasurySpend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TreasurySpend.ProtoReflect.Descriptor instead.
 func (*TreasurySpend) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{29}
+	return file_canoliq_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *TreasurySpend) GetId() uint64 {
@@ -2479,7 +2820,7 @@ type MultisigApproval struct {
 
 func (x *MultisigApproval) Reset() {
 	*x = MultisigApproval{}
-	mi := &file_canoliq_proto_msgTypes[30]
+	mi := &file_canoliq_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2491,7 +2832,7 @@ func (x *MultisigApproval) String() string {
 func (*MultisigApproval) ProtoMessage() {}
 
 func (x *MultisigApproval) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[30]
+	mi := &file_canoliq_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2504,7 +2845,7 @@ func (x *MultisigApproval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MultisigApproval.ProtoReflect.Descriptor instead.
 func (*MultisigApproval) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{30}
+	return file_canoliq_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *MultisigApproval) GetSpendId() uint64 {
@@ -2540,7 +2881,7 @@ type CLIQStakeIndex struct {
 
 func (x *CLIQStakeIndex) Reset() {
 	*x = CLIQStakeIndex{}
-	mi := &file_canoliq_proto_msgTypes[31]
+	mi := &file_canoliq_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2552,7 +2893,7 @@ func (x *CLIQStakeIndex) String() string {
 func (*CLIQStakeIndex) ProtoMessage() {}
 
 func (x *CLIQStakeIndex) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[31]
+	mi := &file_canoliq_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2565,7 +2906,7 @@ func (x *CLIQStakeIndex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CLIQStakeIndex.ProtoReflect.Descriptor instead.
 func (*CLIQStakeIndex) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{31}
+	return file_canoliq_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CLIQStakeIndex) GetAddresses() [][]byte {
@@ -2592,7 +2933,7 @@ type ValidatorRegistryEntry struct {
 
 func (x *ValidatorRegistryEntry) Reset() {
 	*x = ValidatorRegistryEntry{}
-	mi := &file_canoliq_proto_msgTypes[32]
+	mi := &file_canoliq_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2604,7 +2945,7 @@ func (x *ValidatorRegistryEntry) String() string {
 func (*ValidatorRegistryEntry) ProtoMessage() {}
 
 func (x *ValidatorRegistryEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[32]
+	mi := &file_canoliq_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2617,7 +2958,7 @@ func (x *ValidatorRegistryEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatorRegistryEntry.ProtoReflect.Descriptor instead.
 func (*ValidatorRegistryEntry) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{32}
+	return file_canoliq_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ValidatorRegistryEntry) GetAddress() []byte {
@@ -2646,7 +2987,7 @@ type ValidatorRegistry struct {
 
 func (x *ValidatorRegistry) Reset() {
 	*x = ValidatorRegistry{}
-	mi := &file_canoliq_proto_msgTypes[33]
+	mi := &file_canoliq_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2658,7 +2999,7 @@ func (x *ValidatorRegistry) String() string {
 func (*ValidatorRegistry) ProtoMessage() {}
 
 func (x *ValidatorRegistry) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[33]
+	mi := &file_canoliq_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2671,7 +3012,7 @@ func (x *ValidatorRegistry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatorRegistry.ProtoReflect.Descriptor instead.
 func (*ValidatorRegistry) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{33}
+	return file_canoliq_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ValidatorRegistry) GetEntries() []*ValidatorRegistryEntry {
@@ -2735,7 +3076,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\fstart_height\x18\x05 \x01(\x04R\vstartHeight\x12\x1d\n" +
 	"\n" +
 	"end_height\x18\x06 \x01(\x04R\tendHeight\x12%\n" +
-	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\x8a\a\n" +
+	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\xc1\a\n" +
 	"\rCanoliqParams\x12\x17\n" +
 	"\afee_bps\x18\x01 \x01(\x04R\x06feeBps\x12&\n" +
 	"\x0fuser_rebate_bps\x18\x02 \x01(\x04R\ruserRebateBps\x12!\n" +
@@ -2764,7 +3105,17 @@ const file_canoliq_proto_rawDesc = "" +
 	"\bvote_fee\x18\x14 \x01(\x04R\avoteFee\x12\x1b\n" +
 	"\tstake_fee\x18\x15 \x01(\x04R\bstakeFee\x120\n" +
 	"\x14multisig_approve_fee\x18\x16 \x01(\x04R\x12multisigApproveFee\x12/\n" +
-	"\x14min_stake_to_propose\x18\x17 \x01(\x04R\x11minStakeToPropose\"1\n" +
+	"\x14min_stake_to_propose\x18\x17 \x01(\x04R\x11minStakeToPropose\x125\n" +
+	"\n" +
+	"governance\x18\x18 \x03(\v2\x15.types.GovernanceTierR\n" +
+	"governance\"\xd8\x01\n" +
+	"\x0eGovernanceTier\x12)\n" +
+	"\x06action\x18\x01 \x01(\x0e2\x11.types.ActionTypeR\x06action\x12\x1d\n" +
+	"\n" +
+	"quorum_bps\x18\x02 \x01(\x04R\tquorumBps\x12!\n" +
+	"\fapproval_bps\x18\x03 \x01(\x04R\vapprovalBps\x12'\n" +
+	"\x0ftimelock_blocks\x18\x04 \x01(\x04R\x0etimelockBlocks\x120\n" +
+	"\x14voting_period_blocks\x18\x05 \x01(\x04R\x12votingPeriodBlocks\"1\n" +
 	"\fVestingIndex\x12!\n" +
 	"\fschedule_ids\x18\x01 \x03(\x04R\vscheduleIds\"M\n" +
 	"\x10MessageCLIQStake\x12!\n" +
@@ -2807,7 +3158,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x06amount\x18\x03 \x01(\x04R\x06amount\x12#\n" +
 	"\rmature_height\x18\x04 \x01(\x04R\fmatureHeight\"\"\n" +
 	"\x0eUnstakingIndex\x12\x10\n" +
-	"\x03ids\x18\x01 \x03(\x04R\x03ids\"\x9c\x03\n" +
+	"\x03ids\x18\x01 \x03(\x04R\x03ids\"\xfb\x03\n" +
 	"\bProposal\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1a\n" +
 	"\bproposer\x18\x02 \x01(\fR\bproposer\x12'\n" +
@@ -2821,7 +3172,10 @@ const file_canoliq_proto_rawDesc = "" +
 	"yes_weight\x18\t \x01(\x04R\tyesWeight\x12\x1b\n" +
 	"\tno_weight\x18\n" +
 	" \x01(\x04R\bnoWeight\x12%\n" +
-	"\x0eabstain_weight\x18\v \x01(\x04R\rabstainWeight\"!\n" +
+	"\x0eabstain_weight\x18\v \x01(\x04R\rabstainWeight\x122\n" +
+	"\vaction_type\x18\f \x01(\x0e2\x11.types.ActionTypeR\n" +
+	"actionType\x12)\n" +
+	"\x04tier\x18\r \x01(\v2\x15.types.GovernanceTierR\x04tier\"!\n" +
 	"\rProposalIndex\x12\x10\n" +
 	"\x03ids\x18\x01 \x03(\x04R\x03ids\"\x80\x01\n" +
 	"\x04Vote\x12\x1f\n" +
@@ -2840,7 +3194,15 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x15ProposalTreasurySpend\x12\x1c\n" +
 	"\trecipient\x18\x01 \x01(\fR\trecipient\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12<\n" +
-	"\fdenomination\x18\x03 \x01(\x0e2\x18.types.SpendDenominationR\fdenomination\"\x97\x02\n" +
+	"\fdenomination\x18\x03 \x01(\x0e2\x18.types.SpendDenominationR\fdenomination\"E\n" +
+	"\x16ProposalValidatorEject\x12+\n" +
+	"\x11validator_address\x18\x01 \x01(\fR\x10validatorAddress\"t\n" +
+	"\x11ProposalEmergency\x12 \n" +
+	"\vdescription\x18\x01 \x01(\tR\vdescription\x12=\n" +
+	"\fparam_change\x18\x02 \x01(\v2\x1a.types.ProposalParamChangeR\vparamChange\"M\n" +
+	"\x17ProposalProtocolUpgrade\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\x18\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload\"\x97\x02\n" +
 	"\fBuybackOrder\x12\x1f\n" +
 	"\vproposal_id\x18\x01 \x01(\x04R\n" +
 	"proposalId\x12\x1d\n" +
@@ -2869,7 +3231,17 @@ const file_canoliq_proto_rawDesc = "" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x14\n" +
 	"\x05stake\x18\x02 \x01(\x04R\x05stake\"L\n" +
 	"\x11ValidatorRegistry\x127\n" +
-	"\aentries\x18\x01 \x03(\v2\x1d.types.ValidatorRegistryEntryR\aentries*K\n" +
+	"\aentries\x18\x01 \x03(\v2\x1d.types.ValidatorRegistryEntryR\aentries*\xe6\x01\n" +
+	"\n" +
+	"ActionType\x12\x12\n" +
+	"\x0eACTION_UNKNOWN\x10\x00\x12\x15\n" +
+	"\x11ACTION_FEE_CHANGE\x10\x01\x12\x1f\n" +
+	"\x1bACTION_TREASURY_SPEND_SMALL\x10\x02\x12\x1f\n" +
+	"\x1bACTION_TREASURY_SPEND_LARGE\x10\x03\x12\x14\n" +
+	"\x10ACTION_EMERGENCY\x10\x04\x12\x1a\n" +
+	"\x16ACTION_VALIDATOR_EJECT\x10\x05\x12\x1b\n" +
+	"\x17ACTION_PROTOCOL_UPGRADE\x10\x06\x12\x1c\n" +
+	"\x18ACTION_AUTONOMY_GRADUATE\x10\a*K\n" +
 	"\n" +
 	"VoteChoice\x12\x10\n" +
 	"\fVOTE_UNKNOWN\x10\x00\x12\f\n" +
@@ -2905,67 +3277,77 @@ func file_canoliq_proto_rawDescGZIP() []byte {
 	return file_canoliq_proto_rawDescData
 }
 
-var file_canoliq_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_canoliq_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_canoliq_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_canoliq_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_canoliq_proto_goTypes = []any{
-	(VoteChoice)(0),                       // 0: types.VoteChoice
-	(ProposalStatus)(0),                   // 1: types.ProposalStatus
-	(BuybackMode)(0),                      // 2: types.BuybackMode
-	(SpendDenomination)(0),                // 3: types.SpendDenomination
-	(*MessageCanoliqDeposit)(nil),         // 4: types.MessageCanoliqDeposit
-	(*MessageCanoliqRedeem)(nil),          // 5: types.MessageCanoliqRedeem
-	(*MessageCanoliqClaimRedemption)(nil), // 6: types.MessageCanoliqClaimRedemption
-	(*MessageCLIQTransfer)(nil),           // 7: types.MessageCLIQTransfer
-	(*MessageCLIQClaimVested)(nil),        // 8: types.MessageCLIQClaimVested
-	(*CanoliqGlobals)(nil),                // 9: types.CanoliqGlobals
-	(*Redemption)(nil),                    // 10: types.Redemption
-	(*RedemptionIndex)(nil),               // 11: types.RedemptionIndex
-	(*VestingSchedule)(nil),               // 12: types.VestingSchedule
-	(*CanoliqParams)(nil),                 // 13: types.CanoliqParams
-	(*VestingIndex)(nil),                  // 14: types.VestingIndex
-	(*MessageCLIQStake)(nil),              // 15: types.MessageCLIQStake
-	(*MessageCLIQUnstake)(nil),            // 16: types.MessageCLIQUnstake
-	(*MessageCLIQClaimUnstake)(nil),       // 17: types.MessageCLIQClaimUnstake
-	(*MessageCLIQProposalCreate)(nil),     // 18: types.MessageCLIQProposalCreate
-	(*MessageCLIQVote)(nil),               // 19: types.MessageCLIQVote
-	(*MessageBuybackExecute)(nil),         // 20: types.MessageBuybackExecute
-	(*MessageDAOTreasurySpend)(nil),       // 21: types.MessageDAOTreasurySpend
-	(*MessageMultisigApprove)(nil),        // 22: types.MessageMultisigApprove
-	(*CLIQStake)(nil),                     // 23: types.CLIQStake
-	(*UnstakingCLIQ)(nil),                 // 24: types.UnstakingCLIQ
-	(*UnstakingIndex)(nil),                // 25: types.UnstakingIndex
-	(*Proposal)(nil),                      // 26: types.Proposal
-	(*ProposalIndex)(nil),                 // 27: types.ProposalIndex
-	(*Vote)(nil),                          // 28: types.Vote
-	(*ProposalParamChange)(nil),           // 29: types.ProposalParamChange
-	(*ProposalBuyback)(nil),               // 30: types.ProposalBuyback
-	(*ProposalTreasurySpend)(nil),         // 31: types.ProposalTreasurySpend
-	(*BuybackOrder)(nil),                  // 32: types.BuybackOrder
-	(*TreasurySpend)(nil),                 // 33: types.TreasurySpend
-	(*MultisigApproval)(nil),              // 34: types.MultisigApproval
-	(*CLIQStakeIndex)(nil),                // 35: types.CLIQStakeIndex
-	(*ValidatorRegistryEntry)(nil),        // 36: types.ValidatorRegistryEntry
-	(*ValidatorRegistry)(nil),             // 37: types.ValidatorRegistry
-	(*anypb.Any)(nil),                     // 38: google.protobuf.Any
+	(ActionType)(0),                       // 0: types.ActionType
+	(VoteChoice)(0),                       // 1: types.VoteChoice
+	(ProposalStatus)(0),                   // 2: types.ProposalStatus
+	(BuybackMode)(0),                      // 3: types.BuybackMode
+	(SpendDenomination)(0),                // 4: types.SpendDenomination
+	(*MessageCanoliqDeposit)(nil),         // 5: types.MessageCanoliqDeposit
+	(*MessageCanoliqRedeem)(nil),          // 6: types.MessageCanoliqRedeem
+	(*MessageCanoliqClaimRedemption)(nil), // 7: types.MessageCanoliqClaimRedemption
+	(*MessageCLIQTransfer)(nil),           // 8: types.MessageCLIQTransfer
+	(*MessageCLIQClaimVested)(nil),        // 9: types.MessageCLIQClaimVested
+	(*CanoliqGlobals)(nil),                // 10: types.CanoliqGlobals
+	(*Redemption)(nil),                    // 11: types.Redemption
+	(*RedemptionIndex)(nil),               // 12: types.RedemptionIndex
+	(*VestingSchedule)(nil),               // 13: types.VestingSchedule
+	(*CanoliqParams)(nil),                 // 14: types.CanoliqParams
+	(*GovernanceTier)(nil),                // 15: types.GovernanceTier
+	(*VestingIndex)(nil),                  // 16: types.VestingIndex
+	(*MessageCLIQStake)(nil),              // 17: types.MessageCLIQStake
+	(*MessageCLIQUnstake)(nil),            // 18: types.MessageCLIQUnstake
+	(*MessageCLIQClaimUnstake)(nil),       // 19: types.MessageCLIQClaimUnstake
+	(*MessageCLIQProposalCreate)(nil),     // 20: types.MessageCLIQProposalCreate
+	(*MessageCLIQVote)(nil),               // 21: types.MessageCLIQVote
+	(*MessageBuybackExecute)(nil),         // 22: types.MessageBuybackExecute
+	(*MessageDAOTreasurySpend)(nil),       // 23: types.MessageDAOTreasurySpend
+	(*MessageMultisigApprove)(nil),        // 24: types.MessageMultisigApprove
+	(*CLIQStake)(nil),                     // 25: types.CLIQStake
+	(*UnstakingCLIQ)(nil),                 // 26: types.UnstakingCLIQ
+	(*UnstakingIndex)(nil),                // 27: types.UnstakingIndex
+	(*Proposal)(nil),                      // 28: types.Proposal
+	(*ProposalIndex)(nil),                 // 29: types.ProposalIndex
+	(*Vote)(nil),                          // 30: types.Vote
+	(*ProposalParamChange)(nil),           // 31: types.ProposalParamChange
+	(*ProposalBuyback)(nil),               // 32: types.ProposalBuyback
+	(*ProposalTreasurySpend)(nil),         // 33: types.ProposalTreasurySpend
+	(*ProposalValidatorEject)(nil),        // 34: types.ProposalValidatorEject
+	(*ProposalEmergency)(nil),             // 35: types.ProposalEmergency
+	(*ProposalProtocolUpgrade)(nil),       // 36: types.ProposalProtocolUpgrade
+	(*BuybackOrder)(nil),                  // 37: types.BuybackOrder
+	(*TreasurySpend)(nil),                 // 38: types.TreasurySpend
+	(*MultisigApproval)(nil),              // 39: types.MultisigApproval
+	(*CLIQStakeIndex)(nil),                // 40: types.CLIQStakeIndex
+	(*ValidatorRegistryEntry)(nil),        // 41: types.ValidatorRegistryEntry
+	(*ValidatorRegistry)(nil),             // 42: types.ValidatorRegistry
+	(*anypb.Any)(nil),                     // 43: google.protobuf.Any
 }
 var file_canoliq_proto_depIdxs = []int32{
-	38, // 0: types.MessageCLIQProposalCreate.payload:type_name -> google.protobuf.Any
-	0,  // 1: types.MessageCLIQVote.choice:type_name -> types.VoteChoice
-	38, // 2: types.Proposal.payload:type_name -> google.protobuf.Any
-	1,  // 3: types.Proposal.status:type_name -> types.ProposalStatus
-	0,  // 4: types.Vote.choice:type_name -> types.VoteChoice
-	13, // 5: types.ProposalParamChange.params:type_name -> types.CanoliqParams
-	2,  // 6: types.ProposalBuyback.mode:type_name -> types.BuybackMode
-	3,  // 7: types.ProposalTreasurySpend.denomination:type_name -> types.SpendDenomination
-	2,  // 8: types.BuybackOrder.mode:type_name -> types.BuybackMode
-	30, // 9: types.BuybackOrder.payload:type_name -> types.ProposalBuyback
-	31, // 10: types.TreasurySpend.payload:type_name -> types.ProposalTreasurySpend
-	36, // 11: types.ValidatorRegistry.entries:type_name -> types.ValidatorRegistryEntry
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	15, // 0: types.CanoliqParams.governance:type_name -> types.GovernanceTier
+	0,  // 1: types.GovernanceTier.action:type_name -> types.ActionType
+	43, // 2: types.MessageCLIQProposalCreate.payload:type_name -> google.protobuf.Any
+	1,  // 3: types.MessageCLIQVote.choice:type_name -> types.VoteChoice
+	43, // 4: types.Proposal.payload:type_name -> google.protobuf.Any
+	2,  // 5: types.Proposal.status:type_name -> types.ProposalStatus
+	0,  // 6: types.Proposal.action_type:type_name -> types.ActionType
+	15, // 7: types.Proposal.tier:type_name -> types.GovernanceTier
+	1,  // 8: types.Vote.choice:type_name -> types.VoteChoice
+	14, // 9: types.ProposalParamChange.params:type_name -> types.CanoliqParams
+	3,  // 10: types.ProposalBuyback.mode:type_name -> types.BuybackMode
+	4,  // 11: types.ProposalTreasurySpend.denomination:type_name -> types.SpendDenomination
+	31, // 12: types.ProposalEmergency.param_change:type_name -> types.ProposalParamChange
+	3,  // 13: types.BuybackOrder.mode:type_name -> types.BuybackMode
+	32, // 14: types.BuybackOrder.payload:type_name -> types.ProposalBuyback
+	33, // 15: types.TreasurySpend.payload:type_name -> types.ProposalTreasurySpend
+	41, // 16: types.ValidatorRegistry.entries:type_name -> types.ValidatorRegistryEntry
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_canoliq_proto_init() }
@@ -2978,8 +3360,8 @@ func file_canoliq_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_canoliq_proto_rawDesc), len(file_canoliq_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   34,
+			NumEnums:      5,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
