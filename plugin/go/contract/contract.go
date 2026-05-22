@@ -32,7 +32,6 @@ Version: 1,
 SupportedTransactions: []string{
 "create_market",
 "submit_prediction",
-"resolve_market",
 "claim_winnings",
 "register_resolver",
 "propose_outcome",
@@ -46,7 +45,6 @@ SupportedTransactions: []string{
 TransactionTypeUrls: []string{
 "type.googleapis.com/types.MessageCreateMarket",
 "type.googleapis.com/types.MessageSubmitPrediction",
-"type.googleapis.com/types.MessageResolveMarket",
 "type.googleapis.com/types.MessageClaimWinnings",
 "type.googleapis.com/types.MessageRegisterResolver",
 "type.googleapis.com/types.MessageProposeOutcome",
@@ -142,8 +140,6 @@ case *MessageCreateMarket:
 return c.CheckMessageCreateMarket(m)
 case *MessageSubmitPrediction:
 return c.CheckMessageSubmitPrediction(m)
-case *MessageResolveMarket:
-return c.CheckMessageResolveMarket(m)
 case *MessageClaimWinnings:
 return c.CheckMessageClaimWinnings(m)
 case *MessageRegisterResolver:
@@ -180,8 +176,6 @@ case *MessageCreateMarket:
 return c.DeliverMessageCreateMarket(m, fee)
 case *MessageSubmitPrediction:
 return c.DeliverMessageSubmitPrediction(m, fee)
-case *MessageResolveMarket:
-return c.DeliverMessageResolveMarket(m, fee)
 case *MessageClaimWinnings:
 return c.DeliverMessageClaimWinnings(m, fee)
 case *MessageRegisterResolver:
