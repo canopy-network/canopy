@@ -51,7 +51,7 @@ VOTE_TALLIED   uint32 = 3
 
 const (
 PRECISION_SCALE         uint64 = 1_000_000
-MIN_B0                  uint64 = 1_000_000
+MIN_B0                  uint64 = 60_000_000
 ELEVATED_RISK_THRESHOLD uint64 = 25_000_000_000
 FIBONACCI_HASH_CONSTANT uint64 = 0x9e3779b97f4a7c15
 )

@@ -91,13 +91,16 @@ return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 creator.Amount -= totalCost
 feePool.Amount += fee
 
-halfB0 := msg.B0 / 2
+// Carve FINALIZATION_BOUNTY from B0 before seeding the LMSR pool.
+// MIN_B0 >= FINALIZATION_BOUNTY + seed margin, so this subtraction is safe.
+lmsrSeed := msg.B0 - FINALIZATION_BOUNTY
+halfB0 := lmsrSeed / 2
 market := &MarketState{
 Status:        STATUS_OPEN,
 ExpiryTime:    msg.ExpiryTime,
 QYes:          halfB0,
 QNo:           halfB0,
-BEff:          msg.B0,
+BEff:          lmsrSeed,
 Creator:       msg.CreatorAddress,
 ClaimedCount:  0,
 TotalPositions: 0,
@@ -105,8 +108,8 @@ OpenTime:      now,
 ElevatedRisk:  false,
 }
 
-pool := &Pool{Id: c.Config.ChainId, Amount: msg.B0}
-treasury := &TreasuryReserve{LockedReserve: 0}
+pool := &Pool{Id: c.Config.ChainId, Amount: lmsrSeed}
+treasury := &TreasuryReserve{LockedReserve: FINALIZATION_BOUNTY}
 
 rawMarket, pe := SafeMarshal(market)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
