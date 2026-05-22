@@ -204,14 +204,49 @@ return &PluginDeliverResponse{Error: pe}
 }
 
 if sweepPool.Amount > 0 {
+// Read the global treasury pool before writing.
+tQId := nextQueryId()
+tResp, tErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: tQId, Key: KeyForTreasuryPool()},
+},
+})
+if tErr != nil {
+return &PluginDeliverResponse{Error: tErr}
+}
+if tResp.Error != nil {
+return &PluginDeliverResponse{Error: tResp.Error}
+}
+
+treasuryPool := &Pool{}
+for _, r := range tResp.Results {
+if r.QueryId == tQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+if pe := Unmarshal(r.Entries[0].Value, treasuryPool); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+}
+}
+
+// Overflow guard.
+if treasuryPool.Amount > ^uint64(0)-sweepPool.Amount {
+return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+}
+treasuryPool.Amount += sweepPool.Amount
 sweepPool.Amount = 0
+
 rawSweep, pe := SafeMarshal(sweepPool)
 if pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
+rawTreasury, pe := SafeMarshal(treasuryPool)
+if pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+// Write zeroed market pool and updated treasury pool atomically.
 sweepWr, sweepErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
 Sets: []*PluginSetOp{
-{Key: poolKey, Value: rawSweep},
+{Key: poolKey,              Value: rawSweep},
+{Key: KeyForTreasuryPool(), Value: rawTreasury},
 },
 })
 if pe := errCheckWrite(sweepWr, sweepErr); pe != nil {
