@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	CurrentProtocolVersion = 1
+	CurrentProtocolVersion         = 1
+	slowApplyTransactionsThreshold = 2 * time.Second
 )
 
 /* This is the 'main' file of the state machine store, with the structure definition and other high level operations */
@@ -35,6 +36,10 @@ type StateMachine struct {
 	cache              *cache                                  // the state machine cache
 	LastValidatorSet   map[uint64]map[uint64]*lib.ValidatorSet // reference to the last validator set saved in the controller
 	Plugin             *lib.Plugin                             // extensible plugin for the FSM
+}
+
+type rootCacheStateStore interface {
+	IsRootCached() bool
 }
 
 // cache is the set of items to be cached used by the state machine
@@ -122,22 +127,34 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 		return nil, nil, ErrWrongStoreType()
 	}
 	// automated execution at the 'beginning of a block'
+	beginBlockStartTime := time.Now()
 	events, err := s.BeginBlock()
 	if err != nil {
 		return nil, nil, err
 	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyBlockBeginTime.Observe(time.Since(beginBlockStartTime).Seconds())
+	}
 	// add the events from begin block
 	r.AddEvent(events...)
 	// apply all Transactions in the block
+	applyTransactionsStartTime := time.Now()
 	if err = s.ApplyTransactions(ctx, b.Transactions, r, allowOversize); err != nil {
 		return nil, nil, err
+	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyBlockTransactionsTime.Observe(time.Since(applyTransactionsStartTime).Seconds())
 	}
 	// sub-out transactions for those that succeeded (only useful for mempool application)
 	b.Transactions = r.Txs
 	// automated execution at the 'ending of a block'
+	endBlockStartTime := time.Now()
 	events, err = s.EndBlock(b.BlockHeader.ProposerAddress)
 	if err != nil {
 		return nil, nil, err
+	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyBlockEndTime.Observe(time.Since(endBlockStartTime).Seconds())
 	}
 	// add the events from end block
 	r.AddEvent(events...)
@@ -156,9 +173,20 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 		return nil, nil, err
 	}
 	// calculate the merkle root of the state database to enable consensus on the result of the state after applying the block
+	rootWasCached := false
+	if cacheAwareStore, ok := store.(rootCacheStateStore); ok {
+		rootWasCached = cacheAwareStore.IsRootCached()
+	}
+	rootStartTime := time.Time{}
+	if !rootWasCached {
+		rootStartTime = time.Now()
+	}
 	stateRoot, err := store.Root()
 	if err != nil {
 		return nil, nil, err
+	}
+	if !rootStartTime.IsZero() {
+		s.Metrics.UpdateFSMApplyBlockRootTime(rootStartTime)
 	}
 	// load the last block from the indexer
 	lastBlock, err := s.LoadBlock(s.height - 1)
@@ -203,6 +231,7 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 // 4. Returns the following for successful transactions within a block: <results, tx-list, root, count>
 // 5. Returns all transactions that failed during processing
 func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *lib.ApplyBlockResults, allowOversize bool) lib.ErrorI {
+	startTime := time.Now()
 	// use a map to check for 'same-block' duplicate transactions
 	deDuplicator := lib.NewDeDuplicator[string]()
 	// use a batch verifier for signatures
@@ -217,6 +246,7 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	// map signature batch indices back to original tx indices
 	batchToTxIdx := make([]int, 0, len(txs))
 	// first batch validate signatures over the entire set
+	checkStartTime := time.Now()
 	for i, tx := range txs {
 		preCount := batchVerifier.Count()
 		checkStore := s.Store().(lib.StoreI)
@@ -234,18 +264,28 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			batchToTxIdx = append(batchToTxIdx, i)
 		}
 	}
+	checkDuration := time.Since(checkStartTime)
+	if s.Metrics != nil {
+		s.Metrics.ApplyTxsCheckTime.Observe(checkDuration.Seconds())
+	}
 	// execute batch verification of the signatures in the block
+	batchVerifyStartTime := time.Now()
 	for _, failedIdx := range batchVerifier.Verify() {
 		if failedIdx < 0 || failedIdx >= len(batchToTxIdx) {
 			return ErrInvalidSignature()
 		}
 		failedCheckTxs[batchToTxIdx[failedIdx]] = ErrInvalidSignature()
 	}
+	batchVerifyDuration := time.Since(batchVerifyStartTime)
+	if s.Metrics != nil {
+		s.Metrics.ApplyTxsBatchVerifyTime.Observe(batchVerifyDuration.Seconds())
+	}
 	// set the store back to the original at the end of processing
 	originalStore := s.Store().(lib.StoreI)
 	defer s.SetStore(originalStore)
 	// create a variable to track if the block is over size
 	var oversize bool
+	var executeDuration, flushDuration time.Duration
 	// iterates over each transaction in the block
 	for i, tx := range txs {
 		// if interrupt signal
@@ -288,7 +328,9 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			return e
 		}
 		// apply the tx to the state machine, generating a transaction result
+		executeStartTime := time.Now()
 		result, events, e := s.ApplyTransaction(uint64(r.Count), tx, hashString, crypto.NewBatchVerifier(true))
+		executeDuration += time.Since(executeStartTime)
 		if e != nil {
 			// add to the failed list
 			r.AddFailed(lib.NewFailedTx(tx, e))
@@ -303,9 +345,11 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			continue
 		} else {
 			// write the transaction to the underlying store
+			flushStartTime := time.Now()
 			if err = txn.Flush(); err != nil {
 				return err
 			}
+			flushDuration += time.Since(flushStartTime)
 			s.SetStore(currentStore)
 		}
 		// encode the result to bytes
@@ -317,6 +361,15 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	}
 	// update metrics
 	s.Metrics.UpdateLargestTxSize(r.LargestTx)
+	if s.Metrics != nil {
+		s.Metrics.ApplyTxsExecuteTime.Observe(executeDuration.Seconds())
+		s.Metrics.ApplyTxsFlushTime.Observe(flushDuration.Seconds())
+	}
+	totalDuration := time.Since(startTime)
+	if totalDuration >= slowApplyTransactionsThreshold {
+		s.log.Warnf("Slow ApplyTransactions height=%d txs=%d failed=%d oversized=%d check=%s batch_verify=%s execute=%s flush=%s total=%s",
+			s.Height(), len(txs), len(r.Failed), len(r.Oversized), checkDuration, batchVerifyDuration, executeDuration, flushDuration, totalDuration)
+	}
 	// return and exit
 	return err
 }

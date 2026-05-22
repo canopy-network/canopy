@@ -83,6 +83,7 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	)
 	tx := new(lib.Transaction)
 	// populate the object ref with the bytes of the transaction
+	decodeStartTime := time.Now()
 	if err = lib.Unmarshal(transaction, tx); err != nil {
 		return
 	}
@@ -90,11 +91,19 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	if err = tx.CheckBasic(); err != nil {
 		return
 	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxDecodeTime.Observe(time.Since(decodeStartTime).Seconds())
+	}
 	// validate the timestamp (prune friendly - replay protection)
+	replayStartTime := time.Now()
 	if err = s.CheckReplay(tx, txHash); err != nil {
 		return
 	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxReplayTime.Observe(time.Since(replayStartTime).Seconds())
+	}
 	// if the transaction is meant for the plugin
+	messageStartTime := time.Now()
 	if s.Plugin != nil && s.Plugin.SupportsTransaction(tx.MessageType) {
 		// execute check tx on the plugin
 		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: tx})
@@ -125,10 +134,17 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 		// set recipient
 		recipient = msg.Recipient()
 	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxMessageTime.Observe(time.Since(messageStartTime).Seconds())
+	}
 	// validate the signature of the transaction
+	signatureStartTime := time.Now()
 	sender, err := s.CheckSignature(tx, authorizedSigners, batchVerifier)
 	if err != nil {
 		return
+	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxSignatureTime.Observe(time.Since(signatureStartTime).Seconds())
 	}
 	// populate special message fields (if applicable)
 	s.PopulateSpecialMessageFields(tx, sender, msg)

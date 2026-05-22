@@ -493,11 +493,16 @@ func (s *Store) NewTxn() lib.StoreI {
 // to the database for direct operations and management.
 func (s *Store) DB() *pebble.DB { return s.db }
 
+// IsRootCached() reports whether the SMT root is already cached on this store instance.
+func (s *Store) IsRootCached() bool { return s.sc != nil }
+
 // Root() retrieves the root hash of the StateCommitStore, representing the current root of the
 // Sparse Merkle Tree. This hash is used for verifying the integrity and consistency of the state.
 func (s *Store) Root() (root []byte, err lib.ErrorI) {
 	// if smt not cached
 	if s.sc == nil {
+		startTime := time.Now()
+		defer s.metrics.UpdateStoreRootTime(startTime)
 		nextVersion := s.version + 1
 		// set up the state commit store
 		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))

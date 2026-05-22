@@ -20,6 +20,8 @@ import (
 
 /* This file implements logic for transaction sending and handling as well as memory pooling */
 
+const slowProposalBuildThreshold = 2 * time.Second
+
 // SendTxMsgs() routes generated transaction messages to the listener for processing + gossiping
 func (c *Controller) SendTxMsgs(txs [][]byte) lib.ErrorI {
 	// create a transaction message object using the tx bytes and the chain id
@@ -217,8 +219,13 @@ func (m *Mempool) HandleTransactions(tx ...[]byte) (err lib.ErrorI) {
 
 // CheckMempool() Checks each transaction in the mempool and caches a block proposal
 func (m *Mempool) CheckMempool() {
+	startTime := time.Now()
 	m.log.Info("Validating mempool and caching a new proposal block")
 	var err lib.ErrorI
+	overlap := m.controller != nil && m.controller.Consensus != nil && m.controller.Consensus.Phase == lib.Phase_PROPOSE_VOTE
+	if overlap && m.metrics != nil {
+		m.metrics.ProposalProposeVoteOverlap.Inc()
+	}
 	// check if a validator
 	// create the actual block structure with the maximum amount of transactions allowed or available in the mempool
 	block := &lib.Block{
@@ -258,7 +265,12 @@ func (m *Mempool) CheckMempool() {
 		m.FSM.SetRootDexCache(rootDexBatch)
 	}
 	// apply the block to the mempool FSM to get the result and validate the transactions
+	applyBlockStartTime := time.Now()
 	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)
+	applyBlockDuration := time.Since(applyBlockStartTime)
+	if m.metrics != nil {
+		m.metrics.ProposalApplyBlockTime.Observe(applyBlockDuration.Seconds())
+	}
 	if err != nil {
 		m.log.Warnf("Check Mempool error: %s", err.Error())
 		return
@@ -266,10 +278,16 @@ func (m *Mempool) CheckMempool() {
 	// set the block result block header
 	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
 	// cache the proposal
+	certResultsStartTime := time.Now()
+	certResults := m.controller.NewCertificateResults(m.FSM, block, blockResult, &bft.ByzantineEvidence{DSE: bft.DoubleSignEvidences{}}, rcBuildHeight)
+	certResultsDuration := time.Since(certResultsStartTime)
+	if m.metrics != nil {
+		m.metrics.ProposalCertResultsTime.Observe(certResultsDuration.Seconds())
+	}
 	m.cachedProposal.Store(&CachedProposal{
 		Block:         block,
 		BlockResult:   blockResult,
-		CertResults:   m.controller.NewCertificateResults(m.FSM, block, blockResult, &bft.ByzantineEvidence{DSE: bft.DoubleSignEvidences{}}, rcBuildHeight),
+		CertResults:   certResults,
 		rcBuildHeight: rcBuildHeight,
 	})
 	// create a cache of failed tx bytes to evict from the mempool
@@ -304,6 +322,14 @@ func (m *Mempool) CheckMempool() {
 		m.cachedResults = append(m.cachedResults, o)
 	}
 	m.log.Info("Done checking mempool")
+	totalDuration := time.Since(startTime)
+	if m.metrics != nil {
+		m.metrics.ProposalBuildTime.Observe(totalDuration.Seconds())
+	}
+	if totalDuration >= slowProposalBuildThreshold {
+		m.log.Warnf("Slow mempool proposal build height=%d txs=%d overlap=%t apply_block=%s cert_results=%s total=%s",
+			block.BlockHeader.Height, len(block.Transactions), overlap, applyBlockDuration, certResultsDuration, totalDuration)
+	}
 	// update the mempool metrics
 	m.metrics.UpdateMempoolMetrics(m.Mempool.TxCount(), m.Mempool.TxsBytes())
 }
