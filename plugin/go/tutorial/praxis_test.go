@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"fmt"
 	"io"
 	"net/http"
@@ -571,4 +572,73 @@ func TestPORSFullFlow(t *testing.T) {
         t.Log("========================================")
         t.Log("PORS FULL FLOW COMPLETE")
         t.Log("========================================")
+}
+
+func TestNonValidatorPredict(t *testing.T) {
+addr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+key, err := keystoreGetKey(addr, "")
+if err != nil {
+t.Fatalf("get validator key: %v", err)
+}
+
+cfgData, cfgErr := os.ReadFile("test_config.json")
+if cfgErr != nil {
+t.Fatalf("read test_config.json: %v", cfgErr)
+}
+var cfg struct {
+PredictorAddress string `json:"predictor_address"`
+PredictorPrivKey string `json:"predictor_privkey"`
+PredictorPubKey  string `json:"predictor_pubkey"`
+}
+if jsonErr := json.Unmarshal(cfgData, &cfg); jsonErr != nil {
+t.Fatalf("parse test_config.json: %v", jsonErr)
+}
+predKey := &keyGroup{Address: cfg.PredictorAddress, PublicKey: cfg.PredictorPubKey, PrivateKey: cfg.PredictorPrivKey}
+
+// Step 1: Fund predictor
+h, _ := getHeight()
+sendMsg := &contract.MessageSend{FromAddress: hexDecode(addr), ToAddress: hexDecode(predKey.Address), Amount: 10_000_000}
+hash := submitSendTx(t, key, sendMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("fund predictor failed: %v", err)
+}
+t.Logf("Predictor funded: %d uPRX", getBalance(predKey.Address))
+
+// Step 2: Create market as validator
+h, _ = getHeight()
+nonce := uint64(time.Now().UnixMicro())
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(addr),
+B0:             1_000_000,
+ExpiryTime:     h + 30,
+Nonce:          nonce,
+Question:       "Will non-validator predict successfully?",
+}
+hash = submitTx(t, key, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("create_market failed: %v", err)
+}
+marketId := contract.DeriveMarketId(hexDecode(addr), nonce)
+t.Logf("Market created. ID: %x", marketId)
+
+// Step 3: Submit prediction as predictor (non-validator)
+h, _ = getHeight()
+balBefore := getBalance(predKey.Address)
+predMsg := &contract.MessageSubmitPrediction{
+MarketId:      marketId,
+BettorAddress: hexDecode(predKey.Address),
+Outcome:       true,
+Shares:        contract.PRECISION_SCALE,
+MaxCost:       10_000_000,
+}
+hash = submitTx(t, predKey, "submit_prediction", "MessageSubmitPrediction", predMsg, h)
+if err := waitForTx(predKey.Address, hash, 60*time.Second); err != nil {
+t.Fatalf("submit_prediction failed: %v", err)
+}
+balAfter := getBalance(predKey.Address)
+t.Logf("Balance before: %d after: %d diff: %d", balBefore, balAfter, int64(balAfter)-int64(balBefore))
+if balAfter >= balBefore {
+t.Errorf("Predictor balance should have decreased")
+}
+t.Log("Non-validator prediction submitted successfully!")
 }
