@@ -66,7 +66,17 @@ export const queryKeys = {
     tableData: (page: number, category: number, committee?: number) => ['tableData', page, category, committee],
 };
 
-const BLOCKS_POLL_MS = 1000;
+// Block polling interval (ms). Defaults to 2s so a plain explorer/wallet —
+// especially a simple private deployment — doesn't poll the node aggressively.
+// Override with VITE_BLOCKS_POLL_MS in the environment for snappier updates.
+const DEFAULT_BLOCKS_POLL_MS = 2000;
+const MIN_BLOCKS_POLL_MS = 500;
+const BLOCKS_POLL_MS = (() => {
+    const raw = Number(import.meta.env.VITE_BLOCKS_POLL_MS);
+    return Number.isFinite(raw) && raw > 0
+        ? Math.max(MIN_BLOCKS_POLL_MS, raw)
+        : DEFAULT_BLOCKS_POLL_MS;
+})();
 
 // Backoff helper: when a polling query keeps failing, slow it down so we
 // don't hammer a degraded RPC node (and so we don't flood the browser
@@ -79,8 +89,8 @@ const errorAwareInterval = (baseMs: number, maxMs: number = 60000) =>
         return Math.min(baseMs * Math.pow(2, fails), maxMs);
     };
 
-// Lightweight hook for the latest block height (polls every 3s, with backoff
-// on errors so a degraded RPC node doesn't spam the console).
+// Lightweight hook for the latest block height (polls every BLOCKS_POLL_MS,
+// with backoff on errors so a degraded RPC node doesn't spam the console).
 export const useLatestBlock = () => {
     return useQuery({
         queryKey: ['latestBlock'],
