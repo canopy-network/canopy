@@ -46,4 +46,5 @@ cmd/web/explorer/.idea
 /cmd/tps/data
 
 rag
-node_modulesplugin/go/tutorial/test_config.json
+node_modules
+plugin/go/tutorial/test_config.json
