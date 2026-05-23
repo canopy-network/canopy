@@ -169,7 +169,7 @@ func (p *Plugin) ListenForInbound() {
 	}
 }
 
-// HandlePluginResponse() routes the inbound response appropriately
+// handleFSMResponse routes the inbound FSM response to the waiting goroutine.
 func (p *Plugin) handleFSMResponse(msg *FSMToPlugin) *PluginError {
 	// thread safety
 	p.l.Lock()

@@ -1,5 +1,21 @@
 package contract
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DEPRECATED — resolve_market handler
+//
+// This handler is intentionally NOT registered in ContractConfig.SupportedTransactions
+// or TransactionTypeUrls (see contract.go). It cannot be invoked via a standard TX.
+//
+// The PORS flow (propose_outcome → file_dispute → commit_vote → reveal_vote →
+// tally_votes → finalize_market) is the sole resolution path for Praxis markets.
+//
+// DO NOT re-register this handler. Doing so would allow a single resolver to
+// unilaterally finalize any market, bypassing the dispute/panel mechanism entirely.
+//
+// This file is retained only to preserve the proto message handler interface.
+// It will be removed in a future cleanup pass once the proto type is deprecated.
+// ═══════════════════════════════════════════════════════════════════════════════
+
 const (
 bountyAmount uint64 = 50_000_000
 bondAmount   uint64 = 100_000_000

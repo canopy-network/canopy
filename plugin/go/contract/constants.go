@@ -1,5 +1,7 @@
 package contract
 
+import "os"
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Praxis Prediction Market — Named Constants
 // Spec authority:
@@ -122,9 +124,11 @@ var PRAXIS_TREASURY_ID = []byte{
 var panelEntropyPrefix = []byte{0x1C}
 var PANEL_ENTROPY_KEY []byte
 
-// TEST_MODE — set to true to use short dispute window for local testing
-// MUST be false before mainnet deployment
-const TEST_MODE = true
+// TEST_MODE — enables compressed timing windows for local testing.
+// Controlled by the PRAXIS_TEST_MODE environment variable.
+// Defaults to false — safe for mainnet.
+// To enable: PRAXIS_TEST_MODE=true ./go-plugin
+var TEST_MODE = os.Getenv("PRAXIS_TEST_MODE") == "true"
 const TEST_DISPUTE_BLOCKS        uint64 = 20
 const TEST_RESOLUTION_DELAY      uint64 = 2
 const TEST_GRACE_PERIOD          uint64 = 2
