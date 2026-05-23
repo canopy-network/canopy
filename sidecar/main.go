@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
@@ -166,76 +165,6 @@ func (s *Store) applyUpdate(fresh *Market) (bool, bool) {
 	return false, false
 }
 
-// ── WebSocket Hub ─────────────────────────────────────────────────
-
-type wsClient struct {
-	send chan []byte
-	done chan struct{}
-}
-
-type Hub struct {
-	mu      sync.RWMutex
-	clients map[*wsClient]struct{}
-}
-
-func newHub() *Hub {
-	return &Hub{clients: make(map[*wsClient]struct{})}
-}
-
-func (h *Hub) register(c *wsClient) {
-	h.mu.Lock()
-	h.clients[c] = struct{}{}
-	h.mu.Unlock()
-}
-
-func (h *Hub) unregister(c *wsClient) {
-	h.mu.Lock()
-	delete(h.clients, c)
-	h.mu.Unlock()
-}
-
-func (h *Hub) broadcast(msg []byte) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for c := range h.clients {
-		select {
-		case c.send <- msg:
-		default:
-		}
-	}
-}
-
-func (h *Hub) clientCount() int {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return len(h.clients)
-}
-
-func encodeWSFrame(payload []byte) []byte {
-	plen := len(payload)
-	var header []byte
-	if plen <= 125 {
-		header = []byte{0x81, byte(plen)}
-	} else if plen <= 65535 {
-		header = []byte{0x81, 126, byte(plen >> 8), byte(plen)}
-	} else {
-		header = make([]byte, 10)
-		header[0] = 0x81
-		header[1] = 127
-		binary.BigEndian.PutUint64(header[2:], uint64(plen))
-	}
-	frame := make([]byte, len(header)+plen)
-	copy(frame, header)
-	copy(frame[len(header):], payload)
-	return frame
-}
-
-func computeWSAcceptKey(clientKey string) string {
-	h := sha1.New()
-	h.Write([]byte(clientKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
-	return base64.StdEncoding.EncodeToString(h.Sum(nil))
-}
-
 // ── Proto varint decoder ──────────────────────────────────────────
 
 func decodeVarint(b []byte, pos int) (uint64, int) {
@@ -329,7 +258,6 @@ func getUint(fields map[int]interface{}, n int) uint64 {
 	}
 }
 
-// base64ToHex converts a base64-encoded 20-byte address to a 40-char hex string
 func base64ToHex(b64 string) string {
 	decoded, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil || len(decoded) != 20 {
@@ -440,17 +368,15 @@ func (c *rpcClient) getFailedTxs(addr string, perPage int) ([]interface{}, error
 type Indexer struct {
 	rpc      *rpcClient
 	store    *Store
-	hub      *Hub
 	creators []string
 	failedMu sync.Mutex
 	failed   map[string]bool
 }
 
-func newIndexer(rpc *rpcClient, store *Store, hub *Hub, creators []string) *Indexer {
+func newIndexer(rpc *rpcClient, store *Store, creators []string) *Indexer {
 	return &Indexer{
 		rpc:      rpc,
 		store:    store,
-		hub:      hub,
 		creators: creators,
 		failed:   make(map[string]bool),
 	}
@@ -477,24 +403,14 @@ func (idx *Indexer) isFailed(txHash string) bool {
 	return idx.failed[txHash]
 }
 
-func (idx *Indexer) poll() []map[string]interface{} {
+func (idx *Indexer) poll() {
 	height, err := idx.rpc.getHeight()
 	if err != nil {
 		log.Printf("[indexer] RPC unreachable: %v", err)
-		return nil
+		return
 	}
 
-	prevHeight := idx.store.getHeight()
 	idx.store.setHeight(height)
-
-	var events []map[string]interface{}
-
-	if height != prevHeight {
-		events = append(events, map[string]interface{}{
-			"type":   "height",
-			"height": height,
-		})
-	}
 
 	for _, creator := range idx.creators {
 		idx.loadFailedTxs(creator)
@@ -727,44 +643,11 @@ func (idx *Indexer) poll() []map[string]interface{} {
 		}
 	}
 
+	// Apply updates to store
 	for _, m := range freshMarkets {
 		m.computeDerived()
-		isNew, changed := idx.store.applyUpdate(m)
-		if isNew {
-			b, _ := json.Marshal(map[string]interface{}{
-				"type":       "new_market",
-				"marketId":   m.MarketID,
-				"question":   m.Question,
-				"creator":    m.Creator,
-				"b0":         m.B0,
-				"lmsrSeed":   m.LmsrSeed,
-				"qYes":       m.QYes,
-				"qNo":        m.QNo,
-				"bEff":       m.BEff,
-				"expiryTime": m.ExpiryTime,
-				"status":     m.StatusLabel,
-				"yesPct":     m.YesPct,
-				"noPct":      m.NoPct,
-				"totalPool":  m.TotalPool,
-				"height":     height,
-			})
-			events = append(events, map[string]interface{}{"_raw": b})
-		} else if changed {
-			b, _ := json.Marshal(map[string]interface{}{
-				"type":      "market_update",
-				"marketId":  m.MarketID,
-				"qYes":      m.QYes,
-				"qNo":       m.QNo,
-				"status":    m.StatusLabel,
-				"yesPct":    m.YesPct,
-				"noPct":     m.NoPct,
-				"totalPool": m.TotalPool,
-				"height":    height,
-			})
-			events = append(events, map[string]interface{}{"_raw": b})
-		}
+		idx.store.applyUpdate(m)
 	}
-	return events
 }
 
 // ── HTTP handlers ─────────────────────────────────────────────────
@@ -811,86 +694,6 @@ func handleMarket(store *Store) http.HandlerFunc {
 	}
 }
 
-func handleWS(hub *Hub, store *Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-			http.Error(w, "expected websocket upgrade", http.StatusBadRequest)
-			return
-		}
-		key := r.Header.Get("Sec-Websocket-Key")
-		if key == "" {
-			http.Error(w, "missing Sec-Websocket-Key", http.StatusBadRequest)
-			return
-		}
-
-		hj, ok := w.(http.Hijacker)
-		if !ok {
-			http.Error(w, "hijack not supported", http.StatusInternalServerError)
-			return
-		}
-		conn, bufrw, err := hj.Hijack()
-		if err != nil {
-			log.Printf("[ws] hijack failed: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		acceptKey := computeWSAcceptKey(key)
-		resp := "HTTP/1.1 101 Switching Protocols\r\n" +
-			"Upgrade: websocket\r\n" +
-			"Connection: Upgrade\r\n" +
-			"Sec-WebSocket-Accept: " + acceptKey + "\r\n\r\n"
-		bufrw.WriteString(resp)
-		bufrw.Flush()
-
-		client := &wsClient{send: make(chan []byte, 64), done: make(chan struct{})}
-		hub.register(client)
-		defer hub.unregister(client)
-
-		markets := store.getMarkets()
-		snapshot, _ := json.Marshal(map[string]interface{}{
-			"type":    "snapshot",
-			"markets": markets,
-			"height":  store.getHeight(),
-		})
-		bufrw.Write(encodeWSFrame(snapshot))
-		bufrw.Flush()
-
-		go func() {
-			for {
-				select {
-				case msg := <-client.send:
-					bufrw.Write(encodeWSFrame(msg))
-					bufrw.Flush()
-				case <-client.done:
-					return
-				}
-			}
-		}()
-
-		buf := make([]byte, 4096)
-		for {
-			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-			n, err := conn.Read(buf)
-			if err != nil || n == 0 {
-				break
-			}
-			if n >= 2 {
-				opcode := buf[0] & 0x0f
-				if opcode == 0x8 {
-					break
-				}
-				if opcode == 0x9 {
-					pong := []byte{0x8a, 0x00}
-					bufrw.Write(pong)
-					bufrw.Flush()
-				}
-			}
-		}
-		close(client.done)
-	}
-}
-
 // ── Main ──────────────────────────────────────────────────────────
 
 func main() {
@@ -904,26 +707,17 @@ func main() {
 
 	rpc   := newRPCClient(rpcBase)
 	store := newStore()
-	hub   := newHub()
-	idx   := newIndexer(rpc, store, hub, creators)
+	idx   := newIndexer(rpc, store, creators)
 
+	// Initial poll
 	idx.poll()
 
+	// Periodic poll
 	go func() {
 		ticker := time.NewTicker(pollInterval)
 		defer ticker.Stop()
 		for range ticker.C {
-			events := idx.poll()
-			for _, ev := range events {
-				if raw, ok := ev["_raw"]; ok {
-					if b, ok := raw.([]byte); ok {
-						hub.broadcast(b)
-					}
-				} else {
-					b, _ := json.Marshal(ev)
-					hub.broadcast(b)
-				}
-			}
+			idx.poll()
 		}
 	}()
 
@@ -931,7 +725,6 @@ func main() {
 	mux.HandleFunc("/v1/praxis/health",  handleHealth(store))
 	mux.HandleFunc("/v1/praxis/markets", handleMarkets(store))
 	mux.HandleFunc("/v1/praxis/market",  handleMarket(store))
-	mux.HandleFunc("/v1/praxis/ws",      handleWS(hub, store))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
