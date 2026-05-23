@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -312,11 +313,20 @@ func getUint(fields map[int]interface{}, n int) uint64 {
 	if !ok {
 		return 0
 	}
-	u, ok := v.(uint64)
-	if !ok {
+	switch val := v.(type) {
+	case uint64:
+		return val
+	case float64:
+		return uint64(val)
+	case string:
+		u, err := strconv.ParseUint(val, 10, 64)
+		if err != nil {
+			return 0
+		}
+		return u
+	default:
 		return 0
 	}
-	return u
 }
 
 // base64ToHex converts a base64-encoded 20-byte address to a 40-char hex string
@@ -542,12 +552,21 @@ func (idx *Indexer) poll() []map[string]interface{} {
 				}
 				if v, ok := msg["b0"].(float64); ok {
 					b0 = uint64(v)
+				} else if v, ok := msg["b0"].(string); ok {
+					u, _ := strconv.ParseUint(v, 10, 64)
+					b0 = u
 				}
 				if v, ok := msg["expiryTime"].(float64); ok {
 					expiry = uint64(v)
+				} else if v, ok := msg["expiryTime"].(string); ok {
+					u, _ := strconv.ParseUint(v, 10, 64)
+					expiry = u
 				}
 				if v, ok := msg["nonce"].(float64); ok {
 					nonce = uint64(v)
+				} else if v, ok := msg["nonce"].(string); ok {
+					u, _ := strconv.ParseUint(v, 10, 64)
+					nonce = u
 				}
 			}
 			if creatorAddr == "" || b0 == 0 {
@@ -641,6 +660,9 @@ func (idx *Indexer) poll() []map[string]interface{} {
 				}
 				if v, ok := msg["shares"].(float64); ok {
 					shares = uint64(v)
+				} else if v, ok := msg["shares"].(string); ok {
+					u, _ := strconv.ParseUint(v, 10, 64)
+					shares = u
 				}
 			}
 			if marketID == "" || shares == 0 {
