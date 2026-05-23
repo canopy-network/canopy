@@ -743,7 +743,7 @@ t.Fatalf("prediction B: %v", err)
 h, _ = getHeight()
 regMsg := &contract.MessageRegisterResolver{
 ResolverAddress: hexDecode(addr),
-StakeAmount:     800_000,
+StakeAmount:     100_000_000,
 }
 hash = submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
 if err := waitForTx(addr, hash, 60*time.Second); err != nil {
@@ -925,7 +925,7 @@ t.Logf("Single YES bettor cost: %d uPRX", cost)
 h, _ = getHeight()
 regMsg := &contract.MessageRegisterResolver{
 ResolverAddress: hexDecode(addr),
-StakeAmount:     800_000,
+StakeAmount:     100_000_000,
 }
 hash = submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
 if err := waitForTx(addr, hash, 60*time.Second); err != nil {
@@ -1108,4 +1108,179 @@ actualRefund, cost, diff, tolerance)
 }
 
 t.Log("Cancelled market refund verified ✓")
+}
+
+func TestLosingBettorZeroPayout(t *testing.T) {
+addr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+key, err := keystoreGetKey(addr, "")
+if err != nil {
+t.Fatalf("get validator key: %v", err)
+}
+
+cfgData, cfgErr := os.ReadFile("test_config.json")
+if cfgErr != nil {
+t.Fatalf("read test_config.json: %v", cfgErr)
+}
+var cfg struct {
+PredictorAddress string `json:"predictor_address"`
+PredictorPrivKey string `json:"predictor_privkey"`
+PredictorPubKey  string `json:"predictor_pubkey"`
+}
+if jsonErr := json.Unmarshal(cfgData, &cfg); jsonErr != nil {
+t.Fatalf("parse test_config.json: %v", jsonErr)
+}
+loser := &keyGroup{Address: cfg.PredictorAddress, PublicKey: cfg.PredictorPubKey, PrivateKey: cfg.PredictorPrivKey}
+
+// Fund loser
+h, _ := getHeight()
+fundMsg := &contract.MessageSend{
+FromAddress: hexDecode(addr),
+ToAddress:   hexDecode(loser.Address),
+Amount:      100_000_000,
+}
+hash := submitSendTx(t, key, fundMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("fund loser: %v", err)
+}
+
+// Create market
+h, _ = getHeight()
+const b0 = uint64(60_000_000)
+nonce := uint64(time.Now().UnixMicro())
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(addr),
+B0:             b0,
+ExpiryTime:     h + 30,
+Nonce:          nonce,
+Question:       "Losing bettor zero payout test",
+}
+hash = submitTx(t, key, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("create_market: %v", err)
+}
+marketId := contract.DeriveMarketId(hexDecode(addr), nonce)
+t.Logf("Market ID: %x", marketId)
+
+// Bettor A (validator) bets YES
+h, _ = getHeight()
+lmsrSeed := b0 - contract.FINALIZATION_BOUNTY
+halfSeed := lmsrSeed / 2
+sharesA := contract.PRECISION_SCALE
+costA, pe := contract.ComputeTradeCost(halfSeed, halfSeed, lmsrSeed, sharesA, true)
+if pe != nil {
+t.Fatalf("ComputeTradeCost A: %v", pe)
+}
+predMsgA := &contract.MessageSubmitPrediction{
+MarketId:      marketId,
+BettorAddress: hexDecode(addr),
+Outcome:       true,
+Shares:        sharesA,
+MaxCost:       costA * 2,
+}
+hash = submitTx(t, key, "submit_prediction", "MessageSubmitPrediction", predMsgA, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("prediction A (YES): %v", err)
+}
+t.Logf("Bettor A (YES) cost: %d uPRX", costA)
+
+// Bettor B (loser) bets NO
+h, _ = getHeight()
+sharesB := contract.PRECISION_SCALE
+qYesAfterA := halfSeed + sharesA
+costB, pe := contract.ComputeTradeCost(qYesAfterA, halfSeed, lmsrSeed, sharesB, false)
+if pe != nil {
+t.Fatalf("ComputeTradeCost B: %v", pe)
+}
+predMsgB := &contract.MessageSubmitPrediction{
+MarketId:      marketId,
+BettorAddress: hexDecode(loser.Address),
+Outcome:       false,
+Shares:        sharesB,
+MaxCost:       costB * 2,
+}
+hash = submitTx(t, loser, "submit_prediction", "MessageSubmitPrediction", predMsgB, h)
+if err := waitForTx(loser.Address, hash, 60*time.Second); err != nil {
+t.Fatalf("prediction B (NO): %v", err)
+}
+t.Logf("Bettor B (NO) cost: %d uPRX", costB)
+
+// Register resolver and wait for expiry
+h, _ = getHeight()
+regMsg := &contract.MessageRegisterResolver{
+ResolverAddress: hexDecode(addr),
+StakeAmount:     100_000_000,
+}
+hash = submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("register_resolver: %v", err)
+}
+
+expiryTarget := createMsg.ExpiryTime + 2
+t.Logf("Waiting for expiry (height %d)...", expiryTarget)
+for {
+cur, _ := getHeight()
+if cur >= expiryTarget {
+break
+}
+time.Sleep(2 * time.Second)
+}
+
+// Propose YES outcome (A wins, B loses)
+h, _ = getHeight()
+bond := contract.ComputeMinBond(&contract.MarketState{BEff: lmsrSeed})
+propMsg := &contract.MessageProposeOutcome{
+MarketId:        marketId,
+ResolverAddress: hexDecode(addr),
+ProposedOutcome: true,
+ProposalBond:    bond,
+}
+hash = submitTx(t, key, "propose_outcome", "MessageProposeOutcome", propMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("propose_outcome: %v", err)
+}
+
+// Wait for dispute window
+disputeTarget := h + contract.ComputeDisputeBlocks(0, 0) + 2
+t.Logf("Waiting for dispute window (height %d)...", disputeTarget)
+for {
+cur, _ := getHeight()
+if cur >= disputeTarget {
+break
+}
+time.Sleep(2 * time.Second)
+}
+
+// Finalize
+h, _ = getHeight()
+finMsg := &contract.MessageFinalizeMarket{
+MarketId:   marketId,
+CallerAddr: hexDecode(addr),
+}
+hash = submitTx(t, key, "finalize_market", "MessageFinalizeMarket", finMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("finalize_market: %v", err)
+}
+t.Log("Market finalized — YES wins")
+
+// Bettor B (loser) claims — should get zero payout
+balBBefore := getBalance(loser.Address)
+h, _ = getHeight()
+claimMsgB := &contract.MessageClaimWinnings{
+MarketId:        marketId,
+ClaimantAddress: hexDecode(loser.Address),
+}
+hash = submitTx(t, loser, "claim_winnings", "MessageClaimWinnings", claimMsgB, h)
+if err := waitForTx(loser.Address, hash, 60*time.Second); err != nil {
+t.Fatalf("claim B: %v", err)
+}
+balBAfter := getBalance(loser.Address)
+actualPayout := int64(balBAfter) - int64(balBBefore)
+t.Logf("Loser balance before: %d after: %d diff: %d", balBBefore, balBAfter, actualPayout)
+
+// Loser should receive nothing — zero or negative (TX fee) is acceptable
+if actualPayout > 0 {
+t.Errorf("Loser should not receive payout, got %d", actualPayout)
+}
+
+t.Log("Losing bettor zero payout verified ✓")
 }
