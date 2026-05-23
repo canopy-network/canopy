@@ -319,6 +319,15 @@ func getUint(fields map[int]interface{}, n int) uint64 {
 	return u
 }
 
+// base64ToHex converts a base64-encoded 20-byte address to a 40-char hex string
+func base64ToHex(b64 string) string {
+	decoded, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil || len(decoded) != 20 {
+		return ""
+	}
+	return hex.EncodeToString(decoded)
+}
+
 func getString(fields map[int]interface{}, n int) string {
 	b := getBytes(fields, n)
 	if b == nil {
@@ -528,7 +537,9 @@ func (idx *Indexer) poll() []map[string]interface{} {
 				question = getString(fields, 5)
 			} else if msg, ok := t["msg"].(map[string]interface{}); ok {
 				question, _ = msg["question"].(string)
-				creatorAddr, _ = msg["creatorAddress"].(string)
+				if v, ok := msg["creatorAddress"].(string); ok {
+					creatorAddr = base64ToHex(v)
+				}
 				if v, ok := msg["b0"].(float64); ok {
 					b0 = uint64(v)
 				}
@@ -622,7 +633,9 @@ func (idx *Indexer) poll() []map[string]interface{} {
 				outcome = outVal == 1
 				shares = getUint(fields, 4)
 			} else if msg, ok := t["msg"].(map[string]interface{}); ok {
-				marketID, _ = msg["marketId"].(string)
+				if v, ok := msg["marketId"].(string); ok {
+					marketID = base64ToHex(v)
+				}
 				if v, ok := msg["outcome"].(bool); ok {
 					outcome = v
 				}
@@ -668,6 +681,10 @@ func (idx *Indexer) poll() []map[string]interface{} {
 				midBytes := getBytes(fields, 1)
 				if len(midBytes) == 20 {
 					marketID = hex.EncodeToString(midBytes)
+				}
+			} else if msg, ok := t["msg"].(map[string]interface{}); ok {
+				if v, ok := msg["marketId"].(string); ok {
+					marketID = base64ToHex(v)
 				}
 			}
 			if marketID == "" {
