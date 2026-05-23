@@ -160,6 +160,7 @@ type FSMMetrics struct {
 	ApplyBlockTransactionsTime        prometheus.Histogram // how long does ApplyTransactions() take inside ApplyBlock()?
 	ApplyBlockEndTime                 prometheus.Histogram // how long does EndBlock() take inside ApplyBlock()?
 	ApplyBlockRootTime                prometheus.Histogram // how long does the uncached ApplyBlock() state root step take?
+	HandleMessageCertificateResultsStageTime *prometheus.HistogramVec
 	HandleCertificateResultsStageTime *prometheus.HistogramVec
 	ApplyTransactionStageTime         *prometheus.HistogramVec
 	ApplyTxsCheckTime                 prometheus.Histogram // how long does the first CheckTx pass in ApplyTransactions() take?
@@ -489,6 +490,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_fsm_apply_block_root_time",
 				Help: "Execution time of the uncached state root step inside FSM ApplyBlock",
 			}),
+			HandleMessageCertificateResultsStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_fsm_handle_message_certificate_results_stage_time",
+				Help: "Execution time of HandleMessageCertificateResults stages",
+			}, []string{"stage"}),
 			HandleCertificateResultsStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_fsm_handle_certificate_results_stage_time",
 				Help: "Execution time of HandleCertificateResults stages",
