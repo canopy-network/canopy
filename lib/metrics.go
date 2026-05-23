@@ -156,31 +156,32 @@ type BFTMetrics struct {
 
 // FSMMetrics represents the telemetry of the FSM module for the node's address
 type FSMMetrics struct {
-	ApplyBlockBeginTime        prometheus.Histogram // how long does BeginBlock() take inside ApplyBlock()?
-	ApplyBlockTransactionsTime prometheus.Histogram // how long does ApplyTransactions() take inside ApplyBlock()?
-	ApplyBlockEndTime          prometheus.Histogram // how long does EndBlock() take inside ApplyBlock()?
-	ApplyBlockRootTime         prometheus.Histogram // how long does the uncached ApplyBlock() state root step take?
-	ApplyTransactionStageTime  *prometheus.HistogramVec
-	ApplyTxsCheckTime          prometheus.Histogram // how long does the first CheckTx pass in ApplyTransactions() take?
-	ApplyTxsBatchVerifyTime    prometheus.Histogram // how long does batch signature verification in ApplyTransactions() take?
-	ApplyTxsExecuteTime        prometheus.Histogram // how long does ApplyTransaction() execution in ApplyTransactions() take?
-	ApplyTxsFlushTime          prometheus.Histogram // how long does nested txn flush time in ApplyTransactions() take?
-	CheckTxDecodeTime          prometheus.Histogram // how long does tx decode/basic validation take?
-	CheckTxReplayLookupTime    prometheus.Histogram // how long does the indexed tx-hash lookup take in CheckReplay()?
-	CheckTxReplayTime          prometheus.Histogram // how long does replay validation take?
-	CheckTxMessageTime         prometheus.Histogram // how long does message validation/fee/signer resolution take?
-	CheckTxSignatureTime       prometheus.Histogram // how long does signature validation take?
-	StateOperationTime         *prometheus.HistogramVec
-	ValidatorStatus            *prometheus.GaugeVec // what's the status of this validator?
-	ValidatorType              *prometheus.GaugeVec // what's the type of this validator?
-	ValidatorCompounding       *prometheus.GaugeVec // is this validator compounding?
-	ValidatorStakeAmount       *prometheus.GaugeVec // what's the stake amount of this validator
-	ValidatorBlockProducer     *prometheus.GaugeVec // was this validator a block producer? // TODO duplicate of canopy_proposer_count
-	ValidatorNonSigner         *prometheus.GaugeVec // was this validator a non signer?
-	ValidatorNonSignerCount    *prometheus.GaugeVec // was any validator a non signer?
-	ValidatorDoubleSigner      *prometheus.GaugeVec // was this validator a double signer?
-	ValidatorDoubleSignerCount *prometheus.GaugeVec // was any validator a double signer?
-	ValidatorCount             *prometheus.GaugeVec // how many validators are there?
+	ApplyBlockBeginTime               prometheus.Histogram // how long does BeginBlock() take inside ApplyBlock()?
+	ApplyBlockTransactionsTime        prometheus.Histogram // how long does ApplyTransactions() take inside ApplyBlock()?
+	ApplyBlockEndTime                 prometheus.Histogram // how long does EndBlock() take inside ApplyBlock()?
+	ApplyBlockRootTime                prometheus.Histogram // how long does the uncached ApplyBlock() state root step take?
+	HandleCertificateResultsStageTime *prometheus.HistogramVec
+	ApplyTransactionStageTime         *prometheus.HistogramVec
+	ApplyTxsCheckTime                 prometheus.Histogram // how long does the first CheckTx pass in ApplyTransactions() take?
+	ApplyTxsBatchVerifyTime           prometheus.Histogram // how long does batch signature verification in ApplyTransactions() take?
+	ApplyTxsExecuteTime               prometheus.Histogram // how long does ApplyTransaction() execution in ApplyTransactions() take?
+	ApplyTxsFlushTime                 prometheus.Histogram // how long does nested txn flush time in ApplyTransactions() take?
+	CheckTxDecodeTime                 prometheus.Histogram // how long does tx decode/basic validation take?
+	CheckTxReplayLookupTime           prometheus.Histogram // how long does the indexed tx-hash lookup take in CheckReplay()?
+	CheckTxReplayTime                 prometheus.Histogram // how long does replay validation take?
+	CheckTxMessageTime                prometheus.Histogram // how long does message validation/fee/signer resolution take?
+	CheckTxSignatureTime              prometheus.Histogram // how long does signature validation take?
+	StateOperationTime                *prometheus.HistogramVec
+	ValidatorStatus                   *prometheus.GaugeVec // what's the status of this validator?
+	ValidatorType                     *prometheus.GaugeVec // what's the type of this validator?
+	ValidatorCompounding              *prometheus.GaugeVec // is this validator compounding?
+	ValidatorStakeAmount              *prometheus.GaugeVec // what's the stake amount of this validator
+	ValidatorBlockProducer            *prometheus.GaugeVec // was this validator a block producer? // TODO duplicate of canopy_proposer_count
+	ValidatorNonSigner                *prometheus.GaugeVec // was this validator a non signer?
+	ValidatorNonSignerCount           *prometheus.GaugeVec // was any validator a non signer?
+	ValidatorDoubleSigner             *prometheus.GaugeVec // was this validator a double signer?
+	ValidatorDoubleSignerCount        *prometheus.GaugeVec // was any validator a double signer?
+	ValidatorCount                    *prometheus.GaugeVec // how many validators are there?
 }
 
 // StoreMetrics represents the telemetry of the 'store' package
@@ -488,6 +489,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_fsm_apply_block_root_time",
 				Help: "Execution time of the uncached state root step inside FSM ApplyBlock",
 			}),
+			HandleCertificateResultsStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_fsm_handle_certificate_results_stage_time",
+				Help: "Execution time of HandleCertificateResults stages",
+			}, []string{"stage"}),
 			ApplyTransactionStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_fsm_apply_transaction_stage_time",
 				Help: "Execution time of ApplyTransaction stages by message type",
