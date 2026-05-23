@@ -401,15 +401,27 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
 func (s *StateMachine) LoadCommittee(chainId uint64, height uint64) (lib.ValidatorSet, lib.ErrorI) {
+	startTime := time.Now()
+	observeStage := func(stage string, stageStartTime time.Time) {
+		if s.Metrics != nil {
+			s.Metrics.LoadCommitteeStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+		}
+	}
+	defer observeStage("total", startTime)
 	// get the historical state at the height
+	timeMachineStartTime := time.Now()
 	historicalFSM, err := s.TimeMachine(height)
+	observeStage("time_machine", timeMachineStartTime)
 	if err != nil {
 		return lib.ValidatorSet{}, err
 	}
 	// memory management for the historical FSM call
 	defer historicalFSM.Discard()
 	// return the 'committee members' (validator set) for that height
-	return historicalFSM.GetCommitteeMembers(chainId)
+	getCommitteeMembersStartTime := time.Now()
+	vs, err := historicalFSM.GetCommitteeMembers(chainId)
+	observeStage("get_committee_members", getCommitteeMembersStartTime)
+	return vs, err
 }
 
 // LoadCertificate() loads a quorum certificate (block, results + 2/3rd committee signatures)
