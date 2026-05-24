@@ -213,6 +213,15 @@ return &PluginError{Code: 194, Module: errModule, Msg: "commit hash must be exac
 func ErrInsufficientPanelCandidates() *PluginError {
 return &PluginError{Code: 195, Module: errModule, Msg: "insufficient eligible panel candidates after position exclusion"}
 }
+func ErrMarketNotReclaimable() *PluginError {
+return &PluginError{Code: 196, Module: errModule, Msg: "market is not eligible for stake reclaim"}
+}
+func ErrReclaimWindowClosed() *PluginError {
+return &PluginError{Code: 197, Module: errModule, Msg: "reclaim window has not opened yet"}
+}
+func ErrNoStakeToReclaim() *PluginError {
+return &PluginError{Code: 198, Module: errModule, Msg: "no stake or position to reclaim"}
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS

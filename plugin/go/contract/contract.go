@@ -41,6 +41,7 @@ SupportedTransactions: []string{
 "tally_votes",
 "finalize_market",
 "claim_slash",
+"reclaim_stake",
 },
 TransactionTypeUrls: []string{
 "type.googleapis.com/types.MessageCreateMarket",
@@ -54,6 +55,7 @@ TransactionTypeUrls: []string{
 "type.googleapis.com/types.MessageTallyVotes",
 "type.googleapis.com/types.MessageFinalizeMarket",
 "type.googleapis.com/types.MessageClaimSlash",
+"type.googleapis.com/types.MessageReclaimStake",
 },
 }
 
@@ -158,6 +160,8 @@ case *MessageFinalizeMarket:
 return c.CheckMessageFinalizeMarket(m)
 case *MessageClaimSlash:
 return c.CheckMessageClaimSlash(m)
+case *MessageReclaimStake:
+return c.CheckMessageReclaimStake(m)
 default:
 return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 }
@@ -194,6 +198,8 @@ case *MessageFinalizeMarket:
 return c.DeliverMessageFinalizeMarket(m, fee)
 case *MessageClaimSlash:
 return c.DeliverMessageClaimSlash(m, fee)
+case *MessageReclaimStake:
+return c.DeliverMessageReclaimStake(m, fee)
 default:
 return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 }

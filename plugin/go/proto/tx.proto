@@ -192,3 +192,8 @@ message MessageClaimSlash {
   bytes market_id        = 1;
   bytes claimant_address = 2;
 }
+
+message MessageReclaimStake {
+  bytes market_id        = 1;
+  bytes claimant_address = 2;
+}

@@ -1826,6 +1826,58 @@ func (x *MessageClaimSlash) GetClaimantAddress() []byte {
 	return nil
 }
 
+type MessageReclaimStake struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	ClaimantAddress []byte                 `protobuf:"bytes,2,opt,name=claimant_address,json=claimantAddress,proto3" json:"claimant_address,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageReclaimStake) Reset() {
+	*x = MessageReclaimStake{}
+	mi := &file_tx_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageReclaimStake) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageReclaimStake) ProtoMessage() {}
+
+func (x *MessageReclaimStake) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageReclaimStake.ProtoReflect.Descriptor instead.
+func (*MessageReclaimStake) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *MessageReclaimStake) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageReclaimStake) GetClaimantAddress() []byte {
+	if x != nil {
+		return x.ClaimantAddress
+	}
+	return nil
+}
+
 var File_tx_proto protoreflect.FileDescriptor
 
 const file_tx_proto_rawDesc = "" +
@@ -1979,6 +2031,9 @@ const file_tx_proto_rawDesc = "" +
 	"callerAddr\"[\n" +
 	"\x11MessageClaimSlash\x12\x1b\n" +
 	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"]\n" +
+	"\x13MessageReclaimStake\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
 	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddressB5Z3github.com/canopy-network/canopy/plugin/go/contractb\x06proto3"
 
 var (
@@ -1993,7 +2048,7 @@ func file_tx_proto_rawDescGZIP() []byte {
 	return file_tx_proto_rawDescData
 }
 
-var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_tx_proto_goTypes = []any{
 	(*Signature)(nil),               // 0: types.Signature
 	(*Transaction)(nil),             // 1: types.Transaction
@@ -2023,10 +2078,11 @@ var file_tx_proto_goTypes = []any{
 	(*MessageTallyVotes)(nil),       // 25: types.MessageTallyVotes
 	(*MessageFinalizeMarket)(nil),   // 26: types.MessageFinalizeMarket
 	(*MessageClaimSlash)(nil),       // 27: types.MessageClaimSlash
-	(*anypb.Any)(nil),               // 28: google.protobuf.Any
+	(*MessageReclaimStake)(nil),     // 28: types.MessageReclaimStake
+	(*anypb.Any)(nil),               // 29: google.protobuf.Any
 }
 var file_tx_proto_depIdxs = []int32{
-	28, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
+	29, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
 	0,  // 1: types.Transaction.signature:type_name -> types.Signature
 	2,  // [2:2] is the sub-list for method output_type
 	2,  // [2:2] is the sub-list for method input_type
@@ -2046,7 +2102,7 @@ func file_tx_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tx_proto_rawDesc), len(file_tx_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
