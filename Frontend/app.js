@@ -425,7 +425,7 @@ function renderMarketCards(markets) {
     parts.push('<div class="mc-acts"><button class="byes2" ' + actYes + '>BET YES</button><button class="bno2" ' + actNo + '>BET NO</button></div>');
     parts.push('<div class="card-foot"><div class="meta">');
     parts.push('<div class="mitem"><span class="mlbl">Total pool</span><span class="mval g">' + fmtA(m.qYes + m.qNo) + ' PRX</span></div>');
-    parts.push('<div class="mitem"><span class="mlbl">' + (open ? 'Expires' : expired ? 'Expired' : 'Finalized') + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
+    parts.push('<div class="mitem"><span class="mlbl">' + (open ? 'Expires' : expired ? 'Expired' : proposed ? 'Proposed' : finalized ? 'Finalized' : 'Closed') + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
     parts.push('<div class="mitem"><span class="mlbl">Creator</span><span class="mval">' + (m.creator ? m.creator.slice(0,8) + '…' : '???') + '</span></div>');
     parts.push('</div><span class="market-id">' + mid.slice(0,8) + '…</span></div>');
     parts.push('</div>');
