@@ -543,6 +543,8 @@ window.loadMarkets = async function () {
     const allTxs = [];
 
     for (let h = 1; h <= tipHeight; h += BATCH) {
+      const pct = Math.round((h / tipHeight) * 100);
+      el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;Scanning blocks ' + h + ' / ' + tipHeight + ' &nbsp;<span style="color:var(--green)">' + pct + '%</span></div>';
       const batchPromises = [];
       for (let bh = h; bh < h + BATCH && bh <= tipHeight; bh++) {
         batchPromises.push(
