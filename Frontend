@@ -1051,89 +1051,92 @@ window.loadMarkets = async function () {
   el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading markets from chain</div>';
   try {
     await checkRPC();
-    const addrsToQuery = new Set(['e7c7dad131a03f7ea0cc09a637ad096eb3495f77']);
-    if (signerAddress) addrsToQuery.add(signerAddress);
-    const allResults = [];
-    for (const addr of addrsToQuery) {
+
+    const heightResp = await rpc('/v1/query/height', {});
+    const tipHeight = Number(heightResp.height || currentHeight || 1);
+    const BATCH = 100;
+    const allTxs = [];
+
+    for (let h = 1; h <= tipHeight; h += BATCH) {
+      const batchPromises = [];
+      for (let bh = h; bh < h + BATCH && bh <= tipHeight; bh++) {
+        batchPromises.push(
+          rpc('/v1/query/txs-by-height', { height: bh, perPage: 50 })
+            .then(d => allTxs.push(...(d.results || [])))
+            .catch(() => {})
+        );
+      }
+      await Promise.all(batchPromises);
+    }
+
+    const marketsMap = new Map();
+
+    for (const tx of allTxs) {
+      if (tx.messageType !== 'create_market') continue;
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const question = msg.question || '';
+      const creator  = tx.sender || '';
+      const b0       = BigInt(msg.b0 || 0);
+      const expiry   = BigInt(msg.expiryTime || msg.expiry_time || 0);
+      const nonce    = BigInt(msg.nonce || 0);
+      const lmsrSeed = b0 > 50000000n ? b0 - 50000000n : b0;
+
+      let marketId = tx.txHash || (creator + String(nonce));
       try {
-        const d = await rpc('/v1/query/txs-by-sender', { address: addr, perPage: 200 });
-        allResults.push(...(d.results || []));
-      } catch {}
-    }
-    const results = allResults;
-    const markets = [];
+        const creatorBytes = /^[0-9a-fA-F]{40}$/.test(creator)
+          ? h2b(creator)
+          : (() => { const bin = atob(creator); return new Uint8Array([...bin].map(c => c.charCodeAt(0))); })();
+        const nonceBytes = new Uint8Array(8);
+        let n = nonce;
+        for (let i = 7; i >= 0; i--) { nonceBytes[i] = Number(n & 0xffn); n >>= 8n; }
+        const input = new Uint8Array(creatorBytes.length + 8);
+        input.set(creatorBytes); input.set(nonceBytes, 20);
+        const hash = await crypto.subtle.digest('SHA-256', input);
+        marketId = b2h(new Uint8Array(hash).slice(0, 20));
+      } catch (e) {}
 
-    for (const tx of results) {
-      const t = tx.transaction || tx;
-      const type = t.type || t.messageType || '';
-      if (type !== 'create_market') continue;
-      const msg = t.msg || t;
-      let question = '', creator = '', b0 = 0n, expiry = 0n, nonce = 0n;
-      if (t.msgBytes) {
-        const bytes = h2b(t.msgBytes);
-        let pos = 0;
-        while (pos < bytes.length) {
-          const { v: tagV, p: p1 } = decVarint(bytes, pos); pos = p1;
-          const fn = Number(tagV >> 3n), wt = Number(tagV & 7n);
-          if (wt === 0) { const { v, p: p2 } = decVarint(bytes, pos); pos = p2; if (fn === 2) b0 = v; if (fn === 3) expiry = v; if (fn === 4) nonce = v; }
-          else if (wt === 2) { const { v: lenV, p: p2 } = decVarint(bytes, pos); const len = Number(lenV); pos = p2; const chunk = bytes.slice(pos, pos + len); pos += len; if (fn === 1) creator = b2h(chunk); if (fn === 5) question = new TextDecoder().decode(chunk); }
-          else if (wt === 1) { pos += 8; } else if (wt === 5) { pos += 4; } else break;
-        }
-      } else {
-        question = msg.question || '';
-        creator = msg.creatorAddress || tx.sender || '';
-        b0 = BigInt(msg.b0 || 0);
-        expiry = BigInt(msg.expiryTime || msg.expiry_time || 0);
-        nonce = BigInt(msg.nonce || 0);
-      }
-      const key = tx.txHash || (creator + b0);
-      if (!markets.some(m => m.txHash === key)) {
-        const lmsrSeed = b0 > 50000000n ? b0 - 50000000n : b0; markets.push({ txHash: tx.txHash || '', question: question || '(no question)', creator, b0, lmsrSeed, expiry, nonce, status: 0, qYes: lmsrSeed / 2n, qNo: lmsrSeed / 2n });
+      if (!marketsMap.has(marketId)) {
+        marketsMap.set(marketId, {
+          txHash: tx.txHash || '',
+          marketId,
+          question: question || '(no question)',
+          creator,
+          b0,
+          lmsrSeed,
+          expiry,
+          nonce,
+          status: 0,
+          qYes: lmsrSeed / 2n,
+          qNo:  lmsrSeed / 2n,
+        });
       }
     }
 
+    for (const tx of allTxs) {
+      if (tx.messageType !== 'submit_prediction') continue;
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const rawMid = msg.marketId || msg.market_id || '';
+      let marketId = rawMid;
+      try { const b = Uint8Array.from(atob(rawMid), c => c.charCodeAt(0)); marketId = b2h(b); } catch(e) {}
+      const outcome  = msg.outcome === true || msg.outcome === 'true' || msg.outcome === 1;
+      const amount   = BigInt(msg.shares || msg.amount || 0);
+      if (!marketId || !marketsMap.has(marketId)) continue;
+      const m = marketsMap.get(marketId);
+      if (outcome) { m.qYes += amount; } else { m.qNo += amount; }
+    }
+
+    const markets = [...marketsMap.values()];
     for (const m of markets) {
-      if (m.expiry && currentHeight > Number(m.expiry)) {
-        m.status = 1;
-      }
+      if (m.expiry && currentHeight > Number(m.expiry)) m.status = 1;
     }
-
-    const deriveMarketId = async (creatorStr, nonce) => {
-      var creatorBytes;
-      if (creatorStr.length === 40 && /^[0-9a-fA-F]{40}$/.test(creatorStr)) {
-        creatorBytes = h2b(creatorStr);
-      } else {
-        try {
-          var bin = atob(creatorStr);
-          creatorBytes = new Uint8Array([...bin].map(function(c) { return c.charCodeAt(0); }));
-        } catch (e) {
-          creatorBytes = new Uint8Array(20);
-        }
-      }
-      var nonceBytes = new Uint8Array(8);
-      var n = BigInt(nonce);
-      for (var i = 7; i >= 0; i--) { nonceBytes[i] = Number(n & 0xffn); n >>= 8n; }
-      var input = new Uint8Array(creatorBytes.length + 8);
-      input.set(creatorBytes); input.set(nonceBytes, 20);
-      var hash = await crypto.subtle.digest('SHA-256', input);
-      return b2h(new Uint8Array(hash).slice(0, 20));
-    };
-
-    var idPromises = markets.map(async function(m) {
-      if (m.creator && m.nonce) {
-        try { m.marketId = await deriveMarketId(m.creator, m.nonce); } catch (e) {}
-      }
-      if (!m.marketId) m.marketId = m.txHash;
-    });
-    await Promise.all(idPromises);
 
     if (countEl) countEl.textContent = markets.length;
     if (markets.length === 0) {
       el.innerHTML = '<div class="alert ay">No markets on-chain yet.<br>Create the first one!</div>';
       return;
     }
-
     el.innerHTML = renderMarketCards(markets);
+
   } catch (e) {
     el.innerHTML = '<div class="alert ar">⚠ Cannot reach node at <code>' + getRPC() + '</code><br>' + esc(e.message) + '</div>';
   }
