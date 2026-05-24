@@ -1086,3 +1086,130 @@ buildMobNav();
 checkRPC();
 setInterval(checkRPC,12000);
 
+// ═══════════════════════════════════════════
+// KEYSTORE — AES-GCM + PBKDF2
+// ═══════════════════════════════════════════
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptKey(privKeyBytes, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(password, salt);
+  const enc  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, privKeyBytes);
+  return {
+    salt: b2h(salt),
+    iv:   b2h(iv),
+    encrypted: b2h(new Uint8Array(enc))
+  };
+}
+
+async function decryptKey(encrypted, iv, salt, password) {
+  const key = await deriveKey(password, h2b(salt));
+  const dec = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: h2b(iv) },
+    key,
+    h2b(encrypted)
+  );
+  return new Uint8Array(dec);
+}
+
+window.createKeystore = async function() {
+  const pw  = document.getElementById('ks_new_pw').value;
+  const pw2 = document.getElementById('ks_new_pw2').value;
+  if (!pw) return toast('Enter a password', true);
+  if (pw !== pw2) return toast('Passwords do not match', true);
+  if (pw.length < 8) return toast('Password must be at least 8 characters', true);
+
+  try {
+    // generate new BLS private key
+    const privBytes = crypto.getRandomValues(new Uint8Array(32));
+    const pubKey    = bls12_381.getPublicKey(privBytes);
+    const hash      = await crypto.subtle.digest('SHA-256', pubKey);
+    const address   = b2h(new Uint8Array(hash).slice(0, 20));
+
+    const { salt, iv, encrypted } = await encryptKey(privBytes, pw);
+
+    const keystore = {
+      version: 1,
+      publicKey: b2h(pubKey),
+      keyAddress: address,
+      salt, iv, encrypted
+    };
+
+    // download
+    const blob = new Blob([JSON.stringify(keystore, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'praxis-keystore-' + address.slice(0,8) + '.json';
+    a.click(); URL.revokeObjectURL(url);
+
+    // auto-load into session
+    signerPrivKey = privBytes;
+    signerPubKey  = pubKey;
+    signerAddress = address;
+    updateSignerUI();
+    toast('Keystore created and loaded');
+    document.getElementById('ks_new_pw').value = '';
+    document.getElementById('ks_new_pw2').value = '';
+  } catch(e) { toast('Create failed: ' + e.message, true); }
+};
+
+window.importKeystore = async function() {
+  const pw   = document.getElementById('ks_imp_pw').value;
+  const file = document.getElementById('ks_imp_file').files[0];
+  if (!file) return toast('Select a keystore file', true);
+  if (!pw)   return toast('Enter password', true);
+
+  try {
+    const text = await file.text();
+    const ks   = JSON.parse(text);
+    if (!ks.encrypted || !ks.salt || !ks.iv || !ks.publicKey) throw new Error('Invalid keystore file');
+
+    const privBytes = await decryptKey(ks.encrypted, ks.iv, ks.salt, pw);
+    const pubKey    = bls12_381.getPublicKey(privBytes);
+
+    // verify pubkey matches
+    if (b2h(pubKey) !== ks.publicKey) throw new Error('Wrong password or corrupted keystore');
+
+    const hash    = await crypto.subtle.digest('SHA-256', pubKey);
+    const address = b2h(new Uint8Array(hash).slice(0, 20));
+
+    signerPrivKey = privBytes;
+    signerPubKey  = pubKey;
+    signerAddress = address;
+    updateSignerUI();
+    toast('Keystore unlocked — ' + address.slice(0,8) + '…');
+    document.getElementById('ks_imp_pw').value = '';
+    document.getElementById('ks_imp_file').value = '';
+  } catch(e) { toast('Import failed: ' + e.message, true); }
+};
+
+function updateSignerUI() {
+  document.getElementById('keyStatus').className = 'kstat loaded';
+  document.getElementById('keyStatus').textContent = '✓ loaded — ' + signerAddress.slice(0,16) + '…';
+  document.getElementById('sk_derived').style.display = 'block';
+  document.getElementById('sk_pub').textContent = b2h(signerPubKey);
+  document.getElementById('sk_addr').textContent = signerAddress;
+  ['c_creator','p_bettor','r_resolver','cl_addr','s_from','w_addr','ft_addr',
+   'reg_addr','prop_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr'].forEach(id => {
+    const el = document.getElementById(id); if (el && !el.value) el.value = signerAddress;
+  });
+  const badge = document.getElementById('sessBadge');
+  if (badge) badge.classList.remove('hidden');
+  refreshBalance();
+  loadMyPredictions();
+  injectKeyboardCopyBtns();
+  setTimeout(wireCopyBtns, 100);
+}

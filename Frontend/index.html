@@ -155,19 +155,55 @@
 </div>
 
 <div class="page" id="page-signer">
-  <div class="ph ph-g"><div class="ph-eye">BLS12-381</div><div class="ph-title">Signer</div><div class="ph-sub">Load your private key — held in RAM only, never stored or sent</div></div>
+  <div class="ph ph-g"><div class="ph-eye">BLS12-381</div><div class="ph-title">Signer</div><div class="ph-sub">Encrypted keystore — private key held in RAM only, never stored or sent</div></div>
+
+  <!-- Status -->
   <div class="card"><div class="ci">
-    <div class="ct">// key_management</div>
+    <div class="ct">// session_status</div>
     <div class="kstat" id="keyStatus">○ No key loaded — transactions cannot be signed</div>
-    <div class="field"><label>Private Key (64 hex)</label><input id="sk_input" type="password" placeholder="64 hex characters…"/><div class="hint">⚠ Only enter on trusted instances. Clears on page reload.</div></div>
-    <div class="brow"><button class="btn bp" onclick="loadKey()">Load Key</button><button class="btn bsec" onclick="clearKey()">Clear</button></div>
     <div class="sbadge hidden" id="sessBadge" onclick="clearKey()">✕ &nbsp; Clear session</div>
     <div id="sk_derived" style="display:none;margin-top:15px">
-      <div class="div"></div>
       <div class="field"><label>Public Key (48 bytes · G1)</label><div class="addr-mono" id="sk_pub" style="font-size:9px;word-break:break-all"></div></div>
       <div class="field" style="margin-top:9px"><label>Derived Address</label><div class="addr-mono" id="sk_addr" style="color:var(--green)"></div></div>
     </div>
   </div></div>
+
+  <!-- Import Keystore -->
+  <div class="card"><div class="ci">
+    <div class="ct">// import_keystore</div>
+    <div class="field">
+      <label>Keystore File (.json)</label>
+      <input id="ks_imp_file" type="file" accept=".json"/>
+      <div class="hint">Upload your encrypted Praxis keystore JSON</div>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_imp_pw" type="password" placeholder="Keystore password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="importKeystore()">🔓 Unlock Keystore</button>
+      <button class="btn bsec" onclick="clearKey()">Clear</button>
+    </div>
+  </div></div>
+
+  <!-- Create New Keystore -->
+  <div class="card"><div class="ci">
+    <div class="ct">// create_keystore</div>
+    <div class="alert ay" style="margin-bottom:12px">Generates a new BLS12-381 keypair and downloads an encrypted keystore file.</div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_new_pw" type="password" placeholder="Choose a strong password…"/>
+    </div>
+    <div class="field">
+      <label>Confirm Password</label>
+      <input id="ks_new_pw2" type="password" placeholder="Confirm password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="createKeystore()">⚙ Generate &amp; Download</button>
+    </div>
+  </div></div>
+
+  <!-- Signing spec -->
   <div class="card"><div class="ci">
     <div class="ct">// signing_spec</div>
     <div class="sinfo">
@@ -175,7 +211,7 @@
       2. time = <em>BigInt(Date.now()) × 1000n</em> — microseconds<br>
       3. BLS12-381 <em>G2 signature (96 bytes)</em> — @noble/curves<br>
       4. address = <em>SHA256(pubKey).slice(0,20)</em><br>
-      5. Plugin format: <em>msgTypeUrl + msgBytes (hex)</em>
+      5. Keystore = <em>AES-GCM + PBKDF2 (200k iterations)</em>
     </div>
   </div></div>
 </div>
