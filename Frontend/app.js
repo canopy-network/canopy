@@ -540,20 +540,42 @@ window.loadMarkets = async function () {
     const heightResp = await rpc('/v1/query/height', {});
     const tipHeight = Number(heightResp.height || currentHeight || 1);
     const BATCH = 100;
-    const allTxs = [];
+    const CACHE_KEY = 'praxis_tx_cache';
+    const CACHE_HEIGHT_KEY = 'praxis_scan_height';
 
-    for (let h = 1; h <= tipHeight; h += BATCH) {
-      const pct = Math.round((h / tipHeight) * 100);
-      el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;Scanning blocks ' + h + ' / ' + tipHeight + ' &nbsp;<span style="color:var(--green)">' + pct + '%</span></div>';
-      const batchPromises = [];
-      for (let bh = h; bh < h + BATCH && bh <= tipHeight; bh++) {
-        batchPromises.push(
-          rpc('/v1/query/txs-by-height', { height: bh, perPage: 50 })
-            .then(d => allTxs.push(...(d.results || [])))
-            .catch(() => {})
-        );
+    // load cache
+    let allTxs = [];
+    let scanFrom = 1;
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      const cachedHeight = parseInt(localStorage.getItem(CACHE_HEIGHT_KEY) || '0');
+      if (cached && cachedHeight > 0) {
+        allTxs = JSON.parse(cached);
+        scanFrom = cachedHeight + 1;
+        el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;Cache loaded to block ' + cachedHeight + ' — scanning new blocks…</div>';
       }
-      await Promise.all(batchPromises);
+    } catch(e) { allTxs = []; scanFrom = 1; }
+
+    // scan only new blocks
+    if (scanFrom <= tipHeight) {
+      for (let h = scanFrom; h <= tipHeight; h += BATCH) {
+        const pct = Math.round(((h - scanFrom) / Math.max(tipHeight - scanFrom, 1)) * 100);
+        el.innerHTML = '<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;Scanning blocks ' + h + ' / ' + tipHeight + ' &nbsp;<span style="color:var(--green)">' + pct + '%</span></div>';
+        const batchPromises = [];
+        for (let bh = h; bh < h + BATCH && bh <= tipHeight; bh++) {
+          batchPromises.push(
+            rpc('/v1/query/txs-by-height', { height: bh, perPage: 50 })
+              .then(d => allTxs.push(...(d.results || [])))
+              .catch(() => {})
+          );
+        }
+        await Promise.all(batchPromises);
+      }
+      // save cache
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(allTxs));
+        localStorage.setItem(CACHE_HEIGHT_KEY, String(tipHeight));
+      } catch(e) {}
     }
 
     const marketsMap = new Map();
@@ -1295,3 +1317,13 @@ if (window.ethereum) {
     else { mmAddress = accounts[0].toLowerCase(); updateMMUI(true); }
   });
 }
+
+// ═══════════════════════════════════════════
+// SCAN CACHE
+// ═══════════════════════════════════════════
+window.clearScanCache = function() {
+  localStorage.removeItem('praxis_tx_cache');
+  localStorage.removeItem('praxis_scan_height');
+  toast('Cache cleared — full rescan on next refresh');
+  loadMarkets();
+};
