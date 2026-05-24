@@ -994,10 +994,11 @@ function renderMarketCards(markets) {
     var m = markets[i];
     var open = m.status === 0;
     var expired = m.status === 1;
+    var proposed = m.status === 2;
     var disputed = m.status === 5;
     var finalized = m.status === 6;
-    var statusClass = open ? 'sp-o' : expired ? 'sp-e' : disputed ? 'sp-d' : 'sp-f';
-    var statusLabel = open ? 'Open' : expired ? 'Expired' : disputed ? 'Disputed' : finalized ? 'Finalized' : 'Closed';
+    var statusClass = open ? 'sp-o' : (expired || proposed) ? 'sp-e' : disputed ? 'sp-d' : 'sp-f';
+    var statusLabel = open ? 'Open' : expired ? 'Expired' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : 'Closed';
     var mid = m.marketId || m.txHash;
     var total = m.qYes + m.qNo;
     var yesPct = total > 0n ? Number(m.qYes * 100n / total) : 50;
@@ -1005,6 +1006,7 @@ function renderMarketCards(markets) {
     var cardClass = 'mcard' + (expired ? ' mexp' : '') + (finalized ? ' mfin' : '');
     var banner = '';
     if (expired) banner = '<div class="mc-banner bnr"><span>⏳</span> Awaiting resolver proposal</div>';
+    if (proposed) banner = '<div class="mc-banner bnr"><span>🔎</span> Resolver: ' + (m.resolver ? m.resolver.slice(0,8) + '…' : '?') + ' — proposed ' + (m.proposedOutcome ? '<span style=\'color:var(--green)\'>YES</span>' : '<span style=\'color:var(--red)\'>NO</span>') + '</div>';
     if (disputed) banner = '<div class="mc-banner bnd"><span>⚡</span> Dispute active — panel vote in progress</div>';
     if (finalized) banner = '<div class="mc-banner bnf"><span>✓</span> Market finalized</div>';
     var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
@@ -1125,9 +1127,24 @@ window.loadMarkets = async function () {
       if (outcome) { m.qYes += amount; } else { m.qNo += amount; }
     }
 
+    for (const tx of allTxs) {
+      if (tx.messageType !== 'propose_outcome') continue;
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const rawMid = msg.marketId || '';
+      let marketId = rawMid;
+      try { const b = Uint8Array.from(atob(rawMid), c => c.charCodeAt(0)); marketId = b2h(b); } catch(e) {}
+      if (!marketId || !marketsMap.has(marketId)) continue;
+      const m = marketsMap.get(marketId);
+      let resolver = tx.sender || '';
+      try { const rb = Uint8Array.from(atob(msg.resolverAddress || ''), c => c.charCodeAt(0)); resolver = b2h(rb); } catch(e) {}
+      m.status = 2;
+      m.resolver = resolver;
+      m.proposedOutcome = msg.proposedOutcome;
+    }
+
     const markets = [...marketsMap.values()];
     for (const m of markets) {
-      if (m.expiry && currentHeight > Number(m.expiry)) m.status = 1;
+      if (m.expiry && currentHeight > Number(m.expiry) && m.status === 0) m.status = 1;
     }
 
     if (countEl) countEl.textContent = markets.length;
