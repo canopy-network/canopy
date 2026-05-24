@@ -164,6 +164,49 @@ candidates = append(candidates, rec.ResolverAddress)
 }
 }
 
+// Layer 1: position exclusion
+// Any resolver with an open unclaimed position in this market is ineligible.
+posQueries := make([]uint64, len(candidates))
+posKeys := make([]*PluginKeyRead, len(candidates))
+for i, addr := range candidates {
+qId := nextQueryId()
+posQueries[i] = qId
+posKeys[i] = &PluginKeyRead{QueryId: qId, Key: KeyForPosition(msg.MarketId, addr)}
+}
+if len(posKeys) > 0 {
+posResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{Keys: posKeys})
+if err != nil {
+return &PluginDeliverResponse{Error: err}
+}
+if posResp.Error != nil {
+return &PluginDeliverResponse{Error: posResp.Error}
+}
+disqualified := make(map[string]bool)
+for _, r := range posResp.Results {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
+continue
+}
+pos := &PositionState{}
+if pe := Unmarshal(r.Entries[0].Value, pos); pe != nil {
+continue
+}
+if !pos.Claimed {
+for i, qId := range posQueries {
+if r.QueryId == qId {
+disqualified[string(candidates[i])] = true
+}
+}
+}
+}
+filtered := candidates[:0]
+for _, addr := range candidates {
+if !disqualified[string(addr)] {
+filtered = append(filtered, addr)
+}
+}
+candidates = filtered
+}
+
 var panelSize uint32
 if market.ElevatedRisk {
 panelSize = ELEVATED_RISK_PANEL_SIZE
@@ -173,6 +216,9 @@ panelSize = MIN_PANEL_SIZE
 
 seed := entropyVal ^ (now * FIBONACCI_HASH_CONSTANT)
 panel := derivePanel(candidates, int(panelSize), seed)
+if len(panel) == 0 {
+return &PluginDeliverResponse{Error: ErrInsufficientPanelCandidates()}
+}
 
 market.Status    = STATUS_DISPUTED
 disputer.Amount -= totalCost

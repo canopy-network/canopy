@@ -104,6 +104,21 @@ ELEVATED_RISK_PANEL_SIZE uint32 = 7
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RRS VOTE WEIGHT TIERS (Layer 2 — anti-whale panel protection)
+// Bronze: RRS 10–49  → weight 1
+// Silver: RRS 50–199 → weight 2
+// Gold:   RRS 200+   → weight 3
+// Hard cap at 3 prevents infinite influence via staking.
+// ─────────────────────────────────────────────────────────────────────────────
+const (
+RRS_SILVER_THRESHOLD uint64 = 50
+RRS_GOLD_THRESHOLD   uint64 = 200
+VOTE_WEIGHT_BRONZE   uint32 = 1
+VOTE_WEIGHT_SILVER   uint32 = 2
+VOTE_WEIGHT_GOLD     uint32 = 3
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PROTOCOL TREASURY
 // PRAXIS_TREASURY_ID: destination pool ID for surplus sweeps (R2) and slashes.
 // []byte cannot be const in Go — defined as var.

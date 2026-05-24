@@ -99,6 +99,32 @@ if resolverRec.StakeAmount < msg.ProposalBond {
 return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 }
 
+// Layer 3: dynamic ELEVATED_RISK re-evaluation at propose time.
+// A market that grew beyond the threshold after creation gets upgraded
+// to the 7-person panel if disputed — regardless of creation-time flag.
+poolQId := nextQueryId()
+poolResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: poolQId, Key: KeyForMarketPool(msg.MarketId)},
+},
+})
+if err != nil {
+return &PluginDeliverResponse{Error: err}
+}
+if poolResp.Error != nil {
+return &PluginDeliverResponse{Error: poolResp.Error}
+}
+for _, r := range poolResp.Results {
+if r.QueryId == poolQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+pool := &Pool{}
+if pe := Unmarshal(r.Entries[0].Value, pool); pe == nil {
+if pool.Amount >= ELEVATED_RISK_THRESHOLD {
+market.ElevatedRisk = true
+}
+}
+}
+}
+
 market.Status             = STATUS_PROPOSED
 resolverRec.StakeAmount  -= msg.ProposalBond
 

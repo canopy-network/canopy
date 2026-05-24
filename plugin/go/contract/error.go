@@ -210,6 +210,9 @@ return &PluginError{Code: 193, Module: errModule, Msg: "no slash proceeds to cla
 func ErrInvalidCommitHash() *PluginError {
 return &PluginError{Code: 194, Module: errModule, Msg: "commit hash must be exactly 32 bytes"}
 }
+func ErrInsufficientPanelCandidates() *PluginError {
+return &PluginError{Code: 195, Module: errModule, Msg: "insufficient eligible panel candidates after position exclusion"}
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS

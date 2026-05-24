@@ -80,6 +80,10 @@ return &PluginDeliverResponse{Error: ErrTallyNotReady()}
 queries := make([]uint64, 0, len(dispute.PanelMembers))
 readKeys := make([]*PluginKeyRead, 0, len(dispute.PanelMembers))
 
+// Layer 2: build RRS read keys alongside vote reveal keys
+rrsQueries := make([]uint64, 0, len(dispute.PanelMembers))
+rrsKeys    := make([]*PluginKeyRead, 0, len(dispute.PanelMembers))
+
 for _, member := range dispute.PanelMembers {
 qId := nextQueryId()
 queries = append(queries, qId)
@@ -87,6 +91,41 @@ readKeys = append(readKeys, &PluginKeyRead{
 QueryId: qId,
 Key:     KeyForVoteReveal(msg.MarketId, member),
 })
+rId := nextQueryId()
+rrsQueries = append(rrsQueries, rId)
+rrsKeys = append(rrsKeys, &PluginKeyRead{
+QueryId: rId,
+Key:     KeyForResolverRecord(member),
+})
+}
+
+// Layer 2: build queryId -> vote weight map from RRS scores
+weightByQId := make(map[uint64]uint32)
+if len(rrsKeys) > 0 {
+rrsResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{Keys: rrsKeys})
+if err != nil {
+return &PluginDeliverResponse{Error: err}
+}
+if rrsResp.Error != nil {
+return &PluginDeliverResponse{Error: rrsResp.Error}
+}
+for idx, r := range rrsResp.Results {
+weight := VOTE_WEIGHT_BRONZE
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+rec := &ResolverRecord{}
+if pe := Unmarshal(r.Entries[0].Value, rec); pe == nil {
+if rec.RrsScore >= RRS_GOLD_THRESHOLD {
+weight = VOTE_WEIGHT_GOLD
+} else if rec.RrsScore >= RRS_SILVER_THRESHOLD {
+weight = VOTE_WEIGHT_SILVER
+}
+}
+}
+// map the corresponding vote reveal queryId to this weight
+if idx < len(queries) {
+weightByQId[queries[idx]] = weight
+}
+}
 }
 
 var yesVotes, noVotes uint32
@@ -109,10 +148,15 @@ vr := &VoteReveal{}
 if pe := Unmarshal(r.Entries[0].Value, vr); pe != nil {
 continue
 }
+// Layer 2: apply RRS tier weight — default Bronze if missing
+w := weightByQId[r.QueryId]
+if w == 0 {
+w = VOTE_WEIGHT_BRONZE
+}
 if vr.Vote {
-yesVotes++
+yesVotes += w
 } else {
-noVotes++
+noVotes += w
 }
 }
 }
