@@ -480,6 +480,25 @@ window.showDetail = function(marketId) {
     yesBtn.setAttribute('disabled',''); noBtn.setAttribute('disabled','');
   }
 
+  const proposeBtn = document.getElementById('det-propose-btn');
+  const claimBtn   = document.getElementById('det-claim-btn');
+  if (proposeBtn) {
+    if (m.status === 1) {
+      proposeBtn.style.display = '';
+      proposeBtn.setAttribute('onclick', 'fillR(' + JSON.stringify(mid) + ', undefined)');
+    } else {
+      proposeBtn.style.display = 'none';
+    }
+  }
+  if (claimBtn) {
+    if (m.status === 2 || m.status === 6) {
+      claimBtn.style.display = '';
+      claimBtn.setAttribute('onclick', 'fillC(' + JSON.stringify(mid) + ')');
+    } else {
+      claimBtn.style.display = 'none';
+    }
+  }
+
   const bannerCard = document.getElementById('det-banner-card');
   if (m.status === 1) {
     bannerCard.style.display = '';
