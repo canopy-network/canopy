@@ -1213,3 +1213,64 @@ function updateSignerUI() {
   injectKeyboardCopyBtns();
   setTimeout(wireCopyBtns, 100);
 }
+
+// ═══════════════════════════════════════════
+// METAMASK
+// ═══════════════════════════════════════════
+let mmAddress = null;
+
+window.connectMetaMask = async function() {
+  if (!window.ethereum) return toast('MetaMask not detected — install MetaMask first', true);
+  try {
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (!accounts || accounts.length === 0) return toast('No accounts returned', true);
+    mmAddress = accounts[0].toLowerCase();
+    updateMMUI(true);
+    toast('MetaMask connected — ' + mmAddress.slice(0,8) + '…');
+  } catch(e) {
+    toast('MetaMask connection failed: ' + e.message, true);
+  }
+};
+
+window.disconnectMetaMask = function() {
+  mmAddress = null;
+  updateMMUI(false);
+  toast('MetaMask disconnected');
+};
+
+function updateMMUI(connected) {
+  const disc = document.getElementById('mm_disconnected');
+  const conn = document.getElementById('mm_connected');
+  const addr = document.getElementById('mm_addr');
+  const status = document.getElementById('mm_status');
+  if (!disc || !conn) return;
+  if (connected) {
+    disc.style.display = 'none';
+    conn.style.display = 'block';
+    if (addr) addr.textContent = mmAddress;
+    if (status) status.textContent = '✓ connected — ' + mmAddress.slice(0,8) + '…';
+  } else {
+    disc.style.display = 'block';
+    conn.style.display = 'none';
+  }
+}
+
+// auto-reconnect if already authorized
+(async () => {
+  if (!window.ethereum) return;
+  try {
+    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    if (accounts && accounts.length > 0) {
+      mmAddress = accounts[0].toLowerCase();
+      updateMMUI(true);
+    }
+  } catch {}
+})();
+
+// listen for account changes
+if (window.ethereum) {
+  window.ethereum.on('accountsChanged', (accounts) => {
+    if (accounts.length === 0) { mmAddress = null; updateMMUI(false); }
+    else { mmAddress = accounts[0].toLowerCase(); updateMMUI(true); }
+  });
+}

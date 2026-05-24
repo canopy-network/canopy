@@ -131,6 +131,21 @@
 
 <div class="page" id="page-wallet">
   <div class="ph ph-g"><div class="ph-eye">Account</div><div class="ph-title">Wallet</div><div class="ph-sub">Check balances, send $PRX, and view your predictions</div></div>
+
+  <!-- MetaMask Connect -->
+  <div class="card" id="mm_card"><div class="ci">
+    <div class="ct">// metamask_identity</div>
+    <div id="mm_disconnected">
+      <div class="sinfo" style="margin-bottom:12px">Connect MetaMask to verify your identity. Your BLS keystore handles transaction signing.</div>
+      <div class="brow"><button class="btn bp" onclick="connectMetaMask()">🦊 Connect MetaMask</button></div>
+    </div>
+    <div id="mm_connected" style="display:none">
+      <div class="kstat loaded" id="mm_status">✓ connected</div>
+      <div class="field" style="margin-top:10px"><label>ETH Address</label><div class="addr-mono" id="mm_addr" style="color:var(--green)"></div></div>
+      <div class="brow" style="margin-top:10px"><button class="btn bsec" onclick="disconnectMetaMask()">Disconnect</button></div>
+    </div>
+  </div></div>
+
   <div class="card"><div class="ci">
     <div class="ct">// balance_lookup</div>
     <div class="field"><label>Address (40 hex)</label><input id="w_addr" type="text" placeholder="e7c7dad1…"/></div>
