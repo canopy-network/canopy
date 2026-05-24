@@ -351,6 +351,45 @@ code{font-family:var(--font-mono);font-size:11px;background:var(--bg2);padding:1
   <div id="marketsList"><div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading markets</div></div>
 </div>
 
+<div class="page" id="page-detail">
+  <div class="ph ph-g">
+    <div class="ph-eye">Market Detail</div>
+    <div class="ph-title" id="det-question">—</div>
+    <div class="ph-sub"><button class="btn bsec bsm" onclick="showPage('markets',null)">← Back to Markets</button></div>
+  </div>
+  <div style="padding:16px;max-width:700px;margin:0 auto">
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <div id="det-status-pill"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val" id="det-qyes">—</div></div>
+        <div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val" id="det-qno">—</div></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div class="prob-row" style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span class="prob-lbl">Implied probability</span>
+          <div style="display:flex;gap:12px"><span class="pvy" id="det-yes-pct">—</span><span class="pvl">YES</span><span class="pvn" id="det-no-pct">—</span><span class="pvl">NO</span></div>
+        </div>
+        <div class="btrack"><div class="byes" id="det-bar" style="width:50%"></div><div class="bno"></div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="byes2" id="det-bet-yes" onclick="">BET YES</button>
+        <button class="bno2" id="det-bet-no" onclick="">BET NO</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:10px;letter-spacing:1px">MARKET INFO</div>
+      <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Market ID</span><span class="mval" id="det-mid" style="font-size:10px">—</span></div>
+      <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Creator</span><span class="mval" id="det-creator">—</span></div>
+      <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Total Pool</span><span class="mval g" id="det-total">—</span></div>
+      <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Expiry</span><span class="mval" id="det-expiry">—</span></div>
+      <div class="mitem" style="padding:8px 0" id="det-resolver-row"><span class="mlbl">Resolver</span><span class="mval" id="det-resolver">—</span></div>
+    </div>
+    <div class="card" id="det-banner-card" style="display:none;margin-bottom:12px"></div>
+  </div>
+</div>
+
 <div class="page" id="page-predict">
   <div class="ph ph-g"><div class="ph-eye">Place Bet</div><div class="ph-title">Submit Prediction</div><div class="ph-sub">Buy YES or NO shares — cost determined by LMSR pricing</div></div>
   <div class="card"><div class="ci">
@@ -1006,13 +1045,13 @@ function renderMarketCards(markets) {
     var cardClass = 'mcard' + (expired ? ' mexp' : '') + (finalized ? ' mfin' : '');
     var banner = '';
     if (expired) banner = '<div class="mc-banner bnr"><span>⏳</span> Awaiting resolver proposal</div>';
-    if (proposed) banner = '<div class="mc-banner bnr"><span>🔎</span> Resolver: ' + (m.resolver ? m.resolver.slice(0,8) + '…' : '?') + ' — proposed ' + (m.proposedOutcome ? '<span style=\'color:var(--green)\'>YES</span>' : '<span style=\'color:var(--red)\'>NO</span>') + '</div>';
+    if (proposed) banner = '<div class="mc-banner bnr"><span>🔎</span> Resolver: ' + (m.resolver ? m.resolver.slice(0,8) + '\u2026' : '?') + ' \u2014 proposed ' + (m.proposedOutcome ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--red)">NO</span>') + '</div>';
     if (disputed) banner = '<div class="mc-banner bnd"><span>⚡</span> Dispute active — panel vote in progress</div>';
     if (finalized) banner = '<div class="mc-banner bnf"><span>✓</span> Market finalized</div>';
     var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
     var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
     parts.push('<div class="' + cardClass + '">');
-    parts.push('<div class="mc-head"><div class="mc-q">' + esc(m.question) + '</div><div class="spill ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</div></div>');
+    parts.push('<div class="mc-head"><div class="mc-q" style="cursor:pointer" onclick="showDetail(\'' + mid + '\')">' + esc(m.question) + '</div><div class="spill ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</div></div>');
     if (banner) parts.push(banner);
     parts.push('<div class="mc-prob"><div class="prob-row"><span class="prob-lbl">Implied probability</span><div class="prob-vals"><div style="text-align:center"><span class="pvy">' + yesPct + '%</span><span class="pvl">YES</span></div><div style="text-align:center"><span class="pvn">' + noPct + '%</span><span class="pvl">NO</span></div></div></div><div class="btrack"><div class="byes" style="width:' + yesPct + '%' + (finalized ? ';box-shadow:none;background:#4a4a4a' : '') + '"></div><div class="bno"' + (finalized ? ' style="background:#2a2a2a"' : '') + '></div></div></div>');
     parts.push('<div class="mc-pools"><div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val">' + fmtA(m.qYes) + ' PRX</div></div><div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val">' + fmtA(m.qNo) + ' PRX</div></div></div>');
@@ -1030,6 +1069,66 @@ function renderMarketCards(markets) {
   parts.push('</div>');
   return parts.join('');
 }
+
+// store markets globally for detail view
+let _allMarkets = [];
+
+window.showDetail = function(marketId) {
+  const m = _allMarkets.find(x => x.marketId === marketId || x.txHash === marketId);
+  if (!m) return;
+  const open = m.status === 0;
+  const proposed = m.status === 2;
+  const finalized = m.status === 6;
+  const total = m.qYes + m.qNo;
+  const yesPct = total > 0n ? Number(m.qYes * 100n / total) : 50;
+  const noPct = 100 - yesPct;
+  const mid = m.marketId || m.txHash;
+
+  document.getElementById('det-question').textContent = m.question;
+  document.getElementById('det-qyes').textContent = fmtA(m.qYes) + ' PRX';
+  document.getElementById('det-qno').textContent = fmtA(m.qNo) + ' PRX';
+  document.getElementById('det-yes-pct').textContent = yesPct + '%';
+  document.getElementById('det-no-pct').textContent = noPct + '%';
+  document.getElementById('det-bar').style.width = yesPct + '%';
+  document.getElementById('det-mid').textContent = mid;
+  document.getElementById('det-creator').textContent = m.creator || '—';
+  document.getElementById('det-total').textContent = fmtA(m.qYes + m.qNo) + ' PRX';
+  document.getElementById('det-expiry').textContent = m.expiry ? 'blk #' + Number(m.expiry) : '—';
+
+  const resolverRow = document.getElementById('det-resolver-row');
+  if (m.resolver) {
+    resolverRow.style.display = '';
+    document.getElementById('det-resolver').textContent = m.resolver + (m.proposedOutcome !== undefined ? ' → proposed ' + (m.proposedOutcome ? 'YES' : 'NO') : '');
+  } else {
+    resolverRow.style.display = 'none';
+  }
+
+  const statusLabels = {0:'Open',1:'Expired',2:'Proposed',5:'Disputed',6:'Finalized'};
+  const statusClasses = {0:'sp-o',1:'sp-e',2:'sp-e',5:'sp-d',6:'sp-f'};
+  document.getElementById('det-status-pill').innerHTML = '<div class="spill ' + (statusClasses[m.status]||'sp-f') + '"><span class="dot"></span>' + (statusLabels[m.status]||'Closed') + '</div>';
+
+  const yesBtn = document.getElementById('det-bet-yes');
+  const noBtn = document.getElementById('det-bet-no');
+  if (open) {
+    yesBtn.removeAttribute('disabled'); yesBtn.setAttribute('onclick', 'fillP(' + JSON.stringify(mid) + ', true)');
+    noBtn.removeAttribute('disabled');  noBtn.setAttribute('onclick', 'fillP(' + JSON.stringify(mid) + ', false)');
+  } else {
+    yesBtn.setAttribute('disabled',''); noBtn.setAttribute('disabled','');
+  }
+
+  const bannerCard = document.getElementById('det-banner-card');
+  if (m.status === 1) {
+    bannerCard.style.display = '';
+    bannerCard.innerHTML = '<div class="mc-banner bnr"><span>⏳</span> Awaiting resolver proposal</div>';
+  } else if (m.status === 2) {
+    bannerCard.style.display = '';
+    bannerCard.innerHTML = '<div class="mc-banner bnr"><span>🔎</span> Resolver: ' + (m.resolver ? m.resolver.slice(0,8) + '…' : '?') + ' — proposed ' + (m.proposedOutcome ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--red)">NO</span>') + '</div>';
+  } else {
+    bannerCard.style.display = 'none';
+  }
+
+  showPage('detail', null);
+};
 
 window.fillP = (id, outcome) => {
   document.getElementById('p_mid').value = id;
@@ -1148,6 +1247,7 @@ window.loadMarkets = async function () {
       if (m.expiry && currentHeight > Number(m.expiry) && m.status === 0) m.status = 1;
     }
 
+    _allMarkets = markets;
     if (countEl) countEl.textContent = markets.length;
     if (markets.length === 0) {
       el.innerHTML = '<div class="alert ay">No markets on-chain yet.<br>Create the first one!</div>';
