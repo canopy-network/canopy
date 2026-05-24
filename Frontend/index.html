@@ -24,6 +24,7 @@
     <div class="ni active" data-p="markets" onclick="showPage('markets',this)"><span class="ni-ic">◈</span>Browse Markets</div>
     <div class="ni" data-p="predict" onclick="showPage('predict',this)"><span class="ni-ic">⚡</span>Submit Prediction</div>
     <div class="ni" data-p="claim" onclick="showPage('claim',this)"><span class="ni-ic">◎</span>Claim Winnings</div>
+    <div class="ni" data-p="reclaim" onclick="showPage('reclaim',this)"><span class="ni-ic">◈</span>Reclaim Stake</div>
     <div class="ns">Account</div>
     <div class="ni" data-p="wallet" onclick="showPage('wallet',this)"><span class="ni-ic">◫</span>Wallet</div>
     <div class="ni" data-p="signer" onclick="showPage('signer',this)"><span class="ni-ic">◉</span>Signer</div>
@@ -91,9 +92,10 @@
         <button class="byes2" id="det-bet-yes" onclick="">BET YES</button>
         <button class="bno2" id="det-bet-no" onclick="">BET NO</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
         <button class="btn bamb" id="det-propose-btn" style="display:none" onclick="">⚖ Propose Outcome</button>
         <button class="btn bsec" id="det-claim-btn" style="display:none" onclick="">◎ Claim Winnings</button>
+        <button class="btn bsec" id="det-reclaim-btn" style="display:none" onclick="">↩ Reclaim Stake</button>
       </div>
     </div>
     <div class="card" style="margin-bottom:12px">
@@ -130,6 +132,19 @@
     <div class="brow"><button class="btn bp" id="btn_claim" onclick="signAndSubmit_claim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_claim()">Build Payload</button></div>
     <div class="pend" id="pend_claim"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="clo"><div class="plbl">// unsigned_payload</div><textarea id="clp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-reclaim">
+  <div class="ph ph-g"><div class="ph-eye">Recover Funds</div><div class="ph-title">Reclaim Stake</div><div class="ph-sub">Recover funds from expired markets with no resolver — available 300 blocks after expiry</div></div>
+  <div class="alert ay">Only available if no resolver proposed an outcome within the resolution window.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// reclaim_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="rc_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="rc_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="rc_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_reclaim" onclick="signAndSubmit_reclaim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_reclaim()">Build Payload</button></div>
+    <div class="pend" id="pend_reclaim"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="rco"><div class="plbl">// unsigned_payload</div><textarea id="rcp" readonly></textarea></div>
   </div></div>
 </div>
 

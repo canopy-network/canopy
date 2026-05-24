@@ -63,6 +63,7 @@ function encCreate(creator,b0,expiry,nonce,question){return cat(bf(1,h2b(creator
 function encPredict(mid,bettor,outcome,shares,maxcost){return cat(bf(1,h2b(mid)),bf(2,h2b(bettor)),boolF(3,outcome),vf(4,shares),vf(5,maxcost));}
 function encResolve(mid,resolver,outcome){return cat(bf(1,h2b(mid)),bf(2,h2b(resolver)),boolF(3,outcome));}
 function encClaim(mid,claimant){return cat(bf(1,h2b(mid)),bf(2,h2b(claimant)));}
+function encReclaim(mid,claimant){return cat(bf(1,h2b(mid)),bf(2,h2b(claimant)));}
 function encRegister(addr,stake){return cat(bf(1,h2b(addr)),vf(2,stake));}
 function encPropose(mid,resolver,outcome,bond){return cat(bf(1,h2b(mid)),bf(2,h2b(resolver)),boolF(3,outcome),vf(4,bond));}
 function encDispute(mid,addr,bond){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)),vf(3,bond));}
@@ -396,12 +397,14 @@ function renderMarketCards(markets) {
   for (var i = 0; i < markets.length; i++) {
     var m = markets[i];
     var open = m.status === 0;
-    var expired = m.status === 1;
-    var proposed = m.status === 2;
+    var expired = m.status === 8;
+    var cancelled = m.status === 1;
+    var proposed = m.status === 4;
     var disputed = m.status === 5;
     var finalized = m.status === 6;
-    var statusClass = open ? 'sp-o' : (expired || proposed) ? 'sp-e' : disputed ? 'sp-d' : 'sp-f';
-    var statusLabel = open ? 'Open' : expired ? 'Expired' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : 'Closed';
+    var voided = m.status === 7;
+    var statusClass = open ? 'sp-o' : (expired || cancelled || voided) ? 'sp-e' : proposed ? 'sp-e' : disputed ? 'sp-d' : 'sp-f';
+    var statusLabel = open ? 'Open' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : 'Closed';
     var mid = m.marketId || m.txHash;
     var total = m.qYes + m.qNo;
     var yesPct = total > 0n ? Number(m.qYes * 100n / total) : 50;
@@ -409,6 +412,8 @@ function renderMarketCards(markets) {
     var cardClass = 'mcard' + (expired ? ' mexp' : '') + (finalized ? ' mfin' : '');
     var banner = '';
     if (expired) banner = '<div class="mc-banner bnr"><span>⏳</span> Awaiting resolver proposal</div>';
+    if (cancelled) banner = '<div class="mc-banner bnr"><span>✕</span> Market cancelled — reclaim your stake</div>';
+    if (voided) banner = '<div class="mc-banner bnr"><span>⚠</span> Market voided — full refund available</div>';
     if (proposed) banner = '<div class="mc-banner bnr"><span>🔎</span> Resolver: ' + (m.resolver ? m.resolver.slice(0,8) + '\u2026' : '?') + ' \u2014 proposed ' + (m.proposedOutcome ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--red)">NO</span>') + '</div>';
     if (disputed) banner = '<div class="mc-banner bnd"><span>⚡</span> Dispute active — panel vote in progress</div>';
     if (finalized) banner = '<div class="mc-banner bnf"><span>✓</span> Market finalized</div>';
@@ -425,7 +430,7 @@ function renderMarketCards(markets) {
     parts.push('<div class="mc-acts"><button class="byes2" ' + actYes + '>BET YES</button><button class="bno2" ' + actNo + '>BET NO</button></div>');
     parts.push('<div class="card-foot"><div class="meta">');
     parts.push('<div class="mitem"><span class="mlbl">Total pool</span><span class="mval g">' + fmtA(m.qYes + m.qNo) + ' PRX</span></div>');
-    parts.push('<div class="mitem"><span class="mlbl">' + (open ? 'Expires' : expired ? 'Expired' : proposed ? 'Proposed' : finalized ? 'Finalized' : 'Closed') + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
+    parts.push('<div class="mitem"><span class="mlbl">' + (open ? 'Expires' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : 'Closed') + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
     parts.push('<div class="mitem"><span class="mlbl">Creator</span><span class="mval">' + (m.creator ? m.creator.slice(0,8) + '…' : '???') + '</span></div>');
     parts.push('</div><span class="market-id">' + mid.slice(0,8) + '…</span></div>');
     parts.push('</div>');
@@ -441,8 +446,12 @@ window.showDetail = function(marketId) {
   const m = _allMarkets.find(x => x.marketId === marketId || x.txHash === marketId);
   if (!m) return;
   const open = m.status === 0;
-  const proposed = m.status === 2;
+  const expired = m.status === 8;
+  const cancelled = m.status === 1;
+  const proposed = m.status === 4;
+  const disputed = m.status === 5;
   const finalized = m.status === 6;
+  const voided = m.status === 7;
   const total = m.qYes + m.qNo;
   const yesPct = total > 0n ? Number(m.qYes * 100n / total) : 50;
   const noPct = 100 - yesPct;
@@ -467,8 +476,8 @@ window.showDetail = function(marketId) {
     resolverRow.style.display = 'none';
   }
 
-  const statusLabels = {0:'Open',1:'Expired',2:'Proposed',5:'Disputed',6:'Finalized'};
-  const statusClasses = {0:'sp-o',1:'sp-e',2:'sp-e',5:'sp-d',6:'sp-f'};
+  const statusLabels = {0:'Open',1:'Cancelled',4:'Proposed',5:'Disputed',6:'Finalized',7:'Voided',8:'Expired'};
+  const statusClasses = {0:'sp-o',1:'sp-e',4:'sp-e',5:'sp-d',6:'sp-f',7:'sp-e',8:'sp-e'};
   document.getElementById('det-status-pill').innerHTML = '<div class="spill ' + (statusClasses[m.status]||'sp-f') + '"><span class="dot"></span>' + (statusLabels[m.status]||'Closed') + '</div>';
 
   const yesBtn = document.getElementById('det-bet-yes');
@@ -483,7 +492,7 @@ window.showDetail = function(marketId) {
   const proposeBtn = document.getElementById('det-propose-btn');
   const claimBtn   = document.getElementById('det-claim-btn');
   if (proposeBtn) {
-    if (m.status === 1) {
+    if (m.status === 8) {
       proposeBtn.style.display = '';
       proposeBtn.setAttribute('onclick', 'fillR(' + JSON.stringify(mid) + ', undefined)');
     } else {
@@ -491,7 +500,7 @@ window.showDetail = function(marketId) {
     }
   }
   if (claimBtn) {
-    if (m.status === 2 || m.status === 6) {
+    if (m.status === 4 || m.status === 6) {
       claimBtn.style.display = '';
       claimBtn.setAttribute('onclick', 'fillC(' + JSON.stringify(mid) + ')');
     } else {
@@ -499,13 +508,29 @@ window.showDetail = function(marketId) {
     }
   }
 
+  const reclaimBtn = document.getElementById('det-reclaim-btn');
+  if (reclaimBtn) {
+    if (m.status === 8 && currentHeight > Number(m.expiry) + 300) {
+      reclaimBtn.style.display = '';
+      reclaimBtn.setAttribute('onclick', 'fillReclaim(' + JSON.stringify(mid) + ')');
+    } else {
+      reclaimBtn.style.display = 'none';
+    }
+  }
+
   const bannerCard = document.getElementById('det-banner-card');
-  if (m.status === 1) {
+  if (m.status === 8) {
     bannerCard.style.display = '';
     bannerCard.innerHTML = '<div class="mc-banner bnr"><span>⏳</span> Awaiting resolver proposal</div>';
-  } else if (m.status === 2) {
+  } else if (m.status === 4) {
     bannerCard.style.display = '';
     bannerCard.innerHTML = '<div class="mc-banner bnr"><span>🔎</span> Resolver: ' + (m.resolver ? m.resolver.slice(0,8) + '…' : '?') + ' — proposed ' + (m.proposedOutcome ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--red)">NO</span>') + '</div>';
+  } else if (m.status === 1) {
+    bannerCard.style.display = '';
+    bannerCard.innerHTML = '<div class="mc-banner bnr"><span>✕</span> Market cancelled — reclaim your stake</div>';
+  } else if (m.status === 7) {
+    bannerCard.style.display = '';
+    bannerCard.innerHTML = '<div class="mc-banner bnr"><span>⚠</span> Market voided — full refund available</div>';
   } else {
     bannerCard.style.display = 'none';
   }
@@ -644,14 +669,34 @@ window.loadMarkets = async function () {
       const m = marketsMap.get(marketId);
       let resolver = tx.sender || '';
       try { const rb = Uint8Array.from(atob(msg.resolverAddress || ''), c => c.charCodeAt(0)); resolver = b2h(rb); } catch(e) {}
-      m.status = 2;
+      m.status = 4;
       m.resolver = resolver;
       m.proposedOutcome = msg.proposedOutcome;
     }
 
+    for (const tx of allTxs) {
+      if (tx.messageType !== 'finalize_market') continue;
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const rawMid = msg.marketId || '';
+      let marketId = rawMid;
+      try { const b = Uint8Array.from(atob(rawMid), c => c.charCodeAt(0)); marketId = b2h(b); } catch(e) {}
+      if (!marketId || !marketsMap.has(marketId)) continue;
+      marketsMap.get(marketId).status = 6;
+    }
+
+    for (const tx of allTxs) {
+      if (tx.messageType !== 'cancel_market') continue;
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const rawMid = msg.marketId || '';
+      let marketId = rawMid;
+      try { const b = Uint8Array.from(atob(rawMid), c => c.charCodeAt(0)); marketId = b2h(b); } catch(e) {}
+      if (!marketId || !marketsMap.has(marketId)) continue;
+      marketsMap.get(marketId).status = 1;
+    }
+
     const markets = [...marketsMap.values()];
     for (const m of markets) {
-      if (m.expiry && currentHeight > Number(m.expiry) && m.status === 0) m.status = 1;
+      if (m.expiry && currentHeight > Number(m.expiry) && m.status === 0) m.status = 8;
     }
 
     _allMarkets = markets;
@@ -1326,4 +1371,49 @@ window.clearScanCache = function() {
   localStorage.removeItem('praxis_scan_height');
   toast('Cache cleared — full rescan on next refresh');
   loadMarkets();
+};
+
+// ═══════════════════════════════════════════
+// ERROR CODES
+// ═══════════════════════════════════════════
+const PRAXIS_ERRORS = {
+  195: 'Dispute panel could not be formed',
+  196: 'This market is not eligible for reclaim',
+  197: "Reclaim window hasn't opened yet — wait 300 blocks after expiry",
+  198: 'Nothing to reclaim for this wallet',
+};
+
+function friendlyError(code, msg) {
+  if (code && PRAXIS_ERRORS[code]) return PRAXIS_ERRORS[code];
+  return msg || 'Unknown error';
+}
+
+// ═══════════════════════════════════════════
+// RECLAIM STAKE
+// ═══════════════════════════════════════════
+window.build_reclaim = function() {
+  try {
+    const mid  = document.getElementById('rc_mid').value.trim().toLowerCase();
+    const addr = document.getElementById('rc_addr').value.trim().toLowerCase();
+    const fee  = parseInt(document.getElementById('rc_fee').value) || 10000;
+    addr40(mid, 'Market ID'); addr40(addr, 'Claimant Address');
+    showPL('rco','rcp', buildUnsigned('reclaim_stake','type.googleapis.com/types.MessageReclaimStake', encReclaim(mid,addr),{fee}));
+    toast('Payload built');
+  } catch(e) { toast(e.message, true); }
+};
+
+window.signAndSubmit_reclaim = async function() {
+  const mid  = document.getElementById('rc_mid').value.trim().toLowerCase();
+  const addr = document.getElementById('rc_addr').value.trim().toLowerCase();
+  const fee  = parseInt(document.getElementById('rc_fee').value) || 10000;
+  try {
+    addr40(mid,'Market ID'); addr40(addr,'Claimant Address');
+  } catch(e) { return toast(e.message, true); }
+  await doSubmit('reclaim_stake','type.googleapis.com/types.MessageReclaimStake', encReclaim(mid,addr),{fee},'btn_reclaim','pend_reclaim');
+};
+
+window.fillReclaim = function(id) {
+  document.getElementById('rc_mid').value = id;
+  if (signerAddress) document.getElementById('rc_addr').value = signerAddress;
+  showPage('reclaim', null);
 };
