@@ -1534,3 +1534,55 @@ updateSignerUI = function() {
   _origUpdateSignerUI();
   checkRoles();
 };
+
+// ═══════════════════════════════════════════
+// COI-3 POSITION CAP CHECK
+// ═══════════════════════════════════════════
+window.checkPositionCap = async function() {
+  const mid    = document.getElementById('p_mid').value.trim().toLowerCase();
+  const bettor = document.getElementById('p_bettor').value.trim().toLowerCase();
+  const mc     = parseInt(document.getElementById('p_maxcost').value) || 0;
+  const capEl  = document.getElementById('cap_indicator');
+  const btn    = document.getElementById('btn_predict');
+
+  if (!capEl) return;
+  if (!mid || mid.length !== 40 || !bettor || bettor.length !== 40) {
+    capEl.style.display = 'none';
+    return;
+  }
+
+  // find market in _allMarkets
+  const m = _allMarkets.find(x => x.marketId === mid || x.txHash === mid);
+  if (!m) { capEl.style.display = 'none'; return; }
+
+  const pool = Number(m.qYes + m.qNo);
+  const cap  = Math.floor(pool * 2000 / 10000); // 20%
+
+  // try to get user's current cost paid from chain
+  let costPaid = 0;
+  try {
+    const d = await rpc('/v1/query/account', { address: bettor });
+    // costPaid not available without plugin query — use 0 for now
+    costPaid = 0;
+  } catch {}
+
+  const newTotal = costPaid + mc;
+  const remaining = cap - costPaid;
+  const pct = pool > 0 ? Math.round((newTotal / pool) * 100) : 0;
+  const over = newTotal > cap;
+
+  capEl.style.display = '';
+  if (over) {
+    capEl.style.background = 'rgba(255,61,90,.08)';
+    capEl.style.border = '1px solid rgba(255,61,90,.3)';
+    capEl.style.color = 'var(--red)';
+    capEl.textContent = '⚠ Exceeds 20% position cap — max ' + fmtA(remaining) + ' PRX remaining';
+    if (btn) btn.setAttribute('disabled', '');
+  } else {
+    capEl.style.background = 'rgba(0,232,122,.05)';
+    capEl.style.border = '1px solid rgba(0,232,122,.15)';
+    capEl.style.color = 'var(--text2)';
+    capEl.textContent = 'Position: ' + fmtA(newTotal) + ' PRX / Cap: ' + fmtA(cap) + ' PRX (' + pct + '% of pool)';
+    if (btn) btn.removeAttribute('disabled');
+  }
+};
