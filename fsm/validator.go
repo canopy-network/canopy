@@ -70,6 +70,37 @@ func (s *StateMachine) GetValidators() (result []*Validator, err lib.ErrorI) {
 	return
 }
 
+// getCurrentValidators() lazily loads the validator list for the FSM's current store view
+func (s *StateMachine) getCurrentValidators() ([]*Validator, lib.ErrorI) {
+	// if cached locally, return immediately
+	if s.cache.liveValidators != nil {
+		return s.cache.liveValidators, nil
+	}
+	// otherwise, load the validator list from the current store view
+	validators, err := s.GetValidators()
+	if err != nil {
+		return nil, err
+	}
+	s.cache.liveValidators = validators
+	if s.cache.sharedValidatorSet != 0 && s.cache.sharedCache != nil {
+		// historical FSMs insert their height-scoped validator list into the shared rolling cache
+		s.cache.sharedCache.Lock()
+		if cached, ok := s.cache.sharedCache.sets[s.cache.sharedValidatorSet]; ok {
+			s.cache.liveValidators = cached
+		} else {
+			s.cache.sharedCache.sets[s.cache.sharedValidatorSet] = validators
+			s.cache.sharedCache.heights = append(s.cache.sharedCache.heights, s.cache.sharedValidatorSet)
+			if len(s.cache.sharedCache.heights) > 64 {
+				evict := s.cache.sharedCache.heights[0]
+				s.cache.sharedCache.heights = s.cache.sharedCache.heights[1:]
+				delete(s.cache.sharedCache.sets, evict)
+			}
+		}
+		s.cache.sharedCache.Unlock()
+	}
+	return validators, nil
+}
+
 // GetValidatorsPaginated() returns a page of filtered validators
 func (s *StateMachine) GetValidatorsPaginated(p lib.PageParams, f lib.ValidatorFilters) (page *lib.Page, err lib.ErrorI) {
 	// initialize a page and the results slice
@@ -450,24 +481,10 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 	if delegate {
 		maxPerCommittee, delegateFilter = p.MaximumDelegatesPerCommittee, lib.FilterOption_MustBe
 	}
-	validators := make([]*Validator, 0)
-	// reverse iterator is slightly more efficient than forward iterator for large datasets
-	it, err := s.RevIterator(ValidatorPrefix())
+	iterateUnmarshalStartTime := time.Now()
+	validators, err := s.getCurrentValidators()
 	if err != nil {
 		return vs, err
-	}
-	// ensure memory cleanup
-	defer it.Close()
-	// for each item of the iterator
-	iterateUnmarshalStartTime := time.Now()
-	for ; it.Valid(); it.Next() {
-		// convert the bytes into a validator object reference
-		val, e := s.unmarshalValidator(it.Value())
-		if e != nil {
-			return vs, e
-		}
-		// add it to the list
-		validators = append(validators, val)
 	}
 	observeStage("iterate_unmarshal", iterateUnmarshalStartTime)
 	// filter out validators not part of the committee
