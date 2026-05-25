@@ -1284,3 +1284,56 @@ t.Errorf("Loser should not receive payout, got %d", actualPayout)
 
 t.Log("Losing bettor zero payout verified ✓")
 }
+
+
+func TestRegisterNewWalletAsResolver(t *testing.T) {
+    kg := &keyGroup{
+        Address:    "45e630c083b6b40ac19107b3482c6b65f2a1728c",
+        PublicKey:  "931074daa5b355ce564248b4ff7839622ff3c0ebcac66e3ae85debbd29375d3399cba06cb5079ce1041068d797034980",
+        PrivateKey: "b321ce79625df5c02324028256976393cfdb7364b08318bb6c4acb8e81a281d6",
+    }
+    h, _ := getHeight()
+    msg := &contract.MessageRegisterResolver{
+        ResolverAddress: hexDecode(kg.Address),
+        StakeAmount:     100_000_000,
+    }
+    txHash := submitTx(t, kg, "register_resolver", "MessageRegisterResolver", msg, h)
+    if err := waitForTx(kg.Address, txHash, 60*time.Second); err != nil {
+        t.Fatalf("register resolver failed: %v", err)
+    }
+    t.Log("Resolver registered! TX:", txHash)
+}
+
+func TestSetupNewWallet(t *testing.T) {
+    validatorKg, _ := keystoreGetKey("e7c7dad131a03f7ea0cc09a637ad096eb3495f77", "")
+    newKg := &keyGroup{
+        Address:    "8e14dc0ce537f1c75036f11d7495d60882aa6731",
+        PublicKey:  "971cbbad4e8c6893b3cd1d31f733dd25058e05ef56abf2e85ba34792704c8ea5510fdc3a57711f695f4f5d45d0e5fa51",
+        PrivateKey: "08562bcd9856ba7b2eb9270b9dee9a6ae7a497fce0d4dcab87b3c2f05157dfaf",
+    }
+
+    // Step 1: Fund new wallet
+    h, _ := getHeight()
+    sendMsg := &contract.MessageSend{
+        FromAddress: hexDecode(validatorKg.Address),
+        ToAddress:   hexDecode(newKg.Address),
+        Amount:      10_000_000_000_000,
+    }
+    txHash := submitSendTx(t, validatorKg, sendMsg, h)
+    if err := waitForTx(validatorKg.Address, txHash, 60*time.Second); err != nil {
+        t.Fatalf("fund failed: %v", err)
+    }
+    t.Log("Funded! TX:", txHash)
+
+    // Step 2: Register as resolver
+    h, _ = getHeight()
+    regMsg := &contract.MessageRegisterResolver{
+        ResolverAddress: hexDecode(newKg.Address),
+        StakeAmount:     100_000_000,
+    }
+    txHash = submitTx(t, newKg, "register_resolver", "MessageRegisterResolver", regMsg, h)
+    if err := waitForTx(newKg.Address, txHash, 60*time.Second); err != nil {
+        t.Fatalf("register resolver failed: %v", err)
+    }
+    t.Log("Resolver registered! TX:", txHash)
+}

@@ -98,6 +98,28 @@ if !bytesEqual(resolver.ResolverAddress, msg.ResolverAddress) {
 return &PluginDeliverResponse{Error: ErrUnauthorized()}
 }
 
+// COI-1: resolver must not hold a position in this market
+coiPosQId := nextQueryId()
+coiPosResp, coiPosErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: coiPosQId, Key: KeyForPosition(msg.MarketId, msg.ResolverAddress)},
+},
+})
+if coiPosErr != nil {
+return &PluginDeliverResponse{Error: ErrStateReadFailed()}
+}
+for _, r := range coiPosResp.Results {
+if r.QueryId == coiPosQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+resolPos := &PositionState{}
+if pe := Unmarshal(r.Entries[0].Value, resolPos); pe != nil {
+return &PluginDeliverResponse{Error: ErrUnmarshalFailed()}
+}
+if resolPos.SharesYes > 0 || resolPos.SharesNo > 0 {
+return &PluginDeliverResponse{Error: ErrResolverHasPosition()}
+}
+}
+}
+
 withinWindow := now >= market.ExpiryTime+RESOLUTION_DELAY_BLOCKS &&
 now <= market.ExpiryTime+RESOLUTION_DELAY_BLOCKS+GRACE_PERIOD_BLOCKS
 if !withinWindow {

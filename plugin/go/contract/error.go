@@ -250,6 +250,18 @@ return nil
 }
 
 // ErrCheckResp is a convenience wrapper for returning errors from CheckTx handlers.
+func ErrResolverHasPosition() *PluginError {
+return &PluginError{Code: 199, Module: errModule, Msg: "resolver holds a position in this market"}
+}
+
+func ErrCreatorCannotResolve() *PluginError {
+return &PluginError{Code: 200, Module: errModule, Msg: "market creator cannot be the resolver for the same market"}
+}
+
+func ErrPositionCapExceeded() *PluginError {
+return &PluginError{Code: 201, Module: errModule, Msg: "position would exceed per-address cap (20% of pool)"}
+}
+
 func ErrCheckResp(err *PluginError) *PluginCheckResponse {
 return &PluginCheckResponse{Error: err}
 }

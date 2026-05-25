@@ -75,6 +75,33 @@ if market == nil {
 return &PluginDeliverResponse{Error: ErrMarketNotFound()}
 }
 
+// COI-1: resolver must not hold a position in this market
+coiPosQId := nextQueryId()
+coiPosResp, coiPosErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: coiPosQId, Key: KeyForPosition(msg.MarketId, msg.ResolverAddress)},
+},
+})
+if coiPosErr != nil {
+return &PluginDeliverResponse{Error: ErrStateReadFailed()}
+}
+for _, r := range coiPosResp.Results {
+if r.QueryId == coiPosQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+resolPos := &PositionState{}
+if pe := Unmarshal(r.Entries[0].Value, resolPos); pe != nil {
+return &PluginDeliverResponse{Error: ErrUnmarshalFailed()}
+}
+if resolPos.SharesYes > 0 || resolPos.SharesNo > 0 {
+return &PluginDeliverResponse{Error: ErrResolverHasPosition()}
+}
+}
+}
+
+// COI-2: market creator cannot be the resolver
+if bytesEqual(market.Creator, msg.ResolverAddress) {
+return &PluginDeliverResponse{Error: ErrCreatorCannotResolve()}
+}
+
 if resolverRec.RrsScore < MIN_RRS_TO_PROPOSE {
 return &PluginDeliverResponse{Error: ErrResolverSuspended()}
 }

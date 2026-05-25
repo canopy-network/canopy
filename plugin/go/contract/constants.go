@@ -143,6 +143,11 @@ var PANEL_ENTROPY_KEY []byte
 // Controlled by the PRAXIS_TEST_MODE environment variable.
 // Defaults to false — safe for mainnet.
 // To enable: PRAXIS_TEST_MODE=true ./go-plugin
+// COI-3: maximum fractional share of pool any single address may hold.
+// Expressed as basis points: 2000 = 20%.
+// Prevents single-actor dominance and wash-trading accumulation.
+const MAX_POSITION_BPS uint64 = 2000
+
 var TEST_MODE = os.Getenv("PRAXIS_TEST_MODE") == "true"
 const TEST_DISPUTE_BLOCKS        uint64 = 20
 const TEST_RESOLUTION_DELAY      uint64 = 2

@@ -117,6 +117,11 @@ finalCost := tradeCost + fee
 if finalCost > msg.MaxCost {
 return &PluginDeliverResponse{Error: ErrCostExceedsMaxCost()}
 }
+// COI-3: per-address position cap (20% of pool)
+if mPool.Amount > 0 && exceedsPositionCap(position.CostPaid, finalCost, mPool.Amount) {
+return &PluginDeliverResponse{Error: ErrPositionCapExceeded()}
+}
+
 if bettor.Amount < finalCost {
 return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 }

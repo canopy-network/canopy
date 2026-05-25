@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval' 'unsafe-inline' https://esm.sh https://cdn.skypack.dev https://fonts.googleapis.com https://fonts.gstatic.com"/>
+<title>Praxis — Prediction Markets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div id="offBanner">⚠ &nbsp; Node offline — check Settings</div>
+<div class="shell">
+
+<nav class="sidebar" id="deskNav">
+  <div class="logo">
+    <div class="logo-hex">
+      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" width="36" height="36">
+        <path d="M5 85 Q20 85 35 60 Q50 10 65 60 Q80 85 95 85" stroke="white" stroke-width="6" stroke-linecap="round" fill="none"/>
+        <circle cx="50" cy="18" r="6" fill="#00e87a"/>
+      </svg>
+    </div>
+    <div class="logo-text"><div class="wm">PRAXIS</div><div class="tg">$PRX</div></div>
+  </div>
+  <div class="nav">
+    <div class="ns">Markets</div>
+    <div class="ni active" data-p="markets" onclick="showPage('markets',this)"><span class="ni-ic">◈</span>Browse Markets</div>
+    <div class="ni" data-p="predict" onclick="showPage('predict',this)"><span class="ni-ic">⚡</span>Submit Prediction</div>
+    <div class="ni" data-p="claim" onclick="showPage('claim',this)"><span class="ni-ic">◎</span>Claim Winnings</div>
+    <div class="ni" data-p="reclaim" onclick="showPage('reclaim',this)"><span class="ni-ic">◈</span>Reclaim Stake</div>
+    <div class="ns">Account</div>
+    <div class="ni" data-p="wallet" onclick="showPage('wallet',this)"><span class="ni-ic">◫</span>Wallet</div>
+    <div class="ni" data-p="signer" onclick="showPage('signer',this)"><span class="ni-ic">◉</span>Signer</div>
+    <div class="ns" id="nav-resolver-section" style="display:none">Resolver</div>
+    <div class="ni nav-resolver-item" data-p="register" onclick="showPage('register',this)" style="display:none"><span class="ni-ic">◈</span>Register<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="propose" onclick="showPage('propose',this)" style="display:none"><span class="ni-ic">◇</span>Propose Outcome<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="dispute" onclick="showPage('dispute',this)" style="display:none"><span class="ni-ic">⚠</span>File Dispute<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="commit" onclick="showPage('commit',this)" style="display:none"><span class="ni-ic">◌</span>Commit Vote<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="reveal" onclick="showPage('reveal',this)" style="display:none"><span class="ni-ic">◎</span>Reveal Vote<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="tally" onclick="showPage('tally',this)" style="display:none"><span class="ni-ic">≡</span>Tally Votes<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="slash" onclick="showPage('slash',this)" style="display:none"><span class="ni-ic">◈</span>Claim Slash<span class="rb rb-r">Resolver</span></div>
+    <div class="ns" id="nav-admin-section" style="display:none">Admin</div>
+    <div class="ni nav-admin-item" data-p="create" onclick="showPage('create',this)" style="display:none"><span class="ni-ic">+</span>Create Market<span class="rb rb-a">Admin</span></div>
+    <div class="ni nav-admin-item" data-p="finalize" onclick="showPage('finalize',this)" style="display:none"><span class="ni-ic">✓</span>Finalize Market<span class="rb rb-a">Admin</span></div>
+    <div class="ni nav-admin-item" data-p="node" onclick="showPage('node',this)" style="display:none"><span class="ni-ic">⊙</span>Settings<span class="rb rb-a">Admin</span></div>
+  </div>
+  <div class="sbfoot">
+    <div class="conn-row"><div class="dot" id="rpcDot"></div><span id="rpcStatus">connecting…</span><span id="hBadge"></span></div>
+    <div class="theme-btn" onclick="toggleTheme()"><div class="ttrack"><div class="tthumb"></div></div><span id="tlbl">Light mode</span></div>
+  </div>
+</nav>
+
+<div class="mobhead">
+  <div class="moblogo">PRAXIS</div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="conn-row"><div class="dot" id="rpcDotM"></div></div>
+    <button class="ham" onclick="openNav()">☰</button>
+  </div>
+</div>
+<div class="mobnav" id="mobNav" onclick="closeNav(event)">
+  <div class="mobpanel"><button class="mobclose" onclick="closeNav()">✕</button><div style="padding-top:44px" id="mobNavBody"></div></div>
+</div>
+
+<main class="main">
+
+<div class="page active" id="page-markets">
+  <div class="ph ph-g"><div class="ph-eye">Live on Canopy</div><div class="ph-title">Prediction Markets</div><div class="ph-sub">Browse open markets and place your predictions using $PRX</div></div>
+  <div class="sbar"><div class="chip">Markets <b id="sb_c">—</b></div><div class="chip">Block <b id="sb_h">—</b></div><button class="btn bsec bsm" onclick="loadMarkets()">↻ Refresh</button><button class="btn bsec bsm" onclick="clearScanCache()" title="Clear cache and rescan all blocks"><span class="hide-mob">Full </span>⟳ Rescan</button></div>
+  <div class="mtabs">
+    <button class="mtab active" id="tab-live" onclick="switchTab('live')">⬤ Live</button>
+    <button class="mtab" id="tab-proposed" onclick="switchTab('proposed')">⚖ Proposed</button>
+    <button class="mtab" id="tab-closed" onclick="switchTab('closed')">◎ Closed</button>
+  </div>
+  <div id="marketsList"><div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading markets</div></div>
+</div>
+
+<div class="page" id="page-detail">
+  <div class="ph ph-g">
+    <div class="ph-eye">Market Detail</div>
+    <div class="ph-title" id="det-question">—</div>
+    <div class="ph-sub"><button class="btn bsec bsm" onclick="showPage('markets',null)">← Back to Markets</button></div>
+  </div>
+  <div style="padding:16px;max-width:700px;margin:0 auto">
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <div id="det-status-pill"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val" id="det-qyes">—</div></div>
+        <div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val" id="det-qno">—</div></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div class="prob-row" style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span class="prob-lbl">Implied probability</span>
+          <div style="display:flex;gap:12px"><span class="pvy" id="det-yes-pct">—</span><span class="pvl">YES</span><span class="pvn" id="det-no-pct">—</span><span class="pvl">NO</span></div>
+        </div>
+        <div class="btrack"><div class="byes" id="det-bar" style="width:50%"></div><div class="bno"></div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="byes2" id="det-bet-yes" onclick="">BET YES</button>
+        <button class="bno2" id="det-bet-no" onclick="">BET NO</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+        <button class="btn bamb" id="det-propose-btn" style="display:none" onclick="">⚖ Propose Outcome</button>
+        <button class="btn bsec" id="det-claim-btn" style="display:none" onclick="">◎ Claim Winnings</button>
+        <button class="btn bsec" id="det-reclaim-btn" style="display:none" onclick="">↩ Reclaim Stake</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:10px;letter-spacing:1px">MARKET INFO</div>
+      <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Market ID</span><span class="mval" id="det-mid" style="font-size:10px;word-break:break-all">—</span></div>
+      <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Creator</span><span class="mval" id="det-creator" style="word-break:break-all">—</span></div>
+      <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Total Pool</span><span class="mval g" id="det-total">—</span></div>
+      <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Expiry</span><span class="mval" id="det-expiry">—</span></div>
+      <div class="mitem" style="padding:8px 0" id="det-resolver-row"><span class="mlbl">Resolver</span><span class="mval" id="det-resolver">—</span></div>
+    </div>
+    <div class="card" id="det-banner-card" style="display:none;margin-bottom:12px"></div>
+  </div>
+</div>
+
+<div class="page" id="page-predict">
+  <div class="ph ph-g"><div class="ph-eye">Place Bet</div><div class="ph-title">Submit Prediction</div><div class="ph-sub">Buy YES or NO shares — cost determined by LMSR pricing</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// prediction_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="p_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Bettor Address</label><input id="p_bettor" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Outcome</label><div class="otog"><div class="obtn yes active" id="btn_yes" onclick="setOut(true)">YES</div><div class="obtn no" id="btn_no" onclick="setOut(false)">NO</div></div></div>
+    <div class="r3"><div class="field"><label>Shares</label><input id="p_shares" type="number" value="1000000"/><div class="hint">1 share = 1,000,000</div></div><div class="field"><label>Max Cost (uPRX)</label><input id="p_maxcost" type="number" value="10000000"/></div><div class="field"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div></div>
+    <div class="brow"><button class="btn bp" id="btn_predict" onclick="signAndSubmit_predict()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_predict()">Build Payload</button></div>
+    <div class="pend" id="pend_predict"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="po"><div class="plbl">// unsigned_payload</div><textarea id="pp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-claim">
+  <div class="ph ph-g"><div class="ph-eye">Collect Payout</div><div class="ph-title">Claim Winnings</div><div class="ph-sub">Proportional payout from losing pool after finalization</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="cl_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="cl_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="cl_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_claim" onclick="signAndSubmit_claim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_claim()">Build Payload</button></div>
+    <div class="pend" id="pend_claim"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="clo"><div class="plbl">// unsigned_payload</div><textarea id="clp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-reclaim">
+  <div class="ph ph-g"><div class="ph-eye">Recover Funds</div><div class="ph-title">Reclaim Stake</div><div class="ph-sub">Recover funds from expired markets with no resolver — available 300 blocks after expiry</div></div>
+  <div class="alert ay">Only available if no resolver proposed an outcome within the resolution window.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// reclaim_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="rc_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="rc_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="rc_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_reclaim" onclick="signAndSubmit_reclaim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_reclaim()">Build Payload</button></div>
+    <div class="pend" id="pend_reclaim"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="rco"><div class="plbl">// unsigned_payload</div><textarea id="rcp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-wallet">
+  <div class="ph ph-g"><div class="ph-eye">Account</div><div class="ph-title">Wallet</div><div class="ph-sub">Check balances, send $PRX, and view your predictions</div></div>
+
+  <!-- MetaMask Connect -->
+  <div class="card" id="mm_card"><div class="ci">
+    <div class="ct">// metamask_identity</div>
+    <div id="mm_disconnected">
+      <div class="sinfo" style="margin-bottom:12px">Connect MetaMask to verify your identity. Your BLS keystore handles transaction signing.</div>
+      <div class="brow"><button class="btn bp" onclick="connectMetaMask()">🦊 Connect MetaMask</button></div>
+    </div>
+    <div id="mm_connected" style="display:none">
+      <div class="kstat loaded" id="mm_status">✓ connected</div>
+      <div class="field" style="margin-top:10px"><label>ETH Address</label><div class="addr-mono" id="mm_addr" style="color:var(--green)"></div></div>
+      <div class="brow" style="margin-top:10px"><button class="btn bsec" onclick="disconnectMetaMask()">Disconnect</button></div>
+    </div>
+  </div></div>
+
+  <div class="card"><div class="ci">
+    <div class="ct">// balance_lookup</div>
+    <div class="field"><label>Address (40 hex)</label><input id="w_addr" type="text" placeholder="e7c7dad1…"/></div>
+    <div class="brow"><button class="btn bp" onclick="queryAccount()">Query Balance</button></div>
+    <div id="w_result" style="display:none;margin-top:15px">
+      <div class="bal-wrap"><div class="bal-num" id="w_balance">0</div><div class="bal-unit">$PRX LIQUID</div></div>
+      <div class="addr-mono" id="w_addrD"></div>
+    </div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// send_prx</div>
+    <div class="r2"><div class="field"><label>From Address</label><input id="s_from" type="text" placeholder="40 hex chars"/></div><div class="field"><label>To Address</label><input id="s_to" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="r2"><div class="field"><label>Amount (uPRX)</label><input id="s_amount" type="number" value="1000000"/></div><div class="field"><label>Fee (uPRX)</label><input id="s_fee" type="number" value="10000"/></div></div>
+    <div class="brow"><button class="btn bp" id="btn_send" onclick="signAndSubmit_send()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_send()">Build Payload</button></div>
+    <div class="pend" id="pend_send"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="so"><div class="plbl">// unsigned_payload</div><textarea id="sp" readonly></textarea></div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// my_predictions</div>
+    <div id="myPredictions"><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">Load wallet to see predictions</div></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-signer">
+  <div class="ph ph-g"><div class="ph-eye">BLS12-381</div><div class="ph-title">Signer</div><div class="ph-sub">Encrypted keystore — private key held in RAM only, never stored or sent</div></div>
+
+  <!-- Status -->
+  <div class="card"><div class="ci">
+    <div class="ct">// session_status</div>
+    <div class="kstat" id="keyStatus">○ No key loaded — transactions cannot be signed</div>
+    <div class="sbadge hidden" id="sessBadge" onclick="clearKey()">✕ &nbsp; Clear session</div>
+    <div id="sk_derived" style="display:none;margin-top:15px">
+      <div class="field"><label>Public Key (48 bytes · G1)</label><div class="addr-mono" id="sk_pub" style="font-size:9px;word-break:break-all"></div></div>
+      <div class="field" style="margin-top:9px"><label>Derived Address</label><div class="addr-mono" id="sk_addr" style="color:var(--green)"></div></div>
+    </div>
+  </div></div>
+
+  <!-- Import Keystore -->
+  <div class="card"><div class="ci">
+    <div class="ct">// import_keystore</div>
+    <div class="field">
+      <label>Keystore File (.json)</label>
+      <input id="ks_imp_file" type="file" accept=".json"/>
+      <div class="hint">Upload your encrypted Praxis keystore JSON</div>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_imp_pw" type="password" placeholder="Keystore password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="importKeystore()">🔓 Unlock Keystore</button>
+      <button class="btn bsec" onclick="clearKey()">Clear</button>
+    </div>
+  </div></div>
+
+  <!-- Create New Keystore -->
+  <div class="card"><div class="ci">
+    <div class="ct">// create_keystore</div>
+    <div class="alert ay" style="margin-bottom:12px">Generates a new BLS12-381 keypair and downloads an encrypted keystore file.</div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_new_pw" type="password" placeholder="Choose a strong password…"/>
+    </div>
+    <div class="field">
+      <label>Confirm Password</label>
+      <input id="ks_new_pw2" type="password" placeholder="Confirm password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="createKeystore()">⚙ Generate &amp; Download</button>
+    </div>
+  </div></div>
+
+  <!-- Signing spec -->
+  <div class="card"><div class="ci">
+    <div class="ct">// signing_spec</div>
+    <div class="sinfo">
+      1. sign_bytes = proto.Marshal(Transaction{…, <em>signature:nil</em>})<br>
+      2. time = <em>BigInt(Date.now()) × 1000n</em> — microseconds<br>
+      3. BLS12-381 <em>G2 signature (96 bytes)</em> — @noble/curves<br>
+      4. address = <em>SHA256(pubKey).slice(0,20)</em><br>
+      5. Keystore = <em>AES-GCM + PBKDF2 (200k iterations)</em>
+    </div>
+  </div></div>
+</div>
+
+<!-- RESOLVER SECTION -->
+<div class="page" id="page-register">
+  <div class="ph ph-r"><div class="ph-eye">Resolver Role</div><div class="ph-title">Register as Resolver</div><div class="ph-sub">Stake $PRX to gain eligibility to propose market outcomes</div></div>
+  <div class="alert ay">Min stake 100,000,000 uPRX. Dishonest proposals result in bond slashing.</div>
+  <div class="card r-card"><div class="ci">
+    <div class="ct">// resolver_registration</div>
+    <div class="r2"><div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Stake Amount (uPRX)</label><input id="reg_stake" type="number" value="100000000"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="reg_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bamb" id="btn_register" onclick="signAndSubmit_register()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_register()">Build Payload</button></div>
+    <div class="pend" id="pend_register"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="rego"><div class="plbl">// unsigned_payload</div><textarea id="regp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-propose">
+  <div class="ph ph-r"><div class="ph-eye">Resolver Action</div><div class="ph-title">Propose Outcome</div><div class="ph-sub">Propose the winning outcome after market expiry</div></div>
+  <div class="alert ay">Only callable after ExpiryTime. Bond locked until finalization.</div>
+  <div class="card r-card"><div class="ci">
+    <div class="ct">// proposal_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="prop_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Resolver Address</label><input id="prop_resolver" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Proposed Outcome</label><div class="otog"><div class="obtn yes active" id="pbtn_yes" onclick="setPropOut(true)">YES</div><div class="obtn no" id="pbtn_no" onclick="setPropOut(false)">NO</div></div></div>
+    <div class="r2"><div class="field"><label>Proposal Bond (uPRX)</label><input id="prop_bond" type="number" value="60000000"/><div class="hint">min = ComputeMinBond(market)</div></div><div class="field"><label>Fee (uPRX)</label><input id="prop_fee" type="number" value="10000"/></div></div>
+    <div class="brow"><button class="btn bamb" id="btn_propose" onclick="signAndSubmit_propose()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_propose()">Build Payload</button></div>
+    <div class="pend" id="pend_propose"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="propo"><div class="plbl">// unsigned_payload</div><textarea id="propp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-dispute">
+  <div class="ph ph-r"><div class="ph-eye">Dispute System</div><div class="ph-title">File Dispute</div><div class="ph-sub">Challenge a proposed outcome within the dispute window</div></div>
+  <div class="alert ar">⚠ Dishonest disputes result in bond slashing to the protocol treasury.</div>
+  <div class="card r-card"><div class="ci">
+    <div class="ct">// dispute_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="dis_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Disputer Address</label><input id="dis_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="r2"><div class="field"><label>Dispute Bond (uPRX)</label><input id="dis_bond" type="number" value="60000000"/></div><div class="field"><label>Fee (uPRX)</label><input id="dis_fee" type="number" value="10000"/></div></div>
+    <div class="brow"><button class="btn bamb" id="btn_dispute" onclick="signAndSubmit_dispute()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_dispute()">Build Payload</button></div>
+    <div class="pend" id="pend_dispute"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="diso"><div class="plbl">// unsigned_payload</div><textarea id="disp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-commit">
+  <div class="ph ph-r"><div class="ph-eye">Panel Voting</div><div class="ph-title">Commit Vote</div><div class="ph-sub">Submit blinded vote hash during the commit phase</div></div>
+  <div class="alert ac">commit_hash = SHA256(vote_byte ‖ nonce ‖ voter_addr) — 0x01=YES, 0x00=NO</div>
+  <div class="card r-card"><div class="ci">
+    <div class="ct">// commit_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="cv_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Voter Address</label><input id="cv_voter" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="r2"><div class="field"><label>Commit Hash (64 hex)</label><input id="cv_hash" type="text" placeholder="SHA256 of vote ‖ nonce ‖ addr"/></div><div class="field"><label>Fee (uPRX)</label><input id="cv_fee" type="number" value="10000"/></div></div>
+    <div class="brow"><button class="btn bamb" id="btn_commit" onclick="signAndSubmit_commit()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_commit()">Build Payload</button></div>
+    <div class="pend" id="pend_commit"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="cvo"><div class="plbl">// unsigned_payload</div><textarea id="cvp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-reveal">
+  <div class="ph ph-r"><div class="ph-eye">Panel Voting</div><div class="ph-title">Reveal Vote</div><div class="ph-sub">Reveal your committed vote during the reveal phase</div></div>
+  <div class="card r-card"><div class="ci">
+    <div class="ct">// reveal_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="rv_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Voter Address</label><input id="rv_voter" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Vote</label><div class="otog"><div class="obtn yes active" id="rvbtn_yes" onclick="setRevOut(true)">YES</div><div class="obtn no" id="rvbtn_no" onclick="setRevOut(false)">NO</div></div></div>
+    <div class="r2"><div class="field"><label>Nonce (64 hex)</label><input id="rv_nonce" type="text" placeholder="64 hex chars used in commit"/></div><div class="field"><label>Fee (uPRX)</label><input id="rv_fee" type="number" value="10000"/></div></div>
+    <div class="brow"><button class="btn bamb" id="btn_reveal" onclick="signAndSubmit_reveal()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_reveal()">Build Payload</button></div>
+    <div class="pend" id="pend_reveal"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="rvo"><div class="plbl">// unsigned_payload</div><textarea id="rvp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-tally">
+  <div class="ph ph-r"><div class="ph-eye">Panel Voting</div><div class="ph-title">Tally Votes</div><div class="ph-sub">Permissionless — trigger vote tally after reveal phase ends</div></div>
+  <div class="card r-card"><div class="ci">
+    <div class="ct">// tally_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="tal_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Caller Address</label><input id="tal_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="tal_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bamb" id="btn_tally" onclick="signAndSubmit_tally()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_tally()">Build Payload</button></div>
+    <div class="pend" id="pend_tally"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="talo"><div class="plbl">// unsigned_payload</div><textarea id="talp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-slash">
+  <div class="ph ph-r"><div class="ph-eye">Enforcement</div><div class="ph-title">Claim Slash</div><div class="ph-sub">Claim reward from a dishonest resolver's forfeited bond</div></div>
+  <div class="card r-card"><div class="ci">
+    <div class="ct">// slash_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="sl_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="sl_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="sl_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bamb" id="btn_slash" onclick="signAndSubmit_slash()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_slash()">Build Payload</button></div>
+    <div class="pend" id="pend_slash"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="slo"><div class="plbl">// unsigned_payload</div><textarea id="slp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ADMIN SECTION -->
+<div class="page" id="page-create">
+  <div class="ph ph-a"><div class="ph-eye">Admin · Market Creation</div><div class="ph-title">Create Market</div><div class="ph-sub">Deploy a new YES/NO prediction market with LMSR liquidity</div></div>
+  <div class="alert ap">B0 minimum 60,000,000 uPRX (50M bounty reserve + 10M LMSR seed).</div>
+  <div class="card a-card"><div class="ci">
+    <div class="ct">// market_parameters</div>
+    <div class="field"><label>Market Question</label><textarea id="c_question" placeholder="Will Praxis launch on mainnet before Q3 2026?"></textarea></div>
+    <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (uPRX)</label><input id="c_b0" type="number" value="60000000"/></div></div>
+    <div class="r3"><div class="field"><label>Expiry Block</label><input id="c_expiry" type="number" placeholder="auto-fill"/></div><div class="field"><label>Nonce</label><input id="c_nonce" type="text" placeholder="auto-fill"/></div><div class="field"><label>Fee (uPRX)</label><input id="c_fee" type="number" value="10000"/></div></div>
+    <div class="brow"><button class="btn bp" id="btn_create" onclick="signAndSubmit_create()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_create()">Build Payload</button></div>
+    <div class="pend" id="pend_create"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="co"><div class="plbl">// unsigned_payload</div><textarea id="cp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-finalize">
+  <div class="ph ph-a"><div class="ph-eye">Admin · Finalization</div><div class="ph-title">Finalize Market</div><div class="ph-sub">Permissionless — seal market after dispute window. Caller receives 50 PRX bounty.</div></div>
+  <div class="card a-card"><div class="ci">
+    <div class="ct">// finalize_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="fin_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Caller Address</label><input id="fin_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="fin_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_finalize" onclick="signAndSubmit_finalize()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_finalize()">Build Payload</button></div>
+    <div class="pend" id="pend_finalize"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="fino"><div class="plbl">// unsigned_payload</div><textarea id="finp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-node">
+  <div class="ph ph-a"><div class="ph-eye">Admin · Configuration</div><div class="ph-title">Settings</div><div class="ph-sub">Node connection and chain diagnostics</div></div>
+  <div class="card a-card"><div class="ci">
+    <div class="ct">// rpc_connection</div>
+    <div class="field"><label>RPC Host</label><input id="ni_host" type="text" value="localhost"/><div class="hint">Public RPC → :50002 &nbsp;·&nbsp; Admin → :50003 (local only)</div></div>
+    <div class="brow"><button class="btn bp" onclick="applyHost()">Apply &amp; Connect</button></div>
+  </div></div>
+  <div class="card a-card"><div class="ci">
+    <div class="ct">// chain_status</div>
+    <div class="igrid">
+      <div class="icell"><div class="ilbl">Height</div><div class="ival" id="ni_height">—</div></div>
+      <div class="icell"><div class="ilbl">Status</div><div class="ival" id="ni_status" style="font-size:12px">—</div></div>
+      <div class="icell" style="grid-column:1/-1"><div class="ilbl">RPC Endpoint</div><div class="ival" id="ni_rpc" style="font-size:10px;word-break:break-all">—</div></div>
+    </div>
+  </div></div>
+  <div class="card a-card"><div class="ci">
+    <div class="ct">// failed_tx_checker</div>
+    <div class="field"><label>Check Address</label><input id="ft_addr" type="text" placeholder="40 hex chars"/></div>
+    <div class="brow"><button class="btn bsec bsm" onclick="checkFailedTxs()">Check Failed Txs</button></div>
+    <div id="ft_result" style="margin-top:11px;display:none"></div>
+  </div></div>
+</div>
+
+</main>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bnav" id="bnav">
+  <div class="bni active" data-p="markets" onclick="showPage('markets',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Markets</div>
+  <div class="bni" data-p="predict" onclick="showPage('predict',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Predict</div>
+  <div class="bni" data-p="wallet" onclick="showPage('wallet',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1" fill="currentColor"/></svg>Wallet</div>
+  <div class="bni" data-p="signer" onclick="showPage('signer',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Signer</div>
+  <div class="bni" data-p="propose" onclick="showPage('propose',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Resolve</div>
+</div>
+
+<div id="toast"></div>
+<div id="confOverlay">
+  <div class="cm">
+    <div class="cm-h"><div class="cm-t" id="confTitle">Confirm Transaction</div><div class="cm-s" id="confSub">review before signing</div></div>
+    <div class="cm-rows" id="confRows"></div>
+    <div class="cm-btns"><button id="confCancel" onclick="closeConfirm()">Cancel</button><button id="confOk">Sign &amp; Submit</button></div>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -100,3 +100,11 @@ return false
 }
 return true
 }
+
+// COI-3: checks whether adding newCost to currentCostPaid would exceed
+// MAX_POSITION_BPS of poolAmount. Returns true if position would be too large.
+func exceedsPositionCap(currentCostPaid, newCost, poolAmount uint64) bool {
+newTotal := currentCostPaid + newCost
+cap := poolAmount * MAX_POSITION_BPS / 10000
+return newTotal > cap
+}
