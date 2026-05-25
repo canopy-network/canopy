@@ -33,7 +33,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size
 /* SIDEBAR */
 .sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;transition:background .25s}
 .logo{padding:18px 16px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px}
-.logo-hex{width:30px;height:30px;flex-shrink:0;background:var(--green);display:flex;align-items:center;justify-content:center;clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)}
+.logo-hex{width:36px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .logo-hex span{font-family:var(--font-d);font-size:10px;font-weight:900;color:#000;letter-spacing:-1px}
 .logo-text .wm{font-family:var(--font-d);font-size:13px;font-weight:900;letter-spacing:2px;color:var(--green);text-shadow:0 0 20px var(--gglow)}
 .logo-text .tg{font-family:var(--font-mono);font-size:8px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-top:1px}
