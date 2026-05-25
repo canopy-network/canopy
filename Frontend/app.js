@@ -701,6 +701,7 @@ window.loadMarkets = async function () {
 
     _allMarkets = markets;
     if (countEl) countEl.textContent = markets.length;
+    checkRoles();
     if (markets.length === 0) {
       el.innerHTML = '<div class="alert ay">No markets on-chain yet.<br>Create the first one!</div>';
       return;
@@ -1221,8 +1222,8 @@ window.createKeystore = async function() {
   if (pw.length < 8) return toast('Password must be at least 8 characters', true);
 
   try {
-    // generate new BLS private key
-    const privBytes = crypto.getRandomValues(new Uint8Array(32));
+    // generate new BLS private key (valid scalar)
+    const privBytes = bls12_381.utils.randomPrivateKey();
     const pubKey    = bls12_381.getPublicKey(privBytes);
     const hash      = await crypto.subtle.digest('SHA-256', pubKey);
     const address   = b2h(new Uint8Array(hash).slice(0, 20));
@@ -1416,4 +1417,43 @@ window.fillReclaim = function(id) {
   document.getElementById('rc_mid').value = id;
   if (signerAddress) document.getElementById('rc_addr').value = signerAddress;
   showPage('reclaim', null);
+};
+
+// ═══════════════════════════════════════════
+// ROLE-BASED SIDEBAR
+// ═══════════════════════════════════════════
+async function checkRoles() {
+  if (!signerAddress) return;
+
+  // Check ADMIN — is signer a validator?
+  try {
+    const d = await rpc('/v1/query/validators', {});
+    const validators = (d.results || []).map(v => v.address.toLowerCase());
+    const isAdmin = validators.includes(signerAddress.toLowerCase());
+    document.getElementById('nav-admin-section').style.display = isAdmin ? '' : 'none';
+    document.querySelectorAll('.nav-admin-item').forEach(el => el.style.display = isAdmin ? '' : 'none');
+  } catch(e) {}
+
+  // Check RESOLVER — has a register_resolver tx in scanned data
+  const isResolver = _allMarkets.length >= 0 && (() => {
+    const cache = localStorage.getItem('praxis_tx_cache');
+    if (!cache) return false;
+    try {
+      const txs = JSON.parse(cache);
+      return txs.some(tx =>
+        tx.messageType === 'register_resolver' &&
+        tx.sender && tx.sender.toLowerCase() === signerAddress.toLowerCase()
+      );
+    } catch { return false; }
+  })();
+
+  document.getElementById('nav-resolver-section').style.display = isResolver ? '' : 'none';
+  document.querySelectorAll('.nav-resolver-item').forEach(el => el.style.display = isResolver ? '' : 'none');
+}
+
+// Run role check after key load and after markets load
+const _origUpdateSignerUI = updateSignerUI;
+updateSignerUI = function() {
+  _origUpdateSignerUI();
+  checkRoles();
 };

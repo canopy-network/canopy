@@ -28,18 +28,18 @@
     <div class="ns">Account</div>
     <div class="ni" data-p="wallet" onclick="showPage('wallet',this)"><span class="ni-ic">◫</span>Wallet</div>
     <div class="ni" data-p="signer" onclick="showPage('signer',this)"><span class="ni-ic">◉</span>Signer</div>
-    <div class="ns">Resolver</div>
-    <div class="ni" data-p="register" onclick="showPage('register',this)"><span class="ni-ic">◈</span>Register<span class="rb rb-r">Resolver</span></div>
-    <div class="ni" data-p="propose" onclick="showPage('propose',this)"><span class="ni-ic">◇</span>Propose Outcome<span class="rb rb-r">Resolver</span></div>
-    <div class="ni" data-p="dispute" onclick="showPage('dispute',this)"><span class="ni-ic">⚠</span>File Dispute<span class="rb rb-r">Resolver</span></div>
-    <div class="ni" data-p="commit" onclick="showPage('commit',this)"><span class="ni-ic">◌</span>Commit Vote<span class="rb rb-r">Resolver</span></div>
-    <div class="ni" data-p="reveal" onclick="showPage('reveal',this)"><span class="ni-ic">◎</span>Reveal Vote<span class="rb rb-r">Resolver</span></div>
-    <div class="ni" data-p="tally" onclick="showPage('tally',this)"><span class="ni-ic">≡</span>Tally Votes<span class="rb rb-r">Resolver</span></div>
-    <div class="ni" data-p="slash" onclick="showPage('slash',this)"><span class="ni-ic">◈</span>Claim Slash<span class="rb rb-r">Resolver</span></div>
-    <div class="ns">Admin</div>
-    <div class="ni" data-p="create" onclick="showPage('create',this)"><span class="ni-ic">+</span>Create Market<span class="rb rb-a">Admin</span></div>
-    <div class="ni" data-p="finalize" onclick="showPage('finalize',this)"><span class="ni-ic">✓</span>Finalize Market<span class="rb rb-a">Admin</span></div>
-    <div class="ni" data-p="node" onclick="showPage('node',this)"><span class="ni-ic">⊙</span>Settings<span class="rb rb-a">Admin</span></div>
+    <div class="ns" id="nav-resolver-section" style="display:none">Resolver</div>
+    <div class="ni nav-resolver-item" data-p="register" onclick="showPage('register',this)" style="display:none"><span class="ni-ic">◈</span>Register<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="propose" onclick="showPage('propose',this)" style="display:none"><span class="ni-ic">◇</span>Propose Outcome<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="dispute" onclick="showPage('dispute',this)" style="display:none"><span class="ni-ic">⚠</span>File Dispute<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="commit" onclick="showPage('commit',this)" style="display:none"><span class="ni-ic">◌</span>Commit Vote<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="reveal" onclick="showPage('reveal',this)" style="display:none"><span class="ni-ic">◎</span>Reveal Vote<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="tally" onclick="showPage('tally',this)" style="display:none"><span class="ni-ic">≡</span>Tally Votes<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="slash" onclick="showPage('slash',this)" style="display:none"><span class="ni-ic">◈</span>Claim Slash<span class="rb rb-r">Resolver</span></div>
+    <div class="ns" id="nav-admin-section" style="display:none">Admin</div>
+    <div class="ni nav-admin-item" data-p="create" onclick="showPage('create',this)" style="display:none"><span class="ni-ic">+</span>Create Market<span class="rb rb-a">Admin</span></div>
+    <div class="ni nav-admin-item" data-p="finalize" onclick="showPage('finalize',this)" style="display:none"><span class="ni-ic">✓</span>Finalize Market<span class="rb rb-a">Admin</span></div>
+    <div class="ni nav-admin-item" data-p="node" onclick="showPage('node',this)" style="display:none"><span class="ni-ic">⊙</span>Settings<span class="rb rb-a">Admin</span></div>
   </div>
   <div class="sbfoot">
     <div class="conn-row"><div class="dot" id="rpcDot"></div><span id="rpcStatus">connecting…</span><span id="hBadge"></span></div>
