@@ -409,16 +409,24 @@ helper. Two options; recommend the second for speed:
 - (b) add `tvl_cap_uCnpy` to `CanoliqParams`, governance-tunable, and have
       the DAO update it as Canopy stake grows.
 
-### Behaviour
-- [ ] `CanoliqParams.tvl_cap_ucnpy uint64` (0 = uncapped). `ValidateParams`
-      rejects negative-cap states.
-- [ ] `DeliverMessageCanoliqDeposit` rejects with `ErrTVLCapExceeded` when
-      `globals.total_pooled_cnpy + amount > params.tvl_cap_ucnpy`.
-- [ ] Surface in `/v1/health`: `{tvlCapUcnpy, tvlUtilizationBps}`.
+**Status: landed and tested (2026-05-25).** Took option (b) — a
+governance-tunable `tvl_cap_ucnpy` param. Full suite green.
 
-### T3 tests
-- [ ] Deposit accepted at exactly cap; one uCNPY above rejects; param change
-      to lift the cap re-enables deposits.
+### Behaviour
+- [x] `CanoliqParams.tvl_cap_ucnpy uint64` (proto field 25; 0 = uncapped;
+      default 0). No `ValidateParams` rule needed — uint64 can't be negative.
+- [x] `DeliverMessageCanoliqDeposit` rejects with `ErrTVLCapExceeded` when
+      `cap > 0 && total_pooled_cnpy + amount > cap`. (Deliver-only; CheckTx is
+      stateless.)
+- [x] `/v1/health` (`HealthView` / `QueryHealth`) surfaces `tvlCapUcnpy` and
+      `tvlUtilizationBps` (= pooled / cap in bps; 0 when uncapped).
+
+### T3 tests (`t3_tvlcap_test.go`)
+- [x] Deposit at exactly cap accepted, one uCNPY above rejected with state
+      unchanged (`TestT3DepositCapBoundary`); lifting the cap re-enables
+      (`TestT3LiftCapReenablesDeposits`); uncapped allows any deposit
+      (`TestT3UncappedAllowsLargeDeposit`); health surfaces cap + utilization
+      (`TestT3HealthSurfacesCapAndUtilization`).
 
 ## T4. Insurance fund peak-TVL tracking (audit F10)
 

@@ -176,6 +176,11 @@ message CanoliqParams {
   // quorum_bps / pass_threshold_bps / timelock_blocks / voting_period_blocks
   // above; an empty list (or unmatched action) falls back to those scalars.
   repeated GovernanceTier governance = 24; // @gotags: json:"governance"
+  // tvl_cap_ucnpy: self-imposed TVL ceiling in uCNPY (WP §9.4: 33% of total
+  // Canopy network stake). 0 = uncapped. Governance-tunable; the DAO raises
+  // it as Canopy network stake grows. Deposits that would push
+  // total_pooled_cnpy above this are rejected.
+  uint64 tvl_cap_ucnpy = 25; // @gotags: json:"tvlCapUcnpy"
 }
 
 // ActionType classifies a proposal so per-action governance tiers can apply

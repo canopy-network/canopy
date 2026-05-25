@@ -50,6 +50,7 @@ const (
 	codeInsufficientTreasuryCNPY
 	codeInvalidLockTier
 	codeStakeLocked
+	codeTVLCapExceeded
 )
 
 // newError constructs a PluginError stamped with the canoLiq module.
@@ -251,4 +252,10 @@ func ErrInvalidLockTier() *contract.PluginError {
 // ErrStakeLocked reports an unstake before the vote-escrow lock_end_height.
 func ErrStakeLocked() *contract.PluginError {
 	return newError(codeStakeLocked, "stake is locked until lock_end_height")
+}
+
+// ErrTVLCapExceeded reports a deposit that would push total pooled CNPY above
+// the governance-set TVL cap.
+func ErrTVLCapExceeded() *contract.PluginError {
+	return newError(codeTVLCapExceeded, "deposit would exceed the TVL cap")
 }

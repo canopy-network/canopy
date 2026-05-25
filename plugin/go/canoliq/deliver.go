@@ -63,7 +63,11 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 			}
 		}
 	}
-	_ = params // params reserved for future per-deposit policy
+	// TVL self-cap (T3 / WP §9.4): reject deposits that would push total
+	// pooled CNPY above the governance-set ceiling. 0 = uncapped.
+	if params.TvlCapUcnpy > 0 && globals.TotalPooledCnpy+msg.Amount > params.TvlCapUcnpy {
+		return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
+	}
 	deduct := msg.Amount + fee
 	if from.Amount < deduct {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}

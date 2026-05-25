@@ -48,6 +48,11 @@ type HealthView struct {
 	Height          uint64 `json:"height"`
 	GenesisComplete bool   `json:"genesisComplete"`
 	ChainID         uint64 `json:"chainId"`
+	// TVLCapUcnpy is the governance-set deposit ceiling (0 = uncapped).
+	TVLCapUcnpy uint64 `json:"tvlCapUcnpy"`
+	// TVLUtilizationBps is total_pooled_cnpy / tvl_cap_ucnpy in bps (0 when
+	// uncapped).
+	TVLUtilizationBps uint64 `json:"tvlUtilizationBps"`
 }
 
 // StakerView is one entry in the active CLIQ staker list.
@@ -61,10 +66,16 @@ type StakerView struct {
 // Always succeeds; falls back to zeros before the first snapshot.
 func (p *Plugin) QueryHealth() *HealthView {
 	s := p.Snapshot()
+	var utilBps uint64
+	if s.Params.TvlCapUcnpy > 0 {
+		utilBps = mulDiv(s.Globals.TotalPooledCnpy, 10_000, s.Params.TvlCapUcnpy)
+	}
 	return &HealthView{
-		Height:          s.Height,
-		GenesisComplete: s.Globals.GenesisComplete,
-		ChainID:         p.config.ChainId,
+		Height:            s.Height,
+		GenesisComplete:   s.Globals.GenesisComplete,
+		ChainID:           p.config.ChainId,
+		TVLCapUcnpy:       s.Params.TvlCapUcnpy,
+		TVLUtilizationBps: utilBps,
 	}
 }
 

@@ -1064,7 +1064,12 @@ type CanoliqParams struct {
 	// tier matches a proposal's ActionType it overrides the scalar
 	// quorum_bps / pass_threshold_bps / timelock_blocks / voting_period_blocks
 	// above; an empty list (or unmatched action) falls back to those scalars.
-	Governance    []*GovernanceTier `protobuf:"bytes,24,rep,name=governance,proto3" json:"governance"` // @gotags: json:"governance"
+	Governance []*GovernanceTier `protobuf:"bytes,24,rep,name=governance,proto3" json:"governance"` // @gotags: json:"governance"
+	// tvl_cap_ucnpy: self-imposed TVL ceiling in uCNPY (WP §9.4: 33% of total
+	// Canopy network stake). 0 = uncapped. Governance-tunable; the DAO raises
+	// it as Canopy network stake grows. Deposits that would push
+	// total_pooled_cnpy above this are rejected.
+	TvlCapUcnpy   uint64 `protobuf:"varint,25,opt,name=tvl_cap_ucnpy,json=tvlCapUcnpy,proto3" json:"tvlCapUcnpy"` // @gotags: json:"tvlCapUcnpy"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1265,6 +1270,13 @@ func (x *CanoliqParams) GetGovernance() []*GovernanceTier {
 		return x.Governance
 	}
 	return nil
+}
+
+func (x *CanoliqParams) GetTvlCapUcnpy() uint64 {
+	if x != nil {
+		return x.TvlCapUcnpy
+	}
+	return 0
 }
 
 // GovernanceTier carries the governance rules for a single ActionType.
@@ -3163,7 +3175,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\fstart_height\x18\x05 \x01(\x04R\vstartHeight\x12\x1d\n" +
 	"\n" +
 	"end_height\x18\x06 \x01(\x04R\tendHeight\x12%\n" +
-	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\xc1\a\n" +
+	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\xe5\a\n" +
 	"\rCanoliqParams\x12\x17\n" +
 	"\afee_bps\x18\x01 \x01(\x04R\x06feeBps\x12&\n" +
 	"\x0fuser_rebate_bps\x18\x02 \x01(\x04R\ruserRebateBps\x12!\n" +
@@ -3195,7 +3207,8 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x14min_stake_to_propose\x18\x17 \x01(\x04R\x11minStakeToPropose\x125\n" +
 	"\n" +
 	"governance\x18\x18 \x03(\v2\x15.types.GovernanceTierR\n" +
-	"governance\"\xd8\x01\n" +
+	"governance\x12\"\n" +
+	"\rtvl_cap_ucnpy\x18\x19 \x01(\x04R\vtvlCapUcnpy\"\xd8\x01\n" +
 	"\x0eGovernanceTier\x12)\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x11.types.ActionTypeR\x06action\x12\x1d\n" +
 	"\n" +
