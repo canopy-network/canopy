@@ -555,6 +555,45 @@ window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('c
 // ═══════════════════════════════════════════
 function decVarint(buf,pos){let r=0n,s=0n;while(pos<buf.length){const b=BigInt(buf[pos++]);r|=(b&0x7fn)<<s;s+=7n;if(!(b&0x80n))break;}return{v:r,p:pos};}
 
+let _activeTab = 'live';
+const CLOSED_WINDOW = 20000; // blocks
+
+window.switchTab = function(tab) {
+  _activeTab = tab;
+  document.querySelectorAll('.mtab').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('tab-' + tab);
+  if (btn) btn.classList.add('active');
+  renderCurrentTab();
+};
+
+function renderCurrentTab() {
+  const el = document.getElementById('marketsList');
+  if (!_allMarkets.length) return;
+
+  let markets;
+  if (_activeTab === 'live') {
+    markets = _allMarkets.filter(m => m.status === 0);
+  } else if (_activeTab === 'proposed') {
+    markets = _allMarkets.filter(m => m.status === 4 || m.status === 5);
+  } else {
+    // closed — rolling window of last CLOSED_WINDOW blocks
+    markets = _allMarkets.filter(m =>
+      (m.status === 8 || m.status === 1 || m.status === 6 || m.status === 7) &&
+      m.expiry && Number(m.expiry) >= (currentHeight - CLOSED_WINDOW)
+    );
+  }
+
+  const countEl = document.getElementById('sb_c');
+  if (countEl) countEl.textContent = _allMarkets.filter(m => m.status === 0).length;
+
+  if (markets.length === 0) {
+    const labels = {live:'No open markets yet', proposed:'No markets awaiting resolution', closed:'No recently closed markets'};
+    el.innerHTML = '<div class="alert ay">' + (labels[_activeTab] || 'No markets') + '</div>';
+    return;
+  }
+  el.innerHTML = renderMarketCards(markets);
+}
+
 window.loadMarkets = async function () {
   const el = document.getElementById('marketsList');
   const countEl = document.getElementById('sb_c');
@@ -700,13 +739,8 @@ window.loadMarkets = async function () {
     }
 
     _allMarkets = markets;
-    if (countEl) countEl.textContent = markets.length;
     checkRoles();
-    if (markets.length === 0) {
-      el.innerHTML = '<div class="alert ay">No markets on-chain yet.<br>Create the first one!</div>';
-      return;
-    }
-    el.innerHTML = renderMarketCards(markets);
+    renderCurrentTab();
 
   } catch (e) {
     el.innerHTML = '<div class="alert ar">⚠ Cannot reach node at <code>' + getRPC() + '</code><br>' + esc(e.message) + '</div>';
