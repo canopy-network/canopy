@@ -420,7 +420,9 @@ function renderMarketCards(markets) {
     var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
     var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
     parts.push('<div class="' + cardClass + '">');
-    parts.push('<div class="mc-head"><div class="mc-q" style="cursor:pointer" onclick="showDetail(\'' + mid + '\')">' + esc(m.question) + '</div><div class="spill ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</div></div>');
+    var volume = m.qYes + m.qNo - m.lmsrSeed;
+    var volStr = volume > 0n ? fmtA(volume) + ' PRX Vol.' : '';
+    parts.push('<div class="mc-head"><div class="mc-q" style="cursor:pointer" onclick="showDetail(\'' + mid + '\')">' + esc(m.question) + '</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div class="spill ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</div>' + (volStr ? '<div style="font-family:var(--font-mono);font-size:9px;color:var(--text3)">' + volStr + '</div>' : '') + '</div></div>');
     if (banner) parts.push(banner);
     parts.push('<div class="mc-prob"><div class="prob-row"><span class="prob-lbl">Implied probability</span><div class="prob-vals"><div style="text-align:center"><span class="pvy">' + yesPct + '%</span><span class="pvl">YES</span></div><div style="text-align:center"><span class="pvn">' + noPct + '%</span><span class="pvl">NO</span></div></div></div><div class="btrack"><div class="byes" style="width:' + yesPct + '%' + (finalized ? ';box-shadow:none;background:#4a4a4a' : '') + '"></div><div class="bno"' + (finalized ? ' style="background:#2a2a2a"' : '') + '></div></div></div>');
     parts.push('<div class="mc-pools"><div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val">' + fmtA(m.qYes) + ' PRX</div></div><div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val">' + fmtA(m.qNo) + ' PRX</div></div></div>');
