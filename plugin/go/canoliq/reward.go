@@ -61,7 +61,12 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 		return nil
 	}
 	if pool.Amount <= globals.LastProcessedRewardPool {
-		// No fresh reward delta this block.
+		// No fresh reward delta this block. Still advance the peak-TVL high
+		// water mark (T4) — also seeds it from the current pool on a pre-T4
+		// node whose peak_tvl_ucnpy is still zero.
+		if globals.TotalPooledCnpy > globals.PeakTvlUcnpy {
+			globals.PeakTvlUcnpy = globals.TotalPooledCnpy
+		}
 		globals.LastProcessedRewardPool = pool.Amount
 		return c.SaveGlobals(globals)
 	}
@@ -77,6 +82,10 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	// User accrual: net rewards plus the user-rebate slice flow into the
 	// pooled CNPY backing cCNPY, lifting the cCNPY/CNPY exchange rate.
 	globals.TotalPooledCnpy += netToUsers + split.UserRebate
+	// Advance the peak-TVL high water mark (T4) post-accrual.
+	if globals.TotalPooledCnpy > globals.PeakTvlUcnpy {
+		globals.PeakTvlUcnpy = globals.TotalPooledCnpy
+	}
 
 	// Drain the swept reward from the committee pool. The remainder
 	// (validator + treasury + buyback shares) lives in plugin-owned keys.
@@ -112,6 +121,16 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 		insurance := uint64(0)
 		if params.InsuranceBps > 0 {
 			insurance = mulDiv(split.Treasury, params.InsuranceBps, 10_000)
+		}
+		// T4: once the reserve reaches its target (insurance_target_bps of peak
+		// TVL), stop skimming — the would-be insurance amount stays in the
+		// treasury so the fee-conservation invariant still holds. A target of 0
+		// disables the gate (skim always on).
+		if params.InsuranceTargetBps > 0 {
+			target := mulDiv(globals.PeakTvlUcnpy, params.InsuranceTargetBps, 10_000)
+			if c.readScalar(KeyForInsurancePool()) >= target {
+				insurance = 0
+			}
 		}
 		treasuryDelta := split.Treasury - insurance
 		if treasuryDelta > 0 {

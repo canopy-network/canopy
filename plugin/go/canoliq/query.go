@@ -25,6 +25,13 @@ type PoolsView struct {
 	BuybackPool         uint64               `json:"buybackPool"`
 	InsurancePool       uint64               `json:"insurancePool"`
 	ValidatorIncentives []ValidatorIncentive `json:"validatorIncentives"`
+	// PeakTvlUcnpy is the running max of total_pooled_cnpy (T4).
+	PeakTvlUcnpy uint64 `json:"peakTvlUcnpy"`
+	// InsuranceTargetUcnpy is the reserve target (insurance_target_bps of peak
+	// TVL); 0 when the gate is disabled.
+	InsuranceTargetUcnpy uint64 `json:"insuranceTargetUcnpy"`
+	// InsuranceFundedBps is insurance_pool / target in bps (0 when no target).
+	InsuranceFundedBps uint64 `json:"insuranceFundedBps"`
 }
 
 // ValidatorIncentive is one entry of the per-validator incentives ledger.
@@ -98,6 +105,13 @@ func (p *Plugin) QueryPools() *PoolsView {
 		TreasuryCLIQ:  s.TreasuryCLIQ,
 		BuybackPool:   s.BuybackPool,
 		InsurancePool: s.InsurancePool,
+		PeakTvlUcnpy:  s.Globals.PeakTvlUcnpy,
+	}
+	if s.Params.InsuranceTargetBps > 0 {
+		view.InsuranceTargetUcnpy = mulDiv(s.Globals.PeakTvlUcnpy, s.Params.InsuranceTargetBps, 10_000)
+		if view.InsuranceTargetUcnpy > 0 {
+			view.InsuranceFundedBps = mulDiv(s.InsurancePool, 10_000, view.InsuranceTargetUcnpy)
+		}
 	}
 	for addr, amt := range s.ValidatorIncentives {
 		if amt == 0 {

@@ -217,6 +217,7 @@ func DefaultParams() *contract.CanoliqParams {
 		ClaimFee:           10_000,
 		CliqTransferFee:    10_000,
 		InsuranceBps:       500,         // 5% of treasury slice — matches Tokenomics v1.1 §8 "5% of DAO treasury inflow" reading
+		InsuranceTargetBps: 500,         // T4: reserve target = 5% of peak TVL (WP §9.2); skim auto-off at target
 		TreasuryThreshold:  1_000_000_000, // 1k CNPY-equivalent in uCNPY
 		MultisigSigners:    nil,         // populated at genesis (genesis.json) or via param-change vote
 		MultisigThreshold:  3,

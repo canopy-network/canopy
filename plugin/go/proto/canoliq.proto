@@ -81,6 +81,9 @@ message CanoliqGlobals {
   uint64 next_spend_id = 12; // @gotags: json:"nextSpendId"
   // next_unstake_id: monotonically-increasing CLIQ unstake id counter
   uint64 next_unstake_id = 13; // @gotags: json:"nextUnstakeId"
+  // peak_tvl_ucnpy: running maximum of total_pooled_cnpy (T4). Drives the
+  // insurance-fund target (5% of peak TVL); advanced each EndBlock.
+  uint64 peak_tvl_ucnpy = 14; // @gotags: json:"peakTvlUcnpy"
 }
 
 // Redemption is a queued cCNPY → CNPY conversion that matures after the
@@ -181,6 +184,11 @@ message CanoliqParams {
   // it as Canopy network stake grows. Deposits that would push
   // total_pooled_cnpy above this are rejected.
   uint64 tvl_cap_ucnpy = 25; // @gotags: json:"tvlCapUcnpy"
+  // insurance_target_bps: insurance-fund reserve target as a fraction of peak
+  // TVL (T4 / WP §9.2: 5%). Once insurance_pool reaches this target the
+  // per-block insurance skim turns off (the would-be amount stays in the
+  // treasury). 0 disables the gate (skim always on).
+  uint64 insurance_target_bps = 26; // @gotags: json:"insuranceTargetBps"
 }
 
 // ActionType classifies a proposal so per-action governance tiers can apply

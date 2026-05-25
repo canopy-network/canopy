@@ -663,6 +663,9 @@ type CanoliqGlobals struct {
 	NextSpendId uint64 `protobuf:"varint,12,opt,name=next_spend_id,json=nextSpendId,proto3" json:"nextSpendId"` // @gotags: json:"nextSpendId"
 	// next_unstake_id: monotonically-increasing CLIQ unstake id counter
 	NextUnstakeId uint64 `protobuf:"varint,13,opt,name=next_unstake_id,json=nextUnstakeId,proto3" json:"nextUnstakeId"` // @gotags: json:"nextUnstakeId"
+	// peak_tvl_ucnpy: running maximum of total_pooled_cnpy (T4). Drives the
+	// insurance-fund target (5% of peak TVL); advanced each EndBlock.
+	PeakTvlUcnpy  uint64 `protobuf:"varint,14,opt,name=peak_tvl_ucnpy,json=peakTvlUcnpy,proto3" json:"peakTvlUcnpy"` // @gotags: json:"peakTvlUcnpy"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -784,6 +787,13 @@ func (x *CanoliqGlobals) GetNextSpendId() uint64 {
 func (x *CanoliqGlobals) GetNextUnstakeId() uint64 {
 	if x != nil {
 		return x.NextUnstakeId
+	}
+	return 0
+}
+
+func (x *CanoliqGlobals) GetPeakTvlUcnpy() uint64 {
+	if x != nil {
+		return x.PeakTvlUcnpy
 	}
 	return 0
 }
@@ -1069,9 +1079,14 @@ type CanoliqParams struct {
 	// Canopy network stake). 0 = uncapped. Governance-tunable; the DAO raises
 	// it as Canopy network stake grows. Deposits that would push
 	// total_pooled_cnpy above this are rejected.
-	TvlCapUcnpy   uint64 `protobuf:"varint,25,opt,name=tvl_cap_ucnpy,json=tvlCapUcnpy,proto3" json:"tvlCapUcnpy"` // @gotags: json:"tvlCapUcnpy"
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	TvlCapUcnpy uint64 `protobuf:"varint,25,opt,name=tvl_cap_ucnpy,json=tvlCapUcnpy,proto3" json:"tvlCapUcnpy"` // @gotags: json:"tvlCapUcnpy"
+	// insurance_target_bps: insurance-fund reserve target as a fraction of peak
+	// TVL (T4 / WP §9.2: 5%). Once insurance_pool reaches this target the
+	// per-block insurance skim turns off (the would-be amount stays in the
+	// treasury). 0 disables the gate (skim always on).
+	InsuranceTargetBps uint64 `protobuf:"varint,26,opt,name=insurance_target_bps,json=insuranceTargetBps,proto3" json:"insuranceTargetBps"` // @gotags: json:"insuranceTargetBps"
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *CanoliqParams) Reset() {
@@ -1275,6 +1290,13 @@ func (x *CanoliqParams) GetGovernance() []*GovernanceTier {
 func (x *CanoliqParams) GetTvlCapUcnpy() uint64 {
 	if x != nil {
 		return x.TvlCapUcnpy
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetInsuranceTargetBps() uint64 {
+	if x != nil {
+		return x.InsuranceTargetBps
 	}
 	return 0
 }
@@ -3141,7 +3163,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\x04R\x06amount\";\n" +
 	"\x16MessageCLIQClaimVested\x12!\n" +
-	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\"\xe6\x04\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\"\x8c\x05\n" +
 	"\x0eCanoliqGlobals\x12,\n" +
 	"\x12total_ccnpy_supply\x18\x01 \x01(\x04R\x10totalCcnpySupply\x12*\n" +
 	"\x11total_pooled_cnpy\x18\x02 \x01(\x04R\x0ftotalPooledCnpy\x126\n" +
@@ -3156,7 +3178,8 @@ const file_canoliq_proto_rawDesc = "" +
 	" \x01(\x04R\x0enextProposalId\x12&\n" +
 	"\x0fnext_buyback_id\x18\v \x01(\x04R\rnextBuybackId\x12\"\n" +
 	"\rnext_spend_id\x18\f \x01(\x04R\vnextSpendId\x12&\n" +
-	"\x0fnext_unstake_id\x18\r \x01(\x04R\rnextUnstakeId\"\x8d\x01\n" +
+	"\x0fnext_unstake_id\x18\r \x01(\x04R\rnextUnstakeId\x12$\n" +
+	"\x0epeak_tvl_ucnpy\x18\x0e \x01(\x04R\fpeakTvlUcnpy\"\x8d\x01\n" +
 	"\n" +
 	"Redemption\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x18\n" +
@@ -3175,7 +3198,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\fstart_height\x18\x05 \x01(\x04R\vstartHeight\x12\x1d\n" +
 	"\n" +
 	"end_height\x18\x06 \x01(\x04R\tendHeight\x12%\n" +
-	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\xe5\a\n" +
+	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\x97\b\n" +
 	"\rCanoliqParams\x12\x17\n" +
 	"\afee_bps\x18\x01 \x01(\x04R\x06feeBps\x12&\n" +
 	"\x0fuser_rebate_bps\x18\x02 \x01(\x04R\ruserRebateBps\x12!\n" +
@@ -3208,7 +3231,8 @@ const file_canoliq_proto_rawDesc = "" +
 	"\n" +
 	"governance\x18\x18 \x03(\v2\x15.types.GovernanceTierR\n" +
 	"governance\x12\"\n" +
-	"\rtvl_cap_ucnpy\x18\x19 \x01(\x04R\vtvlCapUcnpy\"\xd8\x01\n" +
+	"\rtvl_cap_ucnpy\x18\x19 \x01(\x04R\vtvlCapUcnpy\x120\n" +
+	"\x14insurance_target_bps\x18\x1a \x01(\x04R\x12insuranceTargetBps\"\xd8\x01\n" +
 	"\x0eGovernanceTier\x12)\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x11.types.ActionTypeR\x06action\x12\x1d\n" +
 	"\n" +

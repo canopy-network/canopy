@@ -435,28 +435,36 @@ Continuous skim is in (post-F5). The v1.1 spec also requires a target of
 gate: once reserve ≥ 5 % of peak TVL, the skim turns off until peak TVL
 grows past the next threshold.
 
+**Status: landed and tested (2026-05-25).** Full suite green.
+
 ### Proto + state
-- [ ] Add `peak_tvl_ucnpy uint64`, `insurance_target_bps uint32` to
-      `CanoliqGlobals` / `CanoliqParams`. Default `insurance_target_bps =
-      500` (5 %).
+- [x] Added `CanoliqGlobals.peak_tvl_ucnpy` (field 14) and
+      `CanoliqParams.insurance_target_bps` (field 26; `uint64` not `uint32` —
+      matches the other bps fields). `DefaultParams` seeds
+      `insurance_target_bps = 500` (5 %).
 
 ### Behaviour
-- [ ] Each `EndBlock`: `peak_tvl = max(peak_tvl, total_pooled_cnpy)`.
-- [ ] `ProcessRewards`: compute `target = mulDiv(peak_tvl,
-      insurance_target_bps, 10_000)`. When `insurance_pool >= target`, skip
-      the insurance skim; the would-be insurance bps re-routes back into
-      `treasury/canoliq` so the fee conservation invariant holds.
-- [ ] `/v1/pools` surfaces `peakTvlUcnpy`, `insuranceTargetUcnpy`,
-      `insuranceFundedBps` (= `insurance_pool / target`).
+- [x] Peak advanced inside `ProcessRewards` (the EndBlock reward hook):
+      `peak_tvl = max(peak_tvl, total_pooled_cnpy)` on both the fresh-delta
+      path (post-accrual) and the no-delta path — the latter also seeds peak
+      from the current pool on a pre-T4 node.
+- [x] `ProcessRewards`: when `insurance_target_bps > 0` and
+      `insurance_pool >= mulDiv(peak_tvl, insurance_target_bps, 10_000)`, the
+      skim is set to 0 so the full treasury slice (incl. the would-be
+      insurance amount) stays in `treasury/canoliq` — conservation holds.
+      `insurance_target_bps = 0` disables the gate (skim always on).
+- [x] `/v1/pools` surfaces `peakTvlUcnpy`, `insuranceTargetUcnpy`,
+      `insuranceFundedBps` (= `insurance_pool / target` in bps).
 
-### T4 tests
-- [ ] Skim active below target; off at-or-above; toggles back on after peak
-      TVL grows past the next threshold.
-- [ ] Conservation: when skim is off, the redirected amount lands in
-      `treasury/canoliq`, not silently lost.
-- [ ] State migration: a node started against a pre-T4 export has
-      `peak_tvl_ucnpy = 0` → first `EndBlock` initializes it to current
-      pool size (not zero).
+### T4 tests (`t4_insurance_test.go`)
+- [x] Skim active below target (`TestT4SkimActiveBelowTarget`); off at/above
+      target (`TestT4SkimOffAtTargetConserves`); resumes after peak grows
+      (`TestT4SkimResumesAfterPeakGrows`).
+- [x] Conservation: skim-off redirects the amount into the treasury, total
+      equals the reward delta (`TestT4SkimOffAtTargetConserves`).
+- [x] Migration: pre-T4 node (`peak_tvl_ucnpy = 0`) initializes peak from the
+      current pool on the first sweep, even with no fresh delta
+      (`TestT4PeakInitializesFromPoolOnMigration`).
 
 ## T5. Autonomy graduation tracking (audit F11)
 
