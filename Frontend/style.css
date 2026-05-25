@@ -281,8 +281,15 @@ code{font-family:var(--font-mono);font-size:11px;background:var(--bg2);padding:1
 .bni svg{width:17px;height:17px}
 
 @media(max-width:768px){
-  .sidebar{display:none}.mobhead{display:flex}.main{padding:14px 14px 70px}.bnav{display:flex}
+  .sidebar{display:none}.mobhead{display:flex}.main{padding:14px 14px 70px;width:100%;min-width:0}.bnav{display:flex}
   .r2,.r3{grid-template-columns:1fr}.mgrid{grid-template-columns:1fr}.ph-title{font-size:17px}
+  .sbar{flex-wrap:wrap;gap:6px;padding:8px 0;justify-content:flex-start}
+  .hide-mob{display:none}
+  .sbar .chip{font-size:10px}
+  .sbar .bsm{font-size:9px;padding:4px 10px;flex:1}
+  .mtabs{padding:0 0 12px;gap:6px}
+  .mtab{flex:1;text-align:center;padding:6px 8px}
+  .shell{display:block}
 }
 
 /* Market Tabs */
