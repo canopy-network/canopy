@@ -48,3 +48,7 @@ cmd/web/explorer/.idea
 rag
 node_modules
 plugin/go/tutorial/test_config.json
+Frontend_backup.html
+sidecar/main.go.bak
+sidecar/praxis-sidecar
+ui/index.html.bak
