@@ -343,6 +343,10 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 	}
 	height := c.currentHeight()
 	survivors := idx.Ids[:0]
+	// T5 graduation deltas, accumulated across this block's tallies and applied
+	// once at the end against a fresh globals load (so dispatchPassed's own
+	// globals writes — e.g. NextSpendId — are not clobbered).
+	var passedDelta, turnoutSumDelta, turnoutCountDelta uint64
 	for _, id := range idx.Ids {
 		prop, err := c.loadProposal(id)
 		if err != nil {
@@ -356,16 +360,35 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 			survivors = append(survivors, id)
 			continue
 		}
+		// Record turnout (participation) for every tallied proposal, regardless
+		// of outcome.
+		if prop.SnapshotTotalStaked > 0 {
+			turnoutSumDelta += mulDiv(prop.YesWeight+prop.NoWeight+prop.AbstainWeight, 10_000, prop.SnapshotTotalStaked)
+			turnoutCountDelta++
+		}
 		passed := proposalPasses(prop, params)
 		if passed {
 			prop.Status = contract.ProposalStatus_PROPOSAL_PASSED
 			if err := c.dispatchPassed(prop, params, height); err != nil {
 				return err
 			}
+			passedDelta++
 		} else {
 			prop.Status = contract.ProposalStatus_PROPOSAL_FAILED
 		}
 		if err := c.cleanupProposal(prop); err != nil {
+			return err
+		}
+	}
+	if passedDelta > 0 || turnoutCountDelta > 0 {
+		g, err := c.LoadGlobals()
+		if err != nil {
+			return err
+		}
+		g.PassedProposalCount += passedDelta
+		g.TurnoutSumBps += turnoutSumDelta
+		g.TurnoutSampleCount += turnoutCountDelta
+		if err := c.SaveGlobals(g); err != nil {
 			return err
 		}
 	}

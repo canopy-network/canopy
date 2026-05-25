@@ -331,12 +331,23 @@ func (c *Canoliq) applySpend(spend *contract.TreasurySpend) *contract.PluginErro
 		if e != nil {
 			return e
 		}
+		// T5: track cumulative CNPY treasury burn for the runway metric.
+		g, err := c.LoadGlobals()
+		if err != nil {
+			return err
+		}
+		g.TreasurySpentTotal += spend.Payload.Amount
+		gBz, e := contract.Marshal(g)
+		if e != nil {
+			return e
+		}
 		_, err = c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
 			Sets: []*contract.PluginSetOp{
 				{Key: KeyForTreasuryCNPY(), Value: EncodeUint64(treasury)},
 				{Key: recipKey, Value: recipBz},
 				{Key: KeyForTreasurySpend(spend.Id), Value: spendBz},
 				{Key: KeyForSpendIndex(), Value: idxBz},
+				{Key: KeyForGlobals(), Value: gBz},
 			},
 		})
 		return err

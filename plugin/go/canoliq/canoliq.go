@@ -37,6 +37,9 @@ func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginB
 		return &contract.PluginBeginResponse{Error: err}
 	}
 	height := req.GetHeight()
+	if err := c.advanceGraduationWindow(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
 	if err := c.processProposals(height); err != nil {
 		return &contract.PluginBeginResponse{Error: err}
 	}
@@ -115,8 +118,22 @@ func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.Plugin
 	}
 }
 
-// DeliverTx applies a transaction. Same dispatch shape as CheckTx.
+// DeliverTx applies a transaction. Same dispatch shape as CheckTx. On a
+// successful delivery the T5 daily-transaction window counter is advanced
+// (see countGraduationTx) so the autonomy-graduation surface can report
+// throughput.
 func (c *Canoliq) DeliverTx(request *contract.PluginDeliverRequest) *contract.PluginDeliverResponse {
+	resp := c.dispatchDeliver(request)
+	if resp != nil && resp.Error == nil {
+		if err := c.countGraduationTx(); err != nil {
+			return &contract.PluginDeliverResponse{Error: err}
+		}
+	}
+	return resp
+}
+
+// dispatchDeliver routes a delivered tx to its message handler.
+func (c *Canoliq) dispatchDeliver(request *contract.PluginDeliverRequest) *contract.PluginDeliverResponse {
 	params, err := c.LoadParams()
 	if err != nil {
 		return &contract.PluginDeliverResponse{Error: err}

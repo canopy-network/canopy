@@ -76,6 +76,7 @@ func (s *RPCServer) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/spend/", s.handleSpend)
 	mux.HandleFunc("/v1/validators", s.handleValidators)
 	mux.HandleFunc("/v1/stakers", s.handleStakers)
+	mux.HandleFunc("/v1/graduation", s.handleGraduation)
 	// Phase 3 §1.1 per-address routes — fulfilled via the lazy queue
 	// drained in EndBlock (see lazy_query.go for the rationale).
 	mux.HandleFunc("/v1/account/", s.handleAccount)
@@ -111,6 +112,13 @@ func (s *RPCServer) handlePools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.plugin.QueryPools())
+}
+
+func (s *RPCServer) handleGraduation(w http.ResponseWriter, r *http.Request) {
+	if !methodIs(w, r, http.MethodGet) {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.plugin.QueryGraduation())
 }
 
 func (s *RPCServer) handleProposals(w http.ResponseWriter, r *http.Request) {

@@ -84,6 +84,22 @@ message CanoliqGlobals {
   // peak_tvl_ucnpy: running maximum of total_pooled_cnpy (T4). Drives the
   // insurance-fund target (5% of peak TVL); advanced each EndBlock.
   uint64 peak_tvl_ucnpy = 14; // @gotags: json:"peakTvlUcnpy"
+  // === T5 autonomy-graduation tracking counters ===
+  // passed_proposal_count: cumulative proposals that have passed.
+  uint64 passed_proposal_count = 15; // @gotags: json:"passedProposalCount"
+  // daily_tx_count_window: delivered-tx counter for the in-progress window.
+  uint64 daily_tx_count_window = 16; // @gotags: json:"dailyTxCountWindow"
+  // last_window_close_height: height the current tx-count window opened.
+  uint64 last_window_close_height = 17; // @gotags: json:"lastWindowCloseHeight"
+  // last_daily_tx_count: tx count of the last completed window (the metric).
+  uint64 last_daily_tx_count = 18; // @gotags: json:"lastDailyTxCount"
+  // turnout_sum_bps: sum of per-proposal turnout (votes/snapshot) in bps.
+  uint64 turnout_sum_bps = 19; // @gotags: json:"turnoutSumBps"
+  // turnout_sample_count: number of tallied proposals contributing turnout.
+  uint64 turnout_sample_count = 20; // @gotags: json:"turnoutSampleCount"
+  // treasury_spent_total: cumulative CNPY spent from treasury/canoliq, used to
+  // estimate the monthly burn for the runway metric.
+  uint64 treasury_spent_total = 21; // @gotags: json:"treasurySpentTotal"
 }
 
 // Redemption is a queued cCNPY → CNPY conversion that matures after the
@@ -189,6 +205,17 @@ message CanoliqParams {
   // per-block insurance skim turns off (the would-be amount stays in the
   // treasury). 0 disables the gate (skim always on).
   uint64 insurance_target_bps = 26; // @gotags: json:"insuranceTargetBps"
+  // === T5 autonomy-graduation thresholds (WP §10) ===
+  // graduation_min_tvl_ucnpy: TVL threshold (> $50M; flat uCNPY for now).
+  uint64 graduation_min_tvl_ucnpy = 27; // @gotags: json:"graduationMinTvlUcnpy"
+  // graduation_min_validators: active-validator threshold (> 30).
+  uint64 graduation_min_validators = 28; // @gotags: json:"graduationMinValidators"
+  // graduation_min_turnout_bps: average governance turnout threshold (> 15%).
+  uint64 graduation_min_turnout_bps = 29; // @gotags: json:"graduationMinTurnoutBps"
+  // graduation_min_daily_tx: daily-transaction threshold (> 10k).
+  uint64 graduation_min_daily_tx = 30; // @gotags: json:"graduationMinDailyTx"
+  // graduation_min_runway_months: treasury-runway threshold in months (> 12).
+  uint64 graduation_min_runway_months = 31; // @gotags: json:"graduationMinRunwayMonths"
 }
 
 // ActionType classifies a proposal so per-action governance tiers can apply

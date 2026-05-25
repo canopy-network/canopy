@@ -665,9 +665,25 @@ type CanoliqGlobals struct {
 	NextUnstakeId uint64 `protobuf:"varint,13,opt,name=next_unstake_id,json=nextUnstakeId,proto3" json:"nextUnstakeId"` // @gotags: json:"nextUnstakeId"
 	// peak_tvl_ucnpy: running maximum of total_pooled_cnpy (T4). Drives the
 	// insurance-fund target (5% of peak TVL); advanced each EndBlock.
-	PeakTvlUcnpy  uint64 `protobuf:"varint,14,opt,name=peak_tvl_ucnpy,json=peakTvlUcnpy,proto3" json:"peakTvlUcnpy"` // @gotags: json:"peakTvlUcnpy"
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PeakTvlUcnpy uint64 `protobuf:"varint,14,opt,name=peak_tvl_ucnpy,json=peakTvlUcnpy,proto3" json:"peakTvlUcnpy"` // @gotags: json:"peakTvlUcnpy"
+	// === T5 autonomy-graduation tracking counters ===
+	// passed_proposal_count: cumulative proposals that have passed.
+	PassedProposalCount uint64 `protobuf:"varint,15,opt,name=passed_proposal_count,json=passedProposalCount,proto3" json:"passedProposalCount"` // @gotags: json:"passedProposalCount"
+	// daily_tx_count_window: delivered-tx counter for the in-progress window.
+	DailyTxCountWindow uint64 `protobuf:"varint,16,opt,name=daily_tx_count_window,json=dailyTxCountWindow,proto3" json:"dailyTxCountWindow"` // @gotags: json:"dailyTxCountWindow"
+	// last_window_close_height: height the current tx-count window opened.
+	LastWindowCloseHeight uint64 `protobuf:"varint,17,opt,name=last_window_close_height,json=lastWindowCloseHeight,proto3" json:"lastWindowCloseHeight"` // @gotags: json:"lastWindowCloseHeight"
+	// last_daily_tx_count: tx count of the last completed window (the metric).
+	LastDailyTxCount uint64 `protobuf:"varint,18,opt,name=last_daily_tx_count,json=lastDailyTxCount,proto3" json:"lastDailyTxCount"` // @gotags: json:"lastDailyTxCount"
+	// turnout_sum_bps: sum of per-proposal turnout (votes/snapshot) in bps.
+	TurnoutSumBps uint64 `protobuf:"varint,19,opt,name=turnout_sum_bps,json=turnoutSumBps,proto3" json:"turnoutSumBps"` // @gotags: json:"turnoutSumBps"
+	// turnout_sample_count: number of tallied proposals contributing turnout.
+	TurnoutSampleCount uint64 `protobuf:"varint,20,opt,name=turnout_sample_count,json=turnoutSampleCount,proto3" json:"turnoutSampleCount"` // @gotags: json:"turnoutSampleCount"
+	// treasury_spent_total: cumulative CNPY spent from treasury/canoliq, used to
+	// estimate the monthly burn for the runway metric.
+	TreasurySpentTotal uint64 `protobuf:"varint,21,opt,name=treasury_spent_total,json=treasurySpentTotal,proto3" json:"treasurySpentTotal"` // @gotags: json:"treasurySpentTotal"
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *CanoliqGlobals) Reset() {
@@ -794,6 +810,55 @@ func (x *CanoliqGlobals) GetNextUnstakeId() uint64 {
 func (x *CanoliqGlobals) GetPeakTvlUcnpy() uint64 {
 	if x != nil {
 		return x.PeakTvlUcnpy
+	}
+	return 0
+}
+
+func (x *CanoliqGlobals) GetPassedProposalCount() uint64 {
+	if x != nil {
+		return x.PassedProposalCount
+	}
+	return 0
+}
+
+func (x *CanoliqGlobals) GetDailyTxCountWindow() uint64 {
+	if x != nil {
+		return x.DailyTxCountWindow
+	}
+	return 0
+}
+
+func (x *CanoliqGlobals) GetLastWindowCloseHeight() uint64 {
+	if x != nil {
+		return x.LastWindowCloseHeight
+	}
+	return 0
+}
+
+func (x *CanoliqGlobals) GetLastDailyTxCount() uint64 {
+	if x != nil {
+		return x.LastDailyTxCount
+	}
+	return 0
+}
+
+func (x *CanoliqGlobals) GetTurnoutSumBps() uint64 {
+	if x != nil {
+		return x.TurnoutSumBps
+	}
+	return 0
+}
+
+func (x *CanoliqGlobals) GetTurnoutSampleCount() uint64 {
+	if x != nil {
+		return x.TurnoutSampleCount
+	}
+	return 0
+}
+
+func (x *CanoliqGlobals) GetTreasurySpentTotal() uint64 {
+	if x != nil {
+		return x.TreasurySpentTotal
 	}
 	return 0
 }
@@ -1085,8 +1150,19 @@ type CanoliqParams struct {
 	// per-block insurance skim turns off (the would-be amount stays in the
 	// treasury). 0 disables the gate (skim always on).
 	InsuranceTargetBps uint64 `protobuf:"varint,26,opt,name=insurance_target_bps,json=insuranceTargetBps,proto3" json:"insuranceTargetBps"` // @gotags: json:"insuranceTargetBps"
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// === T5 autonomy-graduation thresholds (WP §10) ===
+	// graduation_min_tvl_ucnpy: TVL threshold (> $50M; flat uCNPY for now).
+	GraduationMinTvlUcnpy uint64 `protobuf:"varint,27,opt,name=graduation_min_tvl_ucnpy,json=graduationMinTvlUcnpy,proto3" json:"graduationMinTvlUcnpy"` // @gotags: json:"graduationMinTvlUcnpy"
+	// graduation_min_validators: active-validator threshold (> 30).
+	GraduationMinValidators uint64 `protobuf:"varint,28,opt,name=graduation_min_validators,json=graduationMinValidators,proto3" json:"graduationMinValidators"` // @gotags: json:"graduationMinValidators"
+	// graduation_min_turnout_bps: average governance turnout threshold (> 15%).
+	GraduationMinTurnoutBps uint64 `protobuf:"varint,29,opt,name=graduation_min_turnout_bps,json=graduationMinTurnoutBps,proto3" json:"graduationMinTurnoutBps"` // @gotags: json:"graduationMinTurnoutBps"
+	// graduation_min_daily_tx: daily-transaction threshold (> 10k).
+	GraduationMinDailyTx uint64 `protobuf:"varint,30,opt,name=graduation_min_daily_tx,json=graduationMinDailyTx,proto3" json:"graduationMinDailyTx"` // @gotags: json:"graduationMinDailyTx"
+	// graduation_min_runway_months: treasury-runway threshold in months (> 12).
+	GraduationMinRunwayMonths uint64 `protobuf:"varint,31,opt,name=graduation_min_runway_months,json=graduationMinRunwayMonths,proto3" json:"graduationMinRunwayMonths"` // @gotags: json:"graduationMinRunwayMonths"
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *CanoliqParams) Reset() {
@@ -1297,6 +1373,41 @@ func (x *CanoliqParams) GetTvlCapUcnpy() uint64 {
 func (x *CanoliqParams) GetInsuranceTargetBps() uint64 {
 	if x != nil {
 		return x.InsuranceTargetBps
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetGraduationMinTvlUcnpy() uint64 {
+	if x != nil {
+		return x.GraduationMinTvlUcnpy
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetGraduationMinValidators() uint64 {
+	if x != nil {
+		return x.GraduationMinValidators
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetGraduationMinTurnoutBps() uint64 {
+	if x != nil {
+		return x.GraduationMinTurnoutBps
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetGraduationMinDailyTx() uint64 {
+	if x != nil {
+		return x.GraduationMinDailyTx
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetGraduationMinRunwayMonths() uint64 {
+	if x != nil {
+		return x.GraduationMinRunwayMonths
 	}
 	return 0
 }
@@ -3163,7 +3274,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\x04R\x06amount\";\n" +
 	"\x16MessageCLIQClaimVested\x12!\n" +
-	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\"\x8c\x05\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\"\xe7\a\n" +
 	"\x0eCanoliqGlobals\x12,\n" +
 	"\x12total_ccnpy_supply\x18\x01 \x01(\x04R\x10totalCcnpySupply\x12*\n" +
 	"\x11total_pooled_cnpy\x18\x02 \x01(\x04R\x0ftotalPooledCnpy\x126\n" +
@@ -3179,7 +3290,14 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x0fnext_buyback_id\x18\v \x01(\x04R\rnextBuybackId\x12\"\n" +
 	"\rnext_spend_id\x18\f \x01(\x04R\vnextSpendId\x12&\n" +
 	"\x0fnext_unstake_id\x18\r \x01(\x04R\rnextUnstakeId\x12$\n" +
-	"\x0epeak_tvl_ucnpy\x18\x0e \x01(\x04R\fpeakTvlUcnpy\"\x8d\x01\n" +
+	"\x0epeak_tvl_ucnpy\x18\x0e \x01(\x04R\fpeakTvlUcnpy\x122\n" +
+	"\x15passed_proposal_count\x18\x0f \x01(\x04R\x13passedProposalCount\x121\n" +
+	"\x15daily_tx_count_window\x18\x10 \x01(\x04R\x12dailyTxCountWindow\x127\n" +
+	"\x18last_window_close_height\x18\x11 \x01(\x04R\x15lastWindowCloseHeight\x12-\n" +
+	"\x13last_daily_tx_count\x18\x12 \x01(\x04R\x10lastDailyTxCount\x12&\n" +
+	"\x0fturnout_sum_bps\x18\x13 \x01(\x04R\rturnoutSumBps\x120\n" +
+	"\x14turnout_sample_count\x18\x14 \x01(\x04R\x12turnoutSampleCount\x120\n" +
+	"\x14treasury_spent_total\x18\x15 \x01(\x04R\x12treasurySpentTotal\"\x8d\x01\n" +
 	"\n" +
 	"Redemption\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x18\n" +
@@ -3198,7 +3316,8 @@ const file_canoliq_proto_rawDesc = "" +
 	"\fstart_height\x18\x05 \x01(\x04R\vstartHeight\x12\x1d\n" +
 	"\n" +
 	"end_height\x18\x06 \x01(\x04R\tendHeight\x12%\n" +
-	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\x97\b\n" +
+	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\xc1\n" +
+	"\n" +
 	"\rCanoliqParams\x12\x17\n" +
 	"\afee_bps\x18\x01 \x01(\x04R\x06feeBps\x12&\n" +
 	"\x0fuser_rebate_bps\x18\x02 \x01(\x04R\ruserRebateBps\x12!\n" +
@@ -3232,7 +3351,12 @@ const file_canoliq_proto_rawDesc = "" +
 	"governance\x18\x18 \x03(\v2\x15.types.GovernanceTierR\n" +
 	"governance\x12\"\n" +
 	"\rtvl_cap_ucnpy\x18\x19 \x01(\x04R\vtvlCapUcnpy\x120\n" +
-	"\x14insurance_target_bps\x18\x1a \x01(\x04R\x12insuranceTargetBps\"\xd8\x01\n" +
+	"\x14insurance_target_bps\x18\x1a \x01(\x04R\x12insuranceTargetBps\x127\n" +
+	"\x18graduation_min_tvl_ucnpy\x18\x1b \x01(\x04R\x15graduationMinTvlUcnpy\x12:\n" +
+	"\x19graduation_min_validators\x18\x1c \x01(\x04R\x17graduationMinValidators\x12;\n" +
+	"\x1agraduation_min_turnout_bps\x18\x1d \x01(\x04R\x17graduationMinTurnoutBps\x125\n" +
+	"\x17graduation_min_daily_tx\x18\x1e \x01(\x04R\x14graduationMinDailyTx\x12?\n" +
+	"\x1cgraduation_min_runway_months\x18\x1f \x01(\x04R\x19graduationMinRunwayMonths\"\xd8\x01\n" +
 	"\x0eGovernanceTier\x12)\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x11.types.ActionTypeR\x06action\x12\x1d\n" +
 	"\n" +

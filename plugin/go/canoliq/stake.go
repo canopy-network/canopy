@@ -19,6 +19,10 @@ import (
 // (30*24*3600/6). Used to convert lock-tier durations to block counts.
 const blocksPerMonth = 432_000
 
+// blocksPerDay approximates a day at the 6s block time (24*3600/6). Bounds the
+// T5 daily-transaction rolling window.
+const blocksPerDay = 14_400
+
 // tierMultipliers returns the voting multiplier (in bps, 10000 = 1×) and the
 // reward-share boost (in bps) for a lock tier (Tokenomics v1.1 §4.2).
 //

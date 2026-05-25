@@ -485,29 +485,47 @@ Whitepaper §10 thresholds:
 | Daily transactions | > 10 k |
 | Runway (treasury / monthly burn) | > 12 mo |
 
+**Status: landed and tested (2026-05-25).** Full suite green.
+
 ### Proto + state
-- [ ] `CanoliqParams` gains `graduation_min_tvl_ucnpy`,
-      `graduation_min_validators`, `graduation_min_turnout_bps`,
-      `graduation_min_daily_tx`, `graduation_min_runway_months`. All
-      governance-tunable; defaults from §10.
-- [ ] `CanoliqGlobals` gains `passed_proposal_count` (incremented in
-      `dispatchPassed`), `daily_tx_count_window` (rolling counter), and
-      `last_window_close_height` for turnout / tx-volume measurement.
-- [ ] `GraduationStatus` on `Snapshot`.
+- [x] `CanoliqParams` gained `graduation_min_{tvl_ucnpy, validators,
+      turnout_bps, daily_tx, runway_months}` (fields 27–31), defaults from §10
+      (TVL = 50e12 uCNPY placeholder ≈ $50M at $1/CNPY).
+- [x] `CanoliqGlobals` gained `passed_proposal_count`, `daily_tx_count_window`,
+      `last_window_close_height` (plan) **plus** `last_daily_tx_count`,
+      `turnout_sum_bps`, `turnout_sample_count`, `treasury_spent_total` (added
+      — needed for completed-window reporting, the turnout running average, and
+      the runway burn estimate respectively).
+- [x] Surfaced via `GraduationView` from the snapshot (rather than a
+      `GraduationStatus` struct on `Snapshot` — the snapshot already carries
+      globals + params + registry, so `QueryGraduation` derives metrics
+      directly).
 
 ### Behaviour
-- [ ] `BeginBlock` advances the rolling window; each handler increments
-      `daily_tx_count_window`.
-- [ ] `dispatchPassed` advances `passed_proposal_count`.
-- [ ] New route `GET /v1/graduation` returns each metric, its threshold,
-      the ratio, and a composite `eligible bool`.
+- [x] `BeginBlock` advances the rolling window (`advanceGraduationWindow`:
+      anchors on the first post-genesis block, resets at `blocksPerDay`
+      boundaries recording `last_daily_tx_count`). Per-tx counting lives in a
+      `DeliverTx` wrapper (`countGraduationTx`) that increments only on a
+      successful delivery — cleaner than touching every handler, and the
+      post-handler fresh load avoids clobbering handler state.
+- [x] `processProposals` increments `passed_proposal_count` on pass and records
+      per-proposal turnout (for pass *and* fail) via accumulated deltas applied
+      against a fresh globals load (avoids the `queueTreasurySpend` RMW clash).
+      `applySpend` tracks `treasury_spent_total` (CNPY burn) for runway.
+- [x] New route `GET /v1/graduation` returns each metric (value + threshold +
+      `met`) and a composite `eligible`. Runway = treasury / amortized monthly
+      burn; positive treasury with zero burn reports a `runwayInfinite`
+      sentinel (met). All thresholds use a strict `>`.
 
-### T5 tests
-- [ ] Each metric crosses threshold independently; `eligible` flips only
-      when all five are met.
-- [ ] Passed-proposal counter advances on pass; failed proposals don't
-      increment.
-- [ ] Rolling window resets exactly at boundary blocks.
+### T5 tests (`t5_graduation_test.go`)
+- [x] Each metric crosses threshold independently; `eligible` flips when any
+      one is broken (`TestT5EligibleWhenAllMet`, `TestT5EligibleFlipsPerMetric`
+      with 5 subtests).
+- [x] Passed-proposal counter advances on pass only; turnout recorded for both
+      (`TestT5PassedProposalAndTurnoutCounters`).
+- [x] Rolling window anchors, holds pre-boundary, resets at boundary
+      (`TestT5RollingWindowReset`); per-tx counting only on success
+      (`TestT5DeliverTxCountsOnSuccessOnly`).
 
 ## T6. Alerting hooks (old plan Phase 3 §2)
 
