@@ -5,6 +5,7 @@ import (
 	"math"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -44,11 +45,21 @@ type rootCacheStateStore interface {
 
 // cache is the set of items to be cached used by the state machine
 type cache struct {
-	accounts     map[uint64]*Account // cache of accounts accessed
-	pools        map[uint64]*Pool    // cache of pools accessed
-	feeParams    *FeeParams          // fee params for the current block
-	valParams    *ValidatorParams    // validator params for the current block
-	rootDexBatch *lib.DexBatch       // root dex batch
+	accounts           map[uint64]*Account   // cache of accounts accessed
+	pools              map[uint64]*Pool      // cache of pools accessed
+	feeParams          *FeeParams            // fee params for the current block
+	valParams          *ValidatorParams      // validator params for the current block
+	rootDexBatch       *lib.DexBatch         // root dex batch
+	liveValidators     []*Validator          // private validator cache for the FSM's current height
+	sharedValidatorSet uint64                // historical height eligible for insertion into the shared validator cache
+	sharedCache        *validatorSharedCache // shared rolling cache of historical validators by height
+}
+
+// validatorSharedCache stores historical validator lists for reuse across FSM snapshots
+type validatorSharedCache struct {
+	sync.RWMutex
+	heights []uint64
+	sets    map[uint64][]*Validator
 }
 
 // New() creates a new instance of a StateMachine
@@ -68,6 +79,9 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 		cache: &cache{
 			accounts: make(map[uint64]*Account),
 			pools:    make(map[uint64]*Pool),
+			sharedCache: &validatorSharedCache{
+				sets: make(map[uint64][]*Validator),
+			},
 		},
 	}
 	// initialize the state machine
@@ -398,7 +412,24 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 		return nil, err
 	}
 	// initialize a new state machine
-	return New(s.Config, heightStore, s.Plugin, s.Metrics, s.log)
+	historicalFSM, err := New(s.Config, heightStore, s.Plugin, s.Metrics, s.log)
+	if err != nil {
+		return nil, err
+	}
+	// historical FSMs share the rolling validator cache but keep a private live cache field
+	historicalFSM.cache.sharedCache = s.cache.sharedCache
+	if height < s.height && s.cache.sharedCache != nil {
+		s.cache.sharedCache.RLock()
+		// set the live validators using the historical cache
+		if validators, ok := s.cache.sharedCache.sets[height]; ok {
+			historicalFSM.cache.liveValidators = validators
+		} else {
+			// defer insertion until first validator access to avoid unnecessary historical scans
+			historicalFSM.cache.sharedValidatorSet = height
+		}
+		s.cache.sharedCache.RUnlock()
+	}
+	return historicalFSM, nil
 }
 
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
@@ -608,6 +639,7 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 			accounts:     make(map[uint64]*Account),
 			pools:        make(map[uint64]*Pool),
 			rootDexBatch: s.cache.rootDexBatch,
+			sharedCache:  s.cache.sharedCache,
 		},
 		LastValidatorSet: s.LastValidatorSet,
 	}, nil
@@ -718,6 +750,8 @@ func (s *StateMachine) Reset() {
 func (s *StateMachine) ResetCaches() {
 	s.cache.accounts = make(map[uint64]*Account)
 	s.cache.pools = make(map[uint64]*Pool)
+	s.cache.liveValidators = nil
+	s.cache.sharedValidatorSet = 0
 	// Params caches must not outlive the current store view, otherwise Reset()/rollback
 	// can leave the FSM reading stale values that disagree with the underlying store.
 	s.cache.valParams = nil
