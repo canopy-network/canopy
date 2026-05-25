@@ -391,6 +391,17 @@ window.loadMyPredictions = async function () {
 // ═══════════════════════════════════════════
 // RENDER MARKET CARDS — Premium Design
 // ═══════════════════════════════════════════
+function resolverTier(addr) {
+  const r = _resolverRegistry.get(addr);
+  if (!r) return null;
+  const s = r.stake;
+  const p = r.proposalCount;
+  if (s >= 4_000_000n && p >= 50) return {label:'Gold',   color:'#FFD700', icon:'★'};
+  if (s >= 2_500_000n && p >= 10) return {label:'Silver', color:'#C0C0C0', icon:'◆'};
+  if (s >= 1_500_000n)            return {label:'Bronze', color:'#CD7F32', icon:'▲'};
+  return null;
+}
+
 function renderMarketCards(markets) {
   var parts = [];
   parts.push('<div class="mgrid">');
@@ -414,7 +425,11 @@ function renderMarketCards(markets) {
     if (expired) banner = '<div class="mc-banner bnr"><span>⏳</span> Awaiting resolver proposal</div>';
     if (cancelled) banner = '<div class="mc-banner bnr"><span>✕</span> Market cancelled — reclaim your stake</div>';
     if (voided) banner = '<div class="mc-banner bnr"><span>⚠</span> Market voided — full refund available</div>';
-    if (proposed) banner = '<div class="mc-banner bnr"><span>🔎</span> Resolver: ' + (m.resolver ? m.resolver.slice(0,8) + '\u2026' : '?') + ' \u2014 proposed ' + (m.proposedOutcome ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--red)">NO</span>') + '</div>';
+    if (proposed) {
+      var tier = m.resolver ? resolverTier(m.resolver) : null;
+      var tierBadge = tier ? ' <span style="color:' + tier.color + ';font-size:9px">' + tier.icon + ' ' + tier.label + '</span>' : '';
+      banner = '<div class="mc-banner bnr"><span>🔎</span> Resolver: ' + (m.resolver ? m.resolver.slice(0,8) + '\u2026' : '?') + tierBadge + ' \u2014 proposed ' + (m.proposedOutcome ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--red)">NO</span>') + '</div>';
+    }
     if (disputed) banner = '<div class="mc-banner bnd"><span>⚡</span> Dispute active — panel vote in progress</div>';
     if (finalized) banner = '<div class="mc-banner bnf"><span>✓</span> Market finalized</div>';
     var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
@@ -443,6 +458,7 @@ function renderMarketCards(markets) {
 
 // store markets globally for detail view
 let _allMarkets = [];
+let _resolverRegistry = new Map(); // address -> {stake, proposalCount}
 
 window.showDetail = function(marketId) {
   const m = _allMarkets.find(x => x.marketId === marketId || x.txHash === marketId);
@@ -473,7 +489,9 @@ window.showDetail = function(marketId) {
   const resolverRow = document.getElementById('det-resolver-row');
   if (m.resolver) {
     resolverRow.style.display = '';
-    document.getElementById('det-resolver').textContent = m.resolver + (m.proposedOutcome !== undefined ? ' → proposed ' + (m.proposedOutcome ? 'YES' : 'NO') : '');
+    const tier = m.resolver ? resolverTier(m.resolver) : null;
+  const tierHtml = tier ? ' <span style="color:' + tier.color + '">' + tier.icon + ' ' + tier.label + '</span>' : '';
+  document.getElementById('det-resolver').innerHTML = (m.resolver || '—') + tierHtml + (m.proposedOutcome !== undefined ? ' → proposed ' + (m.proposedOutcome ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--red)">NO</span>') : '');
   } else {
     resolverRow.style.display = 'none';
   }
@@ -713,6 +731,26 @@ window.loadMarkets = async function () {
       m.status = 4;
       m.resolver = resolver;
       m.proposedOutcome = msg.proposedOutcome;
+    }
+
+    // Build resolver registry
+    for (const tx of allTxs) {
+      if (tx.messageType !== 'register_resolver') continue;
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const addr = tx.sender || '';
+      let stake = BigInt(msg.stakeAmount || msg.stake_amount || 0);
+      if (!_resolverRegistry.has(addr)) {
+        _resolverRegistry.set(addr, { stake, proposalCount: 0 });
+      } else {
+        _resolverRegistry.get(addr).stake = stake;
+      }
+    }
+    for (const tx of allTxs) {
+      if (tx.messageType !== 'propose_outcome') continue;
+      const addr = tx.sender || '';
+      if (_resolverRegistry.has(addr)) {
+        _resolverRegistry.get(addr).proposalCount++;
+      }
     }
 
     for (const tx of allTxs) {
@@ -1418,6 +1456,9 @@ const PRAXIS_ERRORS = {
   196: 'This market is not eligible for reclaim',
   197: "Reclaim window hasn't opened yet — wait 300 blocks after expiry",
   198: 'Nothing to reclaim for this wallet',
+  199: 'You hold a position in this market and cannot act as resolver. Transfer or forfeit your shares first.',
+  200: 'The market creator cannot resolve their own market.',
+  201: 'This prediction would exceed the 20% per-address position cap for this market. Try a smaller amount.',
 };
 
 function friendlyError(code, msg) {
