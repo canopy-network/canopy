@@ -347,37 +347,53 @@ Tokenomics v1.1 §4.2:
 | 12 mo | 3× | +50 % |
 | 24 mo | 4× | +75 % |
 
+**Status: landed and tested (2026-05-22).** Full suite green.
+
 ### Proto + state
-- [ ] Extend `CLIQStake` with `lock_tier` enum (LOCK_NONE / LOCK_3M /
-      LOCK_6M / LOCK_12M / LOCK_24M) and `lock_end_height`.
-- [ ] `MessageCLIQStake` gains a `lock_tier` field; voting weight, unstake
+- [x] Extended `CLIQStake` with `lock_tier` (`LockTier` enum: LOCK_NONE /
+      LOCK_3M / LOCK_6M / LOCK_12M / LOCK_24M) and `lock_end_height`.
+- [x] `MessageCLIQStake` gained `lock_tier`; voting weight, unstake
       eligibility, and reward boost derive from it.
-- [ ] Add `tierMultipliers()` helper returning `(voteX, boostBps)` for each
-      tier.
+- [x] `tierMultipliers()` returns `(voteMultBps, boostBps)` (10000 = 1×);
+      `lockTierDurationBlocks()` converts tiers to blocks
+      (`blocksPerMonth = 432_000` at 6s); `validLockTier()` range-checks.
 
 ### Behaviour
-- [ ] `governance.go::voteWeightFor` multiplies raw stake by the voter's
-      tier `voteX`.
-- [ ] `reward.go::distributeValidatorShare` and the
-      `BUYBACK_DISTRIBUTE_STAKERS` path apply tier `boostBps` to each
-      staker's share. Boost remainder credited to the largest-stake
-      LOCK_24M staker.
-- [ ] `MessageCLIQUnstake` rejects when `current_height <
-      stake.lock_end_height` (unless tier is LOCK_NONE).
+- [x] `voteWeightFor(stake)` (new in `stake.go`) scales raw stake by the
+      tier `voteMultBps`; the vote handler uses it.
+- [x] `BUYBACK_DISTRIBUTE_STAKERS` (`distributeBuybackToStakers`) applies
+      tier `boostBps` to each staker's effective weight; rounding remainder
+      goes to the largest-stake LOCK_24M staker (fallback: largest overall).
+      **Deviation from plan:** the boost is *not* applied to
+      `distributeValidatorShare` — that path pays the 15 % slice to committee
+      validators (`ValidatorRegistry`), not CLIQ stakers, so the §4.2
+      vote-escrow boost doesn't belong there. Vote-escrow boost is a
+      CLIQ-staker reward, hence the buyback-distribution path only.
+- [x] Stake aggregation rule: locks only ever **strengthen** — a higher tier
+      raises the record and pushes `lock_end_height` out; adding LOCK_NONE to
+      a locked record leaves the lock intact (added tokens inherit it).
+- [x] `DeliverMessageCLIQUnstake` rejects with `ErrStakeLocked` when
+      `lock_tier != LOCK_NONE && current_height < lock_end_height`. (Enforced
+      in Deliver, not the stateless Check.) Tier range checked in
+      `CheckMessageCLIQStake` (`ErrInvalidLockTier`).
 
 ### CLI
-- [ ] `canoliqctl stake` gains `--lock {none,3m,6m,12m,24m}`.
+- [x] `canoliqctl cliq-stake` gained `--lock {none,3m,6m,12m,24m}`
+      (`parseLockFlag` / `parseLockTier`).
 
-### T2 tests
-- [ ] Tier resolver returns the right `(voteX, boostBps)` for each tier;
-      out-of-range rejects.
-- [ ] Voting weight scales with tier; a LOCK_24M staker with X CLIQ
-      out-votes 3 × LOCK_NONE stakers with X each.
-- [ ] Reward boost: in a two-staker fixture (LOCK_NONE 100 CLIQ, LOCK_12M
-      100 CLIQ), the LOCK_12M staker receives `(1 + 0.50)`× the LOCK_NONE
-      staker's share, modulo rounding. Verify conservation: sum of boosted
-      shares == `split.Validators`.
-- [ ] Pre-lock-end unstake rejected; post-lock-end accepted.
+### T2 tests (`t2_voteescrow_test.go`)
+- [x] Tier resolver values + durations; `validLockTier` rejects out-of-range
+      (`TestT2TierMultipliers`).
+- [x] Voting weight scales with tier; a LOCK_24M staker out-votes 3 ×
+      LOCK_NONE stakers (`TestT2VoteWeightForScalesWithTier`,
+      `TestT2VoteTallyAppliesMultiplier` — yes 4X vs no 3X end-to-end).
+- [x] Reward boost: LOCK_NONE 100 + LOCK_12M 100 → 100 / 150 (1.5×), exact
+      conservation to `cliqAcquired` (`TestT2RewardBoostInBuybackDistribution`).
+      (Conservation target is `cliqAcquired`, not `split.Validators` — the
+      boost lives in the buyback-distribution path per the deviation above.)
+- [x] Pre-lock-end unstake rejected, post-lock-end accepted
+      (`TestT2UnstakeLockGate`); lock-strengthen aggregation
+      (`TestT2StakeLockOnlyStrengthens`).
 
 ## T3. TVL self-cap (audit F9)
 

@@ -222,6 +222,9 @@ message MessageCLIQStake {
   bytes from_address = 1; // @gotags: json:"fromAddress"
   // amount: liquid CLIQ to lock (uCLIQ)
   uint64 amount = 2;
+  // lock_tier: vote-escrow lock to commit this stake to (T2). LOCK_NONE keeps
+  // the stake liquid-to-unstake after the standard unbond window.
+  LockTier lock_tier = 3; // @gotags: json:"lockTier"
 }
 
 // MessageCLIQUnstake debits the staker's CLIQStake and queues an unbond
@@ -297,6 +300,16 @@ message MessageMultisigApprove {
   uint64 spend_id = 2; // @gotags: json:"spendId"
 }
 
+// LockTier is the vote-escrow lock duration a staker commits to (Tokenomics
+// v1.1 §4.2). Longer locks grant a higher voting multiplier and reward boost.
+enum LockTier {
+  LOCK_NONE = 0;
+  LOCK_3M = 1;
+  LOCK_6M = 2;
+  LOCK_12M = 3;
+  LOCK_24M = 4;
+}
+
 // CLIQStake is the per-address active stake record.
 message CLIQStake {
   // address: the staker
@@ -307,6 +320,12 @@ message CLIQStake {
   // proposal-vote eligibility (vote weight = 0 if staked_at_height >
   // proposal.creation_height).
   uint64 staked_at_height = 3; // @gotags: json:"stakedAtHeight"
+  // lock_tier: vote-escrow lock tier (T2). Drives voting multiplier, reward
+  // boost, and the unstake-eligibility height. Locks only ever strengthen:
+  // re-staking with a higher tier raises this and pushes lock_end_height out.
+  LockTier lock_tier = 4; // @gotags: json:"lockTier"
+  // lock_end_height: earliest height an unstake is permitted (0 for LOCK_NONE).
+  uint64 lock_end_height = 5; // @gotags: json:"lockEndHeight"
 }
 
 // UnstakingCLIQ is a queued unstake awaiting maturity.

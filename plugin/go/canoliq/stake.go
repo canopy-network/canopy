@@ -15,6 +15,71 @@ import (
 // (see governance.go::voteWeightFor); to enable that snapshot,
 // CLIQStake.staked_at_height records the latest stake increase.
 
+// blocksPerMonth approximates a 30-day month at the 6s block time
+// (30*24*3600/6). Used to convert lock-tier durations to block counts.
+const blocksPerMonth = 432_000
+
+// tierMultipliers returns the voting multiplier (in bps, 10000 = 1×) and the
+// reward-share boost (in bps) for a lock tier (Tokenomics v1.1 §4.2).
+//
+//	tier      voting×   reward boost
+//	NONE      1.0×      base
+//	3M        1.5×      +10%
+//	6M        2.0×      +25%
+//	12M       3.0×      +50%
+//	24M       4.0×      +75%
+func tierMultipliers(tier contract.LockTier) (voteMultBps, boostBps uint64) {
+	switch tier {
+	case contract.LockTier_LOCK_3M:
+		return 15_000, 1_000
+	case contract.LockTier_LOCK_6M:
+		return 20_000, 2_500
+	case contract.LockTier_LOCK_12M:
+		return 30_000, 5_000
+	case contract.LockTier_LOCK_24M:
+		return 40_000, 7_500
+	default: // LOCK_NONE
+		return 10_000, 0
+	}
+}
+
+// lockTierDurationBlocks returns the lock duration in blocks for a tier.
+func lockTierDurationBlocks(tier contract.LockTier) uint64 {
+	switch tier {
+	case contract.LockTier_LOCK_3M:
+		return 3 * blocksPerMonth
+	case contract.LockTier_LOCK_6M:
+		return 6 * blocksPerMonth
+	case contract.LockTier_LOCK_12M:
+		return 12 * blocksPerMonth
+	case contract.LockTier_LOCK_24M:
+		return 24 * blocksPerMonth
+	default: // LOCK_NONE
+		return 0
+	}
+}
+
+// validLockTier reports whether t is a known LockTier enum value.
+func validLockTier(t contract.LockTier) bool {
+	switch t {
+	case contract.LockTier_LOCK_NONE, contract.LockTier_LOCK_3M, contract.LockTier_LOCK_6M,
+		contract.LockTier_LOCK_12M, contract.LockTier_LOCK_24M:
+		return true
+	default:
+		return false
+	}
+}
+
+// voteWeightFor returns a staker's governance weight: raw stake scaled by the
+// lock tier's voting multiplier (T2). Zero for an absent record.
+func voteWeightFor(stake *contract.CLIQStake) uint64 {
+	if stake == nil || stake.Address == nil {
+		return 0
+	}
+	voteMultBps, _ := tierMultipliers(stake.LockTier)
+	return mulDiv(stake.Amount, voteMultBps, 10_000)
+}
+
 // CheckMessageCLIQStake validates a stake request statelessly.
 func (c *Canoliq) CheckMessageCLIQStake(msg *contract.MessageCLIQStake, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 {
@@ -22,6 +87,9 @@ func (c *Canoliq) CheckMessageCLIQStake(msg *contract.MessageCLIQStake, fee uint
 	}
 	if msg.Amount == 0 {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if !validLockTier(msg.LockTier) {
+		return &contract.PluginCheckResponse{Error: ErrInvalidLockTier()}
 	}
 	if fee < params.StakeFee {
 		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
@@ -141,12 +209,28 @@ func (c *Canoliq) DeliverMessageCLIQStake(msg *contract.MessageCLIQStake, fee ui
 	cnpy.Amount -= fee
 	feePool.Amount += fee
 	height := c.currentHeight()
+	newLockEnd := height + lockTierDurationBlocks(msg.LockTier)
 	if !stakePresent {
-		stake = &contract.CLIQStake{Address: msg.FromAddress, Amount: msg.Amount, StakedAtHeight: height}
+		stake = &contract.CLIQStake{
+			Address:       msg.FromAddress,
+			Amount:        msg.Amount,
+			StakedAtHeight: height,
+			LockTier:      msg.LockTier,
+			LockEndHeight: newLockEnd,
+		}
 		idx.Addresses = appendStakerIfMissing(idx.Addresses, msg.FromAddress)
 	} else {
 		stake.Amount += msg.Amount
 		stake.StakedAtHeight = height
+		// Locks only ever strengthen: a higher tier raises the record's tier
+		// and a later end pushes lock_end_height out. Adding LOCK_NONE to an
+		// existing lock leaves both untouched (added tokens inherit the lock).
+		if msg.LockTier > stake.LockTier {
+			stake.LockTier = msg.LockTier
+		}
+		if newLockEnd > stake.LockEndHeight {
+			stake.LockEndHeight = newLockEnd
+		}
 	}
 	globals.TotalStakedCliq += msg.Amount
 	stakeBz, e := contract.Marshal(stake)
@@ -261,6 +345,10 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 	}
 	if !stakePresent || stake.Amount < msg.Amount {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientStakedCLIQ()}
+	}
+	// Vote-escrow lock: locked stake cannot unstake until lock_end_height (T2).
+	if stake.LockTier != contract.LockTier_LOCK_NONE && c.currentHeight() < stake.LockEndHeight {
+		return &contract.PluginDeliverResponse{Error: ErrStakeLocked()}
 	}
 	if cnpy.Amount < fee {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}

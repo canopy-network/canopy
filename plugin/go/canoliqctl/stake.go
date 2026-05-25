@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
@@ -9,16 +10,21 @@ import (
 
 // cmdCLIQStake submits MessageCLIQStake, locking liquid CLIQ into a stake
 // record that confers governance weight on proposals created from this
-// height onward.
+// height onward. The optional --lock flag commits the stake to a vote-escrow
+// tier (T2) for a higher voting multiplier + reward boost.
 func cmdCLIQStake(args []string, gf globalFlags) error {
-	if err := requireArgs(args, 2, commandUsages["cliq-stake"]); err != nil {
-		return err
-	}
-	signer, err := fetchSigner(gf.adminURL, args[0], gf.password)
+	rest, lockTier, err := parseLockFlag(args)
 	if err != nil {
 		return err
 	}
-	amount, err := parseUint(args[1], "amount")
+	if err := requireArgs(rest, 2, commandUsages["cliq-stake"]); err != nil {
+		return err
+	}
+	signer, err := fetchSigner(gf.adminURL, rest[0], gf.password)
+	if err != nil {
+		return err
+	}
+	amount, err := parseUint(rest[1], "amount")
 	if err != nil {
 		return err
 	}
@@ -27,13 +33,59 @@ func cmdCLIQStake(args []string, gf globalFlags) error {
 		return err
 	}
 
-	msg := &contract.MessageCLIQStake{FromAddress: from, Amount: amount}
+	msg := &contract.MessageCLIQStake{FromAddress: from, Amount: amount, LockTier: lockTier}
 	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cliq_stake", msg, txParams(gf))
 	if err != nil {
 		return err
 	}
-	fmt.Printf("cliq-stake submitted: tx_hash=%s from=%s amount=%d\n", hash, signer.Address, amount)
+	fmt.Printf("cliq-stake submitted: tx_hash=%s from=%s amount=%d lock=%s\n",
+		hash, signer.Address, amount, strings.ToLower(strings.TrimPrefix(lockTier.String(), "LOCK_")))
 	return nil
+}
+
+// parseLockFlag pulls an optional "--lock <tier>" out of args and returns the
+// remaining positionals plus the resolved LockTier (default LOCK_NONE).
+func parseLockFlag(args []string) (positional []string, tier contract.LockTier, err error) {
+	tier = contract.LockTier_LOCK_NONE
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "--lock":
+			if i+1 >= len(args) {
+				return nil, tier, fmt.Errorf("--lock requires a value (none|3m|6m|12m|24m)")
+			}
+			tier, err = parseLockTier(args[i+1])
+			if err != nil {
+				return nil, tier, err
+			}
+			i++
+		case strings.HasPrefix(args[i], "--lock="):
+			tier, err = parseLockTier(strings.TrimPrefix(args[i], "--lock="))
+			if err != nil {
+				return nil, tier, err
+			}
+		default:
+			positional = append(positional, args[i])
+		}
+	}
+	return positional, tier, nil
+}
+
+// parseLockTier maps a CLI lock token to a LockTier enum value.
+func parseLockTier(s string) (contract.LockTier, error) {
+	switch strings.ToLower(s) {
+	case "", "none":
+		return contract.LockTier_LOCK_NONE, nil
+	case "3m":
+		return contract.LockTier_LOCK_3M, nil
+	case "6m":
+		return contract.LockTier_LOCK_6M, nil
+	case "12m":
+		return contract.LockTier_LOCK_12M, nil
+	case "24m":
+		return contract.LockTier_LOCK_24M, nil
+	default:
+		return contract.LockTier_LOCK_NONE, fmt.Errorf("invalid --lock %q (want none|3m|6m|12m|24m)", s)
+	}
 }
 
 // cmdCLIQUnstake submits MessageCLIQUnstake, debiting the staker's record and

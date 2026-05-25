@@ -48,6 +48,8 @@ const (
 	codeInvalidProposalPayload
 	codeInsufficientTreasuryCLIQ
 	codeInsufficientTreasuryCNPY
+	codeInvalidLockTier
+	codeStakeLocked
 )
 
 // newError constructs a PluginError stamped with the canoLiq module.
@@ -239,4 +241,14 @@ func ErrInsufficientTreasuryCLIQ() *contract.PluginError {
 // ErrInsufficientTreasuryCNPY reports a treasury_canopy draw beyond available.
 func ErrInsufficientTreasuryCNPY() *contract.PluginError {
 	return newError(codeInsufficientTreasuryCNPY, "insufficient CNPY in DAO treasury")
+}
+
+// ErrInvalidLockTier reports a stake with an unknown vote-escrow lock tier.
+func ErrInvalidLockTier() *contract.PluginError {
+	return newError(codeInvalidLockTier, "invalid vote-escrow lock tier")
+}
+
+// ErrStakeLocked reports an unstake before the vote-escrow lock_end_height.
+func ErrStakeLocked() *contract.PluginError {
+	return newError(codeStakeLocked, "stake is locked until lock_end_height")
 }

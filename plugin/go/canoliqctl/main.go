@@ -49,7 +49,7 @@ var commandUsages = map[string]string{
 	"claim":              "claim <nickname> <redemption-id>",
 	"cliq-transfer":      "cliq-transfer <from-nickname> <to-address-hex> <amount-uCLIQ>",
 	"cliq-claim-vested":  "cliq-claim-vested <nickname>",
-	"cliq-stake":         "cliq-stake <nickname> <amount-uCLIQ>",
+	"cliq-stake":         "cliq-stake <nickname> <amount-uCLIQ> [--lock none|3m|6m|12m|24m]",
 	"cliq-unstake":       "cliq-unstake <nickname> <amount-uCLIQ>",
 	"cliq-claim-unstake": "cliq-claim-unstake <nickname> <unstake-id>",
 	"vote":               "vote <nickname> <proposal-id> <yes|no|abstain>",

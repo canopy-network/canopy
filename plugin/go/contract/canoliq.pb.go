@@ -89,6 +89,63 @@ func (ActionType) EnumDescriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{0}
 }
 
+// LockTier is the vote-escrow lock duration a staker commits to (Tokenomics
+// v1.1 §4.2). Longer locks grant a higher voting multiplier and reward boost.
+type LockTier int32
+
+const (
+	LockTier_LOCK_NONE LockTier = 0
+	LockTier_LOCK_3M   LockTier = 1
+	LockTier_LOCK_6M   LockTier = 2
+	LockTier_LOCK_12M  LockTier = 3
+	LockTier_LOCK_24M  LockTier = 4
+)
+
+// Enum value maps for LockTier.
+var (
+	LockTier_name = map[int32]string{
+		0: "LOCK_NONE",
+		1: "LOCK_3M",
+		2: "LOCK_6M",
+		3: "LOCK_12M",
+		4: "LOCK_24M",
+	}
+	LockTier_value = map[string]int32{
+		"LOCK_NONE": 0,
+		"LOCK_3M":   1,
+		"LOCK_6M":   2,
+		"LOCK_12M":  3,
+		"LOCK_24M":  4,
+	}
+)
+
+func (x LockTier) Enum() *LockTier {
+	p := new(LockTier)
+	*p = x
+	return p
+}
+
+func (x LockTier) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (LockTier) Descriptor() protoreflect.EnumDescriptor {
+	return file_canoliq_proto_enumTypes[1].Descriptor()
+}
+
+func (LockTier) Type() protoreflect.EnumType {
+	return &file_canoliq_proto_enumTypes[1]
+}
+
+func (x LockTier) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use LockTier.Descriptor instead.
+func (LockTier) EnumDescriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{1}
+}
+
 // VoteChoice enumerates the legal vote selections.
 type VoteChoice int32
 
@@ -126,11 +183,11 @@ func (x VoteChoice) String() string {
 }
 
 func (VoteChoice) Descriptor() protoreflect.EnumDescriptor {
-	return file_canoliq_proto_enumTypes[1].Descriptor()
+	return file_canoliq_proto_enumTypes[2].Descriptor()
 }
 
 func (VoteChoice) Type() protoreflect.EnumType {
-	return &file_canoliq_proto_enumTypes[1]
+	return &file_canoliq_proto_enumTypes[2]
 }
 
 func (x VoteChoice) Number() protoreflect.EnumNumber {
@@ -139,7 +196,7 @@ func (x VoteChoice) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VoteChoice.Descriptor instead.
 func (VoteChoice) EnumDescriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{1}
+	return file_canoliq_proto_rawDescGZIP(), []int{2}
 }
 
 // ProposalStatus tracks proposal state through its lifecycle.
@@ -182,11 +239,11 @@ func (x ProposalStatus) String() string {
 }
 
 func (ProposalStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_canoliq_proto_enumTypes[2].Descriptor()
+	return file_canoliq_proto_enumTypes[3].Descriptor()
 }
 
 func (ProposalStatus) Type() protoreflect.EnumType {
-	return &file_canoliq_proto_enumTypes[2]
+	return &file_canoliq_proto_enumTypes[3]
 }
 
 func (x ProposalStatus) Number() protoreflect.EnumNumber {
@@ -195,7 +252,7 @@ func (x ProposalStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProposalStatus.Descriptor instead.
 func (ProposalStatus) EnumDescriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{2}
+	return file_canoliq_proto_rawDescGZIP(), []int{3}
 }
 
 // BuybackMode selects the post-acquisition disposition of CLIQ.
@@ -232,11 +289,11 @@ func (x BuybackMode) String() string {
 }
 
 func (BuybackMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_canoliq_proto_enumTypes[3].Descriptor()
+	return file_canoliq_proto_enumTypes[4].Descriptor()
 }
 
 func (BuybackMode) Type() protoreflect.EnumType {
-	return &file_canoliq_proto_enumTypes[3]
+	return &file_canoliq_proto_enumTypes[4]
 }
 
 func (x BuybackMode) Number() protoreflect.EnumNumber {
@@ -245,7 +302,7 @@ func (x BuybackMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use BuybackMode.Descriptor instead.
 func (BuybackMode) EnumDescriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{3}
+	return file_canoliq_proto_rawDescGZIP(), []int{4}
 }
 
 // SpendDenomination distinguishes CNPY-denominated spends from CLIQ.
@@ -282,11 +339,11 @@ func (x SpendDenomination) String() string {
 }
 
 func (SpendDenomination) Descriptor() protoreflect.EnumDescriptor {
-	return file_canoliq_proto_enumTypes[4].Descriptor()
+	return file_canoliq_proto_enumTypes[5].Descriptor()
 }
 
 func (SpendDenomination) Type() protoreflect.EnumType {
-	return &file_canoliq_proto_enumTypes[4]
+	return &file_canoliq_proto_enumTypes[5]
 }
 
 func (x SpendDenomination) Number() protoreflect.EnumNumber {
@@ -295,7 +352,7 @@ func (x SpendDenomination) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SpendDenomination.Descriptor instead.
 func (SpendDenomination) EnumDescriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{4}
+	return file_canoliq_proto_rawDescGZIP(), []int{5}
 }
 
 // MessageCanoliqDeposit deposits CNPY into the canoLiq pool and mints cCNPY
@@ -1346,7 +1403,10 @@ type MessageCLIQStake struct {
 	// from_address: the staker
 	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// amount: liquid CLIQ to lock (uCLIQ)
-	Amount        uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	// lock_tier: vote-escrow lock to commit this stake to (T2). LOCK_NONE keeps
+	// the stake liquid-to-unstake after the standard unbond window.
+	LockTier      LockTier `protobuf:"varint,3,opt,name=lock_tier,json=lockTier,proto3,enum=types.LockTier" json:"lockTier"` // @gotags: json:"lockTier"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1393,6 +1453,13 @@ func (x *MessageCLIQStake) GetAmount() uint64 {
 		return x.Amount
 	}
 	return 0
+}
+
+func (x *MessageCLIQStake) GetLockTier() LockTier {
+	if x != nil {
+		return x.LockTier
+	}
+	return LockTier_LOCK_NONE
 }
 
 // MessageCLIQUnstake debits the staker's CLIQStake and queues an unbond
@@ -1822,8 +1889,14 @@ type CLIQStake struct {
 	// proposal-vote eligibility (vote weight = 0 if staked_at_height >
 	// proposal.creation_height).
 	StakedAtHeight uint64 `protobuf:"varint,3,opt,name=staked_at_height,json=stakedAtHeight,proto3" json:"stakedAtHeight"` // @gotags: json:"stakedAtHeight"
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// lock_tier: vote-escrow lock tier (T2). Drives voting multiplier, reward
+	// boost, and the unstake-eligibility height. Locks only ever strengthen:
+	// re-staking with a higher tier raises this and pushes lock_end_height out.
+	LockTier LockTier `protobuf:"varint,4,opt,name=lock_tier,json=lockTier,proto3,enum=types.LockTier" json:"lockTier"` // @gotags: json:"lockTier"
+	// lock_end_height: earliest height an unstake is permitted (0 for LOCK_NONE).
+	LockEndHeight uint64 `protobuf:"varint,5,opt,name=lock_end_height,json=lockEndHeight,proto3" json:"lockEndHeight"` // @gotags: json:"lockEndHeight"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CLIQStake) Reset() {
@@ -1873,6 +1946,20 @@ func (x *CLIQStake) GetAmount() uint64 {
 func (x *CLIQStake) GetStakedAtHeight() uint64 {
 	if x != nil {
 		return x.StakedAtHeight
+	}
+	return 0
+}
+
+func (x *CLIQStake) GetLockTier() LockTier {
+	if x != nil {
+		return x.LockTier
+	}
+	return LockTier_LOCK_NONE
+}
+
+func (x *CLIQStake) GetLockEndHeight() uint64 {
+	if x != nil {
+		return x.LockEndHeight
 	}
 	return 0
 }
@@ -3117,10 +3204,11 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x0ftimelock_blocks\x18\x04 \x01(\x04R\x0etimelockBlocks\x120\n" +
 	"\x14voting_period_blocks\x18\x05 \x01(\x04R\x12votingPeriodBlocks\"1\n" +
 	"\fVestingIndex\x12!\n" +
-	"\fschedule_ids\x18\x01 \x03(\x04R\vscheduleIds\"M\n" +
+	"\fschedule_ids\x18\x01 \x03(\x04R\vscheduleIds\"{\n" +
 	"\x10MessageCLIQStake\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x04R\x06amount\"O\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12,\n" +
+	"\tlock_tier\x18\x03 \x01(\x0e2\x0f.types.LockTierR\blockTier\"O\n" +
 	"\x12MessageCLIQUnstake\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"[\n" +
@@ -3147,11 +3235,13 @@ const file_canoliq_proto_rawDesc = "" +
 	"proposalId\"V\n" +
 	"\x16MessageMultisigApprove\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x19\n" +
-	"\bspend_id\x18\x02 \x01(\x04R\aspendId\"g\n" +
+	"\bspend_id\x18\x02 \x01(\x04R\aspendId\"\xbd\x01\n" +
 	"\tCLIQStake\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12(\n" +
-	"\x10staked_at_height\x18\x03 \x01(\x04R\x0estakedAtHeight\"v\n" +
+	"\x10staked_at_height\x18\x03 \x01(\x04R\x0estakedAtHeight\x12,\n" +
+	"\tlock_tier\x18\x04 \x01(\x0e2\x0f.types.LockTierR\blockTier\x12&\n" +
+	"\x0flock_end_height\x18\x05 \x01(\x04R\rlockEndHeight\"v\n" +
 	"\rUnstakingCLIQ\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\fR\aaddress\x12\x16\n" +
@@ -3241,7 +3331,13 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x10ACTION_EMERGENCY\x10\x04\x12\x1a\n" +
 	"\x16ACTION_VALIDATOR_EJECT\x10\x05\x12\x1b\n" +
 	"\x17ACTION_PROTOCOL_UPGRADE\x10\x06\x12\x1c\n" +
-	"\x18ACTION_AUTONOMY_GRADUATE\x10\a*K\n" +
+	"\x18ACTION_AUTONOMY_GRADUATE\x10\a*O\n" +
+	"\bLockTier\x12\r\n" +
+	"\tLOCK_NONE\x10\x00\x12\v\n" +
+	"\aLOCK_3M\x10\x01\x12\v\n" +
+	"\aLOCK_6M\x10\x02\x12\f\n" +
+	"\bLOCK_12M\x10\x03\x12\f\n" +
+	"\bLOCK_24M\x10\x04*K\n" +
 	"\n" +
 	"VoteChoice\x12\x10\n" +
 	"\fVOTE_UNKNOWN\x10\x00\x12\f\n" +
@@ -3277,77 +3373,80 @@ func file_canoliq_proto_rawDescGZIP() []byte {
 	return file_canoliq_proto_rawDescData
 }
 
-var file_canoliq_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_canoliq_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
 var file_canoliq_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_canoliq_proto_goTypes = []any{
 	(ActionType)(0),                       // 0: types.ActionType
-	(VoteChoice)(0),                       // 1: types.VoteChoice
-	(ProposalStatus)(0),                   // 2: types.ProposalStatus
-	(BuybackMode)(0),                      // 3: types.BuybackMode
-	(SpendDenomination)(0),                // 4: types.SpendDenomination
-	(*MessageCanoliqDeposit)(nil),         // 5: types.MessageCanoliqDeposit
-	(*MessageCanoliqRedeem)(nil),          // 6: types.MessageCanoliqRedeem
-	(*MessageCanoliqClaimRedemption)(nil), // 7: types.MessageCanoliqClaimRedemption
-	(*MessageCLIQTransfer)(nil),           // 8: types.MessageCLIQTransfer
-	(*MessageCLIQClaimVested)(nil),        // 9: types.MessageCLIQClaimVested
-	(*CanoliqGlobals)(nil),                // 10: types.CanoliqGlobals
-	(*Redemption)(nil),                    // 11: types.Redemption
-	(*RedemptionIndex)(nil),               // 12: types.RedemptionIndex
-	(*VestingSchedule)(nil),               // 13: types.VestingSchedule
-	(*CanoliqParams)(nil),                 // 14: types.CanoliqParams
-	(*GovernanceTier)(nil),                // 15: types.GovernanceTier
-	(*VestingIndex)(nil),                  // 16: types.VestingIndex
-	(*MessageCLIQStake)(nil),              // 17: types.MessageCLIQStake
-	(*MessageCLIQUnstake)(nil),            // 18: types.MessageCLIQUnstake
-	(*MessageCLIQClaimUnstake)(nil),       // 19: types.MessageCLIQClaimUnstake
-	(*MessageCLIQProposalCreate)(nil),     // 20: types.MessageCLIQProposalCreate
-	(*MessageCLIQVote)(nil),               // 21: types.MessageCLIQVote
-	(*MessageBuybackExecute)(nil),         // 22: types.MessageBuybackExecute
-	(*MessageDAOTreasurySpend)(nil),       // 23: types.MessageDAOTreasurySpend
-	(*MessageMultisigApprove)(nil),        // 24: types.MessageMultisigApprove
-	(*CLIQStake)(nil),                     // 25: types.CLIQStake
-	(*UnstakingCLIQ)(nil),                 // 26: types.UnstakingCLIQ
-	(*UnstakingIndex)(nil),                // 27: types.UnstakingIndex
-	(*Proposal)(nil),                      // 28: types.Proposal
-	(*ProposalIndex)(nil),                 // 29: types.ProposalIndex
-	(*Vote)(nil),                          // 30: types.Vote
-	(*ProposalParamChange)(nil),           // 31: types.ProposalParamChange
-	(*ProposalBuyback)(nil),               // 32: types.ProposalBuyback
-	(*ProposalTreasurySpend)(nil),         // 33: types.ProposalTreasurySpend
-	(*ProposalValidatorEject)(nil),        // 34: types.ProposalValidatorEject
-	(*ProposalEmergency)(nil),             // 35: types.ProposalEmergency
-	(*ProposalProtocolUpgrade)(nil),       // 36: types.ProposalProtocolUpgrade
-	(*BuybackOrder)(nil),                  // 37: types.BuybackOrder
-	(*TreasurySpend)(nil),                 // 38: types.TreasurySpend
-	(*MultisigApproval)(nil),              // 39: types.MultisigApproval
-	(*CLIQStakeIndex)(nil),                // 40: types.CLIQStakeIndex
-	(*ValidatorRegistryEntry)(nil),        // 41: types.ValidatorRegistryEntry
-	(*ValidatorRegistry)(nil),             // 42: types.ValidatorRegistry
-	(*anypb.Any)(nil),                     // 43: google.protobuf.Any
+	(LockTier)(0),                         // 1: types.LockTier
+	(VoteChoice)(0),                       // 2: types.VoteChoice
+	(ProposalStatus)(0),                   // 3: types.ProposalStatus
+	(BuybackMode)(0),                      // 4: types.BuybackMode
+	(SpendDenomination)(0),                // 5: types.SpendDenomination
+	(*MessageCanoliqDeposit)(nil),         // 6: types.MessageCanoliqDeposit
+	(*MessageCanoliqRedeem)(nil),          // 7: types.MessageCanoliqRedeem
+	(*MessageCanoliqClaimRedemption)(nil), // 8: types.MessageCanoliqClaimRedemption
+	(*MessageCLIQTransfer)(nil),           // 9: types.MessageCLIQTransfer
+	(*MessageCLIQClaimVested)(nil),        // 10: types.MessageCLIQClaimVested
+	(*CanoliqGlobals)(nil),                // 11: types.CanoliqGlobals
+	(*Redemption)(nil),                    // 12: types.Redemption
+	(*RedemptionIndex)(nil),               // 13: types.RedemptionIndex
+	(*VestingSchedule)(nil),               // 14: types.VestingSchedule
+	(*CanoliqParams)(nil),                 // 15: types.CanoliqParams
+	(*GovernanceTier)(nil),                // 16: types.GovernanceTier
+	(*VestingIndex)(nil),                  // 17: types.VestingIndex
+	(*MessageCLIQStake)(nil),              // 18: types.MessageCLIQStake
+	(*MessageCLIQUnstake)(nil),            // 19: types.MessageCLIQUnstake
+	(*MessageCLIQClaimUnstake)(nil),       // 20: types.MessageCLIQClaimUnstake
+	(*MessageCLIQProposalCreate)(nil),     // 21: types.MessageCLIQProposalCreate
+	(*MessageCLIQVote)(nil),               // 22: types.MessageCLIQVote
+	(*MessageBuybackExecute)(nil),         // 23: types.MessageBuybackExecute
+	(*MessageDAOTreasurySpend)(nil),       // 24: types.MessageDAOTreasurySpend
+	(*MessageMultisigApprove)(nil),        // 25: types.MessageMultisigApprove
+	(*CLIQStake)(nil),                     // 26: types.CLIQStake
+	(*UnstakingCLIQ)(nil),                 // 27: types.UnstakingCLIQ
+	(*UnstakingIndex)(nil),                // 28: types.UnstakingIndex
+	(*Proposal)(nil),                      // 29: types.Proposal
+	(*ProposalIndex)(nil),                 // 30: types.ProposalIndex
+	(*Vote)(nil),                          // 31: types.Vote
+	(*ProposalParamChange)(nil),           // 32: types.ProposalParamChange
+	(*ProposalBuyback)(nil),               // 33: types.ProposalBuyback
+	(*ProposalTreasurySpend)(nil),         // 34: types.ProposalTreasurySpend
+	(*ProposalValidatorEject)(nil),        // 35: types.ProposalValidatorEject
+	(*ProposalEmergency)(nil),             // 36: types.ProposalEmergency
+	(*ProposalProtocolUpgrade)(nil),       // 37: types.ProposalProtocolUpgrade
+	(*BuybackOrder)(nil),                  // 38: types.BuybackOrder
+	(*TreasurySpend)(nil),                 // 39: types.TreasurySpend
+	(*MultisigApproval)(nil),              // 40: types.MultisigApproval
+	(*CLIQStakeIndex)(nil),                // 41: types.CLIQStakeIndex
+	(*ValidatorRegistryEntry)(nil),        // 42: types.ValidatorRegistryEntry
+	(*ValidatorRegistry)(nil),             // 43: types.ValidatorRegistry
+	(*anypb.Any)(nil),                     // 44: google.protobuf.Any
 }
 var file_canoliq_proto_depIdxs = []int32{
-	15, // 0: types.CanoliqParams.governance:type_name -> types.GovernanceTier
+	16, // 0: types.CanoliqParams.governance:type_name -> types.GovernanceTier
 	0,  // 1: types.GovernanceTier.action:type_name -> types.ActionType
-	43, // 2: types.MessageCLIQProposalCreate.payload:type_name -> google.protobuf.Any
-	1,  // 3: types.MessageCLIQVote.choice:type_name -> types.VoteChoice
-	43, // 4: types.Proposal.payload:type_name -> google.protobuf.Any
-	2,  // 5: types.Proposal.status:type_name -> types.ProposalStatus
-	0,  // 6: types.Proposal.action_type:type_name -> types.ActionType
-	15, // 7: types.Proposal.tier:type_name -> types.GovernanceTier
-	1,  // 8: types.Vote.choice:type_name -> types.VoteChoice
-	14, // 9: types.ProposalParamChange.params:type_name -> types.CanoliqParams
-	3,  // 10: types.ProposalBuyback.mode:type_name -> types.BuybackMode
-	4,  // 11: types.ProposalTreasurySpend.denomination:type_name -> types.SpendDenomination
-	31, // 12: types.ProposalEmergency.param_change:type_name -> types.ProposalParamChange
-	3,  // 13: types.BuybackOrder.mode:type_name -> types.BuybackMode
-	32, // 14: types.BuybackOrder.payload:type_name -> types.ProposalBuyback
-	33, // 15: types.TreasurySpend.payload:type_name -> types.ProposalTreasurySpend
-	41, // 16: types.ValidatorRegistry.entries:type_name -> types.ValidatorRegistryEntry
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	1,  // 2: types.MessageCLIQStake.lock_tier:type_name -> types.LockTier
+	44, // 3: types.MessageCLIQProposalCreate.payload:type_name -> google.protobuf.Any
+	2,  // 4: types.MessageCLIQVote.choice:type_name -> types.VoteChoice
+	1,  // 5: types.CLIQStake.lock_tier:type_name -> types.LockTier
+	44, // 6: types.Proposal.payload:type_name -> google.protobuf.Any
+	3,  // 7: types.Proposal.status:type_name -> types.ProposalStatus
+	0,  // 8: types.Proposal.action_type:type_name -> types.ActionType
+	16, // 9: types.Proposal.tier:type_name -> types.GovernanceTier
+	2,  // 10: types.Vote.choice:type_name -> types.VoteChoice
+	15, // 11: types.ProposalParamChange.params:type_name -> types.CanoliqParams
+	4,  // 12: types.ProposalBuyback.mode:type_name -> types.BuybackMode
+	5,  // 13: types.ProposalTreasurySpend.denomination:type_name -> types.SpendDenomination
+	32, // 14: types.ProposalEmergency.param_change:type_name -> types.ProposalParamChange
+	4,  // 15: types.BuybackOrder.mode:type_name -> types.BuybackMode
+	33, // 16: types.BuybackOrder.payload:type_name -> types.ProposalBuyback
+	34, // 17: types.TreasurySpend.payload:type_name -> types.ProposalTreasurySpend
+	42, // 18: types.ValidatorRegistry.entries:type_name -> types.ValidatorRegistryEntry
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_canoliq_proto_init() }
@@ -3360,7 +3459,7 @@ func file_canoliq_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_canoliq_proto_rawDesc), len(file_canoliq_proto_rawDesc)),
-			NumEnums:      5,
+			NumEnums:      6,
 			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   0,

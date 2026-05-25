@@ -262,7 +262,8 @@ func (c *Canoliq) DeliverMessageCLIQVote(msg *contract.MessageCLIQVote, fee uint
 			// Voter staked after proposal creation — zero weight per snapshot.
 			return &contract.PluginDeliverResponse{Error: ErrStakeAfterCreation()}
 		}
-		weight = stake.Amount
+		// Vote weight = raw stake × the lock tier's voting multiplier (T2).
+		weight = voteWeightFor(stake)
 	}
 	cnpy.Amount -= fee
 	feePool.Amount += fee

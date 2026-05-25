@@ -199,21 +199,41 @@ func (c *Canoliq) distributeBuybackToStakers(cliqAcquired uint64) ([]*contract.P
 	if totalStake == 0 {
 		return []*contract.PluginSetOp{{Key: KeyForTreasuryCLIQ(), Value: EncodeUint64(c.readScalar(KeyForTreasuryCLIQ()) + cliqAcquired)}}, nil
 	}
-	sets := make([]*contract.PluginSetOp, 0, len(stakes))
-	allocated := uint64(0)
-	largestIdx := 0
+	// Boost each staker's effective weight by their lock tier (T2 §4.2): a
+	// LOCK_12M staker's 100 CLIQ counts as 150 against the distribution.
+	boosted := make([]uint64, len(stakes))
+	totalBoosted := uint64(0)
 	for i, s := range stakes {
-		if s.Amount > stakes[largestIdx].Amount {
-			largestIdx = i
+		_, boostBps := tierMultipliers(s.LockTier)
+		boosted[i] = mulDiv(s.Amount, 10_000+boostBps, 10_000)
+		totalBoosted += boosted[i]
+	}
+	// Rounding remainder goes to the largest-stake LOCK_24M staker, falling
+	// back to the largest staker overall when no LOCK_24M staker is present.
+	remainderIdx := 0
+	largestOverall := 0
+	bestLockedAmount := uint64(0)
+	for i, s := range stakes {
+		if s.Amount > stakes[largestOverall].Amount {
+			largestOverall = i
+		}
+		if s.LockTier == contract.LockTier_LOCK_24M && s.Amount > bestLockedAmount {
+			bestLockedAmount = s.Amount
+			remainderIdx = i
 		}
 	}
+	if bestLockedAmount == 0 {
+		remainderIdx = largestOverall
+	}
+	sets := make([]*contract.PluginSetOp, 0, len(stakes))
+	allocated := uint64(0)
 	credits := make([]uint64, len(stakes))
-	for i, s := range stakes {
-		credits[i] = mulDiv(cliqAcquired, s.Amount, totalStake)
+	for i := range stakes {
+		credits[i] = mulDiv(cliqAcquired, boosted[i], totalBoosted)
 		allocated += credits[i]
 	}
 	if allocated < cliqAcquired {
-		credits[largestIdx] += cliqAcquired - allocated
+		credits[remainderIdx] += cliqAcquired - allocated
 	}
 	for i, s := range stakes {
 		current := DecodeUint64(c.readBytes(KeyForCLIQBalance(s.Address)))
