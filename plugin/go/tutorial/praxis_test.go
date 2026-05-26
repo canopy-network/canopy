@@ -64,6 +64,11 @@ func keystoreGetKey(address, password string) (*keyGroup, error) {
 			PublicKey:  "ae13ea1c3a3a180b821b961561fedab3864fe037c7e159ef79c606c4399210f76f8bbb2ef7fe580c335a02cb48441b32",
 			PrivateKey: "14f43ca8c7f31a63d144564e8826186383844b5da679dfc2c9352d665d69f0f6",
 		},
+		"8f8b550064ec4ee4551d1666cb0ee5d35fc5154a": {
+			Address:    "8f8b550064ec4ee4551d1666cb0ee5d35fc5154a",
+			PublicKey:  "88634c8e0fd9ee8911b362e5aff8c046154263e9b8e507fc5efe5b5d9cb6cb4fd14c3672bccb929c411e3050ccca44a9",
+			PrivateKey: "1c91a4882751adc1fa4f2574c4321bf144e36411ade55e099e9c6ffece87ee49",
+		},
 	}
 	if kg, ok := known[address]; ok {
 		return &kg, nil
@@ -309,6 +314,43 @@ func submitTx(t *testing.T, kg *keyGroup, shortType, msgName string, msg proto.M
 	return hash
 }
 
+
+// setupResolver creates a fresh key, funds it from the validator, and registers
+// it as a resolver. Returns the keyGroup and address. The creator address must
+// differ from the returned resolver address (COI-2 enforcement).
+func setupResolver(t *testing.T, validatorKey *keyGroup, validatorAddr string, stakeAmount uint64) (*keyGroup, string) {
+	t.Helper()
+	// Always use the hardcoded predictor key — keystore persists across node restarts.
+	// Fund with stakeAmount * 3 to ensure sufficient balance after fees and prior deductions.
+	resolverAddr := "8f8b550064ec4ee4551d1666cb0ee5d35fc5154a"
+	h, _ := getHeight()
+	fundMsg := &contract.MessageSend{
+		FromAddress: hexDecode(validatorAddr),
+		ToAddress:   hexDecode(resolverAddr),
+		Amount:      stakeAmount * 3,
+	}
+	hash := submitSendTx(t, validatorKey, fundMsg, h)
+	if err := waitForTx(validatorAddr, hash, 60*time.Second); err != nil {
+		t.Fatalf("fund resolver: %v", err)
+	}
+	// Register resolver — stake adds on top of any existing stake.
+	h2, _ := getHeight()
+	regMsg := &contract.MessageRegisterResolver{
+		ResolverAddress: hexDecode(resolverAddr),
+		StakeAmount:     stakeAmount,
+	}
+	regKey := &keyGroup{
+		Address:    resolverAddr,
+		PublicKey:  "88634c8e0fd9ee8911b362e5aff8c046154263e9b8e507fc5efe5b5d9cb6cb4fd14c3672bccb929c411e3050ccca44a9",
+		PrivateKey: "1c91a4882751adc1fa4f2574c4321bf144e36411ade55e099e9c6ffece87ee49",
+	}
+	regHash := submitTx(t, regKey, "register_resolver", "MessageRegisterResolver", regMsg, h2)
+	if err := waitForTx(resolverAddr, regHash, 60*time.Second); err != nil {
+		t.Fatalf("register resolver: %v", err)
+	}
+	t.Logf("Resolver %s registered with stake %d", resolverAddr, stakeAmount)
+	return regKey, resolverAddr
+}
 func hexDecode(s string) []byte {
 	b, _ := hex.DecodeString(s)
 	return b
@@ -483,17 +525,10 @@ func TestPORSFullFlow(t *testing.T) {
         }
         t.Log("Prediction submitted")
 
-        // Step 3: Register resolver
+        // Step 3: Register resolver (separate address — COI-2: creator cannot resolve)
+        resolverKey, resolverAddr := setupResolver(t, key, addr, 200_000_000)
         h, _ = getHeight()
-        regMsg := &contract.MessageRegisterResolver{
-                ResolverAddress: hexDecode(addr),
-                StakeAmount:     100_000_000,
-        }
-        hash = submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
-        if err := waitForTx(addr, hash, 60*time.Second); err != nil {
-                t.Fatalf("register_resolver failed: %v", err)
-        }
-        t.Log("Resolver registered")
+        _ = h
 
         // Wait for market to expire
         t.Logf("Waiting for expiry (height %d)...", createMsg.ExpiryTime+2)
@@ -511,12 +546,12 @@ func TestPORSFullFlow(t *testing.T) {
         h, _ = getHeight()
         propMsg := &contract.MessageProposeOutcome{
                 MarketId:        marketId,
-                ResolverAddress: hexDecode(addr),
+                ResolverAddress: hexDecode(resolverAddr),
                 ProposedOutcome: true,
                 ProposalBond:    100_000_000,
         }
-        hash = submitTx(t, key, "propose_outcome", "MessageProposeOutcome", propMsg, h)
-        if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+        hash = submitTx(t, resolverKey, "propose_outcome", "MessageProposeOutcome", propMsg, h)
+        if err := waitForTx(resolverAddr, hash, 60*time.Second); err != nil {
                 t.Fatalf("propose_outcome failed: %v", err)
         }
         t.Log("Outcome proposed")
@@ -739,16 +774,8 @@ if err := waitForTx(bettorB.Address, hash, 60*time.Second); err != nil {
 t.Fatalf("prediction B: %v", err)
 }
 
-// Register resolver and wait for expiry
-h, _ = getHeight()
-regMsg := &contract.MessageRegisterResolver{
-ResolverAddress: hexDecode(addr),
-StakeAmount:     100_000_000,
-}
-hash = submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
-if err := waitForTx(addr, hash, 60*time.Second); err != nil {
-t.Fatalf("register_resolver: %v", err)
-}
+// Register resolver (separate address — COI-2)
+resolverKey, resolverAddr := setupResolver(t, key, addr, 200_000_000)
 
 // Wait for expiry
 expiryTarget := createMsg.ExpiryTime + 2
@@ -767,12 +794,12 @@ h, _ = getHeight()
 bond := contract.ComputeMinBond(&contract.MarketState{BEff: lmsrSeed})
 propMsg := &contract.MessageProposeOutcome{
 MarketId:        marketId,
-ResolverAddress: hexDecode(addr),
+ResolverAddress: hexDecode(resolverAddr),
 ProposedOutcome: true,
 ProposalBond:    bond,
 }
-hash = submitTx(t, key, "propose_outcome", "MessageProposeOutcome", propMsg, h)
-if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+hash = submitTx(t, resolverKey, "propose_outcome", "MessageProposeOutcome", propMsg, h)
+if err := waitForTx(resolverAddr, hash, 60*time.Second); err != nil {
 t.Fatalf("propose_outcome: %v", err)
 }
 
@@ -921,16 +948,8 @@ t.Fatalf("submit_prediction: %v", err)
 }
 t.Logf("Single YES bettor cost: %d uPRX", cost)
 
-// Register resolver and wait for expiry
-h, _ = getHeight()
-regMsg := &contract.MessageRegisterResolver{
-ResolverAddress: hexDecode(addr),
-StakeAmount:     100_000_000,
-}
-hash = submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
-if err := waitForTx(addr, hash, 60*time.Second); err != nil {
-t.Fatalf("register_resolver: %v", err)
-}
+// Register resolver (separate address — COI-2)
+resolverKey, resolverAddr := setupResolver(t, key, addr, 200_000_000)
 
 expiryTarget := createMsg.ExpiryTime + 2
 t.Logf("Waiting for expiry (height %d)...", expiryTarget)
@@ -947,12 +966,12 @@ h, _ = getHeight()
 bond := contract.ComputeMinBond(&contract.MarketState{BEff: lmsrSeed})
 propMsg := &contract.MessageProposeOutcome{
 MarketId:        marketId,
-ResolverAddress: hexDecode(addr),
+ResolverAddress: hexDecode(resolverAddr),
 ProposedOutcome: true,
 ProposalBond:    bond,
 }
-hash = submitTx(t, key, "propose_outcome", "MessageProposeOutcome", propMsg, h)
-if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+hash = submitTx(t, resolverKey, "propose_outcome", "MessageProposeOutcome", propMsg, h)
+if err := waitForTx(resolverAddr, hash, 60*time.Second); err != nil {
 t.Fatalf("propose_outcome: %v", err)
 }
 
@@ -1204,16 +1223,8 @@ t.Fatalf("prediction B (NO): %v", err)
 }
 t.Logf("Bettor B (NO) cost: %d uPRX", costB)
 
-// Register resolver and wait for expiry
-h, _ = getHeight()
-regMsg := &contract.MessageRegisterResolver{
-ResolverAddress: hexDecode(addr),
-StakeAmount:     100_000_000,
-}
-hash = submitTx(t, key, "register_resolver", "MessageRegisterResolver", regMsg, h)
-if err := waitForTx(addr, hash, 60*time.Second); err != nil {
-t.Fatalf("register_resolver: %v", err)
-}
+// Register resolver (separate address — COI-2)
+resolverKey, resolverAddr := setupResolver(t, key, addr, 200_000_000)
 
 expiryTarget := createMsg.ExpiryTime + 2
 t.Logf("Waiting for expiry (height %d)...", expiryTarget)
@@ -1230,12 +1241,12 @@ h, _ = getHeight()
 bond := contract.ComputeMinBond(&contract.MarketState{BEff: lmsrSeed})
 propMsg := &contract.MessageProposeOutcome{
 MarketId:        marketId,
-ResolverAddress: hexDecode(addr),
+ResolverAddress: hexDecode(resolverAddr),
 ProposedOutcome: true,
 ProposalBond:    bond,
 }
-hash = submitTx(t, key, "propose_outcome", "MessageProposeOutcome", propMsg, h)
-if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+hash = submitTx(t, resolverKey, "propose_outcome", "MessageProposeOutcome", propMsg, h)
+if err := waitForTx(resolverAddr, hash, 60*time.Second); err != nil {
 t.Fatalf("propose_outcome: %v", err)
 }
 

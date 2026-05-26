@@ -165,6 +165,10 @@ return &PluginError{Code: 164, Module: errModule, Msg: "proposal bond is below m
 // PRAXIS ERRORS — PORS DISPUTE (180–199)
 // ─────────────────────────────────────────────────────────────────────────────
 
+func ErrDisputeWindowOpen() *PluginError {
+return &PluginError{Code: 181, Module: errModule, Msg: "dispute window is still open — too early to finalize"}
+}
+
 func ErrDisputeWindowClosed() *PluginError {
 return &PluginError{Code: 180, Module: errModule, Msg: "dispute window has closed"}
 }

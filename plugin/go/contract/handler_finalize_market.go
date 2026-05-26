@@ -96,8 +96,11 @@ return &PluginDeliverResponse{Error: ErrInternal()}
 }
 disputeWindow   := ComputeDisputeBlocks(market.OpenTime, market.ExpiryTime)
 disputeDeadline := proposal.ProposalBlock + disputeWindow
-if !TEST_MODE && now <= disputeDeadline {
-return &PluginDeliverResponse{Error: ErrDisputeWindowClosed()}
+// Reject if dispute window is still open — too early to finalize.
+// In TEST_MODE, skip the window check so tests don't wait 34,560 blocks.
+disputeWindowOpen := now <= disputeDeadline
+if !TEST_MODE && disputeWindowOpen {
+return &PluginDeliverResponse{Error: ErrDisputeWindowOpen()}
 }
 }
 
