@@ -1337,3 +1337,224 @@ func TestSetupNewWallet(t *testing.T) {
     }
     t.Log("Resolver registered! TX:", txHash)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COI ADVERSARIAL TESTS — Issue-19
+// These tests verify that conflict-of-interest guards reject bad transactions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestCOI1ResolverWithPosition verifies that a resolver who holds a position
+// in the market they are resolving is rejected by propose_outcome (COI-1).
+func TestCOI1ResolverWithPosition(t *testing.T) {
+validatorAddr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+validatorKey, _ := keystoreGetKey(validatorAddr, "")
+predictorAddr := "8f8b550064ec4ee4551d1666cb0ee5d35fc5154a"
+predictorKey := &keyGroup{
+Address:    predictorAddr,
+PublicKey:  "88634c8e0fd9ee8911b362e5aff8c046154263e9b8e507fc5efe5b5d9cb6cb4fd14c3672bccb929c411e3050ccca44a9",
+PrivateKey: "1c91a4882751adc1fa4f2574c4321bf144e36411ade55e099e9c6ffece87ee49",
+}
+
+h, _ := getHeight()
+
+// 1. Create market
+nonce := uint64(time.Now().UnixMicro())
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(validatorAddr),
+B0:             60_000_000,
+ExpiryTime:     h + 100,
+Nonce:          nonce,
+Question:       "COI-1 test market",
+}
+txHash := submitTx(t, validatorKey, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(validatorAddr, txHash, 60*time.Second); err != nil {
+t.Fatalf("create market: %v", err)
+}
+marketId := contract.DeriveMarketId(hexDecode(validatorAddr), nonce)
+t.Logf("market_id: %x", marketId)
+
+// 2. Fund predictor and have them bet YES
+h2, _ := getHeight()
+sendMsg := &contract.MessageSend{
+FromAddress: hexDecode(validatorAddr),
+ToAddress:   hexDecode(predictorAddr),
+Amount:      10_000_000,
+}
+sendHash := submitTx(t, validatorKey, "send", "MessageSend", sendMsg, h2)
+if err := waitForTx(validatorAddr, sendHash, 60*time.Second); err != nil {
+t.Fatalf("fund predictor: %v", err)
+}
+
+h3, _ := getHeight()
+betMsg := &contract.MessageSubmitPrediction{
+MarketId:      marketId,
+BettorAddress: hexDecode(predictorAddr),
+Outcome:       true,
+Shares:        contract.PRECISION_SCALE,
+MaxCost:       5_000_000,
+}
+betHash := submitTx(t, predictorKey, "submit_prediction", "MessageSubmitPrediction", betMsg, h3)
+if err := waitForTx(predictorAddr, betHash, 60*time.Second); err != nil {
+t.Fatalf("bet: %v", err)
+}
+t.Log("Predictor holds YES position")
+
+// 3. Register predictor as resolver
+h4, _ := getHeight()
+regMsg := &contract.MessageRegisterResolver{
+ResolverAddress: hexDecode(predictorAddr),
+StakeAmount:     100_000_000,
+}
+// Fund more for stake
+h4b, _ := getHeight()
+fundMsg := &contract.MessageSend{
+FromAddress: hexDecode(validatorAddr),
+ToAddress:   hexDecode(predictorAddr),
+Amount:      150_000_000,
+}
+fundHash := submitTx(t, validatorKey, "send", "MessageSend", fundMsg, h4b)
+if err := waitForTx(validatorAddr, fundHash, 60*time.Second); err != nil {
+t.Fatalf("fund for stake: %v", err)
+}
+h4c, _ := getHeight()
+_ = h4
+regHash := submitTx(t, predictorKey, "register_resolver", "MessageRegisterResolver", regMsg, h4c)
+if err := waitForTx(predictorAddr, regHash, 60*time.Second); err != nil {
+t.Fatalf("register resolver: %v", err)
+}
+t.Log("Predictor registered as resolver")
+
+// 4. Wait for market expiry
+t.Log("Waiting for market to expire...")
+for {
+cur, _ := getHeight()
+if cur > createMsg.ExpiryTime {
+break
+}
+time.Sleep(5 * time.Second)
+}
+
+// 5. Attempt propose_outcome as resolver who holds a position — must fail
+h5, _ := getHeight()
+propMsg := &contract.MessageProposeOutcome{
+MarketId:        marketId,
+ResolverAddress: hexDecode(predictorAddr),
+ProposedOutcome: true,
+ProposalBond:    100_000_000,
+}
+txHash2 := submitTx(t, predictorKey, "propose_outcome", "MessageProposeOutcome", propMsg, h5)
+err := waitForTx(predictorAddr, txHash2, 60*time.Second)
+if err == nil {
+t.Fatal("COI-1 FAILED: propose_outcome succeeded for resolver with position — expected rejection")
+}
+t.Logf("COI-1 PASS: propose_outcome correctly rejected resolver with position: %v", err)
+}
+
+// TestCOI2CreatorCannotResolve verifies that the market creator cannot also
+// act as the resolver for the same market (COI-2).
+func TestCOI2CreatorCannotResolve(t *testing.T) {
+validatorAddr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+validatorKey, _ := keystoreGetKey(validatorAddr, "")
+
+h, _ := getHeight()
+
+// 1. Create market — validator is the creator
+nonce := uint64(time.Now().UnixMicro())
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(validatorAddr),
+B0:             60_000_000,
+ExpiryTime:     h + 100,
+Nonce:          nonce,
+Question:       "COI-2 test market",
+}
+txHash := submitTx(t, validatorKey, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(validatorAddr, txHash, 60*time.Second); err != nil {
+t.Fatalf("create market: %v", err)
+}
+marketId := contract.DeriveMarketId(hexDecode(validatorAddr), nonce)
+t.Logf("market_id: %x", marketId)
+
+// 2. Register creator as resolver
+h2, _ := getHeight()
+regMsg := &contract.MessageRegisterResolver{
+ResolverAddress: hexDecode(validatorAddr),
+StakeAmount:     100_000_000,
+}
+regHash := submitTx(t, validatorKey, "register_resolver", "MessageRegisterResolver", regMsg, h2)
+if err := waitForTx(validatorAddr, regHash, 60*time.Second); err != nil {
+t.Fatalf("register resolver: %v", err)
+}
+
+// 3. Wait for expiry
+t.Log("Waiting for market to expire...")
+for {
+cur, _ := getHeight()
+if cur > createMsg.ExpiryTime {
+break
+}
+time.Sleep(5 * time.Second)
+}
+
+// 4. Attempt propose_outcome as creator — must fail (COI-2)
+h3, _ := getHeight()
+propMsg := &contract.MessageProposeOutcome{
+MarketId:        marketId,
+ResolverAddress: hexDecode(validatorAddr),
+ProposedOutcome: true,
+ProposalBond:    100_000_000,
+}
+txHash2 := submitTx(t, validatorKey, "propose_outcome", "MessageProposeOutcome", propMsg, h3)
+err := waitForTx(validatorAddr, txHash2, 60*time.Second)
+if err == nil {
+t.Fatal("COI-2 FAILED: propose_outcome succeeded for creator-as-resolver — expected rejection")
+}
+t.Logf("COI-2 PASS: propose_outcome correctly rejected creator-as-resolver: %v", err)
+}
+
+// TestCOI3PositionCapEnforced verifies that a single address cannot accumulate
+// more than 20% of the winning side shares (COI-3).
+func TestCOI3PositionCapEnforced(t *testing.T) {
+validatorAddr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+validatorKey, _ := keystoreGetKey(validatorAddr, "")
+
+h, _ := getHeight()
+
+// 1. Create market
+nonce := uint64(time.Now().UnixMicro())
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(validatorAddr),
+B0:             60_000_000,
+ExpiryTime:     h + 50000,
+Nonce:          nonce,
+Question:       "COI-3 cap test market",
+}
+txHash := submitTx(t, validatorKey, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(validatorAddr, txHash, 60*time.Second); err != nil {
+t.Fatalf("create market: %v", err)
+}
+marketId := contract.DeriveMarketId(hexDecode(validatorAddr), nonce)
+t.Logf("market_id: %x", marketId)
+
+// 2. Submit a large YES bet that would exceed 20% of YES shares.
+// Initial QYes = B0/2 - FINALIZATION_BOUNTY/2 = ~5_000_000 shares.
+// Requesting 50_000_000 shares (10x the initial side) — well over 20%.
+h2, _ := getHeight()
+betMsg := &contract.MessageSubmitPrediction{
+MarketId:      marketId,
+BettorAddress: hexDecode(validatorAddr),
+Outcome:       true,
+Shares:        50_000_000 * contract.PRECISION_SCALE,
+MaxCost:       500_000_000,
+}
+txHash2 := submitTx(t, validatorKey, "submit_prediction", "MessageSubmitPrediction", betMsg, h2)
+err := waitForTx(validatorAddr, txHash2, 60*time.Second)
+if err == nil {
+t.Fatal("COI-3 FAILED: oversized position was accepted — expected ErrPositionCapExceeded")
+}
+t.Logf("COI-3 PASS: oversized position correctly rejected: %v", err)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COI ADVERSARIAL TESTS — Issue-19
+// ─────────────────────────────────────────────────────────────────────────────
+
