@@ -210,12 +210,11 @@ type StoreMetrics struct {
 
 // MempoolMetrics represents the telemetry of the memory pool of pending transactions
 type MempoolMetrics struct {
-	MempoolSize                prometheus.Gauge     // how many bytes are in the mempool?
-	MempoolTxCount             prometheus.Gauge     // how many transactions are in the mempool?
-	ProposalBuildTime          prometheus.Histogram // how long does mempool proposal building take?
-	ProposalApplyBlockTime     prometheus.Histogram // how long does ApplyBlock() take during proposal building?
-	ProposalCertResultsTime    prometheus.Histogram // how long does NewCertificateResults() take during proposal building?
-	ProposalProposeVoteOverlap prometheus.Counter   // how often does proposal building start during PROPOSE_VOTE?
+	MempoolSize             prometheus.Gauge     // how many bytes are in the mempool?
+	MempoolTxCount          prometheus.Gauge     // how many transactions are in the mempool?
+	ProposalBuildTime       prometheus.Histogram // how long does mempool proposal building take?
+	ProposalApplyBlockTime  prometheus.Histogram // how long does ApplyBlock() take during proposal building?
+	ProposalCertResultsTime prometheus.Histogram // how long does NewCertificateResults() take during proposal building?
 }
 
 // NewMetricsServer() creates a new telemetry server
@@ -685,10 +684,6 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			ProposalCertResultsTime: promauto.NewHistogram(prometheus.HistogramOpts{
 				Name: "canopy_mempool_proposal_cert_results_time",
 				Help: "Execution time of NewCertificateResults during CheckMempool proposal building",
-			}),
-			ProposalProposeVoteOverlap: promauto.NewCounter(prometheus.CounterOpts{
-				Name: "canopy_mempool_proposal_propose_vote_overlap_total",
-				Help: "Total CheckMempool proposal builds that started while consensus was in PROPOSE_VOTE",
 			}),
 		},
 	}

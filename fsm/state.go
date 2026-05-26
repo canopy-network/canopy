@@ -770,6 +770,7 @@ func (s *StateMachine) SetStore(store lib.RWStoreI)                   { s.store 
 func (s *StateMachine) Height() uint64                                { return s.height }
 func (s *StateMachine) TotalVDFIterations() uint64                    { return s.totalVDFIterations }
 func (s *StateMachine) Discard()                                      { s.store.(lib.StoreI).Discard() }
+func (s *StateMachine) ProposalVoteConfig() GovProposalVoteConfig     { return s.proposeVoteConfig }
 func (s *StateMachine) SetProposalVoteConfig(c GovProposalVoteConfig) { s.proposeVoteConfig = c }
 
 var _ lib.PluginCompatibleFSM = new(StateMachine)
