@@ -1,7 +1,7 @@
 package contract
 
 import (
-"math/rand"
+"crypto/sha256"
 
 "google.golang.org/protobuf/types/known/anypb"
 )
@@ -86,33 +86,36 @@ return &PluginGenesisResponse{}
 func (c *Contract) BeginBlock(req *PluginBeginRequest) *PluginBeginResponse {
 SetGlobalHeight(req.Height)
 
-entropyQId := rand.Uint64()
+entropyQId := nextQueryId()
 entropyResp, readErr := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
 {QueryId: entropyQId, Key: PANEL_ENTROPY_KEY},
 },
 })
 
-var acc uint64
+// Issue-17 fix: replace XOR accumulator with SHA256 hash chain.
+// XOR with a deterministic height function is fully predictable by chain
+// observers — they can compute the accumulator value at any future block and
+// time a file_dispute call to influence panel selection.
+// SHA256(prev || height_bytes) is a one-way function: knowing the output
+// does not allow computing a height that produces a desired panel seed.
+var prev [8]byte
 if readErr == nil && entropyResp != nil {
 for _, r := range entropyResp.Results {
-if r.QueryId == entropyQId && len(r.Entries) > 0 {
-if len(r.Entries[0].Value) >= 8 {
-for i := 0; i < 8; i++ {
-acc = (acc << 8) | uint64(r.Entries[0].Value[i])
-}
-}
+if r.QueryId == entropyQId && len(r.Entries) > 0 && len(r.Entries[0].Value) >= 8 {
+copy(prev[:], r.Entries[0].Value[:8])
 }
 }
 }
 
-acc ^= req.Height * 0x9e3779b97f4a7c15
-
-buf := make([]byte, 8)
+heightBytes := make([]byte, 8)
 for i := 7; i >= 0; i-- {
-buf[i] = byte(acc & 0xFF)
-acc >>= 8
+heightBytes[i] = byte(req.Height & 0xFF)
+req.Height >>= 8
 }
+input := append(prev[:], heightBytes...)
+hash := sha256.Sum256(input)
+buf := hash[:8]
 
 wr, writeErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
 Sets: []*PluginSetOp{

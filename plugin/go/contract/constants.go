@@ -143,9 +143,14 @@ var PANEL_ENTROPY_KEY []byte
 // Controlled by the PRAXIS_TEST_MODE environment variable.
 // Defaults to false — safe for mainnet.
 // To enable: PRAXIS_TEST_MODE=true ./go-plugin
-// COI-3: maximum fractional share of pool any single address may hold.
-// Expressed as basis points: 2000 = 20%.
-// Prevents single-actor dominance and wash-trading accumulation.
+// COI-3: maximum fractional share of the winning side any single address may hold.
+// Expressed in basis points: 2000 = 20%.
+// Cap is enforced on shares (not CostPaid) so early cheap buyers face the same
+// limit as late entrants — prevents single-address dominant share accumulation.
+// Limitations (by design):
+//   - Does not prevent multi-address (Sybil) wash trading — on-chain identity
+//     is not enforced; two addresses can each hold up to 20%.
+//   - Cap is share-based so pool growth does not progressively loosen it.
 const MAX_POSITION_BPS uint64 = 2000
 
 var TEST_MODE = os.Getenv("PRAXIS_TEST_MODE") == "true"
