@@ -25,6 +25,15 @@ PREFIX_ACCOUNT  = []byte{0x01}
 PREFIX_FEE_POOL = []byte{0x02}
 )
 
+// Issue-12: assert MIN_B0 > FINALIZATION_BOUNTY at startup.
+// If this ever fails, create_market would seed a TreasuryReserve that cannot
+// cover the finalization bounty, silently breaking permissionless finalization.
+func init() {
+if MIN_B0 <= FINALIZATION_BOUNTY {
+panic("invariant violated: MIN_B0 must be greater than FINALIZATION_BOUNTY")
+}
+}
+
 var ContractConfig = &PluginConfig{
 Name:    "praxis_prediction_market",
 Id:      1,

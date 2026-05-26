@@ -1,5 +1,10 @@
 package contract
 
+// Issue-4 (accepted risk): COI-2 has no CheckTx guard because market.Creator
+// requires a StateRead which violates the AUDIT-8 stateless CheckTx rule.
+// A creator-as-resolver can spam the mempool with proposals that always fail
+// at DeliverTx. This is a known griefing vector; mitigation is rate-limiting
+// at the gossip layer, not the plugin layer.
 func (c *Contract) CheckMessageProposeOutcome(msg *MessageProposeOutcome) *PluginCheckResponse {
 if len(msg.MarketId) != 20 {
 return ErrCheckResp(ErrInvalidParam())
@@ -75,6 +80,13 @@ if market == nil {
 return &PluginDeliverResponse{Error: ErrMarketNotFound()}
 }
 
+// Issue-16: RRS check before COI-1 position read — suspended resolvers
+// get ErrResolverSuspended, not ErrResolverHasPosition.
+
+if resolverRec.RrsScore < MIN_RRS_TO_PROPOSE {
+return &PluginDeliverResponse{Error: ErrResolverSuspended()}
+}
+
 // COI-1: resolver must not hold a position in this market
 coiPosQId := nextQueryId()
 coiPosResp, coiPosErr := c.plugin.StateRead(c, &PluginStateReadRequest{
@@ -100,10 +112,6 @@ return &PluginDeliverResponse{Error: ErrResolverHasPosition()}
 // COI-2: market creator cannot be the resolver
 if bytesEqual(market.Creator, msg.ResolverAddress) {
 return &PluginDeliverResponse{Error: ErrCreatorCannotResolve()}
-}
-
-if resolverRec.RrsScore < MIN_RRS_TO_PROPOSE {
-return &PluginDeliverResponse{Error: ErrResolverSuspended()}
 }
 
 if market.Status == STATUS_OPEN {

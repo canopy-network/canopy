@@ -297,3 +297,10 @@ return &PluginError{Code: 5, Module: errModule, Msg: "plugin socket write failed
 func ErrFailedPluginRead(err error) *PluginError {
 return &PluginError{Code: 4, Module: errModule, Msg: "plugin socket read failed: " + err.Error()}
 }
+
+// ErrCorruptState is returned when a required state key exists but contains
+// zero-length data — distinguishable from ErrMarketNotFound (key absent).
+// Issue-13: improves debuggability of storage corruption scenarios.
+func ErrCorruptState() *PluginError {
+return &PluginError{Code: 4010, Msg: "state key exists but value is empty — possible storage corruption"}
+}

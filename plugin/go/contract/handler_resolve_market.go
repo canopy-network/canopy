@@ -2,6 +2,10 @@ package contract
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DEPRECATED — resolve_market handler
+// Issue-15: This handler is NOT registered in ContractConfig.SupportedTransactions
+// or TransactionTypeUrls. Any client sending MessageResolveMarket will receive
+// a routing error (unknown tx type), NOT a deprecation notice.
+// SDK/frontend clients must migrate to propose_outcome (PORS flow).
 //
 // This handler is intentionally NOT registered in ContractConfig.SupportedTransactions
 // or TransactionTypeUrls (see contract.go). It cannot be invoked via a standard TX.

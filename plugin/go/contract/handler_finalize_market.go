@@ -112,10 +112,9 @@ var proposerKey []byte
 var disputerKey []byte
 var disputerQId uint64
 
-if proposal != nil {
+if proposal == nil { return &PluginDeliverResponse{Error: ErrInternal()} }
 proposerKey = KeyForAccount(proposal.ResolverAddr)
 readKeys2 = append(readKeys2, &PluginKeyRead{QueryId: proposerQId, Key: proposerKey})
-}
 
 if pathA && dispute != nil {
 disputerQId = nextQueryId()
