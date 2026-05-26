@@ -1362,7 +1362,7 @@ nonce := uint64(time.Now().UnixMicro())
 createMsg := &contract.MessageCreateMarket{
 CreatorAddress: hexDecode(validatorAddr),
 B0:             60_000_000,
-ExpiryTime:     h + 100,
+ExpiryTime:     h + 30,
 Nonce:          nonce,
 Question:       "COI-1 test market",
 }
@@ -1380,7 +1380,7 @@ FromAddress: hexDecode(validatorAddr),
 ToAddress:   hexDecode(predictorAddr),
 Amount:      10_000_000,
 }
-sendHash := submitTx(t, validatorKey, "send", "MessageSend", sendMsg, h2)
+sendHash := submitSendTx(t, validatorKey, sendMsg, h2)
 if err := waitForTx(validatorAddr, sendHash, 60*time.Second); err != nil {
 t.Fatalf("fund predictor: %v", err)
 }
@@ -1412,7 +1412,7 @@ FromAddress: hexDecode(validatorAddr),
 ToAddress:   hexDecode(predictorAddr),
 Amount:      150_000_000,
 }
-fundHash := submitTx(t, validatorKey, "send", "MessageSend", fundMsg, h4b)
+fundHash := submitSendTx(t, validatorKey, fundMsg, h4b)
 if err := waitForTx(validatorAddr, fundHash, 60*time.Second); err != nil {
 t.Fatalf("fund for stake: %v", err)
 }
@@ -1463,7 +1463,7 @@ nonce := uint64(time.Now().UnixMicro())
 createMsg := &contract.MessageCreateMarket{
 CreatorAddress: hexDecode(validatorAddr),
 B0:             60_000_000,
-ExpiryTime:     h + 100,
+ExpiryTime:     h + 30,
 Nonce:          nonce,
 Question:       "COI-2 test market",
 }
