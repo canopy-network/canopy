@@ -117,9 +117,19 @@ finalCost := tradeCost + fee
 if finalCost > msg.MaxCost {
 return &PluginDeliverResponse{Error: ErrCostExceedsMaxCost()}
 }
-// COI-3: per-address position cap (20% of pool)
-if mPool.Amount > 0 && exceedsPositionCap(position.CostPaid, finalCost, mPool.Amount) {
+// COI-3: per-address position cap — capped on shares, not CostPaid.
+// totalSideShares is post-trade so the cap scales with actual exposure.
+var totalSideShares uint64
+if msg.Outcome {
+totalSideShares = market.QYes + msg.Shares
+if exceedsPositionCap(position.SharesYes, msg.Shares, totalSideShares) {
 return &PluginDeliverResponse{Error: ErrPositionCapExceeded()}
+}
+} else {
+totalSideShares = market.QNo + msg.Shares
+if exceedsPositionCap(position.SharesNo, msg.Shares, totalSideShares) {
+return &PluginDeliverResponse{Error: ErrPositionCapExceeded()}
+}
 }
 
 if bettor.Amount < finalCost {

@@ -129,10 +129,15 @@ return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 // Layer 3: dynamic ELEVATED_RISK re-evaluation at propose time.
 // A market that grew beyond the threshold after creation gets upgraded
 // to the 7-person panel if disputed — regardless of creation-time flag.
-poolQId := nextQueryId()
+// Read pool (elevated risk check) AND treasury reserve (Issue-11 fix)
+// in a single batch — bond must be deposited into TreasuryReserve here
+// so finalize_market can pay both bounty + bond return from the reserve.
+poolQId  := nextQueryId()
+treasQId := nextQueryId()
 poolResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
-{QueryId: poolQId, Key: KeyForMarketPool(msg.MarketId)},
+{QueryId: poolQId,  Key: KeyForMarketPool(msg.MarketId)},
+{QueryId: treasQId, Key: KeyForTreasuryReserve(msg.MarketId)},
 },
 })
 if err != nil {
@@ -141,19 +146,35 @@ return &PluginDeliverResponse{Error: err}
 if poolResp.Error != nil {
 return &PluginDeliverResponse{Error: poolResp.Error}
 }
+treasury := &TreasuryReserve{}
 for _, r := range poolResp.Results {
-if r.QueryId == poolQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
+continue
+}
+switch r.QueryId {
+case poolQId:
 pool := &Pool{}
 if pe := Unmarshal(r.Entries[0].Value, pool); pe == nil {
 if pool.Amount >= ELEVATED_RISK_THRESHOLD {
 market.ElevatedRisk = true
 }
 }
+case treasQId:
+if pe := Unmarshal(r.Entries[0].Value, treasury); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
 }
 }
 
-market.Status             = STATUS_PROPOSED
-resolverRec.StakeAmount  -= msg.ProposalBond
+market.Status            = STATUS_PROPOSED
+resolverRec.StakeAmount -= msg.ProposalBond
+
+// Issue-11 fix: deposit ProposalBond into TreasuryReserve so finalize_market
+// can pay both FINALIZATION_BOUNTY and bond return without running short.
+if treasury.LockedReserve > ^uint64(0)-msg.ProposalBond {
+return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+}
+treasury.LockedReserve += msg.ProposalBond
 
 proposal := &ProposalRecord{
 ResolverAddr:    msg.ResolverAddress,
@@ -173,13 +194,16 @@ rawPR, pe := SafeMarshal(proposal)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawRS, pe := SafeMarshal(resolverState)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawTR, pe := SafeMarshal(treasury)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
 wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
 Sets: []*PluginSetOp{
-{Key: KeyForMarket(msg.MarketId),              Value: rawM},
+{Key: KeyForMarket(msg.MarketId),                Value: rawM},
 {Key: KeyForResolverRecord(msg.ResolverAddress), Value: rawRR},
-{Key: KeyForProposal(msg.MarketId),             Value: rawPR},
-{Key: KeyForResolverState(msg.MarketId),        Value: rawRS},
+{Key: KeyForProposal(msg.MarketId),              Value: rawPR},
+{Key: KeyForResolverState(msg.MarketId),         Value: rawRS},
+{Key: KeyForTreasuryReserve(msg.MarketId),       Value: rawTR},
 },
 })
 if pe := errCheckWrite(wr, werr); pe != nil {

@@ -101,10 +101,19 @@ return false
 return true
 }
 
-// COI-3: checks whether adding newCost to currentCostPaid would exceed
-// MAX_POSITION_BPS of poolAmount. Returns true if position would be too large.
-func exceedsPositionCap(currentCostPaid, newCost, poolAmount uint64) bool {
-newTotal := currentCostPaid + newCost
-cap := poolAmount * MAX_POSITION_BPS / 10000
+// COI-3: checks whether holding currentShares + newShares would exceed
+// MAX_POSITION_BPS of totalSideShares (shares outstanding on that side).
+// Capping on shares — not CostPaid — is correct for LMSR because CostPaid
+// is path-dependent: early buyers pay less per share than late buyers, so
+// a CostPaid cap penalises late entrants while allowing early actors to
+// accumulate dominant share positions cheaply.
+// totalSideShares is the post-trade value (market.QYes or market.QNo after
+// adding msg.Shares) so the cap scales with the market's actual exposure.
+func exceedsPositionCap(currentShares, newShares, totalSideShares uint64) bool {
+if totalSideShares == 0 {
+return false
+}
+newTotal := currentShares + newShares
+cap := totalSideShares * MAX_POSITION_BPS / 10000
 return newTotal > cap
 }

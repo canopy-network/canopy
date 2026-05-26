@@ -169,18 +169,11 @@ if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawAcc, pe := SafeMarshal(claimantAcc)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
-wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-Sets: []*PluginSetOp{
-{Key: posKey,    Value: rawPos},
-{Key: marketKey, Value: rawMkt},
-{Key: poolKey,   Value: rawMP},
-{Key: claimKey,  Value: rawAcc},
-},
-})
-if pe := errCheckWrite(wr, werr); pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
-
+// Issue-14 fix: compute sweep eligibility BEFORE the atomic write.
+// marketPool.Amount is already post-payout in memory — no re-read needed.
+// Folding sweep into the same StateWrite eliminates the TOCTOU window where
+// two concurrent last-winner calls could both re-read a non-zero pool and
+// double-credit treasury.
 resolutionDelay := RESOLUTION_DELAY_BLOCKS
 gracePeriod     := GRACE_PERIOD_BLOCKS
 claimGrace      := CLAIM_GRACE_PERIOD
@@ -189,35 +182,21 @@ resolutionDelay = TEST_RESOLUTION_DELAY
 gracePeriod     = TEST_GRACE_PERIOD
 claimGrace      = TEST_CLAIM_GRACE_PERIOD
 }
-graceEnd := market.ExpiryTime + resolutionDelay + gracePeriod + claimGrace
+graceEnd    := market.ExpiryTime + resolutionDelay + gracePeriod + claimGrace
 shouldSweep := (market.Status == STATUS_FINALIZED &&
 (market.ClaimedCount == market.TotalPositions || now > graceEnd)) ||
 (market.Status == STATUS_CANCELLED && now > graceEnd)
-if shouldSweep {
-sweepQId := nextQueryId()
-sweepResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
-Keys: []*PluginKeyRead{
-{QueryId: sweepQId, Key: poolKey},
-},
-})
-if err != nil {
-return &PluginDeliverResponse{Error: err}
-}
-if sweepResp.Error != nil {
-return &PluginDeliverResponse{Error: sweepResp.Error}
+
+sets := []*PluginSetOp{
+{Key: posKey,    Value: rawPos},
+{Key: marketKey, Value: rawMkt},
+{Key: poolKey,   Value: rawMP},
+{Key: claimKey,  Value: rawAcc},
 }
 
-sweepPool := &Pool{}
-for _, r := range sweepResp.Results {
-if r.QueryId == sweepQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
-if pe := Unmarshal(r.Entries[0].Value, sweepPool); pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
-}
-}
-
-if sweepPool.Amount > 0 {
-// Read the global treasury pool before writing.
+if shouldSweep && marketPool.Amount > 0 {
+// marketPool.Amount here is the post-payout remainder (already subtracted above).
+// Read treasury once, add remainder, zero the market pool — all in one write.
 tQId := nextQueryId()
 tResp, tErr := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
@@ -241,13 +220,14 @@ return &PluginDeliverResponse{Error: pe}
 }
 
 // Overflow guard.
-if treasuryPool.Amount > ^uint64(0)-sweepPool.Amount {
+if treasuryPool.Amount > ^uint64(0)-marketPool.Amount {
 return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 }
-treasuryPool.Amount += sweepPool.Amount
-sweepPool.Amount = 0
+treasuryPool.Amount += marketPool.Amount
+marketPool.Amount   = 0
 
-rawSweep, pe := SafeMarshal(sweepPool)
+// Re-marshal pool (now zeroed) and treasury (now incremented).
+rawMP, pe = SafeMarshal(marketPool)
 if pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
@@ -255,17 +235,15 @@ rawTreasury, pe := SafeMarshal(treasuryPool)
 if pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
-// Write zeroed market pool and updated treasury pool atomically.
-sweepWr, sweepErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-Sets: []*PluginSetOp{
-{Key: poolKey,              Value: rawSweep},
-{Key: KeyForTreasuryPool(), Value: rawTreasury},
-},
-})
-if pe := errCheckWrite(sweepWr, sweepErr); pe != nil {
+
+// Replace pool op with zeroed value; append treasury op.
+sets[2] = &PluginSetOp{Key: poolKey,              Value: rawMP}
+sets    = append(sets, &PluginSetOp{Key: KeyForTreasuryPool(), Value: rawTreasury})
+}
+
+wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets})
+if pe := errCheckWrite(wr, werr); pe != nil {
 return &PluginDeliverResponse{Error: pe}
-}
-}
 }
 
 return &PluginDeliverResponse{}
