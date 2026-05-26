@@ -1239,6 +1239,7 @@ Snapshot-served (sub-millisecond, stale by ≤1 block):
 | `/v1/spend/{id}/approvals` | multisig approvals filtered to the *current* signer set |
 | `/v1/validators` | `ValidatorRegistry` (committee snapshot used for pro-rata) |
 | `/v1/stakers` | `{stakers: [{address, amount, stakedAtHeight}]}` from `CLIQStakeIndex` |
+| `/v1/graduation` | five autonomy-graduation metrics + composite `eligible` (T5) |
 
 Lazy-fulfilled per-address (latency: up to one block ≈ 6s on localnet):
 
@@ -1259,6 +1260,75 @@ drains the query queue. Client disconnects (e.g. via `ctx` timeout)
 cancel the wait promptly. Pending unstakes and per-address
 redemption listings are *not yet* exposed — they'd need new
 write-side indexes; tracked as future work.
+
+## Push alerts (webhooks)
+
+The RPC surface above is *pull* (poll it from a dashboard). For unattended
+monitoring the plugin can also *push* alerts to a webhook (Slack, Discord,
+or any JSON receiver) when an on-chain condition trips. Disabled by default.
+
+Enable by setting `CANOLIQ_ALERT_URL` (or the `alerts` block in
+`CANOLIQ_CONFIG`):
+
+```bash
+export CANOLIQ_ALERT_URL=https://hooks.slack.com/services/...
+```
+
+Full config block (all knobs optional except `webhookUrl`):
+
+```json
+"alerts": {
+  "webhookUrl": "https://hooks.slack.com/services/...",
+  "authHeader": "Bearer <token>",          // optional Authorization header
+  "format": "slack",                         // json (default) | slack | discord
+  "windowBlocks": 100,                       // tumbling window for drain/drop
+  "drainAlertBps": 5000,                     // buyback drain > 50% over window
+  "concentrationAlertBps": 6600,             // one validator > 66% of stake
+  "tvlDropBps": 2000,                        // TVL drop > 20% over window
+  "defaultMinIntervalBlocks": 100,           // debounce between re-fires
+  "minIntervalBlocks": { "tvl_drop": 50 }    // per-kind debounce override
+}
+```
+
+### Conditions
+
+| Kind | Severity | Fires when |
+|---|---|---|
+| `buyback_drain` | warn | buyback pool drains > `drainAlertBps` within a `windowBlocks` window |
+| `validator_concentration` | warn | one committee validator holds > `concentrationAlertBps` of total stake |
+| `tvl_drop` | crit | total pooled CNPY drops > `tvlDropBps` within a `windowBlocks` window |
+
+Drain/drop use a **tumbling** window: the baseline re-anchors every
+`windowBlocks` blocks (not a true sliding window — simpler, no per-block
+ring buffer). Concentration is instantaneous. A *stuck-redemption* condition
+is planned but deferred: it needs a global mature-unclaimed-redemption index
+that does not exist yet.
+
+### Payload
+
+The canonical JSON envelope:
+
+```json
+{
+  "kind": "buyback_drain",
+  "height": 12345,
+  "severity": "warn",
+  "message": "buyback pool draining faster than threshold",
+  "details": { "schemaVersion": 1, "baseline": 1000, "current": 400, "dropBps": 6000, "thresholdBps": 5000 }
+}
+```
+
+`format: "slack"` sends `{"text": "[warn] canoLiq buyback_drain @ h12345: ..."}`;
+`format: "discord"` sends the same string as `{"content": "..."}`.
+
+### Delivery semantics
+
+- **Non-blocking:** POSTs run on a goroutine with a 5s timeout, so a slow or
+  dead receiver never stalls `EndBlock` / consensus. Failures log at WARN.
+- **Debounced:** each kind re-fires at most once per `minIntervalBlocks`. The
+  watermark lives in state (`KeyForAlertState(kind)`) so it survives restarts.
+- **Auto-resolving:** when a condition clears, its watermark resets, so the
+  next occurrence fires immediately.
 
 ## Logs
 

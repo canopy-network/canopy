@@ -189,6 +189,11 @@ func (c *Canoliq) EndBlock(req *contract.PluginEndRequest) *contract.PluginEndRe
 		return &contract.PluginEndResponse{Error: err}
 	}
 	c.drainLazyQueries()
+	// T6: evaluate push-alert conditions against the freshly-published
+	// snapshot. Dispatch is non-blocking; a webhook failure never stalls here.
+	if err := c.evaluateAlerts(req.GetHeight()); err != nil {
+		return &contract.PluginEndResponse{Error: err}
+	}
 	return &contract.PluginEndResponse{}
 }
 

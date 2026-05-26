@@ -22,6 +22,11 @@ const pluginModeEnv = "CANOPY_PLUGIN_MODE"
 // keeps whatever the JSON config provides (default: disabled).
 const canoliqRpcAddrEnv = "CANOLIQ_RPC_ADDR"
 
+// CANOLIQ_ALERT_URL turns on (or overrides the target of) the push-alert
+// webhook, taking precedence over Config.Alerts.WebhookURL. Empty/unset keeps
+// whatever the JSON config provides (default: disabled).
+const canoliqAlertURLEnv = "CANOLIQ_ALERT_URL"
+
 func main() {
 	mode := os.Getenv(pluginModeEnv)
 	var canoliqPlugin *canoliq.Plugin
@@ -41,6 +46,12 @@ func main() {
 		}
 		if addr := os.Getenv(canoliqRpcAddrEnv); addr != "" {
 			cfg.RpcAddress = addr
+		}
+		if url := os.Getenv(canoliqAlertURLEnv); url != "" {
+			if cfg.Alerts == nil {
+				cfg.Alerts = &canoliq.AlertConfig{}
+			}
+			cfg.Alerts.WebhookURL = url
 		}
 		canoliqPlugin = canoliq.StartPlugin(cfg)
 	default:

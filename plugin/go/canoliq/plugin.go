@@ -44,6 +44,10 @@ type Plugin struct {
 	// a *lazyQuery here and block on its result channel; EndBlock drains
 	// it after refreshSnapshot. See lazy_query.go for the rationale.
 	pendingQueries chan *lazyQuery
+	// alertHook is a unit-test seam. When non-nil, fired alerts are delivered
+	// to it synchronously instead of POSTing to the configured webhook. Always
+	// nil in production builds. See alerts.go.
+	alertHook func(AlertEnvelope)
 }
 
 // RPC returns the active HTTP query server, or nil if disabled.

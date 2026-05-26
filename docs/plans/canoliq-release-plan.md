@@ -533,43 +533,46 @@ WP §11 "monitoring dashboards & alerts for validator behaviour, committee
 health, and TVL movement." Push surface for unattended monitoring; pull
 surface (RPC) is already in.
 
+**Status: landed and tested (2026-05-26).** Full suite green. The
+stuck-redemption condition is **deferred** (needs a global
+mature-unclaimed-redemption index that doesn't exist yet — the plan flagged
+this dependency); the other three conditions ship.
+
 ### Webhook delivery (`plugin/go/canoliq/alerts.go`)
-- [ ] `AlertConfig` struct — `WebhookURL`, `AuthHeader` (optional),
-      `Enabled`, per-kind `MinIntervalBlocks` debounce, payload `Format`
-      (json | slack | discord), 5 s POST timeout.
-- [ ] `Config.Alerts *AlertConfig` plumbed via JSON + `CANOLIQ_ALERT_URL`
-      env override; empty disables (mirrors `RpcAddress`).
-- [ ] Dispatcher fans out POSTs on a goroutine so `EndBlock` never blocks
-      on network IO; failures logged at WARN.
-- [ ] Deduplication: per-kind last-fired-height entry under
-      `KeyForAlertState(kind)`; skip when `current_height - last_fired <
-      MinIntervalBlocks`. Resolution event clears the watermark.
+- [x] `AlertConfig` — `WebhookURL`, `AuthHeader`, `Format` (json|slack|discord),
+      per-kind `MinIntervalBlocks` (+ `DefaultMinIntervalBlocks`), `WindowBlocks`,
+      and the three condition thresholds. Empty `WebhookURL` disables (Enabled
+      flag dropped — presence of a URL is the switch, mirroring `RpcAddress`).
+- [x] `Config.Alerts *AlertConfig` via JSON + `CANOLIQ_ALERT_URL` env override.
+- [x] `fireAlert` fans out POSTs on a goroutine (5 s timeout); failures log WARN;
+      `EndBlock` never blocks.
+- [x] Dedup via `KeyForAlertState(kind)` → `AlertState{last_fired_height,
+      window_start_height, window_baseline}`; skip within `MinIntervalBlocks`;
+      resolution clears the watermark.
 
 ### Conditions
-- [ ] **Buyback drain rate.** Rolling 100-block window; fire when window
-      drain > `drain_alert_bps` (default 50 %).
-- [ ] **Stuck redemption queue.** Mature unclaimed redemption count >
-      `stuck_redemption_threshold`. **Depends on L3 indexes** + a global
-      `StuckRedemptionIndex` of unclaimed mature ids — block this condition
-      on those landing.
-- [ ] **Validator-incentive starvation.** `max_validator_stake /
-      total_committee_stake > concentration_alert_bps` (default 66 %).
-- [ ] **TVL drop.** Rolling-window drop > N % in M blocks.
+- [x] **Buyback drain** — tumbling `WindowBlocks` window; fire when drain >
+      `DrainAlertBps` (default 5000). *(Tumbling, not sliding — re-anchors
+      baseline each window; documented.)*
+- [~] **Stuck redemption queue** — **deferred**, needs a global stuck index.
+- [x] **Validator concentration** — `max_stake / total_stake >
+      ConcentrationAlertBps` (default 6600); instantaneous.
+- [x] **TVL drop** — tumbling window; fire when pooled drops > `TvlDropBps`
+      (default 2000).
 
 ### Payload + tests + docs
-- [ ] Envelope: `{kind, height, severity (warn|crit), message, details:
-      {schemaVersion, ...}}`. Slack / Discord adapters convert.
-- [ ] `httptest.Server` mock receiver; each kind fires once with expected
-      payload under a seeded condition. Debounce: same condition seeded
-      across consecutive `EndBlock`s fires once. Resilience: webhook 500
-      doesn't stall `EndBlock`. Threshold edges: at-threshold doesn't fire,
-      just-above fires.
-- [ ] `README.md` payload schema + config knobs + webhook setup.
-      `AGENTS.md` design rationale (push vs pull, dedup-in-state, goroutine
-      dispatcher).
+- [x] Envelope `{kind, height, severity (warn|crit), message, details:
+      {schemaVersion, ...}}`; slack→`{text}`, discord→`{content}` adapters.
+- [x] `t6_alerts_test.go`: each kind fires under a seeded condition; debounce
+      fires once across consecutive blocks; resolution re-arms; threshold edges
+      (at-threshold no-fire, +1bps fires); `httptest.Server` delivery for all
+      three formats; auth header; 500 handled gracefully; disabled is a no-op.
+- [x] `README.md` config block + conditions table + payload schema + delivery
+      semantics; `AGENTS.md` design rationale.
 
 ## Testnet exit criteria
-- [ ] T1 + T2 + T3 + T4 + T5 + T6 landed and tested.
+- [x] T1 + T2 + T3 + T4 + T5 + T6 landed and tested (T6 minus the deferred
+      stuck-redemption condition). Full in-process suite green.
 - [ ] Public testnet docker compose runs through:
       - tiered proposal round-trips (fee change, validator ejection,
         emergency, large treasury spend),

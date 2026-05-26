@@ -597,3 +597,15 @@ message ValidatorRegistry {
   // entries: per-validator stake records
   repeated ValidatorRegistryEntry entries = 1;
 }
+
+// AlertState is the per-kind bookkeeping for the T6 alert subsystem: the
+// debounce watermark and the tumbling-window baseline for windowed conditions.
+message AlertState {
+  // last_fired_height: height the alert last fired (0 = not currently firing).
+  // Cleared to 0 when the condition resolves so it can fire again.
+  uint64 last_fired_height = 1; // @gotags: json:"lastFiredHeight"
+  // window_start_height: height the current measurement window opened.
+  uint64 window_start_height = 2; // @gotags: json:"windowStartHeight"
+  // window_baseline: the measured value at window open (e.g. pool balance).
+  uint64 window_baseline = 3; // @gotags: json:"windowBaseline"
+}

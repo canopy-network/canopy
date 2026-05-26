@@ -3254,6 +3254,72 @@ func (x *ValidatorRegistry) GetEntries() []*ValidatorRegistryEntry {
 	return nil
 }
 
+// AlertState is the per-kind bookkeeping for the T6 alert subsystem: the
+// debounce watermark and the tumbling-window baseline for windowed conditions.
+type AlertState struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// last_fired_height: height the alert last fired (0 = not currently firing).
+	// Cleared to 0 when the condition resolves so it can fire again.
+	LastFiredHeight uint64 `protobuf:"varint,1,opt,name=last_fired_height,json=lastFiredHeight,proto3" json:"lastFiredHeight"` // @gotags: json:"lastFiredHeight"
+	// window_start_height: height the current measurement window opened.
+	WindowStartHeight uint64 `protobuf:"varint,2,opt,name=window_start_height,json=windowStartHeight,proto3" json:"windowStartHeight"` // @gotags: json:"windowStartHeight"
+	// window_baseline: the measured value at window open (e.g. pool balance).
+	WindowBaseline uint64 `protobuf:"varint,3,opt,name=window_baseline,json=windowBaseline,proto3" json:"windowBaseline"` // @gotags: json:"windowBaseline"
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AlertState) Reset() {
+	*x = AlertState{}
+	mi := &file_canoliq_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertState) ProtoMessage() {}
+
+func (x *AlertState) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertState.ProtoReflect.Descriptor instead.
+func (*AlertState) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *AlertState) GetLastFiredHeight() uint64 {
+	if x != nil {
+		return x.LastFiredHeight
+	}
+	return 0
+}
+
+func (x *AlertState) GetWindowStartHeight() uint64 {
+	if x != nil {
+		return x.WindowStartHeight
+	}
+	return 0
+}
+
+func (x *AlertState) GetWindowBaseline() uint64 {
+	if x != nil {
+		return x.WindowBaseline
+	}
+	return 0
+}
+
 var File_canoliq_proto protoreflect.FileDescriptor
 
 const file_canoliq_proto_rawDesc = "" +
@@ -3482,7 +3548,12 @@ const file_canoliq_proto_rawDesc = "" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x14\n" +
 	"\x05stake\x18\x02 \x01(\x04R\x05stake\"L\n" +
 	"\x11ValidatorRegistry\x127\n" +
-	"\aentries\x18\x01 \x03(\v2\x1d.types.ValidatorRegistryEntryR\aentries*\xe6\x01\n" +
+	"\aentries\x18\x01 \x03(\v2\x1d.types.ValidatorRegistryEntryR\aentries\"\x91\x01\n" +
+	"\n" +
+	"AlertState\x12*\n" +
+	"\x11last_fired_height\x18\x01 \x01(\x04R\x0flastFiredHeight\x12.\n" +
+	"\x13window_start_height\x18\x02 \x01(\x04R\x11windowStartHeight\x12'\n" +
+	"\x0fwindow_baseline\x18\x03 \x01(\x04R\x0ewindowBaseline*\xe6\x01\n" +
 	"\n" +
 	"ActionType\x12\x12\n" +
 	"\x0eACTION_UNKNOWN\x10\x00\x12\x15\n" +
@@ -3535,7 +3606,7 @@ func file_canoliq_proto_rawDescGZIP() []byte {
 }
 
 var file_canoliq_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_canoliq_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
+var file_canoliq_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_canoliq_proto_goTypes = []any{
 	(ActionType)(0),                       // 0: types.ActionType
 	(LockTier)(0),                         // 1: types.LockTier
@@ -3581,16 +3652,17 @@ var file_canoliq_proto_goTypes = []any{
 	(*CLIQStakeIndex)(nil),                // 41: types.CLIQStakeIndex
 	(*ValidatorRegistryEntry)(nil),        // 42: types.ValidatorRegistryEntry
 	(*ValidatorRegistry)(nil),             // 43: types.ValidatorRegistry
-	(*anypb.Any)(nil),                     // 44: google.protobuf.Any
+	(*AlertState)(nil),                    // 44: types.AlertState
+	(*anypb.Any)(nil),                     // 45: google.protobuf.Any
 }
 var file_canoliq_proto_depIdxs = []int32{
 	16, // 0: types.CanoliqParams.governance:type_name -> types.GovernanceTier
 	0,  // 1: types.GovernanceTier.action:type_name -> types.ActionType
 	1,  // 2: types.MessageCLIQStake.lock_tier:type_name -> types.LockTier
-	44, // 3: types.MessageCLIQProposalCreate.payload:type_name -> google.protobuf.Any
+	45, // 3: types.MessageCLIQProposalCreate.payload:type_name -> google.protobuf.Any
 	2,  // 4: types.MessageCLIQVote.choice:type_name -> types.VoteChoice
 	1,  // 5: types.CLIQStake.lock_tier:type_name -> types.LockTier
-	44, // 6: types.Proposal.payload:type_name -> google.protobuf.Any
+	45, // 6: types.Proposal.payload:type_name -> google.protobuf.Any
 	3,  // 7: types.Proposal.status:type_name -> types.ProposalStatus
 	0,  // 8: types.Proposal.action_type:type_name -> types.ActionType
 	16, // 9: types.Proposal.tier:type_name -> types.GovernanceTier
@@ -3621,7 +3693,7 @@ func file_canoliq_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_canoliq_proto_rawDesc), len(file_canoliq_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   38,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -34,6 +34,7 @@ var (
 	domainStakeIndex    = []byte{20}
 	domainRedeemIndex   = []byte{21}
 	domainUnstakeIndex  = []byte{22}
+	domainAlertState    = []byte{23}
 
 	treasuryCanopy = []byte("canopy")
 	treasuryCliq   = []byte("cliq")
@@ -207,6 +208,11 @@ func KeyForInsurancePool() []byte {
 // KeyForValidatorRegistry returns the singleton validator stake registry key.
 func KeyForValidatorRegistry() []byte {
 	return JoinLenPrefix(canoliqPrefix, domainValIncent, indexSingleton)
+}
+
+// KeyForAlertState returns the per-kind alert bookkeeping key (T6).
+func KeyForAlertState(kind string) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainAlertState, []byte(kind))
 }
 
 // EncodeUint64 returns the 8-byte big-endian encoding of n. Used for storing

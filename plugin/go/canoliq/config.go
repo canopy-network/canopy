@@ -101,6 +101,39 @@ type Config struct {
 	GenesisPath               string `json:"genesisPath"`
 	RpcAddress                string `json:"rpcAddress"`
 	RedemptionUnstakingBlocks uint64 `json:"redemptionUnstakingBlocks"`
+	// Alerts configures the optional push-alert webhook (T6). Nil or empty
+	// WebhookURL disables it (mirrors RpcAddress). CANOLIQ_ALERT_URL overrides
+	// the URL at startup.
+	Alerts *AlertConfig `json:"alerts,omitempty"`
+}
+
+// AlertConfig configures the T6 push-alert subsystem. Empty WebhookURL
+// disables all alert delivery.
+type AlertConfig struct {
+	// WebhookURL is the POST target. Empty disables delivery.
+	WebhookURL string `json:"webhookUrl"`
+	// AuthHeader, when set, is sent as the Authorization header value.
+	AuthHeader string `json:"authHeader,omitempty"`
+	// Format selects the payload shape: "json" (default), "slack", "discord".
+	Format string `json:"format,omitempty"`
+	// MinIntervalBlocks debounces re-fires per alert kind. Falls back to
+	// DefaultMinIntervalBlocks when a kind is absent.
+	MinIntervalBlocks map[string]uint64 `json:"minIntervalBlocks,omitempty"`
+	// DefaultMinIntervalBlocks is the debounce used when a kind has no entry
+	// in MinIntervalBlocks (default alertDefaultMinInterval).
+	DefaultMinIntervalBlocks uint64 `json:"defaultMinIntervalBlocks,omitempty"`
+	// WindowBlocks is the tumbling window for drain/drop conditions (default
+	// alertDefaultWindowBlocks).
+	WindowBlocks uint64 `json:"windowBlocks,omitempty"`
+	// DrainAlertBps fires the buyback-drain alert when the window drain exceeds
+	// this fraction (default 5000 = 50%).
+	DrainAlertBps uint64 `json:"drainAlertBps,omitempty"`
+	// ConcentrationAlertBps fires when one validator holds more than this
+	// fraction of committee stake (default 6600 = 66%).
+	ConcentrationAlertBps uint64 `json:"concentrationAlertBps,omitempty"`
+	// TvlDropBps fires when TVL drops more than this fraction over the window
+	// (default 2000 = 20%).
+	TvlDropBps uint64 `json:"tvlDropBps,omitempty"`
 }
 
 // localnetPlaceholderAddress is the single hex address every bundled

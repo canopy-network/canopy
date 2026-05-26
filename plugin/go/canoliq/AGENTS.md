@@ -325,6 +325,41 @@ shape matches `canoliqctl`. `google.protobuf.Any` fields (e.g.
 `Proposal.Payload`) serialize as `{typeUrl, value}` — opaque to JSON
 consumers but sufficient for reconciliation.
 
+## Push alerts (T6)
+
+`alerts.go` adds a *push* path on top of the *pull* RPC surface. Design points
+a reviewer should hold onto:
+
+- **Push vs pull.** The RPC layer already exposes everything for polling.
+  Alerts exist only for the handful of events an operator must react to
+  unattended (pool draining, stake concentration, TVL crash). Don't add an
+  alert for something a dashboard poll already covers well.
+- **Goroutine dispatcher.** `fireAlert` spawns a goroutine for the webhook
+  POST (5s timeout) so a slow/dead receiver can never stall `EndBlock` — i.e.
+  never stall consensus. Delivery is best-effort: failures log at WARN and are
+  swallowed. Never make alert delivery block or error a lifecycle call.
+- **Dedup in state, not memory.** The per-kind watermark
+  (`KeyForAlertState(kind)` → `AlertState`) lives on-chain so debounce survives
+  restarts and is deterministic across nodes. `applyAlert` fires only when
+  `last_fired==0` or `height-last_fired >= minInterval`, and clears the
+  watermark on resolution so the next occurrence pages immediately.
+- **Evaluation is deterministic; delivery is not.** `evaluateAlerts` runs in
+  `EndBlock` after `refreshSnapshot`, reading the snapshot + alert state — all
+  deterministic, same on every node. Only the POST is non-deterministic, and it
+  has no state effect. Keep it that way: never let webhook success/failure feed
+  back into state.
+- **Tumbling windows.** Drain/drop conditions re-anchor a baseline every
+  `windowBlocks` rather than keeping a per-block ring buffer — cheaper, and good
+  enough for an alert. `rollWindow` returns `true` on the anchor block so the
+  caller skips comparing against a just-set baseline.
+- **Test seam.** `Plugin.alertHook` (nil in production) receives alerts
+  synchronously so condition/dedup tests are deterministic; the real HTTP path
+  (`postAlert`, format adapters, 500-resilience) is tested separately against
+  `httptest.Server`.
+- **Deferred:** the stuck-redemption condition needs a global
+  mature-unclaimed-redemption index (L3 only added per-address indexes). Blocked
+  on that landing.
+
 ## Per-request Canoliq, long-lived Plugin
 
 Every inbound FSM lifecycle message creates a fresh `*Canoliq` carrying the
