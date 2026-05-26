@@ -171,6 +171,31 @@ type economicParameterResponse struct {
 }
 
 // =====================================================
+// Query Response Types
+// =====================================================
+type AccountView struct {
+	Address            lib.HexBytes `json:"address"`
+	Amount             uint64       `json:"amount"`
+	TotalAmount        uint64       `json:"totalAmount,omitempty"`
+	SpendableAmount    uint64       `json:"spendableAmount,omitempty"`
+	VestedAmount       uint64       `json:"vestedAmount,omitempty"`
+	LockedAmount       uint64       `json:"lockedAmount,omitempty"`
+	VestingAmount      uint64       `json:"vestingAmount,omitempty"`
+	VestingStartHeight uint64       `json:"vestingStartHeight,omitempty"`
+	VestingCliffHeight uint64       `json:"vestingCliffHeight,omitempty"`
+	VestingEndHeight   uint64       `json:"vestingEndHeight,omitempty"`
+}
+
+type AccountViewPage []*AccountView
+
+// AccountViewPage satisfies the Page interface.
+func (p *AccountViewPage) New() lib.Pageable { return &AccountViewPage{} }
+
+func init() {
+	lib.RegisteredPageables[fsm.AccountsPageName] = new(AccountViewPage)
+}
+
+// =====================================================
 // Transaction Request Types
 // =====================================================
 type txSend struct {

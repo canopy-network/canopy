@@ -739,13 +739,26 @@ func (s *Server) heightAndAddressParams(w http.ResponseWriter, r *http.Request, 
 	})
 }
 
-func spendableAccountView(sm *fsm.StateMachine, account *fsm.Account) *fsm.Account {
+func spendableAccountView(sm *fsm.StateMachine, account *fsm.Account) *AccountView {
 	if account == nil {
 		return nil
 	}
-	view := *account
-	view.Amount = sm.AccountSpendableAmount(account)
-	return &view
+	total := account.Amount
+	spendable := sm.AccountSpendableAmount(account)
+	vested := sm.AccountVestedAmount(account)
+	locked := sm.AccountLockedAmount(account)
+	return &AccountView{
+		Address:            account.Address,
+		Amount:             spendable,
+		TotalAmount:        total,
+		SpendableAmount:    spendable,
+		VestedAmount:       vested,
+		LockedAmount:       locked,
+		VestingAmount:      account.VestingAmount,
+		VestingStartHeight: account.VestingStartHeight,
+		VestingCliffHeight: account.VestingCliffHeight,
+		VestingEndHeight:   account.VestingEndHeight,
+	}
 }
 
 func spendableAccountPageView(sm *fsm.StateMachine, page *lib.Page) *lib.Page {
@@ -757,7 +770,7 @@ func spendableAccountPageView(sm *fsm.StateMachine, page *lib.Page) *lib.Page {
 	if !ok || accounts == nil {
 		return &view
 	}
-	result := make(fsm.AccountPage, 0, len(*accounts))
+	result := make(AccountViewPage, 0, len(*accounts))
 	for _, account := range *accounts {
 		result = append(result, spendableAccountView(sm, account))
 	}

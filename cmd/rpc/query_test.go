@@ -93,7 +93,7 @@ func TestIndexerBlobsCached_RetainsOnlyLatestFullSnapshot(t *testing.T) {
 	require.NotEmpty(t, entry4.deltaBytes)
 }
 
-func TestAccountQueryReturnsSpendableAmount(t *testing.T) {
+func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {
 	server := newTestIndexerBlobServer(t)
 	sm := server.controller.FSM
 	address := crypto.NewAddress(bytes.Repeat([]byte{0x33}, crypto.AddressSize))
@@ -118,16 +118,21 @@ func TestAccountQueryReturnsSpendableAmount(t *testing.T) {
 	server.Account(rec, req, nil)
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	var got fsm.Account
+	var got AccountView
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Equal(t, address.Bytes(), []byte(got.Address))
 	require.Equal(t, uint64(110), got.Amount)
+	require.Equal(t, uint64(150), got.TotalAmount)
+	require.Equal(t, uint64(110), got.SpendableAmount)
+	require.Equal(t, uint64(60), got.VestedAmount)
+	require.Equal(t, uint64(40), got.LockedAmount)
 	require.Equal(t, uint64(100), got.VestingAmount)
 	require.Equal(t, uint64(1), got.VestingStartHeight)
 	require.Equal(t, uint64(2), got.VestingCliffHeight)
 	require.Equal(t, uint64(6), got.VestingEndHeight)
 }
 
-func TestAccountsQueryReturnsSpendableAmounts(t *testing.T) {
+func TestAccountsQueryReturnsVestingBreakdowns(t *testing.T) {
 	server := newTestIndexerBlobServer(t)
 	sm := server.controller.FSM
 	liquid := crypto.NewAddress(bytes.Repeat([]byte{0x44}, crypto.AddressSize))
@@ -153,27 +158,28 @@ func TestAccountsQueryReturnsSpendableAmounts(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	var got struct {
-		Results []fsm.Account `json:"results"`
+		Results []AccountView `json:"results"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	require.NotEmpty(t, got.Results)
 
-	amounts := make(map[string]uint64, len(got.Results))
+	amounts := make(map[string]AccountView, len(got.Results))
 	for _, account := range got.Results {
-		amounts[crypto.NewAddressFromBytes(account.Address).String()] = account.Amount
+		amounts[crypto.NewAddressFromBytes(account.Address).String()] = account
 	}
-	require.Equal(t, uint64(25), amounts[liquid.String()])
-	require.Equal(t, uint64(110), amounts[vested.String()])
+	require.Equal(t, uint64(25), amounts[liquid.String()].Amount)
+	require.Equal(t, uint64(25), amounts[liquid.String()].TotalAmount)
+	require.Equal(t, uint64(25), amounts[liquid.String()].SpendableAmount)
+	require.Zero(t, amounts[liquid.String()].VestedAmount)
+	require.Zero(t, amounts[liquid.String()].LockedAmount)
 
-	var vestedAccount *fsm.Account
-	for i := range got.Results {
-		account := got.Results[i]
-		if crypto.NewAddressFromBytes(account.Address).String() == vested.String() {
-			vestedAccount = &account
-			break
-		}
-	}
-	require.NotNil(t, vestedAccount)
+	vestedAccount, ok := amounts[vested.String()]
+	require.True(t, ok)
+	require.Equal(t, uint64(110), vestedAccount.Amount)
+	require.Equal(t, uint64(150), vestedAccount.TotalAmount)
+	require.Equal(t, uint64(110), vestedAccount.SpendableAmount)
+	require.Equal(t, uint64(60), vestedAccount.VestedAmount)
+	require.Equal(t, uint64(40), vestedAccount.LockedAmount)
 	require.Equal(t, uint64(100), vestedAccount.VestingAmount)
 	require.Equal(t, uint64(1), vestedAccount.VestingStartHeight)
 	require.Equal(t, uint64(2), vestedAccount.VestingCliffHeight)

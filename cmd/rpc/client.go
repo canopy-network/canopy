@@ -169,8 +169,8 @@ func (c *Client) TransactionsByRecipient(address string, params lib.PageParams) 
 	return
 }
 
-func (c *Client) Account(height uint64, address string) (p *fsm.Account, err lib.ErrorI) {
-	p = new(fsm.Account)
+func (c *Client) Account(height uint64, address string) (p *AccountView, err lib.ErrorI) {
+	p = new(AccountView)
 	err = c.heightAndAddressRequest(AccountRouteName, height, address, p)
 	return
 }
