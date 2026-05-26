@@ -22,6 +22,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Required by plugin.proto
+type Signature struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PublicKey     []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Signature) Reset() {
+	*x = Signature{}
+	mi := &file_tx_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Signature) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Signature) ProtoMessage() {}
+
+func (x *Signature) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Signature.ProtoReflect.Descriptor instead.
+func (*Signature) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Signature) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *Signature) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
 type Transaction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageType   string                 `protobuf:"bytes,1,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`
@@ -39,7 +92,7 @@ type Transaction struct {
 
 func (x *Transaction) Reset() {
 	*x = Transaction{}
-	mi := &file_tx_proto_msgTypes[0]
+	mi := &file_tx_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -51,7 +104,7 @@ func (x *Transaction) String() string {
 func (*Transaction) ProtoMessage() {}
 
 func (x *Transaction) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[0]
+	mi := &file_tx_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64,7 +117,7 @@ func (x *Transaction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Transaction.ProtoReflect.Descriptor instead.
 func (*Transaction) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{0}
+	return file_tx_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Transaction) GetMessageType() string {
@@ -128,58 +181,6 @@ func (x *Transaction) GetChainId() uint64 {
 		return x.ChainId
 	}
 	return 0
-}
-
-type Signature struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PublicKey     []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
-	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Signature) Reset() {
-	*x = Signature{}
-	mi := &file_tx_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Signature) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Signature) ProtoMessage() {}
-
-func (x *Signature) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Signature.ProtoReflect.Descriptor instead.
-func (*Signature) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *Signature) GetPublicKey() []byte {
-	if x != nil {
-		return x.PublicKey
-	}
-	return nil
-}
-
-func (x *Signature) GetSignature() []byte {
-	if x != nil {
-		return x.Signature
-	}
-	return nil
 }
 
 type FeeParams struct {
@@ -258,794 +259,7 @@ func (x *FeeParams) GetClaimWinningsFee() uint64 {
 	return 0
 }
 
-type MessageSend struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FromAddress   []byte                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"`
-	ToAddress     []byte                 `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"to_address,omitempty"`
-	Amount        uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MessageSend) Reset() {
-	*x = MessageSend{}
-	mi := &file_tx_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageSend) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageSend) ProtoMessage() {}
-
-func (x *MessageSend) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageSend.ProtoReflect.Descriptor instead.
-func (*MessageSend) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *MessageSend) GetFromAddress() []byte {
-	if x != nil {
-		return x.FromAddress
-	}
-	return nil
-}
-
-func (x *MessageSend) GetToAddress() []byte {
-	if x != nil {
-		return x.ToAddress
-	}
-	return nil
-}
-
-func (x *MessageSend) GetAmount() uint64 {
-	if x != nil {
-		return x.Amount
-	}
-	return 0
-}
-
-type MessageCreateMarket struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	CreatorAddress []byte                 `protobuf:"bytes,1,opt,name=creator_address,json=creatorAddress,proto3" json:"creator_address,omitempty"`
-	B0             uint64                 `protobuf:"varint,2,opt,name=b0,proto3" json:"b0,omitempty"`
-	ExpiryTime     uint64                 `protobuf:"varint,3,opt,name=expiry_time,json=expiryTime,proto3" json:"expiry_time,omitempty"`
-	Nonce          uint64                 `protobuf:"varint,4,opt,name=nonce,proto3" json:"nonce,omitempty"`
-	Question       string                 `protobuf:"bytes,5,opt,name=question,proto3" json:"question,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *MessageCreateMarket) Reset() {
-	*x = MessageCreateMarket{}
-	mi := &file_tx_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageCreateMarket) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageCreateMarket) ProtoMessage() {}
-
-func (x *MessageCreateMarket) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageCreateMarket.ProtoReflect.Descriptor instead.
-func (*MessageCreateMarket) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *MessageCreateMarket) GetCreatorAddress() []byte {
-	if x != nil {
-		return x.CreatorAddress
-	}
-	return nil
-}
-
-func (x *MessageCreateMarket) GetB0() uint64 {
-	if x != nil {
-		return x.B0
-	}
-	return 0
-}
-
-func (x *MessageCreateMarket) GetExpiryTime() uint64 {
-	if x != nil {
-		return x.ExpiryTime
-	}
-	return 0
-}
-
-func (x *MessageCreateMarket) GetNonce() uint64 {
-	if x != nil {
-		return x.Nonce
-	}
-	return 0
-}
-
-func (x *MessageCreateMarket) GetQuestion() string {
-	if x != nil {
-		return x.Question
-	}
-	return ""
-}
-
-type MessageSubmitPrediction struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BettorAddress []byte                 `protobuf:"bytes,1,opt,name=bettor_address,json=bettorAddress,proto3" json:"bettor_address,omitempty"`
-	MarketId      []byte                 `protobuf:"bytes,2,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	Outcome       bool                   `protobuf:"varint,3,opt,name=outcome,proto3" json:"outcome,omitempty"`
-	Shares        uint64                 `protobuf:"varint,4,opt,name=shares,proto3" json:"shares,omitempty"`
-	MaxCost       uint64                 `protobuf:"varint,5,opt,name=max_cost,json=maxCost,proto3" json:"max_cost,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MessageSubmitPrediction) Reset() {
-	*x = MessageSubmitPrediction{}
-	mi := &file_tx_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageSubmitPrediction) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageSubmitPrediction) ProtoMessage() {}
-
-func (x *MessageSubmitPrediction) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageSubmitPrediction.ProtoReflect.Descriptor instead.
-func (*MessageSubmitPrediction) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *MessageSubmitPrediction) GetBettorAddress() []byte {
-	if x != nil {
-		return x.BettorAddress
-	}
-	return nil
-}
-
-func (x *MessageSubmitPrediction) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageSubmitPrediction) GetOutcome() bool {
-	if x != nil {
-		return x.Outcome
-	}
-	return false
-}
-
-func (x *MessageSubmitPrediction) GetShares() uint64 {
-	if x != nil {
-		return x.Shares
-	}
-	return 0
-}
-
-func (x *MessageSubmitPrediction) GetMaxCost() uint64 {
-	if x != nil {
-		return x.MaxCost
-	}
-	return 0
-}
-
-type MessageResolveMarket struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	ResolverAddress []byte                 `protobuf:"bytes,2,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
-	WinningOutcome  bool                   `protobuf:"varint,3,opt,name=winning_outcome,json=winningOutcome,proto3" json:"winning_outcome,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *MessageResolveMarket) Reset() {
-	*x = MessageResolveMarket{}
-	mi := &file_tx_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageResolveMarket) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageResolveMarket) ProtoMessage() {}
-
-func (x *MessageResolveMarket) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageResolveMarket.ProtoReflect.Descriptor instead.
-func (*MessageResolveMarket) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *MessageResolveMarket) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageResolveMarket) GetResolverAddress() []byte {
-	if x != nil {
-		return x.ResolverAddress
-	}
-	return nil
-}
-
-func (x *MessageResolveMarket) GetWinningOutcome() bool {
-	if x != nil {
-		return x.WinningOutcome
-	}
-	return false
-}
-
-type MessageClaimWinnings struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	ClaimantAddress []byte                 `protobuf:"bytes,2,opt,name=claimant_address,json=claimantAddress,proto3" json:"claimant_address,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *MessageClaimWinnings) Reset() {
-	*x = MessageClaimWinnings{}
-	mi := &file_tx_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageClaimWinnings) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageClaimWinnings) ProtoMessage() {}
-
-func (x *MessageClaimWinnings) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageClaimWinnings.ProtoReflect.Descriptor instead.
-func (*MessageClaimWinnings) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *MessageClaimWinnings) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageClaimWinnings) GetClaimantAddress() []byte {
-	if x != nil {
-		return x.ClaimantAddress
-	}
-	return nil
-}
-
-type MessageRegisterResolver struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ResolverAddress []byte                 `protobuf:"bytes,1,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
-	StakeAmount     uint64                 `protobuf:"varint,2,opt,name=stake_amount,json=stakeAmount,proto3" json:"stake_amount,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *MessageRegisterResolver) Reset() {
-	*x = MessageRegisterResolver{}
-	mi := &file_tx_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageRegisterResolver) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageRegisterResolver) ProtoMessage() {}
-
-func (x *MessageRegisterResolver) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageRegisterResolver.ProtoReflect.Descriptor instead.
-func (*MessageRegisterResolver) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *MessageRegisterResolver) GetResolverAddress() []byte {
-	if x != nil {
-		return x.ResolverAddress
-	}
-	return nil
-}
-
-func (x *MessageRegisterResolver) GetStakeAmount() uint64 {
-	if x != nil {
-		return x.StakeAmount
-	}
-	return 0
-}
-
-type MessageProposeOutcome struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	ResolverAddress []byte                 `protobuf:"bytes,2,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
-	ProposedOutcome bool                   `protobuf:"varint,3,opt,name=proposed_outcome,json=proposedOutcome,proto3" json:"proposed_outcome,omitempty"`
-	ProposalBond    uint64                 `protobuf:"varint,4,opt,name=proposal_bond,json=proposalBond,proto3" json:"proposal_bond,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *MessageProposeOutcome) Reset() {
-	*x = MessageProposeOutcome{}
-	mi := &file_tx_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageProposeOutcome) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageProposeOutcome) ProtoMessage() {}
-
-func (x *MessageProposeOutcome) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageProposeOutcome.ProtoReflect.Descriptor instead.
-func (*MessageProposeOutcome) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *MessageProposeOutcome) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageProposeOutcome) GetResolverAddress() []byte {
-	if x != nil {
-		return x.ResolverAddress
-	}
-	return nil
-}
-
-func (x *MessageProposeOutcome) GetProposedOutcome() bool {
-	if x != nil {
-		return x.ProposedOutcome
-	}
-	return false
-}
-
-func (x *MessageProposeOutcome) GetProposalBond() uint64 {
-	if x != nil {
-		return x.ProposalBond
-	}
-	return 0
-}
-
-type MessageFileDispute struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	DisputerAddress []byte                 `protobuf:"bytes,2,opt,name=disputer_address,json=disputerAddress,proto3" json:"disputer_address,omitempty"`
-	DisputeBond     uint64                 `protobuf:"varint,3,opt,name=dispute_bond,json=disputeBond,proto3" json:"dispute_bond,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *MessageFileDispute) Reset() {
-	*x = MessageFileDispute{}
-	mi := &file_tx_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageFileDispute) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageFileDispute) ProtoMessage() {}
-
-func (x *MessageFileDispute) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageFileDispute.ProtoReflect.Descriptor instead.
-func (*MessageFileDispute) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *MessageFileDispute) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageFileDispute) GetDisputerAddress() []byte {
-	if x != nil {
-		return x.DisputerAddress
-	}
-	return nil
-}
-
-func (x *MessageFileDispute) GetDisputeBond() uint64 {
-	if x != nil {
-		return x.DisputeBond
-	}
-	return 0
-}
-
-type MessageCommitVote struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MarketId      []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	VoterAddr     []byte                 `protobuf:"bytes,2,opt,name=voter_addr,json=voterAddr,proto3" json:"voter_addr,omitempty"`
-	CommitHash    []byte                 `protobuf:"bytes,3,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MessageCommitVote) Reset() {
-	*x = MessageCommitVote{}
-	mi := &file_tx_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageCommitVote) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageCommitVote) ProtoMessage() {}
-
-func (x *MessageCommitVote) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageCommitVote.ProtoReflect.Descriptor instead.
-func (*MessageCommitVote) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *MessageCommitVote) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageCommitVote) GetVoterAddr() []byte {
-	if x != nil {
-		return x.VoterAddr
-	}
-	return nil
-}
-
-func (x *MessageCommitVote) GetCommitHash() []byte {
-	if x != nil {
-		return x.CommitHash
-	}
-	return nil
-}
-
-type MessageRevealVote struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MarketId      []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	VoterAddr     []byte                 `protobuf:"bytes,2,opt,name=voter_addr,json=voterAddr,proto3" json:"voter_addr,omitempty"`
-	Vote          bool                   `protobuf:"varint,3,opt,name=vote,proto3" json:"vote,omitempty"`
-	Nonce         []byte                 `protobuf:"bytes,4,opt,name=nonce,proto3" json:"nonce,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MessageRevealVote) Reset() {
-	*x = MessageRevealVote{}
-	mi := &file_tx_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageRevealVote) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageRevealVote) ProtoMessage() {}
-
-func (x *MessageRevealVote) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageRevealVote.ProtoReflect.Descriptor instead.
-func (*MessageRevealVote) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *MessageRevealVote) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageRevealVote) GetVoterAddr() []byte {
-	if x != nil {
-		return x.VoterAddr
-	}
-	return nil
-}
-
-func (x *MessageRevealVote) GetVote() bool {
-	if x != nil {
-		return x.Vote
-	}
-	return false
-}
-
-func (x *MessageRevealVote) GetNonce() []byte {
-	if x != nil {
-		return x.Nonce
-	}
-	return nil
-}
-
-type MessageTallyVotes struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MarketId      []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	CallerAddr    []byte                 `protobuf:"bytes,2,opt,name=caller_addr,json=callerAddr,proto3" json:"caller_addr,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MessageTallyVotes) Reset() {
-	*x = MessageTallyVotes{}
-	mi := &file_tx_proto_msgTypes[13]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageTallyVotes) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageTallyVotes) ProtoMessage() {}
-
-func (x *MessageTallyVotes) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[13]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageTallyVotes.ProtoReflect.Descriptor instead.
-func (*MessageTallyVotes) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *MessageTallyVotes) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageTallyVotes) GetCallerAddr() []byte {
-	if x != nil {
-		return x.CallerAddr
-	}
-	return nil
-}
-
-type MessageFinalizeMarket struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MarketId      []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	CallerAddr    []byte                 `protobuf:"bytes,2,opt,name=caller_addr,json=callerAddr,proto3" json:"caller_addr,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MessageFinalizeMarket) Reset() {
-	*x = MessageFinalizeMarket{}
-	mi := &file_tx_proto_msgTypes[14]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageFinalizeMarket) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageFinalizeMarket) ProtoMessage() {}
-
-func (x *MessageFinalizeMarket) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[14]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageFinalizeMarket.ProtoReflect.Descriptor instead.
-func (*MessageFinalizeMarket) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *MessageFinalizeMarket) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageFinalizeMarket) GetCallerAddr() []byte {
-	if x != nil {
-		return x.CallerAddr
-	}
-	return nil
-}
-
-type MessageClaimSlash struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
-	ClaimantAddress []byte                 `protobuf:"bytes,2,opt,name=claimant_address,json=claimantAddress,proto3" json:"claimant_address,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *MessageClaimSlash) Reset() {
-	*x = MessageClaimSlash{}
-	mi := &file_tx_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageClaimSlash) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageClaimSlash) ProtoMessage() {}
-
-func (x *MessageClaimSlash) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageClaimSlash.ProtoReflect.Descriptor instead.
-func (*MessageClaimSlash) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *MessageClaimSlash) GetMarketId() []byte {
-	if x != nil {
-		return x.MarketId
-	}
-	return nil
-}
-
-func (x *MessageClaimSlash) GetClaimantAddress() []byte {
-	if x != nil {
-		return x.ClaimantAddress
-	}
-	return nil
-}
-
+// ADLMSR state objects (0x10-0x14)
 type MarketState struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Status         uint32                 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
@@ -1064,7 +278,7 @@ type MarketState struct {
 
 func (x *MarketState) Reset() {
 	*x = MarketState{}
-	mi := &file_tx_proto_msgTypes[16]
+	mi := &file_tx_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1076,7 +290,7 @@ func (x *MarketState) String() string {
 func (*MarketState) ProtoMessage() {}
 
 func (x *MarketState) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[16]
+	mi := &file_tx_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1089,7 +303,7 @@ func (x *MarketState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketState.ProtoReflect.Descriptor instead.
 func (*MarketState) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{16}
+	return file_tx_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MarketState) GetStatus() uint32 {
@@ -1174,7 +388,7 @@ type PositionState struct {
 
 func (x *PositionState) Reset() {
 	*x = PositionState{}
-	mi := &file_tx_proto_msgTypes[17]
+	mi := &file_tx_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1186,7 +400,7 @@ func (x *PositionState) String() string {
 func (*PositionState) ProtoMessage() {}
 
 func (x *PositionState) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[17]
+	mi := &file_tx_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1199,7 +413,7 @@ func (x *PositionState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PositionState.ProtoReflect.Descriptor instead.
 func (*PositionState) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{17}
+	return file_tx_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PositionState) GetSharesYes() uint64 {
@@ -1240,7 +454,7 @@ type OutcomeState struct {
 
 func (x *OutcomeState) Reset() {
 	*x = OutcomeState{}
-	mi := &file_tx_proto_msgTypes[18]
+	mi := &file_tx_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1252,7 +466,7 @@ func (x *OutcomeState) String() string {
 func (*OutcomeState) ProtoMessage() {}
 
 func (x *OutcomeState) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[18]
+	mi := &file_tx_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1265,7 +479,7 @@ func (x *OutcomeState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OutcomeState.ProtoReflect.Descriptor instead.
 func (*OutcomeState) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{18}
+	return file_tx_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *OutcomeState) GetWinningOutcome() bool {
@@ -1291,7 +505,7 @@ type TreasuryReserve struct {
 
 func (x *TreasuryReserve) Reset() {
 	*x = TreasuryReserve{}
-	mi := &file_tx_proto_msgTypes[19]
+	mi := &file_tx_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1303,7 +517,7 @@ func (x *TreasuryReserve) String() string {
 func (*TreasuryReserve) ProtoMessage() {}
 
 func (x *TreasuryReserve) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[19]
+	mi := &file_tx_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1316,7 +530,7 @@ func (x *TreasuryReserve) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TreasuryReserve.ProtoReflect.Descriptor instead.
 func (*TreasuryReserve) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{19}
+	return file_tx_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TreasuryReserve) GetLockedReserve() uint64 {
@@ -1326,6 +540,7 @@ func (x *TreasuryReserve) GetLockedReserve() uint64 {
 	return 0
 }
 
+// PORS state objects (0x13, 0x16-0x1C)
 type ResolverState struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ResolverAddress []byte                 `protobuf:"bytes,1,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
@@ -1335,7 +550,7 @@ type ResolverState struct {
 
 func (x *ResolverState) Reset() {
 	*x = ResolverState{}
-	mi := &file_tx_proto_msgTypes[20]
+	mi := &file_tx_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1347,7 +562,7 @@ func (x *ResolverState) String() string {
 func (*ResolverState) ProtoMessage() {}
 
 func (x *ResolverState) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[20]
+	mi := &file_tx_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1360,7 +575,7 @@ func (x *ResolverState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolverState.ProtoReflect.Descriptor instead.
 func (*ResolverState) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{20}
+	return file_tx_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ResolverState) GetResolverAddress() []byte {
@@ -1382,7 +597,7 @@ type ResolverRecord struct {
 
 func (x *ResolverRecord) Reset() {
 	*x = ResolverRecord{}
-	mi := &file_tx_proto_msgTypes[21]
+	mi := &file_tx_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1394,7 +609,7 @@ func (x *ResolverRecord) String() string {
 func (*ResolverRecord) ProtoMessage() {}
 
 func (x *ResolverRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[21]
+	mi := &file_tx_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1407,7 +622,7 @@ func (x *ResolverRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolverRecord.ProtoReflect.Descriptor instead.
 func (*ResolverRecord) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{21}
+	return file_tx_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ResolverRecord) GetResolverAddress() []byte {
@@ -1451,7 +666,7 @@ type ProposalRecord struct {
 
 func (x *ProposalRecord) Reset() {
 	*x = ProposalRecord{}
-	mi := &file_tx_proto_msgTypes[22]
+	mi := &file_tx_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1463,7 +678,7 @@ func (x *ProposalRecord) String() string {
 func (*ProposalRecord) ProtoMessage() {}
 
 func (x *ProposalRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[22]
+	mi := &file_tx_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1476,7 +691,7 @@ func (x *ProposalRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalRecord.ProtoReflect.Descriptor instead.
 func (*ProposalRecord) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{22}
+	return file_tx_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ProposalRecord) GetResolverAddr() []byte {
@@ -1528,7 +743,7 @@ type DisputeRecord struct {
 
 func (x *DisputeRecord) Reset() {
 	*x = DisputeRecord{}
-	mi := &file_tx_proto_msgTypes[23]
+	mi := &file_tx_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1540,7 +755,7 @@ func (x *DisputeRecord) String() string {
 func (*DisputeRecord) ProtoMessage() {}
 
 func (x *DisputeRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[23]
+	mi := &file_tx_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1553,7 +768,7 @@ func (x *DisputeRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisputeRecord.ProtoReflect.Descriptor instead.
 func (*DisputeRecord) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{23}
+	return file_tx_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DisputeRecord) GetDisputerAddress() []byte {
@@ -1609,7 +824,7 @@ type VoteCommit struct {
 
 func (x *VoteCommit) Reset() {
 	*x = VoteCommit{}
-	mi := &file_tx_proto_msgTypes[24]
+	mi := &file_tx_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1621,7 +836,7 @@ func (x *VoteCommit) String() string {
 func (*VoteCommit) ProtoMessage() {}
 
 func (x *VoteCommit) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[24]
+	mi := &file_tx_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1634,7 +849,7 @@ func (x *VoteCommit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VoteCommit.ProtoReflect.Descriptor instead.
 func (*VoteCommit) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{24}
+	return file_tx_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *VoteCommit) GetVoterAddr() []byte {
@@ -1669,7 +884,7 @@ type VoteReveal struct {
 
 func (x *VoteReveal) Reset() {
 	*x = VoteReveal{}
-	mi := &file_tx_proto_msgTypes[25]
+	mi := &file_tx_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1681,7 +896,7 @@ func (x *VoteReveal) String() string {
 func (*VoteReveal) ProtoMessage() {}
 
 func (x *VoteReveal) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[25]
+	mi := &file_tx_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1694,7 +909,7 @@ func (x *VoteReveal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VoteReveal.ProtoReflect.Descriptor instead.
 func (*VoteReveal) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{25}
+	return file_tx_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *VoteReveal) GetVoterAddr() []byte {
@@ -1729,7 +944,7 @@ type SlashRecord struct {
 
 func (x *SlashRecord) Reset() {
 	*x = SlashRecord{}
-	mi := &file_tx_proto_msgTypes[26]
+	mi := &file_tx_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1741,7 +956,7 @@ func (x *SlashRecord) String() string {
 func (*SlashRecord) ProtoMessage() {}
 
 func (x *SlashRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[26]
+	mi := &file_tx_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1754,7 +969,7 @@ func (x *SlashRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SlashRecord.ProtoReflect.Descriptor instead.
 func (*SlashRecord) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{26}
+	return file_tx_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SlashRecord) GetSlashedAddress() []byte {
@@ -1787,7 +1002,7 @@ type PanelEntropyAccum struct {
 
 func (x *PanelEntropyAccum) Reset() {
 	*x = PanelEntropyAccum{}
-	mi := &file_tx_proto_msgTypes[27]
+	mi := &file_tx_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1799,7 +1014,7 @@ func (x *PanelEntropyAccum) String() string {
 func (*PanelEntropyAccum) ProtoMessage() {}
 
 func (x *PanelEntropyAccum) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[27]
+	mi := &file_tx_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1812,7 +1027,7 @@ func (x *PanelEntropyAccum) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PanelEntropyAccum.ProtoReflect.Descriptor instead.
 func (*PanelEntropyAccum) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{27}
+	return file_tx_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PanelEntropyAccum) GetAccumulator() uint64 {
@@ -1822,11 +1037,913 @@ func (x *PanelEntropyAccum) GetAccumulator() uint64 {
 	return 0
 }
 
+// Transaction messages (12 types)
+type MessageSend struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress   []byte                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"`
+	ToAddress     []byte                 `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"to_address,omitempty"`
+	Amount        uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageSend) Reset() {
+	*x = MessageSend{}
+	mi := &file_tx_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageSend) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageSend) ProtoMessage() {}
+
+func (x *MessageSend) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageSend.ProtoReflect.Descriptor instead.
+func (*MessageSend) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *MessageSend) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageSend) GetToAddress() []byte {
+	if x != nil {
+		return x.ToAddress
+	}
+	return nil
+}
+
+func (x *MessageSend) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+type MessageCreateMarket struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CreatorAddress []byte                 `protobuf:"bytes,1,opt,name=creator_address,json=creatorAddress,proto3" json:"creator_address,omitempty"`
+	B0             uint64                 `protobuf:"varint,2,opt,name=b0,proto3" json:"b0,omitempty"`
+	ExpiryTime     uint64                 `protobuf:"varint,3,opt,name=expiry_time,json=expiryTime,proto3" json:"expiry_time,omitempty"`
+	Nonce          uint64                 `protobuf:"varint,4,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	Question       string                 `protobuf:"bytes,5,opt,name=question,proto3" json:"question,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MessageCreateMarket) Reset() {
+	*x = MessageCreateMarket{}
+	mi := &file_tx_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageCreateMarket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageCreateMarket) ProtoMessage() {}
+
+func (x *MessageCreateMarket) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageCreateMarket.ProtoReflect.Descriptor instead.
+func (*MessageCreateMarket) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *MessageCreateMarket) GetCreatorAddress() []byte {
+	if x != nil {
+		return x.CreatorAddress
+	}
+	return nil
+}
+
+func (x *MessageCreateMarket) GetB0() uint64 {
+	if x != nil {
+		return x.B0
+	}
+	return 0
+}
+
+func (x *MessageCreateMarket) GetExpiryTime() uint64 {
+	if x != nil {
+		return x.ExpiryTime
+	}
+	return 0
+}
+
+func (x *MessageCreateMarket) GetNonce() uint64 {
+	if x != nil {
+		return x.Nonce
+	}
+	return 0
+}
+
+func (x *MessageCreateMarket) GetQuestion() string {
+	if x != nil {
+		return x.Question
+	}
+	return ""
+}
+
+type MessageSubmitPrediction struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MarketId      []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	BettorAddress []byte                 `protobuf:"bytes,2,opt,name=bettor_address,json=bettorAddress,proto3" json:"bettor_address,omitempty"`
+	Outcome       bool                   `protobuf:"varint,3,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	Shares        uint64                 `protobuf:"varint,4,opt,name=shares,proto3" json:"shares,omitempty"`
+	MaxCost       uint64                 `protobuf:"varint,5,opt,name=max_cost,json=maxCost,proto3" json:"max_cost,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageSubmitPrediction) Reset() {
+	*x = MessageSubmitPrediction{}
+	mi := &file_tx_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageSubmitPrediction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageSubmitPrediction) ProtoMessage() {}
+
+func (x *MessageSubmitPrediction) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageSubmitPrediction.ProtoReflect.Descriptor instead.
+func (*MessageSubmitPrediction) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *MessageSubmitPrediction) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageSubmitPrediction) GetBettorAddress() []byte {
+	if x != nil {
+		return x.BettorAddress
+	}
+	return nil
+}
+
+func (x *MessageSubmitPrediction) GetOutcome() bool {
+	if x != nil {
+		return x.Outcome
+	}
+	return false
+}
+
+func (x *MessageSubmitPrediction) GetShares() uint64 {
+	if x != nil {
+		return x.Shares
+	}
+	return 0
+}
+
+func (x *MessageSubmitPrediction) GetMaxCost() uint64 {
+	if x != nil {
+		return x.MaxCost
+	}
+	return 0
+}
+
+type MessageClaimWinnings struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	ClaimantAddress []byte                 `protobuf:"bytes,2,opt,name=claimant_address,json=claimantAddress,proto3" json:"claimant_address,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageClaimWinnings) Reset() {
+	*x = MessageClaimWinnings{}
+	mi := &file_tx_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageClaimWinnings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageClaimWinnings) ProtoMessage() {}
+
+func (x *MessageClaimWinnings) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageClaimWinnings.ProtoReflect.Descriptor instead.
+func (*MessageClaimWinnings) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *MessageClaimWinnings) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageClaimWinnings) GetClaimantAddress() []byte {
+	if x != nil {
+		return x.ClaimantAddress
+	}
+	return nil
+}
+
+type MessageResolveMarket struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	ResolverAddress []byte                 `protobuf:"bytes,2,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
+	WinningOutcome  bool                   `protobuf:"varint,3,opt,name=winning_outcome,json=winningOutcome,proto3" json:"winning_outcome,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageResolveMarket) Reset() {
+	*x = MessageResolveMarket{}
+	mi := &file_tx_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageResolveMarket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageResolveMarket) ProtoMessage() {}
+
+func (x *MessageResolveMarket) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageResolveMarket.ProtoReflect.Descriptor instead.
+func (*MessageResolveMarket) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *MessageResolveMarket) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageResolveMarket) GetResolverAddress() []byte {
+	if x != nil {
+		return x.ResolverAddress
+	}
+	return nil
+}
+
+func (x *MessageResolveMarket) GetWinningOutcome() bool {
+	if x != nil {
+		return x.WinningOutcome
+	}
+	return false
+}
+
+type MessageRegisterResolver struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ResolverAddress []byte                 `protobuf:"bytes,1,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
+	StakeAmount     uint64                 `protobuf:"varint,2,opt,name=stake_amount,json=stakeAmount,proto3" json:"stake_amount,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageRegisterResolver) Reset() {
+	*x = MessageRegisterResolver{}
+	mi := &file_tx_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageRegisterResolver) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageRegisterResolver) ProtoMessage() {}
+
+func (x *MessageRegisterResolver) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageRegisterResolver.ProtoReflect.Descriptor instead.
+func (*MessageRegisterResolver) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *MessageRegisterResolver) GetResolverAddress() []byte {
+	if x != nil {
+		return x.ResolverAddress
+	}
+	return nil
+}
+
+func (x *MessageRegisterResolver) GetStakeAmount() uint64 {
+	if x != nil {
+		return x.StakeAmount
+	}
+	return 0
+}
+
+type MessageProposeOutcome struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	ResolverAddress []byte                 `protobuf:"bytes,2,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
+	ProposedOutcome bool                   `protobuf:"varint,3,opt,name=proposed_outcome,json=proposedOutcome,proto3" json:"proposed_outcome,omitempty"`
+	ProposalBond    uint64                 `protobuf:"varint,4,opt,name=proposal_bond,json=proposalBond,proto3" json:"proposal_bond,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageProposeOutcome) Reset() {
+	*x = MessageProposeOutcome{}
+	mi := &file_tx_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageProposeOutcome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageProposeOutcome) ProtoMessage() {}
+
+func (x *MessageProposeOutcome) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageProposeOutcome.ProtoReflect.Descriptor instead.
+func (*MessageProposeOutcome) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *MessageProposeOutcome) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageProposeOutcome) GetResolverAddress() []byte {
+	if x != nil {
+		return x.ResolverAddress
+	}
+	return nil
+}
+
+func (x *MessageProposeOutcome) GetProposedOutcome() bool {
+	if x != nil {
+		return x.ProposedOutcome
+	}
+	return false
+}
+
+func (x *MessageProposeOutcome) GetProposalBond() uint64 {
+	if x != nil {
+		return x.ProposalBond
+	}
+	return 0
+}
+
+type MessageFileDispute struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	DisputerAddress []byte                 `protobuf:"bytes,2,opt,name=disputer_address,json=disputerAddress,proto3" json:"disputer_address,omitempty"`
+	DisputeBond     uint64                 `protobuf:"varint,3,opt,name=dispute_bond,json=disputeBond,proto3" json:"dispute_bond,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageFileDispute) Reset() {
+	*x = MessageFileDispute{}
+	mi := &file_tx_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageFileDispute) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageFileDispute) ProtoMessage() {}
+
+func (x *MessageFileDispute) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageFileDispute.ProtoReflect.Descriptor instead.
+func (*MessageFileDispute) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *MessageFileDispute) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageFileDispute) GetDisputerAddress() []byte {
+	if x != nil {
+		return x.DisputerAddress
+	}
+	return nil
+}
+
+func (x *MessageFileDispute) GetDisputeBond() uint64 {
+	if x != nil {
+		return x.DisputeBond
+	}
+	return 0
+}
+
+type MessageCommitVote struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MarketId      []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	VoterAddr     []byte                 `protobuf:"bytes,2,opt,name=voter_addr,json=voterAddr,proto3" json:"voter_addr,omitempty"`
+	CommitHash    []byte                 `protobuf:"bytes,3,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageCommitVote) Reset() {
+	*x = MessageCommitVote{}
+	mi := &file_tx_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageCommitVote) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageCommitVote) ProtoMessage() {}
+
+func (x *MessageCommitVote) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageCommitVote.ProtoReflect.Descriptor instead.
+func (*MessageCommitVote) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *MessageCommitVote) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageCommitVote) GetVoterAddr() []byte {
+	if x != nil {
+		return x.VoterAddr
+	}
+	return nil
+}
+
+func (x *MessageCommitVote) GetCommitHash() []byte {
+	if x != nil {
+		return x.CommitHash
+	}
+	return nil
+}
+
+type MessageRevealVote struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MarketId      []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	VoterAddr     []byte                 `protobuf:"bytes,2,opt,name=voter_addr,json=voterAddr,proto3" json:"voter_addr,omitempty"`
+	Vote          bool                   `protobuf:"varint,3,opt,name=vote,proto3" json:"vote,omitempty"`
+	Nonce         []byte                 `protobuf:"bytes,4,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageRevealVote) Reset() {
+	*x = MessageRevealVote{}
+	mi := &file_tx_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageRevealVote) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageRevealVote) ProtoMessage() {}
+
+func (x *MessageRevealVote) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageRevealVote.ProtoReflect.Descriptor instead.
+func (*MessageRevealVote) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *MessageRevealVote) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageRevealVote) GetVoterAddr() []byte {
+	if x != nil {
+		return x.VoterAddr
+	}
+	return nil
+}
+
+func (x *MessageRevealVote) GetVote() bool {
+	if x != nil {
+		return x.Vote
+	}
+	return false
+}
+
+func (x *MessageRevealVote) GetNonce() []byte {
+	if x != nil {
+		return x.Nonce
+	}
+	return nil
+}
+
+type MessageTallyVotes struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MarketId      []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	CallerAddr    []byte                 `protobuf:"bytes,2,opt,name=caller_addr,json=callerAddr,proto3" json:"caller_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageTallyVotes) Reset() {
+	*x = MessageTallyVotes{}
+	mi := &file_tx_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageTallyVotes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageTallyVotes) ProtoMessage() {}
+
+func (x *MessageTallyVotes) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageTallyVotes.ProtoReflect.Descriptor instead.
+func (*MessageTallyVotes) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *MessageTallyVotes) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageTallyVotes) GetCallerAddr() []byte {
+	if x != nil {
+		return x.CallerAddr
+	}
+	return nil
+}
+
+type MessageFinalizeMarket struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MarketId      []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	CallerAddr    []byte                 `protobuf:"bytes,2,opt,name=caller_addr,json=callerAddr,proto3" json:"caller_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageFinalizeMarket) Reset() {
+	*x = MessageFinalizeMarket{}
+	mi := &file_tx_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageFinalizeMarket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageFinalizeMarket) ProtoMessage() {}
+
+func (x *MessageFinalizeMarket) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageFinalizeMarket.ProtoReflect.Descriptor instead.
+func (*MessageFinalizeMarket) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *MessageFinalizeMarket) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageFinalizeMarket) GetCallerAddr() []byte {
+	if x != nil {
+		return x.CallerAddr
+	}
+	return nil
+}
+
+type MessageClaimSlash struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	ClaimantAddress []byte                 `protobuf:"bytes,2,opt,name=claimant_address,json=claimantAddress,proto3" json:"claimant_address,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageClaimSlash) Reset() {
+	*x = MessageClaimSlash{}
+	mi := &file_tx_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageClaimSlash) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageClaimSlash) ProtoMessage() {}
+
+func (x *MessageClaimSlash) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageClaimSlash.ProtoReflect.Descriptor instead.
+func (*MessageClaimSlash) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *MessageClaimSlash) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageClaimSlash) GetClaimantAddress() []byte {
+	if x != nil {
+		return x.ClaimantAddress
+	}
+	return nil
+}
+
+type MessageReclaimStake struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	ClaimantAddress []byte                 `protobuf:"bytes,2,opt,name=claimant_address,json=claimantAddress,proto3" json:"claimant_address,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageReclaimStake) Reset() {
+	*x = MessageReclaimStake{}
+	mi := &file_tx_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageReclaimStake) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageReclaimStake) ProtoMessage() {}
+
+func (x *MessageReclaimStake) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageReclaimStake.ProtoReflect.Descriptor instead.
+func (*MessageReclaimStake) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *MessageReclaimStake) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageReclaimStake) GetClaimantAddress() []byte {
+	if x != nil {
+		return x.ClaimantAddress
+	}
+	return nil
+}
+
+// MessageForfeitPosition allows a resolver to voluntarily exit a position
+// in a market they intend to resolve — satisfying the COI-1 requirement.
+// Issue-2: without this tx type, a resolver with even 1 share is permanently
+// disqualified from resolving, with no protocol-level escape hatch.
+// The full CostPaid is refunded; shares are zeroed atomically.
+type MessageForfeitPosition struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	ResolverAddress []byte                 `protobuf:"bytes,2,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageForfeitPosition) Reset() {
+	*x = MessageForfeitPosition{}
+	mi := &file_tx_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageForfeitPosition) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageForfeitPosition) ProtoMessage() {}
+
+func (x *MessageForfeitPosition) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageForfeitPosition.ProtoReflect.Descriptor instead.
+func (*MessageForfeitPosition) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *MessageForfeitPosition) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageForfeitPosition) GetResolverAddress() []byte {
+	if x != nil {
+		return x.ResolverAddress
+	}
+	return nil
+}
+
 var File_tx_proto protoreflect.FileDescriptor
 
 const file_tx_proto_rawDesc = "" +
 	"\n" +
-	"\btx.proto\x12\x05types\x1a\x19google/protobuf/any.proto\"\xa3\x02\n" +
+	"\btx.proto\x12\x05types\x1a\x19google/protobuf/any.proto\"H\n" +
+	"\tSignature\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1c\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\"\xa3\x02\n" +
 	"\vTransaction\x12!\n" +
 	"\fmessage_type\x18\x01 \x01(\tR\vmessageType\x12&\n" +
 	"\x03msg\x18\x02 \x01(\v2\x14.google.protobuf.AnyR\x03msg\x12.\n" +
@@ -1837,77 +1954,13 @@ const file_tx_proto_rawDesc = "" +
 	"\x04memo\x18\a \x01(\tR\x04memo\x12\x1d\n" +
 	"\n" +
 	"network_id\x18\b \x01(\x04R\tnetworkId\x12\x19\n" +
-	"\bchain_id\x18\t \x01(\x04R\achainId\"H\n" +
-	"\tSignature\x12\x1d\n" +
-	"\n" +
-	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1c\n" +
-	"\tsignature\x18\x02 \x01(\fR\tsignature\"\xe2\x01\n" +
+	"\bchain_id\x18\t \x01(\x04R\achainId\"\xe2\x01\n" +
 	"\tFeeParams\x12\x19\n" +
 	"\bsend_fee\x18\x01 \x01(\x04R\asendFee\x12*\n" +
 	"\x11create_market_fee\x18\x02 \x01(\x04R\x0fcreateMarketFee\x122\n" +
 	"\x15submit_prediction_fee\x18\x03 \x01(\x04R\x13submitPredictionFee\x12,\n" +
 	"\x12resolve_market_fee\x18\x04 \x01(\x04R\x10resolveMarketFee\x12,\n" +
-	"\x12claim_winnings_fee\x18\x05 \x01(\x04R\x10claimWinningsFee\"g\n" +
-	"\vMessageSend\x12!\n" +
-	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
-	"\n" +
-	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x04R\x06amount\"\xa1\x01\n" +
-	"\x13MessageCreateMarket\x12'\n" +
-	"\x0fcreator_address\x18\x01 \x01(\fR\x0ecreatorAddress\x12\x0e\n" +
-	"\x02b0\x18\x02 \x01(\x04R\x02b0\x12\x1f\n" +
-	"\vexpiry_time\x18\x03 \x01(\x04R\n" +
-	"expiryTime\x12\x14\n" +
-	"\x05nonce\x18\x04 \x01(\x04R\x05nonce\x12\x1a\n" +
-	"\bquestion\x18\x05 \x01(\tR\bquestion\"\xaa\x01\n" +
-	"\x17MessageSubmitPrediction\x12%\n" +
-	"\x0ebettor_address\x18\x01 \x01(\fR\rbettorAddress\x12\x1b\n" +
-	"\tmarket_id\x18\x02 \x01(\fR\bmarketId\x12\x18\n" +
-	"\aoutcome\x18\x03 \x01(\bR\aoutcome\x12\x16\n" +
-	"\x06shares\x18\x04 \x01(\x04R\x06shares\x12\x19\n" +
-	"\bmax_cost\x18\x05 \x01(\x04R\amaxCost\"\x87\x01\n" +
-	"\x14MessageResolveMarket\x12\x1b\n" +
-	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
-	"\x10resolver_address\x18\x02 \x01(\fR\x0fresolverAddress\x12'\n" +
-	"\x0fwinning_outcome\x18\x03 \x01(\bR\x0ewinningOutcome\"^\n" +
-	"\x14MessageClaimWinnings\x12\x1b\n" +
-	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
-	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"g\n" +
-	"\x17MessageRegisterResolver\x12)\n" +
-	"\x10resolver_address\x18\x01 \x01(\fR\x0fresolverAddress\x12!\n" +
-	"\fstake_amount\x18\x02 \x01(\x04R\vstakeAmount\"\xaf\x01\n" +
-	"\x15MessageProposeOutcome\x12\x1b\n" +
-	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
-	"\x10resolver_address\x18\x02 \x01(\fR\x0fresolverAddress\x12)\n" +
-	"\x10proposed_outcome\x18\x03 \x01(\bR\x0fproposedOutcome\x12#\n" +
-	"\rproposal_bond\x18\x04 \x01(\x04R\fproposalBond\"\x7f\n" +
-	"\x12MessageFileDispute\x12\x1b\n" +
-	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
-	"\x10disputer_address\x18\x02 \x01(\fR\x0fdisputerAddress\x12!\n" +
-	"\fdispute_bond\x18\x03 \x01(\x04R\vdisputeBond\"p\n" +
-	"\x11MessageCommitVote\x12\x1b\n" +
-	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12\x1d\n" +
-	"\n" +
-	"voter_addr\x18\x02 \x01(\fR\tvoterAddr\x12\x1f\n" +
-	"\vcommit_hash\x18\x03 \x01(\fR\n" +
-	"commitHash\"y\n" +
-	"\x11MessageRevealVote\x12\x1b\n" +
-	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12\x1d\n" +
-	"\n" +
-	"voter_addr\x18\x02 \x01(\fR\tvoterAddr\x12\x12\n" +
-	"\x04vote\x18\x03 \x01(\bR\x04vote\x12\x14\n" +
-	"\x05nonce\x18\x04 \x01(\fR\x05nonce\"Q\n" +
-	"\x11MessageTallyVotes\x12\x1b\n" +
-	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12\x1f\n" +
-	"\vcaller_addr\x18\x02 \x01(\fR\n" +
-	"callerAddr\"U\n" +
-	"\x15MessageFinalizeMarket\x12\x1b\n" +
-	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12\x1f\n" +
-	"\vcaller_addr\x18\x02 \x01(\fR\n" +
-	"callerAddr\"[\n" +
-	"\x11MessageClaimSlash\x12\x1b\n" +
-	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
-	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"\xad\x02\n" +
+	"\x12claim_winnings_fee\x18\x05 \x01(\x04R\x10claimWinningsFee\"\xad\x02\n" +
 	"\vMarketState\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\rR\x06status\x12\x1f\n" +
 	"\vexpiry_time\x18\x02 \x01(\x04R\n" +
@@ -1975,7 +2028,73 @@ const file_tx_proto_rawDesc = "" +
 	"\n" +
 	"slashed_at\x18\x03 \x01(\x04R\tslashedAt\"5\n" +
 	"\x11PanelEntropyAccum\x12 \n" +
-	"\vaccumulator\x18\x01 \x01(\x04R\vaccumulatorB5Z3github.com/canopy-network/canopy/plugin/go/contractb\x06proto3"
+	"\vaccumulator\x18\x01 \x01(\x04R\vaccumulator\"g\n" +
+	"\vMessageSend\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
+	"\n" +
+	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\"\xa1\x01\n" +
+	"\x13MessageCreateMarket\x12'\n" +
+	"\x0fcreator_address\x18\x01 \x01(\fR\x0ecreatorAddress\x12\x0e\n" +
+	"\x02b0\x18\x02 \x01(\x04R\x02b0\x12\x1f\n" +
+	"\vexpiry_time\x18\x03 \x01(\x04R\n" +
+	"expiryTime\x12\x14\n" +
+	"\x05nonce\x18\x04 \x01(\x04R\x05nonce\x12\x1a\n" +
+	"\bquestion\x18\x05 \x01(\tR\bquestion\"\xaa\x01\n" +
+	"\x17MessageSubmitPrediction\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12%\n" +
+	"\x0ebettor_address\x18\x02 \x01(\fR\rbettorAddress\x12\x18\n" +
+	"\aoutcome\x18\x03 \x01(\bR\aoutcome\x12\x16\n" +
+	"\x06shares\x18\x04 \x01(\x04R\x06shares\x12\x19\n" +
+	"\bmax_cost\x18\x05 \x01(\x04R\amaxCost\"^\n" +
+	"\x14MessageClaimWinnings\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"\x87\x01\n" +
+	"\x14MessageResolveMarket\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10resolver_address\x18\x02 \x01(\fR\x0fresolverAddress\x12'\n" +
+	"\x0fwinning_outcome\x18\x03 \x01(\bR\x0ewinningOutcome\"g\n" +
+	"\x17MessageRegisterResolver\x12)\n" +
+	"\x10resolver_address\x18\x01 \x01(\fR\x0fresolverAddress\x12!\n" +
+	"\fstake_amount\x18\x02 \x01(\x04R\vstakeAmount\"\xaf\x01\n" +
+	"\x15MessageProposeOutcome\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10resolver_address\x18\x02 \x01(\fR\x0fresolverAddress\x12)\n" +
+	"\x10proposed_outcome\x18\x03 \x01(\bR\x0fproposedOutcome\x12#\n" +
+	"\rproposal_bond\x18\x04 \x01(\x04R\fproposalBond\"\x7f\n" +
+	"\x12MessageFileDispute\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10disputer_address\x18\x02 \x01(\fR\x0fdisputerAddress\x12!\n" +
+	"\fdispute_bond\x18\x03 \x01(\x04R\vdisputeBond\"p\n" +
+	"\x11MessageCommitVote\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12\x1d\n" +
+	"\n" +
+	"voter_addr\x18\x02 \x01(\fR\tvoterAddr\x12\x1f\n" +
+	"\vcommit_hash\x18\x03 \x01(\fR\n" +
+	"commitHash\"y\n" +
+	"\x11MessageRevealVote\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12\x1d\n" +
+	"\n" +
+	"voter_addr\x18\x02 \x01(\fR\tvoterAddr\x12\x12\n" +
+	"\x04vote\x18\x03 \x01(\bR\x04vote\x12\x14\n" +
+	"\x05nonce\x18\x04 \x01(\fR\x05nonce\"Q\n" +
+	"\x11MessageTallyVotes\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12\x1f\n" +
+	"\vcaller_addr\x18\x02 \x01(\fR\n" +
+	"callerAddr\"U\n" +
+	"\x15MessageFinalizeMarket\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12\x1f\n" +
+	"\vcaller_addr\x18\x02 \x01(\fR\n" +
+	"callerAddr\"[\n" +
+	"\x11MessageClaimSlash\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"]\n" +
+	"\x13MessageReclaimStake\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"`\n" +
+	"\x16MessageForfeitPosition\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10resolver_address\x18\x02 \x01(\fR\x0fresolverAddressB5Z3github.com/canopy-network/canopy/plugin/go/contractb\x06proto3"
 
 var (
 	file_tx_proto_rawDescOnce sync.Once
@@ -1989,41 +2108,43 @@ func file_tx_proto_rawDescGZIP() []byte {
 	return file_tx_proto_rawDescData
 }
 
-var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_tx_proto_goTypes = []any{
-	(*Transaction)(nil),             // 0: types.Transaction
-	(*Signature)(nil),               // 1: types.Signature
+	(*Signature)(nil),               // 0: types.Signature
+	(*Transaction)(nil),             // 1: types.Transaction
 	(*FeeParams)(nil),               // 2: types.FeeParams
-	(*MessageSend)(nil),             // 3: types.MessageSend
-	(*MessageCreateMarket)(nil),     // 4: types.MessageCreateMarket
-	(*MessageSubmitPrediction)(nil), // 5: types.MessageSubmitPrediction
-	(*MessageResolveMarket)(nil),    // 6: types.MessageResolveMarket
-	(*MessageClaimWinnings)(nil),    // 7: types.MessageClaimWinnings
-	(*MessageRegisterResolver)(nil), // 8: types.MessageRegisterResolver
-	(*MessageProposeOutcome)(nil),   // 9: types.MessageProposeOutcome
-	(*MessageFileDispute)(nil),      // 10: types.MessageFileDispute
-	(*MessageCommitVote)(nil),       // 11: types.MessageCommitVote
-	(*MessageRevealVote)(nil),       // 12: types.MessageRevealVote
-	(*MessageTallyVotes)(nil),       // 13: types.MessageTallyVotes
-	(*MessageFinalizeMarket)(nil),   // 14: types.MessageFinalizeMarket
-	(*MessageClaimSlash)(nil),       // 15: types.MessageClaimSlash
-	(*MarketState)(nil),             // 16: types.MarketState
-	(*PositionState)(nil),           // 17: types.PositionState
-	(*OutcomeState)(nil),            // 18: types.OutcomeState
-	(*TreasuryReserve)(nil),         // 19: types.TreasuryReserve
-	(*ResolverState)(nil),           // 20: types.ResolverState
-	(*ResolverRecord)(nil),          // 21: types.ResolverRecord
-	(*ProposalRecord)(nil),          // 22: types.ProposalRecord
-	(*DisputeRecord)(nil),           // 23: types.DisputeRecord
-	(*VoteCommit)(nil),              // 24: types.VoteCommit
-	(*VoteReveal)(nil),              // 25: types.VoteReveal
-	(*SlashRecord)(nil),             // 26: types.SlashRecord
-	(*PanelEntropyAccum)(nil),       // 27: types.PanelEntropyAccum
-	(*anypb.Any)(nil),               // 28: google.protobuf.Any
+	(*MarketState)(nil),             // 3: types.MarketState
+	(*PositionState)(nil),           // 4: types.PositionState
+	(*OutcomeState)(nil),            // 5: types.OutcomeState
+	(*TreasuryReserve)(nil),         // 6: types.TreasuryReserve
+	(*ResolverState)(nil),           // 7: types.ResolverState
+	(*ResolverRecord)(nil),          // 8: types.ResolverRecord
+	(*ProposalRecord)(nil),          // 9: types.ProposalRecord
+	(*DisputeRecord)(nil),           // 10: types.DisputeRecord
+	(*VoteCommit)(nil),              // 11: types.VoteCommit
+	(*VoteReveal)(nil),              // 12: types.VoteReveal
+	(*SlashRecord)(nil),             // 13: types.SlashRecord
+	(*PanelEntropyAccum)(nil),       // 14: types.PanelEntropyAccum
+	(*MessageSend)(nil),             // 15: types.MessageSend
+	(*MessageCreateMarket)(nil),     // 16: types.MessageCreateMarket
+	(*MessageSubmitPrediction)(nil), // 17: types.MessageSubmitPrediction
+	(*MessageClaimWinnings)(nil),    // 18: types.MessageClaimWinnings
+	(*MessageResolveMarket)(nil),    // 19: types.MessageResolveMarket
+	(*MessageRegisterResolver)(nil), // 20: types.MessageRegisterResolver
+	(*MessageProposeOutcome)(nil),   // 21: types.MessageProposeOutcome
+	(*MessageFileDispute)(nil),      // 22: types.MessageFileDispute
+	(*MessageCommitVote)(nil),       // 23: types.MessageCommitVote
+	(*MessageRevealVote)(nil),       // 24: types.MessageRevealVote
+	(*MessageTallyVotes)(nil),       // 25: types.MessageTallyVotes
+	(*MessageFinalizeMarket)(nil),   // 26: types.MessageFinalizeMarket
+	(*MessageClaimSlash)(nil),       // 27: types.MessageClaimSlash
+	(*MessageReclaimStake)(nil),     // 28: types.MessageReclaimStake
+	(*MessageForfeitPosition)(nil),  // 29: types.MessageForfeitPosition
+	(*anypb.Any)(nil),               // 30: google.protobuf.Any
 }
 var file_tx_proto_depIdxs = []int32{
-	28, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
-	1,  // 1: types.Transaction.signature:type_name -> types.Signature
+	30, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
+	0,  // 1: types.Transaction.signature:type_name -> types.Signature
 	2,  // [2:2] is the sub-list for method output_type
 	2,  // [2:2] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
@@ -2042,7 +2163,7 @@ func file_tx_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tx_proto_rawDesc), len(file_tx_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

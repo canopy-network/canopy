@@ -51,6 +51,7 @@ SupportedTransactions: []string{
 "finalize_market",
 "claim_slash",
 "reclaim_stake",
+"forfeit_position",
 },
 TransactionTypeUrls: []string{
 "type.googleapis.com/types.MessageCreateMarket",
@@ -65,6 +66,7 @@ TransactionTypeUrls: []string{
 "type.googleapis.com/types.MessageFinalizeMarket",
 "type.googleapis.com/types.MessageClaimSlash",
 "type.googleapis.com/types.MessageReclaimStake",
+"type.googleapis.com/types.MessageForfeitPosition",
 },
 }
 
@@ -174,6 +176,8 @@ case *MessageClaimSlash:
 return c.CheckMessageClaimSlash(m)
 case *MessageReclaimStake:
 return c.CheckMessageReclaimStake(m)
+case *MessageForfeitPosition:
+return c.CheckMessageForfeitPosition(m)
 default:
 return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 }
@@ -212,6 +216,8 @@ case *MessageClaimSlash:
 return c.DeliverMessageClaimSlash(m, fee)
 case *MessageReclaimStake:
 return c.DeliverMessageReclaimStake(m, fee)
+case *MessageForfeitPosition:
+return c.DeliverMessageForfeitPosition(m, fee)
 default:
 return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 }

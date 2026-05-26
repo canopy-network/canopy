@@ -1878,6 +1878,63 @@ func (x *MessageReclaimStake) GetClaimantAddress() []byte {
 	return nil
 }
 
+// MessageForfeitPosition allows a resolver to voluntarily exit a position
+// in a market they intend to resolve — satisfying the COI-1 requirement.
+// Issue-2: without this tx type, a resolver with even 1 share is permanently
+// disqualified from resolving, with no protocol-level escape hatch.
+// The full CostPaid is refunded; shares are zeroed atomically.
+type MessageForfeitPosition struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MarketId        []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	ResolverAddress []byte                 `protobuf:"bytes,2,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageForfeitPosition) Reset() {
+	*x = MessageForfeitPosition{}
+	mi := &file_tx_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageForfeitPosition) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageForfeitPosition) ProtoMessage() {}
+
+func (x *MessageForfeitPosition) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageForfeitPosition.ProtoReflect.Descriptor instead.
+func (*MessageForfeitPosition) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *MessageForfeitPosition) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageForfeitPosition) GetResolverAddress() []byte {
+	if x != nil {
+		return x.ResolverAddress
+	}
+	return nil
+}
+
 var File_tx_proto protoreflect.FileDescriptor
 
 const file_tx_proto_rawDesc = "" +
@@ -2034,7 +2091,10 @@ const file_tx_proto_rawDesc = "" +
 	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"]\n" +
 	"\x13MessageReclaimStake\x12\x1b\n" +
 	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
-	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddressB5Z3github.com/canopy-network/canopy/plugin/go/contractb\x06proto3"
+	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"`\n" +
+	"\x16MessageForfeitPosition\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
+	"\x10resolver_address\x18\x02 \x01(\fR\x0fresolverAddressB5Z3github.com/canopy-network/canopy/plugin/go/contractb\x06proto3"
 
 var (
 	file_tx_proto_rawDescOnce sync.Once
@@ -2048,7 +2108,7 @@ func file_tx_proto_rawDescGZIP() []byte {
 	return file_tx_proto_rawDescData
 }
 
-var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_tx_proto_goTypes = []any{
 	(*Signature)(nil),               // 0: types.Signature
 	(*Transaction)(nil),             // 1: types.Transaction
@@ -2079,10 +2139,11 @@ var file_tx_proto_goTypes = []any{
 	(*MessageFinalizeMarket)(nil),   // 26: types.MessageFinalizeMarket
 	(*MessageClaimSlash)(nil),       // 27: types.MessageClaimSlash
 	(*MessageReclaimStake)(nil),     // 28: types.MessageReclaimStake
-	(*anypb.Any)(nil),               // 29: google.protobuf.Any
+	(*MessageForfeitPosition)(nil),  // 29: types.MessageForfeitPosition
+	(*anypb.Any)(nil),               // 30: google.protobuf.Any
 }
 var file_tx_proto_depIdxs = []int32{
-	29, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
+	30, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
 	0,  // 1: types.Transaction.signature:type_name -> types.Signature
 	2,  // [2:2] is the sub-list for method output_type
 	2,  // [2:2] is the sub-list for method input_type
@@ -2102,7 +2163,7 @@ func file_tx_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tx_proto_rawDesc), len(file_tx_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

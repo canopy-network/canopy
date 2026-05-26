@@ -197,3 +197,13 @@ message MessageReclaimStake {
   bytes market_id        = 1;
   bytes claimant_address = 2;
 }
+
+// MessageForfeitPosition allows a resolver to voluntarily exit a position
+// in a market they intend to resolve — satisfying the COI-1 requirement.
+// Issue-2: without this tx type, a resolver with even 1 share is permanently
+// disqualified from resolving, with no protocol-level escape hatch.
+// The full CostPaid is refunded; shares are zeroed atomically.
+message MessageForfeitPosition {
+  bytes market_id        = 1;
+  bytes resolver_address = 2;
+}
