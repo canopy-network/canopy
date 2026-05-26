@@ -20,7 +20,7 @@ const AccountsPage: React.FC = () => {
     const { data: accountsData, isLoading, error } = useAccounts(currentPage, pageSize)
     const accounts = accountsData?.results || []
     const largestBalance = React.useMemo(
-        () => toCNPY(accounts.reduce((max: number, account: { amount?: number; totalAmount?: number }) => Math.max(max, Number(account.totalAmount ?? account.amount || 0)), 0)),
+        () => toCNPY(accounts.reduce((max: number, account: { amount?: number; totalAmount?: number }) => Math.max(max, Number(account.totalAmount ?? account.amount ?? 0)), 0)),
         [accounts],
     )
     const overviewCards = [
