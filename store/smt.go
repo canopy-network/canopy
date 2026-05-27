@@ -98,6 +98,12 @@ type SMT struct {
 	keyBitLength int
 	// nodeCache: an efficient in-memory cache to avoid marshalling and unmarshalling recent nodes
 	nodeCache map[string]*node
+	// parentNodeCache: read-only seed inherited from the parent store at Copy() time.
+	// getNode() falls back to this map when a key misses the local nodeCache, avoiding
+	// disk reads for tree state inherited from the parent. setNode/delNode never mutate
+	// this map — all writes go to nodeCache so the parent's view remains untouched.
+	// The MaxCacheSize wipe in setNode only resets nodeCache; parentNodeCache stays warm.
+	parentNodeCache map[string]*node
 	// operations: a list of deferred operations to execute
 	operations []*node
 	// unsorted_ops: a list of operations that aren't yet sorted
@@ -620,11 +626,18 @@ func (s *SMT) delNode(key []byte) lib.ErrorI {
 // getNode() retrieves a node object from the database
 func (s *SMT) getNode(key []byte) (n *node, err lib.ErrorI) {
 	s.stats.NodeReads++
-	// check cache
+	// check local (writable) cache first
 	n, found := s.nodeCache[string(key)]
 	if found {
 		s.stats.NodeCacheHits++
 		return n, nil
+	}
+	// check inherited read-only seed from the parent store (if any)
+	if s.parentNodeCache != nil {
+		if n, found = s.parentNodeCache[string(key)]; found {
+			s.stats.NodeCacheHits++
+			return n, nil
+		}
 	}
 	s.stats.NodeCacheMisses++
 	// initialize a reference to a node object

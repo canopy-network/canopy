@@ -337,9 +337,9 @@ func TestMaybeBackup(t *testing.T) {
 	require.Equal(t, []byte("v3"), restoredVal)
 }
 
-// TestCopySeededNodeCacheReducesMisses verifies that a store Copy() pre-populates the ephemeral
-// SMT nodeCache from the parent's warm cache, so that Root() on the copy incurs fewer cache misses
-// than a cold store starting from scratch.
+// TestCopySeededNodeCacheReducesMisses verifies that a store Copy() reference-shares the
+// parent's SMT nodeCache as a read-only seed, so Root() on the copy serves tree-node reads
+// from the in-memory seed instead of Pebble.
 func TestCopySeededNodeCacheReducesMisses(t *testing.T) {
 	parent, _, cleanup := testStore(t)
 	defer cleanup()
@@ -353,64 +353,107 @@ func TestCopySeededNodeCacheReducesMisses(t *testing.T) {
 	require.NoError(t, parent.Set(key3, []byte("300")))
 	_, err := parent.Commit()
 	require.NoError(t, err)
-	// parent.sc is now warm after Commit()
 	require.True(t, parent.IsRootCached())
 	warmCacheSize := len(parent.sc.nodeCache)
 	require.Positive(t, warmCacheSize, "parent nodeCache should be populated after commit")
 
-	// Copy() should snapshot the parent's nodeCache into seedCache
+	// Copy() should reference-share the parent's nodeCache via seedCache.
+	// crucially: it must be the SAME map (pointer equality), not a copy.
 	copyStore, errI := parent.Copy()
 	require.NoError(t, errI)
 	cs := copyStore.(*Store)
-	require.Len(t, cs.seedCache, warmCacheSize, "copy should carry the parent's nodeCache snapshot")
+	require.NotNil(t, cs.seedCache, "copy should carry a seed reference")
+	require.Len(t, cs.seedCache, warmCacheSize, "seed should be the parent's full nodeCache")
+	// prove true reference-sharing (no copy): mutating the parent's nodeCache must be
+	// visible through the seed. would fail if Copy() allocated a new map.
+	parent.sc.nodeCache["__test_sentinel__"] = nil
+	_, ok := cs.seedCache["__test_sentinel__"]
+	require.True(t, ok, "mutation on parent's nodeCache must be visible through shared seed reference")
+	delete(parent.sc.nodeCache, "__test_sentinel__")
 
 	// apply a new write on the copy (simulates mempool apply_block)
 	key4 := lib.JoinLenPrefix([]byte("acct/"), []byte("dave"))
 	require.NoError(t, cs.Set(key4, []byte("400")))
 
-	// Root() on the copy should inject seedCache into sc.nodeCache before Commit()
+	// Root() on the copy should move seedCache onto the ephemeral SMT as parentNodeCache
 	_, errI = cs.Root()
 	require.NoError(t, errI)
-	require.Nil(t, cs.seedCache, "seedCache should be released after Root()")
+	require.Nil(t, cs.seedCache, "Store.seedCache should be released after Root()")
+	require.NotNil(t, cs.sc.parentNodeCache, "SMT.parentNodeCache should hold the seed after Root()")
 
-	// the copy's nodeCache should contain at least the seeded entries
-	require.GreaterOrEqual(t, len(cs.sc.nodeCache), warmCacheSize,
-		"copy nodeCache should contain at least the seeded entries after Root()")
-
-	// cache hits should be non-zero (seeded nodes were reused)
+	// cache hits should be non-zero (seeded nodes were reused via parentNodeCache fallback)
 	require.Positive(t, cs.sc.stats.NodeCacheHits,
-		"seeded nodeCache should produce cache hits during Root()")
+		"parentNodeCache fallback should produce cache hits during Root()")
 
-	// misses should be far fewer than reads (most reads served from seed)
 	totalReads := cs.sc.stats.NodeCacheHits + cs.sc.stats.NodeCacheMisses
 	missRate := float64(cs.sc.stats.NodeCacheMisses) / float64(totalReads)
 	t.Logf("seeded copy: reads=%d hits=%d misses=%d miss_rate=%.1f%%",
 		totalReads, cs.sc.stats.NodeCacheHits, cs.sc.stats.NodeCacheMisses, missRate*100)
 	require.Less(t, missRate, 0.5, "seeded copy miss rate should be below 50%%")
 
-	// cold copy (no seed) for comparison
+	// cold copy (no seed) for comparison — Copy() before any Commit gives a natural cold state
 	parent2, _, cleanup2 := testStore(t)
 	defer cleanup2()
 	require.NoError(t, parent2.Set(key1, []byte("100")))
 	require.NoError(t, parent2.Set(key2, []byte("200")))
 	require.NoError(t, parent2.Set(key3, []byte("300")))
-	_, err = parent2.Commit()
-	require.NoError(t, err)
-	// manually wipe sc so Copy() sees no warm cache — simulates pre-fix behaviour
-	parent2.sc = nil
+	// no Commit() — parent2.sc is still nil, so Copy() has no cache to seed (natural cold path)
+	require.False(t, parent2.IsRootCached())
 	coldCopy, errI := parent2.Copy()
 	require.NoError(t, errI)
 	cc := coldCopy.(*Store)
-	require.Nil(t, cc.seedCache, "cold copy should have no seed")
+	require.Nil(t, cc.seedCache, "cold copy (parent had no Commit) should have no seed")
 	require.NoError(t, cc.Set(key4, []byte("400")))
 	_, errI = cc.Root()
 	require.NoError(t, errI)
+	require.Nil(t, cc.sc.parentNodeCache, "cold copy should not have a parentNodeCache")
 	coldMissRate := float64(cc.sc.stats.NodeCacheMisses) / float64(cc.sc.stats.NodeCacheHits+cc.sc.stats.NodeCacheMisses)
 	t.Logf("cold copy:   reads=%d hits=%d misses=%d miss_rate=%.1f%%",
 		cc.sc.stats.NodeCacheHits+cc.sc.stats.NodeCacheMisses,
 		cc.sc.stats.NodeCacheHits, cc.sc.stats.NodeCacheMisses, coldMissRate*100)
 	require.Greater(t, coldMissRate, missRate,
 		"cold copy should have a higher miss rate than the seeded copy")
+}
+
+// TestCopySeedSurvivesMaxCacheSizeWipe verifies that the MaxCacheSize wipe in setNode()
+// only clears the ephemeral SMT's own nodeCache and leaves the parentNodeCache seed intact.
+// This is the PERF-1 fix: with the prior design (seed copied into nodeCache) the wipe
+// would erase the entire seed on the first setNode call when the cache was near MaxCacheSize.
+func TestCopySeedSurvivesMaxCacheSizeWipe(t *testing.T) {
+	parent, _, cleanup := testStore(t)
+	defer cleanup()
+	// commit something so parent has a real warm cache
+	key1 := lib.JoinLenPrefix([]byte("acct/"), []byte("alice"))
+	require.NoError(t, parent.Set(key1, []byte("100")))
+	_, err := parent.Commit()
+	require.NoError(t, err)
+
+	copyStore, errI := parent.Copy()
+	require.NoError(t, errI)
+	cs := copyStore.(*Store)
+	require.NoError(t, cs.Set(lib.JoinLenPrefix([]byte("acct/"), []byte("bob")), []byte("200")))
+	_, errI = cs.Root()
+	require.NoError(t, errI)
+	require.NotNil(t, cs.sc.parentNodeCache, "seed must be present after Root()")
+
+	// simulate the MaxCacheSize wipe path: force setNode() to reset the local cache
+	cs.sc.nodeCache = make(map[string]*node)
+	// the seed must still be intact and queryable
+	require.NotEmpty(t, cs.sc.parentNodeCache, "parentNodeCache must survive a local cache wipe")
+
+	// pick any key from the seed and verify getNode finds it via the seed fallback
+	var sampleKey string
+	for k := range cs.sc.parentNodeCache {
+		sampleKey = k
+		break
+	}
+	require.NotEmpty(t, sampleKey, "seed must contain at least one node")
+	statsBefore := cs.sc.stats.NodeCacheHits
+	n, errI := cs.sc.getNode([]byte(sampleKey))
+	require.NoError(t, errI)
+	require.NotNil(t, n)
+	require.Equal(t, statsBefore+1, cs.sc.stats.NodeCacheHits,
+		"getNode must register a cache hit served from parentNodeCache")
 }
 
 func testStore(t *testing.T) (*Store, *pebble.DB, func()) {

@@ -79,7 +79,14 @@ type Store struct {
 	compaction atomic.Bool   // atomic boolean for compaction status
 	backup     atomic.Bool   // atomic boolean for backup status
 	isTxn      bool          // flag indicating if the store is in transaction mode
-	seedCache  map[string]*node // warm nodeCache snapshot from parent store at Copy() time
+	// seedCache: read-only reference to the parent store's SMT nodeCache, captured at Copy()
+	// time. Injected into the ephemeral SMT as parentNodeCache on the first Root() call so
+	// tree-node lookups for unchanged state are served from memory instead of Pebble.
+	// Reference-shared (no allocation) — safe because the SMT only reads from it; all writes
+	// go to the ephemeral SMT's own nodeCache. The parent's nodeCache is stable between
+	// Commit() and the next IncreaseVersion() call, which is the window in which the
+	// ephemeral copy is used.
+	seedCache map[string]*node
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -232,17 +239,17 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		compaction: atomic.Bool{},
 		backup:     atomic.Bool{},
 	}
-	// seed the ephemeral store with the parent's warm nodeCache so that getNode() hits the
-	// in-memory cache instead of deserializing from Pebble during the next Root() call.
-	// nodes are content-addressed and immutable, so sharing *node pointers is safe.
-	// the seed is a snapshot taken at Copy() time; the parent and the copy diverge independently.
-	if s.sc != nil && len(s.sc.nodeCache) > 0 {
-		seed := make(map[string]*node, len(s.sc.nodeCache))
-		for k, v := range s.sc.nodeCache {
-			seed[k] = v
-		}
-		storeCopy.seedCache = seed
+	// reference-share the parent's nodeCache as a read-only seed for the ephemeral store.
+	// no copy is performed: the ephemeral SMT treats the seed as read-only (writes go to its
+	// own nodeCache), so the parent's map is never mutated. the parent's sc.nodeCache is
+	// stable between Commit() and the next IncreaseVersion() — the lifetime of this copy.
+	// s.mu protects the read of s.sc against a concurrent IncreaseVersion()/Discard() that
+	// would set s.sc = nil.
+	s.mu.Lock()
+	if s.sc != nil {
+		storeCopy.seedCache = s.sc.nodeCache
 	}
+	s.mu.Unlock()
 	return storeCopy, nil
 }
 
@@ -519,12 +526,14 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 		nextVersion := s.version + 1
 		// set up the state commit store
 		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
-		// pre-populate the nodeCache with the warm snapshot from the parent store (if any).
-		// this avoids re-deserializing tree nodes from Pebble for state that hasn't changed,
-		// reducing cache miss rate and Merkle root computation time on ephemeral copies.
+		// inject the parent's nodeCache as a read-only seed. getNode() falls back to it on
+		// misses against the local cache, avoiding Pebble reads for unchanged tree state.
+		// the seed is referenced (not copied) and never written to — local writes go to the
+		// SMT's own nodeCache. the MaxCacheSize wipe in setNode only resets nodeCache; the
+		// seed remains intact, so the optimization survives large write batches.
 		if s.seedCache != nil {
-			s.sc.nodeCache = s.seedCache
-			s.seedCache = nil // release reference; sc.nodeCache now owns it
+			s.sc.parentNodeCache = s.seedCache
+			s.seedCache = nil // release the Store-level reference; SMT now holds it
 		}
 		// commit the SMT directly using the txn ops
 		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
