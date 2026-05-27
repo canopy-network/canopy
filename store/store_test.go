@@ -337,6 +337,82 @@ func TestMaybeBackup(t *testing.T) {
 	require.Equal(t, []byte("v3"), restoredVal)
 }
 
+// TestCopySeededNodeCacheReducesMisses verifies that a store Copy() pre-populates the ephemeral
+// SMT nodeCache from the parent's warm cache, so that Root() on the copy incurs fewer cache misses
+// than a cold store starting from scratch.
+func TestCopySeededNodeCacheReducesMisses(t *testing.T) {
+	parent, _, cleanup := testStore(t)
+	defer cleanup()
+
+	// write several keys and commit so the parent's SMT nodeCache gets warmed
+	key1 := lib.JoinLenPrefix([]byte("acct/"), []byte("alice"))
+	key2 := lib.JoinLenPrefix([]byte("acct/"), []byte("bob"))
+	key3 := lib.JoinLenPrefix([]byte("acct/"), []byte("carol"))
+	require.NoError(t, parent.Set(key1, []byte("100")))
+	require.NoError(t, parent.Set(key2, []byte("200")))
+	require.NoError(t, parent.Set(key3, []byte("300")))
+	_, err := parent.Commit()
+	require.NoError(t, err)
+	// parent.sc is now warm after Commit()
+	require.True(t, parent.IsRootCached())
+	warmCacheSize := len(parent.sc.nodeCache)
+	require.Positive(t, warmCacheSize, "parent nodeCache should be populated after commit")
+
+	// Copy() should snapshot the parent's nodeCache into seedCache
+	copyStore, errI := parent.Copy()
+	require.NoError(t, errI)
+	cs := copyStore.(*Store)
+	require.Len(t, cs.seedCache, warmCacheSize, "copy should carry the parent's nodeCache snapshot")
+
+	// apply a new write on the copy (simulates mempool apply_block)
+	key4 := lib.JoinLenPrefix([]byte("acct/"), []byte("dave"))
+	require.NoError(t, cs.Set(key4, []byte("400")))
+
+	// Root() on the copy should inject seedCache into sc.nodeCache before Commit()
+	_, errI = cs.Root()
+	require.NoError(t, errI)
+	require.Nil(t, cs.seedCache, "seedCache should be released after Root()")
+
+	// the copy's nodeCache should contain at least the seeded entries
+	require.GreaterOrEqual(t, len(cs.sc.nodeCache), warmCacheSize,
+		"copy nodeCache should contain at least the seeded entries after Root()")
+
+	// cache hits should be non-zero (seeded nodes were reused)
+	require.Positive(t, cs.sc.stats.NodeCacheHits,
+		"seeded nodeCache should produce cache hits during Root()")
+
+	// misses should be far fewer than reads (most reads served from seed)
+	totalReads := cs.sc.stats.NodeCacheHits + cs.sc.stats.NodeCacheMisses
+	missRate := float64(cs.sc.stats.NodeCacheMisses) / float64(totalReads)
+	t.Logf("seeded copy: reads=%d hits=%d misses=%d miss_rate=%.1f%%",
+		totalReads, cs.sc.stats.NodeCacheHits, cs.sc.stats.NodeCacheMisses, missRate*100)
+	require.Less(t, missRate, 0.5, "seeded copy miss rate should be below 50%%")
+
+	// cold copy (no seed) for comparison
+	parent2, _, cleanup2 := testStore(t)
+	defer cleanup2()
+	require.NoError(t, parent2.Set(key1, []byte("100")))
+	require.NoError(t, parent2.Set(key2, []byte("200")))
+	require.NoError(t, parent2.Set(key3, []byte("300")))
+	_, err = parent2.Commit()
+	require.NoError(t, err)
+	// manually wipe sc so Copy() sees no warm cache — simulates pre-fix behaviour
+	parent2.sc = nil
+	coldCopy, errI := parent2.Copy()
+	require.NoError(t, errI)
+	cc := coldCopy.(*Store)
+	require.Nil(t, cc.seedCache, "cold copy should have no seed")
+	require.NoError(t, cc.Set(key4, []byte("400")))
+	_, errI = cc.Root()
+	require.NoError(t, errI)
+	coldMissRate := float64(cc.sc.stats.NodeCacheMisses) / float64(cc.sc.stats.NodeCacheHits+cc.sc.stats.NodeCacheMisses)
+	t.Logf("cold copy:   reads=%d hits=%d misses=%d miss_rate=%.1f%%",
+		cc.sc.stats.NodeCacheHits+cc.sc.stats.NodeCacheMisses,
+		cc.sc.stats.NodeCacheHits, cc.sc.stats.NodeCacheMisses, coldMissRate*100)
+	require.Greater(t, coldMissRate, missRate,
+		"cold copy should have a higher miss rate than the seeded copy")
+}
+
 func testStore(t *testing.T) (*Store, *pebble.DB, func()) {
 	fs := vfs.NewMem()
 	db, err := pebble.Open("", &pebble.Options{

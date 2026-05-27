@@ -79,6 +79,7 @@ type Store struct {
 	compaction atomic.Bool   // atomic boolean for compaction status
 	backup     atomic.Bool   // atomic boolean for backup status
 	isTxn      bool          // flag indicating if the store is in transaction mode
+	seedCache  map[string]*node // warm nodeCache snapshot from parent store at Copy() time
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -218,8 +219,8 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 	writer := s.db.NewBatch()
 	reader := NewVersionedStore(s.db.NewSnapshot(), writer, s.version)
 	lssReader := NewVersionedStore(s.db.NewSnapshot(), writer, lssVersion)
-	// return the store object
-	return &Store{
+	// build the copy
+	storeCopy := &Store{
 		version:    s.version,
 		log:        s.log,
 		db:         s.db,
@@ -230,7 +231,19 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
 		backup:     atomic.Bool{},
-	}, nil
+	}
+	// seed the ephemeral store with the parent's warm nodeCache so that getNode() hits the
+	// in-memory cache instead of deserializing from Pebble during the next Root() call.
+	// nodes are content-addressed and immutable, so sharing *node pointers is safe.
+	// the seed is a snapshot taken at Copy() time; the parent and the copy diverge independently.
+	if s.sc != nil && len(s.sc.nodeCache) > 0 {
+		seed := make(map[string]*node, len(s.sc.nodeCache))
+		for k, v := range s.sc.nodeCache {
+			seed[k] = v
+		}
+		storeCopy.seedCache = seed
+	}
+	return storeCopy, nil
 }
 
 // Commit() performs a single atomic write of the current state to all stores.
@@ -506,6 +519,13 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 		nextVersion := s.version + 1
 		// set up the state commit store
 		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
+		// pre-populate the nodeCache with the warm snapshot from the parent store (if any).
+		// this avoids re-deserializing tree nodes from Pebble for state that hasn't changed,
+		// reducing cache miss rate and Merkle root computation time on ephemeral copies.
+		if s.seedCache != nil {
+			s.sc.nodeCache = s.seedCache
+			s.seedCache = nil // release reference; sc.nodeCache now owns it
+		}
 		// commit the SMT directly using the txn ops
 		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
 			return nil, err
