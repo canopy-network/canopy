@@ -25,6 +25,7 @@ var (
 	nick            string
 	data            string
 	fee             uint64
+	mint            bool
 	delegate        bool
 	earlyWithdrawal bool
 	sim             bool
@@ -37,6 +38,7 @@ func init() {
 	adminCmd.PersistentFlags().Uint64Var(&fee, "fee", 0, "custom fee, by default will use the minimum fee")
 	txStakeCmd.PersistentFlags().BoolVar(&delegate, "delegate", false, "delegate tokens to committee(s) only without actual validator operation")
 	txEditStakeCmd.PersistentFlags().BoolVar(&delegate, "delegate", false, "delegate tokens to committee(s) only without actual validator operation")
+	txDAOTransferCmd.PersistentFlags().BoolVar(&mint, "mint", false, "mint the transfer amount into the DAO pool before executing the treasury grant")
 	txStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
 	txEditStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
 	txCreateOrderCmd.PersistentFlags().StringVar(&data, "data", "", "data for create order")
@@ -47,6 +49,7 @@ func init() {
 	adminCmd.AddCommand(ksDeleteCmd)
 	adminCmd.AddCommand(ksGetCmd)
 	adminCmd.AddCommand(txSendCmd)
+	adminCmd.AddCommand(txSendVestingCmd)
 	adminCmd.AddCommand(txStakeCmd)
 	adminCmd.AddCommand(txEditStakeCmd)
 	adminCmd.AddCommand(txUnstakeCmd)
@@ -144,6 +147,26 @@ var (
 		},
 	}
 
+	txSendVestingCmd = &cobra.Command{
+		Use:     "tx-send-vesting <address or nickname> <to-address> <amount> <vesting-start-height> <vesting-cliff-height> <vesting-end-height> --fee=10000 --simulate=true",
+		Short:   "send an amount to another address with a recipient vesting schedule",
+		Example: "tx-send-vesting dfd3c8dff19da7682f7fe5fde062c813b55c9eee eed6c9dff19da7682f7fe5fde062c813b42c7abc 10000 100 120 200",
+		Args:    cobra.MinimumNArgs(6),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxSendVesting(
+				argGetAddrOrNickname(args[0]),
+				argGetAddr(args[1]),
+				uint64(argToInt(args[2])),
+				uint64(argToInt(args[3])),
+				uint64(argToInt(args[4])),
+				uint64(argToInt(args[5])),
+				getPassword(),
+				!sim,
+				fee,
+			))
+		},
+	}
+
 	txStakeCmd = &cobra.Command{
 		Use:     "tx-stake <address or nickname> <net-address> <amount> <committees> <output> <signer address or nickname> --delegated --early-withdrawal --fee=10000 --simulate=true",
 		Short:   "stake a validator",
@@ -206,11 +229,11 @@ var (
 	}
 
 	txDAOTransferCmd = &cobra.Command{
-		Use:   "tx-dao-transfer <address or nickname> <amount> <proposal-start-block> <proposal-end-block> --fee=10000 --simulate=true",
+		Use:   "tx-dao-transfer <address or nickname> <amount> <proposal-start-block> <proposal-end-block> --mint --fee=10000 --simulate=true",
 		Short: "propose a treasury subsidy - use the simulate flag to generate json only",
 		Args:  cobra.MinimumNArgs(4),
 		Run: func(cmd *cobra.Command, args []string) {
-			writeTxResultToConsole(client.TxDaoTransfer(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), getPassword(), !sim, fee))
+			writeTxResultToConsole(client.TxDaoTransfer(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), getPassword(), !sim, fee, mint))
 		},
 	}
 

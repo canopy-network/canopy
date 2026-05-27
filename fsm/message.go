@@ -54,9 +54,19 @@ func (s *StateMachine) HandleMessage(msg lib.MessageI) lib.ErrorI {
 
 // HandleMessageSend() is the proper handler for a `Send` message
 func (s *StateMachine) HandleMessageSend(msg *MessageSend) lib.ErrorI {
+	// vesting sends must preflight recipient compatibility before mutating sender state
+	if msg.VestingStartHeight != 0 || msg.VestingEndHeight != 0 {
+		if err := s.ValidateAccountAddWithVesting(msg); err != nil {
+			return err
+		}
+	}
 	// subtract from sender
 	if err := s.AccountSub(crypto.NewAddressFromBytes(msg.FromAddress), msg.Amount); err != nil {
 		return err
+	}
+	// if special vesting send
+	if msg.VestingStartHeight != 0 || msg.VestingEndHeight != 0 {
+		return s.AccountAddWithVesting(msg)
 	}
 	// add to recipient
 	return s.AccountAdd(crypto.NewAddressFromBytes(msg.ToAddress), msg.Amount)
@@ -308,6 +318,12 @@ func (s *StateMachine) HandleMessageDAOTransfer(msg *MessageDAOTransfer) lib.Err
 	// requires explicit approval from +2/3 maj of the validator set
 	if err := s.ApproveProposal(msg); err != nil {
 		return ErrRejectProposal()
+	}
+	// optionally mint the transfer amount into the DAO pool before distributing the grant
+	if msg.Mint {
+		if err := s.MintToPool(lib.DAOPoolID, msg.Amount); err != nil {
+			return err
+		}
 	}
 	// remove from DAO fund
 	if err := s.PoolSub(lib.DAOPoolID, msg.Amount); err != nil {
