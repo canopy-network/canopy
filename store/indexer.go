@@ -29,7 +29,7 @@ var (
 	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
 	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
 	// create indexer cache
-	blockCache, _ = lru.New[uint64, *lib.BlockResult](4)
+	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
 )
 
