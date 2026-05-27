@@ -253,6 +253,19 @@ func (s *StateMachine) marshalAccount(account *Account) ([]byte, lib.ErrorI) {
 	to simply prove that no-one owns the private key for that account
 */
 
+// clonePool returns an independent copy of the pool so callers can mutate without
+// affecting the cached entry (Pool.Points is a slice of pointers).
+func clonePool(p *Pool) *Pool {
+	out := &Pool{Id: p.Id, Amount: p.Amount, TotalPoolPoints: p.TotalPoolPoints}
+	if len(p.Points) > 0 {
+		out.Points = make([]*lib.PoolPoints, len(p.Points))
+		for i, pp := range p.Points {
+			out.Points[i] = &lib.PoolPoints{Address: pp.Address, Points: pp.Points}
+		}
+	}
+	return out
+}
+
 // GetPool() returns a Pool structure for a specific ID
 func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
 	startTime := time.Now()
@@ -261,6 +274,10 @@ func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
 			s.Metrics.StateOperationTime.WithLabelValues("get_pool").Observe(time.Since(startTime).Seconds())
 		}
 	}()
+	// check cache (return clone to prevent aliasing on the cached struct)
+	if pool, found := s.cache.pools[id]; found {
+		return clonePool(pool), nil
+	}
 	// get the pool bytes from the state using the Key a specific id
 	bz, err := s.Get(KeyForPool(id))
 	if err != nil {
@@ -273,6 +290,8 @@ func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
 	}
 	// set the pool id from the key
 	pool.Id = id
+	// populate cache with a clone so the returned pointer is not aliased
+	s.cache.pools[id] = clonePool(pool)
 	// return the pool
 	return pool, nil
 }
@@ -334,7 +353,13 @@ func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
 	}()
 	// if the pool has a 0 balance
 	if pool.Amount == 0 {
-		return s.Delete(KeyForPool(pool.Id))
+		if err = s.Delete(KeyForPool(pool.Id)); err != nil {
+			return
+		}
+		// cache a clone after successful delete (matches accounts cache: zero-amount is
+		// indistinguishable from a missing entry via unmarshalPool(nil))
+		s.cache.pools[pool.Id] = clonePool(pool)
+		return
 	}
 	// convert the pool to bytes
 	bz, err := s.marshalPool(pool)
@@ -345,6 +370,9 @@ func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
 	if err = s.Set(KeyForPool(pool.Id), bz); err != nil {
 		return
 	}
+	// cache a clone after successful write so external mutation of the passed-in pool
+	// cannot leak into the cache
+	s.cache.pools[pool.Id] = clonePool(pool)
 	return
 }
 

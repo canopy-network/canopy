@@ -45,6 +45,7 @@ type rootCacheStateStore interface {
 // cache is the set of items to be cached used by the state machine
 type cache struct {
 	accounts     map[uint64]*Account // cache of accounts accessed
+	pools        map[uint64]*Pool    // cache of pools accessed
 	feeParams    *FeeParams          // fee params for the current block
 	valParams    *ValidatorParams    // validator params for the current block
 	rootDexBatch *lib.DexBatch       // root dex batch
@@ -66,6 +67,7 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 		events:            new(lib.EventsTracker),
 		cache: &cache{
 			accounts: make(map[uint64]*Account),
+			pools:    make(map[uint64]*Pool),
 		},
 	}
 	// initialize the state machine
@@ -604,6 +606,7 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		log:                s.log,
 		cache: &cache{
 			accounts:     make(map[uint64]*Account),
+			pools:        make(map[uint64]*Pool),
 			rootDexBatch: s.cache.rootDexBatch,
 		},
 		LastValidatorSet: s.LastValidatorSet,
@@ -714,6 +717,7 @@ func (s *StateMachine) Reset() {
 // ResetCaches() dumps the state machine caches
 func (s *StateMachine) ResetCaches() {
 	s.cache.accounts = make(map[uint64]*Account)
+	s.cache.pools = make(map[uint64]*Pool)
 	// Params caches must not outlive the current store view, otherwise Reset()/rollback
 	// can leave the FSM reading stale values that disagree with the underlying store.
 	s.cache.valParams = nil
