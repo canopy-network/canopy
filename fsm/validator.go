@@ -70,7 +70,9 @@ func (s *StateMachine) GetValidators() (result []*Validator, err lib.ErrorI) {
 	return
 }
 
-// getCurrentValidators() lazily loads the validator list for the FSM's current store view
+// getCurrentValidators() lazily loads the validator list for the FSM's current store view.
+// The returned slice may alias the shared historical validator cache, so callers must treat
+// the returned validators as read-only.
 func (s *StateMachine) getCurrentValidators() ([]*Validator, lib.ErrorI) {
 	// if cached locally, return immediately
 	if s.cache.liveValidators != nil {
@@ -98,7 +100,7 @@ func (s *StateMachine) getCurrentValidators() ([]*Validator, lib.ErrorI) {
 		}
 		s.cache.sharedCache.Unlock()
 	}
-	return validators, nil
+	return s.cache.liveValidators, nil
 }
 
 // GetValidatorsPaginated() returns a page of filtered validators
