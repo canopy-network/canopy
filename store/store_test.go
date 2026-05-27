@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -351,11 +353,18 @@ func TestCopySeededNodeCacheReducesMisses(t *testing.T) {
 	require.NoError(t, parent.Set(key1, []byte("100")))
 	require.NoError(t, parent.Set(key2, []byte("200")))
 	require.NoError(t, parent.Set(key3, []byte("300")))
+	// Commit() persists to Pebble (cold-comparison copy below needs disk-resident state),
+	// then a follow-up Set+Root warms parent.sc.nodeCache by traversing the on-disk tree
+	// to insert a new key. (Root() alone after Commit has no ops to process.)
 	_, err := parent.Commit()
 	require.NoError(t, err)
+	warmKey := lib.JoinLenPrefix([]byte("acct/"), []byte("warm"))
+	require.NoError(t, parent.Set(warmKey, []byte("0")))
+	_, errR := parent.Root()
+	require.NoError(t, errR)
 	require.True(t, parent.IsRootCached())
 	warmCacheSize := len(parent.sc.nodeCache)
-	require.Positive(t, warmCacheSize, "parent nodeCache should be populated after commit")
+	require.Positive(t, warmCacheSize, "parent nodeCache should be populated after Set+Root")
 
 	// Copy() should reference-share the parent's nodeCache via seedCache.
 	// crucially: it must be the SAME map (pointer equality), not a copy.
@@ -391,14 +400,17 @@ func TestCopySeededNodeCacheReducesMisses(t *testing.T) {
 		totalReads, cs.sc.stats.NodeCacheHits, cs.sc.stats.NodeCacheMisses, missRate*100)
 	require.Less(t, missRate, 0.5, "seeded copy miss rate should be below 50%%")
 
-	// cold copy (no seed) for comparison — Copy() before any Commit gives a natural cold state
+	// cold copy (no seed) for comparison: commit so Pebble has tree nodes, but skip the
+	// post-commit Root() — sc stays nil so Copy() captures no seed and the ephemeral
+	// must read everything from disk.
 	parent2, _, cleanup2 := testStore(t)
 	defer cleanup2()
 	require.NoError(t, parent2.Set(key1, []byte("100")))
 	require.NoError(t, parent2.Set(key2, []byte("200")))
 	require.NoError(t, parent2.Set(key3, []byte("300")))
-	// no Commit() — parent2.sc is still nil, so Copy() has no cache to seed (natural cold path)
-	require.False(t, parent2.IsRootCached())
+	_, err2 := parent2.Commit()
+	require.NoError(t, err2)
+	require.False(t, parent2.IsRootCached(), "skip Root() so the cold copy gets no seed")
 	coldCopy, errI := parent2.Copy()
 	require.NoError(t, errI)
 	cc := coldCopy.(*Store)
@@ -422,10 +434,10 @@ func TestCopySeededNodeCacheReducesMisses(t *testing.T) {
 func TestCopySeedSurvivesMaxCacheSizeWipe(t *testing.T) {
 	parent, _, cleanup := testStore(t)
 	defer cleanup()
-	// commit something so parent has a real warm cache
+	// warm parent SMT (Root, not Commit — Commit resets sc and erases the warm cache).
 	key1 := lib.JoinLenPrefix([]byte("acct/"), []byte("alice"))
 	require.NoError(t, parent.Set(key1, []byte("100")))
-	_, err := parent.Commit()
+	_, err := parent.Root()
 	require.NoError(t, err)
 
 	copyStore, errI := parent.Copy()
@@ -454,6 +466,127 @@ func TestCopySeedSurvivesMaxCacheSizeWipe(t *testing.T) {
 	require.NotNil(t, n)
 	require.Equal(t, statsBefore+1, cs.sc.stats.NodeCacheHits,
 		"getNode must register a cache hit served from parentNodeCache")
+	require.Equal(t, 1, cs.sc.stats.NodeCacheHitsSeed,
+		"seed-served hits must be counted separately for observability")
+}
+
+// TestDelNodeShadowsParentSeed proves the CORRECT-1 fix: a delNode against a key that
+// lives only in the inherited parentNodeCache must shadow the seed so subsequent
+// getNode calls within the same batch see the deletion, not the stale parent value.
+func TestDelNodeShadowsParentSeed(t *testing.T) {
+	parent, _, cleanup := testStore(t)
+	defer cleanup()
+	// warm parent SMT with one key. Root() (not Commit) keeps parent.sc populated.
+	k := lib.JoinLenPrefix([]byte("acct/"), []byte("alice"))
+	require.NoError(t, parent.Set(k, []byte("100")))
+	_, err := parent.Root()
+	require.NoError(t, err)
+	require.Positive(t, len(parent.sc.nodeCache))
+
+	copyStore, errI := parent.Copy()
+	require.NoError(t, errI)
+	cs := copyStore.(*Store)
+	// force Root() so the SMT picks up parentNodeCache from seedCache
+	require.NoError(t, cs.Set(lib.JoinLenPrefix([]byte("acct/"), []byte("bob")), []byte("200")))
+	_, errI = cs.Root()
+	require.NoError(t, errI)
+	require.NotNil(t, cs.sc.parentNodeCache)
+
+	// pick any key the parent put in the seed (we want to test the delete-shadow path on it).
+	var seedKey string
+	for kk := range cs.sc.parentNodeCache {
+		seedKey = kk
+		break
+	}
+	require.NotEmpty(t, seedKey)
+	// sanity: getNode returns the seed node before deletion.
+	pre, errPre := cs.sc.getNode([]byte(seedKey))
+	require.NoError(t, errPre)
+	require.NotNil(t, pre, "pre-delete read should hit the seed")
+
+	// delete and verify subsequent getNode does NOT return the stale seed entry.
+	require.NoError(t, cs.sc.delNode([]byte(seedKey)))
+	n, err2 := cs.sc.getNode([]byte(seedKey))
+	require.NoError(t, err2)
+	require.Nil(t, n, "delNode must shadow the parentNodeCache entry — getNode should return nil after deletion")
+
+	// the tombstone itself should NOT count as a seed hit on the metric.
+	hitsSeedBefore := cs.sc.stats.NodeCacheHitsSeed
+	_, _ = cs.sc.getNode([]byte(seedKey))
+	require.Equal(t, hitsSeedBefore, cs.sc.stats.NodeCacheHitsSeed,
+		"tombstone reads must not increment NodeCacheHitsSeed (no fall-through to seed)")
+}
+
+// TestCopySeedConcurrentParentActivity exercises the design's central concurrency claim:
+// the parent's nodeCache map captured at Copy() time must remain safe to read from the
+// ephemeral copy WITHOUT any external lock, even while the parent continues committing
+// new blocks. Production reality: an external mutex (Mempool.L in the controller)
+// serializes Copy and Commit on the parent — but the ephemeral's subsequent Root()
+// (which reads parentNodeCache) runs OUTSIDE that lock. The claim is that this is safe
+// because each parent Commit allocates a fresh sc.nodeCache map; the OLD map referenced
+// by the ephemeral becomes orphaned in the parent and is never written to again.
+// Run under -race; the race detector catches any violation.
+func TestCopySeedConcurrentParentActivity(t *testing.T) {
+	parent, _, cleanup := testStore(t)
+	defer cleanup()
+	require.NoError(t, parent.Set(lib.JoinLenPrefix([]byte("seed/"), []byte("k0")), []byte("v0")))
+	_, err := parent.Commit()
+	require.NoError(t, err)
+
+	// extLock simulates the controller's Mempool.L — it serializes parent.Commit and
+	// parent.Copy, but ephemeral operations on the COPY run lock-free.
+	var extLock sync.Mutex
+	const iterations = 30
+	var stop atomic.Bool
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; !stop.Load() && i < iterations; i++ {
+			extLock.Lock()
+			key := lib.JoinLenPrefix([]byte("parent/"), []byte(fmt.Sprintf("k%d", i)))
+			if err := parent.Set(key, []byte(fmt.Sprintf("v%d", i))); err != nil {
+				extLock.Unlock()
+				return
+			}
+			if _, err := parent.Commit(); err != nil {
+				extLock.Unlock()
+				return
+			}
+			extLock.Unlock()
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; !stop.Load() && i < iterations; i++ {
+			extLock.Lock()
+			cp, errI := parent.Copy()
+			extLock.Unlock()
+			if errI != nil {
+				return
+			}
+			// Run ephemeral Root() OUTSIDE the external lock. This is the actual
+			// production pattern: the heavy CheckMempool/Root work runs without
+			// blocking parent commits.
+			cs := cp.(*Store)
+			key := lib.JoinLenPrefix([]byte("ephem/"), []byte(fmt.Sprintf("k%d", i)))
+			if err := cs.Set(key, []byte("x")); err != nil {
+				cs.Discard()
+				return
+			}
+			if _, errI := cs.Root(); errI != nil {
+				cs.Discard()
+				return
+			}
+			cs.Discard()
+		}
+	}()
+
+	wg.Wait()
+	stop.Store(true)
 }
 
 func testStore(t *testing.T) (*Store, *pebble.DB, func()) {

@@ -543,6 +543,7 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 			len(s.ss.txn.ops),
 			s.sc.stats.NodeReads,
 			s.sc.stats.NodeCacheHits,
+			s.sc.stats.NodeCacheHitsSeed,
 			s.sc.stats.NodeCacheMisses,
 			s.sc.stats.TraverseSteps,
 			s.sc.stats.Rehashes,

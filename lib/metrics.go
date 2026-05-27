@@ -189,23 +189,24 @@ type FSMMetrics struct {
 
 // StoreMetrics represents the telemetry of the 'store' package
 type StoreMetrics struct {
-	DBPartitionTime      prometheus.Histogram // how long does the db partition take?
-	DBFlushPartitionTime prometheus.Histogram // how long does the db partition flush take?
-	DBPartitionEntries   prometheus.Gauge     // how many entries in the partition batch?
-	DBPartitionSize      prometheus.Gauge     // how big is the partition batch?
-	DBCommitTime         prometheus.Histogram // how long does the db commit take?
-	DBCommitEntries      prometheus.Gauge     // how many entries in the commit batch?
-	DBCommitSize         prometheus.Gauge     // how big is the commit batch?
-	RootTime             prometheus.Histogram // how long does uncached store.Root() take?
-	RootOps              prometheus.Histogram // how many pending state ops were applied to compute an uncached store.Root()?
-	RootNodeReads        prometheus.Histogram // how many SMT getNode() calls happened while computing an uncached store.Root()?
-	RootNodeCacheHits    prometheus.Histogram // how many SMT getNode() cache hits happened while computing an uncached store.Root()?
-	RootNodeCacheMisses  prometheus.Histogram // how many SMT getNode() cache misses happened while computing an uncached store.Root()?
-	RootTraverseSteps    prometheus.Histogram // how many SMT traversal steps happened while computing an uncached store.Root()?
-	RootRehashes         prometheus.Histogram // how many parent rehash steps happened while computing an uncached store.Root()?
-	DBBackupTime         prometheus.Histogram // how long does the db backup take?
-	DBLSSCompactionTime  prometheus.Histogram // how long does the db LSS compaction take?
-	DBHSSCompactionTime  prometheus.Histogram // how long does the db HSS compaction take?
+	DBPartitionTime       prometheus.Histogram // how long does the db partition take?
+	DBFlushPartitionTime  prometheus.Histogram // how long does the db partition flush take?
+	DBPartitionEntries    prometheus.Gauge     // how many entries in the partition batch?
+	DBPartitionSize       prometheus.Gauge     // how big is the partition batch?
+	DBCommitTime          prometheus.Histogram // how long does the db commit take?
+	DBCommitEntries       prometheus.Gauge     // how many entries in the commit batch?
+	DBCommitSize          prometheus.Gauge     // how big is the commit batch?
+	RootTime              prometheus.Histogram // how long does uncached store.Root() take?
+	RootOps               prometheus.Histogram // how many pending state ops were applied to compute an uncached store.Root()?
+	RootNodeReads         prometheus.Histogram // how many SMT getNode() calls happened while computing an uncached store.Root()?
+	RootNodeCacheHits     prometheus.Histogram // how many SMT getNode() cache hits happened while computing an uncached store.Root()?
+	RootNodeCacheHitsSeed prometheus.Histogram // subset of cache hits served from the inherited parent seed (zero on cold stores)
+	RootNodeCacheMisses   prometheus.Histogram // how many SMT getNode() cache misses happened while computing an uncached store.Root()?
+	RootTraverseSteps     prometheus.Histogram // how many SMT traversal steps happened while computing an uncached store.Root()?
+	RootRehashes          prometheus.Histogram // how many parent rehash steps happened while computing an uncached store.Root()?
+	DBBackupTime          prometheus.Histogram // how long does the db backup take?
+	DBLSSCompactionTime   prometheus.Histogram // how long does the db LSS compaction take?
+	DBHSSCompactionTime   prometheus.Histogram // how long does the db HSS compaction take?
 }
 
 // MempoolMetrics represents the telemetry of the memory pool of pending transactions
@@ -638,6 +639,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_store_root_node_cache_hits",
 				Help: "SMT getNode() cache hits while computing uncached store.Root()",
 			}),
+			RootNodeCacheHitsSeed: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_root_node_cache_hits_seed",
+				Help: "SMT getNode() cache hits served from the inherited parent seed (subset of total hits)",
+			}),
 			RootNodeCacheMisses: promauto.NewHistogram(prometheus.HistogramOpts{
 				Name: "canopy_store_root_node_cache_misses",
 				Help: "SMT getNode() cache misses while computing uncached store.Root()",
@@ -930,7 +935,7 @@ func (m *Metrics) UpdateStoreRootTime(startTime time.Time) {
 }
 
 // UpdateStoreRootStats() updates counters collected during an uncached store.Root() build.
-func (m *Metrics) UpdateStoreRootStats(ops, nodeReads, cacheHits, cacheMisses, traverseSteps, rehashes int) {
+func (m *Metrics) UpdateStoreRootStats(ops, nodeReads, cacheHits, cacheHitsSeed, cacheMisses, traverseSteps, rehashes int) {
 	// exit if empty
 	if m == nil {
 		return
@@ -938,6 +943,7 @@ func (m *Metrics) UpdateStoreRootStats(ops, nodeReads, cacheHits, cacheMisses, t
 	m.RootOps.Observe(float64(ops))
 	m.RootNodeReads.Observe(float64(nodeReads))
 	m.RootNodeCacheHits.Observe(float64(cacheHits))
+	m.RootNodeCacheHitsSeed.Observe(float64(cacheHitsSeed))
 	m.RootNodeCacheMisses.Observe(float64(cacheMisses))
 	m.RootTraverseSteps.Observe(float64(traverseSteps))
 	m.RootRehashes.Observe(float64(rehashes))

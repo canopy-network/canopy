@@ -119,11 +119,12 @@ type SMT struct {
 
 // SMTStats captures the internal work performed during the most recent SMT commit.
 type SMTStats struct {
-	NodeReads       int
-	NodeCacheHits   int
-	NodeCacheMisses int
-	TraverseSteps   int
-	Rehashes        int
+	NodeReads         int
+	NodeCacheHits     int
+	NodeCacheHitsSeed int // subset of NodeCacheHits served from parentNodeCache (inherited seed)
+	NodeCacheMisses   int
+	TraverseSteps     int
+	Rehashes          int
 }
 
 // node wraps protobuf Node with a key
@@ -605,6 +606,10 @@ func (s *SMT) setNode(n *node) lib.ErrorI {
 	// check cache max size
 	if len(s.nodeCache) >= MaxCacheSize {
 		s.nodeCache = make(map[string]*node, MaxCacheSize)
+		// drop the inherited seed too: a wipe loses local shadows (set/del tombstones)
+		// against parent entries, and the seed would then serve stale reads for any
+		// key we have written or deleted in this batch.
+		s.parentNodeCache = nil
 	}
 	// set in cache
 	s.nodeCache[string(n.Key.bytes())] = n
@@ -619,6 +624,15 @@ func (s *SMT) setNode(n *node) lib.ErrorI {
 
 // delNode() remove a node from the database given its unique identifier
 func (s *SMT) delNode(key []byte) lib.ErrorI {
+	// if the key lives in the inherited seed, write a nil tombstone into the local
+	// cache so subsequent in-batch getNode() calls do not fall through to the seed
+	// and return the stale (pre-delete) node. tombstones are interpreted by getNode.
+	if s.parentNodeCache != nil {
+		if _, inSeed := s.parentNodeCache[string(key)]; inSeed {
+			s.nodeCache[string(key)] = nil
+			return s.store.Delete(lib.JoinLenPrefix(key))
+		}
+	}
 	delete(s.nodeCache, string(key))
 	return s.store.Delete(lib.JoinLenPrefix(key))
 }
@@ -630,12 +644,16 @@ func (s *SMT) getNode(key []byte) (n *node, err lib.ErrorI) {
 	n, found := s.nodeCache[string(key)]
 	if found {
 		s.stats.NodeCacheHits++
+		// nil entry is a tombstone: this SMT deleted the key earlier in the batch.
+		// do not fall through to parentNodeCache — the deletion shadows the seed.
+		// nil node matches the "not found" signal returned for missing Pebble keys.
 		return n, nil
 	}
 	// check inherited read-only seed from the parent store (if any)
 	if s.parentNodeCache != nil {
 		if n, found = s.parentNodeCache[string(key)]; found {
 			s.stats.NodeCacheHits++
+			s.stats.NodeCacheHitsSeed++
 			return n, nil
 		}
 	}
