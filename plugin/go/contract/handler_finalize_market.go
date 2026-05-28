@@ -115,9 +115,11 @@ return &PluginDeliverResponse{Error: ErrDisputeWindowOpen()}
 
 callerQId   := nextQueryId()
 proposerQId := nextQueryId()
+creatorQId  := nextQueryId()
 
 readKeys2 := []*PluginKeyRead{
 {QueryId: callerQId,   Key: KeyForAccount(msg.CallerAddr)},
+{QueryId: creatorQId,  Key: KeyForAccount(market.Creator)},
 }
 
 var proposerKey []byte
@@ -145,6 +147,7 @@ return &PluginDeliverResponse{Error: resp2.Error}
 callerAcc   := &Account{}
 proposerAcc := &Account{}
 disputerAcc := &Account{}
+creatorAcc  := &Account{}
 
 for _, r := range resp2.Results {
 if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
@@ -157,6 +160,10 @@ return &PluginDeliverResponse{Error: pe}
 }
 case proposerQId:
 if pe := Unmarshal(r.Entries[0].Value, proposerAcc); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+case creatorQId:
+if pe := Unmarshal(r.Entries[0].Value, creatorAcc); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case disputerQId:
@@ -182,6 +189,11 @@ bondReturn = treasury.LockedReserve
 treasury.LockedReserve -= bondReturn
 proposerAcc.Amount     += bondReturn
 }
+// Return creator bond on successful finalization.
+if treasury.CreatorBond > 0 {
+creatorAcc.Amount    += treasury.CreatorBond
+treasury.CreatorBond  = 0
+}
 
 // C-1 fix: record pool at finalization so claim_winnings uses immutable amount.
 market.FinalizedPoolAmount = marketPool.Amount
@@ -205,6 +217,9 @@ rawProposer, pe := SafeMarshal(proposerAcc)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 sets = append(sets, &PluginSetOp{Key: proposerKey, Value: rawProposer})
 }
+rawCreator, pe := SafeMarshal(creatorAcc)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+sets = append(sets, &PluginSetOp{Key: KeyForAccount(market.Creator), Value: rawCreator})
 
 // Write OutcomeState so claim_winnings can find the winning outcome.
 if proposal != nil {

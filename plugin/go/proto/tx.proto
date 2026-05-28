@@ -61,6 +61,7 @@ message OutcomeState {
 
 message TreasuryReserve {
   uint64 locked_reserve = 1;
+  uint64 creator_bond   = 2;
 }
 
 // PORS state objects (0x13, 0x16-0x1C)

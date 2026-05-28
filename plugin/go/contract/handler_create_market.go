@@ -83,7 +83,10 @@ return &PluginDeliverResponse{Error: pe}
 	if fee > 0 && msg.B0 > ^uint64(0)-fee {
 return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 }
-totalCost := msg.B0 + fee
+if msg.B0 > ^uint64(0)-fee-CREATOR_BOND {
+return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+}
+totalCost := msg.B0 + fee + CREATOR_BOND
 if creator.Amount < totalCost {
 return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 }
@@ -109,7 +112,7 @@ ElevatedRisk:  false,
 }
 
 pool := &Pool{Id: c.Config.ChainId, Amount: lmsrSeed}
-treasury := &TreasuryReserve{LockedReserve: FINALIZATION_BOUNTY}
+treasury := &TreasuryReserve{LockedReserve: FINALIZATION_BOUNTY, CreatorBond: CREATOR_BOND}
 
 rawMarket, pe := SafeMarshal(market)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }

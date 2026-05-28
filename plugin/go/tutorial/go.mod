@@ -10,6 +10,8 @@ require (
 	google.golang.org/protobuf v1.36.6
 )
 
+require github.com/golang/protobuf v1.5.0 // indirect
+
 require (
 	github.com/canopy-network/canopy/plugin/go v0.0.0
 	github.com/kilic/bls12-381 v0.1.0 // indirect

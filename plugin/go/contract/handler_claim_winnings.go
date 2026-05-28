@@ -95,6 +95,7 @@ return &PluginDeliverResponse{Error: ErrAlreadyClaimed()}
 }
 
 var payout uint64
+cancelTreasury := &TreasuryReserve{}
 switch market.Status {
 case STATUS_FINALIZED:
 outQId := nextQueryId()
@@ -150,6 +151,26 @@ payout = ComputePayout(poolForPayout, winnerShares, totalWinShares)
 
 case STATUS_CANCELLED:
 payout = position.CostPaid
+// Slash creator bond into treasury pool on cancel.
+bondSlashQId := nextQueryId()
+bsResp, bsErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: bondSlashQId, Key: KeyForTreasuryReserve(msg.MarketId)},
+},
+})
+if bsErr != nil {
+return &PluginDeliverResponse{Error: bsErr}
+}
+if bsResp.Error != nil {
+return &PluginDeliverResponse{Error: bsResp.Error}
+}
+for _, r := range bsResp.Results {
+if r.QueryId == bondSlashQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+if pe := Unmarshal(r.Entries[0].Value, cancelTreasury); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+}
+}
 
 case STATUS_VOIDED:
 payout = position.CostPaid
@@ -199,6 +220,38 @@ sets := []*PluginSetOp{
 {Key: marketKey, Value: rawMkt},
 {Key: poolKey,   Value: rawMP},
 {Key: claimKey,  Value: rawAcc},
+}
+
+// Fold creator bond slash into sets if this was a cancel.
+if market.Status == STATUS_CANCELLED && cancelTreasury.CreatorBond > 0 {
+cancelTPool := &Pool{}
+tpQId := nextQueryId()
+tpResp, tpErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: tpQId, Key: KeyForTreasuryPool()},
+},
+})
+if tpErr != nil {
+return &PluginDeliverResponse{Error: tpErr}
+}
+if tpResp.Error != nil {
+return &PluginDeliverResponse{Error: tpResp.Error}
+}
+for _, r := range tpResp.Results {
+if r.QueryId == tpQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+if pe := Unmarshal(r.Entries[0].Value, cancelTPool); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+}
+}
+cancelTPool.Amount      += cancelTreasury.CreatorBond
+cancelTreasury.CreatorBond = 0
+rawCT, pe := SafeMarshal(cancelTreasury)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawCTP, pe := SafeMarshal(cancelTPool)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+sets = append(sets, &PluginSetOp{Key: KeyForTreasuryReserve(msg.MarketId), Value: rawCT})
+sets = append(sets, &PluginSetOp{Key: KeyForTreasuryPool(), Value: rawCTP})
 }
 
 if shouldSweep && marketPool.Amount > 0 {
