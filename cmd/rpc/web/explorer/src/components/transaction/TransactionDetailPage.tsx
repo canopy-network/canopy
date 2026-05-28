@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { useTxByHash, useBlockByHeight } from '../../hooks/useApi'
+import { Copy } from 'lucide-react'
+import { useTxByHash, useBlockByHeight, useLatestBlock } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
@@ -22,6 +23,42 @@ const formatAmount = (micro: number): string => {
     return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
 }
 
+const CopySymbol = () => <Copy aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
+
+const truncateMiddle = (value: string, leading = 12, trailing = 8) => {
+    if (!value || value === 'N/A') return value || 'N/A'
+    return value.length > leading + trailing ? `${value.slice(0, leading)}…${value.slice(-trailing)}` : value
+}
+
+type PaymentPercent = {
+    chainId?: number | string
+    percent?: number
+    percents?: number
+}
+
+const getRewardTotalsByChain = (paymentPercents: PaymentPercent[]) => {
+    const totals = new Map<string, number>()
+
+    paymentPercents.forEach((recipient) => {
+        const chainId = String(recipient.chainId ?? 'Unknown')
+        const percent = Number(recipient.percents ?? recipient.percent ?? 0)
+
+        totals.set(chainId, (totals.get(chainId) ?? 0) + percent)
+    })
+
+    return Array.from(totals.entries())
+        .map(([chainId, total]) => ({ chainId, total }))
+        .sort((a, b) => {
+            const aChain = Number(a.chainId)
+            const bChain = Number(b.chainId)
+
+            if (Number.isNaN(aChain) || Number.isNaN(bChain)) {
+                return a.chainId.localeCompare(b.chainId)
+            }
+            return aChain - bChain
+        })
+}
+
 const TransactionDetailPage: React.FC = () => {
     const { transactionHash } = useParams<{ transactionHash: string }>()
     const navigate = useNavigate()
@@ -32,6 +69,17 @@ const TransactionDetailPage: React.FC = () => {
     // Use the real hook to get transaction data
     const { data: transactionData, isLoading, error } = useTxByHash(transactionHash || '')
 
+    // Get the latest confirmed block height to detect pending transactions.
+    // If the tx height is ahead of the current chain height, it hasn't been
+    // included in a block yet — it's a pending (mempool) transaction.
+    const { data: latestBlockData } = useLatestBlock()
+    const latestHeight = Number(
+        latestBlockData?.results?.[0]?.blockHeader?.height
+        ?? latestBlockData?.results?.[0]?.height
+        ?? latestBlockData?.height
+        ?? 0
+    )
+
     // Get block data to find all transactions in the same block
     const txBlockHeight = transactionData?.result?.height || transactionData?.height || 0
     const { data: blockData } = useBlockByHeight(txBlockHeight)
@@ -41,10 +89,13 @@ const TransactionDetailPage: React.FC = () => {
     const transactionFeeMicro = transaction?.transaction?.fee || transaction?.fee || 0
     const txType = transaction?.transaction?.type || transaction?.messageType || transaction?.type || 'send'
 
+    const txHeight = transaction?.height || transaction?.blockHeight || transaction?.block || 0
+    const rawStatus = String(transaction?.status || '').toLowerCase()
+    const isPending = txHeight === 0 || rawStatus === 'pending' || (latestHeight > 0 && txHeight > latestHeight)
+
     // Helper function to normalize hash for comparison
     const normalizeHash = (hash: string): string => {
         if (!hash) return ''
-        // Remove '0x' prefix if present and convert to lowercase
         return hash.replace(/^0x/i, '').toLowerCase()
     }
 
@@ -206,8 +257,7 @@ const TransactionDetailPage: React.FC = () => {
     }
 
     // Extract data from the API response (using transaction already extracted above)
-    const status = transaction?.status || 'success'
-    const blockHeight = transaction?.height || transaction?.blockHeight || transaction?.block || 0
+    const blockHeight = txHeight
     const timestamp = transaction?.transaction?.time || transaction?.timestamp || transaction?.time || new Date().toISOString()
     const fee = formatFee(transactionFeeMicro)
 
@@ -222,6 +272,8 @@ const TransactionDetailPage: React.FC = () => {
 
     const amountMicro = extractAmountMicro(transaction as Record<string, unknown>)
     const value = amountMicro > 0 ? formatAmount(amountMicro) : '0 CNPY'
+    const rewardPaymentPercents = transaction.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents ?? []
+    const rewardTotalsByChain = getRewardTotalsByChain(rewardPaymentPercents)
 
     return (
         <motion.div
@@ -229,7 +281,7 @@ const TransactionDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="w-full"
+            className="explorer-detail-page w-full"
         >
             {/* Header */}
             <div className="mb-8">
@@ -258,11 +310,11 @@ const TransactionDetailPage: React.FC = () => {
                                     </h1>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3 mt-2">
-                                    <span className="inline-flex min-w-[6.25rem] items-center justify-center rounded-md border border-[#35cd48]/30 bg-[#35cd48]/12 px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight text-[#35cd48]">
-                                        {status === 'success' || status === 'Success' ? 'Success' : 'Pending'}
+                                    <span className={`inline-flex min-w-[6.25rem] items-center justify-center rounded-md border px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight ${isPending ? 'border-yellow-500/30 bg-yellow-500/12 text-yellow-500' : 'border-[#35cd48]/30 bg-[#35cd48]/12 text-[#35cd48]'}`}>
+                                        {isPending ? 'Pending' : 'Success'}
                                     </span>
                                     <span className="text-gray-400 text-sm">
-                                        Confirmed {getTimeAgo(timestamp)}
+                                        {isPending ? 'Awaiting block inclusion' : `Confirmed ${getTimeAgo(timestamp)}`}
                                     </span>
                                 </div>
                             </div>
@@ -314,56 +366,66 @@ const TransactionDetailPage: React.FC = () => {
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Transaction Hash</span>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-primary font-mono text-sm">
+                                            <span className="text-primary text-sm">
                                                 {txHash}
                                             </span>
                                             <button
                                                 onClick={() => copyToClipboard(txHash)}
+                                                aria-label="Copy transaction hash"
                                                 className="text-primary hover:text-primary transition-colors flex-shrink-0"
                                             >
-                                                <i className="fa-solid fa-copy text-xs"></i>
+                                                <CopySymbol />
                                             </button>
                                         </div>
                                     </div>
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Status</span>
-                                        <span className="inline-flex min-w-[6.25rem] items-center justify-center rounded-md border border-[#35cd48]/30 bg-[#35cd48]/12 px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight text-[#35cd48]">
-                                            {status === 'success' || status === 'Success' ? 'Success' : 'Pending'}
+                                        <span className={`inline-flex min-w-[6.25rem] items-center justify-center rounded-md border px-1.5 py-0.5 text-center text-[10px] font-medium tracking-tight ${isPending ? 'border-yellow-500/30 bg-yellow-500/12 text-yellow-500' : 'border-[#35cd48]/30 bg-[#35cd48]/12 text-[#35cd48]'}`}>
+                                            {isPending ? 'Pending' : 'Success'}
                                         </span>
                                     </div>
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Block</span>
-                                        <span className="text-primary font-mono">{blockHeight.toLocaleString()}</span>
+                                        {isPending ? (
+                                            <span className="text-sm font-medium text-yellow-400">Mempool</span>
+                                        ) : (
+                                            <span className="text-primary">{blockHeight.toLocaleString()}</span>
+                                        )}
                                     </div>
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Timestamp</span>
-                                        <span className="text-white font-mono text-sm">{formatTimestamp(timestamp)}</span>
+                                        {isPending ? (
+                                            <span className="text-sm font-medium text-yellow-400">Pending</span>
+                                        ) : (
+                                            <span className="text-white text-sm">{formatTimestamp(timestamp)}</span>
+                                        )}
                                     </div>
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Value</span>
-                                        <span className="text-primary font-mono">{value}</span>
+                                        <span className="text-primary">{value}</span>
                                     </div>
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">Transaction Fee</span>
-                                        <span className="text-orange-400 font-mono">{fee}</span>
+                                        <span className="text-orange-400">{fee}</span>
                                     </div>
 
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">From</span>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-gray-400 font-mono text-sm">
+                                            <span className="text-gray-400 text-sm">
                                                 {from}
                                             </span>
                                             <button
                                                 onClick={() => copyToClipboard(from)}
+                                                aria-label="Copy from address"
                                                 className="text-primary hover:text-primary transition-colors flex-shrink-0"
                                             >
-                                                <i className="fa-solid fa-copy text-xs"></i>
+                                                <CopySymbol />
                                             </button>
                                         </div>
                                     </div>
@@ -371,14 +433,15 @@ const TransactionDetailPage: React.FC = () => {
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">To</span>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-gray-400 font-mono text-sm">
+                                            <span className="text-gray-400 text-sm">
                                                 {to}
                                             </span>
                                             <button
                                                 onClick={() => copyToClipboard(to)}
+                                                aria-label="Copy to address"
                                                 className="text-primary hover:text-primary transition-colors flex-shrink-0"
                                             >
-                                                <i className="fa-solid fa-copy text-xs"></i>
+                                                <CopySymbol />
                                             </button>
                                         </div>
                                     </div>
@@ -405,17 +468,18 @@ const TransactionDetailPage: React.FC = () => {
 
                                 <div className="space-y-6">
                                     <div className="flex flex-col items-start gap-2 bg-input rounded-lg p-3">
-                                        <div className="text-white text-sm mb-2">From Address</div>
-                                        <div className="w-full overflow-hidden">
-                                            <div className="font-mono text-gray-400 text-xs sm:text-sm truncate">
-                                                {from}
+                                        <div className="text-white text-sm font-semibold mb-2">From Address</div>
+                                        <div className="flex w-full items-center gap-2 overflow-hidden">
+                                            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-gray-400 text-xs sm:text-sm" title={from}>
+                                                {truncateMiddle(from)}
                                             </div>
-                                            <div className="flex justify-end mt-1">
+                                            <div className="shrink-0">
                                                 <button
                                                     onClick={() => copyToClipboard(from)}
-                                                    className="text-primary hover:text-primary transition-colors text-xs px-1 py-0.5"
+                                                    aria-label="Copy from address"
+                                                    className="text-primary hover:text-primary transition-colors px-1 py-0.5"
                                                 >
-                                                    Copy <i className="fa-solid fa-copy text-xs ml-1"></i>
+                                                    <CopySymbol />
                                                 </button>
                                             </div>
                                         </div>
@@ -430,17 +494,18 @@ const TransactionDetailPage: React.FC = () => {
                                     </div>
 
                                     <div className="flex flex-col items-start gap-2 bg-input rounded-lg p-3">
-                                        <div className="text-white text-sm mb-2">To Address</div>
-                                        <div className="w-full overflow-hidden">
-                                            <div className="font-mono text-gray-400 text-xs sm:text-sm truncate">
-                                                {to}
+                                        <div className="text-white text-sm font-semibold mb-2">To Address</div>
+                                        <div className="flex w-full items-center gap-2 overflow-hidden">
+                                            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-gray-400 text-xs sm:text-sm" title={to}>
+                                                {truncateMiddle(to)}
                                             </div>
-                                            <div className="flex justify-end mt-1">
+                                            <div className="shrink-0">
                                                 <button
                                                     onClick={() => copyToClipboard(to)}
-                                                    className="text-primary hover:text-primary transition-colors text-xs px-1 py-0.5"
+                                                    aria-label="Copy to address"
+                                                    className="text-primary hover:text-primary transition-colors px-1 py-0.5"
                                                 >
-                                                    Copy <i className="fa-solid fa-copy text-xs ml-1"></i>
+                                                    <CopySymbol />
                                                 </button>
                                             </div>
                                         </div>
@@ -463,11 +528,11 @@ const TransactionDetailPage: React.FC = () => {
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center">
                                             <span className="text-gray-400 text-sm">Fee Paid</span>
-                                            <span className="text-white font-mono text-sm">{formatFee(transactionFeeMicro)}</span>
+                                            <span className="text-white text-sm">{formatFee(transactionFeeMicro)}</span>
                                         </div>
                                         <div className="flex justify-between items-center">
                                             <span className="text-gray-400 text-sm">Fee (uCNPY)</span>
-                                            <span className="text-gray-300 font-mono text-sm">{transactionFeeMicro.toLocaleString()}</span>
+                                            <span className="text-gray-300 text-sm">{transactionFeeMicro.toLocaleString()}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -489,7 +554,7 @@ const TransactionDetailPage: React.FC = () => {
                                         <span className="text-gray-400 text-sm">Transaction Type</span>
                                         <TransactionTypeBadge type={txType} />
                                     </div>
-                                    {position !== null && (
+                                    {position !== null && !isPending && (
                                         <div className="flex justify-between items-center">
                                             <span className="text-gray-400 text-sm">Position in Block</span>
                                             <span className="text-white text-sm">{position}</span>
@@ -568,24 +633,26 @@ const TransactionDetailPage: React.FC = () => {
                                         <div className="flex justify-between items-start">
                                             <span className="text-gray-400 text-sm">Sender</span>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-white font-mono text-sm">{truncate(from, 10)}</span>
+                                                <span className="text-white text-sm">{truncate(from, 10)}</span>
                                                 <button
                                                     onClick={() => copyToClipboard(from)}
+                                                    aria-label="Copy sender"
                                                     className="text-primary hover:text-primary/80 transition-colors"
                                                 >
-                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                    <CopySymbol />
                                                 </button>
                                             </div>
                                         </div>
                                         <div className="flex justify-between items-start">
                                             <span className="text-gray-400 text-sm">Recipient</span>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-white font-mono text-sm">{truncate(to, 10)}</span>
+                                                <span className="text-white text-sm">{truncate(to, 10)}</span>
                                                 <button
                                                     onClick={() => copyToClipboard(to)}
+                                                    aria-label="Copy recipient"
                                                     className="text-primary hover:text-primary/80 transition-colors"
                                                 >
-                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                    <CopySymbol />
                                                 </button>
                                             </div>
                                         </div>
@@ -596,7 +663,7 @@ const TransactionDetailPage: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {txType === 'certificateResults' && transaction.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents && (
+                                {txType === 'certificateResults' && rewardPaymentPercents.length > 0 && (
                                     <div className="border border-white/10 rounded-lg p-4">
                                         <div className="flex items-center justify-between mb-3">
                                             <span className="text-gray-400 text-sm">Reward Distribution</span>
@@ -605,16 +672,28 @@ const TransactionDetailPage: React.FC = () => {
                                         <div className="space-y-2">
                                             <div className="flex justify-between items-start">
                                                 <span className="text-gray-400 text-sm">Recipients</span>
-                                                <span className="text-white font-mono text-sm">
-                                                    {transaction.transaction.msg.qc.results.rewardRecipients.paymentPercents.length}
+                                                <span className="text-white text-sm">
+                                                    {rewardPaymentPercents.length}
                                                 </span>
                                             </div>
-                                            <div className="flex justify-between items-start">
-                                                <span className="text-gray-400 text-sm">Total</span>
-                                                <span className="text-white font-mono text-sm">
-                                                    {transaction.transaction.msg.qc.results.rewardRecipients.paymentPercents.reduce((sum: number, r: Record<string, number>) => sum + (r.percents || 0), 0)}%
-                                                </span>
-                                            </div>
+                                            {rewardTotalsByChain.length === 1 ? (
+                                                <div className="flex justify-between items-start">
+                                                    <span className="text-gray-400 text-sm">Total</span>
+                                                    <span className="text-white text-sm">
+                                                        {rewardTotalsByChain[0].total}%
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <span className="text-gray-400 text-sm">Total by Chain</span>
+                                                    {rewardTotalsByChain.map(({ chainId, total }) => (
+                                                        <div key={chainId} className="flex justify-between items-start">
+                                                            <span className="text-gray-400 text-sm">Chain {chainId}</span>
+                                                            <span className="text-white text-sm">{total}%</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -622,7 +701,7 @@ const TransactionDetailPage: React.FC = () => {
                         ) : (
                             // Raw JSON view with syntax highlighting
                             <div className="border border-white/10 rounded-lg p-4">
-                                <pre className="text-xs overflow-x-auto whitespace-pre-wrap font-mono">
+                                <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
                                     <code className="text-gray-300">
                                         {JSON.stringify(transaction, null, 2)
                                             .replace(/(".*?")\s*:/g, '<span class="text-blue-400">$1</span>:')

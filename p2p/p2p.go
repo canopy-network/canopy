@@ -295,13 +295,18 @@ func (p *P2P) DialFailedPeers(interval time.Duration) {
 				}
 			}
 
+			// prevent a stampede of dials by staggering with a delay
+			const reconnectStagger = 100 * time.Millisecond
 			// Attempt a single dial per tick; keep it in the failed set if it doesn't succeed.
-			go func(mapKey any, a *lib.PeerAddress) {
+			go func(mapKey any, a *lib.PeerAddress, idx int) {
+				if idx > 0 {
+					time.Sleep(time.Duration(idx) * reconnectStagger)
+				}
 				if err := p.Dial(a, false, true); err != nil {
 					return
 				}
 				p.failedPeers.Delete(mapKey)
-			}(key, reconnect)
+			}(key, reconnect, count)
 
 			count++
 			return true
@@ -347,7 +352,7 @@ func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey bool) l
 // the peer set and the peer book
 func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPublicKey bool) (err lib.ErrorI) {
 	// create the e2e encrypted connection while establishing a full peer info object
-	connection, err := p.NewConnection(conn)
+	connection, err := p.NewConnection(conn, info)
 	if err != nil {
 		return err
 	}
@@ -503,9 +508,13 @@ func (p *P2P) DialAndDisconnect(a *lib.PeerAddress, strictPublicKey bool) lib.Er
 // OnPeerError() callback to P2P when a peer errors
 func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string, uuid uint64) {
 	p.log.Warn(PeerError(publicKey, remoteAddr, err))
+	// acquire the write lock before modifying the peer set
+	unlock := lockWithTrace("p2p", &p.mux, p.log)
+	removeErr := p.PeerSet.Remove(publicKey, uuid)
+	unlock()
 	// ignore error: peer may have disconnected before added
-	if err = p.PeerSet.Remove(publicKey, uuid); err != nil {
-		p.log.Errorf("Remove error: %s", err.Error())
+	if removeErr != nil {
+		p.log.Errorf("Remove error: %s", removeErr.Error())
 	}
 
 	// Add to failed peers using the configured address from must-connects when possible.

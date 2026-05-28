@@ -28,6 +28,14 @@ message Account {
   bytes address = 1;
   // amount: the balance of funds the account has
   uint64 amount = 2;
+  // vesting_amount: the portion of the account balance subject to vesting
+  uint64 vesting_amount = 3; // @gotags: json:"vestingAmount,omitempty"
+  // vesting_start_height: the block height when linear vesting begins accruing
+  uint64 vesting_start_height = 4; // @gotags: json:"vestingStartHeight,omitempty"
+  // vesting_cliff_height: the block height before which vested funds are not withdrawable
+  uint64 vesting_cliff_height = 5; // @gotags: json:"vestingCliffHeight,omitempty"
+  // vesting_end_height: the block height when the vesting amount is fully unlocked
+  uint64 vesting_end_height = 6; // @gotags: json:"vestingEndHeight,omitempty"
 }
 
 // A pool is like an account without an owner, holding funds that are managed directly by the blockchain protocol

@@ -50,7 +50,7 @@ export const Dashboard = () => {
                 <motion.div variants={item} className="flex items-center justify-between mb-1">
                     <PageHeader
                         title="Dashboard"
-                        subtitle="All wallets overview, accounts, and recent activity"
+                        subtitle="Monitor recent activity, accounts, and overview for all wallets."
                         className="w-full"
                     />
                 </motion.div>

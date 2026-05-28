@@ -1,16 +1,24 @@
 import React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { Copy } from 'lucide-react'
 import { useOrder } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 
-import { toCNPY } from '../../lib/utils'
+import { formatDecimalWithSubscript, formatLocaleNumber, formatMicroCNPY } from '../../lib/utils'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
+const SWAP_DECIMAL_PLACES = 6
+
 const formatAmount = (micro: number): string => {
-    if (micro === 0) return '0 CNPY'
-    const cnpy = toCNPY(micro)
-    return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
+    return formatMicroCNPY(micro)
+}
+
+const CopySymbol = () => <Copy aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
+
+const truncateMiddle = (value: string, leading = 12, trailing = 8) => {
+    if (!value || value === 'N/A') return value || 'N/A'
+    return value.length > leading + trailing ? `${value.slice(0, leading)}…${value.slice(-trailing)}` : value
 }
 
 const OrderDetailPage: React.FC = () => {
@@ -93,7 +101,7 @@ const OrderDetailPage: React.FC = () => {
     const status: string = buyerSendAddress ? 'Locked' : 'Active'
 
     const exchangeRate = requestedAmount > 0
-        ? (amountForSale / requestedAmount).toFixed(6)
+        ? formatDecimalWithSubscript(amountForSale / requestedAmount, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)
         : 'N/A'
 
     return (
@@ -102,7 +110,7 @@ const OrderDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="w-full"
+            className="explorer-detail-page w-full"
         >
             {/* Header */}
             <div className="mb-8">
@@ -176,7 +184,7 @@ const OrderDetailPage: React.FC = () => {
 
                             {viewMode === 'raw' ? (
                                 <div className="rounded-lg border border-white/10 p-4">
-                                    <pre className="overflow-x-auto whitespace-pre-wrap text-xs font-mono">
+                                    <pre className="overflow-x-auto whitespace-pre-wrap text-xs">
                                         <code className="text-gray-300">
                                             {JSON.stringify(order, null, 2)
                                                 .split('\n')
@@ -207,12 +215,13 @@ const OrderDetailPage: React.FC = () => {
                                     <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                         <span className="text-gray-400 text-sm">Order ID</span>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-primary font-mono text-sm">{id}</span>
+                                            <span className="text-primary text-sm">{id}</span>
                                             <button
                                                 onClick={() => copyToClipboard(id)}
+                                                aria-label="Copy order ID"
                                                 className="text-primary hover:text-primary transition-colors flex-shrink-0"
                                             >
-                                                <i className="fa-solid fa-copy text-xs"></i>
+                                                <CopySymbol />
                                             </button>
                                         </div>
                                     </div>
@@ -226,22 +235,22 @@ const OrderDetailPage: React.FC = () => {
 
                                     <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                         <span className="text-gray-400 text-sm">Committee</span>
-                                        <span className="text-white font-mono">{committee}</span>
+                                        <span className="text-white">{committee}</span>
                                     </div>
 
                                     <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                         <span className="text-gray-400 text-sm">Amount For Sale</span>
-                                        <span className="text-primary font-mono">{formatAmount(amountForSale)}</span>
+                                        <span className="text-primary">{formatAmount(amountForSale)}</span>
                                     </div>
 
                                     <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                         <span className="text-gray-400 text-sm">Requested Amount</span>
-                                        <span className="text-primary font-mono">{formatAmount(requestedAmount)}</span>
+                                        <span className="text-primary">{formatAmount(requestedAmount)}</span>
                                     </div>
 
                                     <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                         <span className="text-gray-400 text-sm">Exchange Rate</span>
-                                        <span className="text-white font-mono">
+                                        <span className="text-white">
                                             {exchangeRate !== 'N/A' ? `1 : ${exchangeRate}` : exchangeRate}
                                         </span>
                                     </div>
@@ -249,20 +258,21 @@ const OrderDetailPage: React.FC = () => {
                                     {rate && (
                                         <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                             <span className="text-gray-400 text-sm">Rate</span>
-                                            <span className="text-white font-mono">{rate}</span>
+                                            <span className="text-white">{rate}</span>
                                         </div>
                                     )}
 
                                     <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                         <span className="text-gray-400 text-sm">Seller Send Address</span>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-gray-400 font-mono text-sm">{sellersSendAddress}</span>
+                                            <span className="text-gray-400 text-sm">{sellersSendAddress}</span>
                                             {sellersSendAddress !== 'N/A' && (
                                                 <button
                                                     onClick={() => copyToClipboard(sellersSendAddress)}
+                                                    aria-label="Copy seller send address"
                                                     className="text-primary hover:text-primary transition-colors flex-shrink-0"
                                                 >
-                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                    <CopySymbol />
                                                 </button>
                                             )}
                                         </div>
@@ -271,13 +281,14 @@ const OrderDetailPage: React.FC = () => {
                                     <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                         <span className="text-gray-400 text-sm">Seller Receive Address</span>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-gray-400 font-mono text-sm">{sellerReceiveAddress}</span>
+                                            <span className="text-gray-400 text-sm">{sellerReceiveAddress}</span>
                                             {sellerReceiveAddress !== 'N/A' && (
                                                 <button
                                                     onClick={() => copyToClipboard(sellerReceiveAddress)}
+                                                    aria-label="Copy seller receive address"
                                                     className="text-primary hover:text-primary transition-colors flex-shrink-0"
                                                 >
-                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                    <CopySymbol />
                                                 </button>
                                             )}
                                         </div>
@@ -287,12 +298,13 @@ const OrderDetailPage: React.FC = () => {
                                         <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                             <span className="text-gray-400 text-sm">Buyer Send Address</span>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-gray-400 font-mono text-sm">{buyerSendAddress}</span>
+                                                <span className="text-gray-400 text-sm">{buyerSendAddress}</span>
                                                 <button
                                                     onClick={() => copyToClipboard(buyerSendAddress)}
+                                                    aria-label="Copy buyer send address"
                                                     className="text-primary hover:text-primary transition-colors flex-shrink-0"
                                                 >
-                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                    <CopySymbol />
                                                 </button>
                                             </div>
                                         </div>
@@ -302,12 +314,13 @@ const OrderDetailPage: React.FC = () => {
                                         <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                             <span className="text-gray-400 text-sm">Buyer Receive Address</span>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-gray-400 font-mono text-sm">{buyerReceiveAddress}</span>
+                                                <span className="text-gray-400 text-sm">{buyerReceiveAddress}</span>
                                                 <button
                                                     onClick={() => copyToClipboard(buyerReceiveAddress)}
+                                                    aria-label="Copy buyer receive address"
                                                     className="text-primary hover:text-primary transition-colors flex-shrink-0"
                                                 >
-                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                    <CopySymbol />
                                                 </button>
                                             </div>
                                         </div>
@@ -316,14 +329,14 @@ const OrderDetailPage: React.FC = () => {
                                     {buyerChainDeadline > 0 && (
                                         <div className="flex flex-col gap-2 border-b border-gray-400/30 pb-4">
                                             <span className="text-gray-400 text-sm">Buyer Chain Deadline</span>
-                                            <span className="text-white font-mono">{buyerChainDeadline.toLocaleString()}</span>
+                                            <span className="text-white">{buyerChainDeadline.toLocaleString()}</span>
                                         </div>
                                     )}
 
                                     {data && (
                                         <div className="flex flex-col gap-2 pb-4">
                                             <span className="text-gray-400 text-sm">Data</span>
-                                            <span className="break-all text-sm font-mono text-white">{data}</span>
+                                            <span className="break-all text-sm text-white">{data}</span>
                                         </div>
                                     )}
                                 </div>
@@ -347,18 +360,19 @@ const OrderDetailPage: React.FC = () => {
 
                                 <div className="space-y-6">
                                     <div className="flex flex-col items-start gap-2 bg-input rounded-lg p-3">
-                                        <div className="text-white text-sm mb-2">Seller Send Address</div>
-                                        <div className="w-full overflow-hidden">
-                                            <div className="font-mono text-gray-400 text-xs sm:text-sm truncate">
-                                                {sellersSendAddress}
+                                        <div className="text-white text-sm font-semibold mb-2">Seller Send Address</div>
+                                        <div className="flex w-full items-center gap-2 overflow-hidden">
+                                            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-gray-400 text-xs sm:text-sm" title={sellersSendAddress}>
+                                                {truncateMiddle(sellersSendAddress)}
                                             </div>
                                             {sellersSendAddress !== 'N/A' && (
-                                                <div className="flex justify-end mt-1">
+                                                <div className="shrink-0">
                                                     <button
                                                         onClick={() => copyToClipboard(sellersSendAddress)}
-                                                        className="text-primary hover:text-primary transition-colors text-xs px-1 py-0.5"
+                                                        aria-label="Copy seller send address"
+                                                        className="text-primary hover:text-primary transition-colors px-1 py-0.5"
                                                     >
-                                                        Copy <i className="fa-solid fa-copy text-xs ml-1"></i>
+                                                        <CopySymbol />
                                                     </button>
                                                 </div>
                                             )}
@@ -375,18 +389,19 @@ const OrderDetailPage: React.FC = () => {
                                     </div>
 
                                     <div className="flex flex-col items-start gap-2 bg-input rounded-lg p-3">
-                                        <div className="text-white text-sm mb-2">Seller Receive Address</div>
-                                        <div className="w-full overflow-hidden">
-                                            <div className="font-mono text-gray-400 text-xs sm:text-sm truncate">
-                                                {sellerReceiveAddress}
+                                        <div className="text-white text-sm font-semibold mb-2">Seller Receive Address</div>
+                                        <div className="flex w-full items-center gap-2 overflow-hidden">
+                                            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-gray-400 text-xs sm:text-sm" title={sellerReceiveAddress}>
+                                                {truncateMiddle(sellerReceiveAddress)}
                                             </div>
                                             {sellerReceiveAddress !== 'N/A' && (
-                                                <div className="flex justify-end mt-1">
+                                                <div className="shrink-0">
                                                     <button
                                                         onClick={() => copyToClipboard(sellerReceiveAddress)}
-                                                        className="text-primary hover:text-primary transition-colors text-xs px-1 py-0.5"
+                                                        aria-label="Copy seller receive address"
+                                                        className="text-primary hover:text-primary transition-colors px-1 py-0.5"
                                                     >
-                                                        Copy <i className="fa-solid fa-copy text-xs ml-1"></i>
+                                                        <CopySymbol />
                                                     </button>
                                                 </div>
                                             )}
@@ -409,23 +424,23 @@ const OrderDetailPage: React.FC = () => {
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-400 text-sm">Amount For Sale</span>
-                                        <span className="text-white font-mono text-sm">{formatAmount(amountForSale)}</span>
+                                        <span className="text-white text-sm">{formatAmount(amountForSale)}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-400 text-sm">Amount (uCNPY)</span>
-                                        <span className="text-gray-300 font-mono text-sm">{amountForSale.toLocaleString()}</span>
+                                        <span className="text-gray-300 text-sm">{amountForSale.toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-400 text-sm">Requested Amount</span>
-                                        <span className="text-white font-mono text-sm">{formatAmount(requestedAmount)}</span>
+                                        <span className="text-white text-sm">{formatAmount(requestedAmount)}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-400 text-sm">Requested (uCNPY)</span>
-                                        <span className="text-gray-300 font-mono text-sm">{requestedAmount.toLocaleString()}</span>
+                                        <span className="text-gray-300 text-sm">{requestedAmount.toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-400 text-sm">Exchange Rate</span>
-                                        <span className="text-primary font-mono text-sm">
+                                        <span className="text-primary text-sm">
                                             {exchangeRate !== 'N/A' ? `1 : ${exchangeRate}` : exchangeRate}
                                         </span>
                                     </div>

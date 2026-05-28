@@ -14,6 +14,7 @@ export interface SparklineChartProps {
     showGrid?: boolean;
     className?: string;
     height?: number | string;
+    interactive?: boolean;
 }
 
 const UP_COLOR = '#35cd48';
@@ -36,6 +37,7 @@ export const SparklineChart = React.memo<SparklineChartProps>(({
     fillColor,
     className = '',
     height = '100%',
+    interactive = true,
 }) => {
     const gradientId = useId();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -134,9 +136,9 @@ export const SparklineChart = React.memo<SparklineChartProps>(({
     }, [color, data, fillColor, formatValue, strokeColor]);
 
     const activePoint =
-        chart && activeIndex != null ? chart.coordinates[activeIndex] : null;
+        interactive && chart && activeIndex != null ? chart.coordinates[activeIndex] : null;
     const activeColor =
-        chart && activeIndex != null
+        interactive && chart && activeIndex != null
             ? chart.trendRuns.find((run) => activeIndex >= run.startIndex && activeIndex <= run.endIndex)?.color ?? chart.stroke
             : chart?.stroke;
 
@@ -150,6 +152,8 @@ export const SparklineChart = React.memo<SparklineChartProps>(({
             </div>
         );
     }
+
+    const activePointPercent = activePoint ? (activePoint.x / chart.width) * 100 : null;
 
     const handlePointerMove = (clientX: number) => {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -165,16 +169,18 @@ export const SparklineChart = React.memo<SparklineChartProps>(({
             ref={containerRef}
             className={`relative ${className}`}
             style={{ height, width: '100%' }}
-            onMouseMove={(event) => handlePointerMove(event.clientX)}
-            onMouseLeave={() => setActiveIndex(null)}
-            onTouchStart={(event) => handlePointerMove(event.touches[0].clientX)}
-            onTouchMove={(event) => handlePointerMove(event.touches[0].clientX)}
-            onTouchEnd={() => setActiveIndex(null)}
+            onMouseMove={interactive ? (event) => handlePointerMove(event.clientX) : undefined}
+            onMouseLeave={interactive ? () => setActiveIndex(null) : undefined}
+            onTouchStart={interactive ? (event) => handlePointerMove(event.touches[0].clientX) : undefined}
+            onTouchMove={interactive ? (event) => handlePointerMove(event.touches[0].clientX) : undefined}
+            onTouchEnd={interactive ? () => setActiveIndex(null) : undefined}
         >
             {activePoint ? (
                 <div
-                    className="pointer-events-none absolute top-1 z-10 -translate-x-1/2 rounded-md border border-white/10 bg-card/95 px-2 py-1 text-[10px] font-medium text-foreground shadow-lg backdrop-blur-sm"
-                    style={{ left: `${(activePoint.x / chart.width) * 100}%` }}
+                    className="pointer-events-none absolute top-1 z-10 max-w-[calc(100%-0.5rem)] -translate-x-1/2 rounded-md border border-white/10 bg-card/95 px-2 py-1 text-[10px] font-medium text-foreground shadow-lg backdrop-blur-sm"
+                    style={{
+                        left: `clamp(3.75rem, ${activePointPercent}%, calc(100% - 3.75rem))`,
+                    }}
                 >
                     <div>{activePoint.formattedValue}</div>
                     {activePoint.label ? (

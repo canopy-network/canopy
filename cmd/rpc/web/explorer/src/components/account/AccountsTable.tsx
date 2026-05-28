@@ -1,14 +1,18 @@
 import React from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import accountsTexts from '../../data/accounts.json'
 import AnimatedNumber from '../AnimatedNumber'
-import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
 import CnpyColorIcon from '../ui/CnpyColorIcon'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Account {
     address: string
     amount: number
+    lockedAmount?: number
+    vestedAmount?: number
+    vestingAmount?: number
 }
 
 interface AccountsTableProps {
@@ -129,25 +133,33 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
                                     >
-                                        <Link
-                                            to={`/account/${account.address}`}
-                                            className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
-                                            title={account.address}
-                                        >
+                                        <div className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white">
                                             <CnpyBadge seed={account.address} />
-                                            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                                            <CopyableIdentifier value={account.address} label="Address" to={`/account/${account.address}`} className="text-sm font-medium text-white">
                                                 {truncateMiddle(account.address)}
-                                            </span>
-                                        </Link>
+                                            </CopyableIdentifier>
+                                        </div>
                                     </td>
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
                                     >
-                                        <span className="text-sm text-white tabular-nums">
-                                            <AnimatedNumber value={account.amount} format={{ maximumFractionDigits: 4 }} className="text-white" />
-                                            <span className="ml-1 text-white/50">CNPY</span>
-                                        </span>
+                                        <div className="space-y-1">
+                                            <span className="text-sm text-white tabular-nums">
+                                                <AnimatedNumber value={toCNPY(account.amount)} format={{ maximumFractionDigits: 4 }} className="text-white" />
+                                                <span className="ml-1 text-white/50">CNPY</span>
+                                            </span>
+                                            {(Number(account.lockedAmount || 0) > 0 || Number(account.vestedAmount || 0) > 0) && (
+                                                <div className="flex flex-wrap gap-2 text-[11px] text-white/45">
+                                                    {Number(account.lockedAmount || 0) > 0 && (
+                                                        <span>Locked {toCNPY(Number(account.lockedAmount || 0)).toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                                                    )}
+                                                    {Number(account.vestedAmount || 0) > 0 && (
+                                                        <span>Vested {toCNPY(Number(account.vestedAmount || 0)).toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))

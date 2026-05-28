@@ -41,8 +41,6 @@ const updateApiConfig = (newRpcURL: string, newAdminRPCURL: string, newChainId: 
     rpcURL = normalizeBaseURL(newRpcURL);
     adminRPCURL = normalizeBaseURL(newAdminRPCURL);
     chainId = newChainId;
-    console.log('API Config Updated:', { rpcURL, adminRPCURL, chainId });
-
     // Dispatch custom event for React Query invalidation
     if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('apiConfigChanged', {
@@ -51,26 +49,29 @@ const updateApiConfig = (newRpcURL: string, newAdminRPCURL: string, newChainId: 
     }
 };
 
-// Legacy support for window.__CONFIG__ (for backward compatibility)
 if (typeof window !== "undefined") {
     if (window.__CONFIG__) {
         rpcURL = normalizeBaseURL(window.__CONFIG__.rpcURL);
         adminRPCURL = normalizeBaseURL(window.__CONFIG__.adminRPCURL);
         chainId = Number(window.__CONFIG__.chainId);
-    }
-
-    // On Netlify deployment, use same-origin proxy paths to avoid browser CORS blocks.
-    if (window.location.hostname === "canopy.nodefleet.net") {
+    } else {
+        // Always use same-origin proxy paths. In production these are served
+        // by netlify.toml redirects; in dev they are served by the vite.config
+        // server.proxy entries. This avoids CORS preflight failures and
+        // missing /rpc path prefixes regardless of VITE_PUBLIC_RPC_URL.
         rpcURL = "/rpc-node1";
         adminRPCURL = "/admin-node1";
     }
 
-    // Replace localhost with current hostname for local development
+    const hostname = window.location.hostname;
+
+    // Replace localhost with current hostname for local development of a
+    // user-provided absolute URL (only applies when window.__CONFIG__ set it).
     if (rpcURL.includes("localhost")) {
-        rpcURL = rpcURL.replace("localhost", window.location.hostname);
+        rpcURL = rpcURL.replace("localhost", hostname);
     }
     if (adminRPCURL.includes("localhost")) {
-        adminRPCURL = adminRPCURL.replace("localhost", window.location.hostname);
+        adminRPCURL = adminRPCURL.replace("localhost", hostname);
     }
 
     // Listen for network changes
@@ -79,11 +80,6 @@ if (typeof window !== "undefined") {
         updateApiConfig(network.rpcUrl, network.adminRpcUrl, network.chainId);
     });
 
-    console.log('RPC URL:', rpcURL);
-    console.log('Admin RPC URL:', adminRPCURL);
-    console.log('Chain ID:', chainId);
-} else {
-    console.log("Running in SSR mode, using environment variables");
 }
 
 // RPC PATHS
@@ -128,10 +124,7 @@ export async function POST(url: string, request: string, path: string) {
             }
             return response.json();
         })
-        .catch((rejected) => {
-            console.log(rejected);
-            return Promise.reject(rejected);
-        });
+        .catch((rejected) => Promise.reject(rejected));
 }
 
 export async function GET(url: string, path: string) {
@@ -144,10 +137,7 @@ export async function GET(url: string, path: string) {
             }
             return response.json();
         })
-        .catch((rejected) => {
-            console.log(rejected);
-            return Promise.reject(rejected);
-        });
+        .catch((rejected) => Promise.reject(rejected));
 }
 
 // Request Objects
@@ -268,7 +258,7 @@ async function fetchTransactionsForBlock(block: any): Promise<any[]> {
             ? attachBlockMetadataToTransactions(transactions, block)
             : [];
     } catch (error) {
-        console.error(`Error fetching transactions for block ${blockHeight}:`, error);
+        
         return [];
     }
 }
@@ -316,7 +306,7 @@ export async function getRecentTransactionsPreview(limit: number = 5, cachedBloc
 
         return recentTransactions.slice(0, limit);
     } catch (error) {
-        console.error('Error fetching recent transactions preview:', error);
+        
         return [];
     }
 }
@@ -393,7 +383,7 @@ export async function getTransactionsWithRealPagination(page: number, perPage: n
         return await AllTransactions(page, perPage, filters);
 
     } catch (error) {
-        console.error('Error fetching transactions with real pagination:', error);
+        
         return { results: [], totalCount: 0, pageNumber: page, perPage, totalPages: 0, hasMore: false };
     }
 }
@@ -445,7 +435,7 @@ export async function getTotalAccountCount(cachedBlocks?: any[]): Promise<{ tota
                             }
                         }
                     } catch (error) {
-                        console.log('Invalid block timestamp:', blockTime, error);
+                        
                     }
                 }
             }
@@ -460,7 +450,7 @@ export async function getTotalAccountCount(cachedBlocks?: any[]): Promise<{ tota
             last24h: 0
         };
     } catch (error) {
-        console.error('Error getting total account count:', error);
+        
         return {
             total: 0,
             last24h: 0
@@ -515,7 +505,7 @@ export async function getTotalTransactionCount(cachedBlocks?: any[]): Promise<{ 
                                     last24hCount++;
                                 }
                             } catch (error) {
-                                console.log('Invalid timestamp:', timestamp, error);
+                                
                             }
                         }
                     }
@@ -565,7 +555,7 @@ export async function getTotalTransactionCount(cachedBlocks?: any[]): Promise<{ 
             tpm: totalTransactionCountCache?.tpm || 0
         };
     } catch (error) {
-        console.error('Error getting total transaction count:', error);
+        
         return {
             total: totalTransactionCountCache?.count || 0,
             last24h: totalTransactionCountCache?.last24h || 0,
@@ -775,7 +765,7 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
             hasMore: endIndex < totalCount,
         };
     } catch (error) {
-        console.error('Error fetching all transactions:', error);
+        
         return { results: [], totalCount: 0, pageNumber: page, perPage, totalPages: 0, hasMore: false };
     }
 }
@@ -861,8 +851,40 @@ export function EcoParams(chain_id: number) {
     return POST(rpcURL, chainRequest(chain_id), ecoParamsPath);
 }
 
-export function Orders() {
-    return POST(rpcURL, JSON.stringify({ height: 0 }), ordersPath);
+export function Orders(page: number = 1, perPage: number = 10, committee: number = 0, height: number = 0) {
+    return POST(rpcURL, JSON.stringify({
+        committee,
+        height,
+        pageNumber: page,
+        perPage,
+    }), ordersPath);
+}
+
+export async function AllOrders(perPage: number = 5000) {
+    const firstPage = await Orders(1, perPage);
+    const firstPageResults = Array.isArray(firstPage?.results)
+        ? firstPage.results
+        : Array.isArray(firstPage?.orders)
+            ? firstPage.orders
+            : [];
+    const totalPages = Math.max(Number(firstPage?.totalPages || 1), 1);
+
+    if (totalPages === 1) {
+        return firstPageResults;
+    }
+
+    const remainingPages = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) => Orders(index + 2, perPage))
+    );
+
+    return remainingPages.reduce<any[]>((allOrders, page) => {
+        const pageResults = Array.isArray(page?.results)
+            ? page.results
+            : Array.isArray(page?.orders)
+                ? page.orders
+                : [];
+        return allOrders.concat(pageResults);
+    }, [...firstPageResults]);
 }
 
 export function Order(committee: number, order_id: string, height: number = 0) {
@@ -948,7 +970,6 @@ export async function getCardData(previousCardData?: any) {
             continue;
         }
 
-        console.error('❌ Error in getCardData request:', result.reason);
     }
 
     const blocks = cardData.blocks?.results || cardData.blocks?.blocks || [];

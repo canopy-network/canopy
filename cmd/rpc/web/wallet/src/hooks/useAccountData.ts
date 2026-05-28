@@ -8,6 +8,11 @@ import { useAccountsList } from "@/app/providers/AccountsProvider"
 interface AccountBalance {
     address: string
     amount: number
+    totalAmount: number
+    spendableAmount: number
+    vestedAmount: number
+    lockedAmount: number
+    vestingAmount: number
     nickname?: string
 }
 
@@ -40,6 +45,8 @@ export function useAccountData() {
     const lastGoodDataRef = useRef<{
         totalBalance: number
         totalLiquid: number
+        totalLocked: number
+        totalVested: number
         totalStaked: number
         balances: AccountBalance[]
         stakingData: StakingData[]
@@ -58,6 +65,8 @@ export function useAccountData() {
             const result = {
                 totalBalance: 0,
                 totalLiquid: 0,
+                totalLocked: 0,
+                totalVested: 0,
                 totalStaked: 0,
                 balances: [] as AccountBalance[],
                 stakingData: [] as StakingData[]
@@ -71,12 +80,35 @@ export function useAccountData() {
                         accounts.map(async (acc): Promise<AccountBalance> => {
                             try {
                                 const res = await dsFetch<number | any>('account', { account: { address: acc.address } })
-                                const val = typeof res === 'number'
-                                    ? res
-                                    : Number(parseMaybeJson(res)?.amount ?? 0)
-                                return { address: acc.address, amount: val || 0, nickname: acc.nickname }
+                                const parsed = typeof res === 'number'
+                                    ? { amount: res }
+                                    : parseMaybeJson(res) ?? {}
+                                const spendable = Number(parsed?.spendableAmount ?? parsed?.amount ?? 0)
+                                const total = Number(parsed?.totalAmount ?? spendable)
+                                const vested = Number(parsed?.vestedAmount ?? 0)
+                                const locked = Number(parsed?.lockedAmount ?? 0)
+                                const vesting = Number(parsed?.vestingAmount ?? 0)
+                                return {
+                                    address: acc.address,
+                                    amount: spendable || 0,
+                                    totalAmount: total || 0,
+                                    spendableAmount: spendable || 0,
+                                    vestedAmount: vested || 0,
+                                    lockedAmount: locked || 0,
+                                    vestingAmount: vesting || 0,
+                                    nickname: acc.nickname,
+                                }
                             } catch {
-                                return { address: acc.address, amount: 0, nickname: acc.nickname }
+                                return {
+                                    address: acc.address,
+                                    amount: 0,
+                                    totalAmount: 0,
+                                    spendableAmount: 0,
+                                    vestedAmount: 0,
+                                    lockedAmount: 0,
+                                    vestingAmount: 0,
+                                    nickname: acc.nickname,
+                                }
                             }
                         })
                     )
@@ -91,6 +123,8 @@ export function useAccountData() {
             // Process balances
             result.balances = balancesResult
             result.totalLiquid = balancesResult.reduce((s, b) => s + (b.amount || 0), 0)
+            result.totalLocked = balancesResult.reduce((s, b) => s + (b.lockedAmount || 0), 0)
+            result.totalVested = balancesResult.reduce((s, b) => s + (b.vestedAmount || 0), 0)
 
             // Process staking data
             const validatorsList = Array.isArray(validatorsResult) ? validatorsResult : []
@@ -107,9 +141,9 @@ export function useAccountData() {
                 return { address: acc.address, staked: staked || 0, rewards: 0, nickname: acc.nickname }
             })
             result.totalStaked = result.stakingData.reduce((s, d) => s + (d.staked || 0), 0)
-            result.totalBalance = result.totalLiquid + result.totalStaked
+            result.totalBalance = result.totalLiquid + result.totalLocked + result.totalStaked
 
-            if (result.totalBalance > 0 || result.totalStaked > 0) {
+            if (result.totalBalance > 0 || result.totalStaked > 0 || result.totalLocked > 0) {
                 lastGoodDataRef.current = result
                 return result
             }
@@ -128,6 +162,8 @@ export function useAccountData() {
     return {
         totalBalance: accountDataQuery.data?.totalBalance || 0,
         totalLiquid: accountDataQuery.data?.totalLiquid || 0,
+        totalLocked: accountDataQuery.data?.totalLocked || 0,
+        totalVested: accountDataQuery.data?.totalVested || 0,
         totalStaked: accountDataQuery.data?.totalStaked || 0,
         balances: accountDataQuery.data?.balances || [],
         stakingData: accountDataQuery.data?.stakingData || [],

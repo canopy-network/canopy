@@ -1,20 +1,40 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
+import { Check, Copy } from 'lucide-react'
 import AnimatedNumber from '../AnimatedNumber'
 import accountDetailTexts from '../../data/accountDetail.json'
-import { toCNPY } from '../../lib/utils'
+import { cnpyDetailFormat, toCNPY } from '../../lib/utils'
 
 interface Account {
     address: string
     amount: number
+    totalAmount?: number
+    spendableAmount?: number
+    vestedAmount?: number
+    lockedAmount?: number
+    vestingAmount?: number
+    vestingStartHeight?: number
+    vestingCliffHeight?: number
+    vestingEndHeight?: number
 }
 
 interface AccountDetailHeaderProps {
     account: Account
 }
 
+const CopySymbol = ({ copied }: { copied: boolean }) => {
+    const Icon = copied ? Check : Copy
+    return <Icon aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />
+}
+
 const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) => {
     const [copied, setCopied] = useState(false)
+    const totalAmount = account.totalAmount ?? account.amount
+    const spendableAmount = account.spendableAmount ?? account.amount
+    const vestedAmount = account.vestedAmount ?? 0
+    const lockedAmount = account.lockedAmount ?? 0
+    const vestingAmount = account.vestingAmount ?? 0
+    const hasVesting = vestingAmount > 0 || vestedAmount > 0 || lockedAmount > 0
 
     const copyToClipboard = async () => {
         try {
@@ -65,10 +85,10 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                                 aria-label={copied ? 'Copied address' : 'Copy address'}
                                 title={copied ? 'Copied' : 'Copy address'}
                             >
-                                <i className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'} text-sm`}></i>
+                                <CopySymbol copied={copied} />
                             </button>
                         </div>
-                        <p className="break-all font-mono text-sm text-white">
+                        <p className="break-all text-sm text-white">
                             {account.address}
                         </p>
                     </div>
@@ -77,19 +97,62 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                         <div className="mb-2 text-sm text-white/60">
                             {accountDetailTexts.header.balance}
                         </div>
-                        <p className="font-mono text-sm text-white">
+                        <p className="text-sm text-white">
                             <AnimatedNumber
                                 value={toCNPY(account.amount)}
-                                format={{
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                }}
+                                format={cnpyDetailFormat}
                                 className="text-white"
                             />
                             <span className="ml-2 text-white">CNPY</span>
                         </p>
                     </div>
                 </div>
+
+                {hasVesting && (
+                    <>
+                        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            {[
+                                { label: 'Total', value: totalAmount },
+                                { label: 'Spendable', value: spendableAmount },
+                                { label: 'Locked', value: lockedAmount },
+                                { label: 'Vested', value: vestedAmount },
+                            ].map((item) => (
+                                <div key={item.label} className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
+                                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                                        {item.label}
+                                    </div>
+                                    <div className="mt-2 text-sm font-medium text-white tabular-nums">
+                                        <AnimatedNumber value={toCNPY(item.value)} format={cnpyDetailFormat} className="text-white" />
+                                        <span className="ml-1 text-white/55">CNPY</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/60">
+                            {vestingAmount > 0 && (
+                                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                    Vesting tranche: {toCNPY(vestingAmount).toLocaleString(undefined, { maximumFractionDigits: 4 })} CNPY
+                                </span>
+                            )}
+                            {account.vestingStartHeight ? (
+                                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                    Start: {account.vestingStartHeight.toLocaleString()}
+                                </span>
+                            ) : null}
+                            {account.vestingCliffHeight ? (
+                                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                    Cliff: {account.vestingCliffHeight.toLocaleString()}
+                                </span>
+                            ) : null}
+                            {account.vestingEndHeight ? (
+                                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                    End: {account.vestingEndHeight.toLocaleString()}
+                                </span>
+                            ) : null}
+                        </div>
+                    </>
+                )}
             </motion.div>
         </div>
     )

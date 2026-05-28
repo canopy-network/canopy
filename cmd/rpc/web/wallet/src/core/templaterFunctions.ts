@@ -14,6 +14,8 @@ const resolveHeightInput = (v: any): number => {
 }
 
 let _denomFactor = 1_000_000
+const DETAIL_MIN_FRACTION_DIGITS = 2
+const DETAIL_MAX_FRACTION_DIGITS = 6
 
 export function setDenomDecimals(decimals: number) {
     _denomFactor = Math.pow(10, decimals)
@@ -38,6 +40,16 @@ export const templateFns = {
         const n = Number(v)
         if (!Number.isFinite(n)) return ''
         return (n / _denomFactor).toLocaleString(undefined, { maximumFractionDigits: 3 })
+    },
+
+    formatToCoinPrecise: (v: any) => {
+        if (v === '' || v == null) return ''
+        const n = Number(v)
+        if (!Number.isFinite(n)) return ''
+        return (n / _denomFactor).toLocaleString(undefined, {
+            minimumFractionDigits: DETAIL_MIN_FRACTION_DIGITS,
+            maximumFractionDigits: DETAIL_MAX_FRACTION_DIGITS,
+        })
     },
 
     fromMicroDenom: (v: any) => {
@@ -76,6 +88,15 @@ export const templateFns = {
         const n = Number(v)
         if (!Number.isFinite(n)) return ''
         return n.toLocaleString(undefined, { maximumFractionDigits: 3 })
+    },
+    numberToLocaleStringPrecise: (v: any) => {
+        if (v === '' || v == null) return ''
+        const n = Number(v)
+        if (!Number.isFinite(n)) return ''
+        return n.toLocaleString(undefined, {
+            minimumFractionDigits: DETAIL_MIN_FRACTION_DIGITS,
+            maximumFractionDigits: DETAIL_MAX_FRACTION_DIGITS,
+        })
     },
     resolveHeight: (v: any) => resolveHeightInput(v),
     toUpper: (v: any) => String(v ?? "")?.toUpperCase(),

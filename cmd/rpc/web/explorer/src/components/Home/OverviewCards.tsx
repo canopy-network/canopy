@@ -5,6 +5,7 @@ import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
 import { useAllBlocksCache, useRecentTransactionsPreview } from '../../hooks/useApi'
 import { extractAmountMicro, toCNPY } from '../../lib/utils'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 const desktopRowCellClass =
     'px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]'
@@ -70,6 +71,7 @@ const LiveIndicator = () => (
 interface WalletPreviewTableProps {
     title: string
     columns: string[]
+    columnWidths?: string[]
     rows: Array<{
         href?: string
         cells: React.ReactNode[]
@@ -83,6 +85,7 @@ interface WalletPreviewTableProps {
 const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
     title,
     columns,
+    columnWidths,
     rows,
     loading = false,
     viewAllPath,
@@ -106,8 +109,15 @@ const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
         <div className="overflow-x-auto">
             <table
                 className={`w-full ${minWidth}`}
-                style={{ tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
+                style={{ tableLayout: columnWidths ? 'fixed' : 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
             >
+                {columnWidths && (
+                    <colgroup>
+                        {columns.map((label, index) => (
+                            <col key={label} style={{ width: columnWidths[index] }} />
+                        ))}
+                    </colgroup>
+                )}
                 <thead>
                     <tr>
                         {columns.map((label) => (
@@ -203,6 +213,7 @@ const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
 const OverviewCards: React.FC = () => {
     const { data: blocksPage, isLoading: isBlocksLoading } = useAllBlocksCache()
     const { data: txsPage, isLoading: isTransactionsLoading } = useRecentTransactionsPreview(blocksPage, 5)
+    const dashboardTableColumnWidths = ['18%', '31%', '25%', '12%', '14%']
 
     const txs = normalizeList(txsPage)
     const blockList = normalizeList(blocksPage)
@@ -219,19 +230,16 @@ const OverviewCards: React.FC = () => {
             cells: [
                 <TransactionTypeBadge type={txType} />,
                 hash ? (
-                    <span className="block max-w-[14rem] truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80">
+                    <CopyableIdentifier value={hash} label="Transaction hash" to={`/transaction/${hash}`} className="max-w-[14rem] text-sm font-medium leading-tight text-white">
                         {truncateHash(hash)}
-                    </span>
+                    </CopyableIdentifier>
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
                 from !== 'N/A' ? (
-                    <span
-                        className="block max-w-[12rem] truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80"
-                        title={from}
-                    >
+                    <CopyableIdentifier value={from} label="Address" to={`/account/${from}`} className="max-w-[12rem] text-sm font-medium leading-tight text-white">
                         {truncateAddress(from)}
-                    </span>
+                    </CopyableIdentifier>
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
@@ -266,19 +274,16 @@ const OverviewCards: React.FC = () => {
                     <span className="text-sm text-white/60">N/A</span>
                 ),
                 hash ? (
-                    <span className="block max-w-[15rem] truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80">
+                    <CopyableIdentifier value={hash} label="Block hash" to={`/block/${height}`} className="max-w-[15rem] text-sm font-medium leading-tight text-white">
                         {truncateHash(hash)}
-                    </span>
+                    </CopyableIdentifier>
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
                 producer !== 'N/A' ? (
-                    <span
-                        className="block max-w-[12rem] truncate text-sm font-medium leading-tight text-white"
-                        title={producer}
-                    >
+                    <CopyableIdentifier value={producer} label="Producer address" to={`/validator/${producer}`} className="max-w-[12rem] text-sm font-medium leading-tight text-white">
                         {truncateAddress(producer)}
-                    </span>
+                    </CopyableIdentifier>
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
@@ -296,6 +301,7 @@ const OverviewCards: React.FC = () => {
                 title="Blocks"
                 viewAllPath="/blocks"
                 columns={['Height', 'Hash', 'Producer', 'Txs', 'Time']}
+                columnWidths={dashboardTableColumnWidths}
                 rows={blockRows}
                 loading={isBlocksLoading}
                 emptyLabel="No blocks found"
@@ -305,6 +311,7 @@ const OverviewCards: React.FC = () => {
                 title="Transactions"
                 viewAllPath="/transactions"
                 columns={['Type', 'Hash', 'From', 'Amount', 'Time']}
+                columnWidths={dashboardTableColumnWidths}
                 rows={transactionRows}
                 loading={isBlocksLoading || isTransactionsLoading}
                 emptyLabel="No transactions found"

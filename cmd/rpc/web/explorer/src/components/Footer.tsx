@@ -6,13 +6,6 @@ const Footer: React.FC = () => {
             <div className="mx-auto px-1 py-6 sm:px-2">
                 {/* Desktop Layout */}
                 <div className="hidden md:flex items-center justify-between">
-                    {/* Left side - Logo and Copyright */}
-                    <div className="flex items-center gap-3">
-                        <span className="text-gray-400 text-sm">
-                            © 2025 Canopy Foundation. All rights reserved.
-                        </span>
-                    </div>
-
                     {/* Right side - Links */}
                     <div className="flex items-center gap-6">
                         <a
@@ -86,13 +79,6 @@ const Footer: React.FC = () => {
                         >
                             Terms
                         </a>
-                    </div>
-
-                    {/* Copyright */}
-                    <div className="text-center">
-                        <span className="text-gray-400 text-xs">
-                            © 2025 Canopy Foundation. All rights reserved.
-                        </span>
                     </div>
                 </div>
             </div>

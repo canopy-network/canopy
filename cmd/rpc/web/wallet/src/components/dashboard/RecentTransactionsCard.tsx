@@ -8,6 +8,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TransactionDetailModal, type TxDetail } from "@/components/transactions/TransactionDetailModal";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { CopyableIdentifier } from "@/components/ui/CopyableIdentifier";
 
 export interface TxError {
   code: number;
@@ -121,9 +122,9 @@ const TransactionDesktopRow = React.memo<{
         </div>
       </td>
       <td className={desktopRowCellClass}>
-        <span className="font-mono text-sm text-foreground/85">
+        <CopyableIdentifier value={tx.hash} label="Transaction hash" className="max-w-[13rem] font-mono text-sm text-foreground/85">
           {truncateMiddle(tx.hash, 10, 8)}
-        </span>
+        </CopyableIdentifier>
       </td>
       <td className={desktopRowCellClass}>
         <span className="text-sm text-foreground/85">
@@ -131,9 +132,9 @@ const TransactionDesktopRow = React.memo<{
         </span>
       </td>
       <td className={desktopRowCellClass}>
-        <span className="font-mono text-sm text-foreground/85">
+        <CopyableIdentifier value={getDisplayAddress(tx)} label="Address" className="max-w-[12rem] font-mono text-sm text-foreground/85">
           {truncateMiddle(getDisplayAddress(tx), 8, 6)}
-        </span>
+        </CopyableIdentifier>
       </td>
       <td className={desktopRowCellClass}>
         <div className="flex items-center gap-1.5">
@@ -201,12 +202,21 @@ const TransactionMobileRow = React.memo<{
           : "text-foreground";
 
   return (
-    <motion.button
+    <motion.div
       className="group w-full rounded-lg border border-[#272729] bg-[#1a1a1a] px-3.5 py-3 text-left"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, delay: index * 0.03 }}
       onClick={() => onViewDetail(tx)}
+      onKeyDown={(event) => {
+        if (event.target instanceof Element && event.target.closest('[data-row-click-ignore="true"]')) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onViewDetail(tx);
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
       <div className="flex items-start gap-3">
         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/30 ${iconBg}`}>
@@ -218,9 +228,9 @@ const TransactionMobileRow = React.memo<{
               <div className="truncate text-sm font-medium text-foreground">
                 {getTxMap(tx.type)}
               </div>
-              <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+              <CopyableIdentifier value={tx.hash} label="Transaction hash" className="mt-0.5 max-w-[12rem] font-mono text-[11px] text-muted-foreground">
                 {truncateMiddle(tx.hash, 10, 8)}
-              </div>
+              </CopyableIdentifier>
             </div>
             <StatusBadge label={tx.status} size="sm" className="leading-none" />
           </div>
@@ -231,9 +241,9 @@ const TransactionMobileRow = React.memo<{
             </div>
             <div>
               <div className="mb-1 uppercase tracking-wider text-white/40">Address</div>
-              <div className="font-mono text-foreground/80">
+              <CopyableIdentifier value={getDisplayAddress(tx)} label="Address" className="max-w-full font-mono text-foreground/80">
                 {truncateMiddle(getDisplayAddress(tx), 8, 6)}
-              </div>
+              </CopyableIdentifier>
             </div>
           </div>
         </div>
@@ -244,7 +254,7 @@ const TransactionMobileRow = React.memo<{
         </span>
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 transition-colors group-hover:text-primary" />
       </div>
-    </motion.button>
+    </motion.div>
   );
 });
 

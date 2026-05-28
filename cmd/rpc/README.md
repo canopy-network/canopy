@@ -58,10 +58,8 @@
 - /v1/query/validator-set
 - /v1/query/checkpoint
 - /v1/subscribe-rc-info
-- /debug/blocked
-- /debug/heap
-- /debug/cpu
-- /debug/routine
+- /debug/pprof
+- /debug/pprof/*name
 - /v1/eth
 - /v1/admin/keystore
 - /v1/admin/keystore-new-key
@@ -305,7 +303,15 @@ $ curl -X POST localhost:50002/v1/query/indexer-blobs \
 **Response**:
 
 - **address**: `hex string` - the 20 byte identifier
-- **amount**: `uint64` - the balance of funds the account has
+- **amount**: `uint64` - the spendable balance of funds the account can currently withdraw
+- **totalAmount**: `uint64` - the total balance recorded for the account before vesting locks are applied
+- **spendableAmount**: `uint64` - the spendable balance of funds the account can currently withdraw
+- **vestedAmount**: `uint64` - the portion of `vestingAmount` that has vested at the queried height
+- **lockedAmount**: `uint64` - the portion of `vestingAmount` that is still locked at the queried height
+- **vestingAmount**: `uint64` - the total amount governed by the vesting schedule (omitted when zero)
+- **vestingStartHeight**: `uint64` - the block height where vesting begins (omitted when zero)
+- **vestingCliffHeight**: `uint64` - the block height where vesting first becomes spendable (omitted when zero)
+- **vestingEndHeight**: `uint64` - the block height where vesting fully completes (omitted when zero)
 
 **Example**:
 
@@ -319,7 +325,15 @@ $ curl -X POST localhost:50002/v1/query/account \
 
 > {
     "address": "0971d5d96f1533479ab1a6472fe0260df6ae732d",
-    "amount": 99990000
+    "amount": 99990000,
+    "totalAmount": 100000000,
+    "spendableAmount": 99990000,
+    "vestedAmount": 500000,
+    "lockedAmount": 10000,
+    "vestingAmount": 510000,
+    "vestingStartHeight": 900,
+    "vestingCliffHeight": 950,
+    "vestingEndHeight": 1200
   }
 ```
 
@@ -341,7 +355,15 @@ $ curl -X POST localhost:50002/v1/query/account \
 - **pageNumber**: `int` - the number of the page
 - **results**: `array` - the list of result objects
   - **address**: - `hex string` the 20 byte unique identifier of the account
-  - **amount**: - `uint64` the balance of funds the account has in micro denomination
+  - **amount**: - `uint64` the spendable balance in micro denomination
+  - **totalAmount**: - `uint64` the total recorded balance before vesting locks are applied
+  - **spendableAmount**: - `uint64` the spendable balance in micro denomination
+  - **vestedAmount**: - `uint64` the vested portion of the vesting tranche at the queried height
+  - **lockedAmount**: - `uint64` the still-locked portion of the vesting tranche at the queried height
+  - **vestingAmount**: - `uint64` the total amount on the vesting schedule, omitted when zero
+  - **vestingStartHeight**: - `uint64` the height where vesting begins, omitted when zero
+  - **vestingCliffHeight**: - `uint64` the height where vesting first becomes spendable, omitted when zero
+  - **vestingEndHeight**: - `uint64` the height where vesting fully completes, omitted when zero
 - **type**: `string` - the type of results
 - **count**: `int` - length of results
 - **totalPages**: `int` - number of pages
@@ -364,15 +386,31 @@ $ curl -X POST localhost:50002/v1/query/accounts \
     "results": [
       {
         "address": "180c9d067ce4275612896dc7ce01390329e7f101",
-        "amount": 969901
+        "amount": 969901,
+        "totalAmount": 969901,
+        "spendableAmount": 969901,
+        "vestedAmount": 0,
+        "lockedAmount": 0
       },
       {
         "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
-        "amount": 18239045002
+        "amount": 18239045002,
+        "totalAmount": 18239045002,
+        "spendableAmount": 18239045002,
+        "vestedAmount": 0,
+        "lockedAmount": 0
       },
       {
         "address": "551f21e333012027b81701a35023efc88b864975",
-        "amount": 130
+        "amount": 130,
+        "totalAmount": 1000,
+        "spendableAmount": 130,
+        "vestedAmount": 30,
+        "lockedAmount": 870,
+        "vestingAmount": 900,
+        "vestingStartHeight": 900,
+        "vestingCliffHeight": 950,
+        "vestingEndHeight": 1200
       }
     ],
     "type": "accounts",
@@ -3543,13 +3581,14 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-import-raw \
 
 **Route:** `/v1/admin/keystore-delete`
 
-**Description**: removes a key from the keystore using either the address or nickname
+**Description**: removes a key from the keystore using either the address or nickname after validating the password
 
 **HTTP Method**: `POST`
 
 **Request**:
 - **nickname**: `string` - the nickname associated with the key
 - **address**: `string` - the address associated with the key
+- **password**: `string` - **(required)** the plain-text password used to encrypt the key
 
 **Response**: `hex-string` - the 20 byte address of the newly imported key
 
@@ -3558,7 +3597,8 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-import-raw \
 $ curl -X POST http://localhost:50003/v1/admin/keystore-delete \
   -H "Content-Type: application/json" \
   -d '{
-    "nickname":"my_key_2"
+    "nickname":"my_key_2",
+    "password":"my_password"
     }'
 
 > "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
@@ -5050,11 +5090,9 @@ Jun 11 09:47:09.521 INFO: Reset BFT (NEW_HEIGHT)
 ## Golang Profiling Debug
 
 **Route:**
-- DebugBlockedRoutePath = "/debug/blocked"
-- DebugHeapRoutePath    = "/debug/heap"
-- DebugCPURoutePath     = "/debug/cpu"
-- DebugRoutineRoutePath = "/debug/routine"
+- /debug/pprof
+- /debug/pprof/*name
 
-**Description**: returns an HTTP handler that serves the named profile. Available profiles can be found in [runtime/pprof.Profile]. See https://pkg.go.dev/net/http/pprof
+**Description**: serves the Go pprof index and named pprof handlers. These routes are exposed on the profiling server bound to `ProfilingPort`, not the main RPC port. Available profiles can be found in `net/http/pprof`. See https://pkg.go.dev/net/http/pprof
 
 **HTTP Method**: `GET`

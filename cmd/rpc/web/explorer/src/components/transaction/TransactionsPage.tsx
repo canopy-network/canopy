@@ -6,6 +6,8 @@ import { extractAmountMicro } from '../../lib/utils'
 import transactionsTexts from '../../data/transactions.json'
 import ExplorerOverviewCards from '../ExplorerOverviewCards'
 
+type ActiveTab = 'confirmed' | 'pending'
+
 interface TransactionRow {
     hash: string
     type: string
@@ -18,6 +20,16 @@ interface TransactionRow {
     timestamp?: string
 }
 
+const getTransactionHash = (txRecord: Record<string, unknown>): string => {
+    return String(
+        txRecord.txHash ??
+        txRecord.hash ??
+        txRecord.transactionHash ??
+        txRecord.id ??
+        ''
+    )
+}
+
 const LiveIndicator = () => (
     <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-sm text-primary">
         <i className="fa-solid fa-circle animate-pulse text-[6px]"></i>
@@ -26,10 +38,16 @@ const LiveIndicator = () => (
 )
 
 const TransactionsPage: React.FC = () => {
-    const [currentPage, setCurrentPage] = React.useState(1)
-    const [pageSize, setPageSize] = React.useState(10)
-    const { data: transactionsData, isLoading: isTransactionsLoading } = useTransactionsWithRealPagination(currentPage, pageSize)
-    const { data: pendingData, isLoading: isPendingLoading } = usePending(1)
+    const [activeTab, setActiveTab] = React.useState<ActiveTab>('confirmed')
+
+    const [confirmedPage, setConfirmedPage] = React.useState(1)
+    const [confirmedPageSize, setConfirmedPageSize] = React.useState(10)
+
+    const [pendingPage, setPendingPage] = React.useState(1)
+    const [pendingPageSize, setPendingPageSize] = React.useState(10)
+
+    const { data: transactionsData, isLoading: isTransactionsLoading } = useTransactionsWithRealPagination(confirmedPage, confirmedPageSize)
+    const { data: pendingData, isLoading: isPendingLoading } = usePending(pendingPage, pendingPageSize)
 
     const normalizeConfirmedTransactions = React.useMemo<TransactionRow[]>(() => {
         const payload = transactionsData as Record<string, unknown> | undefined
@@ -39,9 +57,10 @@ const TransactionsPage: React.FC = () => {
         return list.map((tx) => {
             const txRecord = tx as Record<string, unknown>
             const rawStatus = String(txRecord.status ?? 'success').toLowerCase()
+            const hash = getTransactionHash(txRecord)
 
             return {
-                hash: String(txRecord.txHash ?? txRecord.hash ?? 'N/A'),
+                hash,
                 type: String(txRecord.messageType ?? txRecord.type ?? 'send'),
                 from: String(txRecord.sender ?? txRecord.from ?? 'N/A'),
                 to: String(txRecord.recipient ?? txRecord.to ?? 'N/A'),
@@ -55,7 +74,7 @@ const TransactionsPage: React.FC = () => {
     }, [transactionsData])
 
     const pendingTransactions = React.useMemo<TransactionRow[]>(() => {
-        if (currentPage !== 1 || !pendingData) return []
+        if (!pendingData) return []
 
         const payload = pendingData as Record<string, unknown>
         const list = payload.results ?? payload.transactions ?? payload.txs ?? pendingData
@@ -63,52 +82,71 @@ const TransactionsPage: React.FC = () => {
 
         return list.map((tx) => {
             const txRecord = tx as Record<string, unknown>
+            const hash = getTransactionHash(txRecord)
             return {
-                hash: String(txRecord.txHash ?? txRecord.hash ?? 'N/A'),
+                hash,
                 type: String(txRecord.messageType ?? txRecord.type ?? 'send'),
                 from: String(txRecord.sender ?? txRecord.from ?? 'N/A'),
                 to: String(txRecord.recipient ?? txRecord.to ?? 'N/A'),
                 amount: extractAmountMicro(txRecord),
                 fee: Number(txRecord.fee ?? 0),
-                status: 'pending',
+                status: 'pending' as const,
                 blockHeight: undefined,
                 timestamp: undefined,
             }
         })
-    }, [currentPage, pendingData])
+    }, [pendingData])
 
-    const totalTransactions = Number((transactionsData as Record<string, unknown> | undefined)?.totalCount ?? 0)
+    const totalConfirmed = Number((transactionsData as Record<string, unknown> | undefined)?.totalCount ?? 0)
+    const totalPending = Number((pendingData as Record<string, unknown> | undefined)?.totalCount ?? 0)
+
     const overviewCards = [
         {
-            title: 'Visible Transactions',
-            value: normalizeConfirmedTransactions.length.toLocaleString(),
-            subValue: 'Current page',
-            icon: 'fa-solid fa-arrow-right-arrow-left',
+            title: 'Indexed Transactions',
+            value: totalConfirmed.toLocaleString(),
+            subValue: 'Confirmed total',
+            icon: 'fa-solid fa-cubes',
         },
         {
             title: 'Pending',
-            value: pendingTransactions.length.toLocaleString(),
+            value: totalPending.toLocaleString(),
             subValue: 'Awaiting block',
             icon: 'fa-solid fa-clock',
         },
         {
             title: 'Confirmed',
             value: normalizeConfirmedTransactions.length.toLocaleString(),
-            subValue: 'In blocks',
+            subValue: 'Current page',
             icon: 'fa-solid fa-circle-check',
         },
         {
-            title: 'Indexed Transactions',
-            value: totalTransactions.toLocaleString(),
-            subValue: 'Confirmed total',
-            icon: 'fa-solid fa-cubes',
+            title: 'Visible Transactions',
+            value: normalizeConfirmedTransactions.length.toLocaleString(),
+            subValue: 'Current page',
+            icon: 'fa-solid fa-arrow-right-arrow-left',
         },
     ]
 
-    const handlePageSizeChange = (value: number) => {
-        setPageSize(value)
-        setCurrentPage(1)
+    const handleConfirmedPageSizeChange = (value: number) => {
+        setConfirmedPageSize(value)
+        setConfirmedPage(1)
     }
+
+    const handlePendingPageSizeChange = (value: number) => {
+        setPendingPageSize(value)
+        setPendingPage(1)
+    }
+
+    const switchTab = (tab: ActiveTab) => {
+        setActiveTab(tab)
+    }
+
+    const tabClass = (tab: ActiveTab) =>
+        `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            activeTab === tab
+                ? 'bg-white/10 text-white'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+        }`
 
     return (
         <motion.div
@@ -130,15 +168,45 @@ const TransactionsPage: React.FC = () => {
 
             <ExplorerOverviewCards cards={overviewCards} className="mb-8" />
 
-            <TransactionsTable
-                transactions={normalizeConfirmedTransactions}
-                loading={isTransactionsLoading || (currentPage === 1 && isPendingLoading)}
-                currentPage={currentPage}
-                totalCount={totalTransactions}
-                pageSize={pageSize}
-                onPageChange={setCurrentPage}
-                onPageSizeChange={handlePageSizeChange}
-            />
+            <div className="mb-4 flex items-center gap-2">
+                <button className={tabClass('confirmed')} onClick={() => switchTab('confirmed')}>
+                    <i className="fa-solid fa-circle-check mr-2 text-xs"></i>
+                    Confirmed
+                </button>
+                <button className={tabClass('pending')} onClick={() => switchTab('pending')}>
+                    <i className="fa-solid fa-clock mr-2 text-xs"></i>
+                    Pending
+                    {totalPending > 0 && (
+                        <span className="ml-2 rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-medium text-yellow-500">
+                            {totalPending.toLocaleString()}
+                        </span>
+                    )}
+                </button>
+            </div>
+
+            {activeTab === 'confirmed' ? (
+                <TransactionsTable
+                    transactions={normalizeConfirmedTransactions}
+                    loading={isTransactionsLoading}
+                    currentPage={confirmedPage}
+                    totalCount={totalConfirmed}
+                    pageSize={confirmedPageSize}
+                    onPageChange={setConfirmedPage}
+                    onPageSizeChange={handleConfirmedPageSizeChange}
+                    emptyMessage="No confirmed transactions found"
+                />
+            ) : (
+                <TransactionsTable
+                    transactions={pendingTransactions}
+                    loading={isPendingLoading}
+                    currentPage={pendingPage}
+                    totalCount={totalPending}
+                    pageSize={pendingPageSize}
+                    onPageChange={setPendingPage}
+                    onPageSizeChange={handlePendingPageSizeChange}
+                    emptyMessage="No pending transactions in mempool"
+                />
+            )}
         </motion.div>
     )
 }

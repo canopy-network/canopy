@@ -4,6 +4,7 @@ import AnimatedNumber from '../AnimatedNumber';
 import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils';
 import PageSizeSelect from '../shared/PageSizeSelect';
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles';
+import CopyableIdentifier from '../ui/CopyableIdentifier';
 
 interface RecentSwapsTableProps {
     swaps: SwapData[];
@@ -161,27 +162,22 @@ const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
                                     >
-                                        <button
-                                            type="button"
-                                            className="text-sm font-medium text-white transition-colors hover:text-primary"
-                                            onClick={() => onRowClick?.(swap)}
-                                            title={swap.orderId}
-                                        >
+                                        <CopyableIdentifier value={swap.orderId} label="Order ID" to={`/order/${swap.committee}/${swap.orderId}`} className="max-w-[12rem] text-sm font-medium text-white">
                                             {truncateMiddle(swap.orderId, 8, 4)}
-                                        </button>
+                                        </CopyableIdentifier>
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <span className="text-sm text-white tabular-nums">{swap.committee}</span>
                                     </td>
                                     <td className={desktopRowCellClass}>
-                                        <span className="block max-w-[12rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white">
+                                        <CopyableIdentifier value={swap.fromAddressFull} label="From address" to={`/account/${swap.fromAddressFull}`} className="max-w-[12rem] text-sm text-white">
                                             {swap.fromAddress}
-                                        </span>
+                                        </CopyableIdentifier>
                                     </td>
                                     <td className={desktopRowCellClass}>
-                                        <span className="block max-w-[12rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white">
+                                        <CopyableIdentifier value={swap.toAddressFull} label="To address" to={`/account/${swap.toAddressFull}`} className="max-w-[12rem] text-sm text-white">
                                             {swap.toAddress}
-                                        </span>
+                                        </CopyableIdentifier>
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <span className="text-sm text-white tabular-nums">{swap.exchangeRate}</span>

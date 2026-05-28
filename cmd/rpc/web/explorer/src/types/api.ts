@@ -27,6 +27,14 @@ export interface Transaction {
 export interface Account {
     address: string;
     amount: number;
+    totalAmount: number;
+    spendableAmount: number;
+    vestedAmount: number;
+    lockedAmount: number;
+    vestingAmount?: number;
+    vestingStartHeight?: number;
+    vestingCliffHeight?: number;
+    vestingEndHeight?: number;
 }
 
 export interface Validator {

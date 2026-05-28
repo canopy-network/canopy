@@ -57,7 +57,7 @@ export const queryKeys = {
     txByHash: (hash: string) => ['txByHash', hash],
     transactionsBySender: (page: number, sender: string) => ['transactionsBySender', page, sender],
     transactionsByRec: (page: number, rec: string) => ['transactionsByRec', page, rec],
-    pending: (page: number) => ['pending', page],
+    pending: (page: number, perPage: number) => ['pending', page, perPage],
     ecoParams: (chainId: number) => ['ecoParams', chainId],
     orders: (chainId: number) => ['orders', chainId],
     config: () => ['config'],
@@ -66,18 +66,101 @@ export const queryKeys = {
     tableData: (page: number, category: number, committee?: number) => ['tableData', page, category, committee],
 };
 
-const BLOCKS_POLL_MS = 3000;
+// Block polling interval (ms). Defaults to 2s so a plain explorer/wallet —
+// especially a simple private deployment — doesn't poll the node aggressively.
+// Override with VITE_BLOCKS_POLL_MS in the environment for snappier updates.
+const DEFAULT_BLOCKS_POLL_MS = 2000;
+const MIN_BLOCKS_POLL_MS = 500;
+const BLOCKS_POLL_MS = (() => {
+    const raw = Number(import.meta.env.VITE_BLOCKS_POLL_MS);
+    return Number.isFinite(raw) && raw > 0
+        ? Math.max(MIN_BLOCKS_POLL_MS, raw)
+        : DEFAULT_BLOCKS_POLL_MS;
+})();
 
-// Lightweight hook for the latest block height (polls every 3s)
+// Backoff helper: when a polling query keeps failing, slow it down so we
+// don't hammer a degraded RPC node (and so we don't flood the browser
+// console with one [Error] line per request — those are emitted natively
+// by the browser for every 4xx/5xx and can't be silenced from JS).
+const errorAwareInterval = (baseMs: number, maxMs: number = 60000) =>
+    (query: { state: { error: unknown; fetchFailureCount: number } }) => {
+        const fails = query.state.fetchFailureCount || 0;
+        if (!query.state.error || fails <= 0) return baseMs;
+        return Math.min(baseMs * Math.pow(2, fails), maxMs);
+    };
+
+// Lightweight hook for the latest block height (polls every BLOCKS_POLL_MS,
+// with backoff on errors so a degraded RPC node doesn't spam the console).
 export const useLatestBlock = () => {
     return useQuery({
         queryKey: ['latestBlock'],
         queryFn: () => Blocks(1, 0),
         staleTime: 0,
-        refetchInterval: BLOCKS_POLL_MS,
+        refetchInterval: errorAwareInterval(BLOCKS_POLL_MS),
+        refetchIntervalInBackground: true,
         refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         refetchOnMount: 'always',
+        retry: false,
     });
+};
+
+// Extracts the height of the most recent block from a Blocks(1,0) response.
+const extractLatestBlockHeight = (payload: any): number => {
+    if (!payload) return 0;
+    const totalCount = payload?.totalCount ?? payload?.count;
+    if (typeof totalCount === 'number' && totalCount > 0) return totalCount;
+    const list = payload?.results || payload?.blocks || payload?.list || payload?.data;
+    const first = Array.isArray(list) && list.length > 0 ? list[0] : null;
+    return Number(first?.blockHeader?.height ?? first?.height ?? 0) || 0;
+};
+
+// Queries that must refresh whenever a new block is produced. Adding a key here
+// makes that query participate in the global "new block" invalidation pulse.
+const BLOCK_DEPENDENT_QUERY_KEYS: Array<readonly unknown[]> = [
+    ['cardData'],
+    ['allBlocksCache'],
+    ['blocks'],
+    ['recentTransactionsPreview'],
+    ['realPaginationTransactions'],
+    ['allTransactions'],
+    ['transactions'],
+    ['txsByHeight'],
+    ['pending'],
+    ['all-validators'],
+    ['all-delegators'],
+    ['validators'],
+    ['validatorsWithFilters'],
+    ['supply'],
+    ['orders'],
+    ['dexBatch'],
+    ['nextDexBatch'],
+];
+
+// Global subscription: polls the latest block height and, whenever it changes,
+// invalidates every dashboard-facing query so the UI reflects the new chain
+// state without requiring a manual page refresh.
+export const useBlockSubscription = () => {
+    const queryClient = useQueryClient();
+    const { data } = useLatestBlock();
+    const lastHeightRef = React.useRef<number>(0);
+
+    React.useEffect(() => {
+        const height = extractLatestBlockHeight(data);
+        if (height <= 0) return;
+        if (lastHeightRef.current === height) return;
+
+        const previousHeight = lastHeightRef.current;
+        lastHeightRef.current = height;
+
+        // Skip invalidation on the very first observation; queries are already
+        // fetching their initial data and we want to avoid a redundant burst.
+        if (previousHeight === 0) return;
+
+        BLOCK_DEPENDENT_QUERY_KEYS.forEach((key) => {
+            queryClient.invalidateQueries({ queryKey: key });
+        });
+    }, [data, queryClient]);
 };
 
 // Hooks for Blocks
@@ -163,11 +246,12 @@ export const useRecentTransactionsPreview = (blocks: any[] | undefined, limit: n
         queryKey: ['recentTransactionsPreview', latestBlockHeight, limit],
         queryFn: () => getRecentTransactionsPreview(limit, blocks),
         staleTime: 5000,
-        refetchInterval: 10000,
+        refetchInterval: errorAwareInterval(10000),
         refetchOnWindowFocus: true,
         refetchOnMount: 'always',
         enabled: Array.isArray(blocks) && blocks.length > 0,
         placeholderData: (previousData) => previousData,
+        retry: false,
     });
 };
 
@@ -393,11 +477,11 @@ export const useTransactionsByRec = (page: number, rec: string) => {
 };
 
 // Hooks for Pending Transactions
-export const usePending = (page: number) => {
+export const usePending = (page: number, perPage: number = 10) => {
     return useQuery({
-        queryKey: queryKeys.pending(page),
-        queryFn: () => Pending(page, 0),
-        staleTime: 10000, // Shorter stale time for pending transactions
+        queryKey: queryKeys.pending(page, perPage),
+        queryFn: () => Pending(page, perPage),
+        staleTime: 10000,
     });
 };
 
@@ -442,10 +526,11 @@ export const useCardData = () => {
             return getCardData(previousCardData);
         },
         staleTime: 0,
-        refetchInterval: BLOCKS_POLL_MS,
+        refetchInterval: errorAwareInterval(BLOCKS_POLL_MS),
         refetchOnWindowFocus: true,
         refetchOnMount: 'always',
         placeholderData: (previousData) => previousData,
+        retry: false,
     });
 };
 
@@ -458,79 +543,49 @@ export const useTableData = (page: number, category: number, committee?: number)
     });
 };
 
-// Hook to load all blocks once and reuse the data
+// Hook to load the most recent block page and reuse the data across the app.
+// Previously this fanned out 10 parallel page fetches every 10s; with a
+// degraded upstream that produced 10 browser-emitted error lines per poll.
+// One page (10 blocks) is enough for Home, Navbar, and the dashboard tables.
 export const useAllBlocksCache = () => {
     return useQuery({
         queryKey: ['allBlocksCache'],
         queryFn: async () => {
-            const allBlocks: any[] = [];
-            const perPage = 10; // Max blocks per page from API
-            const maxPages = 10; // Maximum 10 pages (100 blocks)
+            const response = await fetch(`${rpcURL}/v1/query/blocks`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ perPage: 10, pageNumber: 1 }),
+            });
 
-            // Make only the required requests
-            const requests = [];
-            for (let page = 1; page <= maxPages; page++) {
-                requests.push(
-                    fetch(`${rpcURL}/v1/query/blocks`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            perPage: perPage,
-                            pageNumber: page,
-                        }),
-                    })
-                );
+            if (!response.ok) {
+                throw new Error(`blocks RPC returned ${response.status}`);
             }
 
-            try {
-                // Keep updates resilient: one failed page should not freeze navbar/dashboard.
-                const settled = await Promise.allSettled(requests);
+            const data = await response.json();
+            const blocks: any[] = Array.isArray(data?.results) ? [...data.results] : [];
 
-                for (let i = 0; i < settled.length; i++) {
-                    const result = settled[i];
-                    if (result.status !== 'fulfilled') {
-                        console.error(`Failed to fetch blocks page ${i + 1}: request rejected`);
-                        continue;
-                    }
+            // Keep newest block first for Navbar and Home blocks table.
+            blocks.sort((a: any, b: any) => {
+                const ah = Number((a?.blockHeader?.height ?? a?.height) || 0);
+                const bh = Number((b?.blockHeader?.height ?? b?.height) || 0);
+                return bh - ah;
+            });
 
-                    const response = result.value;
-                    if (!response.ok) {
-                        console.error(`Failed to fetch blocks page ${i + 1}: status ${response.status}`);
-                        continue;
-                    }
-
-                    const data = await response.json();
-                    if (data.results && Array.isArray(data.results)) {
-                        allBlocks.push(...data.results);
-                    }
-                    if (typeof data.totalCount === 'number') {
-                        (allBlocks as any).totalCount = data.totalCount;
-                    }
-                }
-
-                // Always keep newest block first for Navbar and Home blocks table.
-                allBlocks.sort((a: any, b: any) => {
-                    const ah = Number((a?.blockHeader?.height ?? a?.height) || 0);
-                    const bh = Number((b?.blockHeader?.height ?? b?.height) || 0);
-                    return bh - ah;
-                });
-
-                if (allBlocks.length === 0) {
-                    throw new Error('No blocks fetched from RPC');
-                }
-
-                return allBlocks;
-            } catch (error: any) {
-                console.error(`Error fetching blocks:`, error);
-                throw new Error(`Error fetching blocks: ${error.message}`);
+            if (typeof data?.totalCount === 'number') {
+                (blocks as any).totalCount = data.totalCount;
             }
+
+            if (blocks.length === 0) {
+                throw new Error('No blocks returned from RPC');
+            }
+
+            return blocks;
         },
         staleTime: 5000,
-        refetchInterval: 10000,
+        refetchInterval: errorAwareInterval(10000),
         refetchOnWindowFocus: true,
         refetchOnMount: 'always',
+        retry: false,
     });
 };
 
@@ -704,8 +759,6 @@ export const useNetworkChangeHandler = () => {
 
     React.useEffect(() => {
         const handleApiConfigChange = (event: any) => {
-            console.log('🔄 Network changed, invalidating queries...', event.detail);
-
             // Invalidate specific queries that depend on network data
             queryClient.invalidateQueries({ queryKey: ['cardData'] });
             queryClient.invalidateQueries({ queryKey: ['blocks'] });

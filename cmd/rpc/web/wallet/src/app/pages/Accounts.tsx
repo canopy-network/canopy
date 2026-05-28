@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronsUpDown,
-  Copy,
   Droplets,
   Percent,
   Search,
@@ -19,12 +18,12 @@ import { useStakedBalanceHistory } from "@/hooks/useStakedBalanceHistory";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
-import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
 import { PageHeader } from "@/components/layouts/PageHeader";
 import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 import { getCanopySymbol } from "@/lib/utils/canopySymbols";
+import { CopyableIdentifier } from "@/components/ui/CopyableIdentifier";
 
 const desktopRowCellClass =
   "px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]";
@@ -48,6 +47,7 @@ export const Accounts = () => {
   const {
     totalBalance,
     totalLiquid,
+    totalLocked,
     totalStaked,
     balances,
     stakingData,
@@ -59,7 +59,6 @@ export const Accounts = () => {
     useStakedBalanceHistory();
   const { openAction } = useActionModal();
   const { chain } = useConfig();
-  const { copyToClipboard } = useCopyToClipboard();
 
   const symbol   = chain?.denom?.symbol   || "CNPY";
   const decimals = chain?.denom?.decimals ?? 6;
@@ -90,13 +89,22 @@ export const Accounts = () => {
   const getAccountSymbol = (index: number) => getCanopySymbol(index);
 
   const getRealTotal = (address: string) => {
-    const liquid = balances.find(b => b.address === address)?.amount ?? 0;
+    const balance = balances.find(b => b.address === address);
+    const liquid = balance?.spendableAmount ?? balance?.amount ?? 0;
+    const locked = balance?.lockedAmount ?? 0;
+    const vested = balance?.vestedAmount ?? 0;
+    const vestingAmount = balance?.vestingAmount ?? 0;
+    const accountTotal = balance?.totalAmount ?? liquid + locked;
     const staked = stakingData.find(s => s.address === address)?.staked ?? 0;
-    return { liquid, staked, total: liquid + staked };
+    return { liquid, locked, vested, vestingAmount, staked, total: accountTotal + staked };
   };
 
   const getStatusInfo = (address: string) => {
+    const locked = balances.find(b => b.address === address)?.lockedAmount ?? 0;
     const staked = stakingData.find(s => s.address === address)?.staked ?? 0;
+    if (locked > 0) {
+      return { label: "Vesting", cls: WALLET_BADGE_TONE };
+    }
     return staked > 0
       ? { label: "Staked",  cls: WALLET_BADGE_TONE }
       : { label: "Liquid",  cls: WALLET_BADGE_TONE };
@@ -104,7 +112,7 @@ export const Accounts = () => {
 
   const processedAddresses = useMemo(() => accounts
     .map((account, index) => {
-      const { liquid, staked, total } = getRealTotal(account.address);
+      const { liquid, locked, vested, vestingAmount, staked, total } = getRealTotal(account.address);
       const { label: statusLabel, cls: statusCls } = getStatusInfo(account.address);
       const symbolSrc = getAccountSymbol(index);
       return {
@@ -115,6 +123,9 @@ export const Accounts = () => {
         publicKey:        account.publicKey || "",
         total,
         liquid,
+        locked,
+        vested,
+        vestingAmount,
         staked,
         stakedPct:        total > 0 ? (staked / total) * 100 : 0,
         liquidPct:        total > 0 ? (liquid / total) * 100 : 0,
@@ -246,7 +257,7 @@ export const Accounts = () => {
       {/* ── Page header ── */}
       <PageHeader
         title="Accounts"
-        subtitle={`${accounts.length} address${accounts.length !== 1 ? "es" : ""} across your keystore`}
+        subtitle="List all your addresses across your keystore."
         actions={
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
@@ -293,6 +304,13 @@ export const Accounts = () => {
               <span className="text-foreground/70">{fmt(totalLiquid)}</span>
               <span className="text-muted-foreground/50">liquid</span>
             </div>
+            {totalLocked > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70 flex-shrink-0" />
+                <span className="text-foreground/70">{fmt(totalLocked)}</span>
+                <span className="text-muted-foreground/50">locked</span>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -447,15 +465,9 @@ export const Accounts = () => {
                             {addr.nickname}
                           </div>
                           <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-[11px] text-muted-foreground leading-tight">
+                            <CopyableIdentifier value={addr.fullAddress} label="Address" className="max-w-[13rem] text-[11px] text-muted-foreground leading-tight">
                               {addr.address}
-                            </span>
-                            <button
-                              onClick={() => copyToClipboard(addr.fullAddress, "Address")}
-                              className="rounded p-0.5 text-white/40 transition-colors hover:bg-[#272729] hover:text-white"
-                            >
-                              <Copy style={{ width: 10, height: 10 }} />
-                            </button>
+                            </CopyableIdentifier>
                           </div>
                         </div>
                       </div>
@@ -463,10 +475,17 @@ export const Accounts = () => {
 
                     {/* Total */}
                     <td className={desktopRowCellClass}>
-                      <span className="text-sm text-foreground tabular-nums">
-                        {fmt(addr.total)}
-                      </span>
-                      <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                      <div>
+                        <span className="text-sm text-foreground tabular-nums">
+                          {fmt(addr.total)}
+                        </span>
+                        <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                        {addr.locked > 0 && (
+                          <div className="mt-1 text-[11px] text-amber-300/80">
+                            Locked {fmt(addr.locked)} {symbol}
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     {/* Staked */}
@@ -482,6 +501,11 @@ export const Accounts = () => {
                       <div>
                         <span className="text-sm text-foreground tabular-nums">{fmt(addr.liquid)}</span>
                         <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                        {addr.vested > 0 && (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Vested {fmt(addr.vested)} {symbol}
+                          </div>
+                        )}
                       </div>
                     </td>
 

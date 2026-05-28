@@ -4,7 +4,8 @@ import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
 import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import TransactionTypeBadge from './TransactionTypeBadge'
 import PageSizeSelect from '../shared/PageSizeSelect'
-import { GREEN_BADGE_CLASS, GREEN_BADGE_TONE } from '../ui/badgeStyles'
+import { BADGE_BASE, GREEN_BADGE_TONE, YELLOW_BADGE_TONE, RED_BADGE_TONE } from '../ui/badgeStyles'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Transaction {
     hash: string
@@ -26,6 +27,7 @@ interface TransactionsTableProps {
     pageSize?: number
     onPageChange?: (page: number) => void
     onPageSizeChange?: (value: number) => void
+    emptyMessage?: string
 }
 
 const desktopHeaderClass =
@@ -62,7 +64,14 @@ const formatAge = (timestamp?: string, status?: Transaction['status']) => {
 }
 
 const statusClassName = (status: Transaction['status']) => {
-    return GREEN_BADGE_TONE
+    switch (status) {
+        case 'pending':
+            return YELLOW_BADGE_TONE
+        case 'failed':
+            return RED_BADGE_TONE
+        default:
+            return GREEN_BADGE_TONE
+    }
 }
 
 const statusLabel = (status: Transaction['status']) => {
@@ -76,6 +85,11 @@ const statusLabel = (status: Transaction['status']) => {
     }
 }
 
+const getTransactionDetailPath = (transaction: Transaction) => {
+    if (!transaction.hash || transaction.hash === 'N/A') return null
+    return `/transaction/${transaction.hash}`
+}
+
 const TransactionsTable: React.FC<TransactionsTableProps> = ({
     transactions,
     loading = false,
@@ -84,6 +98,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     pageSize = 10,
     onPageChange,
     onPageSizeChange,
+    emptyMessage = 'No transactions found',
 }) => {
     const navigate = useNavigate()
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
@@ -151,26 +166,29 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                         ) : transactions.length === 0 ? (
                             <tr>
                                 <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
-                                    No transactions found in this page of blocks
+                                    {emptyMessage}
                                 </td>
                             </tr>
                         ) : (
-                            transactions.map((transaction) => (
+                            transactions.map((transaction) => {
+                                const detailPath = getTransactionDetailPath(transaction)
+
+                                return (
                                 <tr
                                     key={`${transaction.status}-${transaction.hash}`}
-                                    className="group cursor-pointer"
+                                    className={`group ${detailPath ? 'cursor-pointer' : ''}`}
                                     onClick={(event) => {
-                                        if (shouldIgnoreRowNavigation(event.target)) return
-                                        navigate(`/transaction/${transaction.hash}`)
+                                        if (!detailPath || shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(detailPath)
                                     }}
                                     onKeyDown={(event) => {
-                                        if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        if (!detailPath || shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
                                         event.preventDefault()
-                                        navigate(`/transaction/${transaction.hash}`)
+                                        navigate(detailPath)
                                     }}
-                                    tabIndex={0}
-                                    role="link"
-                                    aria-label={`View transaction ${transaction.hash}`}
+                                    tabIndex={detailPath ? 0 : undefined}
+                                    role={detailPath ? 'link' : undefined}
+                                    aria-label={detailPath ? `View transaction ${transaction.hash}` : undefined}
                                 >
                                     <td
                                         className={desktopRowCellClass}
@@ -181,15 +199,30 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                     <td
                                         className={desktopRowCellClass}
                                     >
-                                        <Link
-                                            to={`/transaction/${transaction.hash}`}
-                                            className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
-                                            title={transaction.hash}
-                                        >
-                                            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                                                {truncateMiddle(transaction.hash)}
-                                            </span>
-                                        </Link>
+                                        <div className="flex max-w-[13rem] items-center gap-1.5">
+                                            {detailPath ? (
+                                                <Link
+                                                    to={detailPath}
+                                                    className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
+                                                    title={transaction.hash}
+                                                    data-row-click-ignore="true"
+                                                >
+                                                    {truncateMiddle(transaction.hash)}
+                                                </Link>
+                                            ) : (
+                                                <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white/40">
+                                                    N/A
+                                                </span>
+                                            )}
+                                            <CopyableIdentifier
+                                                value={transaction.hash}
+                                                label="Transaction hash"
+                                                className="shrink-0 text-white/35 hover:text-primary"
+                                                iconClassName="opacity-100"
+                                            >
+                                                <span className="sr-only">Copy transaction hash</span>
+                                            </CopyableIdentifier>
+                                        </div>
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         {transaction.blockHeight ? (
@@ -207,26 +240,18 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                         {transaction.from === 'N/A' ? (
                                             <span className="text-sm text-white/40">N/A</span>
                                         ) : (
-                                            <Link
-                                                to={`/account/${transaction.from}`}
-                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
-                                                title={transaction.from}
-                                            >
+                                            <CopyableIdentifier value={transaction.from} label="From address" to={`/account/${transaction.from}`} className="max-w-[13rem] text-sm text-white">
                                                 {truncateMiddle(transaction.from)}
-                                            </Link>
+                                            </CopyableIdentifier>
                                         )}
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         {transaction.to === 'N/A' ? (
                                             <span className="text-sm text-white/40">N/A</span>
                                         ) : (
-                                            <Link
-                                                to={`/account/${transaction.to}`}
-                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
-                                                title={transaction.to}
-                                            >
+                                            <CopyableIdentifier value={transaction.to} label="To address" to={`/account/${transaction.to}`} className="max-w-[13rem] text-sm text-white">
                                                 {truncateMiddle(transaction.to)}
-                                            </Link>
+                                            </CopyableIdentifier>
                                         )}
                                     </td>
                                     <td className={desktopRowCellClass}>
@@ -234,7 +259,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <span
-                                            className={`${GREEN_BADGE_CLASS} ${statusClassName(transaction.status)}`}
+                                            className={`${BADGE_BASE} ${statusClassName(transaction.status)}`}
                                         >
                                             {statusLabel(transaction.status)}
                                         </span>
@@ -246,7 +271,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                                         <span className="text-sm text-white/60">{formatAge(transaction.timestamp, transaction.status)}</span>
                                     </td>
                                 </tr>
-                            ))
+                                )
+                            })
                         )}
                     </tbody>
                 </table>

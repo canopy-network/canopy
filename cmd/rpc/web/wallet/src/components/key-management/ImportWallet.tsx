@@ -14,7 +14,7 @@ interface EncryptedKeyFile {
     keyNickname?: string;
 }
 
-export const ImportWallet = ({ embedded = false }: { embedded?: boolean }): JSX.Element => {
+export const ImportWallet = ({ embedded = false, onSuccess }: { embedded?: boolean; onSuccess?: () => void }): JSX.Element => {
     const toast = useToast();
     const dsFetch = useDSFetcher();
     const queryClient = useQueryClient();
@@ -101,6 +101,7 @@ export const ImportWallet = ({ embedded = false }: { embedded?: boolean }): JSX.
             });
 
             setImportForm({ privateKey: '', password: '', confirmPassword: '', nickname: '' });
+            onSuccess?.();
         } catch (error) {
             toast.dismiss(loadingToast);
             toast.error({
@@ -195,6 +196,7 @@ export const ImportWallet = ({ embedded = false }: { embedded?: boolean }): JSX.
             setKeystoreFile(null);
             setKeystoreFileName('');
             if (fileInputRef.current) fileInputRef.current.value = '';
+            onSuccess?.();
         } catch (error) {
             toast.dismiss(loadingToast);
             toast.error({

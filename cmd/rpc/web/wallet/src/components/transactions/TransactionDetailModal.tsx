@@ -1,6 +1,6 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X, Copy, ExternalLink, CheckCircle2, AlertTriangle, Info } from "lucide-react";
+import { X, Copy, CheckCircle2, AlertTriangle, Info } from "lucide-react";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { LucideIcon } from "@/components/ui/LucideIcon";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
@@ -144,8 +144,6 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const symbol = chain?.denom?.symbol ?? "CNPY";
   const decimals = Number(chain?.denom?.decimals ?? 6);
   const toDisplay = (n: number) => n / Math.pow(10, decimals);
-
-  const explorerTxUrl = chain?.explorer?.tx ?? "";
 
   React.useEffect(() => {
     if (!open) return;
@@ -344,20 +342,6 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   </section>
                 )}
               </div>
-
-              {explorerTxUrl && (
-                <div className="px-6 py-4 border-t border-border/50 flex justify-end">
-                  <a
-                    href={`${explorerTxUrl}/${tx.hash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[#216cd0] hover:text-[#216cd0]/80 transition-colors"
-                  >
-                    View on Explorer
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              )}
             </motion.div>
           </motion.div>
         </>

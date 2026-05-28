@@ -343,7 +343,7 @@ func (x *VDF) GetIterations() uint64 {
 type MultiPublicKey struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// public_keys: the full signer set when the signature is an aggregate BLS multisig signature
-	PublicKeys [][]byte `protobuf:"bytes,1,rep,name=public_keys,json=publicKeys,proto3" json:"public_keys,omitempty"` // @gotags: json:"publicKeys,omitempty"
+	PublicKeys [][]byte `protobuf:"bytes,1,rep,name=public_keys,json=publicKeys,proto3" json:"publicKeys,omitempty"` // @gotags: json:"publicKeys,omitempty"
 	// bitmap: identifies which multi_public_keys are included in the aggregate signature
 	Bitmap []byte `protobuf:"bytes,2,opt,name=bitmap,proto3" json:"bitmap,omitempty"` // @gotags: json:"bitmap,omitempty"
 	// threshold: minimum number of enabled signers required for verification; 0 disables threshold enforcement

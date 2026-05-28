@@ -4,6 +4,7 @@ import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
 import AnimatedNumber from '../AnimatedNumber'
 import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
 import PageSizeSelect from '../shared/PageSizeSelect'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Block {
     height: number
@@ -195,20 +196,14 @@ const BlocksTable: React.FC<BlocksTableProps> = ({
                                         </span>
                                     </td>
                                     <td className={desktopRowCellClass}>
-                                        <span
-                                            className="block max-w-[14rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white"
-                                            title={block.hash}
-                                        >
+                                        <CopyableIdentifier value={block.hash} label="Block hash" to={`/block/${block.height}`} className="max-w-[14rem] text-sm font-medium text-white">
                                             {truncateMiddle(block.hash)}
-                                        </span>
+                                        </CopyableIdentifier>
                                     </td>
                                     <td className={desktopRowCellClass}>
-                                        <span
-                                            className="block max-w-[14rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white"
-                                            title={block.producer}
-                                        >
+                                        <CopyableIdentifier value={block.producer} label="Producer address" to={`/validator/${block.producer}`} className="max-w-[14rem] text-sm font-medium text-white">
                                             {truncateMiddle(block.producer)}
-                                        </span>
+                                        </CopyableIdentifier>
                                     </td>
                                     <td
                                         className={`${desktopRowCellClass} text-center`}

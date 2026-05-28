@@ -61,7 +61,11 @@ func (s *Server) Height(w http.ResponseWriter, _ *http.Request, _ httprouter.Par
 func (s *Server) Account(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
 	s.heightAndAddressParams(w, r, func(s *fsm.StateMachine, a lib.HexBytes) (interface{}, lib.ErrorI) {
-		return s.GetAccount(crypto.NewAddressFromBytes(a))
+		account, err := s.GetAccount(crypto.NewAddressFromBytes(a))
+		if err != nil {
+			return nil, err
+		}
+		return spendableAccountView(s, account), nil
 	})
 }
 
@@ -69,7 +73,11 @@ func (s *Server) Account(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 func (s *Server) Accounts(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
 	s.heightPaginated(w, r, func(s *fsm.StateMachine, p *paginatedHeightRequest) (interface{}, lib.ErrorI) {
-		return s.GetAccountsPaginated(p.PageParams)
+		page, err := s.GetAccountsPaginated(p.PageParams)
+		if err != nil {
+			return nil, err
+		}
+		return spendableAccountPageView(s, page), nil
 	})
 }
 
@@ -400,8 +408,34 @@ func (s *Server) Blocks(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 
 // TransactionByHash responds with a transaction with the hash h
 func (s *Server) TransactionByHash(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.hashIndexer(w, r, func(s lib.StoreI, h lib.HexBytes) (any, lib.ErrorI) { return s.GetTxByHash(h) })
+	req := new(hashRequest)
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	hashBytes, err := lib.StringToBytes(req.Hash)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	st, ok := s.setupStore(w)
+	if !ok {
+		return
+	}
+	defer st.Discard()
+	tx, err := st.GetTxByHash(hashBytes)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	if tx != nil && tx.GetTxHash() != "" {
+		write(w, tx, http.StatusOK)
+		return
+	}
+	if pendingTx, found := s.controller.GetPendingTxByHash(req.Hash); found {
+		write(w, pendingTx, http.StatusOK)
+		return
+	}
+	write(w, map[string]string{"error": "transaction not found"}, http.StatusNotFound)
 }
 
 // TransactionsByHeight response with the transactions at block height h
@@ -703,6 +737,45 @@ func (s *Server) heightAndAddressParams(w http.ResponseWriter, r *http.Request, 
 		write(w, p, http.StatusOK)
 		return
 	})
+}
+
+func spendableAccountView(sm *fsm.StateMachine, account *fsm.Account) *AccountView {
+	if account == nil {
+		return nil
+	}
+	total := account.Amount
+	spendable := sm.AccountSpendableAmount(account)
+	vested := sm.AccountVestedAmount(account)
+	locked := sm.AccountLockedAmount(account)
+	return &AccountView{
+		Address:            account.Address,
+		Amount:             spendable,
+		TotalAmount:        total,
+		SpendableAmount:    spendable,
+		VestedAmount:       vested,
+		LockedAmount:       locked,
+		VestingAmount:      account.VestingAmount,
+		VestingStartHeight: account.VestingStartHeight,
+		VestingCliffHeight: account.VestingCliffHeight,
+		VestingEndHeight:   account.VestingEndHeight,
+	}
+}
+
+func spendableAccountPageView(sm *fsm.StateMachine, page *lib.Page) *lib.Page {
+	if page == nil {
+		return nil
+	}
+	view := *page
+	accounts, ok := page.Results.(*fsm.AccountPage)
+	if !ok || accounts == nil {
+		return &view
+	}
+	result := make(AccountViewPage, 0, len(*accounts))
+	for _, account := range *accounts {
+		result = append(result, spendableAccountView(sm, account))
+	}
+	view.Results = &result
+	return &view
 }
 
 // heightAndIdParams is a helper function to execute a callback with a state machine and ID as parameters

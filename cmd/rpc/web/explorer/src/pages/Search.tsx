@@ -92,7 +92,7 @@ const SearchPage: React.FC = () => {
                     className="mb-8"
                 >
                     <h1 className="explorer-page-title">Search Results</h1>
-                    <p className="explorer-page-subtitle">Find blocks, transactions, addresses, and validators</p>
+                    <p className="explorer-page-subtitle">Find blocks, transactions, addresses, validators, and orders</p>
                 </motion.div>
 
                 {/* Search Input */}
@@ -107,7 +107,7 @@ const SearchPage: React.FC = () => {
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Search blocks, transactions, addresses..."
+                            placeholder="Search blocks, transactions, addresses, orders..."
                             className="w-full bg-input border border-white/8 rounded-lg px-4 py-3 pl-12 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring focus:ring-primary/50 focus:border-primary"
                         />
                         {searchTerm && (
@@ -187,7 +187,7 @@ const SearchPage: React.FC = () => {
                         >
                             <i className="fa-solid fa-search text-4xl text-gray-600 mb-4"></i>
                             <h3 className="text-xl font-semibold text-white mb-2">Start searching</h3>
-                            <p className="text-gray-400">Enter a block height, transaction hash, address, or validator name</p>
+                            <p className="text-gray-400">Enter a block height, transaction hash, address, validator name, or order ID</p>
                         </motion.div>
                     )}
                 </AnimatePresence>

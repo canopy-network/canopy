@@ -2,10 +2,11 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { useAllValidators, useAllBlocksCache, useCardData } from '../../hooks/useApi'
 import AnimatedNumber from '../AnimatedNumber'
-import { Link } from 'react-router-dom'
-import { toCNPY } from '../../lib/utils'
+import { Link, useNavigate } from 'react-router-dom'
+import { isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
 import CnpyColorIcon from '../ui/CnpyColorIcon'
 import { GREEN_BADGE_CLASS, GREEN_BADGE_TONE } from '../ui/badgeStyles'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 const desktopRowCellClass =
@@ -34,6 +35,7 @@ interface SummaryTableProps {
     viewAllPath: string
     emptyLabel: string
     minWidth?: string
+    rowHrefs?: Array<string | undefined>
 }
 
 const SummaryTable: React.FC<SummaryTableProps> = ({
@@ -44,13 +46,17 @@ const SummaryTable: React.FC<SummaryTableProps> = ({
     viewAllPath,
     emptyLabel,
     minWidth = 'min-w-[1100px]',
-}) => (
-    <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="rounded-xl border border-white/10 bg-[#1a1a1a] p-5"
-    >
+    rowHrefs = [],
+}) => {
+    const navigate = useNavigate()
+
+    return (
+        <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="rounded-xl border border-white/10 bg-[#1a1a1a] p-5"
+        >
         <div className="mb-5 flex items-center justify-between gap-3 leading-none">
             <h2 className="wallet-card-title tracking-tight">{title}</h2>
             <LiveIndicator />
@@ -103,10 +109,24 @@ const SummaryTable: React.FC<SummaryTableProps> = ({
                         rows.map((cells, index) => (
                             <motion.tr
                                 key={`${title}-${index}`}
-                                className="group"
+                                className={`group ${rowHrefs[index] ? 'cursor-pointer' : ''}`}
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.06 + index * 0.04 }}
+                                onClick={(event) => {
+                                    const href = rowHrefs[index]
+                                    if (!href || shouldIgnoreRowNavigation(event.target)) return
+                                    navigate(href)
+                                }}
+                                onKeyDown={(event) => {
+                                    const href = rowHrefs[index]
+                                    if (!href || shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                    event.preventDefault()
+                                    navigate(href)
+                                }}
+                                tabIndex={rowHrefs[index] ? 0 : undefined}
+                                role={rowHrefs[index] ? 'link' : undefined}
+                                aria-label={rowHrefs[index] ? `Open ${title} row ${index + 1}` : undefined}
                             >
                                 {cells.map((cell, cellIndex) => (
                                     <td
@@ -138,7 +158,8 @@ const SummaryTable: React.FC<SummaryTableProps> = ({
             </Link>
         </div>
     </motion.section>
-)
+    )
+}
 
 const ExtraTables: React.FC = () => {
     const { data: allValidatorsData, isLoading: isValidatorsLoading } = useAllValidators()
@@ -255,7 +276,16 @@ const ExtraTables: React.FC = () => {
             return [
                 <div className="flex items-center gap-2">
                     <CnpyBadge seed={address} />
-                    <Link to={`/validator/${address}`} className="text-white hover:text-primary hover:underline">{truncate(String(address), 16)}</Link>
+                    <CopyableIdentifier value={String(address)} label="Validator address" to={`/validator/${address}`} className="text-white">{truncate(String(address), 16)}</CopyableIdentifier>
+                    <Link
+                        to={`/validator/${address}`}
+                        data-row-click-ignore="true"
+                        className="shrink-0 text-white/35 transition-colors hover:text-primary"
+                        title="Open validator details"
+                        aria-label="Open validator details"
+                    >
+                        <i className="fa-solid fa-arrow-up-right-from-square text-[10px]" aria-hidden="true" />
+                    </Link>
                 </div>,
                 <span className="text-gray-200">
                     {rewardsPct}%
@@ -309,6 +339,11 @@ const ExtraTables: React.FC = () => {
         })
     }, [top10Validators, totalStake, validatorStats])
 
+    const validatorRowHrefs = React.useMemo(
+        () => top10Validators.map((validator: any) => validator.address ? `/validator/${validator.address}` : undefined),
+        [top10Validators]
+    )
+
     return (
         <div className="grid grid-cols-1 gap-6">
             <SummaryTable
@@ -324,6 +359,7 @@ const ExtraTables: React.FC = () => {
                     'Staking Power',
                 ]}
                 rows={validatorRows}
+                rowHrefs={validatorRowHrefs}
                 loading={isValidatorsLoading}
                 emptyLabel="No validators found"
             />

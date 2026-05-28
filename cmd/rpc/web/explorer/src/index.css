@@ -151,6 +151,19 @@ html {
   color: rgba(255, 255, 255, 0.64);
 }
 
+.explorer-detail-page,
+.explorer-detail-page :where(:not(i, svg, path)) {
+  font-family: "Inter", system-ui, sans-serif !important;
+}
+
+.explorer-detail-page :where(h1, h2, h3, h4, h5, h6, p, span, a, pre, code, td, th, label, li, button) {
+  color: #ffffff !important;
+}
+
+.explorer-detail-page :where([class*="font-mono"]) {
+  font-family: "Inter", system-ui, sans-serif !important;
+}
+
 .explorer-overview-section {
   width: 100%;
   border-radius: 0.75rem;

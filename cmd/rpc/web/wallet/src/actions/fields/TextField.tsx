@@ -23,6 +23,8 @@ export const TextField: React.FC<BaseFieldProps> = ({
     // Track whether user has manually edited this field
     const touchedRef = React.useRef(false)
 
+    const isOncePopulate = (field as Record<string, unknown>).autoPopulate === 'once'
+
     // Sync field value when the resolved template changes (e.g., table selection)
     // This allows computed fields to stay in sync while still being editable
     React.useEffect(() => {
@@ -35,8 +37,6 @@ export const TextField: React.FC<BaseFieldProps> = ({
             prevResolvedRef.current = resolvedStr
         }
     }, [resolvedValue, field.value, onChange])
-
-    const isOncePopulate = (field as Record<string, unknown>).autoPopulate === 'once'
 
     // For readOnly fields with a value template, always use the resolved template
     // For editable fields with autoPopulate=once, respect user clearing the field
