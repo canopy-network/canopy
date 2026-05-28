@@ -69,6 +69,11 @@ func keystoreGetKey(address, password string) (*keyGroup, error) {
 			PublicKey:  "88634c8e0fd9ee8911b362e5aff8c046154263e9b8e507fc5efe5b5d9cb6cb4fd14c3672bccb929c411e3050ccca44a9",
 			PrivateKey: "1c91a4882751adc1fa4f2574c4321bf144e36411ade55e099e9c6ffece87ee49",
 		},
+		"205f68c279331cd17b9d41727f09eed7162b0389": {
+			Address:    "205f68c279331cd17b9d41727f09eed7162b0389",
+			PublicKey:  "94ed6fa9309508f451d036ebeac618e317bc10883abad9d784246c87131fc66b8cb4d3b4b1b64a08de9c5737ea035ef3",
+			PrivateKey: "3b0da148ffe050d58288df78a4b9ed58012a816919e4888b4a066f61d04c4e22",
+		},
 	}
 	if kg, ok := known[address]; ok {
 		return &kg, nil
@@ -322,7 +327,7 @@ func setupResolver(t *testing.T, validatorKey *keyGroup, validatorAddr string, s
 	t.Helper()
 	// Always use the hardcoded predictor key — keystore persists across node restarts.
 	// Fund with stakeAmount * 3 to ensure sufficient balance after fees and prior deductions.
-	resolverAddr := "8f8b550064ec4ee4551d1666cb0ee5d35fc5154a"
+	resolverAddr := "205f68c279331cd17b9d41727f09eed7162b0389"
 	h, _ := getHeight()
 	fundMsg := &contract.MessageSend{
 		FromAddress: hexDecode(validatorAddr),
@@ -341,8 +346,8 @@ func setupResolver(t *testing.T, validatorKey *keyGroup, validatorAddr string, s
 	}
 	regKey := &keyGroup{
 		Address:    resolverAddr,
-		PublicKey:  "88634c8e0fd9ee8911b362e5aff8c046154263e9b8e507fc5efe5b5d9cb6cb4fd14c3672bccb929c411e3050ccca44a9",
-		PrivateKey: "1c91a4882751adc1fa4f2574c4321bf144e36411ade55e099e9c6ffece87ee49",
+		PublicKey:  "94ed6fa9309508f451d036ebeac618e317bc10883abad9d784246c87131fc66b8cb4d3b4b1b64a08de9c5737ea035ef3",
+		PrivateKey: "3b0da148ffe050d58288df78a4b9ed58012a816919e4888b4a066f61d04c4e22",
 	}
 	regHash := submitTx(t, regKey, "register_resolver", "MessageRegisterResolver", regMsg, h2)
 	if err := waitForTx(resolverAddr, regHash, 60*time.Second); err != nil {
@@ -718,7 +723,7 @@ nonce := uint64(time.Now().UnixMicro())
 createMsg := &contract.MessageCreateMarket{
 CreatorAddress: hexDecode(addr),
 B0:             b0,
-ExpiryTime:     h + 30,
+ExpiryTime:     h + 50,
 Nonce:          nonce,
 Question:       "Payout math verification market",
 }
@@ -804,8 +809,7 @@ t.Fatalf("propose_outcome: %v", err)
 }
 
 // Wait for dispute window
-disputeBlocks := contract.ComputeDisputeBlocks(0, 0) // TEST_MODE returns TEST_DISPUTE_BLOCKS
-disputeTarget := h + disputeBlocks + 2
+disputeTarget := h + contract.TEST_DISPUTE_BLOCKS + 2 // TEST_DISPUTE_BLOCKS=20; ComputeDisputeBlocks not used (no PRAXIS_TEST_MODE in test binary)
 t.Logf("Waiting for dispute window (height %d)...", disputeTarget)
 for {
 cur, _ := getHeight()
@@ -976,7 +980,7 @@ t.Fatalf("propose_outcome: %v", err)
 }
 
 // Wait for dispute window
-disputeTarget := h + contract.ComputeDisputeBlocks(0, 0) + 2
+disputeTarget := h + contract.TEST_DISPUTE_BLOCKS + 2
 t.Logf("Waiting for dispute window (height %d)...", disputeTarget)
 for {
 cur, _ := getHeight()
@@ -1251,7 +1255,7 @@ t.Fatalf("propose_outcome: %v", err)
 }
 
 // Wait for dispute window
-disputeTarget := h + contract.ComputeDisputeBlocks(0, 0) + 2
+disputeTarget := h + contract.TEST_DISPUTE_BLOCKS + 2
 t.Logf("Waiting for dispute window (height %d)...", disputeTarget)
 for {
 cur, _ := getHeight()
@@ -1298,12 +1302,23 @@ t.Log("Losing bettor zero payout verified ✓")
 
 
 func TestRegisterNewWalletAsResolver(t *testing.T) {
+    validatorKg, _ := keystoreGetKey("e7c7dad131a03f7ea0cc09a637ad096eb3495f77", "")
     kg := &keyGroup{
-        Address:    "45e630c083b6b40ac19107b3482c6b65f2a1728c",
-        PublicKey:  "931074daa5b355ce564248b4ff7839622ff3c0ebcac66e3ae85debbd29375d3399cba06cb5079ce1041068d797034980",
-        PrivateKey: "b321ce79625df5c02324028256976393cfdb7364b08318bb6c4acb8e81a281d6",
+        Address:    "062b9d112eef6fbea23e3cc44670b9bc8778efad",
+        PublicKey:  "b46e36b0d68b7574a84accfc0e101b83d3d1ba6aca035a4a3889d4ee955488deab3dc217dc9362bb691c11be96ad606c",
+        PrivateKey: "1645806b57847d4c3683ab27f8a1c23384c372839f994207e0e47dd7769a2a2d",
     }
     h, _ := getHeight()
+    fundMsg := &contract.MessageSend{
+        FromAddress: hexDecode(validatorKg.Address),
+        ToAddress:   hexDecode(kg.Address),
+        Amount:      500_000_000,
+    }
+    fundHash := submitSendTx(t, validatorKg, fundMsg, h)
+    if err := waitForTx(validatorKg.Address, fundHash, 60*time.Second); err != nil {
+        t.Fatalf("fund failed: %v", err)
+    }
+    h, _ = getHeight()
     msg := &contract.MessageRegisterResolver{
         ResolverAddress: hexDecode(kg.Address),
         StakeAmount:     100_000_000,

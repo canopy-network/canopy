@@ -161,4 +161,4 @@ var TEST_MODE = os.Getenv("PRAXIS_TEST_MODE") == "true"
 const TEST_DISPUTE_BLOCKS        uint64 = 20
 const TEST_RESOLUTION_DELAY      uint64 = 2
 const TEST_GRACE_PERIOD          uint64 = 2
-const TEST_CLAIM_GRACE_PERIOD    uint64 = 5
+const TEST_CLAIM_GRACE_PERIOD    uint64 = 50

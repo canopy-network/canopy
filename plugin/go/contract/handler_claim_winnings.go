@@ -184,7 +184,7 @@ claimGrace      = TEST_CLAIM_GRACE_PERIOD
 }
 graceEnd    := market.ExpiryTime + resolutionDelay + gracePeriod + claimGrace
 shouldSweep := (market.Status == STATUS_FINALIZED &&
-(market.ClaimedCount == market.TotalPositions || now > graceEnd)) ||
+(market.TotalPositions > 0 && market.ClaimedCount == market.TotalPositions || now > graceEnd)) ||
 (market.Status == STATUS_CANCELLED && now > graceEnd)
 
 sets := []*PluginSetOp{

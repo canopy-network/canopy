@@ -124,10 +124,11 @@
   <div class="ph ph-g"><div class="ph-eye">Place Bet</div><div class="ph-title">Submit Prediction</div><div class="ph-sub">Buy YES or NO shares — cost determined by LMSR pricing</div></div>
   <div class="card"><div class="ci">
     <div class="ct">// prediction_parameters</div>
-    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="p_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Bettor Address</label><input id="p_bettor" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="p_mid" type="text" placeholder="40 hex chars" oninput="checkPositionCap()"/></div><div class="field"><label>Bettor Address</label><input id="p_bettor" type="text" placeholder="40 hex chars" oninput="checkPositionCap()"/></div></div>
     <div class="field"><label>Outcome</label><div class="otog"><div class="obtn yes active" id="btn_yes" onclick="setOut(true)">YES</div><div class="obtn no" id="btn_no" onclick="setOut(false)">NO</div></div></div>
-    <div class="r3"><div class="field"><label>Shares</label><input id="p_shares" type="number" value="1000000"/><div class="hint">1 share = 1,000,000</div></div><div class="field"><label>Max Cost (uPRX)</label><input id="p_maxcost" type="number" value="10000000"/></div><div class="field"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div></div>
+    <div class="r3"><div class="field"><label>Shares</label><input id="p_shares" type="number" value="1000000"/><div class="hint">1 share = 1,000,000</div></div><div class="field"><label>Max Cost (uPRX)</label><input id="p_maxcost" type="number" value="10000000" oninput="checkPositionCap()"/></div><div class="field"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div></div>
     <div class="brow"><button class="btn bp" id="btn_predict" onclick="signAndSubmit_predict()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_predict()">Build Payload</button></div>
+    <div id="cap_indicator" style="display:none;margin-bottom:8px;padding:8px 12px;font-family:var(--font-mono);font-size:10px;border-radius:2px"></div>
     <div class="pend" id="pend_predict"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="po"><div class="plbl">// unsigned_payload</div><textarea id="pp" readonly></textarea></div>
   </div></div>
