@@ -43,7 +43,8 @@ message MarketState {
   uint64 claimed_count   = 7;
   uint64 total_positions = 8;
   uint64 open_time       = 9;
-  bool   elevated_risk   = 10;
+  bool   elevated_risk        = 10;
+  uint64 finalized_pool_amount = 11;
 }
 
 message PositionState {

@@ -261,19 +261,20 @@ func (x *FeeParams) GetClaimWinningsFee() uint64 {
 
 // ADLMSR state objects (0x10-0x14)
 type MarketState struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Status         uint32                 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	ExpiryTime     uint64                 `protobuf:"varint,2,opt,name=expiry_time,json=expiryTime,proto3" json:"expiry_time,omitempty"`
-	QYes           uint64                 `protobuf:"varint,3,opt,name=q_yes,json=qYes,proto3" json:"q_yes,omitempty"`
-	QNo            uint64                 `protobuf:"varint,4,opt,name=q_no,json=qNo,proto3" json:"q_no,omitempty"`
-	BEff           uint64                 `protobuf:"varint,5,opt,name=b_eff,json=bEff,proto3" json:"b_eff,omitempty"`
-	Creator        []byte                 `protobuf:"bytes,6,opt,name=creator,proto3" json:"creator,omitempty"`
-	ClaimedCount   uint64                 `protobuf:"varint,7,opt,name=claimed_count,json=claimedCount,proto3" json:"claimed_count,omitempty"`
-	TotalPositions uint64                 `protobuf:"varint,8,opt,name=total_positions,json=totalPositions,proto3" json:"total_positions,omitempty"`
-	OpenTime       uint64                 `protobuf:"varint,9,opt,name=open_time,json=openTime,proto3" json:"open_time,omitempty"`
-	ElevatedRisk   bool                   `protobuf:"varint,10,opt,name=elevated_risk,json=elevatedRisk,proto3" json:"elevated_risk,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Status              uint32                 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	ExpiryTime          uint64                 `protobuf:"varint,2,opt,name=expiry_time,json=expiryTime,proto3" json:"expiry_time,omitempty"`
+	QYes                uint64                 `protobuf:"varint,3,opt,name=q_yes,json=qYes,proto3" json:"q_yes,omitempty"`
+	QNo                 uint64                 `protobuf:"varint,4,opt,name=q_no,json=qNo,proto3" json:"q_no,omitempty"`
+	BEff                uint64                 `protobuf:"varint,5,opt,name=b_eff,json=bEff,proto3" json:"b_eff,omitempty"`
+	Creator             []byte                 `protobuf:"bytes,6,opt,name=creator,proto3" json:"creator,omitempty"`
+	ClaimedCount        uint64                 `protobuf:"varint,7,opt,name=claimed_count,json=claimedCount,proto3" json:"claimed_count,omitempty"`
+	TotalPositions      uint64                 `protobuf:"varint,8,opt,name=total_positions,json=totalPositions,proto3" json:"total_positions,omitempty"`
+	OpenTime            uint64                 `protobuf:"varint,9,opt,name=open_time,json=openTime,proto3" json:"open_time,omitempty"`
+	ElevatedRisk        bool                   `protobuf:"varint,10,opt,name=elevated_risk,json=elevatedRisk,proto3" json:"elevated_risk,omitempty"`
+	FinalizedPoolAmount uint64                 `protobuf:"varint,11,opt,name=finalized_pool_amount,json=finalizedPoolAmount,proto3" json:"finalized_pool_amount,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *MarketState) Reset() {
@@ -374,6 +375,13 @@ func (x *MarketState) GetElevatedRisk() bool {
 		return x.ElevatedRisk
 	}
 	return false
+}
+
+func (x *MarketState) GetFinalizedPoolAmount() uint64 {
+	if x != nil {
+		return x.FinalizedPoolAmount
+	}
+	return 0
 }
 
 type PositionState struct {
@@ -1960,7 +1968,7 @@ const file_tx_proto_rawDesc = "" +
 	"\x11create_market_fee\x18\x02 \x01(\x04R\x0fcreateMarketFee\x122\n" +
 	"\x15submit_prediction_fee\x18\x03 \x01(\x04R\x13submitPredictionFee\x12,\n" +
 	"\x12resolve_market_fee\x18\x04 \x01(\x04R\x10resolveMarketFee\x12,\n" +
-	"\x12claim_winnings_fee\x18\x05 \x01(\x04R\x10claimWinningsFee\"\xad\x02\n" +
+	"\x12claim_winnings_fee\x18\x05 \x01(\x04R\x10claimWinningsFee\"\xe1\x02\n" +
 	"\vMarketState\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\rR\x06status\x12\x1f\n" +
 	"\vexpiry_time\x18\x02 \x01(\x04R\n" +
@@ -1973,7 +1981,8 @@ const file_tx_proto_rawDesc = "" +
 	"\x0ftotal_positions\x18\b \x01(\x04R\x0etotalPositions\x12\x1b\n" +
 	"\topen_time\x18\t \x01(\x04R\bopenTime\x12#\n" +
 	"\relevated_risk\x18\n" +
-	" \x01(\bR\felevatedRisk\"\x82\x01\n" +
+	" \x01(\bR\felevatedRisk\x122\n" +
+	"\x15finalized_pool_amount\x18\v \x01(\x04R\x13finalizedPoolAmount\"\x82\x01\n" +
 	"\rPositionState\x12\x1d\n" +
 	"\n" +
 	"shares_yes\x18\x01 \x01(\x04R\tsharesYes\x12\x1b\n" +

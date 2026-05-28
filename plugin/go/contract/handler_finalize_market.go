@@ -22,6 +22,7 @@ marketQId   := nextQueryId()
 disputeQId  := nextQueryId()
 proposalQId := nextQueryId()
 treasQId    := nextQueryId()
+poolQId     := nextQueryId()
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
@@ -29,6 +30,7 @@ Keys: []*PluginKeyRead{
 {QueryId: disputeQId,  Key: KeyForDispute(msg.MarketId)},
 {QueryId: proposalQId, Key: KeyForProposal(msg.MarketId)},
 {QueryId: treasQId,    Key: KeyForTreasuryReserve(msg.MarketId)},
+{QueryId: poolQId,     Key: KeyForMarketPool(msg.MarketId)},
 },
 })
 if err != nil {
@@ -42,6 +44,7 @@ var market   *MarketState
 var dispute  *DisputeRecord
 var proposal *ProposalRecord
 treasury    := &TreasuryReserve{}
+marketPool  := &Pool{}
 
 for _, r := range resp.Results {
 switch r.QueryId {
@@ -70,6 +73,12 @@ return &PluginDeliverResponse{Error: pe}
 case treasQId:
 if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
 if pe := Unmarshal(r.Entries[0].Value, treasury); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+}
+case poolQId:
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+if pe := Unmarshal(r.Entries[0].Value, marketPool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 }
@@ -174,6 +183,8 @@ treasury.LockedReserve -= bondReturn
 proposerAcc.Amount     += bondReturn
 }
 
+// C-1 fix: record pool at finalization so claim_winnings uses immutable amount.
+market.FinalizedPoolAmount = marketPool.Amount
 market.Status = STATUS_FINALIZED
 
 rawM, pe := SafeMarshal(market)

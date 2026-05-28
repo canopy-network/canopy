@@ -138,7 +138,14 @@ if winnerShares > 0 {
 if totalWinShares == 0 {
 return &PluginDeliverResponse{Error: ErrInternal()}
 }
-payout = ComputePayout(marketPool.Amount, winnerShares, totalWinShares)
+// C-1 fix: use FinalizedPoolAmount (recorded at finalization) not live pool.
+// Live pool shrinks as each claimant collects, causing later claimants
+// to receive less than their fair pro-rata share.
+poolForPayout := marketPool.Amount
+if market.FinalizedPoolAmount > 0 {
+poolForPayout = market.FinalizedPoolAmount
+}
+payout = ComputePayout(poolForPayout, winnerShares, totalWinShares)
 }
 
 case STATUS_CANCELLED:

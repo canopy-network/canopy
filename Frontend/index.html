@@ -35,6 +35,7 @@
     <div class="ni" data-p="signer" onclick="showPage('signer',this)"><span class="ni-ic">◉</span>Signer</div>
     <div class="ns" id="nav-resolver-section" style="display:none">Resolver</div>
     <div class="ni nav-resolver-item" data-p="register" onclick="showPage('register',this)" style="display:none"><span class="ni-ic">◈</span>Register<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="forfeit" onclick="showPage('forfeit',this)" style="display:none"><span class="ni-ic">↩</span>Forfeit Position<span class="rb rb-r">Resolver</span></div>
     <div class="ni nav-resolver-item" data-p="propose" onclick="showPage('propose',this)" style="display:none"><span class="ni-ic">◇</span>Propose Outcome<span class="rb rb-r">Resolver</span></div>
     <div class="ni nav-resolver-item" data-p="dispute" onclick="showPage('dispute',this)" style="display:none"><span class="ni-ic">⚠</span>File Dispute<span class="rb rb-r">Resolver</span></div>
     <div class="ni nav-resolver-item" data-p="commit" onclick="showPage('commit',this)" style="display:none"><span class="ni-ic">◌</span>Commit Vote<span class="rb rb-r">Resolver</span></div>
@@ -103,6 +104,7 @@
         <button class="bno2" id="det-bet-no" onclick="">BET NO</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+        <button class="btn bamb" id="det-forfeit-btn" style="display:none" onclick="">↩ Forfeit Position</button>
         <button class="btn bamb" id="det-propose-btn" style="display:none" onclick="">⚖ Propose Outcome</button>
         <button class="btn bsec" id="det-claim-btn" style="display:none" onclick="">◎ Claim Winnings</button>
         <button class="btn bsec" id="det-reclaim-btn" style="display:none" onclick="">↩ Reclaim Stake</button>
@@ -118,6 +120,19 @@
     </div>
     <div class="card" id="det-banner-card" style="display:none;margin-bottom:12px"></div>
   </div>
+</div>
+
+<div class="page" id="page-forfeit">
+  <div class="ph ph-g"><div class="ph-eye">Resolver Action</div><div class="ph-title">Forfeit Position</div><div class="ph-sub">Exit your position before proposing an outcome — required for COI-1 compliance</div></div>
+  <div class="alert ay">⚠ Forfeiting permanently exits your shares in this market. This cannot be undone.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// forfeit_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="fo_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Resolver Address</label><input id="fo_resolver" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="fo_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_forfeit" onclick="signAndSubmit_forfeit()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_forfeit()">Build Payload</button></div>
+    <div class="pend" id="pend_forfeit"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="foo"><div class="plbl">// unsigned_payload</div><textarea id="fop" readonly></textarea></div>
+  </div></div>
 </div>
 
 <div class="page" id="page-predict">

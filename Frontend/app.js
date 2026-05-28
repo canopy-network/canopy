@@ -72,6 +72,7 @@ function encReveal(mid,voter,vote,nonce){return cat(bf(1,h2b(mid)),bf(2,h2b(vote
 function encTally(mid,addr){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)));}
 function encFinalize(mid,addr){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)));}
 function encSlash(mid,addr){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)));}
+function encForfeit(mid,resolver){return cat(bf(1,h2b(mid)),bf(2,h2b(resolver)));}
 
 // ═══════════════════════════════════════════
 // TX SIGN BYTES ENCODER
@@ -296,10 +297,24 @@ async function doSubmit(msgType,typeUrl,inner,meta,btnId,pendId){
   try{
     const tx=await buildSigned(msgType,typeUrl,inner,meta);
     const hash=await submitTxRPC(tx);
-    toast('✓ Submitted — '+(hash.length>20?hash.slice(0,20)+'…':hash));
+    toast('⏳ Broadcasting — confirming in ~25s…');
     checkRPC();
     if(msgType==='create_market')setTimeout(loadMarkets,3000);
-  }catch(e){toast('Error: '+e.message,true);}
+    setTimeout(async()=>{
+      try{
+        const d=await rpc('/v1/query/failed-txs',{address:signerAddress,perPage:20});
+        const failed=(d.results||[]).find(r=>r.txHash===hash);
+        if(failed){
+          const code=failed.error?.code;
+          const msg=failed.error?.msg||'Transaction failed';
+          toast('✗ Failed — '+friendlyError(code,msg),true);
+        } else {
+          toast('✓ Confirmed — '+(hash.length>20?hash.slice(0,20)+'…':hash));
+          if(msgType==='create_market'||msgType==='finalize_market')loadMarkets();
+        }
+      }catch(e){toast('✓ Submitted — could not confirm status',false);}
+    },25000);
+  }catch(e){toast(friendlyError(null,e.message),true);}
   finally{setPend(btnId,pendId,false);}
 }
 
@@ -371,18 +386,38 @@ window.loadMyPredictions = async function () {
       return;
     }
 
-    el.innerHTML = predictions.map(p =>
-      '<div style="background:var(--bg);border:1px solid var(--border);padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">' +
-        '<div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--text3);margin-bottom:4px">MKT ' + p.marketId.slice(0,12) + '…</div>' +
-          '<div style="display:flex;gap:12px">' +
-            '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:' + (p.outcome ? 'var(--green)' : 'var(--red)') + '">' + (p.outcome ? 'YES' : 'NO') + '</span>' +
-            '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Shares: ' + fmtA(p.shares) + '</span>' +
-            '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Max: ' + fmtA(p.maxCost) + ' PRX</span>' +
+    el.innerHTML = predictions.map(p => {
+      const m = _allMarkets.find(x => x.id === p.marketId);
+      let payoutHtml = '';
+      if (m && m.status === 6) {
+        // finalized — compute expected payout
+        const totalPool = m.qYes + m.qNo;
+        const winPool   = p.outcome ? m.qYes : m.qNo;
+        const won       = m.proposedOutcome === p.outcome;
+        if (won && winPool > 0n) {
+          const payout = totalPool * p.shares / winPool;
+          payoutHtml = '<div style="margin-top:6px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--green)">✓ Est. payout: ' + fmtA(payout) + ' PRX</div>';
+        } else if (!won) {
+          payoutHtml = '<div style="margin-top:6px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--red)">✗ Lost</div>';
+        }
+      } else if (m && m.status === 4) {
+        payoutHtml = '<div style="margin-top:6px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--text3)">⏳ Awaiting finalization</div>';
+      }
+      return '<div style="background:var(--bg);border:1px solid var(--border);padding:12px;margin-bottom:8px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<div>' +
+            '<div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--text3);margin-bottom:4px">MKT ' + p.marketId.slice(0,12) + '…</div>' +
+            '<div style="display:flex;gap:12px">' +
+              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:' + (p.outcome ? 'var(--green)' : 'var(--red)') + '">' + (p.outcome ? 'YES' : 'NO') + '</span>' +
+              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Shares: ' + fmtA(p.shares) + '</span>' +
+              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Max: ' + fmtA(p.maxCost) + ' PRX</span>' +
+            '</div>' +
           '</div>' +
+          '<span style="font-family:JetBrains Mono,monospace;font-size:9px;color:var(--text3)">#' + p.height + '</span>' +
         '</div>' +
-        '<span style="font-family:JetBrains Mono,monospace;font-size:9px;color:var(--text3)">#' + p.height + '</span>' +
-      '</div>').join('');
+        payoutHtml +
+      '</div>';
+    }).join('');
   } catch (e) {
     el.innerHTML = '<div style="padding:12px;color:var(--red);font-family:JetBrains Mono,monospace;font-size:10px">Error: ' + esc(e.message) + '</div>';
   }
@@ -414,8 +449,9 @@ function renderMarketCards(markets) {
     var disputed = m.status === 5;
     var finalized = m.status === 6;
     var voided = m.status === 7;
+    var resolved = m.status === 2;
     var statusClass = open ? 'sp-o' : (expired || cancelled || voided) ? 'sp-e' : proposed ? 'sp-e' : disputed ? 'sp-d' : 'sp-f';
-    var statusLabel = open ? 'Open' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : 'Closed';
+    var statusLabel = open ? 'Open' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : resolved ? 'Resolved' : 'Closed';
     var mid = m.marketId || m.txHash;
     var total = m.qYes + m.qNo;
     var yesPct = total > 0n ? Number(m.qYes * 100n / total) : 50;
@@ -470,6 +506,7 @@ window.showDetail = function(marketId) {
   const disputed = m.status === 5;
   const finalized = m.status === 6;
   const voided = m.status === 7;
+  const resolved = m.status === 2;
   const total = m.qYes + m.qNo;
   const yesPct = total > 0n ? Number(m.qYes * 100n / total) : 50;
   const noPct = 100 - yesPct;
@@ -496,8 +533,8 @@ window.showDetail = function(marketId) {
     resolverRow.style.display = 'none';
   }
 
-  const statusLabels = {0:'Open',1:'Cancelled',4:'Proposed',5:'Disputed',6:'Finalized',7:'Voided',8:'Expired'};
-  const statusClasses = {0:'sp-o',1:'sp-e',4:'sp-e',5:'sp-d',6:'sp-f',7:'sp-e',8:'sp-e'};
+  const statusLabels = {0:'Open',1:'Cancelled',2:'Resolved',3:'Expired',4:'Proposed',5:'Disputed',6:'Finalized',7:'Voided',8:'Expired'};
+  const statusClasses = {0:'sp-o',1:'sp-e',2:'sp-f',3:'sp-e',4:'sp-e',5:'sp-d',6:'sp-f',7:'sp-e',8:'sp-e'};
   document.getElementById('det-status-pill').innerHTML = '<div class="spill ' + (statusClasses[m.status]||'sp-f') + '"><span class="dot"></span>' + (statusLabels[m.status]||'Closed') + '</div>';
 
   const yesBtn = document.getElementById('det-bet-yes');
@@ -513,10 +550,40 @@ window.showDetail = function(marketId) {
   const claimBtn   = document.getElementById('det-claim-btn');
   if (proposeBtn) {
     if (m.status === 8) {
-      proposeBtn.style.display = '';
-      proposeBtn.setAttribute('onclick', 'fillR(' + JSON.stringify(mid) + ', undefined)');
+      // COI-1: hide propose if signer is market creator
+      const signerIsCreator = signerAddress && m.creator && signerAddress.toLowerCase() === m.creator.toLowerCase();
+      // COI-2: hide propose if signer holds a position in this market
+      const signerHasPosition = (() => {
+        try {
+          const txs = JSON.parse(localStorage.getItem('praxis_tx_cache') || '[]');
+          return txs.some(tx =>
+            tx.messageType === 'submit_prediction' &&
+            tx.sender && tx.sender.toLowerCase() === (signerAddress||'').toLowerCase() &&
+            tx.transaction && tx.transaction.msg &&
+            (() => { try { return b2h(Uint8Array.from(atob(tx.transaction.msg.marketId||''), c=>c.charCodeAt(0))) === mid; } catch { return false; } })()
+          );
+        } catch { return false; }
+      })();
+      if (signerIsCreator) {
+        proposeBtn.style.display = '';
+        proposeBtn.disabled = true;
+        proposeBtn.title = 'Market creators cannot propose outcomes for their own markets';
+        proposeBtn.textContent = '⚖ Cannot Propose (Creator)';
+      } else if (signerHasPosition) {
+        proposeBtn.style.display = '';
+        proposeBtn.disabled = true;
+        proposeBtn.title = 'Forfeit your position before proposing';
+        proposeBtn.textContent = '⚖ Forfeit Position First';
+      } else {
+        proposeBtn.style.display = '';
+        proposeBtn.disabled = false;
+        proposeBtn.textContent = '⚖ Propose Outcome';
+        proposeBtn.setAttribute('onclick', 'fillR(' + JSON.stringify(mid) + ', undefined)');
+      }
     } else {
       proposeBtn.style.display = 'none';
+      proposeBtn.disabled = false;
+      proposeBtn.textContent = '⚖ Propose Outcome';
     }
   }
   if (claimBtn) {
@@ -535,6 +602,16 @@ window.showDetail = function(marketId) {
       reclaimBtn.setAttribute('onclick', 'fillReclaim(' + JSON.stringify(mid) + ')');
     } else {
       reclaimBtn.style.display = 'none';
+    }
+  }
+
+  const forfeitBtn = document.getElementById('det-forfeit-btn');
+  if (forfeitBtn) {
+    if (m.status === 0 && signerAddress && signerAddress !== m.creator) {
+      forfeitBtn.style.display = '';
+      forfeitBtn.setAttribute('onclick', 'fillForfeit(' + JSON.stringify(mid) + ')');
+    } else {
+      forfeitBtn.style.display = 'none';
     }
   }
 
@@ -598,7 +675,7 @@ function renderCurrentTab() {
   } else {
     // closed — rolling window of last CLOSED_WINDOW blocks
     markets = _allMarkets.filter(m =>
-      (m.status === 8 || m.status === 1 || m.status === 6 || m.status === 7) &&
+      (m.status === 8 || m.status === 1 || m.status === 6 || m.status === 7 || m.status === 2 || m.status === 3) &&
       m.expiry && Number(m.expiry) >= (currentHeight - CLOSED_WINDOW)
     );
   }
@@ -761,6 +838,16 @@ window.loadMarkets = async function () {
       try { const b = Uint8Array.from(atob(rawMid), c => c.charCodeAt(0)); marketId = b2h(b); } catch(e) {}
       if (!marketId || !marketsMap.has(marketId)) continue;
       marketsMap.get(marketId).status = 6;
+    }
+
+    for (const tx of allTxs) {
+      if (tx.messageType !== 'resolve_market') continue;
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const rawMid = msg.marketId || '';
+      let marketId = rawMid;
+      try { const b = Uint8Array.from(atob(rawMid), c => c.charCodeAt(0)); marketId = b2h(b); } catch(e) {}
+      if (!marketId || !marketsMap.has(marketId)) continue;
+      marketsMap.get(marketId).status = 2;
     }
 
     for (const tx of allTxs) {
@@ -1452,6 +1539,12 @@ window.clearScanCache = function() {
 // ERROR CODES
 // ═══════════════════════════════════════════
 const PRAXIS_ERRORS = {
+  124: 'Market has not expired yet — propose_outcome is only callable after expiry.',
+  181: 'Cannot finalize — dispute window is still open. Wait for the dispute period to close.',
+  4001: 'Resolver has an open position in this market. Use Forfeit Position before proposing.',
+  4002: 'Market creator cannot act as resolver for their own market.',
+  4003: 'This prediction exceeds the 20% position cap for one side. Try a smaller amount.',
+  4010: 'Storage error — please try again or contact support.',
   195: 'Dispute panel could not be formed',
   196: 'This market is not eligible for reclaim',
   197: "Reclaim window hasn't opened yet — wait 300 blocks after expiry",
@@ -1462,6 +1555,7 @@ const PRAXIS_ERRORS = {
 };
 
 function friendlyError(code, msg) {
+  if (!code && msg) { const m = msg.match(/"code":(\d+)/); if (m) code = parseInt(m[1]); }
   if (code && PRAXIS_ERRORS[code]) return PRAXIS_ERRORS[code];
   return msg || 'Unknown error';
 }
@@ -1585,4 +1679,32 @@ window.checkPositionCap = async function() {
     capEl.textContent = 'Position: ' + fmtA(newTotal) + ' PRX / Cap: ' + fmtA(cap) + ' PRX (' + pct + '% of pool)';
     if (btn) btn.removeAttribute('disabled');
   }
+};
+
+// ═══════════════════════════════════════════
+// FORFEIT POSITION
+// ═══════════════════════════════════════════
+window.build_forfeit = function() {
+  const mid      = document.getElementById('fo_mid').value.trim().toLowerCase();
+  const resolver = document.getElementById('fo_resolver').value.trim().toLowerCase();
+  const fee      = parseInt(document.getElementById('fo_fee').value) || 10000;
+  mid40(mid); addr40(resolver, 'Resolver Address');
+  const inner = encForfeit(mid, resolver);
+  showPL('foo','fop', buildUnsigned('forfeit_position','type.googleapis.com/types.MessageForfeitPosition',inner,{fee}));
+  toast('Payload built');
+};
+
+window.signAndSubmit_forfeit = async function() {
+  const mid      = document.getElementById('fo_mid').value.trim().toLowerCase();
+  const resolver = document.getElementById('fo_resolver').value.trim().toLowerCase();
+  const fee      = parseInt(document.getElementById('fo_fee').value) || 10000;
+  try { mid40(mid); addr40(resolver, 'Resolver Address'); } catch(e) { return toast(e.message, true); }
+  const inner = encForfeit(mid, resolver);
+  await doSubmit('forfeit_position','type.googleapis.com/types.MessageForfeitPosition',inner,{fee},'btn_forfeit','pend_forfeit');
+};
+
+window.fillForfeit = function(id) {
+  document.getElementById('fo_mid').value = id;
+  if (signerAddress) document.getElementById('fo_resolver').value = signerAddress;
+  showPage('forfeit', null);
 };
