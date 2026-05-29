@@ -260,7 +260,7 @@ func (x *QuorumCertificate) GetNonSigners(vs *ConsensusValidators) (nonSignerPub
 		// exit with empty qc error
 		return nil, 0, ErrEmptyQuorumCertificate()
 	}
-	// retrieve the non-signers from the signature using teh validator set
+	// retrieve the non-signers from the signature using the validator set
 	return x.Signature.GetNonSigners(vs)
 }
 
@@ -1187,7 +1187,7 @@ func (x DoubleSigner) MarshalJSON() ([]byte, error) {
 	return MarshalJSON(jsonDoubleSigner{Id: x.Id, Heights: x.Heights})
 }
 
-// MarshalJSON() implements the json.Unmarshaler interface for double signers
+// UnmarshalJSON() implements the json.Unmarshaler interface for double signers
 func (x *DoubleSigner) UnmarshalJSON(jsonBytes []byte) (err error) {
 	// create a new json object reference to ensure a non nil result
 	j := new(jsonDoubleSigner)

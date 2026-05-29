@@ -132,7 +132,7 @@ func ResolveAndReplacePort(netAddress *string, chainId uint64) (error ErrorI) {
 // HasChain() returns if the PeerAddress's PeerMeta has this chain
 func (x *PeerAddress) HasChain(id uint64) bool { return x.PeerMeta.ChainId == id }
 
-// peerAddressJSON is the json.Marshaller and json.Unmarshaler representation fo the PeerAddress object
+// peerAddressJSON is the json.Marshaller and json.Unmarshaler representation for the PeerAddress object
 type peerAddressJSON struct {
 	PublicKey  HexBytes  `json:"publicKey,omitempty"`
 	NetAddress string    `json:"netAddress,omitempty"`

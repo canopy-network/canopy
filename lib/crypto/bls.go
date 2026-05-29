@@ -45,7 +45,7 @@ func NewBLS12381PrivateKey() (PrivateKeyI, error) {
 	return newBLS12381PrivateKey(privateKey), nil
 }
 
-// StringToBLS12381PrivateKey() creates a new PrivateKeyI interface  from a BLS Private Key hex string
+// StringToBLS12381PrivateKey() creates a new PrivateKeyI interface from a BLS Private Key hex string
 func StringToBLS12381PrivateKey(hexString string) (PrivateKeyI, error) {
 	bz, err := hex.DecodeString(hexString)
 	if err != nil {
