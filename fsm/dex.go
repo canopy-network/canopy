@@ -2,11 +2,12 @@ package fsm
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
 	"math/big"
 	"sort"
 	"strings"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 /* Dex.go implements logic to handle AMM style atomic exchanges between root & nested chains
@@ -616,6 +617,8 @@ func (s *StateMachine) RotateDexBatches(receiptsHash []byte, lPoolSize, counterP
 	if err = s.Delete(KeyForNextBatch(chainId)); err != nil {
 		return
 	}
+	// delete it from the cache too
+	delete(s.cache.chainDexBatch, lib.BytesToString(KeyForNextBatch(chainId)))
 	// set the upcoming sell batch as 'last'
 	return s.SetDexBatch(KeyForLockedBatch(chainId), nextSellBatch)
 }
@@ -721,7 +724,11 @@ func (s *StateMachine) SetDexBatch(key []byte, b *lib.DexBatch) (err lib.ErrorI)
 	if err != nil {
 		return
 	}
-	return s.Set(key, value)
+	if err := s.Set(key, value); err != nil {
+		return err
+	}
+	s.cache.chainDexBatch[lib.BytesToString(key)] = b
+	return nil
 }
 
 // GetDexBatch() retrieves a sell batch from the state store
@@ -731,11 +738,16 @@ func (s *StateMachine) GetDexBatch(chainId uint64, locked bool, withPoints ...bo
 	if locked {
 		key = KeyForLockedBatch(chainId)
 	}
-	// get bytes from state
-	bz, err := s.Get(key)
-	if err != nil {
-		return
-	}
+	// ensures the pool points are attached to the batch whether
+	// the batch is retrieved from cache or state
+	defer func() {
+		if err == nil && len(withPoints) == 1 && withPoints[0] {
+			// set the pool points
+			b.PoolPoints = lPool.Points
+			// set total pool points
+			b.TotalPoolPoints = lPool.TotalPoolPoints
+		}
+	}()
 	// retrieve the liquidity pool from state
 	lPool, err = s.GetPool(chainId + LiquidityPoolAddend)
 	if err != nil {
@@ -744,6 +756,16 @@ func (s *StateMachine) GetDexBatch(chainId uint64, locked bool, withPoints ...bo
 	// create a new batch object reference to ensure no 'nil' batches are used
 	b = &lib.DexBatch{Committee: chainId, PoolSize: lPool.Amount}
 	defer b.EnsureNonNil()
+	// first, try to obtain the current batch from the cache to avoid unnecessary unmarshalling
+	if cached, ok := s.cache.chainDexBatch[lib.BytesToString(key)]; ok {
+		b = cached
+		return
+	}
+	// otherwise, get bytes from state
+	bz, err := s.Get(key)
+	if err != nil {
+		return
+	}
 	// check for nil bytes
 	if len(bz) == 0 {
 		return
@@ -751,12 +773,6 @@ func (s *StateMachine) GetDexBatch(chainId uint64, locked bool, withPoints ...bo
 	// populate the batch object with the bytes
 	err = lib.Unmarshal(bz, b)
 	// check if points should be attached
-	if len(withPoints) == 1 && withPoints[0] {
-		// set the pool points
-		b.PoolPoints = lPool.Points
-		// set total pool points
-		b.TotalPoolPoints = lPool.TotalPoolPoints
-	}
 	// exit
 	return
 }

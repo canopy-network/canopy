@@ -6,9 +6,10 @@ import (
 	"math"
 	"strings"
 
+	"sort"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"sort"
 )
 
 /* This file defines the account, pool, and supply tracker state interactions */
