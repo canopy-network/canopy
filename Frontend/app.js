@@ -47,7 +47,6 @@ function h2b(hex){hex=hex.trim().toLowerCase();if(hex.length%2)throw new Error('
 function b2h(b){return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');}
 function fmtA(n){if(!n&&n!==0)return'—';const x=Number(n);if(x>=1e9)return(x/1e9).toFixed(2)+'B';if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1e3)return(x/1e3).toFixed(1)+'k';return String(x);}
 function fmtPRX(n){if(!n&&n!==0)return'—';const x=Number(n)/1_000_000;if(x>=1e9)return(x/1e9).toFixed(2)+'B';if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1000)return(x/1000).toFixed(2)+'k';if(x>=1)return x.toFixed(2);return x.toFixed(6);}
-function fmtPRX(n){if(!n&&n!==0)return'—';const x=Number(n)/1_000_000;if(x>=1e9)return(x/1e9).toFixed(2)+'B';if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1000)return(x/1000).toFixed(2)+'k';if(x>=1)return x.toFixed(2);return x.toFixed(6);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function addr40(s,label){if(!s||s.length!==40)throw new Error(`${label||'Address'} must be 40 hex chars`);}
 function mid40(s){addr40(s,'Market ID');}
