@@ -97,6 +97,7 @@ MIN_RRS_TO_PROPOSE  uint64 = 10
 FINALIZATION_BOUNTY uint64 = 50_000_000
 CREATOR_BOND        uint64 = 5_000_000_000
 RRS_INITIAL         uint64 = 100
+MIN_RESOLVER_STAKE  uint64 = 500_000_000_000
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,6 +134,17 @@ var PRAXIS_TREASURY_ID = []byte{
 0xe7, 0xc7, 0xda, 0xd1, 0x31, 0xa0, 0x3f, 0x7e,
 0xa0, 0xcc, 0x09, 0xa6, 0x37, 0xad, 0x09, 0x6e,
 0xb3, 0x49, 0x5f, 0x77,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRAXIS_BUILDER_ADDRESS: destination for 20% builder treasury rewards (PRIS v1.0).
+// Cold wallet — separate from validator address.
+// ─────────────────────────────────────────────────────────────────────────────
+
+var PRAXIS_BUILDER_ADDRESS = []byte{
+	0x95, 0x43, 0x78, 0xba, 0x10, 0x9c, 0x5c, 0xa4,
+	0x5b, 0x23, 0xbf, 0xa2, 0x84, 0xf3, 0xac, 0x70,
+	0xe2, 0x67, 0x1b, 0x87,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

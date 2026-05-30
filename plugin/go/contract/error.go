@@ -265,6 +265,9 @@ return &PluginError{Code: 200, Module: errModule, Msg: "market creator cannot be
 func ErrPositionCapExceeded() *PluginError {
 return &PluginError{Code: 201, Module: errModule, Msg: "position would exceed per-address cap (20% of pool)"}
 }
+func ErrInsufficientResolverStake() *PluginError {
+return &PluginError{Code: 202, Module: errModule, Msg: "resolver stake below minimum (500,000 PRX required)"}
+}
 
 func ErrCheckResp(err *PluginError) *PluginCheckResponse {
 return &PluginCheckResponse{Error: err}

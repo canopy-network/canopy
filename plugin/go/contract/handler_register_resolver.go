@@ -4,8 +4,8 @@ func (c *Contract) CheckMessageRegisterResolver(msg *MessageRegisterResolver) *P
 if len(msg.ResolverAddress) != 20 {
 return ErrCheckResp(ErrInvalidAddress())
 }
-if msg.StakeAmount == 0 {
-return ErrCheckResp(ErrInvalidAmount())
+if msg.StakeAmount < MIN_RESOLVER_STAKE {
+return ErrCheckResp(ErrInsufficientResolverStake())
 }
 return &PluginCheckResponse{
 AuthorizedSigners: [][]byte{msg.ResolverAddress},
@@ -65,6 +65,9 @@ return &PluginDeliverResponse{Error: pe}
 }
 }
 
+if msg.StakeAmount < MIN_RESOLVER_STAKE {
+return &PluginDeliverResponse{Error: ErrInsufficientResolverStake()}
+}
 if fee > 0 && msg.StakeAmount > ^uint64(0)-fee {
 return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 }

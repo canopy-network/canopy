@@ -479,7 +479,7 @@ h, _ := getHeight()
 
 msg := &contract.MessageRegisterResolver{
 ResolverAddress: hexDecode(addr),
-StakeAmount:     100_000_000, // 100 PRX
+StakeAmount:     500_000_000_000, // 500,000 PRX minimum
 }
 txHash := submitTx(t, key, "register_resolver", "MessageRegisterResolver", msg, h)
 if err := waitForTx(addr, txHash, 60*time.Second); err != nil {
@@ -531,7 +531,7 @@ func TestPORSFullFlow(t *testing.T) {
         t.Log("Prediction submitted")
 
         // Step 3: Register resolver (separate address — COI-2: creator cannot resolve)
-        resolverKey, resolverAddr := setupResolver(t, key, addr, 200_000_000)
+        resolverKey, resolverAddr := setupResolver(t, key, addr, 500_000_000_000)
         h, _ = getHeight()
         _ = h
 
@@ -780,7 +780,7 @@ t.Fatalf("prediction B: %v", err)
 }
 
 // Register resolver (separate address — COI-2)
-resolverKey, resolverAddr := setupResolver(t, key, addr, 200_000_000)
+resolverKey, resolverAddr := setupResolver(t, key, addr, 500_000_000_000)
 
 // Wait for expiry
 expiryTarget := createMsg.ExpiryTime + 2
@@ -953,7 +953,7 @@ t.Fatalf("submit_prediction: %v", err)
 t.Logf("Single YES bettor cost: %d uPRX", cost)
 
 // Register resolver (separate address — COI-2)
-resolverKey, resolverAddr := setupResolver(t, key, addr, 200_000_000)
+resolverKey, resolverAddr := setupResolver(t, key, addr, 500_000_000_000)
 
 expiryTarget := createMsg.ExpiryTime + 2
 t.Logf("Waiting for expiry (height %d)...", expiryTarget)
@@ -1228,7 +1228,7 @@ t.Fatalf("prediction B (NO): %v", err)
 t.Logf("Bettor B (NO) cost: %d uPRX", costB)
 
 // Register resolver (separate address — COI-2)
-resolverKey, resolverAddr := setupResolver(t, key, addr, 200_000_000)
+resolverKey, resolverAddr := setupResolver(t, key, addr, 500_000_000_000)
 
 expiryTarget := createMsg.ExpiryTime + 2
 t.Logf("Waiting for expiry (height %d)...", expiryTarget)
@@ -1321,7 +1321,7 @@ func TestRegisterNewWalletAsResolver(t *testing.T) {
     h, _ = getHeight()
     msg := &contract.MessageRegisterResolver{
         ResolverAddress: hexDecode(kg.Address),
-        StakeAmount:     100_000_000,
+        StakeAmount:     500_000_000_000,
     }
     txHash := submitTx(t, kg, "register_resolver", "MessageRegisterResolver", msg, h)
     if err := waitForTx(kg.Address, txHash, 60*time.Second); err != nil {
@@ -1355,7 +1355,7 @@ func TestSetupNewWallet(t *testing.T) {
     h, _ = getHeight()
     regMsg := &contract.MessageRegisterResolver{
         ResolverAddress: hexDecode(newKg.Address),
-        StakeAmount:     100_000_000,
+        StakeAmount:     500_000_000_000,
     }
     txHash = submitTx(t, newKg, "register_resolver", "MessageRegisterResolver", regMsg, h)
     if err := waitForTx(newKg.Address, txHash, 60*time.Second); err != nil {
@@ -1429,7 +1429,7 @@ t.Log("Predictor holds YES position")
 h4, _ := getHeight()
 regMsg := &contract.MessageRegisterResolver{
 ResolverAddress: hexDecode(predictorAddr),
-StakeAmount:     100_000_000,
+StakeAmount:     500_000_000_000,
 }
 // Fund more for stake
 h4b, _ := getHeight()
@@ -1504,7 +1504,7 @@ t.Logf("market_id: %x", marketId)
 h2, _ := getHeight()
 regMsg := &contract.MessageRegisterResolver{
 ResolverAddress: hexDecode(validatorAddr),
-StakeAmount:     100_000_000,
+StakeAmount:     500_000_000_000,
 }
 regHash := submitTx(t, validatorKey, "register_resolver", "MessageRegisterResolver", regMsg, h2)
 if err := waitForTx(validatorAddr, regHash, 60*time.Second); err != nil {
