@@ -46,6 +46,8 @@ function boolF(f,v){return cat(tag(f,0),new Uint8Array([v?1:0]));}
 function h2b(hex){hex=hex.trim().toLowerCase();if(hex.length%2)throw new Error('Odd hex');const o=new Uint8Array(hex.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(hex.slice(i*2,i*2+2),16);return o;}
 function b2h(b){return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');}
 function fmtA(n){if(!n&&n!==0)return'—';const x=Number(n);if(x>=1e9)return(x/1e9).toFixed(2)+'B';if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1e3)return(x/1e3).toFixed(1)+'k';return String(x);}
+function fmtPRX(n){if(!n&&n!==0)return'—';const x=Number(n)/1_000_000;if(x>=1e9)return(x/1e9).toFixed(2)+'B';if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1000)return(x/1000).toFixed(2)+'k';if(x>=1)return x.toFixed(2);return x.toFixed(6);}
+function fmtPRX(n){if(!n&&n!==0)return'—';const x=Number(n)/1_000_000;if(x>=1e9)return(x/1e9).toFixed(2)+'B';if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1000)return(x/1000).toFixed(2)+'k';if(x>=1)return x.toFixed(2);return x.toFixed(6);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function addr40(s,label){if(!s||s.length!==40)throw new Error(`${label||'Address'} must be 40 hex chars`);}
 function mid40(s){addr40(s,'Market ID');}
@@ -293,7 +295,7 @@ window.queryAccount=async function(){
   try{
     const d=await rpc('/v1/query/account',{address:addr});
     document.getElementById('w_result').style.display='block';
-    document.getElementById('w_balance').textContent=Number(d.amount||0).toLocaleString();
+    document.getElementById('w_balance').textContent=fmtPRX(d.amount||0);
     document.getElementById('w_addrD').textContent=addr;
   }catch(e){toast('Query failed: '+e.message,true);}
 };
@@ -362,7 +364,7 @@ async function refreshBalance(){
   try{
     const d=await rpc('/v1/query/account',{address:signerAddress});
     const bal=Number(d.amount||0);
-    const wbal=document.getElementById('w_balance');if(wbal)wbal.textContent=bal.toLocaleString();
+    const wbal=document.getElementById('w_balance');if(wbal)wbal.textContent=fmtPRX(bal);
     const wres=document.getElementById('w_result');if(wres)wres.style.display='block';
     const wadr=document.getElementById('w_addrD');if(wadr)wadr.textContent=signerAddress;
     const waddr=document.getElementById('w_addr');if(waddr&&!waddr.value)waddr.value=signerAddress;
@@ -427,7 +429,7 @@ window.loadMyPredictions = async function () {
         const won       = m.proposedOutcome === p.outcome;
         if (won && winPool > 0n) {
           const payout = totalPool * p.shares / winPool;
-          payoutHtml = '<div style="margin-top:6px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--green)">✓ Est. payout: ' + fmtA(payout) + ' PRX</div>';
+          payoutHtml = '<div style="margin-top:6px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--green)">✓ Est. payout: ' + fmtPRX(payout) + ' PRX</div>';
         } else if (!won) {
           payoutHtml = '<div style="margin-top:6px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--red)">✗ Lost</div>';
         }
@@ -440,8 +442,8 @@ window.loadMyPredictions = async function () {
             '<div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--text3);margin-bottom:4px">MKT ' + p.marketId.slice(0,12) + '…</div>' +
             '<div style="display:flex;gap:12px">' +
               '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:' + (p.outcome ? 'var(--green)' : 'var(--red)') + '">' + (p.outcome ? 'YES' : 'NO') + '</span>' +
-              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Shares: ' + fmtA(p.shares) + '</span>' +
-              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Max: ' + fmtA(p.maxCost) + ' PRX</span>' +
+              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Shares: ' + fmtPRX(p.shares) + '</span>' +
+              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Max: ' + fmtPRX(p.maxCost) + ' PRX</span>' +
             '</div>' +
           '</div>' +
           '<span style="font-family:JetBrains Mono,monospace;font-size:9px;color:var(--text3)">#' + p.height + '</span>' +
@@ -503,17 +505,17 @@ function renderMarketCards(markets) {
     var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
     parts.push('<div class="' + cardClass + '">');
     var volume = m.qYes + m.qNo - m.lmsrSeed;
-    var volStr = volume > 0n ? fmtA(volume) + ' PRX Vol.' : '';
+    var volStr = volume > 0n ? fmtPRX(volume) + ' PRX Vol.' : '';
     parts.push('<div class="mc-head"><div class="mc-q" style="cursor:pointer" onclick="showDetail(\'' + mid + '\')">' + esc(m.question) + '</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div class="spill ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</div>' + (volStr ? '<div style="font-family:var(--font-mono);font-size:9px;color:var(--text3)">' + volStr + '</div>' : '') + '</div></div>');
     if (banner) parts.push(banner);
     parts.push('<div class="mc-prob"><div class="prob-row"><span class="prob-lbl">Implied probability</span><div class="prob-vals"><div style="text-align:center"><span class="pvy">' + yesPct + '%</span><span class="pvl">YES</span></div><div style="text-align:center"><span class="pvn">' + noPct + '%</span><span class="pvl">NO</span></div></div></div><div class="btrack"><div class="byes" style="width:' + yesPct + '%' + (finalized ? ';box-shadow:none;background:#4a4a4a' : '') + '"></div><div class="bno"' + (finalized ? ' style="background:#2a2a2a"' : '') + '></div></div></div>');
-    parts.push('<div class="mc-pools"><div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val">' + fmtA(m.qYes) + ' PRX</div></div><div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val">' + fmtA(m.qNo) + ' PRX</div></div></div>');
+    parts.push('<div class="mc-pools"><div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val">' + fmtPRX(m.qYes) + ' PRX</div></div><div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val">' + fmtPRX(m.qNo) + ' PRX</div></div></div>');
 
     var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
     var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
     parts.push('<div class="mc-acts"><button class="byes2" ' + actYes + '>BET YES</button><button class="bno2" ' + actNo + '>BET NO</button></div>');
     parts.push('<div class="card-foot"><div class="meta">');
-    parts.push('<div class="mitem"><span class="mlbl">Total pool</span><span class="mval g">' + fmtA(m.qYes + m.qNo) + ' PRX</span></div>');
+    parts.push('<div class="mitem"><span class="mlbl">Total pool</span><span class="mval g">' + fmtPRX(m.qYes + m.qNo) + ' PRX</span></div>');
     parts.push('<div class="mitem"><span class="mlbl">' + (open ? 'Expires' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : 'Closed') + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
     parts.push('<div class="mitem"><span class="mlbl">Creator</span><span class="mval">' + (m.creator ? m.creator.slice(0,8) + '…' : '???') + '</span></div>');
     parts.push('</div><span class="market-id">' + mid.slice(0,8) + '…</span></div>');
@@ -544,14 +546,14 @@ window.showDetail = function(marketId) {
   const mid = m.marketId || m.txHash;
 
   document.getElementById('det-question').textContent = m.question;
-  document.getElementById('det-qyes').textContent = fmtA(m.qYes) + ' PRX';
-  document.getElementById('det-qno').textContent = fmtA(m.qNo) + ' PRX';
+  document.getElementById('det-qyes').textContent = fmtPRX(m.qYes) + ' PRX';
+  document.getElementById('det-qno').textContent = fmtPRX(m.qNo) + ' PRX';
   document.getElementById('det-yes-pct').textContent = yesPct + '%';
   document.getElementById('det-no-pct').textContent = noPct + '%';
   document.getElementById('det-bar').style.width = yesPct + '%';
   document.getElementById('det-mid').textContent = mid;
   document.getElementById('det-creator').textContent = m.creator || '—';
-  document.getElementById('det-total').textContent = fmtA(m.qYes + m.qNo) + ' PRX';
+  document.getElementById('det-total').textContent = fmtPRX(m.qYes + m.qNo) + ' PRX';
   document.getElementById('det-expiry').textContent = m.expiry ? 'blk #' + Number(m.expiry) : '—';
 
   const resolverRow = document.getElementById('det-resolver-row');
@@ -911,7 +913,7 @@ window.loadMarkets = async function () {
 window.build_send=function(){try{
   const from=document.getElementById('s_from').value.trim().toLowerCase();
   const to=document.getElementById('s_to').value.trim().toLowerCase();
-  const amt=parseInt(document.getElementById('s_amount').value);
+  const amt=parseInt(document.getElementById('s_amount').value)*1000000;
   const fee=parseInt(document.getElementById('s_fee').value)||10000;
   addr40(from,'From');addr40(to,'To');if(!amt||amt<=0)throw new Error('Amount > 0 required');
   showPL('so','sp',buildUnsigned('send','type.googleapis.com/types.MessageSend',encSend(from,to,amt),{fee}));toast('Payload built');
@@ -919,7 +921,7 @@ window.build_send=function(){try{
 window.signAndSubmit_send=async function(){try{
   const from=document.getElementById('s_from').value.trim().toLowerCase();
   const to=document.getElementById('s_to').value.trim().toLowerCase();
-  const amt=parseInt(document.getElementById('s_amount').value);
+  const amt=parseInt(document.getElementById('s_amount').value)*1000000;
   const fee=parseInt(document.getElementById('s_fee').value)||10000;
   addr40(from,'From');addr40(to,'To');if(!amt||amt<=0)throw new Error('Amount > 0');
   await doSubmit('send','type.googleapis.com/types.MessageSend',encSend(from,to,amt),{fee},'btn_send','pend_send');
@@ -929,7 +931,7 @@ window.signAndSubmit_send=async function(){try{
 window.build_create=function(){try{
   const q=document.getElementById('c_question').value.trim();
   const cr=document.getElementById('c_creator').value.trim().toLowerCase();
-  const b0=parseInt(document.getElementById('c_b0').value);
+  const b0=parseInt(document.getElementById('c_b0').value)*1000000;
   const exp=parseInt(document.getElementById('c_expiry').value)||currentHeight+1000;
   const fee=parseInt(document.getElementById('c_fee').value)||10000;
   let nonce=document.getElementById('c_nonce').value;
@@ -941,7 +943,7 @@ window.build_create=function(){try{
 window.signAndSubmit_create=async function(){try{
   const q=document.getElementById('c_question').value.trim();
   const cr=document.getElementById('c_creator').value.trim().toLowerCase();
-  const b0=parseInt(document.getElementById('c_b0').value);
+  const b0=parseInt(document.getElementById('c_b0').value)*1000000;
   const exp=parseInt(document.getElementById('c_expiry').value)||currentHeight+1000;
   const fee=parseInt(document.getElementById('c_fee').value)||10000;
   let nonce=document.getElementById('c_nonce').value;
@@ -955,19 +957,21 @@ window.signAndSubmit_create=async function(){try{
 window.build_predict=function(){try{
   const mid=document.getElementById('p_mid').value.trim().toLowerCase();mid40(mid);
   const bettor=document.getElementById('p_bettor').value.trim().toLowerCase();addr40(bettor,'Bettor');
-  const shares=parseInt(document.getElementById('p_shares').value);
-  const mc=parseInt(document.getElementById('p_maxcost').value);
+  const sharesInput=parseInt(document.getElementById("p_shares").value);
+  const shares=sharesInput*1000000;
+  const mc=parseInt(document.getElementById('p_maxcost').value)*1000000;
   const fee=parseInt(document.getElementById('p_fee').value)||10000;
-  if(shares<1)throw new Error('Shares min 1 PRX');
+  if(sharesInput<1)throw new Error("Shares min 1 PRX");
   showPL('po','pp',buildUnsigned('submit_prediction','type.googleapis.com/types.MessageSubmitPrediction',encPredict(mid,bettor,selectedOut,shares,mc),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_predict=async function(){try{
   const mid=document.getElementById('p_mid').value.trim().toLowerCase();mid40(mid);
   const bettor=document.getElementById('p_bettor').value.trim().toLowerCase();addr40(bettor,'Bettor');
-  const shares=parseInt(document.getElementById('p_shares').value);
-  const mc=parseInt(document.getElementById('p_maxcost').value);
+  const sharesInput=parseInt(document.getElementById("p_shares").value);
+  const shares=sharesInput*1000000;
+  const mc=parseInt(document.getElementById('p_maxcost').value)*1000000;
   const fee=parseInt(document.getElementById('p_fee').value)||10000;
-  if(shares<1)throw new Error('Shares min 1 PRX');
+  if(sharesInput<1)throw new Error("Shares min 1 PRX");
   await doSubmit('submit_prediction','type.googleapis.com/types.MessageSubmitPrediction',encPredict(mid,bettor,selectedOut,shares,mc),{fee},'btn_predict','pend_predict');
 }catch(e){toast(e.message,true);}};
 
@@ -1002,14 +1006,14 @@ window.signAndSubmit_claim=async function(){try{
 // ── REGISTER RESOLVER
 window.build_register=function(){try{
   const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
-  const stake=parseInt(document.getElementById('reg_stake').value);
+  const stake=parseInt(document.getElementById('reg_stake').value)*1000000;
   const fee=parseInt(document.getElementById('reg_fee').value)||10000;
   if(stake<100)throw new Error('Stake min 100 PRX');
   showPL('rego','regp',buildUnsigned('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_register=async function(){try{
   const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
-  const stake=parseInt(document.getElementById('reg_stake').value);
+  const stake=parseInt(document.getElementById('reg_stake').value)*1000000;
   const fee=parseInt(document.getElementById('reg_fee').value)||10000;
   if(stake<100)throw new Error('Stake min 100 PRX');
   await doSubmit('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee},'btn_register','pend_register');
@@ -1019,14 +1023,14 @@ window.signAndSubmit_register=async function(){try{
 window.build_propose=function(){try{
   const mid=document.getElementById('prop_mid').value.trim().toLowerCase();mid40(mid);
   const res=document.getElementById('prop_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
-  const bond=parseInt(document.getElementById('prop_bond').value);
+  const bond=parseInt(document.getElementById('prop_bond').value)*1000000;
   const fee=parseInt(document.getElementById('prop_fee').value)||10000;
   showPL('propo','propp',buildUnsigned('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_propose=async function(){try{
   const mid=document.getElementById('prop_mid').value.trim().toLowerCase();mid40(mid);
   const res=document.getElementById('prop_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
-  const bond=parseInt(document.getElementById('prop_bond').value);
+  const bond=parseInt(document.getElementById('prop_bond').value)*1000000;
   const fee=parseInt(document.getElementById('prop_fee').value)||10000;
   await doSubmit('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee},'btn_propose','pend_propose');
 }catch(e){toast(e.message,true);}};
@@ -1035,14 +1039,14 @@ window.signAndSubmit_propose=async function(){try{
 window.build_dispute=function(){try{
   const mid=document.getElementById('dis_mid').value.trim().toLowerCase();mid40(mid);
   const addr=document.getElementById('dis_addr').value.trim().toLowerCase();addr40(addr,'Disputer');
-  const bond=parseInt(document.getElementById('dis_bond').value);
+  const bond=parseInt(document.getElementById('dis_bond').value)*1000000;
   const fee=parseInt(document.getElementById('dis_fee').value)||10000;
   showPL('diso','disp',buildUnsigned('file_dispute','type.googleapis.com/types.MessageFileDispute',encDispute(mid,addr,bond),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_dispute=async function(){try{
   const mid=document.getElementById('dis_mid').value.trim().toLowerCase();mid40(mid);
   const addr=document.getElementById('dis_addr').value.trim().toLowerCase();addr40(addr,'Disputer');
-  const bond=parseInt(document.getElementById('dis_bond').value);
+  const bond=parseInt(document.getElementById('dis_bond').value)*1000000;
   const fee=parseInt(document.getElementById('dis_fee').value)||10000;
   await doSubmit('file_dispute','type.googleapis.com/types.MessageFileDispute',encDispute(mid,addr,bond),{fee},'btn_dispute','pend_dispute');
 }catch(e){toast(e.message,true);}};
@@ -1710,7 +1714,7 @@ updateSignerUI = function() {
 window.checkPositionCap = async function() {
   const mid    = document.getElementById('p_mid').value.trim().toLowerCase();
   const bettor = document.getElementById('p_bettor').value.trim().toLowerCase();
-  const mc     = parseInt(document.getElementById('p_maxcost').value) || 0;
+  const mc     = (parseInt(document.getElementById('p_maxcost').value) || 0)*1000000;
   const capEl  = document.getElementById('cap_indicator');
   const btn    = document.getElementById('btn_predict');
 
@@ -1745,13 +1749,13 @@ window.checkPositionCap = async function() {
     capEl.style.background = 'rgba(255,61,90,.08)';
     capEl.style.border = '1px solid rgba(255,61,90,.3)';
     capEl.style.color = 'var(--red)';
-    capEl.textContent = '⚠ Exceeds 20% position cap — max ' + fmtA(remaining) + ' PRX remaining';
+    capEl.textContent = '⚠ Exceeds 20% position cap — max ' + fmtPRX(remaining) + ' PRX remaining';
     if (btn) btn.setAttribute('disabled', '');
   } else {
     capEl.style.background = 'rgba(0,232,122,.05)';
     capEl.style.border = '1px solid rgba(0,232,122,.15)';
     capEl.style.color = 'var(--text2)';
-    capEl.textContent = 'Position: ' + fmtA(newTotal) + ' PRX / Cap: ' + fmtA(cap) + ' PRX (' + pct + '% of pool)';
+    capEl.textContent = 'Position: ' + fmtPRX(newTotal) + ' PRX / Cap: ' + fmtPRX(cap) + ' PRX (' + pct + '% of pool)';
     if (btn) btn.removeAttribute('disabled');
   }
 };
