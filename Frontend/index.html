@@ -228,6 +228,24 @@
     </div>
   </div></div>
 
+  <!-- Quick Unlock (saved session) -->
+  <div class="card" id="ks_quick_wrap" style="display:none"><div class="ci">
+    <div class="ct">// quick_unlock</div>
+    <div class="alert ag" style="margin-bottom:12px">Saved keystore detected — enter password to restore session.</div>
+    <div class="field">
+      <label>Account</label>
+      <div class="addr-mono" id="ks_quick_addr" style="color:var(--green);font-size:12px"></div>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_quick_pw" type="password" placeholder="Keystore password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="quickUnlock()">⚡ Quick Unlock</button>
+      <button class="btn bsec" onclick="localStorage.removeItem('praxis_keystore');checkSavedKeystore();toast('Saved keystore cleared')">Forget</button>
+    </div>
+  </div></div>
+
   <!-- Import Keystore -->
   <div class="card"><div class="ci">
     <div class="ct">// import_keystore</div>

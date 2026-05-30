@@ -277,6 +277,7 @@ window.loadKey=async function(){
   }catch(e){signerPrivKey=signerPubKey=signerAddress=null;toast('Key load failed: '+e.message,true);}
 };
 window.clearKey=function(){
+  localStorage.removeItem('praxis_keystore');
   signerPrivKey=signerPubKey=signerAddress=null;
   document.getElementById('keyStatus').className='kstat';
   document.getElementById('keyStatus').textContent='○ No key loaded';
@@ -1369,6 +1370,7 @@ document.getElementById('ni_host').value=getRPCHost();
 buildMobNav();
 checkRPC();
 setInterval(checkRPC,12000);
+checkSavedKeystore();
 
 // ═══════════════════════════════════════════
 // KEYSTORE — AES-GCM + Argon2id (Canopy official format)
@@ -1484,6 +1486,51 @@ window.createKeystore = async function() {
   } catch(e) { toast('Create failed: ' + e.message, true); }
 };
 
+window.checkSavedKeystore = function() {
+  const saved = localStorage.getItem('praxis_keystore');
+  const wrap = document.getElementById('ks_quick_wrap');
+  if (!wrap) return;
+  if (saved) {
+    const raw = JSON.parse(saved);
+    const addr = raw.keyAddress || '?';
+    document.getElementById('ks_quick_addr').textContent = addr.slice(0,8) + '…' + addr.slice(-6);
+    wrap.style.display = '';
+  } else {
+    wrap.style.display = 'none';
+  }
+};
+
+window.quickUnlock = async function() {
+  const pw = document.getElementById('ks_quick_pw').value;
+  if (!pw) return toast('Enter password', true);
+  const saved = localStorage.getItem('praxis_keystore');
+  if (!saved) return toast('No saved keystore', true);
+  try {
+    const raw = JSON.parse(saved);
+    if (!raw.encrypted || !raw.salt || !raw.iv || !raw.publicKey) throw new Error('Invalid saved keystore');
+    if (raw.argon2) { window._argon2Override = raw.argon2; } else { window._argon2Override = null; }
+    let privBytes;
+    try {
+      privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, raw.kdf || 'argon2id');
+    } catch(e) {
+      privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, 'pbkdf2');
+    }
+    let pubKey = bls12_381.getPublicKey(privBytes);
+    if (b2h(pubKey) !== raw.publicKey) {
+      try { privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, 'pbkdf2'); pubKey = bls12_381.getPublicKey(privBytes); } catch(e2) {}
+    }
+    if (b2h(pubKey) !== raw.publicKey) throw new Error('Wrong password');
+    const hash = await crypto.subtle.digest('SHA-256', pubKey);
+    const address = b2h(new Uint8Array(hash).slice(0, 20));
+    signerPrivKey = privBytes;
+    signerPubKey = pubKey;
+    signerAddress = address;
+    updateSignerUI();
+    toast('Session restored — ' + address.slice(0,8) + '…');
+    document.getElementById('ks_quick_pw').value = '';
+  } catch(e) { toast('Unlock failed: ' + e.message, true); }
+};
+
 window.importKeystore = async function() {
   const pw   = document.getElementById('ks_imp_pw').value;
   const file = document.getElementById('ks_imp_file').files[0];
@@ -1519,8 +1566,10 @@ window.importKeystore = async function() {
     signerAddress = address;
     updateSignerUI();
     toast('Keystore unlocked — ' + address.slice(0,8) + '…');
+    localStorage.setItem('praxis_keystore', JSON.stringify(raw));
     document.getElementById('ks_imp_pw').value = '';
     document.getElementById('ks_imp_file').value = '';
+    checkSavedKeystore();
   } catch(e) { console.error('Import failed full error:', e); toast('Import failed: ' + e.message, true); }
 };
 
