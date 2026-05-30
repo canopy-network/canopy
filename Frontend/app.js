@@ -1370,7 +1370,6 @@ document.getElementById('ni_host').value=getRPCHost();
 buildMobNav();
 checkRPC();
 setInterval(checkRPC,12000);
-checkSavedKeystore();
 
 // ═══════════════════════════════════════════
 // KEYSTORE — AES-GCM + Argon2id (Canopy official format)
@@ -1835,3 +1834,4 @@ window.fillForfeit = function(id) {
   if (signerAddress) document.getElementById('fo_resolver').value = signerAddress;
   showPage('forfeit', null);
 };
+checkSavedKeystore();
