@@ -97,22 +97,50 @@ async function blsSign(msg){
 }
 
 // ═══════════════════════════════════════════
+// BASE64 HELPER (for proto JSON encoding)
+// ═══════════════════════════════════════════
+function b2b64(bytes){
+  let s='';for(let i=0;i<bytes.length;i++)s+=String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+// ═══════════════════════════════════════════
 // BUILD SIGNED TX
+// node expects snake_case JSON (proto3 JSON mapping) with base64 bytes
+// Transaction fields: message_type, msg{type_url,value}, signature{public_key,signature},
+//   created_height, time, fee, memo, network_id, chain_id
 // ═══════════════════════════════════════════
 async function buildSigned(msgType,typeUrl,inner,meta){
   const txTime=BigInt(Date.now())*1000n;
   const p={txTime,fee:meta.fee||10000,height:meta.height||currentHeight,memo:'',netId:currentNetworkID,chainId:currentChainID};
   const sb=encSignBytes(msgType,typeUrl,inner,p);
   const sig=await blsSign(sb);
-  const sigObj={publicKey:b2h(signerPubKey),signature:b2h(sig)};
-  const base={signature:sigObj,createdHeight:p.height,time:Number(txTime),fee:p.fee,memo:'',networkID:currentNetworkID,chainID:currentChainID};
-  return{type:msgType,...base,msgTypeUrl:typeUrl,msgBytes:b2h(inner)};
+  return {
+    message_type: msgType,
+    msg: { type_url: typeUrl, value: b2b64(inner) },
+    signature: { public_key: b2b64(signerPubKey), signature: b2b64(sig) },
+    created_height: p.height,
+    time: Number(txTime),
+    fee: p.fee,
+    memo: '',
+    network_id: currentNetworkID,
+    chain_id: currentChainID,
+  };
 }
 
 function buildUnsigned(msgType,typeUrl,inner,meta){
   const txTime=BigInt(Date.now())*1000n;
-  const base={signature:null,createdHeight:meta.height||currentHeight,time:Number(txTime),fee:meta.fee||10000,memo:'',networkID:1,chainID:1};
-  return{type:msgType,...base,msgTypeUrl:typeUrl,msgBytes:b2h(inner)};
+  return {
+    message_type: msgType,
+    msg: { type_url: typeUrl, value: b2b64(inner) },
+    signature: null,
+    created_height: meta.height||currentHeight,
+    time: Number(txTime),
+    fee: meta.fee||10000,
+    memo: '',
+    network_id: currentNetworkID||1,
+    chain_id: currentChainID||1,
+  };
 }
 
 // ═══════════════════════════════════════════
@@ -190,7 +218,9 @@ updateTL();
 // ═══════════════════════════════════════════
 window.checkRPC=async function(){
   try{
-    const d=await rpc('/v1/query/height',{});currentHeight=d.height||0;if(d.networkID)currentNetworkID=d.networkID;if(d.chainID)currentChainID=d.chainID;
+    const d=await rpc('/v1/query/height',{});currentHeight=d.height||0;
+    currentNetworkID=d.network_id||d.networkID||currentNetworkID;
+    currentChainID=d.chain_id||d.chainID||currentChainID;
     ['rpcDot','rpcDotM'].forEach(id=>{const e=document.getElementById(id);if(e)e.className='dot live';});
     const el=document.getElementById('rpcStatus');if(el)el.textContent='live';
     const hb=document.getElementById('hBadge');if(hb)hb.textContent=`block ${currentHeight}`;
@@ -1337,41 +1367,60 @@ checkRPC();
 setInterval(checkRPC,12000);
 
 // ═══════════════════════════════════════════
-// KEYSTORE — AES-GCM + PBKDF2
+// KEYSTORE — AES-GCM + Argon2id (Canopy official format)
+// Uses argon2-bundled.min.js (must be served alongside app.js)
 // ═══════════════════════════════════════════
-async function deriveKey(password, salt) {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
+
+// Argon2id params matching Canopy CLI keystore
+const ARGON2_TIME    = 3;
+const ARGON2_MEM     = 65536; // 64 MB
+const ARGON2_THREADS = 4;
+const ARGON2_KEYLEN  = 32;
+
+async function deriveKeyArgon2(password, salt) {
+  // argon2-bundled exposes window.argon2
+  if (!window.argon2) throw new Error('Argon2 library not loaded — ensure argon2-bundled.min.js is present');
+  const result = await window.argon2.hash({
+    pass: password,
+    salt: salt,           // Uint8Array
+    time: ARGON2_TIME,
+    mem:  ARGON2_MEM,
+    hashLen: ARGON2_KEYLEN,
+    parallelism: ARGON2_THREADS,
+    type: window.argon2.ArgonType.Argon2id,
+  });
+  // result.hash is Uint8Array of 32 bytes — import as AES-GCM key
+  return crypto.subtle.importKey('raw', result.hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
 async function encryptKey(privKeyBytes, password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv   = crypto.getRandomValues(new Uint8Array(12));
-  const key  = await deriveKey(password, salt);
+  const key  = await deriveKeyArgon2(password, salt);
   const enc  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, privKeyBytes);
   return {
+    kdf:  'argon2id',
     salt: b2h(salt),
     iv:   b2h(iv),
-    encrypted: b2h(new Uint8Array(enc))
+    encrypted: b2h(new Uint8Array(enc)),
+    argon2: { time: ARGON2_TIME, mem: ARGON2_MEM, threads: ARGON2_THREADS, keylen: ARGON2_KEYLEN },
   };
 }
 
-async function decryptKey(encrypted, iv, salt, password) {
-  const key = await deriveKey(password, h2b(salt));
-  const dec = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: h2b(iv) },
-    key,
-    h2b(encrypted)
-  );
+async function decryptKey(encrypted, iv, salt, password, kdf) {
+  let key;
+  if (!kdf || kdf === 'argon2id') {
+    key = await deriveKeyArgon2(password, h2b(salt));
+  } else {
+    // legacy PBKDF2 fallback for old keystores
+    const enc = new TextEncoder();
+    const km = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+    key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: h2b(salt), iterations: 200000, hash: 'SHA-256' },
+      km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    );
+  }
+  const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: h2b(iv) }, key, h2b(encrypted));
   return new Uint8Array(dec);
 }
 
@@ -1393,9 +1442,11 @@ window.createKeystore = async function() {
 
     const keystore = {
       version: 1,
+      kdf: 'argon2id',
       publicKey: b2h(pubKey),
       keyAddress: address,
-      salt, iv, encrypted
+      salt, iv, encrypted,
+      argon2: { time: ARGON2_TIME, mem: ARGON2_MEM, threads: ARGON2_THREADS, keylen: ARGON2_KEYLEN },
     };
 
     // download
@@ -1427,7 +1478,7 @@ window.importKeystore = async function() {
     const ks   = JSON.parse(text);
     if (!ks.encrypted || !ks.salt || !ks.iv || !ks.publicKey) throw new Error('Invalid keystore file');
 
-    const privBytes = await decryptKey(ks.encrypted, ks.iv, ks.salt, pw);
+    const privBytes = await decryptKey(ks.encrypted, ks.iv, ks.salt, pw, ks.kdf || 'argon2id');
     const pubKey    = bls12_381.getPublicKey(privBytes);
 
     // verify pubkey matches
