@@ -297,3 +297,8 @@ code{font-family:var(--font-mono);font-size:11px;background:var(--bg2);padding:1
 .mtab{padding:6px 16px;font-family:var(--font-mono);font-size:10px;letter-spacing:1px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s;border-radius:2px}
 .mtab:hover{border-color:var(--green);color:var(--green)}
 .mtab.active{background:var(--gdim);border-color:var(--green);color:var(--green)}
+
+/* Keystore account card selector */
+.ks-acct-card:hover { border-color: var(--green) !important; }
+.ks-acct-active { border-color: var(--green) !important; }
+.ks-acct-active div:last-child { background: var(--green) !important; }

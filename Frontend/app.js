@@ -116,15 +116,16 @@ async function buildSigned(msgType,typeUrl,inner,meta){
   const sb=encSignBytes(msgType,typeUrl,inner,p);
   const sig=await blsSign(sb);
   return {
-    message_type: msgType,
-    msg: { type_url: typeUrl, value: b2b64(inner) },
-    signature: { public_key: b2b64(signerPubKey), signature: b2b64(sig) },
-    created_height: p.height,
+    type: msgType,
+    msgTypeUrl: typeUrl,
+    msgBytes: b2h(inner),
+    signature: { publicKey: b2h(signerPubKey), signature: b2h(sig) },
+    createdHeight: p.height,
     time: Number(txTime),
     fee: p.fee,
     memo: '',
-    network_id: currentNetworkID,
-    chain_id: currentChainID,
+    networkID: currentNetworkID,
+    chainID: currentChainID,
   };
 }
 
@@ -1383,10 +1384,10 @@ async function deriveKeyArgon2(password, salt) {
   const result = await window.argon2.hash({
     pass: password,
     salt: salt,           // Uint8Array
-    time: ARGON2_TIME,
-    mem:  ARGON2_MEM,
-    hashLen: ARGON2_KEYLEN,
-    parallelism: ARGON2_THREADS,
+    time: window._argon2Override?.time || ARGON2_TIME,
+    mem:  window._argon2Override?.mem  || ARGON2_MEM,
+    hashLen: window._argon2Override?.keylen || ARGON2_KEYLEN,
+    parallelism: window._argon2Override?.threads || ARGON2_THREADS,
     type: window.argon2.ArgonType.Argon2id,
   });
   // result.hash is Uint8Array of 32 bytes — import as AES-GCM key
@@ -1408,19 +1409,32 @@ async function encryptKey(privKeyBytes, password) {
 }
 
 async function decryptKey(encrypted, iv, salt, password, kdf) {
-  let key;
-  if (!kdf || kdf === 'argon2id') {
+  let key, nonce;
+  if (kdf === 'canopy') {
+    // Canopy CLI format: Argon2i (not id), mem=32MB, keyLen=32, nonce=key[:12]
+    if (!window.argon2) throw new Error('Argon2 library not loaded');
+    const result = await window.argon2.hash({
+      pass: password, salt: h2b(salt),
+      time: 3, mem: 32768, hashLen: 32,
+      parallelism: 4, type: window.argon2.ArgonType.Argon2i,
+    });
+    const keyBytes = result.hash;  // 32 bytes
+    nonce = keyBytes.slice(0, 12); // nonce = key[:12]
+    key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
+  } else if (!kdf || kdf === 'argon2id') {
     key = await deriveKeyArgon2(password, h2b(salt));
+    nonce = h2b(iv);
   } else {
-    // legacy PBKDF2 fallback for old keystores
+    // legacy PBKDF2 fallback
     const enc = new TextEncoder();
     const km = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
     key = await crypto.subtle.deriveKey(
       { name: 'PBKDF2', salt: h2b(salt), iterations: 200000, hash: 'SHA-256' },
       km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
     );
+    nonce = h2b(iv);
   }
-  const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: h2b(iv) }, key, h2b(encrypted));
+  const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, key, h2b(encrypted));
   return new Uint8Array(dec);
 }
 
@@ -1475,18 +1489,28 @@ window.importKeystore = async function() {
 
   try {
     const text = await file.text();
-    const ks   = JSON.parse(text);
-    if (!ks.encrypted || !ks.salt || !ks.iv || !ks.publicKey) throw new Error('Invalid keystore file');
+    const raw  = JSON.parse(text);
 
-    const privBytes = await decryptKey(ks.encrypted, ks.iv, ks.salt, pw, ks.kdf || 'argon2id');
-    const pubKey    = bls12_381.getPublicKey(privBytes);
-
-    // verify pubkey matches
-    if (b2h(pubKey) !== ks.publicKey) throw new Error('Wrong password or corrupted keystore');
-
+    // Praxis flat format
+    if (!raw.encrypted || !raw.salt || !raw.iv || !raw.publicKey) throw new Error('Invalid keystore file');
+    if (raw.argon2) { window._argon2Override = raw.argon2; } else { window._argon2Override = null; }
+    let privBytes;
+    try {
+      privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, raw.kdf || 'argon2id');
+    } catch(e) {
+      privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, 'pbkdf2');
+    }
+    let pubKey = bls12_381.getPublicKey(privBytes);
+    if (b2h(pubKey) !== raw.publicKey) {
+      // try pbkdf2 fallback
+      try {
+        privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, 'pbkdf2');
+        pubKey = bls12_381.getPublicKey(privBytes);
+      } catch(e2) {}
+    }
+    if (b2h(pubKey) !== raw.publicKey) throw new Error('Wrong password or corrupted keystore');
     const hash    = await crypto.subtle.digest('SHA-256', pubKey);
     const address = b2h(new Uint8Array(hash).slice(0, 20));
-
     signerPrivKey = privBytes;
     signerPubKey  = pubKey;
     signerAddress = address;
@@ -1494,7 +1518,7 @@ window.importKeystore = async function() {
     toast('Keystore unlocked — ' + address.slice(0,8) + '…');
     document.getElementById('ks_imp_pw').value = '';
     document.getElementById('ks_imp_file').value = '';
-  } catch(e) { toast('Import failed: ' + e.message, true); }
+  } catch(e) { console.error('Import failed full error:', e); toast('Import failed: ' + e.message, true); }
 };
 
 function updateSignerUI() {
