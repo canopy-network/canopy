@@ -112,7 +112,7 @@ func waitForTx(sender, txHash string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		data, _ := postJSON(queryRPCURL+"/v1/query/txs-by-sender",
-			fmt.Sprintf(`{"address":%q,"perPage":20}`, sender))
+			fmt.Sprintf(`{"address":%q,"perPage":50}`, sender))
 		var r struct {
 			Results []struct {
 				TxHash string `json:"txHash"`
