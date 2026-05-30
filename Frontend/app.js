@@ -1732,14 +1732,19 @@ window.fillReclaim = function(id) {
 async function checkRoles() {
   if (!signerAddress) return;
 
-  // Check ADMIN — is signer a validator?
-  try {
-    const d = await rpc('/v1/query/validators', {});
-    const validators = (d.results || []).map(v => v.address.toLowerCase());
-    const isAdmin = validators.includes(signerAddress.toLowerCase());
-    document.getElementById('nav-admin-section').style.display = isAdmin ? '' : 'none';
-    document.querySelectorAll('.nav-admin-item').forEach(el => el.style.display = isAdmin ? '' : 'none');
-  } catch(e) {}
+  // Superadmin — full access regardless of role
+  const SUPERADMIN = '8e14dc0ce537f1c75036f11d7495d60882aa6731';
+  if (signerAddress.toLowerCase() === SUPERADMIN) {
+    document.getElementById('nav-resolver-section').style.display = '';
+    document.querySelectorAll('.nav-resolver-item').forEach(el => el.style.display = '');
+    document.getElementById('nav-admin-section').style.display = '';
+    document.querySelectorAll('.nav-admin-item').forEach(el => el.style.display = '');
+    return;
+  }
+
+  // Admin section — superadmin only (handled above)
+  document.getElementById('nav-admin-section').style.display = 'none';
+  document.querySelectorAll('.nav-admin-item').forEach(el => el.style.display = 'none');
 
   // Check RESOLVER — has a register_resolver tx in scanned data
   const isResolver = _allMarkets.length >= 0 && (() => {

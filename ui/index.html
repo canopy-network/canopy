@@ -116,6 +116,7 @@
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Creator</span><span class="mval" id="det-creator" style="word-break:break-all">—</span></div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Total Pool</span><span class="mval g" id="det-total">—</span></div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Expiry</span><span class="mval" id="det-expiry">—</span></div>
+      <div class="mitem" id="det-rules-row" style="padding:8px 0;border-bottom:1px solid var(--border);display:none"><span class="mlbl">Rules</span><span class="mval" id="det-rules" style="white-space:pre-wrap;font-size:11px">—</span></div>
       <div class="mitem" style="padding:8px 0" id="det-resolver-row"><span class="mlbl">Resolver</span><span class="mval" id="det-resolver">—</span></div>
     </div>
     <div class="card" id="det-banner-card" style="display:none;margin-bottom:12px"></div>
@@ -141,7 +142,7 @@
     <div class="ct">// prediction_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="p_mid" type="text" placeholder="40 hex chars" oninput="checkPositionCap()"/></div><div class="field"><label>Bettor Address</label><input id="p_bettor" type="text" placeholder="40 hex chars" oninput="checkPositionCap()"/></div></div>
     <div class="field"><label>Outcome</label><div class="otog"><div class="obtn yes active" id="btn_yes" onclick="setOut(true)">YES</div><div class="obtn no" id="btn_no" onclick="setOut(false)">NO</div></div></div>
-    <div class="r3"><div class="field"><label>Shares</label><input id="p_shares" type="number" value="1000000"/><div class="hint">1 share = 1,000,000</div></div><div class="field"><label>Max Cost (uPRX)</label><input id="p_maxcost" type="number" value="10000000" oninput="checkPositionCap()"/></div><div class="field"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div></div>
+    <div class="r3"><div class="field"><label>Shares (PRX)</label><input id="p_shares" type="number" value="1"/><div class="hint">Min 1 PRX</div></div><div class="field"><label>Max Cost (PRX)</label><input id="p_maxcost" type="number" value="100" oninput="checkPositionCap()"/></div><div class="field"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div></div>
     <div class="brow"><button class="btn bp" id="btn_predict" onclick="signAndSubmit_predict()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_predict()">Build Payload</button></div>
     <div id="cap_indicator" style="display:none;margin-bottom:8px;padding:8px 12px;font-family:var(--font-mono);font-size:10px;border-radius:2px"></div>
     <div class="pend" id="pend_predict"><span class="blink">▪▪▪</span> broadcasting…</div>
@@ -203,7 +204,7 @@
   <div class="card"><div class="ci">
     <div class="ct">// send_prx</div>
     <div class="r2"><div class="field"><label>From Address</label><input id="s_from" type="text" placeholder="40 hex chars"/></div><div class="field"><label>To Address</label><input id="s_to" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="r2"><div class="field"><label>Amount (uPRX)</label><input id="s_amount" type="number" value="1000000"/></div><div class="field"><label>Fee (uPRX)</label><input id="s_fee" type="number" value="10000"/></div></div>
+    <div class="r2"><div class="field"><label>Amount (PRX)</label><input id="s_amount" type="number" value="1"/></div><div class="field"><label>Fee (uPRX)</label><input id="s_fee" type="number" value="10000"/></div></div>
     <div class="brow"><button class="btn bp" id="btn_send" onclick="signAndSubmit_send()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_send()">Build Payload</button></div>
     <div class="pend" id="pend_send"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="so"><div class="plbl">// unsigned_payload</div><textarea id="sp" readonly></textarea></div>
@@ -228,6 +229,24 @@
     </div>
   </div></div>
 
+  <!-- Quick Unlock (saved session) -->
+  <div class="card" id="ks_quick_wrap" style="display:none"><div class="ci">
+    <div class="ct">// quick_unlock</div>
+    <div class="alert ag" style="margin-bottom:12px">Saved keystore detected — enter password to restore session.</div>
+    <div class="field">
+      <label>Account</label>
+      <div class="addr-mono" id="ks_quick_addr" style="color:var(--green);font-size:12px"></div>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_quick_pw" type="password" placeholder="Keystore password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="quickUnlock()">⚡ Quick Unlock</button>
+      <button class="btn bsec" onclick="localStorage.removeItem('praxis_keystore');checkSavedKeystore();toast('Saved keystore cleared')">Forget</button>
+    </div>
+  </div></div>
+
   <!-- Import Keystore -->
   <div class="card"><div class="ci">
     <div class="ct">// import_keystore</div>
@@ -235,6 +254,7 @@
       <label>Keystore File (.json)</label>
       <input id="ks_imp_file" type="file" accept=".json"/>
       <div class="hint">Upload your encrypted Praxis keystore JSON</div>
+
     </div>
     <div class="field">
       <label>Password</label>
@@ -279,10 +299,10 @@
 <!-- RESOLVER SECTION -->
 <div class="page" id="page-register">
   <div class="ph ph-r"><div class="ph-eye">Resolver Role</div><div class="ph-title">Register as Resolver</div><div class="ph-sub">Stake $PRX to gain eligibility to propose market outcomes</div></div>
-  <div class="alert ay">Min stake 100,000,000 uPRX. Dishonest proposals result in bond slashing.</div>
+  <div class="alert ay">Min stake 100 PRX. Dishonest proposals result in bond slashing.</div>
   <div class="card r-card"><div class="ci">
     <div class="ct">// resolver_registration</div>
-    <div class="r2"><div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Stake Amount (uPRX)</label><input id="reg_stake" type="number" value="100000000"/></div></div>
+    <div class="r2"><div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Stake Amount (PRX)</label><input id="reg_stake" type="number" value="100"/></div></div>
     <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="reg_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bamb" id="btn_register" onclick="signAndSubmit_register()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_register()">Build Payload</button></div>
     <div class="pend" id="pend_register"><span class="blink">▪▪▪</span> broadcasting…</div>
@@ -297,7 +317,7 @@
     <div class="ct">// proposal_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="prop_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Resolver Address</label><input id="prop_resolver" type="text" placeholder="40 hex chars"/></div></div>
     <div class="field"><label>Proposed Outcome</label><div class="otog"><div class="obtn yes active" id="pbtn_yes" onclick="setPropOut(true)">YES</div><div class="obtn no" id="pbtn_no" onclick="setPropOut(false)">NO</div></div></div>
-    <div class="r2"><div class="field"><label>Proposal Bond (uPRX)</label><input id="prop_bond" type="number" value="60000000"/><div class="hint">min = ComputeMinBond(market)</div></div><div class="field"><label>Fee (uPRX)</label><input id="prop_fee" type="number" value="10000"/></div></div>
+    <div class="r2"><div class="field"><label>Proposal Bond (PRX)</label><input id="prop_bond" type="number" value="60"/><div class="hint">min = ComputeMinBond(market)</div></div><div class="field"><label>Fee (uPRX)</label><input id="prop_fee" type="number" value="10000"/></div></div>
     <div class="brow"><button class="btn bamb" id="btn_propose" onclick="signAndSubmit_propose()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_propose()">Build Payload</button></div>
     <div class="pend" id="pend_propose"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="propo"><div class="plbl">// unsigned_payload</div><textarea id="propp" readonly></textarea></div>
@@ -310,7 +330,7 @@
   <div class="card r-card"><div class="ci">
     <div class="ct">// dispute_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="dis_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Disputer Address</label><input id="dis_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="r2"><div class="field"><label>Dispute Bond (uPRX)</label><input id="dis_bond" type="number" value="60000000"/></div><div class="field"><label>Fee (uPRX)</label><input id="dis_fee" type="number" value="10000"/></div></div>
+    <div class="r2"><div class="field"><label>Dispute Bond (PRX)</label><input id="dis_bond" type="number" value="60"/></div><div class="field"><label>Fee (uPRX)</label><input id="dis_fee" type="number" value="10000"/></div></div>
     <div class="brow"><button class="btn bamb" id="btn_dispute" onclick="signAndSubmit_dispute()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_dispute()">Build Payload</button></div>
     <div class="pend" id="pend_dispute"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="diso"><div class="plbl">// unsigned_payload</div><textarea id="disp" readonly></textarea></div>
@@ -370,11 +390,12 @@
 <!-- ADMIN SECTION -->
 <div class="page" id="page-create">
   <div class="ph ph-a"><div class="ph-eye">Admin · Market Creation</div><div class="ph-title">Create Market</div><div class="ph-sub">Deploy a new YES/NO prediction market with LMSR liquidity</div></div>
-  <div class="alert ap">B0 minimum 60,000,000 uPRX (50M bounty reserve + 10M LMSR seed).</div>
+  <div class="alert ap">B0 minimum 60 PRX (50 PRX bounty reserve + 10 PRX LMSR seed).</div>
   <div class="card a-card"><div class="ci">
     <div class="ct">// market_parameters</div>
     <div class="field"><label>Market Question</label><textarea id="c_question" placeholder="Will Praxis launch on mainnet before Q3 2026?"></textarea></div>
-    <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (uPRX)</label><input id="c_b0" type="number" value="60000000"/></div></div>
+    <div class="field"><label>Resolution Rules <span style="color:var(--text3);font-size:10px">(optional)</span></label><textarea id="c_rules" placeholder="Resolves YES if... Source: ... Edge cases: ..."></textarea></div>
+    <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (PRX)</label><input id="c_b0" type="number" value="60"/></div></div>
     <div class="r3"><div class="field"><label>Expiry Block</label><input id="c_expiry" type="number" placeholder="auto-fill"/></div><div class="field"><label>Nonce</label><input id="c_nonce" type="text" placeholder="auto-fill"/></div><div class="field"><label>Fee (uPRX)</label><input id="c_fee" type="number" value="10000"/></div></div>
     <div class="brow"><button class="btn bp" id="btn_create" onclick="signAndSubmit_create()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_create()">Build Payload</button></div>
     <div class="pend" id="pend_create"><span class="blink">▪▪▪</span> broadcasting…</div>
@@ -443,6 +464,7 @@
   </div>
 </div>
 
+<script src="argon2-bundled.min.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

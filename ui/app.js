@@ -46,6 +46,7 @@ function boolF(f,v){return cat(tag(f,0),new Uint8Array([v?1:0]));}
 function h2b(hex){hex=hex.trim().toLowerCase();if(hex.length%2)throw new Error('Odd hex');const o=new Uint8Array(hex.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(hex.slice(i*2,i*2+2),16);return o;}
 function b2h(b){return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');}
 function fmtA(n){if(!n&&n!==0)return'—';const x=Number(n);if(x>=1e9)return(x/1e9).toFixed(2)+'B';if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1e3)return(x/1e3).toFixed(1)+'k';return String(x);}
+function fmtPRX(n){if(!n&&n!==0)return'—';const x=Number(n)/1_000_000;if(x>=1e9)return(x/1e9).toFixed(2)+'B';if(x>=1e6)return(x/1e6).toFixed(2)+'M';if(x>=1000)return(x/1000).toFixed(2)+'k';if(x>=1)return x.toFixed(2);return x.toFixed(6);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function addr40(s,label){if(!s||s.length!==40)throw new Error(`${label||'Address'} must be 40 hex chars`);}
 function mid40(s){addr40(s,'Market ID');}
@@ -59,7 +60,7 @@ function encAny(typeUrl,inner){return cat(sf(1,typeUrl),bf(2,inner));}
 // INNER MESSAGE ENCODERS — field numbers match tx.proto
 // ═══════════════════════════════════════════
 function encSend(from,to,amt){return cat(bf(1,h2b(from)),bf(2,h2b(to)),vf(3,amt));}
-function encCreate(creator,b0,expiry,nonce,question){return cat(bf(1,h2b(creator)),vf(2,b0),vf(3,expiry),vf(4,nonce),sf(5,question));}
+function encCreate(creator,b0,expiry,nonce,question,rules){return cat(bf(1,h2b(creator)),vf(2,b0),vf(3,expiry),vf(4,nonce),sf(5,question),sf(6,rules||''));}
 function encPredict(mid,bettor,outcome,shares,maxcost){return cat(bf(1,h2b(mid)),bf(2,h2b(bettor)),boolF(3,outcome),vf(4,shares),vf(5,maxcost));}
 function encResolve(mid,resolver,outcome){return cat(bf(1,h2b(mid)),bf(2,h2b(resolver)),boolF(3,outcome));}
 function encClaim(mid,claimant){return cat(bf(1,h2b(mid)),bf(2,h2b(claimant)));}
@@ -97,22 +98,51 @@ async function blsSign(msg){
 }
 
 // ═══════════════════════════════════════════
+// BASE64 HELPER (for proto JSON encoding)
+// ═══════════════════════════════════════════
+function b2b64(bytes){
+  let s='';for(let i=0;i<bytes.length;i++)s+=String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+// ═══════════════════════════════════════════
 // BUILD SIGNED TX
+// node expects snake_case JSON (proto3 JSON mapping) with base64 bytes
+// Transaction fields: message_type, msg{type_url,value}, signature{public_key,signature},
+//   created_height, time, fee, memo, network_id, chain_id
 // ═══════════════════════════════════════════
 async function buildSigned(msgType,typeUrl,inner,meta){
   const txTime=BigInt(Date.now())*1000n;
   const p={txTime,fee:meta.fee||10000,height:meta.height||currentHeight,memo:'',netId:currentNetworkID,chainId:currentChainID};
   const sb=encSignBytes(msgType,typeUrl,inner,p);
   const sig=await blsSign(sb);
-  const sigObj={publicKey:b2h(signerPubKey),signature:b2h(sig)};
-  const base={signature:sigObj,createdHeight:p.height,time:Number(txTime),fee:p.fee,memo:'',networkID:currentNetworkID,chainID:currentChainID};
-  return{type:msgType,...base,msgTypeUrl:typeUrl,msgBytes:b2h(inner)};
+  return {
+    type: msgType,
+    msgTypeUrl: typeUrl,
+    msgBytes: b2h(inner),
+    signature: { publicKey: b2h(signerPubKey), signature: b2h(sig) },
+    createdHeight: p.height,
+    time: Number(txTime),
+    fee: p.fee,
+    memo: '',
+    networkID: currentNetworkID,
+    chainID: currentChainID,
+  };
 }
 
 function buildUnsigned(msgType,typeUrl,inner,meta){
   const txTime=BigInt(Date.now())*1000n;
-  const base={signature:null,createdHeight:meta.height||currentHeight,time:Number(txTime),fee:meta.fee||10000,memo:'',networkID:1,chainID:1};
-  return{type:msgType,...base,msgTypeUrl:typeUrl,msgBytes:b2h(inner)};
+  return {
+    message_type: msgType,
+    msg: { type_url: typeUrl, value: b2b64(inner) },
+    signature: null,
+    created_height: meta.height||currentHeight,
+    time: Number(txTime),
+    fee: meta.fee||10000,
+    memo: '',
+    network_id: currentNetworkID||1,
+    chain_id: currentChainID||1,
+  };
 }
 
 // ═══════════════════════════════════════════
@@ -190,7 +220,9 @@ updateTL();
 // ═══════════════════════════════════════════
 window.checkRPC=async function(){
   try{
-    const d=await rpc('/v1/query/height',{});currentHeight=d.height||0;if(d.networkID)currentNetworkID=d.networkID;if(d.chainID)currentChainID=d.chainID;
+    const d=await rpc('/v1/query/height',{});currentHeight=d.height||0;
+    currentNetworkID=d.network_id||d.networkID||currentNetworkID;
+    currentChainID=d.chain_id||d.chainID||currentChainID;
     ['rpcDot','rpcDotM'].forEach(id=>{const e=document.getElementById(id);if(e)e.className='dot live';});
     const el=document.getElementById('rpcStatus');if(el)el.textContent='live';
     const hb=document.getElementById('hBadge');if(hb)hb.textContent=`block ${currentHeight}`;
@@ -245,6 +277,7 @@ window.loadKey=async function(){
   }catch(e){signerPrivKey=signerPubKey=signerAddress=null;toast('Key load failed: '+e.message,true);}
 };
 window.clearKey=function(){
+  localStorage.removeItem('praxis_keystore');
   signerPrivKey=signerPubKey=signerAddress=null;
   document.getElementById('keyStatus').className='kstat';
   document.getElementById('keyStatus').textContent='○ No key loaded';
@@ -262,7 +295,7 @@ window.queryAccount=async function(){
   try{
     const d=await rpc('/v1/query/account',{address:addr});
     document.getElementById('w_result').style.display='block';
-    document.getElementById('w_balance').textContent=Number(d.amount||0).toLocaleString();
+    document.getElementById('w_balance').textContent=fmtPRX(d.amount||0);
     document.getElementById('w_addrD').textContent=addr;
   }catch(e){toast('Query failed: '+e.message,true);}
 };
@@ -331,7 +364,7 @@ async function refreshBalance(){
   try{
     const d=await rpc('/v1/query/account',{address:signerAddress});
     const bal=Number(d.amount||0);
-    const wbal=document.getElementById('w_balance');if(wbal)wbal.textContent=bal.toLocaleString();
+    const wbal=document.getElementById('w_balance');if(wbal)wbal.textContent=fmtPRX(bal);
     const wres=document.getElementById('w_result');if(wres)wres.style.display='block';
     const wadr=document.getElementById('w_addrD');if(wadr)wadr.textContent=signerAddress;
     const waddr=document.getElementById('w_addr');if(waddr&&!waddr.value)waddr.value=signerAddress;
@@ -396,7 +429,7 @@ window.loadMyPredictions = async function () {
         const won       = m.proposedOutcome === p.outcome;
         if (won && winPool > 0n) {
           const payout = totalPool * p.shares / winPool;
-          payoutHtml = '<div style="margin-top:6px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--green)">✓ Est. payout: ' + fmtA(payout) + ' PRX</div>';
+          payoutHtml = '<div style="margin-top:6px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--green)">✓ Est. payout: ' + fmtPRX(payout) + ' PRX</div>';
         } else if (!won) {
           payoutHtml = '<div style="margin-top:6px;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--red)">✗ Lost</div>';
         }
@@ -409,8 +442,8 @@ window.loadMyPredictions = async function () {
             '<div style="font-family:JetBrains Mono,monospace;font-size:10px;color:var(--text3);margin-bottom:4px">MKT ' + p.marketId.slice(0,12) + '…</div>' +
             '<div style="display:flex;gap:12px">' +
               '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:' + (p.outcome ? 'var(--green)' : 'var(--red)') + '">' + (p.outcome ? 'YES' : 'NO') + '</span>' +
-              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Shares: ' + fmtA(p.shares) + '</span>' +
-              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Max: ' + fmtA(p.maxCost) + ' PRX</span>' +
+              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Shares: ' + fmtPRX(p.shares) + '</span>' +
+              '<span style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--text2)">Max: ' + fmtPRX(p.maxCost) + ' PRX</span>' +
             '</div>' +
           '</div>' +
           '<span style="font-family:JetBrains Mono,monospace;font-size:9px;color:var(--text3)">#' + p.height + '</span>' +
@@ -472,17 +505,17 @@ function renderMarketCards(markets) {
     var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
     parts.push('<div class="' + cardClass + '">');
     var volume = m.qYes + m.qNo - m.lmsrSeed;
-    var volStr = volume > 0n ? fmtA(volume) + ' PRX Vol.' : '';
+    var volStr = volume > 0n ? fmtPRX(volume) + ' PRX Vol.' : '';
     parts.push('<div class="mc-head"><div class="mc-q" style="cursor:pointer" onclick="showDetail(\'' + mid + '\')">' + esc(m.question) + '</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div class="spill ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</div>' + (volStr ? '<div style="font-family:var(--font-mono);font-size:9px;color:var(--text3)">' + volStr + '</div>' : '') + '</div></div>');
     if (banner) parts.push(banner);
     parts.push('<div class="mc-prob"><div class="prob-row"><span class="prob-lbl">Implied probability</span><div class="prob-vals"><div style="text-align:center"><span class="pvy">' + yesPct + '%</span><span class="pvl">YES</span></div><div style="text-align:center"><span class="pvn">' + noPct + '%</span><span class="pvl">NO</span></div></div></div><div class="btrack"><div class="byes" style="width:' + yesPct + '%' + (finalized ? ';box-shadow:none;background:#4a4a4a' : '') + '"></div><div class="bno"' + (finalized ? ' style="background:#2a2a2a"' : '') + '></div></div></div>');
-    parts.push('<div class="mc-pools"><div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val">' + fmtA(m.qYes) + ' PRX</div></div><div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val">' + fmtA(m.qNo) + ' PRX</div></div></div>');
+    parts.push('<div class="mc-pools"><div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val">' + fmtPRX(m.qYes) + ' PRX</div></div><div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val">' + fmtPRX(m.qNo) + ' PRX</div></div></div>');
 
     var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
     var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
     parts.push('<div class="mc-acts"><button class="byes2" ' + actYes + '>BET YES</button><button class="bno2" ' + actNo + '>BET NO</button></div>');
     parts.push('<div class="card-foot"><div class="meta">');
-    parts.push('<div class="mitem"><span class="mlbl">Total pool</span><span class="mval g">' + fmtA(m.qYes + m.qNo) + ' PRX</span></div>');
+    parts.push('<div class="mitem"><span class="mlbl">Total pool</span><span class="mval g">' + fmtPRX(m.qYes + m.qNo) + ' PRX</span></div>');
     parts.push('<div class="mitem"><span class="mlbl">' + (open ? 'Expires' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : 'Closed') + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
     parts.push('<div class="mitem"><span class="mlbl">Creator</span><span class="mval">' + (m.creator ? m.creator.slice(0,8) + '…' : '???') + '</span></div>');
     parts.push('</div><span class="market-id">' + mid.slice(0,8) + '…</span></div>');
@@ -513,15 +546,21 @@ window.showDetail = function(marketId) {
   const mid = m.marketId || m.txHash;
 
   document.getElementById('det-question').textContent = m.question;
-  document.getElementById('det-qyes').textContent = fmtA(m.qYes) + ' PRX';
-  document.getElementById('det-qno').textContent = fmtA(m.qNo) + ' PRX';
+  document.getElementById('det-qyes').textContent = fmtPRX(m.qYes) + ' PRX';
+  document.getElementById('det-qno').textContent = fmtPRX(m.qNo) + ' PRX';
   document.getElementById('det-yes-pct').textContent = yesPct + '%';
   document.getElementById('det-no-pct').textContent = noPct + '%';
   document.getElementById('det-bar').style.width = yesPct + '%';
   document.getElementById('det-mid').textContent = mid;
   document.getElementById('det-creator').textContent = m.creator || '—';
-  document.getElementById('det-total').textContent = fmtA(m.qYes + m.qNo) + ' PRX';
+  document.getElementById('det-total').textContent = fmtPRX(m.qYes + m.qNo) + ' PRX';
   document.getElementById('det-expiry').textContent = m.expiry ? 'blk #' + Number(m.expiry) : '—';
+  const rulesRow = document.getElementById('det-rules-row');
+  const rulesEl = document.getElementById('det-rules');
+  if (rulesRow && rulesEl) {
+    if (m.rules) { rulesEl.textContent = m.rules; rulesRow.style.display = ''; }
+    else { rulesRow.style.display = 'none'; }
+  }
 
   const resolverRow = document.getElementById('det-resolver-row');
   if (m.resolver) {
@@ -745,6 +784,7 @@ window.loadMarkets = async function () {
       if (tx.messageType !== 'create_market') continue;
       const msg = (tx.transaction && tx.transaction.msg) || {};
       const question = msg.question || '';
+      const rules    = msg.rules || '';
       const creator  = tx.sender || '';
       const b0       = BigInt(msg.b0 || 0);
       const expiry   = BigInt(msg.expiryTime || msg.expiry_time || 0);
@@ -770,6 +810,7 @@ window.loadMarkets = async function () {
           txHash: tx.txHash || '',
           marketId,
           question: question || '(no question)',
+          rules: rules || '',
           creator,
           b0,
           lmsrSeed,
@@ -880,7 +921,7 @@ window.loadMarkets = async function () {
 window.build_send=function(){try{
   const from=document.getElementById('s_from').value.trim().toLowerCase();
   const to=document.getElementById('s_to').value.trim().toLowerCase();
-  const amt=parseInt(document.getElementById('s_amount').value);
+  const amt=parseInt(document.getElementById('s_amount').value)*1000000;
   const fee=parseInt(document.getElementById('s_fee').value)||10000;
   addr40(from,'From');addr40(to,'To');if(!amt||amt<=0)throw new Error('Amount > 0 required');
   showPL('so','sp',buildUnsigned('send','type.googleapis.com/types.MessageSend',encSend(from,to,amt),{fee}));toast('Payload built');
@@ -888,7 +929,7 @@ window.build_send=function(){try{
 window.signAndSubmit_send=async function(){try{
   const from=document.getElementById('s_from').value.trim().toLowerCase();
   const to=document.getElementById('s_to').value.trim().toLowerCase();
-  const amt=parseInt(document.getElementById('s_amount').value);
+  const amt=parseInt(document.getElementById('s_amount').value)*1000000;
   const fee=parseInt(document.getElementById('s_fee').value)||10000;
   addr40(from,'From');addr40(to,'To');if(!amt||amt<=0)throw new Error('Amount > 0');
   await doSubmit('send','type.googleapis.com/types.MessageSend',encSend(from,to,amt),{fee},'btn_send','pend_send');
@@ -898,45 +939,49 @@ window.signAndSubmit_send=async function(){try{
 window.build_create=function(){try{
   const q=document.getElementById('c_question').value.trim();
   const cr=document.getElementById('c_creator').value.trim().toLowerCase();
-  const b0=parseInt(document.getElementById('c_b0').value);
+  const b0=parseInt(document.getElementById('c_b0').value)*1000000;
   const exp=parseInt(document.getElementById('c_expiry').value)||currentHeight+1000;
   const fee=parseInt(document.getElementById('c_fee').value)||10000;
   let nonce=document.getElementById('c_nonce').value;
   if(!nonce)nonce=BigInt(Date.now())*1000n;
   else nonce=parseInt(nonce);
+  const rules=document.getElementById('c_rules').value.trim();
   if(!q)throw new Error('Question required');addr40(cr,'Creator');
-  showPL('co','cp',buildUnsigned('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q),{fee}));toast('Payload built');
+  showPL('co','cp',buildUnsigned('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,rules),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_create=async function(){try{
   const q=document.getElementById('c_question').value.trim();
   const cr=document.getElementById('c_creator').value.trim().toLowerCase();
-  const b0=parseInt(document.getElementById('c_b0').value);
+  const b0=parseInt(document.getElementById('c_b0').value)*1000000;
   const exp=parseInt(document.getElementById('c_expiry').value)||currentHeight+1000;
   const fee=parseInt(document.getElementById('c_fee').value)||10000;
   let nonce=document.getElementById('c_nonce').value;
   if(!nonce)nonce=BigInt(Date.now())*1000n;
   else nonce=parseInt(nonce);
+  const rules=document.getElementById('c_rules').value.trim();
   if(!q)throw new Error('Question required');addr40(cr,'Creator');
-  await doSubmit('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q),{fee},'btn_create','pend_create');
+  await doSubmit('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,rules),{fee},'btn_create','pend_create');
 }catch(e){toast(e.message,true);}};
 
 // ── SUBMIT PREDICTION
 window.build_predict=function(){try{
   const mid=document.getElementById('p_mid').value.trim().toLowerCase();mid40(mid);
   const bettor=document.getElementById('p_bettor').value.trim().toLowerCase();addr40(bettor,'Bettor');
-  const shares=parseInt(document.getElementById('p_shares').value);
-  const mc=parseInt(document.getElementById('p_maxcost').value);
+  const sharesInput=parseInt(document.getElementById("p_shares").value);
+  const shares=sharesInput*1000000;
+  const mc=parseInt(document.getElementById('p_maxcost').value)*1000000;
   const fee=parseInt(document.getElementById('p_fee').value)||10000;
-  if(shares<1)throw new Error('Shares min 1 PRX');
+  if(sharesInput<1)throw new Error("Shares min 1 PRX");
   showPL('po','pp',buildUnsigned('submit_prediction','type.googleapis.com/types.MessageSubmitPrediction',encPredict(mid,bettor,selectedOut,shares,mc),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_predict=async function(){try{
   const mid=document.getElementById('p_mid').value.trim().toLowerCase();mid40(mid);
   const bettor=document.getElementById('p_bettor').value.trim().toLowerCase();addr40(bettor,'Bettor');
-  const shares=parseInt(document.getElementById('p_shares').value);
-  const mc=parseInt(document.getElementById('p_maxcost').value);
+  const sharesInput=parseInt(document.getElementById("p_shares").value);
+  const shares=sharesInput*1000000;
+  const mc=parseInt(document.getElementById('p_maxcost').value)*1000000;
   const fee=parseInt(document.getElementById('p_fee').value)||10000;
-  if(shares<1)throw new Error('Shares min 1 PRX');
+  if(sharesInput<1)throw new Error("Shares min 1 PRX");
   await doSubmit('submit_prediction','type.googleapis.com/types.MessageSubmitPrediction',encPredict(mid,bettor,selectedOut,shares,mc),{fee},'btn_predict','pend_predict');
 }catch(e){toast(e.message,true);}};
 
@@ -971,14 +1016,14 @@ window.signAndSubmit_claim=async function(){try{
 // ── REGISTER RESOLVER
 window.build_register=function(){try{
   const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
-  const stake=parseInt(document.getElementById('reg_stake').value);
+  const stake=parseInt(document.getElementById('reg_stake').value)*1000000;
   const fee=parseInt(document.getElementById('reg_fee').value)||10000;
   if(stake<100)throw new Error('Stake min 100 PRX');
   showPL('rego','regp',buildUnsigned('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_register=async function(){try{
   const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
-  const stake=parseInt(document.getElementById('reg_stake').value);
+  const stake=parseInt(document.getElementById('reg_stake').value)*1000000;
   const fee=parseInt(document.getElementById('reg_fee').value)||10000;
   if(stake<100)throw new Error('Stake min 100 PRX');
   await doSubmit('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee},'btn_register','pend_register');
@@ -988,14 +1033,14 @@ window.signAndSubmit_register=async function(){try{
 window.build_propose=function(){try{
   const mid=document.getElementById('prop_mid').value.trim().toLowerCase();mid40(mid);
   const res=document.getElementById('prop_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
-  const bond=parseInt(document.getElementById('prop_bond').value);
+  const bond=parseInt(document.getElementById('prop_bond').value)*1000000;
   const fee=parseInt(document.getElementById('prop_fee').value)||10000;
   showPL('propo','propp',buildUnsigned('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_propose=async function(){try{
   const mid=document.getElementById('prop_mid').value.trim().toLowerCase();mid40(mid);
   const res=document.getElementById('prop_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
-  const bond=parseInt(document.getElementById('prop_bond').value);
+  const bond=parseInt(document.getElementById('prop_bond').value)*1000000;
   const fee=parseInt(document.getElementById('prop_fee').value)||10000;
   await doSubmit('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee},'btn_propose','pend_propose');
 }catch(e){toast(e.message,true);}};
@@ -1004,14 +1049,14 @@ window.signAndSubmit_propose=async function(){try{
 window.build_dispute=function(){try{
   const mid=document.getElementById('dis_mid').value.trim().toLowerCase();mid40(mid);
   const addr=document.getElementById('dis_addr').value.trim().toLowerCase();addr40(addr,'Disputer');
-  const bond=parseInt(document.getElementById('dis_bond').value);
+  const bond=parseInt(document.getElementById('dis_bond').value)*1000000;
   const fee=parseInt(document.getElementById('dis_fee').value)||10000;
   showPL('diso','disp',buildUnsigned('file_dispute','type.googleapis.com/types.MessageFileDispute',encDispute(mid,addr,bond),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_dispute=async function(){try{
   const mid=document.getElementById('dis_mid').value.trim().toLowerCase();mid40(mid);
   const addr=document.getElementById('dis_addr').value.trim().toLowerCase();addr40(addr,'Disputer');
-  const bond=parseInt(document.getElementById('dis_bond').value);
+  const bond=parseInt(document.getElementById('dis_bond').value)*1000000;
   const fee=parseInt(document.getElementById('dis_fee').value)||10000;
   await doSubmit('file_dispute','type.googleapis.com/types.MessageFileDispute',encDispute(mid,addr,bond),{fee},'btn_dispute','pend_dispute');
 }catch(e){toast(e.message,true);}};
@@ -1337,41 +1382,73 @@ checkRPC();
 setInterval(checkRPC,12000);
 
 // ═══════════════════════════════════════════
-// KEYSTORE — AES-GCM + PBKDF2
+// KEYSTORE — AES-GCM + Argon2id (Canopy official format)
+// Uses argon2-bundled.min.js (must be served alongside app.js)
 // ═══════════════════════════════════════════
-async function deriveKey(password, salt) {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
+
+// Argon2id params matching Canopy CLI keystore
+const ARGON2_TIME    = 3;
+const ARGON2_MEM     = 65536; // 64 MB
+const ARGON2_THREADS = 4;
+const ARGON2_KEYLEN  = 32;
+
+async function deriveKeyArgon2(password, salt) {
+  // argon2-bundled exposes window.argon2
+  if (!window.argon2) throw new Error('Argon2 library not loaded — ensure argon2-bundled.min.js is present');
+  const result = await window.argon2.hash({
+    pass: password,
+    salt: salt,           // Uint8Array
+    time: window._argon2Override?.time || ARGON2_TIME,
+    mem:  window._argon2Override?.mem  || ARGON2_MEM,
+    hashLen: window._argon2Override?.keylen || ARGON2_KEYLEN,
+    parallelism: window._argon2Override?.threads || ARGON2_THREADS,
+    type: window.argon2.ArgonType.Argon2id,
+  });
+  // result.hash is Uint8Array of 32 bytes — import as AES-GCM key
+  return crypto.subtle.importKey('raw', result.hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
 async function encryptKey(privKeyBytes, password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv   = crypto.getRandomValues(new Uint8Array(12));
-  const key  = await deriveKey(password, salt);
+  const key  = await deriveKeyArgon2(password, salt);
   const enc  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, privKeyBytes);
   return {
+    kdf:  'argon2id',
     salt: b2h(salt),
     iv:   b2h(iv),
-    encrypted: b2h(new Uint8Array(enc))
+    encrypted: b2h(new Uint8Array(enc)),
+    argon2: { time: ARGON2_TIME, mem: ARGON2_MEM, threads: ARGON2_THREADS, keylen: ARGON2_KEYLEN },
   };
 }
 
-async function decryptKey(encrypted, iv, salt, password) {
-  const key = await deriveKey(password, h2b(salt));
-  const dec = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: h2b(iv) },
-    key,
-    h2b(encrypted)
-  );
+async function decryptKey(encrypted, iv, salt, password, kdf) {
+  let key, nonce;
+  if (kdf === 'canopy') {
+    // Canopy CLI format: Argon2i (not id), mem=32MB, keyLen=32, nonce=key[:12]
+    if (!window.argon2) throw new Error('Argon2 library not loaded');
+    const result = await window.argon2.hash({
+      pass: password, salt: h2b(salt),
+      time: 3, mem: 32768, hashLen: 32,
+      parallelism: 4, type: window.argon2.ArgonType.Argon2i,
+    });
+    const keyBytes = result.hash;  // 32 bytes
+    nonce = keyBytes.slice(0, 12); // nonce = key[:12]
+    key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
+  } else if (!kdf || kdf === 'argon2id') {
+    key = await deriveKeyArgon2(password, h2b(salt));
+    nonce = h2b(iv);
+  } else {
+    // legacy PBKDF2 fallback
+    const enc = new TextEncoder();
+    const km = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+    key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: h2b(salt), iterations: 200000, hash: 'SHA-256' },
+      km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    );
+    nonce = h2b(iv);
+  }
+  const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, key, h2b(encrypted));
   return new Uint8Array(dec);
 }
 
@@ -1393,9 +1470,11 @@ window.createKeystore = async function() {
 
     const keystore = {
       version: 1,
+      kdf: 'argon2id',
       publicKey: b2h(pubKey),
       keyAddress: address,
-      salt, iv, encrypted
+      salt, iv, encrypted,
+      argon2: { time: ARGON2_TIME, mem: ARGON2_MEM, threads: ARGON2_THREADS, keylen: ARGON2_KEYLEN },
     };
 
     // download
@@ -1416,6 +1495,51 @@ window.createKeystore = async function() {
   } catch(e) { toast('Create failed: ' + e.message, true); }
 };
 
+window.checkSavedKeystore = function() {
+  const saved = localStorage.getItem('praxis_keystore');
+  const wrap = document.getElementById('ks_quick_wrap');
+  if (!wrap) return;
+  if (saved) {
+    const raw = JSON.parse(saved);
+    const addr = raw.keyAddress || '?';
+    document.getElementById('ks_quick_addr').textContent = addr.slice(0,8) + '…' + addr.slice(-6);
+    wrap.style.display = '';
+  } else {
+    wrap.style.display = 'none';
+  }
+};
+
+window.quickUnlock = async function() {
+  const pw = document.getElementById('ks_quick_pw').value;
+  if (!pw) return toast('Enter password', true);
+  const saved = localStorage.getItem('praxis_keystore');
+  if (!saved) return toast('No saved keystore', true);
+  try {
+    const raw = JSON.parse(saved);
+    if (!raw.encrypted || !raw.salt || !raw.iv || !raw.publicKey) throw new Error('Invalid saved keystore');
+    if (raw.argon2) { window._argon2Override = raw.argon2; } else { window._argon2Override = null; }
+    let privBytes;
+    try {
+      privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, raw.kdf || 'argon2id');
+    } catch(e) {
+      privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, 'pbkdf2');
+    }
+    let pubKey = bls12_381.getPublicKey(privBytes);
+    if (b2h(pubKey) !== raw.publicKey) {
+      try { privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, 'pbkdf2'); pubKey = bls12_381.getPublicKey(privBytes); } catch(e2) {}
+    }
+    if (b2h(pubKey) !== raw.publicKey) throw new Error('Wrong password');
+    const hash = await crypto.subtle.digest('SHA-256', pubKey);
+    const address = b2h(new Uint8Array(hash).slice(0, 20));
+    signerPrivKey = privBytes;
+    signerPubKey = pubKey;
+    signerAddress = address;
+    updateSignerUI();
+    toast('Session restored — ' + address.slice(0,8) + '…');
+    document.getElementById('ks_quick_pw').value = '';
+  } catch(e) { toast('Unlock failed: ' + e.message, true); }
+};
+
 window.importKeystore = async function() {
   const pw   = document.getElementById('ks_imp_pw').value;
   const file = document.getElementById('ks_imp_file').files[0];
@@ -1424,26 +1548,38 @@ window.importKeystore = async function() {
 
   try {
     const text = await file.text();
-    const ks   = JSON.parse(text);
-    if (!ks.encrypted || !ks.salt || !ks.iv || !ks.publicKey) throw new Error('Invalid keystore file');
+    const raw  = JSON.parse(text);
 
-    const privBytes = await decryptKey(ks.encrypted, ks.iv, ks.salt, pw);
-    const pubKey    = bls12_381.getPublicKey(privBytes);
-
-    // verify pubkey matches
-    if (b2h(pubKey) !== ks.publicKey) throw new Error('Wrong password or corrupted keystore');
-
+    // Praxis flat format
+    if (!raw.encrypted || !raw.salt || !raw.iv || !raw.publicKey) throw new Error('Invalid keystore file');
+    if (raw.argon2) { window._argon2Override = raw.argon2; } else { window._argon2Override = null; }
+    let privBytes;
+    try {
+      privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, raw.kdf || 'argon2id');
+    } catch(e) {
+      privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, 'pbkdf2');
+    }
+    let pubKey = bls12_381.getPublicKey(privBytes);
+    if (b2h(pubKey) !== raw.publicKey) {
+      // try pbkdf2 fallback
+      try {
+        privBytes = await decryptKey(raw.encrypted, raw.iv, raw.salt, pw, 'pbkdf2');
+        pubKey = bls12_381.getPublicKey(privBytes);
+      } catch(e2) {}
+    }
+    if (b2h(pubKey) !== raw.publicKey) throw new Error('Wrong password or corrupted keystore');
     const hash    = await crypto.subtle.digest('SHA-256', pubKey);
     const address = b2h(new Uint8Array(hash).slice(0, 20));
-
     signerPrivKey = privBytes;
     signerPubKey  = pubKey;
     signerAddress = address;
     updateSignerUI();
     toast('Keystore unlocked — ' + address.slice(0,8) + '…');
+    localStorage.setItem('praxis_keystore', JSON.stringify(raw));
     document.getElementById('ks_imp_pw').value = '';
     document.getElementById('ks_imp_file').value = '';
-  } catch(e) { toast('Import failed: ' + e.message, true); }
+    checkSavedKeystore();
+  } catch(e) { console.error('Import failed full error:', e); toast('Import failed: ' + e.message, true); }
 };
 
 function updateSignerUI() {
@@ -1596,14 +1732,19 @@ window.fillReclaim = function(id) {
 async function checkRoles() {
   if (!signerAddress) return;
 
-  // Check ADMIN — is signer a validator?
-  try {
-    const d = await rpc('/v1/query/validators', {});
-    const validators = (d.results || []).map(v => v.address.toLowerCase());
-    const isAdmin = validators.includes(signerAddress.toLowerCase());
-    document.getElementById('nav-admin-section').style.display = isAdmin ? '' : 'none';
-    document.querySelectorAll('.nav-admin-item').forEach(el => el.style.display = isAdmin ? '' : 'none');
-  } catch(e) {}
+  // Superadmin — full access regardless of role
+  const SUPERADMIN = '8e14dc0ce537f1c75036f11d7495d60882aa6731';
+  if (signerAddress.toLowerCase() === SUPERADMIN) {
+    document.getElementById('nav-resolver-section').style.display = '';
+    document.querySelectorAll('.nav-resolver-item').forEach(el => el.style.display = '');
+    document.getElementById('nav-admin-section').style.display = '';
+    document.querySelectorAll('.nav-admin-item').forEach(el => el.style.display = '');
+    return;
+  }
+
+  // Admin section — superadmin only (handled above)
+  document.getElementById('nav-admin-section').style.display = 'none';
+  document.querySelectorAll('.nav-admin-item').forEach(el => el.style.display = 'none');
 
   // Check RESOLVER — has a register_resolver tx in scanned data
   const isResolver = _allMarkets.length >= 0 && (() => {
@@ -1635,7 +1776,7 @@ updateSignerUI = function() {
 window.checkPositionCap = async function() {
   const mid    = document.getElementById('p_mid').value.trim().toLowerCase();
   const bettor = document.getElementById('p_bettor').value.trim().toLowerCase();
-  const mc     = parseInt(document.getElementById('p_maxcost').value) || 0;
+  const mc     = (parseInt(document.getElementById('p_maxcost').value) || 0)*1000000;
   const capEl  = document.getElementById('cap_indicator');
   const btn    = document.getElementById('btn_predict');
 
@@ -1670,13 +1811,13 @@ window.checkPositionCap = async function() {
     capEl.style.background = 'rgba(255,61,90,.08)';
     capEl.style.border = '1px solid rgba(255,61,90,.3)';
     capEl.style.color = 'var(--red)';
-    capEl.textContent = '⚠ Exceeds 20% position cap — max ' + fmtA(remaining) + ' PRX remaining';
+    capEl.textContent = '⚠ Exceeds 20% position cap — max ' + fmtPRX(remaining) + ' PRX remaining';
     if (btn) btn.setAttribute('disabled', '');
   } else {
     capEl.style.background = 'rgba(0,232,122,.05)';
     capEl.style.border = '1px solid rgba(0,232,122,.15)';
     capEl.style.color = 'var(--text2)';
-    capEl.textContent = 'Position: ' + fmtA(newTotal) + ' PRX / Cap: ' + fmtA(cap) + ' PRX (' + pct + '% of pool)';
+    capEl.textContent = 'Position: ' + fmtPRX(newTotal) + ' PRX / Cap: ' + fmtPRX(cap) + ' PRX (' + pct + '% of pool)';
     if (btn) btn.removeAttribute('disabled');
   }
 };
@@ -1708,3 +1849,4 @@ window.fillForfeit = function(id) {
   if (signerAddress) document.getElementById('fo_resolver').value = signerAddress;
   showPage('forfeit', null);
 };
+checkSavedKeystore();
