@@ -60,7 +60,7 @@ function encAny(typeUrl,inner){return cat(sf(1,typeUrl),bf(2,inner));}
 // INNER MESSAGE ENCODERS — field numbers match tx.proto
 // ═══════════════════════════════════════════
 function encSend(from,to,amt){return cat(bf(1,h2b(from)),bf(2,h2b(to)),vf(3,amt));}
-function encCreate(creator,b0,expiry,nonce,question){return cat(bf(1,h2b(creator)),vf(2,b0),vf(3,expiry),vf(4,nonce),sf(5,question));}
+function encCreate(creator,b0,expiry,nonce,question,rules){return cat(bf(1,h2b(creator)),vf(2,b0),vf(3,expiry),vf(4,nonce),sf(5,question),sf(6,rules||''));}
 function encPredict(mid,bettor,outcome,shares,maxcost){return cat(bf(1,h2b(mid)),bf(2,h2b(bettor)),boolF(3,outcome),vf(4,shares),vf(5,maxcost));}
 function encResolve(mid,resolver,outcome){return cat(bf(1,h2b(mid)),bf(2,h2b(resolver)),boolF(3,outcome));}
 function encClaim(mid,claimant){return cat(bf(1,h2b(mid)),bf(2,h2b(claimant)));}
@@ -555,6 +555,12 @@ window.showDetail = function(marketId) {
   document.getElementById('det-creator').textContent = m.creator || '—';
   document.getElementById('det-total').textContent = fmtPRX(m.qYes + m.qNo) + ' PRX';
   document.getElementById('det-expiry').textContent = m.expiry ? 'blk #' + Number(m.expiry) : '—';
+  const rulesRow = document.getElementById('det-rules-row');
+  const rulesEl = document.getElementById('det-rules');
+  if (rulesRow && rulesEl) {
+    if (m.rules) { rulesEl.textContent = m.rules; rulesRow.style.display = ''; }
+    else { rulesRow.style.display = 'none'; }
+  }
 
   const resolverRow = document.getElementById('det-resolver-row');
   if (m.resolver) {
@@ -778,6 +784,7 @@ window.loadMarkets = async function () {
       if (tx.messageType !== 'create_market') continue;
       const msg = (tx.transaction && tx.transaction.msg) || {};
       const question = msg.question || '';
+      const rules    = msg.rules || '';
       const creator  = tx.sender || '';
       const b0       = BigInt(msg.b0 || 0);
       const expiry   = BigInt(msg.expiryTime || msg.expiry_time || 0);
@@ -803,6 +810,7 @@ window.loadMarkets = async function () {
           txHash: tx.txHash || '',
           marketId,
           question: question || '(no question)',
+          rules: rules || '',
           creator,
           b0,
           lmsrSeed,
@@ -937,8 +945,9 @@ window.build_create=function(){try{
   let nonce=document.getElementById('c_nonce').value;
   if(!nonce)nonce=BigInt(Date.now())*1000n;
   else nonce=parseInt(nonce);
+  const rules=document.getElementById('c_rules').value.trim();
   if(!q)throw new Error('Question required');addr40(cr,'Creator');
-  showPL('co','cp',buildUnsigned('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q),{fee}));toast('Payload built');
+  showPL('co','cp',buildUnsigned('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,rules),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_create=async function(){try{
   const q=document.getElementById('c_question').value.trim();
@@ -949,8 +958,9 @@ window.signAndSubmit_create=async function(){try{
   let nonce=document.getElementById('c_nonce').value;
   if(!nonce)nonce=BigInt(Date.now())*1000n;
   else nonce=parseInt(nonce);
+  const rules=document.getElementById('c_rules').value.trim();
   if(!q)throw new Error('Question required');addr40(cr,'Creator');
-  await doSubmit('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q),{fee},'btn_create','pend_create');
+  await doSubmit('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,rules),{fee},'btn_create','pend_create');
 }catch(e){toast(e.message,true);}};
 
 // ── SUBMIT PREDICTION

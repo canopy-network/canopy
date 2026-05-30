@@ -116,6 +116,7 @@
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Creator</span><span class="mval" id="det-creator" style="word-break:break-all">—</span></div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Total Pool</span><span class="mval g" id="det-total">—</span></div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Expiry</span><span class="mval" id="det-expiry">—</span></div>
+      <div class="mitem" id="det-rules-row" style="padding:8px 0;border-bottom:1px solid var(--border);display:none"><span class="mlbl">Rules</span><span class="mval" id="det-rules" style="white-space:pre-wrap;font-size:11px">—</span></div>
       <div class="mitem" style="padding:8px 0" id="det-resolver-row"><span class="mlbl">Resolver</span><span class="mval" id="det-resolver">—</span></div>
     </div>
     <div class="card" id="det-banner-card" style="display:none;margin-bottom:12px"></div>
@@ -393,6 +394,7 @@
   <div class="card a-card"><div class="ci">
     <div class="ct">// market_parameters</div>
     <div class="field"><label>Market Question</label><textarea id="c_question" placeholder="Will Praxis launch on mainnet before Q3 2026?"></textarea></div>
+    <div class="field"><label>Resolution Rules <span style="color:var(--text3);font-size:10px">(optional)</span></label><textarea id="c_rules" placeholder="Resolves YES if... Source: ... Edge cases: ..."></textarea></div>
     <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (PRX)</label><input id="c_b0" type="number" value="60"/></div></div>
     <div class="r3"><div class="field"><label>Expiry Block</label><input id="c_expiry" type="number" placeholder="auto-fill"/></div><div class="field"><label>Nonce</label><input id="c_nonce" type="text" placeholder="auto-fill"/></div><div class="field"><label>Fee (uPRX)</label><input id="c_fee" type="number" value="10000"/></div></div>
     <div class="brow"><button class="btn bp" id="btn_create" onclick="signAndSubmit_create()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_create()">Build Payload</button></div>

@@ -45,6 +45,8 @@ message MarketState {
   uint64 open_time       = 9;
   bool   elevated_risk        = 10;
   uint64 finalized_pool_amount = 11;
+  string question        = 12;
+  string rules           = 13;
 }
 
 message PositionState {
@@ -128,6 +130,7 @@ message MessageCreateMarket {
   uint64 expiry_time     = 3;
   uint64 nonce           = 4;
   string question        = 5;
+  string rules           = 6;
 }
 
 message MessageSubmitPrediction {

@@ -109,6 +109,8 @@ ClaimedCount:  0,
 TotalPositions: 0,
 OpenTime:      now,
 ElevatedRisk:  false,
+Question:      msg.Question,
+Rules:         msg.Rules,
 }
 
 pool := &Pool{Id: c.Config.ChainId, Amount: lmsrSeed}
