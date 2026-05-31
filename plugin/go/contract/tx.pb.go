@@ -618,13 +618,15 @@ func (x *ResolverState) GetResolverAddress() []byte {
 }
 
 type ResolverRecord struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ResolverAddress []byte                 `protobuf:"bytes,1,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
-	StakeAmount     uint64                 `protobuf:"varint,2,opt,name=stake_amount,json=stakeAmount,proto3" json:"stake_amount,omitempty"`
-	RrsScore        uint64                 `protobuf:"varint,3,opt,name=rrs_score,json=rrsScore,proto3" json:"rrs_score,omitempty"`
-	RegisteredAt    uint64                 `protobuf:"varint,4,opt,name=registered_at,json=registeredAt,proto3" json:"registered_at,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	ResolverAddress       []byte                 `protobuf:"bytes,1,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
+	StakeAmount           uint64                 `protobuf:"varint,2,opt,name=stake_amount,json=stakeAmount,proto3" json:"stake_amount,omitempty"`
+	RrsScore              uint64                 `protobuf:"varint,3,opt,name=rrs_score,json=rrsScore,proto3" json:"rrs_score,omitempty"`
+	RegisteredAt          uint64                 `protobuf:"varint,4,opt,name=registered_at,json=registeredAt,proto3" json:"registered_at,omitempty"`
+	SuccessfulResolutions uint64                 `protobuf:"varint,5,opt,name=successful_resolutions,json=successfulResolutions,proto3" json:"successful_resolutions,omitempty"`
+	LastClaimedEpoch      uint64                 `protobuf:"varint,6,opt,name=last_claimed_epoch,json=lastClaimedEpoch,proto3" json:"last_claimed_epoch,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ResolverRecord) Reset() {
@@ -681,6 +683,20 @@ func (x *ResolverRecord) GetRrsScore() uint64 {
 func (x *ResolverRecord) GetRegisteredAt() uint64 {
 	if x != nil {
 		return x.RegisteredAt
+	}
+	return 0
+}
+
+func (x *ResolverRecord) GetSuccessfulResolutions() uint64 {
+	if x != nil {
+		return x.SuccessfulResolutions
+	}
+	return 0
+}
+
+func (x *ResolverRecord) GetLastClaimedEpoch() uint64 {
+	if x != nil {
+		return x.LastClaimedEpoch
 	}
 	return 0
 }
@@ -2159,6 +2175,50 @@ func (x *LastClaimedBlock) GetHeight() uint64 {
 	return 0
 }
 
+type GlobalStats struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	TotalWeightedResolutions uint64                 `protobuf:"varint,1,opt,name=total_weighted_resolutions,json=totalWeightedResolutions,proto3" json:"total_weighted_resolutions,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *GlobalStats) Reset() {
+	*x = GlobalStats{}
+	mi := &file_tx_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GlobalStats) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GlobalStats) ProtoMessage() {}
+
+func (x *GlobalStats) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GlobalStats.ProtoReflect.Descriptor instead.
+func (*GlobalStats) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *GlobalStats) GetTotalWeightedResolutions() uint64 {
+	if x != nil {
+		return x.TotalWeightedResolutions
+	}
+	return 0
+}
+
 var File_tx_proto protoreflect.FileDescriptor
 
 const file_tx_proto_rawDesc = "" +
@@ -2215,12 +2275,14 @@ const file_tx_proto_rawDesc = "" +
 	"\x0elocked_reserve\x18\x01 \x01(\x04R\rlockedReserve\x12!\n" +
 	"\fcreator_bond\x18\x02 \x01(\x04R\vcreatorBond\":\n" +
 	"\rResolverState\x12)\n" +
-	"\x10resolver_address\x18\x01 \x01(\fR\x0fresolverAddress\"\xa0\x01\n" +
+	"\x10resolver_address\x18\x01 \x01(\fR\x0fresolverAddress\"\x85\x02\n" +
 	"\x0eResolverRecord\x12)\n" +
 	"\x10resolver_address\x18\x01 \x01(\fR\x0fresolverAddress\x12!\n" +
 	"\fstake_amount\x18\x02 \x01(\x04R\vstakeAmount\x12\x1b\n" +
 	"\trrs_score\x18\x03 \x01(\x04R\brrsScore\x12#\n" +
-	"\rregistered_at\x18\x04 \x01(\x04R\fregisteredAt\"\xc4\x01\n" +
+	"\rregistered_at\x18\x04 \x01(\x04R\fregisteredAt\x125\n" +
+	"\x16successful_resolutions\x18\x05 \x01(\x04R\x15successfulResolutions\x12,\n" +
+	"\x12last_claimed_epoch\x18\x06 \x01(\x04R\x10lastClaimedEpoch\"\xc4\x01\n" +
 	"\x0eProposalRecord\x12#\n" +
 	"\rresolver_addr\x18\x01 \x01(\fR\fresolverAddr\x12)\n" +
 	"\x10proposed_outcome\x18\x02 \x01(\bR\x0fproposedOutcome\x12#\n" +
@@ -2332,7 +2394,9 @@ const file_tx_proto_rawDesc = "" +
 	"\x10resolver_address\x18\x01 \x01(\fR\x0fresolverAddress\x12\x14\n" +
 	"\x05epoch\x18\x02 \x01(\x04R\x05epoch\"*\n" +
 	"\x10LastClaimedBlock\x12\x16\n" +
-	"\x06height\x18\x01 \x01(\x04R\x06heightB5Z3github.com/canopy-network/canopy/plugin/go/contractb\x06proto3"
+	"\x06height\x18\x01 \x01(\x04R\x06height\"K\n" +
+	"\vGlobalStats\x12<\n" +
+	"\x1atotal_weighted_resolutions\x18\x01 \x01(\x04R\x18totalWeightedResolutionsB5Z3github.com/canopy-network/canopy/plugin/go/contractb\x06proto3"
 
 var (
 	file_tx_proto_rawDescOnce sync.Once
@@ -2346,7 +2410,7 @@ func file_tx_proto_rawDescGZIP() []byte {
 	return file_tx_proto_rawDescData
 }
 
-var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_tx_proto_goTypes = []any{
 	(*Signature)(nil),                  // 0: types.Signature
 	(*Transaction)(nil),                // 1: types.Transaction
@@ -2382,10 +2446,11 @@ var file_tx_proto_goTypes = []any{
 	(*MessageClaimCreatorFee)(nil),     // 31: types.MessageClaimCreatorFee
 	(*MessageClaimResolverReward)(nil), // 32: types.MessageClaimResolverReward
 	(*LastClaimedBlock)(nil),           // 33: types.LastClaimedBlock
-	(*any1.Any)(nil),                   // 34: google.protobuf.Any
+	(*GlobalStats)(nil),                // 34: types.GlobalStats
+	(*any1.Any)(nil),                   // 35: google.protobuf.Any
 }
 var file_tx_proto_depIdxs = []int32{
-	34, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
+	35, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
 	0,  // 1: types.Transaction.signature:type_name -> types.Signature
 	2,  // [2:2] is the sub-list for method output_type
 	2,  // [2:2] is the sub-list for method input_type
@@ -2405,7 +2470,7 @@ func file_tx_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tx_proto_rawDesc), len(file_tx_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   34,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

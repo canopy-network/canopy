@@ -314,3 +314,9 @@ return &PluginError{Code: 204, Module: errModule, Msg: "pool is empty — nothin
 func ErrMarketNotFinalized() *PluginError {
 return &PluginError{Code: 205, Module: errModule, Msg: "market is not finalized"}
 }
+func ErrInsufficientRRS() *PluginError {
+return &PluginError{Code: 207, Module: errModule, Msg: "resolver RRS score is zero — not eligible for rewards"}
+}
+func ErrNoResolutions() *PluginError {
+return &PluginError{Code: 208, Module: errModule, Msg: "no successful resolutions in this epoch"}
+}

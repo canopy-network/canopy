@@ -61,3 +61,10 @@ return JoinLenPrefix(builderLastClaimedPrefix, []byte("/blc/"))
 func KeyForInvestorLastClaimed() []byte {
 return JoinLenPrefix(investorLastClaimedPrefix, []byte("/ilc/"))
 }
+
+var globalStatsPrefix = []byte{0x28}
+
+// KeyForGlobalStats returns the singleton state key for protocol-wide resolution stats.
+func KeyForGlobalStats() []byte {
+return JoinLenPrefix(globalStatsPrefix, []byte("/stats/"))
+}

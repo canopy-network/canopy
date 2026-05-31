@@ -72,10 +72,12 @@ message ResolverState {
 }
 
 message ResolverRecord {
-  bytes  resolver_address = 1;
-  uint64 stake_amount     = 2;
-  uint64 rrs_score        = 3;
-  uint64 registered_at    = 4;
+  bytes  resolver_address       = 1;
+  uint64 stake_amount           = 2;
+  uint64 rrs_score              = 3;
+  uint64 registered_at          = 4;
+  uint64 successful_resolutions = 5;
+  uint64 last_claimed_epoch     = 6;
 }
 
 message ProposalRecord {
@@ -229,4 +231,8 @@ message MessageClaimResolverReward {
 
 message LastClaimedBlock {
   uint64 height = 1;
+}
+
+message GlobalStats {
+  uint64 total_weighted_resolutions = 1;
 }

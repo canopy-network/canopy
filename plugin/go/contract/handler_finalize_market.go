@@ -129,6 +129,12 @@ var disputerQId uint64
 if proposal == nil { return &PluginDeliverResponse{Error: ErrInternal()} }
 proposerKey = KeyForAccount(proposal.ResolverAddr)
 readKeys2 = append(readKeys2, &PluginKeyRead{QueryId: proposerQId, Key: proposerKey})
+resolverRecQId := nextQueryId()
+globalStatsQId := nextQueryId()
+resolverFeeQId := nextQueryId()
+readKeys2 = append(readKeys2, &PluginKeyRead{QueryId: resolverRecQId,  Key: KeyForResolverRecord(proposal.ResolverAddr)})
+readKeys2 = append(readKeys2, &PluginKeyRead{QueryId: globalStatsQId,  Key: KeyForGlobalStats()})
+readKeys2 = append(readKeys2, &PluginKeyRead{QueryId: resolverFeeQId,  Key: KeyForResolverFeePool(msg.MarketId)})
 
 if pathA && dispute != nil {
 disputerQId = nextQueryId()
@@ -146,7 +152,10 @@ return &PluginDeliverResponse{Error: resp2.Error}
 
 callerAcc   := &Account{}
 proposerAcc := &Account{}
-disputerAcc := &Account{}
+disputerAcc  := &Account{}
+resolverRec  := &ResolverRecord{}
+globalStats  := &GlobalStats{}
+resolverFeePool := &Pool{}
 creatorAcc  := &Account{}
 
 for _, r := range resp2.Results {
@@ -170,6 +179,12 @@ case disputerQId:
 if pe := Unmarshal(r.Entries[0].Value, disputerAcc); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
+case resolverRecQId:
+_ = Unmarshal(r.Entries[0].Value, resolverRec)
+case globalStatsQId:
+_ = Unmarshal(r.Entries[0].Value, globalStats)
+case resolverFeeQId:
+_ = Unmarshal(r.Entries[0].Value, resolverFeePool)
 }
 }
 
@@ -199,6 +214,26 @@ treasury.CreatorBond  = 0
 market.FinalizedPoolAmount = marketPool.Amount
 market.Status = STATUS_FINALIZED
 
+// PRIS v1.0-r3: RRS increment and resolver fee payout on correct finalization (pathB).
+if pathB && proposal != nil {
+resolverRec.RrsScore++
+if resolverRec.RrsScore > 0 {
+resolverRec.SuccessfulResolutions++
+}
+weight := uint64(1)
+if resolverRec.RrsScore >= RRS_GOLD_THRESHOLD {
+weight = uint64(VOTE_WEIGHT_GOLD)
+} else if resolverRec.RrsScore >= RRS_SILVER_THRESHOLD {
+weight = uint64(VOTE_WEIGHT_SILVER)
+}
+globalStats.TotalWeightedResolutions += weight
+// Pay resolver fee pool to resolver
+if resolverFeePool.Amount > 0 {
+proposerAcc.Amount      += resolverFeePool.Amount
+resolverFeePool.Amount   = 0
+}
+}
+
 rawM, pe := SafeMarshal(market)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawT, pe := SafeMarshal(treasury)
@@ -216,6 +251,18 @@ if proposal != nil && proposerKey != nil {
 rawProposer, pe := SafeMarshal(proposerAcc)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 sets = append(sets, &PluginSetOp{Key: proposerKey, Value: rawProposer})
+}
+// PRIS: write resolver record, global stats, resolver fee pool
+if pathB && proposal != nil {
+rawRec, pe := SafeMarshal(resolverRec)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawStats, pe := SafeMarshal(globalStats)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawResFee, pe := SafeMarshal(resolverFeePool)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+sets = append(sets, &PluginSetOp{Key: KeyForResolverRecord(proposal.ResolverAddr), Value: rawRec})
+sets = append(sets, &PluginSetOp{Key: KeyForGlobalStats(),                          Value: rawStats})
+sets = append(sets, &PluginSetOp{Key: KeyForResolverFeePool(msg.MarketId),          Value: rawResFee})
 }
 rawCreator, pe := SafeMarshal(creatorAcc)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
