@@ -40,7 +40,11 @@ marketKey  := KeyForMarket(msg.MarketId)
 posKey     := KeyForPosition(msg.MarketId, msg.BettorAddress)
 poolKey    := KeyForMarketPool(msg.MarketId)
 bettorKey  := KeyForAccount(msg.BettorAddress)
-feePoolKey := KeyForFeePool(c.Config.ChainId)
+feePoolKey      := KeyForFeePool(c.Config.ChainId)
+creatorFeeKey   := KeyForCreatorFeePool(msg.MarketId)
+resolverFeeKey  := KeyForResolverFeePool(msg.MarketId)
+creatorFeeQId   := nextQueryId()
+resolverFeeQId  := nextQueryId()
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
@@ -48,7 +52,9 @@ Keys: []*PluginKeyRead{
 {QueryId: posQId,    Key: posKey},
 {QueryId: poolQId,   Key: poolKey},
 {QueryId: bettorQId, Key: bettorKey},
-{QueryId: feeQId,    Key: feePoolKey},
+{QueryId: feeQId,         Key: feePoolKey},
+{QueryId: creatorFeeQId,  Key: creatorFeeKey},
+{QueryId: resolverFeeQId, Key: resolverFeeKey},
 },
 })
 if err != nil {
@@ -60,9 +66,11 @@ return &PluginDeliverResponse{Error: resp.Error}
 
 var market *MarketState
 position  := &PositionState{}
-mPool     := &Pool{}
-bettor    := &Account{}
-feePool   := &Pool{}
+mPool       := &Pool{}
+bettor      := &Account{}
+feePool     := &Pool{}
+creatorFee  := &Pool{}
+resolverFee := &Pool{}
 
 for _, r := range resp.Results {
 if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
@@ -90,6 +98,14 @@ case feeQId:
 if pe := Unmarshal(r.Entries[0].Value, feePool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
+case creatorFeeQId:
+if pe := Unmarshal(r.Entries[0].Value, creatorFee); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+case resolverFeeQId:
+if pe := Unmarshal(r.Entries[0].Value, resolverFee); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
 }
 }
 
@@ -110,10 +126,12 @@ tradeCost, pe := ComputeTradeCost(market.QYes, market.QNo, market.BEff, msg.Shar
 if pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
+creatorFeeAmt  := ComputeBps(tradeCost, CREATOR_FEE_BPS)
+resolverFeeAmt := ComputeBps(tradeCost, RESOLVER_FEE_BPS)
 if fee > 0 && tradeCost > ^uint64(0)-fee {
 return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 }
-finalCost := tradeCost + fee
+finalCost := tradeCost + fee + creatorFeeAmt + resolverFeeAmt
 if finalCost > msg.MaxCost {
 return &PluginDeliverResponse{Error: ErrCostExceedsMaxCost()}
 }
@@ -138,9 +156,11 @@ return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 
 isNewPosition := position.SharesYes == 0 && position.SharesNo == 0 && position.CostPaid == 0
 
-bettor.Amount  -= finalCost
-mPool.Amount   += tradeCost
-feePool.Amount += fee
+bettor.Amount      -= finalCost
+mPool.Amount       += tradeCost
+feePool.Amount     += fee
+creatorFee.Amount  += creatorFeeAmt
+resolverFee.Amount += resolverFeeAmt
 
 if msg.Outcome {
 market.QYes += msg.Shares
@@ -165,12 +185,18 @@ rawPool, pe := SafeMarshal(mPool)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawFee, pe := SafeMarshal(feePool)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawCreatorFee, pe := SafeMarshal(creatorFee)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawResolverFee, pe := SafeMarshal(resolverFee)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
 sets := []*PluginSetOp{
-{Key: marketKey, Value: rawMarket},
-{Key: posKey,    Value: rawPos},
-{Key: poolKey,   Value: rawPool},
-{Key: feePoolKey, Value: rawFee},
+{Key: marketKey,      Value: rawMarket},
+{Key: posKey,         Value: rawPos},
+{Key: poolKey,        Value: rawPool},
+{Key: feePoolKey,     Value: rawFee},
+{Key: creatorFeeKey,  Value: rawCreatorFee},
+{Key: resolverFeeKey, Value: rawResolverFee},
 }
 var deletes []*PluginDeleteOp
 if bettor.Amount == 0 {
