@@ -97,6 +97,12 @@ func (c *Controller) CheckMempool() {
 		return
 	}
 	for {
+		// skip mempool checks while syncing: the mempool is unused (no proposals) and on nested
+		// chains the remote RPC calls (GetDexBatch) hold the mempool lock, blocking the sync loop
+		if c.isSyncing.Load() {
+			time.Sleep(time.Duration(c.Config.LazyMempoolCheckFrequencyS) * time.Second)
+			continue
+		}
 		// keep a list of transaction needing to be gossipped
 		var toGossip [][]byte
 		// if recheck is necessary
