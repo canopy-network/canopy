@@ -1312,7 +1312,7 @@ func TestRegisterNewWalletAsResolver(t *testing.T) {
     fundMsg := &contract.MessageSend{
         FromAddress: hexDecode(validatorKg.Address),
         ToAddress:   hexDecode(kg.Address),
-        Amount:      500_000_000,
+        Amount:      600_000_000_000,
     }
     fundHash := submitSendTx(t, validatorKg, fundMsg, h)
     if err := waitForTx(validatorKg.Address, fundHash, 60*time.Second); err != nil {
@@ -1388,7 +1388,7 @@ nonce := uint64(time.Now().UnixMicro())
 createMsg := &contract.MessageCreateMarket{
 CreatorAddress: hexDecode(validatorAddr),
 B0:             60_000_000,
-ExpiryTime:     h + 30,
+ExpiryTime:     h + 150,
 Nonce:          nonce,
 Question:       "COI-1 test market",
 }
@@ -1425,25 +1425,22 @@ t.Fatalf("bet: %v", err)
 }
 t.Log("Predictor holds YES position")
 
-// 3. Register predictor as resolver
-h4, _ := getHeight()
-regMsg := &contract.MessageRegisterResolver{
-ResolverAddress: hexDecode(predictorAddr),
-StakeAmount:     500_000_000_000,
-}
-// Fund more for stake
+// 3. Register predictor as resolver — fund first, then register
 h4b, _ := getHeight()
 fundMsg := &contract.MessageSend{
 FromAddress: hexDecode(validatorAddr),
 ToAddress:   hexDecode(predictorAddr),
-Amount:      150_000_000,
+Amount:      600_000_000_000,
 }
 fundHash := submitSendTx(t, validatorKey, fundMsg, h4b)
 if err := waitForTx(validatorAddr, fundHash, 60*time.Second); err != nil {
 t.Fatalf("fund for stake: %v", err)
 }
 h4c, _ := getHeight()
-_ = h4
+regMsg := &contract.MessageRegisterResolver{
+ResolverAddress: hexDecode(predictorAddr),
+StakeAmount:     500_000_000_000,
+}
 regHash := submitTx(t, predictorKey, "register_resolver", "MessageRegisterResolver", regMsg, h4c)
 if err := waitForTx(predictorAddr, regHash, 60*time.Second); err != nil {
 t.Fatalf("register resolver: %v", err)
@@ -1453,8 +1450,8 @@ t.Log("Predictor registered as resolver")
 // 4. Wait for market expiry
 t.Log("Waiting for market to expire...")
 for {
-cur, _ := getHeight()
-if cur > createMsg.ExpiryTime {
+cur, err := getHeight()
+if err == nil && cur > 0 && cur > createMsg.ExpiryTime {
 break
 }
 time.Sleep(5 * time.Second)
