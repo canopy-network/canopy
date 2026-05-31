@@ -212,3 +212,21 @@ message MessageForfeitPosition {
   bytes market_id        = 1;
   bytes resolver_address = 2;
 }
+
+// PRIS v1.0-r3 message types
+
+message MessageClaimBuilderReward {}
+
+message MessageClaimCreatorFee {
+  bytes market_id      = 1;
+  bytes creator_address = 2;
+}
+
+message MessageClaimResolverReward {
+  bytes resolver_address = 1;
+  uint64 epoch           = 2;
+}
+
+message LastClaimedBlock {
+  uint64 height = 1;
+}

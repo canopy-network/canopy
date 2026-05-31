@@ -67,6 +67,9 @@ TransactionTypeUrls: []string{
 "type.googleapis.com/types.MessageClaimSlash",
 "type.googleapis.com/types.MessageReclaimStake",
 "type.googleapis.com/types.MessageForfeitPosition",
+	"type.googleapis.com/types.MessageClaimBuilderReward",
+	"type.googleapis.com/types.MessageClaimCreatorFee",
+	"type.googleapis.com/types.MessageClaimResolverReward",
 },
 }
 
@@ -141,7 +144,11 @@ return &PluginBeginResponse{}
 }
 
 func (c *Contract) EndBlock(req *PluginEndRequest) *PluginEndResponse {
-return &PluginEndResponse{}
+	height := GetGlobalHeight()
+	if height > 0 && height%PRIS_EPOCH_BLOCKS == 0 {
+		_ = c.processEpochBoundary(height)
+	}
+	return &PluginEndResponse{}
 }
 
 func (c *Contract) CheckTx(req *PluginCheckRequest) *PluginCheckResponse {
@@ -178,6 +185,8 @@ case *MessageReclaimStake:
 return c.CheckMessageReclaimStake(m)
 case *MessageForfeitPosition:
 return c.CheckMessageForfeitPosition(m)
+case *MessageClaimBuilderReward:
+return c.CheckMessageClaimBuilderReward(m)
 default:
 return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 }
@@ -218,6 +227,8 @@ case *MessageReclaimStake:
 return c.DeliverMessageReclaimStake(m, fee)
 case *MessageForfeitPosition:
 return c.DeliverMessageForfeitPosition(m, fee)
+case *MessageClaimBuilderReward:
+return c.DeliverMessageClaimBuilderReward(m, fee)
 default:
 return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 }

@@ -7,9 +7,9 @@
 package contract
 
 import (
+	any1 "github.com/golang/protobuf/ptypes/any"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	anypb "google.golang.org/protobuf/types/known/anypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -78,7 +78,7 @@ func (x *Signature) GetSignature() []byte {
 type Transaction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageType   string                 `protobuf:"bytes,1,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`
-	Msg           *anypb.Any             `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
+	Msg           *any1.Any              `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
 	Signature     *Signature             `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	CreatedHeight uint64                 `protobuf:"varint,4,opt,name=created_height,json=createdHeight,proto3" json:"created_height,omitempty"`
 	Time          uint64                 `protobuf:"varint,5,opt,name=time,proto3" json:"time,omitempty"`
@@ -127,7 +127,7 @@ func (x *Transaction) GetMessageType() string {
 	return ""
 }
 
-func (x *Transaction) GetMsg() *anypb.Any {
+func (x *Transaction) GetMsg() *any1.Any {
 	if x != nil {
 		return x.Msg
 	}
@@ -1975,6 +1975,190 @@ func (x *MessageForfeitPosition) GetResolverAddress() []byte {
 	return nil
 }
 
+type MessageClaimBuilderReward struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageClaimBuilderReward) Reset() {
+	*x = MessageClaimBuilderReward{}
+	mi := &file_tx_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageClaimBuilderReward) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageClaimBuilderReward) ProtoMessage() {}
+
+func (x *MessageClaimBuilderReward) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageClaimBuilderReward.ProtoReflect.Descriptor instead.
+func (*MessageClaimBuilderReward) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{30}
+}
+
+type MessageClaimCreatorFee struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MarketId       []byte                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	CreatorAddress []byte                 `protobuf:"bytes,2,opt,name=creator_address,json=creatorAddress,proto3" json:"creator_address,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MessageClaimCreatorFee) Reset() {
+	*x = MessageClaimCreatorFee{}
+	mi := &file_tx_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageClaimCreatorFee) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageClaimCreatorFee) ProtoMessage() {}
+
+func (x *MessageClaimCreatorFee) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageClaimCreatorFee.ProtoReflect.Descriptor instead.
+func (*MessageClaimCreatorFee) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *MessageClaimCreatorFee) GetMarketId() []byte {
+	if x != nil {
+		return x.MarketId
+	}
+	return nil
+}
+
+func (x *MessageClaimCreatorFee) GetCreatorAddress() []byte {
+	if x != nil {
+		return x.CreatorAddress
+	}
+	return nil
+}
+
+type MessageClaimResolverReward struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ResolverAddress []byte                 `protobuf:"bytes,1,opt,name=resolver_address,json=resolverAddress,proto3" json:"resolver_address,omitempty"`
+	Epoch           uint64                 `protobuf:"varint,2,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageClaimResolverReward) Reset() {
+	*x = MessageClaimResolverReward{}
+	mi := &file_tx_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageClaimResolverReward) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageClaimResolverReward) ProtoMessage() {}
+
+func (x *MessageClaimResolverReward) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageClaimResolverReward.ProtoReflect.Descriptor instead.
+func (*MessageClaimResolverReward) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *MessageClaimResolverReward) GetResolverAddress() []byte {
+	if x != nil {
+		return x.ResolverAddress
+	}
+	return nil
+}
+
+func (x *MessageClaimResolverReward) GetEpoch() uint64 {
+	if x != nil {
+		return x.Epoch
+	}
+	return 0
+}
+
+type LastClaimedBlock struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Height        uint64                 `protobuf:"varint,1,opt,name=height,proto3" json:"height,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LastClaimedBlock) Reset() {
+	*x = LastClaimedBlock{}
+	mi := &file_tx_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LastClaimedBlock) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LastClaimedBlock) ProtoMessage() {}
+
+func (x *LastClaimedBlock) ProtoReflect() protoreflect.Message {
+	mi := &file_tx_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LastClaimedBlock.ProtoReflect.Descriptor instead.
+func (*LastClaimedBlock) Descriptor() ([]byte, []int) {
+	return file_tx_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *LastClaimedBlock) GetHeight() uint64 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
+}
+
 var File_tx_proto protoreflect.FileDescriptor
 
 const file_tx_proto_rawDesc = "" +
@@ -2139,7 +2323,16 @@ const file_tx_proto_rawDesc = "" +
 	"\x10claimant_address\x18\x02 \x01(\fR\x0fclaimantAddress\"`\n" +
 	"\x16MessageForfeitPosition\x12\x1b\n" +
 	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12)\n" +
-	"\x10resolver_address\x18\x02 \x01(\fR\x0fresolverAddressB5Z3github.com/canopy-network/canopy/plugin/go/contractb\x06proto3"
+	"\x10resolver_address\x18\x02 \x01(\fR\x0fresolverAddress\"\x1b\n" +
+	"\x19MessageClaimBuilderReward\"^\n" +
+	"\x16MessageClaimCreatorFee\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\fR\bmarketId\x12'\n" +
+	"\x0fcreator_address\x18\x02 \x01(\fR\x0ecreatorAddress\"]\n" +
+	"\x1aMessageClaimResolverReward\x12)\n" +
+	"\x10resolver_address\x18\x01 \x01(\fR\x0fresolverAddress\x12\x14\n" +
+	"\x05epoch\x18\x02 \x01(\x04R\x05epoch\"*\n" +
+	"\x10LastClaimedBlock\x12\x16\n" +
+	"\x06height\x18\x01 \x01(\x04R\x06heightB5Z3github.com/canopy-network/canopy/plugin/go/contractb\x06proto3"
 
 var (
 	file_tx_proto_rawDescOnce sync.Once
@@ -2153,42 +2346,46 @@ func file_tx_proto_rawDescGZIP() []byte {
 	return file_tx_proto_rawDescData
 }
 
-var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_tx_proto_goTypes = []any{
-	(*Signature)(nil),               // 0: types.Signature
-	(*Transaction)(nil),             // 1: types.Transaction
-	(*FeeParams)(nil),               // 2: types.FeeParams
-	(*MarketState)(nil),             // 3: types.MarketState
-	(*PositionState)(nil),           // 4: types.PositionState
-	(*OutcomeState)(nil),            // 5: types.OutcomeState
-	(*TreasuryReserve)(nil),         // 6: types.TreasuryReserve
-	(*ResolverState)(nil),           // 7: types.ResolverState
-	(*ResolverRecord)(nil),          // 8: types.ResolverRecord
-	(*ProposalRecord)(nil),          // 9: types.ProposalRecord
-	(*DisputeRecord)(nil),           // 10: types.DisputeRecord
-	(*VoteCommit)(nil),              // 11: types.VoteCommit
-	(*VoteReveal)(nil),              // 12: types.VoteReveal
-	(*SlashRecord)(nil),             // 13: types.SlashRecord
-	(*PanelEntropyAccum)(nil),       // 14: types.PanelEntropyAccum
-	(*MessageSend)(nil),             // 15: types.MessageSend
-	(*MessageCreateMarket)(nil),     // 16: types.MessageCreateMarket
-	(*MessageSubmitPrediction)(nil), // 17: types.MessageSubmitPrediction
-	(*MessageClaimWinnings)(nil),    // 18: types.MessageClaimWinnings
-	(*MessageResolveMarket)(nil),    // 19: types.MessageResolveMarket
-	(*MessageRegisterResolver)(nil), // 20: types.MessageRegisterResolver
-	(*MessageProposeOutcome)(nil),   // 21: types.MessageProposeOutcome
-	(*MessageFileDispute)(nil),      // 22: types.MessageFileDispute
-	(*MessageCommitVote)(nil),       // 23: types.MessageCommitVote
-	(*MessageRevealVote)(nil),       // 24: types.MessageRevealVote
-	(*MessageTallyVotes)(nil),       // 25: types.MessageTallyVotes
-	(*MessageFinalizeMarket)(nil),   // 26: types.MessageFinalizeMarket
-	(*MessageClaimSlash)(nil),       // 27: types.MessageClaimSlash
-	(*MessageReclaimStake)(nil),     // 28: types.MessageReclaimStake
-	(*MessageForfeitPosition)(nil),  // 29: types.MessageForfeitPosition
-	(*anypb.Any)(nil),               // 30: google.protobuf.Any
+	(*Signature)(nil),                  // 0: types.Signature
+	(*Transaction)(nil),                // 1: types.Transaction
+	(*FeeParams)(nil),                  // 2: types.FeeParams
+	(*MarketState)(nil),                // 3: types.MarketState
+	(*PositionState)(nil),              // 4: types.PositionState
+	(*OutcomeState)(nil),               // 5: types.OutcomeState
+	(*TreasuryReserve)(nil),            // 6: types.TreasuryReserve
+	(*ResolverState)(nil),              // 7: types.ResolverState
+	(*ResolverRecord)(nil),             // 8: types.ResolverRecord
+	(*ProposalRecord)(nil),             // 9: types.ProposalRecord
+	(*DisputeRecord)(nil),              // 10: types.DisputeRecord
+	(*VoteCommit)(nil),                 // 11: types.VoteCommit
+	(*VoteReveal)(nil),                 // 12: types.VoteReveal
+	(*SlashRecord)(nil),                // 13: types.SlashRecord
+	(*PanelEntropyAccum)(nil),          // 14: types.PanelEntropyAccum
+	(*MessageSend)(nil),                // 15: types.MessageSend
+	(*MessageCreateMarket)(nil),        // 16: types.MessageCreateMarket
+	(*MessageSubmitPrediction)(nil),    // 17: types.MessageSubmitPrediction
+	(*MessageClaimWinnings)(nil),       // 18: types.MessageClaimWinnings
+	(*MessageResolveMarket)(nil),       // 19: types.MessageResolveMarket
+	(*MessageRegisterResolver)(nil),    // 20: types.MessageRegisterResolver
+	(*MessageProposeOutcome)(nil),      // 21: types.MessageProposeOutcome
+	(*MessageFileDispute)(nil),         // 22: types.MessageFileDispute
+	(*MessageCommitVote)(nil),          // 23: types.MessageCommitVote
+	(*MessageRevealVote)(nil),          // 24: types.MessageRevealVote
+	(*MessageTallyVotes)(nil),          // 25: types.MessageTallyVotes
+	(*MessageFinalizeMarket)(nil),      // 26: types.MessageFinalizeMarket
+	(*MessageClaimSlash)(nil),          // 27: types.MessageClaimSlash
+	(*MessageReclaimStake)(nil),        // 28: types.MessageReclaimStake
+	(*MessageForfeitPosition)(nil),     // 29: types.MessageForfeitPosition
+	(*MessageClaimBuilderReward)(nil),  // 30: types.MessageClaimBuilderReward
+	(*MessageClaimCreatorFee)(nil),     // 31: types.MessageClaimCreatorFee
+	(*MessageClaimResolverReward)(nil), // 32: types.MessageClaimResolverReward
+	(*LastClaimedBlock)(nil),           // 33: types.LastClaimedBlock
+	(*any1.Any)(nil),                   // 34: google.protobuf.Any
 }
 var file_tx_proto_depIdxs = []int32{
-	30, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
+	34, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
 	0,  // 1: types.Transaction.signature:type_name -> types.Signature
 	2,  // [2:2] is the sub-list for method output_type
 	2,  // [2:2] is the sub-list for method input_type
@@ -2208,7 +2405,7 @@ func file_tx_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tx_proto_rawDesc), len(file_tx_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

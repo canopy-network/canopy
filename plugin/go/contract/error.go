@@ -311,3 +311,9 @@ return &PluginError{Code: 4, Module: errModule, Msg: "plugin socket read failed:
 func ErrCorruptState() *PluginError {
 return &PluginError{Code: 4010, Msg: "state key exists but value is empty — possible storage corruption"}
 }
+func ErrCooldownNotElapsed() *PluginError {
+return &PluginError{Code: 203, Module: errModule, Msg: "cooldown period has not elapsed"}
+}
+func ErrEmptyPool() *PluginError {
+return &PluginError{Code: 204, Module: errModule, Msg: "pool is empty — nothing to claim"}
+}
