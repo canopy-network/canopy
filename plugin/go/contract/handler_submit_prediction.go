@@ -43,8 +43,10 @@ bettorKey  := KeyForAccount(msg.BettorAddress)
 feePoolKey      := KeyForFeePool(c.Config.ChainId)
 creatorFeeKey   := KeyForCreatorFeePool(msg.MarketId)
 resolverFeeKey  := KeyForResolverFeePool(msg.MarketId)
+	gTreasuryKey    := KeyForTreasuryPool()
 creatorFeeQId   := nextQueryId()
-resolverFeeQId  := nextQueryId()
+	resolverFeeQId  := nextQueryId()
+	gTreasuryQId    := nextQueryId()
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
@@ -55,6 +57,7 @@ Keys: []*PluginKeyRead{
 {QueryId: feeQId,         Key: feePoolKey},
 {QueryId: creatorFeeQId,  Key: creatorFeeKey},
 {QueryId: resolverFeeQId, Key: resolverFeeKey},
+	{QueryId: gTreasuryQId,   Key: gTreasuryKey},
 },
 })
 if err != nil {
@@ -71,6 +74,7 @@ bettor      := &Account{}
 feePool     := &Pool{}
 creatorFee  := &Pool{}
 resolverFee := &Pool{}
+	gTreasury   := &Pool{}
 
 for _, r := range resp.Results {
 if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
@@ -104,6 +108,10 @@ return &PluginDeliverResponse{Error: pe}
 }
 case resolverFeeQId:
 if pe := Unmarshal(r.Entries[0].Value, resolverFee); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+case gTreasuryQId:
+if pe := Unmarshal(r.Entries[0].Value, gTreasury); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 }
@@ -158,7 +166,8 @@ isNewPosition := position.SharesYes == 0 && position.SharesNo == 0 && position.C
 
 bettor.Amount      -= finalCost
 mPool.Amount       += tradeCost
-feePool.Amount     += fee
+feePool.Amount     += fee / 2
+	gTreasury.Amount   += fee - fee/2
 creatorFee.Amount  += creatorFeeAmt
 resolverFee.Amount += resolverFeeAmt
 
@@ -185,7 +194,9 @@ rawPool, pe := SafeMarshal(mPool)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawFee, pe := SafeMarshal(feePool)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
-rawCreatorFee, pe := SafeMarshal(creatorFee)
+rawGTreasury, pe := SafeMarshal(gTreasury)
+	if pe != nil { return &PluginDeliverResponse{Error: pe} }
+	rawCreatorFee, pe := SafeMarshal(creatorFee)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawResolverFee, pe := SafeMarshal(resolverFee)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
@@ -197,6 +208,7 @@ sets := []*PluginSetOp{
 {Key: feePoolKey,     Value: rawFee},
 {Key: creatorFeeKey,  Value: rawCreatorFee},
 {Key: resolverFeeKey, Value: rawResolverFee},
+		{Key: gTreasuryKey,   Value: rawGTreasury},
 }
 var deletes []*PluginDeleteOp
 if bettor.Amount == 0 {

@@ -37,11 +37,13 @@ marketId := DeriveMarketId(msg.CreatorAddress, msg.Nonce)
 
 marketQId  := nextQueryId()
 creatorQId := nextQueryId()
-feeQId     := nextQueryId()
+feeQId        := nextQueryId()
+	gTreasuryQId  := nextQueryId()
 
 marketKey  := KeyForMarket(marketId)
 creatorKey := KeyForAccount(msg.CreatorAddress)
-feePoolKey := KeyForFeePool(c.Config.ChainId)
+feePoolKey    := KeyForFeePool(c.Config.ChainId)
+	gTreasuryKey  := KeyForTreasuryPool()
 poolKey    := KeyForMarketPool(marketId)
 treasKey   := KeyForTreasuryReserve(marketId)
 
@@ -50,6 +52,7 @@ Keys: []*PluginKeyRead{
 {QueryId: marketQId,  Key: marketKey},
 {QueryId: creatorQId, Key: creatorKey},
 {QueryId: feeQId,     Key: feePoolKey},
+		{QueryId: gTreasuryQId, Key: gTreasuryKey},
 },
 })
 if err != nil {
@@ -60,7 +63,8 @@ return &PluginDeliverResponse{Error: resp.Error}
 }
 
 creator := &Account{}
-feePool := &Pool{}
+feePool   := &Pool{}
+	gTreasury := &Pool{}
 
 for _, r := range resp.Results {
 if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
@@ -77,7 +81,11 @@ case feeQId:
 if pe := Unmarshal(r.Entries[0].Value, feePool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
-}
+		case gTreasuryQId:
+		if pe := Unmarshal(r.Entries[0].Value, gTreasury); pe != nil {
+		return &PluginDeliverResponse{Error: pe}
+		}
+	}
 }
 
 	if fee > 0 && msg.B0 > ^uint64(0)-fee {
@@ -92,7 +100,8 @@ return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 }
 
 creator.Amount -= totalCost
-feePool.Amount += fee
+feePool.Amount   += fee / 2
+	gTreasury.Amount += fee - fee/2
 
 // Carve FINALIZATION_BOUNTY from B0 before seeding the LMSR pool.
 // MIN_B0 >= FINALIZATION_BOUNTY + seed margin, so this subtraction is safe.

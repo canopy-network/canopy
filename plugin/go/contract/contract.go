@@ -55,6 +55,9 @@ SupportedTransactions: []string{
 	"claim_builder_reward",
 	"claim_creator_fee",
 	"claim_resolver_reward",
+		"claim_community_reward",
+		"claim_investor_reward",
+		"claim_protocol_reward",
 },
 TransactionTypeUrls: []string{
 	"type.googleapis.com/types.MessageCreateMarket",
@@ -73,6 +76,9 @@ TransactionTypeUrls: []string{
 	"type.googleapis.com/types.MessageClaimBuilderReward",
 	"type.googleapis.com/types.MessageClaimCreatorFee",
 	"type.googleapis.com/types.MessageClaimResolverReward",
+		"type.googleapis.com/types.MessageClaimCommunityReward",
+		"type.googleapis.com/types.MessageClaimInvestorReward",
+		"type.googleapis.com/types.MessageClaimProtocolReward",
 },
 }
 
@@ -194,6 +200,12 @@ case *MessageClaimCreatorFee:
 return c.CheckMessageClaimCreatorFee(m)
 case *MessageClaimResolverReward:
 return c.CheckMessageClaimResolverReward(m)
+case *MessageClaimCommunityReward:
+return c.CheckMessageClaimCommunityReward(m)
+case *MessageClaimInvestorReward:
+return c.CheckMessageClaimInvestorReward(m)
+case *MessageClaimProtocolReward:
+return c.CheckMessageClaimProtocolReward(m)
 default:
 return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 }
@@ -240,6 +252,12 @@ case *MessageClaimCreatorFee:
 return c.DeliverMessageClaimCreatorFee(m, fee)
 case *MessageClaimResolverReward:
 return c.DeliverMessageClaimResolverReward(m, fee)
+case *MessageClaimCommunityReward:
+return c.DeliverMessageClaimCommunityReward(m, fee)
+case *MessageClaimInvestorReward:
+return c.DeliverMessageClaimInvestorReward(m, fee)
+case *MessageClaimProtocolReward:
+return c.DeliverMessageClaimProtocolReward(m, fee)
 default:
 return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 }

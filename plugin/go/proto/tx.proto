@@ -233,6 +233,12 @@ message LastClaimedBlock {
   uint64 height = 1;
 }
 
+message MessageClaimCommunityReward {}
+
+message MessageClaimInvestorReward {}
+
+message MessageClaimProtocolReward {}
+
 message GlobalStats {
   uint64 total_weighted_resolutions = 1;
 }

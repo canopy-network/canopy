@@ -20,17 +20,20 @@ return &PluginDeliverResponse{Error: ErrHeightNotSet()}
 
 recQId     := nextQueryId()
 accQId     := nextQueryId()
-feeQId     := nextQueryId()
+feeQId          := nextQueryId()
+	gTreasuryQId    := nextQueryId()
 
 recKey     := KeyForResolverRecord(msg.ResolverAddress)
 accKey     := KeyForAccount(msg.ResolverAddress)
-feePoolKey := KeyForFeePool(c.Config.ChainId)
+feePoolKey      := KeyForFeePool(c.Config.ChainId)
+	gTreasuryKey    := KeyForTreasuryPool()
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
 {QueryId: recQId, Key: recKey},
 {QueryId: accQId, Key: accKey},
-{QueryId: feeQId, Key: feePoolKey},
+{QueryId: feeQId,       Key: feePoolKey},
+		{QueryId: gTreasuryQId, Key: gTreasuryKey},
 },
 })
 if err != nil {
@@ -42,7 +45,8 @@ return &PluginDeliverResponse{Error: resp.Error}
 
 var existing *ResolverRecord
 account := &Account{}
-feePool := &Pool{}
+feePool     := &Pool{}
+	gTreasury   := &Pool{}
 
 for _, r := range resp.Results {
 if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
@@ -62,6 +66,10 @@ case feeQId:
 if pe := Unmarshal(r.Entries[0].Value, feePool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
+case gTreasuryQId:
+if pe := Unmarshal(r.Entries[0].Value, gTreasury); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
 }
 }
 
@@ -77,7 +85,8 @@ return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 }
 
 account.Amount -= totalCost
-feePool.Amount += fee
+feePool.Amount  += fee / 2
+	gTreasury.Amount += fee - fee/2
 
 var record *ResolverRecord
 if existing != nil {
