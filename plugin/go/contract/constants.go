@@ -137,17 +137,6 @@ var PRAXIS_TREASURY_ID = []byte{
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PRAXIS_BUILDER_ADDRESS: destination for 20% builder treasury rewards (PRIS v1.0).
-// Cold wallet — separate from validator address.
-// ─────────────────────────────────────────────────────────────────────────────
-
-var PRAXIS_BUILDER_ADDRESS = []byte{
-	0x95, 0x43, 0x78, 0xba, 0x10, 0x9c, 0x5c, 0xa4,
-	0x5b, 0x23, 0xbf, 0xa2, 0x84, 0xf3, 0xac, 0x70,
-	0xe2, 0x67, 0x1b, 0x87,
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // PANEL ENTROPY KEY
 // Singleton state key for the 0x1C rolling entropy accumulator.
 // Initialised in contract.go init() via JoinLenPrefix.
