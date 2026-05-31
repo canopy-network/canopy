@@ -305,15 +305,12 @@ func ErrFailedPluginRead(err error) *PluginError {
 return &PluginError{Code: 4, Module: errModule, Msg: "plugin socket read failed: " + err.Error()}
 }
 
-// ErrCorruptState is returned when a required state key exists but contains
-// zero-length data — distinguishable from ErrMarketNotFound (key absent).
-// Issue-13: improves debuggability of storage corruption scenarios.
-func ErrCorruptState() *PluginError {
-return &PluginError{Code: 4010, Msg: "state key exists but value is empty — possible storage corruption"}
-}
 func ErrCooldownNotElapsed() *PluginError {
 return &PluginError{Code: 203, Module: errModule, Msg: "cooldown period has not elapsed"}
 }
 func ErrEmptyPool() *PluginError {
 return &PluginError{Code: 204, Module: errModule, Msg: "pool is empty — nothing to claim"}
+}
+func ErrMarketNotFinalized() *PluginError {
+return &PluginError{Code: 205, Module: errModule, Msg: "market is not finalized"}
 }

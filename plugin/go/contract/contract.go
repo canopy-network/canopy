@@ -69,6 +69,7 @@ TransactionTypeUrls: []string{
 "type.googleapis.com/types.MessageForfeitPosition",
 	"type.googleapis.com/types.MessageClaimBuilderReward",
 	"type.googleapis.com/types.MessageClaimCreatorFee",
+	"type.googleapis.com/types.MessageClaimCreatorFee",
 	"type.googleapis.com/types.MessageClaimResolverReward",
 },
 }
@@ -187,6 +188,8 @@ case *MessageForfeitPosition:
 return c.CheckMessageForfeitPosition(m)
 case *MessageClaimBuilderReward:
 return c.CheckMessageClaimBuilderReward(m)
+case *MessageClaimCreatorFee:
+return c.CheckMessageClaimCreatorFee(m)
 default:
 return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 }
@@ -229,6 +232,8 @@ case *MessageForfeitPosition:
 return c.DeliverMessageForfeitPosition(m, fee)
 case *MessageClaimBuilderReward:
 return c.DeliverMessageClaimBuilderReward(m, fee)
+case *MessageClaimCreatorFee:
+return c.DeliverMessageClaimCreatorFee(m, fee)
 default:
 return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 }
