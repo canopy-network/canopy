@@ -31,6 +31,8 @@ marketKey   := KeyForMarket(msg.MarketId)
 proposalKey := KeyForProposal(msg.MarketId)
 dispAccKey  := KeyForAccount(msg.DisputerAddress)
 feePoolKey  := KeyForFeePool(c.Config.ChainId)
+treasyPoolKey := KeyForTreasuryPool()
+treasyQId    := nextQueryId()
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
@@ -39,6 +41,7 @@ Keys: []*PluginKeyRead{
 {QueryId: dispAccQId,  Key: dispAccKey},
 {QueryId: entropyQId,  Key: PANEL_ENTROPY_KEY},
 {QueryId: feeQId,      Key: feePoolKey},
+{QueryId: treasyQId,   Key: treasyPoolKey},
 },
 })
 if err != nil {
@@ -52,6 +55,7 @@ var market   *MarketState
 var proposal *ProposalRecord
 disputer    := &Account{}
 feePool     := &Pool{}
+treasyPool  := &Pool{}
 var entropyVal uint64
 
 for _, r := range resp.Results {
@@ -222,7 +226,8 @@ return &PluginDeliverResponse{Error: ErrInsufficientPanelCandidates()}
 
 market.Status    = STATUS_DISPUTED
 disputer.Amount -= totalCost
-feePool.Amount  += fee
+feePool.Amount   += fee / 2
+treasyPool.Amount += fee / 2
 
 dispute := &DisputeRecord{
 DisputerAddress: msg.DisputerAddress,
@@ -239,11 +244,14 @@ rawD, pe := SafeMarshal(dispute)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawFee, pe := SafeMarshal(feePool)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawTreasy, pe := SafeMarshal(treasyPool)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
 sets := []*PluginSetOp{
 {Key: marketKey,                   Value: rawM},
 {Key: KeyForDispute(msg.MarketId), Value: rawD},
 {Key: feePoolKey,                  Value: rawFee},
+{Key: treasyPoolKey,               Value: rawTreasy},
 }
 var deletes []*PluginDeleteOp
 if disputer.Amount == 0 {
