@@ -1581,3 +1581,122 @@ t.Logf("COI-3 PASS: oversized position correctly rejected: %v", err)
 // COI ADVERSARIAL TESTS — Issue-19
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+func TestPRISFeeFlow(t *testing.T) {
+addr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+key, err := keystoreGetKey(addr, "")
+if err != nil {
+t.Fatalf("get key: %v", err)
+}
+
+// Create market — B0 = 60 PRX
+h, _ := getHeight()
+nonce := uint64(time.Now().UnixMicro())
+const b0 = uint64(60_000_000)
+createMsg := &contract.MessageCreateMarket{
+CreatorAddress: hexDecode(addr),
+B0:             b0,
+ExpiryTime:     h + 80,
+Nonce:          nonce,
+Question:       "PRIS fee flow verification",
+}
+balBefore := getBalance(addr)
+hash := submitTx(t, key, "create_market", "MessageCreateMarket", createMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("create_market: %v", err)
+}
+balAfter := getBalance(addr)
+marketId := contract.DeriveMarketId(hexDecode(addr), nonce)
+t.Logf("Market ID: %x", marketId)
+t.Logf("Creation cost: %d uPRX (B0+bond+fee)", balBefore-balAfter)
+
+// Submit prediction — check 2% fee on top
+h, _ = getHeight()
+lmsrSeed := b0 - contract.FINALIZATION_BOUNTY
+halfSeed := lmsrSeed / 2
+shares := contract.PRECISION_SCALE
+tradeCost, pe := contract.ComputeTradeCost(halfSeed, halfSeed, lmsrSeed, uint64(shares), true)
+if pe != nil {
+t.Fatalf("ComputeTradeCost: %v", pe)
+}
+creatorFee  := tradeCost * contract.CREATOR_FEE_BPS / 10_000
+resolverFee := tradeCost * contract.RESOLVER_FEE_BPS / 10_000
+expectedTotalCost := tradeCost + creatorFee + resolverFee + testFee
+t.Logf("tradeCost=%d creatorFee=%d resolverFee=%d totalExpected=%d", tradeCost, creatorFee, resolverFee, expectedTotalCost)
+
+bettorBalBefore := getBalance(addr)
+predMsg := &contract.MessageSubmitPrediction{
+MarketId:      marketId,
+BettorAddress: hexDecode(addr),
+Outcome:       true,
+Shares:        uint64(shares),
+MaxCost:       expectedTotalCost * 2,
+}
+hash = submitTx(t, key, "submit_prediction", "MessageSubmitPrediction", predMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("submit_prediction: %v", err)
+}
+bettorBalAfter := getBalance(addr)
+actualCost := int64(bettorBalBefore) - int64(bettorBalAfter)
+t.Logf("Bettor cost: %d (expected ~%d)", actualCost, expectedTotalCost)
+if actualCost < int64(tradeCost+creatorFee+resolverFee) {
+t.Errorf("PRIS fees not charged: cost %d below tradeCost+fees %d", actualCost, tradeCost+creatorFee+resolverFee)
+} else {
+t.Log("PRIS fees charged on top of tradeCost ✓")
+}
+
+// Register resolver and finalize
+resolverKey, resolverAddr := setupResolver(t, key, addr, 500_000_000_000)
+
+// Wait for expiry
+expiryTarget := createMsg.ExpiryTime + 2
+for {
+cur, _ := getHeight()
+if cur >= expiryTarget { break }
+time.Sleep(2 * time.Second)
+}
+
+// Propose outcome
+h, _ = getHeight()
+bond := contract.ComputeMinBond(&contract.MarketState{BEff: lmsrSeed})
+propMsg := &contract.MessageProposeOutcome{
+MarketId:        marketId,
+ResolverAddress: hexDecode(resolverAddr),
+ProposedOutcome: true,
+ProposalBond:    bond,
+}
+hash = submitTx(t, resolverKey, "propose_outcome", "MessageProposeOutcome", propMsg, h)
+if err := waitForTx(resolverAddr, hash, 60*time.Second); err != nil {
+t.Fatalf("propose_outcome: %v", err)
+}
+
+// Wait for dispute window
+disputeTarget := h + contract.TEST_DISPUTE_BLOCKS + 2
+for {
+cur, _ := getHeight()
+if cur >= disputeTarget { break }
+time.Sleep(2 * time.Second)
+}
+
+// Finalize — resolver should receive resolver fee pool
+resolverBalBefore := getBalance(resolverAddr)
+h, _ = getHeight()
+finMsg := &contract.MessageFinalizeMarket{
+MarketId:   marketId,
+CallerAddr: hexDecode(addr),
+}
+hash = submitTx(t, key, "finalize_market", "MessageFinalizeMarket", finMsg, h)
+if err := waitForTx(addr, hash, 60*time.Second); err != nil {
+t.Fatalf("finalize_market: %v", err)
+}
+resolverBalAfter := getBalance(resolverAddr)
+resolverGain := int64(resolverBalAfter) - int64(resolverBalBefore)
+t.Logf("Resolver balance change at finalization: %d uPRX (expected ~%d resolver fee)", resolverGain, resolverFee)
+if resolverGain > 0 {
+t.Log("Resolver fee paid at finalization ✓")
+} else {
+t.Errorf("Resolver fee NOT paid at finalization: gain=%d", resolverGain)
+}
+
+t.Log("PRIS fee flow verified ✓")
+}
