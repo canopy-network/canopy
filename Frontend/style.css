@@ -302,3 +302,10 @@ code{font-family:var(--font-mono);font-size:11px;background:var(--bg2);padding:1
 .ks-acct-card:hover { border-color: var(--green) !important; }
 .ks-acct-active { border-color: var(--green) !important; }
 .ks-acct-active div:last-child { background: var(--green) !important; }
+
+.confirm-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);}
+.confirm-row:last-child{border-bottom:none;}
+.confirm-lbl{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.5px;}
+.confirm-val{font-family:var(--font-mono);font-size:11px;color:var(--text2);text-align:right;}
+.confirm-val.green{color:var(--green);}
+.confirm-val.red{color:var(--red);}
