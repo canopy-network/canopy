@@ -2012,8 +2012,13 @@ window.loadResolvers=async function(){
       const msg=(tx.transaction&&tx.transaction.msg)||{};
       const addr=tx.sender||'';
       const stake=BigInt(msg.stakeAmount||msg.stake_amount||0);
-      if(!resolvers.has(addr))resolvers.set(addr,{addr,stake,proposals:0,height:tx.height||0,rrs:0,successfulResolutions:0});
-      else resolvers.get(addr).stake=stake;
+      if(!resolvers.has(addr)){
+        resolvers.set(addr,{addr,stake,proposals:0,height:tx.height||0,rrs:0,successfulResolutions:0});
+      } else {
+        const r=resolvers.get(addr);
+        r.stake+=stake; // additive — each register_resolver adds to existing stake
+        if((tx.height||0)>r.height)r.height=tx.height;
+      }
     }
     for(const tx of txs){
       if(tx.messageType!=='propose_outcome')continue;
@@ -2021,13 +2026,8 @@ window.loadResolvers=async function(){
       if(resolvers.has(addr))resolvers.get(addr).proposals++;
     }
     if(resolvers.size===0){el.innerHTML='<div class="alert ay">No registered resolvers found</div>';return;}
-    el.innerHTML='<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;fetching live RRS scores…</div>';
     const list=[...resolvers.values()];
-    await Promise.all(list.map(async r=>{
-      const rec=await fetchResolverRecord(r.addr);
-      if(rec){r.rrs=Number(rec.rrs);r.stake=rec.stake;r.successfulResolutions=Number(rec.successfulResolutions);}
-      else{r.rrs=Math.min(r.proposals*10,999);}
-    }));
+    list.forEach(r=>{ r.rrs=Math.min(r.proposals*10,999); });
     list.sort((a,b)=>b.rrs-a.rrs);
     el.innerHTML=list.map(r=>{
       const rrs=r.rrs||0;
@@ -2043,7 +2043,7 @@ window.loadResolvers=async function(){
         '</div>'+
         '<div class="igrid" style="grid-template-columns:1fr 1fr 1fr 1fr">'+
           '<div class="icell"><div class="ilbl">Stake</div><div class="ival" style="font-size:11px">'+fmtPRX(r.stake)+' PRX</div></div>'+
-          '<div class="icell"><div class="ilbl">RRS Score</div><div class="ival" style="color:'+tcolor+'">'+rrs+'</div></div>'+
+          '<div class="icell"><div class="ilbl">Est. RRS</div><div class="ival" style="color:'+tcolor+'">'+rrs+'</div></div>'+
           '<div class="icell"><div class="ilbl">Correct</div><div class="ival">'+(r.successfulResolutions||r.proposals)+'</div></div>'+
           '<div class="icell"><div class="ilbl">Since block</div><div class="ival">#'+r.height+'</div></div>'+
         '</div>'+
