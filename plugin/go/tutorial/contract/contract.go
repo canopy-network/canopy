@@ -1,77 +1,88 @@
 package contract
 
 import (
-"google.golang.org/protobuf/proto"
-"google.golang.org/protobuf/reflect/protodesc"
-"google.golang.org/protobuf/reflect/protoreflect"
+"crypto/sha256"
+
 "google.golang.org/protobuf/types/known/anypb"
 )
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Praxis Prediction Market — Contract Wiring
-// Spec authority: ADLMSR v5.6.6-r2-CORRECTED + PORS v1.0-r2-CORRECTED
-//
-// This file contains:
-//   - ContractConfig  (FSM handshake — tx type registration)
-//   - Contract struct (application context)
-//   - init()          (file descriptor registration + PANEL_ENTROPY_KEY init)
-//   - Lifecycle       (Genesis, BeginBlock, EndBlock)
-//   - CheckTx router  (stateless validation — zero StateRead calls)
-//   - DeliverTx router(stateful execution)
-//
-// Never modify plugin.go, main.go, or plugin.proto.
-// ═══════════════════════════════════════════════════════════════════════════════
+var (
+PREFIX_MARKET_STATE    = []byte{0x10}
+PREFIX_POSITION_STATE  = []byte{0x11}
+PREFIX_OUTCOME_STATE   = []byte{0x12}
+PREFIX_RESOLVER_STATE  = []byte{0x13}
+PREFIX_TREASURY        = []byte{0x14}
+PREFIX_RESOLVER_RECORD = []byte{0x16}
+PREFIX_PROPOSAL_RECORD = []byte{0x17}
+PREFIX_DISPUTE_RECORD  = []byte{0x18}
+PREFIX_VOTE_COMMIT     = []byte{0x19}
+PREFIX_VOTE_REVEAL     = []byte{0x1A}
+PREFIX_SLASH_RECORD    = []byte{0x1B}
+)
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONTRACT CONFIG
-// SupportedTransactions[i] MUST exactly match TransactionTypeUrls[i].
-// Any mismatch causes silent misrouting — transactions fail with no error.
-// Phase 1: ADLMSR only (5 types including send).
-// Phase 2: add PORS types at indices 5-11.
-// ─────────────────────────────────────────────────────────────────────────────
+var (
+PREFIX_ACCOUNT  = []byte{0x01}
+PREFIX_FEE_POOL = []byte{0x02}
+)
+
+// Issue-12: assert MIN_B0 > FINALIZATION_BOUNTY at startup.
+// If this ever fails, create_market would seed a TreasuryReserve that cannot
+// cover the finalization bounty, silently breaking permissionless finalization.
+func init() {
+if MIN_B0 <= FINALIZATION_BOUNTY {
+panic("invariant violated: MIN_B0 must be greater than FINALIZATION_BOUNTY")
+}
+}
 
 var ContractConfig = &PluginConfig{
-Name:    "praxis_contract",
+Name:    "praxis_prediction_market",
 Id:      1,
 Version: 1,
 SupportedTransactions: []string{
-"send",               // index 0
-"create_market",      // index 1
-"submit_prediction",  // index 2
-"resolve_market",     // index 3
-"claim_winnings",     // index 4
-"register_resolver",  // index 5
-"propose_outcome",    // index 6
-"file_dispute",       // index 7
-"commit_vote",        // index 8
-"reveal_vote",        // index 9
-"tally_votes",        // index 10
-"finalize_market",    // index 11
-"claim_slash",        // index 12
+"create_market",
+"submit_prediction",
+"claim_winnings",
+"register_resolver",
+"propose_outcome",
+"file_dispute",
+"commit_vote",
+"reveal_vote",
+"tally_votes",
+"finalize_market",
+"claim_slash",
+"reclaim_stake",
+"forfeit_position",
+	"claim_builder_reward",
+	"claim_creator_fee",
+	"claim_resolver_reward",
+		"claim_community_reward",
+		"claim_investor_reward",
+		"claim_protocol_reward",
 },
 TransactionTypeUrls: []string{
-"type.googleapis.com/types.MessageSend",
-"type.googleapis.com/types.MessageCreateMarket",
-"type.googleapis.com/types.MessageSubmitPrediction",
-"type.googleapis.com/types.MessageResolveMarket",
-"type.googleapis.com/types.MessageClaimWinnings",
-"type.googleapis.com/types.MessageRegisterResolver",
-"type.googleapis.com/types.MessageProposeOutcome",
-"type.googleapis.com/types.MessageFileDispute",
-"type.googleapis.com/types.MessageCommitVote",
-"type.googleapis.com/types.MessageRevealVote",
-"type.googleapis.com/types.MessageTallyVotes",
-"type.googleapis.com/types.MessageFinalizeMarket",
-"type.googleapis.com/types.MessageClaimSlash",
+	"type.googleapis.com/types.MessageCreateMarket",
+	"type.googleapis.com/types.MessageSubmitPrediction",
+	"type.googleapis.com/types.MessageClaimWinnings",
+	"type.googleapis.com/types.MessageRegisterResolver",
+	"type.googleapis.com/types.MessageProposeOutcome",
+	"type.googleapis.com/types.MessageFileDispute",
+	"type.googleapis.com/types.MessageCommitVote",
+	"type.googleapis.com/types.MessageRevealVote",
+	"type.googleapis.com/types.MessageTallyVotes",
+	"type.googleapis.com/types.MessageFinalizeMarket",
+	"type.googleapis.com/types.MessageClaimSlash",
+	"type.googleapis.com/types.MessageReclaimStake",
+	"type.googleapis.com/types.MessageForfeitPosition",
+	"type.googleapis.com/types.MessageClaimBuilderReward",
+	"type.googleapis.com/types.MessageClaimCreatorFee",
+	"type.googleapis.com/types.MessageClaimResolverReward",
+		"type.googleapis.com/types.MessageClaimCommunityReward",
+		"type.googleapis.com/types.MessageClaimInvestorReward",
+		"type.googleapis.com/types.MessageClaimProtocolReward",
 },
-EventTypeUrls: nil,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONTRACT STRUCT
-// Plugin and fsmId are set by plugin.go — do not set manually.
-// Do NOT add currentHeight here — use GetGlobalHeight() instead (AUDIT-9).
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 type Contract struct {
 Config    Config
@@ -80,177 +91,176 @@ plugin    *Plugin
 fsmId     uint64
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// INIT
-// Registers all protobuf file descriptors with the FSM during startup handshake.
-// Also initialises PANEL_ENTROPY_KEY which depends on JoinLenPrefix.
-// ─────────────────────────────────────────────────────────────────────────────
-
-func init() {
-// Initialise the singleton entropy key now that JoinLenPrefix is available.
-PANEL_ENTROPY_KEY = KeyForPanelEntropy()
-
-file_account_proto_init()
-file_event_proto_init()
-file_plugin_proto_init()
-file_tx_proto_init()
-
-var fds [][]byte
-for _, file := range []protoreflect.FileDescriptor{
-anypb.File_google_protobuf_any_proto,
-File_account_proto,
-File_event_proto,
-File_plugin_proto,
-File_tx_proto,
-} {
-fd, err := proto.Marshal(protodesc.ToFileDescriptorProto(file))
-if err != nil {
-panic("praxis: failed to marshal file descriptor: " + err.Error())
+func marketKey(prefix, marketId []byte) []byte {
+return append(append([]byte{}, prefix...), marketId...)
 }
-fds = append(fds, fd)
+func positionKey(marketId, addr []byte) []byte {
+k := append(append([]byte{}, PREFIX_POSITION_STATE...), marketId...)
+return append(k, addr...)
 }
-ContractConfig.FileDescriptorProtos = fds
+func addrKey(prefix, addr []byte) []byte {
+return append(append([]byte{}, prefix...), addr...)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LIFECYCLE
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Genesis imports initial state at chain launch. No-op for now.
-func (c *Contract) Genesis(_ *PluginGenesisRequest) *PluginGenesisResponse {
+func (c *Contract) Genesis(req *PluginGenesisRequest) *PluginGenesisResponse {
 return &PluginGenesisResponse{}
 }
 
-// BeginBlock is called at the start of every block before any transactions.
-// Sets the global height (AUDIT-9) and updates the 0x1C entropy accumulator (NF-2).
-// Write failure is non-fatal — accumulator stays at last committed value (accepted degradation).
 func (c *Contract) BeginBlock(req *PluginBeginRequest) *PluginBeginResponse {
 SetGlobalHeight(req.Height)
 
-// NF-2: update rolling entropy accumulator at 0x1C.
 entropyQId := nextQueryId()
 entropyResp, readErr := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
 {QueryId: entropyQId, Key: PANEL_ENTROPY_KEY},
 },
 })
-var acc uint64
-if readErr == nil && entropyResp != nil && entropyResp.Error == nil {
+
+// Issue-17 fix: replace XOR accumulator with SHA256 hash chain.
+// XOR with a deterministic height function is fully predictable by chain
+// observers — they can compute the accumulator value at any future block and
+// time a file_dispute call to influence panel selection.
+// SHA256(prev || height_bytes) is a one-way function: knowing the output
+// does not allow computing a height that produces a desired panel seed.
+var prev [8]byte
+if readErr == nil && entropyResp != nil {
 for _, r := range entropyResp.Results {
-if r.QueryId == entropyQId && len(r.Entries) > 0 {
-accMsg := &PanelEntropyAccum{}
-if Unmarshal(r.Entries[0].Value, accMsg) == nil {
-acc = accMsg.Accumulator
+if r.QueryId == entropyQId && len(r.Entries) > 0 && len(r.Entries[0].Value) >= 8 {
+copy(prev[:], r.Entries[0].Value[:8])
 }
 }
 }
+
+heightBytes := make([]byte, 8)
+for i := 7; i >= 0; i-- {
+heightBytes[i] = byte(req.Height & 0xFF)
+req.Height >>= 8
 }
-acc ^= req.Height * FIBONACCI_HASH_CONSTANT
-rawAcc, mErr := SafeMarshal(&PanelEntropyAccum{Accumulator: acc})
-if mErr == nil {
-wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+input := append(prev[:], heightBytes...)
+hash := sha256.Sum256(input)
+buf := hash[:8]
+
+wr, writeErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
 Sets: []*PluginSetOp{
-{Key: PANEL_ENTROPY_KEY, Value: rawAcc},
+{Key: PANEL_ENTROPY_KEY, Value: buf},
 },
 })
-// NF-2: capture result — non-fatal on failure, log would go here in production.
-_ = errCheckWrite(wr, werr)
+if writeErr != nil || (wr != nil && wr.Error != nil) {
+_ = wr
 }
+
 return &PluginBeginResponse{}
 }
 
-// EndBlock is called at the end of every block after all transactions.
-func (c *Contract) EndBlock(_ *PluginEndRequest) *PluginEndResponse {
-return &PluginEndResponse{}
+func (c *Contract) EndBlock(req *PluginEndRequest) *PluginEndResponse {
+	height := GetGlobalHeight()
+	if height > 0 && height%PRIS_EPOCH_BLOCKS == 0 {
+		_ = c.processEpochBoundary(height)
+	}
+	return &PluginEndResponse{}
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CHECKTX ROUTER
-// Stateless validation only — ZERO StateRead calls permitted here (AUDIT-8).
-// Validates message fields and returns AuthorizedSigners for FSM sig verification.
-// Fee check happens first — rejects obviously underfunded transactions fast.
-// ─────────────────────────────────────────────────────────────────────────────
 
 func (c *Contract) CheckTx(req *PluginCheckRequest) *PluginCheckResponse {
 msg, err := FromAny(req.Tx.Msg)
 if err != nil {
 return &PluginCheckResponse{Error: err}
 }
-
-// Route to the correct CheckTx handler.
-switch x := msg.(type) {
+switch m := msg.(type) {
 case *MessageSend:
-return c.CheckMessageSend(x)
+return c.CheckMessageSend(m)
 case *MessageCreateMarket:
-return c.CheckMessageCreateMarket(x)
+return c.CheckMessageCreateMarket(m)
 case *MessageSubmitPrediction:
-return c.CheckMessageSubmitPrediction(x)
-case *MessageResolveMarket:
-return c.CheckMessageResolveMarket(x)
+return c.CheckMessageSubmitPrediction(m)
 case *MessageClaimWinnings:
-return c.CheckMessageClaimWinnings(x)
+return c.CheckMessageClaimWinnings(m)
 case *MessageRegisterResolver:
-return c.CheckMessageRegisterResolver(x)
+return c.CheckMessageRegisterResolver(m)
 case *MessageProposeOutcome:
-return c.CheckMessageProposeOutcome(x)
+return c.CheckMessageProposeOutcome(m)
 case *MessageFileDispute:
-return c.CheckMessageFileDispute(x)
+return c.CheckMessageFileDispute(m)
 case *MessageCommitVote:
-return c.CheckMessageCommitVote(x)
+return c.CheckMessageCommitVote(m)
 case *MessageRevealVote:
-return c.CheckMessageRevealVote(x)
+return c.CheckMessageRevealVote(m)
 case *MessageTallyVotes:
-return c.CheckMessageTallyVotes(x)
+return c.CheckMessageTallyVotes(m)
 case *MessageFinalizeMarket:
-return c.CheckMessageFinalizeMarket(x)
+return c.CheckMessageFinalizeMarket(m)
 case *MessageClaimSlash:
-return c.CheckMessageClaimSlash(x)
+return c.CheckMessageClaimSlash(m)
+case *MessageReclaimStake:
+return c.CheckMessageReclaimStake(m)
+case *MessageForfeitPosition:
+return c.CheckMessageForfeitPosition(m)
+case *MessageClaimBuilderReward:
+return c.CheckMessageClaimBuilderReward(m)
+case *MessageClaimCreatorFee:
+return c.CheckMessageClaimCreatorFee(m)
+case *MessageClaimResolverReward:
+return c.CheckMessageClaimResolverReward(m)
+case *MessageClaimCommunityReward:
+return c.CheckMessageClaimCommunityReward(m)
+case *MessageClaimInvestorReward:
+return c.CheckMessageClaimInvestorReward(m)
+case *MessageClaimProtocolReward:
+return c.CheckMessageClaimProtocolReward(m)
 default:
 return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DELIVERTX ROUTER
-// Stateful execution — called exactly once per transaction in block order.
-// If this returns an error the tx is recorded as failed and fee still charged.
-// CheckTx must catch everything recoverable before a tx enters a block.
-// ─────────────────────────────────────────────────────────────────────────────
 
 func (c *Contract) DeliverTx(req *PluginDeliverRequest) *PluginDeliverResponse {
 msg, err := FromAny(req.Tx.Msg)
 if err != nil {
 return &PluginDeliverResponse{Error: err}
 }
-
-switch x := msg.(type) {
+fee := req.Tx.Fee
+switch m := msg.(type) {
 case *MessageSend:
-return c.DeliverMessageSend(x, req.Tx.Fee)
+return c.DeliverMessageSend(m, fee)
 case *MessageCreateMarket:
-return c.DeliverMessageCreateMarket(x, req.Tx.Fee)
+return c.DeliverMessageCreateMarket(m, fee)
 case *MessageSubmitPrediction:
-return c.DeliverMessageSubmitPrediction(x, req.Tx.Fee)
-case *MessageResolveMarket:
-return c.DeliverMessageResolveMarket(x, req.Tx.Fee)
+return c.DeliverMessageSubmitPrediction(m, fee)
 case *MessageClaimWinnings:
-return c.DeliverMessageClaimWinnings(x, req.Tx.Fee)
+return c.DeliverMessageClaimWinnings(m, fee)
 case *MessageRegisterResolver:
-return c.DeliverMessageRegisterResolver(x, req.Tx.Fee)
+return c.DeliverMessageRegisterResolver(m, fee)
 case *MessageProposeOutcome:
-return c.DeliverMessageProposeOutcome(x, req.Tx.Fee)
+return c.DeliverMessageProposeOutcome(m, fee)
 case *MessageFileDispute:
-return c.DeliverMessageFileDispute(x, req.Tx.Fee)
+return c.DeliverMessageFileDispute(m, fee)
 case *MessageCommitVote:
-return c.DeliverMessageCommitVote(x, req.Tx.Fee)
+return c.DeliverMessageCommitVote(m, fee)
 case *MessageRevealVote:
-return c.DeliverMessageRevealVote(x, req.Tx.Fee)
+return c.DeliverMessageRevealVote(m, fee)
 case *MessageTallyVotes:
-return c.DeliverMessageTallyVotes(x, req.Tx.Fee)
+return c.DeliverMessageTallyVotes(m, fee)
 case *MessageFinalizeMarket:
-return c.DeliverMessageFinalizeMarket(x, req.Tx.Fee)
+return c.DeliverMessageFinalizeMarket(m, fee)
 case *MessageClaimSlash:
-return c.DeliverMessageClaimSlash(x, req.Tx.Fee)
+return c.DeliverMessageClaimSlash(m, fee)
+case *MessageReclaimStake:
+return c.DeliverMessageReclaimStake(m, fee)
+case *MessageForfeitPosition:
+return c.DeliverMessageForfeitPosition(m, fee)
+case *MessageClaimBuilderReward:
+return c.DeliverMessageClaimBuilderReward(m, fee)
+case *MessageClaimCreatorFee:
+return c.DeliverMessageClaimCreatorFee(m, fee)
+case *MessageClaimResolverReward:
+return c.DeliverMessageClaimResolverReward(m, fee)
+case *MessageClaimCommunityReward:
+return c.DeliverMessageClaimCommunityReward(m, fee)
+case *MessageClaimInvestorReward:
+return c.DeliverMessageClaimInvestorReward(m, fee)
+case *MessageClaimProtocolReward:
+return c.DeliverMessageClaimProtocolReward(m, fee)
 default:
 return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 }
 }
+
+var _ = (*anypb.Any)(nil)

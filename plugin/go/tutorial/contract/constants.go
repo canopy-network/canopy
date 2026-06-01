@@ -1,5 +1,7 @@
 package contract
 
+import "os"
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Praxis Prediction Market — Named Constants
 // Spec authority:
@@ -51,7 +53,7 @@ VOTE_TALLIED   uint32 = 3
 
 const (
 PRECISION_SCALE         uint64 = 1_000_000
-MIN_B0                  uint64 = 1_000_000
+MIN_B0                  uint64 = 60_000_000
 ELEVATED_RISK_THRESHOLD uint64 = 25_000_000_000
 FIBONACCI_HASH_CONSTANT uint64 = 0x9e3779b97f4a7c15
 )
@@ -73,6 +75,10 @@ RESOLUTION_DELAY_BLOCKS - GRACE_PERIOD_BLOCKS - CLAIM_GRACE_PERIOD - 1)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIMING CONSTANTS — PORS (all values in blocks)
+// Issue-18: DISPUTE_BLOCKS is block-count based, not wall-clock.
+// At 5s/block the floor is ~48h. If block time deviates (e.g. 4s/block
+// during validator churn), the wall-clock window shrinks proportionally.
+// Future: anchor to wall-clock via a protocol time parameter.
 // MIN_DISPUTE_BLOCKS = 34,560 ≈ 48h at ~5s block time (P5)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -89,7 +95,9 @@ REVEAL_PHASE_BLOCKS uint64 = 17_280
 const (
 MIN_RRS_TO_PROPOSE  uint64 = 10
 FINALIZATION_BOUNTY uint64 = 50_000_000
+CREATOR_BOND        uint64 = 5_000_000_000
 RRS_INITIAL         uint64 = 100
+MIN_RESOLVER_STAKE  uint64 = 500_000_000_000
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,6 +107,21 @@ RRS_INITIAL         uint64 = 100
 const (
 MIN_PANEL_SIZE           uint32 = 3
 ELEVATED_RISK_PANEL_SIZE uint32 = 7
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RRS VOTE WEIGHT TIERS (Layer 2 — anti-whale panel protection)
+// Bronze: RRS 10–49  → weight 1
+// Silver: RRS 50–199 → weight 2
+// Gold:   RRS 200+   → weight 3
+// Hard cap at 3 prevents infinite influence via staking.
+// ─────────────────────────────────────────────────────────────────────────────
+const (
+RRS_SILVER_THRESHOLD uint64 = 50
+RRS_GOLD_THRESHOLD   uint64 = 200
+VOTE_WEIGHT_BRONZE   uint32 = 1
+VOTE_WEIGHT_SILVER   uint32 = 2
+VOTE_WEIGHT_GOLD     uint32 = 3
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,7 +145,22 @@ var PRAXIS_TREASURY_ID = []byte{
 var panelEntropyPrefix = []byte{0x1C}
 var PANEL_ENTROPY_KEY []byte
 
-// TEST_MODE — short dispute window for local testing
-// MUST be false before mainnet deployment
-const TEST_MODE = true
-const TEST_DISPUTE_BLOCKS uint64 = 20
+// TEST_MODE — enables compressed timing windows for local testing.
+// Controlled by the PRAXIS_TEST_MODE environment variable.
+// Defaults to false — safe for mainnet.
+// To enable: PRAXIS_TEST_MODE=true ./go-plugin
+// COI-3: maximum fractional share of the winning side any single address may hold.
+// Expressed in basis points: 2000 = 20%.
+// Cap is enforced on shares (not CostPaid) so early cheap buyers face the same
+// limit as late entrants — prevents single-address dominant share accumulation.
+// Limitations (by design):
+//   - Does not prevent multi-address (Sybil) wash trading — on-chain identity
+//     is not enforced; two addresses can each hold up to 20%.
+//   - Cap is share-based so pool growth does not progressively loosen it.
+const MAX_POSITION_BPS uint64 = 2000
+
+var TEST_MODE = os.Getenv("PRAXIS_TEST_MODE") == "true"
+const TEST_DISPUTE_BLOCKS        uint64 = 20
+const TEST_RESOLUTION_DELAY      uint64 = 2
+const TEST_GRACE_PERIOD          uint64 = 2
+const TEST_CLAIM_GRACE_PERIOD    uint64 = 50

@@ -184,3 +184,9 @@ return b
 func KeyForMarketPool(marketId []byte) []byte {
 return JoinLenPrefix(poolPrefix, marketId)
 }
+
+// KeyForTreasuryPool returns the state key for the global Praxis treasury pool.
+// Prefix 0x1D — receives surplus sweeps from finalized/cancelled markets.
+func KeyForTreasuryPool() []byte {
+return JoinLenPrefix([]byte{0x1D}, []byte("/treasury/"))
+}

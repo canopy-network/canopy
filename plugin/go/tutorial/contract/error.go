@@ -165,6 +165,10 @@ return &PluginError{Code: 164, Module: errModule, Msg: "proposal bond is below m
 // PRAXIS ERRORS — PORS DISPUTE (180–199)
 // ─────────────────────────────────────────────────────────────────────────────
 
+func ErrDisputeWindowOpen() *PluginError {
+return &PluginError{Code: 181, Module: errModule, Msg: "dispute window is still open — too early to finalize"}
+}
+
 func ErrDisputeWindowClosed() *PluginError {
 return &PluginError{Code: 180, Module: errModule, Msg: "dispute window has closed"}
 }
@@ -210,6 +214,18 @@ return &PluginError{Code: 193, Module: errModule, Msg: "no slash proceeds to cla
 func ErrInvalidCommitHash() *PluginError {
 return &PluginError{Code: 194, Module: errModule, Msg: "commit hash must be exactly 32 bytes"}
 }
+func ErrInsufficientPanelCandidates() *PluginError {
+return &PluginError{Code: 195, Module: errModule, Msg: "insufficient eligible panel candidates after position exclusion"}
+}
+func ErrMarketNotReclaimable() *PluginError {
+return &PluginError{Code: 196, Module: errModule, Msg: "market is not eligible for stake reclaim"}
+}
+func ErrReclaimWindowClosed() *PluginError {
+return &PluginError{Code: 197, Module: errModule, Msg: "reclaim window has not opened yet"}
+}
+func ErrNoStakeToReclaim() *PluginError {
+return &PluginError{Code: 198, Module: errModule, Msg: "no stake or position to reclaim"}
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -238,6 +254,21 @@ return nil
 }
 
 // ErrCheckResp is a convenience wrapper for returning errors from CheckTx handlers.
+func ErrResolverHasPosition() *PluginError {
+return &PluginError{Code: 199, Module: errModule, Msg: "resolver holds a position in this market"}
+}
+
+func ErrCreatorCannotResolve() *PluginError {
+return &PluginError{Code: 200, Module: errModule, Msg: "market creator cannot be the resolver for the same market"}
+}
+
+func ErrPositionCapExceeded() *PluginError {
+return &PluginError{Code: 201, Module: errModule, Msg: "position would exceed per-address cap (20% of pool)"}
+}
+func ErrInsufficientResolverStake() *PluginError {
+return &PluginError{Code: 202, Module: errModule, Msg: "resolver stake below minimum (500,000 PRX required)"}
+}
+
 func ErrCheckResp(err *PluginError) *PluginCheckResponse {
 return &PluginCheckResponse{Error: err}
 }
@@ -272,4 +303,20 @@ return &PluginError{Code: 5, Module: errModule, Msg: "plugin socket write failed
 
 func ErrFailedPluginRead(err error) *PluginError {
 return &PluginError{Code: 4, Module: errModule, Msg: "plugin socket read failed: " + err.Error()}
+}
+
+func ErrCooldownNotElapsed() *PluginError {
+return &PluginError{Code: 203, Module: errModule, Msg: "cooldown period has not elapsed"}
+}
+func ErrEmptyPool() *PluginError {
+return &PluginError{Code: 204, Module: errModule, Msg: "pool is empty — nothing to claim"}
+}
+func ErrMarketNotFinalized() *PluginError {
+return &PluginError{Code: 205, Module: errModule, Msg: "market is not finalized"}
+}
+func ErrInsufficientRRS() *PluginError {
+return &PluginError{Code: 207, Module: errModule, Msg: "resolver RRS score is zero — not eligible for rewards"}
+}
+func ErrNoResolutions() *PluginError {
+return &PluginError{Code: 208, Module: errModule, Msg: "no successful resolutions in this epoch"}
 }

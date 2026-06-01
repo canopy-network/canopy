@@ -1,21 +1,5 @@
 package contract
 
-// handler_submit_prediction.go — MessageSubmitPrediction
-// Spec: ADLMSR v5.6.6-r2-CORRECTED
-//
-// Purchases shares in a prediction market using LMSR pricing.
-// Cost = C(q_new) - C(q_old) where C is the LMSR cost function.
-//
-// CheckTx:  bettor_address 20 bytes, market_id 20 bytes, shares >= PRECISION_SCALE,
-//           max_cost non-zero. Zero StateRead (AUDIT-8).
-// DeliverTx:
-//   CheckAutoCancel first (AUDIT-5)
-//   Re-read position in same batch as market after cancel check (AUDIT-5)
-//   AUDIT-3: guard now >= market.OpenTime before any subtraction
-//   AUDIT-7: re-validate shares >= PRECISION_SCALE in DeliverTx
-//   AUDIT-12: finalCost <= max_cost slippage guard
-//   4-key atomic write: market, position, pool, bettor account
-
 func (c *Contract) CheckMessageSubmitPrediction(msg *MessageSubmitPrediction) *PluginCheckResponse {
 if len(msg.BettorAddress) != 20 {
 return ErrCheckResp(ErrInvalidAddress())
@@ -23,7 +7,6 @@ return ErrCheckResp(ErrInvalidAddress())
 if len(msg.MarketId) != 20 {
 return ErrCheckResp(ErrInvalidParam())
 }
-// AUDIT-7: stateless shares floor check in CheckTx too.
 if msg.Shares < PRECISION_SCALE {
 return ErrCheckResp(ErrSharesBelowMinimum())
 }
@@ -40,18 +23,13 @@ now := GetGlobalHeight()
 if now == 0 {
 return &PluginDeliverResponse{Error: ErrHeightNotSet()}
 }
-
-// AUDIT-7: re-validate in DeliverTx — belt-and-suspenders.
 if msg.Shares < PRECISION_SCALE {
 return &PluginDeliverResponse{Error: ErrSharesBelowMinimum()}
 }
-
-// AUDIT-5: CheckAutoCancel before reading position.
-if pe := c.CheckAutoCancel(msg.MarketId); pe != nil {
-return &PluginDeliverResponse{Error: pe}
+if cancelErr := c.CheckAutoCancel(msg.MarketId); cancelErr != nil {
+return &PluginDeliverResponse{Error: cancelErr}
 }
 
-// AUDIT-5: re-read market and position together after cancel check.
 marketQId  := nextQueryId()
 posQId     := nextQueryId()
 poolQId    := nextQueryId()
@@ -62,7 +40,13 @@ marketKey  := KeyForMarket(msg.MarketId)
 posKey     := KeyForPosition(msg.MarketId, msg.BettorAddress)
 poolKey    := KeyForMarketPool(msg.MarketId)
 bettorKey  := KeyForAccount(msg.BettorAddress)
-feePoolKey := KeyForFeePool(c.Config.ChainId)
+feePoolKey      := KeyForFeePool(c.Config.ChainId)
+creatorFeeKey   := KeyForCreatorFeePool(msg.MarketId)
+resolverFeeKey  := KeyForResolverFeePool(msg.MarketId)
+	gTreasuryKey    := KeyForTreasuryPool()
+creatorFeeQId   := nextQueryId()
+	resolverFeeQId  := nextQueryId()
+	gTreasuryQId    := nextQueryId()
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
@@ -70,7 +54,10 @@ Keys: []*PluginKeyRead{
 {QueryId: posQId,    Key: posKey},
 {QueryId: poolQId,   Key: poolKey},
 {QueryId: bettorQId, Key: bettorKey},
-{QueryId: feeQId,    Key: feePoolKey},
+{QueryId: feeQId,         Key: feePoolKey},
+{QueryId: creatorFeeQId,  Key: creatorFeeKey},
+{QueryId: resolverFeeQId, Key: resolverFeeKey},
+	{QueryId: gTreasuryQId,   Key: gTreasuryKey},
 },
 })
 if err != nil {
@@ -82,12 +69,15 @@ return &PluginDeliverResponse{Error: resp.Error}
 
 var market *MarketState
 position  := &PositionState{}
-mPool     := &Pool{}
-bettor    := &Account{}
-feePool   := &Pool{}
+mPool       := &Pool{}
+bettor      := &Account{}
+feePool     := &Pool{}
+creatorFee  := &Pool{}
+resolverFee := &Pool{}
+	gTreasury   := &Pool{}
 
 for _, r := range resp.Results {
-if len(r.Entries) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 continue
 }
 switch r.QueryId {
@@ -112,6 +102,18 @@ case feeQId:
 if pe := Unmarshal(r.Entries[0].Value, feePool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
+case creatorFeeQId:
+if pe := Unmarshal(r.Entries[0].Value, creatorFee); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+case resolverFeeQId:
+if pe := Unmarshal(r.Entries[0].Value, resolverFee); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
+case gTreasuryQId:
+if pe := Unmarshal(r.Entries[0].Value, gTreasury); pe != nil {
+return &PluginDeliverResponse{Error: pe}
+}
 }
 }
 
@@ -124,39 +126,51 @@ return &PluginDeliverResponse{Error: ErrMarketNotOpen()}
 if now > market.ExpiryTime {
 return &PluginDeliverResponse{Error: ErrMarketNotOpen()}
 }
-
-// AUDIT-3: guard now >= OpenTime before any subtraction involving heights.
 if now < market.OpenTime {
 return &PluginDeliverResponse{Error: ErrMarketNotOpen()}
 }
 
-// ── LMSR cost calculation ─────────────────────────────────────────────────
 tradeCost, pe := ComputeTradeCost(market.QYes, market.QNo, market.BEff, msg.Shares, msg.Outcome)
 if pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
-
-// AUDIT-12: finalCost overflow check before MaxCost comparison.
+creatorFeeAmt  := ComputeBps(tradeCost, CREATOR_FEE_BPS)
+resolverFeeAmt := ComputeBps(tradeCost, RESOLVER_FEE_BPS)
 if fee > 0 && tradeCost > ^uint64(0)-fee {
 return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 }
-finalCost := tradeCost + fee
-
-// AUDIT-12: slippage protection — reject if cost exceeds bettor's limit.
+finalCost := tradeCost + fee + creatorFeeAmt + resolverFeeAmt
 if finalCost > msg.MaxCost {
 return &PluginDeliverResponse{Error: ErrCostExceedsMaxCost()}
+}
+// COI-3: per-address position cap — capped on shares, not CostPaid.
+// totalSideShares is post-trade so the cap scales with actual exposure.
+var totalSideShares uint64
+if msg.Outcome {
+totalSideShares = market.QYes + msg.Shares
+if exceedsPositionCap(position.SharesYes, msg.Shares, totalSideShares) {
+return &PluginDeliverResponse{Error: ErrPositionCapExceeded()}
+}
+} else {
+totalSideShares = market.QNo + msg.Shares
+if exceedsPositionCap(position.SharesNo, msg.Shares, totalSideShares) {
+return &PluginDeliverResponse{Error: ErrPositionCapExceeded()}
+}
 }
 
 if bettor.Amount < finalCost {
 return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 }
 
-// ── Mutate in memory ──────────────────────────────────────────────────────
-bettor.Amount  -= finalCost
-mPool.Amount   += tradeCost
-feePool.Amount += fee
+isNewPosition := position.SharesYes == 0 && position.SharesNo == 0 && position.CostPaid == 0
 
-// Update LMSR q-values.
+bettor.Amount      -= finalCost
+mPool.Amount       += tradeCost
+feePool.Amount     += fee / 2
+	gTreasury.Amount   += fee - fee/2
+creatorFee.Amount  += creatorFeeAmt
+resolverFee.Amount += resolverFeeAmt
+
 if msg.Outcome {
 market.QYes += msg.Shares
 position.SharesYes += msg.Shares
@@ -166,56 +180,42 @@ position.SharesNo += msg.Shares
 }
 position.CostPaid += tradeCost
 
-// Track total unique positions for surplus sweep in ClaimWinnings.
-// Only increment if this is the first prediction from this address.
-if position.SharesYes == msg.Shares && !msg.Outcome {
-// first prediction was NO
-market.TotalPositions++
-} else if position.SharesNo == msg.Shares && msg.Outcome {
-// first prediction was YES — but SharesNo is 0 so check differently
-market.TotalPositions++
-} else if position.SharesYes == msg.Shares && msg.Outcome && position.SharesNo == 0 {
-market.TotalPositions++
-} else if position.SharesNo == msg.Shares && !msg.Outcome && position.SharesYes == 0 {
+if isNewPosition {
 market.TotalPositions++
 }
 
-// Update elevated risk flag.
 market.ElevatedRisk = IsElevatedRisk(mPool.Amount)
 
-// ── Marshal all ───────────────────────────────────────────────────────────
 rawMarket, pe := SafeMarshal(market)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawPos, pe := SafeMarshal(position)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawPool, pe := SafeMarshal(mPool)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawFee, pe := SafeMarshal(feePool)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawGTreasury, pe := SafeMarshal(gTreasury)
+	if pe != nil { return &PluginDeliverResponse{Error: pe} }
+	rawCreatorFee, pe := SafeMarshal(creatorFee)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawResolverFee, pe := SafeMarshal(resolverFee)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
 sets := []*PluginSetOp{
-{Key: marketKey, Value: rawMarket},
-{Key: posKey,    Value: rawPos},
-{Key: poolKey,   Value: rawPool},
-{Key: feePoolKey, Value: rawFee},
+{Key: marketKey,      Value: rawMarket},
+{Key: posKey,         Value: rawPos},
+{Key: poolKey,        Value: rawPool},
+{Key: feePoolKey,     Value: rawFee},
+{Key: creatorFeeKey,  Value: rawCreatorFee},
+{Key: resolverFeeKey, Value: rawResolverFee},
+		{Key: gTreasuryKey,   Value: rawGTreasury},
 }
-
 var deletes []*PluginDeleteOp
 if bettor.Amount == 0 {
 deletes = []*PluginDeleteOp{{Key: bettorKey}}
 } else {
 rawBettor, pe := SafeMarshal(bettor)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 sets = append(sets, &PluginSetOp{Key: bettorKey, Value: rawBettor})
 }
 

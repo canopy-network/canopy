@@ -100,3 +100,14 @@ return false
 }
 return true
 }
+
+// exceedsPositionCap returns true if adding newShares would give the address
+// more than 20% of the total side shares post-trade.
+func exceedsPositionCap(currentShares, newShares, totalSideShares uint64) bool {
+if totalSideShares == 0 {
+return false
+}
+postTrade := currentShares + newShares
+// cap = 20% of totalSideShares
+return postTrade*5 > totalSideShares
+}
