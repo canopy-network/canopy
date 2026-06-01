@@ -173,12 +173,70 @@ if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawM, pe := SafeMarshal(market)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
-wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-Sets: []*PluginSetOp{
+sets := []*PluginSetOp{
 {Key: KeyForDispute(msg.MarketId), Value: rawD},
 {Key: KeyForMarket(msg.MarketId),  Value: rawM},
+}
+
+// PRIS v1.0-r3: if proposer wins dispute, RRS +20 and increment GlobalStats
+if !disputerWins {
+propQId   := nextQueryId()
+recQId    := nextQueryId()
+statsQId  := nextQueryId()
+prisResp, prisErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: propQId,  Key: KeyForProposal(msg.MarketId)},
+{QueryId: recQId,   Key: KeyForGlobalStats()},
+{QueryId: statsQId, Key: KeyForGlobalStats()},
 },
 })
+if prisErr == nil && prisResp.Error == nil {
+proposal   := &ProposalRecord{}
+globalStats := &GlobalStats{}
+for _, r := range prisResp.Results {
+if len(r.Entries) == 0 { continue }
+switch r.QueryId {
+case propQId:
+_ = Unmarshal(r.Entries[0].Value, proposal)
+case statsQId:
+_ = Unmarshal(r.Entries[0].Value, globalStats)
+}
+}
+if len(proposal.ResolverAddr) == 20 {
+resolverRecQId := nextQueryId()
+recResp, recErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: resolverRecQId, Key: KeyForResolverRecord(proposal.ResolverAddr)},
+},
+})
+if recErr == nil && recResp.Error == nil {
+resolverRec := &ResolverRecord{}
+for _, r := range recResp.Results {
+if r.QueryId == resolverRecQId && len(r.Entries) > 0 {
+_ = Unmarshal(r.Entries[0].Value, resolverRec)
+}
+}
+resolverRec.RrsScore += 20
+resolverRec.SuccessfulResolutions++
+weight := uint64(1)
+if resolverRec.RrsScore >= RRS_GOLD_THRESHOLD {
+weight = uint64(VOTE_WEIGHT_GOLD)
+} else if resolverRec.RrsScore >= RRS_SILVER_THRESHOLD {
+weight = uint64(VOTE_WEIGHT_SILVER)
+}
+globalStats.TotalWeightedResolutions += weight
+rawRec, pe2 := SafeMarshal(resolverRec)
+rawStats, pe3 := SafeMarshal(globalStats)
+if pe2 == nil && pe3 == nil {
+sets = append(sets, &PluginSetOp{Key: KeyForResolverRecord(proposal.ResolverAddr), Value: rawRec})
+sets = append(sets, &PluginSetOp{Key: KeyForGlobalStats(), Value: rawStats})
+}
+}
+}
+}
+}
+
+wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets})
 if pe := errCheckWrite(wr, werr); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
