@@ -1,24 +1,5 @@
 package contract
 
-// handler_tally_votes.go — MessageTallyVotes
-// Spec: PORS v1.0-r2-CORRECTED (P5, NF-1)
-//
-// Permissionless — any address triggers tally after the reveal phase ends.
-// Reads VoteReveal for each panel member (point lookups, not range scan).
-// Majority YES → disputer wins → proposer slashed, market reopens for new proposal.
-// Majority NO  → proposer wins → dispute rejected, market returns to STATUS_PROPOSED.
-// Tie          → proposer wins (disputer bears burden of proof).
-//
-// Idempotency: DisputeRecord.VoteStatus == VOTE_TALLIED → return success immediately.
-//
-// CheckTx:  market_id 20 bytes, caller_addr 20 bytes. Zero StateRead (AUDIT-8, NF-1).
-// DeliverTx:
-//   Read market + dispute
-//   Validate STATUS_DISPUTED and reveal phase ended
-//   Point-lookup VoteReveal for each panel member
-//   Count votes, determine winner
-//   2-key atomic write: DisputeRecord (VOTE_TALLIED) + MarketState
-
 func (c *Contract) CheckMessageTallyVotes(msg *MessageTallyVotes) *PluginCheckResponse {
 if len(msg.MarketId) != 20 {
 return ErrCheckResp(ErrInvalidParam())
@@ -26,7 +7,6 @@ return ErrCheckResp(ErrInvalidParam())
 if len(msg.CallerAddr) != 20 {
 return ErrCheckResp(ErrInvalidAddress())
 }
-// Permissionless — no AuthorizedSigners restriction beyond caller signing.
 return &PluginCheckResponse{
 AuthorizedSigners: [][]byte{msg.CallerAddr},
 }
@@ -38,7 +18,6 @@ if now == 0 {
 return &PluginDeliverResponse{Error: ErrHeightNotSet()}
 }
 
-// ── Batch read 1: market + dispute ────────────────────────────────────────
 marketQId  := nextQueryId()
 disputeQId := nextQueryId()
 
@@ -61,7 +40,7 @@ var dispute *DisputeRecord
 for _, r := range resp.Results {
 switch r.QueryId {
 case marketQId:
-if len(r.Entries) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrMarketNotFound()}
 }
 market = &MarketState{}
@@ -69,7 +48,7 @@ if pe := Unmarshal(r.Entries[0].Value, market); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case disputeQId:
-if len(r.Entries) == 0 {
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 return &PluginDeliverResponse{Error: ErrNotDisputed()}
 }
 dispute = &DisputeRecord{}
@@ -89,33 +68,64 @@ if dispute == nil {
 return &PluginDeliverResponse{Error: ErrNotDisputed()}
 }
 
-// Idempotency: already tallied.
 if dispute.VoteStatus == VOTE_TALLIED {
 return &PluginDeliverResponse{}
 }
 
-// Reveal phase must have ended.
 revealEnd := dispute.DisputeBlock + COMMIT_PHASE_BLOCKS + REVEAL_PHASE_BLOCKS
 if now <= revealEnd {
 return &PluginDeliverResponse{Error: ErrTallyNotReady()}
 }
 
-// ── Batch read 2: VoteReveal for each panel member ────────────────────────
-// Point lookups — bounded by panel size (max ELEVATED_RISK_PANEL_SIZE = 7).
-type revealQuery struct {
-queryId uint64
-member  []byte
-}
-queries := make([]revealQuery, 0, len(dispute.PanelMembers))
+queries := make([]uint64, 0, len(dispute.PanelMembers))
 readKeys := make([]*PluginKeyRead, 0, len(dispute.PanelMembers))
+
+// Layer 2: build RRS read keys alongside vote reveal keys
+rrsQueries := make([]uint64, 0, len(dispute.PanelMembers))
+rrsKeys    := make([]*PluginKeyRead, 0, len(dispute.PanelMembers))
 
 for _, member := range dispute.PanelMembers {
 qId := nextQueryId()
-queries = append(queries, revealQuery{queryId: qId, member: member})
+queries = append(queries, qId)
 readKeys = append(readKeys, &PluginKeyRead{
 QueryId: qId,
 Key:     KeyForVoteReveal(msg.MarketId, member),
 })
+rId := nextQueryId()
+rrsQueries = append(rrsQueries, rId)
+rrsKeys = append(rrsKeys, &PluginKeyRead{
+QueryId: rId,
+Key:     KeyForResolverRecord(member),
+})
+}
+
+// Layer 2: build queryId -> vote weight map from RRS scores
+weightByQId := make(map[uint64]uint32)
+if len(rrsKeys) > 0 {
+rrsResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{Keys: rrsKeys})
+if err != nil {
+return &PluginDeliverResponse{Error: err}
+}
+if rrsResp.Error != nil {
+return &PluginDeliverResponse{Error: rrsResp.Error}
+}
+for idx, r := range rrsResp.Results {
+weight := VOTE_WEIGHT_BRONZE
+if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+rec := &ResolverRecord{}
+if pe := Unmarshal(r.Entries[0].Value, rec); pe == nil {
+if rec.RrsScore >= RRS_GOLD_THRESHOLD {
+weight = VOTE_WEIGHT_GOLD
+} else if rec.RrsScore >= RRS_SILVER_THRESHOLD {
+weight = VOTE_WEIGHT_SILVER
+}
+}
+}
+// map the corresponding vote reveal queryId to this weight
+if idx < len(queries) {
+weightByQId[queries[idx]] = weight
+}
+}
 }
 
 var yesVotes, noVotes uint32
@@ -130,67 +140,103 @@ if voteResp.Error != nil {
 return &PluginDeliverResponse{Error: voteResp.Error}
 }
 
-// Build queryId → member map for matching.
-qIdToMember := make(map[uint64][]byte, len(queries))
-for _, q := range queries {
-qIdToMember[q.queryId] = q.member
-}
-
 for _, r := range voteResp.Results {
-if len(r.Entries) == 0 {
-// Panel member did not reveal — abstention, counts as no vote.
+if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 continue
 }
 vr := &VoteReveal{}
 if pe := Unmarshal(r.Entries[0].Value, vr); pe != nil {
-continue // skip malformed — treat as abstention
+continue
+}
+// Layer 2: apply RRS tier weight — default Bronze if missing
+w := weightByQId[r.QueryId]
+if w == 0 {
+w = VOTE_WEIGHT_BRONZE
 }
 if vr.Vote {
-yesVotes++
+yesVotes += w
 } else {
-noVotes++
+noVotes += w
 }
 }
 }
 
-// Majority YES → disputer wins (proposed outcome was wrong).
-// Majority NO or tie → proposer wins (dispute rejected).
 disputerWins := yesVotes > noVotes
-
-// Update dispute record.
 dispute.VoteStatus = VOTE_TALLIED
 
-// Update market status based on tally result.
-// Disputer wins: proposer's outcome was wrong → market returns to STATUS_PROPOSED
-// for a new proposal (the old proposal is invalidated). Slashing handled in
-// finalize_market after the panel result is used.
-// Proposer wins: dispute rejected → market stays on path to STATUS_FINALIZED.
 if disputerWins {
-// Disputer wins — proposed outcome overturned.
-// Market returns to STATUS_PROPOSED so a new propose_outcome can be filed.
-// The existing ProposalRecord remains as evidence for slashing in finalize_market.
 market.Status = STATUS_PROPOSED
 }
-// If proposer wins, market.Status stays STATUS_DISPUTED — finalize_market
-// will transition it to STATUS_FINALIZED after confirming the tally.
 
-// ── Marshal ───────────────────────────────────────────────────────────────
 rawD, pe := SafeMarshal(dispute)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawM, pe := SafeMarshal(market)
-if pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
-// ── 2-key atomic write ────────────────────────────────────────────────────
-wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-Sets: []*PluginSetOp{
+sets := []*PluginSetOp{
 {Key: KeyForDispute(msg.MarketId), Value: rawD},
 {Key: KeyForMarket(msg.MarketId),  Value: rawM},
+}
+
+// PRIS v1.0-r3: if proposer wins dispute, RRS +20 and increment GlobalStats
+if !disputerWins {
+propQId   := nextQueryId()
+recQId    := nextQueryId()
+statsQId  := nextQueryId()
+prisResp, prisErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: propQId,  Key: KeyForProposal(msg.MarketId)},
+{QueryId: recQId,   Key: KeyForGlobalStats()},
+{QueryId: statsQId, Key: KeyForGlobalStats()},
 },
 })
+if prisErr == nil && prisResp.Error == nil {
+proposal   := &ProposalRecord{}
+globalStats := &GlobalStats{}
+for _, r := range prisResp.Results {
+if len(r.Entries) == 0 { continue }
+switch r.QueryId {
+case propQId:
+_ = Unmarshal(r.Entries[0].Value, proposal)
+case statsQId:
+_ = Unmarshal(r.Entries[0].Value, globalStats)
+}
+}
+if len(proposal.ResolverAddr) == 20 {
+resolverRecQId := nextQueryId()
+recResp, recErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+Keys: []*PluginKeyRead{
+{QueryId: resolverRecQId, Key: KeyForResolverRecord(proposal.ResolverAddr)},
+},
+})
+if recErr == nil && recResp.Error == nil {
+resolverRec := &ResolverRecord{}
+for _, r := range recResp.Results {
+if r.QueryId == resolverRecQId && len(r.Entries) > 0 {
+_ = Unmarshal(r.Entries[0].Value, resolverRec)
+}
+}
+resolverRec.RrsScore += 20
+resolverRec.SuccessfulResolutions++
+weight := uint64(1)
+if resolverRec.RrsScore >= RRS_GOLD_THRESHOLD {
+weight = uint64(VOTE_WEIGHT_GOLD)
+} else if resolverRec.RrsScore >= RRS_SILVER_THRESHOLD {
+weight = uint64(VOTE_WEIGHT_SILVER)
+}
+globalStats.TotalWeightedResolutions += weight
+rawRec, pe2 := SafeMarshal(resolverRec)
+rawStats, pe3 := SafeMarshal(globalStats)
+if pe2 == nil && pe3 == nil {
+sets = append(sets, &PluginSetOp{Key: KeyForResolverRecord(proposal.ResolverAddr), Value: rawRec})
+sets = append(sets, &PluginSetOp{Key: KeyForGlobalStats(), Value: rawStats})
+}
+}
+}
+}
+}
+
+wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets})
 if pe := errCheckWrite(wr, werr); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }

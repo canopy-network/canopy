@@ -206,8 +206,12 @@ proposerAcc.Amount     += bondReturn
 }
 // Return creator bond on successful finalization.
 if treasury.CreatorBond > 0 {
-creatorAcc.Amount    += treasury.CreatorBond
-treasury.CreatorBond  = 0
+creatorAcc.Amount += treasury.CreatorBond
+// Strip bond from pool before snapshotting — bettor payouts exclude it.
+if marketPool.Amount >= treasury.CreatorBond {
+marketPool.Amount -= treasury.CreatorBond
+}
+treasury.CreatorBond = 0
 }
 
 // C-1 fix: record pool at finalization so claim_winnings uses immutable amount.

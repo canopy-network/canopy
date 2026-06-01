@@ -96,7 +96,7 @@ record = existing
 record = &ResolverRecord{
 ResolverAddress: msg.ResolverAddress,
 StakeAmount:     msg.StakeAmount,
-RrsScore:        RRS_INITIAL,
+RrsScore:        PRIS_RRS_INITIAL,
 RegisteredAt:    now,
 }
 }
