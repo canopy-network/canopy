@@ -179,6 +179,7 @@ window.showPage=function(id,btn){
   if(id==='wallet'){refreshBalance();loadMyPredictions();}
   if(id==='create')updateCreateBreakdown();
   if(id==='predict')updatePredictBreakdown();
+  if(id==='resolvers')loadResolvers();
   closeNav();
 };
 
@@ -270,7 +271,7 @@ window.loadKey=async function(){
     document.getElementById('sk_addr').textContent=signerAddress;
     ['c_creator','p_bettor','r_resolver','cl_addr','s_from','w_addr','ft_addr',
      'reg_addr','prop_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr',
-     'fo_resolver','rc_addr'].forEach(id=>{
+     'fo_resolver','rc_addr','ccf_addr','can_addr'].forEach(id=>{
       const el=document.getElementById(id);if(el&&!el.value)el.value=signerAddress;
     });
     document.getElementById('sk_input').value='';
@@ -465,12 +466,11 @@ window.loadMyPredictions = async function () {
 function resolverTier(addr) {
   const r = _resolverRegistry.get(addr);
   if (!r) return null;
-  const s = r.stake;
-  const p = r.proposalCount;
-  if (s >= 4_000_000n && p >= 50) return {label:'Gold',   color:'#FFD700', icon:'★'};
-  if (s >= 2_500_000n && p >= 10) return {label:'Silver', color:'#C0C0C0', icon:'◆'};
-  if (s >= 1_500_000n)            return {label:'Bronze', color:'#CD7F32', icon:'▲'};
-  return null;
+  const estRRS = Math.min(r.proposalCount * 10, 999);
+  if (estRRS >= 200) return {label:'Gold',   color:'#FFD700', icon:'★'};
+  if (estRRS >= 50)  return {label:'Silver', color:'#C0C0C0', icon:'◆'};
+  if (estRRS >= 1)   return {label:'Bronze', color:'#CD7F32', icon:'▲'};
+  return {label:'Registered', color:'var(--text3)', icon:'○'};
 }
 
 function renderMarketCards(markets) {
@@ -1347,6 +1347,18 @@ function showConfirm(title, rows) {
         ['Claimant',    (document.getElementById('sl_addr')?.value||'').slice(0,16)+'…', ''],
       ]
     ],
+    signAndSubmit_claimcreator: () => [
+      'Claim Creator Fee', [
+        ['Market ID', (document.getElementById('ccf_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Creator',   (document.getElementById('ccf_addr')?.value||'').slice(0,16)+'…', ''],
+      ]
+    ],
+    signAndSubmit_cancel: () => [
+      'Cancel Market', [
+        ['Market ID', (document.getElementById('can_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Creator',   (document.getElementById('can_addr')?.value||'').slice(0,16)+'…', ''],
+      ]
+    ],
     signAndSubmit_send: () => [
       'Send $PRX', [
         ['To',    (document.getElementById('s_to')?.value||'').slice(0,16)+'…', ''],
@@ -1627,7 +1639,7 @@ function updateSignerUI() {
   document.getElementById('sk_addr').textContent = signerAddress;
   ['c_creator','p_bettor','r_resolver','cl_addr','s_from','w_addr','ft_addr',
    'reg_addr','prop_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr',
-   'fo_resolver','rc_addr'].forEach(id => {
+   'fo_resolver','rc_addr','ccf_addr','can_addr'].forEach(id => {
     const el = document.getElementById(id); if (el && !el.value) el.value = signerAddress;
   });
   const badge = document.getElementById('sessBadge');
@@ -1888,3 +1900,155 @@ window.fillForfeit = function(id) {
   showPage('forfeit', null);
 };
 checkSavedKeystore();
+
+// ═══════════════════════════════════════════
+// CLAIM CREATOR FEE
+// ═══════════════════════════════════════════
+function encClaimCreatorFee(mid,creator){return cat(bf(1,h2b(mid)),bf(2,h2b(creator)));}
+
+window.build_claimcreator=function(){
+  try{
+    const mid=document.getElementById('ccf_mid').value.trim().toLowerCase();mid40(mid);
+    const addr=document.getElementById('ccf_addr').value.trim().toLowerCase();addr40(addr,'Creator');
+    const fee=parseInt(document.getElementById('ccf_fee').value)||10000;
+    showPL('ccfo','ccfp',buildUnsigned('claim_creator_fee','type.googleapis.com/types.MessageClaimCreatorFee',encClaimCreatorFee(mid,addr),{fee}));
+    toast('Payload built');
+  }catch(e){toast(e.message,true);}
+};
+window.signAndSubmit_claimcreator=async function(){
+  try{
+    const mid=document.getElementById('ccf_mid').value.trim().toLowerCase();mid40(mid);
+    const addr=document.getElementById('ccf_addr').value.trim().toLowerCase();addr40(addr,'Creator');
+    const fee=parseInt(document.getElementById('ccf_fee').value)||10000;
+    await doSubmit('claim_creator_fee','type.googleapis.com/types.MessageClaimCreatorFee',encClaimCreatorFee(mid,addr),{fee},'btn_claimcreator','pend_claimcreator');
+  }catch(e){toast(e.message,true);}
+};
+window.fillClaimCreator=function(id){
+  document.getElementById('ccf_mid').value=id;
+  if(signerAddress)document.getElementById('ccf_addr').value=signerAddress;
+  showPage('claimcreator',null);
+};
+
+// ═══════════════════════════════════════════
+// CANCEL MARKET
+// ═══════════════════════════════════════════
+function encCancelMarket(mid,creator){return cat(bf(1,h2b(mid)),bf(2,h2b(creator)));}
+
+window.build_cancel=function(){
+  try{
+    const mid=document.getElementById('can_mid').value.trim().toLowerCase();mid40(mid);
+    const addr=document.getElementById('can_addr').value.trim().toLowerCase();addr40(addr,'Creator');
+    const fee=parseInt(document.getElementById('can_fee').value)||10000;
+    showPL('cano','canp',buildUnsigned('cancel_market','type.googleapis.com/types.MessageCancelMarket',encCancelMarket(mid,addr),{fee}));
+    toast('Payload built');
+  }catch(e){toast(e.message,true);}
+};
+window.signAndSubmit_cancel=async function(){
+  try{
+    const mid=document.getElementById('can_mid').value.trim().toLowerCase();mid40(mid);
+    const addr=document.getElementById('can_addr').value.trim().toLowerCase();addr40(addr,'Creator');
+    const fee=parseInt(document.getElementById('can_fee').value)||10000;
+    await doSubmit('cancel_market','type.googleapis.com/types.MessageCancelMarket',encCancelMarket(mid,addr),{fee},'btn_cancel','pend_cancel');
+  }catch(e){toast(e.message,true);}
+};
+
+// ═══════════════════════════════════════════
+// RESOLVER RECORD STATE QUERY
+// prefix 0x16 + len + addr bytes
+// ═══════════════════════════════════════════
+function buildResolverKey(addrHex){
+  const addr=h2b(addrHex);
+  const key=new Uint8Array(1+1+addr.length);
+  key[0]=0x16; key[1]=addr.length; key.set(addr,2);
+  return b2h(key);
+}
+
+function decodeResolverRecord(hexData){
+  const buf=h2b(hexData);
+  let pos=0;
+  const rec={stake:0n,rrs:0n,registeredAt:0n,successfulResolutions:0n,lastClaimedEpoch:0n};
+  while(pos<buf.length){
+    const {v:tagV,p:p1}=decVarint(buf,pos);pos=p1;
+    const fn=Number(tagV>>3n),wt=Number(tagV&7n);
+    if(wt===2){const {v:lenV,p:p2}=decVarint(buf,pos);pos=p2+Number(lenV);}
+    else if(wt===0){
+      const {v,p:p2}=decVarint(buf,pos);pos=p2;
+      if(fn===2)rec.stake=v;
+      if(fn===3)rec.rrs=v;
+      if(fn===4)rec.registeredAt=v;
+      if(fn===5)rec.successfulResolutions=v;
+      if(fn===6)rec.lastClaimedEpoch=v;
+    } else if(wt===1){pos+=8;} else if(wt===5){pos+=4;} else break;
+  }
+  return rec;
+}
+
+async function fetchResolverRecord(addrHex){
+  try{
+    const key=buildResolverKey(addrHex);
+    const resp=await fetch(getRPC()+'/v1/state?key='+key);
+    if(!resp.ok)return null;
+    const data=await resp.json();
+    const hex=data.value||data.result||'';
+    if(!hex)return null;
+    return decodeResolverRecord(hex);
+  }catch{return null;}
+}
+
+// ═══════════════════════════════════════════
+// BROWSE RESOLVERS
+// ═══════════════════════════════════════════
+window.loadResolvers=async function(){
+  const el=document.getElementById('resolversList');
+  if(!el)return;
+  el.innerHTML='<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading resolvers</div>';
+  try{
+    const cache=localStorage.getItem('praxis_tx_cache');
+    if(!cache){el.innerHTML='<div class="alert ay">No chain data — browse Markets first to scan blocks</div>';return;}
+    const txs=JSON.parse(cache);
+    const resolvers=new Map();
+    for(const tx of txs){
+      if(tx.messageType!=='register_resolver')continue;
+      const msg=(tx.transaction&&tx.transaction.msg)||{};
+      const addr=tx.sender||'';
+      const stake=BigInt(msg.stakeAmount||msg.stake_amount||0);
+      if(!resolvers.has(addr))resolvers.set(addr,{addr,stake,proposals:0,height:tx.height||0,rrs:0,successfulResolutions:0});
+      else resolvers.get(addr).stake=stake;
+    }
+    for(const tx of txs){
+      if(tx.messageType!=='propose_outcome')continue;
+      const addr=tx.sender||'';
+      if(resolvers.has(addr))resolvers.get(addr).proposals++;
+    }
+    if(resolvers.size===0){el.innerHTML='<div class="alert ay">No registered resolvers found</div>';return;}
+    el.innerHTML='<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;fetching live RRS scores…</div>';
+    const list=[...resolvers.values()];
+    await Promise.all(list.map(async r=>{
+      const rec=await fetchResolverRecord(r.addr);
+      if(rec){r.rrs=Number(rec.rrs);r.stake=rec.stake;r.successfulResolutions=Number(rec.successfulResolutions);}
+      else{r.rrs=Math.min(r.proposals*10,999);}
+    }));
+    list.sort((a,b)=>b.rrs-a.rrs);
+    el.innerHTML=list.map(r=>{
+      const rrs=r.rrs||0;
+      let tier,tcolor,ticon;
+      if(rrs>=200){tier='Gold';tcolor='#FFD700';ticon='★';}
+      else if(rrs>=50){tier='Silver';tcolor='#C0C0C0';ticon='◆';}
+      else if(rrs>=1){tier='Bronze';tcolor='#CD7F32';ticon='▲';}
+      else{tier='Registered';tcolor='var(--text3)';ticon='○';}
+      return '<div class="card" style="margin-bottom:10px"><div class="ci">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+          '<div class="addr-mono" style="font-size:11px;color:var(--green)">'+r.addr.slice(0,8)+'…'+r.addr.slice(-6)+'</div>'+
+          '<span style="font-family:var(--font-mono);font-size:11px;color:'+tcolor+'">'+ticon+' '+tier+'</span>'+
+        '</div>'+
+        '<div class="igrid" style="grid-template-columns:1fr 1fr 1fr 1fr">'+
+          '<div class="icell"><div class="ilbl">Stake</div><div class="ival" style="font-size:11px">'+fmtPRX(r.stake)+' PRX</div></div>'+
+          '<div class="icell"><div class="ilbl">RRS Score</div><div class="ival" style="color:'+tcolor+'">'+rrs+'</div></div>'+
+          '<div class="icell"><div class="ilbl">Correct</div><div class="ival">'+(r.successfulResolutions||r.proposals)+'</div></div>'+
+          '<div class="icell"><div class="ilbl">Since block</div><div class="ival">#'+r.height+'</div></div>'+
+        '</div>'+
+        '<div style="margin-top:10px;font-family:var(--font-mono);font-size:9px;color:var(--text3);word-break:break-all">'+r.addr+'</div>'+
+      '</div></div>';
+    }).join('');
+  }catch(e){el.innerHTML='<div class="alert ar">Error: '+esc(e.message)+'</div>';}
+};

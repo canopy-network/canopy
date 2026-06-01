@@ -31,6 +31,9 @@
     <div class="ni" data-p="claim" onclick="showPage('claim',this)"><span class="ni-ic">◎</span>Claim Winnings</div>
     <div class="ni" data-p="reclaim" onclick="showPage('reclaim',this)"><span class="ni-ic">◈</span>Reclaim Stake</div>
     <div class="ni" data-p="resolve" onclick="showPage('resolve',this)"><span class="ni-ic">⚖</span>Resolve Market</div>
+    <div class="ni" data-p="resolvers" onclick="showPage('resolvers',this)"><span class="ni-ic">◈</span>Browse Resolvers</div>
+    <div class="ni" data-p="claimcreator" onclick="showPage('claimcreator',this)"><span class="ni-ic">◎</span>Claim Creator Fee</div>
+    <div class="ni" data-p="cancel" onclick="showPage('cancel',this)"><span class="ni-ic">✕</span>Cancel Market</div>
     <div class="ns">Account</div>
     <div class="ni" data-p="wallet" onclick="showPage('wallet',this)"><span class="ni-ic">◫</span>Wallet</div>
     <div class="ni" data-p="signer" onclick="showPage('signer',this)"><span class="ni-ic">◉</span>Signer</div>
@@ -453,6 +456,38 @@
     <div class="field"><label>Check Address</label><input id="ft_addr" type="text" placeholder="40 hex chars"/></div>
     <div class="brow"><button class="btn bsec bsm" onclick="checkFailedTxs()">Check Failed Txs</button></div>
     <div id="ft_result" style="margin-top:11px;display:none"></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-resolvers">
+  <div class="ph ph-g"><div class="ph-eye">Directory</div><div class="ph-title">Browse Resolvers</div><div class="ph-sub">All registered resolvers with stake, tier, and proposal history</div></div>
+  <div class="sbar"><button class="btn bsec bsm" onclick="loadResolvers()">↻ Refresh</button></div>
+  <div id="resolversList"><div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading resolvers</div></div>
+</div>
+
+<div class="page" id="page-claimcreator">
+  <div class="ph ph-g"><div class="ph-eye">Creator Reward</div><div class="ph-title">Claim Creator Fee</div><div class="ph-sub">Claim your accumulated 1% creator fee after market finalization</div></div>
+  <div class="alert ag">Only available after market reaches STATUS_FINALIZED and caller is the market creator.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_creator_fee_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="ccf_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Creator Address</label><input id="ccf_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="ccf_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_claimcreator" onclick="signAndSubmit_claimcreator()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_claimcreator()">Build Payload</button></div>
+    <div class="pend" id="pend_claimcreator"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="ccfo"><div class="plbl">// unsigned_payload</div><textarea id="ccfp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-cancel">
+  <div class="ph ph-g"><div class="ph-eye">Market Management</div><div class="ph-title">Cancel Market</div><div class="ph-sub">Cancel an open market and recover creator bond + remaining pool</div></div>
+  <div class="alert ar">⚠ Cancellation is permanent. All participants will receive full refunds via Claim Winnings.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// cancel_market_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="can_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Creator Address</label><input id="can_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="can_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_cancel" onclick="signAndSubmit_cancel()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_cancel()">Build Payload</button></div>
+    <div class="pend" id="pend_cancel"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="cano"><div class="plbl">// unsigned_payload</div><textarea id="canp" readonly></textarea></div>
   </div></div>
 </div>
 
