@@ -30,6 +30,10 @@
     <div class="ni" data-p="predict" onclick="showPage('predict',this)"><span class="ni-ic">⚡</span>Submit Prediction</div>
     <div class="ni" data-p="claim" onclick="showPage('claim',this)"><span class="ni-ic">◎</span>Claim Winnings</div>
     <div class="ni" data-p="reclaim" onclick="showPage('reclaim',this)"><span class="ni-ic">◈</span>Reclaim Stake</div>
+    <div class="ni" data-p="resolve" onclick="showPage('resolve',this)"><span class="ni-ic">⚖</span>Resolve Market</div>
+    <div class="ni" data-p="resolvers" onclick="showPage('resolvers',this)"><span class="ni-ic">◈</span>Browse Resolvers</div>
+    <div class="ni" data-p="claimcreator" onclick="showPage('claimcreator',this)"><span class="ni-ic">◎</span>Claim Creator Fee</div>
+    <div class="ni" data-p="cancel" onclick="showPage('cancel',this)"><span class="ni-ic">✕</span>Cancel Market</div>
     <div class="ns">Account</div>
     <div class="ni" data-p="wallet" onclick="showPage('wallet',this)"><span class="ni-ic">◫</span>Wallet</div>
     <div class="ni" data-p="signer" onclick="showPage('signer',this)"><span class="ni-ic">◉</span>Signer</div>
@@ -142,7 +146,9 @@
     <div class="ct">// prediction_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="p_mid" type="text" placeholder="40 hex chars" oninput="checkPositionCap()"/></div><div class="field"><label>Bettor Address</label><input id="p_bettor" type="text" placeholder="40 hex chars" oninput="checkPositionCap()"/></div></div>
     <div class="field"><label>Outcome</label><div class="otog"><div class="obtn yes active" id="btn_yes" onclick="setOut(true)">YES</div><div class="obtn no" id="btn_no" onclick="setOut(false)">NO</div></div></div>
-    <div class="r3"><div class="field"><label>Shares (PRX)</label><input id="p_shares" type="number" value="1"/><div class="hint">Min 1 PRX</div></div><div class="field"><label>Max Cost (PRX)</label><input id="p_maxcost" type="number" value="100" oninput="checkPositionCap()"/></div><div class="field"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div></div>
+    <div class="r3"><div class="field"><label>Shares (PRX)</label><input id="p_shares" type="number" value="1" oninput="updatePredictBreakdown()"/><div class="hint">Min 1 PRX</div></div><div class="field"><label>Slippage Tolerance <span id="p_slip_lbl" style="color:var(--green);font-size:10px">5.0%</span></label><input id="p_slippage" type="range" min="1" max="10" step="0.5" value="5" oninput="updatePredictBreakdown()" style="width:100%;accent-color:var(--green)"/><div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;color:var(--text3)"><span>1%</span><span>10%</span></div></div>
+    <div class="field"><label>Max Cost (PRX) <span style="color:var(--text3);font-size:9px">auto</span></label><input id="p_maxcost" type="number" value="100" readonly style="opacity:.6"/></div><div class="field"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div></div>
+    <div id="predict_breakdown" style="margin-bottom:12px;background:var(--bg);border:1px solid var(--border);padding:10px 14px;border-radius:2px"></div>
     <div class="brow"><button class="btn bp" id="btn_predict" onclick="signAndSubmit_predict()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_predict()">Build Payload</button></div>
     <div id="cap_indicator" style="display:none;margin-bottom:8px;padding:8px 12px;font-family:var(--font-mono);font-size:10px;border-radius:2px"></div>
     <div class="pend" id="pend_predict"><span class="blink">▪▪▪</span> broadcasting…</div>
@@ -172,6 +178,20 @@
     <div class="brow"><button class="btn bp" id="btn_reclaim" onclick="signAndSubmit_reclaim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_reclaim()">Build Payload</button></div>
     <div class="pend" id="pend_reclaim"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="rco"><div class="plbl">// unsigned_payload</div><textarea id="rcp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-resolve">
+  <div class="ph ph-g"><div class="ph-eye">Direct Resolution</div><div class="ph-title">Resolve Market</div><div class="ph-sub">Directly resolve an expired market as the authorized resolver</div></div>
+  <div class="alert ay">Only callable after ExpiryTime. Caller must be the authorized resolver for this market.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// resolve_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="r_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Resolver Address</label><input id="r_resolver" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Winning Outcome</label><div class="otog"><div class="obtn yes active" id="rbtn_yes" onclick="setResOut(true)">YES</div><div class="obtn no" id="rbtn_no" onclick="setResOut(false)">NO</div></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="r_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_resolve" onclick="signAndSubmit_resolve()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_resolve()">Build Payload</button></div>
+    <div class="pend" id="pend_resolve"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="ro"><div class="plbl">// unsigned_payload</div><textarea id="rp" readonly></textarea></div>
   </div></div>
 </div>
 
@@ -299,7 +319,7 @@
 <!-- RESOLVER SECTION -->
 <div class="page" id="page-register">
   <div class="ph ph-r"><div class="ph-eye">Resolver Role</div><div class="ph-title">Register as Resolver</div><div class="ph-sub">Stake $PRX to gain eligibility to propose market outcomes</div></div>
-  <div class="alert ay">Min stake 100 PRX. Dishonest proposals result in bond slashing.</div>
+  <div class="alert ay">Min stake 500,000 PRX. Dishonest proposals result in bond slashing.</div>
   <div class="card r-card"><div class="ci">
     <div class="ct">// resolver_registration</div>
     <div class="r2"><div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Stake Amount (PRX)</label><input id="reg_stake" type="number" value="100"/></div></div>
@@ -395,8 +415,9 @@
     <div class="ct">// market_parameters</div>
     <div class="field"><label>Market Question</label><textarea id="c_question" placeholder="Will Praxis launch on mainnet before Q3 2026?"></textarea></div>
     <div class="field"><label>Resolution Rules <span style="color:var(--text3);font-size:10px">(optional)</span></label><textarea id="c_rules" placeholder="Resolves YES if... Source: ... Edge cases: ..."></textarea></div>
-    <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (PRX)</label><input id="c_b0" type="number" value="60"/></div></div>
+    <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (PRX)</label><input id="c_b0" type="number" value="5000" oninput="updateCreateBreakdown()"/><div class="hint">Creator bond of 5,000 PRX is locked until market finalizes. Min 1 PRX.</div></div></div>
     <div class="r3"><div class="field"><label>Expiry Block</label><input id="c_expiry" type="number" placeholder="auto-fill"/></div><div class="field"><label>Nonce</label><input id="c_nonce" type="text" placeholder="auto-fill"/></div><div class="field"><label>Fee (uPRX)</label><input id="c_fee" type="number" value="10000"/></div></div>
+    <div id="create_breakdown" style="margin-bottom:12px;background:var(--bg);border:1px solid var(--border);padding:10px 14px;border-radius:2px"></div>
     <div class="brow"><button class="btn bp" id="btn_create" onclick="signAndSubmit_create()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_create()">Build Payload</button></div>
     <div class="pend" id="pend_create"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="co"><div class="plbl">// unsigned_payload</div><textarea id="cp" readonly></textarea></div>
@@ -438,6 +459,38 @@
   </div></div>
 </div>
 
+<div class="page" id="page-resolvers">
+  <div class="ph ph-g"><div class="ph-eye">Directory</div><div class="ph-title">Browse Resolvers</div><div class="ph-sub">All registered resolvers with stake, tier, and proposal history</div></div>
+  <div class="sbar"><button class="btn bsec bsm" onclick="loadResolvers()">↻ Refresh</button></div>
+  <div id="resolversList"><div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading resolvers</div></div>
+</div>
+
+<div class="page" id="page-claimcreator">
+  <div class="ph ph-g"><div class="ph-eye">Creator Reward</div><div class="ph-title">Claim Creator Fee</div><div class="ph-sub">Claim your accumulated 1% creator fee after market finalization</div></div>
+  <div class="alert ag">Only available after market reaches STATUS_FINALIZED and caller is the market creator.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_creator_fee_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="ccf_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Creator Address</label><input id="ccf_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="ccf_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_claimcreator" onclick="signAndSubmit_claimcreator()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_claimcreator()">Build Payload</button></div>
+    <div class="pend" id="pend_claimcreator"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="ccfo"><div class="plbl">// unsigned_payload</div><textarea id="ccfp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-cancel">
+  <div class="ph ph-g"><div class="ph-eye">Market Management</div><div class="ph-title">Cancel Market</div><div class="ph-sub">Cancel an open market and recover creator bond + remaining pool</div></div>
+  <div class="alert ar">⚠ Cancellation is permanent. All participants will receive full refunds via Claim Winnings.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// cancel_market_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="can_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Creator Address</label><input id="can_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="can_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_cancel" onclick="signAndSubmit_cancel()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_cancel()">Build Payload</button></div>
+    <div class="pend" id="pend_cancel"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="cano"><div class="plbl">// unsigned_payload</div><textarea id="canp" readonly></textarea></div>
+  </div></div>
+</div>
+
 </main>
 </div>
 
@@ -451,7 +504,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1" fill="currentColor"/></svg>Wallet</div>
   <div class="bni" data-p="signer" onclick="showPage('signer',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Signer</div>
-  <div class="bni" data-p="propose" onclick="showPage('propose',this)">
+  <div class="bni" data-p="resolve" onclick="showPage('resolve',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Resolve</div>
 </div>
 

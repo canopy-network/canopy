@@ -77,7 +77,10 @@ message ResolverRecord {
   uint64 rrs_score              = 3;
   uint64 registered_at          = 4;
   uint64 successful_resolutions = 5;
-  uint64 last_claimed_epoch     = 6;
+  uint64 last_claimed_epoch        = 6;
+  bool   is_active                 = 7;
+  uint64 unbonding_amount          = 8;
+  uint64 unbonding_release_height  = 9;
 }
 
 message ProposalRecord {
@@ -238,6 +241,15 @@ message MessageClaimCommunityReward {}
 message MessageClaimInvestorReward {}
 
 message MessageClaimProtocolReward {}
+
+message MessageUnstakeResolver {
+  bytes  resolver_address = 1;
+  uint64 amount           = 2; // 0 = full exit
+}
+
+message MessageClaimUnbondedStake {
+  bytes resolver_address = 1;
+}
 
 message GlobalStats {
   uint64 total_weighted_resolutions = 1;

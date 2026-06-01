@@ -305,6 +305,11 @@ func ErrFailedPluginRead(err error) *PluginError {
 return &PluginError{Code: 4, Module: errModule, Msg: "plugin socket read failed: " + err.Error()}
 }
 
+func ErrActiveProposalExists() *PluginError  { return &PluginError{Code: 210, Module: errModule, Msg: "active proposal exists — cannot unstake"} }
+func ErrResolverNotActive() *PluginError    { return &PluginError{Code: 211, Module: errModule, Msg: "resolver is not active"} }
+func ErrNoUnbondingStake() *PluginError     { return &PluginError{Code: 212, Module: errModule, Msg: "no unbonding stake to claim"} }
+func ErrUnbondingNotComplete() *PluginError { return &PluginError{Code: 213, Module: errModule, Msg: "unbonding period not complete"} }
+func ErrResolverNotFound() *PluginError     { return &PluginError{Code: 214, Module: errModule, Msg: "resolver record not found"} }
 func ErrCooldownNotElapsed() *PluginError {
 return &PluginError{Code: 203, Module: errModule, Msg: "cooldown period has not elapsed"}
 }
