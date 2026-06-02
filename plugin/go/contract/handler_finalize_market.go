@@ -220,10 +220,8 @@ market.Status = STATUS_FINALIZED
 
 // PRIS v1.0-r3: RRS increment and resolver fee payout on correct finalization (pathB).
 if pathB && proposal != nil {
-resolverRec.RrsScore++
-if resolverRec.RrsScore > 0 {
+resolverRec.RrsScore += 10
 resolverRec.SuccessfulResolutions++
-}
 weight := uint64(1)
 if resolverRec.RrsScore >= RRS_GOLD_THRESHOLD {
 weight = uint64(VOTE_WEIGHT_GOLD)

@@ -59,6 +59,7 @@ SupportedTransactions: []string{
 		"claim_investor_reward",
 		"claim_protocol_reward",
 		"unstake_resolver",
+		"cancel_market",
 		"claim_unbonded_stake",
 },
 TransactionTypeUrls: []string{
@@ -82,6 +83,7 @@ TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageClaimInvestorReward",
 		"type.googleapis.com/types.MessageClaimProtocolReward",
 		"type.googleapis.com/types.MessageUnstakeResolver",
+		"type.googleapis.com/types.MessageCancelMarket",
 		"type.googleapis.com/types.MessageClaimUnbondedStake",
 },
 }
@@ -212,6 +214,8 @@ case *MessageClaimProtocolReward:
 return c.CheckMessageClaimProtocolReward(m)
 case *MessageUnstakeResolver:
 return c.CheckMessageUnstakeResolver(m)
+case *MessageCancelMarket:
+return c.CheckMessageCancelMarket(m)
 case *MessageClaimUnbondedStake:
 return c.CheckMessageClaimUnbondedStake(m)
 default:
@@ -268,6 +272,8 @@ case *MessageClaimProtocolReward:
 return c.DeliverMessageClaimProtocolReward(m, fee)
 case *MessageUnstakeResolver:
 return c.DeliverMessageUnstakeResolver(m, fee)
+case *MessageCancelMarket:
+return c.DeliverMessageCancelMarket(m, fee)
 case *MessageClaimUnbondedStake:
 return c.DeliverMessageClaimUnbondedStake(m, fee)
 default:

@@ -91,6 +91,7 @@ feePool.Amount  += fee / 2
 var record *ResolverRecord
 if existing != nil {
 existing.StakeAmount += msg.StakeAmount
+existing.IsActive = true // re-activate on re-registration after full exit
 record = existing
 } else {
 record = &ResolverRecord{
@@ -98,6 +99,7 @@ ResolverAddress: msg.ResolverAddress,
 StakeAmount:     msg.StakeAmount,
 RrsScore:        PRIS_RRS_INITIAL,
 RegisteredAt:    now,
+IsActive:        true,
 }
 }
 

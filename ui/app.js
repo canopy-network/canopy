@@ -517,11 +517,11 @@ function renderMarketCards(markets) {
     var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
     var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
     parts.push('<div class="mc-acts"><button class="byes2" ' + actYes + '>BET YES</button><button class="bno2" ' + actNo + '>BET NO</button></div>');
-    parts.push('<div class="card-foot"><div class="meta">');
-    parts.push('<div class="mitem"><span class="mlbl">Total pool</span><span class="mval g">' + fmtPRX(m.qYes + m.qNo) + ' PRX</span></div>');
+    parts.push('<div class="mc-foot"><div class="mitems">');
+    parts.push('<div class="mitem"><span class="mlbl">Pool</span><span class="mval g">' + fmtPRX(m.qYes + m.qNo) + ' PRX</span></div>');
     parts.push('<div class="mitem"><span class="mlbl">' + (open ? 'Expires' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : 'Closed') + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
     parts.push('<div class="mitem"><span class="mlbl">Creator</span><span class="mval">' + (m.creator ? m.creator.slice(0,8) + '…' : '???') + '</span></div>');
-    parts.push('</div><span class="market-id">' + mid.slice(0,8) + '…</span></div>');
+    parts.push('</div><button class="btn bsec bsm" style="font-size:9px;padding:4px 8px;margin-left:auto" onclick="showDetail(\'' + mid + '\')">› Detail</button></div>');
     parts.push('</div>');
   }
   parts.push('</div>');
@@ -530,7 +530,8 @@ function renderMarketCards(markets) {
 
 // store markets globally for detail view
 let _allMarkets = [];
-let _resolverRegistry = new Map(); // address -> {stake, proposalCount}
+let _resolverRegistry = new Map();
+let _detailMarketId = null; // address -> {stake, proposalCount}
 
 window.showDetail = function(marketId) {
   const m = _allMarkets.find(x => x.marketId === marketId || x.txHash === marketId);
@@ -674,7 +675,9 @@ window.showDetail = function(marketId) {
     bannerCard.style.display = 'none';
   }
 
+  _detailMarketId = mid;
   showPage('detail', null);
+  setTimeout(()=>switchDetailTab('activity'), 50);
 };
 
 window.fillP = (id, outcome) => {
@@ -2051,4 +2054,163 @@ window.loadResolvers=async function(){
       '</div></div>';
     }).join('');
   }catch(e){el.innerHTML='<div class="alert ar">Error: '+esc(e.message)+'</div>';}
+};
+// ═══════════════════════════════════════════
+// MARKET DETAIL — ACTIVITY FEED + TOP HOLDERS
+// ═══════════════════════════════════════════
+window.switchDetailTab = function(tab) {
+  ['activity','holders'].forEach(t => {
+    const btn = document.getElementById('dtab-'+t);
+    const pane = document.getElementById('dpane-'+t);
+    if(btn) {
+      btn.style.borderBottomColor = t===tab ? 'var(--green)' : 'transparent';
+      btn.style.color = t===tab ? 'var(--text2)' : 'var(--text3)';
+    }
+    if(pane) pane.style.display = t===tab ? '' : 'none';
+  });
+  if(tab==='activity') renderActivityFeed(_detailMarketId);
+  if(tab==='holders')  renderTopHolders(_detailMarketId);
+};
+
+window.renderActivityFeed = function(mid) {
+  const el = document.getElementById('dpane-activity');
+  if(!el||!mid) return;
+  try {
+    const txs = JSON.parse(localStorage.getItem('praxis_tx_cache')||'[]');
+    const relevant = txs.filter(tx => {
+      const msg = (tx.transaction&&tx.transaction.msg)||{};
+      const rawMid = msg.marketId||msg.market_id||'';
+      if(!rawMid && tx.messageType==='create_market') {
+        // match by derived marketId
+        return false; // handled below
+      }
+      if(!rawMid) return false;
+      let txMid = rawMid;
+      try { txMid = b2h(Uint8Array.from(atob(rawMid),c=>c.charCodeAt(0))); } catch{}
+      return txMid === mid;
+    });
+
+    // also include the create_market TX for this market
+    const createTx = txs.find(tx => tx.messageType==='create_market' && _allMarkets.find(m=>m.marketId===mid&&m.txHash===tx.txHash));
+    if(createTx && !relevant.includes(createTx)) relevant.unshift(createTx);
+
+    relevant.sort((a,b)=>(b.height||0)-(a.height||0));
+
+    if(!relevant.length){
+      el.innerHTML='<div style="padding:20px;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--text3)">No activity found</div>';
+      return;
+    }
+
+    const typeIcon  = {create_market:'◎',submit_prediction:'⚡',propose_outcome:'⚖',finalize_market:'✓',cancel_market:'✕',claim_winnings:'◈',forfeit_position:'↩',resolve_market:'⚑'};
+    const typeColor = {create_market:'var(--text2)',submit_prediction:'var(--green)',propose_outcome:'#FFD700',finalize_market:'var(--green)',cancel_market:'var(--red)',claim_winnings:'var(--green)',forfeit_position:'var(--red)',resolve_market:'#C0C0C0'};
+
+    el.innerHTML = relevant.map(tx => {
+      const msg = (tx.transaction&&tx.transaction.msg)||{};
+      const type = tx.messageType||'unknown';
+      const icon = typeIcon[type]||'▪';
+      const color = typeColor[type]||'var(--text3)';
+      const sender = tx.sender||'';
+      const height = tx.height||0;
+      let detail = '';
+      if(type==='submit_prediction'){
+        const outcome = msg.outcome===true||msg.outcome==='true'||msg.outcome===1;
+        const shares = BigInt(msg.shares||msg.amount||0);
+        detail = '<span style="color:'+(outcome?'var(--green)':'var(--red)')+'font-weight:700">'+(outcome?'YES':'NO')+'</span> &nbsp;'+fmtPRX(shares)+' PRX';
+      } else if(type==='propose_outcome'){
+        const outcome = msg.proposedOutcome===true||msg.proposedOutcome==='true'||msg.proposedOutcome===1;
+        detail = 'Proposed <span style="color:'+(outcome?'var(--green)':'var(--red)')+'">'+( outcome?'YES':'NO')+'</span>';
+      } else if(type==='create_market'){
+        const b0=BigInt(msg.b0||0);
+        detail='Market created · B0 '+fmtPRX(b0)+' PRX';
+      } else if(type==='finalize_market'){detail='Market finalized';}
+      else if(type==='cancel_market'){detail='Market cancelled';}
+      else if(type==='claim_winnings'){detail='Claimed winnings';}
+      else if(type==='forfeit_position'){detail='Position forfeited';}
+      return '<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">'+
+        '<div style="font-size:15px;color:'+color+';min-width:18px;margin-top:1px">'+icon+'</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'+
+            '<span style="font-family:var(--font-mono);font-size:10px;color:'+color+';text-transform:uppercase;letter-spacing:.5px">'+type.replace(/_/g,' ')+'</span>'+
+            '<span style="font-family:var(--font-mono);font-size:9px;color:var(--text3)">blk #'+height+'</span>'+
+          '</div>'+
+          '<div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);margin-bottom:3px">'+
+            (sender?sender.slice(0,8)+'…'+sender.slice(-6):'')+
+          '</div>'+
+          (detail?'<div style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">'+detail+'</div>':'')+
+        '</div>'+
+      '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML='<div style="padding:16px;color:var(--red);font-family:var(--font-mono);font-size:11px">Error: '+esc(e.message)+'</div>';
+  }
+};
+
+window.renderTopHolders = function(mid) {
+  const el = document.getElementById('dpane-holders');
+  if(!el||!mid) return;
+  try {
+    const txs = JSON.parse(localStorage.getItem('praxis_tx_cache')||'[]');
+    const holders = new Map();
+    for(const tx of txs){
+      if(tx.messageType!=='submit_prediction') continue;
+      const msg=(tx.transaction&&tx.transaction.msg)||{};
+      const rawMid=msg.marketId||msg.market_id||'';
+      let txMid=rawMid;
+      try{txMid=b2h(Uint8Array.from(atob(rawMid),c=>c.charCodeAt(0)));}catch{}
+      if(txMid!==mid) continue;
+      const addr=tx.sender||'';
+      const outcome=msg.outcome===true||msg.outcome==='true'||msg.outcome===1;
+      const shares=BigInt(msg.shares||msg.amount||0);
+      if(!holders.has(addr)) holders.set(addr,{addr,yes:0n,no:0n,txCount:0});
+      const h=holders.get(addr);
+      if(outcome) h.yes+=shares; else h.no+=shares;
+      h.txCount++;
+    }
+    if(!holders.size){
+      el.innerHTML='<div style="padding:20px;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--text3)">No positions yet</div>';
+      return;
+    }
+    const list=[...holders.values()].sort((a,b)=>Number((b.yes+b.no)-(a.yes+a.no)));
+    const totalYes=list.reduce((s,h)=>s+h.yes,0n);
+    const totalNo=list.reduce((s,h)=>s+h.no,0n);
+    const grand=totalYes+totalNo;
+    el.innerHTML=
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border-bottom:1px solid var(--border)">'+
+        '<div style="padding:12px;text-align:center;background:var(--surface)">'+
+          '<div style="font-family:var(--font-mono);font-size:8px;color:var(--text3);margin-bottom:4px;letter-spacing:1px">TOTAL YES</div>'+
+          '<div style="font-family:var(--font-mono);font-size:12px;color:var(--green)">'+fmtPRX(totalYes)+' PRX</div></div>'+
+        '<div style="padding:12px;text-align:center;background:var(--surface)">'+
+          '<div style="font-family:var(--font-mono);font-size:8px;color:var(--text3);margin-bottom:4px;letter-spacing:1px">TOTAL NO</div>'+
+          '<div style="font-family:var(--font-mono);font-size:12px;color:var(--red)">'+fmtPRX(totalNo)+' PRX</div></div>'+
+      '</div>'+
+      list.map((h,i)=>{
+        const total=h.yes+h.no;
+        const pct=grand>0n?Number(total*100n/grand):0;
+        const yesPct=total>0n?Number(h.yes*100n/total):0;
+        const bias=h.yes>h.no?'YES':h.no>h.yes?'NO':'EVEN';
+        const bc=bias==='YES'?'var(--green)':bias==='NO'?'var(--red)':'var(--text3)';
+        return '<div style="padding:12px 16px;border-bottom:1px solid var(--border)">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+            '<div style="display:flex;align-items:center;gap:8px">'+
+              '<span style="font-family:var(--font-mono);font-size:9px;color:var(--text3);min-width:20px">#'+(i+1)+'</span>'+
+              '<span style="font-family:var(--font-mono);font-size:10px;color:var(--green)">'+h.addr.slice(0,8)+'…'+h.addr.slice(-6)+'</span>'+
+            '</div>'+
+            '<span style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:'+bc+'">'+bias+'</span>'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">'+
+            '<div><div style="font-family:var(--font-mono);font-size:8px;color:var(--text3);margin-bottom:2px">YES</div>'+
+              '<div style="font-family:var(--font-mono);font-size:10px;color:var(--green)">'+fmtPRX(h.yes)+'</div></div>'+
+            '<div><div style="font-family:var(--font-mono);font-size:8px;color:var(--text3);margin-bottom:2px">NO</div>'+
+              '<div style="font-family:var(--font-mono);font-size:10px;color:var(--red)">'+fmtPRX(h.no)+'</div></div>'+
+            '<div><div style="font-family:var(--font-mono);font-size:8px;color:var(--text3);margin-bottom:2px">SHARE</div>'+
+              '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text2)">'+pct+'%</div></div>'+
+          '</div>'+
+          '<div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden">'+
+            '<div style="height:100%;width:'+yesPct+'%;background:var(--green);transition:width .3s"></div>'+
+          '</div>'+
+        '</div>';
+      }).join('');
+  } catch(e){
+    el.innerHTML='<div style="padding:16px;color:var(--red);font-family:var(--font-mono);font-size:11px">Error: '+esc(e.message)+'</div>';
+  }
 };

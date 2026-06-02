@@ -115,7 +115,7 @@
       </div>
     </div>
     <div class="card" style="margin-bottom:12px">
-      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:10px;letter-spacing:1px">MARKET INFO</div>
+      <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);margin-bottom:12px;letter-spacing:2px;text-transform:uppercase;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:16px;height:1px;background:var(--green)"></span>MARKET INFO</div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Market ID</span><span class="mval" id="det-mid" style="font-size:10px;word-break:break-all">—</span></div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Creator</span><span class="mval" id="det-creator" style="word-break:break-all">—</span></div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Total Pool</span><span class="mval g" id="det-total">—</span></div>
@@ -124,6 +124,16 @@
       <div class="mitem" style="padding:8px 0" id="det-resolver-row"><span class="mlbl">Resolver</span><span class="mval" id="det-resolver">—</span></div>
     </div>
     <div class="card" id="det-banner-card" style="display:none;margin-bottom:12px"></div>
+
+    <!-- ACTIVITY + HOLDERS TABS -->
+    <div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">
+      <div style="display:flex;border-bottom:1px solid var(--border)">
+        <button id="dtab-activity" onclick="switchDetailTab('activity')" style="flex:1;padding:11px 8px;font-family:var(--font-mono);font-size:10px;letter-spacing:1px;border:none;border-bottom:2px solid var(--green);background:none;color:var(--text2);cursor:pointer">⚡ ACTIVITY</button>
+        <button id="dtab-holders" onclick="switchDetailTab('holders')" style="flex:1;padding:11px 8px;font-family:var(--font-mono);font-size:10px;letter-spacing:1px;border:none;border-bottom:2px solid transparent;background:none;color:var(--text3);cursor:pointer">◈ TOP HOLDERS</button>
+      </div>
+      <div id="dpane-activity" style="min-height:160px"></div>
+      <div id="dpane-holders" style="min-height:160px;display:none"></div>
+    </div>
   </div>
 </div>
 

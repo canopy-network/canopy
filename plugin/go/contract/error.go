@@ -305,6 +305,8 @@ func ErrFailedPluginRead(err error) *PluginError {
 return &PluginError{Code: 4, Module: errModule, Msg: "plugin socket read failed: " + err.Error()}
 }
 
+func ErrMarketExpired() *PluginError      { return &PluginError{Code: 215, Module: errModule, Msg: "market has expired"} }
+func ErrMarketHasPositions() *PluginError { return &PluginError{Code: 216, Module: errModule, Msg: "market has positions — cannot cancel"} }
 func ErrActiveProposalExists() *PluginError  { return &PluginError{Code: 210, Module: errModule, Msg: "active proposal exists — cannot unstake"} }
 func ErrResolverNotActive() *PluginError    { return &PluginError{Code: 211, Module: errModule, Msg: "resolver is not active"} }
 func ErrNoUnbondingStake() *PluginError     { return &PluginError{Code: 212, Module: errModule, Msg: "no unbonding stake to claim"} }

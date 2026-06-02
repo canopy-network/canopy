@@ -74,3 +74,18 @@ func KeyForUnbondingRecord(addr []byte) []byte {
 func KeyForGlobalStats() []byte {
 return JoinLenPrefix(globalStatsPrefix, []byte("/stats/"))
 }
+
+var resolverIndexPrefix = []byte{0x2A}
+var marketIndexPrefix   = []byte{0x2B}
+
+// KeyForResolverIndex returns the singleton key for the global resolver address list.
+// Value: ResolverIndex proto — list of all registered resolver addresses.
+func KeyForResolverIndex() []byte {
+return JoinLenPrefix(resolverIndexPrefix, []byte("/ridx/"))
+}
+
+// KeyForMarketIndex returns the singleton key for the global market ID list.
+// Value: MarketIndex proto — list of all created market IDs.
+func KeyForMarketIndex() []byte {
+return JoinLenPrefix(marketIndexPrefix, []byte("/midx/"))
+}

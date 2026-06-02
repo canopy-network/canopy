@@ -22,11 +22,13 @@ recQId     := nextQueryId()
 accQId     := nextQueryId()
 feeQId          := nextQueryId()
 	gTreasuryQId    := nextQueryId()
+	ridxQId         := nextQueryId()
 
 recKey     := KeyForResolverRecord(msg.ResolverAddress)
 accKey     := KeyForAccount(msg.ResolverAddress)
 feePoolKey      := KeyForFeePool(c.Config.ChainId)
 	gTreasuryKey    := KeyForTreasuryPool()
+	ridxKey         := KeyForResolverIndex()
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
@@ -34,6 +36,7 @@ Keys: []*PluginKeyRead{
 {QueryId: accQId, Key: accKey},
 {QueryId: feeQId,       Key: feePoolKey},
 		{QueryId: gTreasuryQId, Key: gTreasuryKey},
+		{QueryId: ridxQId,       Key: ridxKey},
 },
 })
 if err != nil {
@@ -47,6 +50,7 @@ var existing *ResolverRecord
 account := &Account{}
 feePool     := &Pool{}
 	gTreasury   := &Pool{}
+	ridx        := &ResolverIndex{}
 
 for _, r := range resp.Results {
 if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
@@ -67,6 +71,10 @@ if pe := Unmarshal(r.Entries[0].Value, feePool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case gTreasuryQId:
+		case ridxQId:
+			if pe := Unmarshal(r.Entries[0].Value, ridx); pe != nil {
+				return &PluginDeliverResponse{Error: pe}
+			}
 if pe := Unmarshal(r.Entries[0].Value, gTreasury); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
@@ -91,6 +99,7 @@ feePool.Amount  += fee / 2
 var record *ResolverRecord
 if existing != nil {
 existing.StakeAmount += msg.StakeAmount
+existing.IsActive = true // re-activate on re-registration after full exit
 record = existing
 } else {
 record = &ResolverRecord{
@@ -98,6 +107,7 @@ ResolverAddress: msg.ResolverAddress,
 StakeAmount:     msg.StakeAmount,
 RrsScore:        PRIS_RRS_INITIAL,
 RegisteredAt:    now,
+IsActive:        true,
 }
 }
 
@@ -105,10 +115,16 @@ rawRec, pe := SafeMarshal(record)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawFee, pe := SafeMarshal(feePool)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawGTreasury, pe := SafeMarshal(gTreasury)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawRidx, pe := SafeMarshal(ridx)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
 sets := []*PluginSetOp{
 {Key: recKey,     Value: rawRec},
-{Key: feePoolKey, Value: rawFee},
+{Key: feePoolKey,    Value: rawFee},
+	{Key: gTreasuryKey,  Value: rawGTreasury},
+	{Key: ridxKey,       Value: rawRidx},
 }
 var deletes []*PluginDeleteOp
 if account.Amount == 0 {
