@@ -4,9 +4,6 @@ func (c *Contract) CheckMessageRegisterResolver(msg *MessageRegisterResolver) *P
 if len(msg.ResolverAddress) != 20 {
 return ErrCheckResp(ErrInvalidAddress())
 }
-if msg.StakeAmount < MIN_RESOLVER_STAKE {
-return ErrCheckResp(ErrInsufficientResolverStake())
-}
 return &PluginCheckResponse{
 AuthorizedSigners: [][]byte{msg.ResolverAddress},
 }
@@ -71,18 +68,17 @@ if pe := Unmarshal(r.Entries[0].Value, feePool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 case gTreasuryQId:
+			if pe := Unmarshal(r.Entries[0].Value, gTreasury); pe != nil {
+				return &PluginDeliverResponse{Error: pe}
+			}
 		case ridxQId:
 			if pe := Unmarshal(r.Entries[0].Value, ridx); pe != nil {
 				return &PluginDeliverResponse{Error: pe}
 			}
-if pe := Unmarshal(r.Entries[0].Value, gTreasury); pe != nil {
-return &PluginDeliverResponse{Error: pe}
 }
 }
-}
-
-if msg.StakeAmount < MIN_RESOLVER_STAKE {
-return &PluginDeliverResponse{Error: ErrInsufficientResolverStake()}
+if existing == nil && msg.StakeAmount < MIN_RESOLVER_STAKE {
+	return &PluginDeliverResponse{Error: ErrInsufficientResolverStake()}
 }
 if fee > 0 && msg.StakeAmount > ^uint64(0)-fee {
 return &PluginDeliverResponse{Error: ErrInvalidAmount()}

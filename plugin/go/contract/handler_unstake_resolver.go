@@ -29,18 +29,21 @@ return &PluginDeliverResponse{Error: ErrHeightNotSet()}
 
 // ── Batch read ────────────────────────────────────────────────────────
 recQId      := nextQueryId()
-proposalQId := nextQueryId()
 accQId      := nextQueryId()
+feeQId      := nextQueryId()
+gTreasuryQId := nextQueryId()
 
-recKey      := KeyForResolverRecord(msg.ResolverAddress)
-proposalKey := KeyForProposal(msg.ResolverAddress)
-accKey      := KeyForAccount(msg.ResolverAddress)
+recKey       := KeyForResolverRecord(msg.ResolverAddress)
+accKey       := KeyForAccount(msg.ResolverAddress)
+feePoolKey   := KeyForFeePool(c.Config.ChainId)
+gTreasuryKey := KeyForTreasuryPool()
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 Keys: []*PluginKeyRead{
-{QueryId: recQId,      Key: recKey},
-{QueryId: proposalQId, Key: proposalKey},
-{QueryId: accQId,      Key: accKey},
+{QueryId: recQId,  Key: recKey},
+{QueryId: accQId,  Key: accKey},
+{QueryId: feeQId,       Key: feePoolKey},
+{QueryId: gTreasuryQId, Key: gTreasuryKey},
 },
 })
 if err != nil {
@@ -51,7 +54,9 @@ return &PluginDeliverResponse{Error: resp.Error}
 }
 
 var record *ResolverRecord
-acc := &Account{}
+acc      := &Account{}
+feePool  := &Pool{}
+gTreasury := &Pool{}
 
 for _, r := range resp.Results {
 if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
@@ -63,42 +68,46 @@ record = &ResolverRecord{}
 if pe := Unmarshal(r.Entries[0].Value, record); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
-case proposalQId:
-// Slash-evasion guard: active proposal exists — reject unstake
-proposal := &ProposalRecord{}
-if pe := Unmarshal(r.Entries[0].Value, proposal); pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
-if proposal.Status == PROPOSAL_OPEN {
-return &PluginDeliverResponse{Error: ErrActiveProposalExists()}
-}
+
 case accQId:
-if pe := Unmarshal(r.Entries[0].Value, acc); pe != nil {
-return &PluginDeliverResponse{Error: pe}
-}
-}
-}
+		if pe := Unmarshal(r.Entries[0].Value, acc); pe != nil {
+			return &PluginDeliverResponse{Error: pe}
+		}
+		case feeQId:
+			if pe := Unmarshal(r.Entries[0].Value, feePool); pe != nil {
+				return &PluginDeliverResponse{Error: pe}
+			}
+		case gTreasuryQId:
+			if pe := Unmarshal(r.Entries[0].Value, gTreasury); pe != nil {
+				return &PluginDeliverResponse{Error: pe}
+			}
+		}
+	}
 
 if record == nil {
 return &PluginDeliverResponse{Error: ErrResolverNotFound()}
 }
 if !record.IsActive {
-return &PluginDeliverResponse{Error: ErrResolverNotActive()}
+	return &PluginDeliverResponse{Error: ErrResolverNotActive()}
 }
 
 // ── Determine unstake amount and type ─────────────────────────────────
 fullExit := msg.Amount == 0 || msg.Amount >= record.StakeAmount
 unstakeAmt := msg.Amount
 if fullExit {
-unstakeAmt = record.StakeAmount
+	unstakeAmt = record.StakeAmount
 }
 
 // Partial unstake: remaining stake must stay >= MIN_RESOLVER_STAKE
 if !fullExit {
-remaining := record.StakeAmount - unstakeAmt
-if remaining < MIN_RESOLVER_STAKE {
-return &PluginDeliverResponse{Error: ErrInsufficientResolverStake()}
+	remaining := record.StakeAmount - unstakeAmt
+	if remaining < MIN_RESOLVER_STAKE {
+		return &PluginDeliverResponse{Error: ErrInsufficientResolverStake()}
+	}
 }
+
+if record.UnbondingAmount > 0 {
+	return &PluginDeliverResponse{Error: ErrUnbondingAlreadyPending()}
 }
 
 // ── Apply RRS penalty ─────────────────────────────────────────────────
@@ -120,25 +129,33 @@ record.UnbondingReleaseHeight = height + PRIS_UNSTAKE_UNBONDING_BLOCKS
 
 // ── Pay fee from account ──────────────────────────────────────────────
 if acc.Amount < fee {
-return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
+	return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 }
 acc.Amount -= fee
+feePool.Amount += fee / 2
+gTreasury.Amount += fee - fee/2
 
 // ── Marshal ───────────────────────────────────────────────────────────
 rawRec, pe := SafeMarshal(record)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawAcc, pe := SafeMarshal(acc)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawFee, pe := SafeMarshal(feePool)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
+rawGTreasury, pe := SafeMarshal(gTreasury)
+if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
-// ── 2-key atomic write ────────────────────────────────────────────────
+// ── Atomic write ──────────────────────────────────────────────────────
 sets := []*PluginSetOp{
-{Key: recKey, Value: rawRec},
+	{Key: recKey,        Value: rawRec},
+	{Key: feePoolKey,    Value: rawFee},
+	{Key: gTreasuryKey,  Value: rawGTreasury},
 }
 var deletes []*PluginDeleteOp
 if acc.Amount == 0 {
-deletes = []*PluginDeleteOp{{Key: accKey}}
+	deletes = []*PluginDeleteOp{{Key: accKey}}
 } else {
-sets = append(sets, &PluginSetOp{Key: accKey, Value: rawAcc})
+	sets = append(sets, &PluginSetOp{Key: accKey, Value: rawAcc})
 }
 
 wr, werr := c.plugin.StateWrite(c, &PluginStateWriteRequest{

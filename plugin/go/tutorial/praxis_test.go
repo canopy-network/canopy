@@ -1774,17 +1774,18 @@ t.Error("Expected rejection: claim before unbonding period should fail")
 t.Log("Correctly rejected early claim ✓")
 }
 
-// ── Test 4: Full exit ─────────────────────────────────────────────────
+// ── Test 4: Cannot full exit while unbonding is pending ─────────────
 h, _ = getHeight()
 exitMsg := &contract.MessageUnstakeResolver{
-ResolverAddress: hexDecode(resolverAddr),
-Amount:          0, // 0 = full exit
+	ResolverAddress: hexDecode(resolverAddr),
+	Amount:          0, // 0 = full exit
 }
 eHash := submitTx(t, resolverKey, "unstake_resolver", "MessageUnstakeResolver", exitMsg, h)
-if err := waitForTx(resolverAddr, eHash, 60*time.Second); err != nil {
-t.Fatalf("full exit: %v", err)
+if err := waitForTx(resolverAddr, eHash, 60*time.Second); err == nil {
+	t.Error("Expected rejection: cannot full exit while unbonding pending")
+} else {
+	t.Log("Correctly rejected full exit while unbonding pending ✓")
 }
-t.Log("Full exit submitted ✓")
 
 // ── Test 5: Cannot unstake again after full exit ──────────────────────
 h, _ = getHeight()
