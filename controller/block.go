@@ -315,6 +315,11 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		return err
 	}
 	if !syncing {
+		// refresh the mempool FSM from the newly committed height before rebuilding
+		c.Mempool.FSM.Discard()
+		if c.Mempool.FSM, err = c.FSM.Copy(); err != nil {
+			return err
+		}
 		// check the mempool to cache a proposal block and validate the mempool itself
 		c.Mempool.dirtyVersion.Add(1)
 		resetProposalConfig := c.SetFSMInConsensusModeForProposals()
