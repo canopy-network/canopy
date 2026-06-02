@@ -1700,3 +1700,104 @@ t.Errorf("Resolver fee NOT paid at finalization: gain=%d", resolverGain)
 
 t.Log("PRIS fee flow verified ✓")
 }
+
+func TestUnstakeResolver(t *testing.T) {
+validatorAddr := "e7c7dad131a03f7ea0cc09a637ad096eb3495f77"
+validatorKey, err := keystoreGetKey(validatorAddr, "")
+if err != nil {
+t.Fatalf("key: %v", err)
+}
+
+// Setup resolver with MIN_RESOLVER_STAKE
+resolverKey, resolverAddr := setupResolver(t, validatorKey, validatorAddr, 500_000_000_000)
+t.Logf("Resolver: %s", resolverAddr)
+
+// ── Test 1: Cannot partial unstake below MIN_RESOLVER_STAKE ──────────
+h, _ := getHeight()
+unstakeMsg := &contract.MessageUnstakeResolver{
+ResolverAddress: hexDecode(resolverAddr),
+Amount:          1, // would leave stake at MIN-1
+}
+hash := submitTx(t, resolverKey, "unstake_resolver", "MessageUnstakeResolver", unstakeMsg, h)
+if err := waitForTx(resolverAddr, hash, 60*time.Second); err == nil {
+t.Error("Expected rejection: partial unstake below MIN_RESOLVER_STAKE should fail")
+} else {
+t.Log("Correctly rejected partial unstake below MIN_RESOLVER_STAKE ✓")
+}
+
+// ── Test 2: Partial unstake — fund extra stake first ─────────────────
+// Add 100,000 PRX extra stake so partial unstake is valid
+h, _ = getHeight()
+extraStake := uint64(100_000_000_000)
+fundMsg := &contract.MessageSend{
+FromAddress: hexDecode(validatorAddr),
+ToAddress:   hexDecode(resolverAddr),
+Amount:      extraStake * 2,
+}
+fHash := submitSendTx(t, validatorKey, fundMsg, h)
+if err := waitForTx(validatorAddr, fHash, 60*time.Second); err != nil {
+t.Fatalf("fund extra stake: %v", err)
+}
+
+h, _ = getHeight()
+addMsg := &contract.MessageRegisterResolver{
+ResolverAddress: hexDecode(resolverAddr),
+StakeAmount:     extraStake,
+}
+aHash := submitTx(t, resolverKey, "register_resolver", "MessageRegisterResolver", addMsg, h)
+if err := waitForTx(resolverAddr, aHash, 60*time.Second); err != nil {
+t.Fatalf("add stake: %v", err)
+}
+t.Logf("Added extra stake %d, total stake now %d", extraStake, 500_000_000_000+extraStake)
+
+// Now partial unstake the extra 100,000 PRX — leaves MIN_RESOLVER_STAKE intact
+h, _ = getHeight()
+partialMsg := &contract.MessageUnstakeResolver{
+ResolverAddress: hexDecode(resolverAddr),
+Amount:          extraStake,
+}
+pHash := submitTx(t, resolverKey, "unstake_resolver", "MessageUnstakeResolver", partialMsg, h)
+if err := waitForTx(resolverAddr, pHash, 60*time.Second); err != nil {
+t.Fatalf("partial unstake: %v", err)
+}
+t.Log("Partial unstake submitted ✓")
+
+// ── Test 3: Cannot claim unbonded stake before release height ─────────
+h, _ = getHeight()
+claimMsg := &contract.MessageClaimUnbondedStake{
+ResolverAddress: hexDecode(resolverAddr),
+}
+cHash := submitTx(t, resolverKey, "claim_unbonded_stake", "MessageClaimUnbondedStake", claimMsg, h)
+if err := waitForTx(resolverAddr, cHash, 60*time.Second); err == nil {
+t.Error("Expected rejection: claim before unbonding period should fail")
+} else {
+t.Log("Correctly rejected early claim ✓")
+}
+
+// ── Test 4: Full exit ─────────────────────────────────────────────────
+h, _ = getHeight()
+exitMsg := &contract.MessageUnstakeResolver{
+ResolverAddress: hexDecode(resolverAddr),
+Amount:          0, // 0 = full exit
+}
+eHash := submitTx(t, resolverKey, "unstake_resolver", "MessageUnstakeResolver", exitMsg, h)
+if err := waitForTx(resolverAddr, eHash, 60*time.Second); err != nil {
+t.Fatalf("full exit: %v", err)
+}
+t.Log("Full exit submitted ✓")
+
+// ── Test 5: Cannot unstake again after full exit ──────────────────────
+h, _ = getHeight()
+reMsg := &contract.MessageUnstakeResolver{
+ResolverAddress: hexDecode(resolverAddr),
+Amount:          0,
+}
+rHash := submitTx(t, resolverKey, "unstake_resolver", "MessageUnstakeResolver", reMsg, h)
+if err := waitForTx(resolverAddr, rHash, 60*time.Second); err == nil {
+t.Error("Expected rejection: cannot unstake after full exit")
+} else {
+t.Log("Correctly rejected double exit ✓")
+}
+
+t.Log("TestUnstakeResolver complete ✓")
+}

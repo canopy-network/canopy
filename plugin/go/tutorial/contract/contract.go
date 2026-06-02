@@ -58,6 +58,8 @@ SupportedTransactions: []string{
 		"claim_community_reward",
 		"claim_investor_reward",
 		"claim_protocol_reward",
+		"unstake_resolver",
+		"claim_unbonded_stake",
 },
 TransactionTypeUrls: []string{
 	"type.googleapis.com/types.MessageCreateMarket",
@@ -79,6 +81,8 @@ TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageClaimCommunityReward",
 		"type.googleapis.com/types.MessageClaimInvestorReward",
 		"type.googleapis.com/types.MessageClaimProtocolReward",
+		"type.googleapis.com/types.MessageUnstakeResolver",
+		"type.googleapis.com/types.MessageClaimUnbondedStake",
 },
 }
 
@@ -206,6 +210,10 @@ case *MessageClaimInvestorReward:
 return c.CheckMessageClaimInvestorReward(m)
 case *MessageClaimProtocolReward:
 return c.CheckMessageClaimProtocolReward(m)
+case *MessageUnstakeResolver:
+return c.CheckMessageUnstakeResolver(m)
+case *MessageClaimUnbondedStake:
+return c.CheckMessageClaimUnbondedStake(m)
 default:
 return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 }
@@ -258,6 +266,10 @@ case *MessageClaimInvestorReward:
 return c.DeliverMessageClaimInvestorReward(m, fee)
 case *MessageClaimProtocolReward:
 return c.DeliverMessageClaimProtocolReward(m, fee)
+case *MessageUnstakeResolver:
+return c.DeliverMessageUnstakeResolver(m, fee)
+case *MessageClaimUnbondedStake:
+return c.DeliverMessageClaimUnbondedStake(m, fee)
 default:
 return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 }

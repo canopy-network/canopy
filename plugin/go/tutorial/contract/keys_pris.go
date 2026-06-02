@@ -62,7 +62,13 @@ func KeyForInvestorLastClaimed() []byte {
 return JoinLenPrefix(investorLastClaimedPrefix, []byte("/ilc/"))
 }
 
-var globalStatsPrefix = []byte{0x28}
+var globalStatsPrefix     = []byte{0x28}
+var unbondingRecordPrefix = []byte{0x29}
+
+// KeyForUnbondingRecord returns the singleton unbonding record for a resolver.
+func KeyForUnbondingRecord(addr []byte) []byte {
+	return JoinLenPrefix(unbondingRecordPrefix, addr)
+}
 
 // KeyForGlobalStats returns the singleton state key for protocol-wide resolution stats.
 func KeyForGlobalStats() []byte {

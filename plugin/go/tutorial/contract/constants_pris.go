@@ -63,3 +63,9 @@ PRAXIS_PROTOCOL_ADDR = []byte{
 0x41, 0xae, 0x1e, 0xa8,
 }
 )
+
+// Unstake constants
+const (
+PRIS_UNSTAKE_UNBONDING_BLOCKS uint64 = 120_960 // 7 days at 5s/block
+PRIS_UNSTAKE_PARTIAL_RRS_HIT  uint64 = 10      // RRS penalty for partial unstake
+)
