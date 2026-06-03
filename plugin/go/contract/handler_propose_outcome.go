@@ -1,5 +1,7 @@
 package contract
 
+import "bytes"
+
 // handler_propose_outcome.go — MessageProposeOutcome
 // Spec: PORS v1.0-r2-CORRECTED
 //
@@ -101,7 +103,34 @@ if resolverRec.RrsScore < MIN_RRS_TO_PROPOSE {
 return &PluginDeliverResponse{Error: ErrResolverSuspended()}
 }
 
-// ── Market status check ───────────────────────────────────────────────────
+	// ── COI-1: resolver must not hold a position in this market ─────────────────
+	resolPosQId := nextQueryId()
+	posResp, posErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: resolPosQId, Key: KeyForPosition(msg.MarketId, msg.ResolverAddress)},
+		},
+	})
+	if posErr != nil {
+		return &PluginDeliverResponse{Error: posErr}
+	}
+	for _, r := range posResp.Results {
+		if r.QueryId == resolPosQId && len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+			resolPos := &PositionState{}
+			if pe := Unmarshal(r.Entries[0].Value, resolPos); pe != nil {
+				return &PluginDeliverResponse{Error: pe}
+			}
+			if resolPos.SharesYes > 0 || resolPos.SharesNo > 0 {
+				return &PluginDeliverResponse{Error: ErrResolverHasPosition()}
+			}
+		}
+	}
+
+// ── COI-2: market creator cannot be the resolver ────────────────────────────
+	if bytes.Equal(market.Creator, msg.ResolverAddress) {
+		return &PluginDeliverResponse{Error: ErrCreatorCannotResolve()}
+	}
+
+	// ── Market status check ───────────────────────────────────────────────────
 // NF-6 FIX: accept STATUS_OPEN if now > ExpiryTime — inline transition.
 // STATUS_OPEN -> STATUS_PROPOSED is atomic; STATUS_EXPIRED never persisted.
 if market.Status == STATUS_OPEN {
