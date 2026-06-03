@@ -95,6 +95,9 @@ feePool.Amount  += fee / 2
 var record *ResolverRecord
 if existing != nil {
 existing.StakeAmount += msg.StakeAmount
+		if existing.StakeAmount < MIN_RESOLVER_STAKE {
+			return &PluginDeliverResponse{Error: ErrInsufficientResolverStake()}
+		}
 existing.IsActive = true // re-activate on re-registration after full exit
 		if existing.RrsScore < PRIS_RRS_INITIAL {
 			existing.RrsScore = PRIS_RRS_INITIAL
