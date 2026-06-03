@@ -96,6 +96,9 @@ var record *ResolverRecord
 if existing != nil {
 existing.StakeAmount += msg.StakeAmount
 existing.IsActive = true // re-activate on re-registration after full exit
+		if existing.RrsScore < PRIS_RRS_INITIAL {
+			existing.RrsScore = PRIS_RRS_INITIAL
+		}
 record = existing
 } else {
 record = &ResolverRecord{
