@@ -495,9 +495,14 @@ function renderMarketCards(markets) {
     var yesPct = total > 0n ? Number(m.qYes * 100n / total) : 50;
     var noPct = 100 - yesPct;
     var cardClass = 'mcard' + (expired ? ' mexp' : '') + (cancelled ? ' mcan' : '') + (finalized ? ' mfin' : '');
+    var volume = m.qYes + m.qNo - m.lmsrSeed;
+    var volStr = volume > 0n ? fmtPRX(volume) + ' PRX' : '—';
+    var expiryLabel = open ? 'Expires' : expired ? 'Expired' : proposed ? 'Proposed at' : finalized ? 'Finalized' : cancelled ? 'Cancelled' : voided ? 'Voided' : 'Block';
+
+    // banner
     var banner = '';
     if (expired) banner = '<div class="mc-banner bnr"><span>⏳</span> Awaiting resolver proposal</div>';
-    if (cancelled) banner = '<div class="mc-banner bnr"><span>✕</span> Market cancelled — reclaim your stake</div>';
+    if (cancelled) banner = '<div class="mc-banner bnd"><span>✕</span> Market cancelled — reclaim your stake</div>';
     if (voided) banner = '<div class="mc-banner bnr"><span>⚠</span> Market voided — full refund available</div>';
     if (proposed) {
       var tier = m.resolver ? resolverTier(m.resolver) : null;
@@ -506,28 +511,71 @@ function renderMarketCards(markets) {
     }
     if (disputed) banner = '<div class="mc-banner bnd"><span>⚡</span> Dispute active — panel vote in progress</div>';
     if (finalized) banner = '<div class="mc-banner bnf"><span>✓</span> Market finalized</div>';
-    var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
-    var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
-    parts.push('<div class="' + cardClass + '">');
-    var volume = m.qYes + m.qNo - m.lmsrSeed;
-    var volStr = volume > 0n ? fmtPRX(volume) + ' PRX Vol.' : '';
-    parts.push('<div class="mc-head"><div class="mc-q" style="cursor:pointer" onclick="showDetail(\'' + mid + '\')">' + esc(m.question) + '</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div class="spill ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</div>' + (volStr ? '<div style="font-family:var(--font-mono);font-size:9px;color:var(--text3)">' + volStr + '</div>' : '') + '</div></div>');
-    if (banner) parts.push(banner);
-    parts.push('<div class="mc-prob"><div class="prob-row"><span class="prob-lbl">Implied probability</span><div class="prob-vals"><div style="text-align:center"><span class="pvy">' + yesPct + '%</span><span class="pvl">YES</span></div><div style="text-align:center"><span class="pvn">' + noPct + '%</span><span class="pvl">NO</span></div></div></div><div class="btrack"><div class="byes" style="width:' + yesPct + '%' + (finalized ? ';box-shadow:none;background:#4a4a4a' : '') + '"></div><div class="bno"' + (finalized ? ' style="background:#2a2a2a"' : '') + '></div></div></div>');
-    parts.push('<div class="mc-pools"><div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val">' + fmtPRX(m.qYes) + ' PRX</div></div><div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val">' + fmtPRX(m.qNo) + ' PRX</div></div></div>');
 
+    // action buttons
     var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
     var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
     var isResolver = signerAddress && _resolverRegistry.has(signerAddress);
     var resolverRec = isResolver ? _resolverRegistry.get(signerAddress) : null;
     var canPropose = open && isResolver && resolverRec && resolverRec.rrs >= 10 && signerAddress !== m.creator;
-    var propBtn = canPropose ? '<button class="byes2" style="background:var(--adim);border-color:rgba(245,158,11,.3);color:var(--amber)" onclick="fillPropose(' + JSON.stringify(mid) + ')">⚖ PROPOSE</button>' : '';
-    parts.push('<div class="mc-acts"><button class="byes2" ' + actYes + '>BET YES</button><button class="bno2" ' + actNo + '>BET NO</button>' + propBtn + '</div>');
-    parts.push('<div class="card-foot"><div class="meta">');
-    parts.push('<div class="mitem"><span class="mlbl">Total pool</span><span class="mval g">' + fmtPRX(m.qYes + m.qNo) + ' PRX</span></div>');
-    parts.push('<div class="mitem"><span class="mlbl">' + (open ? 'Expires' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : 'Closed') + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
-    parts.push('<div class="mitem"><span class="mlbl">Creator</span><span class="mval">' + (m.creator ? m.creator.slice(0,8) + '…' : '???') + '</span></div>');
-    parts.push('</div><span class="market-id">' + mid.slice(0,8) + '…</span></div>');
+    var propBtn = canPropose ? '<button class="mc-propose-btn" onclick="fillPropose(' + JSON.stringify(mid) + ')">⚖ PROPOSE</button>' : '';
+
+    parts.push('<div class="' + cardClass + '">');
+
+    // ── HEAD: question + status pill
+    parts.push(
+      '<div class="mc-head" onclick="showDetail(\'' + mid + '\')">' +
+        '<div class="mc-q">' + esc(m.question) + '</div>' +
+        '<div class="spill ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</div>' +
+      '</div>'
+    );
+
+    // ── PROB: big YES/NO numbers + bar
+    parts.push(
+      '<div class="mc-prob">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">' +
+          '<div style="display:flex;flex-direction:column">' +
+            '<span class="pvy">' + yesPct + '%</span>' +
+            '<span class="pvl">YES</span>' +
+          '</div>' +
+          '<div style="display:flex;flex-direction:column;align-items:flex-end">' +
+            '<span class="pvn">' + noPct + '%</span>' +
+            '<span class="pvl">NO</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="btrack"><div class="byes" style="width:' + yesPct + '%' + (finalized ? ';box-shadow:none;background:#3a3a3a' : '') + '"></div><div class="bno"' + (finalized ? ' style="background:#222"' : '') + '></div></div>' +
+      '</div>'
+    );
+
+    // ── BANNER
+    if (banner) parts.push(banner);
+
+    // ── POOLS row: YES pool | NO pool
+    parts.push(
+      '<div class="mc-pools">' +
+        '<div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val">' + fmtPRX(m.qYes) + ' PRX</div></div>' +
+        '<div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val">' + fmtPRX(m.qNo) + ' PRX</div></div>' +
+      '</div>'
+    );
+
+    // ── ACTIONS
+    parts.push(
+      '<div class="mc-acts">' +
+        '<button class="byes2" ' + actYes + '>BET YES</button>' +
+        '<button class="bno2" ' + actNo + '>BET NO</button>' +
+        propBtn +
+      '</div>'
+    );
+
+    // ── FOOTER: volume + expiry + creator
+    parts.push(
+      '<div class="mc-foot">' +
+        '<div class="mc-foot-item"><span class="mlbl">Volume</span><span class="mval g">' + volStr + '</span></div>' +
+        '<div class="mc-foot-item"><span class="mlbl">' + expiryLabel + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>' +
+        '<div class="mc-foot-item"><span class="mlbl">Creator</span><span class="mval">' + (m.creator ? m.creator.slice(0,8) + '\u2026' : '???') + '</span></div>' +
+      '</div>'
+    );
+
     parts.push('</div>');
   }
   parts.push('</div>');

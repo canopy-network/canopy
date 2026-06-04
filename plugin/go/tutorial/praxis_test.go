@@ -1708,12 +1708,15 @@ if err != nil {
 t.Fatalf("key: %v", err)
 }
 
-// Setup resolver with MIN_RESOLVER_STAKE
+// Setup resolver with MIN_RESOLVER_STAKE using fresh address each run
 resolverKey, resolverAddr := setupResolver(t, validatorKey, validatorAddr, 500_000_000_000)
+h, _ := getHeight()
+fHash := ""
+fundMsg := &contract.MessageSend{}
 t.Logf("Resolver: %s", resolverAddr)
 
 // ── Test 1: Cannot partial unstake below MIN_RESOLVER_STAKE ──────────
-h, _ := getHeight()
+h, _ = getHeight()
 unstakeMsg := &contract.MessageUnstakeResolver{
 ResolverAddress: hexDecode(resolverAddr),
 Amount:          1, // would leave stake at MIN-1
@@ -1729,12 +1732,12 @@ t.Log("Correctly rejected partial unstake below MIN_RESOLVER_STAKE ✓")
 // Add 100,000 PRX extra stake so partial unstake is valid
 h, _ = getHeight()
 extraStake := uint64(100_000_000_000)
-fundMsg := &contract.MessageSend{
+fundMsg = &contract.MessageSend{
 FromAddress: hexDecode(validatorAddr),
 ToAddress:   hexDecode(resolverAddr),
 Amount:      extraStake * 2,
 }
-fHash := submitSendTx(t, validatorKey, fundMsg, h)
+fHash = submitSendTx(t, validatorKey, fundMsg, h)
 if err := waitForTx(validatorAddr, fHash, 60*time.Second); err != nil {
 t.Fatalf("fund extra stake: %v", err)
 }
