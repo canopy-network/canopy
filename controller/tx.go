@@ -260,7 +260,16 @@ func (m *Mempool) CheckMempool() {
 		rootDexBatch, err := m.controller.RCManager.GetDexBatch(rootChainID,
 			rcBuildHeight, m.controller.Config.ChainId, false)
 		if err != nil {
-			m.log.Warnf("Check Mempool error: %s", err.Error())
+			// CRITICAL: if the root chain query fails (e.g. the root-chain RPC/websocket is
+			// momentarily unreachable and returns EOF), DO NOT proceed to build a proposal.
+			// Caching a proposal with a nil root dex batch produces a state root that diverges
+			// from the deterministic value other nodes (and this node at commit time, which uses
+			// the embedded qc.Results.RootDexBatch) compute. That divergence surfaces as
+			// 'unequal block hash' and wedges consensus until the connection recovers.
+			// Bail out instead and keep the last valid cached proposal; the next check (or the
+			// next CommitCertificate) rebuilds it once the root chain is reachable again.
+			m.log.Warnf("Check Mempool skipped: unable to fetch root dex batch: %s", err.Error())
+			return
 		}
 		m.FSM.SetRootDexCache(rootDexBatch)
 	}

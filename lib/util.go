@@ -823,9 +823,10 @@ func DecodeLengthPrefixed(key []byte) (segments [][]byte) {
 
 // Retry is a simple exponential backoff retry structure in the form of doubling the timeout
 type Retry struct {
-	waitTimeMS uint64 // time to wait in milliseconds
-	maxLoops   uint64 // the maximum number of loops before quitting
-	loopCount  uint64 // the loop count itself
+	waitTimeMS    uint64 // time to wait in milliseconds
+	maxWaitTimeMS uint64 // optional cap on the wait time (0 = uncapped)
+	maxLoops      uint64 // the maximum number of loops before quitting
+	loopCount     uint64 // the loop count itself
 }
 
 // NewRetry() constructs a new Retry given parameters
@@ -833,6 +834,17 @@ func NewRetry(waitTimeMS, maxLoops uint64) *Retry {
 	return &Retry{
 		waitTimeMS: waitTimeMS,
 		maxLoops:   maxLoops,
+	}
+}
+
+// NewCappedRetry() constructs a Retry whose exponential backoff is capped at maxWaitTimeMS.
+// This keeps reconnect/poll loops responsive: the delay grows exponentially up to the cap and
+// then stays there, instead of ballooning into minutes (or longer) after a handful of failures.
+func NewCappedRetry(waitTimeMS, maxWaitTimeMS, maxLoops uint64) *Retry {
+	return &Retry{
+		waitTimeMS:    waitTimeMS,
+		maxWaitTimeMS: maxWaitTimeMS,
+		maxLoops:      maxLoops,
 	}
 }
 
@@ -849,6 +861,10 @@ func (r *Retry) WaitAndDoRetry() bool {
 		time.Sleep(time.Duration(r.waitTimeMS) * time.Millisecond)
 		// double the timeout
 		r.waitTimeMS += r.waitTimeMS
+		// clamp the wait time to the configured maximum (if any) to avoid runaway backoff
+		if r.maxWaitTimeMS != 0 && r.waitTimeMS > r.maxWaitTimeMS {
+			r.waitTimeMS = r.maxWaitTimeMS
+		}
 	}
 	// increment the loop count
 	r.loopCount++
