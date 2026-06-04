@@ -30,7 +30,6 @@
     <div class="ni" data-p="predict" onclick="showPage('predict',this)"><span class="ni-ic">⚡</span>Submit Prediction</div>
     <div class="ni" data-p="claim" onclick="showPage('claim',this)"><span class="ni-ic">◎</span>Claim Winnings</div>
     <div class="ni" data-p="reclaim" onclick="showPage('reclaim',this)"><span class="ni-ic">◈</span>Reclaim Stake</div>
-    <div class="ni" data-p="resolve" onclick="showPage('resolve',this)"><span class="ni-ic">⚖</span>Resolve Market</div>
     <div class="ni" data-p="resolvers" onclick="showPage('resolvers',this)"><span class="ni-ic">◈</span>Browse Resolvers</div>
     <div class="ni" data-p="claimcreator" onclick="showPage('claimcreator',this)"><span class="ni-ic">◎</span>Claim Creator Fee</div>
     <div class="ni" data-p="cancel" onclick="showPage('cancel',this)"><span class="ni-ic">✕</span>Cancel Market</div>
@@ -46,6 +45,8 @@
     <div class="ni nav-resolver-item" data-p="reveal" onclick="showPage('reveal',this)" style="display:none"><span class="ni-ic">◎</span>Reveal Vote<span class="rb rb-r">Resolver</span></div>
     <div class="ni nav-resolver-item" data-p="tally" onclick="showPage('tally',this)" style="display:none"><span class="ni-ic">≡</span>Tally Votes<span class="rb rb-r">Resolver</span></div>
     <div class="ni nav-resolver-item" data-p="slash" onclick="showPage('slash',this)" style="display:none"><span class="ni-ic">◈</span>Claim Slash<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="unstake-resolver" onclick="showPage('unstake-resolver',this)" style="display:none"><span class="ni-ic">↓</span>Unstake Resolver<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="claim-unbonded" onclick="showPage('claim-unbonded',this)" style="display:none"><span class="ni-ic">◎</span>Claim Unbonded<span class="rb rb-r">Resolver</span></div>
     <div class="ns" id="nav-admin-section" style="display:none">Admin</div>
     <div class="ni nav-admin-item" data-p="create" onclick="showPage('create',this)" style="display:none"><span class="ni-ic">+</span>Create Market<span class="rb rb-a">Admin</span></div>
     <div class="ni nav-admin-item" data-p="finalize" onclick="showPage('finalize',this)" style="display:none"><span class="ni-ic">✓</span>Finalize Market<span class="rb rb-a">Admin</span></div>
@@ -115,7 +116,7 @@
       </div>
     </div>
     <div class="card" style="margin-bottom:12px">
-      <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);margin-bottom:12px;letter-spacing:2px;text-transform:uppercase;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:16px;height:1px;background:var(--green)"></span>MARKET INFO</div>
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:10px;letter-spacing:1px">MARKET INFO</div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Market ID</span><span class="mval" id="det-mid" style="font-size:10px;word-break:break-all">—</span></div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Creator</span><span class="mval" id="det-creator" style="word-break:break-all">—</span></div>
       <div class="mitem" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="mlbl">Total Pool</span><span class="mval g" id="det-total">—</span></div>
@@ -188,20 +189,6 @@
     <div class="brow"><button class="btn bp" id="btn_reclaim" onclick="signAndSubmit_reclaim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_reclaim()">Build Payload</button></div>
     <div class="pend" id="pend_reclaim"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="rco"><div class="plbl">// unsigned_payload</div><textarea id="rcp" readonly></textarea></div>
-  </div></div>
-</div>
-
-<div class="page" id="page-resolve">
-  <div class="ph ph-g"><div class="ph-eye">Direct Resolution</div><div class="ph-title">Resolve Market</div><div class="ph-sub">Directly resolve an expired market as the authorized resolver</div></div>
-  <div class="alert ay">Only callable after ExpiryTime. Caller must be the authorized resolver for this market.</div>
-  <div class="card"><div class="ci">
-    <div class="ct">// resolve_parameters</div>
-    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="r_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Resolver Address</label><input id="r_resolver" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field"><label>Winning Outcome</label><div class="otog"><div class="obtn yes active" id="rbtn_yes" onclick="setResOut(true)">YES</div><div class="obtn no" id="rbtn_no" onclick="setResOut(false)">NO</div></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="r_fee" type="number" value="10000"/></div>
-    <div class="brow"><button class="btn bp" id="btn_resolve" onclick="signAndSubmit_resolve()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_resolve()">Build Payload</button></div>
-    <div class="pend" id="pend_resolve"><span class="blink">▪▪▪</span> broadcasting…</div>
-    <div class="pbox" id="ro"><div class="plbl">// unsigned_payload</div><textarea id="rp" readonly></textarea></div>
   </div></div>
 </div>
 
@@ -342,12 +329,12 @@
 
 <div class="page" id="page-propose">
   <div class="ph ph-r"><div class="ph-eye">Resolver Action</div><div class="ph-title">Propose Outcome</div><div class="ph-sub">Propose the winning outcome after market expiry</div></div>
-  <div class="alert ay">Only callable after ExpiryTime. Bond locked until finalization.</div>
+  <div class="alert ay">Bond is deducted from resolver stake, not wallet balance. Propose only after market expiry. Dispute window opens on proposal.</div>
   <div class="card r-card"><div class="ci">
     <div class="ct">// proposal_parameters</div>
-    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="prop_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Resolver Address</label><input id="prop_resolver" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="prop_mid" type="text" placeholder="40 hex chars" oninput="updateMinBondHint()"/></div><div class="field"><label>Resolver Address</label><input id="prop_resolver" type="text" placeholder="40 hex chars"/></div></div>
     <div class="field"><label>Proposed Outcome</label><div class="otog"><div class="obtn yes active" id="pbtn_yes" onclick="setPropOut(true)">YES</div><div class="obtn no" id="pbtn_no" onclick="setPropOut(false)">NO</div></div></div>
-    <div class="r2"><div class="field"><label>Proposal Bond (PRX)</label><input id="prop_bond" type="number" value="60"/><div class="hint">min = ComputeMinBond(market)</div></div><div class="field"><label>Fee (uPRX)</label><input id="prop_fee" type="number" value="10000"/></div></div>
+    <div class="r2"><div class="field"><label>Proposal Bond (PRX)</label><input id="prop_bond" type="number" value="60" oninput="updateMinBondHint()"/><div class="hint" id="prop_bond_hint">Enter Market ID to compute min bond</div></div><div class="field"><label>Fee (uPRX)</label><input id="prop_fee" type="number" value="10000"/></div></div>
     <div class="brow"><button class="btn bamb" id="btn_propose" onclick="signAndSubmit_propose()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_propose()">Build Payload</button></div>
     <div class="pend" id="pend_propose"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="propo"><div class="plbl">// unsigned_payload</div><textarea id="propp" readonly></textarea></div>
@@ -501,6 +488,31 @@
   </div></div>
 </div>
 
+<div class="page" id="page-unstake-resolver">
+  <div class="ph ph-r"><div class="ph-eye">Resolver · Unstake</div><div class="ph-title">Unstake Resolver</div><div class="ph-sub">Partial or full exit from resolver role. Amount 0 = full exit.</div></div>
+  <div class="alert ay">⚠ Active proposals block unstaking. Partial unstake penalises RRS by 10. Full exit resets RRS to 10.</div>
+  <div class="card r-card"><div class="ci">
+    <div class="ct">// unstake_resolver_parameters</div>
+    <div class="r2"><div class="field"><label>Resolver Address</label><input id="unst_addr" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Amount (PRX, 0 = full exit)</label><input id="unst_amount" type="number" value="0" min="0"/></div></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="unst_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_unstake_resolver" onclick="signAndSubmit_unstake_resolver()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_unstake_resolver()">Build Payload</button></div>
+    <div class="pend" id="pend_unstake_resolver"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="unsto"><div class="plbl">// unsigned_payload</div><textarea id="unstp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-claim-unbonded">
+  <div class="ph ph-r"><div class="ph-eye">Resolver · Unbonding</div><div class="ph-title">Claim Unbonded Stake</div><div class="ph-sub">Release tokens after unbonding period completes (~120,960 blocks).</div></div>
+  <div class="card r-card"><div class="ci">
+    <div class="ct">// claim_unbonded_stake_parameters</div>
+    <div class="field"><label>Resolver Address</label><input id="cub_addr" type="text" placeholder="40 hex chars"/></div>
+    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="cub_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_claim_unbonded" onclick="signAndSubmit_claim_unbonded()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_claim_unbonded()">Build Payload</button></div>
+    <div class="pend" id="pend_claim_unbonded"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="cubo"><div class="plbl">// unsigned_payload</div><textarea id="cubp" readonly></textarea></div>
+  </div></div>
+</div>
+
 </main>
 </div>
 
@@ -514,8 +526,6 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1" fill="currentColor"/></svg>Wallet</div>
   <div class="bni" data-p="signer" onclick="showPage('signer',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Signer</div>
-  <div class="bni" data-p="resolve" onclick="showPage('resolve',this)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Resolve</div>
 </div>
 
 <div id="toast"></div>

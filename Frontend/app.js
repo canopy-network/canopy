@@ -20,7 +20,6 @@ let currentHeight = 0;
 let currentNetworkID = 1;
 let currentChainID   = 1;
 let selectedOut   = true;
-let resolveOut    = true;
 let propOut       = true;
 let revOut        = true;
 let signerPrivKey = null, signerPubKey = null, signerAddress = null;
@@ -39,6 +38,8 @@ function bf(f,b){if(!b||!b.length)return new Uint8Array(0);return cat(tag(f,2),e
 function sf(f,s){if(!s||!s.length)return new Uint8Array(0);const e=new TextEncoder().encode(s);return cat(tag(f,2),encV(e.length),e);}
 function ef(f,m){if(!m||!m.length)return new Uint8Array(0);return cat(tag(f,2),encV(m.length),m);}
 function boolF(f,v){return cat(tag(f,0),new Uint8Array([v?1:0]));}
+function hexToBytes(hex){const b=new Uint8Array(hex.length/2);for(let i=0;i<hex.length;i+=2)b[i/2]=parseInt(hex.slice(i,i+2),16);return b;}
+function bytesToHex(b){return Array.from(b).map(x=>x.toString(16).padStart(2,"0")).join("");}
 
 // ═══════════════════════════════════════════
 // HELPERS
@@ -74,6 +75,8 @@ function encTally(mid,addr){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)));}
 function encFinalize(mid,addr){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)));}
 function encSlash(mid,addr){return cat(bf(1,h2b(mid)),bf(2,h2b(addr)));}
 function encForfeit(mid,resolver){return cat(bf(1,h2b(mid)),bf(2,h2b(resolver)));}
+function encUnstakeResolver(addr,amount){return cat(bf(1,h2b(addr)),vf(2,amount));}
+function encClaimUnbonded(addr){return cat(bf(1,h2b(addr)));}
 
 // ═══════════════════════════════════════════
 // TX SIGN BYTES ENCODER
@@ -248,7 +251,6 @@ window.applyHost=function(){const h=document.getElementById('ni_host').value.tri
 // OUTCOME TOGGLES
 // ═══════════════════════════════════════════
 window.setOut=function(v){selectedOut=v;document.getElementById('btn_yes').className='obtn yes'+(v?' active':'');document.getElementById('btn_no').className='obtn no'+(!v?' active':'');};
-window.setResOut=function(v){resolveOut=v;document.getElementById('rbtn_yes').className='obtn yes'+(v?' active':'');document.getElementById('rbtn_no').className='obtn no'+(!v?' active':'');};
 window.setPropOut=function(v){propOut=v;document.getElementById('pbtn_yes').className='obtn yes'+(v?' active':'');document.getElementById('pbtn_no').className='obtn no'+(!v?' active':'');};
 window.setRevOut=function(v){revOut=v;document.getElementById('rvbtn_yes').className='obtn yes'+(v?' active':'');document.getElementById('rvbtn_no').className='obtn no'+(!v?' active':'');};
 
@@ -271,7 +273,7 @@ window.loadKey=async function(){
     document.getElementById('sk_addr').textContent=signerAddress;
     ['c_creator','p_bettor','r_resolver','cl_addr','s_from','w_addr','ft_addr',
      'reg_addr','prop_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr',
-     'fo_resolver','rc_addr','ccf_addr','can_addr'].forEach(id=>{
+     'fo_resolver','rc_addr','ccf_addr','can_addr','unst_addr','cub_addr'].forEach(id=>{
       const el=document.getElementById(id);if(el&&!el.value)el.value=signerAddress;
     });
     document.getElementById('sk_input').value='';
@@ -486,13 +488,13 @@ function renderMarketCards(markets) {
     var finalized = m.status === 6;
     var voided = m.status === 7;
     var resolved = m.status === 2;
-    var statusClass = open ? 'sp-o' : (expired || cancelled || voided) ? 'sp-e' : proposed ? 'sp-e' : disputed ? 'sp-d' : 'sp-f';
+    var statusClass = open ? 'sp-o' : expired ? 'sp-e' : cancelled ? 'sp-d' : voided ? 'sp-e' : proposed ? 'sp-e' : disputed ? 'sp-d' : 'sp-f';
     var statusLabel = open ? 'Open' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : resolved ? 'Resolved' : 'Closed';
     var mid = m.marketId || m.txHash;
     var total = m.qYes + m.qNo;
     var yesPct = total > 0n ? Number(m.qYes * 100n / total) : 50;
     var noPct = 100 - yesPct;
-    var cardClass = 'mcard' + (expired ? ' mexp' : '') + (finalized ? ' mfin' : '');
+    var cardClass = 'mcard' + (expired ? ' mexp' : '') + (cancelled ? ' mcan' : '') + (finalized ? ' mfin' : '');
     var banner = '';
     if (expired) banner = '<div class="mc-banner bnr"><span>⏳</span> Awaiting resolver proposal</div>';
     if (cancelled) banner = '<div class="mc-banner bnr"><span>✕</span> Market cancelled — reclaim your stake</div>';
@@ -516,7 +518,11 @@ function renderMarketCards(markets) {
 
     var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
     var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
-    parts.push('<div class="mc-acts"><button class="byes2" ' + actYes + '>BET YES</button><button class="bno2" ' + actNo + '>BET NO</button></div>');
+    var isResolver = signerAddress && _resolverRegistry.has(signerAddress);
+    var resolverRec = isResolver ? _resolverRegistry.get(signerAddress) : null;
+    var canPropose = open && isResolver && resolverRec && resolverRec.rrs >= 10 && signerAddress !== m.creator;
+    var propBtn = canPropose ? '<button class="byes2" style="background:var(--adim);border-color:rgba(245,158,11,.3);color:var(--amber)" onclick="fillPropose(' + JSON.stringify(mid) + ')">⚖ PROPOSE</button>' : '';
+    parts.push('<div class="mc-acts"><button class="byes2" ' + actYes + '>BET YES</button><button class="bno2" ' + actNo + '>BET NO</button>' + propBtn + '</div>');
     parts.push('<div class="card-foot"><div class="meta">');
     parts.push('<div class="mitem"><span class="mlbl">Total pool</span><span class="mval g">' + fmtPRX(m.qYes + m.qNo) + ' PRX</span></div>');
     parts.push('<div class="mitem"><span class="mlbl">' + (open ? 'Expires' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : 'Closed') + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>');
@@ -577,7 +583,7 @@ window.showDetail = function(marketId) {
   }
 
   const statusLabels = {0:'Open',1:'Cancelled',2:'Resolved',3:'Expired',4:'Proposed',5:'Disputed',6:'Finalized',7:'Voided',8:'Expired'};
-  const statusClasses = {0:'sp-o',1:'sp-e',2:'sp-f',3:'sp-e',4:'sp-e',5:'sp-d',6:'sp-f',7:'sp-e',8:'sp-e'};
+  const statusClasses = {0:'sp-o',1:'sp-d',2:'sp-f',3:'sp-e',4:'sp-e',5:'sp-d',6:'sp-f',7:'sp-e',8:'sp-e'};
   document.getElementById('det-status-pill').innerHTML = '<div class="spill ' + (statusClasses[m.status]||'sp-f') + '"><span class="dot"></span>' + (statusLabels[m.status]||'Closed') + '</div>';
 
   const yesBtn = document.getElementById('det-bet-yes');
@@ -621,7 +627,7 @@ window.showDetail = function(marketId) {
         proposeBtn.style.display = '';
         proposeBtn.disabled = false;
         proposeBtn.textContent = '⚖ Propose Outcome';
-        proposeBtn.setAttribute('onclick', 'fillR(' + JSON.stringify(mid) + ', undefined)');
+        proposeBtn.setAttribute('onclick', 'fillPropose(' + JSON.stringify(mid) + ')');
       }
     } else {
       proposeBtn.style.display = 'none';
@@ -630,11 +636,14 @@ window.showDetail = function(marketId) {
     }
   }
   if (claimBtn) {
-    if (m.status === 4 || m.status === 6) {
+    if (m.status === 6) {
       claimBtn.style.display = '';
+      claimBtn.textContent = '◎ Claim Winnings';
       claimBtn.setAttribute('onclick', 'fillC(' + JSON.stringify(mid) + ')');
-    } else {
-      claimBtn.style.display = 'none';
+    } else if (m.status === 1) {
+      claimBtn.style.display = '';
+      claimBtn.textContent = '◎ Claim Refund';
+      claimBtn.setAttribute('onclick', 'fillC(' + JSON.stringify(mid) + ')');
     }
   }
 
@@ -684,11 +693,6 @@ window.fillP = (id, outcome) => {
   document.getElementById('p_mid').value = id;
   if (outcome !== undefined) { setOut(outcome); }
   showPage('predict', null);
-};
-window.fillR = (id, outcome) => {
-  document.getElementById('r_mid').value = id;
-  if (outcome !== undefined) { setResOut(outcome); }
-  showPage('resolve', null);
 };
 window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('claim', null); };
 
@@ -864,7 +868,7 @@ window.loadMarkets = async function () {
       const addr = tx.sender || '';
       let stake = BigInt(msg.stakeAmount || msg.stake_amount || 0);
       if (!_resolverRegistry.has(addr)) {
-        _resolverRegistry.set(addr, { stake, proposalCount: 0 });
+        _resolverRegistry.set(addr, { stake, proposalCount: 0, rrs: 10 });
       } else {
         _resolverRegistry.get(addr).stake = stake;
       }
@@ -876,6 +880,8 @@ window.loadMarkets = async function () {
         _resolverRegistry.get(addr).proposalCount++;
       }
     }
+    // sync rrs estimate into registry
+    _resolverRegistry.forEach(r => { r.rrs = Math.min(10 + r.proposalCount * 10, 999); });
 
     for (const tx of allTxs) {
       if (tx.messageType !== 'finalize_market') continue;
@@ -888,13 +894,13 @@ window.loadMarkets = async function () {
     }
 
     for (const tx of allTxs) {
-      if (tx.messageType !== 'resolve_market') continue;
+      if (tx.messageType !== 'file_dispute') continue;
       const msg = (tx.transaction && tx.transaction.msg) || {};
       const rawMid = msg.marketId || '';
       let marketId = rawMid;
       try { const b = Uint8Array.from(atob(rawMid), c => c.charCodeAt(0)); marketId = b2h(b); } catch(e) {}
       if (!marketId || !marketsMap.has(marketId)) continue;
-      marketsMap.get(marketId).status = 2;
+      marketsMap.get(marketId).status = 5;
     }
 
     for (const tx of allTxs) {
@@ -1025,20 +1031,6 @@ window.signAndSubmit_predict=async function(){try{
   await doSubmit('submit_prediction','type.googleapis.com/types.MessageSubmitPrediction',encPredict(mid,bettor,selectedOut,shares,mc),{fee},'btn_predict','pend_predict');
 }catch(e){toast(e.message,true);}};
 
-// ── RESOLVE MARKET
-window.build_resolve=function(){try{
-  const mid=document.getElementById('r_mid').value.trim().toLowerCase();mid40(mid);
-  const res=document.getElementById('r_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
-  const fee=parseInt(document.getElementById('r_fee').value)||10000;
-  showPL('ro','rp',buildUnsigned('resolve_market','type.googleapis.com/types.MessageResolveMarket',encResolve(mid,res,resolveOut),{fee}));toast('Payload built');
-}catch(e){toast(e.message,true);}};
-window.signAndSubmit_resolve=async function(){try{
-  const mid=document.getElementById('r_mid').value.trim().toLowerCase();mid40(mid);
-  const res=document.getElementById('r_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
-  const fee=parseInt(document.getElementById('r_fee').value)||10000;
-  await doSubmit('resolve_market','type.googleapis.com/types.MessageResolveMarket',encResolve(mid,res,resolveOut),{fee},'btn_resolve','pend_resolve');
-}catch(e){toast(e.message,true);}};
-
 // ── CLAIM WINNINGS
 window.build_claim=function(){try{
   const mid=document.getElementById('cl_mid').value.trim().toLowerCase();mid40(mid);
@@ -1058,14 +1050,14 @@ window.build_register=function(){try{
   const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
   const stake=parseInt(document.getElementById('reg_stake').value)*1000000;
   const fee=parseInt(document.getElementById('reg_fee').value)||10000;
-  if(stake<500000)throw new Error('Stake min 500,000 PRX');
+  if(stake<500000000000)throw new Error('Stake min 500,000 PRX');
   showPL('rego','regp',buildUnsigned('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_register=async function(){try{
   const addr=document.getElementById('reg_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
   const stake=parseInt(document.getElementById('reg_stake').value)*1000000;
   const fee=parseInt(document.getElementById('reg_fee').value)||10000;
-  if(stake<500000)throw new Error('Stake min 500,000 PRX');
+  if(stake<500000000000)throw new Error('Stake min 500,000 PRX');
   await doSubmit('register_resolver','type.googleapis.com/types.MessageRegisterResolver',encRegister(addr,stake),{fee},'btn_register','pend_register');
 }catch(e){toast(e.message,true);}};
 
@@ -1291,12 +1283,6 @@ function showConfirm(title, rows) {
         ['Max Cost',    v('p_maxcost').toLocaleString()+' PRX', ''],
       ]
     ],
-    signAndSubmit_resolve: () => [
-      'Resolve Market', [
-        ['Market ID',   (document.getElementById('r_mid')?.value||'').slice(0,16)+'…', ''],
-        ['Outcome',     (window._resolveOut!==false?'YES':'NO'), window._resolveOut!==false?'green':'red'],
-      ]
-    ],
     signAndSubmit_claim: () => [
       'Claim Winnings', [
         ['Market ID',   (document.getElementById('cl_mid')?.value||'').slice(0,16)+'…', ''],
@@ -1360,6 +1346,17 @@ function showConfirm(title, rows) {
       'Cancel Market', [
         ['Market ID', (document.getElementById('can_mid')?.value||'').slice(0,16)+'…', ''],
         ['Creator',   (document.getElementById('can_addr')?.value||'').slice(0,16)+'…', ''],
+      ]
+    ],
+    signAndSubmit_unstake_resolver: () => [
+      'Unstake Resolver', [
+        ['Resolver', (document.getElementById('unst_addr')?.value||'').slice(0,16)+'…', ''],
+        ['Amount',   (parseInt(document.getElementById('unst_amount')?.value||0)).toLocaleString()+' PRX (0 = full exit)', ''],
+      ]
+    ],
+    signAndSubmit_claim_unbonded: () => [
+      'Claim Unbonded Stake', [
+        ['Resolver', (document.getElementById('cub_addr')?.value||'').slice(0,16)+'…', ''],
       ]
     ],
     signAndSubmit_send: () => [
@@ -1642,7 +1639,7 @@ function updateSignerUI() {
   document.getElementById('sk_addr').textContent = signerAddress;
   ['c_creator','p_bettor','r_resolver','cl_addr','s_from','w_addr','ft_addr',
    'reg_addr','prop_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr',
-   'fo_resolver','rc_addr','ccf_addr','can_addr'].forEach(id => {
+   'fo_resolver','rc_addr','ccf_addr','can_addr','unst_addr','cub_addr'].forEach(id => {
     const el = document.getElementById(id); if (el && !el.value) el.value = signerAddress;
   });
   const badge = document.getElementById('sessBadge');
@@ -1741,6 +1738,20 @@ const PRAXIS_ERRORS = {
   199: 'You hold a position in this market and cannot act as resolver. Transfer or forfeit your shares first.',
   200: 'The market creator cannot resolve their own market.',
   201: 'This prediction would exceed the 20% per-address position cap for this market. Try a smaller amount.',
+  202: 'Resolver stake below minimum — 500,000 PRX required.',
+  203: 'Cooldown period has not elapsed yet.',
+  204: 'Pool is empty — nothing to claim.',
+  205: 'Market is not finalized.',
+  207: 'Resolver RRS is zero — not eligible for rewards.',
+  208: 'No successful resolutions in this epoch.',
+  210: 'Active proposal exists — unstake not allowed.',
+  211: 'Resolver is not active.',
+  212: 'No unbonding stake to claim.',
+  213: 'Unbonding period not complete.',
+  214: 'Resolver record not found.',
+  215: 'Market has expired.',
+  216: 'Market has positions — cannot cancel.',
+  217: 'Unbonding already pending.',
 };
 
 function friendlyError(code, msg) {
@@ -1902,6 +1913,37 @@ window.fillForfeit = function(id) {
   if (signerAddress) document.getElementById('fo_resolver').value = signerAddress;
   showPage('forfeit', null);
 };
+window.fillPropose = function(id) {
+  document.getElementById('prop_mid').value = id;
+  if (signerAddress) document.getElementById('prop_resolver').value = signerAddress;
+  showPage('propose', null);
+  setTimeout(updateMinBondHint, 50);
+};
+
+window.updateMinBondHint = function() {
+  const mid = document.getElementById('prop_mid').value.trim().toLowerCase();
+  const hint = document.getElementById('prop_bond_hint');
+  const bondEl = document.getElementById('prop_bond');
+  if (!hint) return;
+  if (!mid || mid.length !== 40) {
+    hint.textContent = 'Enter Market ID to compute min bond';
+    hint.style.color = '';
+    return;
+  }
+  const m = _allMarkets.find(x => x.marketId === mid || x.txHash === mid);
+  if (!m) {
+    hint.textContent = 'Market not found in cache — browse Markets first';
+    hint.style.color = 'var(--red)';
+    return;
+  }
+  // BEff = current pool size (qYes + qNo)
+  const beff = Number(m.qYes + m.qNo) / 1_000_000;
+  const onePct = beff * 0.01;
+  const minBond = Math.max(onePct, 60);
+  hint.textContent = 'Min bond: ' + minBond.toFixed(2) + ' PRX  (max(1% of pool, 60 PRX) — deducted from resolver stake)';
+  hint.style.color = 'var(--amber)';
+  if (bondEl && parseFloat(bondEl.value) < minBond) bondEl.value = Math.ceil(minBond);
+};
 checkSavedKeystore();
 
 // ═══════════════════════════════════════════
@@ -1956,6 +1998,48 @@ window.signAndSubmit_cancel=async function(){
 };
 
 // ═══════════════════════════════════════════
+// UNSTAKE RESOLVER
+// ═══════════════════════════════════════════
+window.build_unstake_resolver=function(){
+  try{
+    const addr=document.getElementById('unst_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
+    const amount=parseInt(document.getElementById('unst_amount').value||'0');
+    const amountU=BigInt(amount)*1000000n;
+    const fee=parseInt(document.getElementById('unst_fee').value)||10000;
+    showPL('unsto','unstp',buildUnsigned('unstake_resolver','type.googleapis.com/types.MessageUnstakeResolver',encUnstakeResolver(addr,amountU),{fee}));
+    toast('Payload built');
+  }catch(e){toast(e.message,true);}
+};
+window.signAndSubmit_unstake_resolver=async function(){
+  try{
+    const addr=document.getElementById('unst_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
+    const amount=parseInt(document.getElementById('unst_amount').value||'0');
+    const amountU=BigInt(amount)*1000000n;
+    const fee=parseInt(document.getElementById('unst_fee').value)||10000;
+    await doSubmit('unstake_resolver','type.googleapis.com/types.MessageUnstakeResolver',encUnstakeResolver(addr,amountU),{fee},'btn_unstake_resolver','pend_unstake_resolver');
+  }catch(e){toast(e.message,true);}
+};
+
+// ═══════════════════════════════════════════
+// CLAIM UNBONDED STAKE
+// ═══════════════════════════════════════════
+window.build_claim_unbonded=function(){
+  try{
+    const addr=document.getElementById('cub_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
+    const fee=parseInt(document.getElementById('cub_fee').value)||10000;
+    showPL('cubo','cubp',buildUnsigned('claim_unbonded_stake','type.googleapis.com/types.MessageClaimUnbondedStake',encClaimUnbonded(addr),{fee}));
+    toast('Payload built');
+  }catch(e){toast(e.message,true);}
+};
+window.signAndSubmit_claim_unbonded=async function(){
+  try{
+    const addr=document.getElementById('cub_addr').value.trim().toLowerCase();addr40(addr,'Resolver');
+    const fee=parseInt(document.getElementById('cub_fee').value)||10000;
+    await doSubmit('claim_unbonded_stake','type.googleapis.com/types.MessageClaimUnbondedStake',encClaimUnbonded(addr),{fee},'btn_claim_unbonded','pend_claim_unbonded');
+  }catch(e){toast(e.message,true);}
+};
+
+// ═══════════════════════════════════════════
 // RESOLVER RECORD STATE QUERY
 // prefix 0x16 + len + addr bytes
 // ═══════════════════════════════════════════
@@ -1989,7 +2073,7 @@ function decodeResolverRecord(hexData){
 async function fetchResolverRecord(addrHex){
   try{
     const key=buildResolverKey(addrHex);
-    const resp=await fetch(getRPC()+'/v1/state?key='+key);
+    const resp=await fetch(getRPC()+'/v1/query/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});
     if(!resp.ok)return null;
     const data=await resp.json();
     const hex=data.value||data.result||'';
@@ -2016,38 +2100,42 @@ window.loadResolvers=async function(){
       const addr=tx.sender||'';
       const stake=BigInt(msg.stakeAmount||msg.stake_amount||0);
       if(!resolvers.has(addr)){
-        resolvers.set(addr,{addr,stake,proposals:0,height:tx.height||0,rrs:0,successfulResolutions:0});
+        // use rrs from _resolverRegistry if available (already computed in loadMarkets)
+        const regEntry=_resolverRegistry.get(addr);
+        const rrs=regEntry?regEntry.rrs:10;
+        resolvers.set(addr,{addr,stake,proposals:regEntry?regEntry.proposalCount:0,height:tx.height||0,rrs});
       } else {
         const r=resolvers.get(addr);
-        r.stake+=stake; // additive — each register_resolver adds to existing stake
+        r.stake=stake;
         if((tx.height||0)>r.height)r.height=tx.height;
       }
     }
     for(const tx of txs){
       if(tx.messageType!=='propose_outcome')continue;
       const addr=tx.sender||'';
-      if(resolvers.has(addr))resolvers.get(addr).proposals++;
+      if(resolvers.has(addr)&&!_resolverRegistry.has(addr))resolvers.get(addr).proposals++;
     }
     if(resolvers.size===0){el.innerHTML='<div class="alert ay">No registered resolvers found</div>';return;}
     const list=[...resolvers.values()];
-    list.forEach(r=>{ r.rrs=Math.min(r.proposals*10,999); });
+    // if registry has data, rrs already set; otherwise estimate
+    list.forEach(r=>{ if(!_resolverRegistry.has(r.addr)) r.rrs=Math.min(10+r.proposals*10,999); });
     list.sort((a,b)=>b.rrs-a.rrs);
     el.innerHTML=list.map(r=>{
       const rrs=r.rrs||0;
       let tier,tcolor,ticon;
-      if(rrs>=200){tier='Gold';tcolor='#FFD700';ticon='★';}
-      else if(rrs>=50){tier='Silver';tcolor='#C0C0C0';ticon='◆';}
-      else if(rrs>=1){tier='Bronze';tcolor='#CD7F32';ticon='▲';}
-      else{tier='Registered';tcolor='var(--text3)';ticon='○';}
+      if(rrs<10){tier='Suspended';tcolor='var(--red)';ticon='✕';}
+      else if(rrs>=500){tier='Gold';tcolor='#FFD700';ticon='★';}
+      else if(rrs>=200){tier='Silver';tcolor='#C0C0C0';ticon='◆';}
+      else{tier='Bronze';tcolor='#CD7F32';ticon='▲';}
       return '<div class="card" style="margin-bottom:10px"><div class="ci">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-          '<div class="addr-mono" style="font-size:11px;color:var(--green)">'+r.addr.slice(0,8)+'…'+r.addr.slice(-6)+'</div>'+
+          '<div class="addr-mono" style="font-size:11px;color:var(--green)">'+r.addr.slice(0,8)+'\u2026'+r.addr.slice(-6)+'</div>'+
           '<span style="font-family:var(--font-mono);font-size:11px;color:'+tcolor+'">'+ticon+' '+tier+'</span>'+
         '</div>'+
         '<div class="igrid" style="grid-template-columns:1fr 1fr 1fr 1fr">'+
           '<div class="icell"><div class="ilbl">Stake</div><div class="ival" style="font-size:11px">'+fmtPRX(r.stake)+' PRX</div></div>'+
           '<div class="icell"><div class="ilbl">Est. RRS</div><div class="ival" style="color:'+tcolor+'">'+rrs+'</div></div>'+
-          '<div class="icell"><div class="ilbl">Correct</div><div class="ival">'+(r.successfulResolutions||r.proposals)+'</div></div>'+
+          '<div class="icell"><div class="ilbl">Proposals</div><div class="ival">'+r.proposals+'</div></div>'+
           '<div class="icell"><div class="ilbl">Since block</div><div class="ival">#'+r.height+'</div></div>'+
         '</div>'+
         '<div style="margin-top:10px;font-family:var(--font-mono);font-size:9px;color:var(--text3);word-break:break-all">'+r.addr+'</div>'+

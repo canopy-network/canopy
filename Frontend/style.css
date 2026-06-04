@@ -219,6 +219,7 @@ code{font-family:var(--font-mono);font-size:11px;background:var(--bg2);padding:1
 .mcard:hover{border-color:var(--border2);box-shadow:0 4px 22px rgba(0,0,0,.45)}
 .mcard.mexp::before{background:linear-gradient(90deg,var(--amber),transparent)!important}
 .mcard.mfin{opacity:.72}.mcard.mfin::before{background:linear-gradient(90deg,#444,transparent)!important}
+.mcard.mcan{opacity:.85}.mcard.mcan::before{background:linear-gradient(90deg,var(--red),transparent)!important}
 .mc-head{padding:13px 15px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:9px;border-bottom:1px solid var(--border)}
 .mc-q{font-family:var(--font-d);font-size:12px;font-weight:700;color:var(--text);line-height:1.4;flex:1}
 .spill{flex-shrink:0;display:flex;align-items:center;gap:4px;padding:2px 7px;font-size:8px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-family:var(--font-mono)}
