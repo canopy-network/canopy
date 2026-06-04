@@ -41,6 +41,7 @@ creatorAccQId := nextQueryId()
 creatorFeeQId := nextQueryId()
 resolverFeeQId := nextQueryId()
 gTreasuryQId  := nextQueryId()
+	ocQId         := nextQueryId()
 feeQId        := nextQueryId()
 
 marketKey      := KeyForMarket(msg.MarketId)
@@ -49,6 +50,7 @@ creatorAccKey  := KeyForAccount(msg.CreatorAddress)
 creatorFeeKey  := KeyForCreatorFeePool(msg.MarketId)
 resolverFeeKey := KeyForResolverFeePool(msg.MarketId)
 gTreasuryKey   := KeyForTreasuryPool()
+	ocKey         := KeyForCreatorOpenCount(msg.CreatorAddress)
 feePoolKey     := KeyForFeePool(c.Config.ChainId)
 
 resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
@@ -59,6 +61,7 @@ Keys: []*PluginKeyRead{
 {QueryId: creatorFeeQId,  Key: creatorFeeKey},
 {QueryId: resolverFeeQId, Key: resolverFeeKey},
 {QueryId: gTreasuryQId,   Key: gTreasuryKey},
+			{QueryId: ocQId,  Key: ocKey},
 {QueryId: feeQId,         Key: feePoolKey},
 },
 })
@@ -75,6 +78,7 @@ creatorAcc  := &Account{}
 creatorFee  := &Pool{}
 resolverFee := &Pool{}
 gTreasury   := &Pool{}
+	openCount   := Pool{}
 feePool     := &Pool{}
 
 for _, r := range resp.Results {
@@ -103,7 +107,11 @@ case resolverFeeQId:
 if pe := Unmarshal(r.Entries[0].Value, resolverFee); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
-case gTreasuryQId:
+case ocQId:
+			if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+				_ = Unmarshal(r.Entries[0].Value, &openCount)
+			}
+		case gTreasuryQId:
 if pe := Unmarshal(r.Entries[0].Value, gTreasury); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
@@ -150,7 +158,12 @@ resolverFee.Amount  = 0
 feePool.Amount    += fee / 2
 gTreasury.Amount  += fee - fee/2
 
-// ── Marshal ───────────────────────────────────────────────────────────
+// Decrement open market counter
+	if openCount.Amount > 0 {
+		openCount.Amount--
+	}
+
+	// ── Marshal ───────────────────────────────────────────────────────────
 rawMarket, pe := SafeMarshal(market)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawTreas, pe := SafeMarshal(treas)
@@ -161,7 +174,9 @@ rawCreatorFee, pe := SafeMarshal(creatorFee)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawResolverFee, pe := SafeMarshal(resolverFee)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
-rawGTreasury, pe := SafeMarshal(gTreasury)
+rawOC, pe := SafeMarshal(&openCount)
+	if pe != nil { return &PluginDeliverResponse{Error: pe} }
+	rawGTreasury, pe := SafeMarshal(gTreasury)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawFee, pe := SafeMarshal(feePool)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
@@ -174,7 +189,8 @@ Sets: []*PluginSetOp{
 {Key: creatorAccKey,  Value: rawCreatorAcc},
 {Key: creatorFeeKey,  Value: rawCreatorFee},
 {Key: resolverFeeKey, Value: rawResolverFee},
-{Key: gTreasuryKey,   Value: rawGTreasury},
+{Key: ocKey,         Value: rawOC},
+		{Key: gTreasuryKey,   Value: rawGTreasury},
 {Key: feePoolKey,     Value: rawFee},
 },
 })

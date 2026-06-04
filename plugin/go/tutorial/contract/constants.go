@@ -93,7 +93,8 @@ REVEAL_PHASE_BLOCKS uint64 = 17_280
 // ─────────────────────────────────────────────────────────────────────────────
 
 const (
-MIN_RRS_TO_PROPOSE  uint64 = 10
+MIN_RRS_TO_PROPOSE          uint64 = 10
+	MAX_OPEN_MARKETS_PER_CREATOR uint64 = 5
 FINALIZATION_BOUNTY uint64 = 50_000_000
 CREATOR_BOND        uint64 = 5_000_000_000
 RRS_INITIAL         uint64 = 100

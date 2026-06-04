@@ -116,10 +116,12 @@ return &PluginDeliverResponse{Error: ErrDisputeWindowOpen()}
 callerQId   := nextQueryId()
 proposerQId := nextQueryId()
 creatorQId  := nextQueryId()
+	ocQId       := nextQueryId()
 
 readKeys2 := []*PluginKeyRead{
 {QueryId: callerQId,   Key: KeyForAccount(msg.CallerAddr)},
 {QueryId: creatorQId,  Key: KeyForAccount(market.Creator)},
+			{QueryId: ocQId,      Key: KeyForCreatorOpenCount(market.Creator)},
 }
 
 var proposerKey []byte
@@ -157,6 +159,7 @@ resolverRec  := &ResolverRecord{}
 globalStats  := &GlobalStats{}
 resolverFeePool := &Pool{}
 creatorAcc  := &Account{}
+	openCount   := Pool{}
 
 for _, r := range resp2.Results {
 if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
@@ -171,7 +174,11 @@ case proposerQId:
 if pe := Unmarshal(r.Entries[0].Value, proposerAcc); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
-case creatorQId:
+case ocQId:
+			if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+				_ = Unmarshal(r.Entries[0].Value, &openCount)
+			}
+		case creatorQId:
 if pe := Unmarshal(r.Entries[0].Value, creatorAcc); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
@@ -266,9 +273,15 @@ sets = append(sets, &PluginSetOp{Key: KeyForResolverRecord(proposal.ResolverAddr
 sets = append(sets, &PluginSetOp{Key: KeyForGlobalStats(),                          Value: rawStats})
 sets = append(sets, &PluginSetOp{Key: KeyForResolverFeePool(msg.MarketId),          Value: rawResFee})
 }
+	if openCount.Amount > 0 {
+		openCount.Amount--
+	}
+	rawOC, pe := SafeMarshal(&openCount)
+	if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawCreator, pe := SafeMarshal(creatorAcc)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
-sets = append(sets, &PluginSetOp{Key: KeyForAccount(market.Creator), Value: rawCreator})
+	sets = append(sets, &PluginSetOp{Key: KeyForCreatorOpenCount(market.Creator), Value: rawOC})
+	sets = append(sets, &PluginSetOp{Key: KeyForAccount(market.Creator), Value: rawCreator})
 
 // Write OutcomeState so claim_winnings can find the winning outcome.
 if proposal != nil {

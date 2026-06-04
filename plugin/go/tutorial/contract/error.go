@@ -90,6 +90,7 @@ return &PluginError{Code: 106, Module: errModule, Msg: "invalid parameter"}
 // PRAXIS ERRORS — MARKET (120–139)
 // ─────────────────────────────────────────────────────────────────────────────
 
+func ErrTooManyOpenMarkets() *PluginError { return &PluginError{Code: 218, Module: errModule, Msg: "creator has too many open markets"} }
 func ErrMarketNotFound() *PluginError {
 return &PluginError{Code: 120, Module: errModule, Msg: "market not found"}
 }

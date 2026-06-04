@@ -39,12 +39,14 @@ marketQId  := nextQueryId()
 creatorQId := nextQueryId()
 feeQId        := nextQueryId()
 	gTreasuryQId  := nextQueryId()
+	ocQId         := nextQueryId()
 	midxQId       := nextQueryId()
 
 marketKey  := KeyForMarket(marketId)
 creatorKey := KeyForAccount(msg.CreatorAddress)
 feePoolKey    := KeyForFeePool(c.Config.ChainId)
 	gTreasuryKey  := KeyForTreasuryPool()
+	ocKey         := KeyForCreatorOpenCount(msg.CreatorAddress)
 	midxKey       := KeyForMarketIndex()
 poolKey    := KeyForMarketPool(marketId)
 treasKey   := KeyForTreasuryReserve(marketId)
@@ -55,6 +57,7 @@ Keys: []*PluginKeyRead{
 {QueryId: creatorQId, Key: creatorKey},
 {QueryId: feeQId,     Key: feePoolKey},
 		{QueryId: gTreasuryQId, Key: gTreasuryKey},
+			{QueryId: ocQId,         Key: ocKey},
 		{QueryId: midxQId,      Key: midxKey},
 },
 })
@@ -68,6 +71,7 @@ return &PluginDeliverResponse{Error: resp.Error}
 creator := &Account{}
 feePool   := &Pool{}
 	gTreasury := &Pool{}
+	openCount := &Pool{}
 	midx      := &MarketIndex{}
 
 for _, r := range resp.Results {
@@ -86,6 +90,10 @@ if pe := Unmarshal(r.Entries[0].Value, feePool); pe != nil {
 return &PluginDeliverResponse{Error: pe}
 }
 		case gTreasuryQId:
+		case ocQId:
+			if len(r.Entries) > 0 && len(r.Entries[0].Value) > 0 {
+				_ = Unmarshal(r.Entries[0].Value, openCount)
+			}
 		case midxQId:
 			if pe := Unmarshal(r.Entries[0].Value, midx); pe != nil {
 				return &PluginDeliverResponse{Error: pe}
@@ -110,6 +118,12 @@ return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 creator.Amount -= totalCost
 feePool.Amount   += fee / 2
 	gTreasury.Amount += fee - fee/2
+
+	// Item-14: spam cap
+	if openCount.Amount >= MAX_OPEN_MARKETS_PER_CREATOR {
+		return &PluginDeliverResponse{Error: ErrTooManyOpenMarkets()}
+	}
+	openCount.Amount++
 
 	// Append new market to global market index
 	midx.MarketIds = append(midx.MarketIds, marketId)
@@ -149,6 +163,8 @@ if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawGTreasury, pe := SafeMarshal(gTreasury)
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 rawMidx, pe := SafeMarshal(midx)
+	rawOC, pe := SafeMarshal(openCount)
+	if pe != nil { return &PluginDeliverResponse{Error: pe} }
 if pe != nil { return &PluginDeliverResponse{Error: pe} }
 
 sets := []*PluginSetOp{
@@ -158,6 +174,7 @@ sets := []*PluginSetOp{
 {Key: feePoolKey,    Value: rawFee},
 	{Key: gTreasuryKey,  Value: rawGTreasury},
 	{Key: midxKey,       Value: rawMidx},
+		{Key: ocKey,         Value: rawOC},
 }
 var deletes []*PluginDeleteOp
 if creator.Amount > 0 {

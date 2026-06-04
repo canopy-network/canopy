@@ -89,3 +89,11 @@ return JoinLenPrefix(resolverIndexPrefix, []byte("/ridx/"))
 func KeyForMarketIndex() []byte {
 return JoinLenPrefix(marketIndexPrefix, []byte("/midx/"))
 }
+
+var creatorOpenCountPrefix = []byte{0x2C}
+
+// KeyForCreatorOpenCount returns the state key for a creator's open market counter.
+// Value: a single uint64 encoded as Pool.Amount (reuses Pool proto).
+func KeyForCreatorOpenCount(addr []byte) []byte {
+return JoinLenPrefix(creatorOpenCountPrefix, addr)
+}
