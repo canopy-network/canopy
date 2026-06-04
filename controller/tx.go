@@ -263,7 +263,8 @@ func (m *Mempool) CheckMempool() (err lib.ErrorI) {
 			rcBuildHeight = m.controller.RCManager.GetHeight(rootChainID)
 		}
 		// for nested chains fetch and cache the DEX root batch, liveness is handled on the certificate results
-		rootDexBatch, err := m.controller.RCManager.GetDexBatch(rootChainID,
+		var rootDexBatch *lib.DexBatch
+		rootDexBatch, err = m.controller.RCManager.GetDexBatch(rootChainID,
 			rcBuildHeight, m.controller.Config.ChainId, false)
 		if err != nil {
 			// CRITICAL: if the root chain query fails (e.g. the root-chain RPC/websocket is
