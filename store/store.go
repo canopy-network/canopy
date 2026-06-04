@@ -73,6 +73,7 @@ type Store struct {
 	sc         *SMT          // reference to the state commitment store
 	*Indexer                 // reference to the indexer store
 	metrics    *lib.Metrics  // telemetry
+	syncing    atomic.Bool   // when true, skip compaction to avoid write stalls during sync
 	log        lib.LoggerI   // logger
 	config     lib.Config    // config
 	mu         *sync.Mutex   // mutex for concurrent commits
@@ -472,6 +473,39 @@ func (s *Store) IncreaseVersion() { func() { s.version++; s.sc = nil }() }
 // number of the state. This is used to track the versioning of the state data.
 func (s *Store) Version() uint64 { return s.version }
 
+// SetSyncing tells the store whether the node is currently syncing, allowing it to
+// defer expensive maintenance operations (compaction) that cause write stalls at scale.
+func (s *Store) SetSyncing(v bool) { s.syncing.Store(v) }
+
+// CompactAll runs compaction across all store prefixes including SMT commitment nodes
+// and indexer entries that are not covered by the regular MaybeCompact cycle.
+// Should be called after sync completes to consolidate the accumulated versions.
+func (s *Store) CompactAll() {
+	if s.compaction.Load() {
+		return
+	}
+	s.compaction.Store(true)
+	defer s.compaction.Store(false)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	version := s.Version()
+	s.log.Infof("full compaction started at height %d (post-sync)", version)
+	now := time.Now()
+	for _, prefix := range [][]byte{
+		latestStatePrefix,
+		historicStatePrefix,
+		stateCommitmentPrefix,
+		stateCommitIDPrefix,
+		indexerPrefix,
+	} {
+		if err := s.db.Compact(ctx, prefix, prefixEnd(prefix), false); err != nil {
+			s.log.Errorf("full compaction failed for prefix: %s", err)
+			return
+		}
+	}
+	s.log.Infof("full compaction finished at height %d in %s", version, time.Since(now))
+}
+
 // NewTxn() creates and returns a new transaction for the Store, allowing atomic operations
 // on the StateStore, StateCommitStore, Indexer, and CommitIDStore.
 func (s *Store) NewTxn() lib.StoreI {
@@ -612,6 +646,11 @@ func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 
 // MaybeCompact() checks if it is time to compact the LSS and HSS respectively
 func (s *Store) MaybeCompact() {
+	// skip compaction during syncing: at scale (~1.5M+ blocks) HSS range compaction causes
+	// PebbleDB write stalls that throttle the sync loop's db.Apply calls
+	if s.syncing.Load() {
+		return
+	}
 	// check if the current version is a multiple of the cleanup block interval
 	compactionInterval := s.config.StoreConfig.LSSCompactionInterval
 	version := s.Version()
