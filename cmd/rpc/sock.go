@@ -28,6 +28,12 @@ const (
 	defaultRCSubscriberPingPeriod     = 50 * time.Second
 	defaultMaxRCSubscribers           = 512
 	defaultMaxRCSubscribersPerChain   = 128
+	// maxReconnectBackoff caps the exponential backoff between root-chain reconnect attempts so
+	// recovery happens within seconds of the root chain becoming reachable again.
+	maxReconnectBackoff = 5 * time.Second
+	// maxReconnectRetries is effectively "retry indefinitely" — the root-chain subscription is
+	// essential, so we keep attempting to reconnect (at the capped interval) rather than giving up.
+	maxReconnectRetries = uint64(1) << 62
 )
 
 // lotteryCache holds a single cached lottery result keyed by (height, id).
@@ -452,7 +458,12 @@ func (r *RCSubscription) dialWithBackoff(chainId uint64, config lib.RootChain) {
 	// create a URL to connect to the root chain with
 	u := url.URL{Scheme: wsScheme, Host: host, Path: SubscribeRCInfoPath, RawQuery: fmt.Sprintf("%s=%d", chainIdParamName, chainId)}
 	// create a new retry for backoff
-	retry := lib.NewRetry(uint64(time.Second.Milliseconds()), 25)
+	// IMPORTANT: a nested chain cannot make progress (build/validate dex batches, learn the
+	// root height, etc.) while its root-chain subscription is down, so reconnection must be
+	// prompt and persistent. Cap the exponential backoff at maxReconnectBackoff and keep retrying
+	// rather than letting the delay balloon into minutes — an uncapped doubling backoff turns a
+	// brief root-chain blip into a multi-minute chain stall before the connection is re-established.
+	retry := lib.NewCappedRetry(uint64(time.Second.Milliseconds()), uint64(maxReconnectBackoff.Milliseconds()), maxReconnectRetries)
 	// until backoff fails or connection succeeds
 	for retry.WaitAndDoRetry() {
 		// log the connection
