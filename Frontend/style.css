@@ -288,7 +288,7 @@ code{font-family:var(--font-mono);font-size:11px;background:var(--bg2);padding:1
 .bni.active{color:var(--green)}
 .bni svg{width:17px;height:17px}
 
-@media(max-width:768px){
+@media(max-width:900px){
   .sidebar{display:none}.mobhead{display:flex}.main{padding:14px 14px 70px;width:100%;min-width:0}.bnav{display:flex}
   .r2,.r3{grid-template-columns:1fr}.mgrid{grid-template-columns:1fr}.ph-title{font-size:17px}
   .sbar{flex-wrap:wrap;gap:6px;padding:8px 0;justify-content:flex-start}
@@ -378,4 +378,32 @@ code{font-family:var(--font-mono);font-size:11px;background:var(--bg2);padding:1
   .det-grid{grid-template-columns:1fr}
   .det-sidebar{position:static}
   .prob-side-pct{font-size:32px}
+}
+
+/* MOBILE CARD OVERRIDES */
+@media(max-width:768px){
+  .mgrid{grid-template-columns:1fr;gap:10px}
+  .mcard-top{padding:12px 12px 10px}
+  .prob-yes,.prob-no{font-size:28px}
+  .mcard-q{font-size:12px}
+  .mcard-meta{padding:7px 12px}
+  .meta-lbl{font-size:7px}
+  .meta-val{font-size:10px}
+  .mcard-actions{padding:8px 12px;gap:6px}
+  .mcard-btn{padding:8px 6px;font-size:8px}
+  .sbar .chip{font-size:9px;padding:4px 8px}
+  .cat{font-size:9px;padding:5px 10px}
+  .ph-title{font-size:22px}
+  .ph-sub{font-size:12px}
+}
+
+@media(max-width:1024px){
+  .sidebar{display:none!important}
+  .mobhead{display:flex!important}
+  .main{width:100%!important;min-width:0!important}
+}
+
+@media(min-width:1100px){
+  .sidebar{position:sticky;transform:none!important;z-index:1}
+  .main{margin-left:0}
 }

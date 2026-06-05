@@ -1127,11 +1127,11 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
 <!-- ── CONFIRM OVERLAY ── -->
 <div id="confOverlay">
   <div class="cm">
-    <div class="cm-h"><div class="cm-t" id="confTitle">Confirm Transaction</div><div class="cm-s">Review before signing</div></div>
+    <div class="cm-h"><div class="cm-t" id="confTitle">Confirm Transaction</div><div class="cm-s" id="confSub">Review before signing</div></div>
     <div class="cm-rows" id="confRows"></div>
     <div class="cm-btns">
-      <button id="confCancel" onclick="closeConf()">Cancel</button>
-      <button id="confOk"     onclick="confirmTx()">Sign &amp; Send</button>
+      <button id="confCancel" onclick="closeConfirm()">Cancel</button>
+      <button id="confOk"     >Sign &amp; Send</button>
     </div>
   </div>
 </div>

@@ -1714,7 +1714,10 @@ freshAddr, err2 := keystoreNewKey("unstake_test_"+import_suffix, testPassword)
 if err2 != nil {
     t.Fatalf("new key: %v", err2)
 }
-resolverKey, _ := keystoreGetKey(freshAddr, testPassword)
+resolverKey, err3 := keystoreGetKey(freshAddr, testPassword)
+if err3 != nil {
+    t.Fatalf("load fresh key: %v", err3)
+}
 resolverAddr := freshAddr
 h, _ := getHeight()
 fHash := ""
