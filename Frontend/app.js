@@ -526,7 +526,7 @@ window.renderMarketCards = function(markets) {
 
     const showBtns = m.status === 0;
 
-    return `<div class="mcard ${cardClass}" onclick="openDetail(${JSON.stringify(mid)})">
+    return `<div class="mcard ${cardClass}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
   <div class="mcard-top">
     <div class="mcard-cat"><span class="mcard-cat-dot"></span>PRAXIS MARKET &nbsp;${statusHtml}</div>
     <div class="mcard-q">${esc(m.question || '(no question)')}</div>

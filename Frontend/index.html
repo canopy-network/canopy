@@ -1101,7 +1101,6 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
 <script src="app.js"></script>
 <script>
 // ── Category filter (new UI feature) ──
-  const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 window._activeCat = 'all';
 window.filterCat = function(el) {
   document.querySelectorAll('.cat').forEach(c => c.classList.remove('active'));

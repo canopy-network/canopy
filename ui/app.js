@@ -526,7 +526,7 @@ window.renderMarketCards = function(markets) {
 
     const showBtns = m.status === 0;
 
-    return `<div class="mcard ${cardClass}" onclick="openDetail(${JSON.stringify(mid)})">
+    return `<div class="mcard ${cardClass}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
   <div class="mcard-top">
     <div class="mcard-cat"><span class="mcard-cat-dot"></span>PRAXIS MARKET &nbsp;${statusHtml}</div>
     <div class="mcard-q">${esc(m.question || '(no question)')}</div>
@@ -564,9 +564,7 @@ let _resolverRegistry = new Map();
 let _detailMarketId = null; // address -> {stake, proposalCount}
 
 window.showDetail = function(marketId) {
-  console.log('showDetail called:', marketId);
   const m = _allMarkets.find(x => x.marketId === marketId || x.txHash === marketId);
-  console.log('market found:', !!m, 'allMarkets len:', _allMarkets.length);
   if (!m) return;
   const open = m.status === 0;
   const expired = m.status === 8;
