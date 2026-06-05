@@ -557,18 +557,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
 .port-val { font-family:var(--display); font-size:20px; font-weight:800; color:var(--text); }
 .port-val.g { color:var(--green); }
 
-/* ── MOBILE RESPONSIVE ── */
-@media(max-width:768px) {
-  .sidebar { display:none; }
-  .mobhead { display:flex; }
-  .main { padding:20px 16px 80px; }
-  .r2,.r3 { grid-template-columns:1fr; }
-  .mgrid { grid-template-columns:1fr; }
-  .cats { overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px; }
-}
-@media(min-width:769px) {
-  .mobnav { display:none !important; }
-}
+/* mobile handled by style.css */
 </style>
 </head>
 <body>
@@ -902,26 +891,76 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
 
 <!-- ── SIGNER ── -->
 <div class="page" id="page-signer">
-  <div class="ph ph-g"><div class="ph-eye">Security</div><div class="ph-title">Transaction Signer</div><div class="ph-sub">BLS keystore for signing Praxis transactions</div></div>
+  <div class="ph ph-g"><div class="ph-eye">BLS12-381</div><div class="ph-title">Signer</div><div class="ph-sub">Encrypted keystore — private key held in RAM only, never stored or sent</div></div>
+
   <div class="card"><div class="ci">
-    <div class="ct">// keystore_status</div>
-    <div class="kstat" id="keyStatus">No key loaded</div>
-    <div id="keyInfo" style="display:none">
-      <div class="field"><label>Loaded Address</label><div class="addr-mono" id="keyAddr"></div></div>
-      <div class="field"><label>Public Key</label><div class="addr-mono" id="keyPub" style="font-size:9px;word-break:break-all"></div></div>
+    <div class="ct">// session_status</div>
+    <div class="kstat" id="keyStatus">○ No key loaded — transactions cannot be signed</div>
+    <div class="sbadge hidden" id="sessBadge" onclick="clearKey()">✕ &nbsp; Clear session</div>
+    <div id="sk_derived" style="display:none;margin-top:15px">
+      <div class="field"><label>Public Key (48 bytes · G1)</label><div class="addr-mono" id="sk_pub" style="font-size:9px;word-break:break-all"></div></div>
+      <div class="field" style="margin-top:9px"><label>Derived Address</label><div class="addr-mono" id="sk_addr" style="color:var(--green)"></div></div>
     </div>
-    <div class="ct" style="margin-top:16px">// load_key</div>
-    <div class="r2"><div class="field"><label>Address (40 hex)</label><input id="sk_addr" type="text" placeholder="e7c7dad1…"/></div><div class="field"><label>Password</label><input id="sk_pass" type="password" placeholder="keystore password"/></div></div>
-    <div class="brow"><button class="btn bp" onclick="loadKey()">Load Key</button><button class="btn bsec" onclick="clearKey()">Clear</button></div>
-    <div id="sk_err" class="alert ar" style="display:none;margin-top:10px"></div>
   </div></div>
+
+  <div class="card" id="ks_quick_wrap" style="display:none"><div class="ci">
+    <div class="ct">// quick_unlock</div>
+    <div class="alert ag" style="margin-bottom:12px">Saved keystore detected — enter password to restore session.</div>
+    <div class="field">
+      <label>Account</label>
+      <div class="addr-mono" id="ks_quick_addr" style="color:var(--green);font-size:12px"></div>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_quick_pw" type="password" placeholder="Keystore password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="quickUnlock()">⚡ Quick Unlock</button>
+      <button class="btn bsec" onclick="localStorage.removeItem('praxis_keystore');checkSavedKeystore();toast('Saved keystore cleared')">Forget</button>
+    </div>
+  </div></div>
+
   <div class="card"><div class="ci">
-    <div class="ct">// create_key</div>
-    <div class="r2"><div class="field"><label>Nickname</label><input id="nk_nick" type="text" placeholder="my-wallet"/></div><div class="field"><label>Password</label><input id="nk_pass" type="password" placeholder="strong password"/></div></div>
-    <div class="brow"><button class="btn bp" onclick="createNewKey()">Create New Key</button></div>
-    <div id="nk_result" style="display:none;margin-top:12px">
-      <div class="alert ag">✓ Key created</div>
-      <div class="field"><label>New Address</label><div class="addr-mono" id="nk_addr"></div></div>
+    <div class="ct">// import_keystore</div>
+    <div class="field">
+      <label>Keystore File (.json)</label>
+      <input id="ks_imp_file" type="file" accept=".json"/>
+      <div class="hint">Upload your encrypted Praxis keystore JSON</div>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_imp_pw" type="password" placeholder="Keystore password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="importKeystore()">🔓 Unlock Keystore</button>
+      <button class="btn bsec" onclick="clearKey()">Clear</button>
+    </div>
+  </div></div>
+
+  <div class="card"><div class="ci">
+    <div class="ct">// create_keystore</div>
+    <div class="alert ay" style="margin-bottom:12px">Generates a new BLS12-381 keypair and downloads an encrypted keystore file.</div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_new_pw" type="password" placeholder="Choose a strong password…"/>
+    </div>
+    <div class="field">
+      <label>Confirm Password</label>
+      <input id="ks_new_pw2" type="password" placeholder="Confirm password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="createKeystore()">⚙ Generate &amp; Download</button>
+    </div>
+  </div></div>
+
+  <div class="card"><div class="ci">
+    <div class="ct">// signing_spec</div>
+    <div class="sinfo">
+      1. sign_bytes = proto.Marshal(Transaction{…, <em>signature:nil</em>})<br>
+      2. time = <em>BigInt(Date.now()) × 1000n</em> — microseconds<br>
+      3. BLS12-381 <em>G2 signature (96 bytes)</em> — @noble/curves<br>
+      4. address = <em>SHA256(pubKey).slice(0,20)</em><br>
+      5. Keystore = <em>AES-GCM + PBKDF2 (200k iterations)</em>
     </div>
   </div></div>
 </div>
