@@ -194,10 +194,11 @@ func (s *SMT) Commit(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 // with its own Txn copy to avoid lock contention, then the results are merged back into
 // the main tree.
 func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
-	// if there are too few operations, fall back to sequential processing
-	// if len(unsortedOps) < NumSubtrees*2 {
-	// 	return s.Commit(unsortedOps)
-	// }
+	// fall back to sequential processing when operations are fewer than subtrees;
+	// addSyntheticBorders + cleanup overhead dominates for small batches
+	if len(unsortedOps) < NumSubtrees*2 {
+		return s.Commit(unsortedOps)
+	}
 
 	parentTxn, ok := s.store.(*Txn)
 	if !ok {
@@ -660,6 +661,10 @@ func (s *SMT) getNode(key []byte) (n *node, err lib.ErrorI) {
 	}
 	// set the key in the node for convenience
 	n.Key.fromBytes(key)
+	// cache the read result to avoid repeated PebbleDB lookups for the same node
+	if len(s.nodeCache) < MaxCacheSize {
+		s.nodeCache[string(key)] = n
+	}
 	return
 }
 
