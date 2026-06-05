@@ -1708,11 +1708,34 @@ if err != nil {
 t.Fatalf("key: %v", err)
 }
 
-// Setup resolver with MIN_RESOLVER_STAKE using fresh address each run
-resolverKey, resolverAddr := setupResolver(t, validatorKey, validatorAddr, 500_000_000_000)
+// Fresh address every run — avoids UnbondingAmount stale state
+import_suffix := fmt.Sprintf("%d", time.Now().UnixMicro()%9999999)
+freshAddr, err2 := keystoreNewKey("unstake_test_"+import_suffix, testPassword)
+if err2 != nil {
+    t.Fatalf("new key: %v", err2)
+}
+resolverKey, _ := keystoreGetKey(freshAddr, testPassword)
+resolverAddr := freshAddr
 h, _ := getHeight()
 fHash := ""
-fundMsg := &contract.MessageSend{}
+fundMsg := &contract.MessageSend{
+    FromAddress: hexDecode(validatorAddr),
+    ToAddress:   hexDecode(resolverAddr),
+    Amount:      500_000_000_000 * 4,
+}
+fHash = submitSendTx(t, validatorKey, fundMsg, h)
+if err := waitForTx(validatorAddr, fHash, 60*time.Second); err != nil {
+    t.Fatalf("fund fresh resolver: %v", err)
+}
+h, _ = getHeight()
+regMsg2 := &contract.MessageRegisterResolver{
+    ResolverAddress: hexDecode(resolverAddr),
+    StakeAmount:     500_000_000_000,
+}
+regHash := submitTx(t, resolverKey, "register_resolver", "MessageRegisterResolver", regMsg2, h)
+if err := waitForTx(resolverAddr, regHash, 60*time.Second); err != nil {
+    t.Fatalf("register fresh resolver: %v", err)
+}
 t.Logf("Resolver: %s", resolverAddr)
 
 // ── Test 1: Cannot partial unstake below MIN_RESOLVER_STAKE ──────────

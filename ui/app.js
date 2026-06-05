@@ -475,112 +475,88 @@ function resolverTier(addr) {
   return {label:'Registered', color:'var(--text3)', icon:'○'};
 }
 
-function renderMarketCards(markets) {
-  var parts = [];
-  parts.push('<div class="mgrid">');
-  for (var i = 0; i < markets.length; i++) {
-    var m = markets[i];
-    var open = m.status === 0;
-    var expired = m.status === 8;
-    var cancelled = m.status === 1;
-    var proposed = m.status === 4;
-    var disputed = m.status === 5;
-    var finalized = m.status === 6;
-    var voided = m.status === 7;
-    var resolved = m.status === 2;
-    var statusClass = open ? 'sp-o' : expired ? 'sp-e' : cancelled ? 'sp-d' : voided ? 'sp-e' : proposed ? 'sp-e' : disputed ? 'sp-d' : 'sp-f';
-    var statusLabel = open ? 'Open' : expired ? 'Expired' : cancelled ? 'Cancelled' : proposed ? 'Proposed' : disputed ? 'Disputed' : finalized ? 'Finalized' : voided ? 'Voided' : resolved ? 'Resolved' : 'Closed';
-    var mid = m.marketId || m.txHash;
-    var total = m.qYes + m.qNo;
-    var yesPct = total > 0n ? Number(m.qYes * 100n / total) : 50;
-    var noPct = 100 - yesPct;
-    var cardClass = 'mcard' + (expired ? ' mexp' : '') + (cancelled ? ' mcan' : '') + (finalized ? ' mfin' : '');
-    var volume = m.qYes + m.qNo - m.lmsrSeed;
-    var volStr = volume > 0n ? fmtPRX(volume) + ' PRX' : '—';
-    var expiryLabel = open ? 'Expires' : expired ? 'Expired' : proposed ? 'Proposed at' : finalized ? 'Finalized' : cancelled ? 'Cancelled' : voided ? 'Voided' : 'Block';
+window.renderMarketCards = function(markets) {
+  if (!markets || markets.length === 0) return '<div class="alert ay">No markets found</div>';
 
-    // banner
-    var banner = '';
-    if (expired) banner = '<div class="mc-banner bnr"><span>⏳</span> Awaiting resolver proposal</div>';
-    if (cancelled) banner = '<div class="mc-banner bnd"><span>✕</span> Market cancelled — reclaim your stake</div>';
-    if (voided) banner = '<div class="mc-banner bnr"><span>⚠</span> Market voided — full refund available</div>';
-    if (proposed) {
-      var tier = m.resolver ? resolverTier(m.resolver) : null;
-      var tierBadge = tier ? ' <span style="color:' + tier.color + ';font-size:9px">' + tier.icon + ' ' + tier.label + '</span>' : '';
-      banner = '<div class="mc-banner bnr"><span>🔎</span> Resolver: ' + (m.resolver ? m.resolver.slice(0,8) + '\u2026' : '?') + tierBadge + ' \u2014 proposed ' + (m.proposedOutcome ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--red)">NO</span>') + '</div>';
-    }
-    if (disputed) banner = '<div class="mc-banner bnd"><span>⚡</span> Dispute active — panel vote in progress</div>';
-    if (finalized) banner = '<div class="mc-banner bnf"><span>✓</span> Market finalized</div>';
-
-    // action buttons
-    var actYes = open ? 'onclick="fillP(\'' + mid + '\', true)"' : 'disabled';
-    var actNo  = open ? 'onclick="fillP(\'' + mid + '\', false)"' : 'disabled';
-    var isResolver = signerAddress && _resolverRegistry.has(signerAddress);
-    var resolverRec = isResolver ? _resolverRegistry.get(signerAddress) : null;
-    var canPropose = open && isResolver && resolverRec && resolverRec.rrs >= 10 && signerAddress !== m.creator;
-    var propBtn = canPropose ? '<button class="mc-propose-btn" onclick="fillPropose(' + JSON.stringify(mid) + ')">⚖ PROPOSE</button>' : '';
-
-    parts.push('<div class="' + cardClass + '">');
-
-    // ── HEAD: question + status pill
-    parts.push(
-      '<div class="mc-head" onclick="showDetail(\'' + mid + '\')">' +
-        '<div class="mc-q">' + esc(m.question) + '</div>' +
-        '<div class="spill ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</div>' +
-      '</div>'
-    );
-
-    // ── PROB: big YES/NO numbers + bar
-    parts.push(
-      '<div class="mc-prob">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">' +
-          '<div style="display:flex;flex-direction:column">' +
-            '<span class="pvy">' + yesPct + '%</span>' +
-            '<span class="pvl">YES</span>' +
-          '</div>' +
-          '<div style="display:flex;flex-direction:column;align-items:flex-end">' +
-            '<span class="pvn">' + noPct + '%</span>' +
-            '<span class="pvl">NO</span>' +
-          '</div>' +
-        '</div>' +
-        '<div class="btrack"><div class="byes" style="width:' + yesPct + '%' + (finalized ? ';box-shadow:none;background:#3a3a3a' : '') + '"></div><div class="bno"' + (finalized ? ' style="background:#222"' : '') + '></div></div>' +
-      '</div>'
-    );
-
-    // ── BANNER
-    if (banner) parts.push(banner);
-
-    // ── POOLS row: YES pool | NO pool
-    parts.push(
-      '<div class="mc-pools">' +
-        '<div class="pc pcy"><div class="pc-lbl">YES Pool</div><div class="pc-val">' + fmtPRX(m.qYes) + ' PRX</div></div>' +
-        '<div class="pc pcn"><div class="pc-lbl">NO Pool</div><div class="pc-val">' + fmtPRX(m.qNo) + ' PRX</div></div>' +
-      '</div>'
-    );
-
-    // ── ACTIONS
-    parts.push(
-      '<div class="mc-acts">' +
-        '<button class="byes2" ' + actYes + '>BET YES</button>' +
-        '<button class="bno2" ' + actNo + '>BET NO</button>' +
-        propBtn +
-      '</div>'
-    );
-
-    // ── FOOTER: volume + expiry + creator
-    parts.push(
-      '<div class="mc-foot">' +
-        '<div class="mc-foot-item"><span class="mlbl">Volume</span><span class="mval g">' + volStr + '</span></div>' +
-        '<div class="mc-foot-item"><span class="mlbl">' + expiryLabel + '</span><span class="mval">blk #' + (m.expiry ? Number(m.expiry) : '?') + '</span></div>' +
-        '<div class="mc-foot-item"><span class="mlbl">Creator</span><span class="mval">' + (m.creator ? m.creator.slice(0,8) + '\u2026' : '???') + '</span></div>' +
-      '</div>'
-    );
-
-    parts.push('</div>');
+  // category filter
+  let filtered = markets;
+  if (window._activeCat && window._activeCat !== 'all') {
+    const cat = window._activeCat;
+    filtered = markets.filter(m => {
+      const q = (m.question || '').toLowerCase();
+      if (cat === 'crypto')   return /btc|eth|crypto|bitcoin|ethereum|solana|token|defi|nft|blockchain/.test(q);
+      if (cat === 'sports')   return /nba|nfl|fifa|soccer|football|tennis|golf|sports|league|match|game|win/.test(q);
+      if (cat === 'politics') return /election|president|vote|congress|senate|government|policy|law|bill/.test(q);
+      if (cat === 'finance')  return /stock|market|fed|rate|gdp|inflation|s&p|nasdaq|economy|oil|gold/.test(q);
+      return true;
+    });
   }
-  parts.push('</div>');
-  return parts.join('');
-}
+
+  if (filtered.length === 0) return '<div class="alert ay">No markets in this category</div>';
+
+  return '<div class="mgrid">' + filtered.map(m => {
+    const total = m.qYes + m.qNo;
+    const yesPct = total > 0n ? Number((m.qYes * 100n) / total) : 50;
+    const noPct  = 100 - yesPct;
+    const mid    = m.marketId || m.txHash || '';
+    const vol    = total > 0n ? fmtPRX(total) : '—';
+    const exp    = m.expiry ? '#' + m.expiry.toString() : '—';
+    const creator = (m.creator || '').slice(0,8) + '…';
+
+    let statusHtml = '';
+    let cardClass  = '';
+    if (m.status === 0) {
+      statusHtml = '<span class="spill sp-live"><span class="sp-dot"></span>LIVE</span>';
+    } else if (m.status === 4) {
+      statusHtml = '<span class="spill sp-proposed">PROPOSED</span>';
+      cardClass = 'mexp';
+    } else if (m.status === 5) {
+      statusHtml = '<span class="spill sp-disputed">DISPUTED</span>';
+      cardClass = 'mexp';
+    } else if (m.status === 6) {
+      statusHtml = '<span class="spill sp-finalized">FINALIZED</span>';
+      cardClass = 'mfin';
+    } else if (m.status === 1) {
+      statusHtml = '<span class="spill sp-cancelled">CANCELLED</span>';
+      cardClass = 'mcan';
+    } else if (m.status === 8) {
+      statusHtml = '<span class="spill sp-expired">EXPIRED</span>';
+      cardClass = 'mexp';
+    }
+
+    const showBtns = m.status === 0;
+
+    return `<div class="mcard ${cardClass}" onclick="openDetail(${JSON.stringify(mid)})">
+  <div class="mcard-top">
+    <div class="mcard-cat"><span class="mcard-cat-dot"></span>PRAXIS MARKET &nbsp;${statusHtml}</div>
+    <div class="mcard-q">${esc(m.question || '(no question)')}</div>
+    <div class="mcard-probs">
+      <div>
+        <div class="prob-yes">${yesPct}%</div>
+        <div class="prob-labels"><span class="prob-lbl">YES</span></div>
+      </div>
+      <div class="prob-divider"></div>
+      <div>
+        <div class="prob-no">${noPct}%</div>
+        <div class="prob-labels"><span class="prob-lbl">NO</span></div>
+      </div>
+    </div>
+    <div class="btrack"><div class="byes" style="width:${yesPct}%"></div></div>
+  </div>
+  <div class="mcard-meta">
+    <div class="meta-item"><span class="meta-lbl">Volume</span><span class="meta-val g">${vol}</span></div>
+    <div class="meta-item"><span class="meta-lbl">Expires</span><span class="meta-val">${exp}</span></div>
+    <div class="meta-item"><span class="meta-lbl">Creator</span><span class="meta-val">${creator}</span></div>
+  </div>
+  ${showBtns ? `<div class="mcard-actions">
+    <button class="mcard-btn mcard-btn-yes" onclick="event.stopPropagation();fillP(${JSON.stringify(mid)},true)">BET YES</button>
+    <button class="mcard-btn mcard-btn-no"  onclick="event.stopPropagation();fillP(${JSON.stringify(mid)},false)">BET NO</button>
+  </div>` : ''}
+</div>`;
+  }).join('') + '</div>';
+};
+
+// ── Volume chip updater ──
 
 // store markets globally for detail view
 let _allMarkets = [];
@@ -588,7 +564,9 @@ let _resolverRegistry = new Map();
 let _detailMarketId = null; // address -> {stake, proposalCount}
 
 window.showDetail = function(marketId) {
+  console.log('showDetail called:', marketId);
   const m = _allMarkets.find(x => x.marketId === marketId || x.txHash === marketId);
+  console.log('market found:', !!m, 'allMarkets len:', _allMarkets.length);
   if (!m) return;
   const open = m.status === 0;
   const expired = m.status === 8;
@@ -736,6 +714,7 @@ window.showDetail = function(marketId) {
   showPage('detail', null);
   setTimeout(()=>switchDetailTab('activity'), 50);
 };
+window.openDetail = window.showDetail;
 
 window.fillP = (id, outcome) => {
   document.getElementById('p_mid').value = id;
@@ -785,7 +764,7 @@ function renderCurrentTab() {
     el.innerHTML = '<div class="alert ay">' + (labels[_activeTab] || 'No markets') + '</div>';
     return;
   }
-  el.innerHTML = renderMarketCards(markets);
+  el.innerHTML = window.renderMarketCards(markets);
 }
 
 window.loadMarkets = async function () {
@@ -1473,7 +1452,7 @@ injectKeyboardCopyBtns();
 // ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
-document.getElementById('ni_host').value=getRPCHost();
+const _niHost=document.getElementById('ni_host');if(_niHost)_niHost.value=getRPCHost();
 buildMobNav();
 checkRPC();
 setInterval(checkRPC,12000);
