@@ -2115,8 +2115,12 @@ window.loadResolvers=async function(){
   if(!el)return;
   el.innerHTML='<div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading resolvers</div>';
   try{
+    // auto-scan if no cache or registry empty
+    if(!localStorage.getItem('praxis_tx_cache')||_resolverRegistry.size===0){
+      await loadMarkets();
+    }
     const cache=localStorage.getItem('praxis_tx_cache');
-    if(!cache){el.innerHTML='<div class="alert ay">No chain data — browse Markets first to scan blocks</div>';return;}
+    if(!cache){el.innerHTML='<div class="alert ay">No chain data — node may be offline</div>';return;}
     const txs=JSON.parse(cache);
     const resolvers=new Map();
     for(const tx of txs){
