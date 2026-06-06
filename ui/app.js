@@ -276,7 +276,7 @@ window.loadKey=async function(){
      'fo_resolver','rc_addr','ccf_addr','can_addr','unst_addr','cub_addr'].forEach(id=>{
       const el=document.getElementById(id);if(el&&!el.value)el.value=signerAddress;
     });
-    document.getElementById('sk_input').value='';
+    const _ski=document.getElementById('sk_input');if(_ski)_ski.value='';
     refreshBalance();
     loadMyPredictions();
     toast('Key loaded — '+signerAddress);
@@ -288,7 +288,7 @@ window.clearKey=function(){
   document.getElementById('keyStatus').className='kstat';
   document.getElementById('keyStatus').textContent='○ No key loaded';
   document.getElementById('sk_derived').style.display='none';
-  document.getElementById('sk_input').value='';
+  const _ski=document.getElementById('sk_input');if(_ski)_ski.value='';
   toast('Key cleared');
 };
 
