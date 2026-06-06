@@ -271,7 +271,7 @@ window.loadKey=async function(){
     document.getElementById('sk_pub').textContent=b2h(signerPubKey);
     document.getElementById('sk_addr').textContent=signerAddress;
     ['c_creator','p_bettor','r_resolver','cl_addr','s_from','w_addr','ft_addr',
-     'reg_addr','prop_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr',
+     'reg_addr','pr_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr',
      'fo_resolver','rc_addr','ccf_addr','can_addr','unst_addr','cub_addr'].forEach(id=>{
       const el=document.getElementById(id);if(el&&!el.value)el.value=signerAddress;
     });
@@ -1087,15 +1087,15 @@ window.signAndSubmit_register=async function(){try{
 
 // ── PROPOSE OUTCOME
 window.build_propose=function(){try{
-  const mid=document.getElementById('prop_mid').value.trim().toLowerCase();mid40(mid);
-  const res=document.getElementById('prop_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
+  const mid=document.getElementById('pr_mid').value.trim().toLowerCase();mid40(mid);
+  const res=document.getElementById('pr_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
   const bond=parseInt(document.getElementById('prop_bond').value)*1000000;
   const fee=parseInt(document.getElementById('prop_fee').value)||10000;
   showPL('propo','propp',buildUnsigned('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_propose=async function(){try{
-  const mid=document.getElementById('prop_mid').value.trim().toLowerCase();mid40(mid);
-  const res=document.getElementById('prop_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
+  const mid=document.getElementById('pr_mid').value.trim().toLowerCase();mid40(mid);
+  const res=document.getElementById('pr_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
   const bond=parseInt(document.getElementById('prop_bond').value)*1000000;
   const fee=parseInt(document.getElementById('prop_fee').value)||10000;
   await doSubmit('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee},'btn_propose','pend_propose');
@@ -1321,7 +1321,7 @@ function showConfirm(title, rows) {
     ],
     signAndSubmit_propose: () => [
       'Propose Outcome', [
-        ['Market ID',   (document.getElementById('prop_mid')?.value||'').slice(0,16)+'…', ''],
+        ['Market ID',   (document.getElementById('pr_mid')?.value||'').slice(0,16)+'…', ''],
         ['Outcome',     (window._propOut!==false?'YES':'NO'), window._propOut!==false?'green':'red'],
         ['Bond',        v('prop_bond').toLocaleString()+' PRX', ''],
       ]
@@ -1662,7 +1662,7 @@ function updateSignerUI() {
   document.getElementById('sk_pub').textContent = b2h(signerPubKey);
   document.getElementById('sk_addr').textContent = signerAddress;
   ['c_creator','p_bettor','r_resolver','cl_addr','s_from','w_addr','ft_addr',
-   'reg_addr','prop_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr',
+   'reg_addr','pr_resolver','dis_addr','cv_voter','rv_voter','tal_addr','fin_addr','sl_addr',
    'fo_resolver','rc_addr','ccf_addr','can_addr','unst_addr','cub_addr'].forEach(id => {
     const el = document.getElementById(id); if (el && !el.value) el.value = signerAddress;
   });
@@ -1938,14 +1938,14 @@ window.fillForfeit = function(id) {
   showPage('forfeit', null);
 };
 window.fillPropose = function(id) {
-  document.getElementById('prop_mid').value = id;
-  if (signerAddress) document.getElementById('prop_resolver').value = signerAddress;
+  document.getElementById('pr_mid').value = id;
+  if (signerAddress) document.getElementById('pr_resolver').value = signerAddress;
   showPage('propose', null);
-  setTimeout(updateMinBondHint, 50);
+  setTimeout(() => { updateMinBondHint(); updateProposeRisk(); }, 50);
 };
 
 window.updateMinBondHint = function() {
-  const mid = document.getElementById('prop_mid').value.trim().toLowerCase();
+  const mid = document.getElementById('pr_mid').value.trim().toLowerCase();
   const hint = document.getElementById('prop_bond_hint');
   const bondEl = document.getElementById('prop_bond');
   if (!hint) return;
@@ -1969,6 +1969,60 @@ window.updateMinBondHint = function() {
   if (bondEl && parseFloat(bondEl.value) < minBond) bondEl.value = Math.ceil(minBond);
 };
 checkSavedKeystore();
+
+
+// ═══════════════════════════════════════════
+// ELEVATED RISK / PANEL SIZE INDICATOR
+// ═══════════════════════════════════════════
+const ELEVATED_RISK_THRESHOLD = 25_000_000_000n; // 25,000 PRX in uPRX
+const STANDARD_PANEL_SIZE = 5;
+const ELEVATED_PANEL_SIZE = 7;
+
+function getRiskInfo(mid) {
+  if (!mid || mid.length !== 40) return null;
+  const m = (_allMarkets || []).find(x => x.marketId === mid || x.txHash === mid);
+  if (!m) return null;
+  const pool = m.qYes + m.qNo;
+  const elevated = pool >= ELEVATED_RISK_THRESHOLD;
+  const poolPRX = (Number(pool) / 1_000_000).toFixed(2);
+  return { elevated, pool, poolPRX, panelSize: elevated ? ELEVATED_PANEL_SIZE : STANDARD_PANEL_SIZE };
+}
+
+function renderRiskBox(boxEl, info) {
+  if (!info) {
+    boxEl.style.display = 'none';
+    return;
+  }
+  const { elevated, poolPRX, panelSize } = info;
+  boxEl.style.display = '';
+  if (elevated) {
+    boxEl.style.background = 'rgba(255,64,96,.08)';
+    boxEl.style.border = '1px solid rgba(255,64,96,.25)';
+    boxEl.style.color = 'var(--red)';
+    boxEl.innerHTML = '⚠ ELEVATED RISK MARKET<br>Pool: ' + poolPRX + ' PRX (&gt;= 25,000 PRX threshold)<br>Panel size: <b>' + panelSize + ' resolvers</b> (extended panel)';
+  } else {
+    boxEl.style.background = 'var(--gdim)';
+    boxEl.style.border = '1px solid rgba(0,232,122,.15)';
+    boxEl.style.color = 'var(--text2)';
+    boxEl.innerHTML = '✓ Standard market<br>Pool: ' + poolPRX + ' PRX<br>Panel size: <b>' + panelSize + ' resolvers</b> (standard panel)';
+  }
+}
+
+window.updateProposeRisk = function() {
+  const mid = (document.getElementById('pr_mid')?.value || '').trim().toLowerCase();
+  const box = document.getElementById('pr_risk_box');
+  if (!box) return;
+  renderRiskBox(box, getRiskInfo(mid));
+  // also update bond hint
+  if (typeof updateMinBondHint === 'function') updateMinBondHint();
+};
+
+window.updateDisputeRisk = function() {
+  const mid = (document.getElementById('di_mid')?.value || '').trim().toLowerCase();
+  const box = document.getElementById('di_risk_box');
+  if (!box) return;
+  renderRiskBox(box, getRiskInfo(mid));
+};
 
 // ═══════════════════════════════════════════
 // CLAIM CREATOR FEE
