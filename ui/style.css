@@ -31,7 +31,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size
 .shell{display:flex;min-height:100vh;position:relative;z-index:1}
 
 /* SIDEBAR */
-.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;transition:background .25s}
+
 .logo{padding:18px 16px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px}
 .logo-hex{width:36px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .logo-hex span{font-family:var(--font-d);font-size:10px;font-weight:900;color:#000;letter-spacing:-1px}
@@ -64,7 +64,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size
 [data-theme="light"] .tthumb{transform:translateX(12px);background:#fff}
 
 /* MOBILE */
-.mobhead{display:none;position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);padding:11px 16px;align-items:center;justify-content:space-between}
+.mobhead{display:flex;width:100%;position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);padding:11px 16px;align-items:center;justify-content:space-between}
 .moblogo{font-family:var(--font-d);font-size:13px;font-weight:900;letter-spacing:2px;color:var(--green)}
 .ham{background:none;border:none;cursor:pointer;color:var(--text);font-size:20px;padding:2px}
 .mobnav{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7)}
@@ -289,7 +289,7 @@ code{font-family:var(--font-mono);font-size:11px;background:var(--bg2);padding:1
 .bni svg{width:17px;height:17px}
 
 @media(max-width:900px){
-  .sidebar{display:none}.mobhead{display:flex}.main{padding:14px 14px 70px;width:100%;min-width:0}.bnav{display:flex}
+  .mobhead{display:flex}.main{padding:14px 14px 70px;width:100%;min-width:0}.bnav{display:flex}
   .r2,.r3{grid-template-columns:1fr}.mgrid{grid-template-columns:1fr}.ph-title{font-size:17px}
   .sbar{flex-wrap:wrap;gap:6px;padding:8px 0;justify-content:flex-start}
   .hide-mob{display:none}
@@ -397,13 +397,5 @@ code{font-family:var(--font-mono);font-size:11px;background:var(--bg2);padding:1
   .ph-sub{font-size:12px}
 }
 
-@media(max-width:1024px){
-  .sidebar{display:none!important}
-  .mobhead{display:flex!important}
-  .main{width:100%!important;min-width:0!important}
-}
 
-@media(min-width:1100px){
-  .sidebar{position:sticky;transform:none!important;z-index:1}
-  .main{margin-left:0}
-}
+
