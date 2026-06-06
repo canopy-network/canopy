@@ -1248,7 +1248,12 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
 <!-- ── REWARD: COMMUNITY ── -->
 <div class="page" id="page-reward-community">
   <div class="ph ph-g"><div class="ph-eye">Rewards</div><div class="ph-title">Community Rewards</div><div class="ph-sub">Participation rewards for active predictors</div></div>
-  <div class="rw-stats">
+  <div id="crw-unauth" class="rw-unauth" style="display:none">
+    <div class="rw-unauth-icon">locked</div>
+    <div class="rw-unauth-title">Not Authorized</div>
+    <div class="rw-unauth-sub">This address is not the authorized community recipient</div>
+  </div>
+  <div id="crw-content"><div class="rw-stats">
     <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="crw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
     <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="crw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
     <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="crw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
@@ -1261,12 +1266,18 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="pend" id="pend_crw"><span class="blink">...</span> broadcasting...</div>
     <div class="pbox" id="crwo"><div class="plbl">// unsigned_payload</div><textarea id="crwp" readonly></textarea></div>
   </div></div>
+  </div></div>
 </div>
 
 <!-- ── REWARD: INVESTOR ── -->
 <div class="page" id="page-reward-investor">
   <div class="ph ph-g"><div class="ph-eye">Rewards</div><div class="ph-title">Investor Rewards</div><div class="ph-sub">Liquidity provision rewards — 241,920 block vesting window</div></div>
-  <div class="rw-stats">
+  <div id="irw-unauth" class="rw-unauth" style="display:none">
+    <div class="rw-unauth-icon">locked</div>
+    <div class="rw-unauth-title">Not Authorized</div>
+    <div class="rw-unauth-sub">This address is not the authorized investor recipient</div>
+  </div>
+  <div id="irw-content"><div class="rw-stats">
     <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="irw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
     <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="irw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
     <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="irw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
@@ -1279,6 +1290,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="brow"><button class="btn bp" id="btn_irw" onclick="signAndSubmit_rewardInvestor()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardInvestor()">Build Payload</button></div>
     <div class="pend" id="pend_irw"><span class="blink">...</span> broadcasting...</div>
     <div class="pbox" id="irwo"><div class="plbl">// unsigned_payload</div><textarea id="irwp" readonly></textarea></div>
+  </div></div>
   </div></div>
 </div>
 

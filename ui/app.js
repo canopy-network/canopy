@@ -2152,8 +2152,8 @@ window.loadResolvers=async function(){
       const rrs=r.rrs||0;
       let tier,tcolor,ticon;
       if(rrs<10){tier='Suspended';tcolor='var(--red)';ticon='✕';}
-      else if(rrs>=500){tier='Gold';tcolor='#FFD700';ticon='★';}
-      else if(rrs>=200){tier='Silver';tcolor='#C0C0C0';ticon='◆';}
+      else if(rrs>=100){tier='Gold';tcolor='#FFD700';ticon='★';}
+      else if(rrs>=50){tier='Silver';tcolor='#C0C0C0';ticon='◆';}
       else{tier='Bronze';tcolor='#CD7F32';ticon='▲';}
       return '<div class="card" style="margin-bottom:10px"><div class="ci">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
@@ -2336,8 +2336,10 @@ window.renderTopHolders = function(mid) {
 // ═══════════════════════════════════════════
 
 const EPOCH_BLOCKS = 1000;
-const AUTHORIZED_BUILDER   = 'e7c7dad131a03f7ea0cc09a637ad096eb3495f77';
-const AUTHORIZED_PROTOCOL  = 'e7c7dad131a03f7ea0cc09a637ad096eb3495f77';
+const AUTHORIZED_BUILDER   = '954378ba109c5ca45b23bfa284f3ac70e2671b87';
+const AUTHORIZED_COMMUNITY = '15e658698d2510799339273f6fccb0484c4f4b6f';
+const AUTHORIZED_INVESTOR  = '125c1bb803a2dd9194dca40d77445cf75647cb12';
+const AUTHORIZED_PROTOCOL  = 'c1764f10ad672558afe1a3b666185fd141ae1ea8';
 
 // Encoding
 function encRewardResolver(addr, epoch){ return cat(bf(1,h2b(addr)), vf(2, BigInt(epoch))); }
@@ -2384,9 +2386,9 @@ async function loadResolverRewardData() {
 
         // Tier
         let tier = 'bronze', tierLabel = '🥉 Bronze', tierClass = 'rrs-bronze';
-        if (rrs >= 200) { tier = 'gold';   tierLabel = '🥇 Gold';   tierClass = 'rrs-gold'; }
-        else if (rrs >= 50) { tier = 'silver'; tierLabel = '🥈 Silver'; tierClass = 'rrs-silver'; }
-        const weight = rrs >= 200 ? 7 : rrs >= 50 ? 3 : 1;
+        if (rrs >= 100) { tier = 'gold';   tierLabel = 'Gold';   tierClass = 'rrs-gold'; }
+        else if (rrs >= 50) { tier = 'silver'; tierLabel = 'Silver'; tierClass = 'rrs-silver'; }
+        const weight = rrs >= 100 ? 3 : rrs >= 50 ? 2 : 1;
 
         const badge = document.getElementById('rrw-tier-badge');
         badge.className = 'rrs-badge ' + tierClass;
