@@ -66,21 +66,20 @@ iteration over stored data.
 */
 
 type Store struct {
-	version      uint64        // version of the store
-	db           *pebble.DB    // underlying database
-	writer       *pebble.Batch // the shared batch writer that allows committing it all at once
-	ss           *Txn          // reference to the state store
-	sc           *SMT          // reference to the state commitment store
-	smtNodeCache map[string]*node // persistent SMT node cache surviving across blocks
-	*Indexer                   // reference to the indexer store
-	metrics      *lib.Metrics  // telemetry
-	syncing      atomic.Bool   // when true, skip compaction to avoid write stalls during sync
-	log          lib.LoggerI   // logger
-	config       lib.Config    // config
-	mu           *sync.Mutex   // mutex for concurrent commits
-	compaction   atomic.Bool   // atomic boolean for compaction status
-	backup       atomic.Bool   // atomic boolean for backup status
-	isTxn        bool          // flag indicating if the store is in transaction mode
+	version    uint64        // version of the store
+	db         *pebble.DB    // underlying database
+	writer     *pebble.Batch // the shared batch writer that allows committing it all at once
+	ss         *Txn          // reference to the state store
+	sc         *SMT          // reference to the state commitment store
+	*Indexer                 // reference to the indexer store
+	metrics    *lib.Metrics  // telemetry
+	syncing    atomic.Bool   // when true, skip compaction to avoid write stalls during sync
+	log        lib.LoggerI   // logger
+	config     lib.Config    // config
+	mu         *sync.Mutex   // mutex for concurrent commits
+	compaction atomic.Bool   // atomic boolean for compaction status
+	backup     atomic.Bool   // atomic boolean for backup status
+	isTxn      bool          // flag indicating if the store is in transaction mode
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -536,16 +535,19 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 		nextVersion := s.version + 1
 		// set up the state commit store
 		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
-		// warm the SMT with the persistent node cache from the previous block
-		if s.smtNodeCache != nil {
-			s.sc.nodeCache = s.smtNodeCache
-		}
 		// commit the SMT directly using the txn ops
+		//
+		// NOTE: the SMT node cache MUST NOT be persisted across blocks. `node.copy()` is a
+		// no-op alias (`&(*x)` returns the same pointer), so the parallel commit mutates the
+		// cached `*node` objects in place (synthetic borders, subtree roots). Reusing those
+		// pointers in a later block also risks serving nodes from a speculative `Root()` call
+		// (e.g. ApplyAndValidateBlock) whose state was reset and never committed, which makes
+		// the cache diverge from the on-disk snapshot and panics with "no child node was
+		// replaced" during traversal. A fresh per-block cache (created by NewSMT and filled by
+		// getNode/setNode) still provides full caching within the commit.
 		if err = s.sc.CommitParallel(s.ss.txn.ops); err != nil {
 			return nil, err
 		}
-		// save the cache for the next block (nodes have correct post-commit values)
-		s.smtNodeCache = s.sc.nodeCache
 	}
 	// return the root
 	return s.sc.Root(), nil
