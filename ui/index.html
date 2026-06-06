@@ -528,6 +528,32 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
 .act-meta { color:var(--text3); font-size:10px; }
 .act-block { margin-left:auto; color:var(--text3); font-size:9px; flex-shrink:0; padding-top:2px; }
 
+/* ── REWARD PAGES ── */
+.rw-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+@media(max-width:768px){ .rw-stats { grid-template-columns:1fr; } }
+.rw-stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:16px; }
+.rw-stat-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; }
+.rw-stat-val { font-family:var(--display); font-size:22px; font-weight:800; color:var(--text); }
+.rw-stat-val.g { color:var(--green); }
+.rw-stat-sub { font-family:var(--mono); font-size:9px; color:var(--text3); margin-top:3px; }
+.rw-formula { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:12px 14px; margin-bottom:16px; font-family:var(--mono); font-size:10px; color:var(--text2); line-height:1.8; }
+.rw-formula b { color:var(--green); }
+.rw-table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; margin-bottom:16px; }
+.rw-table th { text-align:left; font-size:8px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:6px 10px; border-bottom:1px solid var(--border); }
+.rw-table td { padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text2); }
+.rw-table tr:last-child td { border-bottom:none; }
+.rw-table td.g { color:var(--green); }
+.rw-table td.d { color:var(--text3); }
+.rw-vesting { background:var(--adim); border:1px solid rgba(245,166,35,.2); border-radius:var(--r); padding:10px 14px; margin-bottom:16px; font-family:var(--mono); font-size:10px; color:var(--amber); }
+.rw-unauth { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 20px; text-align:center; }
+.rw-unauth-icon { font-size:40px; margin-bottom:16px; opacity:.4; }
+.rw-unauth-title { font-family:var(--display); font-size:18px; font-weight:700; color:var(--text2); margin-bottom:8px; }
+.rw-unauth-sub { font-family:var(--mono); font-size:10px; color:var(--text3); }
+.rrs-badge { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:var(--r); font-family:var(--mono); font-size:11px; font-weight:600; margin-bottom:16px; }
+.rrs-bronze { background:rgba(205,127,50,.12); color:#cd7f32; border:1px solid rgba(205,127,50,.25); }
+.rrs-silver { background:rgba(192,192,192,.12); color:#aaa; border:1px solid rgba(192,192,192,.25); }
+.rrs-gold   { background:rgba(255,215,0,.12);   color:#ffd700; border:1px solid rgba(255,215,0,.25); }
+
 /* ── RESOLVER CARDS ── */
 .res-card {
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
@@ -619,6 +645,13 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="ni" data-p="resolvers" onclick="showPage('resolvers',this)"><span class="ni-ic">◈</span>Browse Resolvers</div>
     <div class="ni" data-p="claimcreator" onclick="showPage('claimcreator',this)"><span class="ni-ic">◎</span>Claim Creator Fee</div>
     <div class="ni" data-p="cancel"    onclick="showPage('cancel',this)">   <span class="ni-ic">✕</span>Cancel Market</div>
+
+    <div class="ns">Rewards</div>
+    <div class="ni" data-p="reward-resolver"  onclick="showPage('reward-resolver',this)"><span class="ni-ic">⚡</span>Resolver Rewards<span class="rb rb-r">Resolver</span></div>
+    <div class="ni" data-p="reward-builder"   onclick="showPage('reward-builder',this)"><span class="ni-ic">🏗</span>Builder Rewards<span class="rb rb-a">Admin</span></div>
+    <div class="ni" data-p="reward-community" onclick="showPage('reward-community',this)"><span class="ni-ic">🌐</span>Community Rewards</div>
+    <div class="ni" data-p="reward-investor"  onclick="showPage('reward-investor',this)"><span class="ni-ic">📈</span>Investor Rewards</div>
+    <div class="ni" data-p="reward-protocol"  onclick="showPage('reward-protocol',this)"><span class="ni-ic">⚙</span>Protocol Rewards</div>
 
     <div class="ns">Account</div>
     <div class="ni" data-p="wallet" onclick="showPage('wallet',this)"><span class="ni-ic">◫</span>Wallet</div>
@@ -1131,6 +1164,147 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="pend" id="pend_finalize"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="fio"><div class="plbl">// unsigned_payload</div><textarea id="fip" readonly></textarea></div>
   </div></div>
+</div>
+
+
+<!-- ── REWARD: RESOLVER ── -->
+<div class="page" id="page-reward-resolver">
+  <div class="ph ph-g"><div class="ph-eye">Rewards</div><div class="ph-title">Resolver Rewards</div><div class="ph-sub">Epoch-weighted rewards based on your RRS tier and resolution activity</div></div>
+  <div class="rw-stats">
+    <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="rrw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="rrw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Current Epoch Pool</div><div class="rw-stat-val" id="rrw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+  </div>
+  <div class="card"><div class="ci">
+    <div class="ct">// resolver_status</div>
+    <div id="rrw-tier-badge" class="rrs-badge rrs-bronze">Bronze — RRS <span id="rrw-rrs">10</span></div>
+    <div class="r3" style="margin-top:12px">
+      <div class="chip"><span>Resolutions</span>&nbsp;<b id="rrw-resolutions">0</b></div>
+      <div class="chip"><span>RRS Score</span>&nbsp;<b id="rrw-rrs2">10</b></div>
+      <div class="chip"><span>Weight</span>&nbsp;<b id="rrw-share">1x</b></div>
+    </div>
+    <div class="rw-formula" style="margin-top:14px">
+      <b>Share formula:</b> your_weight / total_weight x epoch_pool<br>
+      Weight = <b>1x</b> Bronze (RRS 1-49) / <b>3x</b> Silver (RRS 50-199) / <b>7x</b> Gold (RRS 200+)
+    </div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// epoch_history</div>
+    <div style="overflow-x:auto">
+      <table class="rw-table" id="rrw-history">
+        <thead><tr><th>Epoch</th><th>Pool (PRX)</th><th>Your Share</th><th>Status</th></tr></thead>
+        <tbody><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text3)">Connect signer to load history</td></tr></tbody>
+      </table>
+    </div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_resolver_reward</div>
+    <div class="r2">
+      <div class="field"><label>Resolver Address</label><input id="rrw-addr" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Epoch Number</label><input id="rrw-epoch" type="number" placeholder="leave blank = current"/></div>
+    </div>
+    <div class="field"><label>Fee (uPRX)</label><input id="rrw-fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_rrw" onclick="signAndSubmit_rewardResolver()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardResolver()">Build Payload</button></div>
+    <div class="pend" id="pend_rrw"><span class="blink">...</span> broadcasting...</div>
+    <div class="pbox" id="rrwo"><div class="plbl">// unsigned_payload</div><textarea id="rrwp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── REWARD: BUILDER ── -->
+<div class="page" id="page-reward-builder">
+  <div class="ph ph-a"><div class="ph-eye">Rewards</div><div class="ph-title">Builder Rewards</div><div class="ph-sub">Protocol rewards for market creators — 120,960 block vesting window</div></div>
+  <div id="brw-unauth" class="rw-unauth" style="display:none">
+    <div class="rw-unauth-icon">locked</div>
+    <div class="rw-unauth-title">Not Authorized</div>
+    <div class="rw-unauth-sub">This address is not registered as a market creator</div>
+  </div>
+  <div id="brw-content">
+    <div class="rw-stats">
+      <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="brw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+      <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="brw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+      <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="brw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+    </div>
+    <div class="rw-vesting">Vesting window: 120,960 blocks (~14 days). Rewards vest linearly.</div>
+    <div class="card"><div class="ci">
+      <div class="ct">// epoch_history</div>
+      <div style="overflow-x:auto">
+        <table class="rw-table" id="brw-history">
+          <thead><tr><th>Epoch</th><th>Pool (PRX)</th><th>Your Share</th><th>Status</th></tr></thead>
+          <tbody><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text3)">Connect signer to load history</td></tr></tbody>
+        </table>
+      </div>
+    </div></div>
+    <div class="card"><div class="ci">
+      <div class="ct">// claim_builder_reward</div>
+      <div class="field"><label>Builder Address</label><input id="brw-addr" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Fee (uPRX)</label><input id="brw-fee" type="number" value="10000"/></div>
+      <div class="brow"><button class="btn bp" id="btn_brw" onclick="signAndSubmit_rewardBuilder()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardBuilder()">Build Payload</button></div>
+      <div class="pend" id="pend_brw"><span class="blink">...</span> broadcasting...</div>
+      <div class="pbox" id="brwo"><div class="plbl">// unsigned_payload</div><textarea id="brwp" readonly></textarea></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ── REWARD: COMMUNITY ── -->
+<div class="page" id="page-reward-community">
+  <div class="ph ph-g"><div class="ph-eye">Rewards</div><div class="ph-title">Community Rewards</div><div class="ph-sub">Participation rewards for active predictors</div></div>
+  <div class="rw-stats">
+    <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="crw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="crw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="crw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+  </div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_community_reward</div>
+    <div class="field"><label>Claimant Address</label><input id="crw-addr" type="text" placeholder="40 hex chars"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="crw-fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_crw" onclick="signAndSubmit_rewardCommunity()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardCommunity()">Build Payload</button></div>
+    <div class="pend" id="pend_crw"><span class="blink">...</span> broadcasting...</div>
+    <div class="pbox" id="crwo"><div class="plbl">// unsigned_payload</div><textarea id="crwp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── REWARD: INVESTOR ── -->
+<div class="page" id="page-reward-investor">
+  <div class="ph ph-g"><div class="ph-eye">Rewards</div><div class="ph-title">Investor Rewards</div><div class="ph-sub">Liquidity provision rewards — 241,920 block vesting window</div></div>
+  <div class="rw-stats">
+    <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="irw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="irw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="irw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+  </div>
+  <div class="rw-vesting">Vesting window: 241,920 blocks (~28 days). Rewards vest linearly.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_investor_reward</div>
+    <div class="field"><label>Investor Address</label><input id="irw-addr" type="text" placeholder="40 hex chars"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="irw-fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_irw" onclick="signAndSubmit_rewardInvestor()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardInvestor()">Build Payload</button></div>
+    <div class="pend" id="pend_irw"><span class="blink">...</span> broadcasting...</div>
+    <div class="pbox" id="irwo"><div class="plbl">// unsigned_payload</div><textarea id="irwp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── REWARD: PROTOCOL ── -->
+<div class="page" id="page-reward-protocol">
+  <div class="ph ph-a"><div class="ph-eye">Rewards</div><div class="ph-title">Protocol Rewards</div><div class="ph-sub">Governance and staking rewards from protocol treasury</div></div>
+  <div id="prw-unauth" class="rw-unauth" style="display:none">
+    <div class="rw-unauth-icon">locked</div>
+    <div class="rw-unauth-title">Not Authorized</div>
+    <div class="rw-unauth-sub">This address is not authorized for protocol rewards</div>
+  </div>
+  <div id="prw-content">
+    <div class="rw-stats">
+      <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="prw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+      <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="prw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+      <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="prw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+    </div>
+    <div class="card"><div class="ci">
+      <div class="ct">// claim_protocol_reward</div>
+      <div class="field"><label>Claimant Address</label><input id="prw-addr" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Fee (uPRX)</label><input id="prw-fee" type="number" value="10000"/></div>
+      <div class="brow"><button class="btn bp" id="btn_prw" onclick="signAndSubmit_rewardProtocol()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardProtocol()">Build Payload</button></div>
+      <div class="pend" id="pend_prw"><span class="blink">...</span> broadcasting...</div>
+      <div class="pbox" id="prwo"><div class="plbl">// unsigned_payload</div><textarea id="prwp" readonly></textarea></div>
+    </div></div>
+  </div>
 </div>
 
 <div class="page" id="page-node">

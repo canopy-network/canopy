@@ -2330,3 +2330,213 @@ window.renderTopHolders = function(mid) {
     el.innerHTML='<div style="padding:16px;color:var(--red);font-family:var(--font-mono);font-size:11px">Error: '+esc(e.message)+'</div>';
   }
 };
+
+// ═══════════════════════════════════════════
+// PRIS REWARD PAGES
+// ═══════════════════════════════════════════
+
+const EPOCH_BLOCKS = 1000;
+const AUTHORIZED_BUILDER   = 'e7c7dad131a03f7ea0cc09a637ad096eb3495f77';
+const AUTHORIZED_PROTOCOL  = 'e7c7dad131a03f7ea0cc09a637ad096eb3495f77';
+
+// Encoding
+function encRewardResolver(addr, epoch){ return cat(bf(1,h2b(addr)), vf(2, BigInt(epoch))); }
+function encRewardBuilder(addr){         return cat(bf(1,h2b(addr))); }
+function encRewardCommunity(addr){       return cat(bf(1,h2b(addr))); }
+function encRewardInvestor(addr){        return cat(bf(1,h2b(addr))); }
+function encRewardProtocol(addr){        return cat(bf(1,h2b(addr))); }
+
+// Auth guard helper
+function checkRewardAuth(pageId, contentId, unauthId, authorizedAddr) {
+  const authed = !authorizedAddr || (signerAddress && signerAddress.toLowerCase() === authorizedAddr.toLowerCase());
+  document.getElementById(contentId).style.display = authed ? '' : 'none';
+  document.getElementById(unauthId).style.display  = authed ? 'none' : '';
+}
+
+// Auto-fill address fields when reward page opens
+
+// Generic pool stat loader (reads from chain via admin RPC)
+async function loadPoolStat(elId, key) {
+  try {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    // Pool data comes from plugin state — show epoch estimate for now
+    const epoch = currentHeight ? Math.floor(currentHeight / EPOCH_BLOCKS) : 0;
+    el.textContent = 'Epoch #' + epoch;
+  } catch(e) {}
+}
+
+// Resolver reward data
+async function loadResolverRewardData() {
+  try {
+    const epoch = currentHeight ? Math.floor(currentHeight / EPOCH_BLOCKS) : 0;
+    document.getElementById('rrw-pool').textContent = 'Epoch #' + epoch;
+
+    // Pull resolver info from the resolvers map if already loaded
+    if (signerAddress && window._resolvers) {
+      const r = window._resolvers.get(signerAddress.toLowerCase());
+      if (r) {
+        const rrs = r.rrs || 10;
+        const proposals = r.proposalCount || 0;
+        document.getElementById('rrw-rrs').textContent  = rrs;
+        document.getElementById('rrw-rrs2').textContent = rrs;
+        document.getElementById('rrw-resolutions').textContent = proposals;
+
+        // Tier
+        let tier = 'bronze', tierLabel = '🥉 Bronze', tierClass = 'rrs-bronze';
+        if (rrs >= 200) { tier = 'gold';   tierLabel = '🥇 Gold';   tierClass = 'rrs-gold'; }
+        else if (rrs >= 50) { tier = 'silver'; tierLabel = '🥈 Silver'; tierClass = 'rrs-silver'; }
+        const weight = rrs >= 200 ? 7 : rrs >= 50 ? 3 : 1;
+
+        const badge = document.getElementById('rrw-tier-badge');
+        badge.className = 'rrs-badge ' + tierClass;
+        badge.innerHTML = tierLabel + ' — RRS <span id="rrw-rrs">' + rrs + '</span>';
+        document.getElementById('rrw-share').textContent = weight + '× weight';
+
+        // Epoch history table (last 5 epochs)
+        let rows = '';
+        for (let i = Math.max(0, epoch - 4); i <= epoch; i++) {
+          const isCurrent = i === epoch;
+          rows += `<tr>
+            <td>#${i}</td>
+            <td class="d">${isCurrent ? 'In progress' : '—'}</td>
+            <td class="d">—</td>
+            <td class="${isCurrent ? 'g' : 'd'}">${isCurrent ? 'Current' : 'Claimable'}</td>
+          </tr>`;
+        }
+        document.querySelector('#rrw-history tbody').innerHTML = rows;
+      }
+    }
+  } catch(e) {}
+}
+
+// Builder reward data
+async function loadBuilderRewardData() {
+  try {
+    const epoch = currentHeight ? Math.floor(currentHeight / EPOCH_BLOCKS) : 0;
+    document.getElementById('brw-pool').textContent = 'Epoch #' + epoch;
+    let rows = '';
+    for (let i = Math.max(0, epoch - 4); i <= epoch; i++) {
+      const isCurrent = i === epoch;
+      rows += `<tr>
+        <td>#${i}</td>
+        <td class="d">${isCurrent ? 'In progress' : '—'}</td>
+        <td class="d">—</td>
+        <td class="${isCurrent ? 'g' : 'd'}">${isCurrent ? 'Current' : 'Claimable'}</td>
+      </tr>`;
+    }
+    document.querySelector('#brw-history tbody').innerHTML = rows;
+  } catch(e) {}
+}
+
+// ── Submit handlers ──
+
+window.signAndSubmit_rewardResolver = async function() {
+  try {
+    const addr = document.getElementById('rrw-addr').value.trim();
+    const epochVal = document.getElementById('rrw-epoch').value.trim();
+    const epoch = epochVal ? parseInt(epochVal) : Math.floor((currentHeight||0) / EPOCH_BLOCKS);
+    const fee = BigInt(document.getElementById('rrw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid resolver address', true);
+    await doSubmit('claim_resolver_reward','type.googleapis.com/types.MessageClaimResolverReward',encRewardResolver(addr,epoch),{fee},'btn_rrw','pend_rrw');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+window.build_rewardResolver = function() {
+  try {
+    const addr = document.getElementById('rrw-addr').value.trim();
+    const epochVal = document.getElementById('rrw-epoch').value.trim();
+    const epoch = epochVal ? parseInt(epochVal) : Math.floor((currentHeight||0) / EPOCH_BLOCKS);
+    const fee = BigInt(document.getElementById('rrw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid resolver address', true);
+    showPL('rrwo','rrwp',buildUnsigned('claim_resolver_reward','type.googleapis.com/types.MessageClaimResolverReward',encRewardResolver(addr,epoch),{fee}));
+    toast('Payload built');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+window.signAndSubmit_rewardBuilder = async function() {
+  try {
+    const addr = document.getElementById('brw-addr').value.trim();
+    const fee = BigInt(document.getElementById('brw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid address', true);
+    await doSubmit('claim_builder_reward','type.googleapis.com/types.MessageClaimBuilderReward',encRewardBuilder(addr),{fee},'btn_brw','pend_brw');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+window.build_rewardBuilder = function() {
+  try {
+    const addr = document.getElementById('brw-addr').value.trim();
+    const fee = BigInt(document.getElementById('brw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid address', true);
+    showPL('brwo','brwp',buildUnsigned('claim_builder_reward','type.googleapis.com/types.MessageClaimBuilderReward',encRewardBuilder(addr),{fee}));
+    toast('Payload built');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+window.signAndSubmit_rewardCommunity = async function() {
+  try {
+    const addr = document.getElementById('crw-addr').value.trim();
+    const fee = BigInt(document.getElementById('crw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid address', true);
+    await doSubmit('claim_community_reward','type.googleapis.com/types.MessageClaimCommunityReward',encRewardCommunity(addr),{fee},'btn_crw','pend_crw');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+window.build_rewardCommunity = function() {
+  try {
+    const addr = document.getElementById('crw-addr').value.trim();
+    const fee = BigInt(document.getElementById('crw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid address', true);
+    showPL('crwo','crwp',buildUnsigned('claim_community_reward','type.googleapis.com/types.MessageClaimCommunityReward',encRewardCommunity(addr),{fee}));
+    toast('Payload built');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+window.signAndSubmit_rewardInvestor = async function() {
+  try {
+    const addr = document.getElementById('irw-addr').value.trim();
+    const fee = BigInt(document.getElementById('irw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid address', true);
+    await doSubmit('claim_investor_reward','type.googleapis.com/types.MessageClaimInvestorReward',encRewardInvestor(addr),{fee},'btn_irw','pend_irw');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+window.build_rewardInvestor = function() {
+  try {
+    const addr = document.getElementById('irw-addr').value.trim();
+    const fee = BigInt(document.getElementById('irw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid address', true);
+    showPL('irwo','irwp',buildUnsigned('claim_investor_reward','type.googleapis.com/types.MessageClaimInvestorReward',encRewardInvestor(addr),{fee}));
+    toast('Payload built');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+window.signAndSubmit_rewardProtocol = async function() {
+  try {
+    const addr = document.getElementById('prw-addr').value.trim();
+    const fee = BigInt(document.getElementById('prw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid address', true);
+    await doSubmit('claim_protocol_reward','type.googleapis.com/types.MessageClaimProtocolReward',encRewardProtocol(addr),{fee},'btn_prw','pend_prw');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+window.build_rewardProtocol = function() {
+  try {
+    const addr = document.getElementById('prw-addr').value.trim();
+    const fee = BigInt(document.getElementById('prw-fee').value||10000);
+    if (!addr || addr.length !== 40) return toast('Invalid address', true);
+    showPL('prwo','prwp',buildUnsigned('claim_protocol_reward','type.googleapis.com/types.MessageClaimProtocolReward',encRewardProtocol(addr),{fee}));
+    toast('Payload built');
+  } catch(e) { toast(friendlyError(null,e.message),true); }
+};
+
+// expose resolvers map for reward page
+const _origBrowseResolvers = window.loadResolvers;
+if (typeof loadResolvers === 'function') {
+  const __orig = loadResolvers;
+  window.loadResolvers = async function() {
+    await __orig();
+    // cache resolvers map reference
+    window._resolvers = resolvers;
+  };
+}
