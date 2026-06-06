@@ -2,6 +2,9 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval' 'unsafe-inline' https://esm.sh https://cdn.skypack.dev https://fonts.googleapis.com https://fonts.gstatic.com"/>
 <title>Praxis — Prediction Markets</title>
@@ -187,6 +190,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
    MAIN
 ══════════════════════════════════════════ */
 .main { flex:1; overflow-y:auto; padding:28px 32px 80px; max-width:980px; }
+@media(max-width:768px){ .main { padding:20px 16px 80px; } }
 
 /* ── PAGE HEADER ── */
 .ph { margin-bottom:24px; padding-bottom:18px; border-bottom:1px solid var(--border); }
@@ -375,6 +379,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .hint { font-family:var(--mono); font-size:9px; color:var(--text3); margin-top:3px; }
 .r2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .r3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+@media(max-width:768px){ .r2,.r3 { grid-template-columns:1fr; } }
 
 /* ── BUTTONS ── */
 .btn {
@@ -517,6 +522,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   padding:14px 16px; display:flex; align-items:center; gap:14px; margin-bottom:10px;
   transition:border-color .15s;
 }
+@media(max-width:768px){ .res-card { flex-wrap:wrap; } .res-avatar { display:none; } }
 .res-card:hover { border-color:var(--border2); }
 .res-avatar {
   width:38px; height:38px; border-radius:50%; background:var(--surf3);
@@ -524,8 +530,8 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   font-family:var(--mono); font-size:12px; color:var(--text3); flex-shrink:0;
 }
 .res-info { flex:1; min-width:0; }
-.res-addr { font-family:var(--mono); font-size:11px; color:var(--cyan); margin-bottom:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.res-stats { display:flex; gap:12px; }
+.res-addr { font-family:var(--mono); font-size:11px; color:var(--cyan); margin-bottom:6px; word-break:break-all; white-space:normal; }
+.res-stats { display:flex; gap:12px; flex-wrap:wrap; }
 .res-stat { display:flex; flex-direction:column; gap:1px; }
 .res-stat-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
 .res-stat-val { font-family:var(--mono); font-size:11px; color:var(--text2); }
@@ -772,7 +778,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// forfeit_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="fo_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Resolver Address</label><input id="fo_resolver" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="fo_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="fo_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_forfeit" onclick="signAndSubmit_forfeit()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_forfeit()">Build Payload</button></div>
     <div class="pend" id="pend_forfeit"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="foo"><div class="plbl">// unsigned_payload</div><textarea id="fop" readonly></textarea></div>
@@ -791,7 +797,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
       <div class="field"><label>Slippage <span id="p_slip_lbl" style="color:var(--green);font-size:10px">5.0%</span></label><input id="p_slippage" type="range" min="1" max="10" step="0.5" value="5" oninput="updatePredictBreakdown()" style="width:100%;accent-color:var(--green)"/><div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--text3)"><span>1%</span><span>10%</span></div></div>
       <div class="field"><label>Max Cost (PRX)</label><input id="p_maxcost" type="number" value="100" readonly style="opacity:.6"/></div>
     </div>
-    <div class="field" style="max-width:180px"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div>
     <div id="predict_breakdown" class="breakdown"></div>
     <div id="cap_indicator"></div>
     <div class="brow"><button class="btn bp" id="btn_predict" onclick="signAndSubmit_predict()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_predict()">Build Payload</button></div>
@@ -806,7 +812,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// claim_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="cl_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="cl_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="cl_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="cl_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_claim" onclick="signAndSubmit_claim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_claim()">Build Payload</button></div>
     <div class="pend" id="pend_claim"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="clo"><div class="plbl">// unsigned_payload</div><textarea id="clp" readonly></textarea></div>
@@ -820,7 +826,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// reclaim_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="rc_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="rc_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="rc_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="rc_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_reclaim" onclick="signAndSubmit_reclaim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_reclaim()">Build Payload</button></div>
     <div class="pend" id="pend_reclaim"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="rco"><div class="plbl">// unsigned_payload</div><textarea id="rcp" readonly></textarea></div>
@@ -839,7 +845,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// creator_fee_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="cf_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Creator Address</label><input id="cf_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="cf_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="cf_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_cf" onclick="signAndSubmit_claimcreator()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_claimcreator()">Build Payload</button></div>
     <div class="pend" id="pend_cf"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="cfo"><div class="plbl">// unsigned_payload</div><textarea id="cfp" readonly></textarea></div>
@@ -853,7 +859,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// cancel_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="can_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Creator Address</label><input id="can_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="can_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="can_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bamb" id="btn_cancel" onclick="signAndSubmit_cancel()">✕ Cancel Market</button><button class="btn bsec" onclick="build_cancel()">Build Payload</button></div>
     <div class="pend" id="pend_cancel"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="cano"><div class="plbl">// unsigned_payload</div><textarea id="canp" readonly></textarea></div>
@@ -980,7 +986,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// register_parameters</div>
     <div class="r2"><div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Stake Amount (PRX)</label><input id="reg_stake" type="number" value="500000" oninput="updateRegisterBreakdown()"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="reg_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="reg_fee" type="number" value="10000"/></div>
     <div id="register_breakdown" class="breakdown"></div>
     <div class="brow"><button class="btn bp" id="btn_register" onclick="signAndSubmit_register()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_register()">Build Payload</button></div>
     <div class="pend" id="pend_register"><span class="blink">▪▪▪</span> broadcasting…</div>
@@ -994,7 +1000,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="ct">// propose_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="pr_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Resolver Address</label><input id="pr_resolver" type="text" placeholder="40 hex chars"/></div></div>
     <div class="field"><label>Proposed Outcome</label><div class="otog"><div class="obtn yes active" id="pr_btn_yes" onclick="setPropOut(true)">YES</div><div class="obtn no" id="pr_btn_no" onclick="setPropOut(false)">NO</div></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="pr_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="pr_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_propose" onclick="signAndSubmit_propose()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_propose()">Build Payload</button></div>
     <div class="pend" id="pend_propose"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="pro"><div class="plbl">// unsigned_payload</div><textarea id="prp" readonly></textarea></div>
@@ -1006,7 +1012,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// dispute_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="di_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Disputer Address</label><input id="di_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="di_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="di_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_dispute" onclick="signAndSubmit_dispute()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_dispute()">Build Payload</button></div>
     <div class="pend" id="pend_dispute"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="dio"><div class="plbl">// unsigned_payload</div><textarea id="dip" readonly></textarea></div>
@@ -1018,7 +1024,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// commit_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="cv_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Voter Address</label><input id="cv_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="r2"><div class="field"><label>Commitment Hash (hex)</label><input id="cv_hash" type="text" placeholder="64 hex chars"/></div><div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="cv_fee" type="number" value="10000"/></div></div>
+    <div class="r2"><div class="field"><label>Commitment Hash (hex)</label><input id="cv_hash" type="text" placeholder="64 hex chars"/></div><div class="field"><label>Fee (uPRX)</label><input id="cv_fee" type="number" value="10000"/></div></div>
     <div class="brow"><button class="btn bp" id="btn_commit" onclick="signAndSubmit_commit()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_commit()">Build Payload</button></div>
     <div class="pend" id="pend_commit"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="cvo"><div class="plbl">// unsigned_payload</div><textarea id="cvp" readonly></textarea></div>
@@ -1031,7 +1037,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="ct">// reveal_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="rv_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Voter Address</label><input id="rv_addr" type="text" placeholder="40 hex chars"/></div></div>
     <div class="r2"><div class="field"><label>Vote (YES/NO)</label><div class="otog"><div class="obtn yes active" id="rv_btn_yes" onclick="setRevOut(true)">YES</div><div class="obtn no" id="rv_btn_no" onclick="setRevOut(false)">NO</div></div></div><div class="field"><label>Salt (hex)</label><input id="rv_salt" type="text" placeholder="32 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="rv_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="rv_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_reveal" onclick="signAndSubmit_reveal()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_reveal()">Build Payload</button></div>
     <div class="pend" id="pend_reveal"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="rvo"><div class="plbl">// unsigned_payload</div><textarea id="rvp" readonly></textarea></div>
@@ -1043,7 +1049,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// tally_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="ta_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Caller Address</label><input id="ta_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="ta_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="ta_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_tally" onclick="signAndSubmit_tally()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_tally()">Build Payload</button></div>
     <div class="pend" id="pend_tally"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="tao"><div class="plbl">// unsigned_payload</div><textarea id="tap" readonly></textarea></div>
@@ -1055,7 +1061,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// slash_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="sl_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="sl_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="sl_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="sl_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_slash" onclick="signAndSubmit_slash()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_slash()">Build Payload</button></div>
     <div class="pend" id="pend_slash"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="slo"><div class="plbl">// unsigned_payload</div><textarea id="slp" readonly></textarea></div>
@@ -1067,7 +1073,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// unstake_parameters</div>
     <div class="r2"><div class="field"><label>Resolver Address</label><input id="un_addr" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Amount (PRX) — 0 = full exit</label><input id="un_amount" type="number" value="0"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="un_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="un_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bamb" id="btn_unstake" onclick="signAndSubmit_unstake()">↓ Unstake</button><button class="btn bsec" onclick="build_unstake()">Build Payload</button></div>
     <div class="pend" id="pend_unstake"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="uno"><div class="plbl">// unsigned_payload</div><textarea id="unp" readonly></textarea></div>
@@ -1079,7 +1085,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// claim_unbonded_parameters</div>
     <div class="field"><label>Resolver Address</label><input id="ub_addr" type="text" placeholder="40 hex chars"/></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="ub_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="ub_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_ub" onclick="signAndSubmit_claimunbonded()">◎ Claim Unbonded</button><button class="btn bsec" onclick="build_claimunbonded()">Build Payload</button></div>
     <div class="pend" id="pend_ub"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="ubo"><div class="plbl">// unsigned_payload</div><textarea id="ubp" readonly></textarea></div>
@@ -1095,7 +1101,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (PRX)</label><input id="c_b0" type="number" value="60" oninput="updateCreateBreakdown()"/></div></div>
     <div class="r2"><div class="field"><label>Expiry (block height)</label><input id="c_expiry" type="number" placeholder="auto"/></div><div class="field"><label>Nonce (optional)</label><input id="c_nonce" type="text" placeholder="auto"/></div></div>
     <div class="field"><label>Rules / Resolution criteria</label><textarea id="c_rules" placeholder="Market resolves YES if…"></textarea></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="c_fee" type="number" value="10000" oninput="updateCreateBreakdown()"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="c_fee" type="number" value="10000" oninput="updateCreateBreakdown()"/></div>
     <div id="create_breakdown" class="breakdown"></div>
     <div class="brow"><button class="btn bp" id="btn_create" onclick="signAndSubmit_create()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_create()">Build Payload</button></div>
     <div class="pend" id="pend_create"><span class="blink">▪▪▪</span> broadcasting…</div>
@@ -1108,7 +1114,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="card"><div class="ci">
     <div class="ct">// finalize_parameters</div>
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="fi_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Caller Address</label><input id="fi_addr" type="text" placeholder="40 hex chars"/></div></div>
-    <div class="field" style="max-width:220px"><label>Fee (uPRX)</label><input id="fi_fee" type="number" value="10000"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="fi_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_finalize" onclick="signAndSubmit_finalize()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_finalize()">Build Payload</button></div>
     <div class="pend" id="pend_finalize"><span class="blink">▪▪▪</span> broadcasting…</div>
     <div class="pbox" id="fio"><div class="plbl">// unsigned_payload</div><textarea id="fip" readonly></textarea></div>
