@@ -411,6 +411,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .bamb:disabled { opacity:.4; cursor:not-allowed; transform:none; box-shadow:none; }
 .bsm { padding:6px 12px; font-size:11px; }
 .brow { display:flex; gap:8px; flex-wrap:wrap; margin-top:15px; align-items:center; }
+.cat-pick { display:flex; gap:6px; flex-wrap:wrap; }
+.cpick { padding:6px 14px; border:1px solid var(--border); border-radius:20px; font-family:var(--mono); font-size:10px; color:var(--text2); cursor:pointer; transition:all .15s; user-select:none; background:transparent; }
+.cpick:hover { border-color:var(--green); color:var(--green); background:var(--gdim); }
+.cpick.active { background:var(--green); color:#000; border-color:var(--green); font-weight:600; }
+.mcard-cat-tag { font-family:var(--mono); font-size:8px; letter-spacing:1px; text-transform:uppercase; padding:2px 7px; border-radius:10px; background:var(--surf2); color:var(--text3); border:1px solid var(--border); }
 .byes2 { width:100%; padding:12px; background:var(--gdim); border:1px solid rgba(0,232,122,.2); color:var(--green); font-family:var(--display); font-size:13px; font-weight:700; cursor:pointer; border-radius:var(--r); transition:all .15s; }
 .byes2:hover { background:var(--green); color:#000; }
 .bno2  { width:100%; padding:12px; background:var(--rdim); border:1px solid rgba(255,64,96,.2); color:var(--red); font-family:var(--display); font-size:13px; font-weight:700; cursor:pointer; border-radius:var(--r); transition:all .15s; }
@@ -1144,6 +1149,15 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="ph ph-a"><div class="ph-eye">Admin</div><div class="ph-title">Create Market</div><div class="ph-sub">Deploy a new prediction market on Praxis</div></div>
   <div class="card"><div class="ci">
     <div class="ct">// market_parameters</div>
+    <div class="field"><label>Category</label>
+      <div class="cat-pick" id="c_cat_pick">
+        <div class="cpick active" data-cat="crypto"   onclick="pickCat(this)">🪙 Crypto</div>
+        <div class="cpick"        data-cat="sports"   onclick="pickCat(this)">⚽ Sports</div>
+        <div class="cpick"        data-cat="politics" onclick="pickCat(this)">🗳 Politics</div>
+        <div class="cpick"        data-cat="finance"  onclick="pickCat(this)">📈 Finance</div>
+        <div class="cpick"        data-cat="other"    onclick="pickCat(this)">◈ Other</div>
+      </div>
+    </div>
     <div class="field"><label>Question</label><input id="c_question" type="text" placeholder="Will BTC exceed $100k by end of 2025?"/></div>
     <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (PRX)</label><input id="c_b0" type="number" value="60" oninput="updateCreateBreakdown()"/></div></div>
     <div class="r2"><div class="field"><label>Expiry (block height)</label><input id="c_expiry" type="number" placeholder="auto"/></div><div class="field"><label>Nonce (optional)</label><input id="c_nonce" type="text" placeholder="auto"/></div></div>

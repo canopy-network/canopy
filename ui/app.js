@@ -477,17 +477,20 @@ function resolverTier(addr) {
 window.renderMarketCards = function(markets) {
   if (!markets || markets.length === 0) return '<div class="alert ay">No markets found</div>';
 
-  // category filter
+  // category filter — tag-based first, keyword fallback
   let filtered = markets;
   if (window._activeCat && window._activeCat !== 'all') {
     const cat = window._activeCat;
     filtered = markets.filter(m => {
+      const tag = extractCat(m.rules || '');
+      if (tag && tag !== 'other') return tag === cat;
+      // keyword fallback for untagged markets
       const q = (m.question || '').toLowerCase();
       if (cat === 'crypto')   return /btc|eth|crypto|bitcoin|ethereum|solana|token|defi|nft|blockchain/.test(q);
       if (cat === 'sports')   return /nba|nfl|fifa|soccer|football|tennis|golf|sports|league|match|game|win/.test(q);
       if (cat === 'politics') return /election|president|vote|congress|senate|government|policy|law|bill/.test(q);
       if (cat === 'finance')  return /stock|market|fed|rate|gdp|inflation|s&p|nasdaq|economy|oil|gold/.test(q);
-      return true;
+      return cat === 'other';
     });
   }
 
@@ -527,7 +530,7 @@ window.renderMarketCards = function(markets) {
 
     return `<div class="mcard ${cardClass}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
   <div class="mcard-top">
-    <div class="mcard-cat"><span class="mcard-cat-dot"></span>PRAXIS MARKET &nbsp;${statusHtml}</div>
+    <div class="mcard-cat"><span class="mcard-cat-dot"></span>PRAXIS MARKET &nbsp;${statusHtml}&nbsp;<span class="mcard-cat-tag">${(CAT_LABELS[extractCat(m.rules||'')] || '◈ Other')}</span></div>
     <div class="mcard-q">${esc(m.question || '(no question)')}</div>
     <div class="mcard-probs">
       <div>
@@ -983,7 +986,7 @@ window.build_create=function(){try{
   else nonce=parseInt(nonce);
   const rules=document.getElementById('c_rules').value.trim();
   if(!q)throw new Error('Question required');addr40(cr,'Creator');
-  showPL('co','cp',buildUnsigned('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,rules),{fee}));toast('Payload built');
+  showPL('co','cp',buildUnsigned('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,buildRulesWithCat(_cat,rules)),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.updateCreateBreakdown=function(){
   const b0=parseInt(document.getElementById('c_b0')?.value||0);
@@ -1009,7 +1012,7 @@ window.signAndSubmit_create=async function(){try{
   else nonce=parseInt(nonce);
   const rules=document.getElementById('c_rules').value.trim();
   if(!q)throw new Error('Question required');addr40(cr,'Creator');
-  await doSubmit('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,rules),{fee},'btn_create','pend_create');
+  await doSubmit('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,buildRulesWithCat(_cat,rules)),{fee},'btn_create','pend_create');
 }catch(e){toast(e.message,true);}};
 
 // ── SUBMIT PREDICTION
@@ -2023,6 +2026,41 @@ window.updateDisputeRisk = function() {
   if (!box) return;
   renderRiskBox(box, getRiskInfo(mid));
 };
+
+
+// ═══════════════════════════════════════════
+// CATEGORY SYSTEM
+// ═══════════════════════════════════════════
+const CAT_LABELS = {
+  crypto: '🪙 Crypto', sports: '⚽ Sports', politics: '🗳 Politics',
+  finance: '📈 Finance', other: '◈ Other'
+};
+
+function extractCat(rules) {
+  if (!rules) return 'other';
+  const m = rules.match(/^\[CAT:(\w+)\]/);
+  return m ? m[1] : 'other';
+}
+
+function stripCatPrefix(rules) {
+  if (!rules) return '';
+  return rules.replace(/^\[CAT:\w+\]\s*/, '');
+}
+
+function buildRulesWithCat(cat, rules) {
+  const stripped = stripCatPrefix(rules);
+  return '[CAT:' + cat + '] ' + stripped;
+}
+
+window.pickCat = function(el) {
+  document.querySelectorAll('#c_cat_pick .cpick').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+};
+
+function getSelectedCat() {
+  const el = document.querySelector('#c_cat_pick .cpick.active');
+  return el ? el.getAttribute('data-cat') : 'other';
+}
 
 // ═══════════════════════════════════════════
 // CLAIM CREATOR FEE
