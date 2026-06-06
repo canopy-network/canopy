@@ -189,8 +189,7 @@ window.showPage=function(id,btn){
 // ═══════════════════════════════════════════
 // MOBILE NAV
 // ═══════════════════════════════════════════
-window.openNav=function(){document.getElementById('deskNav').classList.toggle('open');document.getElementById('mobNav').classList.toggle('open');};
-window.closeNav=function(e){if(e&&e.target!==document.getElementById('mobNav'))return;document.getElementById('mobNav').classList.remove('open');};
+window.openNav=function(){document.getElementById('deskNav').classList.add('open');document.getElementById('mobNav').classList.add('open');};window.closeNav=function(e){if(!e||e.target===document.getElementById('mobNav')||e.currentTarget===document.getElementById('mobNav')){document.getElementById('deskNav').classList.remove('open');document.getElementById('mobNav').classList.remove('open');}};
 
 function buildMobNav(){
   const body=document.getElementById('mobNavBody');
