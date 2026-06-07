@@ -2,8 +2,8 @@
   "page": {
     "title": "Validator Details",
     "description": "Complete validator information and performance metrics",
-    "breadcrumb": "Validators >",
-    "backToValidators": "Back to Validators"
+    "breadcrumb": "Staking >",
+    "backToValidators": "Back to Staking"
   },
   "header": {
     "status": {

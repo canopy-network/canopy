@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -54,9 +55,19 @@ func (s *StateMachine) HandleMessage(msg lib.MessageI) lib.ErrorI {
 
 // HandleMessageSend() is the proper handler for a `Send` message
 func (s *StateMachine) HandleMessageSend(msg *MessageSend) lib.ErrorI {
+	// vesting sends must preflight recipient compatibility before mutating sender state
+	if msg.VestingStartHeight != 0 || msg.VestingEndHeight != 0 {
+		if err := s.ValidateAccountAddWithVesting(msg); err != nil {
+			return err
+		}
+	}
 	// subtract from sender
 	if err := s.AccountSub(crypto.NewAddressFromBytes(msg.FromAddress), msg.Amount); err != nil {
 		return err
+	}
+	// if special vesting send
+	if msg.VestingStartHeight != 0 || msg.VestingEndHeight != 0 {
+		return s.AccountAddWithVesting(msg)
 	}
 	// add to recipient
 	return s.AccountAdd(crypto.NewAddressFromBytes(msg.ToAddress), msg.Amount)
@@ -309,6 +320,12 @@ func (s *StateMachine) HandleMessageDAOTransfer(msg *MessageDAOTransfer) lib.Err
 	if err := s.ApproveProposal(msg); err != nil {
 		return ErrRejectProposal()
 	}
+	// optionally mint the transfer amount into the DAO pool before distributing the grant
+	if msg.Mint {
+		if err := s.MintToPool(lib.DAOPoolID, msg.Amount); err != nil {
+			return err
+		}
+	}
 	// remove from DAO fund
 	if err := s.PoolSub(lib.DAOPoolID, msg.Amount); err != nil {
 		return err
@@ -319,8 +336,17 @@ func (s *StateMachine) HandleMessageDAOTransfer(msg *MessageDAOTransfer) lib.Err
 
 // HandleMessageCertificateResults() is the proper handler for a `CertificateResults` message
 func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateResults) lib.ErrorI {
+	startTime := time.Now()
+	observeStage := func(stage string, stageStartTime time.Time) {
+		if s.Metrics != nil {
+			s.Metrics.HandleMessageCertificateResultsStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+		}
+	}
+	defer observeStage("total", startTime)
 	// load the root chain id from state
+	rootChainIdStartTime := time.Now()
 	rootChainId, err := s.GetRootChainId()
+	observeStage("get_root_chain_id", rootChainIdStartTime)
 	if err != nil {
 		return err
 	}
@@ -338,7 +364,9 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 	}
 	if committee == nil {
 		// otherwise, retrieve it from the store
+		loadCommitteeStartTime := time.Now()
 		valSet, err := s.LoadCommittee(chainId, msg.Qc.Header.RootHeight)
+		observeStage("load_committee", loadCommitteeStartTime)
 		if err != nil {
 			return err
 		}
@@ -346,7 +374,9 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 	}
 	// ensure it's a valid QC
 	// max block size is 0 here because there should not be a block attached to this QC
+	qcCheckStartTime := time.Now()
 	isPartialQC, err := msg.Qc.Check(*committee, 0, &lib.View{NetworkId: uint64(s.NetworkID), ChainId: chainId}, false)
+	observeStage("qc_check", qcCheckStartTime)
 	if err != nil {
 		return err
 	}
@@ -355,7 +385,10 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 		return lib.ErrNoMaj23()
 	}
 	// handle the certificate results
-	return s.HandleCertificateResults(msg.Qc, committee)
+	handleCertificateResultsStartTime := time.Now()
+	err = s.HandleCertificateResults(msg.Qc, committee)
+	observeStage("handle_certificate_results", handleCertificateResultsStartTime)
+	return err
 }
 
 // HandleMessageSubsidy() is the proper handler for a `Subsidy` message

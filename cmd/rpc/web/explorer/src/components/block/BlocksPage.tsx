@@ -25,7 +25,8 @@ const LiveIndicator = () => (
 
 const BlocksPage: React.FC = () => {
     const [currentPage, setCurrentPage] = React.useState(1)
-    const { data: blocksData, isLoading } = useBlocks(currentPage, 10, 'all')
+    const [pageSize, setPageSize] = React.useState(10)
+    const { data: blocksData, isLoading } = useBlocks(currentPage, pageSize, 'all')
 
     const normalizeBlocks = (payload: unknown): Block[] => {
         if (!payload) return []
@@ -115,6 +116,11 @@ const BlocksPage: React.FC = () => {
         setCurrentPage(page)
     }
 
+    const handlePageSizeChange = (value: number) => {
+        setPageSize(value)
+        setCurrentPage(1)
+    }
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -123,7 +129,7 @@ const BlocksPage: React.FC = () => {
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="w-full"
         >
-            <div className="mb-6">
+            <div className="mb-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h1 className="explorer-page-title">
@@ -144,7 +150,9 @@ const BlocksPage: React.FC = () => {
                 loading={isLoading}
                 totalCount={totalBlocks}
                 currentPage={currentPage}
+                pageSize={pageSize}
                 onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
             />
         </motion.div>
     )

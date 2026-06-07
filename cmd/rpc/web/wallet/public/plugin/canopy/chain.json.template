@@ -11,10 +11,6 @@
     "base": "/rpc",
     "admin": "/adminrpc"
   },
-  "explorer": {
-    "tx": "http://localhost:50001/transaction",
-    "order": "http://localhost:50001/order"
-  },
   "address": {
     "format": "evm"
   },
@@ -28,7 +24,16 @@
     "account": {
       "source": { "base": "rpc", "path": "/v1/query/account", "method": "POST" },
       "body": { "height": 0, "address": "{{account.address}}" },
-      "coerce": { "body": { "height": "number" }, "response": { "amount": "number" } },
+      "coerce": { "body": { "height": "number" }, "response": {
+        "amount": "number",
+        "totalAmount": "number",
+        "vestedAmount": "number",
+        "lockedAmount": "number",
+        "vestingAmount": "number",
+        "vestingStartHeight": "number",
+        "vestingCliffHeight": "number",
+        "vestingEndHeight": "number"
+      } },
       "selector": ""
     },
     "accountByHeight": {
@@ -61,7 +66,7 @@
     },
     "keystoreDelete": {
       "source": { "base": "admin", "path": "/v1/admin/keystore-delete", "method": "POST" },
-      "body": { "nickname": "{{nickname}}" }
+      "body": { "address": "{{address}}", "password": "{{password}}" }
     },
     "validator": {
       "source": { "base": "rpc", "path": "/v1/query/validator", "method": "POST" },

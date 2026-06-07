@@ -4,23 +4,23 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronsUpDown,
-  Copy,
   LockOpen,
   Pause,
   Pen,
   Play,
   Scan,
 } from "lucide-react";
-import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useDenom } from "@/hooks/useDenom";
 import { getCanopySymbolByHash } from "@/lib/utils/canopySymbols";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 import { ValidatorCard } from "./ValidatorCard";
 import {
   ValidatorDetails,
   ValidatorDetailsModal,
 } from "./ValidatorDetailsModal";
+import { CopyableIdentifier } from "@/components/ui/CopyableIdentifier";
 
 interface Validator {
   address: string;
@@ -52,7 +52,7 @@ const itemVariants = {
 const desktopHeaderClass =
   "px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4";
 const desktopRowCellClass =
-  "px-2 sm:px-3 lg:px-4 py-2 align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]";
+  "px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]";
 const actionButtonClass =
   "inline-flex items-center justify-center rounded-lg border border-border/60 p-2 text-foreground transition-colors hover:border-white/20 hover:bg-accent";
 
@@ -76,17 +76,7 @@ const truncateAddress = (address: string) =>
   `${address.substring(0, 8)}…${address.substring(address.length - 4)}`;
 
 const statusBadgeClass = (status: Validator["status"]) => {
-  switch (status) {
-    case "Staked":
-    case "Delegate":
-      return "border-primary/25 bg-primary/12 text-primary";
-    case "Paused":
-      return "border-yellow-500/25 bg-yellow-500/12 text-yellow-400";
-    case "Unstaking":
-      return "border-red-500/25 bg-red-500/12 text-red-400";
-    default:
-      return "border-border/60 bg-background text-muted-foreground";
-  }
+  return WALLET_BADGE_TONE;
 };
 
 const DesktopValidatorRow: React.FC<{
@@ -94,7 +84,6 @@ const DesktopValidatorRow: React.FC<{
   index: number;
   onViewDetails: () => void;
 }> = ({ validator, index, onViewDetails }) => {
-  const { copyToClipboard } = useCopyToClipboard();
   const { openAction } = useActionModal();
   const { symbol, factor } = useDenom();
 
@@ -145,42 +134,36 @@ const DesktopValidatorRow: React.FC<{
         className={desktopRowCellClass}
         style={{ borderTopLeftRadius: "10px", borderBottomLeftRadius: "10px" }}
       >
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-3">
           <img
             src={getCanopySymbolByHash(validator.address)}
             alt=""
             className="h-7 w-7 rounded-lg object-contain flex-shrink-0"
           />
-          <span
-            className="text-base font-medium text-foreground"
-            title={validator.address}
-          >
-            {truncateAddress(validator.address)}
-          </span>
-          <button
-            type="button"
-            className="rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-accent/60 hover:text-primary"
-            onClick={() => copyToClipboard(validator.address, "Validator Address")}
-            title="Copy Validator Address"
-          >
-            <Copy className="h-2.5 w-2.5" />
-          </button>
+          <div>
+            <div className="text-sm font-medium text-foreground leading-tight">
+              {validator.nickname || truncateAddress(validator.address)}
+            </div>
+            <div className="flex items-center gap-1 mt-0.5">
+              <CopyableIdentifier value={validator.address} label="Validator address" className="max-w-[13rem] text-[11px] text-muted-foreground leading-tight">
+                {truncateAddress(validator.address)}
+              </CopyableIdentifier>
+            </div>
+          </div>
         </div>
       </td>
       <td className={desktopRowCellClass}>
-        <span className="text-base font-medium text-foreground tabular-nums">
+        <span className="text-sm font-medium text-foreground tabular-nums">
           {formatStakedAmount(validator.stakedAmount, factor)} {symbol}
         </span>
       </td>
       <td className={desktopRowCellClass}>
-        <span
-          className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-tight ${statusBadgeClass(validator.status)}`}
-        >
+        <span className={`${WALLET_BADGE_CLASS} leading-none ${statusBadgeClass(validator.status)}`}>
           {validator.status}
         </span>
       </td>
       <td className={desktopRowCellClass}>
-        <span className={`text-base font-medium tabular-nums ${rewardsColor}`}>
+        <span className={`text-sm font-medium tabular-nums ${rewardsColor}`}>
           {formatRewards(validator.rewards24h, factor)} {symbol}
         </span>
       </td>

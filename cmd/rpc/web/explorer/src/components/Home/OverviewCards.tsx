@@ -2,9 +2,10 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
-import { useAllBlocksCache, useTransactionsWithRealPagination } from '../../hooks/useApi'
+import { useAllBlocksCache, useRecentTransactionsPreview } from '../../hooks/useApi'
 import { extractAmountMicro, toCNPY } from '../../lib/utils'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 const desktopRowCellClass =
     'px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#1a1a1a]'
@@ -47,8 +48,17 @@ const formatAmount = (amount: number) =>
 const normalizeList = (payload: any) => {
     if (!payload) return [] as any[]
     if (Array.isArray(payload)) return payload
-    const found = payload.transactions || payload.blocks || payload.results || payload.list || payload.data
-    return Array.isArray(found) ? found : []
+    for (const candidate of [
+        payload.results,
+        payload.transactions,
+        payload.txs,
+        payload.blocks,
+        payload.list,
+        payload.data,
+    ]) {
+        if (Array.isArray(candidate)) return candidate
+    }
+    return []
 }
 
 const LiveIndicator = () => (
@@ -61,10 +71,12 @@ const LiveIndicator = () => (
 interface WalletPreviewTableProps {
     title: string
     columns: string[]
+    columnWidths?: string[]
     rows: Array<{
         href?: string
         cells: React.ReactNode[]
     }>
+    loading?: boolean
     viewAllPath: string
     emptyLabel: string
     minWidth?: string
@@ -73,7 +85,9 @@ interface WalletPreviewTableProps {
 const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
     title,
     columns,
+    columnWidths,
     rows,
+    loading = false,
     viewAllPath,
     emptyLabel,
     minWidth = 'min-w-[720px]',
@@ -95,8 +109,15 @@ const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
         <div className="overflow-x-auto">
             <table
                 className={`w-full ${minWidth}`}
-                style={{ tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
+                style={{ tableLayout: columnWidths ? 'fixed' : 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
             >
+                {columnWidths && (
+                    <colgroup>
+                        {columns.map((label, index) => (
+                            <col key={label} style={{ width: columnWidths[index] }} />
+                        ))}
+                    </colgroup>
+                )}
                 <thead>
                     <tr>
                         {columns.map((label) => (
@@ -110,7 +131,26 @@ const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
                     </tr>
                 </thead>
                 <tbody>
-                    {rows.length === 0 ? (
+                    {loading ? (
+                        Array.from({ length: 5 }).map((_, index) => (
+                            <tr key={`${title}-loading-${index}`} className="animate-pulse">
+                                {columns.map((_, cellIndex) => (
+                                    <td
+                                        key={`${title}-loading-${index}-${cellIndex}`}
+                                        className={desktopRowCellClass}
+                                        style={{
+                                            borderTopLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderBottomLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderTopRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                            borderBottomRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                        }}
+                                    >
+                                        <div className="h-3 w-20 rounded bg-white/10 sm:w-28 lg:w-32" />
+                                    </td>
+                                ))}
+                            </tr>
+                        ))
+                    ) : rows.length === 0 ? (
                         <tr>
                             <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
                                 {emptyLabel}
@@ -171,8 +211,9 @@ const WalletPreviewTable: React.FC<WalletPreviewTableProps> = ({
 }
 
 const OverviewCards: React.FC = () => {
-    const { data: txsPage } = useTransactionsWithRealPagination(1, 5)
-    const { data: blocksPage } = useAllBlocksCache()
+    const { data: blocksPage, isLoading: isBlocksLoading } = useAllBlocksCache()
+    const { data: txsPage, isLoading: isTransactionsLoading } = useRecentTransactionsPreview(blocksPage, 5)
+    const dashboardTableColumnWidths = ['18%', '31%', '25%', '12%', '14%']
 
     const txs = normalizeList(txsPage)
     const blockList = normalizeList(blocksPage)
@@ -187,27 +228,21 @@ const OverviewCards: React.FC = () => {
         return {
             href: hash ? `/transaction/${hash}` : undefined,
             cells: [
+                <TransactionTypeBadge type={txType} />,
                 hash ? (
-                    <div className="flex max-w-[14rem] items-center gap-2 truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80">
-                    <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-green-300/10 text-primary">
-                        <i className="fa-solid fa-arrow-right-arrow-left text-sm" />
-                    </span>
-                    <span className="truncate">{truncateHash(hash)}</span>
-                    </div>
+                    <CopyableIdentifier value={hash} label="Transaction hash" to={`/transaction/${hash}`} className="max-w-[14rem] text-sm font-medium leading-tight text-white">
+                        {truncateHash(hash)}
+                    </CopyableIdentifier>
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
                 from !== 'N/A' ? (
-                    <span
-                        className="block max-w-[12rem] truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80"
-                        title={from}
-                    >
+                    <CopyableIdentifier value={from} label="Address" to={`/account/${from}`} className="max-w-[12rem] text-sm font-medium leading-tight text-white">
                         {truncateAddress(from)}
-                    </span>
+                    </CopyableIdentifier>
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
-                <TransactionTypeBadge type={txType} />,
                 amount > 0 ? (
                     <span className="whitespace-nowrap text-sm text-white tabular-nums">{formatAmount(amount)}</span>
                 ) : (
@@ -239,19 +274,16 @@ const OverviewCards: React.FC = () => {
                     <span className="text-sm text-white/60">N/A</span>
                 ),
                 hash ? (
-                    <span className="block max-w-[15rem] truncate text-sm font-medium leading-tight text-white transition-colors group-hover:text-white/80">
+                    <CopyableIdentifier value={hash} label="Block hash" to={`/block/${height}`} className="max-w-[15rem] text-sm font-medium leading-tight text-white">
                         {truncateHash(hash)}
-                    </span>
+                    </CopyableIdentifier>
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
                 producer !== 'N/A' ? (
-                    <span
-                        className="block max-w-[12rem] truncate text-sm font-medium leading-tight text-white"
-                        title={producer}
-                    >
+                    <CopyableIdentifier value={producer} label="Producer address" to={`/validator/${producer}`} className="max-w-[12rem] text-sm font-medium leading-tight text-white">
                         {truncateAddress(producer)}
-                    </span>
+                    </CopyableIdentifier>
                 ) : (
                     <span className="text-sm text-white/60">N/A</span>
                 ),
@@ -269,15 +301,19 @@ const OverviewCards: React.FC = () => {
                 title="Blocks"
                 viewAllPath="/blocks"
                 columns={['Height', 'Hash', 'Producer', 'Txs', 'Time']}
+                columnWidths={dashboardTableColumnWidths}
                 rows={blockRows}
+                loading={isBlocksLoading}
                 emptyLabel="No blocks found"
                 minWidth="min-w-[760px]"
             />
             <WalletPreviewTable
                 title="Transactions"
                 viewAllPath="/transactions"
-                columns={['Hash', 'From', 'Type', 'Amount', 'Time']}
+                columns={['Type', 'Hash', 'From', 'Amount', 'Time']}
+                columnWidths={dashboardTableColumnWidths}
                 rows={transactionRows}
+                loading={isBlocksLoading || isTransactionsLoading}
                 emptyLabel="No transactions found"
                 minWidth="min-w-[760px]"
             />

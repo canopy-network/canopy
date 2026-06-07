@@ -94,7 +94,7 @@ const DexBatchesPage: React.FC = () => {
             transition={{ duration: 0.3, ease: 'easeInOut' }}
             className="w-full"
         >
-            <div className="mb-6">
+            <div className="mb-4">
                 <h1 className="explorer-page-title">
                     {dexTexts.page.title}
                 </h1>

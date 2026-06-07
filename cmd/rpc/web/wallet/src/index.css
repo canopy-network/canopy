@@ -152,7 +152,7 @@ html {
   gap: 0.5rem;
   font-size: 1rem;
   line-height: 1.5;
-  color: #35cd48;
+  color: hsl(var(--muted-foreground));
 }
 
 .wallet-page-subtitle::before {
@@ -252,42 +252,6 @@ html {
   animation: pulse-ring 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-@keyframes landing-confetti-fall {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, -14vh, 0) rotate(0deg);
-  }
-  8% {
-    opacity: var(--landing-confetti-opacity, 0.7);
-  }
-  22% {
-    transform: translate3d(var(--landing-confetti-x1, -10px), 24vh, 0) rotate(80deg);
-  }
-  48% {
-    transform: translate3d(var(--landing-confetti-x2, 6px), 52vh, 0) rotate(170deg);
-  }
-  74% {
-    transform: translate3d(var(--landing-confetti-x3, -5px), 82vh, 0) rotate(260deg);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(var(--landing-confetti-x4, 12px), 112vh, 0) rotate(var(--landing-confetti-rotate, 340deg));
-  }
-}
-
-.landing-confetti-piece {
-  position: absolute;
-  top: -14vh;
-  border-radius: 2px;
-  pointer-events: none;
-  opacity: 0;
-  box-shadow: 0 0 7px rgba(255, 255, 255, 0.12);
-  will-change: transform, opacity;
-  animation-name: landing-confetti-fall;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
@@ -351,10 +315,4 @@ html {
 .scrollbar-hide::-webkit-scrollbar {
   width: 0;
   height: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing-confetti-piece {
-    animation: none !important;
-  }
 }

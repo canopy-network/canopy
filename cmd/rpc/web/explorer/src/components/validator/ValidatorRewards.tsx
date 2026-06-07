@@ -38,6 +38,8 @@ interface ValidatorRewardsProps {
 
 const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
     const [activeTab, setActiveTab] = useState('rewardsHistory')
+    const [blockRewardsPageSize, setBlockRewardsPageSize] = useState(10)
+    const [crossChainRewardsPageSize, setCrossChainRewardsPageSize] = useState(10)
 
     const formatNumber = (num: number) => {
         return num.toLocaleString()
@@ -153,7 +155,10 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                                         <span className="text-primary">{formatReward(reward.netReward)} {validatorDetailTexts.metrics.units.cnpy}</span>
                                     ])}
                                     paginate={true}
-                                    pageSize={10}
+                                    pageSize={blockRewardsPageSize}
+                                    showEntriesSelector={true}
+                                    currentEntriesPerPage={blockRewardsPageSize}
+                                    onEntriesPerPageChange={setBlockRewardsPageSize}
                                 />
                             </div>
                         ) : (
@@ -197,7 +202,10 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                                         </span>
                                     ])}
                                     paginate={true}
-                                    pageSize={10}
+                                    pageSize={crossChainRewardsPageSize}
+                                    showEntriesSelector={true}
+                                    currentEntriesPerPage={crossChainRewardsPageSize}
+                                    onEntriesPerPageChange={setCrossChainRewardsPageSize}
                                 />
                             </div>
                         )}

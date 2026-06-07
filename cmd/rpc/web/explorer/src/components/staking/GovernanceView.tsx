@@ -5,6 +5,7 @@ import stakingConfig from '../../data/staking.json'
 import ExplorerOverviewCards from '../ExplorerOverviewCards'
 import { formatPaginationRange, toCNPY } from '../../lib/utils'
 import AnimatedNumber from '../AnimatedNumber'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface GovernanceParam {
     paramName: string
@@ -140,10 +141,6 @@ const GovernanceView: React.FC = () => {
     const governanceParams = getGovernanceParams()
     const itemsPerPage = stakingConfig.governance.table.pagination.itemsPerPage || 10
 
-    const getParamSpaceColor = (space: string) => {
-        return stakingConfig.ui.colors[space] || stakingConfig.ui.colors.default
-    }
-
     const formatParamValue = (value: string | number, paramName: string) => {
         if (typeof value === 'number') {
             // Convert fees from micro denomination to CNPY
@@ -216,7 +213,7 @@ const GovernanceView: React.FC = () => {
                             <span className="capitalize">{param.paramSpace}</span>
                         </>
                     )
-                    cellClassName = `${stakingConfig.governance.table.styling.paramSpace} ${getParamSpaceColor(param.paramSpace)}`
+                    cellClassName = `${GREEN_BADGE_CLASS} capitalize`
                     break
                 case 'paramType':
                     cellContent = (param as any).paramType || 'Unknown'
@@ -280,7 +277,7 @@ const GovernanceView: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
             >
-                <div className="mb-6">
+                <div className="mb-4">
                     <h2 className="explorer-page-title">
                         {stakingConfig.governance.title}
                     </h2>
@@ -416,7 +413,10 @@ const GovernanceView: React.FC = () => {
                     {!isLoading && governanceParams.length > 0 && (
                         <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
                             <div>
-                                {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={governanceParams.length} />
+                                <span className="inline-flex items-baseline gap-1">
+                                    <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                                    <AnimatedNumber value={governanceParams.length} />
+                                </span>
                             </div>
 
                             <div className="flex items-center gap-2">

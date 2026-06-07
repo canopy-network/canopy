@@ -1,6 +1,8 @@
 import React from "react";
 import AnimatedNumber from "../AnimatedNumber";
 import { formatPaginationRange } from "../../lib/utils";
+import PageSizeSelect from "../shared/PageSizeSelect";
+import CopyableIdentifier from "../ui/CopyableIdentifier";
 
 export interface DexBatchRow {
   batchType: "Locked" | "Next";
@@ -20,8 +22,6 @@ interface DexBatchesTableProps {
   loading?: boolean;
   title?: string;
 }
-
-const PAGE_SIZE = 10;
 
 const desktopHeaderClass =
   "px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4";
@@ -47,19 +47,20 @@ const columns = [
 
 const DexBatchesTable: React.FC<DexBatchesTableProps> = ({ rows, loading = false, title }) => {
   const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [rows.length]);
+  }, [rows.length, pageSize]);
 
   const totalCount = rows.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const endIdx = Math.min(currentPage * PAGE_SIZE, totalCount);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endIdx = Math.min(currentPage * pageSize, totalCount);
   const paginatedRows = React.useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return rows.slice(start, start + PAGE_SIZE);
-  }, [currentPage, rows]);
+    const start = (currentPage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [currentPage, pageSize, rows]);
 
   const visiblePages = React.useMemo(() => {
     if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -95,7 +96,7 @@ const DexBatchesTable: React.FC<DexBatchesTableProps> = ({ rows, loading = false
           </thead>
           <tbody>
             {loading ? (
-              Array.from({ length: PAGE_SIZE }).map((_, index) => (
+              Array.from({ length: pageSize }).map((_, index) => (
                 <tr key={`skeleton-${index}`} className="group animate-pulse">
                   {columns.map((_, columnIndex) => (
                     <td
@@ -129,9 +130,13 @@ const DexBatchesTable: React.FC<DexBatchesTableProps> = ({ rows, loading = false
                     <span className="text-sm text-white tabular-nums">{row.committee}</span>
                   </td>
                   <td className={desktopRowCellClass}>
-                    <span className="block max-w-[14rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white" title={row.receiptHash !== "N/A" ? row.receiptHash : undefined}>
-                      {row.receiptHash !== "N/A" ? truncate(row.receiptHash) : "N/A"}
-                    </span>
+                    {row.receiptHash !== "N/A" ? (
+                      <CopyableIdentifier value={row.receiptHash} label="Receipt hash" className="max-w-[14rem] text-sm text-white">
+                        {truncate(row.receiptHash)}
+                      </CopyableIdentifier>
+                    ) : (
+                      <span className="text-sm text-white">N/A</span>
+                    )}
                   </td>
                   <td className={desktopRowCellClass}>
                     <span className="text-sm text-white tabular-nums">{row.orders}</span>
@@ -166,8 +171,12 @@ const DexBatchesTable: React.FC<DexBatchesTableProps> = ({ rows, loading = false
 
       {!loading && totalCount > 0 && (
         <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
-          <div>
-            {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalCount} />
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-baseline gap-1">
+              <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+              <AnimatedNumber value={totalCount} />
+            </span>
+            <PageSizeSelect value={pageSize} onChange={setPageSize} />
           </div>
 
           <div className="flex items-center gap-2">

@@ -46,7 +46,7 @@ export const GovernanceStatsCards: React.FC<GovernanceStatsCardsProps> = ({
             value: activeProposals.toString(),
             subtitle: (
                 <span className="flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 bg-primary rounded-full"></span>
+                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground"></span>
                     Open for voting
                 </span>
             ),

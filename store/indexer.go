@@ -29,7 +29,7 @@ var (
 	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
 	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
 	// create indexer cache
-	blockCache, _ = lru.New[uint64, *lib.BlockResult](4)
+	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
 )
 
@@ -127,12 +127,18 @@ func (t *Indexer) GetBlockByHeight(height uint64) (*lib.BlockResult, lib.ErrorI)
 		return nil, err
 	}
 	// get block from hash key
-	return t.getBlock(hashKey, true)
+	block, err := t.getBlock(hashKey, true)
+	if err != nil {
+		return nil, err
+	}
+	// populate cache on read so historical blocks are warm after a restart
+	blockCache.Add(height, block)
+	return block, nil
 }
 
 // GetBlockHeaderByHeight() returns the block result without transactions
 func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.ErrorI) {
-	// check cache
+	// check cache (full block result may be cached from GetBlockByHeight or IndexBlock)
 	if got, found := blockCache.Get(height); found {
 		return got, nil
 	}
@@ -142,7 +148,13 @@ func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.E
 		return nil, err
 	}
 	// get block from hash key
-	return t.getBlock(hashKey, false)
+	block, err := t.getBlock(hashKey, false)
+	if err != nil {
+		return nil, err
+	}
+	// populate cache on read so historical blocks are warm after a restart
+	blockCache.Add(height, block)
+	return block, nil
 }
 
 // GetBlocks() returns a page of blocks based on the page parameters

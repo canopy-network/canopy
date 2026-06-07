@@ -4,6 +4,7 @@ import AccountsTable from './AccountsTable'
 import { useAccounts } from '../../hooks/useApi'
 import accountsTexts from '../../data/accounts.json'
 import ExplorerOverviewCards from '../ExplorerOverviewCards'
+import { toCNPY } from '../../lib/utils'
 
 const LiveIndicator = () => (
     <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-sm text-primary">
@@ -14,11 +15,12 @@ const LiveIndicator = () => (
 
 const AccountsPage: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
 
-    const { data: accountsData, isLoading, error } = useAccounts(currentPage)
+    const { data: accountsData, isLoading, error } = useAccounts(currentPage, pageSize)
     const accounts = accountsData?.results || []
     const largestBalance = React.useMemo(
-        () => accounts.reduce((max: number, account: { amount?: number }) => Math.max(max, Number(account.amount || 0)), 0),
+        () => toCNPY(accounts.reduce((max: number, account: { amount?: number; totalAmount?: number }) => Math.max(max, Number(account.totalAmount ?? account.amount ?? 0)), 0)),
         [accounts],
     )
     const overviewCards = [
@@ -46,6 +48,11 @@ const AccountsPage: React.FC = () => {
         setCurrentPage(page)
     }
 
+    const handlePageSizeChange = (value: number) => {
+        setPageSize(value)
+        setCurrentPage(1)
+    }
+
     if (error) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
@@ -69,7 +76,7 @@ const AccountsPage: React.FC = () => {
             className="w-full"
         >
             <div className="w-full">
-                <div className="mb-8">
+                <div className="mb-4">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <h1 className="explorer-page-title">{accountsTexts.page.title}</h1>
@@ -86,7 +93,9 @@ const AccountsPage: React.FC = () => {
                     loading={isLoading}
                     totalCount={accountsData?.totalCount || 0}
                     currentPage={currentPage}
+                    pageSize={pageSize}
                     onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
                 />
             </div>
         </motion.div>

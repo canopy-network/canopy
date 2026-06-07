@@ -4,6 +4,7 @@ import { Copy } from 'lucide-react';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useManifest } from '@/hooks/useManifest';
 import { useDenom } from '@/hooks/useDenom';
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from '@/components/ui/badgeStyles';
 
 interface Address {
     id: string;
@@ -43,16 +44,7 @@ export const AddressRow: React.FC<AddressRowProps> = ({
     const { symbol, factor } = useDenom();
 
     const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'Active':
-                return 'bg-green-500/20 text-green-400';
-            case 'Inactive':
-                return 'bg-red-500/20 text-red-400';
-            case 'Pending':
-                return 'bg-yellow-500/20 text-yellow-400';
-            default:
-                return 'bg-muted/20 text-muted-foreground';
-        }
+        return WALLET_BADGE_TONE;
     };
 
     return (
@@ -92,7 +84,7 @@ export const AddressRow: React.FC<AddressRowProps> = ({
                 <div className="text-foreground font-medium">{formatBalance(address.liquid, factor)} {symbol}</div>
             </td>
             <td className="p-4">
-                <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(address.status)}`}>
+                <span className={`${WALLET_BADGE_CLASS} ${getStatusColor(address.status)}`}>
                     {address.status}
                 </span>
             </td>
@@ -121,4 +113,3 @@ export const AddressRow: React.FC<AddressRowProps> = ({
         </motion.tr>
     );
 };
-

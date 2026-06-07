@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -15,6 +16,12 @@ import (
 
 // GetAccount() returns an Account structure for a specific address
 func (s *StateMachine) GetAccount(address crypto.AddressI) (*Account, lib.ErrorI) {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("get_account").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// check cache
 	if acc, found := s.cache.accounts[lib.MemHash(address.Bytes())]; found {
 		return acc, nil
@@ -81,8 +88,73 @@ func (s *StateMachine) GetAccountBalance(address crypto.AddressI) (uint64, lib.E
 	return account.Amount, nil
 }
 
+// GetAccountSpendableBalance() returns the spendable balance of an Account at a specific address
+func (s *StateMachine) GetAccountSpendableBalance(address crypto.AddressI) (uint64, lib.ErrorI) {
+	account, err := s.GetAccount(address)
+	if err != nil {
+		return 0, err
+	}
+	return s.AccountSpendableAmount(account), nil
+}
+
+// AccountVestedAmount() returns the vested portion of the account's vesting tranche at the current height
+func (s *StateMachine) AccountVestedAmount(account *Account) uint64 {
+	// if vesting hasn't started yet or if the cliff hasn't passed yet
+	if s.Height() < account.VestingStartHeight || s.Height() < account.VestingCliffHeight {
+		return 0
+	}
+	// if the height is past vesting end height
+	if s.Height() >= account.VestingEndHeight {
+		return account.VestingAmount
+	}
+	// calculate the elapsed blocks
+	elapsed := s.Height() - account.VestingStartHeight
+	// calculate the duration of the vesting
+	duration := account.VestingEndHeight - account.VestingStartHeight
+	// calculate the amount vested
+	return account.VestingAmount * elapsed / duration
+}
+
+// AccountLockedAmount() returns the still-locked portion of the account's vesting tranche
+func (s *StateMachine) AccountLockedAmount(account *Account) uint64 {
+	if account.VestingAmount == 0 {
+		return 0
+	}
+	// get the amount already vested
+	vested := s.AccountVestedAmount(account)
+	// if amount vested GTE total vested tranche
+	if vested >= account.VestingAmount {
+		return 0
+	}
+	// exit with vesting_amount - vested
+	return account.VestingAmount - vested
+}
+
+// AccountSpendableAmount() returns how much of the account balance may be withdrawn at the current height
+func (s *StateMachine) AccountSpendableAmount(account *Account) uint64 {
+	if account == nil {
+		return 0
+	}
+	// get the amount that is currently ineligible for spend
+	locked := s.AccountLockedAmount(account)
+	// check for invariant
+	if locked >= account.Amount {
+		return 0
+	}
+	// return spendable amount
+	return account.Amount - locked
+}
+
 // SetAccount() upserts an account into the state
 func (s *StateMachine) SetAccount(account *Account) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("set_account").Observe(time.Since(startTime).Seconds())
+		}
+	}()
+	// state cleanup for fully vested accounts
+	s.clearAccountVestingIfFullyVested(account)
 	// add to cache
 	s.cache.accounts[lib.MemHash(account.Address)] = account
 	// convert bytes to the address object
@@ -133,6 +205,12 @@ func (s *StateMachine) AccountDeductFees(address crypto.AddressI, fee uint64) li
 
 // AccountAdd() adds tokens to an Account
 func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("account_add").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// ensure no unnecessary database updates
 	if amountToAdd == 0 {
 		return nil
@@ -152,8 +230,60 @@ func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) l
 	return s.SetAccount(account)
 }
 
+// ValidateAccountAddWithVesting() ensures an account can receive the send under the provided vesting schedule.
+func (s *StateMachine) ValidateAccountAddWithVesting(msg *MessageSend) lib.ErrorI {
+	acc, err := s.GetAccount(crypto.NewAddress(msg.ToAddress))
+	if err != nil {
+		return err
+	}
+	// if account has active vesting - the vesting terms must match *exactly* to enable another send
+	if acc.VestingAmount != 0 && s.AccountLockedAmount(acc) != 0 {
+		if acc.VestingStartHeight != msg.VestingStartHeight ||
+			acc.VestingCliffHeight != msg.VestingCliffHeight ||
+			acc.VestingEndHeight != msg.VestingEndHeight {
+			return ErrIncompatibleVesting()
+		}
+	}
+	return nil
+}
+
+// AccountAddWithVesting() adds tokens to an Account and applies the send's vesting schedule to the full amount.
+func (s *StateMachine) AccountAddWithVesting(msg *MessageSend) lib.ErrorI {
+	acc, err := s.GetAccount(crypto.NewAddress(msg.ToAddress))
+	if err != nil {
+		return err
+	}
+	// overflow protection
+	if acc.Amount > math.MaxUint64-msg.Amount || acc.VestingAmount > math.MaxUint64-msg.Amount {
+		return ErrInvalidAmount()
+	}
+	// if account has active vesting - the vesting terms must match *exactly* to enable another send
+	if err = s.ValidateAccountAddWithVesting(msg); err != nil {
+		return err
+	}
+	// update amount
+	acc.Amount += msg.Amount
+	if acc.VestingAmount == 0 || s.AccountLockedAmount(acc) == 0 {
+		acc.VestingAmount = msg.Amount
+		acc.VestingStartHeight = msg.VestingStartHeight
+		acc.VestingCliffHeight = msg.VestingCliffHeight
+		acc.VestingEndHeight = msg.VestingEndHeight
+		return s.SetAccount(acc)
+	}
+	// update vesting amount
+	acc.VestingAmount += msg.Amount
+	// set account
+	return s.SetAccount(acc)
+}
+
 // AccountSub() removes tokens from an Account
 func (s *StateMachine) AccountSub(address crypto.AddressI, amountToSub uint64) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("account_sub").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// ensure no unnecessary database updates
 	if amountToSub == 0 {
 		return nil
@@ -163,8 +293,8 @@ func (s *StateMachine) AccountSub(address crypto.AddressI, amountToSub uint64) l
 	if err != nil {
 		return err
 	}
-	// if the account amount is less than the amount to subtract; return insufficient funds
-	if account.Amount < amountToSub {
+	// only the currently authorized amount may be withdrawn
+	if s.AccountSpendableAmount(account) < amountToSub {
 		return ErrInsufficientFunds()
 	}
 	// subtract from the account amount
@@ -193,7 +323,7 @@ func (s *StateMachine) maybeFaucetTopUpForSendTx(sender crypto.AddressI, require
 	if !sender.Equals(faucetAddr) {
 		return nil
 	}
-	bal, e := s.GetAccountBalance(sender)
+	bal, e := s.GetAccountSpendableBalance(sender)
 	if e != nil {
 		return e
 	}
@@ -220,6 +350,20 @@ func (s *StateMachine) marshalAccount(account *Account) ([]byte, lib.ErrorI) {
 	return lib.Marshal(account)
 }
 
+// clearAccountVestingIfFullyVested() is a helper function to clean up the state if fully vested
+func (s *StateMachine) clearAccountVestingIfFullyVested(account *Account) {
+	if account == nil || account.VestingAmount == 0 {
+		return
+	}
+	if s.AccountLockedAmount(account) != 0 {
+		return
+	}
+	account.VestingAmount = 0
+	account.VestingStartHeight = 0
+	account.VestingCliffHeight = 0
+	account.VestingEndHeight = 0
+}
+
 // POOL CODE BELOW
 
 /*
@@ -228,8 +372,31 @@ func (s *StateMachine) marshalAccount(account *Account) ([]byte, lib.ErrorI) {
 	to simply prove that no-one owns the private key for that account
 */
 
+// clonePool returns an independent copy of the pool so callers can mutate without
+// affecting the cached entry (Pool.Points is a slice of pointers).
+func clonePool(p *Pool) *Pool {
+	out := &Pool{Id: p.Id, Amount: p.Amount, TotalPoolPoints: p.TotalPoolPoints}
+	if len(p.Points) > 0 {
+		out.Points = make([]*lib.PoolPoints, len(p.Points))
+		for i, pp := range p.Points {
+			out.Points[i] = &lib.PoolPoints{Address: pp.Address, Points: pp.Points}
+		}
+	}
+	return out
+}
+
 // GetPool() returns a Pool structure for a specific ID
 func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("get_pool").Observe(time.Since(startTime).Seconds())
+		}
+	}()
+	// check cache (return clone to prevent aliasing on the cached struct)
+	if pool, found := s.cache.pools[id]; found {
+		return clonePool(pool), nil
+	}
 	// get the pool bytes from the state using the Key a specific id
 	bz, err := s.Get(KeyForPool(id))
 	if err != nil {
@@ -242,6 +409,8 @@ func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
 	}
 	// set the pool id from the key
 	pool.Id = id
+	// populate cache with a clone so the returned pointer is not aliased
+	s.cache.pools[id] = clonePool(pool)
 	// return the pool
 	return pool, nil
 }
@@ -295,9 +464,21 @@ func (s *StateMachine) GetPoolBalance(id uint64) (uint64, lib.ErrorI) {
 
 // SetPool() upserts a Pool structure into the state
 func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("set_pool").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// if the pool has a 0 balance
 	if pool.Amount == 0 {
-		return s.Delete(KeyForPool(pool.Id))
+		if err = s.Delete(KeyForPool(pool.Id)); err != nil {
+			return
+		}
+		// cache a clone after successful delete (matches accounts cache: zero-amount is
+		// indistinguishable from a missing entry via unmarshalPool(nil))
+		s.cache.pools[pool.Id] = clonePool(pool)
+		return
 	}
 	// convert the pool to bytes
 	bz, err := s.marshalPool(pool)
@@ -308,6 +489,9 @@ func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
 	if err = s.Set(KeyForPool(pool.Id), bz); err != nil {
 		return
 	}
+	// cache a clone after successful write so external mutation of the passed-in pool
+	// cannot leak into the cache
+	s.cache.pools[pool.Id] = clonePool(pool)
 	return
 }
 
@@ -356,6 +540,12 @@ func (s *StateMachine) MintToAccount(address crypto.AddressI, amount uint64) lib
 
 // PoolAdd() adds tokens to the Pool structure
 func (s *StateMachine) PoolAdd(id uint64, amountToAdd uint64) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("pool_add").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// get the pool from the
 	pool, err := s.GetPool(id)
 	if err != nil {
@@ -753,13 +943,24 @@ const (
 
 // account is the json.Marshaller and json.Unmarshaler implementation for the Account object
 type account struct {
-	Address lib.HexBytes `json:"address,omitempty"`
-	Amount  uint64       `json:"amount,omitempty"`
+	Address            lib.HexBytes `json:"address,omitempty"`
+	Amount             uint64       `json:"amount,omitempty"`
+	VestingAmount      uint64       `json:"vestingAmount,omitempty"`
+	VestingStartHeight uint64       `json:"vestingStartHeight,omitempty"`
+	VestingCliffHeight uint64       `json:"vestingCliffHeight,omitempty"`
+	VestingEndHeight   uint64       `json:"vestingEndHeight,omitempty"`
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the Account object
 func (x *Account) MarshalJSON() ([]byte, error) {
-	return json.Marshal(account{x.Address, x.Amount})
+	return json.Marshal(account{
+		Address:            x.Address,
+		Amount:             x.Amount,
+		VestingAmount:      x.VestingAmount,
+		VestingStartHeight: x.VestingStartHeight,
+		VestingCliffHeight: x.VestingCliffHeight,
+		VestingEndHeight:   x.VestingEndHeight,
+	})
 }
 
 // UnmarshalJSON() is the json.Unmarshaler implementation for the Account object
@@ -768,7 +969,12 @@ func (x *Account) UnmarshalJSON(bz []byte) (err error) {
 	if err = json.Unmarshal(bz, a); err != nil {
 		return err
 	}
-	x.Address, x.Amount = a.Address, a.Amount
+	x.Address = a.Address
+	x.Amount = a.Amount
+	x.VestingAmount = a.VestingAmount
+	x.VestingStartHeight = a.VestingStartHeight
+	x.VestingCliffHeight = a.VestingCliffHeight
+	x.VestingEndHeight = a.VestingEndHeight
 	return
 }
 

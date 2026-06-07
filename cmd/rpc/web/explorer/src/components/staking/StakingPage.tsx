@@ -34,8 +34,6 @@ interface Validator {
     stakingPower: number
 }
 
-const PAGE_SIZE = 10
-
 const LiveIndicator = () => (
     <div className="relative inline-flex items-center gap-1.5 rounded-full bg-[#35cd48]/5 px-4 py-1">
         <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#35cd48] shadow-[0_0_4px_rgba(53,205,72,0.8)]" />
@@ -45,6 +43,7 @@ const LiveIndicator = () => (
 
 const StakingPage: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
     const [statusFilter, setStatusFilter] = useState('all')
     const [sortBy, setSortBy] = useState('stake')
     const [filtersOpen, setFiltersOpen] = useState(false)
@@ -204,20 +203,20 @@ const StakingPage: React.FC = () => {
     }, [allStakers, sortBy, statusFilter])
 
     const paginatedStakers = useMemo(() => {
-        const startIndex = (currentPage - 1) * PAGE_SIZE
-        return filteredStakers.slice(startIndex, startIndex + PAGE_SIZE)
-    }, [currentPage, filteredStakers])
+        const startIndex = (currentPage - 1) * pageSize
+        return filteredStakers.slice(startIndex, startIndex + pageSize)
+    }, [currentPage, filteredStakers, pageSize])
 
     useEffect(() => {
         setCurrentPage(1)
     }, [sortBy, statusFilter])
 
     useEffect(() => {
-        const totalPages = Math.max(1, Math.ceil(filteredStakers.length / PAGE_SIZE))
+        const totalPages = Math.max(1, Math.ceil(filteredStakers.length / pageSize))
         if (currentPage > totalPages) {
             setCurrentPage(totalPages)
         }
-    }, [currentPage, filteredStakers.length])
+    }, [currentPage, filteredStakers.length, pageSize])
 
     const stats = useMemo(() => {
         const validators = allStakers.filter((staker) => !staker.delegate)
@@ -341,7 +340,12 @@ const StakingPage: React.FC = () => {
                 loading={isLoading}
                 totalCount={filteredStakers.length}
                 currentPage={currentPage}
+                pageSize={pageSize}
                 onPageChange={setCurrentPage}
+                onPageSizeChange={(value) => {
+                    setPageSize(value)
+                    setCurrentPage(1)
+                }}
                 variant="accounts"
                 showRank={false}
                 useCnpyBadge={true}

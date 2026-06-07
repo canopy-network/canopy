@@ -2,6 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import validatorDetailTexts from '../../data/validatorDetail.json'
 import AnimatedNumber from '../AnimatedNumber'
+import { cnpyDetailFormat, toCNPY } from '../../lib/utils'
 
 interface ValidatorDetail {
     stakedAmount: number // in micro denomination
@@ -15,11 +16,6 @@ interface ValidatorMetricsProps {
 }
 
 const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
-    // Helper function to convert micro denomination to CNPY
-    const toCNPY = (micro: number): number => {
-        return micro / 1000000
-    }
-
     const stakedAmountCNPY = toCNPY(validator.stakedAmount)
 
     // Format height display
@@ -36,6 +32,7 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
             suffix: ` ${validatorDetailTexts.metrics.units.cnpy}`,
             icon: 'fa-solid fa-lock',
             subtitle: null,
+            format: cnpyDetailFormat,
         },
         {
             title: 'Committees Staked',
@@ -43,6 +40,7 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
             suffix: '',
             icon: 'fa-solid fa-network-wired',
             subtitle: validator.committees.length > 0 ? `IDs: ${validator.committees.join(', ')}` : 'None',
+            format: { maximumFractionDigits: 0, minimumFractionDigits: 0 },
         },
         {
             title: 'Max Paused Height',
@@ -50,6 +48,7 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
             suffix: '',
             icon: 'fa-solid fa-pause-circle',
             subtitle: validator.maxPausedHeight > 0 ? `Height: ${formatHeight(validator.maxPausedHeight)}` : 'Not paused',
+            format: { maximumFractionDigits: 0, minimumFractionDigits: 0 },
         },
         {
             title: 'Unstaking Height',
@@ -57,6 +56,7 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
             suffix: '',
             icon: 'fa-solid fa-arrow-down',
             subtitle: validator.unstakingHeight > 0 ? `Height: ${formatHeight(validator.unstakingHeight)}` : 'Not unstaking',
+            format: { maximumFractionDigits: 0, minimumFractionDigits: 0 },
         }
     ]
 
@@ -92,7 +92,7 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
                         ) : (
                             <AnimatedNumber
                                 value={metric.value}
-                                format={{ maximumFractionDigits: 2 }}
+                                format={metric.format}
                                 className="text-white"
                             />
                         )}

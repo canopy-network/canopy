@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Send } from 'lucide-react';
+import { ArrowUp, ChevronRight } from 'lucide-react';
 import { useActionModal } from '@/app/providers/ActionModalProvider';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useAccountsList, useSelectedAccount } from '@/app/providers/AccountsProvider';
@@ -9,14 +9,17 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getCanopySymbol } from '@/lib/utils/canopySymbols';
 import { useDenom } from '@/hooks/useDenom';
+import { CopyableIdentifier } from '@/components/ui/CopyableIdentifier';
 
 const shortAddr = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 interface AddressData {
     id: string;
     address: string;
+    fullAddress: string;
     nickname: string;
     totalValue: string;
+    lockedValue?: string;
 }
 
 const AddressRow = React.memo<{
@@ -36,7 +39,12 @@ const AddressRow = React.memo<{
 
         <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-foreground truncate leading-tight">{address.nickname}</div>
-            <div className="text-xs text-muted-foreground/60 mt-0.5">{address.address}</div>
+            <CopyableIdentifier value={address.fullAddress} label="Address" className="mt-0.5 max-w-full text-xs text-muted-foreground/60">
+                {address.address}
+            </CopyableIdentifier>
+            {address.lockedValue && (
+                <div className="mt-1 text-[11px] text-amber-300/75">{address.lockedValue} locked</div>
+            )}
         </div>
 
         <div className="ml-auto flex items-center gap-2.5 flex-shrink-0">
@@ -50,7 +58,7 @@ const AddressRow = React.memo<{
                 }}
                 aria-label={`Send from ${address.nickname}`}
             >
-                <Send style={{ width: 12, height: 12 }} />
+                <ArrowUp style={{ width: 12, height: 12 }} />
             </button>
         </div>
     </motion.div>
@@ -80,12 +88,17 @@ export const AllAddressesCard = React.memo(() => {
 
     const processedAddresses = useMemo((): AddressData[] =>
         accounts.map(account => {
-            const balance = balances.find(b => b.address === account.address)?.amount || 0;
+            const balance = balances.find(b => b.address === account.address);
+            const spendable = balance?.amount ?? 0;
+            const locked = balance?.lockedAmount ?? 0;
+            const total = balance?.totalAmount ?? spendable + locked;
             return {
                 id: account.address,
                 address: shortAddr(account.address),
+                fullAddress: account.address,
                 nickname: account.nickname || 'Unnamed',
-                totalValue: formatBalance(balance),
+                totalValue: formatBalance(total),
+                lockedValue: locked > 0 ? formatBalance(locked) : undefined,
             };
         }),
         [accounts, balances, formatBalance]

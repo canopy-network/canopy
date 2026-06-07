@@ -157,6 +157,59 @@ func TestApplyTransaction_FaucetSendNeverFails(t *testing.T) {
 	require.Equal(t, fee+(amount-1), sup.Total)
 }
 
+func TestApplyTransactionVestingSend(t *testing.T) {
+	const (
+		amount             = uint64(10)
+		vestingStartHeight = uint64(4)
+		vestingCliffHeight = uint64(8)
+		vestingEndHeight   = uint64(14)
+		fee                = uint64(1)
+	)
+	kg := newTestKeyGroup(t)
+	to := newTestAddress(t, 1)
+	sendTx, err := NewSendTransactionWithVesting(
+		kg.PrivateKey, to, amount,
+		vestingStartHeight, vestingCliffHeight, vestingEndHeight,
+		1, 1, fee, 1, "",
+	)
+	require.NoError(t, err)
+
+	sm := newTestStateMachine(t)
+	s := sm.store.(lib.StoreI)
+	sm.height = vestingStartHeight
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: fee}))
+	require.NoError(t, sm.AccountAdd(kg.Address, amount+fee))
+	require.NoError(t, s.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 1,
+			Hash:   crypto.Hash([]byte("block_hash")),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+	}))
+
+	txBytes, err := lib.Marshal(sendTx)
+	require.NoError(t, err)
+	txHash := crypto.HashString(txBytes)
+
+	got, _, err := sm.ApplyTransaction(0, txBytes, txHash, nil)
+	require.NoError(t, err)
+	require.Equal(t, vestingStartHeight, got.Height)
+	require.Equal(t, txHash, got.TxHash)
+
+	recipient, err := sm.GetAccount(to)
+	require.NoError(t, err)
+	require.Equal(t, amount, recipient.Amount)
+	require.Equal(t, amount, recipient.VestingAmount)
+	require.Equal(t, vestingStartHeight, recipient.VestingStartHeight)
+	require.Equal(t, vestingCliffHeight, recipient.VestingCliffHeight)
+	require.Equal(t, vestingEndHeight, recipient.VestingEndHeight)
+	require.Zero(t, sm.AccountSpendableAmount(recipient))
+
+	senderBal, err := sm.GetAccountBalance(kg.Address)
+	require.NoError(t, err)
+	require.Zero(t, senderBal)
+}
+
 func TestCheckTx(t *testing.T) {
 	const amount = uint64(100)
 	// predefine a keygroup for signing the transaction
@@ -669,6 +722,23 @@ func TestCheckMessage(t *testing.T) {
 			detail: "a invalid message that fails check()",
 			msg:    invalidMsgSendAny,
 			error:  "recipient address is empty",
+		},
+		{
+			name:   "invalid vesting send",
+			detail: "a send message with an invalid vesting schedule fails",
+			msg: func() *anypb.Any {
+				anyMsg, err := lib.NewAny(&MessageSend{
+					FromAddress:        newTestAddressBytes(t),
+					ToAddress:          newTestAddressBytes(t),
+					Amount:             100,
+					VestingStartHeight: 2,
+					VestingCliffHeight: 3,
+					VestingEndHeight:   2,
+				})
+				require.NoError(t, err)
+				return anyMsg
+			}(),
+			error: "invalid vesting schedule",
 		},
 		{
 			name:     "valid message",

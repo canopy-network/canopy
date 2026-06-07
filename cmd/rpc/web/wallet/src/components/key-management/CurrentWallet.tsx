@@ -7,8 +7,8 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  Pencil,
   Trash2,
-  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
@@ -36,8 +36,12 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
   const [passwordError, setPasswordError] = useState("");
   const [isFetchingKey, setIsFetchingKey] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletePasswordError, setDeletePasswordError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [renameNickname, setRenameNickname] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
   const { copyToClipboard } = useCopyToClipboard();
   const toast = useToast();
   const dsFetch = useDSFetcher();
@@ -70,7 +74,24 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
     setShowPasswordModal(false);
     setPassword("");
     setPasswordError("");
-  }, [selectedAccount?.id]);
+    setIsRenameOpen(false);
+    setRenameNickname(selectedKeyEntry?.keyNickname || selectedAccount?.nickname || "");
+  }, [selectedAccount?.id, selectedAccount?.nickname, selectedKeyEntry?.keyNickname]);
+
+  const invalidateKeystore = async () => {
+    const invalidate = () =>
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === "ds" &&
+          query.queryKey[2] === "keystore",
+      });
+
+    await invalidate();
+    setTimeout(() => {
+      void invalidate();
+    }, 500);
+  };
 
   const handleDownloadKeyfile = () => {
     if (!selectedAccount) {
@@ -197,31 +218,78 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
       return;
     }
 
-    setDeleteConfirmation("");
+    setDeletePassword("");
+    setDeletePasswordError("");
     setShowDeleteModal(true);
+  };
+
+  const handleRenameAccount = async () => {
+    if (!selectedAccount || !selectedKeyEntry) return;
+
+    const nextNickname = renameNickname.trim();
+    const currentNickname = selectedKeyEntry.keyNickname || selectedAccount.nickname;
+
+    if (!nextNickname) {
+      toast.error({
+        title: "Missing wallet name",
+        description: "Please enter a nickname.",
+      });
+      return;
+    }
+
+    if (nextNickname === currentNickname) {
+      setIsRenameOpen(false);
+      return;
+    }
+
+    setIsRenaming(true);
+    try {
+      await dsFetch("keystoreImport", {
+        nickname: nextNickname,
+        address: selectedKeyEntry.keyAddress,
+        publicKey: selectedKeyEntry.publicKey,
+        salt: selectedKeyEntry.salt,
+        encrypted: selectedKeyEntry.encrypted,
+        keyAddress: selectedKeyEntry.keyAddress,
+      });
+
+      await invalidateKeystore();
+
+      toast.success({
+        title: "Nickname updated",
+        description: `Wallet renamed to "${nextNickname}".`,
+      });
+      setIsRenameOpen(false);
+    } catch (error) {
+      toast.error({
+        title: "Rename failed",
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsRenaming(false);
+    }
   };
 
   const handleConfirmDelete = async () => {
     if (!selectedAccount) return;
 
-    const nickname = selectedKeyEntry?.keyNickname || selectedAccount.nickname;
-    if (deleteConfirmation !== nickname) {
-      toast.error({
-        title: "Confirmation Failed",
-        description: `Please type "${nickname}" to confirm deletion`,
-      });
+    if (!deletePassword) {
+      setDeletePasswordError("Password is required.");
       return;
     }
 
     setIsDeleting(true);
+    setDeletePasswordError("");
 
     try {
+      const nickname = selectedKeyEntry?.keyNickname || selectedAccount.nickname;
+
       await dsFetch("keystoreDelete", {
-        nickname: nickname,
+        address: selectedKeyEntry?.keyAddress ?? selectedAccount.address,
+        password: deletePassword,
       });
 
-      // Invalidate keystore cache
-      await queryClient.invalidateQueries({ queryKey: ["ds", "keystore"] });
+      await invalidateKeystore();
 
       toast.success({
         title: "Account Deleted",
@@ -229,9 +297,8 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
       });
 
       setShowDeleteModal(false);
-      setDeleteConfirmation("");
+      setDeletePassword("");
 
-      // Switch to another account
       const otherAccounts = accounts.filter((acc) => acc.id !== selectedAccount.id);
       if (otherAccounts.length > 0) {
         setTimeout(() => {
@@ -241,6 +308,7 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
         switchAccount(null);
       }
     } catch (error) {
+      setDeletePasswordError("Unable to delete with that password.");
       toast.error({
         title: "Delete Failed",
         description: error instanceof Error ? error.message : String(error),
@@ -257,25 +325,80 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
           <label className="block text-sm font-medium text-foreground/80 mb-2">
             Wallet Name
           </label>
-          <Select
-            value={selectedAccount?.id || ""}
-            onValueChange={switchAccount}
-          >
-            <SelectTrigger className="w-full bg-muted border-border text-foreground h-11 rounded-lg focus:ring-2 focus:ring-primary/35">
-              <SelectValue placeholder="Select wallet" />
-            </SelectTrigger>
-            <SelectContent className="bg-muted border-border">
-              {accounts.map((account) => (
-                <SelectItem
-                  key={account.id}
-                  value={account.id}
-                  className="text-foreground"
-                >
-                  {account.nickname}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Select
+                value={selectedAccount?.id || ""}
+                onValueChange={switchAccount}
+              >
+                <SelectTrigger className="w-full bg-muted border-border text-foreground h-11 rounded-lg focus:ring-2 focus:ring-primary/35">
+                  <SelectValue placeholder="Select wallet" />
+                </SelectTrigger>
+                <SelectContent className="bg-muted border-border">
+                  {accounts.map((account) => (
+                    <SelectItem
+                      key={account.id}
+                      value={account.id}
+                      className="text-foreground"
+                    >
+                      {account.nickname}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11 px-3"
+                onClick={() => {
+                  setRenameNickname(selectedKeyEntry?.keyNickname || selectedAccount?.nickname || "");
+                  setIsRenameOpen((value) => !value);
+                }}
+                disabled={!selectedAccount || !selectedKeyEntry}
+              >
+                <Pencil className="h-4 w-4" />
+                Rename
+              </Button>
+            </div>
+
+            {isRenameOpen && (
+              <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3 sm:flex-row">
+                <input
+                  type="text"
+                  value={renameNickname}
+                  onChange={(e) => setRenameNickname(e.target.value)}
+                  placeholder="Wallet nickname"
+                  className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-10"
+                    onClick={handleRenameAccount}
+                    disabled={isRenaming}
+                  >
+                    {isRenaming ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="h-10"
+                    onClick={() => {
+                      setIsRenameOpen(false);
+                      setRenameNickname(selectedKeyEntry?.keyNickname || selectedAccount?.nickname || "");
+                    }}
+                    disabled={isRenaming}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -383,8 +506,8 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
           </Button>
           <Button
             onClick={handleDeleteAccount}
-            variant="destructive"
-            className="h-11 w-full"
+            variant="secondary"
+            className="h-11 w-full border-[#ff1845]/30 bg-[#ff1845]/10 text-[#ff6b84] shadow-none hover:border-[#ff1845]/40 hover:bg-[#ff1845]/14 hover:text-[#ff7f96]"
             disabled={!selectedAccount}
           >
             <Trash2 className="h-4 w-4" />
@@ -470,25 +593,29 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
             </div>
 
             <p className="text-sm text-muted-foreground mb-4">
-              Type <span className="font-semibold text-foreground">
+              Enter your wallet password to confirm deletion of <span className="font-semibold text-foreground">
                 {selectedKeyEntry?.keyNickname || selectedAccount?.nickname}
-              </span> to confirm deletion:
+              </span>:
             </p>
 
             <input
-              type="text"
-              value={deleteConfirmation}
-              onChange={(e) => setDeleteConfirmation(e.target.value)}
-              placeholder="Type wallet name to confirm"
-              className="w-full bg-[#0f0f0f] text-foreground border border-[#272729] rounded-lg px-3 py-2.5 mb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff1845]/25"
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Password"
+              className="w-full bg-[#0f0f0f] text-foreground border border-[#272729] rounded-lg px-3 py-2.5 mb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff1845]/25"
               autoFocus
             />
+            {deletePasswordError && (
+              <div className="text-sm text-[#ff1845] mb-2">{deletePasswordError}</div>
+            )}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 mt-2">
               <button
                 onClick={() => {
                   setShowDeleteModal(false);
-                  setDeleteConfirmation("");
+                  setDeletePassword("");
+                  setDeletePasswordError("");
                 }}
                 className="px-4 py-2 rounded-lg border border-[#272729] bg-[#0f0f0f] text-white hover:bg-[#272729]"
                 disabled={isDeleting}
@@ -498,7 +625,7 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
               <button
                 onClick={handleConfirmDelete}
                 className="px-4 py-2 rounded-lg bg-[#ff1845] text-white hover:bg-[#ff1845]/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isDeleting || deleteConfirmation !== (selectedKeyEntry?.keyNickname || selectedAccount?.nickname)}
+                disabled={isDeleting || !deletePassword}
               >
                 {isDeleting ? "Deleting..." : "Delete Permanently"}
               </button>

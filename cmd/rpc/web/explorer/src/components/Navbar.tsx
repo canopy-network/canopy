@@ -307,7 +307,7 @@ const Navbar = () => {
                                             if (lowerCaseSearchTerm.includes('swap') || lowerCaseSearchTerm.includes('token')) {
                                                 navigate('/token-swaps');
                                             } else if (lowerCaseSearchTerm.includes('validator') || lowerCaseSearchTerm.includes('stake')) {
-                                                navigate('/validators');
+                                                navigate('/staking');
                                             } else if (lowerCaseSearchTerm.includes('block')) {
                                                 navigate('/blocks');
                                             } else if (lowerCaseSearchTerm.includes('transaction') || lowerCaseSearchTerm.includes('tx')) {

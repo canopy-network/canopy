@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Proposal } from "@/hooks/useGovernance";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 interface ProposalCardProps {
   proposal: Proposal;
@@ -8,18 +9,7 @@ interface ProposalCardProps {
 }
 
 const getStatusColor = (status: Proposal["status"]) => {
-  switch (status) {
-    case "active":
-      return "bg-primary/20 text-primary border-primary/40";
-    case "passed":
-      return "bg-green-500/20 text-green-400 border-green-500/40";
-    case "rejected":
-      return "bg-red-500/20 text-red-400 border-red-500/40";
-    case "pending":
-      return "bg-yellow-500/20 text-yellow-400 border-yellow-500/40";
-    default:
-      return "bg-muted/20 text-muted-foreground border-border/40";
-  }
+  return WALLET_BADGE_TONE;
 };
 
 const getStatusLabel = (status: Proposal["status"]) => {
@@ -77,9 +67,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
             <span className="text-muted-foreground text-sm">
               #{proposal.id.slice(0, 8)}...
             </span>
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(proposal.status)}`}
-            >
+            <span className={`${WALLET_BADGE_CLASS} ${getStatusColor(proposal.status)}`}>
               {getStatusLabel(proposal.status)}
             </span>
           </div>

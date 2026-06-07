@@ -1,10 +1,11 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X, Copy, ExternalLink, CheckCircle2, AlertTriangle, Info } from "lucide-react";
+import { X, Copy, CheckCircle2, AlertTriangle, Info } from "lucide-react";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { LucideIcon } from "@/components/ui/LucideIcon";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { ActionTooltip } from "@/components/ui/ActionTooltip";
+import { WALLET_BADGE_CLASS, WALLET_BADGE_TONE } from "@/components/ui/badgeStyles";
 
 export interface TxError {
   code: number;
@@ -66,11 +67,7 @@ const formatTimeAgo = (tsMs: number) => {
 };
 
 const getStatusColor = (s: string) => {
-  if (s === "Confirmed") return "bg-[#35cd48]/12 text-[#35cd48] border-[#35cd48]/35";
-  if (s === "Pending") return "bg-[#ddb228]/12 text-[#ddb228] border-[#ddb228]/35";
-  if (s === "Open") return "bg-[#216cd0]/12 text-[#216cd0] border-[#216cd0]/35";
-  if (s === "Failed") return "bg-[#ff1845]/12 text-[#ff1845] border-[#ff1845]/35";
-  return "bg-[#0f0f0f] text-white/60 border-[#272729]";
+  return WALLET_BADGE_TONE;
 };
 
 const truncateMiddle = (value: string, removed = 10) => {
@@ -148,8 +145,6 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const decimals = Number(chain?.denom?.decimals ?? 6);
   const toDisplay = (n: number) => n / Math.pow(10, decimals);
 
-  const explorerTxUrl = chain?.explorer?.tx ?? "";
-
   React.useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -204,9 +199,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(tx.status)}`}
-                  >
+                  <span className={`${WALLET_BADGE_CLASS} ${getStatusColor(tx.status)}`}>
                     {tx.status}
                   </span>
                   <button
@@ -349,20 +342,6 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   </section>
                 )}
               </div>
-
-              {explorerTxUrl && (
-                <div className="px-6 py-4 border-t border-border/50 flex justify-end">
-                  <a
-                    href={`${explorerTxUrl}/${tx.hash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[#216cd0] hover:text-[#216cd0]/80 transition-colors"
-                  >
-                    View on Explorer
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              )}
             </motion.div>
           </motion.div>
         </>

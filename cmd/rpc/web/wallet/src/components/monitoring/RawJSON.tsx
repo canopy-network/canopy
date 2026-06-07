@@ -1,7 +1,7 @@
 import React from 'react';
 import { useDSFetcher } from '@/core/dsFetch';
 import { useQuery } from '@tanstack/react-query';
-import { Download } from 'lucide-react';
+import { Check, Copy, Download } from 'lucide-react';
 
 type RawJSONTab = 'quorum' | 'config' | 'peerInfo' | 'peerBook';
 
@@ -59,6 +59,8 @@ export default function RawJSON({
     onExportLogs,
 }: RawJSONProps): JSX.Element {
     const dsFetch = useDSFetcher();
+    const [copied, setCopied] = React.useState(false);
+    const copyResetRef = React.useRef<number | null>(null);
 
     const currentTab = tabData.find(t => t.id === activeTab);
 
@@ -93,19 +95,54 @@ export default function RawJSON({
         URL.revokeObjectURL(url);
     };
 
+    React.useEffect(() => {
+        return () => {
+            if (copyResetRef.current !== null) {
+                window.clearTimeout(copyResetRef.current);
+            }
+        };
+    }, []);
+
+    const handleCopyJSON = async () => {
+        if (!tabContentData || !navigator.clipboard) return;
+
+        await navigator.clipboard.writeText(JSON.stringify(tabContentData, null, 2));
+        setCopied(true);
+
+        if (copyResetRef.current !== null) {
+            window.clearTimeout(copyResetRef.current);
+        }
+
+        copyResetRef.current = window.setTimeout(() => {
+            setCopied(false);
+            copyResetRef.current = null;
+        }, 1500);
+    };
+
     return (
         <div className="bg-card rounded-xl border border-border p-6">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-foreground text-lg font-bold">Raw JSON</h2>
-                <button
-                    onClick={handleExportJSON}
-                    className="rounded-md border border-[#272729] p-2 text-white/60 transition-colors hover:border-white/15 hover:bg-[#0f0f0f] hover:text-white/80 disabled:pointer-events-none disabled:opacity-40"
-                    disabled={!tabContentData}
-                    title="Export JSON"
-                    aria-label="Export JSON"
-                >
-                    <Download className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleCopyJSON}
+                        className="rounded-md border border-[#272729] p-2 text-white/60 transition-colors hover:border-white/15 hover:bg-[#0f0f0f] hover:text-white/80 disabled:pointer-events-none disabled:opacity-40"
+                        disabled={!tabContentData}
+                        title={copied ? 'Copied' : 'Copy JSON'}
+                        aria-label="Copy JSON"
+                    >
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </button>
+                    <button
+                        onClick={handleExportJSON}
+                        className="rounded-md border border-[#272729] p-2 text-white/60 transition-colors hover:border-white/15 hover:bg-[#0f0f0f] hover:text-white/80 disabled:pointer-events-none disabled:opacity-40"
+                        disabled={!tabContentData}
+                        title="Export JSON"
+                        aria-label="Export JSON"
+                    >
+                        <Download className="h-4 w-4" />
+                    </button>
+                </div>
             </div>
 
             {/* Tab buttons */}

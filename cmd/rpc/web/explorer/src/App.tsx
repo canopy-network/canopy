@@ -7,7 +7,6 @@ import BlocksPage from './components/block/BlocksPage'
 import BlockDetailPage from './components/block/BlockDetailPage'
 import TransactionsPage from './components/transaction/TransactionsPage'
 import TransactionDetailPage from './components/transaction/TransactionDetailPage'
-import ValidatorsPage from './components/validator/ValidatorsPage'
 import ValidatorDetailPage from './components/validator/ValidatorDetailPage'
 import AccountsPage from './components/account/AccountsPage'
 import AccountDetailPage from './components/account/AccountDetailPage'
@@ -17,12 +16,14 @@ import DexBatchesPage from './components/dex/DexBatchesPage'
 import StakingPage from './components/staking/StakingPage'
 import GovernancePage from './components/staking/GovernancePage'
 import SupplyPage from './components/staking/SupplyPage'
-import { useNetworkChangeHandler } from './hooks/useApi'
+import { useNetworkChangeHandler, useBlockSubscription } from './hooks/useApi'
 import ExplorerLayout from './components/layouts/ExplorerLayout'
 
 function App() {
   // Handle network changes and invalidate queries
   useNetworkChangeHandler();
+  // Detect new blocks globally and refresh dashboard queries on chain growth
+  useBlockSubscription();
 
   return (
     <Router>
@@ -36,8 +37,8 @@ function App() {
             <Route path="/block/:blockHeight" element={<BlockDetailPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/transaction/:transactionHash" element={<TransactionDetailPage />} />
-            <Route path="/validators" element={<ValidatorsPage />} />
-            <Route path="/delegators" element={<ValidatorsPage />} />
+            <Route path="/validators" element={<Navigate to="/staking" replace />} />
+            <Route path="/delegators" element={<Navigate to="/staking" replace />} />
             <Route path="/validator/:validatorAddress" element={<ValidatorDetailPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/account/:address" element={<AccountDetailPage />} />

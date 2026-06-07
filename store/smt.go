@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"math/bits"
 	"sort"
-	"sync"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -102,11 +101,22 @@ type SMT struct {
 	operations []*node
 	// unsorted_ops: a list of operations that aren't yet sorted
 	unsortedOps map[string]*node
+	// stats: counters captured for the most recent commit() call
+	stats SMTStats
 	// OpData: data for each operation
 	OpData
 	// define reserved keys
 	minKey *key
 	maxKey *key
+}
+
+// SMTStats captures the internal work performed during the most recent SMT commit.
+type SMTStats struct {
+	NodeReads       int
+	NodeCacheHits   int
+	NodeCacheMisses int
+	TraverseSteps   int
+	Rehashes        int
 }
 
 // node wraps protobuf Node with a key
@@ -176,6 +186,7 @@ func (s *SMT) Root() []byte { return bytes.Clone(s.root.Value) }
 // minimizing the amount of traversals, IOPS, and hash operations over the master tree
 // this is the sequential alternative to 'commit parallel'
 func (s *SMT) Commit(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
+	s.stats = SMTStats{}
 	s.operations = make([]*node, 0, len(unsortedOps))
 	// insert all unsorted operations into the slice
 	for _, operation := range unsortedOps {
@@ -189,49 +200,101 @@ func (s *SMT) Commit(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 	return s.commit(false)
 }
 
-// CommitParallel(): sorts the operations in 8 subtree threads, executes those threads in parallel and combines them into the master tree
+// CommitParallel() executes deferred operations in parallel by partitioning them into
+// 8 subtrees based on their 3-bit prefix (000-111), avoiding conflicts between operations
+// that would modify overlapping tree regions. Each subtree is processed independently
+// with its own Txn copy to avoid lock contention, then the results are merged back into
+// the main tree.
 func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
-	var wg sync.WaitGroup
-	errChan := make(chan lib.ErrorI, NumSubtrees)
-	// add 16 synthetic borders to the tree
+	// if there are too few operations, fall back to sequential processing
+	// if len(unsortedOps) < NumSubtrees*2 {
+	// 	return s.Commit(unsortedOps)
+	// }
+
+	parentTxn, ok := s.store.(*Txn)
+	if !ok {
+		return s.Commit(unsortedOps)
+	}
+
+	groups, err := s.sortOperationsByPrefix(unsortedOps)
+	if err != nil {
+		return err
+	}
+
 	cleanup, err := s.addSyntheticBorders()
 	if err != nil {
 		return err
 	}
-	// collect the roots for each group (000, 001, 010, 011...)
-	roots, err := s.getSubtreeRoots()
+	defer func() {
+		if cleanupErr := cleanup(); cleanupErr != nil && err == nil {
+			err = cleanupErr
+		}
+	}()
+
+	subtreeRoots, err := s.getSubtreeRoots()
 	if err != nil {
 		return err
 	}
-	// sort operations grouping by prefix
-	groupedByPrefix, err := s.sortOperationsByPrefix(unsortedOps)
-	if err != nil {
-		return
+
+	type subtreeResult struct {
+		index int
+		store *subtreeStore
+		err   lib.ErrorI
 	}
-	// commit each group in parallel
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
-			// create subtree
-			subtree := s.createSubtree(roots[index], groupedByPrefix[index])
-			subtree.reset()
-			// commit the subtree
-			if e := subtree.commit(true); e != nil {
-				errChan <- e
-			}
-		}(i)
-	}
-	// wait for all goroutines to finish
-	wg.Wait()
-	close(errChan)
-	// check if any errors occurred
-	for err = range errChan {
-		if err != nil {
-			return
+
+	resultChan := make(chan subtreeResult, NumSubtrees)
+	activeSubtrees := 0
+
+	for i := 0; i < NumSubtrees; i++ {
+		if len(groups[i]) == 0 {
+			continue
 		}
+		activeSubtrees++
+		st := parentTxn.newSubtreeStore()
+
+		go func(idx int, ops []*node, root *node, store *subtreeStore) {
+			subtree := &SMT{
+				store:        store,
+				root:         root,
+				keyBitLength: s.keyBitLength,
+				nodeCache:    make(map[string]*node),
+				operations:   ops,
+				minKey:       s.minKey,
+				maxKey:       s.maxKey,
+			}
+			subtree.reset()
+			commitErr := subtree.commit(true)
+			resultChan <- subtreeResult{
+				index: idx,
+				store: store,
+				err:   commitErr,
+			}
+		}(i, groups[i], subtreeRoots[i], st)
 	}
-	return cleanup()
+
+	results := make([]subtreeResult, 0, activeSubtrees)
+	for completed := 0; completed < activeSubtrees; completed++ {
+		result := <-resultChan
+		if result.err != nil {
+			// Drain remaining results before returning so goroutines
+			// finish and don't race with the deferred cleanup.
+			for completed++; completed < activeSubtrees; completed++ {
+				<-resultChan
+			}
+			return result.err
+		}
+		results = append(results, result)
+	}
+	for _, result := range results {
+		parentTxn.mergeSubtreeOps(result.store)
+	}
+
+	s.root, err = s.getNode(s.root.Key.bytes())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // commit(): executes the deferred operations in order (left-to-right),
@@ -339,6 +402,7 @@ func (s *SMT) traverse() (err lib.ErrorI) {
 		case RightChild: // move down to the right
 			currentKey = s.current.RightChildKey
 		}
+		s.stats.TraverseSteps++
 		// load current node from the store
 		s.current, err = s.getNode(currentKey)
 		if err != nil {
@@ -378,6 +442,7 @@ func (s *SMT) rehash() (err lib.ErrorI) {
 		if len(s.operations) != 0 && s.operations[0].Key.cmp(&key{key: parent.RightChildKey}) <= 0 {
 			return
 		}
+		s.stats.Rehashes++
 		// calculate its new value
 		if err = s.updateParentValue(parent); err != nil {
 			return
@@ -510,19 +575,6 @@ func (s *SMT) getSubtreeRoots() (roots []*node, err lib.ErrorI) {
 	return
 }
 
-// createSubtree() initializes the subtree structure
-func (s *SMT) createSubtree(root *node, operations []*node) *SMT {
-	return &SMT{
-		store:        s.store,
-		root:         root,
-		keyBitLength: s.keyBitLength,
-		nodeCache:    make(map[string]*node),
-		operations:   operations,
-		minKey:       s.minKey,
-		maxKey:       s.maxKey,
-	}
-}
-
 // sortOperationsByPrefix returns 8 sorted slices grouped by 3-bit prefix: 000 to 111
 func (s *SMT) sortOperationsByPrefix(unsortedOps map[uint64]valueOp) (groups [8][]*node, err lib.ErrorI) {
 	// for each unsorted operation
@@ -604,11 +656,14 @@ func (s *SMT) delNode(key []byte) lib.ErrorI {
 
 // getNode() retrieves a node object from the database
 func (s *SMT) getNode(key []byte) (n *node, err lib.ErrorI) {
+	s.stats.NodeReads++
 	// check cache
 	n, found := s.nodeCache[string(key)]
 	if found {
+		s.stats.NodeCacheHits++
 		return n, nil
 	}
+	s.stats.NodeCacheMisses++
 	// initialize a reference to a node object
 	n = newNode()
 	// get the bytes of the node from the kv store

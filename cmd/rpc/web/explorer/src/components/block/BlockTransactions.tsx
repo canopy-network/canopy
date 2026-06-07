@@ -1,10 +1,12 @@
 import React from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import blockDetailTexts from '../../data/blockDetail.json'
 import transactionsTexts from '../../data/transactions.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TransactionTypeBadge from '../transaction/TransactionTypeBadge'
-import { formatPaginationRange } from '../../lib/utils'
+import { cnpyDetailFormat, formatMicroCNPY, formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation } from '../../lib/utils'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Transaction {
     hash: string
@@ -49,27 +51,12 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
         return `${value.slice(0, leading)}…${value.slice(-trailing)}`
     }
 
-    const formatFee = (fee: number) => {
-        if (!fee || fee === 0) return '0 CNPY'
-        const cnpy = fee / 1_000_000
-        return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
-    }
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'success':
-                return 'border-primary/25 bg-primary/12 text-primary'
-            case 'failed':
-                return 'border-red-500/25 bg-red-500/12 text-red-400'
-            case 'pending':
-                return 'border-yellow-500/25 bg-yellow-500/12 text-yellow-400'
-            default:
-                return 'border-gray-500/25 bg-gray-500/12 text-gray-400'
-        }
-    }
-
     const getTransactionType = (tx: Transaction): string => {
         return tx.type || tx.messageType || 'send'
+    }
+
+    const getTransactionHash = (tx: Transaction): string => {
+        return tx.txHash || tx.hash || ''
     }
 
     const columns = [
@@ -127,21 +114,33 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                         {paginatedTransactions.map((tx) => {
                             const txType = getTransactionType(tx)
                             const amount = tx.value || 0
+                            const txHash = getTransactionHash(tx)
+                            const detailPath = txHash ? `/transaction/${txHash}` : null
 
                             return (
-                                <tr key={tx.hash} className="group">
+                                <tr
+                                    key={txHash || tx.hash}
+                                    className={`group ${detailPath ? 'cursor-pointer' : ''}`}
+                                    onClick={(event) => {
+                                        if (!detailPath || shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(detailPath)
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (!detailPath || shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        event.preventDefault()
+                                        navigate(detailPath)
+                                    }}
+                                    tabIndex={detailPath ? 0 : undefined}
+                                    role={detailPath ? 'link' : undefined}
+                                    aria-label={detailPath ? `View transaction ${txHash}` : undefined}
+                                >
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
                                     >
-                                        <button
-                                            type="button"
-                                            className="text-sm font-medium text-white transition-colors hover:text-primary"
-                                            onClick={() => navigate(`/transaction/${tx.hash}`)}
-                                            title={tx.hash}
-                                        >
-                                            {truncateMiddle(tx.hash, 8, 4)}
-                                        </button>
+                                        <CopyableIdentifier value={txHash} label="Transaction hash" to={detailPath || undefined} className="max-w-[12rem] text-sm font-medium text-white">
+                                            {truncateMiddle(txHash, 8, 4)}
+                                        </CopyableIdentifier>
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <TransactionTypeBadge type={txType} />
@@ -150,41 +149,31 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                                         {tx.from === 'N/A' ? (
                                             <span className="text-sm text-white/40">N/A</span>
                                         ) : (
-                                            <Link
-                                                to={`/account/${tx.from}`}
-                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
-                                                title={tx.from}
-                                            >
+                                            <CopyableIdentifier value={tx.from} label="From address" to={`/account/${tx.from}`} className="max-w-[13rem] text-sm text-white">
                                                 {truncateMiddle(tx.from)}
-                                            </Link>
+                                            </CopyableIdentifier>
                                         )}
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         {tx.to === 'N/A' ? (
                                             <span className="text-sm text-white/40">N/A</span>
                                         ) : (
-                                            <Link
-                                                to={`/account/${tx.to}`}
-                                                className="block max-w-[13rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-white transition-colors hover:text-primary"
-                                                title={tx.to}
-                                            >
+                                            <CopyableIdentifier value={tx.to} label="To address" to={`/account/${tx.to}`} className="max-w-[13rem] text-sm text-white">
                                                 {truncateMiddle(tx.to)}
-                                            </Link>
+                                            </CopyableIdentifier>
                                         )}
                                     </td>
                                     <td className={desktopRowCellClass}>
                                         <span className="text-sm text-white tabular-nums">
-                                            <AnimatedNumber value={amount} format={{ maximumFractionDigits: 4 }} className="text-white" />
+                                            <AnimatedNumber value={amount} format={cnpyDetailFormat} className="text-white" />
                                             <span className="ml-1 text-white/50">{transactionsTexts.table.units.cnpy}</span>
                                         </span>
                                     </td>
                                     <td className={desktopRowCellClass}>
-                                        <span className="text-sm text-white tabular-nums">{formatFee(tx.fee || 0)}</span>
+                                        <span className="text-sm text-white tabular-nums">{formatMicroCNPY(tx.fee || 0)}</span>
                                     </td>
                                     <td className={desktopRowCellClass}>
-                                        <span
-                                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-tight ${getStatusColor(tx.status || 'success')}`}
-                                        >
+                                        <span className={GREEN_BADGE_CLASS}>
                                             {transactionsTexts.status[tx.status as keyof typeof transactionsTexts.status] || transactionsTexts.status.success}
                                         </span>
                                     </td>
@@ -204,7 +193,10 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
             {totalTransactions > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
                     <div>
-                        {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalTransactions} />
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                            <AnimatedNumber value={totalTransactions} />
+                        </span>
                     </div>
 
                     <div className="flex items-center gap-2">

@@ -2,8 +2,11 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { useAllValidators, useAllBlocksCache, useCardData } from '../../hooks/useApi'
 import AnimatedNumber from '../AnimatedNumber'
-import { Link } from 'react-router-dom'
-import { toCNPY } from '../../lib/utils'
+import { Link, useNavigate } from 'react-router-dom'
+import { isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
+import CnpyColorIcon from '../ui/CnpyColorIcon'
+import { GREEN_BADGE_CLASS, GREEN_BADGE_TONE } from '../ui/badgeStyles'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 const desktopRowCellClass =
@@ -16,51 +19,44 @@ const LiveIndicator = () => (
     </div>
 )
 
-const CNPY_GRADIENTS = [
-    'linear-gradient(135deg, #45ca46 0%, #2f8f36 100%)',
-    'linear-gradient(135deg, #36cfc9 0%, #1677ff 100%)',
-    'linear-gradient(135deg, #faad14 0%, #d46b08 100%)',
-    'linear-gradient(135deg, #9254de 0%, #531dab 100%)',
-    'linear-gradient(135deg, #f759ab 0%, #cf1322 100%)',
-]
-
-const getCnpyGradient = (seed: string) => {
-    const total = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-    return CNPY_GRADIENTS[total % CNPY_GRADIENTS.length]
-}
-
 const CnpyBadge: React.FC<{ seed: string }> = ({ seed }) => (
-    <div
-        className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full p-[3px]"
-        style={{ background: getCnpyGradient(seed) }}
-    >
-        <img src="/canopy-symbol-white.png" alt="" className="h-full w-full object-contain" />
-    </div>
+    <CnpyColorIcon seed={seed} size={28} />
 )
+
+const activityBadgeClass = (activityScore: string) => {
+    return GREEN_BADGE_TONE
+}
 
 interface SummaryTableProps {
     title: string
     columns: string[]
     rows: React.ReactNode[][]
+    loading?: boolean
     viewAllPath: string
     emptyLabel: string
     minWidth?: string
+    rowHrefs?: Array<string | undefined>
 }
 
 const SummaryTable: React.FC<SummaryTableProps> = ({
     title,
     columns,
     rows,
+    loading = false,
     viewAllPath,
     emptyLabel,
     minWidth = 'min-w-[1100px]',
-}) => (
-    <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="rounded-xl border border-white/10 bg-[#1a1a1a] p-5"
-    >
+    rowHrefs = [],
+}) => {
+    const navigate = useNavigate()
+
+    return (
+        <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="rounded-xl border border-white/10 bg-[#1a1a1a] p-5"
+        >
         <div className="mb-5 flex items-center justify-between gap-3 leading-none">
             <h2 className="wallet-card-title tracking-tight">{title}</h2>
             <LiveIndicator />
@@ -84,7 +80,26 @@ const SummaryTable: React.FC<SummaryTableProps> = ({
                     </tr>
                 </thead>
                 <tbody>
-                    {rows.length === 0 ? (
+                    {loading ? (
+                        Array.from({ length: 5 }).map((_, index) => (
+                            <tr key={`${title}-loading-${index}`} className="animate-pulse">
+                                {columns.map((_, cellIndex) => (
+                                    <td
+                                        key={`${title}-loading-${index}-${cellIndex}`}
+                                        className={desktopRowCellClass}
+                                        style={{
+                                            borderTopLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderBottomLeftRadius: cellIndex === 0 ? '10px' : undefined,
+                                            borderTopRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                            borderBottomRightRadius: cellIndex === columns.length - 1 ? '10px' : undefined,
+                                        }}
+                                    >
+                                        <div className="h-3 w-20 rounded bg-white/10 sm:w-28 lg:w-32" />
+                                    </td>
+                                ))}
+                            </tr>
+                        ))
+                    ) : rows.length === 0 ? (
                         <tr>
                             <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-white/60">
                                 {emptyLabel}
@@ -94,10 +109,24 @@ const SummaryTable: React.FC<SummaryTableProps> = ({
                         rows.map((cells, index) => (
                             <motion.tr
                                 key={`${title}-${index}`}
-                                className="group"
+                                className={`group ${rowHrefs[index] ? 'cursor-pointer' : ''}`}
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.06 + index * 0.04 }}
+                                onClick={(event) => {
+                                    const href = rowHrefs[index]
+                                    if (!href || shouldIgnoreRowNavigation(event.target)) return
+                                    navigate(href)
+                                }}
+                                onKeyDown={(event) => {
+                                    const href = rowHrefs[index]
+                                    if (!href || shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                    event.preventDefault()
+                                    navigate(href)
+                                }}
+                                tabIndex={rowHrefs[index] ? 0 : undefined}
+                                role={rowHrefs[index] ? 'link' : undefined}
+                                aria-label={rowHrefs[index] ? `Open ${title} row ${index + 1}` : undefined}
                             >
                                 {cells.map((cell, cellIndex) => (
                                     <td
@@ -129,10 +158,11 @@ const SummaryTable: React.FC<SummaryTableProps> = ({
             </Link>
         </div>
     </motion.section>
-)
+    )
+}
 
 const ExtraTables: React.FC = () => {
-    const { data: allValidatorsData } = useAllValidators()
+    const { data: allValidatorsData, isLoading: isValidatorsLoading } = useAllValidators()
     const { data: blocksPage } = useAllBlocksCache()
     const { data: cardData } = useCardData()
 
@@ -246,7 +276,16 @@ const ExtraTables: React.FC = () => {
             return [
                 <div className="flex items-center gap-2">
                     <CnpyBadge seed={address} />
-                    <Link to={`/validator/${address}`} className="text-white hover:text-primary hover:underline">{truncate(String(address), 16)}</Link>
+                    <CopyableIdentifier value={String(address)} label="Validator address" to={`/validator/${address}`} className="text-white">{truncate(String(address), 16)}</CopyableIdentifier>
+                    <Link
+                        to={`/validator/${address}`}
+                        data-row-click-ignore="true"
+                        className="shrink-0 text-white/35 transition-colors hover:text-primary"
+                        title="Open validator details"
+                        aria-label="Open validator details"
+                    >
+                        <i className="fa-solid fa-arrow-up-right-from-square text-[10px]" aria-hidden="true" />
+                    </Link>
                 </div>,
                 <span className="text-gray-200">
                     {rewardsPct}%
@@ -261,13 +300,7 @@ const ExtraTables: React.FC = () => {
                         chainsStaked || '0'
                     )}
                 </span>,
-                <span className={`text-xs px-2 py-1 rounded-full ${activityScore === 'Active' ? 'bg-primary/20 text-primary' :
-                    activityScore === 'Standby' ? 'bg-yellow-500/20 text-yellow-400' :
-                        activityScore === 'Paused' ? 'bg-orange-500/20 text-orange-400' :
-                            activityScore === 'Unstaking' ? 'bg-red-500/20 text-red-400' :
-                                activityScore === 'Delegate' ? 'bg-blue-500/20 text-blue-400' :
-                                    'bg-gray-500/20 text-gray-400'
-                    }`}>
+                <span className={`${GREEN_BADGE_CLASS} ${activityBadgeClass(activityScore)}`}>
                     {activityScore}
                 </span>,
                 <span className="text-gray-200">
@@ -306,11 +339,16 @@ const ExtraTables: React.FC = () => {
         })
     }, [top10Validators, totalStake, validatorStats])
 
+    const validatorRowHrefs = React.useMemo(
+        () => top10Validators.map((validator: any) => validator.address ? `/validator/${validator.address}` : undefined),
+        [top10Validators]
+    )
+
     return (
         <div className="grid grid-cols-1 gap-6">
             <SummaryTable
                 title="Validators"
-                viewAllPath="/validators"
+                viewAllPath="/staking"
                 columns={[
                     'Name/Address',
                     'Rewards %',
@@ -321,6 +359,8 @@ const ExtraTables: React.FC = () => {
                     'Staking Power',
                 ]}
                 rows={validatorRows}
+                rowHrefs={validatorRowHrefs}
+                loading={isValidatorsLoading}
                 emptyLabel="No validators found"
             />
         </div>

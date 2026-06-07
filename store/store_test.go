@@ -2,7 +2,10 @@ package store
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/cockroachdb/pebble/v2"
@@ -275,6 +278,63 @@ func TestRollbackWithPrefixOverlappingKeys(t *testing.T) {
 	value, err = st.Get(childKey)
 	require.NoError(t, err)
 	require.Equal(t, []byte("child-v1"), value)
+}
+
+func TestMaybeBackup(t *testing.T) {
+	// use a single base dir so db and backup share the same filesystem, making
+	// os.Rename atomic across both paths
+	baseDir := t.TempDir()
+	dbDir := filepath.Join(baseDir, "db")
+	backupDir := filepath.Join(baseDir, "backup")
+	// set up chain configs
+	config := lib.DefaultConfig()
+	config.StoreConfig.BackupInterval = 3
+	config.StoreConfig.BackupDirectory = backupDir
+	// set up new store with the configs above
+	st, e := NewStore(config, dbDir, nil, lib.NewDefaultLogger())
+	require.NoError(t, e)
+	s := st.(*Store)
+	// write a key and commit 3 blocks to reach the backup trigger;
+	// Commit() calls MaybeBackup() internally so no explicit call is needed
+	key := lib.JoinLenPrefix([]byte("state/"), []byte("value"))
+	for i := 1; i <= 3; i++ {
+		require.NoError(t, s.Set(key, fmt.Appendf(nil, "v%d", i)))
+		_, err := s.Commit()
+		require.NoError(t, err)
+	}
+	require.EqualValues(t, 3, s.Version())
+	// wait for the backup goroutine started by Commit() to complete
+	require.Eventually(t, func() bool { return !s.backup.Load() },
+		1*time.Second, 50*time.Millisecond)
+	// backup directory must exist
+	_, err := os.Stat(backupDir)
+	require.NoError(t, err)
+	// height file must reflect the block at which the backup was taken
+	heightData, err := os.ReadFile(filepath.Join(backupDir, "height.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "3", string(heightData))
+	// advance more blocks so the live DB diverges from the backup
+	for i := 4; i <= 5; i++ {
+		require.NoError(t, s.Set(key, fmt.Appendf(nil, "v%d", i)))
+		_, err = s.Commit()
+		require.NoError(t, err)
+	}
+	require.EqualValues(t, 5, s.Version())
+	require.NoError(t, s.Close())
+	// simulate a catastrophic loss of the live DB directory
+	require.NoError(t, os.RemoveAll(dbDir))
+	// promote the backup to the DB path
+	require.NoError(t, os.Rename(backupDir, dbDir))
+	// reopen from the backup location — should restore to height 3
+	restored, e := NewStore(config, dbDir, nil, lib.NewDefaultLogger())
+	require.NoError(t, e)
+	defer restored.Close()
+	restoredStore := restored.(*Store)
+	require.EqualValues(t, 3, restoredStore.Version())
+	// value must be what was committed at block 3, not the later diverged state
+	restoredVal, err := restored.Get(key)
+	require.NoError(t, err)
+	require.Equal(t, []byte("v3"), restoredVal)
 }
 
 func testStore(t *testing.T) (*Store, *pebble.DB, func()) {

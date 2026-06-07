@@ -1,12 +1,18 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import accountsTexts from '../../data/accounts.json'
 import AnimatedNumber from '../AnimatedNumber'
-import { formatPaginationRange } from '../../lib/utils'
+import { formatPaginationRange, isRowNavigationKey, shouldIgnoreRowNavigation, toCNPY } from '../../lib/utils'
+import PageSizeSelect from '../shared/PageSizeSelect'
+import CnpyColorIcon from '../ui/CnpyColorIcon'
+import CopyableIdentifier from '../ui/CopyableIdentifier'
 
 interface Account {
     address: string
     amount: number
+    lockedAmount?: number
+    vestedAmount?: number
+    vestingAmount?: number
 }
 
 interface AccountsTableProps {
@@ -14,41 +20,23 @@ interface AccountsTableProps {
     loading?: boolean
     totalCount?: number
     currentPage?: number
+    pageSize?: number
     onPageChange?: (page: number) => void
+    onPageSizeChange?: (value: number) => void
 }
-
-const PAGE_SIZE = 10
 
 const desktopHeaderClass =
     'px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4'
 const desktopRowCellClass =
     'bg-[#1a1a1a] px-2 py-2 align-middle transition-colors group-hover:bg-[#272729] sm:px-3 lg:px-4'
 
-const CNPY_GRADIENTS = [
-    'linear-gradient(135deg, #45ca46 0%, #2f8f36 100%)',
-    'linear-gradient(135deg, #36cfc9 0%, #1677ff 100%)',
-    'linear-gradient(135deg, #faad14 0%, #d46b08 100%)',
-    'linear-gradient(135deg, #9254de 0%, #531dab 100%)',
-    'linear-gradient(135deg, #f759ab 0%, #cf1322 100%)',
-]
-
 const truncateMiddle = (value: string, leading = 10, trailing = 6) => {
     if (!value || value.length <= leading + trailing + 1) return value || 'N/A'
     return `${value.slice(0, leading)}…${value.slice(-trailing)}`
 }
 
-const getCnpyGradient = (seed: string) => {
-    const total = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-    return CNPY_GRADIENTS[total % CNPY_GRADIENTS.length]
-}
-
 const CnpyBadge: React.FC<{ seed: string }> = ({ seed }) => (
-    <div
-        className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full p-[3px]"
-        style={{ background: getCnpyGradient(seed) }}
-    >
-        <img src="/canopy-symbol-white.png" alt="" className="h-full w-full object-contain" />
-    </div>
+    <CnpyColorIcon seed={seed} size={28} />
 )
 
 const AccountsTable: React.FC<AccountsTableProps> = ({
@@ -56,11 +44,14 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
     loading = false,
     totalCount = 0,
     currentPage = 1,
+    pageSize = 10,
     onPageChange,
+    onPageSizeChange,
 }) => {
-    const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
-    const endIdx = Math.min(currentPage * PAGE_SIZE, totalCount)
+    const navigate = useNavigate()
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
+    const endIdx = Math.min(currentPage * pageSize, totalCount)
 
     const visiblePages = React.useMemo(() => {
         if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -96,7 +87,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
                     </thead>
                     <tbody>
                         {loading ? (
-                            Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                            Array.from({ length: pageSize }).map((_, index) => (
                                 <tr key={`skeleton-${index}`} className="group animate-pulse">
                                     {columns.map((_, columnIndex) => (
                                         <td
@@ -122,30 +113,53 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
                             </tr>
                         ) : (
                             accounts.map((account) => (
-                                <tr key={account.address} className="group">
+                                <tr
+                                    key={account.address}
+                                    className="group cursor-pointer"
+                                    onClick={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target)) return
+                                        navigate(`/account/${account.address}`)
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (shouldIgnoreRowNavigation(event.target) || !isRowNavigationKey(event.key)) return
+                                        event.preventDefault()
+                                        navigate(`/account/${account.address}`)
+                                    }}
+                                    tabIndex={0}
+                                    role="link"
+                                    aria-label={`View account ${account.address}`}
+                                >
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
                                     >
-                                        <Link
-                                            to={`/account/${account.address}`}
-                                            className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-primary"
-                                            title={account.address}
-                                        >
+                                        <div className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-white">
                                             <CnpyBadge seed={account.address} />
-                                            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                                            <CopyableIdentifier value={account.address} label="Address" to={`/account/${account.address}`} className="text-sm font-medium text-white">
                                                 {truncateMiddle(account.address)}
-                                            </span>
-                                        </Link>
+                                            </CopyableIdentifier>
+                                        </div>
                                     </td>
                                     <td
                                         className={desktopRowCellClass}
                                         style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
                                     >
-                                        <span className="text-sm text-white tabular-nums">
-                                            <AnimatedNumber value={account.amount} format={{ maximumFractionDigits: 4 }} className="text-white" />
-                                            <span className="ml-1 text-white/50">CNPY</span>
-                                        </span>
+                                        <div className="space-y-1">
+                                            <span className="text-sm text-white tabular-nums">
+                                                <AnimatedNumber value={toCNPY(account.amount)} format={{ maximumFractionDigits: 4 }} className="text-white" />
+                                                <span className="ml-1 text-white/50">CNPY</span>
+                                            </span>
+                                            {(Number(account.lockedAmount || 0) > 0 || Number(account.vestedAmount || 0) > 0) && (
+                                                <div className="flex flex-wrap gap-2 text-[11px] text-white/45">
+                                                    {Number(account.lockedAmount || 0) > 0 && (
+                                                        <span>Locked {toCNPY(Number(account.lockedAmount || 0)).toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                                                    )}
+                                                    {Number(account.vestedAmount || 0) > 0 && (
+                                                        <span>Vested {toCNPY(Number(account.vestedAmount || 0)).toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))
@@ -156,8 +170,14 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
 
             {!loading && totalCount > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalCount} />
+                    <div className="flex items-center gap-3">
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{formatPaginationRange(startIdx, endIdx)} of</span>
+                            <AnimatedNumber value={totalCount} />
+                        </span>
+                        {onPageSizeChange && (
+                            <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">

@@ -179,7 +179,7 @@ const ValidatorDetailPage: React.FC = () => {
                     <h1 className="text-2xl font-bold text-white mb-4">Validator not found</h1>
                     <p className="mb-6 text-white/60">The requested validator could not be found.</p>
                     <button
-                        onClick={() => navigate('/validators')}
+                        onClick={() => navigate('/staking')}
                         className="rounded-lg bg-[#35cd48] px-6 py-2 text-[#0f0f0f] transition-colors hover:opacity-90"
                     >
                         {validatorDetailTexts.page.backToValidators}
@@ -200,7 +200,7 @@ const ValidatorDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="w-full"
+            className="explorer-detail-page w-full"
         >
             {/* Breadcrumb */}
             <div className="mb-6 sm:mb-8">
@@ -209,7 +209,7 @@ const ValidatorDetailPage: React.FC = () => {
                         Staking
                     </button>
                     <i className="fa-solid fa-chevron-right text-xs"></i>
-                    <span className="text-white break-all sm:break-normal font-mono text-xs sm:text-sm">
+                    <span className="text-white break-all sm:break-normal text-xs sm:text-sm">
                         {typeof window !== 'undefined' && window.innerWidth < 640
                             ? truncate(validator.address || '', 6)
                             : validator.address || ''}

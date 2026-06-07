@@ -160,7 +160,7 @@ export default function Monitoring(): JSX.Element {
     >
       <PageHeader
         title="Monitoring"
-        subtitle="Node status, peers, performance metrics, and raw network data"
+        subtitle="Monitor node status, peers, performance metrics, and raw network data."
       />
 
       <NodeStatus

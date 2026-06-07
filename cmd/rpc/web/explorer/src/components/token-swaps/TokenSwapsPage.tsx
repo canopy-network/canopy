@@ -5,7 +5,7 @@ import SwapFilters from './SwapFilters';
 import type { SwapFilterValues } from './SwapFilters';
 import RecentSwapsTable from './RecentSwapsTable';
 import { useOrders } from '../../hooks/useApi'
-import { toCNPY } from '../../lib/utils';
+import { formatDecimalWithSubscript, formatLocaleNumber, toCNPY } from '../../lib/utils';
 import ExplorerOverviewCards from '../ExplorerOverviewCards';
 
 interface Order {
@@ -24,7 +24,9 @@ export interface SwapData {
     orderId: string;
     committee: number;
     fromAddress: string;
+    fromAddressFull: string;
     toAddress: string;
+    toAddressFull: string;
     exchangeRate: string;
     exchangeRateNum: number;
     amount: string;
@@ -36,12 +38,14 @@ export type SortKey = 'committee' | 'exchangeRate' | 'amount' | 'status';
 export type SortDir = 'asc' | 'desc';
 
 const DEFAULT_FILTERS: SwapFilterValues = { minAmount: '', status: 'All', committee: 'All' };
+const SWAP_DECIMAL_PLACES = 2;
 
 const TokenSwapsPage: React.FC = () => {
     const navigate = useNavigate();
     const [filters, setFilters] = useState<SwapFilterValues>(DEFAULT_FILTERS);
     const [sortKey, setSortKey] = useState<SortKey | null>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
+    const [pageSize, setPageSize] = useState(10);
 
     const { data: ordersData, isLoading } = useOrders();
 
@@ -65,18 +69,20 @@ const TokenSwapsPage: React.FC = () => {
                 ? order.amountForSale / order.requestedAmount
                 : 0;
             const exchangeRate = exchangeRateNum > 0
-                ? `1 : ${exchangeRateNum.toFixed(6)}`
+                ? `1 : ${formatDecimalWithSubscript(exchangeRateNum, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)}`
                 : 'N/A';
 
             const status: 'Active' | 'Locked' = order.buyerSendAddress ? 'Locked' : 'Active';
             const amountRaw = toCNPY(order.amountForSale);
-            const amount = `${amountRaw.toFixed(6)} CNPY`;
+            const amount = `${formatLocaleNumber(amountRaw, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)} CNPY`;
 
             return {
                 orderId: order.id,
                 committee: order.committee,
                 fromAddress: truncateAddress(order.sellersSendAddress),
+                fromAddressFull: order.sellersSendAddress,
                 toAddress: truncateAddress(order.sellerReceiveAddress),
+                toAddressFull: order.sellerReceiveAddress,
                 exchangeRate,
                 exchangeRateNum,
                 amount,
@@ -90,6 +96,7 @@ const TokenSwapsPage: React.FC = () => {
         const set = new Set(swaps.map((s) => s.committee));
         return Array.from(set).sort((a, b) => a - b);
     }, [swaps]);
+
     const overviewCards = useMemo(() => {
         const activeCount = swaps.filter((swap) => swap.status === 'Active').length;
         const lockedCount = swaps.filter((swap) => swap.status === 'Locked').length;
@@ -116,12 +123,12 @@ const TokenSwapsPage: React.FC = () => {
             },
             {
                 title: 'Open Volume',
-                value: `${totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })} CNPY`,
-                subValue: `${availableCommittees.length.toLocaleString()} committees`,
+                value: totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+                subValue: 'CNPY',
                 icon: 'fa-solid fa-chart-column',
             },
         ];
-    }, [availableCommittees.length, swaps]);
+    }, [swaps]);
 
     const filteredSwaps = useMemo(() => {
         let result = swaps;
@@ -224,7 +231,7 @@ const TokenSwapsPage: React.FC = () => {
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="w-full"
         >
-            <div className="flex justify-between items-center mb-8">
+            <div className="mb-4 flex items-center justify-between">
                 <div>
                     <h1 className="explorer-page-title">Token Swaps</h1>
                     <p className="explorer-page-subtitle">Atomic swap orderbook on the Canopy network</p>
@@ -256,6 +263,8 @@ const TokenSwapsPage: React.FC = () => {
                 sortKey={sortKey}
                 sortDir={sortDir}
                 onSort={handleSort}
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
             />
         </motion.div>
     );

@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
 import toast from 'react-hot-toast'
 import { Account, TransactionsBySender, TransactionsByRec } from '../../lib/api'
+import { toCNPY } from '../../lib/utils'
+import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 interface SearchResultsProps {
     results: any
@@ -21,6 +23,12 @@ interface FieldConfig {
     truncate?: boolean
     fullWidth?: boolean
 }
+
+const formatAccountBalance = (amount: number | undefined) =>
+    toCNPY(Number(amount || 0)).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })
 
 const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
     // Sync activeTab with filter.type if filter is set
@@ -40,13 +48,14 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
 
     // Calculate actual counts from filtered results (using same logic as getFilteredResults)
     const getActualCounts = () => {
-        if (!results) return { all: 0, blocks: 0, transactions: 0, addresses: 0, validators: 0 }
+        if (!results) return { all: 0, blocks: 0, transactions: 0, addresses: 0, validators: 0, orders: 0 }
 
         // Use the same filtering logic as getFilteredResults to get accurate counts
         const uniqueBlocksMap = new Map()
         const uniqueTxMap = new Map()
         const uniqueAddressesMap = new Map()
         const uniqueValidatorsMap = new Map()
+        const uniqueOrdersMap = new Map()
 
         // Process blocks with same validation as getFilteredResults
         results.blocks?.forEach((block: any) => {
@@ -90,12 +99,23 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             }
         })
 
+        // Process orders
+        results.orders?.forEach((order: any) => {
+            if (order && order.data) {
+                const oid = order.id || order.data.id || order.data.Id
+                if (oid && !uniqueOrdersMap.has(oid)) {
+                    uniqueOrdersMap.set(oid, true)
+                }
+            }
+        })
+
         return {
-            all: uniqueBlocksMap.size + uniqueTxMap.size + uniqueAddressesMap.size + uniqueValidatorsMap.size,
+            all: uniqueBlocksMap.size + uniqueTxMap.size + uniqueAddressesMap.size + uniqueValidatorsMap.size + uniqueOrdersMap.size,
             blocks: uniqueBlocksMap.size,
             transactions: uniqueTxMap.size,
             addresses: uniqueAddressesMap.size,
-            validators: uniqueValidatorsMap.size
+            validators: uniqueValidatorsMap.size,
+            orders: uniqueOrdersMap.size
         }
     }
 
@@ -106,7 +126,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
         { id: 'blocks', label: 'Blocks', count: actualCounts.blocks },
         { id: 'transactions', label: 'Transactions', count: actualCounts.transactions },
         { id: 'addresses', label: 'Addresses', count: actualCounts.addresses },
-        { id: 'validators', label: 'Validators', count: actualCounts.validators }
+        { id: 'validators', label: 'Validators', count: actualCounts.validators },
+        { id: 'orders', label: 'Orders', count: actualCounts.orders }
     ]
 
     const parseTimestampToDate = (timestamp: unknown): Date | null => {
@@ -233,7 +254,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             fetchAddressData()
         }, [address])
 
-        const balance = accountData?.amount ? (accountData.amount / 1000000).toFixed(2) : (initialData?.amount ? (initialData.amount / 1000000).toFixed(2) : '0.00')
+        const balance = formatAccountBalance(accountData?.amount ?? initialData?.amount)
 
         return (
             <motion.div
@@ -250,7 +271,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 </div>
                                 <span className="text-white text-lg">Address</span>
                             </div>
-                            <div className="bg-green-700/30 text-primary text-sm rounded-full px-2 py-0.5 w-fit">
+                            <div className={GREEN_BADGE_CLASS}>
                                 Address
                             </div>
                         </div>
@@ -328,7 +349,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 icon: 'fa-cube',
                 iconColor: 'text-primary',
                 bgColor: 'bg-green-700/30',
-                badgeColor: 'bg-green-700/30',
+                badgeClass: GREEN_BADGE_CLASS,
                 badgeText: 'Block',
                 title: `Block #${item.blockHeader?.height ?? item.height ?? 'N/A'}`,
                 borderColor: 'border-gray-400/10',
@@ -346,7 +367,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 icon: 'fa-arrow-right-arrow-left',
                 iconColor: 'text-blue-500',
                 bgColor: 'bg-blue-700/30',
-                badgeColor: 'bg-blue-700/30',
+                badgeClass: GREEN_BADGE_CLASS,
                 badgeText: 'Transaction',
                 title: 'Transaction',
                 borderColor: 'border-gray-400/10',
@@ -370,7 +391,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 icon: 'fa-shield-halved',
                 iconColor: (item.delegate === true) ? 'text-blue-500' : 'text-primary',
                 bgColor: 'bg-green-700/30',
-                badgeColor: (item.delegate === true) ? 'bg-blue-700/20' : 'bg-green-700/30',
+                badgeClass: GREEN_BADGE_CLASS,
                 badgeText: (item.delegate === true) ? 'Delegator' : 'Validator',
                 title: item.name || item.delegate ? 'Delegator' : 'Validator',
                 borderColor: 'border-gray-400/10',
@@ -385,7 +406,40 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                     { label: 'Auto-Compound:', value: `${(item.compound ?? false) ? 'Yes' : 'No'}` },
                     { label: 'Net Address:', value: `${item.netAddress ? item.netAddress : 'tcp://delegation'}` }
                 ] as FieldConfig[]
-            }
+            },
+            order: (() => {
+                const oid = item.id || item.Id || ''
+                const committee = item.committee ?? item.Chain ?? ''
+                const buyerSendAddr = item.buyerSendAddress || item.BuyerSendAddress || ''
+                const orderStatus = buyerSendAddr ? 'Locked' : 'Active'
+                const amountForSale = item.amountForSale ?? item.AmountForSale ?? 0
+                const requestedAmount = item.requestedAmount ?? item.RequestedAmount ?? 0
+                const sellerSendAddr = item.sellersSendAddress || item.SellersSendAddress || 'N/A'
+                const sellerReceiveAddr = item.sellerReceiveAddress || item.SellerReceiveAddress || 'N/A'
+
+                return {
+                    icon: 'fa-right-left',
+                    iconColor: 'text-yellow-500',
+                    bgColor: 'bg-yellow-700/30',
+                    badgeClass: GREEN_BADGE_CLASS,
+                    badgeText: orderStatus,
+                    title: `Order ${oid.length > 16 ? truncateHash(oid, 8) : oid}`,
+                    borderColor: 'border-gray-400/10',
+                    hoverColor: 'hover:border-gray-400/20',
+                    linkTo: `/order/${committee}/${oid}`,
+                    copyValue: oid,
+                    copyLabel: 'Copy Order ID',
+                    fields: [
+                        { label: 'Order ID:', value: truncateHash(oid, 10) },
+                        { label: 'Committee:', value: String(committee) },
+                        { label: 'Status:', value: orderStatus },
+                        { label: 'Amount For Sale:', value: `${toCNPY(Number(amountForSale)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CNPY` },
+                        { label: 'Requested:', value: `${toCNPY(Number(requestedAmount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CNPY` },
+                        { label: 'Seller Send:', value: truncateHash(sellerSendAddr, 6) },
+                        { label: 'Seller Receive:', value: truncateHash(sellerReceiveAddr, 6) },
+                    ] as FieldConfig[]
+                }
+            })()
         }
 
         const config = configs[type as keyof typeof configs]
@@ -407,7 +461,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 </div>
                                 <span className="text-white text-base sm:text-lg break-words">{config.title}</span>
                             </div>
-                            <div className={`${config.badgeColor} ${config.iconColor} text-sm rounded-full px-2 py-0.5 w-fit`}>
+                            <div className={config.badgeClass}>
                                 {config.badgeText}
                             </div>
                         </div>
@@ -434,6 +488,10 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                     linkTo = `/account/${item.address}`
                                 } else if (type === 'validator' && field.label === 'Address:') {
                                     linkTo = `/validator/${item.address}`
+                                } else if (type === 'order' && field.label === 'Order ID:') {
+                                    const oid = item.id || item.Id || ''
+                                    const committee = item.committee ?? item.Chain ?? ''
+                                    linkTo = `/order/${committee}/${oid}`
                                 }
 
                                 return (
@@ -484,6 +542,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
         const uniqueTxMap = new Map()
         const uniqueAddressesMap = new Map()
         const uniqueValidatorsMap = new Map()
+        const uniqueOrdersMap = new Map()
 
         // Process blocks and remove duplicates - filter out invalid blocks
         results.blocks?.forEach((block: any) => {
@@ -529,11 +588,22 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             }
         })
 
+        // Process orders
+        results.orders?.forEach((order: any) => {
+            if (order && order.data) {
+                const oid = order.id || order.data.id || order.data.Id
+                if (oid && !uniqueOrdersMap.has(oid)) {
+                    uniqueOrdersMap.set(oid, { ...order.data, resultType: 'order' })
+                }
+            }
+        })
+
         // Get unique arrays from Maps
         const uniqueBlocks = Array.from(uniqueBlocksMap.values())
         const uniqueTransactions = Array.from(uniqueTxMap.values())
         const uniqueAddresses = Array.from(uniqueAddressesMap.values())
         const uniqueValidators = Array.from(uniqueValidatorsMap.values())
+        const uniqueOrders = Array.from(uniqueOrdersMap.values())
 
         // Determine which results to show based on activeTab
         let filteredResults = []
@@ -543,7 +613,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 ...uniqueBlocks,
                 ...uniqueTransactions,
                 ...uniqueAddresses,
-                ...uniqueValidators
+                ...uniqueValidators,
+                ...uniqueOrders
             ]
         } else if (activeTab === 'blocks') {
             filteredResults = uniqueBlocks
@@ -553,6 +624,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             filteredResults = uniqueAddresses
         } else if (activeTab === 'validators') {
             filteredResults = uniqueValidators
+        } else if (activeTab === 'orders') {
+            filteredResults = uniqueOrders
         }
 
         // Apply filters if provided
@@ -696,7 +769,11 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             {allFilteredResults.length > 0 && (
                 <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 lg:flex-row-reverse">
                     <div className="text-xs sm:text-sm text-gray-400 text-center sm:text-left">
-                        {startIndex + 1} to {Math.min(endIndex, allFilteredResults.length)} of <AnimatedNumber value={allFilteredResults.length} /> results
+                        <span className="inline-flex items-baseline gap-1">
+                            <span>{startIndex + 1} to {Math.min(endIndex, allFilteredResults.length)} of</span>
+                            <AnimatedNumber value={allFilteredResults.length} />
+                            <span>results</span>
+                        </span>
                     </div>
                     <div className="flex gap-2 flex-wrap justify-center">
                         <button

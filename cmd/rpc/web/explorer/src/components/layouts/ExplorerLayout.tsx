@@ -1,13 +1,11 @@
 import { Outlet } from 'react-router-dom'
 import Footer from '../Footer'
-import ExplorerConfetti from './ExplorerConfetti'
 import { ExplorerSidebar } from './ExplorerSidebar'
 import { ExplorerTopBar } from './ExplorerTopBar'
 
 export default function ExplorerLayout() {
     return (
         <div className="relative flex h-dvh min-h-dvh overflow-hidden bg-background">
-            <ExplorerConfetti />
             <ExplorerSidebar />
 
             <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

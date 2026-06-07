@@ -1,5 +1,5 @@
-import React, { useMemo, useCallback, useRef, useEffect } from 'react';
-import { Download, Pause, Play, Trash2 } from 'lucide-react';
+import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import { Check, Copy, Download, Pause, Play, Trash2 } from 'lucide-react';
 
 interface NodeLogsProps {
     logs: string[];
@@ -17,7 +17,9 @@ export default function NodeLogs({
                                      onExportLogs
                                  }: NodeLogsProps): JSX.Element {
     const containerRef = useRef<HTMLDivElement>(null);
+    const copyResetRef = useRef<number | null>(null);
     const MAX_LOGS = 1000;
+    const [copied, setCopied] = useState(false);
 
     const limitedLogs = useMemo(() => {
         return logs.slice(0, MAX_LOGS);
@@ -83,6 +85,30 @@ export default function NodeLogs({
         }
     }, [limitedLogs, isPaused]);
 
+    useEffect(() => {
+        return () => {
+            if (copyResetRef.current !== null) {
+                window.clearTimeout(copyResetRef.current);
+            }
+        };
+    }, []);
+
+    const handleCopyLogs = useCallback(async () => {
+        if (limitedLogs.length === 0 || !navigator.clipboard) return;
+
+        await navigator.clipboard.writeText(limitedLogs.join('\n'));
+        setCopied(true);
+
+        if (copyResetRef.current !== null) {
+            window.clearTimeout(copyResetRef.current);
+        }
+
+        copyResetRef.current = window.setTimeout(() => {
+            setCopied(false);
+            copyResetRef.current = null;
+        }, 1500);
+    }, [limitedLogs]);
+
     const LogLine = React.memo(({ log, index }: { log: string; index: number }) => (
         <div className="mb-1">
             {formatLogLine(log)}
@@ -114,6 +140,15 @@ export default function NodeLogs({
                         title="Clear"
                     >
                         <Trash2 className="h-4 w-4" />
+                    </button>
+                    <button
+                        onClick={handleCopyLogs}
+                        className="rounded-md border border-[#272729] p-2 text-white/60 transition-colors hover:border-white/15 hover:bg-[#0f0f0f] hover:text-white/80 disabled:pointer-events-none disabled:opacity-40"
+                        title={copied ? 'Copied' : 'Copy Logs'}
+                        aria-label="Copy logs"
+                        disabled={limitedLogs.length === 0}
+                    >
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </button>
                     <button
                         onClick={onExportLogs}

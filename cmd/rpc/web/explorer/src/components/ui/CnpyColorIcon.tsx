@@ -1,11 +1,21 @@
 import React from 'react'
 
-const CNPY_ACCENTS = ['#35cd48', '#216cd0', '#ddb228', '#ff1845', '#ffffff']
+const CNPY_ACCENTS = ['#35CD48', '#216CD0', '#DDB228', '#FF1845', '#36CFC9', '#9254DE', '#F759AB', '#FA8C16']
+
+const canopyHash = (value: string) => {
+    let hash = 2166136261
+
+    for (let i = 0; i < value.length; i += 1) {
+        hash ^= value.charCodeAt(i)
+        hash = Math.imul(hash, 16777619)
+    }
+
+    return hash >>> 0
+}
 
 export const getCnpyAccent = (seed: string | number) => {
     const value = seed.toString()
-    const hash = Array.from(value).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-    return CNPY_ACCENTS[hash % CNPY_ACCENTS.length]
+    return CNPY_ACCENTS[canopyHash(value) % CNPY_ACCENTS.length]
 }
 
 const canopyIconSvg = (color: string) => `
