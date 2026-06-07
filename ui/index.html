@@ -1160,7 +1160,15 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     </div>
     <div class="field"><label>Question</label><input id="c_question" type="text" placeholder="Will BTC exceed $100k by end of 2025?"/></div>
     <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (PRX)</label><input id="c_b0" type="number" value="60" oninput="updateCreateBreakdown()"/></div></div>
-    <div class="r2"><div class="field"><label>Expiry (block height)</label><input id="c_expiry" type="number" placeholder="auto"/></div><div class="field"><label>Nonce (optional)</label><input id="c_nonce" type="text" placeholder="auto"/></div></div>
+    <div class="r2">
+      <div class="field">
+        <label>Expiry Date &amp; Time</label>
+        <input id="c_expiry_dt" type="datetime-local" oninput="updateExpiryFromDate()"/>
+        <div class="hint" id="c_expiry_hint">Select a date to compute block height</div>
+        <input id="c_expiry" type="hidden" value=""/>
+      </div>
+      <div class="field"><label>Nonce (optional)</label><input id="c_nonce" type="text" placeholder="auto"/></div>
+    </div>
     <div class="field"><label>Rules / Resolution criteria</label><textarea id="c_rules" placeholder="Market resolves YES if…"></textarea></div>
     <div class="field"><label>Fee (uPRX)</label><input id="c_fee" type="number" value="10000" oninput="updateCreateBreakdown()"/></div>
     <div id="create_breakdown" class="breakdown"></div>

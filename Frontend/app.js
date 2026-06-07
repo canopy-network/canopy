@@ -57,6 +57,11 @@ function mid40(s){addr40(s,'Market ID');}
 // ═══════════════════════════════════════════
 function encAny(typeUrl,inner){return cat(sf(1,typeUrl),bf(2,inner));}
 
+function getSelectedCat() {
+  const el = document.querySelector('#c_cat_pick .cpick.active');
+  return el ? el.getAttribute('data-cat') : 'other';
+}
+
 // ═══════════════════════════════════════════
 // INNER MESSAGE ENCODERS — field numbers match tx.proto
 // ═══════════════════════════════════════════
@@ -180,7 +185,7 @@ window.showPage=function(id,btn){
   const bm=document.querySelector(`#bnav [data-p="${id}"]`);if(bm)bm.classList.add('active');
   if(id==='markets')loadMarkets();
   if(id==='wallet'){refreshBalance();loadMyPredictions();}
-  if(id==='create')updateCreateBreakdown();
+  if(id==='create'){updateCreateBreakdown();setTimeout(initExpiryDate,50);}
   if(id==='predict')updatePredictBreakdown();
   if(id==='resolvers')loadResolvers();
   closeNav();
@@ -236,7 +241,7 @@ window.checkRPC=async function(){
     const ns=document.getElementById('ni_status');if(ns)ns.textContent='connected';
     const nr=document.getElementById('ni_rpc');if(nr)nr.textContent=getRPC();
     const sh=document.getElementById('sb_h');if(sh)sh.textContent=currentHeight;
-    const ce=document.getElementById('c_expiry');if(ce&&!ce.value)ce.value=currentHeight+1000;
+    updateExpiryFromDate();
     const nonceEl=document.getElementById('c_nonce');if(nonceEl&&!nonceEl.value)nonceEl.value=BigInt(Date.now())*1000n;
   }catch{
     ['rpcDot','rpcDotM'].forEach(id=>{const e=document.getElementById(id);if(e)e.className='dot';});
@@ -976,6 +981,7 @@ window.signAndSubmit_send=async function(){try{
 
 // ── CREATE MARKET
 window.build_create=function(){try{
+  const _cat=getSelectedCat();
   const q=document.getElementById('c_question').value.trim();
   const cr=document.getElementById('c_creator').value.trim().toLowerCase();
   const b0=parseInt(document.getElementById('c_b0').value)*1000000;
@@ -1002,6 +1008,7 @@ window.updateCreateBreakdown=function(){
     '<div class="cm-row" style="border-top:1px solid var(--border2);margin-top:4px"><span class="cm-l" style="color:var(--text)">Total deducted</span><span class="cm-v g" style="font-size:13px">'+(b0+bond).toLocaleString()+' PRX</span></div>';
 };
 window.signAndSubmit_create=async function(){try{
+  const _cat=getSelectedCat();
   const q=document.getElementById('c_question').value.trim();
   const cr=document.getElementById('c_creator').value.trim().toLowerCase();
   const b0=parseInt(document.getElementById('c_b0').value)*1000000;
@@ -2028,6 +2035,71 @@ window.updateDisputeRisk = function() {
 };
 
 
+
+// ═══════════════════════════════════════════
+// EXPIRY DATE → BLOCK HEIGHT CONVERTER
+// ═══════════════════════════════════════════
+const BLOCK_TIME_MS = 5000; // 5s per block
+
+function blocksFromNow(ms) {
+  return Math.ceil(ms / BLOCK_TIME_MS);
+}
+
+function fmtDuration(ms) {
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return d + 'd ' + h + 'h';
+  if (h > 0) return h + 'h ' + m + 'm';
+  return m + 'm';
+}
+
+window.updateExpiryFromDate = function() {
+  const dtEl   = document.getElementById('c_expiry_dt');
+  const hidden = document.getElementById('c_expiry');
+  const hint   = document.getElementById('c_expiry_hint');
+  if (!dtEl || !hidden || !hint) return;
+
+  const val = dtEl.value;
+  if (!val) {
+    hint.textContent = 'Select a date to compute block height';
+    hint.style.color = '';
+    hidden.value = '';
+    return;
+  }
+
+  const targetMs = new Date(val).getTime();
+  const nowMs    = Date.now();
+  const diffMs   = targetMs - nowMs;
+
+  if (diffMs <= 0) {
+    hint.textContent = 'Date must be in the future';
+    hint.style.color = 'var(--red)';
+    hidden.value = '';
+    return;
+  }
+
+  const blocksNeeded = blocksFromNow(diffMs);
+  const blockHeight  = currentHeight + blocksNeeded;
+  hidden.value = blockHeight;
+
+  const dur = fmtDuration(diffMs);
+  hint.textContent = 'Block #' + blockHeight + '  (~' + dur + ' from now, ' + blocksNeeded + ' blocks)';
+  hint.style.color = blocksNeeded < 100 ? 'var(--red)' : 'var(--amber)';
+};
+
+// Set default expiry to 7 days from now when page loads
+window.initExpiryDate = function() {
+  const dtEl = document.getElementById('c_expiry_dt');
+  if (!dtEl || dtEl.value) return;
+  const d = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+  // Format: YYYY-MM-DDTHH:MM
+  const pad = n => String(n).padStart(2, '0');
+  dtEl.value = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  updateExpiryFromDate();
+};
+
 // ═══════════════════════════════════════════
 // CATEGORY SYSTEM
 // ═══════════════════════════════════════════
@@ -2057,10 +2129,7 @@ window.pickCat = function(el) {
   el.classList.add('active');
 };
 
-function getSelectedCat() {
-  const el = document.querySelector('#c_cat_pick .cpick.active');
-  return el ? el.getAttribute('data-cat') : 'other';
-}
+
 
 // ═══════════════════════════════════════════
 // CLAIM CREATOR FEE
