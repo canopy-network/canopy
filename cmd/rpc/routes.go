@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"net/http"
+	"net/http/pprof"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -50,7 +51,6 @@ const (
 	DexPriceRoutePath              = "/v1/query/dex-price"
 	DexBatchRoutePath              = "/v1/query/dex-batch"
 	NextDexBatchRoutePath          = "/v1/query/next-dex-batch"
-	OracleOrdersRoutePath          = "/v1/query/oracle-orders"
 	LastProposersRoutePath         = "/v1/query/last-proposers"
 	IsValidDoubleSignerRoutePath   = "/v1/query/valid-double-signer"
 	DoubleSignersRoutePath         = "/v1/query/double-signers"
@@ -64,11 +64,6 @@ const (
 	ValidatorSetRoutePath          = "/v1/query/validator-set"
 	CheckpointRoutePath            = "/v1/query/checkpoint"
 	SubscribeRCInfoPath            = "/v1/subscribe-rc-info"
-	// debug
-	DebugBlockedRoutePath   = "/debug/blocked"
-	DebugHeapRoutePath      = "/debug/heap"
-	DebugCPURoutePath       = "/debug/cpu"
-	DebugGoroutineRoutePath = "/debug/goroutine"
 	// eth
 	EthereumRoutePath = "/v1/eth"
 	// admin
@@ -79,6 +74,7 @@ const (
 	KeystoreDeleteRoutePath    = "/v1/admin/keystore-delete"
 	KeystoreGetRoutePath       = "/v1/admin/keystore-get"
 	TxSendRoutePath            = "/v1/admin/tx-send"
+	TxSendVestingRoutePath     = "/v1/admin/tx-send-vesting"
 	TxStakeRoutePath           = "/v1/admin/tx-stake"
 	TxEditStakeRoutePath       = "/v1/admin/tx-edit-stake"
 	TxUnstakeRoutePath         = "/v1/admin/tx-unstake"
@@ -155,7 +151,6 @@ const (
 	DexPriceRouteName              = "dex-price"
 	DexBatchRouteName              = "dex-batch"
 	NextDexBatchRouteName          = "next-dex-batch"
-	OracleOrdersRouteName          = "oracle-orders"
 	LastProposersRouteName         = "last-proposers"
 	IsValidDoubleSignerRouteName   = "valid-double-signer"
 	DoubleSignersRouteName         = "double-signers"
@@ -178,6 +173,7 @@ const (
 	KeystoreDeleteRouteName         = "keystore-delete"
 	KeystoreGetRouteName            = "keystore-get"
 	TxSendRouteName                 = "tx-send"
+	TxSendVestingRouteName          = "tx-send-vesting"
 	TxStakeRouteName                = "tx-stake"
 	TxUnstakeRouteName              = "tx-unstake"
 	TxEditStakeRouteName            = "tx-edit-stake"
@@ -257,7 +253,6 @@ var routePaths = routes{
 	DexPriceRouteName:              {Method: http.MethodPost, Path: DexPriceRoutePath},
 	DexBatchRouteName:              {Method: http.MethodPost, Path: DexBatchRoutePath},
 	NextDexBatchRouteName:          {Method: http.MethodPost, Path: NextDexBatchRoutePath},
-	OracleOrdersRouteName:          {Method: http.MethodPost, Path: OracleOrdersRoutePath},
 	LastProposersRouteName:         {Method: http.MethodPost, Path: LastProposersRoutePath},
 	IsValidDoubleSignerRouteName:   {Method: http.MethodPost, Path: IsValidDoubleSignerRoutePath},
 	DoubleSignersRouteName:         {Method: http.MethodPost, Path: DoubleSignersRoutePath},
@@ -270,11 +265,6 @@ var routePaths = routes{
 	RootChainInfoRouteName:         {Method: http.MethodPost, Path: RootChainInfoRoutePath},
 	ValidatorSetRouteName:          {Method: http.MethodPost, Path: ValidatorSetRoutePath},
 	CheckpointRouteName:            {Method: http.MethodPost, Path: CheckpointRoutePath},
-	// debug
-	DebugBlockedRouteName:   {Method: http.MethodGet, Path: DebugBlockedRoutePath},
-	DebugHeapRouteName:      {Method: http.MethodGet, Path: DebugHeapRoutePath},
-	DebugCPURouteName:       {Method: http.MethodGet, Path: DebugCPURoutePath},
-	DebugGoroutineRouteName: {Method: http.MethodGet, Path: DebugGoroutineRoutePath},
 	// eth
 	EthereumRouteName: {Method: http.MethodPost, Path: EthereumRoutePath},
 	// admin
@@ -285,6 +275,7 @@ var routePaths = routes{
 	KeystoreDeleteRouteName:         {Method: http.MethodPost, Path: KeystoreDeleteRoutePath},
 	KeystoreGetRouteName:            {Method: http.MethodPost, Path: KeystoreGetRoutePath},
 	TxSendRouteName:                 {Method: http.MethodPost, Path: TxSendRoutePath},
+	TxSendVestingRouteName:          {Method: http.MethodPost, Path: TxSendVestingRoutePath},
 	TxStakeRouteName:                {Method: http.MethodPost, Path: TxStakeRoutePath},
 	TxEditOrderRouteName:            {Method: http.MethodPost, Path: TxEditOrderRoutePath},
 	TxUnstakeRouteName:              {Method: http.MethodPost, Path: TxUnstakeRoutePath},
@@ -363,7 +354,6 @@ func createRouter(s *Server) *httprouter.Router {
 		DexPriceRouteName:              s.DexPrice,
 		DexBatchRouteName:              s.DexBatch,
 		NextDexBatchRouteName:          s.NextDexBatch,
-		OracleOrdersRouteName:          s.OracleOrders,
 		LastProposersRouteName:         s.LastProposers,
 		IsValidDoubleSignerRouteName:   s.IsValidDoubleSigner,
 		DoubleSignersRouteName:         s.DoubleSigners,
@@ -403,6 +393,7 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		KeystoreDeleteRouteName:         s.KeystoreDelete,
 		KeystoreGetRouteName:            s.KeystoreGetKeyGroup,
 		TxSendRouteName:                 s.TransactionSend,
+		TxSendVestingRouteName:          s.TransactionSendVesting,
 		TxStakeRouteName:                s.TransactionStake,
 		TxEditStakeRouteName:            s.TransactionEditStake,
 		TxUnstakeRouteName:              s.TransactionUnstake,
@@ -429,11 +420,6 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		LogsRouteName:                   logsHandler(s),
 		AddVoteRouteName:                s.AddVote,
 		DelVoteRouteName:                s.DelVote,
-		// debug
-		DebugBlockedRouteName:   debugHandler(DebugBlockedRouteName),
-		DebugHeapRouteName:      debugHandler(DebugHeapRouteName),
-		DebugCPURouteName:       debugHandler(DebugCPURouteName),
-		DebugGoroutineRouteName: debugHandler(DebugGoroutineRouteName),
 	}
 
 	// Initialize a new router using the httprouter package.
@@ -447,5 +433,19 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		router.Handle(path.Method, path.Path, logHandler{path.Path, handler}.Handle)
 	}
 
+	return router
+}
+
+func createDebugRouter() *httprouter.Router {
+	httpRoute := func(f http.HandlerFunc) httprouter.Handle {
+		return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			f(w, r)
+		}
+	}
+
+	router := httprouter.New()
+	router.GET("/debug/pprof", httpRoute(pprof.Index))
+	// importing "net/http/pprof" auto-registers all handlers on DefaultServeMux via init().
+	router.GET("/debug/pprof/*name", httpRoute(http.DefaultServeMux.ServeHTTP))
 	return router
 }

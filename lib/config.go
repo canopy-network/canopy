@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -41,9 +42,6 @@ type Config struct {
 	ConsensusConfig    // bft options
 	MempoolConfig      // mempool options
 	MetricsConfig      // telemetry options
-
-	EthBlockProviderConfig `json:"ethBlockProviderConfig"` // ethereum block provider configuration
-	OracleConfig           `json:"oracleConfig"`           // oracle configuration
 }
 
 // DefaultConfig() returns a Config with developer set options
@@ -57,27 +55,24 @@ func DefaultConfig() Config {
 		ConsensusConfig:    DefaultConsensusConfig(),
 		MempoolConfig:      DefaultMempoolConfig(),
 		MetricsConfig:      DefaultMetricsConfig(),
-
-		EthBlockProviderConfig: DefaultEthBlockProviderConfig(),
-		OracleConfig:           DefaultOracleConfig(),
 	}
 }
 
 // MAIN CONFIG BELOW
 
 type MainConfig struct {
-	LogLevel         string             `json:"logLevel"`         // any level includes the levels above it: debug < info < warning < error
-	ChainId          uint64             `json:"chainId"`          // the identifier of this particular chain within a single 'network id'
-	SleepUntil       uint64             `json:"sleepUntil"`       // allows coordinated 'wake-ups' for genesis or chain halt events
-	RootChain        []RootChain        `json:"rootChain"`        // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
-	RunVDF           bool               `json:"runVDF"`           // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
-	Headless         bool               `json:"headless"`         // turn off the web wallet and block explorer 'web' front ends
-	AutoUpdate           bool   `json:"autoUpdate"`           // check for new versions of software each X time
-	AutoUpdateRepoOwner  string `json:"autoUpdateRepoOwner"`  // GitHub repo owner for core auto-updates (e.g., "canopy-network")
-	AutoUpdateRepoName   string `json:"autoUpdateRepoName"`   // GitHub repo name for core auto-updates (e.g., "canopy")
-	Plugin               string `json:"plugin"`               // the configured plugin to use
-	PluginTimeoutMS  int                `json:"pluginTimeoutMS"`  // plugin request timeout in milliseconds
-	PluginAutoUpdate PluginAutoUpdateConfig `json:"pluginAutoUpdate"` // plugin auto-update configuration
+	LogLevel            string                 `json:"logLevel"`            // any level includes the levels above it: debug < info < warning < error
+	ChainId             uint64                 `json:"chainId"`             // the identifier of this particular chain within a single 'network id'
+	SleepUntil          uint64                 `json:"sleepUntil"`          // allows coordinated 'wake-ups' for genesis or chain halt events
+	RootChain           []RootChain            `json:"rootChain"`           // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
+	RunVDF              bool                   `json:"runVDF"`              // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
+	Headless            bool                   `json:"headless"`            // turn off the web wallet and block explorer 'web' front ends
+	AutoUpdate          bool                   `json:"autoUpdate"`          // check for new versions of software each X time
+	AutoUpdateRepoOwner string                 `json:"autoUpdateRepoOwner"` // GitHub repo owner for core auto-updates (e.g., "canopy-network")
+	AutoUpdateRepoName  string                 `json:"autoUpdateRepoName"`  // GitHub repo name for core auto-updates (e.g., "canopy")
+	Plugin              string                 `json:"plugin"`              // the configured plugin to use
+	PluginTimeoutMS     int                    `json:"pluginTimeoutMS"`     // plugin request timeout in milliseconds
+	PluginAutoUpdate    PluginAutoUpdateConfig `json:"pluginAutoUpdate"`    // plugin auto-update configuration
 }
 
 // PluginAutoUpdateConfig holds configuration for plugin auto-updates
@@ -128,6 +123,7 @@ type RPCConfig struct {
 	ExplorerPort               string `json:"explorerPort"`               // the port where the block explorer is hosted
 	RPCPort                    string `json:"rpcPort"`                    // the port where the rpc server is hosted
 	AdminPort                  string `json:"adminPort"`                  // the port where the admin rpc server is hosted
+	ProfilingPort              string `json:"profilingPort"`              // the port where the pprof profiling server is hosted
 	RPCUrl                     string `json:"rpcURL"`                     // the url where the rpc server is hosted
 	AdminRPCUrl                string `json:"adminRPCUrl"`                // the url where the admin rpc server is hosted
 	TimeoutS                   int    `json:"timeoutS"`                   // the rpc request timeout in seconds
@@ -153,6 +149,7 @@ func DefaultRPCConfig() RPCConfig {
 		ExplorerPort:               "50001",                    // find the explorer on localhost:50001
 		RPCPort:                    "50002",                    // the rpc is served on localhost:50002
 		AdminPort:                  "50003",                    // the admin rpc is served on localhost:50003
+		ProfilingPort:              "6060",                     // the pprof profiling server is served on localhost:6060
 		RPCUrl:                     "http://localhost:50002",   // use a local rpc by default
 		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
 		TimeoutS:                   3,                          // the rpc timeout is 3 seconds
@@ -280,6 +277,9 @@ type StoreConfig struct {
 	// sync. Lower values also increase the risk of data loss due to a pebble issue where batches are
 	// returned before commit completion when compaction runs concurrently with commits.
 	LSSCompactionInterval uint64 `json:"lssCompactionInterval"` // interval for compacting latest store data
+	BackupDirectory       string `json:"backupDirectory"`       // directory where backups of the database are stored
+	BackupInterval        uint64 `json:"backupInterval"`        // interval in blocks for creating backups of the database (0 to disable automatic backups)
+	CompressionProfile    string `json:"compressionProfile"`    // the pebbledb compression profile to use.
 }
 
 // DefaultDataDirPath() is $USERHOME/.canopy
@@ -300,11 +300,14 @@ func DefaultDataDirPath() string {
 // DefaultStoreConfig() returns the developer recommended store configuration
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		DataDirPath:           DefaultDataDirPath(),           // use the default data dir path
-		DBName:                "canopy",                       // 'canopy' database name
-		IndexByAccount:        true,                           // index transactions by account
-		InMemory:              false,                          // persist to disk, not memory
-		LSSCompactionInterval: uint64(rand.Int32N(101) + 500), // clean every 500-600 blocks (random)
+		DataDirPath:           DefaultDataDirPath(),                      // use the default data dir path
+		DBName:                "canopy",                                  // 'canopy' database name
+		IndexByAccount:        true,                                      // index transactions by account
+		InMemory:              false,                                     // persist to disk, not memory
+		LSSCompactionInterval: uint64(rand.Int32N(101) + 500),            // clean every 500-600 blocks (random)
+		BackupDirectory:       path.Join(DefaultDataDirPath(), "backup"), // backup directory name
+		BackupInterval:        0,                                         // backups disabled by default
+		CompressionProfile:    "zstd",
 	}
 }
 
@@ -345,51 +348,6 @@ func DefaultMetricsConfig() MetricsConfig {
 		PrometheusAddress:      "0.0.0.0:9090", // the default prometheus address
 		HeapProfilingEnabled:   false,          // disabled by default (causes GC pauses)
 		HeapProfilingIntervalS: 10,             // 10 second interval when enabled
-	}
-}
-
-type EthBlockProviderConfig struct {
-	NodeUrl           string `json:"ethNodeUrl"`        // ethereum rpc node url
-	NodeWSUrl         string `json:"ethNodeWsUrl"`      // ethereum node websocket url
-	EVMChainId        uint64 `json:"evmChainId"`        // ethereum chain id
-	RetryDelay        int    `json:"retryDelay"`        // retry delay in seconds for connection failures
-	StartupBlockDepth uint64 `json:"startupBlockDepth"` // how far back to start processing blocks when no next height was provided
-}
-
-// DefaultEthBlockProviderConfig() returns the default ethereum block provider configuration
-func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
-	return EthBlockProviderConfig{
-		NodeUrl:           "http://localhost:8545",
-		NodeWSUrl:         "ws://localhost:8545",
-		EVMChainId:        1,
-		RetryDelay:        5, // default 5 seconds reconnect retry delay
-		StartupBlockDepth: 1000,
-	}
-}
-
-// OracleConfig represents the configuration of the off-chain order witness oracle
-type OracleConfig struct {
-	OracleEnabled            bool   `json:"oracleEnabled"`            // enables or disables the oracle functionality
-	StateFile                string `json:"stateSaveFile"`            // file to save oracle state
-	OrderResubmitDelayBlocks uint64 `json:"orderResubmitDelayBlocks"` // how many root blocks to wait to resubmit order
-	Committee                uint64 `json:"committee"`                // committee this oracle will witnessed orders for
-	ProposeDelayBlocks       uint64 `json:"proposeDelayBlocks"`       // oracle will wait this number of source chain blocks before including a newly witnessed order in a proposed block
-	ReorgRollbackBlocks      uint64 `json:"reorgRollbackBlocks"`      // how far back to rollback the order store on reorgs
-	LockOrderCooldownBlocks  uint64 `json:"lockOrderCooldownBlocks"`  // how many root blocks to wait to prevent resubmission of lock orders with same ID
-	SafeBlockConfirmations   uint64 `json:"safeBlockConfirmations"`   // number of block confirmations required before considering a block safe
-}
-
-// DefaultOracleConfig() returns the default ethereum block provider configuration
-func DefaultOracleConfig() OracleConfig {
-	return OracleConfig{
-		OracleEnabled:            false,
-		StateFile:                "oracle.state",
-		OrderResubmitDelayBlocks: 2,
-		Committee:                2,
-		ProposeDelayBlocks:       3,
-		ReorgRollbackBlocks:      60,
-		LockOrderCooldownBlocks:  2,
-		SafeBlockConfirmations:   5,
 	}
 }
 

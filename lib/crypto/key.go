@@ -50,10 +50,26 @@ type AddressI interface {
 	Equals(AddressI) bool
 }
 
-// MultiPublicKeyI is an interface model for a multi-signature public key, representing multiple signers in a single structure
-// It allows aggregation of individual signatures, validation of aggregated signatures, and management of signers through a bitmap
-// that tracks which participants have signed
+// MultiPublicKeyI is an interface model for a multi-signature public key, representing multiple signers in a single structure.
+// It has two distinct uses:
+//   - canonical account identity via Address(), where implementations may normalize the signer set
+//   - order-preserving verification state via Bytes()/Bitmap()/AddSigner(), where signer indices must remain stable
 type MultiPublicKeyI interface {
+	// Address() creates the canonical account identity for the signer set.
+	// This may intentionally differ from Bytes() when the serialized verification state preserves signer order and bitmap.
+	Address() AddressI
+	// Bytes() serializes the concrete MPK instance, preserving signer order and bitmap semantics for roundtripping.
+	Bytes() []byte
+	// String() returns the hex string representation
+	String() string
+	// Equals() compares two public keys using the implementation's chosen identity semantics.
+	Equals(i PublicKeyI) bool
+	// models the json.Marshaller encoding interface
+	json.Marshaler
+	// models the json.Unmarshaler decoding interface
+	json.Unmarshaler
+
+	// Aggregates() canonicalizes the signatures to a single byte slice
 	AggregateSignatures() ([]byte, error)
 	// VerifyBytes() verifies a digital aggregate signature from multiple signers
 	VerifyBytes(msg, aggregatedSignature []byte) bool
@@ -95,7 +111,11 @@ func NewPublicKeyFromBytes(bz []byte) (PublicKeyI, error) {
 	case BLS12381PubKeySize:
 		return BytesToBLS12381Public(bz)
 	}
-	return nil, fmt.Errorf("unrecognized public key format")
+	multiKey, err := NewMultiBLSFromPublicKey(bz)
+	if err != nil {
+		return nil, fmt.Errorf("unrecognized public key format")
+	}
+	return multiKey, nil
 }
 
 // PrivateKeyToFile() writes a private key to a file located at filepath

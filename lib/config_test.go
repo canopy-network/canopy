@@ -12,16 +12,14 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	// calculate expected
 	expected := Config{
-		MainConfig:             DefaultMainConfig(),
-		RPCConfig:              DefaultRPCConfig(),
-		StateMachineConfig:     DefaultStateMachineConfig(),
-		StoreConfig:            DefaultStoreConfig(),
-		P2PConfig:              DefaultP2PConfig(),
-		ConsensusConfig:        DefaultConsensusConfig(),
-		MempoolConfig:          DefaultMempoolConfig(),
-		MetricsConfig:          DefaultMetricsConfig(),
-		EthBlockProviderConfig: DefaultEthBlockProviderConfig(),
-		OracleConfig:           DefaultOracleConfig(),
+		MainConfig:         DefaultMainConfig(),
+		RPCConfig:          DefaultRPCConfig(),
+		StateMachineConfig: DefaultStateMachineConfig(),
+		StoreConfig:        DefaultStoreConfig(),
+		P2PConfig:          DefaultP2PConfig(),
+		ConsensusConfig:    DefaultConsensusConfig(),
+		MempoolConfig:      DefaultMempoolConfig(),
+		MetricsConfig:      DefaultMetricsConfig(),
 	}
 	// execute the function call
 	got := DefaultConfig()

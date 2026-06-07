@@ -31,7 +31,7 @@ function ConfirmInner({
         <div className="bg-card border border-border rounded">
           <div className="flex items-center justify-between px-3 sm:px-4 py-2">
             <div className="text-sm text-foreground/80">Raw Payload</div>
-            <button className="text-sm text-emerald-400" onClick={()=>setOpen(!open)}>{open ? 'Hide' : 'Show'}</button>
+            <button className="text-sm text-foreground/80 hover:text-foreground" onClick={()=>setOpen(!open)}>{open ? 'Hide' : 'Show'}</button>
           </div>
           {open && (
             <pre className="px-3 sm:px-4 py-3 text-xs overflow-auto border-t border-border">
@@ -46,8 +46,8 @@ function ConfirmInner({
         <button
           onClick={onConfirm}
           className={cx(
-            'px-3 py-2 text-black rounded flex-1 text-sm sm:text-base font-semibold',
-            danger ? 'bg-red-500 hover:bg-red-400' : 'bg-emerald-500 hover:bg-emerald-400'
+            'px-3 py-2 rounded-xl flex-1 text-sm sm:text-base font-semibold transition-colors',
+            danger ? 'bg-red-500 hover:bg-red-400 text-white' : 'bg-zinc-500 hover:bg-zinc-400 text-white hover:text-white'
           )}
         >
           {ctaLabel}

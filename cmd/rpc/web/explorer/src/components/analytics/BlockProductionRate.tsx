@@ -38,16 +38,21 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             return timeA - timeB
         })
 
-        // Always create 4 data points by dividing blocks into 4 equal groups
-        const numPoints = 4
-        const blocksPerGroup = Math.max(1, Math.ceil(filteredBlocks.length / numPoints))
+        // always create 4 data points by dividing blocks into 4 equal groups
+        const numPoints = Math.min(4, filteredBlocks.length)
+        const base = Math.floor(filteredBlocks.length / numPoints)
+        const remainder = filteredBlocks.length % numPoints
         const blockData: number[] = []
         const timeLabels: string[] = []
-        const groupTimeRanges: number[] = [] // Store time range for each group in minutes
+        const groupTimeRanges: number[] = [] // store time range for each group in minutes
 
+        let offset = 0
         for (let i = 0; i < numPoints; i++) {
-            const startIdx = i * blocksPerGroup
-            const endIdx = Math.min(startIdx + blocksPerGroup, filteredBlocks.length)
+            // distribute remainder across first groups so sizes differ by at most 1
+            const groupSize = base + (i < remainder ? 1 : 0)
+            const startIdx = offset
+            const endIdx = offset + groupSize
+            offset = endIdx
             const groupBlocks = filteredBlocks.slice(startIdx, endIdx)
 
             if (groupBlocks.length === 0) {
@@ -57,23 +62,26 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                 continue
             }
 
-            // Count blocks in this group
-            blockData.push(groupBlocks.length)
-
-            // Get time label from first and last block in group
+            // get time label from first and last block in group
             const firstBlock = groupBlocks[0]
             const lastBlock = groupBlocks[groupBlocks.length - 1]
-            
+
             const firstTime = firstBlock.blockHeader?.time || firstBlock.time || 0
             const lastTime = lastBlock.blockHeader?.time || lastBlock.time || 0
-            
+
             const firstTimeMs = firstTime > 1e12 ? firstTime / 1000 : firstTime
             const lastTimeMs = lastTime > 1e12 ? lastTime / 1000 : lastTime
-            
-            // Calculate time range for this group in minutes
+
+            // calculate time range for this group in minutes
             const groupTimeRangeMs = lastTimeMs - firstTimeMs
             const groupTimeRangeMins = groupTimeRangeMs / (60 * 1000)
             groupTimeRanges.push(groupTimeRangeMins)
+
+            // normalize to blocks per minute: N blocks have N-1 intervals over the duration
+            const blocksPerMin = groupTimeRangeMins > 0 && groupBlocks.length > 1
+                ? (groupBlocks.length - 1) / groupTimeRangeMins
+                : groupBlocks.length
+            blockData.push(Math.round(blocksPerMin * 100) / 100)
             
             const firstDate = new Date(firstTimeMs)
             const lastDate = new Date(lastTimeMs)
@@ -127,10 +135,10 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
 
     if (loading) {
         return (
-            <div className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200">
+            <div className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200">
                 <div className="animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded w-1/2 mb-4"></div>
-                    <div className="h-32 bg-gray-700 rounded"></div>
+                    <div className="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
+                    <div className="h-32 bg-white/10 rounded"></div>
                 </div>
             </div>
         )
@@ -143,14 +151,14 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.2 }}
-                className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+                className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
             >
                 <div className="mb-4">
                     <h3 className="text-lg font-semibold text-white">
                         Block Production Rate
                     </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                        Blocks per time interval
+                        Blocks per minute
                     </p>
                 </div>
                 <div className="h-32 flex items-center justify-center">
@@ -165,14 +173,14 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.2 }}
-            className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+            className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
         >
             <div className="mb-4">
                 <h3 className="text-lg font-semibold text-white">
                     Block Production Rate
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Blocks per {timeInterval} interval
+                    Blocks per minute
                 </p>
             </div>
 
@@ -181,7 +189,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                     {/* Grid lines */}
                     <defs>
                         <pattern id="grid-blocks" width="30" height="20" patternUnits="userSpaceOnUse">
-                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="#374151" strokeWidth="0.5" />
+                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
                         </pattern>
                     </defs>
                     <rect width="100%" height="100%" fill="url(#grid-blocks)" />
@@ -189,8 +197,8 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                     {/* Area chart */}
                     <defs>
                         <linearGradient id="blockGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor="#4ADE80" stopOpacity="0.3" />
-                            <stop offset="100%" stopColor="#4ADE80" stopOpacity="0.1" />
+                            <stop offset="0%" stopColor="#45ca46" stopOpacity="0.3" />
+                            <stop offset="100%" stopColor="#45ca46" stopOpacity="0.1" />
                         </linearGradient>
                     </defs>
 
@@ -209,7 +217,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                             {/* Line */}
                             <polyline
                                 fill="none"
-                                stroke="#4ADE80"
+                                stroke="#45ca46"
                                 strokeWidth="2"
                                 points={blockData.map((value, index) => {
                                     const x = (index / (blockData.length - 1)) * 280 + 10
@@ -227,7 +235,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                             cx="150"
                             cy="55"
                             r="4"
-                            fill="#4ADE80"
+                            fill="#45ca46"
                         />
                     )}
                 </svg>

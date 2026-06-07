@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/canopy-network/canopy/lib"
+	"github.com/cockroachdb/pebble/v2/sstable"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,3 +66,24 @@ func TestMakeVersionedKeyConcurrent(t *testing.T) {
 	require.False(t, failed.Load(), "concurrent makeVersionedKey produced malformed keys")
 }
 
+func TestGetCompressionProfile(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected *sstable.CompressionProfile
+	}{
+		{"zstd", sstable.ZstdCompression},
+		{"ZSTD", sstable.ZstdCompression},
+		{"snappy", sstable.SnappyCompression},
+		{"fastest", sstable.FastestCompression},
+		{"balanced", sstable.BalancedCompression},
+		{"good", sstable.GoodCompression},
+		{"noCompression", sstable.NoCompression},
+		{"unknown", sstable.ZstdCompression},
+		{"", sstable.ZstdCompression},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			require.Equal(t, tt.expected, getCompressionProfile(tt.input))
+		})
+	}
+}

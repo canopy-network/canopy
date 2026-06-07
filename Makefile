@@ -26,13 +26,12 @@ help:
 # BUILDING
 # ==================================================================================== #
 
-## build/canopy: build the canopy binary into the GO_BIN_DIR
-build/canopy:
-	npm install --prefix $(EXPLORER_DIR) && npm run build --prefix $(EXPLORER_DIR)
+## build/canopy: build the canopy binary into the GO_BIN_DIR with embedded wallet and explorer assets
+build/canopy: build/wallet build/explorer
 	go build -o $(GO_BIN_DIR)/canopy $(CLI_DIR)
 
 ## build/canopy-full: build the canopy binary and its wallet and explorer altogether
-build/canopy-full: build/wallet build/explorer build/canopy
+build/canopy-full: build/canopy
 
 ## build/wallet: build the canopy's wallet project
 build/wallet:

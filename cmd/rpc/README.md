@@ -5,7 +5,9 @@
 ## RPC Routes Reference
 - /v1/
 - /v1/tx
+- /v1/txs
 - /v1/query/height
+- /v1/query/indexer-blobs
 - /v1/query/account
 - /v1/query/accounts
 - /v1/query/pool
@@ -56,10 +58,8 @@
 - /v1/query/validator-set
 - /v1/query/checkpoint
 - /v1/subscribe-rc-info
-- /debug/blocked
-- /debug/heap
-- /debug/cpu
-- /debug/routine
+- /debug/pprof
+- /debug/pprof/*name
 - /v1/eth
 - /v1/admin/keystore
 - /v1/admin/keystore-new-key
@@ -83,7 +83,7 @@
 - /v1/admin/tx-dex-liquidity-withdraw
 - /v1/admin/tx-lock-order
 - /v1/admin/tx-close-order
-- /v1/admin/subsidy
+- /v1/admin/tx-subsidy
 - /v1/admin/tx-start-poll
 - /v1/admin/tx-vote-poll
 - /v1/admin/resource-usage
@@ -166,6 +166,57 @@ $ curl -X POST localhost:50002/v1/tx \
 > "25c7216b7523fdfdb60b989b38c4b9d83a546a63029d56f2ce6f2be6bd255aa4"
 ```
 
+## Txs
+
+**Route**: `/v1/txs`
+
+**Description**: submits multiple transactions in a single request
+
+**HTTP Method**: `POST`
+
+**Request**: `array` of transactions, each with the same structure as the `/v1/tx` request:
+
+- **type**: `string` - the message name (`"send"`, `"stake"`, `"edit-stake"`, ...)
+- **msg**: `Message` - the payload of the transaction (`MessageSend`, `MessageStake`, ...)
+- **signature**: `Signature` - the authorization (public key and signature) of the transaction
+- **time**: `uint64` - the creation time of the transaction for replay protection (unix micro)
+- **createdHeight**: `uint64` - the height the transaction was created `+/- 4320` accepted
+- **fee**: `uint64`  the network fee for sending the transaction (minimum is parameterized)
+- **memo**: `string` - an embedded message in the transaction (optional)
+- **networkID**: `uint64` - the unique identifier of the network (`1` for mainnet, `2` for testnet, ...)
+- **chainID**: `uint64` - the unique identifier of the committee (`1` for canopy, `2` for canary, ...)
+
+**Response**: `array of hex strings` - the hashes of the submitted transactions
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/txs \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "type": "send",
+      "msg": {
+        "fromAddress": "b8bc466953be5f6f31954108f683d2b02b8b7453",
+        "toAddress": "08c18a0e3ef3727b42eab9eef51494f8f7f83bd0",
+        "amount": 1000000
+      },
+      "signature": {
+        "publicKey": "a5b97c05cb26c9bc118b3e2258f03101a9a427317dccd80abd4f3a82a42afc6c27ae5f63a04aaef180558b0176282f1c78a51af474036316b1c2ae826bf8c23a",
+        "signature": "89ce883843a4ebfc763e0fd377718e659063bdfee492f3fff1cfe055b9cbc1f67da580e3ad638c32d520c3db4baf94a0c4f605cb73b0ee021a330a23a93ffe99"
+      },
+      "time": 1747865418150488,
+      "createdHeight": 1,
+      "fee": 10000,
+      "memo": "hello world",
+      "networkID": 1,
+      "chainID": 1
+    }
+  ]'
+
+> ["25c7216b7523fdfdb60b989b38c4b9d83a546a63029d56f2ce6f2be6bd255aa4"]
+```
+
 ## Height
 
 **Route:** `/v1/query/height`
@@ -188,6 +239,55 @@ $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v
 > 9157
 ```
 
+## Indexer Blobs
+
+**Route:** `/v1/query/indexer-blobs`
+
+**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. Accounts, pools, and validators are returned as deltas between the current and previous blobs.
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+
+**Response**: raw protobuf bytes (`application/x-protobuf`) representing an `IndexerBlobs` message containing:
+- **current**: `IndexerBlob` - the indexer blob at the requested height
+  - **block**: `bytes` - the block data
+  - **accounts**: `[]bytes` - the account entries
+  - **pools**: `[]bytes` - the pool entries
+  - **validators**: `[]bytes` - the validator entries
+  - **dexPrices**: `[]bytes` - the DEX price entries
+  - **nonSigners**: `[]bytes` - the non-signer entries
+  - **doubleSigners**: `[]bytes` - the double-signer entries
+  - **orders**: `bytes` - the order book data
+  - **params**: `bytes` - the protocol parameters
+  - **dexBatches**: `[]bytes` - the DEX batch entries
+  - **nextDexBatches**: `[]bytes` - the next DEX batch entries
+  - **committeesData**: `bytes` - the committees data
+  - **subsidizedCommittees**: `[]uint64` - the subsidized committee IDs
+  - **retiredCommittees**: `[]uint64` - the retired committee IDs
+  - **supply**: `bytes` - the token supply data
+  - **totalValidatorsActive**: `uint32` - count of active validators
+  - **totalValidatorsPaused**: `uint32` - count of paused validators
+  - **totalValidatorsUnstaking**: `uint32` - count of unstaking validators
+  - **validatorsDelta**: `bool` - whether validators are returned as a delta
+  - **totalDelegatesActive**: `uint32` - count of active delegates
+  - **totalDelegatesPaused**: `uint32` - count of paused delegates
+  - **totalDelegatesUnstaking**: `uint32` - count of unstaking delegates
+- **previous**: `IndexerBlob` - the indexer blob at the previous height (same structure as current, absent for heights ≤ 2)
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/query/indexer-blobs \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 100
+      }'
+
+> <binary protobuf response>
+```
+
 ## Account
 
 **Route:** `/v1/query/account`
@@ -203,7 +303,15 @@ $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v
 **Response**:
 
 - **address**: `hex string` - the 20 byte identifier
-- **amount**: `uint64` - the balance of funds the account has
+- **amount**: `uint64` - the spendable balance of funds the account can currently withdraw
+- **totalAmount**: `uint64` - the total balance recorded for the account before vesting locks are applied
+- **spendableAmount**: `uint64` - the spendable balance of funds the account can currently withdraw
+- **vestedAmount**: `uint64` - the portion of `vestingAmount` that has vested at the queried height
+- **lockedAmount**: `uint64` - the portion of `vestingAmount` that is still locked at the queried height
+- **vestingAmount**: `uint64` - the total amount governed by the vesting schedule (omitted when zero)
+- **vestingStartHeight**: `uint64` - the block height where vesting begins (omitted when zero)
+- **vestingCliffHeight**: `uint64` - the block height where vesting first becomes spendable (omitted when zero)
+- **vestingEndHeight**: `uint64` - the block height where vesting fully completes (omitted when zero)
 
 **Example**:
 
@@ -217,7 +325,15 @@ $ curl -X POST localhost:50002/v1/query/account \
 
 > {
     "address": "0971d5d96f1533479ab1a6472fe0260df6ae732d",
-    "amount": 99990000
+    "amount": 99990000,
+    "totalAmount": 100000000,
+    "spendableAmount": 99990000,
+    "vestedAmount": 500000,
+    "lockedAmount": 10000,
+    "vestingAmount": 510000,
+    "vestingStartHeight": 900,
+    "vestingCliffHeight": 950,
+    "vestingEndHeight": 1200
   }
 ```
 
@@ -239,7 +355,15 @@ $ curl -X POST localhost:50002/v1/query/account \
 - **pageNumber**: `int` - the number of the page
 - **results**: `array` - the list of result objects
   - **address**: - `hex string` the 20 byte unique identifier of the account
-  - **amount**: - `uint64` the balance of funds the account has in micro denomination
+  - **amount**: - `uint64` the spendable balance in micro denomination
+  - **totalAmount**: - `uint64` the total recorded balance before vesting locks are applied
+  - **spendableAmount**: - `uint64` the spendable balance in micro denomination
+  - **vestedAmount**: - `uint64` the vested portion of the vesting tranche at the queried height
+  - **lockedAmount**: - `uint64` the still-locked portion of the vesting tranche at the queried height
+  - **vestingAmount**: - `uint64` the total amount on the vesting schedule, omitted when zero
+  - **vestingStartHeight**: - `uint64` the height where vesting begins, omitted when zero
+  - **vestingCliffHeight**: - `uint64` the height where vesting first becomes spendable, omitted when zero
+  - **vestingEndHeight**: - `uint64` the height where vesting fully completes, omitted when zero
 - **type**: `string` - the type of results
 - **count**: `int` - length of results
 - **totalPages**: `int` - number of pages
@@ -262,15 +386,31 @@ $ curl -X POST localhost:50002/v1/query/accounts \
     "results": [
       {
         "address": "180c9d067ce4275612896dc7ce01390329e7f101",
-        "amount": 969901
+        "amount": 969901,
+        "totalAmount": 969901,
+        "spendableAmount": 969901,
+        "vestedAmount": 0,
+        "lockedAmount": 0
       },
       {
         "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
-        "amount": 18239045002
+        "amount": 18239045002,
+        "totalAmount": 18239045002,
+        "spendableAmount": 18239045002,
+        "vestedAmount": 0,
+        "lockedAmount": 0
       },
       {
         "address": "551f21e333012027b81701a35023efc88b864975",
-        "amount": 130
+        "amount": 130,
+        "totalAmount": 1000,
+        "spendableAmount": 130,
+        "vestedAmount": 30,
+        "lockedAmount": 870,
+        "vestingAmount": 900,
+        "vestingStartHeight": 900,
+        "vestingCliffHeight": 950,
+        "vestingEndHeight": 1200
       }
     ],
     "type": "accounts",
@@ -2491,12 +2631,8 @@ $ curl -X POST localhost:50002/v1/query/order \
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
 - **committee**: `uint64` – the unique identifier of the committee to filter by (optional: use 0 to get all committees)
-- **sellersSendAddress**: `hex-string` – the seller address to filter orders by (optional: use "" to get all seller addresses)
-- **buyerSendAddress**: `hex-string` – the buyer address to filter locked orders by (optional: use "" to get all buyer addresses)
 - **pageNumber**: `int` – the page number to retrieve (optional: starts at 1)
 - **perPage**: `int` – the number of orders per page (optional: defaults to system default)
-
-**Note**: `sellersSendAddress` and `buyerSendAddress` are mutually exclusive filters. You cannot use both in the same request.
 
 **Response**:
 - **pageNumber**: `int` - the current page number
@@ -2563,40 +2699,6 @@ $ curl -X POST localhost:50002/v1/query/orders \
         "committee": 1,
         "pageNumber": 1,
         "perPage": 20
-      }'
-```
-
-**Example 3: Filter by sellersSendAddress with pagination (uses indexed lookup)**
-```
-$ curl -X POST localhost:50002/v1/query/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe",
-        "pageNumber": 1,
-        "perPage": 10
-      }'
-```
-
-**Example 4: Filter by both committee and sellersSendAddress with pagination (most efficient)**
-```
-$ curl -X POST localhost:50002/v1/query/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-        "committee": 1,
-        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe",
-        "pageNumber": 1,
-        "perPage": 10
-      }'
-```
-
-**Example 5: Filter by buyerSendAddress with pagination (locked orders only)**
-```
-$ curl -X POST localhost:50002/v1/query/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-        "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
-        "pageNumber": 1,
-        "perPage": 10
       }'
 ```
 
@@ -3479,13 +3581,14 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-import-raw \
 
 **Route:** `/v1/admin/keystore-delete`
 
-**Description**: removes a key from the keystore using either the address or nickname
+**Description**: removes a key from the keystore using either the address or nickname after validating the password
 
 **HTTP Method**: `POST`
 
 **Request**:
 - **nickname**: `string` - the nickname associated with the key
 - **address**: `string` - the address associated with the key
+- **password**: `string` - **(required)** the plain-text password used to encrypt the key
 
 **Response**: `hex-string` - the 20 byte address of the newly imported key
 
@@ -3494,7 +3597,8 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-import-raw \
 $ curl -X POST http://localhost:50003/v1/admin/keystore-delete \
   -H "Content-Type: application/json" \
   -d '{
-    "nickname":"my_key_2"
+    "nickname":"my_key_2",
+    "password":"my_password"
     }'
 
 > "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
@@ -4986,11 +5090,9 @@ Jun 11 09:47:09.521 INFO: Reset BFT (NEW_HEIGHT)
 ## Golang Profiling Debug
 
 **Route:**
-- DebugBlockedRoutePath = "/debug/blocked"
-- DebugHeapRoutePath    = "/debug/heap"
-- DebugCPURoutePath     = "/debug/cpu"
-- DebugRoutineRoutePath = "/debug/routine"
+- /debug/pprof
+- /debug/pprof/*name
 
-**Description**: returns an HTTP handler that serves the named profile. Available profiles can be found in [runtime/pprof.Profile]. See https://pkg.go.dev/net/http/pprof
+**Description**: serves the Go pprof index and named pprof handlers. These routes are exposed on the profiling server bound to `ProfilingPort`, not the main RPC port. Available profiles can be found in `net/http/pprof`. See https://pkg.go.dev/net/http/pprof
 
 **HTTP Method**: `GET`

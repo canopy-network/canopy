@@ -39,7 +39,7 @@ export const ModalTabs: React.FC<ModalTabsProps> = ({
                             key={tab.label + index}
                             value={tab.value}
                             variant="wallet"
-                            className="gap-1.5 sm:gap-2 md:gap-3 text-xs sm:text-sm md:text-base lg:text-lg"
+                            className="gap-1.5 sm:gap-2 md:gap-3 text-xs sm:text-sm md:text-base lg:text-lg text-white/60 hover:text-white/90 data-[state=active]:border-[#35cd48] data-[state=active]:text-[#35cd48]"
                         >
                             {tab.icon ? <LucideIcon name={tab.icon} className="w-4 h-4 sm:w-5 sm:h-5" /> : null}
                             {tab.label}

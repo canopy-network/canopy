@@ -143,7 +143,7 @@ export default function ComboSelect({
                     disabled={disabled}
                     className={
                         buttonClassName ??
-                        "flex items-center justify-between border px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-50 w-full bg-background/60 border-border/70 text-foreground min-h-11 sm:min-h-12 rounded-xl transition-colors"
+                        "flex items-center justify-between border px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-white/12 focus:border-white/20 disabled:cursor-not-allowed disabled:opacity-50 w-full bg-background/60 border-border/70 text-foreground min-h-11 sm:min-h-12 rounded-xl transition-colors"
                     }
                     aria-haspopup="listbox"
                     aria-expanded={open}
@@ -177,7 +177,7 @@ export default function ComboSelect({
                 }
             >
                 {/* Input */}
-                <div className="flex items-center gap-2 border-b border-border/70 px-2 py-1.5 text-canopy-50">
+                <div className="flex items-center gap-2 border-b border-border/70 px-2 py-1.5 text-foreground">
                     <input
                         ref={inputRef}
                         value={query}
@@ -206,8 +206,8 @@ export default function ComboSelect({
                                                     disabled={opt.disabled}
                                                     onClick={() => handlePick(opt.value)}
                                                     className={cx(
-                                                        "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-primary hover:text-primary-foreground disabled:opacity-50 text-canopy-50 mt-1",
-                                                        isSel && "bg-primary text-primary-foreground"
+                                                        "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-white/10 hover:text-foreground disabled:opacity-50 text-foreground mt-1",
+                                                        isSel && "bg-white/12 text-foreground"
                                                     )}
                                                 >
                                                     <Check
@@ -232,7 +232,7 @@ export default function ComboSelect({
                             <button
                                 type="button"
                                 onClick={() => assignValue(query)}
-                                className="flex w-full items-center gap-2 rounded-md px-2 py-2 hover:bg-primary text-canopy-50 hover:text-primary-foreground"
+                                className="flex w-full items-center gap-2 rounded-md px-2 py-2 hover:bg-white/10 text-foreground hover:text-foreground"
                             >
                                 <ArrowRight className="h-4 w-4"/>
                                 Assign “{query.trim()}”

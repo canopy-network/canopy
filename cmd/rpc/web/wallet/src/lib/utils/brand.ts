@@ -1,15 +1,24 @@
 const CANOPY_COLORS = [
-  "#6EE7B7",
-  "#38BDF8",
-  "#C084FC",
-  "#FBBF24",
-  "#F472B6",
-  "#60A5FA",
-  "#F87171",
-  "#34D399",
-  "#A78BFA",
-  "#F59E0B",
+  "#35CD48",
+  "#216CD0",
+  "#DDB228",
+  "#FF1845",
+  "#36CFC9",
+  "#9254DE",
+  "#F759AB",
+  "#FA8C16",
 ];
+
+function canopyHash(input: string): number {
+  let hash = 2166136261;
+
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
 
 /**
  * Return a pseudo-random color from the palette based on a seed (string/number).
@@ -20,9 +29,7 @@ export function getCanopyAccent(seed?: string | number): string {
     return CANOPY_COLORS[Math.floor(Math.random() * CANOPY_COLORS.length)];
   }
 
-  const s = seed.toString();
-  const hash = s.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return CANOPY_COLORS[hash % CANOPY_COLORS.length];
+  return CANOPY_COLORS[canopyHash(seed.toString()) % CANOPY_COLORS.length];
 }
 
 /**
@@ -35,5 +42,4 @@ export function canopyIconSvg(color: string): string {
 
 export const EXPLORER_NEON_GREEN = "#35cd48";
 export const EXPLORER_NEON_BORDER = "#35cd48";
-export const EXPLORER_ICON_GLOW =
-  "text-[#35cd48] drop-shadow-[0_0_12px_rgba(53,205,72,0.4)]";
+export const EXPLORER_ICON_GLOW = "text-[#35cd48]";

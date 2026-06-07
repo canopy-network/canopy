@@ -274,7 +274,6 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 // - atomically writes all to the underlying db
 // - sets up the controller for the next height
 func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
-	c.log.Warnf("CommitCertificate block: %d qc %d chain %d", block.BlockHeader.Height, qc.Header.Height, qc.Header.ChainId)
 	start := time.Now()
 	// cancel any running mempool check
 	c.Mempool.stop()
@@ -334,12 +333,6 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	}
 	// log to signal finishing the commit
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
-	// execute Oracle CommitCertificate
-	err = c.oracle.CommitCertificate(qc, block, blockResult, ts)
-	if err != nil {
-		// exit with error
-		return err
-	}
 	// set up the finite state machine for the next height
 	c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
 	if err != nil {

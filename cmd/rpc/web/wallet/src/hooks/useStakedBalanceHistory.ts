@@ -7,7 +7,7 @@ export function useStakedBalanceHistory() {
     const { accounts, loading: accountsLoading } = useAccounts()
     const addresses = accounts.map(a => a.address).filter(Boolean)
     const dsFetch = useDSFetcher()
-    const { currentHeight, height24hAgo, calculateHistory, isReady } = useHistoryCalculation()
+    const { currentHeight, historyStartHeight, calculateHistory, isReady } = useHistoryCalculation()
 
     return useQuery({
         queryKey: ['stakedBalanceHistory', addresses, currentHeight],
@@ -18,7 +18,11 @@ export function useStakedBalanceHistory() {
 
         queryFn: async (): Promise<HistoryResult> => {
             if (addresses.length === 0) {
-                return { current: 0, previous24h: 0, change24h: 0, changePercentage: 0, progressPercentage: 0 }
+                return { current: 0, previous24h: 0, change24h: 0, changePercentage: 0, progressPercentage: 0, periodLabel: 'Live' }
+            }
+
+            if (historyStartHeight == null) {
+                return { current: 0, previous24h: 0, change24h: 0, changePercentage: 0, progressPercentage: 0, periodLabel: 'Live' }
             }
 
             // Fetch current and previous staked amounts in parallel
@@ -28,7 +32,7 @@ export function useStakedBalanceHistory() {
                     .catch(() => 0)
             )
             const previousPromises = addresses.map(address =>
-                dsFetch<any>('validatorByHeight', { address, height: height24hAgo })
+                dsFetch<any>('validatorByHeight', { address, height: historyStartHeight })
                     .then(v => v?.stakedAmount || 0)
                     .catch(() => 0)
             )

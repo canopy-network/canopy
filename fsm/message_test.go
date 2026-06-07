@@ -699,6 +699,93 @@ func TestHandleMessageSend(t *testing.T) {
 	}
 }
 
+func TestHandleMessageSendWithVesting(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 4
+	sender := newTestAddress(t)
+	recipient := newTestAddress(t, 1)
+	require.NoError(t, sm.AccountAdd(sender, 10))
+
+	msg := &MessageSend{
+		FromAddress:        sender.Bytes(),
+		ToAddress:          recipient.Bytes(),
+		Amount:             10,
+		VestingStartHeight: 4,
+		VestingCliffHeight: 8,
+		VestingEndHeight:   14,
+	}
+	require.NoError(t, sm.HandleMessageSend(msg))
+
+	got, err := sm.GetAccount(recipient)
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), got.Amount)
+	require.Equal(t, uint64(10), got.VestingAmount)
+	require.Zero(t, sm.AccountSpendableAmount(got))
+}
+
+func TestHandleMessageSendWithIncompatibleVesting(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sender := newTestAddress(t)
+	recipient := newTestAddress(t, 1)
+	require.NoError(t, sm.AccountAdd(sender, 5))
+	require.NoError(t, sm.SetAccount(&Account{
+		Address:            recipient.Bytes(),
+		Amount:             10,
+		VestingAmount:      4,
+		VestingStartHeight: 4,
+		VestingCliffHeight: 6,
+		VestingEndHeight:   10,
+	}))
+
+	msg := &MessageSend{
+		FromAddress:        sender.Bytes(),
+		ToAddress:          recipient.Bytes(),
+		Amount:             5,
+		VestingStartHeight: 4,
+		VestingCliffHeight: 7,
+		VestingEndHeight:   11,
+	}
+	require.ErrorContains(t, sm.HandleMessageSend(msg), "incompatible vesting schedule")
+
+	senderAccount, err := sm.GetAccount(sender)
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), senderAccount.Amount)
+}
+
+func TestHandleMessageSendWithVestingReusesFullyVestedAccount(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 20
+	sender := newTestAddress(t)
+	recipient := newTestAddress(t, 1)
+	require.NoError(t, sm.AccountAdd(sender, 5))
+	require.NoError(t, sm.SetAccount(&Account{
+		Address:            recipient.Bytes(),
+		Amount:             10,
+		VestingAmount:      4,
+		VestingStartHeight: 4,
+		VestingCliffHeight: 6,
+		VestingEndHeight:   10,
+	}))
+
+	msg := &MessageSend{
+		FromAddress:        sender.Bytes(),
+		ToAddress:          recipient.Bytes(),
+		Amount:             5,
+		VestingStartHeight: 20,
+		VestingCliffHeight: 22,
+		VestingEndHeight:   30,
+	}
+	require.NoError(t, sm.HandleMessageSend(msg))
+
+	got, err := sm.GetAccount(recipient)
+	require.NoError(t, err)
+	require.Equal(t, uint64(15), got.Amount)
+	require.Equal(t, uint64(5), got.VestingAmount)
+	require.Equal(t, uint64(20), got.VestingStartHeight)
+	require.Equal(t, uint64(22), got.VestingCliffHeight)
+	require.Equal(t, uint64(30), got.VestingEndHeight)
+}
+
 func TestHandleMessageStake(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -1826,6 +1913,19 @@ func TestHandleMessageDAOTransfer(t *testing.T) {
 				EndHeight:   3,
 			},
 		},
+		{
+			name:           "successful mint and transfer",
+			detail:         "a successful dao transfer was completed after minting to the treasury",
+			proposalConfig: AcceptAllProposals,
+			height:         2,
+			msg: &MessageDAOTransfer{
+				Address:     newTestAddressBytes(t),
+				Amount:      1,
+				Mint:        true,
+				StartHeight: 2,
+				EndHeight:   3,
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1849,10 +1949,21 @@ func TestHandleMessageDAOTransfer(t *testing.T) {
 			got, err := sm.GetPoolBalance(lib.DAOPoolID)
 			require.NoError(t, err)
 			// validate the transfer
-			require.Equal(t, test.daoPreset-test.msg.Amount, got)
+			expectedDAOBalance := test.daoPreset - test.msg.Amount
+			if test.msg.Mint {
+				expectedDAOBalance = test.daoPreset
+			}
+			require.Equal(t, expectedDAOBalance, got)
 			// get the recipient account
 			got, err = sm.GetAccountBalance(crypto.NewAddress(test.msg.Address))
 			require.Equal(t, test.msg.Amount, got)
+			supply, err := sm.GetSupply()
+			require.NoError(t, err)
+			var expectedTotal uint64
+			if test.msg.Mint {
+				expectedTotal = test.msg.Amount
+			}
+			require.Equal(t, expectedTotal, supply.Total)
 		})
 	}
 }

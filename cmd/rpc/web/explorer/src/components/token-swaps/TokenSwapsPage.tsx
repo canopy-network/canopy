@@ -1,8 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import SwapFilters from './SwapFilters';
+import type { SwapFilterValues } from './SwapFilters';
 import RecentSwapsTable from './RecentSwapsTable';
-import { useOrders } from '../../hooks/useApi';
+import { useOrders } from '../../hooks/useApi'
+import { formatDecimalWithSubscript, formatLocaleNumber, toCNPY } from '../../lib/utils';
+import ExplorerOverviewCards from '../ExplorerOverviewCards';
 
 interface Order {
     id: string;
@@ -16,124 +20,188 @@ interface Order {
     sellersSendAddress: string;
 }
 
-interface SwapData {
-    hash: string;
-    assetPair: string;
-    action: 'Buy CNPY' | 'Sell CNPY';
-    block: number;
-    age: string;
-    fromAddress: string;
-    toAddress: string;
-    exchangeRate: string;
-    amount: string;
+export interface SwapData {
     orderId: string;
     committee: number;
-    status: 'Active' | 'Locked' | 'Completed';
+    fromAddress: string;
+    fromAddressFull: string;
+    toAddress: string;
+    toAddressFull: string;
+    exchangeRate: string;
+    exchangeRateNum: number;
+    amount: string;
+    amountRaw: number;
+    status: 'Active' | 'Locked';
 }
 
+export type SortKey = 'committee' | 'exchangeRate' | 'amount' | 'status';
+export type SortDir = 'asc' | 'desc';
+
+const DEFAULT_FILTERS: SwapFilterValues = { minAmount: '', status: 'All', committee: 'All' };
+const SWAP_DECIMAL_PLACES = 2;
+
 const TokenSwapsPage: React.FC = () => {
-    const [selectedChainId] = useState<number>(1);
-    const [filters, setFilters] = useState({
-        assetPair: 'All Pairs',
-        actionType: 'All Actions',
-        timeRange: 'Last 24 Hours',
-        minAmount: ''
-    });
+    const navigate = useNavigate();
+    const [filters, setFilters] = useState<SwapFilterValues>(DEFAULT_FILTERS);
+    const [sortKey, setSortKey] = useState<SortKey | null>(null);
+    const [sortDir, setSortDir] = useState<SortDir>('asc');
+    const [pageSize, setPageSize] = useState(10);
 
-    // Fetch orders data
-    const { data: ordersData, isLoading } = useOrders(selectedChainId);
+    const { data: ordersData, isLoading } = useOrders();
 
-    // Transform orders data to swaps format
     const swaps = useMemo(() => {
-        const ordersList = Array.isArray((ordersData as any)?.orders)
-            ? (ordersData as any).orders
-            : Array.isArray((ordersData as any)?.results)
-                ? (ordersData as any).results
+        const ordersList = Array.isArray((ordersData as Record<string, unknown>)?.orders)
+            ? (ordersData as Record<string, unknown[]>).orders
+            : Array.isArray((ordersData as Record<string, unknown>)?.results)
+                ? (ordersData as Record<string, unknown[]>).results
                 : [];
 
         if (ordersList.length === 0) return [];
 
-        return ordersList.map((order: Order) => {
-            // Determine asset pair based on committee (this is a simplified mapping)
-            const assetPairs = ['CNPY/ETH', 'CNPY/BTC', 'CNPY/SOL', 'CNPY/USDC', 'CNPY/AVAX'];
-            const assetPair = assetPairs[order.committee % assetPairs.length] || 'CNPY/UNKNOWN';
+        const truncateAddress = (addr: string) => {
+            if (!addr || addr.length < 10) return addr;
+            return addr.slice(0, 6) + '...' + addr.slice(-4);
+        };
 
-            // Calculate exchange rate (CNPY per unit of counter asset)
-            const exchangeRate = order.requestedAmount > 0
-                ? `1 Asset = ${(order.amountForSale / order.requestedAmount).toFixed(6)} CNPY`
+        return ordersList.map((rawOrder) => {
+            const order = rawOrder as Order;
+            const exchangeRateNum = order.requestedAmount > 0
+                ? order.amountForSale / order.requestedAmount
+                : 0;
+            const exchangeRate = exchangeRateNum > 0
+                ? `1 : ${formatDecimalWithSubscript(exchangeRateNum, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)}`
                 : 'N/A';
 
-            // Determine action (all orders are sell orders in the API)
-            const action = 'Sell CNPY';
-
-            // Determine status
-            const status = order.buyerSendAddress ? 'Locked' : 'Active';
-
-            // Format amounts (convert from micro denomination to CNPY)
-            const cnpyAmount = (order.amountForSale / 1000000).toFixed(6);
-            const amount = `-${cnpyAmount} CNPY`;
-
-            // Format addresses
-            const truncateAddress = (addr: string) => {
-                if (!addr || addr.length < 10) return addr;
-                return addr.slice(0, 6) + '...' + addr.slice(-4);
-            };
+            const status: 'Active' | 'Locked' = order.buyerSendAddress ? 'Locked' : 'Active';
+            const amountRaw = toCNPY(order.amountForSale);
+            const amount = `${formatLocaleNumber(amountRaw, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)} CNPY`;
 
             return {
-                hash: order.id.slice(0, 8) + '...' + order.id.slice(-4),
-                assetPair,
-                action,
-                block: Math.floor(Math.random() * 1000000) + 6000000, // Simulated block number
-                age: 'Unknown', // We don't have timestamp in the API
-                fromAddress: truncateAddress(order.sellersSendAddress),
-                toAddress: truncateAddress(order.sellerReceiveAddress),
-                exchangeRate,
-                amount,
                 orderId: order.id,
                 committee: order.committee,
+                fromAddress: truncateAddress(order.sellersSendAddress),
+                fromAddressFull: order.sellersSendAddress,
+                toAddress: truncateAddress(order.sellerReceiveAddress),
+                toAddressFull: order.sellerReceiveAddress,
+                exchangeRate,
+                exchangeRateNum,
+                amount,
+                amountRaw,
                 status
-            };
+            } satisfies SwapData;
         });
     }, [ordersData]);
 
-    // Apply filters
+    const availableCommittees = useMemo(() => {
+        const set = new Set(swaps.map((s) => s.committee));
+        return Array.from(set).sort((a, b) => a - b);
+    }, [swaps]);
+
+    const overviewCards = useMemo(() => {
+        const activeCount = swaps.filter((swap) => swap.status === 'Active').length;
+        const lockedCount = swaps.filter((swap) => swap.status === 'Locked').length;
+        const totalVolume = swaps.reduce((sum, swap) => sum + swap.amountRaw, 0);
+
+        return [
+            {
+                title: 'Orders',
+                value: swaps.length.toLocaleString(),
+                subValue: 'Open book',
+                icon: 'fa-solid fa-book',
+            },
+            {
+                title: 'Active',
+                value: activeCount.toLocaleString(),
+                subValue: 'Open orders',
+                icon: 'fa-solid fa-unlock',
+            },
+            {
+                title: 'Locked',
+                value: lockedCount.toLocaleString(),
+                subValue: 'Buyer locked',
+                icon: 'fa-solid fa-lock',
+            },
+            {
+                title: 'Open Volume',
+                value: totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+                subValue: 'CNPY',
+                icon: 'fa-solid fa-chart-column',
+            },
+        ];
+    }, [swaps]);
+
     const filteredSwaps = useMemo(() => {
-        return swaps.filter((swap: SwapData) => {
-            if (filters.assetPair !== 'All Pairs' && swap.assetPair !== filters.assetPair) {
-                return false;
+        let result = swaps;
+
+        if (filters.minAmount) {
+            const min = parseFloat(filters.minAmount);
+            if (!isNaN(min)) {
+                result = result.filter((s) => s.amountRaw >= min);
             }
-            if (filters.actionType !== 'All Actions' && swap.action !== filters.actionType) {
-                return false;
-            }
-            if (filters.minAmount && parseFloat(swap.amount.replace(/[^\d.-]/g, '')) < parseFloat(filters.minAmount)) {
-                return false;
-            }
-            return true;
-        });
+        }
+
+        if (filters.status !== 'All') {
+            result = result.filter((s) => s.status === filters.status);
+        }
+
+        if (filters.committee !== 'All') {
+            const cid = Number(filters.committee);
+            result = result.filter((s) => s.committee === cid);
+        }
+
+        return result;
     }, [swaps, filters]);
 
-    const handleApplyFilters = (newFilters: any) => {
+    const sortedSwaps = useMemo(() => {
+        if (!sortKey) return filteredSwaps;
+
+        const sorted = [...filteredSwaps];
+        sorted.sort((a, b) => {
+            let cmp = 0;
+            switch (sortKey) {
+                case 'committee':
+                    cmp = a.committee - b.committee;
+                    break;
+                case 'amount':
+                    cmp = a.amountRaw - b.amountRaw;
+                    break;
+                case 'exchangeRate':
+                    cmp = a.exchangeRateNum - b.exchangeRateNum;
+                    break;
+                case 'status':
+                    cmp = a.status.localeCompare(b.status);
+                    break;
+            }
+            return sortDir === 'asc' ? cmp : -cmp;
+        });
+        return sorted;
+    }, [filteredSwaps, sortKey, sortDir]);
+
+    const handleSort = (key: SortKey) => {
+        if (sortKey === key) {
+            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortKey(key);
+            setSortDir('asc');
+        }
+    };
+
+    const handleApplyFilters = (newFilters: SwapFilterValues) => {
         setFilters(newFilters);
     };
 
     const handleResetFilters = () => {
-        setFilters({
-            assetPair: 'All Pairs',
-            actionType: 'All Actions',
-            timeRange: 'Last 24 Hours',
-            minAmount: ''
-        });
+        setFilters(DEFAULT_FILTERS);
+        setSortKey(null);
+        setSortDir('asc');
     };
 
     const handleExportData = () => {
         const csvContent = [
-            ['Hash', 'Asset Pair', 'Action', 'Block', 'Age', 'From Address', 'To Address', 'Exchange Rate', 'Amount', 'Status'],
-            ...filteredSwaps.map((swap: SwapData) => [
-                swap.hash,
-                swap.assetPair,
-                swap.action,
-                swap.block.toString(),
-                swap.age,
+            ['Order ID', 'Committee', 'From Address', 'To Address', 'Exchange Rate', 'Amount', 'Status'],
+            ...sortedSwaps.map((swap) => [
+                swap.orderId,
+                swap.committee.toString(),
                 swap.fromAddress,
                 swap.toAddress,
                 swap.exchangeRate,
@@ -151,42 +219,53 @@ const TokenSwapsPage: React.FC = () => {
         window.URL.revokeObjectURL(url);
     };
 
+    const handleRowClick = (swap: SwapData) => {
+        navigate(`/order/${swap.committee}/${swap.orderId}`);
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
+            className="w-full"
         >
-            <div className="flex justify-between items-center mb-8">
+            <div className="mb-4 flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Token Swaps</h1>
-                    <p className="text-gray-400">Real-time atomic swaps between Canopy (CNPY) and other cryptocurrencies</p>
+                    <h1 className="explorer-page-title">Token Swaps</h1>
+                    <p className="explorer-page-subtitle">Atomic swap orderbook on the Canopy network</p>
                 </div>
                 <div className="flex items-center space-x-4">
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors duration-200 font-medium"
-                    >
-                        <i className="fas fa-sync-alt mr-2"></i>Refresh
-                    </button>
+                    <SwapFilters
+                        compact
+                        onApplyFilters={handleApplyFilters}
+                        onResetFilters={handleResetFilters}
+                        filters={filters}
+                        onFiltersChange={setFilters}
+                        availableCommittees={availableCommittees}
+                    />
                     <button
                         onClick={handleExportData}
-                        className="px-4 py-2 bg-card border-gray-800/40 text-gray-300 hover:bg-card/80 rounded-lg transition-colors duration-200 font-medium"
+                        className="px-4 py-2 bg-card border-white/10 text-gray-300 hover:bg-card/80 rounded-lg transition-colors duration-200 font-medium"
                     >
                         <i className="fas fa-download mr-2"></i>Export
                     </button>
                 </div>
             </div>
 
-            <SwapFilters
-                onApplyFilters={handleApplyFilters}
-                onResetFilters={handleResetFilters}
-                filters={filters}
-                onFiltersChange={setFilters}
+            <ExplorerOverviewCards cards={overviewCards} className="mb-8" />
+
+            <RecentSwapsTable
+                swaps={sortedSwaps}
+                loading={isLoading && !ordersData}
+                onRowClick={handleRowClick}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSort}
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
             />
-            <RecentSwapsTable swaps={filteredSwaps} loading={isLoading && !ordersData} />
         </motion.div>
     );
 };

@@ -44,16 +44,21 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
             return timeA - timeB
         })
 
-        // Always create 4 data points by dividing blocks into 4 equal groups
-        const numPoints = 4
-        const blocksPerGroup = Math.max(1, Math.ceil(filteredBlocks.length / numPoints))
+        // always create 4 data points by dividing blocks into 4 equal groups
+        const numPoints = Math.min(4, filteredBlocks.length)
+        const base = Math.floor(filteredBlocks.length / numPoints)
+        const remainder = filteredBlocks.length % numPoints
         const txCounts: number[] = []
         const timeLabels: string[] = []
-        const groupTimeRanges: number[] = [] // Store time range for each group in minutes
+        const groupTimeRanges: number[] = [] // store time range for each group in minutes
 
+        let offset = 0
         for (let i = 0; i < numPoints; i++) {
-            const startIdx = i * blocksPerGroup
-            const endIdx = Math.min(startIdx + blocksPerGroup, filteredBlocks.length)
+            // distribute remainder across first groups so sizes differ by at most 1
+            const groupSize = base + (i < remainder ? 1 : 0)
+            const startIdx = offset
+            const endIdx = offset + groupSize
+            offset = endIdx
             const groupBlocks = filteredBlocks.slice(startIdx, endIdx)
 
             if (groupBlocks.length === 0) {
@@ -63,11 +68,12 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                 continue
             }
 
-            // Count total transactions in this group
-            const groupTxCount = groupBlocks.reduce((sum: number, block: any) => {
-                return sum + (block.blockHeader?.numTxs || 0)
+            // average per-block transactions in this group so ±1 block difference doesn't skew the chart
+            const groupTxTotal = groupBlocks.reduce((sum: number, block: any) => {
+                return sum + parseInt(block.blockHeader?.numTxs || '0', 10)
             }, 0)
-            txCounts.push(groupTxCount)
+            const avgTxPerBlock = groupBlocks.length > 0 ? groupTxTotal / groupBlocks.length : 0
+            txCounts.push(Math.round(avgTxPerBlock * 100) / 100)
 
             // Get time label from first and last block in group
             const firstBlock = groupBlocks[0]
@@ -137,10 +143,10 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
 
     if (loading) {
         return (
-            <div className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200">
+            <div className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200">
                 <div className="animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded w-1/2 mb-4"></div>
-                    <div className="h-32 bg-gray-700 rounded"></div>
+                    <div className="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
+                    <div className="h-32 bg-white/10 rounded"></div>
                 </div>
             </div>
         )
@@ -151,14 +157,14 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+            className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
         >
             <div className="mb-4">
                 <h3 className="text-lg font-semibold text-white">
                     Network Activity
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Transactions per {timeInterval}
+                    Avg transactions per block over time
                 </p>
             </div>
 
@@ -167,7 +173,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                     {/* Grid lines */}
                     <defs>
                         <pattern id="grid" width="30" height="20" patternUnits="userSpaceOnUse">
-                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="#374151" strokeWidth="0.5" />
+                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
                         </pattern>
                     </defs>
                     <rect width="100%" height="100%" fill="url(#grid)" />
@@ -176,7 +182,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                     {txCounts.length > 1 && (
                         <polyline
                             fill="none"
-                            stroke="#4ADE80"
+                            stroke="#45ca46"
                             strokeWidth="2"
                             points={txCounts.map((value: number, index: number) => {
                                 const x = (index / Math.max(txCounts.length - 1, 1)) * 280 + 10
@@ -197,7 +203,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                                 cx={x}
                                 cy={y}
                                 r="4"
-                                fill="#4ADE80"
+                                fill="#45ca46"
                                 className="cursor-pointer transition-all duration-200 hover:r-6 drop-shadow-sm"
                                 onMouseEnter={() => setHoveredPoint({
                                     index,
@@ -215,7 +221,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                 {/* Tooltip */}
                 {hoveredPoint && (
                     <div
-                        className="absolute bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white shadow-lg z-10 pointer-events-none"
+                        className="absolute bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white shadow-lg z-10 pointer-events-none"
                         style={{
                             left: `${(hoveredPoint.x / 300) * 100}%`,
                             top: `${(hoveredPoint.y / 120) * 100}%`,
@@ -223,7 +229,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                         }}
                     >
                         <div className="font-semibold">{hoveredPoint.timeLabel}</div>
-                        <div className="text-green-400">{hoveredPoint.value.toLocaleString()} transactions</div>
+                        <div className="text-primary">{hoveredPoint.value.toLocaleString()} transactions</div>
                     </div>
                 )}
 
