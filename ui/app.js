@@ -1099,15 +1099,15 @@ window.signAndSubmit_register=async function(){try{
 window.build_propose=function(){try{
   const mid=document.getElementById('pr_mid').value.trim().toLowerCase();mid40(mid);
   const res=document.getElementById('pr_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
-  const bond=parseInt(document.getElementById('prop_bond').value)*1000000;
-  const fee=parseInt(document.getElementById('prop_fee').value)||10000;
+  const bond=parseInt(document.getElementById('pr_bond').value)*1000000;
+  const fee=parseInt(document.getElementById('pr_fee').value)||10000;
   showPL('propo','propp',buildUnsigned('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.signAndSubmit_propose=async function(){try{
   const mid=document.getElementById('pr_mid').value.trim().toLowerCase();mid40(mid);
   const res=document.getElementById('pr_resolver').value.trim().toLowerCase();addr40(res,'Resolver');
-  const bond=parseInt(document.getElementById('prop_bond').value)*1000000;
-  const fee=parseInt(document.getElementById('prop_fee').value)||10000;
+  const bond=parseInt(document.getElementById('pr_bond').value)*1000000;
+  const fee=parseInt(document.getElementById('pr_fee').value)||10000;
   await doSubmit('propose_outcome','type.googleapis.com/types.MessageProposeOutcome',encPropose(mid,res,propOut,bond),{fee},'btn_propose','pend_propose');
 }catch(e){toast(e.message,true);}};
 
@@ -1957,7 +1957,7 @@ window.fillPropose = function(id) {
 window.updateMinBondHint = function() {
   const mid = document.getElementById('pr_mid').value.trim().toLowerCase();
   const hint = document.getElementById('prop_bond_hint');
-  const bondEl = document.getElementById('prop_bond');
+  const bondEl = document.getElementById('pr_bond');
   if (!hint) return;
   if (!mid || mid.length !== 40) {
     hint.textContent = 'Enter Market ID to compute min bond';
@@ -1976,7 +1976,7 @@ window.updateMinBondHint = function() {
   const minBond = Math.max(onePct, 60);
   hint.textContent = 'Min bond: ' + minBond.toFixed(2) + ' PRX  (max(1% of pool, 60 PRX) — deducted from resolver stake)';
   hint.style.color = 'var(--amber)';
-  if (bondEl && parseFloat(bondEl.value) < minBond) bondEl.value = Math.ceil(minBond);
+  const bondEl2 = document.getElementById('pr_bond'); if (bondEl2 && parseFloat(bondEl2.value) < minBond) bondEl2.value = Math.ceil(minBond);
 };
 checkSavedKeystore();
 

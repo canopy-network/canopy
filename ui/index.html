@@ -1051,6 +1051,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="pr_mid" type="text" placeholder="40 hex chars" oninput="updateProposeRisk()"/></div><div class="field"><label>Resolver Address</label><input id="pr_resolver" type="text" placeholder="40 hex chars"/></div></div>
     <div class="field"><label>Proposed Outcome</label><div class="otog"><div class="obtn yes active" id="pr_btn_yes" onclick="setPropOut(true)">YES</div><div class="obtn no" id="pr_btn_no" onclick="setPropOut(false)">NO</div></div></div>
     <div id="pr_risk_box" style="display:none;margin-bottom:13px;padding:10px 14px;border-radius:var(--r);font-family:var(--mono);font-size:10px;line-height:1.7"></div>
+    <div class="field"><label>Proposal Bond (PRX)</label><input id="pr_bond" type="number" value="60"/><div class="hint" id="prop_bond_hint">Enter Market ID to compute min bond</div></div>
     <div class="field"><label>Fee (uPRX)</label><input id="pr_fee" type="number" value="10000"/></div>
     <div class="brow"><button class="btn bp" id="btn_propose" onclick="signAndSubmit_propose()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_propose()">Build Payload</button></div>
     <div class="pend" id="pend_propose"><span class="blink">▪▪▪</span> broadcasting…</div>
