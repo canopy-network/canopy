@@ -123,7 +123,6 @@ func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {
 	require.Equal(t, address.Bytes(), []byte(got.Address))
 	require.Equal(t, uint64(110), got.Amount)
 	require.Equal(t, uint64(150), got.TotalAmount)
-	require.Equal(t, uint64(110), got.SpendableAmount)
 	require.Equal(t, uint64(60), got.VestedAmount)
 	require.Equal(t, uint64(40), got.LockedAmount)
 	require.Equal(t, uint64(100), got.VestingAmount)
@@ -169,7 +168,6 @@ func TestAccountsQueryReturnsVestingBreakdowns(t *testing.T) {
 	}
 	require.Equal(t, uint64(25), amounts[liquid.String()].Amount)
 	require.Equal(t, uint64(25), amounts[liquid.String()].TotalAmount)
-	require.Equal(t, uint64(25), amounts[liquid.String()].SpendableAmount)
 	require.Zero(t, amounts[liquid.String()].VestedAmount)
 	require.Zero(t, amounts[liquid.String()].LockedAmount)
 
@@ -177,7 +175,6 @@ func TestAccountsQueryReturnsVestingBreakdowns(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, uint64(110), vestedAccount.Amount)
 	require.Equal(t, uint64(150), vestedAccount.TotalAmount)
-	require.Equal(t, uint64(110), vestedAccount.SpendableAmount)
 	require.Equal(t, uint64(60), vestedAccount.VestedAmount)
 	require.Equal(t, uint64(40), vestedAccount.LockedAmount)
 	require.Equal(t, uint64(100), vestedAccount.VestingAmount)

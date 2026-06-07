@@ -751,7 +751,6 @@ func spendableAccountView(sm *fsm.StateMachine, account *fsm.Account) *AccountVi
 		Address:            account.Address,
 		Amount:             spendable,
 		TotalAmount:        total,
-		SpendableAmount:    spendable,
 		VestedAmount:       vested,
 		LockedAmount:       locked,
 		VestingAmount:      account.VestingAmount,

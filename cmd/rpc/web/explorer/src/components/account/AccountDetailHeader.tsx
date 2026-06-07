@@ -9,7 +9,6 @@ interface Account {
     address: string
     amount: number
     totalAmount?: number
-    spendableAmount?: number
     vestedAmount?: number
     lockedAmount?: number
     vestingAmount?: number
@@ -30,7 +29,7 @@ const CopySymbol = ({ copied }: { copied: boolean }) => {
 const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) => {
     const [copied, setCopied] = useState(false)
     const totalAmount = account.totalAmount ?? account.amount
-    const spendableAmount = account.spendableAmount ?? account.amount
+    const spendableAmount = account.amount
     const vestedAmount = account.vestedAmount ?? 0
     const lockedAmount = account.lockedAmount ?? 0
     const vestingAmount = account.vestingAmount ?? 0
