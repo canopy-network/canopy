@@ -813,7 +813,13 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
           <div class="mitem"><span class="mlbl">Creator</span><span class="mval" id="det-creator">—</span></div>
           <div class="mitem"><span class="mlbl">Total Pool</span><span class="mval g" id="det-total">—</span></div>
           <div class="mitem"><span class="mlbl">Expiry</span><span class="mval" id="det-expiry">—</span></div>
-          <div class="mitem" id="det-rules-row" style="display:none"><span class="mlbl">Rules</span><span class="mval" id="det-rules" style="white-space:pre-wrap;font-size:10px">—</span></div>
+          <div id="det-rules-row" style="display:none;margin-top:12px">
+            <div style="font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+              RESOLUTION CRITERIA
+              <span id="det-cat-badge" style="padding:2px 8px;border-radius:10px;font-size:8px;font-weight:600;letter-spacing:1px"></span>
+            </div>
+            <div id="det-rules" style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.7;white-space:pre-wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px"></div>
+          </div>
           <div class="mitem" id="det-resolver-row"><span class="mlbl">Resolver</span><span class="mval" id="det-resolver">—</span></div>
         </div>
       </div>

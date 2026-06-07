@@ -595,12 +595,38 @@ window.showDetail = function(marketId) {
   document.getElementById('det-mid').textContent = mid;
   document.getElementById('det-creator').textContent = m.creator || '—';
   document.getElementById('det-total').textContent = fmtPRX(m.qYes + m.qNo) + ' PRX';
-  document.getElementById('det-expiry').textContent = m.expiry ? 'blk #' + Number(m.expiry) : '—';
+  if (m.expiry) {
+    const blk = Number(m.expiry);
+    const blocksLeft = blk - currentHeight;
+    const msLeft = blocksLeft * 5000;
+    const expDate = new Date(Date.now() + msLeft);
+    const dateStr = expDate.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    const timeStr = expDate.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('det-expiry').textContent = 'blk #' + blk + '  (' + dateStr + ' ' + timeStr + ')';
+  } else {
+    document.getElementById('det-expiry').textContent = '—';
+  }
   const rulesRow = document.getElementById('det-rules-row');
-  const rulesEl = document.getElementById('det-rules');
+  const rulesEl  = document.getElementById('det-rules');
+  const catBadge = document.getElementById('det-cat-badge');
   if (rulesRow && rulesEl) {
-    if (m.rules) { rulesEl.textContent = m.rules; rulesRow.style.display = ''; }
-    else { rulesRow.style.display = 'none'; }
+    const rawRules = m.rules || '';
+    const cat      = extractCat(rawRules);
+    const stripped = stripCatPrefix(rawRules).trim();
+    const displayRules = stripped || (cat !== 'other' ? 'No resolution criteria specified.' : '');
+    if (displayRules || cat !== 'other') {
+      rulesEl.textContent = displayRules || 'No resolution criteria specified.';
+      rulesRow.style.display = '';
+      if (catBadge) {
+        catBadge.textContent = CAT_LABELS[cat] || '◈ Other';
+        const catColors = { crypto:'#f7931a', sports:'#22c55e', politics:'#3b82f6', finance:'#a855f7', other:'var(--text3)' };
+        catBadge.style.background = 'var(--surf2)';
+        catBadge.style.color = catColors[cat] || 'var(--text3)';
+        catBadge.style.border = '1px solid var(--border)';
+      }
+    } else {
+      rulesRow.style.display = 'none';
+    }
   }
 
   const resolverRow = document.getElementById('det-resolver-row');
