@@ -12,8 +12,12 @@ const queryClient = new QueryClient({
       staleTime: 30000, // 30 seconds
       refetchInterval: 20000, // 20 seconds auto refresh
       retry: 3,
-      refetchOnWindowFocus: false,
-      refetchOnMount: true, // Refetch when component mounts
+      // Keep polling running even when the tab is in the background, so the
+      // dashboard reflects new blocks without needing a manual refresh.
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      refetchOnMount: true,
     },
   },
 })

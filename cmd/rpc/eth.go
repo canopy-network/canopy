@@ -254,7 +254,7 @@ func (s *Server) EthGetBalance(args []any) (result any, err error) {
 	// create a read-only state for the block tag
 	_ = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
 		// get the balance for the address
-		balance, e := state.GetAccountBalance(address)
+		balance, e := state.GetAccountSpendableBalance(address)
 		if e != nil {
 			return
 		}
@@ -478,7 +478,7 @@ func (s *Server) EthCall(args []any) (any, error) {
 			var balance uint64
 			switch toHex {
 			case fsm.CNPYContractAddress:
-				balance, e = state.GetAccountBalance(address)
+				balance, e = state.GetAccountSpendableBalance(address)
 				if e != nil {
 					return e
 				}
@@ -503,7 +503,7 @@ func (s *Server) EthCall(args []any) (any, error) {
 			if e != nil {
 				return e
 			}
-			balance, e := state.GetAccountBalance(fromAddress)
+			balance, e := state.GetAccountSpendableBalance(fromAddress)
 			if e != nil {
 				return e
 			}

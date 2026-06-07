@@ -171,6 +171,30 @@ type economicParameterResponse struct {
 }
 
 // =====================================================
+// Query Response Types
+// =====================================================
+type AccountView struct {
+	Address            lib.HexBytes `json:"address"`
+	Amount             uint64       `json:"amount"`
+	TotalAmount        uint64       `json:"totalAmount,omitempty"`
+	VestedAmount       uint64       `json:"vestedAmount,omitempty"`
+	LockedAmount       uint64       `json:"lockedAmount,omitempty"`
+	VestingAmount      uint64       `json:"vestingAmount,omitempty"`
+	VestingStartHeight uint64       `json:"vestingStartHeight,omitempty"`
+	VestingCliffHeight uint64       `json:"vestingCliffHeight,omitempty"`
+	VestingEndHeight   uint64       `json:"vestingEndHeight,omitempty"`
+}
+
+type AccountViewPage []*AccountView
+
+// AccountViewPage satisfies the Page interface.
+func (p *AccountViewPage) New() lib.Pageable { return &AccountViewPage{} }
+
+func init() {
+	lib.RegisteredPageables[fsm.AccountsPageName] = new(AccountViewPage)
+}
+
+// =====================================================
 // Transaction Request Types
 // =====================================================
 type txSend struct {
@@ -179,6 +203,18 @@ type txSend struct {
 	Output   string `json:"output"`
 	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
+	fromFields
+}
+
+type txSendVesting struct {
+	Fee                uint64 `json:"fee"`
+	Amount             uint64 `json:"amount"`
+	Output             string `json:"output"`
+	VestingStartHeight uint64 `json:"vestingStartHeight"`
+	VestingCliffHeight uint64 `json:"vestingCliffHeight"`
+	VestingEndHeight   uint64 `json:"vestingEndHeight"`
+	Submit             bool   `json:"submit"`
+	Password           string `json:"password"`
 	fromFields
 }
 
@@ -216,6 +252,7 @@ type txChangeParam struct {
 type txDaoTransfer struct {
 	Fee      uint64 `json:"fee"`
 	Amount   uint64 `json:"amount"`
+	Mint     bool   `json:"mint"`
 	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
 	fromFields
@@ -358,25 +395,29 @@ type signerFields struct {
 
 // txRequest is used server side to unmarshall all transaction requests
 type txRequest struct {
-	Amount          uint64          `json:"amount"`
-	PubKey          string          `json:"pubKey"`
-	NetAddress      string          `json:"netAddress"`
-	Output          string          `json:"output"`
-	OpCode          lib.HexBytes    `json:"opCode"`
-	Data            lib.HexBytes    `json:"data"`
-	Fee             uint64          `json:"fee"`
-	Delegate        bool            `json:"delegate"`
-	EarlyWithdrawal bool            `json:"earlyWithdrawal"`
-	Submit          bool            `json:"submit"`
-	ReceiveAmount   uint64          `json:"receiveAmount"`
-	ReceiveAddress  lib.HexBytes    `json:"receiveAddress"`
-	Percent         uint64          `json:"percent"`
-	OrderId         string          `json:"orderId"`
-	Memo            string          `json:"memo"`
-	PollJSON        json.RawMessage `json:"pollJSON"`
-	PollApprove     bool            `json:"pollApprove"`
-	Signer          lib.HexBytes    `json:"signer"`
-	SignerNickname  string          `json:"signerNickname"`
+	Amount             uint64          `json:"amount"`
+	VestingStartHeight uint64          `json:"vestingStartHeight"`
+	VestingCliffHeight uint64          `json:"vestingCliffHeight"`
+	VestingEndHeight   uint64          `json:"vestingEndHeight"`
+	PubKey             string          `json:"pubKey"`
+	NetAddress         string          `json:"netAddress"`
+	Output             string          `json:"output"`
+	OpCode             lib.HexBytes    `json:"opCode"`
+	Data               lib.HexBytes    `json:"data"`
+	Fee                uint64          `json:"fee"`
+	Mint               bool            `json:"mint"`
+	Delegate           bool            `json:"delegate"`
+	EarlyWithdrawal    bool            `json:"earlyWithdrawal"`
+	Submit             bool            `json:"submit"`
+	ReceiveAmount      uint64          `json:"receiveAmount"`
+	ReceiveAddress     lib.HexBytes    `json:"receiveAddress"`
+	Percent            uint64          `json:"percent"`
+	OrderId            string          `json:"orderId"`
+	Memo               string          `json:"memo"`
+	PollJSON           json.RawMessage `json:"pollJSON"`
+	PollApprove        bool            `json:"pollApprove"`
+	Signer             lib.HexBytes    `json:"signer"`
+	SignerNickname     string          `json:"signerNickname"`
 	addressRequest
 	nicknameRequest
 	passwordRequest
