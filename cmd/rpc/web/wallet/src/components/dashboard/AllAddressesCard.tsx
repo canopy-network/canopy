@@ -89,7 +89,7 @@ export const AllAddressesCard = React.memo(() => {
     const processedAddresses = useMemo((): AddressData[] =>
         accounts.map(account => {
             const balance = balances.find(b => b.address === account.address);
-            const spendable = balance?.spendableAmount ?? balance?.amount ?? 0;
+            const spendable = balance?.amount ?? 0;
             const locked = balance?.lockedAmount ?? 0;
             const total = balance?.totalAmount ?? spendable + locked;
             return {

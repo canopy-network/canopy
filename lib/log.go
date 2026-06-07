@@ -199,6 +199,34 @@ func (l *Logger) write(msg string) {
 }
 
 // NewLogger() creates a new Logger instance with the specified configuration and optional data directory path
+func NewOracleLogger(config LoggerConfig, dataDirPath ...string) LoggerI {
+	if config.Out == nil {
+		if dataDirPath == nil || dataDirPath[0] == "" {
+			dataDirPath = make([]string, 1)
+			dataDirPath[0] = DefaultDataDirPath()
+		}
+		logPath := filepath.Join(dataDirPath[0], LogDirectory, LogFileName)
+		if _, err := os.Stat(logPath); errors.Is(err, os.ErrNotExist) {
+			if err = os.MkdirAll(filepath.Join(dataDirPath[0], LogDirectory), os.ModePerm); err != nil {
+				fmt.Println(err)
+				panic(err)
+			}
+		}
+		logFile := &lumberjack.Logger{
+			Filename:   logPath,
+			MaxSize:    1, // megabyte
+			MaxBackups: 1500,
+			MaxAge:     14, // days
+			Compress:   true,
+		}
+		config.Out = logFile
+	}
+	return &Logger{
+		config: config,
+	}
+}
+
+// NewLogger() creates a new Logger instance with the specified configuration and optional data directory path
 func NewLogger(config LoggerConfig, dataDirPath ...string) LoggerI {
 	if config.Out == nil {
 		if dataDirPath == nil || dataDirPath[0] == "" {
