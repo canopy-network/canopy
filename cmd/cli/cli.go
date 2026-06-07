@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -51,7 +50,6 @@ var (
 )
 
 func init() {
-	flag.Parse()
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(queryCmd)

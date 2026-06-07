@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -166,6 +167,86 @@ func TestSetAccountsOverflow(t *testing.T) {
 	require.NoError(t, e)
 	require.Zero(t, balance)
 	require.Equal(t, uint64(math.MaxUint64), supply.Total)
+}
+
+func TestAccountVestingAccounting(t *testing.T) {
+	sm := newTestStateMachine(t)
+	account := &Account{
+		Address:            newTestAddressBytes(t),
+		Amount:             150,
+		VestingAmount:      100,
+		VestingStartHeight: 2,
+		VestingCliffHeight: 5,
+		VestingEndHeight:   12,
+	}
+	tests := []struct {
+		name       string
+		height     uint64
+		vested     uint64
+		locked     uint64
+		authorized uint64
+	}{
+		{name: "before cliff", height: 4, vested: 0, locked: 100, authorized: 50},
+		{name: "at cliff", height: 5, vested: 30, locked: 70, authorized: 80},
+		{name: "mid vest", height: 8, vested: 60, locked: 40, authorized: 110},
+		{name: "fully vested", height: 12, vested: 100, locked: 0, authorized: 150},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sm.height = test.height
+			require.Equal(t, test.vested, sm.AccountVestedAmount(account))
+			require.Equal(t, test.locked, sm.AccountLockedAmount(account))
+			require.Equal(t, test.authorized, sm.AccountSpendableAmount(account))
+		})
+	}
+}
+
+func TestAccountSubRespectsVesting(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 4
+	addr := newTestAddress(t)
+	require.NoError(t, sm.SetAccount(&Account{
+		Address:            addr.Bytes(),
+		Amount:             10,
+		VestingAmount:      6,
+		VestingStartHeight: 2,
+		VestingCliffHeight: 5,
+		VestingEndHeight:   10,
+	}))
+
+	require.ErrorContains(t, sm.AccountSub(addr, 5), "insufficient funds")
+	require.NoError(t, sm.AccountSub(addr, 4))
+
+	got, err := sm.GetAccount(addr)
+	require.NoError(t, err)
+	require.Equal(t, uint64(6), got.Amount)
+	require.Equal(t, uint64(6), got.VestingAmount)
+}
+
+func TestAccountJSONRoundTripPreservesVesting(t *testing.T) {
+	original := &Account{
+		Address:            newTestAddressBytes(t),
+		Amount:             150,
+		VestingAmount:      100,
+		VestingStartHeight: 2,
+		VestingCliffHeight: 5,
+		VestingEndHeight:   12,
+	}
+
+	bz, err := json.Marshal(original)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"address":"`+crypto.NewAddressFromBytes(original.Address).String()+`",
+		"amount":150,
+		"vestingAmount":100,
+		"vestingStartHeight":2,
+		"vestingCliffHeight":5,
+		"vestingEndHeight":12
+	}`, string(bz))
+
+	var roundTrip Account
+	require.NoError(t, json.Unmarshal(bz, &roundTrip))
+	require.EqualExportedValues(t, *original, roundTrip)
 }
 
 func TestGetAccountsPaginated(t *testing.T) {

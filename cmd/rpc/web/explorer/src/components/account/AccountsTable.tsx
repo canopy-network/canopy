@@ -10,6 +10,9 @@ import CopyableIdentifier from '../ui/CopyableIdentifier'
 interface Account {
     address: string
     amount: number
+    lockedAmount?: number
+    vestedAmount?: number
+    vestingAmount?: number
 }
 
 interface AccountsTableProps {
@@ -141,10 +144,22 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
                                         className={desktopRowCellClass}
                                         style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
                                     >
-                                        <span className="text-sm text-white tabular-nums">
-                                            <AnimatedNumber value={toCNPY(account.amount)} format={{ maximumFractionDigits: 4 }} className="text-white" />
-                                            <span className="ml-1 text-white/50">CNPY</span>
-                                        </span>
+                                        <div className="space-y-1">
+                                            <span className="text-sm text-white tabular-nums">
+                                                <AnimatedNumber value={toCNPY(account.amount)} format={{ maximumFractionDigits: 4 }} className="text-white" />
+                                                <span className="ml-1 text-white/50">CNPY</span>
+                                            </span>
+                                            {(Number(account.lockedAmount || 0) > 0 || Number(account.vestedAmount || 0) > 0) && (
+                                                <div className="flex flex-wrap gap-2 text-[11px] text-white/45">
+                                                    {Number(account.lockedAmount || 0) > 0 && (
+                                                        <span>Locked {toCNPY(Number(account.lockedAmount || 0)).toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                                                    )}
+                                                    {Number(account.vestedAmount || 0) > 0 && (
+                                                        <span>Vested {toCNPY(Number(account.vestedAmount || 0)).toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))
