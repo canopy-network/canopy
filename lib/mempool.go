@@ -15,10 +15,10 @@ var _ Mempool = &FeeMempool{} // Mempool interface enforcement for FeeMempool im
 
 // Mempool interface is a model for a pre-block, in-memory, Transaction store
 type Mempool interface {
-	Contains(txHash string) bool               // whether the mempool has this transaction already (de-duplicated by hash)
-	AddTransactions(tx ...[]byte) (err ErrorI) // insert new unconfirmed transaction
-	DeleteTransaction(tx ...[]byte)            // delete unconfirmed transaction
-	GetTransactions(maxBytes uint64) [][]byte  // retrieve transactions from the highest fee to lowest
+	Contains(txHash string) bool                             // whether the mempool has this transaction already (de-duplicated by hash)
+	AddTransactions(tx ...[]byte) (recheck bool, err ErrorI) // insert new unconfirmed transaction
+	DeleteTransaction(tx ...[]byte)                          // delete unconfirmed transaction
+	GetTransactions(maxBytes uint64) [][]byte                // retrieve transactions from the highest fee to lowest
 
 	Clear()              // reset the entire store
 	TxCount() int        // number of Transactions in the pool
@@ -55,7 +55,7 @@ func NewMempool(config MempoolConfig) Mempool {
 
 // AddTransaction() inserts a new unconfirmed Transaction to the Pool and returns if this addition
 // requires a recheck of the Mempool due to dropping or re-ordering of the Transactions
-func (f *FeeMempool) AddTransactions(txs ...[]byte) (err ErrorI) {
+func (f *FeeMempool) AddTransactions(txs ...[]byte) (recheck bool, err ErrorI) {
 	// create a list of MempoolTxs
 	mempoolTxs := make([]MempoolTx, 0, len(txs))
 	for _, tx := range txs {
@@ -64,7 +64,7 @@ func (f *FeeMempool) AddTransactions(txs ...[]byte) (err ErrorI) {
 		// if the transaction bytes is larger than the max size
 		if uint32(txBytes) > f.config.IndividualMaxTxSize {
 			// exit with error
-			return ErrMaxTxSize()
+			return false, ErrMaxTxSize()
 		}
 		// check if the mempool already contains the transaction
 		if _, found := f.pool.m[crypto.HashString(tx)]; found {
@@ -74,11 +74,11 @@ func (f *FeeMempool) AddTransactions(txs ...[]byte) (err ErrorI) {
 		transaction := new(Transaction)
 		// populate the object ref with the bytes of the transaction
 		if err = Unmarshal(tx, transaction); err != nil {
-			return
+			return false, err
 		}
 		// perform basic validations against the tx object
 		if err = transaction.CheckBasic(); err != nil {
-			return
+			return false, err
 		}
 		// extract the fee from the transaction result
 		fee := transaction.Fee
@@ -92,6 +92,7 @@ func (f *FeeMempool) AddTransactions(txs ...[]byte) (err ErrorI) {
 		// update the number of bytes
 		f.txsBytes += txBytes
 	}
+	recheck = len(mempoolTxs) != 0
 	// insert the transactions into the pool
 	f.pool.insert(mempoolTxs...)
 	// assess if limits are exceeded - if so, drop from the bottom
@@ -111,7 +112,7 @@ func (f *FeeMempool) AddTransactions(txs ...[]byte) (err ErrorI) {
 		}
 	}
 	// if any are dropped or re-order happened
-	return nil
+	return recheck, nil
 }
 
 // GetTransactions() returns a list of the Transactions from the pool up to 'max collective Transaction bytes'

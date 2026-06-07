@@ -126,7 +126,11 @@ func (c *Controller) Start() {
 			} else if rootChainInfo != nil && rootChainInfo.Height != 0 {
 				c.log.Infof("Received root chain info with %d validators", len(rootChainInfo.ValidatorSet.GetValidatorSet()))
 				// call mempool check
-				c.Mempool.CheckMempool()
+				resetProposalConfig := c.SetFSMInConsensusModeForProposals()
+				if e := c.Mempool.CheckMempool(); e != nil {
+					c.log.Warnf("Initial mempool rebuild failed: %s", e.Error())
+				}
+				resetProposalConfig()
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
 				// exit the loop
@@ -206,6 +210,7 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	if info.Timestamp != 0 {
 		timestamp = time.UnixMicro(int64(info.Timestamp))
 	}
+	c.Mempool.dirtyVersion.Add(1)
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height

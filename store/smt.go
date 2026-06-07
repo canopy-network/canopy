@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"math/bits"
 	"sort"
-	"sync"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -201,50 +200,101 @@ func (s *SMT) Commit(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 	return s.commit(false)
 }
 
-// CommitParallel(): sorts the operations in 8 subtree threads, executes those threads in parallel and combines them into the master tree
+// CommitParallel() executes deferred operations in parallel by partitioning them into
+// 8 subtrees based on their 3-bit prefix (000-111), avoiding conflicts between operations
+// that would modify overlapping tree regions. Each subtree is processed independently
+// with its own Txn copy to avoid lock contention, then the results are merged back into
+// the main tree.
 func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
-	s.stats = SMTStats{}
-	var wg sync.WaitGroup
-	errChan := make(chan lib.ErrorI, NumSubtrees)
-	// add 16 synthetic borders to the tree
+	// if there are too few operations, fall back to sequential processing
+	// if len(unsortedOps) < NumSubtrees*2 {
+	// 	return s.Commit(unsortedOps)
+	// }
+
+	parentTxn, ok := s.store.(*Txn)
+	if !ok {
+		return s.Commit(unsortedOps)
+	}
+
+	groups, err := s.sortOperationsByPrefix(unsortedOps)
+	if err != nil {
+		return err
+	}
+
 	cleanup, err := s.addSyntheticBorders()
 	if err != nil {
 		return err
 	}
-	// collect the roots for each group (000, 001, 010, 011...)
-	roots, err := s.getSubtreeRoots()
+	defer func() {
+		if cleanupErr := cleanup(); cleanupErr != nil && err == nil {
+			err = cleanupErr
+		}
+	}()
+
+	subtreeRoots, err := s.getSubtreeRoots()
 	if err != nil {
 		return err
 	}
-	// sort operations grouping by prefix
-	groupedByPrefix, err := s.sortOperationsByPrefix(unsortedOps)
-	if err != nil {
-		return
+
+	type subtreeResult struct {
+		index int
+		store *subtreeStore
+		err   lib.ErrorI
 	}
-	// commit each group in parallel
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
-			// create subtree
-			subtree := s.createSubtree(roots[index], groupedByPrefix[index])
-			subtree.reset()
-			// commit the subtree
-			if e := subtree.commit(true); e != nil {
-				errChan <- e
-			}
-		}(i)
-	}
-	// wait for all goroutines to finish
-	wg.Wait()
-	close(errChan)
-	// check if any errors occurred
-	for err = range errChan {
-		if err != nil {
-			return
+
+	resultChan := make(chan subtreeResult, NumSubtrees)
+	activeSubtrees := 0
+
+	for i := 0; i < NumSubtrees; i++ {
+		if len(groups[i]) == 0 {
+			continue
 		}
+		activeSubtrees++
+		st := parentTxn.newSubtreeStore()
+
+		go func(idx int, ops []*node, root *node, store *subtreeStore) {
+			subtree := &SMT{
+				store:        store,
+				root:         root,
+				keyBitLength: s.keyBitLength,
+				nodeCache:    make(map[string]*node),
+				operations:   ops,
+				minKey:       s.minKey,
+				maxKey:       s.maxKey,
+			}
+			subtree.reset()
+			commitErr := subtree.commit(true)
+			resultChan <- subtreeResult{
+				index: idx,
+				store: store,
+				err:   commitErr,
+			}
+		}(i, groups[i], subtreeRoots[i], st)
 	}
-	return cleanup()
+
+	results := make([]subtreeResult, 0, activeSubtrees)
+	for completed := 0; completed < activeSubtrees; completed++ {
+		result := <-resultChan
+		if result.err != nil {
+			// Drain remaining results before returning so goroutines
+			// finish and don't race with the deferred cleanup.
+			for completed++; completed < activeSubtrees; completed++ {
+				<-resultChan
+			}
+			return result.err
+		}
+		results = append(results, result)
+	}
+	for _, result := range results {
+		parentTxn.mergeSubtreeOps(result.store)
+	}
+
+	s.root, err = s.getNode(s.root.Key.bytes())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // commit(): executes the deferred operations in order (left-to-right),
@@ -523,19 +573,6 @@ func (s *SMT) getSubtreeRoots() (roots []*node, err lib.ErrorI) {
 		}
 	}
 	return
-}
-
-// createSubtree() initializes the subtree structure
-func (s *SMT) createSubtree(root *node, operations []*node) *SMT {
-	return &SMT{
-		store:        s.store,
-		root:         root,
-		keyBitLength: s.keyBitLength,
-		nodeCache:    make(map[string]*node),
-		operations:   operations,
-		minKey:       s.minKey,
-		maxKey:       s.maxKey,
-	}
 }
 
 // sortOperationsByPrefix returns 8 sorted slices grouped by 3-bit prefix: 000 to 111

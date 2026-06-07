@@ -62,8 +62,16 @@ type validatorSharedCache struct {
 	sets    map[uint64][]*Validator
 }
 
-// New() creates a new instance of a StateMachine
-func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+func newValidatorSharedCache() *validatorSharedCache {
+	return &validatorSharedCache{
+		sets: make(map[uint64][]*Validator),
+	}
+}
+
+func newStateMachine(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI, sharedCache *validatorSharedCache) (*StateMachine, lib.ErrorI) {
+	if sharedCache == nil {
+		sharedCache = newValidatorSharedCache()
+	}
 	// create the state machine object reference
 	sm := &StateMachine{
 		store:             nil,
@@ -77,11 +85,9 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 		log:               log,
 		events:            new(lib.EventsTracker),
 		cache: &cache{
-			accounts: make(map[uint64]*Account),
-			pools:    make(map[uint64]*Pool),
-			sharedCache: &validatorSharedCache{
-				sets: make(map[uint64][]*Validator),
-			},
+			accounts:    make(map[uint64]*Account),
+			pools:       make(map[uint64]*Pool),
+			sharedCache: sharedCache,
 		},
 	}
 	// initialize the state machine
@@ -95,6 +101,11 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 	}
 	// initialize the state machine and exit
 	return sm, nil
+}
+
+// New() creates a new instance of a StateMachine
+func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+	return newStateMachine(c, store, plugin, metrics, log, nil)
 }
 
 // Initialize() initializes a StateMachine object using the StoreI
@@ -412,12 +423,10 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 		return nil, err
 	}
 	// initialize a new state machine
-	historicalFSM, err := New(s.Config, heightStore, s.Plugin, s.Metrics, s.log)
+	historicalFSM, err := newStateMachine(s.Config, heightStore, s.Plugin, s.Metrics, s.log, s.cache.sharedCache)
 	if err != nil {
 		return nil, err
 	}
-	// historical FSMs share the rolling validator cache but keep a private live cache field
-	historicalFSM.cache.sharedCache = s.cache.sharedCache
 	if height < s.height && s.cache.sharedCache != nil {
 		s.cache.sharedCache.RLock()
 		// set the live validators using the historical cache
@@ -774,6 +783,7 @@ func (s *StateMachine) SetStore(store lib.RWStoreI)                   { s.store 
 func (s *StateMachine) Height() uint64                                { return s.height }
 func (s *StateMachine) TotalVDFIterations() uint64                    { return s.totalVDFIterations }
 func (s *StateMachine) Discard()                                      { s.store.(lib.StoreI).Discard() }
+func (s *StateMachine) ProposalVoteConfig() GovProposalVoteConfig     { return s.proposeVoteConfig }
 func (s *StateMachine) SetProposalVoteConfig(c GovProposalVoteConfig) { s.proposeVoteConfig = c }
 
 var _ lib.PluginCompatibleFSM = new(StateMachine)
