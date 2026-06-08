@@ -533,33 +533,25 @@ window.renderMarketCards = function(markets) {
 
     const showBtns = m.status === 0;
 
-    return `<div class="mcard ${cardClass}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
-  <div class="mcard-top">
-    <div class="mcard-cat"><span class="mcard-cat-dot"></span>PRAXIS MARKET &nbsp;${statusHtml}&nbsp;<span class="mcard-cat-tag">${(CAT_LABELS[extractCat(m.rules||'')] || '◈ Other')}</span></div>
-    <div class="mcard-q">${esc(m.question || '(no question)')}</div>
-    <div class="mcard-probs">
-      <div>
-        <div class="prob-yes">${yesPct}%</div>
-        <div class="prob-labels"><span class="prob-lbl">YES</span></div>
+    const catIcon = {'crypto':'🪙','sports':'⚽','politics':'🗳','finance':'📈','other':'◈'}[extractCat(m.rules||'')] || '◈';
+    const catName = (CAT_LABELS[extractCat(m.rules||'')] || 'Other').replace(/[🪙⚽🗳📈◈]\s*/,'');
+    const hasBanner = !!extractImg(m.rules||'');
+    return `<div class="mcard ${cardClass}${hasBanner?' mcard-featured':''}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
+    ${mkBannerImg(m.rules)}<div class="mcard-top">
+      <div class="mcard-cat">${catIcon} ${catName} &nbsp;${statusHtml}</div>
+      <div class="mcard-q">${esc(m.question || '(no question)')}</div>
+      <div class="mcard-pill-row">
+        <span class="pill-yes">${yesPct}%</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">vs</span>
+        <span class="pill-no">${noPct}%</span>
       </div>
-      <div class="prob-divider"></div>
-      <div>
-        <div class="prob-no">${noPct}%</div>
-        <div class="prob-labels"><span class="prob-lbl">NO</span></div>
-      </div>
+      <div class="btrack"><div class="byes" style="width:${yesPct}%"></div></div>
     </div>
-    <div class="btrack"><div class="byes" style="width:${yesPct}%"></div></div>
-  </div>
-  <div class="mcard-meta">
-    <div class="meta-item"><span class="meta-lbl">Volume</span><span class="meta-val g">${vol}</span></div>
-    <div class="meta-item"><span class="meta-lbl">Expires</span><span class="meta-val">${exp}</span></div>
-    <div class="meta-item"><span class="meta-lbl">Creator</span><span class="meta-val">${creator}</span></div>
-  </div>
-  ${showBtns ? `<div class="mcard-actions">
-    <button class="mcard-btn mcard-btn-yes" onclick="event.stopPropagation();fillP(${JSON.stringify(mid)},true)">BET YES</button>
-    <button class="mcard-btn mcard-btn-no"  onclick="event.stopPropagation();fillP(${JSON.stringify(mid)},false)">BET NO</button>
-  </div>` : ''}
-</div>`;
+    <div class="mcard-meta">
+      <div class="meta-item"><span class="meta-lbl">Vol</span><span class="meta-val g">${vol}</span></div>
+      <div class="meta-item"><span class="meta-lbl">Exp</span><span class="meta-val">${exp}</span></div>
+      <div class="meta-item"><span class="meta-lbl">Creator</span><span class="meta-val">${creator}</span></div>
+    </div></div>`;
   }).join('') + '</div>';
 };
 
@@ -606,13 +598,27 @@ window.showDetail = function(marketId) {
   } else {
     document.getElementById('det-expiry').textContent = '—';
   }
+  // Banner image
+  const imgUrl = extractImg(m.rules || '');
+  const bannerDiv = document.getElementById('det-img-banner');
+  const bannerImg = document.getElementById('det-img-banner-img');
+  if (bannerDiv && bannerImg) {
+    if (imgUrl) {
+      bannerImg.src = imgUrl;
+      bannerDiv.style.display = '';
+      bannerImg.onerror = () => { bannerDiv.style.display = 'none'; };
+    } else {
+      bannerDiv.style.display = 'none';
+    }
+  }
+
   const rulesRow = document.getElementById('det-rules-row');
   const rulesEl  = document.getElementById('det-rules');
   const catBadge = document.getElementById('det-cat-badge');
   if (rulesRow && rulesEl) {
     const rawRules = m.rules || '';
     const cat      = extractCat(rawRules);
-    const stripped = stripCatPrefix(rawRules).trim();
+    const stripped = stripImgTag(stripCatPrefix(rawRules)).trim();
     const displayRules = stripped || (cat !== 'other' ? 'No resolution criteria specified.' : '');
     if (displayRules || cat !== 'other') {
       rulesEl.textContent = displayRules || 'No resolution criteria specified.';
@@ -1017,8 +1023,9 @@ window.build_create=function(){try{
   if(!nonce)nonce=BigInt(Date.now())*1000n;
   else nonce=parseInt(nonce);
   const rules=document.getElementById('c_rules').value.trim();
+  const _imgUrl=document.getElementById('c_img')?.value.trim()||'';
   if(!q)throw new Error('Question required');addr40(cr,'Creator');
-  showPL('co','cp',buildUnsigned('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,buildRulesWithCat(_cat,rules)),{fee}));toast('Payload built');
+  showPL('co','cp',buildUnsigned('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,buildRulesWithImg(buildRulesWithCat(_cat,rules),_imgUrl)),{fee}));toast('Payload built');
 }catch(e){toast(e.message,true);}};
 window.updateCreateBreakdown=function(){
   const b0=parseInt(document.getElementById('c_b0')?.value||0);
@@ -1044,8 +1051,9 @@ window.signAndSubmit_create=async function(){try{
   if(!nonce)nonce=BigInt(Date.now())*1000n;
   else nonce=parseInt(nonce);
   const rules=document.getElementById('c_rules').value.trim();
+  const _imgUrl=document.getElementById('c_img')?.value.trim()||'';
   if(!q)throw new Error('Question required');addr40(cr,'Creator');
-  await doSubmit('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,buildRulesWithCat(_cat,rules)),{fee},'btn_create','pend_create');
+  await doSubmit('create_market','type.googleapis.com/types.MessageCreateMarket',encCreate(cr,b0,exp,nonce,q,buildRulesWithImg(buildRulesWithCat(_cat,rules),_imgUrl)),{fee},'btn_create','pend_create');
 }catch(e){toast(e.message,true);}};
 
 // ── SUBMIT PREDICTION
@@ -2061,6 +2069,54 @@ window.updateDisputeRisk = function() {
 };
 
 
+
+
+// ═══════════════════════════════════════════
+// MARKET BANNER IMAGE SYSTEM
+// ═══════════════════════════════════════════
+
+function mkBannerImg(rules) {
+  const u = extractImg(rules||'');
+  if (!u) return '';
+  return '<img class="mcard-banner" src="' + u + '" alt="" onerror="this.style.display=\'none\'">';
+}
+
+function extractImg(rules) {
+  if (!rules) return '';
+  const m = rules.match(/\[IMG:([^\]]+)\]/);
+  return m ? m[1].trim() : '';
+}
+
+function stripImgTag(rules) {
+  if (!rules) return '';
+  return rules.replace(/\[IMG:[^\]]+\]\s*/g, '').trim();
+}
+
+function buildRulesWithImg(rules, imgUrl) {
+  const stripped = stripImgTag(rules);
+  if (!imgUrl) return stripped;
+  return stripped + (stripped ? ' ' : '') + '[IMG:' + imgUrl.trim() + ']';
+}
+
+window.previewBanner = function() {
+  const url = (document.getElementById('c_img')?.value || '').trim();
+  const preview = document.getElementById('c_img_preview');
+  const img = document.getElementById('c_img_preview_img');
+  const hint = document.getElementById('c_img_hint');
+  if (!preview || !img) return;
+  if (url && (url.startsWith('http') || url.startsWith('ipfs'))) {
+    img.src = url;
+    preview.style.display = '';
+    img.onload = () => { if (hint) { hint.textContent = '✓ Image loaded'; hint.style.color = 'var(--green)'; } };
+    img.onerror = () => {
+      preview.style.display = 'none';
+      if (hint) { hint.textContent = '✗ Could not load image — check URL or CORS policy'; hint.style.color = 'var(--red)'; }
+    };
+  } else {
+    preview.style.display = 'none';
+    if (hint) { hint.textContent = 'Image will be stored on-chain via IPFS or direct URL. Recommended: 16:9, min 800x450px.'; hint.style.color = ''; }
+  }
+};
 
 // ═══════════════════════════════════════════
 // EXPIRY DATE → BLOCK HEIGHT CONVERTER

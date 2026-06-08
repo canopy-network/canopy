@@ -223,14 +223,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* ── STAT BAR ── */
 .sbar {
-  display:flex; gap:8px; margin-bottom:20px;
+  display:flex; gap:6px; margin-bottom:16px;
   flex-wrap:wrap; align-items:center;
 }
+@media(max-width:768px){ .sbar { overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px; } }
 .chip {
   background:var(--surface); border:1px solid var(--border);
-  padding:6px 13px; border-radius:var(--r);
-  font-family:var(--mono); font-size:10px; color:var(--text2);
-  display:flex; align-items:center; gap:6px;
+  padding:5px 10px; border-radius:var(--r);
+  font-family:var(--mono); font-size:9px; color:var(--text2);
+  display:flex; align-items:center; gap:5px;
 }
 .chip b { color:var(--text); font-family:var(--display); font-size:13px; font-weight:700; }
 
@@ -259,7 +260,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .mtab.active { color:var(--green); border-bottom-color:var(--green); }
 
 /* ── MARKET GRID ── */
-.mgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:14px; }
+.mgrid { display:flex; flex-direction:column; gap:10px; }
 
 .mcard {
   background:var(--surface);
@@ -272,25 +273,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 }
 .mcard:hover {
   border-color:rgba(0,232,122,.3);
-  box-shadow:0 8px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(0,232,122,.06);
-  transform:translateY(-2px);
+  box-shadow:0 4px 20px rgba(0,0,0,.4), 0 0 0 1px rgba(0,232,122,.06);
+  transform:translateY(-1px);
 }
-.mcard-top { padding:16px 16px 12px; flex:1; }
+.mcard-top { padding:14px 16px 10px; flex:1; }
 .mcard-cat {
-  font-family:var(--mono); font-size:8px; letter-spacing:2px;
+  font-family:var(--mono); font-size:9px; letter-spacing:1px;
   text-transform:uppercase; color:var(--text3); margin-bottom:8px;
   display:flex; align-items:center; gap:6px;
 }
-.mcard-cat-dot { width:5px; height:5px; border-radius:50%; background:var(--green); }
+
 .mcard-q {
-  font-family:var(--display); font-size:14px; font-weight:700;
-  line-height:1.35; color:var(--text); margin-bottom:14px;
+  font-family:var(--sans); font-size:12px; font-weight:600;
+  line-height:1.35; color:var(--text); margin-bottom:10px;
 }
 .mcard-probs {
-  display:flex; align-items:center; gap:10px; margin-bottom:10px;
+  display:flex; align-items:center; gap:8px; margin-bottom:8px;
 }
-.prob-yes { font-family:var(--display); font-size:22px; font-weight:800; color:var(--green); }
-.prob-no  { font-family:var(--display); font-size:22px; font-weight:800; color:var(--red); }
+.prob-yes { font-family:var(--display); font-size:18px; font-weight:800; color:var(--green); }
+.prob-no  { font-family:var(--display); font-size:18px; font-weight:800; color:var(--red); }
 .prob-labels { display:flex; flex-direction:column; gap:1px; }
 .prob-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:1px; }
 .prob-divider { width:1px; height:32px; background:var(--border); margin:0 6px; }
@@ -307,6 +308,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .meta-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
 .meta-val { font-family:var(--mono); font-size:11px; color:var(--text2); font-weight:500; }
 .meta-val.g { color:var(--green); }
+
 
 .mcard-actions {
   display:grid; grid-template-columns:1fr 1fr; gap:0;
@@ -329,11 +331,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
   font-family:var(--mono); font-size:8px; font-weight:600; letter-spacing:1px;
   text-transform:uppercase;
 }
-.sp-live    { background:var(--gdim); color:var(--green); border:1px solid rgba(0,232,122,.2); }
-.sp-proposed{ background:var(--adim); color:var(--amber); border:1px solid rgba(245,166,35,.2); }
-.sp-disputed{ background:var(--rdim); color:var(--red);   border:1px solid rgba(255,64,96,.2); }
-.sp-finalized{background:var(--bdim); color:var(--blue);  border:1px solid rgba(59,130,246,.2);}
-.sp-cancelled{background:var(--surf3);color:var(--text3); border:1px solid var(--border2); }
+.sp-live    { background:transparent; color:var(--green); border:none; padding:0; letter-spacing:0; }
+.sp-proposed{ background:transparent; color:var(--amber); border:none; padding:0; letter-spacing:0; }
+.sp-disputed{ background:transparent; color:var(--red);   border:none; padding:0; letter-spacing:0; }
+.sp-finalized{background:transparent; color:var(--blue);  border:none; padding:0; letter-spacing:0;}
+.sp-cancelled{background:transparent;color:var(--text3); border:none; padding:0; letter-spacing:0; }
 .sp-expired { background:var(--adim); color:var(--amber); border:1px solid rgba(245,166,35,.2); }
 .sp-dot { width:5px; height:5px; border-radius:50%; background:currentColor; }
 .sp-live .sp-dot { animation:pulse 2s ease-in-out infinite; }
@@ -416,6 +418,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .cpick:hover { border-color:var(--green); color:var(--green); background:var(--gdim); }
 .cpick.active { background:var(--green); color:#000; border-color:var(--green); font-weight:600; }
 .mcard-cat-tag { font-family:var(--mono); font-size:8px; letter-spacing:1px; text-transform:uppercase; padding:2px 7px; border-radius:10px; background:var(--surf2); color:var(--text3); border:1px solid var(--border); }
+.mcard-pill-row { display:flex; gap:6px; margin-bottom:8px; }
+.pill-yes { font-family:var(--display); font-size:13px; font-weight:800; color:var(--green); display:flex; align-items:baseline; gap:3px; }
+.pill-no  { font-family:var(--display); font-size:13px; font-weight:800; color:var(--red);   display:flex; align-items:baseline; gap:3px; }
+.pill-lbl { font-family:var(--mono); font-size:9px; color:var(--text3); font-weight:400; }
 .byes2 { width:100%; padding:12px; background:var(--gdim); border:1px solid rgba(0,232,122,.2); color:var(--green); font-family:var(--display); font-size:13px; font-weight:700; cursor:pointer; border-radius:var(--r); transition:all .15s; }
 .byes2:hover { background:var(--green); color:#000; }
 .bno2  { width:100%; padding:12px; background:var(--rdim); border:1px solid rgba(255,64,96,.2); color:var(--red); font-family:var(--display); font-size:13px; font-weight:700; cursor:pointer; border-radius:var(--r); transition:all .15s; }
@@ -593,6 +599,8 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
 
 /* ── BANNER ── */
 .mc-banner { padding:11px 14px; display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:11px; }
+.mcard-banner { width:100%; height:160px; object-fit:cover; display:block; border-bottom:1px solid var(--border); border-radius:var(--r) var(--r) 0 0; }
+.mcard-featured .mcard-banner { height:160px; }
 .bnr { background:var(--adim); color:var(--amber); border-bottom:1px solid rgba(245,166,35,.15); }
 
 /* ── CAP INDICATOR ── */
@@ -756,6 +764,9 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="ph-sub"><button class="btn bsec bsm" onclick="showPage('markets',null)">← Back</button></div>
   </div>
 
+  <div id="det-img-banner" style="display:none;border-radius:var(--r);overflow:hidden;margin-bottom:14px;max-height:200px">
+    <img id="det-img-banner-img" src="" alt="" style="width:100%;height:160px;object-fit:cover;display:block;border-radius:var(--r)"/>
+  </div>
   <div class="det-grid">
     <div class="det-main">
       <!-- prob big display -->
@@ -1177,6 +1188,14 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
       <div class="field"><label>Nonce (optional)</label><input id="c_nonce" type="text" placeholder="auto"/></div>
     </div>
     <div class="field"><label>Rules / Resolution criteria</label><textarea id="c_rules" placeholder="Market resolves YES if…"></textarea></div>
+    <div class="field">
+      <label>Market Banner Image URL <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+      <input id="c_img" type="text" placeholder="https://i.imgur.com/... or ipfs://..." oninput="previewBanner()"/>
+      <div id="c_img_preview" style="display:none;margin-top:8px;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);max-height:160px">
+        <img id="c_img_preview_img" src="" alt="Banner preview" style="width:100%;height:160px;object-fit:cover;display:block"/>
+      </div>
+      <div class="hint" id="c_img_hint">Image will be stored on-chain via IPFS or direct URL. Recommended: 16:9, min 800x450px.</div>
+    </div>
     <div class="field"><label>Fee (uPRX)</label><input id="c_fee" type="number" value="10000" oninput="updateCreateBreakdown()"/></div>
     <div id="create_breakdown" class="breakdown"></div>
     <div class="brow"><button class="btn bp" id="btn_create" onclick="signAndSubmit_create()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_create()">Build Payload</button></div>
