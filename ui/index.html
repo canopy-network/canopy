@@ -195,7 +195,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .btab-bar {
   position:fixed; bottom:0; left:0; right:0; z-index:197;
   background:var(--surface); border-top:1px solid var(--border);
-  display:flex; align-items:stretch; height:56px;
+  display:flex; align-items:stretch; height:60px;
   padding-bottom:env(safe-area-inset-bottom);
 }
 .btab {
@@ -208,8 +208,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 }
 .btab:active { opacity:.7; }
 .btab.active { color:var(--green); }
-.btab-icon { font-size:18px; line-height:1; }
-.main { padding-bottom:72px !important; }
+.btab-icon { font-size:20px; line-height:1; }
+.main { padding-bottom:80px !important; }
 .mobnav { display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); }
 .mobnav.open { display:block; }
 .mobpanel { position:absolute; left:0; top:0; bottom:0; width:270px; background:var(--surface); border-right:1px solid var(--border); overflow-y:auto; transform:translateX(-100%); transition:transform .25s; }
@@ -360,7 +360,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* ── DETAIL PAGE ── */
 .det-grid { display:grid; grid-template-columns:1fr 340px; gap:20px; align-items:start; }
-@media(max-width:800px){ .det-grid { grid-template-columns:1fr; } }
+@media(max-width:900px){ .det-grid { grid-template-columns:1fr; } }
 
 .det-main {}
 .det-sidebar { display:flex; flex-direction:column; gap:14px; }
@@ -440,6 +440,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .pill-yes { font-family:var(--display); font-size:13px; font-weight:800; color:var(--green); display:flex; align-items:baseline; gap:3px; }
 .pill-no  { font-family:var(--display); font-size:13px; font-weight:800; color:var(--red);   display:flex; align-items:baseline; gap:3px; }
 .pill-lbl { font-family:var(--mono); font-size:9px; color:var(--text3); font-weight:400; }
+.pill-multi { font-family:var(--mono); font-size:9px; color:var(--text3); font-weight:400; margin-left:2px; }
 .byes2 { width:100%; padding:12px; background:var(--gdim); border:1px solid rgba(0,232,122,.2); color:var(--green); font-family:var(--display); font-size:13px; font-weight:700; cursor:pointer; border-radius:var(--r); transition:all .15s; }
 .byes2:hover { background:var(--green); color:#000; }
 .bno2  { width:100%; padding:12px; background:var(--rdim); border:1px solid rgba(255,64,96,.2); color:var(--red); font-family:var(--display); font-size:13px; font-weight:700; cursor:pointer; border-radius:var(--r); transition:all .15s; }

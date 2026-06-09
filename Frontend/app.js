@@ -536,14 +536,16 @@ window.renderMarketCards = function(markets) {
     const catIcon = {'crypto':'🪙','sports':'⚽','politics':'🗳','finance':'📈','other':'◈'}[extractCat(m.rules||'')] || '◈';
     const catName = (CAT_LABELS[extractCat(m.rules||'')] || 'Other').replace(/[🪙⚽🗳📈◈]\s*/,'');
     const hasBanner = !!extractImg(m.rules||'');
+    const yesMulti = m.qYes > 0n ? (Number(m.qYes + m.qNo) / Number(m.qYes)).toFixed(2) : '—';
+    const noMulti  = m.qNo  > 0n ? (Number(m.qYes + m.qNo) / Number(m.qNo)).toFixed(2)  : '—';
     return `<div class="mcard ${cardClass}${hasBanner?' mcard-featured':''}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
     ${mkBannerImg(m.rules)}<div class="mcard-top">
       <div class="mcard-cat">${catIcon} ${catName} &nbsp;${statusHtml}</div>
       <div class="mcard-q">${esc(m.question || '(no question)')}</div>
       <div class="mcard-pill-row">
-        <span class="pill-yes">${yesPct}%</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">vs</span>
-        <span class="pill-no">${noPct}%</span>
+        <span class="pill-yes">${yesPct}% <span class="pill-multi">${yesMulti}x</span></span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">·</span>
+        <span class="pill-no">${noPct}% <span class="pill-multi">${noMulti}x</span></span>
       </div>
       <div class="btrack"><div class="byes" style="width:${yesPct}%"></div></div>
     </div>
@@ -2832,14 +2834,16 @@ window.runSearch = function() {
     const statusMap = {0:'<span class="spill sp-live">● LIVE</span>',2:'<span class="spill sp-proposed">◆ PROPOSED</span>',3:'<span class="spill sp-disputed">⚠ DISPUTED</span>',4:'<span class="spill sp-finalized">✓ FINALIZED</span>',1:'<span class="spill sp-cancelled">✕ CANCELLED</span>',8:'<span class="spill sp-proposed">⏱ EXPIRED</span>'};
     const statusHtml = statusMap[m.status] || '';
     const hasBanner = !!extractImg(m.rules||'');
+    const yesMulti = m.qYes > 0n ? (Number(m.qYes + m.qNo) / Number(m.qYes)).toFixed(2) : '—';
+    const noMulti  = m.qNo  > 0n ? (Number(m.qYes + m.qNo) / Number(m.qNo)).toFixed(2)  : '—';
     return `<div class="mcard${hasBanner?' mcard-featured':''}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
     ${mkBannerImg(m.rules)}<div class="mcard-top">
       <div class="mcard-cat">${catIcon} ${catName} &nbsp;${statusHtml}</div>
       <div class="mcard-q">${esc(m.question || '(no question)')}</div>
       <div class="mcard-pill-row">
-        <span class="pill-yes">${yesPct}%</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">vs</span>
-        <span class="pill-no">${noPct}%</span>
+        <span class="pill-yes">${yesPct}% <span class="pill-multi">${yesMulti}x</span></span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">·</span>
+        <span class="pill-no">${noPct}% <span class="pill-multi">${noMulti}x</span></span>
       </div>
       <div class="btrack"><div class="byes" style="width:${yesPct}%"></div></div>
     </div>
