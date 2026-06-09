@@ -707,7 +707,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   <div class="moblogo">PRAXIS</div>
   <div style="display:flex;align-items:center;gap:10px">
     <div class="conn-row"><div class="dot" id="rpcDotM"></div></div>
-    <button class="ham" onclick="openNav()">☰</button>
+    <button class="ham" onclick="openNav()" style="display:none">☰</button>
   </div>
 </div>
 <div class="mobnav" id="mobNav" onclick="closeNav(event)">
@@ -721,6 +721,23 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
      PAGES
 ══════════════════════════════════════ -->
 <main class="main">
+
+<!-- ── SEARCH ── -->
+<div class="page" id="page-search">
+  <div class="ph ph-g"><div class="ph-eye">Discover</div><div class="ph-title">Search Markets</div><div class="ph-sub">Find markets by keyword, category, or creator</div></div>
+  <div class="field" style="margin-bottom:16px">
+    <input id="srch-input" type="text" placeholder="Search markets..." oninput="runSearch()" style="font-size:15px;padding:12px 14px"/>
+  </div>
+  <div class="cat-pick" style="margin-bottom:16px" id="srch-cats">
+    <div class="cpick active" data-cat="all"      onclick="srchCat(this)">All</div>
+    <div class="cpick"        data-cat="crypto"   onclick="srchCat(this)">🪙 Crypto</div>
+    <div class="cpick"        data-cat="sports"   onclick="srchCat(this)">⚽ Sports</div>
+    <div class="cpick"        data-cat="politics" onclick="srchCat(this)">🗳 Politics</div>
+    <div class="cpick"        data-cat="finance"  onclick="srchCat(this)">📈 Finance</div>
+    <div class="cpick"        data-cat="other"    onclick="srchCat(this)">◈ Other</div>
+  </div>
+  <div id="srch-results"><div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:40px 0">Type to search markets</div></div>
+</div>
 
 <!-- ── BROWSE MARKETS ── -->
 <div class="page active" id="page-markets">

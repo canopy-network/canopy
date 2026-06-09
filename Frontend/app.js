@@ -181,7 +181,7 @@ window.showPage=function(id,btn){
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('#deskNav .ni').forEach(b=>b.classList.remove('active'));
   const dm=document.querySelector(`#deskNav [data-p="${id}"]`);if(dm)dm.classList.add('active');
-  document.querySelectorAll('#bnav .bni').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#bnav .btab').forEach(b=>b.classList.remove('active'));
   const bm=document.querySelector(`#bnav [data-p="${id}"]`);if(bm)bm.classList.add('active');
   if(id==='markets')loadMarkets();
   if(id==='wallet'){refreshBalance();loadMyPredictions();}
@@ -2785,3 +2785,67 @@ if (typeof loadResolvers === 'function') {
     window._resolvers = resolvers;
   };
 }
+
+// ═══════════════════════════════════════════
+// SEARCH PAGE
+// ═══════════════════════════════════════════
+let _srchCat = 'all';
+
+window.srchCat = function(el) {
+  document.querySelectorAll('#srch-cats .cpick').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  _srchCat = el.getAttribute('data-cat') || 'all';
+  runSearch();
+};
+
+window.runSearch = function() {
+  const q = (document.getElementById('srch-input')?.value || '').trim().toLowerCase();
+  const out = document.getElementById('srch-results');
+  if (!out) return;
+  const markets = _allMarkets || [];
+  if (!q && _srchCat === 'all') {
+    out.innerHTML = '<div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:40px 0">Type to search markets</div>';
+    return;
+  }
+  let filtered = markets.filter(m => {
+    const catMatch = _srchCat === 'all' || extractCat(m.rules || '') === _srchCat;
+    const textMatch = !q ||
+      (m.question || '').toLowerCase().includes(q) ||
+      (m.marketId || '').toLowerCase().includes(q) ||
+      (m.creator || '').toLowerCase().includes(q) ||
+      stripCatPrefix(m.rules || '').toLowerCase().includes(q);
+    return catMatch && textMatch;
+  });
+  if (filtered.length === 0) {
+    out.innerHTML = '<div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:40px 0">No markets found</div>';
+    return;
+  }
+  out.innerHTML = '<div class="mgrid">' + filtered.map(m => {
+    const mid = m.marketId || m.txHash || '';
+    const total = m.qYes + m.qNo;
+    const yesPct = total > 0n ? Number((m.qYes * 100n) / total) : 50;
+    const noPct = 100 - yesPct;
+    const vol = fmtPRX(total) + ' PRX';
+    const exp = m.expiry ? '#' + m.expiry.toString() : '—';
+    const catIcon = {'crypto':'🪙','sports':'⚽','politics':'🗳','finance':'📈','other':'◈'}[extractCat(m.rules||'')] || '◈';
+    const catName = (CAT_LABELS[extractCat(m.rules||'')] || 'Other').replace(/[🪙⚽🗳📈◈]\s*/,'');
+    const statusMap = {0:'<span class="spill sp-live">● LIVE</span>',2:'<span class="spill sp-proposed">◆ PROPOSED</span>',3:'<span class="spill sp-disputed">⚠ DISPUTED</span>',4:'<span class="spill sp-finalized">✓ FINALIZED</span>',1:'<span class="spill sp-cancelled">✕ CANCELLED</span>',8:'<span class="spill sp-proposed">⏱ EXPIRED</span>'};
+    const statusHtml = statusMap[m.status] || '';
+    const hasBanner = !!extractImg(m.rules||'');
+    return \`<div class="mcard\${hasBanner?' mcard-featured':''}" onclick="openDetail(this.dataset.mid)" data-mid="\${mid}">
+    \${mkBannerImg(m.rules)}<div class="mcard-top">
+      <div class="mcard-cat">\${catIcon} \${catName} &nbsp;\${statusHtml}</div>
+      <div class="mcard-q">\${esc(m.question || '(no question)')}</div>
+      <div class="mcard-pill-row">
+        <span class="pill-yes">\${yesPct}%</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">vs</span>
+        <span class="pill-no">\${noPct}%</span>
+      </div>
+      <div class="btrack"><div class="byes" style="width:\${yesPct}%"></div></div>
+    </div>
+    <div class="mcard-meta">
+      <div class="meta-item"><span class="meta-lbl">Vol</span><span class="meta-val g">\${vol}</span></div>
+      <div class="meta-item"><span class="meta-lbl">Exp</span><span class="meta-val">\${exp}</span></div>
+    </div></div>\`;
+  }).join('') + '</div>';
+};
