@@ -192,6 +192,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .shell { padding-top:48px; }
 .moblogo { font-family:var(--display); font-size:15px; font-weight:800; letter-spacing:1px; color:var(--green); }
 .ham { background:none; border:none; cursor:pointer; color:var(--text); font-size:22px; padding:2px; }
+.btab-bar {
+  position:fixed; bottom:0; left:0; right:0; z-index:197;
+  background:var(--surface); border-top:1px solid var(--border);
+  display:flex; align-items:stretch; height:56px;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.btab {
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:3px; cursor:pointer;
+  color:var(--text3); font-family:var(--mono); font-size:8px;
+  letter-spacing:.5px; text-transform:uppercase;
+  border:none; background:none; padding:0;
+  transition:color .15s;
+}
+.btab:active { opacity:.7; }
+.btab.active { color:var(--green); }
+.btab-icon { font-size:18px; line-height:1; }
+.main { padding-bottom:72px !important; }
 .mobnav { display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); }
 .mobnav.open { display:block; }
 .mobpanel { position:absolute; left:0; top:0; bottom:0; width:270px; background:var(--surface); border-right:1px solid var(--border); overflow-y:auto; transform:translateX(-100%); transition:transform .25s; }
@@ -710,6 +728,29 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <button class="ham" onclick="openNav()" style="display:none">☰</button>
   </div>
 </div>
+
+<nav class="btab-bar" id="bnav">
+  <button class="btab active" data-p="markets" onclick="showPage('markets',this)">
+    <span class="btab-icon">◈</span>
+    <span>Markets</span>
+  </button>
+  <button class="btab" data-p="resolvers" onclick="showPage('resolvers',this)">
+    <span class="btab-icon">◉</span>
+    <span>Resolvers</span>
+  </button>
+  <button class="btab" data-p="search" onclick="showPage('search',this)">
+    <span class="btab-icon">⌕</span>
+    <span>Search</span>
+  </button>
+  <button class="btab" data-p="wallet" onclick="showPage('wallet',this)">
+    <span class="btab-icon">◫</span>
+    <span>Wallet</span>
+  </button>
+  <button class="btab" id="btab-more" onclick="openNav()">
+    <span class="btab-icon">≡</span>
+    <span>More</span>
+  </button>
+</nav>
 <div class="mobnav" id="mobNav" onclick="closeNav(event)">
   <div class="mobpanel">
     <button class="mobclose" onclick="closeNav()">✕</button>
