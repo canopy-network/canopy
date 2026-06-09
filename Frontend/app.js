@@ -2832,20 +2832,20 @@ window.runSearch = function() {
     const statusMap = {0:'<span class="spill sp-live">● LIVE</span>',2:'<span class="spill sp-proposed">◆ PROPOSED</span>',3:'<span class="spill sp-disputed">⚠ DISPUTED</span>',4:'<span class="spill sp-finalized">✓ FINALIZED</span>',1:'<span class="spill sp-cancelled">✕ CANCELLED</span>',8:'<span class="spill sp-proposed">⏱ EXPIRED</span>'};
     const statusHtml = statusMap[m.status] || '';
     const hasBanner = !!extractImg(m.rules||'');
-    return \`<div class="mcard\${hasBanner?' mcard-featured':''}" onclick="openDetail(this.dataset.mid)" data-mid="\${mid}">
-    \${mkBannerImg(m.rules)}<div class="mcard-top">
-      <div class="mcard-cat">\${catIcon} \${catName} &nbsp;\${statusHtml}</div>
-      <div class="mcard-q">\${esc(m.question || '(no question)')}</div>
+    return `<div class="mcard${hasBanner?' mcard-featured':''}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
+    ${mkBannerImg(m.rules)}<div class="mcard-top">
+      <div class="mcard-cat">${catIcon} ${catName} &nbsp;${statusHtml}</div>
+      <div class="mcard-q">${esc(m.question || '(no question)')}</div>
       <div class="mcard-pill-row">
-        <span class="pill-yes">\${yesPct}%</span>
+        <span class="pill-yes">${yesPct}%</span>
         <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">vs</span>
-        <span class="pill-no">\${noPct}%</span>
+        <span class="pill-no">${noPct}%</span>
       </div>
-      <div class="btrack"><div class="byes" style="width:\${yesPct}%"></div></div>
+      <div class="btrack"><div class="byes" style="width:${yesPct}%"></div></div>
     </div>
     <div class="mcard-meta">
-      <div class="meta-item"><span class="meta-lbl">Vol</span><span class="meta-val g">\${vol}</span></div>
-      <div class="meta-item"><span class="meta-lbl">Exp</span><span class="meta-val">\${exp}</span></div>
-    </div></div>\`;
+      <div class="meta-item"><span class="meta-lbl">Vol</span><span class="meta-val g">${vol}</span></div>
+      <div class="meta-item"><span class="meta-lbl">Exp</span><span class="meta-val">${exp}</span></div>
+    </div></div>`;
   }).join('') + '</div>';
 };
