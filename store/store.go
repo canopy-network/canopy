@@ -538,13 +538,9 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 		// commit the SMT directly using the txn ops
 		//
 		// NOTE: the SMT node cache MUST NOT be persisted across blocks. `node.copy()` is a
-		// no-op alias (`&(*x)` returns the same pointer), so the parallel commit mutates the
-		// cached `*node` objects in place (synthetic borders, subtree roots). Reusing those
-		// pointers in a later block also risks serving nodes from a speculative `Root()` call
-		// (e.g. ApplyAndValidateBlock) whose state was reset and never committed, which makes
-		// the cache diverge from the on-disk snapshot and panics with "no child node was
-		// replaced" during traversal. A fresh per-block cache (created by NewSMT and filled by
-		// getNode/setNode) still provides full caching within the commit.
+		// no-op alias, so the parallel commit mutates cached `*node` objects in place. Reusing
+		// them later can serve stale nodes (e.g. from a speculative, uncommitted `Root()` call),
+		// diverging from the on-disk snapshot. A fresh per-block cache still caches within the commit.
 		if err = s.sc.CommitParallel(s.ss.txn.ops); err != nil {
 			return nil, err
 		}
