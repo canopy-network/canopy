@@ -77,6 +77,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 }
 
 .shell{display:flex;flex-direction:column;min-height:100vh;position:relative;z-index:1}
+@media(max-width:1024px){.shell{min-height:unset;}}
 
 /* ══════════════════════════════════════════
    SIDEBAR
@@ -360,7 +361,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* ── DETAIL PAGE ── */
 .det-grid { display:grid; grid-template-columns:1fr 340px; gap:20px; align-items:start; }
-@media(max-width:900px){ .det-grid { grid-template-columns:1fr; } }
+@media(max-width:1024px){ .det-grid { grid-template-columns:1fr; } }
 
 .det-main {}
 .det-sidebar { display:flex; flex-direction:column; gap:14px; }
