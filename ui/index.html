@@ -1668,6 +1668,21 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
 <div class="page" id="page-signer">
   <div class="ph ph-g"><div class="ph-eye">BLS12-381</div><div class="ph-title">Signer</div><div class="ph-sub">Encrypted keystore — private key held in RAM only, never stored or sent</div></div>
 
+
+  <div class="card"><div class="ci">
+    <div class="ct">// connect_wallet — recommended</div>
+    <div id="mm_disconnected">
+      <div class="sinfo" style="margin-bottom:14px">Connect MetaMask to automatically derive your Praxis BLS signing key.<br/><em>Same MetaMask account = same Praxis key on any device. No file import needed.</em></div>
+      <div class="brow"><button class="btn bp" id="mm-connect-btn" onclick="connectMetaMaskBLS()">🦊 Connect Wallet</button></div>
+    </div>
+    <div id="mm_connected" style="display:none">
+      <div class="kstat loaded" id="mm_status">&#x2713; connected</div>
+      <div class="field" style="margin-top:10px"><label>ETH Address</label><div class="addr-mono" id="mm_addr" style="color:var(--green)"></div></div>
+      <div class="field" style="margin-top:8px"><label>Praxis Address (derived)</label><div class="addr-mono" id="mm_praxis_addr" style="color:var(--cyan)"></div></div>
+      <div class="brow" style="margin-top:10px"><button class="btn bsec" onclick="disconnectMetaMaskBLS()">Disconnect</button></div>
+    </div>
+  </div></div>
+
   <div class="card"><div class="ci">
     <div class="ct">// session_status</div>
     <div class="kstat" id="keyStatus">○ No key loaded — transactions cannot be signed</div>
@@ -2093,6 +2108,7 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
 </div>
 
 <div id="toast"></div>
+<script src="metamask-auth.js"></script>
 <script src="app.js"></script>
 <script>
 // ── Category filter ──
