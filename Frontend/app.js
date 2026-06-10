@@ -2853,3 +2853,231 @@ window.runSearch = function() {
     </div></div>`;
   }).join('') + '</div>';
 };
+
+// ═══════════════════════════════════════════
+// NEW DETAIL PAGE FUNCTIONS
+// ═══════════════════════════════════════════
+
+window.applySortAndRender = function() {
+  const sort = document.getElementById('marketSort')?.value || 'vol';
+  let markets = [...(_allMarkets || [])];
+  if (sort === 'new') markets.sort((a,b) => (b.height||0) - (a.height||0));
+  else if (sort === 'expiry') markets.sort((a,b) => Number(a.expiry||0) - Number(b.expiry||0));
+  else if (sort === 'yes') markets.sort((a,b) => {
+    const pctA = (a.qYes+a.qNo)>0n ? Number(a.qYes*100n/(a.qYes+a.qNo)) : 50;
+    const pctB = (b.qYes+b.qNo)>0n ? Number(b.qYes*100n/(b.qYes+b.qNo)) : 50;
+    return pctB - pctA;
+  });
+  const el = document.getElementById('marketsList');
+  if (el) el.innerHTML = renderMarketCards(markets);
+};
+
+window.selectDetailOut = function(isYes) {
+  window._detOutcome = isYes;
+  document.getElementById('dout-yes')?.classList.toggle('active', isYes);
+  document.getElementById('dout-no')?.classList.toggle('active', !isYes);
+  const submitBtn = document.getElementById('det-bet-yes');
+  const submitBtnNo = document.getElementById('det-bet-no');
+  const lbl = document.getElementById('det-submit-lbl');
+  const amt = document.getElementById('det-amt')?.value || '100';
+  if (submitBtn) { submitBtn.style.display = isYes ? 'block' : 'none'; }
+  if (submitBtnNo) { submitBtnNo.style.display = !isYes ? 'block' : 'none'; }
+  if (lbl) lbl.textContent = amt + ' PRX';
+  updateDetTrade();
+};
+
+window.updateDetTrade = function() {
+  const amt = parseFloat(document.getElementById('det-amt')?.value || 100);
+  const sharesEl = document.getElementById('det-ts-shares');
+  const priceEl  = document.getElementById('det-ts-price');
+  const winEl    = document.getElementById('det-ts-win');
+  const lblEl    = document.getElementById('det-submit-lbl');
+  const lblNoEl  = document.getElementById('det-submit-lbl-no');
+  if (sharesEl) sharesEl.textContent = (amt * 0.98).toFixed(2);
+  if (priceEl)  priceEl.textContent  = ((window._detOutcome ? 54 : 46) / 100).toFixed(2) + '¢';
+  if (winEl)    winEl.textContent    = (amt * 1.85).toFixed(2) + ' PRX';
+  if (lblEl)    lblEl.textContent    = amt + ' PRX';
+  if (lblNoEl)  lblNoEl.textContent  = amt + ' PRX';
+};
+
+window.detAmtStep = function(step) {
+  const inp = document.getElementById('det-amt');
+  if (!inp) return;
+  inp.value = Math.max(1, parseFloat(inp.value||100) + step);
+  updateDetTrade();
+};
+
+window.setDetAmt = function(amt) {
+  const inp = document.getElementById('det-amt');
+  if (inp) { inp.value = amt; updateDetTrade(); }
+};
+
+window.switchActionTab = function(tab) {
+  document.getElementById('dact-buy')?.classList.toggle('active', tab==='buy');
+  document.getElementById('dact-sell')?.classList.toggle('active', tab==='sell');
+};
+
+window.setHolderTab = function(side, el) {
+  document.querySelectorAll('.det-htab').forEach(b => b.classList.remove('active'));
+  el?.classList.add('active');
+  renderHoldersSidebar(window._detailMarketId, side);
+};
+
+window.setChartRange = function(range, el) {
+  document.querySelectorAll('.det-ctab').forEach(b => b.classList.remove('active'));
+  el?.classList.add('active');
+  renderDetailChart(window._detailMarketId, range);
+};
+
+window.renderDetailChart = function(mid, range) {
+  const canvas  = document.getElementById('det-chart');
+  const emptyEl = document.getElementById('det-chart-empty');
+  if (!canvas) return;
+  try {
+    const txs = JSON.parse(localStorage.getItem('praxis_tx_cache') || '[]');
+    const sorted = txs.filter(tx => {
+      if (tx.messageType !== 'submit_prediction') return false;
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const rawMid = msg.marketId || msg.market_id || '';
+      let txMid = rawMid;
+      try { txMid = b2h(Uint8Array.from(atob(rawMid), c=>c.charCodeAt(0))); } catch {}
+      return txMid === mid;
+    }).sort((a,b) => (a.height||0) - (b.height||0));
+
+    if (sorted.length < 2) {
+      if (emptyEl) emptyEl.style.display = '';
+      canvas.style.opacity = '0';
+      return;
+    }
+
+    let qYes = 0, qNo = 0;
+    const points = [];
+    for (const tx of sorted) {
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const outcome = msg.outcome === true || msg.outcome === 'true' || msg.outcome === 1;
+      const shares = Number(BigInt(msg.shares || msg.amount || 0)) / 1e6;
+      if (outcome) qYes += shares; else qNo += shares;
+      const total = qYes + qNo;
+      if (total > 0) points.push({ h: tx.height || 0, pct: qYes / total * 100 });
+    }
+
+    if (points.length < 2) { if (emptyEl) emptyEl.style.display = ''; canvas.style.opacity = '0'; return; }
+    if (emptyEl) emptyEl.style.display = 'none';
+    canvas.style.opacity = '1';
+
+    const ctx = canvas.getContext('2d');
+    const W = canvas.offsetWidth || 560, H = canvas.offsetHeight || 140;
+    canvas.width = W; canvas.height = H;
+    ctx.clearRect(0, 0, W, H);
+    const pad = {t:10,b:10,l:10,r:10};
+    const iW = W-pad.l-pad.r, iH = H-pad.t-pad.b;
+    const minH = points[0].h, maxH = points[points.length-1].h;
+    const rangeH = Math.max(maxH-minH, 1);
+
+    ctx.strokeStyle = 'rgba(255,255,255,.04)'; ctx.lineWidth = 1;
+    [25,50,75].forEach(p => {
+      const y = pad.t + iH - (p/100)*iH;
+      ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(pad.l+iW,y); ctx.stroke();
+    });
+    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.setLineDash([4,4]);
+    const y50 = pad.t + iH*0.5;
+    ctx.beginPath(); ctx.moveTo(pad.l,y50); ctx.lineTo(pad.l+iW,y50); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.beginPath();
+    points.forEach((pt,i) => {
+      const x = pad.l + ((pt.h-minH)/rangeH)*iW;
+      const y = pad.t + iH - (pt.pct/100)*iH;
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle = '#00e87a'; ctx.lineWidth = 2; ctx.stroke();
+
+    const lastPt = points[points.length-1];
+    const lastX = pad.l + ((lastPt.h-minH)/rangeH)*iW;
+    ctx.lineTo(lastX, pad.t+iH); ctx.lineTo(pad.l, pad.t+iH); ctx.closePath();
+    const grad = ctx.createLinearGradient(0,pad.t,0,pad.t+iH);
+    grad.addColorStop(0,'rgba(0,232,122,.25)'); grad.addColorStop(1,'rgba(0,232,122,0)');
+    ctx.fillStyle = grad; ctx.fill();
+
+    const lastY = pad.t + iH - (lastPt.pct/100)*iH;
+    ctx.beginPath(); ctx.arc(lastX,lastY,5,0,Math.PI*2);
+    ctx.fillStyle = '#00e87a'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  } catch(e) { if (emptyEl) emptyEl.style.display = ''; }
+};
+
+window.renderHoldersSidebar = function(mid, side) {
+  side = side || 'yes';
+  const el = document.getElementById('det-holders-list');
+  if (!el) return;
+  try {
+    const txs = JSON.parse(localStorage.getItem('praxis_tx_cache') || '[]');
+    const holders = {};
+    txs.filter(tx => {
+      if (tx.messageType !== 'submit_prediction') return false;
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const rawMid = msg.marketId || msg.market_id || '';
+      let txMid = rawMid;
+      try { txMid = b2h(Uint8Array.from(atob(rawMid), c=>c.charCodeAt(0))); } catch {}
+      return txMid === mid;
+    }).forEach(tx => {
+      const msg = (tx.transaction && tx.transaction.msg) || {};
+      const outcome = msg.outcome === true || msg.outcome === 'true' || msg.outcome === 1;
+      if ((side==='yes') !== outcome) return;
+      const addr = tx.sender || '?';
+      const shares = Number(BigInt(msg.shares || msg.amount || 0)) / 1e6;
+      holders[addr] = (holders[addr] || 0) + shares;
+    });
+    const sorted = Object.entries(holders).sort((a,b) => b[1]-a[1]).slice(0,10);
+    if (!sorted.length) { el.innerHTML = '<div class="det-holders-empty">No holders yet</div>'; return; }
+    el.innerHTML = sorted.map(([addr,amt],i) => `
+      <div class="det-holder-row">
+        <span class="det-holder-rank">#${i+1}</span>
+        <div class="det-holder-avatar">${addr.slice(0,2).toUpperCase()}</div>
+        <span class="det-holder-addr">${addr.slice(0,8)}…${addr.slice(-4)}</span>
+        <span class="det-holder-amt ${side}-side">${amt.toFixed(2)} PRX</span>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = '<div class="det-holders-empty">No holders yet</div>'; }
+};
+
+window.srchCat = function(el) {
+  document.querySelectorAll('#srch-cats .cpick').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  runSearch();
+};
+
+window.runSearch = function() {
+  const q = (document.getElementById('srch-input')?.value || '').toLowerCase().trim();
+  const cat = document.querySelector('#srch-cats .cpick.active')?.getAttribute('data-cat') || 'all';
+  const el = document.getElementById('srch-results');
+  if (!el) return;
+  let results = _allMarkets || [];
+  if (q) results = results.filter(m => (m.question||'').toLowerCase().includes(q) || (m.marketId||'').toLowerCase().includes(q));
+  if (cat && cat !== 'all') results = results.filter(m => extractCat(m.rules||'') === cat);
+  if (!results.length) { el.innerHTML = '<div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:40px 0">No markets found</div>'; return; }
+  el.innerHTML = renderMarketCards(results);
+};
+
+// Live ticker
+window.updateTicker = function() {
+  const track = document.getElementById('tickerTrack');
+  if (!track) return;
+  try {
+    const txs = JSON.parse(localStorage.getItem('praxis_tx_cache') || '[]');
+    if (!txs.length) return;
+    const recent = txs.slice(-20).reverse();
+    const items = recent.map(tx => {
+      const type = tx.messageType || '';
+      const sender = (tx.sender||'?').slice(0,8)+'…';
+      const typeMap = {submit_prediction:'predicted',create_market:'created',claim_winnings:'claimed',propose_outcome:'proposed'};
+      const action = typeMap[type] || type;
+      const msg = (tx.transaction&&tx.transaction.msg)||{};
+      const outcome = msg.outcome===true||msg.outcome==='true'||msg.outcome===1;
+      const detail = type==='submit_prediction' ? (outcome?'<span class="t-yes">YES</span>':'<span class="t-no">NO</span>') : '';
+      return `<div class="ticker-item"><span class="ticker-dot"></span><span class="t-user">${sender}</span><span class="t-action">${action}</span>${detail}</div>`;
+    }).join('');
+    track.innerHTML = items + items; // duplicate for seamless loop
+  } catch(e) {}
+};
+setTimeout(updateTicker, 2000);
+setInterval(updateTicker, 30000);
