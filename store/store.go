@@ -473,8 +473,7 @@ func (s *Store) IncreaseVersion() { func() { s.version++; s.sc = nil }() }
 // number of the state. This is used to track the versioning of the state data.
 func (s *Store) Version() uint64 { return s.version }
 
-// SetSyncing tells the store whether the node is currently syncing, allowing it to
-// defer expensive maintenance operations (compaction) that cause write stalls at scale.
+// SetSyncing tells the store whether the node is currently syncing
 func (s *Store) SetSyncing(v bool) { s.syncing.Store(v) }
 
 // CompactAll runs compaction across all store prefixes including SMT commitment nodes
