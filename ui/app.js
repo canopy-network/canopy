@@ -124,10 +124,7 @@ async function buildSigned(msgType,typeUrl,inner,meta){
   const p={txTime,fee:meta.fee||10000,height:meta.height||currentHeight,memo:'',netId:currentNetworkID,chainId:currentChainID};
   const sb=encSignBytes(msgType,typeUrl,inner,p);
   const sig=await blsSign(sb);
-  return {
-    type: msgType,
-    msgTypeUrl: typeUrl,
-    msgBytes: b2h(inner),
+  const base={
     signature: { publicKey: b2h(signerPubKey), signature: b2h(sig) },
     createdHeight: p.height,
     time: Number(txTime),
@@ -136,6 +133,19 @@ async function buildSigned(msgType,typeUrl,inner,meta){
     networkID: currentNetworkID,
     chainID: currentChainID,
   };
+  if(msgType==='send'){
+    const bytes=inner instanceof Uint8Array?inner:h2b(b2h(inner));
+    let pos=0,fromB=null,toB=null,amt=0n;
+    while(pos<bytes.length){
+      const {v:tagV,p:p1}=decVarint(bytes,pos);pos=p1;
+      const fn=Number(tagV>>3n),wt=Number(tagV&7n);
+      if(wt===2){const {v:ln,p:p2}=decVarint(bytes,pos);pos=p2;const val=bytes.slice(pos,pos+Number(ln));pos+=Number(ln);if(fn===1)fromB=val;else if(fn===2)toB=val;}
+      else if(wt===0){const {v,p:p2}=decVarint(bytes,pos);pos=p2;if(fn===3)amt=v;}
+    }
+    const toHex=b=>Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');
+    return {...base,type:'send',msg:{fromAddress:toHex(fromB),toAddress:toHex(toB),amount:Number(amt)}};
+  }
+  return {...base,type:msgType,msgTypeUrl:typeUrl,msgBytes:b2h(inner)};
 }
 
 function buildUnsigned(msgType,typeUrl,inner,meta){
