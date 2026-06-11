@@ -25,15 +25,24 @@ type PluginCompatibleFSM interface {
 	StateWrite(request *PluginStateWriteRequest) (response PluginStateWriteResponse, err ErrorI)
 }
 
+// PluginQueryProvider: defines the 'expected' interface for serving detached, read-only state
+// queries from the plugin. Unlike PluginCompatibleFSM, these queries are not tied to an
+// in-flight tx/block lifecycle and operate against a historical read-only snapshot of state.
+type PluginQueryProvider interface {
+	// QueryState() executes a 'read request' against a read-only state snapshot at the given height (0 = latest committed)
+	QueryState(height uint64, request *PluginStateReadRequest) (response PluginStateReadResponse, err ErrorI)
+}
+
 // Plugin defines the 'VM-less' extension of the Finite State Machine
 type Plugin struct {
-	config      *PluginConfig                         // the plugin configuration
-	conn        net.Conn                              // the underlying unix sock file connection
-	pending     map[uint64]chan isPluginToFSM_Payload // the outstanding requests from the FSM
-	requestFSMs map[uint64]PluginCompatibleFSM        // maps request IDs to their FSM context for concurrent operations
-	l           sync.Mutex                            // thread safety
-	log         LoggerI                               // the logger associated with the plugin
-	timeout     time.Duration                         // plugin request timeout
+	config        *PluginConfig                         // the plugin configuration
+	conn          net.Conn                              // the underlying unix sock file connection
+	pending       map[uint64]chan isPluginToFSM_Payload // the outstanding requests from the FSM
+	requestFSMs   map[uint64]PluginCompatibleFSM        // maps request IDs to their FSM context for concurrent operations
+	queryProvider PluginQueryProvider                   // serves detached, read-only state queries from the plugin
+	l             sync.Mutex                            // thread safety
+	log           LoggerI                               // the logger associated with the plugin
+	timeout       time.Duration                         // plugin request timeout
 }
 
 // NewPlugin() creates and starts a plguin
@@ -58,6 +67,19 @@ func NewPlugin(conn net.Conn, log LoggerI, timeout time.Duration) (p *Plugin) {
 	log.Debugf("Started plugin listening service for connection: %s", conn.RemoteAddr())
 	// exit
 	return
+}
+
+// SetQueryProvider() registers the provider that serves detached, read-only state queries from the plugin
+func (p *Plugin) SetQueryProvider(provider PluginQueryProvider) {
+	// defensive nil check
+	if p == nil {
+		return
+	}
+	// thread safety
+	p.l.Lock()
+	defer p.l.Unlock()
+	// set the query provider
+	p.queryProvider = provider
 }
 
 // Genesis() is the fsm calling the genesis function of the plugin
@@ -252,6 +274,9 @@ func (p *Plugin) ListenForInbound() {
 				case *PluginToFSM_StateWrite:
 					p.log.Debugf("ListenForInbound() routing state write request ID %d", msg.Id)
 					return p.handleStateWriteRequest(msg)
+				case *PluginToFSM_Query:
+					p.log.Debugf("ListenForInbound() routing detached query request ID %d", msg.Id)
+					return p.handleQueryRequest(msg)
 				default:
 					p.log.Debugf("ListenForInbound() unknown message type: %T for message ID %d", payload, msg.Id)
 					return ErrInvalidPluginToFSMMessage(reflect.TypeOf(payload))
@@ -348,6 +373,57 @@ func (p *Plugin) handleStateReadRequest(msg *PluginToFSM) ErrorI {
 		p.log.Debugf("handleStateReadRequest() error sending response: %v", sendErr)
 	} else {
 		p.log.Debug("handleStateReadRequest() response sent successfully")
+	}
+	return sendErr
+}
+
+// handleQueryRequest() handles an inbound detached, read-only state query from the plugin.
+// Unlike handleStateReadRequest(), it does NOT look up an in-flight FSM context (requestFSMs);
+// instead it serves the query against a historical read-only snapshot via the query provider.
+func (p *Plugin) handleQueryRequest(msg *PluginToFSM) ErrorI {
+	// debug log query request start
+	p.log.Debugf("handleQueryRequest() processing message ID %d", msg.Id)
+	// get the query request
+	request := msg.GetQuery()
+	p.log.Debugf("handleQueryRequest() query request: %+v", request)
+	// defensive nil check on the request
+	if request == nil {
+		p.log.Debugf("handleQueryRequest() nil query request for message ID %d", msg.Id)
+		return ErrInvalidPluginToFSMMessage(reflect.TypeOf(msg.Payload))
+	}
+	// get the query provider under lock
+	p.l.Lock()
+	provider := p.queryProvider
+	p.l.Unlock()
+	// build the response container
+	response := new(PluginQueryResponse)
+	// check if a query provider is registered
+	if provider == nil {
+		p.log.Debugf("handleQueryRequest() no query provider registered for message ID %d", msg.Id)
+		response.Error = NewPluginError(ErrNoPluginQueryProvider())
+	} else {
+		// execute the detached read-only query
+		read, err := provider.QueryState(request.GetHeight(), request.GetRead())
+		if err != nil {
+			p.log.Debugf("handleQueryRequest() query provider error: %v", err)
+			response.Error = NewPluginError(err)
+		} else {
+			p.log.Debugf("handleQueryRequest() query provider success: %+v", read)
+			response.Read = &read
+		}
+	}
+	// send response back to the plugin
+	p.log.Debugf("handleQueryRequest() sending response back for message ID %d", msg.Id)
+	sendErr := p.sendProtoMsg(&FSMToPlugin{
+		Id: msg.Id,
+		Payload: &FSMToPlugin_Query{
+			Query: response,
+		},
+	})
+	if sendErr != nil {
+		p.log.Debugf("handleQueryRequest() error sending response: %v", sendErr)
+	} else {
+		p.log.Debug("handleQueryRequest() response sent successfully")
 	}
 	return sendErr
 }

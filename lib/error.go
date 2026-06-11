@@ -279,6 +279,7 @@ const (
 	CodeUnexpectedPluginToFSM     ErrorCode = 108
 	CodePluginTimeout             ErrorCode = 109
 	CodeInvalidPluginSchema       ErrorCode = 110
+	CodeNoPluginQueryProvider     ErrorCode = 111
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -903,4 +904,8 @@ func ErrPluginTimeout() ErrorI {
 
 func ErrInvalidFSMToPluginMessage(t reflect.Type) ErrorI {
 	return NewError(CodeInvalidFSMToPluginmessage, StateMachineModule, fmt.Sprintf("unrecognized fsm_to_plugin message: %v", t))
+}
+
+func ErrNoPluginQueryProvider() ErrorI {
+	return NewError(CodeNoPluginQueryProvider, StateMachineModule, "no plugin query provider is registered")
 }
