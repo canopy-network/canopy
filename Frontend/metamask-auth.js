@@ -171,7 +171,7 @@ function _applyDerivedKey() {
   if (!mmDerivedPriv || !mmDerivedPub) return;
   // Inject into app.js signer state
   signerPrivKey = mmDerivedPriv;
-  signerPubKey  = b2h(mmDerivedPub);
+  signerPubKey  = mmDerivedPub;
   signerAddress = mmDerivedAddr;
 
   // Update signer UI
@@ -183,7 +183,7 @@ function _applyDerivedKey() {
   const ka = document.getElementById('keyAddr');
   if (ka) ka.textContent = mmDerivedAddr;
   const kp = document.getElementById('keyPub');
-  if (kp) kp.textContent = signerPubKey;
+  if (kp) kp.textContent = Array.from(mmDerivedPub).map(b=>b.toString(16).padStart(2,"0")).join("");
   const ki = document.getElementById('keyInfo');
   if (ki) ki.style.display = '';
 
