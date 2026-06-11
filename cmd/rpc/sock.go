@@ -443,8 +443,7 @@ func (r *RCSubscription) Listen() {
 		// update the root chain info
 		r.Info = newInfo
 		// skip the callback during syncing: the BFT is paused so ResetBFT messages are
-		// unnecessary, and UpdateP2PMustConnect sends to a channel with buffer=1 that can
-		// block while holding the controller lock, starving the sync loop
+		// unnecessary
 		if !r.manager.controller.Syncing().Load() {
 			r.manager.afterRCUpdate(newInfo)
 		}
