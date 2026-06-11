@@ -62,6 +62,7 @@ type VersionedStore struct {
 	db           pebble.Reader
 	batch        *pebble.Batch
 	closed       bool
+	parallel     bool // when true, the store shares (does not own) the underlying reader and must never be closed
 	version      uint64
 	decodeBuffer [][]byte
 }
@@ -84,6 +85,7 @@ func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) *V
 func (vs *VersionedStore) NewParallelReader() *VersionedStore {
 	return &VersionedStore{
 		db:           vs.db,
+		parallel:     true,
 		version:      vs.version,
 		decodeBuffer: make([][]byte, 0, 5),
 	}
@@ -183,6 +185,12 @@ func (vs *VersionedStore) Commit() (e lib.ErrorI) {
 
 // Close closes the store and releases resources
 func (vs *VersionedStore) Close() lib.ErrorI {
+	// a parallel reader shares (does not own) the underlying reader; closing it would
+	// release a snapshot still in use by the owner. This is always a programming error
+	// so panic to surface it rather than silently corrupting concurrent readers.
+	if vs.parallel {
+		panic("Close() called on a parallel VersionedStore reader: parallel readers do not own the underlying reader and must never be closed")
+	}
 	// prevent panic due to double close
 	if vs.closed {
 		return nil

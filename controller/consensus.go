@@ -765,7 +765,11 @@ func (c *Controller) finishSyncing() {
 	// (including SMT/indexer which are never compacted during normal operation)
 	if st, ok := c.FSM.Store().(*store.Store); ok {
 		st.SetSyncing(false)
-		go st.CompactAll()
+		go func() {
+			if err := st.Compact(st.Version(), true, true); err != nil {
+				c.log.Errorf("post-sync compaction failed: %s", err)
+			}
+		}()
 	}
 	// enable listening for a block
 	go c.ListenForBlock()
