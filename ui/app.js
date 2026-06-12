@@ -663,11 +663,14 @@ window.showDetail = function(marketId) {
 
   const yesBtn = document.getElementById('det-bet-yes');
   const noBtn = document.getElementById('det-bet-no');
+  const placeBetBtn = document.getElementById('det-place-bet');
   if (open) {
     yesBtn.removeAttribute('disabled'); yesBtn.setAttribute('onclick', 'fillP(' + JSON.stringify(mid) + ', true)');
     noBtn.removeAttribute('disabled');  noBtn.setAttribute('onclick', 'fillP(' + JSON.stringify(mid) + ', false)');
+    if (placeBetBtn) { placeBetBtn.style.display=''; placeBetBtn.dataset.mid=mid; placeBetBtn.setAttribute('onclick', 'fillP(' + JSON.stringify(mid) + ', true)'); }
   } else {
     yesBtn.setAttribute('disabled',''); noBtn.setAttribute('disabled','');
+    if (placeBetBtn) placeBetBtn.style.display='none';
   }
 
   const proposeBtn = document.getElementById('det-propose-btn');
@@ -1508,6 +1511,14 @@ injectKeyboardCopyBtns();
 const _niHost=document.getElementById('ni_host');if(_niHost)_niHost.value=getRPCHost();
 buildMobNav();
 checkRPC();
+// Place Bet button delegation
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('#det-place-bet');
+  if (!btn) return;
+  const mid = btn.getAttribute('data-mid');
+  if (mid) fillP(mid, true);
+});
+
 setInterval(checkRPC,12000);
 
 // ═══════════════════════════════════════════

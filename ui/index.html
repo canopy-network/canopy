@@ -1444,73 +1444,15 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <!-- ════ RIGHT PANEL ════ -->
     <div class="det-right" id="det-right-panel">
 
-      <!-- BUY / ACTION CARD -->
-      <div class="det-action-card">
-
-        <!-- Buy / Sell tabs (Opinion style) -->
-        <div class="det-action-tabs">
-          <button class="det-action-tab active" id="dact-buy"  onclick="switchActionTab('buy')">Buy</button>
-          <button class="det-action-tab"        id="dact-sell" onclick="switchActionTab('sell')">Sell</button>
-        </div>
-
-        <!-- Outcome selector: YES / NO pills -->
-        <div class="det-outcome-row" id="det-outcome-btns">
-          <button class="det-out-btn det-out-yes active" id="dout-yes" onclick="selectDetailOut(true)">
-            YES &nbsp;<span id="dout-yes-pct" class="det-out-pct">—</span>
-          </button>
-          <button class="det-out-btn det-out-no"  id="dout-no"  onclick="selectDetailOut(false)">
-            NO &nbsp;<span id="dout-no-pct" class="det-out-pct">—</span>
-          </button>
-        </div>
-
-        <!-- Amount input -->
-        <div class="det-amount-block">
-          <div class="det-amount-lbl">Amount <span style="color:var(--text3)">(PRX)</span></div>
-          <div class="det-amount-row">
-            <button class="det-amt-step" onclick="detAmtStep(-100)">−</button>
-            <input class="det-amt-input" id="det-amt" type="number" min="1" value="100" oninput="updateDetTrade()"/>
-            <button class="det-amt-step" onclick="detAmtStep(100)">+</button>
-          </div>
-          <div class="det-amt-presets">
-            <button onclick="setDetAmt(100)">100</button>
-            <button onclick="setDetAmt(500)">500</button>
-            <button onclick="setDetAmt(1000)">1K</button>
-            <button onclick="setDetAmt(5000)">5K</button>
-          </div>
-        </div>
-
-        <!-- Trade summary -->
-        <div class="det-trade-summary">
-          <div class="det-ts-row">
-            <span class="det-ts-lbl">Est. Shares</span>
-            <span class="det-ts-val" id="det-ts-shares">—</span>
-          </div>
-          <div class="det-ts-row">
-            <span class="det-ts-lbl">Avg Price</span>
-            <span class="det-ts-val" id="det-ts-price">—</span>
-          </div>
-          <div class="det-ts-row det-ts-total">
-            <span class="det-ts-lbl">To Win</span>
-            <span class="det-ts-val g" id="det-ts-win">$0.00 (+0%)</span>
-          </div>
-        </div>
-
-        <!-- Submit button -->
-        <button class="det-submit-btn" id="det-bet-yes" onclick="">
-          Buy YES — <span id="det-submit-lbl">100 PRX</span>
-        </button>
-
-        <!-- Secondary actions -->
-        <div class="det-secondary-actions">
-          <button class="btn bamb bsm" id="det-forfeit-btn"  style="display:none;width:100%" onclick="">↩ Forfeit Position</button>
-          <button class="btn bsec bsm" id="det-propose-btn"  style="display:none;width:100%" onclick="">⚖ Propose Outcome</button>
-          <button class="btn bp   bsm" id="det-claim-btn"    style="display:none;width:100%" onclick="">◎ Claim Winnings</button>
-          <button class="btn bsec bsm" id="det-reclaim-btn"  style="display:none;width:100%" onclick="">↩ Reclaim Stake</button>
-          <!-- hidden NO bet button (wired by JS) -->
-          <button class="det-submit-btn det-submit-no" id="det-bet-no" onclick="" style="display:none">
-            Buy NO — <span id="det-submit-lbl-no">100 PRX</span>
-          </button>
-        </div>
+      <!-- ACTION BUTTONS -->
+      <div class="det-action-card" style="padding:12px;display:flex;flex-direction:column;gap:8px">
+        <button class="det-submit-btn" id="det-place-bet" style="width:100%" onclick="fillP(this.getAttribute('data-mid')||window._detailMarketId, true)">⚡ Place Bet</button>
+        <button class="det-submit-btn" id="det-bet-yes" onclick="" style="display:none"></button>
+        <button class="det-submit-btn det-submit-no" id="det-bet-no" onclick="" style="display:none"></button>
+        <button class="btn bamb bsm" id="det-forfeit-btn"  style="display:none;width:100%" onclick="">↩ Forfeit Position</button>
+        <button class="btn bsec bsm" id="det-propose-btn"  style="display:none;width:100%" onclick="">⚖ Propose Outcome</button>
+        <button class="btn bp   bsm" id="det-claim-btn"    style="display:none;width:100%" onclick="">◎ Claim Winnings</button>
+        <button class="btn bsec bsm" id="det-reclaim-btn"  style="display:none;width:100%" onclick="">↩ Reclaim Stake</button>
       </div>
 
       <!-- TOP HOLDERS SIDEBAR CARD -->
