@@ -766,7 +766,7 @@ func (c *Controller) finishSyncing() {
 	if st, ok := c.FSM.Store().(*store.Store); ok {
 		st.SetSyncing(false)
 		go func() {
-			if err := st.Compact(st.Version(), true, true); err != nil {
+			if err := st.Compact(st.Version(), true, true, true, true); err != nil {
 				c.log.Errorf("post-sync compaction failed: %s", err)
 			}
 		}()

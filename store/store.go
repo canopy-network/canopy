@@ -634,7 +634,7 @@ func (s *Store) MaybeCompact() {
 			// perform HSS compaction every 4th compaction
 			hssCompaction := (version/compactionInterval)%4 == 0
 			// trigger compaction of store keys
-			if err := s.Compact(version, hssCompaction, false); err != nil {
+			if err := s.Compact(version, hssCompaction, false, false, false); err != nil {
 				s.log.Errorf("key compaction failed: %s", err)
 			}
 		}()
@@ -723,59 +723,60 @@ func (s *Store) MaybeBackup() {
 	}()
 }
 
-// Compact runs Pebble range compaction over the store prefixes. It always compacts the latest
-// state prefix, optionally the historic state prefix when 'compactHSS' is set, and—when 'synced'
-// is set (post-sync consolidation)—the state commitment, commit id, and indexer prefixes which
-// are not touched by the regular compaction cycle.
-func (s *Store) Compact(version uint64, compactHSS, synced bool) lib.ErrorI {
+// Compact runs Pebble range compaction over the latest state prefix plus any additional
+// prefixes flagged by the caller.
+func (s *Store) Compact(version uint64, compactHSS, compactStateCommitment, compactStateCommitID, compactIndexer bool) lib.ErrorI {
 	// compactions are not allowed to run concurrently to not intertwine with the keys
 	if !s.compaction.CompareAndSwap(false, true) {
 		s.log.Debugf("key compaction skipped [%d]: already in progress", version)
 		return nil
 	}
 	defer s.compaction.Store(false)
-	// track current time and version
 	now := time.Now()
 	s.log.Debugf("key compaction started at height %d", version)
-	// create a timeout to limit the duration of the compaction process; a full post-sync
-	// compaction touches every prefix so it is given a larger budget
-	// TODO: timeouts were chosen arbitrarily, should update the numbers once multiple tests are run
+	// budget more time the more prefixes are compacted
+	// TODO: per-prefix budget was chosen arbitrarily, update once multiple tests are run
 	timeout := 3 * time.Minute
-	if synced {
-		timeout = 10 * time.Minute
+	for _, enabled := range []bool{compactHSS, compactStateCommitment, compactStateCommitID, compactIndexer} {
+		if enabled {
+			timeout += 3 * time.Minute
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	// first compaction: latest state keys
+	// latest state keys are always compacted
 	if err := s.compactPrefixRange(ctx, latestStatePrefix, true); err != nil {
 		return err
 	}
-	// update LSS compaction metrics
 	lssDuration := time.Since(now)
 	s.metrics.UpdateStoreJobMetrics(lssDuration, 0, 0)
 	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssDuration)
-	// second compaction: historic state keys
+	// historic state keys
 	if compactHSS {
 		hssTime := time.Now()
 		if err := s.compactPrefixRange(ctx, historicStatePrefix, false); err != nil {
 			return err
 		}
 		hssDuration := time.Since(hssTime)
-		// log results
 		s.log.Debugf("key compaction finished [HSS] [%d] time: %s, total time: %s", version,
 			hssDuration, time.Since(now))
-		// update HSS compaction metrics
 		s.metrics.UpdateStoreJobMetrics(0, hssDuration, 0)
 	}
-	// post-sync compaction: consolidate the prefixes excluded from the regular compaction cycle
-	// (SMT commitment nodes, commit ids, and indexer entries)
-	if synced {
-		for _, prefix := range [][]byte{stateCommitmentPrefix, stateCommitIDPrefix, indexerPrefix} {
-			if err := s.compactPrefixRange(ctx, prefix, false); err != nil {
-				return err
-			}
+	// remaining prefixes outside the regular LSS/HSS cycle
+	if compactStateCommitment {
+		if err := s.compactPrefixRange(ctx, stateCommitmentPrefix, false); err != nil {
+			return err
 		}
-		s.log.Infof("full compaction finished at height %d in %s", version, time.Since(now))
+	}
+	if compactStateCommitID {
+		if err := s.compactPrefixRange(ctx, stateCommitIDPrefix, false); err != nil {
+			return err
+		}
+	}
+	if compactIndexer {
+		if err := s.compactPrefixRange(ctx, indexerPrefix, false); err != nil {
+			return err
+		}
 	}
 	return nil
 }

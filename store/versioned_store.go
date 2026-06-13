@@ -185,11 +185,9 @@ func (vs *VersionedStore) Commit() (e lib.ErrorI) {
 
 // Close closes the store and releases resources
 func (vs *VersionedStore) Close() lib.ErrorI {
-	// a parallel reader shares (does not own) the underlying reader; closing it would
-	// release a snapshot still in use by the owner. This is always a programming error
-	// so panic to surface it rather than silently corrupting concurrent readers.
+	// a parallel reader does not own the underlying reader and must never be closed
 	if vs.parallel {
-		panic("Close() called on a parallel VersionedStore reader: parallel readers do not own the underlying reader and must never be closed")
+		panic("Close() called on a parallel VersionedStore reader")
 	}
 	// prevent panic due to double close
 	if vs.closed {
