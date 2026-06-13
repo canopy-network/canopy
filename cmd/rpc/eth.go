@@ -32,18 +32,42 @@ import (
 
 // EthereumHandler is a helper function that abstracts common workflows of ethereum calls using the JSON rpc 2.0 specification
 func (s *Server) EthereumHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var err error
-	// create a new ethereumRequest instance to populate with request data
-	ptr := new(ethRPCRequest)
-	// attempt to unmarshal the request body into the keystoreRequest
-	if ok := unmarshal(w, r, ptr); !ok {
+	var raw json.RawMessage
+	if ok := unmarshal(w, r, &raw); !ok {
 		return
 	}
-	var args []any
-	// convert the params to a list
-	if err = json.Unmarshal(ptr.Params, &args); err != nil {
+	if strings.HasPrefix(strings.TrimSpace(string(raw)), "[") {
+		var requests []ethRPCRequest
+		if err := json.Unmarshal(raw, &requests); err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		responses := make([]ethRPCResponse, 0, len(requests))
+		for i := range requests {
+			responses = append(responses, s.handleEthereumRPCRequest(&requests[i]))
+		}
+		write(w, responses, http.StatusOK)
+		return
+	}
+	ptr := new(ethRPCRequest)
+	if err := json.Unmarshal(raw, ptr); err != nil {
 		write(w, err, http.StatusBadRequest)
 		return
+	}
+	write(w, s.handleEthereumRPCRequest(ptr), http.StatusOK)
+}
+
+func (s *Server) handleEthereumRPCRequest(ptr *ethRPCRequest) ethRPCResponse {
+	var err error
+	var args []any
+	if len(ptr.Params) != 0 && string(ptr.Params) != "null" {
+		if err = json.Unmarshal(ptr.Params, &args); err != nil {
+			return ethRPCResponse{
+				ID:      ptr.ID,
+				JSONRPC: "2.0",
+				Error:   &ethereumRPCError{Code: -32603, Message: err.Error()},
+			}
+		}
 	}
 	var ethResponse any
 	switch ptr.Method {
@@ -125,13 +149,12 @@ func (s *Server) EthereumHandler(w http.ResponseWriter, r *http.Request, _ httpr
 		// purposefully don't support any method that requires private key unlocks
 		err = ethMethodNotFound(ptr.Method)
 	}
-	// write the final result
-	write(w, ethRPCResponse{
+	return ethRPCResponse{
 		ID:      ptr.ID,
 		JSONRPC: "2.0",
 		Result:  ethResponse,
 		Error:   ethereumRPCErrorFrom(err),
-	}, http.StatusOK)
+	}
 }
 
 // startEthRPCService() runs the needed routines for the eth rpc wrapper
@@ -853,6 +876,7 @@ func (s *Server) blockToEIP1559Block(block *lib.BlockResult, fullTx bool) (ethRP
 	// create the EIP-1559 block
 	return ethRPCBlock{
 		Number:                hexutil.Big(*big.NewInt(int64(block.BlockHeader.Height))),
+		Difficulty:            hexutil.Big(*big.NewInt(0)),
 		Hash:                  common.BytesToHash(block.BlockHeader.Hash),
 		ParentHash:            common.BytesToHash(block.BlockHeader.LastBlockHash),
 		Sha3Uncles:            types.EmptyUncleHash,
@@ -1175,6 +1199,7 @@ type ethereumRPCError struct {
 // ethRPCBlock matches the ethereum block header (which isn't exposed)
 type ethRPCBlock struct {
 	Number                hexutil.Big    `json:"number"`
+	Difficulty            hexutil.Big    `json:"difficulty"`
 	Hash                  common.Hash    `json:"hash"`
 	ParentHash            common.Hash    `json:"parentHash"`
 	Sha3Uncles            common.Hash    `json:"sha3Uncles"`
@@ -1289,7 +1314,7 @@ func ethNullResult() json.RawMessage { return json.RawMessage("null") }
 
 // isNilBlock() reports whether the fetched block result is usable.
 func isNilBlock(block *lib.BlockResult) bool {
-	return block == nil || block.BlockHeader == nil
+	return block == nil || block.BlockHeader == nil || len(block.BlockHeader.Hash) == 0
 }
 
 // isNotFoundErr() identifies backend lookup misses that should serialize as null/empty results.
@@ -1646,8 +1671,8 @@ func (s *Server) latestMinedNonceForAddress(st *store.Store, address crypto.Addr
 		return 0, ok, err
 	}
 	nextNonce := nonce + 1
-	if minNonce := s.minimumAcceptedEthereumNonce(); nextNonce < minNonce {
-		nextNonce = minNonce
+	if currentNonce := s.currentEthBlockNumber(); nextNonce < currentNonce {
+		nextNonce = currentNonce
 	}
 	return nextNonce, true, nil
 }
@@ -1801,7 +1826,7 @@ func filterParamsFromArgs(args []any) (params newFilterParams, err error) {
 			return newFilterParams{}, e
 		}
 		if err = json.Unmarshal(bz, &params); err != nil {
-			return newFilterParams{}, fmt.Errorf("failed to unmarshal filter params: %w", err)
+			return newFilterParams{}, ethInvalidParams(fmt.Sprintf("failed to unmarshal filter params: %v", err))
 		}
 	}
 	if params.BlockHash != "" {
