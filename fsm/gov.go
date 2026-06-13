@@ -574,7 +574,7 @@ func (s *StateMachine) LoadRootChainId(height uint64) (uint64, lib.ErrorI) {
 		return 0, err
 	}
 	// memory cleanup
-	if height != s.Height() {
+	if historicalFSM != s {
 		defer historicalFSM.Discard()
 	}
 	// return the root chain id at that height
