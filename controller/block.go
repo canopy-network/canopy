@@ -500,10 +500,11 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool) (b *li
 		c.debugDumpHeaderDiff(candidate, compare)
 		return nil, lib.ErrUnequalBlockHash()
 	}
-	// validate VDF if committing randomly since this randomness is pseudo-non-deterministic (among nodes)
-	if commit && compare.Height > 1 && candidate.Vdf != nil {
-		// this design has similar security guarantees but lowers the computational requirements at a per-node basis
-		if rand.Intn(100) == 0 {
+	// Replicas must always validate proposer-supplied VDFs during normal consensus.
+	// During fast sync, VDFs are treated like advisory historical metadata and are
+	// sampled probabilistically to preserve throughput.
+	if compare.Height > 1 && candidate.Vdf != nil {
+		if !c.Syncing().Load() || (commit && rand.Intn(100) == 0) {
 			// validate the VDF included in the block
 			if !crypto.VerifyVDF(candidate.LastBlockHash, candidate.Vdf.Output, candidate.Vdf.Proof, int(candidate.Vdf.Iterations)) {
 				// exit with vdf error
@@ -530,6 +531,10 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 	}
 	// if syncing the blockchain
 	if syncing {
+		// Fast sync intentionally trades per-block historical QC verification for throughput.
+		// The security model relies on checkpoint heights as the long-range-attack anchor,
+		// so intermediate blocks may be replayed for state continuity and only checkpoint
+		// heights are required to re-establish historical consistency during catch-up.
 		// use checkpoints to protect against long-range attacks
 		if qc.Header.Height%CheckpointFrequency == 0 {
 			// attempt to load the checkpoint from the file
@@ -549,7 +554,8 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 				return nil, fsm.ErrInvalidCheckpoint()
 			}
 		}
-	} else {
+	}
+	if !syncing || qc.Header.Height%CheckpointFrequency == 0 {
 		// load the committee from the root chain using the root height embedded in the certificate message
 		v, err := c.Consensus.LoadCommittee(c.LoadRootChainId(qc.Header.Height), qc.Header.RootHeight)
 		if err != nil {
@@ -567,8 +573,10 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 			// exit with error
 			return nil, lib.ErrNoMaj23()
 		}
-		// update the non signer percent for the validators
-		c.Metrics.UpdateNonSignerPercent(qc.Signature, v)
+		if !syncing {
+			// update the non signer percent for the validators
+			c.Metrics.UpdateNonSignerPercent(qc.Signature, v)
+		}
 	}
 	// ensure the proposal inside the quorum certificate is valid at a stateless level
 	block, err := qc.CheckProposalBasic(c.FSM.Height(), c.Config.NetworkID, c.Config.ChainId)

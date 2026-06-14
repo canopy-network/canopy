@@ -32,6 +32,7 @@ type Plugin struct {
 	pending     map[uint64]chan isPluginToFSM_Payload // the outstanding requests from the FSM
 	requestFSMs map[uint64]PluginCompatibleFSM        // maps request IDs to their FSM context for concurrent operations
 	l           sync.Mutex                            // thread safety
+	writeL      sync.Mutex                            // serializes outbound writes on the shared connection
 	log         LoggerI                               // the logger associated with the plugin
 	timeout     time.Duration                         // plugin request timeout
 }
@@ -566,6 +567,8 @@ func (p *Plugin) sendLengthPrefixed(bz []byte) ErrorI {
 	// write the message (length prefixed)
 	totalBytes := append(lengthPrefix, bz...)
 	p.log.Debugf("sendLengthPrefixed() writing total %d bytes (4 prefix + %d data)", len(totalBytes), len(bz))
+	p.writeL.Lock()
+	defer p.writeL.Unlock()
 	if _, er := p.conn.Write(totalBytes); er != nil {
 		p.log.Debugf("sendLengthPrefixed() write error: %v", er)
 		return ErrFailedPluginWrite(er)

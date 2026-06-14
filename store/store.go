@@ -249,29 +249,34 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
-	// update the version (height) number
-	s.version++
+	nextVersion := s.version + 1
 	// set the new CommitID (to the Transaction not the actual DB)
-	if err = s.setCommitID(s.version, root); err != nil {
+	if err = s.setCommitID(nextVersion, root); err != nil {
+		s.Reset()
 		return nil, err
 	}
 	// collect LSS tombstones before Flush() clears the txn operations
 	lssDeleteKeys := s.collectLssDeleteKeys()
 	// commit the in-memory txn to the pebbleDB batch
 	if e := s.Flush(); e != nil {
+		s.Reset()
 		return nil, e
 	}
 	if err = s.purgeLssTombstones(lssDeleteKeys); err != nil {
+		s.Reset()
 		return nil, err
 	}
 	// extract the internal metrics from the pebble batch
 	size, count := len(s.writer.Repr()), s.writer.Count()
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
 	if err := s.db.Apply(s.writer, pebble.NoSync); err != nil {
-		return nil, ErrCommitDB(err)
+		commitErr := ErrCommitDB(err)
+		s.Reset()
+		return nil, commitErr
 	}
 	// update the metrics once complete
 	s.metrics.UpdateStoreMetrics(int64(size), int64(count), time.Time{}, startTime)
+	s.version = nextVersion
 	// reset the writer for the next height
 	s.Reset()
 	// compact if necessary

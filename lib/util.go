@@ -500,7 +500,7 @@ func SaveJSONToFile(j any, dataDirPath, filePath string) (err ErrorI) {
 		return
 	}
 	// attempt to write the json bytes to a json file at the path
-	if e := os.WriteFile(filepath.Join(dataDirPath, filePath), jsonBytes, os.ModePerm); e != nil {
+	if e := os.WriteFile(filepath.Join(dataDirPath, filePath), jsonBytes, 0600); e != nil {
 		// exit with error
 		return ErrWriteFile(e)
 	}

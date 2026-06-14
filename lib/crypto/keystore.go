@@ -215,7 +215,7 @@ func (ks *Keystore) SaveToFile(dataDirPath string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dataDirPath, KeyStoreName), bz, os.ModePerm)
+	return os.WriteFile(filepath.Join(dataDirPath, KeyStoreName), bz, 0600)
 }
 
 // EncryptedPrivateKey represents an encrypted form of a private key, including the public key,
