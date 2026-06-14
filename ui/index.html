@@ -1015,8 +1015,8 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   .mgrid-2col { grid-template-columns: 1fr; }
 }
 
-/* ══ ENHANCED MCARD (Opinion style) ══ */
-.mcard-v2 {
+/* ══ PRAXIS CARD ══ */
+.pcard {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r);
@@ -1025,31 +1025,117 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
   transition: border-color .2s, box-shadow .2s, transform .15s;
   position: relative;
 }
-.mcard-v2:hover {
+.pcard:hover {
   border-color: rgba(0,232,122,.35);
-  box-shadow: 0 6px 24px rgba(0,0,0,.5), 0 0 0 1px rgba(0,232,122,.08);
+  box-shadow: 0 6px 28px rgba(0,0,0,.6), 0 0 0 1px rgba(0,232,122,.1);
   transform: translateY(-2px);
 }
-/* banner image */
-.mcard-v2-banner {
-  width: 100%; height: 100px; object-fit: cover;
-  display: block; border-bottom: 1px solid var(--border);
+/* banner — blurred atmospheric strip */
+.pcard-banner-wrap {
+  position: relative; height: 64px; overflow: hidden;
+  background: var(--bg2);
 }
-/* top body */
-.mcard-v2-body { padding: 12px 13px 10px; flex: 1; }
-.mcard-v2-cat {
+.pcard-banner-bg {
+  position: absolute; inset: -6px;
+  width: calc(100% + 12px); height: calc(100% + 12px);
+  object-fit: cover; filter: blur(8px) brightness(.35) saturate(.5);
+}
+.pcard-banner-fg {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.pcard-banner-fg img {
+  height: 40px; width: 40px; object-fit: cover;
+  border-radius: 5px; border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 2px 10px rgba(0,0,0,.6);
+}
+.pcard-banner-empty {
+  position: absolute; inset: 0;
+  background: linear-gradient(160deg, rgba(0,232,122,.04) 0%, var(--bg2) 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+.pcard-banner-empty::after {
+  content: '◈';
+  font-size: 22px; color: var(--border2);
+  font-family: var(--mono);
+}
+/* body */
+.pcard-body { padding: 10px 12px 8px; flex: 1; }
+.pcard-cat {
   font-family: var(--mono); font-size: 8px; letter-spacing: 1.5px;
-  text-transform: uppercase; color: var(--text3); margin-bottom: 7px;
+  text-transform: uppercase; color: var(--text3); margin-bottom: 5px;
   display: flex; align-items: center; gap: 6px;
 }
-.mcard-v2-q {
+.pcard-q {
   font-family: var(--sans); font-size: 12px; font-weight: 600;
-  line-height: 1.4; color: var(--text); margin-bottom: 10px;
+  line-height: 1.35; color: var(--text); margin-bottom: 9px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-/* outcomes row */
-.mcard-v2-outcomes {
-  display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+/* trading terminal YES/NO */
+.pcard-odds {
+  display: flex; align-items: stretch; gap: 0;
+  margin-bottom: 8px; border-radius: 4px; overflow: hidden;
+  border: 1px solid var(--border);
 }
+.pcard-odds-yes {
+  flex: 1; padding: 6px 8px;
+  background: rgba(0,232,122,.07);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.pcard-odds-no {
+  flex: 1; padding: 6px 8px;
+  background: rgba(255,64,96,.07);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.pcard-odds-pct {
+  font-family: var(--mono); font-size: 14px; font-weight: 700; line-height: 1;
+  letter-spacing: -.5px;
+}
+.pcard-odds-yes .pcard-odds-pct { color: var(--green); }
+.pcard-odds-no  .pcard-odds-pct { color: var(--red); }
+.pcard-odds-lbl {
+  font-family: var(--mono); font-size: 8px; letter-spacing: 1.5px;
+  color: var(--text3); text-transform: uppercase; font-weight: 600;
+  margin-top: 1px;
+}
+.pcard-odds-unit {
+  font-size: 9px; opacity: .5; font-weight: 400; margin-left: 1px;
+}
+/* probability bar */
+.pcard-bar {
+  height: 2px; background: var(--border); border-radius: 1px;
+  overflow: hidden; margin-bottom: 0;
+}
+.pcard-bar-yes {
+  height: 100%; background: var(--green);
+  border-radius: 1px; transition: width .4s ease;
+}
+/* meta footer */
+.pcard-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 12px; border-top: 1px solid var(--border);
+  background: var(--bg2);
+}
+.pcard-vol {
+  font-family: var(--mono); font-size: 9px; color: var(--text3);
+}
+.pcard-vol b { color: var(--cyan); font-size: 10px; }
+.pcard-exp { font-family: var(--mono); font-size: 9px; color: var(--text3); }
+.pcard-bookmark {
+  background: none; border: none; cursor: pointer;
+  font-size: 13px; color: var(--text3); padding: 2px;
+  transition: color .15s;
+}
+.pcard-bookmark:hover { color: var(--amber); }
+.pcard-bookmark.saved { color: var(--amber); }
+/* featured card */
+.pcard-featured { grid-column: 1 / -1; }
+.pcard-featured .pcard-banner-wrap { height: 100px; }
+.pcard-featured .pcard-q { font-size: 14px; -webkit-line-clamp: 3; }
+.pcard-featured .pcard-odds-pct { font-size: 18px; }
+/* outcome-pill legacy compat */
 .outcome-pill {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   gap: 2px; padding: 7px 4px; border-radius: 4px; cursor: pointer;
@@ -1967,7 +2053,6 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="pbox" id="crwo"><div class="plbl">// unsigned_payload</div><textarea id="crwp" readonly></textarea></div>
   </div></div>
   </div></div>
-</div>
 
 <!-- ── REWARD: INVESTOR ── -->
 <div class="page" id="page-reward-investor">
@@ -1992,7 +2077,6 @@ code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1
     <div class="pbox" id="irwo"><div class="plbl">// unsigned_payload</div><textarea id="irwp" readonly></textarea></div>
   </div></div>
   </div></div>
-</div>
 
 <!-- ── REWARD: PROTOCOL ── -->
 <div class="page" id="page-reward-protocol">
@@ -2128,76 +2212,84 @@ window.renderCurrentTab = function() {
   let bookmarks = [];
   try { bookmarks = JSON.parse(localStorage.getItem('praxis_bookmarks') || '[]'); } catch {}
 
-  listEl.innerHTML = '<div class="mgrid-2col">' + markets.map(m => buildOpinionCard(m, bookmarks)).join('') + '</div>';
+  const featuredMid = markets[0] ? (markets[0].marketId || markets[0].txHash) : null;
+    listEl.innerHTML = '<div class="mgrid-2col">' +
+      markets.map((m, i) => buildPraxisCard(m, bookmarks, i === 0)).join('') +
+      '</div>';
 };
 
 // ── Build a single Opinion-style market card ──
-function buildOpinionCard(m, bookmarks) {
+function buildPraxisCard(m, bookmarks, featured) {
   const mid = m.marketId || m.txHash || '';
   const total = (m.qYes || 0n) + (m.qNo || 0n);
   const yesPct = total > 0n ? Number((m.qYes * 100n) / total) : 50;
   const noPct = 100 - yesPct;
-  const vol = total > 0n ? fmtPRX(total) + ' PRX' : '—';
+  const vol = total > 0n ? fmtPRX(total) : '—';
   const exp = m.expiry ? '#' + m.expiry.toString() : '—';
   const isBookmarked = bookmarks.includes(mid);
 
   const catKey = (typeof extractCat === 'function') ? extractCat(m.rules || '') : 'other';
-  const catIcons = {crypto:'🪙',sports:'⚽',politics:'🗳',finance:'📈',esports:'🎮',other:'◈'};
-  const catIcon = catIcons[catKey] || '◈';
+  const catSymbols = {crypto:'◈',sports:'◉',politics:'◆',finance:'▲',esports:'▣',other:'◈'};
+  const catSymbol = catSymbols[catKey] || '◈';
   const catName = catKey.charAt(0).toUpperCase() + catKey.slice(1);
 
   const statusMap = {
     0: '<span class="spill sp-live"><span class="sp-dot"></span>LIVE</span>',
     2: '<span class="spill sp-proposed">◆ PROPOSED</span>',
     3: '<span class="spill sp-disputed">⚠ DISPUTED</span>',
-    4: '<span class="spill sp-finalized">✓ FINALIZED</span>',
-    1: '<span class="spill sp-cancelled">✕ CANCELLED</span>',
+    4: '<span class="spill sp-finalized">✓ FINAL</span>',
+    1: '<span class="spill sp-cancelled">✕ VOID</span>',
     8: '<span class="spill sp-expired">⏱ EXPIRED</span>'
   };
   const statusHtml = statusMap[m.status] || '';
 
-  // banner image
   let bannerHtml = '';
   if (typeof extractImg === 'function') {
     const imgUrl = extractImg(m.rules || '');
-    if (imgUrl) bannerHtml = `<img class="mcard-v2-banner" src="${imgUrl}" alt="" loading="lazy" onerror="this.style.display='none'"/>`;
+    if (imgUrl) {
+      bannerHtml = `<div class="pcard-banner-wrap">
+        <img class="pcard-banner-bg" src="${imgUrl}" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        <div class="pcard-banner-fg"><img src="${imgUrl}" alt="" onerror="this.parentElement.style.display='none'"/></div>
+      </div>`;
+    } else {
+      bannerHtml = `<div class="pcard-banner-wrap"><div class="pcard-banner-empty"></div></div>`;
+    }
+  } else {
+    bannerHtml = `<div class="pcard-banner-wrap"><div class="pcard-banner-empty"></div></div>`;
   }
 
-  // question text (strip cat prefix)
   const question = (typeof stripCatPrefix === 'function') ? stripCatPrefix(m.question || m.rules || '(no question)') : (m.question || '(no question)');
+  const maxLen = featured ? 120 : 80;
+  const qTrunc = esc(question).slice(0, maxLen) + (question.length > maxLen ? '…' : '');
 
-  const isLive = m.status === 0;
-  const yesFn = isLive ? `openDetail(this.closest('[data-mid]').dataset.mid)` : '';
-  const noFn  = isLive ? `openDetail(this.closest('[data-mid]').dataset.mid)` : '';
-
-  return `<div class="mcard-v2" data-mid="${mid}" onclick="openDetail('${mid}')">
-  ${bannerHtml}
-  <div class="mcard-v2-body">
-    <div class="mcard-v2-cat">
-      ${catIcon} ${catName}
-      <span style="margin-left:auto">${statusHtml}</span>
-    </div>
-    <div class="mcard-v2-q">${esc(question).slice(0,90)}${question.length>90?'…':''}</div>
-    <div class="mcard-v2-outcomes" onclick="event.stopPropagation()">
-      <div class="outcome-pill outcome-pill-yes" onclick="openDetail('${mid}')">
-        <div class="op-pct">${yesPct}%</div>
-        <div class="op-lbl">YES</div>
+  return `<div class="pcard${featured ? ' pcard-featured' : ''}" data-mid="${mid}" onclick="openDetail('${mid}')">
+    ${bannerHtml}
+    <div class="pcard-body">
+      <div class="pcard-cat">
+        <span>${catSymbol} ${catName}</span>
+        <span style="margin-left:auto">${statusHtml}</span>
       </div>
-      <div class="outcome-pill outcome-pill-no" onclick="openDetail('${mid}')">
-        <div class="op-pct">${noPct}%</div>
-        <div class="op-lbl">NO</div>
+      <div class="pcard-q">${qTrunc}</div>
+      <div class="pcard-odds" onclick="event.stopPropagation()">
+        <div class="pcard-odds-yes" onclick="openDetail('${mid}')">
+          <div class="pcard-odds-pct">${yesPct}<span style="font-size:9px;opacity:.6">¢</span></div>
+          <div class="pcard-odds-lbl">YES</div>
+        </div>
+        <div class="pcard-odds-no" onclick="openDetail('${mid}')">
+          <div class="pcard-odds-pct">${noPct}<span style="font-size:9px;opacity:.6">¢</span></div>
+          <div class="pcard-odds-lbl">NO</div>
+        </div>
       </div>
+      <div class="pcard-bar"><div class="pcard-bar-yes" style="width:${yesPct}%"></div></div>
     </div>
-    <div class="mcard-v2-bar"><div class="mcard-v2-bar-yes" style="width:${yesPct}%"></div></div>
-  </div>
-  <div class="mcard-v2-meta" onclick="event.stopPropagation()">
-    <div class="mcard-v2-vol">Vol &nbsp;<b>${vol}</b></div>
-    <div class="mcard-v2-exp">Exp ${exp}</div>
-    <button class="mcard-v2-bookmark${isBookmarked?' saved':''}" onclick="toggleBookmark('${mid}',this)" title="Bookmark">
-      ${isBookmarked?'★':'☆'}
-    </button>
-  </div>
-</div>`;
+    <div class="pcard-meta" onclick="event.stopPropagation()">
+      <div class="pcard-vol">VOL&nbsp;<b>${vol}</b></div>
+      <div class="pcard-exp">${exp}</div>
+      <button class="pcard-bookmark${isBookmarked ? ' saved' : ''}" onclick="toggleBookmark('${mid}',this)" title="Bookmark">
+        ${isBookmarked ? '★' : '☆'}
+      </button>
+    </div>
+  </div>`;
 }
 
 // ── Bookmark toggle ──
@@ -2695,5 +2787,6 @@ setInterval(async () => {
   } catch(e) { syncDots(false); }
 }, 4000);
 </script>
+
 </body>
 </html>

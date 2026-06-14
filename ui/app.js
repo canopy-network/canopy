@@ -189,11 +189,13 @@ window.toast=function(msg,isErr=false){
 window.showPage=function(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
+  window.scrollTo(0,0);document.body.scrollTop=0;document.documentElement.scrollTop=0;const _m=document.querySelector('main');if(_m)_m.scrollTop=0;
   document.querySelectorAll('#deskNav .ni').forEach(b=>b.classList.remove('active'));
   const dm=document.querySelector(`#deskNav [data-p="${id}"]`);if(dm)dm.classList.add('active');
   document.querySelectorAll('#bnav .btab').forEach(b=>b.classList.remove('active'));
   const bm=document.querySelector(`#bnav [data-p="${id}"]`);if(bm)bm.classList.add('active');
   if(id==='markets')loadMarkets();
+  const tw=document.getElementById('tickerWrap');if(tw)tw.style.display=id==='markets'?'':'none';
   if(id==='wallet'){refreshBalance();loadMyPredictions();}
   if(id==='create'){updateCreateBreakdown();setTimeout(initExpiryDate,50);}
   if(id==='predict')updatePredictBreakdown();
@@ -511,7 +513,71 @@ window.renderMarketCards = function(markets) {
 
   if (filtered.length === 0) return '<div class="alert ay">No markets in this category</div>';
 
-  return '<div class="mgrid">' + filtered.map(m => {
+  // ── PRAXIS CARD BUILDER ──
+function buildPraxisCard(m, bookmarks, featured) {
+  bookmarks = bookmarks || [];
+  const mid = m.marketId || m.txHash || '';
+  const total = (m.qYes || 0n) + (m.qNo || 0n);
+  const yesPct = total > 0n ? Number((m.qYes * 100n) / total) : 50;
+  const noPct = 100 - yesPct;
+  const vol = total > 0n ? fmtPRX(total) : '—';
+  const exp = m.expiry ? '#' + m.expiry.toString() : '—';
+  const isBookmarked = bookmarks.includes(mid);
+  const catKey = (typeof extractCat === 'function') ? extractCat(m.rules || '') : 'other';
+  const catSymbols = {crypto:'◈',sports:'◉',politics:'◆',finance:'▲',esports:'▣',other:'◈'};
+  const catSymbol = catSymbols[catKey] || '◈';
+  const catName = catKey.charAt(0).toUpperCase() + catKey.slice(1);
+  const statusMap = {
+    0: '<span class="spill sp-live"><span class="sp-dot"></span>LIVE</span>',
+    2: '<span class="spill sp-proposed">◆ PROPOSED</span>',
+    3: '<span class="spill sp-disputed">⚠ DISPUTED</span>',
+    4: '<span class="spill sp-finalized">✓ FINAL</span>',
+    5: '<span class="spill sp-disputed">⚠ DISPUTED</span>',
+    6: '<span class="spill sp-finalized">✓ FINAL</span>',
+    1: '<span class="spill sp-cancelled">✕ VOID</span>',
+    8: '<span class="spill sp-expired">⏱ EXPIRED</span>'
+  };
+  const statusHtml = statusMap[m.status] || '';
+  let bannerHtml = '';
+  if (typeof extractImg === 'function') {
+    const imgUrl = extractImg(m.rules || '');
+    if (imgUrl) {
+      bannerHtml = '<div class="pcard-banner-wrap"><img class="pcard-banner-bg" src="' + imgUrl + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"/><div class="pcard-banner-fg"><img src="' + imgUrl + '" alt="" onerror="this.parentElement.style.display=\'none\'"/></div></div>';
+    } else {
+      bannerHtml = '<div class="pcard-banner-wrap"><div class="pcard-banner-empty"></div></div>';
+    }
+  } else {
+    bannerHtml = '<div class="pcard-banner-wrap"><div class="pcard-banner-empty"></div></div>';
+  }
+  const question = (typeof stripCatPrefix === 'function') ? stripCatPrefix(m.question || m.rules || '(no question)') : (m.question || '(no question)');
+  const maxLen = featured ? 120 : 80;
+  const qTrunc = esc(question).slice(0, maxLen) + (question.length > maxLen ? '\u2026' : '');
+  return '<div class="pcard' + (featured ? ' pcard-featured' : '') + '" data-mid="' + mid + '" onclick="openDetail(\'' + mid + '\')">' +
+    bannerHtml +
+    '<div class="pcard-body">' +
+      '<div class="pcard-cat"><span>' + catSymbol + ' ' + catName + '</span><span style="margin-left:auto">' + statusHtml + '</span></div>' +
+      '<div class="pcard-q">' + qTrunc + '</div>' +
+      '<div class="pcard-odds" onclick="event.stopPropagation()">' +
+        '<div class="pcard-odds-yes" onclick="openDetail(\'' + mid + '\')">' +
+          '<div class="pcard-odds-pct">' + yesPct + '<span class="pcard-odds-unit">%</span></div>' +
+          '<div class="pcard-odds-lbl">YES</div>' +
+        '</div>' +
+        '<div class="pcard-odds-no" onclick="openDetail(\'' + mid + '\')">' +
+          '<div class="pcard-odds-pct">' + noPct + '<span class="pcard-odds-unit">%</span></div>' +
+          '<div class="pcard-odds-lbl">NO</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pcard-bar"><div class="pcard-bar-yes" style="width:' + yesPct + '%"></div></div>' +
+    '</div>' +
+    '<div class="pcard-meta" onclick="event.stopPropagation()">' +
+      '<div class="pcard-vol">VOL&nbsp;<b>' + vol + '</b></div>' +
+      '<div class="pcard-exp">' + exp + '</div>' +
+      '<button class="pcard-bookmark' + (isBookmarked ? ' saved' : '') + '" onclick="toggleBookmark(\'' + mid + '\',this)" title="Bookmark">' + (isBookmarked ? '\u2605' : '\u2606') + '</button>' +
+    '</div>' +
+  '</div>';
+}
+
+return '<div class="mgrid-2col">' + filtered.map((m, i) => {
     const total = m.qYes + m.qNo;
     const yesPct = total > 0n ? Number((m.qYes * 100n) / total) : 50;
     const noPct  = 100 - yesPct;
@@ -548,22 +614,7 @@ window.renderMarketCards = function(markets) {
     const hasBanner = !!extractImg(m.rules||'');
     const yesMulti = m.qYes > 0n ? (Number(m.qYes + m.qNo) / Number(m.qYes)).toFixed(2) : '—';
     const noMulti  = m.qNo  > 0n ? (Number(m.qYes + m.qNo) / Number(m.qNo)).toFixed(2)  : '—';
-    return `<div class="mcard ${cardClass}${hasBanner?' mcard-featured':''}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
-    ${mkBannerImg(m.rules)}<div class="mcard-top">
-      <div class="mcard-cat">${catIcon} ${catName} &nbsp;${statusHtml}</div>
-      <div class="mcard-q">${esc(m.question || '(no question)')}</div>
-      <div class="mcard-pill-row">
-        <span class="pill-yes">${yesPct}% <span class="pill-multi">${yesMulti}x</span></span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">·</span>
-        <span class="pill-no">${noPct}% <span class="pill-multi">${noMulti}x</span></span>
-      </div>
-      <div class="btrack"><div class="byes" style="width:${yesPct}%"></div></div>
-    </div>
-    <div class="mcard-meta">
-      <div class="meta-item"><span class="meta-lbl">Vol</span><span class="meta-val g">${vol}</span></div>
-      <div class="meta-item"><span class="meta-lbl">Exp</span><span class="meta-val">${exp}</span></div>
-      <div class="meta-item"><span class="meta-lbl">Creator</span><span class="meta-val">${creator}</span></div>
-    </div></div>`;
+    return buildPraxisCard(m, [], i === 0);
   }).join('') + '</div>';
 };
 
@@ -781,7 +832,7 @@ window.fillC = id => { document.getElementById('cl_mid').value = id; showPage('c
 function decVarint(buf,pos){let r=0n,s=0n;while(pos<buf.length){const b=BigInt(buf[pos++]);r|=(b&0x7fn)<<s;s+=7n;if(!(b&0x80n))break;}return{v:r,p:pos};}
 
 let _activeTab = 'live';
-const CLOSED_WINDOW = 20000; // blocks
+const CLOSED_WINDOW = 100000; // blocks (~4.5 months at 5s/block)
 
 window.switchTab = function(tab) {
   _activeTab = tab;
@@ -1499,6 +1550,7 @@ window.clearKey = function() {
 const _origShowPage = window.showPage;
 window.showPage = function(id, btn) {
   _origShowPage(id, btn);
+  setTimeout(function(){ window.scrollTo(0,0); document.body.scrollTop=0; document.documentElement.scrollTop=0; const m=document.querySelector('main'); if(m) m.scrollTop=0; }, 300);
   setTimeout(wireCopyBtns, 50);
 };
 
@@ -2843,7 +2895,7 @@ window.runSearch = function() {
     out.innerHTML = '<div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:40px 0">No markets found</div>';
     return;
   }
-  out.innerHTML = '<div class="mgrid">' + filtered.map(m => {
+  out.innerHTML = '<div class="mgrid-2col">' + filtered.map((m, i) => {
     const mid = m.marketId || m.txHash || '';
     const total = m.qYes + m.qNo;
     const yesPct = total > 0n ? Number((m.qYes * 100n) / total) : 50;
@@ -2857,21 +2909,7 @@ window.runSearch = function() {
     const hasBanner = !!extractImg(m.rules||'');
     const yesMulti = m.qYes > 0n ? (Number(m.qYes + m.qNo) / Number(m.qYes)).toFixed(2) : '—';
     const noMulti  = m.qNo  > 0n ? (Number(m.qYes + m.qNo) / Number(m.qNo)).toFixed(2)  : '—';
-    return `<div class="mcard${hasBanner?' mcard-featured':''}" onclick="openDetail(this.dataset.mid)" data-mid="${mid}">
-    ${mkBannerImg(m.rules)}<div class="mcard-top">
-      <div class="mcard-cat">${catIcon} ${catName} &nbsp;${statusHtml}</div>
-      <div class="mcard-q">${esc(m.question || '(no question)')}</div>
-      <div class="mcard-pill-row">
-        <span class="pill-yes">${yesPct}% <span class="pill-multi">${yesMulti}x</span></span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">·</span>
-        <span class="pill-no">${noPct}% <span class="pill-multi">${noMulti}x</span></span>
-      </div>
-      <div class="btrack"><div class="byes" style="width:${yesPct}%"></div></div>
-    </div>
-    <div class="mcard-meta">
-      <div class="meta-item"><span class="meta-lbl">Vol</span><span class="meta-val g">${vol}</span></div>
-      <div class="meta-item"><span class="meta-lbl">Exp</span><span class="meta-val">${exp}</span></div>
-    </div></div>`;
+    return buildPraxisCard(m, [], i === 0);
   }).join('') + '</div>';
 };
 
