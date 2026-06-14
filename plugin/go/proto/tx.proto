@@ -1,56 +1,269 @@
 syntax = "proto3";
+
 package types;
-option go_package = "github.com/canopy-network/go-plugin/contract";
+
+option go_package = "github.com/canopy-network/canopy/plugin/go/contract";
 
 import "google/protobuf/any.proto";
-// Transaction represents a request or action submitted to the network like transfer assets or perform other operations
-// within the blockchain system - THIS MUST MATCH lib.Transaction EXACTLY for signing
-message Transaction {
-  // message_type: The type of the transaction like 'send' or 'stake'
-  string message_type = 1; // @gotags: json:"messageType"
-  // msg: The actual transaction message payload, which is encapsulated in a generic message format
-  google.protobuf.Any msg = 2;
-  // signature: The cryptographic signature used to verify the authenticity of the transaction
-  Signature signature = 3;
-  // created_height: The height when the transaction was created - allows 'safe pruning'
-  uint64 created_height = 4; // @gotags: json:"createdHeight"
-  // time: The timestamp when the transaction was created - used as temporal entropy to prevent hash collisions in txs
-  uint64 time = 5;
-  // fee: The fee associated with processing the transaction
-  uint64 fee = 6;
-  // memo: An optional message or note attached to the transaction
-  string memo = 7;
-  // network_id: The identity of the network the transaction is intended for
-  uint64 network_id = 8; // @gotags: json:"networkID"
-  // chain_id: The identity of the committee the transaction is intended for
-  uint64 chain_id = 9; // @gotags: json:"chainID"
-  // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
-  // NO CONFLICT STARTING AT FIELD = 10
-}
 
-// MessageSend is a standard transfer transaction, taking tokens from the sender and transferring
-// them to the recipient
-message MessageSend {
-  // from_address: is the sender of the funds
-  bytes from_address = 1; // @gotags: json:"fromAddress"
-  // to_address: is the recipient of the funds
-  bytes to_address = 2; // @gotags: json:"toAddress"
-  // amount: is the amount of tokens in micro-denomination (uCNPY)
-  uint64 amount = 3;
-}
-
-// FeeParams is the parameter space that defines various amounts for transaction fees
-message FeeParams {
-  // send_fee: is the fee amount (in uCNPY) for Message Send
-  uint64 send_fee = 1; // @gotags: json:"sendFee"
-  // NO CONFLICT STARTING AT FIELD = 14
-}
-
-// A Signature is a digital signature is a cryptographic "fingerprint" created with a private key,
-// allowing others to verify the authenticity and integrity of a message using the corresponding public key
+// Required by plugin.proto
 message Signature {
-  // public_key: is a cryptographic code shared openly, used to verify digital signatures
-  bytes public_key = 1; // @gotags: json:"publicKey"
-  // signature: the bytes of the signature output from a private key which may be verified with the message and public
-  bytes signature = 2;
+  bytes public_key = 1;
+  bytes signature  = 2;
+}
+
+message Transaction {
+  string              message_type   = 1;
+  google.protobuf.Any msg            = 2;
+  Signature           signature      = 3;
+  uint64              created_height = 4;
+  uint64              time           = 5;
+  uint64              fee            = 6;
+  string              memo           = 7;
+  uint64              network_id     = 8;
+  uint64              chain_id       = 9;
+}
+
+message FeeParams {
+  uint64 send_fee              = 1;
+  uint64 create_market_fee     = 2;
+  uint64 submit_prediction_fee = 3;
+  uint64 resolve_market_fee    = 4;
+  uint64 claim_winnings_fee    = 5;
+}
+
+// ADLMSR state objects (0x10-0x14)
+message MarketState {
+  uint32 status          = 1;
+  uint64 expiry_time     = 2;
+  uint64 q_yes           = 3;
+  uint64 q_no            = 4;
+  uint64 b_eff           = 5;
+  bytes  creator         = 6;
+  uint64 claimed_count   = 7;
+  uint64 total_positions = 8;
+  uint64 open_time       = 9;
+  bool   elevated_risk        = 10;
+  uint64 finalized_pool_amount = 11;
+  string question        = 12;
+  string rules           = 13;
+}
+
+message PositionState {
+  uint64 shares_yes = 1;
+  uint64 shares_no  = 2;
+  uint64 cost_paid  = 3;
+  bool   claimed    = 4;
+}
+
+message OutcomeState {
+  bool   winning_outcome = 1;
+  uint64 resolved_at     = 2;
+}
+
+message TreasuryReserve {
+  uint64 locked_reserve = 1;
+  uint64 creator_bond   = 2;
+}
+
+// PORS state objects (0x13, 0x16-0x1C)
+message ResolverState {
+  bytes resolver_address = 1;
+}
+
+message ResolverRecord {
+  bytes  resolver_address       = 1;
+  uint64 stake_amount           = 2;
+  uint64 rrs_score              = 3;
+  uint64 registered_at          = 4;
+  uint64 successful_resolutions = 5;
+  uint64 last_claimed_epoch        = 6;
+  bool   is_active                 = 7;
+  uint64 unbonding_amount          = 8;
+  uint64 unbonding_release_height  = 9;
+}
+
+message ProposalRecord {
+  bytes  resolver_addr    = 1;
+  bool   proposed_outcome = 2;
+  uint64 proposal_bond    = 3;
+  uint64 proposal_block   = 4;
+  uint32 status           = 5;
+}
+
+message DisputeRecord {
+  bytes          disputer_address = 1;
+  uint64         dispute_bond     = 2;
+  uint64         dispute_block    = 3;
+  uint32         vote_status      = 4;
+  uint32         panel_size       = 5;
+  repeated bytes panel_members    = 6;
+}
+
+message VoteCommit {
+  bytes  voter_addr   = 1;
+  bytes  commit_hash  = 2;
+  uint64 committed_at = 3;
+}
+
+message VoteReveal {
+  bytes  voter_addr  = 1;
+  bool   vote        = 2;
+  uint64 revealed_at = 3;
+}
+
+message SlashRecord {
+  bytes  slashed_address = 1;
+  uint64 slash_amount    = 2;
+  uint64 slashed_at      = 3;
+}
+
+message PanelEntropyAccum {
+  uint64 accumulator = 1;
+}
+
+// Transaction messages (12 types)
+message MessageSend {
+  bytes  from_address = 1;
+  bytes  to_address   = 2;
+  uint64 amount       = 3;
+}
+
+message MessageCreateMarket {
+  bytes  creator_address = 1;
+  uint64 b0              = 2;
+  uint64 expiry_time     = 3;
+  uint64 nonce           = 4;
+  string question        = 5;
+  string rules           = 6;
+}
+
+message MessageSubmitPrediction {
+  bytes  market_id = 1;
+  bytes  bettor_address = 2;
+  bool   outcome   = 3;
+  uint64 shares    = 4;
+  uint64 max_cost  = 5;
+}
+
+message MessageClaimWinnings {
+  bytes market_id        = 1;
+  bytes claimant_address = 2;
+}
+
+message MessageResolveMarket {
+  bytes market_id        = 1;
+  bytes resolver_address = 2;
+  bool  winning_outcome  = 3;
+}
+
+message MessageRegisterResolver {
+  bytes  resolver_address = 1;
+  uint64 stake_amount     = 2;
+}
+
+message MessageProposeOutcome {
+  bytes  market_id        = 1;
+  bytes  resolver_address = 2;
+  bool   proposed_outcome = 3;
+  uint64 proposal_bond    = 4;
+}
+
+message MessageFileDispute {
+  bytes  market_id        = 1;
+  bytes  disputer_address = 2;
+  uint64 dispute_bond     = 3;
+}
+
+message MessageCommitVote {
+  bytes market_id   = 1;
+  bytes voter_addr  = 2;
+  bytes commit_hash = 3;
+}
+
+message MessageRevealVote {
+  bytes  market_id  = 1;
+  bytes  voter_addr = 2;
+  bool   vote       = 3;
+  bytes  nonce      = 4;
+}
+
+message MessageTallyVotes {
+  bytes market_id   = 1;
+  bytes caller_addr = 2;
+}
+
+message MessageFinalizeMarket {
+  bytes market_id   = 1;
+  bytes caller_addr = 2;
+}
+
+message MessageClaimSlash {
+  bytes market_id        = 1;
+  bytes claimant_address = 2;
+}
+
+message MessageReclaimStake {
+  bytes market_id        = 1;
+  bytes claimant_address = 2;
+}
+
+// MessageForfeitPosition allows a resolver to voluntarily exit a position
+// in a market they intend to resolve — satisfying the COI-1 requirement.
+// Issue-2: without this tx type, a resolver with even 1 share is permanently
+// disqualified from resolving, with no protocol-level escape hatch.
+// The full CostPaid is refunded; shares are zeroed atomically.
+message MessageForfeitPosition {
+  bytes market_id        = 1;
+  bytes resolver_address = 2;
+}
+
+// PRIS v1.0-r3 message types
+
+message MessageClaimBuilderReward {}
+
+message MessageClaimCreatorFee {
+  bytes market_id      = 1;
+  bytes creator_address = 2;
+}
+
+message MessageClaimResolverReward {
+  bytes resolver_address = 1;
+  uint64 epoch           = 2;
+}
+
+message LastClaimedBlock {
+  uint64 height = 1;
+}
+
+message MessageClaimCommunityReward {}
+
+message MessageClaimInvestorReward {}
+
+message MessageClaimProtocolReward {}
+
+message MessageCancelMarket {
+  bytes market_id       = 1;
+  bytes creator_address = 2;
+}
+
+message MessageUnstakeResolver {
+  bytes  resolver_address = 1;
+  uint64 amount           = 2; // 0 = full exit
+}
+
+message MessageClaimUnbondedStake {
+  bytes resolver_address = 1;
+}
+
+message ResolverIndex {
+  repeated bytes addresses = 1;
+}
+
+message MarketIndex {
+  repeated bytes market_ids = 1;
+}
+
+message GlobalStats {
+  uint64 total_weighted_resolutions = 1;
 }

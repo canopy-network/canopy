@@ -153,7 +153,7 @@ start() {
     mkdir -p "$PLUGIN_DIR"
     # Start the binary in background with nohup
     echo "Starting go-plugin..."
-    nohup "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
+    nohup env PRAXIS_TEST_MODE=true "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
     local pid=$!
     # Save PID to file
     echo "$pid" > "$PID_FILE"

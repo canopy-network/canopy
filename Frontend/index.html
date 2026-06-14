@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval' 'unsafe-inline' https://esm.sh https://cdn.skypack.dev https://fonts.googleapis.com https://fonts.gstatic.com"/>
+<title>Praxis — Prediction Markets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+/* ── TOKENS ── */
+:root {
+  --bg:       #070a0f;
+  --bg2:      #0c1018;
+  --surface:  #0f1520;
+  --surf2:    #141c2e;
+  --surf3:    #1a2338;
+  --border:   #1e2a40;
+  --border2:  #28374f;
+  --text:     #e2eaf8;
+  --text2:    #7a90b4;
+  --text3:    #374560;
+  --green:    #00e87a;
+  --gdim:     rgba(0,232,122,.06);
+  --gglow:    rgba(0,232,122,.25);
+  --red:      #ff4060;
+  --rdim:     rgba(255,64,96,.06);
+  --amber:    #f5a623;
+  --adim:     rgba(245,166,35,.07);
+  --blue:     #3b82f6;
+  --bdim:     rgba(59,130,246,.07);
+  --cyan:     #06b6d4;
+  --shadow:   rgba(0,0,0,.7);
+  --mono:     'DM Mono', monospace;
+  --sans:     'DM Sans', sans-serif;
+  --display:  'Syne', sans-serif;
+  --r:        6px;
+}
+[data-theme="light"] {
+  --bg:#f0f4fb; --bg2:#e2e9f4; --surface:#fff; --surf2:#f5f8ff; --surf3:#e8edf8;
+  --border:#b8c9e0; --border2:#a0b4d0;
+  --text:#0f1a2e; --text2:#3a5070; --text3:#7a96b8;
+  --green:#00913f; --gdim:rgba(0,145,63,.10); --gglow:rgba(0,145,63,.25);
+  --red:#cc1f3a; --rdim:rgba(204,31,58,.10);
+  --amber:#b45309; --adim:rgba(180,83,9,.10);
+  --blue:#1d4ed8; --bdim:rgba(29,78,216,.10);
+  --shadow:rgba(0,0,0,.15);
+}
+[data-theme="light"] body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    linear-gradient(rgba(0,145,63,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,145,63,.018) 1px, transparent 1px);
+  background-size:48px 48px;
+}
+[data-theme="light"] .card { box-shadow:0 1px 4px rgba(0,0,0,.08); }
+[data-theme="light"] .mcard { box-shadow:0 1px 4px rgba(0,0,0,.08); }
+[data-theme="light"] .mcard:hover { box-shadow:0 8px 24px rgba(0,0,0,.12), 0 0 0 1px rgba(0,145,63,.15); }
+[data-theme="light"] .res-card { box-shadow:0 1px 4px rgba(0,0,0,.08); }
+[data-theme="light"] .sidebar { box-shadow:2px 0 12px rgba(0,0,0,.1); }
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6;min-height:100vh;overflow-x:hidden}
+
+/* ── GRID OVERLAY ── */
+[data-theme="dark"] body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    linear-gradient(rgba(0,232,122,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,232,122,.012) 1px, transparent 1px);
+  background-size:48px 48px;
+}
+
+.shell{display:flex;flex-direction:column;min-height:100vh;position:relative;z-index:1}
+@media(max-width:1024px){.shell{min-height:unset;}}
+
+/* ══════════════════════════════════════════
+   SIDEBAR
+══════════════════════════════════════════ */
+.sidebar {
+  width:270px;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex; flex-direction:column;
+  position:fixed; top:0; left:0; height:100vh;
+  overflow-y:auto; z-index:199;
+  transform:translateX(-100%);
+  transition:transform .25s;
+}
+.sidebar.open { transform:translateX(0); }
+
+.logo {
+  padding:20px 18px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:12px;
+}
+.logo-icon {
+  width:34px; height:34px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.logo-text .brand {
+  font-family:var(--display);
+  font-size:15px; font-weight:800;
+  letter-spacing:1px; color:var(--green);
+  text-shadow:0 0 30px var(--gglow);
+}
+.logo-text .ticker {
+  font-family:var(--mono);
+  font-size:9px; color:var(--text3);
+  letter-spacing:2px; margin-top:1px;
+}
+
+/* network badge */
+.net-badge {
+  margin:10px 18px;
+  padding:6px 10px;
+  background:var(--gdim);
+  border:1px solid rgba(0,232,122,.15);
+  border-radius:var(--r);
+  display:flex; align-items:center; gap:8px;
+  font-family:var(--mono); font-size:9px; color:var(--green);
+  letter-spacing:1px;
+}
+.net-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--text3); flex-shrink:0;
+  transition:all .4s;
+}
+.net-dot.live { background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 2s ease-in-out infinite; }
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.net-height { margin-left:auto; font-size:9px; color:var(--text3); }
+
+.nav { padding:6px 0; flex:1; overflow-y:auto; }
+.nav::-webkit-scrollbar { width:2px; }
+.nav::-webkit-scrollbar-thumb { background:var(--border2); }
+
+.ns {
+  font-family:var(--mono); font-size:8px;
+  letter-spacing:3px; text-transform:uppercase;
+  color:var(--text3); padding:12px 18px 5px;
+  display:flex; align-items:center; gap:8px;
+}
+.ns::after { content:''; flex:1; height:1px; background:var(--border); }
+
+.ni {
+  display:flex; align-items:center; gap:9px;
+  padding:8px 18px; cursor:pointer;
+  color:var(--text2); font-size:12px; font-weight:500;
+  transition:all .12s;
+  border-left:2px solid transparent;
+  user-select:none; border-radius:0;
+}
+.ni:hover { color:var(--text); background:var(--gdim); }
+.ni.active { color:var(--green); border-left-color:var(--green); background:var(--gdim); }
+.ni-ic { width:15px; text-align:center; font-size:14px; flex-shrink:0; opacity:.6; }
+.ni.active .ni-ic { opacity:1; }
+.rb { font-family:var(--mono); font-size:7px; letter-spacing:1px; text-transform:uppercase; padding:2px 6px; margin-left:auto; flex-shrink:0; border-radius:3px; }
+.rb-r { background:var(--adim); color:var(--amber); border:1px solid rgba(245,166,35,.2); }
+.rb-a { background:var(--bdim); color:var(--blue); border:1px solid rgba(59,130,246,.2); }
+
+.sbfoot {
+  padding:12px 16px; border-top:1px solid var(--border);
+  display:flex; flex-direction:column; gap:8px;
+}
+.conn-row { display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10px; color:var(--text2); }
+#hBadge { font-family:var(--mono); font-size:9px; color:var(--text3); margin-left:auto; }
+.theme-btn {
+  display:flex; align-items:center; gap:8px; cursor:pointer;
+  padding:6px 10px; background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--r); font-family:var(--mono); font-size:9px; color:var(--text2);
+  transition:all .15s;
+}
+.theme-btn:hover { border-color:var(--green); color:var(--green); }
+.ttrack { width:26px; height:13px; background:var(--border2); border-radius:7px; position:relative; flex-shrink:0; transition:background .2s; }
+[data-theme="light"] .ttrack { background:var(--green); }
+.tthumb { position:absolute; top:2.5px; left:2.5px; width:8px; height:8px; border-radius:50%; background:var(--text2); transition:transform .2s, background .2s; }
+[data-theme="light"] .tthumb { transform:translateX(13px); background:#fff; }
+
+/* ══════════════════════════════════════════
+   MOBILE
+══════════════════════════════════════════ */
+.mobhead {
+  display:flex; position:fixed; top:0; left:0; right:0; z-index:198;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:12px 16px; align-items:center; justify-content:space-between;
+  height:48px; box-sizing:border-box;
+}
+.shell { padding-top:48px; }
+.moblogo { font-family:var(--display); font-size:15px; font-weight:800; letter-spacing:1px; color:var(--green); }
+.ham { background:none; border:none; cursor:pointer; color:var(--text); font-size:22px; padding:2px; }
+.btab-bar {
+  position:fixed; bottom:0; left:0; right:0; z-index:197;
+  background:var(--surface); border-top:1px solid var(--border);
+  display:flex; align-items:stretch; height:60px;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.btab {
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:3px; cursor:pointer;
+  color:var(--text3); font-family:var(--mono); font-size:8px;
+  letter-spacing:.5px; text-transform:uppercase;
+  border:none; background:none; padding:0;
+  transition:color .15s;
+}
+.btab:active { opacity:.7; }
+.btab.active { color:var(--green); }
+.btab-icon { font-size:20px; line-height:1; }
+.main { padding-bottom:80px !important; }
+.mobnav { display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); }
+.mobnav.open { display:block; }
+.mobpanel { position:absolute; left:0; top:0; bottom:0; width:270px; background:var(--surface); border-right:1px solid var(--border); overflow-y:auto; transform:translateX(-100%); transition:transform .25s; }
+.mobnav.open .mobpanel { transform:translateX(0); }
+.mobclose { position:absolute; top:14px; right:14px; background:none; border:none; cursor:pointer; font-size:20px; color:var(--text2); }
+
+/* ══════════════════════════════════════════
+   MAIN
+══════════════════════════════════════════ */
+.main { flex:1; overflow-y:auto; padding:28px 32px 80px; max-width:980px; }
+@media(max-width:768px){ .main { padding:20px 16px 80px; } }
+
+/* ── PAGE HEADER ── */
+.ph { margin-bottom:24px; padding-bottom:18px; border-bottom:1px solid var(--border); }
+.ph-eye {
+  font-family:var(--mono); font-size:9px; letter-spacing:3px;
+  text-transform:uppercase; margin-bottom:8px;
+  display:flex; align-items:center; gap:10px;
+}
+.ph-eye::before { content:''; width:20px; height:1px; }
+.ph-g .ph-eye { color:var(--green); }
+.ph-g .ph-eye::before { background:var(--green); }
+.ph-r .ph-eye { color:var(--amber); }
+.ph-r .ph-eye::before { background:var(--amber); }
+.ph-a .ph-eye { color:var(--blue); }
+.ph-a .ph-eye::before { background:var(--blue); }
+.ph-title { font-family:var(--display); font-size:22px; font-weight:800; letter-spacing:-.3px; line-height:1.2; }
+.ph-sub { font-size:13px; color:var(--text2); margin-top:5px; }
+
+/* ── STAT BAR ── */
+.sbar {
+  display:flex; gap:6px; margin-bottom:16px;
+  flex-wrap:wrap; align-items:center;
+}
+@media(max-width:768px){ .sbar { overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px; } }
+.chip {
+  background:var(--surface); border:1px solid var(--border);
+  padding:5px 10px; border-radius:var(--r);
+  font-family:var(--mono); font-size:9px; color:var(--text2);
+  display:flex; align-items:center; gap:5px;
+}
+.chip b { color:var(--text); font-family:var(--display); font-size:13px; font-weight:700; }
+
+/* ── CATEGORY TABS ── */
+.cats {
+  display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px;
+}
+.cat {
+  padding:6px 14px; border:1px solid var(--border); border-radius:20px;
+  font-family:var(--mono); font-size:10px; color:var(--text2);
+  cursor:pointer; transition:all .15s; user-select:none;
+  background:transparent;
+}
+.cat:hover { border-color:var(--green); color:var(--green); background:var(--gdim); }
+.cat.active { background:var(--green); color:#000; border-color:var(--green); font-weight:600; }
+
+/* ── STATUS TABS ── */
+.mtabs { display:flex; gap:4px; margin-bottom:20px; border-bottom:1px solid var(--border); }
+.mtab {
+  padding:9px 18px; background:none; border:none;
+  font-family:var(--mono); font-size:10px; letter-spacing:1px;
+  color:var(--text3); cursor:pointer; border-bottom:2px solid transparent;
+  transition:all .15s; margin-bottom:-1px;
+}
+.mtab:hover { color:var(--text2); }
+.mtab.active { color:var(--green); border-bottom-color:var(--green); }
+
+/* ── MARKET GRID ── */
+.mgrid { display:flex; flex-direction:column; gap:10px; }
+
+.mcard {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  display:flex; flex-direction:column;
+  overflow:hidden; cursor:pointer;
+  transition:border-color .2s, box-shadow .2s, transform .2s;
+  position:relative;
+}
+.mcard:hover {
+  border-color:rgba(0,232,122,.3);
+  box-shadow:0 4px 20px rgba(0,0,0,.4), 0 0 0 1px rgba(0,232,122,.06);
+  transform:translateY(-1px);
+}
+.mcard-top { padding:14px 16px 10px; flex:1; }
+.mcard-cat {
+  font-family:var(--mono); font-size:9px; letter-spacing:1px;
+  text-transform:uppercase; color:var(--text3); margin-bottom:8px;
+  display:flex; align-items:center; gap:6px;
+}
+
+.mcard-q {
+  font-family:var(--sans); font-size:12px; font-weight:600;
+  line-height:1.35; color:var(--text); margin-bottom:10px;
+}
+.mcard-probs {
+  display:flex; align-items:center; gap:8px; margin-bottom:8px;
+}
+.prob-yes { font-family:var(--display); font-size:18px; font-weight:800; color:var(--green); }
+.prob-no  { font-family:var(--display); font-size:18px; font-weight:800; color:var(--red); }
+.prob-labels { display:flex; flex-direction:column; gap:1px; }
+.prob-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:1px; }
+.prob-divider { width:1px; height:32px; background:var(--border); margin:0 6px; }
+
+.btrack { height:4px; background:var(--bg2); border-radius:2px; overflow:hidden; margin-bottom:14px; }
+.byes { height:100%; background:var(--green); border-radius:2px; transition:width .4s ease; }
+
+.mcard-meta {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:10px 16px; border-top:1px solid var(--border);
+  background:var(--surf2);
+}
+.meta-item { display:flex; flex-direction:column; gap:2px; }
+.meta-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
+.meta-val { font-family:var(--mono); font-size:11px; color:var(--text2); font-weight:500; }
+.meta-val.g { color:var(--green); }
+
+
+.mcard-actions {
+  display:grid; grid-template-columns:1fr 1fr; gap:0;
+  border-top:1px solid var(--border);
+}
+.mcard-btn {
+  padding:10px 8px; border:none; cursor:pointer;
+  font-family:var(--display); font-size:11px; font-weight:700;
+  letter-spacing:.5px; transition:all .15s; text-align:center;
+}
+.mcard-btn-yes { background:var(--gdim); color:var(--green); border-right:1px solid var(--border); }
+.mcard-btn-yes:hover { background:var(--green); color:#000; }
+.mcard-btn-no  { background:var(--rdim); color:var(--red); }
+.mcard-btn-no:hover  { background:var(--red); color:#fff; }
+
+/* status pills */
+.spill {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 8px; border-radius:12px;
+  font-family:var(--mono); font-size:8px; font-weight:600; letter-spacing:1px;
+  text-transform:uppercase;
+}
+.sp-live    { background:transparent; color:var(--green); border:none; padding:0; letter-spacing:0; }
+.sp-proposed{ background:transparent; color:var(--amber); border:none; padding:0; letter-spacing:0; }
+.sp-disputed{ background:transparent; color:var(--red);   border:none; padding:0; letter-spacing:0; }
+.sp-finalized{background:transparent; color:var(--blue);  border:none; padding:0; letter-spacing:0;}
+.sp-cancelled{background:transparent;color:var(--text3); border:none; padding:0; letter-spacing:0; }
+.sp-expired { background:var(--adim); color:var(--amber); border:1px solid rgba(245,166,35,.2); }
+.sp-dot { width:5px; height:5px; border-radius:50%; background:currentColor; }
+.sp-live .sp-dot { animation:pulse 2s ease-in-out infinite; }
+
+/* ── DETAIL PAGE ── */
+.det-grid { display:grid; grid-template-columns:1fr 340px; gap:20px; align-items:start; }
+@media(max-width:1024px){ .det-grid { grid-template-columns:1fr; } }
+
+.det-main {}
+.det-sidebar { display:flex; flex-direction:column; gap:14px; }
+
+.prob-big {
+  display:flex; gap:0; margin-bottom:16px;
+  border:1px solid var(--border); border-radius:var(--r); overflow:hidden;
+}
+.prob-side {
+  flex:1; padding:20px 16px; display:flex; flex-direction:column; align-items:center;
+}
+.prob-side-yes { background:rgba(0,232,122,.04); border-right:1px solid var(--border); }
+.prob-side-no  { background:rgba(255,64,96,.04); }
+.prob-side-pct { font-family:var(--display); font-size:36px; font-weight:800; line-height:1; margin-bottom:4px; }
+.prob-side-yes .prob-side-pct { color:var(--green); }
+.prob-side-no  .prob-side-pct { color:var(--red); }
+.prob-side-lbl { font-family:var(--mono); font-size:9px; color:var(--text3); letter-spacing:2px; }
+.prob-side-pool { font-family:var(--mono); font-size:11px; color:var(--text2); margin-top:6px; }
+
+/* ── CARD ── */
+.card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r); margin-bottom:14px; position:relative; overflow:hidden;
+}
+.ci { padding:18px; }
+.ct {
+  font-family:var(--mono); font-size:9px; color:var(--text3);
+  letter-spacing:2px; text-transform:uppercase;
+  margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border);
+}
+
+/* ── FORM ── */
+.field { margin-bottom:13px; }
+.field label {
+  display:block; font-family:var(--mono); font-size:9px; color:var(--text2);
+  letter-spacing:2px; text-transform:uppercase; margin-bottom:5px;
+}
+.field input, .field textarea, .field select {
+  width:100%; background:var(--bg); border:1px solid var(--border2);
+  padding:9px 12px; color:var(--text); font-family:var(--mono); font-size:12px;
+  outline:none; border-radius:var(--r); transition:border-color .15s, box-shadow .15s;
+  appearance:none;
+}
+.field input:focus, .field textarea:focus {
+  border-color:var(--green); box-shadow:0 0 0 3px var(--gdim);
+}
+.field textarea { resize:vertical; min-height:70px; line-height:1.6; }
+.hint { font-family:var(--mono); font-size:9px; color:var(--text3); margin-top:3px; }
+.r2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.r3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+@media(max-width:768px){ .r2,.r3 { grid-template-columns:1fr; } }
+
+/* ── BUTTONS ── */
+.btn {
+  display:inline-flex; align-items:center; gap:7px;
+  padding:9px 18px; border:none; cursor:pointer;
+  font-family:var(--sans); font-size:13px; font-weight:600;
+  letter-spacing:.2px; transition:all .15s; border-radius:var(--r);
+}
+.bp  { background:var(--green); color:#000; }
+.bp:hover  { filter:brightness(1.1); transform:translateY(-1px); box-shadow:0 4px 20px var(--gglow); }
+.bp:active { transform:translateY(0); }
+.bp:disabled { opacity:.4; cursor:not-allowed; transform:none; box-shadow:none; }
+.bsec { background:transparent; border:1px solid var(--border2); color:var(--text2); }
+.bsec:hover { border-color:var(--green); color:var(--green); background:var(--gdim); }
+.bamb { background:var(--amber); color:#000; }
+.bamb:hover { filter:brightness(1.08); transform:translateY(-1px); box-shadow:0 4px 16px rgba(245,166,35,.3); }
+.bamb:disabled { opacity:.4; cursor:not-allowed; transform:none; box-shadow:none; }
+.bsm { padding:6px 12px; font-size:11px; }
+.brow { display:flex; gap:8px; flex-wrap:wrap; margin-top:15px; align-items:center; }
+.cat-pick { display:flex; gap:6px; flex-wrap:wrap; }
+.cpick { padding:6px 14px; border:1px solid var(--border); border-radius:20px; font-family:var(--mono); font-size:10px; color:var(--text2); cursor:pointer; transition:all .15s; user-select:none; background:transparent; }
+.cpick:hover { border-color:var(--green); color:var(--green); background:var(--gdim); }
+.cpick.active { background:var(--green); color:#000; border-color:var(--green); font-weight:600; }
+.mcard-cat-tag { font-family:var(--mono); font-size:8px; letter-spacing:1px; text-transform:uppercase; padding:2px 7px; border-radius:10px; background:var(--surf2); color:var(--text3); border:1px solid var(--border); }
+.mcard-pill-row { display:flex; gap:6px; margin-bottom:8px; }
+.pill-yes { font-family:var(--display); font-size:13px; font-weight:800; color:var(--green); display:flex; align-items:baseline; gap:3px; }
+.pill-no  { font-family:var(--display); font-size:13px; font-weight:800; color:var(--red);   display:flex; align-items:baseline; gap:3px; }
+.pill-lbl { font-family:var(--mono); font-size:9px; color:var(--text3); font-weight:400; }
+.pill-multi { font-family:var(--mono); font-size:9px; color:var(--text3); font-weight:400; margin-left:2px; }
+.byes2 { width:100%; padding:12px; background:var(--gdim); border:1px solid rgba(0,232,122,.2); color:var(--green); font-family:var(--display); font-size:13px; font-weight:700; cursor:pointer; border-radius:var(--r); transition:all .15s; }
+.byes2:hover { background:var(--green); color:#000; }
+.bno2  { width:100%; padding:12px; background:var(--rdim); border:1px solid rgba(255,64,96,.2); color:var(--red); font-family:var(--display); font-size:13px; font-weight:700; cursor:pointer; border-radius:var(--r); transition:all .15s; }
+.bno2:hover  { background:var(--red); color:#fff; }
+
+/* ── OUTCOME TOGGLE ── */
+.otog { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:12px; }
+.obtn { padding:11px; border:1px solid var(--border2); background:transparent; color:var(--text2); cursor:pointer; font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:2px; transition:all .15s; text-align:center; border-radius:var(--r); }
+.obtn.yes:hover { border-color:var(--green); color:var(--green); }
+.obtn.no:hover  { border-color:var(--red); color:var(--red); }
+.obtn.yes.active{ background:var(--gdim); border-color:var(--green); color:var(--green); }
+.obtn.no.active { background:var(--rdim); border-color:var(--red); color:var(--red); }
+
+/* ── ALERTS ── */
+.alert { padding:10px 14px; font-family:var(--mono); font-size:10px; margin-bottom:13px; line-height:1.7; border-radius:var(--r); }
+.ag { background:var(--gdim); border:1px solid rgba(0,232,122,.15); color:var(--green); }
+.ar { background:var(--rdim); border:1px solid rgba(255,64,96,.15); color:var(--red); }
+.ay { background:var(--adim); border:1px solid rgba(245,166,35,.2); color:var(--amber); }
+.ac { background:var(--bdim); border:1px solid rgba(59,130,246,.15); color:var(--blue); }
+
+/* ── PAYLOAD ── */
+.pbox { display:none; margin-top:13px; }
+.plbl { font-family:var(--mono); font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; }
+.pbox textarea { width:100%; background:var(--bg); border:1px solid var(--border2); border-radius:var(--r); padding:10px; color:var(--text2); font-family:var(--mono); font-size:10px; resize:vertical; min-height:120px; outline:none; line-height:1.7; }
+
+/* ── PENDING ── */
+.pend { display:none; align-items:center; gap:8px; font-family:var(--mono); font-size:10px; color:var(--amber); padding:9px 13px; background:var(--adim); border:1px solid rgba(245,166,35,.2); margin-top:11px; border-radius:var(--r); }
+.blink { animation:blink 1.2s step-end infinite; }
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.1}}
+
+/* ── LOADING ── */
+.loading { padding:60px; text-align:center; color:var(--text3); font-family:var(--mono); font-size:11px; letter-spacing:1px; }
+
+/* ── TOAST ── */
+#toast { position:fixed; bottom:22px; right:22px; background:var(--surf2); border:1px solid var(--border2); border-radius:var(--r); padding:11px 16px; font-family:var(--mono); font-size:11px; color:var(--text); z-index:9999; display:none; max-width:360px; box-shadow:0 12px 40px var(--shadow); letter-spacing:.3px; line-height:1.5; }
+#toast.ok  { border-color:var(--green); color:var(--green); }
+#toast.err { border-color:var(--red);   color:var(--red); }
+
+/* ── PAGES ── */
+.page { display:none; }
+.page.active { display:block; animation:pageIn .18s ease; }
+@keyframes pageIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── INFO GRID ── */
+.igrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(130px,1fr)); gap:8px; }
+.icell { background:var(--bg); border:1px solid var(--border); padding:13px; border-radius:var(--r); }
+.ilbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; }
+.ival { font-family:var(--mono); font-size:14px; color:var(--text); }
+
+/* ── KEY / WALLET ── */
+.kstat { display:flex; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--border2); border-radius:var(--r); font-family:var(--mono); font-size:11px; margin-bottom:13px; color:var(--text2); }
+.kstat.loaded { border-color:var(--green); background:var(--gdim); color:var(--green); }
+.addr-mono { font-family:var(--mono); font-size:10px; color:var(--cyan); word-break:break-all; padding:8px 12px; background:var(--bg); border:1px solid var(--border2); margin-top:8px; border-radius:var(--r); }
+.bal-wrap { padding:18px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); margin-bottom:14px; }
+.bal-num { font-family:var(--display); font-size:32px; font-weight:800; color:var(--green); line-height:1; margin-bottom:2px; }
+.bal-unit { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:2px; }
+.sinfo { font-family:var(--mono); font-size:10px; color:var(--text2); line-height:2; }
+.sinfo em { color:var(--green); font-style:normal; }
+code { font-family:var(--mono); font-size:11px; background:var(--bg2); padding:1px 5px; border:1px solid var(--border); color:var(--cyan); border-radius:3px; }
+.cwrap { display:flex; align-items:center; gap:5px; }
+.cbtn { background:var(--bg2); border:1px solid var(--border); color:var(--text3); padding:3px 8px; font-size:11px; cursor:pointer; transition:all .15s; border-radius:3px; }
+.cbtn:hover { border-color:var(--green); color:var(--green); }
+.cbtn.ok { color:var(--green); border-color:var(--green); }
+.sbadge { display:inline-flex; align-items:center; gap:5px; padding:4px 12px; background:var(--rdim); border:1px solid rgba(255,64,96,.2); border-radius:var(--r); font-family:var(--mono); font-size:9px; color:var(--red); cursor:pointer; transition:all .15s; margin-top:7px; }
+.sbadge:hover { background:var(--red); color:#fff; }
+.sbadge.hidden { display:none; }
+
+/* ── OFFLINE BANNER ── */
+#offBanner { display:none; position:sticky; top:0; z-index:50; background:rgba(255,64,96,.07); border-bottom:1px solid rgba(255,64,96,.2); padding:7px 18px; font-family:var(--mono); font-size:10px; color:var(--red); text-align:center; }
+#offBanner.show { display:block; }
+
+/* ── CONFIRM MODAL ── */
+#confOverlay { display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.8); backdrop-filter:blur(6px); align-items:center; justify-content:center; }
+#confOverlay.open { display:flex; }
+.cm { background:var(--surface); border:1px solid var(--border2); border-radius:var(--r); width:min(430px,92vw); max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px var(--shadow); }
+.cm-h { padding:18px; border-bottom:1px solid var(--border); }
+.cm-t { font-family:var(--display); font-size:16px; font-weight:800; }
+.cm-s { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; margin-top:3px; }
+.cm-rows { padding:14px 18px; }
+.cm-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:11px; }
+.cm-row:last-child { border:none; }
+.cm-l { color:var(--text3); }
+.cm-v { color:var(--text); word-break:break-all; text-align:right; max-width:60%; }
+.cm-v.g { color:var(--green); }
+.cm-v.r { color:var(--red); }
+.cm-btns { display:flex; border-top:1px solid var(--border); }
+.cm-btns button { flex:1; padding:14px; border:none; cursor:pointer; font-family:var(--display); font-size:13px; font-weight:700; transition:all .15s; }
+#confCancel { background:transparent; color:var(--text2); border-right:1px solid var(--border); }
+#confCancel:hover { color:var(--text); background:var(--bg2); }
+#confOk { background:var(--green); color:#000; border-radius:0 0 var(--r) 0; }
+#confOk:hover { filter:brightness(1.08); }
+
+/* ── MARKET DETAIL INFO TABLE ── */
+.mitem { display:flex; justify-content:space-between; align-items:flex-start; padding:9px 0; border-bottom:1px solid var(--border); gap:12px; }
+.mlbl { font-family:var(--mono); font-size:10px; color:var(--text3); flex-shrink:0; }
+.mval { font-family:var(--mono); font-size:11px; color:var(--text2); text-align:right; word-break:break-all; }
+.mval.g { color:var(--green); }
+
+/* ── ACTIVITY FEED ── */
+.act-item {
+  display:flex; align-items:flex-start; gap:12px;
+  padding:11px 16px; border-bottom:1px solid var(--border);
+  font-family:var(--mono); font-size:11px;
+}
+.act-item:last-child { border-bottom:none; }
+.act-icon { width:28px; height:28px; border-radius:var(--r); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; margin-top:1px; }
+.act-icon-create   { background:var(--bdim); }
+.act-icon-predict  { background:var(--gdim); }
+.act-icon-propose  { background:var(--adim); }
+.act-icon-finalize { background:rgba(59,130,246,.08); }
+.act-icon-claim    { background:var(--gdim); }
+.act-icon-dispute  { background:var(--rdim); }
+.act-body { flex:1; min-width:0; }
+.act-type { color:var(--text2); font-weight:500; margin-bottom:2px; }
+.act-meta { color:var(--text3); font-size:10px; }
+.act-block { margin-left:auto; color:var(--text3); font-size:9px; flex-shrink:0; padding-top:2px; }
+
+/* ── REWARD PAGES ── */
+.rw-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+@media(max-width:768px){ .rw-stats { grid-template-columns:1fr; } }
+.rw-stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:16px; }
+.rw-stat-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; }
+.rw-stat-val { font-family:var(--display); font-size:22px; font-weight:800; color:var(--text); }
+.rw-stat-val.g { color:var(--green); }
+.rw-stat-sub { font-family:var(--mono); font-size:9px; color:var(--text3); margin-top:3px; }
+.rw-formula { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:12px 14px; margin-bottom:16px; font-family:var(--mono); font-size:10px; color:var(--text2); line-height:1.8; }
+.rw-formula b { color:var(--green); }
+.rw-table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; margin-bottom:16px; }
+.rw-table th { text-align:left; font-size:8px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:6px 10px; border-bottom:1px solid var(--border); }
+.rw-table td { padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text2); }
+.rw-table tr:last-child td { border-bottom:none; }
+.rw-table td.g { color:var(--green); }
+.rw-table td.d { color:var(--text3); }
+.rw-vesting { background:var(--adim); border:1px solid rgba(245,166,35,.2); border-radius:var(--r); padding:10px 14px; margin-bottom:16px; font-family:var(--mono); font-size:10px; color:var(--amber); }
+.rw-unauth { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 20px; text-align:center; }
+.rw-unauth-icon { font-size:40px; margin-bottom:16px; opacity:.4; }
+.rw-unauth-title { font-family:var(--display); font-size:18px; font-weight:700; color:var(--text2); margin-bottom:8px; }
+.rw-unauth-sub { font-family:var(--mono); font-size:10px; color:var(--text3); }
+.rrs-badge { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:var(--r); font-family:var(--mono); font-size:11px; font-weight:600; margin-bottom:16px; }
+.rrs-bronze { background:rgba(205,127,50,.12); color:#cd7f32; border:1px solid rgba(205,127,50,.25); }
+.rrs-silver { background:rgba(192,192,192,.12); color:#aaa; border:1px solid rgba(192,192,192,.25); }
+.rrs-gold   { background:rgba(255,215,0,.12);   color:#ffd700; border:1px solid rgba(255,215,0,.25); }
+
+/* ── RESOLVER CARDS ── */
+.res-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  padding:14px 16px; display:flex; align-items:center; gap:14px; margin-bottom:10px;
+  transition:border-color .15s;
+}
+@media(max-width:768px){ .res-card { flex-wrap:wrap; } .res-avatar { display:none; } }
+.res-card:hover { border-color:var(--border2); }
+.res-avatar {
+  width:38px; height:38px; border-radius:50%; background:var(--surf3);
+  border:1px solid var(--border2); display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-size:12px; color:var(--text3); flex-shrink:0;
+}
+.res-info { flex:1; min-width:0; }
+.res-addr { font-family:var(--mono); font-size:11px; color:var(--cyan); margin-bottom:6px; word-break:break-all; white-space:normal; }
+.res-stats { display:flex; gap:12px; flex-wrap:wrap; }
+.res-stat { display:flex; flex-direction:column; gap:1px; }
+.res-stat-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
+.res-stat-val { font-family:var(--mono); font-size:11px; color:var(--text2); }
+.tier-badge { padding:3px 8px; border-radius:10px; font-family:var(--mono); font-size:8px; font-weight:600; letter-spacing:1px; }
+.tier-bronze { background:rgba(205,127,50,.1); color:#cd7f32; border:1px solid rgba(205,127,50,.2); }
+.tier-silver { background:rgba(192,192,192,.1); color:#b8c8d8; border:1px solid rgba(192,192,192,.2); }
+.tier-gold   { background:rgba(255,215,0,.1);   color:#ffd700; border:1px solid rgba(255,215,0,.2); }
+
+/* ── BREAKDOWN ── */
+.breakdown { margin-bottom:13px; background:var(--bg); border:1px solid var(--border); padding:12px 14px; border-radius:var(--r); }
+.bk-row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:11px; }
+.bk-row:last-child { border:none; margin-top:4px; }
+.bk-l { color:var(--text3); }
+.bk-v { color:var(--text); }
+.bk-v.g { color:var(--green); }
+
+/* ── BANNER ── */
+.mc-banner { padding:11px 14px; display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:11px; }
+.mcard-banner { width:100%; height:160px; object-fit:cover; display:block; border-bottom:1px solid var(--border); border-radius:var(--r) var(--r) 0 0; }
+.mcard-featured .mcard-banner { height:160px; }
+.bnr { background:var(--adim); color:var(--amber); border-bottom:1px solid rgba(245,166,35,.15); }
+
+/* ── CAP INDICATOR ── */
+#cap_indicator { display:none; margin-bottom:8px; padding:8px 12px; font-family:var(--mono); font-size:10px; border-radius:var(--r); }
+
+/* ── PORTFOLIO STRIP ── */
+.port-strip {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px;
+  margin-bottom:20px;
+}
+.port-cell {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  padding:14px 16px;
+}
+.port-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; margin-bottom:6px; }
+.port-val { font-family:var(--display); font-size:20px; font-weight:800; color:var(--text); }
+.port-val.g { color:var(--green); }
+
+/* mobile handled by style.css */
+</style>
+</head>
+<body>
+<div id="offBanner">⚠ &nbsp; Node offline — check Settings</div>
+<div class="shell">
+
+<!-- ══════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════ -->
+<div style="display:flex;flex:1;min-height:0"><nav class="sidebar" id="deskNav">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
+        <path d="M5 85 Q20 85 35 60 Q50 10 65 60 Q80 85 95 85" stroke="#00e87a" stroke-width="7" stroke-linecap="round" fill="none"/>
+        <circle cx="50" cy="18" r="7" fill="#00e87a"/>
+      </svg>
+    </div>
+    <div class="logo-text">
+      <div class="brand">PRAXIS</div>
+      <div class="ticker">$PRX</div>
+    </div>
+  </div>
+
+  <div class="net-badge">
+    <div class="dot" id="rpcDot"></div>
+    <span id="rpcStatus">connecting…</span>
+    <span class="net-height" id="hBadge"></span>
+  </div>
+
+  <div class="nav">
+    <div class="ns">Markets</div>
+    <div class="ni active" data-p="markets"   onclick="showPage('markets',this)">  <span class="ni-ic">◈</span>Browse Markets</div>
+    <div class="ni" data-p="predict"   onclick="showPage('predict',this)">  <span class="ni-ic">⚡</span>Submit Prediction</div>
+    <div class="ni" data-p="claim"     onclick="showPage('claim',this)">    <span class="ni-ic">◎</span>Claim Winnings</div>
+    <div class="ni" data-p="reclaim"   onclick="showPage('reclaim',this)">  <span class="ni-ic">◈</span>Reclaim Stake</div>
+    <div class="ni" data-p="resolvers" onclick="showPage('resolvers',this)"><span class="ni-ic">◈</span>Browse Resolvers</div>
+    <div class="ni" data-p="claimcreator" onclick="showPage('claimcreator',this)"><span class="ni-ic">◎</span>Claim Creator Fee</div>
+    <div class="ni" data-p="cancel"    onclick="showPage('cancel',this)">   <span class="ni-ic">✕</span>Cancel Market</div>
+
+    <div class="ns">Rewards</div>
+    <div class="ni" data-p="reward-resolver"  onclick="showPage('reward-resolver',this)"><span class="ni-ic">⚡</span>Resolver Rewards<span class="rb rb-r">Resolver</span></div>
+    <div class="ni" data-p="reward-builder"   onclick="showPage('reward-builder',this)"><span class="ni-ic">🏗</span>Builder Rewards<span class="rb rb-a">Admin</span></div>
+    <div class="ni" data-p="reward-community" onclick="showPage('reward-community',this)"><span class="ni-ic">🌐</span>Community Rewards</div>
+    <div class="ni" data-p="reward-investor"  onclick="showPage('reward-investor',this)"><span class="ni-ic">📈</span>Investor Rewards</div>
+    <div class="ni" data-p="reward-protocol"  onclick="showPage('reward-protocol',this)"><span class="ni-ic">⚙</span>Protocol Rewards</div>
+
+    <div class="ns">Account</div>
+    <div class="ni" data-p="wallet" onclick="showPage('wallet',this)"><span class="ni-ic">◫</span>Wallet</div>
+    <div class="ni" data-p="signer" onclick="showPage('signer',this)"><span class="ni-ic">◉</span>Signer</div>
+
+    <div class="ns" id="nav-resolver-section" style="display:none">Resolver</div>
+    <div class="ni nav-resolver-item" data-p="register"       onclick="showPage('register',this)"       style="display:none"><span class="ni-ic">◈</span>Register<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="forfeit"        onclick="showPage('forfeit',this)"        style="display:none"><span class="ni-ic">↩</span>Forfeit Position<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="propose"        onclick="showPage('propose',this)"        style="display:none"><span class="ni-ic">◇</span>Propose Outcome<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="dispute"        onclick="showPage('dispute',this)"        style="display:none"><span class="ni-ic">⚠</span>File Dispute<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="commit"         onclick="showPage('commit',this)"         style="display:none"><span class="ni-ic">◌</span>Commit Vote<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="reveal"         onclick="showPage('reveal',this)"         style="display:none"><span class="ni-ic">◎</span>Reveal Vote<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="tally"          onclick="showPage('tally',this)"          style="display:none"><span class="ni-ic">≡</span>Tally Votes<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="slash"          onclick="showPage('slash',this)"          style="display:none"><span class="ni-ic">◈</span>Claim Slash<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="unstake-resolver" onclick="showPage('unstake-resolver',this)" style="display:none"><span class="ni-ic">↓</span>Unstake Resolver<span class="rb rb-r">Resolver</span></div>
+    <div class="ni nav-resolver-item" data-p="claim-unbonded" onclick="showPage('claim-unbonded',this)" style="display:none"><span class="ni-ic">◎</span>Claim Unbonded<span class="rb rb-r">Resolver</span></div>
+
+    <div class="ns" id="nav-admin-section" style="display:none">Admin</div>
+    <div class="ni nav-admin-item" data-p="create"   onclick="showPage('create',this)"   style="display:none"><span class="ni-ic">+</span>Create Market<span class="rb rb-a">Admin</span></div>
+    <div class="ni nav-admin-item" data-p="finalize" onclick="showPage('finalize',this)" style="display:none"><span class="ni-ic">✓</span>Finalize Market<span class="rb rb-a">Admin</span></div>
+    <div class="ni nav-admin-item" data-p="node"     onclick="showPage('node',this)"     style="display:none"><span class="ni-ic">⊙</span>Settings<span class="rb rb-a">Admin</span></div>
+  </div>
+
+  <div class="sbfoot">
+    <div class="conn-row">
+      <div class="dot" id="rpcDotFoot"></div>
+      <span id="rpcStatusFoot">connecting…</span>
+    </div>
+    <div class="theme-btn" onclick="toggleTheme()">
+      <div class="ttrack"><div class="tthumb"></div></div>
+      <span id="tlbl">Light mode</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════
+     MOBILE NAV
+══════════════════════════════════════ -->
+<div class="mobhead">
+  <div class="moblogo">PRAXIS</div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="conn-row"><div class="dot" id="rpcDotM"></div></div>
+    <button class="ham" onclick="openNav()" style="display:none">☰</button>
+  </div>
+</div>
+
+<nav class="btab-bar" id="bnav">
+  <button class="btab active" data-p="markets" onclick="showPage('markets',this)">
+    <span class="btab-icon">◈</span>
+    <span>Markets</span>
+  </button>
+  <button class="btab" data-p="resolvers" onclick="showPage('resolvers',this)">
+    <span class="btab-icon">◉</span>
+    <span>Resolvers</span>
+  </button>
+  <button class="btab" data-p="search" onclick="showPage('search',this)">
+    <span class="btab-icon">⌕</span>
+    <span>Search</span>
+  </button>
+  <button class="btab" data-p="wallet" onclick="showPage('wallet',this)">
+    <span class="btab-icon">◫</span>
+    <span>Wallet</span>
+  </button>
+  <button class="btab" id="btab-more" onclick="openNav()">
+    <span class="btab-icon">≡</span>
+    <span>More</span>
+  </button>
+</nav>
+<div class="mobnav" id="mobNav" onclick="closeNav(event)">
+  <div class="mobpanel">
+    <button class="mobclose" onclick="closeNav()">✕</button>
+    <div style="padding-top:50px" id="mobNavBody"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGES
+══════════════════════════════════════ -->
+<main class="main">
+
+<!-- ── SEARCH ── -->
+<div class="page" id="page-search">
+  <div class="ph ph-g"><div class="ph-eye">Discover</div><div class="ph-title">Search Markets</div><div class="ph-sub">Find markets by keyword, category, or creator</div></div>
+  <div class="field" style="margin-bottom:16px">
+    <input id="srch-input" type="text" placeholder="Search markets..." oninput="runSearch()" style="font-size:15px;padding:12px 14px"/>
+  </div>
+  <div class="cat-pick" style="margin-bottom:16px" id="srch-cats">
+    <div class="cpick active" data-cat="all"      onclick="srchCat(this)">All</div>
+    <div class="cpick"        data-cat="crypto"   onclick="srchCat(this)">🪙 Crypto</div>
+    <div class="cpick"        data-cat="sports"   onclick="srchCat(this)">⚽ Sports</div>
+    <div class="cpick"        data-cat="politics" onclick="srchCat(this)">🗳 Politics</div>
+    <div class="cpick"        data-cat="finance"  onclick="srchCat(this)">📈 Finance</div>
+    <div class="cpick"        data-cat="other"    onclick="srchCat(this)">◈ Other</div>
+  </div>
+  <div id="srch-results"><div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:40px 0">Type to search markets</div></div>
+</div>
+
+<!-- ── BROWSE MARKETS ── -->
+<div class="page active" id="page-markets">
+  <div class="ph ph-g">
+    <div class="ph-eye">Live on Canopy</div>
+    <div class="ph-title">Prediction Markets</div>
+    <div class="ph-sub">Browse open markets and place your predictions using $PRX</div>
+  </div>
+
+  <div class="sbar">
+    <div class="chip">Markets <b id="sb_c">—</b></div>
+    <div class="chip">Block <b id="sb_h">—</b></div>
+    <div class="chip">Volume <b id="sb_vol" class="g">—</b></div>
+    <button class="btn bsec bsm" onclick="loadMarkets()">↻ Refresh</button>
+    <button class="btn bsec bsm" onclick="clearScanCache()" title="Clear cache and rescan all blocks"><span class="hide-mob">Full </span>⟳ Rescan</button>
+  </div>
+
+  <div class="cats">
+    <div class="cat active" data-cat="all"     onclick="filterCat(this)">All</div>
+    <div class="cat"        data-cat="crypto"  onclick="filterCat(this)">🪙 Crypto</div>
+    <div class="cat"        data-cat="sports"  onclick="filterCat(this)">⚽ Sports</div>
+    <div class="cat"        data-cat="politics"onclick="filterCat(this)">🗳 Politics</div>
+    <div class="cat"        data-cat="finance" onclick="filterCat(this)">📈 Finance</div>
+    <div class="cat"        data-cat="other"   onclick="filterCat(this)">◈ Other</div>
+  </div>
+
+  <div class="mtabs">
+    <button class="mtab active" id="tab-live"     onclick="switchTab('live')">⬤ Live</button>
+    <button class="mtab"        id="tab-proposed" onclick="switchTab('proposed')">⚖ Proposed</button>
+    <button class="mtab"        id="tab-closed"   onclick="switchTab('closed')">◎ Closed</button>
+  </div>
+
+  <div id="marketsList"><div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading markets</div></div>
+</div>
+
+<!-- ── MARKET DETAIL ── -->
+<div class="page" id="page-detail">
+  <div class="ph ph-g">
+    <div class="ph-eye">Market Detail</div>
+    <div class="ph-title" id="det-question">—</div>
+    <div class="ph-sub"><button class="btn bsec bsm" onclick="showPage('markets',null)">← Back</button></div>
+  </div>
+
+  <div id="det-img-banner" style="display:none;border-radius:var(--r);overflow:hidden;margin-bottom:14px;max-height:200px">
+    <img id="det-img-banner-img" src="" alt="" style="width:100%;height:160px;object-fit:cover;display:block;border-radius:var(--r)"/>
+  </div>
+  <div class="det-grid">
+    <div class="det-main">
+      <!-- prob big display -->
+      <div class="prob-big">
+        <div class="prob-side prob-side-yes">
+          <div class="prob-side-pct" id="det-yes-pct">—</div>
+          <div class="prob-side-lbl">YES</div>
+          <div class="prob-side-pool" id="det-qyes">—</div>
+        </div>
+        <div class="prob-side prob-side-no">
+          <div class="prob-side-pct" id="det-no-pct">—</div>
+          <div class="prob-side-lbl">NO</div>
+          <div class="prob-side-pool" id="det-qno">—</div>
+        </div>
+      </div>
+      <div class="btrack" style="margin-bottom:16px;height:6px"><div class="byes" id="det-bar" style="width:50%"></div><div class="bno"></div></div>
+
+      <!-- banner -->
+      <div id="det-banner-card" style="display:none;margin-bottom:14px"></div>
+
+      <!-- activity + holders -->
+      <div class="card" style="margin-bottom:0;padding:0;overflow:hidden">
+        <div style="display:flex;border-bottom:1px solid var(--border)">
+          <button id="dtab-activity" onclick="switchDetailTab('activity')" style="flex:1;padding:11px 8px;font-family:var(--mono);font-size:9px;letter-spacing:1px;border:none;border-bottom:2px solid var(--green);background:none;color:var(--text2);cursor:pointer">⚡ ACTIVITY</button>
+          <button id="dtab-holders"  onclick="switchDetailTab('holders')"  style="flex:1;padding:11px 8px;font-family:var(--mono);font-size:9px;letter-spacing:1px;border:none;border-bottom:2px solid transparent;background:none;color:var(--text3);cursor:pointer">◈ TOP HOLDERS</button>
+        </div>
+        <div id="dpane-activity" style="min-height:160px"></div>
+        <div id="dpane-holders"  style="min-height:160px;display:none"></div>
+      </div>
+    </div>
+
+    <div class="det-sidebar">
+      <!-- status + action card -->
+      <div class="card" style="margin-bottom:0">
+        <div class="ci">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="det-status-pill"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+            <button class="byes2" id="det-bet-yes" onclick="">BET YES</button>
+            <button class="bno2"  id="det-bet-no"  onclick="">BET NO</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn bamb bsm" id="det-forfeit-btn" style="display:none;width:100%" onclick="">↩ Forfeit Position</button>
+            <button class="btn bsec bsm" id="det-propose-btn" style="display:none;width:100%" onclick="">⚖ Propose Outcome</button>
+            <button class="btn bp   bsm" id="det-claim-btn"   style="display:none;width:100%" onclick="">◎ Claim Winnings</button>
+            <button class="btn bsec bsm" id="det-reclaim-btn" style="display:none;width:100%" onclick="">↩ Reclaim Stake</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- market info -->
+      <div class="card" style="margin-bottom:0">
+        <div class="ci">
+          <div class="ct">Market Info</div>
+          <div class="mitem"><span class="mlbl">Market ID</span><span class="mval" id="det-mid" style="font-size:10px">—</span></div>
+          <div class="mitem"><span class="mlbl">Creator</span><span class="mval" id="det-creator">—</span></div>
+          <div class="mitem"><span class="mlbl">Total Pool</span><span class="mval g" id="det-total">—</span></div>
+          <div class="mitem"><span class="mlbl">Expiry</span><span class="mval" id="det-expiry">—</span></div>
+          <div id="det-rules-row" style="display:none;margin-top:12px">
+            <div style="font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+              RESOLUTION CRITERIA
+              <span id="det-cat-badge" style="padding:2px 8px;border-radius:10px;font-size:8px;font-weight:600;letter-spacing:1px"></span>
+            </div>
+            <div id="det-rules" style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.7;white-space:pre-wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px"></div>
+          </div>
+          <div class="mitem" id="det-resolver-row"><span class="mlbl">Resolver</span><span class="mval" id="det-resolver">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FORFEIT ── -->
+<div class="page" id="page-forfeit">
+  <div class="ph ph-r"><div class="ph-eye">Resolver Action</div><div class="ph-title">Forfeit Position</div><div class="ph-sub">Exit your position before proposing an outcome — required for COI-1 compliance</div></div>
+  <div class="alert ay">⚠ Forfeiting permanently exits your shares in this market. This cannot be undone.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// forfeit_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="fo_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Resolver Address</label><input id="fo_resolver" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="fo_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_forfeit" onclick="signAndSubmit_forfeit()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_forfeit()">Build Payload</button></div>
+    <div class="pend" id="pend_forfeit"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="foo"><div class="plbl">// unsigned_payload</div><textarea id="fop" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── PREDICT ── -->
+<div class="page" id="page-predict">
+  <div class="ph ph-g"><div class="ph-eye">Place Bet</div><div class="ph-title">Submit Prediction</div><div class="ph-sub">Buy YES or NO shares — cost determined by LMSR pricing</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// prediction_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="p_mid" type="text" placeholder="40 hex chars" oninput="checkPositionCap()"/></div><div class="field"><label>Bettor Address</label><input id="p_bettor" type="text" placeholder="40 hex chars" oninput="checkPositionCap()"/></div></div>
+    <div class="field"><label>Outcome</label><div class="otog"><div class="obtn yes active" id="btn_yes" onclick="setOut(true)">YES</div><div class="obtn no" id="btn_no" onclick="setOut(false)">NO</div></div></div>
+    <div class="r3">
+      <div class="field"><label>Shares (PRX)</label><input id="p_shares" type="number" value="1" oninput="updatePredictBreakdown()"/><div class="hint">Min 1 PRX</div></div>
+      <div class="field"><label>Slippage <span id="p_slip_lbl" style="color:var(--green);font-size:10px">5.0%</span></label><input id="p_slippage" type="range" min="1" max="10" step="0.5" value="5" oninput="updatePredictBreakdown()" style="width:100%;accent-color:var(--green)"/><div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--text3)"><span>1%</span><span>10%</span></div></div>
+      <div class="field"><label>Max Cost (PRX)</label><input id="p_maxcost" type="number" value="100" readonly style="opacity:.6"/></div>
+    </div>
+    <div class="field"><label>Fee (uPRX)</label><input id="p_fee" type="number" value="10000"/></div>
+    <div id="predict_breakdown" class="breakdown"></div>
+    <div id="cap_indicator"></div>
+    <div class="brow"><button class="btn bp" id="btn_predict" onclick="signAndSubmit_predict()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_predict()">Build Payload</button></div>
+    <div class="pend" id="pend_predict"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="po"><div class="plbl">// unsigned_payload</div><textarea id="pp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── CLAIM WINNINGS ── -->
+<div class="page" id="page-claim">
+  <div class="ph ph-g"><div class="ph-eye">Collect Payout</div><div class="ph-title">Claim Winnings</div><div class="ph-sub">Proportional payout from losing pool after finalization</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="cl_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="cl_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="cl_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_claim" onclick="signAndSubmit_claim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_claim()">Build Payload</button></div>
+    <div class="pend" id="pend_claim"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="clo"><div class="plbl">// unsigned_payload</div><textarea id="clp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── RECLAIM STAKE ── -->
+<div class="page" id="page-reclaim">
+  <div class="ph ph-r"><div class="ph-eye">Recover Funds</div><div class="ph-title">Reclaim Stake</div><div class="ph-sub">Recover funds from expired markets with no resolver</div></div>
+  <div class="alert ay">Only available if no resolver proposed an outcome within the resolution window.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// reclaim_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="rc_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="rc_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="rc_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_reclaim" onclick="signAndSubmit_reclaim()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_reclaim()">Build Payload</button></div>
+    <div class="pend" id="pend_reclaim"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="rco"><div class="plbl">// unsigned_payload</div><textarea id="rcp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── BROWSE RESOLVERS ── -->
+<div class="page" id="page-resolvers">
+  <div class="ph ph-g"><div class="ph-eye">Network</div><div class="ph-title">Browse Resolvers</div><div class="ph-sub">Active resolvers staking $PRX to guarantee market outcomes</div></div>
+  <div id="resolversList"><div class="loading"><span class="blink">▪ ▪ ▪</span>&nbsp;&nbsp;loading resolvers</div></div>
+</div>
+
+<!-- ── CLAIM CREATOR FEE ── -->
+<div class="page" id="page-claimcreator">
+  <div class="ph ph-g"><div class="ph-eye">Creator</div><div class="ph-title">Claim Creator Fee</div><div class="ph-sub">Collect accumulated fees from markets you created</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// creator_fee_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="cf_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Creator Address</label><input id="cf_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="cf_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_cf" onclick="signAndSubmit_claimcreator()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_claimcreator()">Build Payload</button></div>
+    <div class="pend" id="pend_cf"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="cfo"><div class="plbl">// unsigned_payload</div><textarea id="cfp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── CANCEL MARKET ── -->
+<div class="page" id="page-cancel">
+  <div class="ph ph-r"><div class="ph-eye">Admin</div><div class="ph-title">Cancel Market</div><div class="ph-sub">Cancel an open market before expiry — creator bond returned</div></div>
+  <div class="alert ay">⚠ Cancellation is irreversible. All bettors can reclaim their stakes.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// cancel_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="can_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Creator Address</label><input id="can_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="can_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bamb" id="btn_cancel" onclick="signAndSubmit_cancel()">✕ Cancel Market</button><button class="btn bsec" onclick="build_cancel()">Build Payload</button></div>
+    <div class="pend" id="pend_cancel"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="cano"><div class="plbl">// unsigned_payload</div><textarea id="canp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── WALLET ── -->
+<div class="page" id="page-wallet">
+  <div class="ph ph-g"><div class="ph-eye">Account</div><div class="ph-title">Wallet</div><div class="ph-sub">Check balances, send $PRX, and view your predictions</div></div>
+  <div class="card" id="mm_card"><div class="ci">
+    <div class="ct">// metamask_identity</div>
+    <div id="mm_disconnected">
+      <div class="sinfo" style="margin-bottom:12px">Connect MetaMask to verify your identity. Your BLS keystore handles transaction signing.</div>
+      <div class="brow"><button class="btn bp" onclick="connectMetaMask()">🦊 Connect MetaMask</button></div>
+    </div>
+    <div id="mm_connected" style="display:none">
+      <div class="kstat loaded" id="mm_status">✓ connected</div>
+      <div class="field" style="margin-top:10px"><label>ETH Address</label><div class="addr-mono" id="mm_addr" style="color:var(--green)"></div></div>
+      <div class="brow" style="margin-top:10px"><button class="btn bsec" onclick="disconnectMetaMask()">Disconnect</button></div>
+    </div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// balance_lookup</div>
+    <div class="field"><label>Address (40 hex)</label><input id="w_addr" type="text" placeholder="e7c7dad1…"/></div>
+    <div class="brow"><button class="btn bp" onclick="queryAccount()">Query Balance</button></div>
+    <div id="w_result" style="display:none;margin-top:15px">
+      <div class="bal-wrap"><div class="bal-num" id="w_balance">0</div><div class="bal-unit">$PRX LIQUID</div></div>
+      <div class="addr-mono" id="w_addrD"></div>
+    </div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// send_prx</div>
+    <div class="r2"><div class="field"><label>From Address</label><input id="s_from" type="text" placeholder="40 hex chars"/></div><div class="field"><label>To Address</label><input id="s_to" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="r2"><div class="field"><label>Amount (PRX)</label><input id="s_amount" type="number" value="1"/></div><div class="field"><label>Fee (uPRX)</label><input id="s_fee" type="number" value="10000"/></div></div>
+    <div class="brow"><button class="btn bp" id="btn_send" onclick="signAndSubmit_send()">⚡ Send $PRX</button><button class="btn bsec" onclick="build_send()">Build Payload</button></div>
+    <div class="pend" id="pend_send"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="so"><div class="plbl">// unsigned_payload</div><textarea id="sp" readonly></textarea></div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// my_predictions</div>
+    <div id="myPredictions"><div style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Load wallet to see predictions</div></div>
+  </div></div>
+</div>
+
+<!-- ── SIGNER ── -->
+<div class="page" id="page-signer">
+  <div class="ph ph-g"><div class="ph-eye">BLS12-381</div><div class="ph-title">Signer</div><div class="ph-sub">Encrypted keystore — private key held in RAM only, never stored or sent</div></div>
+
+  <div class="card"><div class="ci">
+    <div class="ct">// session_status</div>
+    <div class="kstat" id="keyStatus">○ No key loaded — transactions cannot be signed</div>
+    <div class="sbadge hidden" id="sessBadge" onclick="clearKey()">✕ &nbsp; Clear session</div>
+    <div id="sk_derived" style="display:none;margin-top:15px">
+      <div class="field"><label>Public Key (48 bytes · G1)</label><div class="addr-mono" id="sk_pub" style="font-size:9px;word-break:break-all"></div></div>
+      <div class="field" style="margin-top:9px"><label>Derived Address</label><div class="addr-mono" id="sk_addr" style="color:var(--green)"></div></div>
+    </div>
+  </div></div>
+
+  <div class="card" id="ks_quick_wrap" style="display:none"><div class="ci">
+    <div class="ct">// quick_unlock</div>
+    <div class="alert ag" style="margin-bottom:12px">Saved keystore detected — enter password to restore session.</div>
+    <div class="field">
+      <label>Account</label>
+      <div class="addr-mono" id="ks_quick_addr" style="color:var(--green);font-size:12px"></div>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_quick_pw" type="password" placeholder="Keystore password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="quickUnlock()">⚡ Quick Unlock</button>
+      <button class="btn bsec" onclick="localStorage.removeItem('praxis_keystore');checkSavedKeystore();toast('Saved keystore cleared')">Forget</button>
+    </div>
+  </div></div>
+
+  <div class="card"><div class="ci">
+    <div class="ct">// import_keystore</div>
+    <div class="field">
+      <label>Keystore File (.json)</label>
+      <input id="ks_imp_file" type="file" accept=".json"/>
+      <div class="hint">Upload your encrypted Praxis keystore JSON</div>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_imp_pw" type="password" placeholder="Keystore password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="importKeystore()">🔓 Unlock Keystore</button>
+      <button class="btn bsec" onclick="clearKey()">Clear</button>
+    </div>
+  </div></div>
+
+  <div class="card"><div class="ci">
+    <div class="ct">// create_keystore</div>
+    <div class="alert ay" style="margin-bottom:12px">Generates a new BLS12-381 keypair and downloads an encrypted keystore file.</div>
+    <div class="field">
+      <label>Password</label>
+      <input id="ks_new_pw" type="password" placeholder="Choose a strong password…"/>
+    </div>
+    <div class="field">
+      <label>Confirm Password</label>
+      <input id="ks_new_pw2" type="password" placeholder="Confirm password…"/>
+    </div>
+    <div class="brow">
+      <button class="btn bp" onclick="createKeystore()">⚙ Generate &amp; Download</button>
+    </div>
+  </div></div>
+
+  <div class="card"><div class="ci">
+    <div class="ct">// signing_spec</div>
+    <div class="sinfo">
+      1. sign_bytes = proto.Marshal(Transaction{…, <em>signature:nil</em>})<br>
+      2. time = <em>BigInt(Date.now()) × 1000n</em> — microseconds<br>
+      3. BLS12-381 <em>G2 signature (96 bytes)</em> — @noble/curves<br>
+      4. address = <em>SHA256(pubKey).slice(0,20)</em><br>
+      5. Keystore = <em>AES-GCM + PBKDF2 (200k iterations)</em>
+    </div>
+  </div></div>
+</div>
+
+<!-- ── RESOLVER PAGES (same forms, new styling) ── -->
+<div class="page" id="page-register">
+  <div class="ph ph-r"><div class="ph-eye">Resolver</div><div class="ph-title">Register as Resolver</div><div class="ph-sub">Stake $PRX to earn resolution fees — minimum 500,000 PRX</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// register_parameters</div>
+    <div class="r2"><div class="field"><label>Resolver Address</label><input id="reg_addr" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Stake Amount (PRX)</label><input id="reg_stake" type="number" value="500000" oninput="updateRegisterBreakdown()"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="reg_fee" type="number" value="10000"/></div>
+    <div id="register_breakdown" class="breakdown"></div>
+    <div class="brow"><button class="btn bp" id="btn_register" onclick="signAndSubmit_register()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_register()">Build Payload</button></div>
+    <div class="pend" id="pend_register"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="rego"><div class="plbl">// unsigned_payload</div><textarea id="regp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-propose">
+  <div class="ph ph-r"><div class="ph-eye">Resolver</div><div class="ph-title">Propose Outcome</div><div class="ph-sub">Submit your resolution after market expiry</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// propose_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="pr_mid" type="text" placeholder="40 hex chars" oninput="updateProposeRisk()"/></div><div class="field"><label>Resolver Address</label><input id="pr_resolver" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Proposed Outcome</label><div class="otog"><div class="obtn yes active" id="pr_btn_yes" onclick="setPropOut(true)">YES</div><div class="obtn no" id="pr_btn_no" onclick="setPropOut(false)">NO</div></div></div>
+    <div id="pr_risk_box" style="display:none;margin-bottom:13px;padding:10px 14px;border-radius:var(--r);font-family:var(--mono);font-size:10px;line-height:1.7"></div>
+    <div class="field"><label>Proposal Bond (PRX)</label><input id="pr_bond" type="number" value="60"/><div class="hint" id="prop_bond_hint">Enter Market ID to compute min bond</div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="pr_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_propose" onclick="signAndSubmit_propose()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_propose()">Build Payload</button></div>
+    <div class="pend" id="pend_propose"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="pro"><div class="plbl">// unsigned_payload</div><textarea id="prp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-dispute">
+  <div class="ph ph-r"><div class="ph-eye">Resolver</div><div class="ph-title">File Dispute</div><div class="ph-sub">Challenge a proposed outcome during the dispute window</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// dispute_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="di_mid" type="text" placeholder="40 hex chars" oninput="updateDisputeRisk()"/></div><div class="field"><label>Disputer Address</label><input id="di_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div id="di_risk_box" style="display:none;margin-bottom:13px;padding:10px 14px;border-radius:var(--r);font-family:var(--mono);font-size:10px;line-height:1.7"></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="di_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_dispute" onclick="signAndSubmit_dispute()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_dispute()">Build Payload</button></div>
+    <div class="pend" id="pend_dispute"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="dio"><div class="plbl">// unsigned_payload</div><textarea id="dip" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-commit">
+  <div class="ph ph-r"><div class="ph-eye">Resolver</div><div class="ph-title">Commit Vote</div><div class="ph-sub">Submit a blinded commitment during the voting phase</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// commit_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="cv_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Voter Address</label><input id="cv_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="r2"><div class="field"><label>Commitment Hash (hex)</label><input id="cv_hash" type="text" placeholder="64 hex chars"/></div><div class="field"><label>Fee (uPRX)</label><input id="cv_fee" type="number" value="10000"/></div></div>
+    <div class="brow"><button class="btn bp" id="btn_commit" onclick="signAndSubmit_commit()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_commit()">Build Payload</button></div>
+    <div class="pend" id="pend_commit"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="cvo"><div class="plbl">// unsigned_payload</div><textarea id="cvp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-reveal">
+  <div class="ph ph-r"><div class="ph-eye">Resolver</div><div class="ph-title">Reveal Vote</div><div class="ph-sub">Reveal your committed vote during the reveal phase</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// reveal_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="rv_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Voter Address</label><input id="rv_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="r2"><div class="field"><label>Vote (YES/NO)</label><div class="otog"><div class="obtn yes active" id="rv_btn_yes" onclick="setRevOut(true)">YES</div><div class="obtn no" id="rv_btn_no" onclick="setRevOut(false)">NO</div></div></div><div class="field"><label>Salt (hex)</label><input id="rv_salt" type="text" placeholder="32 hex chars"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="rv_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_reveal" onclick="signAndSubmit_reveal()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_reveal()">Build Payload</button></div>
+    <div class="pend" id="pend_reveal"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="rvo"><div class="plbl">// unsigned_payload</div><textarea id="rvp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-tally">
+  <div class="ph ph-r"><div class="ph-eye">Resolver</div><div class="ph-title">Tally Votes</div><div class="ph-sub">Trigger vote tallying after the reveal phase ends</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// tally_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="ta_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Caller Address</label><input id="ta_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="ta_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_tally" onclick="signAndSubmit_tally()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_tally()">Build Payload</button></div>
+    <div class="pend" id="pend_tally"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="tao"><div class="plbl">// unsigned_payload</div><textarea id="tap" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-slash">
+  <div class="ph ph-r"><div class="ph-eye">Resolver</div><div class="ph-title">Claim Slash</div><div class="ph-sub">Claim slashed stake from a penalized resolver</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// slash_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="sl_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Claimant Address</label><input id="sl_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="sl_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_slash" onclick="signAndSubmit_slash()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_slash()">Build Payload</button></div>
+    <div class="pend" id="pend_slash"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="slo"><div class="plbl">// unsigned_payload</div><textarea id="slp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-unstake-resolver">
+  <div class="ph ph-r"><div class="ph-eye">Resolver</div><div class="ph-title">Unstake Resolver</div><div class="ph-sub">Begin 120,960-block unbonding period — partial or full exit</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// unstake_parameters</div>
+    <div class="r2"><div class="field"><label>Resolver Address</label><input id="un_addr" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Amount (PRX) — 0 = full exit</label><input id="un_amount" type="number" value="0"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="un_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bamb" id="btn_unstake" onclick="signAndSubmit_unstake()">↓ Unstake</button><button class="btn bsec" onclick="build_unstake()">Build Payload</button></div>
+    <div class="pend" id="pend_unstake"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="uno"><div class="plbl">// unsigned_payload</div><textarea id="unp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-claim-unbonded">
+  <div class="ph ph-r"><div class="ph-eye">Resolver</div><div class="ph-title">Claim Unbonded Stake</div><div class="ph-sub">Release tokens after the 120,960-block unbonding period</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_unbonded_parameters</div>
+    <div class="field"><label>Resolver Address</label><input id="ub_addr" type="text" placeholder="40 hex chars"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="ub_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_ub" onclick="signAndSubmit_claimunbonded()">◎ Claim Unbonded</button><button class="btn bsec" onclick="build_claimunbonded()">Build Payload</button></div>
+    <div class="pend" id="pend_ub"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="ubo"><div class="plbl">// unsigned_payload</div><textarea id="ubp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── ADMIN PAGES ── -->
+<div class="page" id="page-create">
+  <div class="ph ph-a"><div class="ph-eye">Admin</div><div class="ph-title">Create Market</div><div class="ph-sub">Deploy a new prediction market on Praxis</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// market_parameters</div>
+    <div class="field"><label>Category</label>
+      <div class="cat-pick" id="c_cat_pick">
+        <div class="cpick active" data-cat="crypto"   onclick="pickCat(this)">🪙 Crypto</div>
+        <div class="cpick"        data-cat="sports"   onclick="pickCat(this)">⚽ Sports</div>
+        <div class="cpick"        data-cat="politics" onclick="pickCat(this)">🗳 Politics</div>
+        <div class="cpick"        data-cat="finance"  onclick="pickCat(this)">📈 Finance</div>
+        <div class="cpick"        data-cat="other"    onclick="pickCat(this)">◈ Other</div>
+      </div>
+    </div>
+    <div class="field"><label>Question</label><input id="c_question" type="text" placeholder="Will BTC exceed $100k by end of 2025?"/></div>
+    <div class="r2"><div class="field"><label>Creator Address</label><input id="c_creator" type="text" placeholder="40 hex chars"/></div><div class="field"><label>B0 Liquidity (PRX)</label><input id="c_b0" type="number" value="60" oninput="updateCreateBreakdown()"/></div></div>
+    <div class="r2">
+      <div class="field">
+        <label>Expiry Date &amp; Time</label>
+        <input id="c_expiry_dt" type="datetime-local" oninput="updateExpiryFromDate()"/>
+        <div class="hint" id="c_expiry_hint">Select a date to compute block height</div>
+        <input id="c_expiry" type="hidden" value=""/>
+      </div>
+      <div class="field"><label>Nonce (optional)</label><input id="c_nonce" type="text" placeholder="auto"/></div>
+    </div>
+    <div class="field"><label>Rules / Resolution criteria</label><textarea id="c_rules" placeholder="Market resolves YES if…"></textarea></div>
+    <div class="field">
+      <label>Market Banner Image URL <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+      <input id="c_img" type="text" placeholder="https://i.imgur.com/... or ipfs://..." oninput="previewBanner()"/>
+      <div id="c_img_preview" style="display:none;margin-top:8px;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);max-height:160px">
+        <img id="c_img_preview_img" src="" alt="Banner preview" style="width:100%;height:160px;object-fit:cover;display:block"/>
+      </div>
+      <div class="hint" id="c_img_hint">Image will be stored on-chain via IPFS or direct URL. Recommended: 16:9, min 800x450px.</div>
+    </div>
+    <div class="field"><label>Fee (uPRX)</label><input id="c_fee" type="number" value="10000" oninput="updateCreateBreakdown()"/></div>
+    <div id="create_breakdown" class="breakdown"></div>
+    <div class="brow"><button class="btn bp" id="btn_create" onclick="signAndSubmit_create()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_create()">Build Payload</button></div>
+    <div class="pend" id="pend_create"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="co"><div class="plbl">// unsigned_payload</div><textarea id="cp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<div class="page" id="page-finalize">
+  <div class="ph ph-a"><div class="ph-eye">Admin</div><div class="ph-title">Finalize Market</div><div class="ph-sub">Collect finalization bounty after the dispute window closes</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// finalize_parameters</div>
+    <div class="r2"><div class="field"><label>Market ID (40 hex)</label><input id="fi_mid" type="text" placeholder="40 hex chars"/></div><div class="field"><label>Caller Address</label><input id="fi_addr" type="text" placeholder="40 hex chars"/></div></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="fi_fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_finalize" onclick="signAndSubmit_finalize()">⚡ Sign &amp; Submit</button><button class="btn bsec" onclick="build_finalize()">Build Payload</button></div>
+    <div class="pend" id="pend_finalize"><span class="blink">▪▪▪</span> broadcasting…</div>
+    <div class="pbox" id="fio"><div class="plbl">// unsigned_payload</div><textarea id="fip" readonly></textarea></div>
+  </div></div>
+</div>
+
+
+<!-- ── REWARD: RESOLVER ── -->
+<div class="page" id="page-reward-resolver">
+  <div class="ph ph-g"><div class="ph-eye">Rewards</div><div class="ph-title">Resolver Rewards</div><div class="ph-sub">Epoch-weighted rewards based on your RRS tier and resolution activity</div></div>
+  <div class="rw-stats">
+    <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="rrw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="rrw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Current Epoch Pool</div><div class="rw-stat-val" id="rrw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+  </div>
+  <div class="card"><div class="ci">
+    <div class="ct">// resolver_status</div>
+    <div id="rrw-tier-badge" class="rrs-badge rrs-bronze">Bronze — RRS <span id="rrw-rrs">10</span></div>
+    <div class="r3" style="margin-top:12px">
+      <div class="chip"><span>Resolutions</span>&nbsp;<b id="rrw-resolutions">0</b></div>
+      <div class="chip"><span>RRS Score</span>&nbsp;<b id="rrw-rrs2">10</b></div>
+      <div class="chip"><span>Weight</span>&nbsp;<b id="rrw-share">1x</b></div>
+    </div>
+    <div class="rw-formula" style="margin-top:14px">
+      <b>Share formula:</b> your_weight / total_weight x epoch_pool<br>
+      Weight = <b>1x</b> Bronze (RRS 1-49) / <b>3x</b> Silver (RRS 50-199) / <b>7x</b> Gold (RRS 200+)
+    </div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// epoch_history</div>
+    <div style="overflow-x:auto">
+      <table class="rw-table" id="rrw-history">
+        <thead><tr><th>Epoch</th><th>Pool (PRX)</th><th>Your Share</th><th>Status</th></tr></thead>
+        <tbody><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text3)">Connect signer to load history</td></tr></tbody>
+      </table>
+    </div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_resolver_reward</div>
+    <div class="r2">
+      <div class="field"><label>Resolver Address</label><input id="rrw-addr" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Epoch Number</label><input id="rrw-epoch" type="number" placeholder="leave blank = current"/></div>
+    </div>
+    <div class="field"><label>Fee (uPRX)</label><input id="rrw-fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_rrw" onclick="signAndSubmit_rewardResolver()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardResolver()">Build Payload</button></div>
+    <div class="pend" id="pend_rrw"><span class="blink">...</span> broadcasting...</div>
+    <div class="pbox" id="rrwo"><div class="plbl">// unsigned_payload</div><textarea id="rrwp" readonly></textarea></div>
+  </div></div>
+</div>
+
+<!-- ── REWARD: BUILDER ── -->
+<div class="page" id="page-reward-builder">
+  <div class="ph ph-a"><div class="ph-eye">Rewards</div><div class="ph-title">Builder Rewards</div><div class="ph-sub">Protocol rewards for market creators — 120,960 block vesting window</div></div>
+  <div id="brw-unauth" class="rw-unauth" style="display:none">
+    <div class="rw-unauth-icon">locked</div>
+    <div class="rw-unauth-title">Not Authorized</div>
+    <div class="rw-unauth-sub">This address is not registered as a market creator</div>
+  </div>
+  <div id="brw-content">
+    <div class="rw-stats">
+      <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="brw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+      <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="brw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+      <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="brw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+    </div>
+    <div class="rw-vesting">Vesting window: 120,960 blocks (~14 days). Rewards vest linearly.</div>
+    <div class="card"><div class="ci">
+      <div class="ct">// epoch_history</div>
+      <div style="overflow-x:auto">
+        <table class="rw-table" id="brw-history">
+          <thead><tr><th>Epoch</th><th>Pool (PRX)</th><th>Your Share</th><th>Status</th></tr></thead>
+          <tbody><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text3)">Connect signer to load history</td></tr></tbody>
+        </table>
+      </div>
+    </div></div>
+    <div class="card"><div class="ci">
+      <div class="ct">// claim_builder_reward</div>
+      <div class="field"><label>Builder Address</label><input id="brw-addr" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Fee (uPRX)</label><input id="brw-fee" type="number" value="10000"/></div>
+      <div class="brow"><button class="btn bp" id="btn_brw" onclick="signAndSubmit_rewardBuilder()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardBuilder()">Build Payload</button></div>
+      <div class="pend" id="pend_brw"><span class="blink">...</span> broadcasting...</div>
+      <div class="pbox" id="brwo"><div class="plbl">// unsigned_payload</div><textarea id="brwp" readonly></textarea></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ── REWARD: COMMUNITY ── -->
+<div class="page" id="page-reward-community">
+  <div class="ph ph-g"><div class="ph-eye">Rewards</div><div class="ph-title">Community Rewards</div><div class="ph-sub">Participation rewards for active predictors</div></div>
+  <div id="crw-unauth" class="rw-unauth" style="display:none">
+    <div class="rw-unauth-icon">locked</div>
+    <div class="rw-unauth-title">Not Authorized</div>
+    <div class="rw-unauth-sub">This address is not the authorized community recipient</div>
+  </div>
+  <div id="crw-content"><div class="rw-stats">
+    <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="crw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="crw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="crw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+  </div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_community_reward</div>
+    <div class="field"><label>Claimant Address</label><input id="crw-addr" type="text" placeholder="40 hex chars"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="crw-fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_crw" onclick="signAndSubmit_rewardCommunity()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardCommunity()">Build Payload</button></div>
+    <div class="pend" id="pend_crw"><span class="blink">...</span> broadcasting...</div>
+    <div class="pbox" id="crwo"><div class="plbl">// unsigned_payload</div><textarea id="crwp" readonly></textarea></div>
+  </div></div>
+  </div></div>
+</div>
+
+<!-- ── REWARD: INVESTOR ── -->
+<div class="page" id="page-reward-investor">
+  <div class="ph ph-g"><div class="ph-eye">Rewards</div><div class="ph-title">Investor Rewards</div><div class="ph-sub">Liquidity provision rewards — 241,920 block vesting window</div></div>
+  <div id="irw-unauth" class="rw-unauth" style="display:none">
+    <div class="rw-unauth-icon">locked</div>
+    <div class="rw-unauth-title">Not Authorized</div>
+    <div class="rw-unauth-sub">This address is not the authorized investor recipient</div>
+  </div>
+  <div id="irw-content"><div class="rw-stats">
+    <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="irw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="irw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+    <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="irw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+  </div>
+  <div class="rw-vesting">Vesting window: 241,920 blocks (~28 days). Rewards vest linearly.</div>
+  <div class="card"><div class="ci">
+    <div class="ct">// claim_investor_reward</div>
+    <div class="field"><label>Investor Address</label><input id="irw-addr" type="text" placeholder="40 hex chars"/></div>
+    <div class="field"><label>Fee (uPRX)</label><input id="irw-fee" type="number" value="10000"/></div>
+    <div class="brow"><button class="btn bp" id="btn_irw" onclick="signAndSubmit_rewardInvestor()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardInvestor()">Build Payload</button></div>
+    <div class="pend" id="pend_irw"><span class="blink">...</span> broadcasting...</div>
+    <div class="pbox" id="irwo"><div class="plbl">// unsigned_payload</div><textarea id="irwp" readonly></textarea></div>
+  </div></div>
+  </div></div>
+</div>
+
+<!-- ── REWARD: PROTOCOL ── -->
+<div class="page" id="page-reward-protocol">
+  <div class="ph ph-a"><div class="ph-eye">Rewards</div><div class="ph-title">Protocol Rewards</div><div class="ph-sub">Governance and staking rewards from protocol treasury</div></div>
+  <div id="prw-unauth" class="rw-unauth" style="display:none">
+    <div class="rw-unauth-icon">locked</div>
+    <div class="rw-unauth-title">Not Authorized</div>
+    <div class="rw-unauth-sub">This address is not authorized for protocol rewards</div>
+  </div>
+  <div id="prw-content">
+    <div class="rw-stats">
+      <div class="rw-stat"><div class="rw-stat-lbl">Claimable Now</div><div class="rw-stat-val g" id="prw-claimable">—</div><div class="rw-stat-sub">PRX</div></div>
+      <div class="rw-stat"><div class="rw-stat-lbl">Total Earned</div><div class="rw-stat-val" id="prw-earned">—</div><div class="rw-stat-sub">PRX all time</div></div>
+      <div class="rw-stat"><div class="rw-stat-lbl">Current Pool</div><div class="rw-stat-val" id="prw-pool">—</div><div class="rw-stat-sub">PRX this epoch</div></div>
+    </div>
+    <div class="card"><div class="ci">
+      <div class="ct">// claim_protocol_reward</div>
+      <div class="field"><label>Claimant Address</label><input id="prw-addr" type="text" placeholder="40 hex chars"/></div>
+      <div class="field"><label>Fee (uPRX)</label><input id="prw-fee" type="number" value="10000"/></div>
+      <div class="brow"><button class="btn bp" id="btn_prw" onclick="signAndSubmit_rewardProtocol()">Sign &amp; Submit</button><button class="btn bsec" onclick="build_rewardProtocol()">Build Payload</button></div>
+      <div class="pend" id="pend_prw"><span class="blink">...</span> broadcasting...</div>
+      <div class="pbox" id="prwo"><div class="plbl">// unsigned_payload</div><textarea id="prwp" readonly></textarea></div>
+    </div></div>
+  </div>
+</div>
+
+<div class="page" id="page-node">
+  <div class="ph ph-a"><div class="ph-eye">Admin</div><div class="ph-title">Node Settings</div><div class="ph-sub">Configure RPC endpoint and network connection</div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// rpc_configuration</div>
+    <div class="field"><label>RPC Endpoint</label><input id="rpc_url" type="text" placeholder="http://localhost:50002"/></div>
+    <div class="brow"><button class="btn bp" onclick="saveRPC()">Save &amp; Reconnect</button><button class="btn bsec" onclick="testRPC()">Test Connection</button></div>
+    <div id="rpc_result" class="alert" style="display:none;margin-top:10px"></div>
+  </div></div>
+  <div class="card"><div class="ci">
+    <div class="ct">// admin_unlock</div>
+    <div class="sinfo">Enter your admin address to unlock Creator and Resolver sections.</div>
+    <div class="field" style="margin-top:10px"><label>Admin Address</label><input id="admin_addr" type="text" placeholder="40 hex chars"/></div>
+    <div class="brow"><button class="btn bp" onclick="setAdminAddr()">Unlock Admin</button></div>
+  </div></div>
+</div>
+
+</main>
+
+<!-- ── CONFIRM OVERLAY ── -->
+<div id="confOverlay">
+  <div class="cm">
+    <div class="cm-h"><div class="cm-t" id="confTitle">Confirm Transaction</div><div class="cm-s" id="confSub">Review before signing</div></div>
+    <div class="cm-rows" id="confRows"></div>
+    <div class="cm-btns">
+      <button id="confCancel" onclick="closeConfirm()">Cancel</button>
+      <button id="confOk"     >Sign &amp; Send</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="app.js"></script>
+<script>
+// ── Category filter (new UI feature) ──
+window._activeCat = 'all';
+window.filterCat = function(el) {
+  document.querySelectorAll('.cat').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  window._activeCat = el.dataset.cat;
+  renderCurrentTab();
+};
+
+const _origRenderTab = window.renderCurrentTab;
+window.renderCurrentTab = function() {
+  if (_origRenderTab) _origRenderTab.call(this);
+  // update volume chip
+  const volEl = document.getElementById('sb_vol');
+  if (volEl && window._allMarkets) {
+    let total = 0n;
+    window._allMarkets.forEach(m => { total += (m.qYes || 0n) + (m.qNo || 0n); });
+    volEl.textContent = total > 0n ? fmtPRX(total) : '—';
+  }
+};
+
+// ── Resolver cards redesign ──
+window.loadResolvers = function() {
+  const el = document.getElementById('resolversList');
+  if (!el) return;
+
+  // build registry from _resolverRegistry if available, else fall back to TX cache
+  const resolvers = new Map();
+  if (window._resolverRegistry && window._resolverRegistry.size > 0) {
+    window._resolverRegistry.forEach((r, addr) => resolvers.set(addr, r));
+  } else {
+    try {
+      const txs = JSON.parse(localStorage.getItem('praxis_tx_cache') || '[]');
+      for (const tx of txs) {
+        if (tx.messageType !== 'register_resolver') continue;
+        const msg = (tx.transaction && tx.transaction.msg) || {};
+        const addr = tx.sender || '';
+        const stake = BigInt(msg.stakeAmount || msg.stake_amount || 0);
+        if (!resolvers.has(addr)) {
+          resolvers.set(addr, { stake, proposalCount: 0, rrs: 10 });
+        } else {
+          resolvers.get(addr).stake = stake;
+        }
+      }
+      for (const tx of txs) {
+        if (tx.messageType !== 'propose_outcome') continue;
+        const addr = tx.sender || '';
+        if (resolvers.has(addr)) resolvers.get(addr).proposalCount++;
+      }
+      resolvers.forEach(r => { r.rrs = Math.min(10 + r.proposalCount * 10, 999); });
+    } catch(e) {}
+  }
+
+  if (resolvers.size === 0) {
+    el.innerHTML = '<div class="alert ay">No resolvers found — browse Markets first to scan blocks</div>';
+    return;
+  }
+
+  let html = '';
+  resolvers.forEach((r, addr) => {
+    const rrs = r.rrs || 10;
+    let tier = 'bronze', tierLabel = 'Bronze';
+    if (rrs >= 200) { tier = 'silver'; tierLabel = 'Silver'; }
+    if (rrs >= 500) { tier = 'gold';   tierLabel = 'Gold'; }
+    const initial = addr.slice(0,2).toUpperCase();
+    html += `<div class="res-card">
+  <div class="res-avatar">${initial}</div>
+  <div class="res-info">
+    <div class="res-addr">${addr}</div>
+    <div class="res-stats">
+      <div class="res-stat"><span class="res-stat-lbl">Stake</span><span class="res-stat-val">${fmtPRX(r.stake || 0n)} PRX</span></div>
+      <div class="res-stat"><span class="res-stat-lbl">Est. RRS</span><span class="res-stat-val">${rrs}</span></div>
+      <div class="res-stat"><span class="res-stat-lbl">Proposals</span><span class="res-stat-val">${r.proposalCount || 0}</span></div>
+    </div>
+  </div>
+  <span class="tier-badge tier-${tier}">${tierLabel}</span>
+</div>`;
+  });
+  el.innerHTML = html;
+};
+
+// ── Sync footer dot with header dot ──
+const origCheckRPC = window.checkRPC;
+function syncDots(alive) {
+  ['rpcDot','rpcDotM','rpcDotFoot'].forEach(id => {
+    const d = document.getElementById(id);
+    if (d) { d.classList.toggle('live', alive); }
+  });
+  const s1 = document.getElementById('rpcStatus');
+  const s2 = document.getElementById('rpcStatusFoot');
+  const txt = alive ? 'connected' : 'offline';
+  if (s1) s1.textContent = txt;
+  if (s2) s2.textContent = txt;
+}
+setInterval(async () => {
+  try {
+    const r = await fetch((window.getRPC ? window.getRPC() : 'http://localhost:50002') + '/v1/query/height', {method:'POST',body:'{}'});
+    const d = await r.json();
+    const h = d.height || 0;
+    syncDots(h > 0);
+    const hEl = document.getElementById('hBadge');
+    const sH  = document.getElementById('sb_h');
+    if (hEl) hEl.textContent = '#' + h;
+    if (sH)  sH.textContent  = h;
+    window.currentHeight = Number(h);
+  } catch(e) { syncDots(false); }
+}, 4000);
+</script>
+</body>
+</html>

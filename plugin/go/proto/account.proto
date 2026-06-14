@@ -1,6 +1,6 @@
 syntax = "proto3";
 package types;
-option go_package = "github.com/canopy-network/go-plugin/contract";
+option go_package = "github.com/canopy-network/canopy/plugin/go/contract";
 
 // An account is a structure that holds funds and can send or receive transactions using a crypto key pair
 // Each account has a unique address and a balance, think a bank account - but managed by the blockchain

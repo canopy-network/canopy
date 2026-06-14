@@ -1,178 +1,291 @@
-# Send Transaction Flow Analysis
+# PRAXIS
+[![Status](https://img.shields.io/badge/status-live-brightgreen)](https://github.com/Makaveli912/canopy)
+
+
+<div align="center">
+
+```
+██████╗ ██████╗  █████╗ ██╗  ██╗██╗███████╗
+██╔══██╗██╔══██╗██╔══██╗╚██╗██╔╝██║██╔════╝
+██████╔╝██████╔╝███████║ ╚███╔╝ ██║███████╗
+██╔═══╝ ██╔══██╗██╔══██║ ██╔██╗ ██║╚════██║
+██║     ██║  ██║██║  ██║██╔╝ ██╗██║███████║
+╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝
+```
+
+**On-Chain Prediction Markets on the Canopy Network**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)](https://go.dev)
+[![Canopy](https://img.shields.io/badge/Canopy-Betanet-00ff88)](https://canopynetwork.org)
+[![Plugin](https://img.shields.io/badge/Plugin-Go-00d4ff)](plugin/go)
+[![Status](https://img.shields.io/badge/Status-Betanet-ffc940)](https://canopynetwork.org)
+
+</div>
+
+---
+
+## ▶ Praxis is a sovereign prediction market protocol built as a Canopy Nested Chain
+
+Praxis ($PRX) lets anyone create YES/NO prediction markets, stake on outcomes, and claim proportional winnings — entirely on-chain, with no platform extraction and no central authority. It is implemented as a Go plugin on the Canopy Network, meaning it runs as an application-specific blockchain with its own state, its own token, and its own transaction types.
+
+[![architecture](https://img.shields.io/badge/architecture-appchain-00ff88)]()
+[![consensus](https://img.shields.io/badge/consensus-NestBFT-00d4ff)]()
+[![signing](https://img.shields.io/badge/signing-BLS12--381-b48eff)]()
+[![state](https://img.shields.io/badge/state-key--value-ffc940)]()
+
+---
 
 ## Overview
 
-This document analyzes the complete flow of a send transaction in the Canopy blockchain plugin template. The plugin implements a Unix socket-based communication system between smart contracts and the Canopy FSM (Finite State Machine).
+Praxis implements four on-chain transaction types:
 
-## Architecture Components
+| Transaction | Description |
+|---|---|
+| `create_market` | Open a new YES/NO prediction market with a question, resolver, and resolution height |
+| `submit_prediction` | Stake tokens on a YES or NO outcome for an open market |
+| `resolve_market` | The designated resolver finalises a market with the winning outcome |
+| `claim_winnings` | Winners claim their proportional payout from the resolved market pool |
 
-### Key Files
-- `main.go`: Entry point starting the plugin with graceful shutdown
-- `contract/plugin.go`: Socket communication and plugin lifecycle management
-- `contract/contract.go`: Core contract logic and transaction processing
-- `contract/error.go`: Plugin-specific error definitions
-- `proto/*.proto`: Protocol buffer definitions for communication
+All state is stored on-chain in the plugin's key-value store. No database, no backend, no off-chain oracle required for basic operation.
 
-## Complete Transaction Flow
+---
 
-### 1. Plugin Initialization (main.go:11-18)
+## Architecture
 
-```
-main() → StartPlugin(DefaultConfig()) → Socket connection to FSM
-```
-
-The plugin connects to the Canopy FSM via Unix socket (`plugin.sock`):
-- Attempts connection every second until successful
-- Creates Plugin instance with configuration
-- Starts background listener for FSM messages
-- Performs handshake with FSM
-
-### 2. Socket Communication Setup (plugin.go:34-68)
+Praxis follows the standard Canopy plugin architecture. The plugin runs as a separate process alongside the Canopy node and communicates over a Unix socket using Protocol Buffers.
 
 ```
-StartPlugin() → net.Dial("unix", sockPath) → ListenForInbound() → Handshake()
+┌─────────────────────────────────────────┐
+│           CANOPY NODE PROCESS           │
+│                                         │
+│  ┌──────────┐  ┌────────────────────┐   │
+│  │ NestBFT  │  │   FSM / Controller │   │
+│  │ Consensus│  │  (block lifecycle) │   │
+│  └──────────┘  └────────┬───────────┘   │
+│                         │ Unix socket   │
+└─────────────────────────┼───────────────┘
+                          │
+          ┌───────────────▼──────────────┐
+          │        PRAXIS PLUGIN         │
+          │                              │
+          │  Genesis()                   │
+          │  BeginBlock()                │
+          │  CheckTx()   ← validate      │
+          │  DeliverTx() ← execute       │
+          │  EndBlock()                  │
+          │                              │
+          │  Transactions:               │
+          │  - create_market             │
+          │  - submit_prediction         │
+          │  - resolve_market            │
+          │  - claim_winnings            │
+          └──────────────────────────────┘
+                          ▲
+                          │ HTTP RPC :50002 / :50003
+                          │
+          ┌───────────────┴──────────────┐
+          │     PRAXIS FRONTEND          │
+          │  Single-file HTML/JS         │
+          │  BLS12-381 signing           │
+          │  Hand-encoded protobuf       │
+          └──────────────────────────────┘
 ```
 
-- **Socket Path**: `/tmp/plugin/plugin.sock` (default data directory)
-- **Protocol**: Length-prefixed protobuf messages
-- **Handshake**: Exchanges plugin configuration with FSM
-- **Concurrent Handling**: Each message processed in separate goroutine
+---
 
-### 3. Transaction Reception (plugin.go:122-167)
+## Repository Layout
 
 ```
-FSM → Unix Socket → ListenForInbound() → Route by message type
+plugin/go/
+├── main.go                  # Entry point — calls contract.StartPlugin()
+├── chain.json               # Chain metadata: name, symbol, chainId, networkId
+├── Makefile                 # Build targets
+├── pluginctl.sh             # Plugin lifecycle (start/stop/restart/status)
+├── AGENTS.md                # AI assistant context for this plugin
+│
+├── contract/
+│   ├── contract.go          # Application logic — all transaction handlers
+│   ├── error.go             # Error codes (built-in 1–14, Praxis 15–16)
+│   ├── plugin.go            # Socket protocol — do not modify
+│   └── tx.pb.go             # Generated Go structs from tx.proto
+│
+└── proto/
+    ├── tx.proto             # Transaction and state message definitions
+    ├── account.proto        # Account and Pool types
+    ├── plugin.proto         # FSM communication protocol
+    └── _generate.sh         # Regenerates Go structs from .proto files
+
+frontend/
+└── index.html               # Single-file frontend — no build step required
 ```
 
-When FSM sends a transaction:
-1. Plugin receives length-prefixed protobuf message
-2. Creates new Contract instance with FSM context
-3. Routes message based on type (`FSMToPlugin_Check` or `FSMToPlugin_Deliver`)
-4. Processes request concurrently in goroutine
+---
 
-### 4. Transaction Validation - CheckTx (contract.go:38-72)
+## State Model
 
-```
-CheckTx() → Validate Fee → Parse Message → CheckMessageSend()
-```
+Praxis stores all on-chain data in the Canopy key-value store using byte-prefixed keys:
 
-**Fee Validation**:
-- Reads fee parameters from state: `KeyForFeeParams()` (contract.go:42)
-- Verifies `tx.fee >= minFees.SendFee` (contract.go:57)
-- Returns error if fee too low: `ErrTxFeeBelowStateLimit()`
+| Prefix | Type | Description |
+|---|---|---|
+| `0x10` | `Market` | One record per prediction market |
+| `0x11` | `MarketCounter` | Singleton — tracks the next market ID |
+| `0x12` | `Prediction` | One record per (forecaster, market) pair |
 
-**Message Parsing**:
-- Deserializes `tx.msg` from protobuf Any type (contract.go:61)
-- Type-switches to handle `MessageSend` (contract.go:66-68)
+Built-in Canopy prefixes (`0x01` Account, `0x02` Pool, `0x07` FeeParams) are preserved unchanged.
 
-**Send Message Validation** (contract.go:96-111):
-- **From Address**: Must be exactly 20 bytes (contract.go:98)
-- **To Address**: Must be exactly 20 bytes (contract.go:102) 
-- **Amount**: Must be greater than 0 (contract.go:106)
-- Returns authorized signers: `[][]byte{msg.FromAddress}`
+---
 
-### 5. Transaction Execution - DeliverTx (contract.go:74-88)
+## Transaction Types
 
-```
-DeliverTx() → Parse Message → DeliverMessageSend()
-```
+### create_market
 
-Routes to `DeliverMessageSend()` with fee parameter for state modifications.
+Opens a new YES/NO prediction market. The creator bonds a stake amount and designates a resolver address. The market remains open for predictions until the resolution height is reached.
 
-### 6. Send Transaction Processing (contract.go:114-212)
-
-**State Reading** (contract.go:124-147):
-```
-StateRead() → FSM via Socket → Returns account balances and fee pool
+```protobuf
+message MessageCreateMarket {
+  bytes  creator_address   = 1;
+  string question          = 2;
+  string description       = 3;
+  bytes  resolver_address  = 4;
+  uint64 resolution_height = 5;
+  uint64 stake_amount      = 6;
+}
 ```
 
-Batch read operation for:
-- **Fee Pool**: `KeyForFeePool(chainId)` with prefix `[]byte{2}`
-- **From Account**: `KeyForAccount(fromAddress)` with prefix `[]byte{1}` 
-- **To Account**: `KeyForAccount(toAddress)` with prefix `[]byte{1}`
+### submit_prediction
 
-**Balance Validation** (contract.go:149-164):
-- Calculates total deduction: `amount + fee`
-- Checks sender balance: `from.Amount >= amountToDeduct`
-- Returns `ErrInsufficientFunds()` if insufficient
+Stakes tokens on a YES (outcome=1) or NO (outcome=2) outcome. Each forecaster may only submit one prediction per market. The staked amount is added to the corresponding pool.
 
-**Balance Updates** (contract.go:166-187):
-- **Self-transfer optimization**: Uses same account object if `fromKey == toKey`
-- **Sender**: `from.Amount -= (msg.Amount + fee)`
-- **Recipient**: `to.Amount += msg.Amount`  
-- **Fee Pool**: `feePool.Amount += fee`
-
-**State Writing** (contract.go:189-211):
-```
-StateWrite() → FSM via Socket → Commits state changes
+```protobuf
+message MessageSubmitPrediction {
+  bytes  forecaster_address = 1;
+  uint64 market_id          = 2;
+  uint32 outcome            = 3;
+  uint64 amount             = 4;
+}
 ```
 
-Two write patterns:
-- **Account Deletion**: If sender balance reaches 0, delete sender account (contract.go:191-198)
-- **Normal Update**: Update all three entities (contract.go:199-207)
+### resolve_market
 
-### 7. State Key Structure
+Finalises the market. Only the designated resolver address may call this. Sets the winning outcome and closes the market to further predictions.
 
-**Account Storage**:
-- Prefix: `[]byte{1}`
-- Key: `JoinLenPrefix(accountPrefix, address)`
-- 20-byte addresses only
-
-**Fee Pool Storage**:
-- Prefix: `[]byte{2}` 
-- Key: `JoinLenPrefix(poolPrefix, formatUint64(chainId))`
-
-**Fee Parameters**:
-- Prefix: `[]byte{7}`
-- Key: `JoinLenPrefix(paramsPrefix, []byte("/f/"))`
-
-### 8. Socket Communication Protocol (plugin.go:239-292)
-
-**Message Format**:
-```
-[4-byte length prefix][protobuf message bytes]
+```protobuf
+message MessageResolveMarket {
+  bytes  resolver_address = 1;
+  uint64 market_id        = 2;
+  uint32 winning_outcome  = 3;
+}
 ```
 
-**Request/Response Pattern**:
-- **Sync Requests**: Plugin waits for FSM response with 10-second timeout
-- **Async Handling**: FSM requests processed concurrently
-- **Request Correlation**: Unique request IDs track pending operations
-- **Error Handling**: Timeout cleanup and error propagation
+### claim_winnings
 
-### 9. Error Handling
+Pays out a winner's original stake plus their proportional share of the losing pool. Each prediction can only be claimed once.
 
-**Validation Errors** (error.go):
-- `ErrInvalidAddress()` - Code 12: Non-20-byte addresses
-- `ErrInvalidAmount()` - Code 13: Zero amounts  
-- `ErrTxFeeBelowStateLimit()` - Code 14: Insufficient fees
-- `ErrInsufficientFunds()` - Code 9: Balance too low
+```protobuf
+message MessageClaimWinnings {
+  bytes  claimer_address = 1;
+  uint64 market_id       = 2;
+}
+```
 
-**System Errors**:
-- Socket communication failures
-- Protobuf serialization errors
-- State read/write timeouts
-- Plugin response correlation errors
+Payout formula:
+```
+payout = stake + (stake × losing_pool) / winning_pool
+```
 
-## Transaction Lifecycle Summary
+---
 
-1. **Plugin Startup**: Connect to FSM via Unix socket
-2. **Transaction Receipt**: FSM sends transaction via socket
-3. **Validation Phase**: CheckTx validates fee, addresses, and amount
-4. **Execution Phase**: DeliverTx reads state, validates balance, updates accounts
-5. **State Persistence**: Write updated balances and fee pool to FSM
-6. **Response**: Return success/error to FSM via socket
+## Getting Started
 
-## Key Features
+### Prerequisites
 
-- **Concurrent Processing**: Multiple transactions handled simultaneously
-- **State Management**: Efficient batch reads/writes with FSM
-- **Error Recovery**: Comprehensive error handling and timeouts
-- **Account Lifecycle**: Automatic cleanup of zero-balance accounts
-- **Fee Collection**: Transparent fee pooling for network sustainability
+- Go 1.24 or later
+- `protoc` and `protoc-gen-go` (for proto regeneration only)
+- A running Canopy node
 
-## Performance Characteristics
+See the [Canopy Builder Docs](https://canopynetwork.org) for full prerequisites.
 
-- **Socket Communication**: Low-latency Unix domain sockets
-- **Batch Operations**: Multiple state operations in single FSM call
-- **Memory Efficiency**: Length-prefixed messaging avoids buffering issues
-- **Concurrent Safety**: Thread-safe request correlation and state management
+### Build
+
+```bash
+# Clone and switch to the Praxis branch
+git clone https://github.com/Makaveli912/canopy.git
+cd canopy
+git checkout feat/praxis-prediction-markets
+
+# Build the Canopy node binary
+go build -o ~/go/bin/canopy ./cmd/main
+
+# Build the Praxis plugin binary
+cd plugin/go
+go build -o go-plugin .
+```
+
+### Run
+
+```bash
+# From repo root
+canopy start
+```
+
+Watch for:
+```
+Plugin go started: go-plugin started successfully
+Plugin service listening on socket: /tmp/plugin/plugin.sock
+```
+
+### Frontend
+
+```bash
+python3 -m http.server 8080 --directory frontend
+```
+
+Open `http://localhost:8080`. Go to **Node** → set host to `localhost` → Apply. The green dot confirms connection.
+
+Go to **Signer** → paste your BLS12-381 private key → Load Key. Your address will be auto-derived and filled into all transaction forms.
+
+---
+
+## Payout Model
+
+Praxis uses an AMM-style proportional payout. Winners split the entire losing pool in proportion to their contribution to the winning pool.
+
+```
+Example:
+  YES pool: 600,000 μPRX (forecaster contributed 200,000)
+  NO pool:  400,000 μPRX (losing side)
+
+  Forecaster share of YES pool: 200,000 / 600,000 = 33.3%
+  Forecaster payout: 200,000 + (400,000 × 33.3%) = 333,333 μPRX
+```
+
+If no one bet on the losing side, the winner's original stake is returned unchanged.
+
+---
+
+## Error Codes
+
+| Code | Name | Description |
+|---|---|---|
+| 1–14 | Built-in | Standard Canopy plugin errors |
+| 15 | `ErrWrongOutcome` | Claimer's prediction did not match the winning outcome |
+| 16 | `ErrDuplicatePrediction` | Forecaster already submitted a prediction for this market |
+
+---
+
+## Token
+
+| Property | Value |
+|---|---|
+| Name | Praxis |
+| Symbol | $PRX |
+| Denomination | μPRX (micro-PRX) |
+| Chain ID | 1 |
+| Network ID | 1 |
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE)

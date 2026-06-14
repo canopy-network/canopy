@@ -1,6 +1,6 @@
 syntax = "proto3";
 package types;
-option go_package = "github.com/canopy-network/go-plugin/contract";
+option go_package = "github.com/canopy-network/canopy/plugin/go/contract";
 import "event.proto";
 import "tx.proto";
 

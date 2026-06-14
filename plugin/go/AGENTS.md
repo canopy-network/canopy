@@ -1,214 +1,111 @@
-# Agent Instructions for Go Plugin
+# Praxis Plugin — AI Agent Context
 
-This document provides context for AI agents working with the Canopy Go plugin codebase.
+This file provides context for AI coding assistants working on the Praxis
+prediction-market plugin for the Canopy Network.
 
-## Overview
+## What This Is
 
-This is a **Go plugin for the Canopy blockchain** that communicates with the Canopy FSM (Finite State Machine) via Unix sockets. The plugin implements custom transaction types and state management for a nested blockchain.
+Praxis is an on-chain YES/NO prediction market protocol built as a Canopy
+Nested Chain plugin. It is written in Go and implements the Canopy plugin
+interface (the five lifecycle methods: Genesis, BeginBlock, CheckTx,
+DeliverTx, EndBlock).
 
-## Architecture
+## Repository Layout
 
-### Communication Pattern
-- **Protocol**: Length-prefixed protobuf messages over Unix socket (`/tmp/plugin/plugin.sock`)
-- **Flow**: FSM ↔ Plugin via `FSMToPlugin` and `PluginToFSM` protobuf messages
-- **Lifecycle**: Plugin connects → Handshake → Receives tx requests → Responds with results
-
-### Key Components
-
-| Directory | Purpose |
-|-----------|---------|
-| `contract/` | Core contract logic, protobuf generated code, plugin communication |
-| `crypto/` | BLS12-381 signing utilities |
-| `proto/` | Protobuf definitions (`.proto` files) |
-| `tutorial/` | Test project with pre-built faucet/reward transaction examples |
-
-### Important Files
-
-- `contract/contract.go` - Main contract logic with `CheckTx` and `DeliverTx` handlers
-- `contract/plugin.go` - Socket communication and plugin lifecycle
-- `contract/*.pb.go` - Generated protobuf code (do not edit manually)
-- `proto/tx.proto` - Transaction message definitions
-- `main.go` - Entry point
-
-## Transaction Flow
-
-1. **CheckTx**: Stateless validation (fee check, address validation, returns authorized signers)
-2. **DeliverTx**: Stateful execution (reads state, applies changes, writes state)
-
-## Adding New Transaction Types
-
-Follow the pattern in `TUTORIAL.md`:
-
-1. Add message to `proto/tx.proto`
-2. Run `proto/_generate.sh` to regenerate Go code
-3. Register in `ContractConfig.SupportedTransactions` and `TransactionTypeUrls`
-4. Add `case` in `CheckTx` switch → implement `CheckMessage<Type>`
-5. Add `case` in `DeliverTx` switch → implement `DeliverMessage<Type>`
-
-## State Management
-
-### Key Prefixes
-- `[]byte{1}` - Account storage
-- `[]byte{2}` - Pool storage  
-- `[]byte{7}` - Governance parameters
-
-### State Operations
-```go
-// Read state
-c.plugin.StateRead(c, &PluginStateReadRequest{Keys: []*PluginKeyRead{...}})
-
-// Write state
-c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: [...], Deletes: [...]})
+```
+plugin/go/
+├── main.go              # Entry point — calls contract.StartPlugin(). Do not modify.
+├── chain.json           # Chain metadata (name, symbol, chainId, networkId)
+├── Makefile             # Build targets — run `make build` before `canopy start`
+├── pluginctl.sh         # Plugin lifecycle script (start/stop/restart/status)
+├── crypto/              # BLS12-381 signing helpers (key loading, sign-bytes, address derivation)
+│
+├── contract/
+│   ├── plugin.go        # Socket protocol, StartPlugin(), StateRead/StateWrite. Do not modify.
+│   ├── contract.go      # ALL application logic lives here — this is the file to edit
+│   └── error.go         # Plugin error codes. Built-in: 1–14. Praxis: 15–29.
+│
+└── proto/
+    ├── tx.proto         # Transaction and state message definitions
+    ├── account.proto    # Account and Pool types (built-in, do not modify)
+    ├── plugin.proto     # FSM communication protocol (do not modify)
+    ├── event.proto      # Event types (do not modify)
+    └── _generate.sh     # Run this after editing tx.proto to regenerate Go structs
 ```
 
-## Cryptography
+## Transaction Types
 
-- **Signature scheme**: BLS12-381 (not Ed25519)
-- **Address derivation**: First 20 bytes of SHA256(publicKey)
-- **Sign bytes**: Deterministic protobuf marshaling of Transaction (without signature field)
+| Name                | Type URL                                          | Signer            |
+|---------------------|---------------------------------------------------|-------------------|
+| `send`              | `type.googleapis.com/types.MessageSend`           | from_address      |
+| `create_market`     | `type.googleapis.com/types.MessageCreateMarket`   | creator_address   |
+| `submit_prediction` | `type.googleapis.com/types.MessageSubmitPrediction`| forecaster_address|
+| `resolve_market`    | `type.googleapis.com/types.MessageResolveMarket`  | resolver_address  |
+| `claim_winnings`    | `type.googleapis.com/types.MessageClaimWinnings`  | claimer_address   |
 
-## Building
+## State Key Prefixes
 
-```bash
-cd plugin/go
-make build          # Builds to plugin/go/go-plugin
-```
+| Prefix | Type          | Key function            |
+|--------|---------------|-------------------------|
+| 0x01   | Account       | KeyForAccount(addr)     |
+| 0x02   | Pool          | KeyForFeePool(chainId)  |
+| 0x07   | FeeParams     | KeyForFeeParams()       |
+| 0x10   | Market        | KeyForMarket(id)        |
+| 0x11   | MarketCounter | KeyForMarketCounter()   |
+| 0x12   | Prediction    | KeyForPrediction(addr, marketId) |
 
-## Running with Docker
+**Important**: All keys are built with `JoinLenPrefix` which length-prefixes
+each segment. This means `KeyForMarket(1)` starts with bytes `[0x01, 0x10, ...]`
+not `[0x10, ...]`. When querying state by prefix, use `0110` (hex), not `10`.
 
-The Go plugin can be run in a Docker container that includes both Canopy and the plugin.
+## Critical Rules (from Canopy Plugin Spec)
 
-### Build the Docker Image
+1. `SupportedTransactions[i]` MUST match `TransactionTypeUrls[i]` exactly.
+   A mismatch causes silent transaction misrouting.
 
-From the repository root:
+2. `CheckTx` is stateless. It CANNOT write state. It may read state minimally
+   (the fee params read is acceptable). Do not add state reads for business
+   logic — those belong in `DeliverTx`.
 
-```bash
-make docker/plugin PLUGIN=go
-```
+3. Sign bytes = `proto.Marshal(txWithSignatureFieldNil)`. Never sign JSON.
 
-This builds a Docker image named `canopy-go` that contains:
-- The Canopy binary
-- The Go plugin binary and control script
-- Pre-configured `config.json` with `"plugin": "go"`
+4. If `DeliverTx` returns an error, the transaction is still included in the
+   block and the fee is still charged. `CheckTx` must catch everything
+   recoverable.
 
-### Run the Container
+5. `PluginDeliverRequest` does not carry a block height. Capture it in
+   `BeginBlock` via `c.currentHeight = req.Height`.
 
-```bash
-make docker/run-go
-```
+6. Always batch-read all required keys in a single `StateRead` call, then
+   batch-write all changes in a single `StateWrite` call.
 
-Or manually with volume mount for persistent data:
+7. When building composite state keys with `append`, always allocate a new
+   slice. `append(existingSlice, ...)` may mutate the original if it has
+   spare capacity.
 
-```bash
-docker run -v ~/.canopy:/root/.canopy canopy-go
-```
+## Adding a New Transaction Type
 
-### Expose Ports for Testing
+1. Add the message definition to `proto/tx.proto`
+2. Run `proto/_generate.sh` to regenerate Go structs
+3. Add the name to `ContractConfig.SupportedTransactions` at index N
+4. Add the type URL to `ContractConfig.TransactionTypeUrls` at index N (same index)
+5. Add a `case *MessageXxx:` to the `CheckTx` switch and implement `CheckMessageXxx`
+6. Add a `case *MessageXxx:` to the `DeliverTx` switch and implement `DeliverMessageXxx`
+7. Add a `KeyForXxx` function using an unused byte prefix (> 0x12 for Praxis)
+8. If you need a new error, add it to `error.go` starting at code 30+
 
-To run tests against the containerized Canopy, expose the RPC ports:
+## Prompts That Work Well
 
-```bash
-docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-go
-```
+**Adding a transaction type:**
+"Using the Canopy Go plugin pattern in contract.go, add a [tx_name] transaction.
+The proto message fields are: [list fields]. Validate [conditions] in CheckTx.
+In DeliverTx, read [keys], apply [logic], write [keys] back. Use prefix 0x13."
 
-| Port | Service |
-|------|---------|
-| 50002 | RPC API (transactions, queries) |
-| 50003 | Admin RPC (keystore operations) |
+**State schema:**
+"I need state keys for [type] in a Canopy plugin. Existing prefixes in use:
+0x01–0x02, 0x07, 0x10–0x12. Design JoinLenPrefix-based keys that don't collide."
 
-Now you can run tests from your host machine that connect to `localhost:50002`.
-
-### View Logs
-
-```bash
-# Get the container ID
-docker ps
-
-# View Canopy logs
-docker exec -it <container_id> tail -f /root/.canopy/logs/log
-
-# View plugin logs
-docker exec -it <container_id> tail -f /tmp/plugin/go-plugin.log
-```
-
-## Running with Canopy
-
-1. Add `"plugin": "go"` to `~/.canopy/config.json`
-2. Start Canopy: `~/go/bin/canopy start`
-3. Plugin auto-starts and connects via Unix socket
-
-## Testing
-
-```bash
-cd plugin/go/tutorial
-go test -v -run TestPluginTransactions -timeout 120s
-```
-
-Requires Canopy running with the plugin enabled and faucet/reward transactions implemented.
-
-## Code Conventions
-
-- **Error handling**: Return `*PluginError` structs, use error functions from `error.go`
-- **Protobuf**: Use `Marshal`/`Unmarshal` helpers from `contract/plugin.go`
-- **Logging**: Use `log.Printf` for debugging (logs to `/tmp/plugin/go-plugin.log`)
-- **QueryIds**: Use `rand.Uint64()` to correlate batch state read requests
-
-## Common Patterns
-
-### CheckTx Template
-```go
-func (c *Contract) CheckMessage<Type>(msg *Message<Type>) *PluginCheckResponse {
-    // Validate addresses (must be 20 bytes)
-    if len(msg.Address) != 20 {
-        return &PluginCheckResponse{Error: ErrInvalidAddress()}
-    }
-    // Validate amount
-    if msg.Amount == 0 {
-        return &PluginCheckResponse{Error: ErrInvalidAmount()}
-    }
-    // Return authorized signers
-    return &PluginCheckResponse{
-        Recipient:         msg.RecipientAddress,
-        AuthorizedSigners: [][]byte{msg.SignerAddress},
-    }
-}
-```
-
-### DeliverTx Template
-```go
-func (c *Contract) DeliverMessage<Type>(msg *Message<Type>, fee uint64) *PluginDeliverResponse {
-    // 1. Generate query IDs
-    queryId := rand.Uint64()
-    
-    // 2. Read state
-    response, err := c.plugin.StateRead(c, &PluginStateReadRequest{...})
-    
-    // 3. Unmarshal accounts
-    account := new(Account)
-    Unmarshal(bytes, account)
-    
-    // 4. Apply business logic
-    account.Amount += msg.Amount
-    
-    // 5. Marshal and write state
-    bytes, _ = Marshal(account)
-    c.plugin.StateWrite(c, &PluginStateWriteRequest{...})
-    
-    return &PluginDeliverResponse{}
-}
-```
-
-## Debugging
-
-- **Plugin logs**: `tail -f /tmp/plugin/go-plugin.log`
-- **Canopy logs**: `tail -f ~/.canopy/logs/log`
-- **Common errors**:
-  - `"message name X is unknown"` → Transaction not registered in `ContractConfig`
-  - `"invalid signature"` → Sign bytes mismatch, check protobuf serialization
-  - Balance not updating → Check `DeliverTx` is being called, wait for block finalization
-
-## Dependencies
-
-Key external packages:
-- `google.golang.org/protobuf` - Protobuf serialization
-- `github.com/drand/kyber` + `github.com/drand/kyber-bls12381` - BLS signing
+**Frontend encoding:**
+"Write a JavaScript hand-encoder for [MessageName] with fields [list with types].
+Field numbers must match tx.proto exactly. Use the varintField/bytesField/stringField
+helpers already in the frontend."

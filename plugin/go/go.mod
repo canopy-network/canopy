@@ -1,10 +1,13 @@
-module github.com/canopy-network/go-plugin
+module github.com/canopy-network/canopy/plugin/go
 
-go 1.25
+go 1.24.0
+
+toolchain go1.24.2
 
 require (
 	github.com/drand/kyber v1.3.2
 	github.com/drand/kyber-bls12381 v0.3.4
+	github.com/golang/protobuf v1.5.0
 	google.golang.org/protobuf v1.36.6
 )
 
