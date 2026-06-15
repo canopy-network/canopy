@@ -1,6 +1,6 @@
 # Makefile for Canopy Kotlin Plugin
 
-.PHONY: all build clean test run dev lint format validate help
+.PHONY: all build clean test test-rpc run dev lint format validate help
 
 # Default target
 all: build
@@ -20,6 +20,12 @@ clean:
 test:
 	@echo "Running tests..."
 	./gradlew test
+
+# Run ONLY the custom RPC endpoints test (/v1/query/faucets, /v1/query/rewards)
+# Requires a running Canopy node with the kotlin plugin and its RPC server on port 50010
+test-rpc:
+	@echo "Running custom RPC endpoints test..."
+	cd tutorial && ./gradlew test --tests "com.canopy.tutorial.RpcTest.testPluginCustomRPCEndpoints" --rerun-tasks
 
 # Run the application
 run:
@@ -74,6 +80,7 @@ help:
 	@echo "  make build      - Build the project"
 	@echo "  make clean      - Clean build artifacts"
 	@echo "  make test       - Run tests"
+	@echo "  make test-rpc   - Run only the custom RPC endpoints test (needs running node + plugin)"
 	@echo "  make run        - Run the application"
 	@echo "  make dev        - Run in development mode"
 	@echo "  make lint       - Run linter"

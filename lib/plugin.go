@@ -309,6 +309,10 @@ func (p *Plugin) handleConfigMessage(msg *PluginToFSM) ErrorI {
 	}
 	// debug log received config
 	p.log.Debugf("handleConfigMessage() received valid config: %+v", m.Config)
+	// GUARD: reject (panic) a plugin that declares custom record prefixes colliding with core-reserved
+	// prefixes. This runs at handshake — BEFORE the plugin processes any genesis/block — so a
+	// misconfigured plugin fails fast instead of silently corrupting state at the first write.
+	assertNoReservedPrefixCollision(m.Config)
 	// set config
 	p.config = m.Config
 	// debug log config set
@@ -332,6 +336,32 @@ func (p *Plugin) handleConfigMessage(msg *PluginToFSM) ErrorI {
 		p.log.Debug("handleConfigMessage() config acknowledgment sent successfully")
 	}
 	return err
+}
+
+// CoreReservedPrefixMax is the highest single-byte store key prefix reserved by Canopy core. Core
+// reserves the contiguous single-byte prefixes 1..CoreReservedPrefixMax (accounts, pools, validators,
+// committees, params, ...). Plugins share the FSM keyspace, so their OWN custom records MUST use key
+// prefixes OUTSIDE this range. Kept intentionally in sync with the prefixes defined in fsm/key.go.
+const CoreReservedPrefixMax = 15
+
+// assertNoReservedPrefixCollision panics if the plugin config declares a custom state prefix that
+// collides with a core-reserved prefix. A collision is a single-byte prefix in the range
+// 1..CoreReservedPrefixMax: because store keys are length-prefixed, only single-byte plugin prefixes
+// can ever alias a (single-byte) core prefix, so multi-byte plugin prefixes are always safe.
+func assertNoReservedPrefixCollision(config *PluginConfig) {
+	if config == nil {
+		return
+	}
+	for _, prefix := range config.CustomStatePrefixes {
+		if len(prefix) == 1 && prefix[0] >= 1 && prefix[0] <= CoreReservedPrefixMax {
+			panic(fmt.Sprintf(
+				"plugin %q declared custom state prefix %d which collides with a core-reserved "+
+					"prefix (1-%d, e.g. accounts/pools/validators/committees); custom records MUST "+
+					"use a key prefix OUTSIDE that range — see plugin TUTORIAL.md 'avoid prefix "+
+					"collisions'", config.Name, prefix[0], CoreReservedPrefixMax,
+			))
+		}
+	}
 }
 
 // HandleStateReadRequest() handles an inbound state read request from a specific FSM context

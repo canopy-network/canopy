@@ -1,6 +1,6 @@
 # Makefile for Canopy TypeScript Plugin
 
-.PHONY: all install build build-proto build-descriptors build-all clean test run dev lint format validate help
+.PHONY: all install build build-proto build-descriptors build-all clean test test-rpc run dev lint format validate help
 
 # Default target
 all: build-all
@@ -41,6 +41,12 @@ test:
 	@echo "Running tests..."
 	cd tutorial && npm install && npm test
 
+# Run ONLY the custom RPC endpoints test (/v1/query/faucets, /v1/query/rewards)
+# Requires a running Canopy node with the typescript plugin and its RPC server on port 50010
+test-rpc:
+	@echo "Running custom RPC endpoints test..."
+	cd tutorial && npm install && npm test -- custom
+
 # Run the application
 run:
 	@echo "Running plugin..."
@@ -73,6 +79,7 @@ help:
 	@echo "  make build-all        - Full build (install + proto + descriptors + TypeScript)"
 	@echo "  make clean            - Clean build artifacts"
 	@echo "  make test             - Run tests (tutorial)"
+	@echo "  make test-rpc         - Run only the custom RPC endpoints test (needs running node + plugin)"
 	@echo "  make run              - Run the application"
 	@echo "  make dev              - Run in development mode"
 	@echo "  make validate         - Run all validation checks"

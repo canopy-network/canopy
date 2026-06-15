@@ -1,4 +1,4 @@
-.PHONY: venv install dev test lint format type-check clean proto build docs
+.PHONY: venv install dev test test-rpc lint format type-check clean proto build docs
 
 # Virtual environment
 VENV_DIR := .venv
@@ -23,6 +23,12 @@ dev: venv
 test: venv
 	$(VENV_DIR)/bin/pytest
 
+# Run ONLY the custom RPC endpoints test (/v1/query/faucets, /v1/query/rewards)
+# Requires a running Canopy node with the python plugin and its RPC server on port 50010.
+# Delegates to the tutorial Makefile, which sets up an isolated venv with the tutorial deps.
+test-rpc:
+	$(MAKE) -C tutorial test-rpc
+
 test-cov: venv
 	$(VENV_DIR)/bin/pytest --cov=plugin --cov-report=html --cov-report=term
 
@@ -42,7 +48,7 @@ type-check: venv
 
 # Protobuf generation
 proto: venv
-	cd contract/proto && $(PYTHON) -m grpc_tools.protoc --python_out=. --proto_path=. *.proto
+	$(PYTHON) -m grpc_tools.protoc --python_out=contract/proto --proto_path=contract/proto contract/proto/*.proto
 	# Fix relative imports in generated files
 	sed -i 's/^import \([^.]\)/from . import \1/' contract/proto/*_pb2.py
 

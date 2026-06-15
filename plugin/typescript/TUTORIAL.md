@@ -75,11 +75,14 @@ export const ContractConfig: any = {
         "type.googleapis.com/types.MessageFaucet",  // Add here
     ],
     eventTypeUrls: [],
+    customStatePrefixes: [faucetPrefix, rewardPrefix],  // Add here
     fileDescriptorProtos,
 };
 ```
 
 **Important**: The order of `supportedTransactions` must match the order of `transactionTypeUrls`.
+
+**Important**: Declare every custom record prefix in `customStatePrefixes`. Canopy reserves single-byte prefixes 1-15 and panics at handshake — before processing any block — if a declared prefix collides with that range, so use prefixes outside 1-15 (e.g. 100, 101) for your own records.
 
 ## Step 4: Add FromAny Message Decoding
 
@@ -511,6 +514,128 @@ static async DeliverMessageReward(contract: Contract, msg: any, fee: Long | numb
 
     return {};
 }
+```
+
+## Step 5b: Expose Custom RPC Endpoints
+
+A plugin can serve its own RPC endpoints for chain-specific data. Canopy core only exposes a single, generic, read-only transport over the unix socket: `Plugin.queryState(height, read)`, which returns raw key/value state at a historical height (`0` = latest committed). The plugin process owns its HTTP server entirely, so you can register as many routes as you want and decode your own keys/protobufs into any response shape. Canopy never needs to know about your endpoints.
+
+> Note: account and pool queries already exist in the Canopy node's own RPC (`/v1/query/account`, `/v1/query/pool`), so they make poor examples of a *custom* endpoint. This tutorial exposes faucet and reward data instead, which only the plugin knows about.
+
+### Persist queryable records during DeliverTx
+
+For data to be queryable, it has to live in state. Extend `proto/tx.proto` with two state-record messages and regenerate (`npm run build:all`):
+
+```protobuf
+// Faucet is a state record tracking the cumulative faucet mints to a recipient (test-only)
+message Faucet {
+  bytes recipient_address = 1; // @gotags: json:"recipientAddress"
+  uint64 total_amount = 2;     // @gotags: json:"totalAmount"
+  uint64 count = 3;
+}
+
+// Reward is a state record tracking the cumulative reward mints to a recipient
+message Reward {
+  bytes recipient_address = 1;  // @gotags: json:"recipientAddress"
+  bytes last_admin_address = 2; // @gotags: json:"lastAdminAddress"
+  uint64 total_amount = 3;      // @gotags: json:"totalAmount"
+  uint64 count = 4;
+}
+```
+
+The `DeliverMessageFaucet` and `DeliverMessageReward` handlers persist a small record alongside the balance update:
+
+- A `Faucet` record per recipient (`recipientAddress`, `totalAmount`, `count`), stored under prefix `[100]` via `KeyForFaucet(addr)`.
+- A `Reward` record per recipient (`recipientAddress`, `lastAdminAddress`, `totalAmount`, `count`), stored under prefix `[101]` via `KeyForReward(addr)`.
+
+> **Important — avoid prefix collisions:** the plugin reads and writes Canopy's FSM keyspace directly (that's why `send` works on real accounts at prefix `1`). Canopy reserves single-byte prefixes `1–15` for its own state (e.g. `3` = validators, `4` = committees). Your plugin-specific records must use prefixes outside that range — otherwise a range/list scan over your prefix will return core records (validators, committees, …) that fail to decode as your type. We use `100`/`101` here.
+
+Add the key helpers to `src/contract/contract.ts` next to `KeyForAccount`:
+
+```typescript
+const faucetPrefix = Buffer.from([100]); // store key prefix for faucet records
+const rewardPrefix = Buffer.from([101]); // store key prefix for reward records
+
+export function KeyForFaucet(addr: Uint8Array): Uint8Array {
+    return JoinLenPrefix(faucetPrefix, Buffer.from(addr));
+}
+export function FaucetPrefix(): Uint8Array {
+    return JoinLenPrefix(faucetPrefix);
+}
+export function KeyForReward(addr: Uint8Array): Uint8Array {
+    return JoinLenPrefix(rewardPrefix, Buffer.from(addr));
+}
+export function RewardPrefix(): Uint8Array {
+    return JoinLenPrefix(rewardPrefix);
+}
+```
+
+### Add the detached query transport
+
+The framework exposes a detached, read-only query that is NOT tied to a tx/block lifecycle and allocates its own random request id, making it safe to call from custom HTTP handlers. It is defined on the `Plugin` class in `src/contract/plugin.ts`:
+
+```typescript
+async queryState(height: number, request: any): Promise<[any | null, IPluginError | null]> {
+    const [response, err] = await this.sendDetachedSync({ query: { height, read: request } });
+    if (err) return [null, err];
+    if (!response || !response.query) return [null, ErrUnexpectedFSMToPlugin(typeof response)];
+    if (response.query.error) return [null, response.query.error];
+    return [response.query.read, null];
+}
+```
+
+This requires the `query` field (`= 10`) and the `PluginQueryRequest`/`PluginQueryResponse` messages added to `proto/plugin.proto`, plus routing the inbound `query` response in `ListenForInbound`/`handleMessageAsync`.
+
+### Register the endpoints
+
+`src/contract/rpc.ts` runs the plugin's HTTP server using node's built-in `http` module. It registers two custom routes (add as many as you like):
+
+```typescript
+export function StartRPCServer(plugin: Plugin): void {
+    const server = http.createServer((req, res) => {
+        const url = new URL(req.url || '', 'http://localhost');
+        // GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
+        if (url.pathname === '/v1/query/faucets') return void handleQueryFaucets(plugin, url, res);
+        // GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
+        if (url.pathname === '/v1/query/rewards') return void handleQueryRewards(plugin, url, res);
+        writeJSONError(res, 404, 'not found');
+    });
+    // listen address comes from the `rpcAddress` config field (default 0.0.0.0:50010)
+    server.listen(/* host/port parsed from */ plugin.config.rpcAddress);
+}
+```
+
+Each handler calls the detached, read-only `queryState`:
+
+- Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
+- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
+
+The server is started from `src/main.ts`:
+
+```typescript
+const plugin = StartPlugin(DefaultConfig());
+StartRPCServer(plugin);
+```
+
+The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
+
+### Query the endpoints
+
+After faucet/reward transactions have been included in blocks:
+
+```bash
+# all faucet records
+curl 'http://localhost:50010/v1/query/faucets'
+# {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
+
+# a single recipient's faucet record
+curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+
+# all reward records (optionally at a historical height)
+curl 'http://localhost:50010/v1/query/rewards?height=42'
+
+# a single recipient's reward record
+curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
 
 ## Step 7: Build and Deploy

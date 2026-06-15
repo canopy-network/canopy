@@ -8,6 +8,9 @@ namespace CanopyPlugin
         public int ChainId { get; set; } = 1;
         public string DataDirPath { get; set; } = "/tmp/plugin/";
 
+        // RpcAddress is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
+        public string RpcAddress { get; set; } = "0.0.0.0:50010";
+
         // DefaultConfig returns the default configuration
         public static Config Default() => new();
 

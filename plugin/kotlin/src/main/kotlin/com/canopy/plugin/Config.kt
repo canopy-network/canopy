@@ -11,7 +11,9 @@ import java.io.File
 @Serializable
 data class Config(
     val chainId: Long = 1,
-    val dataDirPath: String = "/tmp/plugin/"
+    val dataDirPath: String = "/tmp/plugin/",
+    // rpcAddress is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
+    val rpcAddress: String = "0.0.0.0:50010"
 ) {
     companion object {
         /**

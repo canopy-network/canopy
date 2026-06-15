@@ -485,8 +485,12 @@ type PluginConfig struct {
 	TransactionTypeUrls []string `protobuf:"bytes,6,rep,name=transaction_type_urls,json=transactionTypeUrls,proto3" json:"transactionTypeUrls"` // @gotags: json:"transactionTypeUrls"
 	// event_type_urls: protobuf type URLs for event messages
 	EventTypeUrls []string `protobuf:"bytes,7,rep,name=event_type_urls,json=eventTypeUrls,proto3" json:"eventTypeUrls"` // @gotags: json:"eventTypeUrls"
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// custom_state_prefixes: the store key prefixes the plugin owns for its custom records (each entry
+	// is the raw prefix bytes, e.g. [100] for faucet). Canopy panics at handshake if any collides with
+	// a core-reserved prefix (1-15), preventing silent state corruption from colliding keyspaces.
+	CustomStatePrefixes [][]byte `protobuf:"bytes,8,rep,name=custom_state_prefixes,json=customStatePrefixes,proto3" json:"customStatePrefixes"` // @gotags: json:"customStatePrefixes"
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *PluginConfig) Reset() {
@@ -564,6 +568,13 @@ func (x *PluginConfig) GetTransactionTypeUrls() []string {
 func (x *PluginConfig) GetEventTypeUrls() []string {
 	if x != nil {
 		return x.EventTypeUrls
+	}
+	return nil
+}
+
+func (x *PluginConfig) GetCustomStatePrefixes() [][]byte {
+	if x != nil {
+		return x.CustomStatePrefixes
 	}
 	return nil
 }
@@ -1870,7 +1881,7 @@ const file_plugin_proto_rawDesc = "" +
 	"stateWrite\x121\n" +
 	"\x05query\x18\n" +
 	" \x01(\v2\x19.types.PluginQueryRequestH\x00R\x05queryB\t\n" +
-	"\apayload\"\x95\x02\n" +
+	"\apayload\"\xc9\x02\n" +
 	"\fPluginConfig\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\x04R\x02id\x12\x18\n" +
@@ -1878,7 +1889,8 @@ const file_plugin_proto_rawDesc = "" +
 	"\x16supported_transactions\x18\x04 \x03(\tR\x15supportedTransactions\x124\n" +
 	"\x16file_descriptor_protos\x18\x05 \x03(\fR\x14fileDescriptorProtos\x122\n" +
 	"\x15transaction_type_urls\x18\x06 \x03(\tR\x13transactionTypeUrls\x12&\n" +
-	"\x0fevent_type_urls\x18\a \x03(\tR\reventTypeUrls\">\n" +
+	"\x0fevent_type_urls\x18\a \x03(\tR\reventTypeUrls\x122\n" +
+	"\x15custom_state_prefixes\x18\b \x03(\fR\x13customStatePrefixes\">\n" +
 	"\x0fPluginFSMConfig\x12+\n" +
 	"\x06config\x18\x01 \x01(\v2\x13.types.PluginConfigR\x06config\"9\n" +
 	"\x14PluginGenesisRequest\x12!\n" +

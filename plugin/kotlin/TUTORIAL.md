@@ -75,10 +75,20 @@ object ContractConfig {
         "type.googleapis.com/types.MessageFaucet"   // Add here
     )
     // ... rest of config
+
+    fun toPluginConfig(): PluginConfig = PluginConfig.newBuilder()
+        // ... name, id, version, supported transactions, type urls, file descriptors ...
+        .addAllCustomStatePrefixes(listOf(            // Declare the prefixes this plugin owns
+            ByteString.copyFrom(FAUCET_PREFIX),       // byteArrayOf(100)
+            ByteString.copyFrom(REWARD_PREFIX)        // byteArrayOf(101)
+        ))
+        .build()
 }
 ```
 
 **Important**: The order of `SUPPORTED_TRANSACTIONS` must match the order of `TRANSACTION_TYPE_URLS`.
+
+**Declare every custom record prefix in `customStatePrefixes`.** Canopy reserves single-byte prefixes 1-15 and panics at handshake — before processing any block — if a declared prefix collides with that range, so use prefixes outside 1-15 (e.g. 100, 101) for your own records.
 
 Also add the imports at the top of the file:
 
@@ -430,6 +440,79 @@ private fun deliverMessageReward(msg: MessageReward, fee: Long): PluginDeliverRe
         PluginDeliverResponse.getDefaultInstance()
     }
 }
+```
+
+## Step 5b: Expose Custom RPC Endpoints
+
+A plugin can serve its own RPC endpoints for chain-specific data. Canopy core only exposes a single, generic, read-only transport over the unix socket: `PluginClient.queryState(height, read)`, which returns raw key/value state at a historical height (`0` = latest committed). The plugin process owns its HTTP server entirely, so you can register as many routes as you want and decode your own keys/protobufs into any response shape. Canopy never needs to know about your endpoints.
+
+> Note: account and pool queries already exist in the Canopy node's own RPC (`/v1/query/account`, `/v1/query/pool`), so they make poor examples of a *custom* endpoint. This tutorial exposes faucet and reward data instead, which only the plugin knows about.
+
+### Persist queryable records during DeliverTx
+
+For data to be queryable, it has to live in state. The `deliverMessageFaucet` and `deliverMessageReward` handlers persist a small record alongside the balance update:
+
+- A `Faucet` record per recipient (`recipientAddress`, `totalAmount`, `count`), stored under prefix `byteArrayOf(100)` via `keyForFaucet(addr)`.
+- A `Reward` record per recipient (`recipientAddress`, `lastAdminAddress`, `totalAmount`, `count`), stored under prefix `byteArrayOf(101)` via `keyForReward(addr)`.
+
+> **Important — avoid prefix collisions:** the plugin reads and writes Canopy's FSM keyspace directly (that's why `send` works on real accounts at prefix `1`). Canopy reserves single-byte prefixes `1–15` for its own state (e.g. `3` = validators, `4` = committees). Your plugin-specific records must use prefixes outside that range — otherwise a range/list scan over your prefix will return core records (validators, committees, …) that fail to decode as your type. We use `100`/`101` here.
+
+These `Faucet`/`Reward` messages live in `src/main/proto/tx.proto`, and the `keyForFaucet`/`keyForReward`/`faucetPrefix`/`rewardPrefix` helpers live in `src/main/kotlin/com/canopy/plugin/Contract.kt`.
+
+### Add the detached query transport
+
+The detached, read-only query is a new wire message (`PluginQueryRequest`/`PluginQueryResponse`, `query = 10` in both oneofs) added to `src/main/proto/plugin.proto`. The framework exposes it as `PluginClient.queryState(height, read)`, which allocates a fresh RANDOM request id (not tied to any in-flight tx/block lifecycle) so it is safe to call from HTTP handlers.
+
+### Register the endpoints
+
+`src/main/kotlin/com/canopy/plugin/Rpc.kt` runs the plugin's HTTP server using the JDK built-in `com.sun.net.httpserver.HttpServer`. It registers two custom routes (add as many as you like):
+
+```kotlin
+fun start() {
+    val server = HttpServer.create(InetSocketAddress(host, port), 0)
+    // GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
+    server.createContext("/v1/query/faucets") { exchange -> handleQueryFaucets(exchange) }
+    // GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
+    server.createContext("/v1/query/rewards") { exchange -> handleQueryRewards(exchange) }
+    server.start()
+}
+```
+
+Each handler calls the detached, read-only `queryState`:
+
+- Without `?address`, it does a **range read** over the record prefix (`faucetPrefix()` / `rewardPrefix()`) and returns every record.
+- With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record.
+
+The server is started from `Main.kt`:
+
+```kotlin
+val plugin = PluginClient(config)
+plugin.start()
+// start the plugin's own HTTP server exposing custom, chain-specific RPC endpoints
+thread(isDaemon = true, name = "plugin-rpc-server") {
+    RpcServer(plugin).start()
+}
+```
+
+The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
+
+### Query the endpoints
+
+After faucet/reward transactions have been included in blocks:
+
+```bash
+# all faucet records
+curl 'http://localhost:50010/v1/query/faucets'
+# {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
+
+# a single recipient's faucet record
+curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+
+# all reward records (optionally at a historical height)
+curl 'http://localhost:50010/v1/query/rewards?height=42'
+
+# a single recipient's reward record
+curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
 
 ## Step 6: Update fromAny Function

@@ -39,6 +39,48 @@ message MessageSend {
   uint64 amount = 3;
 }
 
+// MessageReward mints tokens to a recipient; the admin authorizes it and pays the fee
+message MessageReward {
+  // admin_address: the admin authorizing the reward
+  bytes admin_address = 1; // @gotags: json:"adminAddress"
+  // recipient_address: who receives the reward
+  bytes recipient_address = 2; // @gotags: json:"recipientAddress"
+  // amount: tokens to mint
+  uint64 amount = 3;
+}
+
+// MessageFaucet is a test-only transaction that mints tokens to any address (no balance check)
+message MessageFaucet {
+  // signer_address: the address signing this transaction (for auth)
+  bytes signer_address = 1; // @gotags: json:"signerAddress"
+  // recipient_address: who receives the tokens
+  bytes recipient_address = 2; // @gotags: json:"recipientAddress"
+  // amount: tokens to mint
+  uint64 amount = 3;
+}
+
+// Faucet is a state record tracking the cumulative faucet mints to a recipient (test-only)
+message Faucet {
+  // recipient_address: the address that received faucet mints
+  bytes recipient_address = 1; // @gotags: json:"recipientAddress"
+  // total_amount: the cumulative amount minted to the recipient via faucet
+  uint64 total_amount = 2; // @gotags: json:"totalAmount"
+  // count: the number of faucet transactions received
+  uint64 count = 3;
+}
+
+// Reward is a state record tracking the cumulative reward mints to a recipient
+message Reward {
+  // recipient_address: the address that received rewards
+  bytes recipient_address = 1; // @gotags: json:"recipientAddress"
+  // last_admin_address: the admin that authorized the most recent reward
+  bytes last_admin_address = 2; // @gotags: json:"lastAdminAddress"
+  // total_amount: the cumulative amount minted to the recipient via reward
+  uint64 total_amount = 3; // @gotags: json:"totalAmount"
+  // count: the number of reward transactions received
+  uint64 count = 4;
+}
+
 // FeeParams is the parameter space that defines various amounts for transaction fees
 message FeeParams {
   // send_fee: is the fee amount (in uCNPY) for Message Send

@@ -5,7 +5,11 @@ export {
     ContractAsync,
     KeyForAccount,
     KeyForFeeParams,
-    KeyForFeePool
+    KeyForFeePool,
+    KeyForFaucet,
+    FaucetPrefix,
+    KeyForReward,
+    RewardPrefix
 } from './contract.js';
 export {
     Plugin,
@@ -17,6 +21,8 @@ export {
     Marshal,
     Unmarshal,
     FromAny,
-    JoinLenPrefix
+    JoinLenPrefix,
+    PLUGIN_BUILD
 } from './plugin.js';
+export { StartRPCServer } from './rpc.js';
 export * from './error.js';

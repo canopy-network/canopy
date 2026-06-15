@@ -74,10 +74,15 @@ var ContractConfig = &PluginConfig{
         "type.googleapis.com/types.MessageFaucet",  // Add here
     },
     EventTypeUrls: nil,
+    // Declare the key prefixes this plugin owns for its custom records. Canopy validates these at
+    // handshake and PANICS before the plugin starts if any collides with a core-reserved prefix (1-15).
+    CustomStatePrefixes: [][]byte{faucetPrefix, rewardPrefix}, // Add here
 }
 ```
 
 **Important**: The order of `SupportedTransactions` must match the order of `TransactionTypeUrls`.
+
+**Important**: Declare every custom record prefix in `CustomStatePrefixes`. Canopy shares its FSM keyspace with the plugin and reserves the single-byte prefixes `1-15` (accounts, pools, validators, committees, ...). At handshake Canopy panics — before processing any block — if a declared prefix collides with that range, so always use prefixes outside `1-15` (e.g. `100`, `101`) for your own records.
 
 ## Step 4: Add CheckTx Validation
 
@@ -417,6 +422,71 @@ func (c *Contract) DeliverMessageReward(msg *MessageReward, fee uint64) *PluginD
     }
     return &PluginDeliverResponse{Error: err}
 }
+```
+
+## Step 5b: Expose Custom RPC Endpoints
+
+A plugin can serve its own RPC endpoints for chain-specific data. Canopy core only exposes a single, generic, read-only transport over the unix socket: `Plugin.QueryState(height, read)`, which returns raw key/value state at a historical height (`0` = latest committed). The plugin process owns its HTTP server entirely, so you can register as many routes as you want and decode your own keys/protobufs into any response shape. Canopy never needs to know about your endpoints.
+
+> Note: account and pool queries already exist in the Canopy node's own RPC (`/v1/query/account`, `/v1/query/pool`), so they make poor examples of a *custom* endpoint. This tutorial exposes faucet and reward data instead, which only the plugin knows about.
+
+### Persist queryable records during DeliverTx
+
+For data to be queryable, it has to live in state. The `DeliverMessageFaucet` and `DeliverMessageReward` handlers above persist a small record alongside the balance update:
+
+- A `Faucet` record per recipient (`recipientAddress`, `totalAmount`, `count`), stored under prefix `[]byte{100}` via `KeyForFaucet(addr)`.
+- A `Reward` record per recipient (`recipientAddress`, `lastAdminAddress`, `totalAmount`, `count`), stored under prefix `[]byte{101}` via `KeyForReward(addr)`.
+
+> **Important — avoid prefix collisions:** the plugin reads and writes Canopy's FSM keyspace directly (that's why `send` works on real accounts at prefix `1`). Canopy reserves single-byte prefixes `1–15` for its own state (e.g. `3` = validators, `4` = committees). Your plugin-specific records must use prefixes outside that range — otherwise a range/list scan over your prefix will return core records (validators, committees, …) that fail to decode as your type. We use `100`/`101` here.
+
+These `Faucet`/`Reward` messages and the `KeyForFaucet`/`KeyForReward`/`FaucetPrefix`/`RewardPrefix` helpers live in `proto/tx.proto` and `contract/contract.go`.
+
+### Register the endpoints
+
+`contract/rpc.go` runs the plugin's HTTP server. It registers two custom routes on a shared mux (add as many as you like):
+
+```go
+func (p *Plugin) StartRPCServer() {
+    mux := http.NewServeMux()
+    // GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
+    mux.HandleFunc("/v1/query/faucets", p.handleQueryFaucets)
+    // GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
+    mux.HandleFunc("/v1/query/rewards", p.handleQueryRewards)
+    http.ListenAndServe(p.config.RPCAddress, mux)
+}
+```
+
+Each handler calls the detached, read-only `QueryState`:
+
+- Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
+- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
+
+The server is started from `main.go`:
+
+```go
+plugin := contract.StartPlugin(contract.DefaultConfig())
+go plugin.StartRPCServer()
+```
+
+The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
+
+### Query the endpoints
+
+After faucet/reward transactions have been included in blocks:
+
+```bash
+# all faucet records
+curl 'http://localhost:50010/v1/query/faucets'
+# {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
+
+# a single recipient's faucet record
+curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+
+# all reward records (optionally at a historical height)
+curl 'http://localhost:50010/v1/query/rewards?height=42'
+
+# a single recipient's reward record
+curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
 
 ## Step 6: Build and Deploy

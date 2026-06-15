@@ -33,9 +33,15 @@ type Plugin struct {
 // socketPath is the name of the plugin socket exposed by the base SDK
 const socketPath = "plugin.sock"
 
+// PluginBuild is a human-readable build marker logged at startup so operators can confirm, via
+// `tail -f /tmp/plugin/go-plugin.log`, that the running binary includes the expected features.
+const PluginBuild = "go-plugin v1 (faucet+reward txs, custom RPC: /v1/query/faucets, /v1/query/rewards)"
+
 // StartPlugin() creates and starts a plugin, returning the running *Plugin so builders can
 // access detached capabilities (e.g. QueryState) to back their own custom RPC endpoints
 func StartPlugin(c Config) *Plugin {
+	// log the build marker so the running version is obvious in the plugin log
+	log.Printf("==== STARTING %s ====", PluginBuild)
 	var conn net.Conn
 	// connect to the socket
 	sockPath := filepath.Join(c.DataDirPath, socketPath)
