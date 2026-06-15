@@ -631,12 +631,22 @@ func (s *Store) MaybeCompact() {
 	version := s.Version()
 	if compactionInterval > 0 && version%compactionInterval == 0 {
 		go func() {
-			// perform HSS compaction every 4th compaction
-			hssCompaction := (version/compactionInterval)%4 == 0
+			now := time.Now()
 			// trigger compaction of store keys
-			if err := s.Compact(version, hssCompaction, false, false, false); err != nil {
-				s.log.Errorf("key compaction failed: %s", err)
+			if err := s.Compact(version, latestStatePrefix); err != nil {
+				s.log.Errorf("LSS key compaction failed: %s", err)
+				return
 			}
+			s.metrics.UpdateStoreJobMetrics(time.Since(now), 0, 0)
+			// perform HSS compaction every 4th compaction
+			if (version/compactionInterval)%4 != 0 {
+				return
+			}
+			now = time.Now()
+			if err := s.Compact(version, historicStatePrefix); err != nil {
+				s.log.Errorf("HSS key compaction failed: %s", err)
+			}
+			s.metrics.UpdateStoreJobMetrics(0, time.Since(now), 0)
 		}()
 	}
 }
@@ -723,68 +733,36 @@ func (s *Store) MaybeBackup() {
 	}()
 }
 
-// Compact runs Pebble range compaction over the latest state prefix plus any additional
-// prefixes flagged by the caller.
-func (s *Store) Compact(version uint64, compactHSS, compactStateCommitment, compactStateCommitID, compactIndexer bool) lib.ErrorI {
+// Compact runs Pebble range compaction over the prefix range
+func (s *Store) Compact(version uint64, prefix []byte) lib.ErrorI {
 	// compactions are not allowed to run concurrently to not intertwine with the keys
 	if !s.compaction.CompareAndSwap(false, true) {
-		s.log.Debugf("key compaction skipped [%d]: already in progress", version)
+		s.log.Debugf("key compaction skipped [%d] [%s]: already in progress", version, prefix)
 		return nil
 	}
 	defer s.compaction.Store(false)
 	now := time.Now()
-	s.log.Debugf("key compaction started at height %d", version)
-	// budget more time the more prefixes are compacted
+	s.log.Debugf("key compaction [%s] started at height %d", prefix, version)
 	// TODO: per-prefix budget was chosen arbitrarily, update once multiple tests are run
-	timeout := 3 * time.Minute
-	for _, enabled := range []bool{compactHSS, compactStateCommitment, compactStateCommitID, compactIndexer} {
-		if enabled {
-			timeout += 3 * time.Minute
-		}
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	// latest state keys are always compacted
-	if err := s.compactPrefixRange(ctx, latestStatePrefix, true); err != nil {
-		return err
+	// compact prefix range
+	if err := s.db.Compact(ctx, prefix, prefixEnd(prefix), true); err != nil {
+		return ErrCompactDB(err)
 	}
-	lssDuration := time.Since(now)
-	s.metrics.UpdateStoreJobMetrics(lssDuration, 0, 0)
-	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssDuration)
-	// historic state keys
-	if compactHSS {
-		hssTime := time.Now()
-		if err := s.compactPrefixRange(ctx, historicStatePrefix, false); err != nil {
-			return err
-		}
-		hssDuration := time.Since(hssTime)
-		s.log.Debugf("key compaction finished [HSS] [%d] time: %s, total time: %s", version,
-			hssDuration, time.Since(now))
-		s.metrics.UpdateStoreJobMetrics(0, hssDuration, 0)
-	}
-	// remaining prefixes outside the regular LSS/HSS cycle
-	if compactStateCommitment {
-		if err := s.compactPrefixRange(ctx, stateCommitmentPrefix, false); err != nil {
-			return err
-		}
-	}
-	if compactStateCommitID {
-		if err := s.compactPrefixRange(ctx, stateCommitIDPrefix, false); err != nil {
-			return err
-		}
-	}
-	if compactIndexer {
-		if err := s.compactPrefixRange(ctx, indexerPrefix, false); err != nil {
-			return err
-		}
-	}
+	// log the duration of the compaction
+	duration := time.Since(now)
+	s.log.Debugf("key compaction finished [%s] [%d] time: %s", prefix, version, duration)
 	return nil
 }
 
-// compactPrefixRange runs a Pebble range compaction over the entire key range of a single prefix.
-func (s *Store) compactPrefixRange(ctx context.Context, prefix []byte, parallelize bool) lib.ErrorI {
-	if err := s.db.Compact(ctx, prefix, prefixEnd(prefix), parallelize); err != nil {
-		return ErrCommitDB(err)
+// CompactAll is a helper function that runs compaction for all store prefixes sequentially
+func (s *Store) CompactAll(version uint64) lib.ErrorI {
+	prefixes := [][]byte{latestStatePrefix, historicStatePrefix, stateCommitmentPrefix, indexerPrefix}
+	for _, prefix := range prefixes {
+		if err := s.Compact(version, prefix); err != nil {
+			return err
+		}
 	}
 	return nil
 }
