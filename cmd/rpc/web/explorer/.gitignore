@@ -8,7 +8,12 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# Keep `dist/` tracked as an empty directory so `//go:embed all:web/explorer/dist`
+# in cmd/rpc/server.go always finds a valid target — `npm run build` writes real
+# assets here at canopy build time, downstream Go consumers (launchpad, indexer,
+# graduator) get a no-op `.gitkeep` and still vendor cleanly.
+dist/*
+!dist/.gitkeep
 dist-ssr
 *.local
 

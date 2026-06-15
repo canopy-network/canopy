@@ -1,7 +1,12 @@
 .agents/*
 .claude/*
 node_modules
-out
+# Keep `out/` tracked as an empty directory so `//go:embed all:web/wallet/out`
+# in cmd/rpc/server.go always finds a valid target — Next.js writes real
+# assets here at canopy build time, downstream Go consumers (launchpad, indexer,
+# graduator) get a no-op `.gitkeep` and still vendor cleanly.
+out/*
+!out/.gitkeep
 vite.config.ts.*
 .idea
 dist
