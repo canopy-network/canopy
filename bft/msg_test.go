@@ -137,7 +137,7 @@ func TestSignBytes(t *testing.T) {
 					ProposerKey: msg.Qc.ProposerKey,
 				}).SignBytes()
 			case RoundInterrupt:
-				expectedSignBytes, err = lib.Marshal(&Message{Header: msg.Header})
+				expectedSignBytes, err = lib.Marshal(&Message{Qc: &QC{Header: msg.Qc.Header}})
 			default:
 				t.Fatal("unexpected phase")
 			}
@@ -242,4 +242,50 @@ func TestHandleMessageNilSignatureReturnsError(t *testing.T) {
 	errI := c.bft.HandleMessage(msg)
 	require.Error(t, errI)
 	require.Equal(t, ErrPartialSignatureEmpty().Code(), errI.Code())
+}
+
+func TestPacemakerMessageSignatureBindsClaimedRound(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, 1)}}
+	require.NoError(t, msg.Sign(c.valKeys[1]))
+
+	msg.Qc.Header.Round = 2
+
+	errI := c.bft.HandleMessage(msg)
+	require.Error(t, errI)
+	require.Equal(t, ErrInvalidPartialSignature().Code(), errI.Code())
+}
+
+func TestProposerMessageRejectsInvalidHighQC(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	justifyPropose := c.simElectionVotePhase(t, 0, false, false, false, 0)
+	aggSig, err := justifyPropose.AggregateSignatures()
+	require.NoError(t, err)
+
+	blk, blkHash, results, resHash := c.proposal(t)
+	highQC := c.setupTestableHighQC(t, false, true)
+	highQC.Signature.Signature = append([]byte{}, highQC.Signature.Signature...)
+	highQC.Signature.Signature[0] ^= 0xFF
+
+	msg := &Message{
+		Header: c.view(Propose, 0),
+		Qc: &QC{
+			Header:      c.view(ElectionVote, 0),
+			Block:       blk,
+			BlockHash:   blkHash,
+			Results:     results,
+			ResultsHash: resHash,
+			ProposerKey: c.valKeys[0].PublicKey().Bytes(),
+			Signature: &lib.AggregateSignature{
+				Signature: aggSig,
+				Bitmap:    justifyPropose.Bitmap(),
+			},
+		},
+		HighQc: highQC,
+	}
+	require.NoError(t, msg.Sign(c.valKeys[0]))
+
+	errI := c.bft.HandleMessage(msg)
+	require.Error(t, errI)
+	require.Equal(t, lib.CodeInvalidAggregateSignature, errI.Code())
 }

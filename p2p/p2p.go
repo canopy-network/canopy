@@ -585,19 +585,7 @@ func (p *P2P) SelfSend(fromPublicKey []byte, topic lib.Topic, payload proto.Mess
 		case p.Inbox(topic) <- m:
 		default:
 			p.log.Errorf("CRITICAL: Inbox %s queue full in self send", lib.Topic_name[int32(topic)])
-			p.log.Error("Dropping all messages")
-			// drain inbox
-			func() {
-				for {
-					select {
-					case <-p.Inbox(topic):
-						// drop
-					default:
-						// channel is empty now
-						return
-					}
-				}
-			}()
+			p.log.Error("Dropping newest message")
 		}
 	}()
 	return nil

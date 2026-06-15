@@ -361,7 +361,7 @@ func (c Config) WriteToFile(filepath string) error {
 		return err
 	}
 	// write the config.json file to the data directory
-	return os.WriteFile(filepath, jsonBytes, os.ModePerm)
+	return os.WriteFile(filepath, jsonBytes, 0600)
 }
 
 // NewConfigFromFile() populates a Config object from a JSON file

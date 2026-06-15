@@ -575,19 +575,7 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet, metrics *l
 			}
 		default:
 			s.logger.Errorf("CRITICAL: Inbox %s queue full in receive service", lib.Topic_name[int32(packet.StreamId)])
-			s.logger.Error("Dropping all messages")
-			// drain inbox
-			func() {
-				for {
-					select {
-					case <-s.inbox:
-						// drop
-					default:
-						// channel is empty now
-						return
-					}
-				}
-			}()
+			s.logger.Error("Dropping newest message")
 		}
 		// reset receiving buffer
 		s.msgAssembler = s.msgAssembler[:0]
