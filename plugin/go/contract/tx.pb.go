@@ -206,271 +206,6 @@ func (x *MessageSend) GetAmount() uint64 {
 	return 0
 }
 
-// MessageReward mints tokens to a recipient; the admin authorizes it and pays the fee
-type MessageReward struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// admin_address: the admin authorizing the reward
-	AdminAddress []byte `protobuf:"bytes,1,opt,name=admin_address,json=adminAddress,proto3" json:"adminAddress"` // @gotags: json:"adminAddress"
-	// recipient_address: who receives the reward
-	RecipientAddress []byte `protobuf:"bytes,2,opt,name=recipient_address,json=recipientAddress,proto3" json:"recipientAddress"` // @gotags: json:"recipientAddress"
-	// amount: tokens to mint
-	Amount        uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MessageReward) Reset() {
-	*x = MessageReward{}
-	mi := &file_tx_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageReward) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageReward) ProtoMessage() {}
-
-func (x *MessageReward) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageReward.ProtoReflect.Descriptor instead.
-func (*MessageReward) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *MessageReward) GetAdminAddress() []byte {
-	if x != nil {
-		return x.AdminAddress
-	}
-	return nil
-}
-
-func (x *MessageReward) GetRecipientAddress() []byte {
-	if x != nil {
-		return x.RecipientAddress
-	}
-	return nil
-}
-
-func (x *MessageReward) GetAmount() uint64 {
-	if x != nil {
-		return x.Amount
-	}
-	return 0
-}
-
-// MessageFaucet is a test-only transaction that mints tokens to any address (no balance check)
-type MessageFaucet struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// signer_address: the address signing this transaction (for auth)
-	SignerAddress []byte `protobuf:"bytes,1,opt,name=signer_address,json=signerAddress,proto3" json:"signerAddress"` // @gotags: json:"signerAddress"
-	// recipient_address: who receives the tokens
-	RecipientAddress []byte `protobuf:"bytes,2,opt,name=recipient_address,json=recipientAddress,proto3" json:"recipientAddress"` // @gotags: json:"recipientAddress"
-	// amount: tokens to mint
-	Amount        uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MessageFaucet) Reset() {
-	*x = MessageFaucet{}
-	mi := &file_tx_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MessageFaucet) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MessageFaucet) ProtoMessage() {}
-
-func (x *MessageFaucet) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MessageFaucet.ProtoReflect.Descriptor instead.
-func (*MessageFaucet) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *MessageFaucet) GetSignerAddress() []byte {
-	if x != nil {
-		return x.SignerAddress
-	}
-	return nil
-}
-
-func (x *MessageFaucet) GetRecipientAddress() []byte {
-	if x != nil {
-		return x.RecipientAddress
-	}
-	return nil
-}
-
-func (x *MessageFaucet) GetAmount() uint64 {
-	if x != nil {
-		return x.Amount
-	}
-	return 0
-}
-
-// Faucet is a state record tracking the cumulative faucet mints to a recipient (test-only)
-type Faucet struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// recipient_address: the address that received faucet mints
-	RecipientAddress []byte `protobuf:"bytes,1,opt,name=recipient_address,json=recipientAddress,proto3" json:"recipientAddress"` // @gotags: json:"recipientAddress"
-	// total_amount: the cumulative amount minted to the recipient via faucet
-	TotalAmount uint64 `protobuf:"varint,2,opt,name=total_amount,json=totalAmount,proto3" json:"totalAmount"` // @gotags: json:"totalAmount"
-	// count: the number of faucet transactions received
-	Count         uint64 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Faucet) Reset() {
-	*x = Faucet{}
-	mi := &file_tx_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Faucet) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Faucet) ProtoMessage() {}
-
-func (x *Faucet) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Faucet.ProtoReflect.Descriptor instead.
-func (*Faucet) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *Faucet) GetRecipientAddress() []byte {
-	if x != nil {
-		return x.RecipientAddress
-	}
-	return nil
-}
-
-func (x *Faucet) GetTotalAmount() uint64 {
-	if x != nil {
-		return x.TotalAmount
-	}
-	return 0
-}
-
-func (x *Faucet) GetCount() uint64 {
-	if x != nil {
-		return x.Count
-	}
-	return 0
-}
-
-// Reward is a state record tracking the cumulative reward mints to a recipient
-type Reward struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// recipient_address: the address that received rewards
-	RecipientAddress []byte `protobuf:"bytes,1,opt,name=recipient_address,json=recipientAddress,proto3" json:"recipientAddress"` // @gotags: json:"recipientAddress"
-	// last_admin_address: the admin that authorized the most recent reward
-	LastAdminAddress []byte `protobuf:"bytes,2,opt,name=last_admin_address,json=lastAdminAddress,proto3" json:"lastAdminAddress"` // @gotags: json:"lastAdminAddress"
-	// total_amount: the cumulative amount minted to the recipient via reward
-	TotalAmount uint64 `protobuf:"varint,3,opt,name=total_amount,json=totalAmount,proto3" json:"totalAmount"` // @gotags: json:"totalAmount"
-	// count: the number of reward transactions received
-	Count         uint64 `protobuf:"varint,4,opt,name=count,proto3" json:"count,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Reward) Reset() {
-	*x = Reward{}
-	mi := &file_tx_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Reward) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Reward) ProtoMessage() {}
-
-func (x *Reward) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Reward.ProtoReflect.Descriptor instead.
-func (*Reward) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *Reward) GetRecipientAddress() []byte {
-	if x != nil {
-		return x.RecipientAddress
-	}
-	return nil
-}
-
-func (x *Reward) GetLastAdminAddress() []byte {
-	if x != nil {
-		return x.LastAdminAddress
-	}
-	return nil
-}
-
-func (x *Reward) GetTotalAmount() uint64 {
-	if x != nil {
-		return x.TotalAmount
-	}
-	return 0
-}
-
-func (x *Reward) GetCount() uint64 {
-	if x != nil {
-		return x.Count
-	}
-	return 0
-}
-
 // FeeParams is the parameter space that defines various amounts for transaction fees
 type FeeParams struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -482,7 +217,7 @@ type FeeParams struct {
 
 func (x *FeeParams) Reset() {
 	*x = FeeParams{}
-	mi := &file_tx_proto_msgTypes[6]
+	mi := &file_tx_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -494,7 +229,7 @@ func (x *FeeParams) String() string {
 func (*FeeParams) ProtoMessage() {}
 
 func (x *FeeParams) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[6]
+	mi := &file_tx_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -507,7 +242,7 @@ func (x *FeeParams) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeeParams.ProtoReflect.Descriptor instead.
 func (*FeeParams) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{6}
+	return file_tx_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *FeeParams) GetSendFee() uint64 {
@@ -531,7 +266,7 @@ type Signature struct {
 
 func (x *Signature) Reset() {
 	*x = Signature{}
-	mi := &file_tx_proto_msgTypes[7]
+	mi := &file_tx_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -543,7 +278,7 @@ func (x *Signature) String() string {
 func (*Signature) ProtoMessage() {}
 
 func (x *Signature) ProtoReflect() protoreflect.Message {
-	mi := &file_tx_proto_msgTypes[7]
+	mi := &file_tx_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -556,7 +291,7 @@ func (x *Signature) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Signature.ProtoReflect.Descriptor instead.
 func (*Signature) Descriptor() ([]byte, []int) {
-	return file_tx_proto_rawDescGZIP(), []int{7}
+	return file_tx_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Signature) GetPublicKey() []byte {
@@ -593,24 +328,7 @@ const file_tx_proto_rawDesc = "" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
 	"\n" +
 	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x04R\x06amount\"y\n" +
-	"\rMessageReward\x12#\n" +
-	"\radmin_address\x18\x01 \x01(\fR\fadminAddress\x12+\n" +
-	"\x11recipient_address\x18\x02 \x01(\fR\x10recipientAddress\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x04R\x06amount\"{\n" +
-	"\rMessageFaucet\x12%\n" +
-	"\x0esigner_address\x18\x01 \x01(\fR\rsignerAddress\x12+\n" +
-	"\x11recipient_address\x18\x02 \x01(\fR\x10recipientAddress\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x04R\x06amount\"n\n" +
-	"\x06Faucet\x12+\n" +
-	"\x11recipient_address\x18\x01 \x01(\fR\x10recipientAddress\x12!\n" +
-	"\ftotal_amount\x18\x02 \x01(\x04R\vtotalAmount\x12\x14\n" +
-	"\x05count\x18\x03 \x01(\x04R\x05count\"\x9c\x01\n" +
-	"\x06Reward\x12+\n" +
-	"\x11recipient_address\x18\x01 \x01(\fR\x10recipientAddress\x12,\n" +
-	"\x12last_admin_address\x18\x02 \x01(\fR\x10lastAdminAddress\x12!\n" +
-	"\ftotal_amount\x18\x03 \x01(\x04R\vtotalAmount\x12\x14\n" +
-	"\x05count\x18\x04 \x01(\x04R\x05count\"&\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\"&\n" +
 	"\tFeeParams\x12\x19\n" +
 	"\bsend_fee\x18\x01 \x01(\x04R\asendFee\"H\n" +
 	"\tSignature\x12\x1d\n" +
@@ -630,21 +348,17 @@ func file_tx_proto_rawDescGZIP() []byte {
 	return file_tx_proto_rawDescData
 }
 
-var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_tx_proto_goTypes = []any{
-	(*Transaction)(nil),   // 0: types.Transaction
-	(*MessageSend)(nil),   // 1: types.MessageSend
-	(*MessageReward)(nil), // 2: types.MessageReward
-	(*MessageFaucet)(nil), // 3: types.MessageFaucet
-	(*Faucet)(nil),        // 4: types.Faucet
-	(*Reward)(nil),        // 5: types.Reward
-	(*FeeParams)(nil),     // 6: types.FeeParams
-	(*Signature)(nil),     // 7: types.Signature
-	(*anypb.Any)(nil),     // 8: google.protobuf.Any
+	(*Transaction)(nil), // 0: types.Transaction
+	(*MessageSend)(nil), // 1: types.MessageSend
+	(*FeeParams)(nil),   // 2: types.FeeParams
+	(*Signature)(nil),   // 3: types.Signature
+	(*anypb.Any)(nil),   // 4: google.protobuf.Any
 }
 var file_tx_proto_depIdxs = []int32{
-	8, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
-	7, // 1: types.Transaction.signature:type_name -> types.Signature
+	4, // 0: types.Transaction.msg:type_name -> google.protobuf.Any
+	3, // 1: types.Transaction.signature:type_name -> types.Signature
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -663,7 +377,7 @@ func file_tx_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tx_proto_rawDesc), len(file_tx_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

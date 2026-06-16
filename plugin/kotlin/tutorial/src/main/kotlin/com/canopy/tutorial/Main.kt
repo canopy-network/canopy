@@ -8,11 +8,11 @@ package com.canopy.tutorial
  * 
  * See TUTORIAL.md in the parent directory for the full tutorial.
  * 
- * To run the RPC tests:
- *   ./gradlew test --tests "com.canopy.tutorial.RpcTest"
+ * To run the integration tests (transactions + custom RPC endpoints):
+ *   ./gradlew test
  * 
  * Or use the Makefile:
- *   make test-rpc
+ *   make test
  */
 fun main() {
     println("Canopy Kotlin Plugin Tutorial")
@@ -20,11 +20,11 @@ fun main() {
     println()
     println("This project contains tests for custom transaction types.")
     println()
-    println("To run the RPC integration tests:")
-    println("  ./gradlew test --tests \"com.canopy.tutorial.RpcTest\"")
+    println("To run the integration tests (transactions + custom RPC endpoints):")
+    println("  ./gradlew test")
     println()
     println("Or use the Makefile:")
-    println("  make test-rpc")
+    println("  make test")
     println()
     println("Prerequisites:")
     println("  1. Canopy node must be running with the Kotlin plugin enabled")

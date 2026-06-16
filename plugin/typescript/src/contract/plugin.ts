@@ -45,8 +45,7 @@ const socketPath = 'plugin.sock';
 
 // PLUGIN_BUILD is a human-readable build marker logged at startup so operators can confirm, via
 // `tail -f /tmp/plugin/typescript-plugin.log`, that the running binary includes the expected features.
-export const PLUGIN_BUILD =
-    'typescript-plugin v1 (faucet+reward txs, custom RPC: /v1/query/faucets, /v1/query/rewards)';
+export const PLUGIN_BUILD = 'typescript-plugin v1 (base SDK + detached custom RPC query path)';
 
 // CONFIG IMPLEMENTATION
 
@@ -491,12 +490,7 @@ export function FromAny(any: any): [any | null, string | null, IPluginError | nu
         if (typeUrl.includes('MessageSend')) {
             return [types.MessageSend.decode(any.value), 'MessageSend', null];
         }
-        if (typeUrl.includes('MessageReward')) {
-            return [types.MessageReward.decode(any.value), 'MessageReward', null];
-        }
-        if (typeUrl.includes('MessageFaucet')) {
-            return [types.MessageFaucet.decode(any.value), 'MessageFaucet', null];
-        }
+        // NOTE: To add new message types, see TUTORIAL.md
         return [null, null, ErrInvalidMessageCast()];
     } catch (err) {
         return [null, null, ErrFromAny(err as Error)];

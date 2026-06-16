@@ -588,7 +588,14 @@ This requires the `query` field (`= 10`) and the `PluginQueryRequest`/`PluginQue
 
 ### Register the endpoints
 
-`src/contract/rpc.ts` runs the plugin's HTTP server using node's built-in `http` module. It registers two custom routes (add as many as you like):
+The base plugin already ships a **skeleton** `src/contract/rpc.ts`: `StartRPCServer(plugin)` runs the plugin's HTTP server using node's built-in `http` module, reads the listen address from the `rpcAddress` config field (default `0.0.0.0:50010`), and registers **no routes** by default. It is already started from `src/main.ts`:
+
+```typescript
+const plugin = StartPlugin(DefaultConfig());
+StartRPCServer(plugin);
+```
+
+So you don't need to wire up the server — you only add your routes to the existing `http.createServer` callback in `StartRPCServer`. Here we add two custom routes (add as many as you like):
 
 ```typescript
 export function StartRPCServer(plugin: Plugin): void {
@@ -609,15 +616,6 @@ Each handler calls the detached, read-only `queryState`:
 
 - Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
 - With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
-
-The server is started from `src/main.ts`:
-
-```typescript
-const plugin = StartPlugin(DefaultConfig());
-StartRPCServer(plugin);
-```
-
-The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
 
 ### Query the endpoints
 
@@ -761,13 +759,20 @@ docker run -it --entrypoint /bin/sh canopy-typescript
 
 ## Step 9: Testing
 
-Run the RPC tests from the `tutorial` directory:
+Run the integration tests from the plugin directory. `make test` runs the transaction tests **and** the custom RPC endpoints test:
+
+```bash
+cd plugin/typescript
+make test
+```
+
+This is equivalent to running, from the `tutorial` directory:
 
 ```bash
 cd plugin/typescript/tutorial
 npm install
-npm run build:proto
-npm test
+npm test          # transaction tests
+npm test -- custom # custom RPC endpoints test
 ```
 
 ### Test Prerequisites
@@ -776,13 +781,23 @@ npm test
 
 2. **Plugin must have the new transaction types registered** (faucet, reward)
 
+3. **The plugin's RPC server must be reachable** on port `50010` (Step 5b) for the custom RPC test
+
 ### What the Tests Do
+
+The transaction tests exercise the transaction flow:
 
 1. **Create test accounts** - Creates two new accounts in the Canopy keystore
 2. **Faucet test** - Mints tokens to account 1 using the faucet transaction
 3. **Send test** - Sends tokens from account 1 to account 2
 4. **Reward test** - Account 2 rewards tokens back to account 1
 5. **Balance verification** - Confirms balances changed as expected
+
+The custom RPC endpoints test (Step 5b) then verifies the plugin's own endpoints:
+
+1. **Submit faucet/reward transactions** and wait for inclusion
+2. **Query `/v1/query/faucets` and `/v1/query/rewards`** (both the list and single-recipient forms)
+3. **Validate the returned records' structure** (valid hex addresses, `count >= 1`, `totalAmount >= 1`), which also guards against prefix-collision regressions
 
 ## Transaction Signing Details
 
@@ -849,9 +864,9 @@ After implementing the new transaction types and starting Canopy with the plugin
 cd ~/canopy
 ~/go/bin/canopy start
 
-# Terminal 2: Run the tests
-cd ~/canopy/plugin/typescript/tutorial
-npm test
+# Terminal 2: Run the tests (transactions + custom RPC endpoints)
+cd ~/canopy/plugin/typescript
+make test
 ```
 
 The test will:

@@ -443,16 +443,24 @@ These `Faucet`/`Reward` messages and the `KeyForFaucet`/`KeyForReward`/`FaucetPr
 
 ### Register the endpoints
 
-`contract/rpc.go` runs the plugin's HTTP server. It registers two custom routes on a shared mux (add as many as you like):
+The base plugin already ships a **skeleton** `contract/rpc.go` with a `StartRPCServer()` that starts the HTTP server but registers **no routes**, and `main.go` already starts it:
+
+```go
+plugin := contract.StartPlugin(contract.DefaultConfig())
+go plugin.StartRPCServer()
+```
+
+To expose your endpoints, register your routes on the mux inside `StartRPCServer()` and implement the handlers (add as many as you like):
 
 ```go
 func (p *Plugin) StartRPCServer() {
+    addr := p.config.RPCAddress
     mux := http.NewServeMux()
     // GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
     mux.HandleFunc("/v1/query/faucets", p.handleQueryFaucets)
     // GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
     mux.HandleFunc("/v1/query/rewards", p.handleQueryRewards)
-    http.ListenAndServe(p.config.RPCAddress, mux)
+    http.ListenAndServe(addr, mux)
 }
 ```
 
@@ -460,13 +468,6 @@ Each handler calls the detached, read-only `QueryState`:
 
 - Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
 - With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
-
-The server is started from `main.go`:
-
-```go
-plugin := contract.StartPlugin(contract.DefaultConfig())
-go plugin.StartRPCServer()
-```
 
 The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
 
@@ -612,11 +613,18 @@ docker run -it --entrypoint /bin/sh canopy-go
 
 ## Step 8: Testing
 
-Run the RPC tests from the `tutorial` directory:
+Run the integration tests from the plugin directory. `make test` runs the transaction tests **and** the custom RPC endpoints test:
+
+```bash
+cd plugin/go
+make test
+```
+
+This is equivalent to running, from the `tutorial` directory:
 
 ```bash
 cd plugin/go/tutorial
-go test -v -run TestPluginTransactions -timeout 120s
+go test -v -run 'TestPluginTransactions|TestPluginCustomRPCEndpoints' -timeout 600s
 ```
 
 ### Test Prerequisites
@@ -625,13 +633,23 @@ go test -v -run TestPluginTransactions -timeout 120s
 
 2. **Plugin must have the new transaction types registered** (faucet, reward)
 
+3. **The plugin's RPC server must be reachable** on port `50010` (Step 5b) for the custom RPC test
+
 ### What the Tests Do
+
+`TestPluginTransactions` exercises the transaction flow:
 
 1. **Create test accounts** - Creates two new accounts in the Canopy keystore
 2. **Faucet test** - Mints tokens to account 1 using the faucet transaction
 3. **Send test** - Sends tokens from account 1 to account 2
 4. **Reward test** - Account 2 rewards tokens back to account 1
 5. **Balance verification** - Confirms balances changed as expected
+
+`TestPluginCustomRPCEndpoints` then verifies the custom RPC endpoints (Step 5b):
+
+1. **Submit faucet/reward transactions** and wait for inclusion
+2. **Query `/v1/query/faucets` and `/v1/query/rewards`** (both the list and single-recipient forms)
+3. **Validate the returned records' structure** (valid hex addresses, `count >= 1`, `totalAmount >= 1`), which also guards against prefix-collision regressions
 
 ## Transaction Signing Details
 
@@ -694,9 +712,9 @@ After implementing the new transaction types and starting Canopy with the plugin
 cd ~/canopy
 ~/go/bin/canopy start
 
-# Terminal 2: Run the tests
-cd ~/canopy/plugin/go/tutorial
-go test -v -run TestPluginTransactions -timeout 120s
+# Terminal 2: Run the tests (transactions + custom RPC endpoints)
+cd ~/canopy/plugin/go
+make test
 ```
 
 The test will:

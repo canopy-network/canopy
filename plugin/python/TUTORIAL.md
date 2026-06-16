@@ -507,15 +507,27 @@ This relies on the new `PluginQueryRequest`/`PluginQueryResponse` messages and t
 
 ### Register the endpoints
 
-`contract/rpc.py` runs the plugin's HTTP server using the Python standard library `http.server` in a background daemon thread (no extra dependencies). It registers two custom routes (add as many as you like):
+The base plugin already ships a **skeleton** `contract/rpc.py`. Its `start_rpc_server(plugin)` runs the plugin's HTTP server using the Python standard library `http.server` in a background daemon thread (no extra dependencies), but it registers **no routes by default** — it's a blank canvas. It is also already started from `main.py`:
 
 ```python
-def start_rpc_server(plugin):
+plugin = await start_plugin(default_config())
+start_rpc_server(plugin)  # skeleton: registers no routes by default
+```
+
+So your job here is to **add your faucet/reward routes and handlers to the existing skeleton**, not to create the file. Add route dispatch in `PluginRPCHandler.do_GET` and implement the handlers (add as many routes as you like):
+
+```python
+def do_GET(self):
+    parsed = urlparse(self.path)
+    query = parse_qs(parsed.query)
     # GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
+    if parsed.path == "/v1/query/faucets":
+        self._handle_query_faucets(query)
     # GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
-    handler_cls = type("BoundPluginRPCHandler", (PluginRPCHandler,), {"plugin": plugin})
-    server = ThreadingHTTPServer((host, port), handler_cls)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    elif parsed.path == "/v1/query/rewards":
+        self._handle_query_rewards(query)
+    else:
+        self._write_json_error(404, "not found")
 ```
 
 Because the HTTP server runs on a background thread while the plugin owns an asyncio event loop, each handler schedules the async `query_state` coroutine onto the plugin's loop and blocks for the result:
@@ -530,7 +542,7 @@ Each handler then decodes the raw bytes into the plugin's own `Faucet`/`Reward` 
 - Without `?address`, it does a **range read** over the record prefix (`faucet_prefix()` / `reward_prefix()`) and returns every record.
 - With `?address=<hex>`, it does a **single-key read** (`key_for_faucet(addr)` / `key_for_reward(addr)`) and returns just that recipient's record.
 
-The server is started from `main.py`:
+The server is already started from `main.py` (no change needed):
 
 ```python
 plugin = await start_plugin(default_config())
@@ -670,20 +682,19 @@ docker run -it --entrypoint /bin/sh canopy-python
 
 ## Step 8: Testing
 
-Run the RPC tests from the `tutorial` directory:
+Run the integration tests from the `tutorial` directory. `make test` runs the transaction tests **and** the custom RPC endpoints test:
+
+```bash
+cd plugin/python/tutorial
+make test
+```
+
+This is equivalent to running, from the `tutorial` directory (transactions first, then the custom RPC endpoints test):
 
 ```bash
 cd plugin/python/tutorial
 pip install -r requirements.txt
-python rpc_test.py
-```
-
-Or using make:
-
-```bash
-cd plugin/python/tutorial
-make install
-make test
+python rpc_test.py && python rpc_test.py custom
 ```
 
 ### Test Prerequisites
@@ -692,13 +703,23 @@ make test
 
 2. **Plugin must have the new transaction types registered** (faucet, reward)
 
+3. **The plugin's RPC server must be reachable** on port `50010` (Step 5b) for the custom RPC test
+
 ### What the Tests Do
+
+`python rpc_test.py` exercises the transaction flow:
 
 1. **Create test accounts** - Creates two new accounts in the Canopy keystore
 2. **Faucet test** - Mints tokens to account 1 using the faucet transaction
 3. **Send test** - Sends tokens from account 1 to account 2
 4. **Reward test** - Account 2 rewards tokens back to account 1
 5. **Balance verification** - Confirms balances changed as expected
+
+`python rpc_test.py custom` then verifies the custom RPC endpoints (Step 5b):
+
+1. **Submit faucet/reward transactions** and wait for inclusion
+2. **Query `/v1/query/faucets` and `/v1/query/rewards`** (both the list and single-recipient forms)
+3. **Validate the returned records' structure** (valid hex addresses, `count >= 1`, `totalAmount >= 1`), which also guards against prefix-collision regressions
 
 ## Transaction Signing Details
 
@@ -764,10 +785,9 @@ After implementing the new transaction types and starting Canopy with the plugin
 cd ~/canopy
 ~/go/bin/canopy start
 
-# Terminal 2: Run the tests
+# Terminal 2: Run the tests (transactions + custom RPC endpoints)
 cd ~/canopy/plugin/python/tutorial
-pip install -r requirements.txt
-python rpc_test.py
+make test
 ```
 
 The test will:

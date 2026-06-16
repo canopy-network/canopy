@@ -19,16 +19,11 @@ var ContractConfig = &PluginConfig{
 	Name:                  "go_plugin_contract",
 	Id:                    1,
 	Version:               1,
-	SupportedTransactions: []string{"send", "reward", "faucet"},
+	SupportedTransactions: []string{"send"},
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
-		"type.googleapis.com/types.MessageReward",
-		"type.googleapis.com/types.MessageFaucet",
 	},
 	EventTypeUrls: nil,
-	// CustomStatePrefixes declares the key prefixes this plugin owns for its custom records. Canopy
-	// validates these at handshake and panics if any collides with a core-reserved prefix (1-15).
-	CustomStatePrefixes: [][]byte{faucetPrefix, rewardPrefix},
 }
 
 // init sets FileDescriptorProtos after ensuring .pb.go files are initialized
@@ -101,10 +96,6 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 	switch x := msg.(type) {
 	case *MessageSend:
 		return c.CheckMessageSend(x)
-	case *MessageReward:
-		return c.CheckMessageReward(x)
-	case *MessageFaucet:
-		return c.CheckMessageFaucet(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -121,10 +112,6 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 	switch x := msg.(type) {
 	case *MessageSend:
 		return c.DeliverMessageSend(x, request.Tx.Fee)
-	case *MessageReward:
-		return c.DeliverMessageReward(x, request.Tx.Fee)
-	case *MessageFaucet:
-		return c.DeliverMessageFaucet(x)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -151,48 +138,6 @@ func (c *Contract) CheckMessageSend(msg *MessageSend) *PluginCheckResponse {
 	}
 	// return the authorized signers
 	return &PluginCheckResponse{Recipient: msg.ToAddress, AuthorizedSigners: [][]byte{msg.FromAddress}}
-}
-
-// CheckMessageFaucet() statelessly validates a 'faucet' message
-func (c *Contract) CheckMessageFaucet(msg *MessageFaucet) *PluginCheckResponse {
-	// check signer address
-	if len(msg.SignerAddress) != 20 {
-		return &PluginCheckResponse{Error: ErrInvalidAddress()}
-	}
-	// check recipient address
-	if len(msg.RecipientAddress) != 20 {
-		return &PluginCheckResponse{Error: ErrInvalidAddress()}
-	}
-	// check amount
-	if msg.Amount == 0 {
-		return &PluginCheckResponse{Error: ErrInvalidAmount()}
-	}
-	// the signer authorizes the faucet (they're requesting tokens for testing)
-	return &PluginCheckResponse{
-		Recipient:         msg.RecipientAddress,
-		AuthorizedSigners: [][]byte{msg.SignerAddress},
-	}
-}
-
-// CheckMessageReward() statelessly validates a 'reward' message
-func (c *Contract) CheckMessageReward(msg *MessageReward) *PluginCheckResponse {
-	// check admin address
-	if len(msg.AdminAddress) != 20 {
-		return &PluginCheckResponse{Error: ErrInvalidAddress()}
-	}
-	// check recipient address
-	if len(msg.RecipientAddress) != 20 {
-		return &PluginCheckResponse{Error: ErrInvalidAddress()}
-	}
-	// check amount
-	if msg.Amount == 0 {
-		return &PluginCheckResponse{Error: ErrInvalidAmount()}
-	}
-	// the admin (not the recipient) must sign to authorize the mint
-	return &PluginCheckResponse{
-		Recipient:         msg.RecipientAddress,
-		AuthorizedSigners: [][]byte{msg.AdminAddress},
-	}
 }
 
 // DeliverMessageSend() handles a 'send' message
@@ -318,218 +263,15 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 	return &PluginDeliverResponse{}
 }
 
-// DeliverMessageFaucet() handles a 'faucet' message by minting tokens to the recipient (test-only).
-// In addition to crediting the recipient's account, it persists a queryable Faucet state record so
-// custom RPC endpoints can report faucet activity.
-func (c *Contract) DeliverMessageFaucet(msg *MessageFaucet) *PluginDeliverResponse {
-	log.Printf("DeliverMessageFaucet called: to=%x amount=%d", msg.RecipientAddress, msg.Amount)
-	// calculate the recipient account key and the faucet record key
-	recipientKey, faucetKey := KeyForAccount(msg.RecipientAddress), KeyForFaucet(msg.RecipientAddress)
-	// generate query ids to correlate the batch read
-	recipientQueryId, faucetQueryId := rand.Uint64(), rand.Uint64()
-	// read the recipient account and any existing faucet record
-	response, err := c.plugin.StateRead(c, &PluginStateReadRequest{
-		Keys: []*PluginKeyRead{
-			{QueryId: recipientQueryId, Key: recipientKey},
-			{QueryId: faucetQueryId, Key: faucetKey},
-		}})
-	if err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	if response.Error != nil {
-		return &PluginDeliverResponse{Error: response.Error}
-	}
-	// extract the raw bytes from the batch read results
-	var recipientBytes, faucetBytes []byte
-	for _, resp := range response.Results {
-		if len(resp.Entries) == 0 {
-			continue
-		}
-		switch resp.QueryId {
-		case recipientQueryId:
-			recipientBytes = resp.Entries[0].Value
-		case faucetQueryId:
-			faucetBytes = resp.Entries[0].Value
-		}
-	}
-	// unmarshal the recipient account (new accounts start at 0)
-	recipient := new(Account)
-	if err = Unmarshal(recipientBytes, recipient); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	// unmarshal the existing faucet record (defaults to empty)
-	faucet := new(Faucet)
-	if err = Unmarshal(faucetBytes, faucet); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	// mint tokens to the recipient (created from nothing)
-	recipient.Amount += msg.Amount
-	// update the queryable faucet record
-	faucet.RecipientAddress = msg.RecipientAddress
-	faucet.TotalAmount += msg.Amount
-	faucet.Count++
-	// marshal the updated account and faucet record
-	recipientBytes, err = Marshal(recipient)
-	if err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	faucetBytes, err = Marshal(faucet)
-	if err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	// write both the account balance and the faucet record
-	resp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-		Sets: []*PluginSetOp{
-			{Key: recipientKey, Value: recipientBytes},
-			{Key: faucetKey, Value: faucetBytes},
-		},
-	})
-	if err == nil {
-		err = resp.Error
-	}
-	return &PluginDeliverResponse{Error: err}
-}
-
-// DeliverMessageReward() handles a 'reward' message by minting tokens to the recipient, with the
-// admin paying the fee. It also persists a queryable Reward state record so custom RPC endpoints
-// can report reward activity.
-func (c *Contract) DeliverMessageReward(msg *MessageReward, fee uint64) *PluginDeliverResponse {
-	log.Printf("DeliverMessageReward called: admin=%x to=%x amount=%d fee=%d", msg.AdminAddress, msg.RecipientAddress, msg.Amount, fee)
-	var (
-		adminKey, recipientKey, feePoolKey, rewardKey             []byte
-		adminBytes, recipientBytes, feePoolBytes, rewardBytes     []byte
-		adminQueryId, recipientQueryId, feeQueryId, rewardQueryId = rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
-		admin, recipient, feePool, reward                         = new(Account), new(Account), new(Pool), new(Reward)
-	)
-	// calculate all state keys
-	adminKey, recipientKey = KeyForAccount(msg.AdminAddress), KeyForAccount(msg.RecipientAddress)
-	feePoolKey, rewardKey = KeyForFeePool(c.Config.ChainId), KeyForReward(msg.RecipientAddress)
-	// batch read fee pool, admin, recipient and any existing reward record
-	response, err := c.plugin.StateRead(c, &PluginStateReadRequest{
-		Keys: []*PluginKeyRead{
-			{QueryId: feeQueryId, Key: feePoolKey},
-			{QueryId: adminQueryId, Key: adminKey},
-			{QueryId: recipientQueryId, Key: recipientKey},
-			{QueryId: rewardQueryId, Key: rewardKey},
-		}})
-	if err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	if response.Error != nil {
-		return &PluginDeliverResponse{Error: response.Error}
-	}
-	// match each result to its variable using the query id
-	for _, resp := range response.Results {
-		if len(resp.Entries) == 0 {
-			continue
-		}
-		switch resp.QueryId {
-		case adminQueryId:
-			adminBytes = resp.Entries[0].Value
-		case recipientQueryId:
-			recipientBytes = resp.Entries[0].Value
-		case feeQueryId:
-			feePoolBytes = resp.Entries[0].Value
-		case rewardQueryId:
-			rewardBytes = resp.Entries[0].Value
-		}
-	}
-	// unmarshal all records
-	if err = Unmarshal(adminBytes, admin); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	if err = Unmarshal(recipientBytes, recipient); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	if err = Unmarshal(feePoolBytes, feePool); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	if err = Unmarshal(rewardBytes, reward); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	// the admin must be able to pay the fee
-	if admin.Amount < fee {
-		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
-	}
-	// apply state changes: admin pays the fee, recipient is minted tokens, fee pool collects the fee
-	admin.Amount -= fee
-	recipient.Amount += msg.Amount
-	feePool.Amount += fee
-	// update the queryable reward record
-	reward.RecipientAddress = msg.RecipientAddress
-	reward.LastAdminAddress = msg.AdminAddress
-	reward.TotalAmount += msg.Amount
-	reward.Count++
-	// marshal the updated records
-	if recipientBytes, err = Marshal(recipient); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	if feePoolBytes, err = Marshal(feePool); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	if rewardBytes, err = Marshal(reward); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	// build the set operations common to both branches
-	sets := []*PluginSetOp{
-		{Key: feePoolKey, Value: feePoolBytes},
-		{Key: recipientKey, Value: recipientBytes},
-		{Key: rewardKey, Value: rewardBytes},
-	}
-	var resp *PluginStateWriteResponse
-	// if the admin is drained, delete the account; otherwise persist the updated admin balance
-	if admin.Amount == 0 {
-		resp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Sets:    sets,
-			Deletes: []*PluginDeleteOp{{Key: adminKey}},
-		})
-	} else {
-		if adminBytes, err = Marshal(admin); err != nil {
-			return &PluginDeliverResponse{Error: err}
-		}
-		resp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Sets: append(sets, &PluginSetOp{Key: adminKey, Value: adminBytes}),
-		})
-	}
-	if err == nil {
-		err = resp.Error
-	}
-	return &PluginDeliverResponse{Error: err}
-}
-
 var (
 	accountPrefix = []byte{1} // store key prefix for accounts
 	poolPrefix    = []byte{2} // store key prefix for pools
-	// NOTE: the plugin shares Canopy's FSM keyspace, so these prefixes MUST NOT collide with core's
-	// reserved prefixes (1-15, e.g. 3=validators, 4=committees). We use high, plugin-owned values.
-	faucetPrefix  = []byte{100} // store key prefix for faucet records
-	rewardPrefix  = []byte{101} // store key prefix for reward records
 	paramsPrefix  = []byte{7} // store key prefix for governance parameters
 )
 
 // KeyForAccount() returns the state database key for an account
 func KeyForAccount(addr []byte) []byte {
 	return JoinLenPrefix(accountPrefix, addr)
-}
-
-// KeyForFaucet() returns the state database key for a recipient's faucet record
-func KeyForFaucet(addr []byte) []byte {
-	return JoinLenPrefix(faucetPrefix, addr)
-}
-
-// FaucetPrefix() returns the key prefix used to iterate over all faucet records
-func FaucetPrefix() []byte {
-	return JoinLenPrefix(faucetPrefix)
-}
-
-// KeyForReward() returns the state database key for a recipient's reward record
-func KeyForReward(addr []byte) []byte {
-	return JoinLenPrefix(rewardPrefix, addr)
-}
-
-// RewardPrefix() returns the key prefix used to iterate over all reward records
-func RewardPrefix() []byte {
-	return JoinLenPrefix(rewardPrefix)
 }
 
 // KeyForFeeParams() returns the state database key for governance controlled 'fee parameters'

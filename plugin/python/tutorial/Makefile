@@ -1,4 +1,4 @@
-.PHONY: install proto test test-rpc clean
+.PHONY: install proto test clean
 
 VENV_DIR := .venv
 VENV_PY := $(VENV_DIR)/bin/python
@@ -18,13 +18,11 @@ install: $(VENV_PY)
 proto:
 	python3 -m grpc_tools.protoc --python_out=proto --proto_path=proto proto/tx.proto
 
-# Run the full RPC test suite (requires running Canopy node with plugin)
+# Run the integration tests (requires a running Canopy node with the python plugin).
+# This runs the transaction tests AND the custom RPC endpoints test
+# (/v1/query/faucets, /v1/query/rewards) — the latter needs the plugin's RPC server on port 50010.
 test: install
-	$(VENV_PY) rpc_test.py
-
-# Run ONLY the custom RPC endpoints test (/v1/query/faucets, /v1/query/rewards)
-test-rpc: install
-	$(VENV_PY) rpc_test.py custom
+	$(VENV_PY) rpc_test.py && $(VENV_PY) rpc_test.py custom
 
 # Clean generated files and the virtual environment
 clean:

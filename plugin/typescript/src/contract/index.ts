@@ -5,11 +5,7 @@ export {
     ContractAsync,
     KeyForAccount,
     KeyForFeeParams,
-    KeyForFeePool,
-    KeyForFaucet,
-    FaucetPrefix,
-    KeyForReward,
-    RewardPrefix
+    KeyForFeePool
 } from './contract.js';
 export {
     Plugin,

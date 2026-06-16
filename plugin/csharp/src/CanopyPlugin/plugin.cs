@@ -26,7 +26,7 @@ namespace CanopyPlugin
 
         // PluginBuild is a human-readable build marker logged at startup so operators can confirm, via
         // `tail -f /tmp/plugin/csharp-plugin.log`, that the running binary includes the expected features.
-        public const string PluginBuild = "csharp-plugin v1 (faucet+reward txs, custom RPC: /v1/query/faucets, /v1/query/rewards)";
+        public const string PluginBuild = "csharp-plugin v1 (base SDK + detached custom RPC query path)";
 
         // Config exposes the general app config so builders can back their own custom RPC endpoints
         public Config Config => _config;

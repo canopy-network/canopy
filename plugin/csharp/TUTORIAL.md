@@ -498,7 +498,15 @@ These `Faucet`/`Reward` messages live in `proto/tx.proto`, and the `KeyForFaucet
 
 ### Register the endpoints
 
-`src/CanopyPlugin/rpc.cs` runs the plugin's HTTP server using `System.Net.HttpListener`. It registers two custom routes (add as many as you like):
+The base plugin already ships a **skeleton** HTTP server in `src/CanopyPlugin/rpc.cs`. It runs the plugin's HTTP server using `System.Net.HttpListener`, reads the listen address from the `RpcAddress` config field (default `0.0.0.0:50010`), and starts the accept loop — but it registers **no routes** by default. It is also already wired into `Program.cs`, which calls it right after the plugin starts:
+
+```csharp
+await plugin.StartAsync();
+// already present in the base plugin
+_ = plugin.StartRpcServerAsync();
+```
+
+So your job is just to **add your routes and handlers to the existing skeleton**. Add a `case` per route to the `RouteRequestAsync` dispatch in `rpc.cs` and implement the matching handler. Here we add two custom routes (add as many as you like):
 
 ```csharp
 public async Task StartRpcServerAsync()
@@ -517,14 +525,7 @@ Each handler calls the detached, read-only `QueryStateAsync`:
 - Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
 - With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
 
-The server is started from `Program.cs`:
-
-```csharp
-await plugin.StartAsync();
-_ = plugin.StartRpcServerAsync();
-```
-
-The listen address comes from the `RpcAddress` config field (default `0.0.0.0:50010`).
+Because the skeleton already starts the server from `Program.cs`, no change to `Program.cs` is needed — your new routes are served as soon as you rebuild.
 
 ### Query the endpoints
 
@@ -670,18 +671,18 @@ docker run -it --entrypoint /bin/sh canopy-csharp
 
 ## Step 8: Testing
 
-Run the RPC tests from the `tutorial` directory:
+Run the integration tests from the plugin directory. `make test` runs the transaction tests **and** the custom RPC endpoints test:
+
+```bash
+cd plugin/csharp
+make test
+```
+
+`make test` invokes `dotnet test`, which runs every test in the tutorial test project — both `TestPluginTransactions` and `TestPluginCustomRPCEndpoints` — so the custom RPC endpoints test runs at the end of the standard test flow. To focus on just the tutorial project you can still run:
 
 ```bash
 cd plugin/csharp
 make test-tutorial
-```
-
-Or run directly:
-
-```bash
-cd plugin/csharp/tutorial
-dotnet test --logger "console;verbosity=detailed"
 ```
 
 ### Test Prerequisites
@@ -690,13 +691,23 @@ dotnet test --logger "console;verbosity=detailed"
 
 2. **Plugin must have the new transaction types registered** (faucet, reward)
 
+3. **The plugin's RPC server must be reachable** on port `50010` (Step 5b) for the custom RPC test
+
 ### What the Tests Do
+
+`TestPluginTransactions` exercises the transaction flow:
 
 1. **Create test accounts** - Creates two new accounts in the Canopy keystore
 2. **Faucet test** - Mints tokens to account 1 using the faucet transaction
 3. **Send test** - Sends tokens from account 1 to account 2
 4. **Reward test** - Account 2 rewards tokens back to account 1
 5. **Balance verification** - Confirms balances changed as expected
+
+`TestPluginCustomRPCEndpoints` then verifies the custom RPC endpoints (Step 5b):
+
+1. **Submit faucet/reward transactions** and wait for inclusion
+2. **Query `/v1/query/faucets` and `/v1/query/rewards`** (both the list and single-recipient forms)
+3. **Validate the returned records' structure** (valid hex addresses, `count >= 1`, `totalAmount >= 1`), which also guards against prefix-collision regressions
 
 ## Transaction Signing Details
 
@@ -755,9 +766,9 @@ After implementing the new transaction types and starting Canopy with the plugin
 cd ~/canopy
 ~/go/bin/canopy start
 
-# Terminal 2: Run the tests
+# Terminal 2: Run the tests (transactions + custom RPC endpoints)
 cd ~/canopy/plugin/csharp
-make test-tutorial
+make test
 ```
 
 The test will:

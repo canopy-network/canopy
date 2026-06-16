@@ -45,7 +45,7 @@ SOCKET_PATH = "plugin.sock"
 
 # PLUGIN_BUILD is a human-readable build marker logged at startup so operators can confirm, via
 # `tail -f /tmp/plugin/python-plugin.log`, that the running binary includes the expected features.
-PLUGIN_BUILD = "python-plugin v1 (faucet+reward txs, custom RPC: /v1/query/faucets, /v1/query/rewards)"
+PLUGIN_BUILD = "python-plugin v1 (base SDK + detached custom RPC query path)"
 
 
 @dataclass

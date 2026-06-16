@@ -1,4 +1,4 @@
-.PHONY: restore build test test-tutorial test-rpc lint format clean proto run serve serve-dev validate docs
+.PHONY: restore build test test-tutorial lint format clean proto run serve serve-dev validate docs
 
 # Development setup
 restore:
@@ -17,6 +17,8 @@ build-local:
 	rm -rf bin && dotnet publish -c Release -r linux-x64 --self-contained true -o bin
 
 # Testing
+# `dotnet test` runs all test projects, including the tutorial integration tests
+# (transaction tests AND the custom RPC endpoints test).
 test:
 	dotnet test
 
@@ -25,11 +27,6 @@ test-verbose:
 
 test-tutorial:
 	dotnet test tutorial/CanopyPlugin.Tutorial.csproj --logger "console;verbosity=detailed"
-
-# Run ONLY the custom RPC endpoints test (/v1/query/faucets, /v1/query/rewards)
-# Requires a running Canopy node with the csharp plugin and its RPC server on port 50010
-test-rpc:
-	dotnet test tutorial/CanopyPlugin.Tutorial.csproj --filter "TestPluginCustomRPCEndpoints" --logger "console;verbosity=detailed"
 
 test-cov:
 	dotnet test --collect:"XPlat Code Coverage" --results-directory:./TestResults

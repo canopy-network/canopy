@@ -40,8 +40,8 @@ import kotlin.test.fail
  * - Canopy node must be running with the Kotlin plugin enabled
  * - The plugin must have faucet and reward transaction types registered
  *
- * Run with: ./gradlew test --tests "com.canopy.tutorial.RpcTest"
- * Or: make test-rpc
+ * Run with: ./gradlew test
+ * Or: make test
  */
 class RpcTest {
     

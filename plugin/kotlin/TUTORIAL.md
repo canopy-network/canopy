@@ -465,25 +465,7 @@ The detached, read-only query is a new wire message (`PluginQueryRequest`/`Plugi
 
 ### Register the endpoints
 
-`src/main/kotlin/com/canopy/plugin/Rpc.kt` runs the plugin's HTTP server using the JDK built-in `com.sun.net.httpserver.HttpServer`. It registers two custom routes (add as many as you like):
-
-```kotlin
-fun start() {
-    val server = HttpServer.create(InetSocketAddress(host, port), 0)
-    // GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
-    server.createContext("/v1/query/faucets") { exchange -> handleQueryFaucets(exchange) }
-    // GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
-    server.createContext("/v1/query/rewards") { exchange -> handleQueryRewards(exchange) }
-    server.start()
-}
-```
-
-Each handler calls the detached, read-only `queryState`:
-
-- Without `?address`, it does a **range read** over the record prefix (`faucetPrefix()` / `rewardPrefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record.
-
-The server is started from `Main.kt`:
+The base plugin already ships a **skeleton** `src/main/kotlin/com/canopy/plugin/Rpc.kt`: `RpcServer.start()` reads the listen address from config, creates the JDK built-in `com.sun.net.httpserver.HttpServer`, logs a startup line, and starts listening — but registers **no routes by default**. `Main.kt` already starts it on a daemon thread:
 
 ```kotlin
 val plugin = PluginClient(config)
@@ -493,6 +475,25 @@ thread(isDaemon = true, name = "plugin-rpc-server") {
     RpcServer(plugin).start()
 }
 ```
+
+Your job is to add routes to the existing skeleton. In `RpcServer.start()`, register your custom routes on the `server` before `server.start()` (add as many as you like):
+
+```kotlin
+fun start() {
+    // ... resolve host/port from plugin.rpcAddress ...
+    val server = HttpServer.create(InetSocketAddress(host, port), 0)
+    // GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
+    server.createContext("/v1/query/faucets") { exchange -> handleQueryFaucets(exchange) }
+    // GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
+    server.createContext("/v1/query/rewards") { exchange -> handleQueryRewards(exchange) }
+    server.start()
+}
+```
+
+Then add the `handleQueryFaucets` / `handleQueryRewards` handlers (and the JSON/hex helpers) to `Rpc.kt`. Each handler calls the detached, read-only `queryState`:
+
+- Without `?address`, it does a **range read** over the record prefix (`faucetPrefix()` / `rewardPrefix()`) and returns every record.
+- With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record.
 
 The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
 
@@ -649,32 +650,41 @@ docker run -it --entrypoint /bin/bash canopy-kotlin
 
 ## Step 9: Testing
 
-Run the RPC tests from the `tutorial` directory:
+Run the integration tests from the `tutorial` directory. `make test` runs the transaction tests **and** the custom RPC endpoints test (both live in the `RpcTest` class, so `./gradlew test` picks them up automatically):
 
 ```bash
 cd plugin/kotlin/tutorial
-make test-rpc
+make test
 ```
 
-Or manually:
+This is equivalent to running, from the `tutorial` directory:
 
 ```bash
 cd plugin/kotlin/tutorial
-./gradlew test --tests "com.canopy.tutorial.RpcTest" --rerun-tasks
+./gradlew test
 ```
 
 ### Test Prerequisites
 
 1. **Canopy node must be running** with the Kotlin plugin enabled (see Step 8)
 2. **Plugin must have the new transaction types registered** (faucet, reward)
+3. **The plugin's RPC server must be reachable** on port `50010` (Step 5b) for the custom RPC test
 
 ### What the Tests Do
+
+`testPluginTransactions` exercises the transaction flow:
 
 1. **Create test accounts** - Creates two new accounts in the Canopy keystore
 2. **Faucet test** - Mints tokens to account 1 using the faucet transaction
 3. **Send test** - Sends tokens from account 1 to account 2
 4. **Reward test** - Account 2 rewards tokens back to account 1
 5. **Balance verification** - Confirms balances changed as expected
+
+`testPluginCustomRPCEndpoints` then verifies the custom RPC endpoints (Step 5b):
+
+1. **Submit faucet/reward transactions** and wait for inclusion
+2. **Query `/v1/query/faucets` and `/v1/query/rewards`** (both the list and single-recipient forms)
+3. **Validate the returned records' structure** (valid hex addresses, `count >= 1`, `totalAmount >= 1`), which also guards against prefix-collision regressions
 
 ## Transaction Signing Details
 
@@ -740,9 +750,9 @@ After implementing the new transaction types and starting Canopy with the plugin
 cd ~/canopy
 ~/go/bin/canopy start
 
-# Terminal 2: Run the tests
+# Terminal 2: Run the tests (transactions + custom RPC endpoints)
 cd ~/canopy/plugin/kotlin/tutorial
-make test-rpc
+make test
 ```
 
 ### Option B: With Docker
@@ -753,7 +763,7 @@ docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-kotli
 
 # Terminal 2: Run the tests (they connect to localhost:50002/50003)
 cd ~/canopy/plugin/kotlin/tutorial
-make test-rpc
+make test
 ```
 
 The test will:

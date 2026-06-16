@@ -25,7 +25,7 @@ private const val TIMEOUT_SECONDS = 10L
  * PLUGIN_BUILD is a human-readable build marker logged at startup so operators can confirm, via
  * `tail -f /tmp/plugin/kotlin-plugin.log`, that the running binary includes the expected features.
  */
-const val PLUGIN_BUILD = "kotlin-plugin v1 (faucet+reward txs, custom RPC: /v1/query/faucets, /v1/query/rewards)"
+const val PLUGIN_BUILD = "kotlin-plugin v1 (base SDK + detached custom RPC query path)"
 
 /**
  * PluginClient handles communication with the Canopy FSM via Unix domain socket

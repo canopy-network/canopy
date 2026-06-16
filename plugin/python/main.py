@@ -20,7 +20,7 @@ async def main() -> None:
     # Start the plugin and capture the running instance
     plugin = await start_plugin(default_config())
 
-    # Start the plugin's own HTTP server exposing custom, chain-specific RPC endpoints
+    # Start the plugin's own HTTP server (skeleton: registers no routes by default)
     start_rpc_server(plugin)
 
     # Wait for shutdown signal

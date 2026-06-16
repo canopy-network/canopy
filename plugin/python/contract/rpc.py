@@ -1,210 +1,78 @@
 """
-Custom RPC server for the Canopy Python plugin.
+Skeleton RPC server for the Canopy Python plugin.
 
-This file contains an EXAMPLE HTTP server that demonstrates how a plugin builder exposes their own
-custom RPC endpoints for their chain. Matches Go's contract/rpc.go structure.
+This file ships the plugin's own HTTP server, but it registers NO routes by default. It is a blank
+canvas that plugin builders extend with their own custom, chain-specific RPC endpoints. Matches
+Go's contract/rpc.go skeleton structure.
 
+DESIGN
+------
 Canopy core only exposes a single, generic, read-only transport over the unix socket:
-`Plugin.query_state(height, read)`, which returns raw key/value state at a historical height. The
-plugin process owns its HTTP server entirely, so builders may register as many routes as they want
-and decode their own keys/protobufs into whatever response shapes they like. Canopy never needs to
-know about chain-specific endpoints.
+`Plugin.query_state(height, read)` (see contract/plugin.py). It is DETACHED (not tied to any
+in-flight tx/block lifecycle) and READ-ONLY: it returns raw key/value state at a historical height
+(0 = latest committed). Canopy never needs to know about chain-specific endpoints.
 
-The endpoints below are intentionally plugin-specific (faucet and reward records) so they showcase
-data that does NOT exist in the Canopy node's own RPC. Account/pool queries already exist in core,
-so they make poor examples of a *custom* endpoint.
+The plugin process owns its HTTP server entirely. Builders may register as many routes as they want
+and decode their own keys/protobufs into whatever response shapes they like, each handler backed by
+the detached, read-only `query_state()` path. No routes are registered here by default.
 
-The server runs in a background thread (Python stdlib http.server, no extra dependencies) and calls
-the async `query_state` safely via `asyncio.run_coroutine_threadsafe` against the plugin's event
-loop.
+For a complete, worked example (faucet/reward records) showing how to add routes + handlers to this
+skeleton, see TUTORIAL.md ("Custom RPC endpoints").
+
+The server runs in a background thread (Python stdlib http.server, no extra dependencies). Handlers
+call the async `query_state` safely via `asyncio.run_coroutine_threadsafe` against the plugin's
+event loop.
+
+EXAMPLE — registering a custom route backed by query_state
+----------------------------------------------------------
+A builder would extend the handler below with their own path, e.g.::
+
+    # 1) import the proto request types and your own keys/messages
+    from .proto import PluginStateReadRequest, PluginKeyRead
+    from .contract import key_for_myrecord, unmarshal
+    from .proto import MyRecord
+
+    # 2) route the path inside PluginRPCHandler.do_GET
+    #    if parsed.path == "/v1/query/myrecords":
+    #        self._handle_query_myrecords(parse_qs(parsed.query))
+
+    # 3) implement the handler using the detached, read-only query_state() path
+    #    def _handle_query_myrecords(self, query: dict) -> None:
+    #        coro = self.plugin.query_state(
+    #            0,  # height (0 = latest committed)
+    #            PluginStateReadRequest(
+    #                keys=[PluginKeyRead(query_id=random.getrandbits(64), key=key_for_myrecord(addr))]
+    #            ),
+    #        )
+    #        future = asyncio.run_coroutine_threadsafe(coro, self.plugin._loop)
+    #        resp = future.result(timeout=15.0)
+    #        ...  # decode resp, unmarshal(MyRecord, value), and self._write_json(...)
 """
 
-import asyncio
 import json
 import logging
-import random
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import List, Optional
-from urllib.parse import urlparse, parse_qs
+from typing import Optional
 
-from .proto import (
-    Faucet,
-    Reward,
-    PluginStateReadRequest,
-    PluginKeyRead,
-    PluginRangeRead,
-    PluginStateEntry,
-)
-from .contract import (
-    key_for_faucet,
-    faucet_prefix,
-    key_for_reward,
-    reward_prefix,
-    unmarshal,
-)
 from .plugin import Plugin, PLUGIN_BUILD
 
 logger = logging.getLogger(__name__)
 
-# How long an RPC handler waits on the detached query coroutine before giving up
-_QUERY_TIMEOUT_SEC = 15.0
-
-
-def _run_query(plugin: Plugin, height: int, request: PluginStateReadRequest):
-    """Run the plugin's async query_state from a (synchronous) RPC handler thread.
-
-    The plugin owns an asyncio event loop on another thread; we schedule the coroutine onto it and
-    block for the result, matching Go's synchronous QueryState call from its HTTP handlers.
-    """
-    if plugin._loop is None:
-        raise RuntimeError("plugin event loop is not running")
-    coro = plugin.query_state(height, request)
-    future = asyncio.run_coroutine_threadsafe(coro, plugin._loop)
-    return future.result(timeout=_QUERY_TIMEOUT_SEC)
-
-
-def _query_value(plugin: Plugin, height: int, key: bytes) -> Optional[bytes]:
-    """Perform a single-key detached read and return the raw value bytes (None means 'not found')."""
-    resp = _run_query(
-        plugin,
-        height,
-        PluginStateReadRequest(keys=[PluginKeyRead(query_id=random.getrandbits(64), key=key)]),
-    )
-    if not resp.results or not resp.results[0].entries:
-        return None
-    return resp.results[0].entries[0].value
-
-
-def _query_range(plugin: Plugin, height: int, prefix: bytes) -> List[PluginStateEntry]:
-    """Perform a detached range read over a key prefix and return the entries."""
-    resp = _run_query(
-        plugin,
-        height,
-        PluginStateReadRequest(ranges=[PluginRangeRead(query_id=random.getrandbits(64), prefix=prefix)]),
-    )
-    if not resp.results:
-        return []
-    return list(resp.results[0].entries)
-
-
-def _faucet_to_json(faucet: Faucet) -> dict:
-    """Shape a Faucet record into a JSON-friendly dict (hex-encoding addresses)."""
-    return {
-        "recipientAddress": faucet.recipient_address.hex(),
-        "totalAmount": faucet.total_amount,
-        "count": faucet.count,
-    }
-
-
-def _reward_to_json(reward: Reward) -> dict:
-    """Shape a Reward record into a JSON-friendly dict (hex-encoding addresses)."""
-    return {
-        "recipientAddress": reward.recipient_address.hex(),
-        "lastAdminAddress": reward.last_admin_address.hex(),
-        "totalAmount": reward.total_amount,
-        "count": reward.count,
-    }
-
-
-def _parse_height(query: dict) -> int:
-    """Read the optional 'height' query parameter, defaulting to 0 (latest committed)."""
-    raw = query.get("height", [None])[0]
-    if raw is None:
-        return 0
-    try:
-        return int(raw)
-    except (ValueError, TypeError):
-        return 0
-
 
 class PluginRPCHandler(BaseHTTPRequestHandler):
-    """HTTP request handler exposing the plugin's custom, chain-specific RPC endpoints.
+    """HTTP request handler for the plugin's custom, chain-specific RPC endpoints.
 
-    The owning Plugin instance is injected as a class attribute by start_rpc_server().
+    No routes are registered by default: every request returns 404. Builders add their own routes
+    here (see the example in this module's docstring and TUTORIAL.md). The owning Plugin instance is
+    injected as a class attribute by start_rpc_server() so handlers can reach query_state().
     """
 
     plugin: Optional[Plugin] = None
 
     def do_GET(self) -> None:  # noqa: N802 (http.server API)
-        parsed = urlparse(self.path)
-        query = parse_qs(parsed.query)
-        if parsed.path == "/v1/query/faucets":
-            self._handle_query_faucets(query)
-        elif parsed.path == "/v1/query/rewards":
-            self._handle_query_rewards(query)
-        else:
-            self._write_json_error(404, "not found")
-
-    def _handle_query_faucets(self, query: dict) -> None:
-        """Return faucet records. With ?address=<hex> it returns a single recipient's record;
-        otherwise it returns every faucet record via a range read over the faucet prefix.
-        """
-        height = _parse_height(query)
-        addr_hex = query.get("address", [None])[0]
-        # optional single-record lookup by recipient address
-        if addr_hex:
-            try:
-                address = bytes.fromhex(addr_hex)
-            except ValueError:
-                address = b""
-            if len(address) != 20:
-                self._write_json_error(400, "address must be a 20-byte hex string")
-                return
-            try:
-                value = _query_value(self.plugin, height, key_for_faucet(address))
-            except Exception as err:
-                self._write_json_error(500, str(err))
-                return
-            faucet = unmarshal(Faucet, value) or Faucet()
-            self._write_json({"faucet": _faucet_to_json(faucet), "height": height})
-            return
-        # otherwise return all faucet records via a range read
-        try:
-            entries = _query_range(self.plugin, height, faucet_prefix())
-        except Exception as err:
-            self._write_json_error(500, str(err))
-            return
-        faucets = []
-        for entry in entries:
-            faucet = unmarshal(Faucet, entry.value) or Faucet()
-            faucets.append(_faucet_to_json(faucet))
-        self._write_json({"faucets": faucets, "count": len(faucets), "height": height})
-
-    def _handle_query_rewards(self, query: dict) -> None:
-        """Return reward records. With ?address=<hex> it returns a single recipient's record;
-        otherwise it returns every reward record via a range read over the reward prefix.
-        """
-        height = _parse_height(query)
-        addr_hex = query.get("address", [None])[0]
-        # optional single-record lookup by recipient address
-        if addr_hex:
-            try:
-                address = bytes.fromhex(addr_hex)
-            except ValueError:
-                address = b""
-            if len(address) != 20:
-                self._write_json_error(400, "address must be a 20-byte hex string")
-                return
-            try:
-                value = _query_value(self.plugin, height, key_for_reward(address))
-            except Exception as err:
-                self._write_json_error(500, str(err))
-                return
-            reward = unmarshal(Reward, value) or Reward()
-            self._write_json({"reward": _reward_to_json(reward), "height": height})
-            return
-        # otherwise return all reward records via a range read
-        try:
-            entries = _query_range(self.plugin, height, reward_prefix())
-        except Exception as err:
-            self._write_json_error(500, str(err))
-            return
-        rewards = []
-        for entry in entries:
-            reward = unmarshal(Reward, entry.value) or Reward()
-            rewards.append(_reward_to_json(reward))
-        self._write_json({"rewards": rewards, "count": len(rewards), "height": height})
+        # No routes are registered by default. Builders add route dispatch here.
+        self._write_json_error(404, "not found")
 
     def _write_json(self, body: dict, status: int = 200) -> None:
         """Write a JSON success response."""
@@ -230,10 +98,11 @@ class PluginRPCHandler(BaseHTTPRequestHandler):
 
 
 def start_rpc_server(plugin: Plugin) -> Optional[ThreadingHTTPServer]:
-    """Launch the plugin's own HTTP server exposing custom, chain-specific RPC endpoints.
+    """Launch the plugin's own HTTP server. By default it registers NO routes.
 
-    Builders are free to register any number of routes; each handler uses the detached, read-only
-    query_state() path to fetch state snapshots from Canopy. Matches Go's StartRPCServer.
+    Builders are free to register any number of routes on PluginRPCHandler; each handler should use
+    the detached, read-only query_state() path to fetch state snapshots from Canopy. Matches Go's
+    StartRPCServer. See TUTORIAL.md for a worked example.
 
     The server runs in a daemon background thread so it does not block the plugin's event loop. The
     running ThreadingHTTPServer is returned so callers can shut it down if desired.
@@ -254,9 +123,9 @@ def start_rpc_server(plugin: Plugin) -> Optional[ThreadingHTTPServer]:
     handler_cls = type("BoundPluginRPCHandler", (PluginRPCHandler,), {"plugin": plugin})
     server = ThreadingHTTPServer((host, port), handler_cls)
 
-    # log the build marker and the registered routes so the running version is obvious in the log
+    # log the build marker so the running version is obvious in the log; no routes are registered
     logger.info(f"plugin RPC server ({PLUGIN_BUILD}) listening on {addr}")
-    logger.info("plugin RPC routes registered: GET /v1/query/faucets, GET /v1/query/rewards")
+    logger.info("plugin RPC routes registered: none (skeleton — add your own; see TUTORIAL.md)")
 
     thread = threading.Thread(target=server.serve_forever, name="plugin-rpc", daemon=True)
     thread.start()
