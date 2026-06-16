@@ -280,6 +280,8 @@ const (
 	CodePluginTimeout             ErrorCode = 109
 	CodeInvalidPluginSchema       ErrorCode = 110
 	CodeNoPluginQueryProvider     ErrorCode = 111
+	CodeNilPluginQueryRead        ErrorCode = 112
+	CodeNoCommittedState          ErrorCode = 113
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -908,4 +910,12 @@ func ErrInvalidFSMToPluginMessage(t reflect.Type) ErrorI {
 
 func ErrNoPluginQueryProvider() ErrorI {
 	return NewError(CodeNoPluginQueryProvider, StateMachineModule, "no plugin query provider is registered")
+}
+
+func ErrNilPluginQueryRead() ErrorI {
+	return NewError(CodeNilPluginQueryRead, StateMachineModule, "plugin query request has no read")
+}
+
+func ErrNoCommittedState() ErrorI {
+	return NewError(CodeNoCommittedState, StateMachineModule, "node has no committed state yet")
 }

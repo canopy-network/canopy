@@ -342,10 +342,19 @@ type pluginQueryProvider struct {
 
 // QueryState() executes a read-only state read against a TimeMachine snapshot at the given height (0 = latest committed)
 func (p *pluginQueryProvider) QueryState(height uint64, request *lib.PluginStateReadRequest) (lib.PluginStateReadResponse, lib.ErrorI) {
+	// guard: a nil read request would nil-deref in StateRead()
+	if request == nil {
+		return lib.PluginStateReadResponse{}, lib.ErrNilPluginQueryRead()
+	}
 	// create a read-only state snapshot at the requested height
 	sm, err := p.controller.FSM.TimeMachine(height)
 	if err != nil {
 		return lib.PluginStateReadResponse{}, lib.ErrTimeMachine(err)
+	}
+	// at height 0 (fresh node, pre-first-commit) TimeMachine returns the LIVE FSM, not a snapshot;
+	// never read from — nor Discard() — the live consensus store
+	if sm == p.controller.FSM {
+		return lib.PluginStateReadResponse{}, lib.ErrNoCommittedState()
 	}
 	// ensure proper cleanup of the snapshot
 	defer sm.Discard()

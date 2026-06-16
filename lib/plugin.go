@@ -431,6 +431,11 @@ func (p *Plugin) handleQueryRequest(msg *PluginToFSM) ErrorI {
 	if provider == nil {
 		p.log.Debugf("handleQueryRequest() no query provider registered for message ID %d", msg.Id)
 		response.Error = NewPluginError(ErrNoPluginQueryProvider())
+	} else if request.GetRead() == nil {
+		// guard: a query with no inner read request would nil-deref in StateRead(); return a plugin
+		// error so a malformed/empty query reports cleanly instead of panicking the node
+		p.log.Debugf("handleQueryRequest() nil read in query request for message ID %d", msg.Id)
+		response.Error = NewPluginError(ErrNilPluginQueryRead())
 	} else {
 		// execute the detached read-only query
 		read, err := provider.QueryState(request.GetHeight(), request.GetRead())
