@@ -495,7 +495,7 @@ Then add the `handleQueryFaucets` / `handleQueryRewards` handlers (and the JSON/
 - Without `?address`, it does a **range read** over the record prefix (`faucetPrefix()` / `rewardPrefix()`) and returns every record.
 - With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record.
 
-The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
+The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`). The RPC server is optional and non-fatal: set `rpcAddress` to empty to disable it, and a bind failure (e.g. port already in use) is logged without crashing the plugin.
 
 ### Query the endpoints
 

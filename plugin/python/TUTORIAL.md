@@ -549,7 +549,7 @@ plugin = await start_plugin(default_config())
 start_rpc_server(plugin)
 ```
 
-The listen address comes from the `rpc_address` config field (default `0.0.0.0:50010`).
+The listen address comes from the `rpc_address` config field (default `0.0.0.0:50010`). The RPC server is optional and non-fatal: set `rpc_address` to empty to disable it, and a bind failure (e.g. port already in use) is logged without crashing the plugin.
 
 ### Query the endpoints
 

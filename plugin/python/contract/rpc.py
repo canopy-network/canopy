@@ -113,15 +113,22 @@ def start_rpc_server(plugin: Plugin) -> Optional[ThreadingHTTPServer]:
         logger.info("plugin RPC server disabled (no rpc_address configured)")
         return None
 
-    # resolve host/port from the configured listen address (e.g. "0.0.0.0:50010")
-    host, _, port_str = addr.rpartition(":")
-    if not host:
-        host = "0.0.0.0"
-    port = int(port_str)
+    # The custom RPC server is OPTIONAL. Parsing the address or binding the port (e.g. already in
+    # use) can fail; a failure here must NOT crash the plugin — log it and continue without an RPC
+    # server so plugins that don't use this feature are unaffected.
+    try:
+        # resolve host/port from the configured listen address (e.g. "0.0.0.0:50010")
+        host, _, port_str = addr.rpartition(":")
+        if not host:
+            host = "0.0.0.0"
+        port = int(port_str)
 
-    # bind the plugin to a dedicated handler subclass so each request can reach query_state()
-    handler_cls = type("BoundPluginRPCHandler", (PluginRPCHandler,), {"plugin": plugin})
-    server = ThreadingHTTPServer((host, port), handler_cls)
+        # bind the plugin to a dedicated handler subclass so each request can reach query_state()
+        handler_cls = type("BoundPluginRPCHandler", (PluginRPCHandler,), {"plugin": plugin})
+        server = ThreadingHTTPServer((host, port), handler_cls)
+    except (OSError, ValueError) as exc:
+        logger.warning(f"plugin RPC server disabled (failed to start on {addr!r}): {exc}")
+        return None
 
     # log the build marker so the running version is obvious in the log; no routes are registered
     logger.info(f"plugin RPC server ({PLUGIN_BUILD}) listening on {addr}")

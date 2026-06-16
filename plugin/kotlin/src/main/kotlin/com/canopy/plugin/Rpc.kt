@@ -58,17 +58,24 @@ class RpcServer(private val plugin: PluginClient) {
             return
         }
 
-        // parse host:port (default host 0.0.0.0 binds all interfaces)
-        val lastColon = addr.lastIndexOf(':')
-        val host = if (lastColon > 0) addr.substring(0, lastColon) else "0.0.0.0"
-        val port = if (lastColon >= 0) addr.substring(lastColon + 1).toInt() else addr.toInt()
+        // The custom RPC server is OPTIONAL. Parsing the address or binding the port (e.g. already
+        // in use) can throw; a failure here must NOT crash the plugin — log it and continue without
+        // an RPC server so plugins that don't use this feature are unaffected.
+        try {
+            // parse host:port (default host 0.0.0.0 binds all interfaces)
+            val lastColon = addr.lastIndexOf(':')
+            val host = if (lastColon > 0) addr.substring(0, lastColon) else "0.0.0.0"
+            val port = if (lastColon >= 0) addr.substring(lastColon + 1).toInt() else addr.toInt()
 
-        val server = HttpServer.create(InetSocketAddress(host, port), 0)
-        // no routes are registered by default; builders add their own here (see TUTORIAL.md)
-        server.executor = null
+            val server = HttpServer.create(InetSocketAddress(host, port), 0)
+            // no routes are registered by default; builders add their own here (see TUTORIAL.md)
+            server.executor = null
 
-        // log the build marker so the running version is obvious in the log
-        logger.info { "plugin RPC server ($PLUGIN_BUILD) listening on $addr (no custom routes registered)" }
-        server.start()
+            // log the build marker so the running version is obvious in the log
+            logger.info { "plugin RPC server ($PLUGIN_BUILD) listening on $addr (no custom routes registered)" }
+            server.start()
+        } catch (e: Exception) {
+            logger.warn(e) { "plugin RPC server disabled (failed to start on $addr)" }
+        }
     }
 }

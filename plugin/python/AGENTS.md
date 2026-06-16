@@ -15,6 +15,7 @@ plugin/python/
 │   ├── contract.py          # Transaction handlers (CheckTx, DeliverTx)
 │   ├── error.py             # Error types matching Go implementation
 │   ├── plugin.py            # Socket communication with FSM
+│   ├── rpc.py               # Skeleton HTTP server for custom RPC endpoints (no routes by default)
 │   └── proto/               # Protobuf definitions and generated code
 │       ├── __init__.py      # Proto type exports
 │       ├── account.proto    # Account and Pool state types
@@ -100,7 +101,7 @@ A plugin can expose its own read-only HTTP endpoints for chain-specific data (e.
 2. **Declare the prefix** — add every custom record prefix to `CONTRACT_CONFIG["custom_state_prefixes"]` (in `contract/contract.py`). Canopy validates this at handshake and **panics before the plugin starts** if a prefix collides with a core-reserved prefix (`1-15`). See "Key Prefixes" above.
 3. **Register routes** by adding them to the skeleton `contract/rpc.py`, which already exists (its `start_rpc_server()` registers **no routes by default**) and is already started from `main.py` with `start_rpc_server(plugin)`. You only add your routes + handlers (backed by `query_state`); add route dispatch in `PluginRPCHandler.do_GET`. The server uses the Python standard library `http.server` (`ThreadingHTTPServer`) on a background daemon thread — add as many routes as you want.
 4. **Back each handler with `query_state`** — the detached, read-only query path on the `Plugin` class (`contract/plugin.py`): `await plugin.query_state(height, read)` returns raw key/value state at a historical height (`0` = latest committed). It allocates its own random request id so it is safe to call outside the tx/block lifecycle. Because the HTTP server runs on its own thread, each handler schedules the coroutine onto the plugin's asyncio loop via `asyncio.run_coroutine_threadsafe(...)` and blocks for the result. Use a single-key read (`key_for_faucet(addr)`) for one record, or a range read over the prefix (`faucet_prefix()`) to list all records. Decode the raw bytes into your own protobuf type and shape the JSON response however you like.
-5. **Listen address** comes from the `rpc_address` config field (default `0.0.0.0:50010`).
+5. **Listen address** comes from the `rpc_address` config field (default `0.0.0.0:50010`). The RPC server is **optional and non-fatal**: set `rpc_address` to empty to disable it, and a startup/bind failure (e.g. port already in use) is logged without crashing the plugin.
 
 ## Common Tasks
 

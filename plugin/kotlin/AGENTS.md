@@ -23,6 +23,7 @@ plugin/kotlin/
 │   ├── Config.kt         # Configuration data class
 │   ├── Contract.kt       # Transaction logic (CheckTx, DeliverTx)
 │   ├── PluginClient.kt   # Unix socket communication with FSM
+│   ├── Rpc.kt            # Skeleton HTTP server for custom RPC endpoints (no routes by default)
 │   └── Error.kt          # Error definitions matching Go codes
 ├── src/main/proto/       # Protobuf definitions
 │   ├── account.proto     # Account/Pool state structures
@@ -96,7 +97,7 @@ A plugin can expose its own read-only HTTP endpoints for chain-specific data (e.
 2. **Declare the prefix** — add every custom record prefix to the plugin config via `.addAllCustomStatePrefixes(...)` in `ContractConfig.toPluginConfig()` (`src/main/kotlin/com/canopy/plugin/Contract.kt`). Canopy validates this at handshake and **panics before the plugin starts** if a prefix collides with a core-reserved prefix (`1-15`). See "Key Prefixes" below.
 3. **Register routes** in `src/main/kotlin/com/canopy/plugin/Rpc.kt`. The skeleton `RpcServer.start()` already exists (it starts the JDK built-in `com.sun.net.httpserver.HttpServer` but registers **no routes** by default) and is already started from `Main.kt` on a daemon thread (`thread { RpcServer(plugin).start() }`). Just add your routes via `server.createContext(...)` (as many as you want) and their handlers, backed by `queryState`.
 4. **Back each handler with `queryState`** — the detached, read-only query path: `PluginClient.queryState(height, read)` returns raw key/value state at a historical height (`0` = latest committed) using a fresh random request id, so it is safe to call from HTTP handlers. Use a single-key read (`keyForFaucet(addr)`) for one record, or a range read over the prefix (`faucetPrefix()`) to list all records. Decode the raw bytes into your own protobuf type and shape the JSON response however you like.
-5. **Listen address** comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
+5. **Listen address** comes from the `rpcAddress` config field (default `0.0.0.0:50010`). The RPC server is **optional and non-fatal**: set `rpcAddress` to empty to disable it, and a startup/bind failure (e.g. port already in use) is logged without crashing the plugin.
 
 ## State Management
 
