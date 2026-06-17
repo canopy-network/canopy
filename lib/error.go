@@ -334,6 +334,7 @@ const (
 	CodeSetEntry               ErrorCode   = 13
 	CodeReadBytes              ErrorCode   = 14
 	CodeIndexBlock             ErrorCode   = 15
+	CodeCompactDB              ErrorCode   = 16
 
 	RPCModule             ErrorModule = "rpc"
 	CodeMempoolStopSignal ErrorCode   = 1
