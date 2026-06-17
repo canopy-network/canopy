@@ -40,12 +40,16 @@ It is **not** a claim of full EVM equivalence.
 - `eth_call` only supports Canopy's fixed pseudo-contract surface.
 - Logs are synthesized for Canopy's supported token-style transfer model, not for arbitrary contract events.
 - Nonce handling is compatibility-oriented and intentionally lighter than a full Ethereum account-history subsystem.
+- Custom ETH-RPC reads are available for native Canopy state that does not map cleanly to Ethereum accounts:
+  - `canopy_getStake(address, blockTag?)` returns validator `stakedAmount` as an `eth_getBalance`-style 18-decimal hex amount.
+  - `canopy_getPool(id, blockTag?)` returns pool `amount` as an `eth_getBalance`-style 18-decimal hex amount.
 
 ### Address Model
 
 Canopy's ETH RPC intentionally exposes a mixed address model:
 
 - Any Canopy account address that fits the standard 20-byte hex format can be queried through Ethereum-style read APIs such as `eth_getBalance`, transaction lookups, and supported log queries.
+- The reserved read-only pseudo-address `0x000000000000000000000000000000000001ffff` maps `eth_getBalance` to the DAO pool balance for exchange compatibility.
 - Only Ethereum-derived `secp256k1` accounts are writable through Ethereum tooling such as MetaMask, `eth_sendRawTransaction`, and Ethereum-style nonce handling.
 
 Implications:
@@ -71,6 +75,8 @@ RPC
 - [x] eth_accounts
 - [x] eth_blockNumber
 - [x] eth_getBalance
+- [x] canopy_getStake
+- [x] canopy_getPool
 - [ ] eth_getStorageAt
 - [x] eth_getTransactionCount
 - [x] eth_getBlockTransactionCountByHash

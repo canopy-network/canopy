@@ -30,6 +30,8 @@ import (
 
 /* This file wraps Canopy with the Ethereum JSON-RPC interface as specified here: https://ethereum.org/en/developers/docs/apis/json-rpc */
 
+const daoPoolPseudoAddress = "0x000000000000000000000000000000000001ffff"
+
 // EthereumHandler is a helper function that abstracts common workflows of ethereum calls using the JSON rpc 2.0 specification
 func (s *Server) EthereumHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var raw json.RawMessage
@@ -95,6 +97,10 @@ func (s *Server) handleEthereumRPCRequest(ptr *ethRPCRequest) ethRPCResponse {
 		ethResponse, err = s.EthBlockNumber(args)
 	case `eth_getBalance`:
 		ethResponse, err = s.EthGetBalance(args)
+	case `canopy_getStake`:
+		ethResponse, err = s.CanopyGetStake(args)
+	case `canopy_getPool`:
+		ethResponse, err = s.CanopyGetPool(args)
 	case `eth_getTransactionCount`:
 		ethResponse, err = s.EthGetTransactionCount(args)
 	case `eth_getBlockTransactionCountByHash`:
@@ -273,14 +279,77 @@ func (s *Server) EthGetBalance(args []any) (result any, err error) {
 	}
 	// create a read-only state for the block tag
 	err = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
-		// get the balance for the address
-		balance, e := state.GetAccountSpendableBalance(address)
-		if e != nil {
-			return
+		addressString := "0x" + strings.ToLower(address.String())
+		var balance uint64
+		switch addressString {
+		case daoPoolPseudoAddress:
+			pool, poolErr := state.GetPool(lib.DAOPoolID)
+			if poolErr != nil {
+				return poolErr
+			}
+			balance = pool.Amount
+		default:
+			// get the balance for the address
+			balance, e = state.GetAccountSpendableBalance(address)
+			if e != nil {
+				return
+			}
 		}
 		// upscale to 18 dec in hex string format
 		result = hexutil.Big(*fsm.UpscaleTo18Decimals(balance))
 		// exit
+		return
+	})
+	return
+}
+
+// CanopyGetStake returns the validator stake record for an address.
+func (s *Server) CanopyGetStake(args []any) (result any, err error) {
+	address, err := addressFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	height, err := blockTagFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	err = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
+		balance := uint64(0)
+		validator, e := state.GetValidator(address)
+		if e != nil {
+			if e.Code() == lib.CodeValidatorNotExists {
+				result = hexutil.Big(*fsm.UpscaleTo18Decimals(balance))
+				return nil
+			}
+			return e
+		}
+		balance = validator.StakedAmount
+		result = hexutil.Big(*fsm.UpscaleTo18Decimals(balance))
+		return
+	})
+	return
+}
+
+// CanopyGetPool returns the pool balance for a pool id.
+func (s *Server) CanopyGetPool(args []any) (result any, err error) {
+	idStr, err := strFromArgs(args, 0)
+	if err != nil {
+		return nil, err
+	}
+	id, err := strconv.ParseUint(idStr, 0, 64)
+	if err != nil {
+		return nil, ethInvalidParams(err.Error())
+	}
+	height, err := blockTagFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	err = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
+		pool, e := state.GetPool(id)
+		if e != nil {
+			return e
+		}
+		result = hexutil.Big(*fsm.UpscaleTo18Decimals(pool.Amount))
 		return
 	})
 	return

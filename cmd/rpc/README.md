@@ -3442,6 +3442,29 @@ $ curl -X POST http://localhost:50002/v1/eth \
 }
 ```
 
+**Custom Methods**:
+
+- `canopy_getStake(address, blockTag?)` - returns the validator's `stakedAmount` as an Ethereum-style hex balance with 18 decimals. Missing validators return `0x0`.
+- `canopy_getPool(id, blockTag?)` - returns the pool `amount` as an Ethereum-style hex balance with 18 decimals.
+- `eth_getBalance("0x000000000000000000000000000000000001ffff", blockTag?)` - returns the DAO pool balance using a reserved read-only pseudo-address for centralized-exchange compatibility.
+
+```
+$ curl -X POST http://localhost:50002/v1/eth \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc":"2.0",
+    "method":"canopy_getPool",
+    "params":["0x1ffff","latest"],
+    "id":1
+  }'
+
+> {
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": "0x3bdca9b8cea006ef98000"
+}
+```
+
 # Admin
 
 🚨**Important: All admin commands assume secure https connection**
