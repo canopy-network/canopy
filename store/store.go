@@ -99,7 +99,7 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		IndexBlockSize: 32 << 10, // 32 KB index blocks
 		Compression: func() *sstable.CompressionProfile {
 			profile := getCompressionProfile(config.CompressionProfile)
-			log.Infof("Using %s compression for sstables", profile.Name)
+			log.Debugf("Using %s compression for sstables", profile.Name)
 			return profile
 		},
 	}
