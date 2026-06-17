@@ -50,6 +50,11 @@ def random_suffix() -> str:
     return secrets.token_hex(4)
 
 
+def random_address_hex() -> str:
+    """Generate a fresh random 20-byte address as a hex string."""
+    return os.urandom(20).hex()
+
+
 def hex_to_base64(hex_str: str) -> str:
     """Convert hex string to base64 (for protojson bytes encoding)."""
     return base64.b64encode(bytes.fromhex(hex_str)).decode('utf-8')
@@ -656,6 +661,26 @@ def test_plugin_custom_rpc_endpoints() -> None:
     assert found.get('totalAmount') == reward_amount, \
         f"reward list totalAmount = {found.get('totalAmount')}, want {reward_amount}"
     print(f"Recipient found in reward list with totalAmount={found.get('totalAmount')}")
+
+    # An address that never received a faucet/reward should return an empty (zero-valued) record
+    unused_addr = random_address_hex()
+    print(f"\nQuerying single-record endpoints with an unused address {unused_addr} (expecting empty records)...")
+
+    empty_faucet = query_faucet_record(plugin_rpc_url, unused_addr)
+    print(f"Empty faucet record: totalAmount={empty_faucet.get('totalAmount')} count={empty_faucet.get('count')}")
+    assert empty_faucet.get('count', 0) == 0, \
+        f"faucet count for unused address = {empty_faucet.get('count')}, want 0"
+    assert empty_faucet.get('totalAmount', 0) == 0, \
+        f"faucet totalAmount for unused address = {empty_faucet.get('totalAmount')}, want 0"
+    print("Empty faucet record verified (count=0, totalAmount=0)")
+
+    empty_reward = query_reward_record(plugin_rpc_url, unused_addr)
+    print(f"Empty reward record: totalAmount={empty_reward.get('totalAmount')} count={empty_reward.get('count')}")
+    assert empty_reward.get('count', 0) == 0, \
+        f"reward count for unused address = {empty_reward.get('count')}, want 0"
+    assert empty_reward.get('totalAmount', 0) == 0, \
+        f"reward totalAmount for unused address = {empty_reward.get('totalAmount')}, want 0"
+    print("Empty reward record verified (count=0, totalAmount=0)")
 
     print("\n--- Custom RPC endpoints verified successfully! ---")
     print(f"  curl '{plugin_rpc_url}/v1/query/faucets?address={recipient_addr}'")

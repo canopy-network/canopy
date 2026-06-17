@@ -404,6 +404,25 @@ class RpcTest {
             println("  Recipient found in reward list with totalAmount=${foundReward.totalAmount}")
         }
 
+        // Step 5: Query both single-record endpoints with a fresh, never-used address and assert the
+        // records come back empty (HTTP 200 + zero-valued record: count=0, totalAmount=0).
+        val unusedAddr = randomAddressHex()
+        println("\nStep 5: Querying single-record endpoints with an unused address ($unusedAddr) to verify empty records...")
+
+        println("  Querying plugin endpoint GET /v1/query/faucets?address=$unusedAddr ...")
+        val emptyFaucet = queryFaucetRecord(unusedAddr)
+        println("  Faucet record for unused address: totalAmount=${emptyFaucet.totalAmount} count=${emptyFaucet.count}")
+        assertTrue(emptyFaucet.count == 0L, "faucet count for unused address = ${emptyFaucet.count}, want 0")
+        assertTrue(emptyFaucet.totalAmount == 0L, "faucet totalAmount for unused address = ${emptyFaucet.totalAmount}, want 0")
+        println("  Faucet record for unused address verified empty (count=0, totalAmount=0)")
+
+        println("  Querying plugin endpoint GET /v1/query/rewards?address=$unusedAddr ...")
+        val emptyReward = queryRewardRecord(unusedAddr)
+        println("  Reward record for unused address: totalAmount=${emptyReward.totalAmount} count=${emptyReward.count}")
+        assertTrue(emptyReward.count == 0L, "reward count for unused address = ${emptyReward.count}, want 0")
+        assertTrue(emptyReward.totalAmount == 0L, "reward totalAmount for unused address = ${emptyReward.totalAmount}, want 0")
+        println("  Reward record for unused address verified empty (count=0, totalAmount=0)")
+
         println("\n--- Custom RPC endpoints verified successfully! ---")
         println("  curl '$PLUGIN_RPC_URL/v1/query/faucets?address=$recipientAddr'")
         println("  curl '$PLUGIN_RPC_URL/v1/query/rewards?address=$recipientAddr'")
@@ -418,6 +437,16 @@ class RpcTest {
      */
     private fun randomSuffix(): String {
         val bytes = ByteArray(4)
+        Random.nextBytes(bytes)
+        return bytes.toHexString()
+    }
+
+    /**
+     * Generate a fresh random 20-byte address as a lowercase hex string. Used to query the
+     * single-record endpoints with an address that has never received a faucet/reward.
+     */
+    private fun randomAddressHex(): String {
+        val bytes = ByteArray(20)
         Random.nextBytes(bytes)
         return bytes.toHexString()
     }

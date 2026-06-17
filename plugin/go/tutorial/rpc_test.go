@@ -412,6 +412,35 @@ func TestPluginCustomRPCEndpoints(t *testing.T) {
 		t.Logf("Recipient found in reward list with totalAmount=%d", found.TotalAmount)
 	}
 
+	// Step 5: an address that never received a faucet/reward must return an EMPTY record from both
+	// single-record endpoints (the query finds nothing, so the record is zero-valued)
+	unusedAddr := randomAddressHex()
+	t.Logf("Step 5: Querying both endpoints with an unused address (%s); expecting empty records...", unusedAddr)
+
+	t.Logf("Querying plugin endpoint GET /v1/query/faucets?address=%s ...", unusedAddr)
+	emptyFaucet, err := queryFaucetRecord(pluginRPCURL, unusedAddr)
+	if err != nil {
+		t.Fatalf("Failed to query faucet record for unused address: %v", err)
+	}
+	t.Logf("Faucet record for unused address: recipient=%q totalAmount=%d count=%d", emptyFaucet.RecipientAddress, emptyFaucet.TotalAmount, emptyFaucet.Count)
+	if emptyFaucet.Count != 0 || emptyFaucet.TotalAmount != 0 {
+		t.Errorf("faucet record for unused address = %+v, want empty (count=0, totalAmount=0)", emptyFaucet)
+	} else {
+		t.Log("Faucet endpoint correctly returned an empty record for the unused address")
+	}
+
+	t.Logf("Querying plugin endpoint GET /v1/query/rewards?address=%s ...", unusedAddr)
+	emptyReward, err := queryRewardRecord(pluginRPCURL, unusedAddr)
+	if err != nil {
+		t.Fatalf("Failed to query reward record for unused address: %v", err)
+	}
+	t.Logf("Reward record for unused address: recipient=%q totalAmount=%d count=%d", emptyReward.RecipientAddress, emptyReward.TotalAmount, emptyReward.Count)
+	if emptyReward.Count != 0 || emptyReward.TotalAmount != 0 {
+		t.Errorf("reward record for unused address = %+v, want empty (count=0, totalAmount=0)", emptyReward)
+	} else {
+		t.Log("Reward endpoint correctly returned an empty record for the unused address")
+	}
+
 	t.Log("")
 	t.Log("--- Custom RPC endpoints verified successfully! ---")
 	t.Logf("  curl '%s/v1/query/faucets?address=%s'", pluginRPCURL, recipientAddr)
@@ -423,6 +452,14 @@ func TestPluginCustomRPCEndpoints(t *testing.T) {
 // randomSuffix generates a random hex suffix for unique nicknames
 func randomSuffix() string {
 	b := make([]byte, 4)
+	cryptorand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// randomAddressHex returns a random 20-byte address as hex; used to query an address that has no
+// faucet/reward record so the endpoint is expected to return an empty (zero-valued) record
+func randomAddressHex() string {
+	b := make([]byte, 20)
 	cryptorand.Read(b)
 	return hex.EncodeToString(b)
 }

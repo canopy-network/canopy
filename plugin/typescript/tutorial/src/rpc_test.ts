@@ -39,6 +39,11 @@ function randomSuffix(): string {
     return randomBytes(4).toString('hex');
 }
 
+// Helper to generate a fresh random 20-byte address as a hex string (never used on-chain)
+function randomAddressHex(): string {
+    return randomBytes(20).toString('hex');
+}
+
 // Convert hex string to base64 (for protojson bytes encoding)
 function hexToBase64(hexStr: string): string {
     return Buffer.from(hexStr, 'hex').toString('base64');
@@ -1041,6 +1046,37 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
     } else {
         console.log(`Recipient found in reward list with totalAmount=${foundReward.totalAmount}`);
     }
+
+    // A never-used address must return an empty (zero-valued) record from the single-record
+    // endpoints: the query returns HTTP 200 with count=0 and totalAmount=0.
+    const unusedAddr = randomAddressHex();
+    console.log(
+        `Querying plugin endpoint GET /v1/query/faucets?address=${unusedAddr} (unused address, expecting empty record)...`
+    );
+    const emptyFaucet = await queryFaucetRecord(PLUGIN_RPC_URL, unusedAddr);
+    console.log(
+        `Empty faucet record for unused address: totalAmount=${emptyFaucet.totalAmount} count=${emptyFaucet.count}`
+    );
+    if (Number(emptyFaucet.count) !== 0 || Number(emptyFaucet.totalAmount) !== 0) {
+        throw new Error(
+            `faucet record for unused address ${unusedAddr} is not empty (totalAmount=${emptyFaucet.totalAmount}, count=${emptyFaucet.count})`
+        );
+    }
+    console.log('Faucet record for unused address verified empty (count=0, totalAmount=0)');
+
+    console.log(
+        `Querying plugin endpoint GET /v1/query/rewards?address=${unusedAddr} (unused address, expecting empty record)...`
+    );
+    const emptyReward = await queryRewardRecord(PLUGIN_RPC_URL, unusedAddr);
+    console.log(
+        `Empty reward record for unused address: totalAmount=${emptyReward.totalAmount} count=${emptyReward.count}`
+    );
+    if (Number(emptyReward.count) !== 0 || Number(emptyReward.totalAmount) !== 0) {
+        throw new Error(
+            `reward record for unused address ${unusedAddr} is not empty (totalAmount=${emptyReward.totalAmount}, count=${emptyReward.count})`
+        );
+    }
+    console.log('Reward record for unused address verified empty (count=0, totalAmount=0)');
 
     console.log('');
     console.log('--- Custom RPC endpoints verified successfully! ---');

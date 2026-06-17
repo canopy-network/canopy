@@ -351,6 +351,31 @@ namespace CanopyPlugin.Tutorial
             Assert.Equal(rewardAmount, foundReward!.TotalAmount);
             Console.WriteLine($"  Recipient found in reward list with totalAmount={foundReward.TotalAmount}");
 
+            // Step 5: an address that never received a faucet/reward must return an EMPTY record from both
+            // single-record endpoints (the query finds nothing, so the record is zero-valued). The endpoint
+            // returns HTTP 200 with count=0 and totalAmount=0; the helper may also surface an absent record
+            // as null, so treat both as "empty".
+            var unusedAddr = RandomAddressHex();
+            Console.WriteLine($"\nStep 5: Querying both endpoints with an unused address ({unusedAddr}); expecting empty records...");
+
+            Console.WriteLine($"  Querying plugin endpoint GET /v1/query/faucets?address={unusedAddr} ...");
+            var emptyFaucet = await QueryFaucetRecordAsync(pluginRpcUrl, unusedAddr);
+            var emptyFaucetCount = emptyFaucet?.Count ?? 0UL;
+            var emptyFaucetTotal = emptyFaucet?.TotalAmount ?? 0UL;
+            Console.WriteLine($"  Faucet record for unused address: totalAmount={emptyFaucetTotal} count={emptyFaucetCount}");
+            Assert.Equal(0UL, emptyFaucetCount);
+            Assert.Equal(0UL, emptyFaucetTotal);
+            Console.WriteLine("  Faucet endpoint correctly returned an empty record for the unused address");
+
+            Console.WriteLine($"  Querying plugin endpoint GET /v1/query/rewards?address={unusedAddr} ...");
+            var emptyReward = await QueryRewardRecordAsync(pluginRpcUrl, unusedAddr);
+            var emptyRewardCount = emptyReward?.Count ?? 0UL;
+            var emptyRewardTotal = emptyReward?.TotalAmount ?? 0UL;
+            Console.WriteLine($"  Reward record for unused address: totalAmount={emptyRewardTotal} count={emptyRewardCount}");
+            Assert.Equal(0UL, emptyRewardCount);
+            Assert.Equal(0UL, emptyRewardTotal);
+            Console.WriteLine("  Reward endpoint correctly returned an empty record for the unused address");
+
             Console.WriteLine("\n--- Custom RPC endpoints verified successfully! ---");
             Console.WriteLine($"  curl '{pluginRpcUrl}/v1/query/faucets?address={recipientAddr}'");
             Console.WriteLine($"  curl '{pluginRpcUrl}/v1/query/rewards?address={recipientAddr}'");
@@ -366,6 +391,17 @@ namespace CanopyPlugin.Tutorial
         private static string RandomSuffix()
         {
             var bytes = new byte[4];
+            RandomNumberGenerator.Fill(bytes);
+            return BLSCrypto.BytesToHex(bytes);
+        }
+
+        /// <summary>
+        /// Generate a random 20-byte address as a lowercase hex string. Used to query an address that has
+        /// never received a faucet/reward, so the single-record endpoints should return an empty record.
+        /// </summary>
+        private static string RandomAddressHex()
+        {
+            var bytes = new byte[20];
             RandomNumberGenerator.Fill(bytes);
             return BLSCrypto.BytesToHex(bytes);
         }
