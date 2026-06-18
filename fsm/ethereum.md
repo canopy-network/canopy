@@ -379,8 +379,11 @@ Pending visibility is node-local, just like Ethereum mempool visibility is node-
 
 *Implementation:*
 
-- For `latest`, `pending`, `safe`, and `finalized`, `eth_getTransactionCount` returns the current Ethereum-facing block height as the next replay-safe nonce baseline.
-- If the node has a higher local pending nonce for that sender, the RPC advances past it so replacement or rapid follow-up sends do not reuse the same replay nonce.
+- The RPC persists a confirmed replay nonce floor for senders with mined RLP-backed transactions.
+- For `latest`, `safe`, and `finalized`, `eth_getTransactionCount` returns the higher of:
+  - the current Ethereum-facing block height, or
+  - the sender's highest confirmed replay nonce plus one.
+- For `pending`, the RPC starts from that confirmed floor and then advances past any higher still-live local pending nonce for the sender.
 - During short block/index lag windows, partially indexed mined txs continue to reserve their pending nonce until the block row is available, so wallet pollers do not immediately reuse that nonce.
 - Explicit numeric block tags are compatibility values, not reconstructed historical Ethereum account nonces.
 

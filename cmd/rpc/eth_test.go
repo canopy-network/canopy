@@ -50,12 +50,20 @@ func TestEthGetTransactionCountUsesReplayHeight(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, hexutil.Uint64(4_999), gotLatest)
 
+	gotSafe, err := server.EthGetTransactionCount([]any{address, safeBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(4_999), gotSafe)
+
+	gotFinalized, err := server.EthGetTransactionCount([]any{address, finalizedBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(4_999), gotFinalized)
+
 	gotPending, err := server.EthGetTransactionCount([]any{address, pendingBlockTag})
 	require.NoError(t, err)
 	require.Equal(t, hexutil.Uint64(4_999), gotPending)
 }
 
-func TestEthGetTransactionCountAdvancesPastPendingNonceForLatestAndPending(t *testing.T) {
+func TestEthGetTransactionCountAdvancesPastPendingNonceForPendingOnly(t *testing.T) {
 	server := newTestEthServerAtHeight(t, 5_000)
 	tx := newTestPendingRLPTransaction(t, 4_999)
 	address := "0x" + senderFromTransaction(tx)
@@ -65,11 +73,45 @@ func TestEthGetTransactionCountAdvancesPastPendingNonceForLatestAndPending(t *te
 
 	gotLatest, err := server.EthGetTransactionCount([]any{address, latestBlockTag})
 	require.NoError(t, err)
-	require.Equal(t, hexutil.Uint64(5_000), gotLatest)
+	require.Equal(t, hexutil.Uint64(4_999), gotLatest)
+
+	gotSafe, err := server.EthGetTransactionCount([]any{address, safeBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(4_999), gotSafe)
+
+	gotFinalized, err := server.EthGetTransactionCount([]any{address, finalizedBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(4_999), gotFinalized)
 
 	gotPending, err := server.EthGetTransactionCount([]any{address, pendingBlockTag})
 	require.NoError(t, err)
 	require.Equal(t, hexutil.Uint64(5_000), gotPending)
+}
+
+func TestEthGetTransactionCountUsesConfirmedReplayFloorForMinedTxs(t *testing.T) {
+	server, db := newTestEthServerAndStoreAtHeight(t, 5_000)
+	tx := newTestPendingRLPTransaction(t, 5_005)
+	address := "0x" + senderFromTransaction(tx)
+
+	require.NoError(t, db.IndexTx(newTestIndexedTxResultFromPendingTx(t, tx, 1)))
+	_, commitErr := db.Commit()
+	require.NoError(t, commitErr)
+
+	gotLatest, err := server.EthGetTransactionCount([]any{address, latestBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_006), gotLatest)
+
+	gotSafe, err := server.EthGetTransactionCount([]any{address, safeBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_006), gotSafe)
+
+	gotFinalized, err := server.EthGetTransactionCount([]any{address, finalizedBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_006), gotFinalized)
+
+	gotPending, err := server.EthGetTransactionCount([]any{address, pendingBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_006), gotPending)
 }
 
 func TestEthGetTransactionCountKeepsPendingNonceReservedWhenBlockMissing(t *testing.T) {
@@ -100,7 +142,7 @@ func TestEthGetTransactionCountKeepsPendingNonceReservedWhenBlockMissing(t *test
 	require.Equal(t, hexutil.Uint64(5_000), gotPending)
 }
 
-func TestEthGetTransactionCountErrorsWhenPendingNonceHitsAcceptanceCeiling(t *testing.T) {
+func TestEthGetTransactionCountPendingErrorsWhenPendingNonceHitsAcceptanceCeiling(t *testing.T) {
 	server := newTestEthServerAtHeight(t, 5_000)
 	nonce := server.maximumAcceptedEthereumNonce()
 	tx := newTestPendingRLPTransaction(t, nonce)
@@ -109,8 +151,17 @@ func TestEthGetTransactionCountErrorsWhenPendingNonceHitsAcceptanceCeiling(t *te
 	registerPendingEthTx(hash, tx)
 	t.Cleanup(func() { clearPendingEthTx(hash) })
 
-	_, err := server.EthGetTransactionCount([]any{address, latestBlockTag})
-	require.ErrorContains(t, err, "no replay-safe nonce available within accepted window")
+	gotLatest, err := server.EthGetTransactionCount([]any{address, latestBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(4_999), gotLatest)
+
+	gotSafe, err := server.EthGetTransactionCount([]any{address, safeBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(4_999), gotSafe)
+
+	gotFinalized, err := server.EthGetTransactionCount([]any{address, finalizedBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(4_999), gotFinalized)
 
 	_, err = server.EthGetTransactionCount([]any{address, pendingBlockTag})
 	require.ErrorContains(t, err, "no replay-safe nonce available within accepted window")

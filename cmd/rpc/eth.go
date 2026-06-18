@@ -372,8 +372,14 @@ func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 		switch blockTag {
 		case earliestBlockTag:
 			return hexutil.Uint64(0), nil
-		case latestBlockTag, pendingBlockTag, safeBlockTag, finalizedBlockTag:
-			nonce, nonceErr := s.nextReplayProtectedNonce(st, address.String())
+		case latestBlockTag, safeBlockTag, finalizedBlockTag:
+			nonce, nonceErr := s.nextConfirmedReplayProtectedNonce(st, address)
+			if nonceErr != nil {
+				return nil, nonceErr
+			}
+			return hexutil.Uint64(nonce), nil
+		case pendingBlockTag:
+			nonce, nonceErr := s.nextPendingReplayProtectedNonce(st, address)
 			if nonceErr != nil {
 				return nil, nonceErr
 			}
@@ -1707,11 +1713,38 @@ func (s *Server) maximumAcceptedEthereumNonce() uint64 {
 	return height + fsm.BlockAcceptanceRange
 }
 
-// nextReplayProtectedNonce() returns the next locally safe replay-protection height for an address.
-func (s *Server) nextReplayProtectedNonce(st *store.Store, address string) (uint64, error) {
+// nextConfirmedReplayProtectedNonce() returns the next confirmed replay-safe nonce for an address.
+func (s *Server) nextConfirmedReplayProtectedNonce(st *store.Store, address crypto.AddressI) (uint64, error) {
 	nonce := s.currentEthBlockNumber()
 	maxNonce := s.maximumAcceptedEthereumNonce()
-	if highestPending, ok, err := s.highestPendingNonceForAddress(st, address); err != nil {
+	if confirmedNonce, ok, err := st.GetHighestConfirmedEthereumReplayNonce(address); err != nil {
+		return 0, err
+	} else if ok {
+		if confirmedNonce >= maxNonce {
+			return 0, fmt.Errorf("no replay-safe nonce available within accepted window")
+		}
+		if confirmedNonce == math.MaxUint64 {
+			return math.MaxUint64, nil
+		}
+		confirmedFloor := confirmedNonce + 1
+		if confirmedFloor > nonce {
+			nonce = confirmedFloor
+		}
+	}
+	if nonce > maxNonce {
+		nonce = maxNonce
+	}
+	return nonce, nil
+}
+
+// nextPendingReplayProtectedNonce() returns the next replay-safe nonce including local pending state.
+func (s *Server) nextPendingReplayProtectedNonce(st *store.Store, address crypto.AddressI) (uint64, error) {
+	nonce, err := s.nextConfirmedReplayProtectedNonce(st, address)
+	if err != nil {
+		return 0, err
+	}
+	maxNonce := s.maximumAcceptedEthereumNonce()
+	if highestPending, ok, err := s.highestPendingNonceForAddress(st, address.String()); err != nil {
 		return 0, err
 	} else if ok && highestPending >= nonce {
 		if highestPending >= maxNonce {
