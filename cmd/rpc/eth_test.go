@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"crypto/ecdsa"
 	"encoding/json"
 	"math/big"
 	"strings"
@@ -168,6 +169,15 @@ func TestEthGetTransactionCountExplicitCurrentBlockRespectsConfirmedReplayFloor(
 	got, err := server.EthGetTransactionCount([]any{address, hexutil.EncodeUint64(5_007)})
 	require.NoError(t, err)
 	require.Equal(t, hexutil.Uint64(5_007), got)
+}
+
+func TestEthGetTransactionCountDoesNotClampBelowConfirmedReplayFloor(t *testing.T) {
+	server, address := newTestEthServerWithConfirmedFloorAndStalePending(t)
+	for _, blockTag := range []string{latestBlockTag, hexutil.EncodeUint64(5_007)} {
+		got, err := server.EthGetTransactionCount([]any{address, blockTag})
+		require.NoError(t, err)
+		require.Equal(t, hexutil.Uint64(5_007), got)
+	}
 }
 
 func TestEthGetTransactionCountExplicitCurrentBlockDoesNotAdvancePastLocalPendingNonce(t *testing.T) {
@@ -414,6 +424,32 @@ func newTestPendingRLPTransaction(t *testing.T, nonce uint64) *lib.Transaction {
 
 	key, err := ethCrypto.GenerateKey()
 	require.NoError(t, err)
+	return newTestPendingRLPTransactionFromKey(t, key, nonce)
+}
+
+func newTestEthServerWithConfirmedFloorAndStalePending(t *testing.T) (*Server, string) {
+	t.Helper()
+
+	server, db := newTestEthServerAndStoreAtHeight(t, 5_008)
+	key, err := ethCrypto.GenerateKey()
+	require.NoError(t, err)
+	minedTx := newTestPendingRLPTransactionFromKey(t, key, 5_006)
+	address := "0x" + senderFromTransaction(minedTx)
+
+	require.NoError(t, db.IndexTx(newTestIndexedTxResultFromPendingTx(t, minedTx, 1)))
+	_, commitErr := db.Commit()
+	require.NoError(t, commitErr)
+
+	stalePendingTx := newTestPendingRLPTransactionFromKey(t, key, 5_001)
+	stalePendingHash := ethHashStringFromTransaction(stalePendingTx)
+	registerPendingEthTx(stalePendingHash, stalePendingTx)
+	t.Cleanup(func() { clearPendingEthTx(stalePendingHash) })
+
+	return server, address
+}
+
+func newTestPendingRLPTransactionFromKey(t *testing.T, key *ecdsa.PrivateKey, nonce uint64) *lib.Transaction {
+	t.Helper()
 
 	recipient := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	ethTx := types.MustSignNewTx(key, types.LatestSignerForChainID(big.NewInt(4_294_967_297)), &types.DynamicFeeTx{

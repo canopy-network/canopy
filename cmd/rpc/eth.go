@@ -1625,7 +1625,9 @@ func clearPendingEthTx(hash string) {
 }
 
 // pendingNonceRangeForAddress() returns the lowest and highest still-live pending nonces for the sender.
-func (s *Server) pendingNonceRangeForAddress(st *store.Store, address string) (lowest, highest uint64, ok bool, err error) {
+// Entries below minNonce are ignored unless they are the immediate predecessor of minNonce and are
+// still in the partial-index state (tx row visible, block row not yet visible).
+func (s *Server) pendingNonceRangeForAddress(st *store.Store, address string, minNonce uint64) (lowest, highest uint64, ok bool, err error) {
 	address = strings.ToLower(address)
 	pseudoPendingTxsMap.Range(func(key, value any) bool {
 		hash := strings.ToLower(key.(string))
@@ -1634,10 +1636,12 @@ func (s *Server) pendingNonceRangeForAddress(st *store.Store, address string) (l
 			clearPendingEthTx(hash)
 			return true
 		}
-		if tx, block, lookupErr := s.findIndexedTxByHash(st, hash); lookupErr != nil {
+		tx, block, lookupErr := s.findIndexedTxByHash(st, hash)
+		if lookupErr != nil {
 			err = lookupErr
 			return false
-		} else if tx != nil && block != nil {
+		}
+		if tx != nil && block != nil {
 			clearPendingEthTx(hash)
 			return true
 		}
@@ -1645,6 +1649,9 @@ func (s *Server) pendingNonceRangeForAddress(st *store.Store, address string) (l
 			return true
 		}
 		nonce := pending.Tx.CreatedHeight
+		if minNonce != 0 && nonce < minNonce && !(tx != nil && block == nil && nonce+1 == minNonce) {
+			return true
+		}
 		if !ok {
 			lowest, highest, ok = nonce, nonce, true
 			return true
@@ -1671,6 +1678,9 @@ func (s *Server) pendingNonceRangeForAddress(st *store.Store, address string) (l
 			continue
 		}
 		nonce := tx.CreatedHeight
+		if nonce < minNonce {
+			continue
+		}
 		if !ok {
 			lowest, highest, ok = nonce, nonce, true
 			continue
@@ -1776,7 +1786,13 @@ func (s *Server) nextLatestReplayProtectedNonce(st *store.Store, address crypto.
 	if err != nil {
 		return 0, err
 	}
-	lowestPending, _, ok, err := s.pendingNonceRangeForAddress(st, address.String())
+	confirmedFloor := uint64(0)
+	if confirmedNonce, ok, err := st.GetHighestConfirmedEthereumReplayNonce(address); err != nil {
+		return 0, err
+	} else if ok {
+		confirmedFloor = confirmedNonce + 1
+	}
+	lowestPending, _, ok, err := s.pendingNonceRangeForAddress(st, address.String(), confirmedFloor)
 	if err != nil {
 		return 0, err
 	}
@@ -1793,7 +1809,7 @@ func (s *Server) nextPendingReplayProtectedNonce(st *store.Store, address crypto
 		return 0, err
 	}
 	maxNonce := s.maximumAcceptedEthereumNonce()
-	if _, highestPending, ok, err := s.pendingNonceRangeForAddress(st, address.String()); err != nil {
+	if _, highestPending, ok, err := s.pendingNonceRangeForAddress(st, address.String(), 0); err != nil {
 		return 0, err
 	} else if ok && highestPending >= nonce {
 		if highestPending >= maxNonce {
