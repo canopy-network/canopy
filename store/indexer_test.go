@@ -94,6 +94,28 @@ func TestGetHighestConfirmedEthereumReplayNonce(t *testing.T) {
 	require.Equal(t, txResult.Transaction.CreatedHeight, nonce)
 }
 
+func TestFindCachedTxByHash(t *testing.T) {
+	store, _, cleanup := testStore(t)
+	defer cleanup()
+
+	txResult, ethHash := newRLPBackedTxResult(t)
+	block := &lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: testHeight,
+			Hash:   bytes.Repeat([]byte{0x22}, 32),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+		Transactions: []*lib.TxResult{txResult},
+	}
+	blockCache.Add(block.BlockHeader.Height, block)
+	t.Cleanup(blockCache.Purge)
+
+	gotTx, gotBlock, err := store.FindCachedTxByHash(ethHash.Bytes())
+	require.NoError(t, err)
+	require.Equal(t, txResult.TxHash, gotTx.TxHash)
+	require.Equal(t, block.BlockHeader.Height, gotBlock.BlockHeader.Height)
+}
+
 const ethGasPriceTestValue = 10_000_000_000
 
 func ptrAddress(address common.Address) *common.Address { return &address }

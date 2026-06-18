@@ -42,6 +42,33 @@ func TestEthGetTransactionReceiptReturnsNullWhenBlockMissing(t *testing.T) {
 	require.Equal(t, "null", string(got.(json.RawMessage)))
 }
 
+func TestEthGetTransactionByHashUsesCachedBlockWhileHashIndexMissing(t *testing.T) {
+	server, _, ethHash := newTestEthServerWithCachedButUnindexedTx(t)
+
+	got, err := server.EthGetTransactionByHash([]any{ethHash.Hex()})
+	require.NoError(t, err)
+
+	txMap, ok := got.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, ethHash.Hex(), txMap["hash"])
+	require.Equal(t, "0x1", txMap["blockNumber"])
+	require.Equal(t, "0x0", txMap["transactionIndex"])
+	require.NotNil(t, txMap["blockHash"])
+}
+
+func TestEthGetTransactionReceiptUsesCachedBlockWhileHashIndexMissing(t *testing.T) {
+	server, _, ethHash := newTestEthServerWithCachedButUnindexedTx(t)
+
+	got, err := server.EthGetTransactionReceipt([]any{ethHash.Hex()})
+	require.NoError(t, err)
+
+	receipt, ok := got.(ethRPCReceipt)
+	require.True(t, ok)
+	require.Equal(t, ethHash, receipt.TxHash)
+	require.Equal(t, hexutil.Big(*big.NewInt(1)), receipt.BlockNumber)
+	require.Equal(t, hexutil.Uint64(0), receipt.TransactionIndex)
+}
+
 func TestEthGetTransactionCountUsesReplayHeight(t *testing.T) {
 	server := newTestEthServerAtHeight(t, 5_000)
 	address := "0xCb8EC4ee2540ecD077Ce57e4b151CD7848dF9beF"
@@ -177,10 +204,34 @@ func newTestEthServerWithPartiallyIndexedTx(t *testing.T) (*Server, *lib.TxResul
 
 	sm := newTestRPCStateMachine(t, db, log)
 	txResult, ethHash := newTestRLPBackedTxResult(t)
+	require.NoError(t, db.IndexTx(txResult))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	setFSMHeight(t, sm, db.Version())
+
+	return &Server{
+		controller:       newTestRPCController(sm),
+		config:           lib.DefaultConfig(),
+		indexerBlobCache: newIndexerBlobCache(8),
+		logger:           log,
+	}, txResult, ethHash
+}
+
+func newTestEthServerWithCachedButUnindexedTx(t *testing.T) (*Server, *lib.TxResult, common.Hash) {
+	t.Helper()
+
+	log := lib.NewDefaultLogger()
+	storeI, err := store.NewStoreInMemory(log)
+	require.NoError(t, err)
+	db := storeI.(*store.Store)
+
+	sm := newTestRPCStateMachine(t, db, log)
+	txResult, ethHash := newTestRLPBackedTxResult(t)
 	block := &lib.BlockResult{
 		BlockHeader: &lib.BlockHeader{
 			Height: 1,
-			Hash:   ethCrypto.Keccak256([]byte("block-1")),
+			Hash:   ethCrypto.Keccak256([]byte("block-cached")),
 			Time:   uint64(time.Now().UnixMicro()),
 		},
 		Transactions: []*lib.TxResult{txResult},
@@ -189,9 +240,7 @@ func newTestEthServerWithPartiallyIndexedTx(t *testing.T) (*Server, *lib.TxResul
 	require.NoError(t, db.IndexBlock(block))
 	_, err = db.Commit()
 	require.NoError(t, err)
-
-	require.NoError(t, db.DeleteBlockForHeight(block.BlockHeader.Height))
-	require.NoError(t, db.IndexTx(txResult))
+	require.NoError(t, db.DeleteTxsForHeight(block.BlockHeader.Height))
 	_, err = db.Commit()
 	require.NoError(t, err)
 

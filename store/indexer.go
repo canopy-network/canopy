@@ -322,6 +322,27 @@ func (t *Indexer) GetTxByHash(hash []byte) (*lib.TxResult, lib.ErrorI) {
 	return t.getTx(t.txHashKey(hash))
 }
 
+// FindCachedTxByHash() searches the recent in-memory block cache for a tx hash during live indexing races.
+func (t *Indexer) FindCachedTxByHash(hash []byte) (*lib.TxResult, *lib.BlockResult, lib.ErrorI) {
+	for _, block := range blockCache.Values() {
+		if block == nil {
+			continue
+		}
+		for _, tx := range block.Transactions {
+			hashes, err := indexedTxHashes(tx)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, candidate := range hashes {
+				if bytes.Equal(candidate, hash) {
+					return tx, block, nil
+				}
+			}
+		}
+	}
+	return nil, nil, nil
+}
+
 // GetTxsByHeight() returns a page of transactions for a height
 func (t *Indexer) GetTxsByHeight(height uint64, newestToOldest bool, p lib.PageParams) (*lib.Page, lib.ErrorI) {
 	return t.getTxs(t.txHeightKey(height), newestToOldest, p)

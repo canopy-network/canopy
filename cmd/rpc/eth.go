@@ -1780,8 +1780,13 @@ func (s *Server) findIndexedTxByHash(st *store.Store, hash string) (*lib.TxResul
 		tx, txErr := st.GetTxByHash(txHash)
 		if txErr == nil && tx.TxHash != "" {
 			block, blockErr := st.GetBlockByHeight(tx.Height)
-			if blockErr == nil && !isNilBlock(block) {
+			if blockErr == nil && !isNilBlock(block) && blockContainsTxHash(block, hash) {
 				return tx, block, nil
+			}
+			if cachedTx, cachedBlock, cacheErr := st.FindCachedTxByHash(txHash); cacheErr != nil {
+				return nil, nil, cacheErr
+			} else if cachedTx != nil && cachedBlock != nil {
+				return cachedTx, cachedBlock, nil
 			}
 			// Surface a partially indexed tx as pending-shaped instead of null so wallet pollers
 			// don't misclassify a mined tx as dropped while block rows are catching up.
@@ -1790,8 +1795,32 @@ func (s *Server) findIndexedTxByHash(st *store.Store, hash string) (*lib.TxResul
 			}
 			return nil, nil, blockErr
 		}
+		if cachedTx, cachedBlock, cacheErr := st.FindCachedTxByHash(txHash); cacheErr != nil {
+			return nil, nil, cacheErr
+		} else if cachedTx != nil && cachedBlock != nil {
+			return cachedTx, cachedBlock, nil
+		}
 	}
 	return nil, nil, nil
+}
+
+func blockContainsTxHash(block *lib.BlockResult, hash string) bool {
+	if isNilBlock(block) {
+		return false
+	}
+	normalizedHash := strings.ToLower(hash)
+	for _, tx := range block.Transactions {
+		if tx == nil {
+			continue
+		}
+		if ethHash := ethHashStringFromTxResult(tx); ethHash != "" && ethHash == normalizedHash {
+			return true
+		}
+		if canopyHash := cleanHex(tx.TxHash); canopyHash != "" && "0x"+strings.ToLower(canopyHash) == normalizedHash {
+			return true
+		}
+	}
+	return false
 }
 
 // txToEthReceipt() converts a Canopy tx result into an Ethereum receipt response object.
