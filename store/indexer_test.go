@@ -81,19 +81,6 @@ func TestDeleteTxsForHeightRemovesEthereumHashAlias(t *testing.T) {
 	require.True(t, got == nil || got.TxHash == "")
 }
 
-func TestGetLatestMinedEthereumNonce(t *testing.T) {
-	store, _, cleanup := testStore(t)
-	defer cleanup()
-
-	txResult, _ := newRLPBackedTxResult(t)
-	require.NoError(t, store.IndexTx(txResult))
-
-	nonce, ok, err := store.GetLatestMinedEthereumNonce(crypto.NewAddress(txResult.Sender))
-	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, txResult.Transaction.CreatedHeight, nonce)
-}
-
 const ethGasPriceTestValue = 10_000_000_000
 
 func ptrAddress(address common.Address) *common.Address { return &address }

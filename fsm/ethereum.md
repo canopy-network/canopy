@@ -379,13 +379,14 @@ Pending visibility is node-local, just like Ethereum mempool visibility is node-
 
 *Implementation:*
 
-- For Ethereum-derived accounts with mined ETH-backed tx history, `eth_getTransactionCount(..., "latest")` returns the sender's highest mined Ethereum nonce plus one.
-- `eth_getTransactionCount(..., "pending")` returns the same confirmed base plus a local pending offset derived from the node's in-memory pending view.
-- For addresses without mined Ethereum-backed tx history, the RPC falls back to Canopy's height-based pseudo-nonce behavior for compatibility.
+- For `latest`, `pending`, `safe`, and `finalized`, `eth_getTransactionCount` returns the current Ethereum-facing block height as the next replay-safe nonce baseline.
+- If the node has a higher local pending nonce for that sender, the RPC advances past it so replacement or rapid follow-up sends do not reuse the same replay nonce.
+- During short block/index lag windows, partially indexed mined txs continue to reserve their pending nonce until the block row is available, so wallet pollers do not immediately reuse that nonce.
+- Explicit numeric block tags are compatibility values, not reconstructed historical Ethereum account nonces.
 
 *Purpose in RPC compatibility:*
 - `eth_getTransactionCount` is expected by many Ethereum tools and wallets to return a usable nonce.
-- The implementation is intended to be wallet-compatible for active Ethereum-derived accounts without introducing a full persistent Ethereum nonce subsystem into Canopy.
+- The implementation is intended to be wallet-compatible without introducing a full persistent Ethereum nonce subsystem into Canopy.
 - Canopy tolerates nonce gaps for Ethereum-submitted transactions; the values only need to remain distinct within the local pending set for a given block-building window.
 
 *Limitations:*
