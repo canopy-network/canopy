@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -32,8 +33,15 @@ type Plugin struct {
 // socketPath is the name of the plugin socket exposed by the base SDK
 const socketPath = "plugin.sock"
 
-// StartPlugin() creates and starts a plguin
-func StartPlugin(c Config) {
+// PluginBuild is a human-readable build marker logged at startup so operators can confirm, via
+// `tail -f /tmp/plugin/go-plugin.log`, that the running binary includes the expected features.
+const PluginBuild = "go-plugin v1 (base SDK + detached custom RPC query path)"
+
+// StartPlugin() creates and starts a plugin, returning the running *Plugin so builders can
+// access detached capabilities (e.g. QueryState) to back their own custom RPC endpoints
+func StartPlugin(c Config) *Plugin {
+	// log the build marker so the running version is obvious in the plugin log
+	log.Printf("==== STARTING %s ====", PluginBuild)
 	var conn net.Conn
 	// connect to the socket
 	sockPath := filepath.Join(c.DataDirPath, socketPath)
@@ -64,8 +72,8 @@ func StartPlugin(c Config) {
 	if err := p.Handshake(); err != nil {
 		log.Fatal(err.Error())
 	}
-	// exit
-	return
+	// exit with the running plugin
+	return p
 }
 
 // Handshake() sends the contract configuration to the FSM and awaits a reply
@@ -119,6 +127,28 @@ func (p *Plugin) StateWrite(c *Contract, request *PluginStateWriteRequest) (*Plu
 	return wrapper.StateWrite, nil
 }
 
+// QueryState() executes a detached, read-only state query against Canopy at the given height (0 = latest committed).
+// Unlike StateRead(), it is NOT tied to an in-flight tx/block lifecycle and does not require a Contract context;
+// it allocates its own request id, making it safe to call from custom RPC handlers (e.g. an HTTP server).
+func (p *Plugin) QueryState(height uint64, request *PluginStateReadRequest) (*PluginStateReadResponse, *PluginError) {
+	// send the detached query and wait for a response
+	response, err := p.sendDetachedSync(&PluginToFSM_Query{Query: &PluginQueryRequest{Height: height, Read: request}})
+	if err != nil {
+		return nil, err
+	}
+	// get the response
+	wrapper, ok := response.(*FSMToPlugin_Query)
+	if !ok {
+		return nil, ErrUnexpectedFSMToPlugin(reflect.TypeOf(response))
+	}
+	// surface any FSM-side error attached to the query response
+	if wrapper.Query != nil && wrapper.Query.Error != nil {
+		return nil, wrapper.Query.Error
+	}
+	// return the unwrapped read response
+	return wrapper.Query.GetRead(), nil
+}
+
 // ListenForInbound() routes inbound requests from the plugin
 func (p *Plugin) ListenForInbound() {
 	for {
@@ -134,7 +164,7 @@ func (p *Plugin) ListenForInbound() {
 				// route the message
 				switch payload := msg.Payload.(type) {
 				// response to a request made by the Contract
-				case *FSMToPlugin_Config, *FSMToPlugin_StateRead, *FSMToPlugin_StateWrite:
+				case *FSMToPlugin_Config, *FSMToPlugin_StateRead, *FSMToPlugin_StateWrite, *FSMToPlugin_Query:
 					log.Println("Received FSM response")
 					return p.handleFSMResponse(msg)
 				// inbound requests from the FSM
@@ -215,6 +245,41 @@ func (p *Plugin) sendToPluginAsync(c *Contract, request isPluginToFSM_Payload) (
 	p.l.Unlock()
 	// send the payload with the request ID
 	err = p.sendProtoMsg(&PluginToFSM{Id: requestId, Payload: request})
+	// exit
+	return
+}
+
+// sendDetachedSync() sends a detached (non-lifecycle) request to the FSM and waits for a response.
+// It does not depend on a Contract context and allocates its own request id.
+func (p *Plugin) sendDetachedSync(request isPluginToFSM_Payload) (isFSMToPlugin_Payload, *PluginError) {
+	// send the detached request
+	ch, requestId, err := p.sendDetachedAsync(request)
+	if err != nil {
+		return nil, err
+	}
+	// wait for the response
+	return p.waitForResponse(ch, requestId)
+}
+
+// sendDetachedAsync() sends a detached (non-lifecycle) request without waiting for a response.
+// Unlike sendToPluginAsync(), it generates its own random request id and does not track a Contract.
+func (p *Plugin) sendDetachedAsync(request isPluginToFSM_Payload) (ch chan isFSMToPlugin_Payload, requestId uint64, err *PluginError) {
+	// generate a fresh random request id (not tied to any in-flight FSM request)
+	requestId = rand.Uint64()
+	// make a channel to receive the response
+	ch = make(chan isFSMToPlugin_Payload, 1)
+	// add to the pending list
+	p.l.Lock()
+	p.pending[requestId] = ch
+	p.l.Unlock()
+	// send the payload with the request id
+	err = p.sendProtoMsg(&PluginToFSM{Id: requestId, Payload: request})
+	// clean up on send error
+	if err != nil {
+		p.l.Lock()
+		delete(p.pending, requestId)
+		p.l.Unlock()
+	}
 	// exit
 	return
 }
@@ -372,6 +437,8 @@ func JoinLenPrefix(toAppend ...[]byte) []byte {
 type Config struct {
 	ChainId     uint64 `json:"chainId"`
 	DataDirPath string `json:"dataDirPath"`
+	// RPCAddress is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
+	RPCAddress string `json:"rpcAddress"`
 }
 
 // DefaultConfig() returns the default configuration
@@ -380,6 +447,7 @@ func DefaultConfig() Config {
 	return Config{
 		ChainId:     1,
 		DataDirPath: filepath.Join("/tmp/plugin/"),
+		RPCAddress:  "0.0.0.0:50010",
 	}
 }
 
