@@ -379,13 +379,54 @@ Pending visibility is node-local, just like Ethereum mempool visibility is node-
 
 *Implementation:*
 
-- The RPC persists a confirmed replay nonce floor for senders with mined RLP-backed transactions.
-- For `latest`, `safe`, and `finalized`, `eth_getTransactionCount` returns the higher of:
-  - the current Ethereum-facing block height, or
-  - the sender's highest confirmed replay nonce plus one.
-- For `pending`, the RPC starts from that confirmed floor and then advances past any higher still-live local pending nonce for the sender.
-- During short block/index lag windows, partially indexed mined txs continue to reserve their pending nonce until the block row is available, so wallet pollers do not immediately reuse that nonce.
-- Explicit numeric block tags are compatibility values, not reconstructed historical Ethereum account nonces.
+- The RPC persists a **confirmed replay nonce floor** for senders with mined RLP-backed transactions.
+  - This is the sender's highest indexed mined replay nonce.
+  - It prevents `eth_getTransactionCount` from moving backwards after pending state clears.
+- The RPC also tracks a short-lived **local pending set** for Ethereum-submitted transactions accepted by this node.
+  - These pending entries exist before full block indexing catches up.
+  - They are cleared once the tx is observable as mined, or after expiry.
+
+*Tag behavior:*
+
+- `latest`
+  - Starts from the confirmed replay-safe value: the higher of:
+    - the current Ethereum-facing block height, or
+    - the sender's highest confirmed replay nonce plus one.
+  - Then clamps that value down to the **lowest unresolved local pending nonce** for the sender, if one exists.
+  - This is intentional wallet-compatibility behavior: it prevents a wallet from concluding that an earlier tx was dropped just because the node accepted later txs before receipts became visible.
+- `pending`
+  - Starts from the confirmed replay-safe value.
+  - Then advances past the **highest unresolved local pending nonce** for the sender.
+  - In other words, `pending` means "what nonce should I use for the next new tx on this node?"
+- `safe` and `finalized`
+  - Use only the confirmed replay-safe value.
+  - They do **not** use the local pending clamp.
+- Explicit numeric block tags
+  - Current-head and future-facing numeric tags are treated as compatibility views, not strict archival Ethereum nonce history.
+  - They use the same confirmed replay-safe logic as `latest`, and the same local pending clamp.
+  - Historical numeric tags are still compatibility values; the RPC does not reconstruct the exact historical Ethereum account nonce for that address at that height.
+
+*Why `latest` sees local pending state:*
+
+- Pure Ethereum semantics would treat `latest` as confirmed-chain state only.
+- That was not sufficient for wallet compatibility on Canopy.
+- A wallet such as MetaMask may:
+  - submit tx `A`,
+  - fail to see a receipt for `A` yet,
+  - ask `eth_getTransactionCount(..., "latest")` or `eth_getTransactionCount(..., "<current block>")`,
+  - and infer that `A` was dropped if the returned value has already advanced past `A`.
+- Clamping `latest` to the **lowest unresolved local pending nonce** avoids that false-drop heuristic while the transaction is still unresolved on this node.
+
+*Mental model:*
+
+- The **confirmed floor** answers: "what has definitely mined historically?"
+- The **lowest unresolved local pending nonce** answers: "what is the earliest tx this node still cannot prove resolved?"
+- The **highest unresolved local pending nonce** answers: "what nonce has this node already accepted up through?"
+
+Together they produce:
+
+- `latest`: "confirmed-compatible, but do not jump ahead of the earliest unresolved local tx"
+- `pending`: "next usable nonce after everything this node already accepted"
 
 *Purpose in RPC compatibility:*
 - `eth_getTransactionCount` is expected by many Ethereum tools and wallets to return a usable nonce.
@@ -394,6 +435,9 @@ Pending visibility is node-local, just like Ethereum mempool visibility is node-
 
 *Limitations:*
 
+- `latest` is intentionally not a pure archival Ethereum-confirmed nonce view while unresolved local pending txs exist.
+- Because the pending clamp is node-local, the behavior is best when a wallet reads and writes through the same RPC node.
+- A client that expects `latest` to ignore local pending state completely may observe lower values than on Ethereum during unresolved local tx windows.
 - Explicit historical block-number queries are **not** canonical Ethereum account-history semantics. If a caller asks for `eth_getTransactionCount(address, "0x...")`, the RPC validates the tag but serves a compatibility value instead of reconstructing the exact historical nonce for that address at that block.
 - Pending nonce visibility is local to the node's mempool and pending cache.
 - The method should be treated as compatibility-oriented rather than a full Ethereum archival nonce implementation.

@@ -42,31 +42,20 @@ func TestEthGetTransactionReceiptReturnsNullWhenBlockMissing(t *testing.T) {
 	require.Equal(t, "null", string(got.(json.RawMessage)))
 }
 
-func TestEthGetTransactionByHashUsesCachedBlockWhileHashIndexMissing(t *testing.T) {
-	server, _, ethHash := newTestEthServerWithCachedButUnindexedTx(t)
+func TestEthGetTransactionByHashReturnsNullWhenHashIndexMissingDespiteWarmBlockCache(t *testing.T) {
+	server, _, ethHash := newTestEthServerWithDeletedButCachedTx(t)
 
 	got, err := server.EthGetTransactionByHash([]any{ethHash.Hex()})
 	require.NoError(t, err)
-
-	txMap, ok := got.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, ethHash.Hex(), txMap["hash"])
-	require.Equal(t, "0x1", txMap["blockNumber"])
-	require.Equal(t, "0x0", txMap["transactionIndex"])
-	require.NotNil(t, txMap["blockHash"])
+	require.Equal(t, "null", string(got.(json.RawMessage)))
 }
 
-func TestEthGetTransactionReceiptUsesCachedBlockWhileHashIndexMissing(t *testing.T) {
-	server, _, ethHash := newTestEthServerWithCachedButUnindexedTx(t)
+func TestEthGetTransactionReceiptReturnsNullWhenHashIndexMissingDespiteWarmBlockCache(t *testing.T) {
+	server, _, ethHash := newTestEthServerWithDeletedButCachedTx(t)
 
 	got, err := server.EthGetTransactionReceipt([]any{ethHash.Hex()})
 	require.NoError(t, err)
-
-	receipt, ok := got.(ethRPCReceipt)
-	require.True(t, ok)
-	require.Equal(t, ethHash, receipt.TxHash)
-	require.Equal(t, hexutil.Big(*big.NewInt(1)), receipt.BlockNumber)
-	require.Equal(t, hexutil.Uint64(0), receipt.TransactionIndex)
+	require.Equal(t, "null", string(got.(json.RawMessage)))
 }
 
 func TestEthGetTransactionCountUsesReplayHeight(t *testing.T) {
@@ -88,6 +77,15 @@ func TestEthGetTransactionCountUsesReplayHeight(t *testing.T) {
 	gotPending, err := server.EthGetTransactionCount([]any{address, pendingBlockTag})
 	require.NoError(t, err)
 	require.Equal(t, hexutil.Uint64(4_999), gotPending)
+}
+
+func TestEthGetTransactionCountUsesPreviousReplayHeightForExplicitCurrentBlock(t *testing.T) {
+	server := newTestEthServerAtHeight(t, 5_001)
+	address := "0xCb8EC4ee2540ecD077Ce57e4b151CD7848dF9beF"
+
+	got, err := server.EthGetTransactionCount([]any{address, hexutil.EncodeUint64(5_000)})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(4_999), got)
 }
 
 func TestEthGetTransactionCountAdvancesPastPendingNonceForPendingOnly(t *testing.T) {
@@ -113,6 +111,23 @@ func TestEthGetTransactionCountAdvancesPastPendingNonceForPendingOnly(t *testing
 	gotPending, err := server.EthGetTransactionCount([]any{address, pendingBlockTag})
 	require.NoError(t, err)
 	require.Equal(t, hexutil.Uint64(5_000), gotPending)
+}
+
+func TestEthGetTransactionCountLatestDoesNotAdvancePastLocalPendingNonce(t *testing.T) {
+	server := newTestEthServerAtHeight(t, 5_002)
+	tx := newTestPendingRLPTransaction(t, 5_000)
+	address := "0x" + senderFromTransaction(tx)
+	hash := ethHashStringFromTransaction(tx)
+	registerPendingEthTx(hash, tx)
+	t.Cleanup(func() { clearPendingEthTx(hash) })
+
+	gotLatest, err := server.EthGetTransactionCount([]any{address, latestBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_000), gotLatest)
+
+	gotPending, err := server.EthGetTransactionCount([]any{address, pendingBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_001), gotPending)
 }
 
 func TestEthGetTransactionCountUsesConfirmedReplayFloorForMinedTxs(t *testing.T) {
@@ -141,6 +156,75 @@ func TestEthGetTransactionCountUsesConfirmedReplayFloorForMinedTxs(t *testing.T)
 	require.Equal(t, hexutil.Uint64(5_006), gotPending)
 }
 
+func TestEthGetTransactionCountExplicitCurrentBlockRespectsConfirmedReplayFloor(t *testing.T) {
+	server, db := newTestEthServerAndStoreAtHeight(t, 5_008)
+	tx := newTestPendingRLPTransaction(t, 5_006)
+	address := "0x" + senderFromTransaction(tx)
+
+	require.NoError(t, db.IndexTx(newTestIndexedTxResultFromPendingTx(t, tx, 1)))
+	_, commitErr := db.Commit()
+	require.NoError(t, commitErr)
+
+	got, err := server.EthGetTransactionCount([]any{address, hexutil.EncodeUint64(5_007)})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_007), got)
+}
+
+func TestEthGetTransactionCountExplicitCurrentBlockDoesNotAdvancePastLocalPendingNonce(t *testing.T) {
+	server := newTestEthServerAtHeight(t, 5_003)
+	tx := newTestPendingRLPTransaction(t, 5_001)
+	address := "0x" + senderFromTransaction(tx)
+	hash := ethHashStringFromTransaction(tx)
+	registerPendingEthTx(hash, tx)
+	t.Cleanup(func() { clearPendingEthTx(hash) })
+
+	got, err := server.EthGetTransactionCount([]any{address, hexutil.EncodeUint64(5_002)})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_001), got)
+}
+
+func TestEthGetTransactionCountLatestClampsToLowestLocalPendingNonce(t *testing.T) {
+	server := newTestEthServerAtHeight(t, 5_004)
+	txA := newTestPendingRLPTransaction(t, 5_001)
+	txB := newTestPendingRLPTransaction(t, 5_002)
+	address := "0x" + senderFromTransaction(txA)
+	hashA := ethHashStringFromTransaction(txA)
+	hashB := ethHashStringFromTransaction(txB)
+	registerPendingEthTx(hashA, txA)
+	registerPendingEthTx(hashB, txB)
+	t.Cleanup(func() {
+		clearPendingEthTx(hashA)
+		clearPendingEthTx(hashB)
+	})
+
+	gotLatest, err := server.EthGetTransactionCount([]any{address, latestBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_001), gotLatest)
+
+	gotPending, err := server.EthGetTransactionCount([]any{address, pendingBlockTag})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_003), gotPending)
+}
+
+func TestEthGetTransactionCountExplicitCurrentBlockClampsToLowestLocalPendingNonce(t *testing.T) {
+	server := newTestEthServerAtHeight(t, 5_004)
+	txA := newTestPendingRLPTransaction(t, 5_001)
+	txB := newTestPendingRLPTransaction(t, 5_002)
+	address := "0x" + senderFromTransaction(txA)
+	hashA := ethHashStringFromTransaction(txA)
+	hashB := ethHashStringFromTransaction(txB)
+	registerPendingEthTx(hashA, txA)
+	registerPendingEthTx(hashB, txB)
+	t.Cleanup(func() {
+		clearPendingEthTx(hashA)
+		clearPendingEthTx(hashB)
+	})
+
+	got, err := server.EthGetTransactionCount([]any{address, hexutil.EncodeUint64(5_003)})
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Uint64(5_001), got)
+}
+
 func TestEthGetTransactionCountKeepsPendingNonceReservedWhenBlockMissing(t *testing.T) {
 	server, db := newTestEthServerAndStoreAtHeight(t, 5_000)
 	tx := newTestPendingRLPTransaction(t, 4_999)
@@ -162,7 +246,7 @@ func TestEthGetTransactionCountKeepsPendingNonceReservedWhenBlockMissing(t *test
 
 	gotLatest, err := server.EthGetTransactionCount([]any{address, latestBlockTag})
 	require.NoError(t, err)
-	require.Equal(t, hexutil.Uint64(5_000), gotLatest)
+	require.Equal(t, hexutil.Uint64(4_999), gotLatest)
 
 	gotPending, err := server.EthGetTransactionCount([]any{address, pendingBlockTag})
 	require.NoError(t, err)
@@ -218,7 +302,7 @@ func newTestEthServerWithPartiallyIndexedTx(t *testing.T) (*Server, *lib.TxResul
 	}, txResult, ethHash
 }
 
-func newTestEthServerWithCachedButUnindexedTx(t *testing.T) (*Server, *lib.TxResult, common.Hash) {
+func newTestEthServerWithDeletedButCachedTx(t *testing.T) (*Server, *lib.TxResult, common.Hash) {
 	t.Helper()
 
 	log := lib.NewDefaultLogger()
@@ -239,6 +323,8 @@ func newTestEthServerWithCachedButUnindexedTx(t *testing.T) (*Server, *lib.TxRes
 
 	require.NoError(t, db.IndexBlock(block))
 	_, err = db.Commit()
+	require.NoError(t, err)
+	_, err = db.GetBlockByHeight(block.BlockHeader.Height)
 	require.NoError(t, err)
 	require.NoError(t, db.DeleteTxsForHeight(block.BlockHeader.Height))
 	_, err = db.Commit()

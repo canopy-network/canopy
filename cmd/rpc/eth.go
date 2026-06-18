@@ -372,7 +372,17 @@ func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 		switch blockTag {
 		case earliestBlockTag:
 			return hexutil.Uint64(0), nil
-		case latestBlockTag, safeBlockTag, finalizedBlockTag:
+		case latestBlockTag:
+			nonce, nonceErr := s.nextConfirmedReplayProtectedNonce(st, address)
+			if nonceErr != nil {
+				return nil, nonceErr
+			}
+			nonce, nonceErr = s.capConfirmedNonceByLocalPending(st, address.String(), nonce)
+			if nonceErr != nil {
+				return nil, nonceErr
+			}
+			return hexutil.Uint64(nonce), nil
+		case safeBlockTag, finalizedBlockTag:
 			nonce, nonceErr := s.nextConfirmedReplayProtectedNonce(st, address)
 			if nonceErr != nil {
 				return nil, nonceErr
@@ -388,6 +398,20 @@ func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 			height, parseErr := parseBlockTag(blockTag)
 			if parseErr != nil {
 				return nil, parseErr
+			}
+			// Wallets may reconcile a just-submitted tx against an explicit current-head block number
+			// before its receipt becomes visible. For current/future numeric tags, keep that confirmed
+			// view from jumping ahead of the prior head unless a confirmed sender floor requires it.
+			if height >= s.currentEthBlockNumber() {
+				nonce, nonceErr := s.nextConfirmedReplayProtectedNonceForExplicitBlock(st, address, height)
+				if nonceErr != nil {
+					return nil, nonceErr
+				}
+				nonce, nonceErr = s.capConfirmedNonceByLocalPending(st, address.String(), nonce)
+				if nonceErr != nil {
+					return nil, nonceErr
+				}
+				return hexutil.Uint64(nonce), nil
 			}
 			return hexutil.Uint64(height), nil
 		}
@@ -1651,6 +1675,53 @@ func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) 
 	return
 }
 
+// lowestPendingNonceForAddress() returns the lowest still-live pending nonce for the sender.
+func (s *Server) lowestPendingNonceForAddress(st *store.Store, address string) (lowest uint64, ok bool, err error) {
+	address = strings.ToLower(address)
+	pseudoPendingTxsMap.Range(func(key, value any) bool {
+		hash := strings.ToLower(key.(string))
+		pending := value.(*ethPendingTx)
+		if pendingTxExpired(pending) {
+			clearPendingEthTx(hash)
+			return true
+		}
+		if tx, block, lookupErr := s.findIndexedTxByHash(st, hash); lookupErr != nil {
+			err = lookupErr
+			return false
+		} else if tx != nil && block != nil {
+			clearPendingEthTx(hash)
+			return true
+		}
+		if pending.Tx == nil || strings.ToLower(senderFromTransaction(pending.Tx)) != address {
+			return true
+		}
+		nonce := pending.Tx.CreatedHeight
+		if !ok || nonce < lowest {
+			lowest, ok = nonce, true
+		}
+		return true
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	s.controller.Mempool.L.Lock()
+	defer s.controller.Mempool.L.Unlock()
+	for _, txBz := range s.controller.Mempool.GetTransactions(math.MaxUint64) {
+		tx := new(lib.Transaction)
+		if err := lib.Unmarshal(txBz, tx); err != nil {
+			continue
+		}
+		if strings.ToLower(senderFromTransaction(tx)) != address {
+			continue
+		}
+		nonce := tx.CreatedHeight
+		if !ok || nonce < lowest {
+			lowest, ok = nonce, true
+		}
+	}
+	return
+}
+
 // findPendingEthTx() resolves a pending tx by hash from the live mempool, with a short local grace fallback after eviction.
 func (s *Server) findPendingEthTx(hash string) *ethPendingTx {
 	hash = strings.ToLower(hash)
@@ -1737,6 +1808,48 @@ func (s *Server) nextConfirmedReplayProtectedNonce(st *store.Store, address cryp
 	return nonce, nil
 }
 
+// nextConfirmedReplayProtectedNonceForExplicitBlock returns a compatibility-safe confirmed nonce
+// for explicit current/future numeric block tags without obsoleting a just-submitted tx solely
+// because the chain head advanced by one block.
+func (s *Server) nextConfirmedReplayProtectedNonceForExplicitBlock(st *store.Store, address crypto.AddressI, height uint64) (uint64, error) {
+	nonce := uint64(0)
+	if height != 0 {
+		nonce = height - 1
+	}
+	maxNonce := s.maximumAcceptedEthereumNonce()
+	if confirmedNonce, ok, err := st.GetHighestConfirmedEthereumReplayNonce(address); err != nil {
+		return 0, err
+	} else if ok {
+		if confirmedNonce >= maxNonce {
+			return 0, fmt.Errorf("no replay-safe nonce available within accepted window")
+		}
+		if confirmedNonce == math.MaxUint64 {
+			return math.MaxUint64, nil
+		}
+		confirmedFloor := confirmedNonce + 1
+		if confirmedFloor > nonce {
+			nonce = confirmedFloor
+		}
+	}
+	if nonce > maxNonce {
+		nonce = maxNonce
+	}
+	return nonce, nil
+}
+
+// capConfirmedNonceByLocalPending prevents confirmed-state nonce views from jumping past
+// the sender's earliest unresolved local pending replay nonce before that tx is observable as mined.
+func (s *Server) capConfirmedNonceByLocalPending(st *store.Store, address string, nonce uint64) (uint64, error) {
+	lowestPending, ok, err := s.lowestPendingNonceForAddress(st, address)
+	if err != nil {
+		return 0, err
+	}
+	if ok && lowestPending < nonce {
+		return lowestPending, nil
+	}
+	return nonce, nil
+}
+
 // nextPendingReplayProtectedNonce() returns the next replay-safe nonce including local pending state.
 func (s *Server) nextPendingReplayProtectedNonce(st *store.Store, address crypto.AddressI) (uint64, error) {
 	nonce, err := s.nextConfirmedReplayProtectedNonce(st, address)
@@ -1774,6 +1887,7 @@ func (s *Server) blockHeightFromNumberArg(args []any, position int) (uint64, err
 }
 
 // findIndexedTxByHash() resolves a mined tx by stored Canopy hash or persisted Ethereum-hash alias.
+// Cached blocks are only trusted to complete an already-indexed tx while block rows are catching up.
 func (s *Server) findIndexedTxByHash(st *store.Store, hash string) (*lib.TxResult, *lib.BlockResult, error) {
 	txHash, err := lib.StringToBytes(cleanHex(hash))
 	if err == nil {
@@ -1794,11 +1908,6 @@ func (s *Server) findIndexedTxByHash(st *store.Store, hash string) (*lib.TxResul
 				return tx, nil, nil
 			}
 			return nil, nil, blockErr
-		}
-		if cachedTx, cachedBlock, cacheErr := st.FindCachedTxByHash(txHash); cacheErr != nil {
-			return nil, nil, cacheErr
-		} else if cachedTx != nil && cachedBlock != nil {
-			return cachedTx, cachedBlock, nil
 		}
 	}
 	return nil, nil, nil

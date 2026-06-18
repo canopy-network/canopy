@@ -81,6 +81,33 @@ func TestDeleteTxsForHeightRemovesEthereumHashAlias(t *testing.T) {
 	require.True(t, got == nil || got.TxHash == "")
 }
 
+func TestDeleteTxsForHeightEvictsCachedBlock(t *testing.T) {
+	store, _, cleanup := testStore(t)
+	defer cleanup()
+
+	txResult, ethHash := newRLPBackedTxResult(t)
+	block := &lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: testHeight,
+			Hash:   bytes.Repeat([]byte{0x33}, 32),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+		Transactions: []*lib.TxResult{txResult},
+	}
+	require.NoError(t, store.IndexBlock(block))
+	_, err := store.Commit()
+	require.NoError(t, err)
+
+	_, err = store.GetBlockByHeight(testHeight)
+	require.NoError(t, err)
+	require.NoError(t, store.DeleteTxsForHeight(testHeight))
+
+	gotTx, gotBlock, err := store.FindCachedTxByHash(ethHash.Bytes())
+	require.NoError(t, err)
+	require.Nil(t, gotTx)
+	require.Nil(t, gotBlock)
+}
+
 func TestGetHighestConfirmedEthereumReplayNonce(t *testing.T) {
 	store, _, cleanup := testStore(t)
 	defer cleanup()

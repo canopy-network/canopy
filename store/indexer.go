@@ -377,6 +377,8 @@ func (t *Indexer) GetHighestConfirmedEthereumReplayNonce(address crypto.AddressI
 
 // DeleteTxsForHeight() deletes the transaction object for a specific height
 func (t *Indexer) DeleteTxsForHeight(height uint64) lib.ErrorI {
+	// Evict any warmed block snapshot so deleted tx rows cannot still leak through recent cache lookups.
+	blockCache.Remove(height)
 	txs, err := t.GetTxsByHeightNonPaginated(height, false)
 	if err != nil {
 		return err
