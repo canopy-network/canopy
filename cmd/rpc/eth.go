@@ -373,17 +373,13 @@ func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 		case earliestBlockTag:
 			return hexutil.Uint64(0), nil
 		case latestBlockTag:
-			nonce, nonceErr := s.nextConfirmedReplayProtectedNonce(st, address)
-			if nonceErr != nil {
-				return nil, nonceErr
-			}
-			nonce, nonceErr = s.capConfirmedNonceByLocalPending(st, address.String(), nonce)
+			nonce, nonceErr := s.nextLatestReplayProtectedNonce(st, address, s.currentEthBlockNumber())
 			if nonceErr != nil {
 				return nil, nonceErr
 			}
 			return hexutil.Uint64(nonce), nil
 		case safeBlockTag, finalizedBlockTag:
-			nonce, nonceErr := s.nextConfirmedReplayProtectedNonce(st, address)
+			nonce, nonceErr := s.nextConfirmedReplayProtectedNonce(st, address, s.currentEthBlockNumber())
 			if nonceErr != nil {
 				return nil, nonceErr
 			}
@@ -403,11 +399,11 @@ func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 			// before its receipt becomes visible. For current/future numeric tags, keep that confirmed
 			// view from jumping ahead of the prior head unless a confirmed sender floor requires it.
 			if height >= s.currentEthBlockNumber() {
-				nonce, nonceErr := s.nextConfirmedReplayProtectedNonceForExplicitBlock(st, address, height)
-				if nonceErr != nil {
-					return nil, nonceErr
+				base := uint64(0)
+				if height != 0 {
+					base = height - 1
 				}
-				nonce, nonceErr = s.capConfirmedNonceByLocalPending(st, address.String(), nonce)
+				nonce, nonceErr := s.nextLatestReplayProtectedNonce(st, address, base)
 				if nonceErr != nil {
 					return nil, nonceErr
 				}
@@ -1628,8 +1624,8 @@ func clearPendingEthTx(hash string) {
 	pseudoPendingTxsMap.Delete(hash)
 }
 
-// highestPendingNonceForAddress() returns the highest still-live pending nonce for the sender.
-func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) (highest uint64, ok bool, err error) {
+// pendingNonceRangeForAddress() returns the lowest and highest still-live pending nonces for the sender.
+func (s *Server) pendingNonceRangeForAddress(st *store.Store, address string) (lowest, highest uint64, ok bool, err error) {
 	address = strings.ToLower(address)
 	pseudoPendingTxsMap.Range(func(key, value any) bool {
 		hash := strings.ToLower(key.(string))
@@ -1649,13 +1645,20 @@ func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) 
 			return true
 		}
 		nonce := pending.Tx.CreatedHeight
-		if !ok || nonce > highest {
-			highest, ok = nonce, true
+		if !ok {
+			lowest, highest, ok = nonce, nonce, true
+			return true
+		}
+		if nonce < lowest {
+			lowest = nonce
+		}
+		if nonce > highest {
+			highest = nonce
 		}
 		return true
 	})
 	if err != nil {
-		return 0, false, err
+		return 0, 0, false, err
 	}
 	s.controller.Mempool.L.Lock()
 	defer s.controller.Mempool.L.Unlock()
@@ -1668,55 +1671,15 @@ func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) 
 			continue
 		}
 		nonce := tx.CreatedHeight
-		if !ok || nonce > highest {
-			highest, ok = nonce, true
-		}
-	}
-	return
-}
-
-// lowestPendingNonceForAddress() returns the lowest still-live pending nonce for the sender.
-func (s *Server) lowestPendingNonceForAddress(st *store.Store, address string) (lowest uint64, ok bool, err error) {
-	address = strings.ToLower(address)
-	pseudoPendingTxsMap.Range(func(key, value any) bool {
-		hash := strings.ToLower(key.(string))
-		pending := value.(*ethPendingTx)
-		if pendingTxExpired(pending) {
-			clearPendingEthTx(hash)
-			return true
-		}
-		if tx, block, lookupErr := s.findIndexedTxByHash(st, hash); lookupErr != nil {
-			err = lookupErr
-			return false
-		} else if tx != nil && block != nil {
-			clearPendingEthTx(hash)
-			return true
-		}
-		if pending.Tx == nil || strings.ToLower(senderFromTransaction(pending.Tx)) != address {
-			return true
-		}
-		nonce := pending.Tx.CreatedHeight
-		if !ok || nonce < lowest {
-			lowest, ok = nonce, true
-		}
-		return true
-	})
-	if err != nil {
-		return 0, false, err
-	}
-	s.controller.Mempool.L.Lock()
-	defer s.controller.Mempool.L.Unlock()
-	for _, txBz := range s.controller.Mempool.GetTransactions(math.MaxUint64) {
-		tx := new(lib.Transaction)
-		if err := lib.Unmarshal(txBz, tx); err != nil {
+		if !ok {
+			lowest, highest, ok = nonce, nonce, true
 			continue
 		}
-		if strings.ToLower(senderFromTransaction(tx)) != address {
-			continue
+		if nonce < lowest {
+			lowest = nonce
 		}
-		nonce := tx.CreatedHeight
-		if !ok || nonce < lowest {
-			lowest, ok = nonce, true
+		if nonce > highest {
+			highest = nonce
 		}
 	}
 	return
@@ -1784,9 +1747,8 @@ func (s *Server) maximumAcceptedEthereumNonce() uint64 {
 	return height + fsm.BlockAcceptanceRange
 }
 
-// nextConfirmedReplayProtectedNonce() returns the next confirmed replay-safe nonce for an address.
-func (s *Server) nextConfirmedReplayProtectedNonce(st *store.Store, address crypto.AddressI) (uint64, error) {
-	nonce := s.currentEthBlockNumber()
+// nextConfirmedReplayProtectedNonce() returns the next confirmed replay-safe nonce for an address from the supplied base view.
+func (s *Server) nextConfirmedReplayProtectedNonce(st *store.Store, address crypto.AddressI, nonce uint64) (uint64, error) {
 	maxNonce := s.maximumAcceptedEthereumNonce()
 	if confirmedNonce, ok, err := st.GetHighestConfirmedEthereumReplayNonce(address); err != nil {
 		return 0, err
@@ -1808,39 +1770,13 @@ func (s *Server) nextConfirmedReplayProtectedNonce(st *store.Store, address cryp
 	return nonce, nil
 }
 
-// nextConfirmedReplayProtectedNonceForExplicitBlock returns a compatibility-safe confirmed nonce
-// for explicit current/future numeric block tags without obsoleting a just-submitted tx solely
-// because the chain head advanced by one block.
-func (s *Server) nextConfirmedReplayProtectedNonceForExplicitBlock(st *store.Store, address crypto.AddressI, height uint64) (uint64, error) {
-	nonce := uint64(0)
-	if height != 0 {
-		nonce = height - 1
-	}
-	maxNonce := s.maximumAcceptedEthereumNonce()
-	if confirmedNonce, ok, err := st.GetHighestConfirmedEthereumReplayNonce(address); err != nil {
+// nextLatestReplayProtectedNonce returns the confirmed replay-safe nonce, clamped by the earliest unresolved local pending nonce.
+func (s *Server) nextLatestReplayProtectedNonce(st *store.Store, address crypto.AddressI, base uint64) (uint64, error) {
+	nonce, err := s.nextConfirmedReplayProtectedNonce(st, address, base)
+	if err != nil {
 		return 0, err
-	} else if ok {
-		if confirmedNonce >= maxNonce {
-			return 0, fmt.Errorf("no replay-safe nonce available within accepted window")
-		}
-		if confirmedNonce == math.MaxUint64 {
-			return math.MaxUint64, nil
-		}
-		confirmedFloor := confirmedNonce + 1
-		if confirmedFloor > nonce {
-			nonce = confirmedFloor
-		}
 	}
-	if nonce > maxNonce {
-		nonce = maxNonce
-	}
-	return nonce, nil
-}
-
-// capConfirmedNonceByLocalPending prevents confirmed-state nonce views from jumping past
-// the sender's earliest unresolved local pending replay nonce before that tx is observable as mined.
-func (s *Server) capConfirmedNonceByLocalPending(st *store.Store, address string, nonce uint64) (uint64, error) {
-	lowestPending, ok, err := s.lowestPendingNonceForAddress(st, address)
+	lowestPending, _, ok, err := s.pendingNonceRangeForAddress(st, address.String())
 	if err != nil {
 		return 0, err
 	}
@@ -1852,12 +1788,12 @@ func (s *Server) capConfirmedNonceByLocalPending(st *store.Store, address string
 
 // nextPendingReplayProtectedNonce() returns the next replay-safe nonce including local pending state.
 func (s *Server) nextPendingReplayProtectedNonce(st *store.Store, address crypto.AddressI) (uint64, error) {
-	nonce, err := s.nextConfirmedReplayProtectedNonce(st, address)
+	nonce, err := s.nextConfirmedReplayProtectedNonce(st, address, s.currentEthBlockNumber())
 	if err != nil {
 		return 0, err
 	}
 	maxNonce := s.maximumAcceptedEthereumNonce()
-	if highestPending, ok, err := s.highestPendingNonceForAddress(st, address.String()); err != nil {
+	if _, highestPending, ok, err := s.pendingNonceRangeForAddress(st, address.String()); err != nil {
 		return 0, err
 	} else if ok && highestPending >= nonce {
 		if highestPending >= maxNonce {
