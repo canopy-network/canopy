@@ -1,4 +1,4 @@
-.PHONY: venv install dev test lint format type-check clean proto build docs
+.PHONY: venv install dev test test-unit test-cov test-verbose lint format type-check clean proto build docs
 
 # Virtual environment
 VENV_DIR := .venv
@@ -19,14 +19,21 @@ install: venv
 dev: venv
 	$(PIP) install -e ".[dev]"
 
-# Testing
-test: venv
+# Run the integration tests against a running Canopy node (matches Go's `make test`):
+# the transaction tests AND the custom RPC endpoints test (/v1/query/faucets, /v1/query/rewards).
+# Requires the node running with the python plugin and its RPC server exposed on port 50010.
+test:
+	cd tutorial && $(MAKE) test
+
+# Unit tests (no node required): exercise the Config + Contract logic in isolation.
+# Depends on `dev` so the package deps + pytest are installed into the venv.
+test-unit: dev
 	$(VENV_DIR)/bin/pytest
 
-test-cov: venv
+test-cov: dev
 	$(VENV_DIR)/bin/pytest --cov=plugin --cov-report=html --cov-report=term
 
-test-verbose: venv
+test-verbose: dev
 	$(VENV_DIR)/bin/pytest -v
 
 # Code quality
@@ -70,8 +77,8 @@ serve-dev: venv
 run-plugin: venv
 	$(PYTHON) main.py
 
-# Full validation
-validate: venv lint type-check test
+# Full validation (uses the node-less unit tests)
+validate: venv lint type-check test-unit
 
 # Setup pre-commit hooks
 hooks:

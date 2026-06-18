@@ -37,11 +37,11 @@ clean:
 	rm -rf node_modules/
 
 # Run the integration tests (in tutorial directory).
-# This runs the transaction tests AND the custom RPC endpoints test
-# (/v1/query/faucets, /v1/query/rewards) — the latter needs the plugin's RPC server on port 50010.
+# `npm test` runs the default "all" selector: the transaction tests AND the custom RPC endpoints
+# test (/v1/query/faucets, /v1/query/rewards) — the latter needs the plugin's RPC server on port 50010.
 test:
 	@echo "Running tests..."
-	cd tutorial && npm install && npm test && npm test -- custom
+	cd tutorial && npm install && npm test
 
 # Run the application
 run:
