@@ -31,6 +31,16 @@ work and pins down exactly what data the devs must supply.
 Deployment cannot proceed until the team supplies all of the following. This is
 the critical hand-off — everything else is execution.
 
+**Status snapshot (2026-06-18):**
+
+| Section | What | Status |
+|---|---|---|
+| A | Genesis bucket recipient addresses | ✅ supplied (2026-06-18) |
+| B | Multisig signers | ⏳ pending — `genesis.testnet.json` still carries `…b1`–`…b5` placeholders |
+| C | Validator registry | ⏳ pending — still `…c01`, `…c02` placeholders |
+| D | Chain parameters (`chainId`, `redemptionUnstakingBlocks`) | ⏳ pending — `chainId: 2` / `redemptionUnstakingBlocks: 14400` are the template defaults |
+| E | Off-chain coordination facts | ⏳ pending (one item closed: bucket-#2/#3 recipients are controlled distributors, confirmed 2026-06-18) |
+
 ### A. Genesis bucket recipient addresses → `genesis.testnet.json` `buckets[].recipients[].address`  ✅ supplied 2026-06-18
 One 20-byte hex address per bucket (7 total). Must be team-controlled testnet
 wallets; **none may equal** the localnet placeholder `851e90…d123` (safety check
@@ -55,38 +65,46 @@ for buckets #2 and #3 are controlled distributors that honor those schedules;
 see [the discrepancy report](./canoliq-whitepaper-tokenomics-discrepancies.md)
 for the audit trail.
 
-### B. Multisig signers → `genesis.testnet.json` `params.multisigSigners[]`
+### B. Multisig signers → `genesis.testnet.json` `params.multisigSigners[]`  ⏳ pending
 - N signer addresses (20-byte hex). `multisigThreshold` (default 3) must be ≤ N.
 - Optional: a lower `treasuryThreshold` for testnet so the multisig path is
   actually exercised on modest spends.
+- *Current placeholders in the file:* `00000000…b1` through `00000000…b5`,
+  threshold `3`, treasuryThreshold `1_000_000_000`.
 
-### C. Validator registry → `genesis.testnet.json` `validatorRegistry[]`
+### C. Validator registry → `genesis.testnet.json` `validatorRegistry[]`  ⏳ pending
 - Per opted-in committee validator: `address` (matches Canopy `Validator.Address`)
   + `stake` (mirror their `StakedAmount` in uCNPY-equivalent).
 - *Optional but strongly recommended* — leaving it empty falls back to a single
   aggregator key and obscures per-validator reward credit.
+- *Current placeholders in the file:* `0000…c01` (stake 1B) and `0000…c02` (stake 1B).
 
-### D. Chain parameters → `canoliq-config.testnet.json`
+### D. Chain parameters → `canoliq-config.testnet.json`  ⏳ pending
 - `chainId`: the value **reserved with the Canopy team** (no collision with an
-  existing committee).
+  existing committee). *Current file value:* `2` (template default — confirm
+  with the Canopy team whether this is the reserved testnet value).
 - `redemptionUnstakingBlocks`: must match the **Canopy testnet's
-  `valParams.UnstakingBlocks`** (the template's 14400 is a guess).
+  `valParams.UnstakingBlocks`**. *Current file value:* `14400` (the template's
+  guess — confirm against the live testnet value).
 
 ### E. Off-chain coordination facts (not file edits, but gating)
-- Confirmation the **chainId is reserved**.
+- Confirmation the **chainId is reserved**.  ⏳ pending
 - A **`MessageSubsidy` proposal** queued/passed on the Canopy DAO (until it passes,
-  `ProcessRewards` is a no-op — no rewards flow).
+  `ProcessRewards` is a no-op — no rewards flow).  ⏳ pending
 - Confirmation each committee validator has run **`MessageEditStake`** adding the
-  chainId to `Validator.Committees[]`.
-- Webhook URL(s) for alerts (optional) → `CANOLIQ_ALERT_URL` / `alerts` config.
+  chainId to `Validator.Committees[]`.  ⏳ pending
+- Webhook URL(s) for alerts (optional) → `CANOLIQ_ALERT_URL` / `alerts` config.  ⏳ pending
+- **(Closed 2026-06-18)** Bucket #2 / #3 recipient addresses are controlled
+  distributors that honor the off-chain emission schedule (see §A footnote).
 
 ---
 
-## Workstream 1 — Wire dev-provided data (once A–D arrive)
+## Workstream 1 — Wire dev-provided data (once B–D arrive; A already wired)
 
-Edit the two committed files and re-verify invariants.
+Edit the two committed files and re-verify invariants. A landed in commit
+`f3fa10e2`; B, C, D remain.
 
-- `plugin/go/canoliq/genesis.testnet.json` — replace the 7 bucket addresses,
+- `plugin/go/canoliq/genesis.testnet.json` — ~~replace the 7 bucket addresses~~ ✅,
   the multisig signers, and the validator registry entries; adjust
   `multisigThreshold` / `treasuryThreshold` if requested.
 - `plugin/go/canoliq/canoliq-config.testnet.json` — set `chainId` +
