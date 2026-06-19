@@ -1,6 +1,9 @@
 package canoliq
 
 import (
+	"bytes"
+	"sort"
+
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -19,7 +22,7 @@ func (s *fakeStore) set(key, value []byte)    { s.data[string(key)] = value }
 func (s *fakeStore) del(key []byte)           { delete(s.data, string(key)) }
 
 func (s *fakeStore) read(req *contract.PluginStateReadRequest) *contract.PluginStateReadResponse {
-	results := make([]*contract.PluginReadResult, 0, len(req.Keys))
+	results := make([]*contract.PluginReadResult, 0, len(req.Keys)+len(req.Ranges))
 	for _, k := range req.Keys {
 		v := s.get(k.Key)
 		if v == nil {
@@ -29,6 +32,42 @@ func (s *fakeStore) read(req *contract.PluginStateReadRequest) *contract.PluginS
 		results = append(results, &contract.PluginReadResult{
 			QueryId: k.QueryId,
 			Entries: []*contract.PluginStateEntry{{Key: k.Key, Value: v}},
+		})
+	}
+	// Range reads: mirror fsm/state.go::StateRead's iterator. Collect all keys
+	// with the given prefix, sort lexicographically (reverse if requested),
+	// honor Limit, return as Entries. Sort matters: the stuck-redemption alert
+	// (and any future range-based reader) assumes ascending lex order maps to
+	// the desired sort key (e.g. mature_height in the key prefix).
+	for _, r := range req.Ranges {
+		var matches []string
+		for k := range s.data {
+			if bytes.HasPrefix([]byte(k), r.Prefix) {
+				matches = append(matches, k)
+			}
+		}
+		if r.Reverse {
+			sort.Sort(sort.Reverse(sort.StringSlice(matches)))
+		} else {
+			sort.Strings(matches)
+		}
+		limit := r.Limit
+		if limit == 0 {
+			limit = ^uint64(0) // "0 limit" semantics in fsm = unlimited
+		}
+		var entries []*contract.PluginStateEntry
+		for i, k := range matches {
+			if uint64(i) >= limit {
+				break
+			}
+			entries = append(entries, &contract.PluginStateEntry{
+				Key:   []byte(k),
+				Value: s.data[k],
+			})
+		}
+		results = append(results, &contract.PluginReadResult{
+			QueryId: r.QueryId,
+			Entries: entries,
 		})
 	}
 	return &contract.PluginStateReadResponse{Results: results}

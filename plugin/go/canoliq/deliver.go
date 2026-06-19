@@ -230,6 +230,11 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 		{Key: KeyForRedemption(msg.FromAddress, id), Value: rBz},
 		{Key: redemIdxKey, Value: riBz},
 		{Key: feePoolKey, Value: feeBz},
+		// Global mature-redemption index: lets the stuck-redemption alert
+		// evaluator range-scan keys ≤ currentHeight in one call. Key shape
+		// puts UnbondCompleteHeight first so lexicographic order matches
+		// maturity order. Deleted when the redemption is claimed.
+		{Key: KeyForMatureRedemption(redemption.UnbondCompleteHeight, msg.FromAddress, id), Value: matureRedemptionMarker},
 	}
 	var deletes []*contract.PluginDeleteOp
 	if bal == 0 {
@@ -346,7 +351,12 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 		{Key: globalsKey, Value: gBz},
 		{Key: feePoolKey, Value: feeBz},
 	}
-	deletes := []*contract.PluginDeleteOp{{Key: rKey}}
+	deletes := []*contract.PluginDeleteOp{
+		{Key: rKey},
+		// Remove the global mature-redemption index entry so the
+		// stuck-redemption alert evaluator stops counting this one.
+		{Key: KeyForMatureRedemption(redemption.UnbondCompleteHeight, msg.FromAddress, msg.RedemptionId)},
+	}
 	redemIdx.Ids = removeUint64(redemIdx.Ids, msg.RedemptionId)
 	if len(redemIdx.Ids) == 0 {
 		deletes = append(deletes, &contract.PluginDeleteOp{Key: redemIdxKey})

@@ -134,6 +134,10 @@ type AlertConfig struct {
 	// TvlDropBps fires when TVL drops more than this fraction over the window
 	// (default 2000 = 20%).
 	TvlDropBps uint64 `json:"tvlDropBps,omitempty"`
+	// StuckRedemptionCount fires when the number of mature unclaimed
+	// redemptions exceeds this value (default 10). Counts the global
+	// mature-redemption index up to current height; severity crit.
+	StuckRedemptionCount uint64 `json:"stuckRedemptionCount,omitempty"`
 }
 
 // localnetPlaceholderAddress is the single hex address every bundled

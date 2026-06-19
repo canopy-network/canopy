@@ -1,6 +1,7 @@
 package canoliq
 
 import (
+	"bytes"
 	"encoding/binary"
 )
 
@@ -35,6 +36,7 @@ var (
 	domainRedeemIndex   = []byte{21}
 	domainUnstakeIndex  = []byte{22}
 	domainAlertState    = []byte{23}
+	domainMatureRedeem  = []byte{24}
 
 	treasuryCanopy = []byte("canopy")
 	treasuryCliq   = []byte("cliq")
@@ -213,6 +215,49 @@ func KeyForValidatorRegistry() []byte {
 // KeyForAlertState returns the per-kind alert bookkeeping key (T6).
 func KeyForAlertState(kind string) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainAlertState, []byte(kind))
+}
+
+// KeyForMatureRedemption returns the global mature-redemption index entry for
+// a queued redemption. Layout is `prefix | domainMatureRedeem | matureHeight |
+// addr | redemptionID` so lexicographic order matches maturity order — a
+// range scan up to current height efficiently lists all mature unclaimed
+// redemptions for the stuck-redemption alert (T6 follow-up). Value is the
+// presence marker `matureRedemptionMarker`; the full Redemption record
+// remains at `KeyForRedemption(addr, id)`.
+func KeyForMatureRedemption(matureHeight uint64, addr []byte, redemptionID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainMatureRedeem, FormatUint64(matureHeight), addr, FormatUint64(redemptionID))
+}
+
+// MatureRedemptionPrefix returns the prefix used to range-scan the
+// mature-redemption index (for the stuck-redemption alert evaluator).
+func MatureRedemptionPrefix() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainMatureRedeem)
+}
+
+// matureRedemptionMarker is a one-byte presence marker stored at each
+// mature-redemption index key. Non-empty so StateRead can disambiguate
+// "present with empty value" from "absent" — though for this index we only
+// ever care about presence.
+var matureRedemptionMarker = []byte{0x01}
+
+// ParseMatureRedemptionHeight extracts the encoded `matureHeight` from a
+// mature-redemption index key produced by KeyForMatureRedemption. Returns
+// `(height, true)` on a recognised key; `(0, false)` when the key does not
+// belong to the mature-redemption index. Used by the stuck-redemption alert
+// evaluator to skip entries whose maturity has not yet arrived.
+func ParseMatureRedemptionHeight(key []byte) (uint64, bool) {
+	pre := MatureRedemptionPrefix()
+	if len(key) < len(pre)+9 {
+		return 0, false
+	}
+	if !bytes.Equal(key[:len(pre)], pre) {
+		return 0, false
+	}
+	// After the prefix sits a length-prefixed 8-byte big-endian height.
+	if key[len(pre)] != 8 {
+		return 0, false
+	}
+	return binary.BigEndian.Uint64(key[len(pre)+1 : len(pre)+9]), true
 }
 
 // EncodeUint64 returns the 8-byte big-endian encoding of n. Used for storing
