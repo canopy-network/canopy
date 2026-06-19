@@ -5,13 +5,15 @@
 - `canoLiq_Whitepaper_v1.1.pdf` (Technical Whitepaper, Version 1.1, May 2025)
 - `canoLiq_Tokenomics_v1.1.pdf` (CLIQ Token Design & Protocol Economics, v1.1, May 2025)
 
-> **Status (verified 2026-06-18): All four doc-vs-doc discrepancies are resolved in v1.2.**
-> See [§ Resolution in v1.2](#resolution-in-v12-verified-2026-06-18) at the end of this
-> document for the per-item verification against `canoLiq_Whitepaper_v1.2.pdf` and
-> `canoLiq_Tokenomics_v1.2.pdf`. The Community & Airdrops genesis-vesting gap noted in
-> [§ Additional code/doc gap](#additional-code-doc-gap-community--airdrops) is *not* a
-> docs issue and remains open pending dev-team confirmation that the bucket recipient
-> is a controlled distributor.
+> **Status (verified 2026-06-18, closed 2026-06-18): All findings resolved.**
+> All four doc-vs-doc discrepancies are fixed in v1.2 — see
+> [§ Resolution in v1.2](#resolution-in-v12-verified-2026-06-18) for the per-item
+> verification against `canoLiq_Whitepaper_v1.2.pdf` and `canoLiq_Tokenomics_v1.2.pdf`.
+> The Community & Airdrops genesis-vesting gap noted in
+> [§ Additional code/doc gap](#additional-code-doc-gap-community--airdrops) was a
+> distributor-vs-genesis question, not a doc-vs-doc one; the dev team has confirmed
+> that the bucket #3 recipient is a controlled distributor that enforces the
+> 12-month linear emission, so no docs or genesis change is required.
 
 ---
 
@@ -112,6 +114,9 @@ distribution (Community) and 24-month emission (Liquidity).
   enforced by the genesis vesting mechanism. It must be handled by the distributor
   address receiving the bucket. Confirm this so the airdrop is not unintentionally fully
   unlocked at launch.
+  - **Resolved 2026-06-18:** dev team confirmed the bucket #3 recipient in
+    `genesis.testnet.json` is a controlled distributor that enforces the 12-month
+    linear emission. No genesis or doc change required.
 
 ## Recommended actions
 
@@ -187,13 +192,18 @@ The Tokenomics doc, which previously never named the default, now states it in t
 
 Whitepaper v1.2 §8.1 (p. 9) is unchanged: Buyback Mechanism default = "Burn".
 
-### Still open (not a doc-vs-doc issue)
+### Community & Airdrops genesis-vesting gap — closed 2026-06-18
 
-The Community & Airdrops genesis-vesting gap (see
-[§ Additional code/doc gap](#additional-code-doc-gap-community--airdrops)) is unchanged
-in v1.2 and cannot be fixed by docs alone. The v1.2 Tokenomics §6 summary still lists
-the bucket as Cliff "None" / Duration "12 months / Snapshot-based; linear daily emission",
-which is internally consistent with an off-chain distributor enforcing the schedule.
-The on-chain genesis vesting (`cliffMonths: 0, vestMonths: 0`) is fine **only if** the
-bucket recipient is a controlled distributor address. Confirm with the dev team that
-this is the case for the testnet genesis address now populated for bucket #3.
+The Community & Airdrops bucket carries `cliffMonths: 0, vestMonths: 0` in
+`plugin/go/canoliq/genesis.testnet.json`, which means the on-chain vesting mechanism
+does *not* enforce the 12-month linear emission described by both v1.2 docs (see the
+Tokenomics §6 summary on p. 7). That schedule must therefore be enforced off-chain by
+whatever address holds the bucket.
+
+**Dev confirmation (2026-06-18):** the address now populated for bucket #3
+(`7d941def…e478` in `genesis.testnet.json`) is a controlled distributor that enforces
+the 12-month linear emission. The on-chain `0/0` is therefore intentional and not a
+doc/code conflict.
+
+No further action required for the v1.1 ↔ v1.2 reconciliation. This whole report
+can be considered closed.
