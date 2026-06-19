@@ -1065,6 +1065,17 @@ liquid CLIQ balance immediately; otherwise the plugin writes a
 unlock vested CLIQ. Update the placeholder hex addresses (`...a1` … `...a7`)
 before running mainnet.
 
+⚠️ **Buckets with `0/0` are not all "no schedule".** For *Liquidity Incentives*
+and *Community & Airdrops* the on-chain `0/0` is intentional: the tokenomics
+schedule (24-month DAO-controlled emission for Liquidity, 12-month snapshot-based
+linear emission for Community & Airdrops) is enforced **off-chain by the bucket
+recipient** — a distributor contract or controlled multisig — not by the genesis
+vesting mechanism. The recipient address you supply for these two buckets must
+honor that schedule; otherwise the full allocation goes liquid at TGE. The other
+`0/0` buckets (*DAO Treasury*, *Dev Grants & Ecosystem*) intentionally have no
+schedule — Treasury is governed by timelock-multisig spend rules, and Dev Grants
+release in milestone-gated tranches at the DAO's discretion.
+
 ## Transaction reference
 
 | Tx | Effect |

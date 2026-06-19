@@ -31,20 +31,29 @@ work and pins down exactly what data the devs must supply.
 Deployment cannot proceed until the team supplies all of the following. This is
 the critical hand-off — everything else is execution.
 
-### A. Genesis bucket recipient addresses → `genesis.testnet.json` `buckets[].recipients[].address`
+### A. Genesis bucket recipient addresses → `genesis.testnet.json` `buckets[].recipients[].address`  ✅ supplied 2026-06-18
 One 20-byte hex address per bucket (7 total). Must be team-controlled testnet
 wallets; **none may equal** the localnet placeholder `851e90…d123` (safety check
 rejects it). The dev team should document who controls each:
 
-| # | Bucket | bps | Vesting | Address needed |
+| # | Bucket | bps | On-chain vesting | Status / Address |
 |---|---|---|---|---|
-| 1 | Validators & Infrastructure | 2200 | 12mo cliff / 3yr | ❓ |
-| 2 | Liquidity Incentives | 1500 | none | ❓ |
-| 3 | Community & Airdrops | 2000 | none | ❓ |
-| 4 | DAO Treasury (canoLiq) | 1500 | none | ❓ |
-| 5 | Founders & Core Team | 1200 | 12mo cliff / 4yr | ❓ |
-| 6 | Strategic Partners & Integrations | 1000 | 6mo cliff / 18mo | ❓ |
-| 7 | Developer Grants & Ecosystem | 600 | none | ❓ |
+| 1 | Validators & Infrastructure | 2200 | 12mo cliff / 3yr | ✅ `83e993da…58cb` |
+| 2 | Liquidity Incentives | 1500 | none (off-chain ⚠️) | ✅ `5c9de695…4206` |
+| 3 | Community & Airdrops | 2000 | none (off-chain ⚠️) | ✅ `7d941def…e478` |
+| 4 | DAO Treasury (canoLiq) | 1500 | none | ✅ `69679898…b4bf` |
+| 5 | Founders & Core Team | 1200 | 12mo cliff / 4yr | ✅ `4a0b0aa3…4d22` |
+| 6 | Strategic Partners & Integrations | 1000 | 6mo cliff / 18mo | ✅ `8e2c25c9…6d24` |
+| 7 | Developer Grants & Ecosystem | 600 | none | ✅ `81be5fbd…8f87` |
+
+⚠️ **Buckets #2 and #3 carry an off-chain schedule.** Their `0/0` on-chain
+vesting is intentional — the v1.2 tokenomics schedule is enforced by the bucket
+recipient, not by the genesis vesting mechanism (24-month DAO-controlled
+emission for Liquidity Incentives; 12-month snapshot-based linear emission for
+Community & Airdrops). Dev team confirmed (2026-06-18) that the addresses above
+for buckets #2 and #3 are controlled distributors that honor those schedules;
+see [the discrepancy report](./canoliq-whitepaper-tokenomics-discrepancies.md)
+for the audit trail.
 
 ### B. Multisig signers → `genesis.testnet.json` `params.multisigSigners[]`
 - N signer addresses (20-byte hex). `multisigThreshold` (default 3) must be ≤ N.
