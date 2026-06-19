@@ -8,10 +8,10 @@ All routes are `GET` only.
 
 | Path | Returns |
 |------|---------|
-| `/v1/health` | `{height, genesisComplete, chainId}` |
+| `/v1/health` | `{height, genesisComplete, chainId, tvlCapUcnpy, tvlUtilizationBps}` |
 | `/v1/globals` | `CanoliqGlobals` (singleton accounting record) |
 | `/v1/params` | `CanoliqParams` (governance-tunable knobs) |
-| `/v1/pools` | Committee pool, treasury (CNPY/CLIQ), buyback, insurance, per-validator incentives |
+| `/v1/pools` | Committee pool, treasury (CNPY/CLIQ), buyback, insurance, per-validator incentives, peak TVL, insurance target & funded-bps |
 | `/v1/account/{addr}` | Composite per-address view: CNPY + cCNPY + liquid CLIQ + stake + validator-incentive + vesting |
 | `/v1/proposals` | Active proposal id list |
 | `/v1/proposal/{id}` | Full `Proposal` record |
@@ -21,6 +21,8 @@ All routes are `GET` only.
 | `/v1/spend/{id}` | `TreasurySpend` record |
 | `/v1/spend/{id}/approvals` | Multisig approvals filtered to the *current* signer set |
 | `/v1/validators` | `ValidatorRegistry` (canoLiq committee snapshot used for pro-rata) |
+| `/v1/stakers` | Active CLIQ stakers with amount and `stakedAtHeight` |
+| `/v1/graduation` | Autonomy-graduation metrics + composite `eligible` flag |
 | `/v1/redemption/{addr}/{id}` | A queued cCNPY → CNPY redemption record |
 | `/v1/vesting/{addr}` | Every vesting schedule for an address with cumulative unlocked-to-date |
 
@@ -33,9 +35,52 @@ GET /v1/health
 {
   "height": 12345,
   "genesisComplete": true,
-  "chainId": 2
+  "chainId": 2,
+  "tvlCapUcnpy": 0,
+  "tvlUtilizationBps": 0
 }
 ```
+
+`tvlCapUcnpy` is the deposit ceiling (`0` = uncapped) and `tvlUtilizationBps` is how full it
+is in basis points. See [TVL Cap](../advanced/tvl-cap.mdx).
+
+### Pools
+
+```json
+GET /v1/pools
+{
+  "committeePool": "950000000",
+  "treasuryCnpy": "30000000",
+  "treasuryCliq": "0",
+  "buybackPool": "17000000",
+  "insurancePool": "4200000",
+  "validatorIncentives": [],
+  "peakTvlUcnpy": "1050000000",
+  "insuranceTargetUcnpy": "52500000",
+  "insuranceFundedBps": 800
+}
+```
+
+See [Insurance Fund](../advanced/insurance.mdx) for `peakTvlUcnpy`, `insuranceTargetUcnpy`,
+and `insuranceFundedBps`.
+
+### Graduation
+
+```json
+GET /v1/graduation
+{
+  "metrics": [
+    {"name": "tvl_ucnpy",         "value": 12000000000000, "threshold": 50000000000000, "met": false},
+    {"name": "active_validators", "value": 18,             "threshold": 30,             "met": false},
+    {"name": "turnout_bps",       "value": 2100,           "threshold": 1500,           "met": true},
+    {"name": "daily_tx",          "value": 4200,           "threshold": 10000,          "met": false},
+    {"name": "runway_months",     "value": 1000000,        "threshold": 12,             "met": true}
+  ],
+  "eligible": false
+}
+```
+
+See [Autonomy Graduation](../advanced/autonomy-graduation.mdx) for what each metric means.
 
 ### Globals
 

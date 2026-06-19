@@ -1,0 +1,39 @@
+---
+sidebar_label: Glossary
+sidebar_position: 3
+---
+
+# Glossary
+
+Quick definitions of the terms used throughout these docs. Linked terms have a dedicated
+page with the full detail.
+
+| Term | Meaning |
+|------|---------|
+| **CNPY** | Canopy's native coin. canoLiq pools it and stakes it; it does not issue it. Tracked in `uCNPY` (1 CNPY = 1,000,000 uCNPY). |
+| **cCNPY** | Liquid-staking receipt token minted when you deposit CNPY. Its value grows as the exchange rate rises. See [The Two Tokens](./two-tokens.mdx). |
+| **CLIQ** | Fixed-supply (100M) governance token. Stake it to vote and to share in protocol value. Tracked in `uCLIQ`. |
+| **Exchange rate** | `total pooled CNPY ÷ total cCNPY supply`. Rises as staking rewards accrue, making each cCNPY redeemable for more CNPY. |
+| **TVL** | Total Value Locked — the total CNPY pooled in the protocol (`total_pooled_cnpy`). |
+| **Peak TVL** | The highest TVL ever reached. Used to size the [insurance reserve](../advanced/insurance.mdx) target. |
+| **TVL cap** | An optional ceiling on total deposits, used to grow the protocol gradually. See [TVL Cap](../advanced/tvl-cap.mdx). |
+| **Redemption** | A queued cCNPY → CNPY conversion. Matures after an *unbonding window*, then is claimed. |
+| **Unbonding / unstaking window** | The cooldown between requesting an exit (redemption or CLIQ unstake) and being able to claim. |
+| **Protocol fee** | The 12% cut taken from staking rewards, split 40/30/15/15. See [Fee Structure](../tokenomics/fee-structure.mdx). |
+| **Vesting** | Time-released unlocking of genesis CLIQ allocations, with a cliff then linear unlock. See [Vesting](../tokenomics/vesting.mdx). |
+| **Staking (CLIQ)** | Locking CLIQ to gain governance voting weight (distinct from staking CNPY). |
+| **Vote-escrow** | Optionally locking staked CLIQ for 3–24 months to multiply voting weight (up to 4×) and boost rewards. See [Vote-Escrow](../tokenomics/vote-escrow.mdx). |
+| **Proposal** | An on-chain governance motion (fee change, treasury spend, buyback, etc.). |
+| **Quorum** | The minimum total voting weight that must participate for a proposal to count. |
+| **Approval / pass threshold** | The share of yes-vs-no weight needed for a proposal to pass. |
+| **Governance tier** | The per-action rule set (quorum, approval, timelock, voting period) chosen by a proposal's type. See [Governance Tiers](../governance/governance-tiers.mdx). |
+| **Timelock** | A mandatory delay between a proposal passing and its effect executing. |
+| **Snapshot** | A read-only frozen copy of plugin state, published each block, that the HTTP API serves from. |
+| **Buyback** | Using the buyback pool to acquire CLIQ, then either burning it or distributing it to stakers. See [Buyback](../advanced/buyback.mdx). |
+| **Insurance fund** | A reserve skimmed from the treasury slice to cover future losses (e.g. slashing). See [Insurance Fund](../advanced/insurance.mdx). |
+| **Treasury** | DAO-controlled funds (in CNPY and CLIQ) spent via governance, with multisig + timelock above a threshold. See [Treasury](../advanced/treasury.mdx). |
+| **Multisig** | A required set of approving signers for large treasury spends. |
+| **Autonomy graduation** | The milestone where canoLiq, having met five health thresholds, can become a sovereign chain. See [Autonomy Graduation](../advanced/autonomy-graduation.mdx). |
+| **bps** | Basis points. `10,000 bps = 100%`, so `1,200 bps = 12%`. canoLiq expresses fractions in bps to stay in integer math. |
+| **FSM** | Canopy's Finite State Machine — the core that runs consensus. canoLiq plugs into it. |
+| **EndBlock** | The per-block hook where canoLiq sweeps rewards, tallies proposals, executes spends, and evaluates alerts. |

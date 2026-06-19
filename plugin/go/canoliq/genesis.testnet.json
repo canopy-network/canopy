@@ -9,7 +9,7 @@
       "vestMonths": 24,
       "recipients": [
         {
-          "address": "0000000000000000000000000000000000000001",
+          "address": "83e993da4f7489b48dc2488632b85e1b2d1f58cb",
           "bps": 10000
         }
       ]
@@ -21,7 +21,7 @@
       "vestMonths": 0,
       "recipients": [
         {
-          "address": "0000000000000000000000000000000000000002",
+          "address": "5c9de695843551ecf5467b0cf428916e99bb4206",
           "bps": 10000
         }
       ]
@@ -33,7 +33,7 @@
       "vestMonths": 0,
       "recipients": [
         {
-          "address": "0000000000000000000000000000000000000003",
+          "address": "7d941defe4a129128ed3f37a61fec9094c49e478",
           "bps": 10000
         }
       ]
@@ -45,7 +45,7 @@
       "vestMonths": 0,
       "recipients": [
         {
-          "address": "0000000000000000000000000000000000000004",
+          "address": "696798986a6d000fe03555aa72e93dbd6837b4bf",
           "bps": 10000
         }
       ]
@@ -57,7 +57,7 @@
       "vestMonths": 36,
       "recipients": [
         {
-          "address": "0000000000000000000000000000000000000005",
+          "address": "4a0b0aa323b18dc4ce09890a5f90d6198c624d22",
           "bps": 10000
         }
       ]
@@ -69,7 +69,7 @@
       "vestMonths": 12,
       "recipients": [
         {
-          "address": "0000000000000000000000000000000000000006",
+          "address": "8e2c25c9dcbf490b1b22d6d4aa5f598b6ba46d24",
           "bps": 10000
         }
       ]
@@ -81,7 +81,7 @@
       "vestMonths": 0,
       "recipients": [
         {
-          "address": "0000000000000000000000000000000000000007",
+          "address": "81be5fbdc670934a6639b1d7be37fdc08f768f87",
           "bps": 10000
         }
       ]

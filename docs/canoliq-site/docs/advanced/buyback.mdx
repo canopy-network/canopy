@@ -33,9 +33,12 @@ CLIQ is permanently removed from supply. No recipient address.
 ### Distribute Stakers Mode
 
 - Iterates `CLIQStakeIndex.Addresses`
-- Computes `mulDiv(cliqAcquired, stake[s], totalStake)` per staker
-- Credits liquid CLIQ balances
-- Rounding remainder credited to the largest staker
+- Each staker's stake is **boosted by their [vote-escrow lock tier](../tokenomics/vote-escrow.mdx)**
+  before the split: `boosted = stake × (10,000 + boostBps) ÷ 10,000`, so longer locks receive
+  a proportionally larger share (e.g. `LOCK_24M` adds +75%)
+- Computes `mulDiv(cliqAcquired, boosted[s], totalBoosted)` per staker and credits liquid CLIQ
+- Rounding remainder is credited to the largest-stake `LOCK_24M` staker, falling back to the
+  largest staker overall — so the total exactly matches `cliq_acquired`
 - Empty staker set → re-credit `treasury/cliq` (no-op)
 
 ## Self-Contained Order

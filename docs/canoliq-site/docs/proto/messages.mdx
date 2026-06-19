@@ -67,12 +67,15 @@ message MessageCLIQClaimVested {
 
 ### MessageCLIQStake
 
-Locks CLIQ for governance weight.
+Locks CLIQ for governance weight. An optional `lock_tier` commits the stake to a
+[vote-escrow](../tokenomics/vote-escrow.mdx) lock for a higher voting multiplier and reward
+boost; `LOCK_NONE` leaves the stake unstakeable after the standard unbond window.
 
 ```protobuf
 message MessageCLIQStake {
   bytes from_address = 1;
   uint64 amount = 2;
+  LockTier lock_tier = 3;  // LOCK_NONE | LOCK_3M | LOCK_6M | LOCK_12M | LOCK_24M
 }
 ```
 
@@ -154,5 +157,83 @@ Approves an above-threshold spend.
 message MessageMultisigApprove {
   bytes from_address = 1;
   uint64 spend_id = 2;
+}
+```
+
+## Proposal Payloads
+
+A `MessageCLIQProposalCreate` carries one of these payload types in its `payload`
+(`google.protobuf.Any`) field. The payload type determines the proposal's
+[action type / governance tier](../governance/governance-tiers.mdx) and what executes on
+pass.
+
+### ProposalParamChange
+
+Atomically replaces the **entire** `CanoliqParams` set (the fee-split fields must still sum to
+10,000). → `ACTION_FEE_CHANGE`.
+
+```protobuf
+message ProposalParamChange {
+  CanoliqParams params = 1;
+}
+```
+
+### ProposalBuyback
+
+Authorizes one buyback. `cliq_acquired = cnpy_amount × 1_000_000 ÷ price_micro_cnpy_per_cliq`.
+→ executed later by [MessageBuybackExecute](#messagebuybackexecute).
+
+```protobuf
+message ProposalBuyback {
+  uint64 cnpy_amount = 1;                 // drawn from buyback pool (clamped to available)
+  uint64 price_micro_cnpy_per_cliq = 2;   // price denominator
+  BuybackMode mode = 3;                   // BUYBACK_BURN | BUYBACK_DISTRIBUTE_STAKERS
+}
+```
+
+### ProposalTreasurySpend
+
+Authorizes a transfer from a treasury bucket. Amounts above `treasury_threshold` require
+multisig + timelock. → `ACTION_TREASURY_SPEND_SMALL` or `_LARGE` by amount.
+
+```protobuf
+message ProposalTreasurySpend {
+  bytes recipient = 1;
+  uint64 amount = 2;
+  SpendDenomination denomination = 3;  // SPEND_CNPY | SPEND_CLIQ
+}
+```
+
+### ProposalValidatorEject
+
+Removes a validator from the committee registry on pass. → `ACTION_VALIDATOR_EJECT`.
+
+```protobuf
+message ProposalValidatorEject {
+  bytes validator_address = 1;
+}
+```
+
+### ProposalEmergency
+
+A security-critical action on the fast-track tier (24h voting, no timelock), optionally
+carrying a param change applied immediately on pass. → `ACTION_EMERGENCY`.
+
+```protobuf
+message ProposalEmergency {
+  string description = 1;
+  ProposalParamChange param_change = 2;  // optional
+}
+```
+
+### ProposalProtocolUpgrade
+
+Signals an off-chain coordinated upgrade; the payload is opaque and recorded for audit (no
+on-chain dispatch). → `ACTION_PROTOCOL_UPGRADE`.
+
+```protobuf
+message ProposalProtocolUpgrade {
+  string version = 1;
+  bytes payload = 2;  // opaque upgrade descriptor
 }
 ```

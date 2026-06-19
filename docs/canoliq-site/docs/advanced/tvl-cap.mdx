@@ -1,0 +1,60 @@
+---
+sidebar_label: TVL Cap
+---
+
+# TVL Cap
+
+**In one sentence:** an optional ceiling on total deposits that lets the protocol grow in a
+controlled way and turns itself off once it is no longer needed.
+
+A brand-new liquid-staking protocol may want to limit how much CNPY it accepts at first — to
+test mechanisms at small scale, manage validator capacity, or roll out gradually. The TVL
+cap (`tvl_cap_ucnpy`) is governance's lever for exactly that.
+
+## How it works
+
+On every deposit, the protocol checks whether accepting it would push total pooled CNPY past
+the cap:
+
+```
+if tvl_cap_ucnpy > 0 and (total_pooled_cnpy + deposit_amount) > tvl_cap_ucnpy:
+    reject the deposit   # ErrTVLCapExceeded
+```
+
+- **`tvl_cap_ucnpy = 0` means uncapped** — this is the default, so deposits are unlimited
+  unless governance sets a ceiling.
+- The check applies only to **deposits**. Rewards accruing to the pool and existing balances
+  are never rejected, so the cap throttles *inflows*, it does not force anyone out.
+- It is a hard pre-condition: a deposit that would exceed the cap fails entirely rather than
+  being partially filled.
+
+## Tuning it
+
+The cap is a governance parameter. As confidence and capacity grow, a
+[parameter-change proposal](../governance/proposals.mdx) can raise it, or set it back to `0`
+to remove the limit entirely.
+
+## Watching utilization
+
+The `/v1/health` endpoint reports both the cap and how full it is, so operators and front
+ends can show "X% of cap used" and warn before deposits start bouncing:
+
+```json
+GET /v1/health
+{
+  "height": 12345,
+  "genesisComplete": true,
+  "chainId": 2,
+  "tvlCapUcnpy": 100000000000,
+  "tvlUtilizationBps": 7350
+}
+```
+
+`tvlUtilizationBps` is `total_pooled_cnpy ÷ tvl_cap_ucnpy` in basis points (here, 73.5%
+full). When the cap is `0`, utilization is reported as `0`.
+
+## Related
+
+- [Deposit & Redeem](../transactions/deposit-redeem.mdx)
+- [Governance Proposals](../governance/proposals.mdx) — how to change the cap
+- [API Endpoints](../api/endpoints.mdx) — `/v1/health`

@@ -36,7 +36,7 @@ sidebar_label: Implementation Plan
 
 ## Phase 3 — Monitoring & Autonomy
 
-### In Progress
+### Completed
 
 - [x] Read-only HTTP query layer
 - [x] Health, globals, params endpoints
@@ -44,8 +44,23 @@ sidebar_label: Implementation Plan
 - [x] Pools endpoint
 - [x] Proposals, votes, buyback, spends endpoints
 - [x] Validators endpoint
+- [x] Stakers and graduation endpoints
 - [x] Redemption and vesting endpoints
+
+### In Progress
+
 - [ ] Per-address redemption index
 - [ ] Per-address unstake index
 - [ ] Insurance fund disbursement (slashing reimbursement)
 - [ ] Validator registry automation from Canopy validator-set readback
+
+## Hardening & Feature Track (T1–T6)
+
+### Completed
+
+- [x] **T1** — Tiered governance: per-action quorum / approval / timelock / voting period
+- [x] **T2** — Vote-escrow lock tiers (3–24 months, up to 4× voting + reward boost)
+- [x] **T3** — TVL deposit cap (governance-tunable ceiling, utilization reporting)
+- [x] **T4** — Insurance fund peak-TVL targeting with auto-off skim
+- [x] **T5** — Autonomy-graduation metric tracking (TVL, validators, turnout, daily tx, runway)
+- [x] **T6** — Push-alert webhooks (buyback drain, validator concentration, TVL drop)

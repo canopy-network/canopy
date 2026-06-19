@@ -1,0 +1,110 @@
+---
+sidebar_label: Push Alerts
+---
+
+# Push-Alert Webhooks
+
+**In one sentence:** an optional, fire-and-forget webhook that pushes a notification when one
+of three risky on-chain conditions crosses a threshold — so operators don't have to sit and
+poll the API.
+
+The [HTTP API](../api/endpoints.mdx) lets you *pull* protocol state whenever you like. Push
+alerts add the opposite: an *unattended* path for the handful of events someone genuinely
+needs to react to fast. Alerts are **off by default** and enabled by configuring a webhook
+URL.
+
+## The three conditions
+
+| Alert | Fires when… | Window | Severity | Default threshold |
+|-------|-------------|--------|----------|-------------------|
+| `buyback_drain` | the buyback pool shrinks too fast | tumbling | `warn` | 5,000 bps (50%) |
+| `validator_concentration` | one validator holds too much committee stake | instantaneous | `warn` | 6,600 bps (66%) |
+| `tvl_drop` | total pooled CNPY falls too fast | tumbling | `crit` | 2,000 bps (20%) |
+
+- **Tumbling window:** the protocol records a baseline at the start of each window
+  (`window_blocks`, default 100) and compares the current value against it. A drop larger
+  than the threshold fires the alert. When the window elapses, a fresh baseline is taken.
+- **Instantaneous:** validator concentration is checked every block as `max validator stake ÷
+  total committee stake`, with no window.
+
+## Debounce: no alert storms
+
+A firing condition would otherwise re-page every single block. To prevent that, each alert
+kind keeps a **watermark** (`last_fired_height`) in state:
+
+- After firing, the alert stays quiet for at least `min_interval_blocks` (default 100 blocks).
+- The watermark **clears the moment the condition resolves**, so a *new* occurrence later
+  fires immediately rather than waiting out the debounce.
+- Because the watermark lives in state, it survives plugin restarts.
+
+## Delivery is best-effort and never blocks consensus
+
+Alerts are evaluated during `EndBlock`, but delivery happens **off-thread**: the webhook POST
+runs in a goroutine with a 5-second timeout. A slow or dead receiver can never stall block
+production. Failures are logged at `WARN` and otherwise ignored — alerts are advisory, not
+guaranteed.
+
+## Payload formats
+
+The canonical payload is the **`AlertEnvelope`**, sent verbatim when `format` is `json`:
+
+```json
+{
+  "kind": "tvl_drop",
+  "height": 84210,
+  "severity": "crit",
+  "message": "TVL dropped faster than threshold",
+  "details": {
+    "baseline": 1050000000,
+    "current": 800000000,
+    "dropBps": 2381,
+    "thresholdBps": 2000,
+    "schemaVersion": 1
+  }
+}
+```
+
+`details` is condition-specific and always carries a `schemaVersion` for downstream
+consumers. For `slack` and `discord` formats, the envelope is projected into that platform's
+shape — a single human-readable line such as:
+
+```
+[crit] canoLiq tvl_drop @ h84210: TVL dropped faster than threshold
+```
+
+sent as `{"text": "…"}` (Slack) or `{"content": "…"}` (Discord).
+
+## Configuration
+
+Alerts are configured under the `alerts` block of the plugin config JSON (or `CANOLIQ_ALERT_URL`
+to override the URL at startup). An empty `webhookUrl` disables the whole subsystem.
+
+| Field | Purpose | Default |
+|-------|---------|---------|
+| `webhookUrl` | POST target; empty disables alerts | — (disabled) |
+| `authHeader` | sent as the `Authorization` header | — |
+| `format` | `json`, `slack`, or `discord` | `json` |
+| `windowBlocks` | tumbling-window size for drain/drop | 100 |
+| `defaultMinIntervalBlocks` | debounce when a kind has no override | 100 |
+| `minIntervalBlocks` | per-kind debounce overrides (map) | — |
+| `drainAlertBps` | buyback-drain threshold | 5,000 (50%) |
+| `concentrationAlertBps` | validator-concentration threshold | 6,600 (66%) |
+| `tvlDropBps` | TVL-drop threshold | 2,000 (20%) |
+
+```json
+{
+  "alerts": {
+    "webhookUrl": "https://hooks.example.com/canoliq",
+    "format": "slack",
+    "windowBlocks": 100,
+    "tvlDropBps": 1500,
+    "minIntervalBlocks": { "tvl_drop": 50 }
+  }
+}
+```
+
+## Related
+
+- [API Endpoints](../api/endpoints.mdx) — the pull-based counterpart
+- [Buyback](./buyback.mdx) — what the `buyback_drain` alert watches
+- [Insurance Fund](./insurance.mdx) — the reserve behind a sharp TVL drop
