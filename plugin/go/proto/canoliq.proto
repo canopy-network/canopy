@@ -195,11 +195,15 @@ message CanoliqParams {
   // quorum_bps / pass_threshold_bps / timelock_blocks / voting_period_blocks
   // above; an empty list (or unmatched action) falls back to those scalars.
   repeated GovernanceTier governance = 24; // @gotags: json:"governance"
-  // tvl_cap_ucnpy: self-imposed TVL ceiling in uCNPY (WP §9.4: 33% of total
-  // Canopy network stake). 0 = uncapped. Governance-tunable; the DAO raises
-  // it as Canopy network stake grows. Deposits that would push
-  // total_pooled_cnpy above this are rejected.
-  uint64 tvl_cap_ucnpy = 25; // @gotags: json:"tvlCapUcnpy"
+  // tvl_cap_bps: self-imposed TVL ceiling as a fraction of total Canopy
+  // network stake, in basis points (WP §9.4: "self-impose a TVL cap of 33%
+  // of total Canopy network stake"). Default 3300 = 33%. 0 = uncapped.
+  // Governance-tunable; raising or lifting requires DAO approval (WP §9.4).
+  // Deposits that would push total_pooled_cnpy above the computed cap
+  // (mulDiv(canopy_total_stake, tvl_cap_bps, 10_000)) are rejected. The
+  // check fails closed when Canopy total stake is unavailable: a deposit
+  // is rejected rather than silently accepted (deliver.go).
+  uint64 tvl_cap_bps = 25; // @gotags: json:"tvlCapBps"
   // insurance_target_bps: insurance-fund reserve target as a fraction of peak
   // TVL (T4 / WP §9.2: 5%). Once insurance_pool reaches this target the
   // per-block insurance skim turns off (the would-be amount stays in the

@@ -55,10 +55,19 @@ type HealthView struct {
 	Height          uint64 `json:"height"`
 	GenesisComplete bool   `json:"genesisComplete"`
 	ChainID         uint64 `json:"chainId"`
-	// TVLCapUcnpy is the governance-set deposit ceiling (0 = uncapped).
-	TVLCapUcnpy uint64 `json:"tvlCapUcnpy"`
-	// TVLUtilizationBps is total_pooled_cnpy / tvl_cap_ucnpy in bps (0 when
-	// uncapped).
+	// TVLCapBps is the governance-set TVL ceiling as a fraction of total
+	// Canopy network stake (WP §9.4). 0 = uncapped.
+	TVLCapBps uint64 `json:"tvlCapBps"`
+	// TVLCapUcnpyEffective is the live uCNPY cap at snapshot height —
+	// mulDiv(canopy_total_stake, tvl_cap_bps, 10_000). Zero when uncapped
+	// OR when Canopy total stake is unavailable (in which case the deposit
+	// path fails closed; see deliver.go).
+	TVLCapUcnpyEffective uint64 `json:"tvlCapUcnpyEffective"`
+	// CanopyTotalStake is the snapshot-height value of lib.Supply.staked —
+	// surfaced so operators can sanity-check the effective cap.
+	CanopyTotalStake uint64 `json:"canopyTotalStake"`
+	// TVLUtilizationBps is total_pooled_cnpy / tvl_cap_ucnpy_effective in bps
+	// (0 when uncapped or the live cap is zero).
 	TVLUtilizationBps uint64 `json:"tvlUtilizationBps"`
 }
 
@@ -69,20 +78,27 @@ type StakerView struct {
 	StakedAtHeight uint64 `json:"stakedAtHeight"`
 }
 
-// QueryHealth returns liveness info — height + genesis flag + chain id.
-// Always succeeds; falls back to zeros before the first snapshot.
+// QueryHealth returns liveness info — height + genesis flag + chain id —
+// plus the live TVL cap surface (cap bps, computed effective uCNPY cap,
+// canopy total stake, utilization). Always succeeds; falls back to zeros
+// before the first snapshot.
 func (p *Plugin) QueryHealth() *HealthView {
 	s := p.Snapshot()
-	var utilBps uint64
-	if s.Params.TvlCapUcnpy > 0 {
-		utilBps = mulDiv(s.Globals.TotalPooledCnpy, 10_000, s.Params.TvlCapUcnpy)
+	var effectiveCap, utilBps uint64
+	if s.Params.TvlCapBps > 0 && s.CanopyTotalStake > 0 {
+		effectiveCap = mulDiv(s.CanopyTotalStake, s.Params.TvlCapBps, 10_000)
+		if effectiveCap > 0 {
+			utilBps = mulDiv(s.Globals.TotalPooledCnpy, 10_000, effectiveCap)
+		}
 	}
 	return &HealthView{
-		Height:            s.Height,
-		GenesisComplete:   s.Globals.GenesisComplete,
-		ChainID:           p.config.ChainId,
-		TVLCapUcnpy:       s.Params.TvlCapUcnpy,
-		TVLUtilizationBps: utilBps,
+		Height:               s.Height,
+		GenesisComplete:      s.Globals.GenesisComplete,
+		ChainID:              p.config.ChainId,
+		TVLCapBps:            s.Params.TvlCapBps,
+		TVLCapUcnpyEffective: effectiveCap,
+		CanopyTotalStake:     s.CanopyTotalStake,
+		TVLUtilizationBps:    utilBps,
 	}
 }
 

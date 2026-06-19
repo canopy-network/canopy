@@ -45,6 +45,12 @@ type Snapshot struct {
 	StakerAddresses     [][]byte
 	Stakers             map[string]*contract.CLIQStake
 	MultisigApprovals   map[uint64][]*contract.MultisigApproval
+	// CanopyTotalStake is Supply.Staked at snapshot height — total locked
+	// CNPY across all Canopy committees (including delegations). Feeds the
+	// /v1/health "effective TVL cap" calculation (WP §9.4). Zero when the
+	// Canopy Supply singleton is not present (very early genesis / standalone
+	// tests).
+	CanopyTotalStake uint64
 }
 
 // emptySnapshot is returned to query helpers when EndBlock has not yet run
@@ -105,6 +111,7 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		qPropIdx
 		qSpendIdx
 		qStakeIdx
+		qCanopySupply
 	)
 	keys := []*contract.PluginKeyRead{
 		{QueryId: qGlobals, Key: KeyForGlobals()},
@@ -118,6 +125,9 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		{QueryId: qPropIdx, Key: KeyForProposalIndex()},
 		{QueryId: qSpendIdx, Key: KeyForSpendIndex()},
 		{QueryId: qStakeIdx, Key: KeyForCLIQStakeIndex()},
+		// Canopy-side Supply singleton — feeds the percentage TVL cap's
+		// /v1/health.tvl_cap_ucnpy_effective. Absence → CanopyTotalStake = 0.
+		{QueryId: qCanopySupply, Key: contract.KeyForSupply()},
 	}
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
 	if err != nil {
@@ -176,6 +186,12 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 			spendIdxBz = raw
 		case qStakeIdx:
 			stakeIdxBz = raw
+		case qCanopySupply:
+			supply := new(contract.Supply)
+			if e := contract.Unmarshal(raw, supply); e != nil {
+				return e
+			}
+			snap.CanopyTotalStake = supply.Staked
 		}
 	}
 

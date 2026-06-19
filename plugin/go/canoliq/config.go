@@ -255,6 +255,11 @@ func DefaultParams() *contract.CanoliqParams {
 		CliqTransferFee:    10_000,
 		InsuranceBps:       500,         // 5% of treasury slice — matches Tokenomics v1.1 §8 "5% of DAO treasury inflow" reading
 		InsuranceTargetBps: 500,         // T4: reserve target = 5% of peak TVL (WP §9.2); skim auto-off at target
+		// TvlCapBps: self-imposed TVL ceiling as a fraction of total Canopy
+		// network stake (WP §9.4: "33% of total Canopy network stake"). 0 =
+		// uncapped; spec default is 3300 (33%). The deposit check fails
+		// closed when Canopy total stake is unavailable.
+		TvlCapBps: 3300,
 		// T5 autonomy-graduation thresholds (WP §10). TVL is a flat uCNPY
 		// placeholder (~$50M at $1/CNPY) pending a real price oracle.
 		GraduationMinTvlUcnpy:     50_000_000_000_000,

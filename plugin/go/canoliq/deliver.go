@@ -63,10 +63,25 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 			}
 		}
 	}
-	// TVL self-cap (T3 / WP §9.4): reject deposits that would push total
-	// pooled CNPY above the governance-set ceiling. 0 = uncapped.
-	if params.TvlCapUcnpy > 0 && globals.TotalPooledCnpy+msg.Amount > params.TvlCapUcnpy {
-		return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
+	// TVL self-cap (WP §9.4: "self-impose a TVL cap of 33% of total Canopy
+	// network stake"). TvlCapBps = 0 means uncapped; any non-zero value
+	// computes a live cap of mulDiv(canopy_total_stake, TvlCapBps, 10_000).
+	// Fail-closed: if Canopy total stake is unreadable or zero we reject the
+	// deposit rather than silently uncapping. Doing otherwise would let
+	// systemic-risk-bounding policy slip silently in any environment where
+	// Canopy's Supply state hasn't initialized (e.g. fresh genesis).
+	if params.TvlCapBps > 0 {
+		totalCanopyStake, perr := c.readCanopyTotalStake()
+		if perr != nil {
+			return &contract.PluginDeliverResponse{Error: perr}
+		}
+		if totalCanopyStake == 0 {
+			return &contract.PluginDeliverResponse{Error: ErrCanopyStakeUnavailable()}
+		}
+		capUcnpy := mulDiv(totalCanopyStake, params.TvlCapBps, 10_000)
+		if globals.TotalPooledCnpy+msg.Amount > capUcnpy {
+			return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
+		}
 	}
 	deduct := msg.Amount + fee
 	if from.Amount < deduct {

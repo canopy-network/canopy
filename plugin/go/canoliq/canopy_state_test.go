@@ -11,7 +11,9 @@ import (
 // readCanopyTotalStake, including the absence path (Supply not set yet).
 
 func TestReadCanopyTotalStakeAbsent(t *testing.T) {
-	c, _ := newTestCanoliq()
+	c, s := newTestCanoliq()
+	// Clear the fixture's default Supply to exercise the absent path.
+	s.del(contract.KeyForSupply())
 
 	stake, err := c.readCanopyTotalStake()
 	if err != nil {
