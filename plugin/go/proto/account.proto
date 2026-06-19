@@ -22,3 +22,22 @@ message Pool {
   // amount: the balance of funds the pool has
   uint64 amount = 2;
 }
+
+// Supply mirrors Canopy's lib.Supply (lib/.proto/account.proto). Plugins
+// unmarshal the singleton stored at SupplyPrefix() to read network-wide
+// totals: total minted, total staked (including delegations), per-committee
+// stake aggregates, and per-committee delegate-only aggregates. Field
+// numbers MUST match lib.Supply so proto wire-format decode succeeds.
+message Supply {
+  // total: total tokens existing in the system (minted minus burned)
+  uint64 total = 1;
+  // staked: total locked tokens (includes delegations)
+  uint64 staked = 2;
+  // delegated_only: locked tokens that are delegate-only
+  uint64 delegated_only = 3; // @gotags: json:"delegatedOnly"
+  // committee_staked: per-committee staked totals (Pool.id = chainId,
+  // Pool.amount = staked uCNPY), sorted by stake
+  repeated Pool committee_staked = 4; // @gotags: json:"committeeStaked"
+  // committee_delegated_only: per-committee delegate-only totals
+  repeated Pool committee_delegated_only = 5; // @gotags: json:"committeeDelegatedOnly"
+}

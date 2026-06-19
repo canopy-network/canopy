@@ -264,9 +264,10 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 }
 
 var (
-	accountPrefix = []byte{1} // store key prefix for accounts
-	poolPrefix    = []byte{2} // store key prefix for pools
-	paramsPrefix  = []byte{7} // store key prefix for governance parameters
+	accountPrefix = []byte{1}  // store key prefix for accounts
+	poolPrefix    = []byte{2}  // store key prefix for pools
+	paramsPrefix  = []byte{7}  // store key prefix for governance parameters
+	supplyPrefix  = []byte{10} // store key prefix for the network-wide supply singleton (mirrors fsm/key.go:40)
 )
 
 // KeyForAccount() returns the state database key for an account
@@ -282,6 +283,18 @@ func KeyForFeeParams() []byte {
 // KeyForFeeParams() returns the state database key for governance controlled 'fee parameters'
 func KeyForFeePool(chainId uint64) []byte {
 	return JoinLenPrefix(poolPrefix, formatUint64(chainId))
+}
+
+// KeyForSupply returns the state database key for the network-wide Supply
+// singleton (lib.Supply: total minted, total staked, per-committee stake
+// aggregates). Mirrors fsm/key.go's SupplyPrefix() — the supply record is
+// stored at the prefix itself with no further segments.
+//
+// Used by canoLiq's percentage TVL cap (Whitepaper §9.4) to read total
+// network stake, and by the restaking optimizer (§7) to read per-committee
+// stake aggregates via Supply.committee_staked.
+func KeyForSupply() []byte {
+	return JoinLenPrefix(supplyPrefix)
 }
 
 func formatUint64(u uint64) []byte {
