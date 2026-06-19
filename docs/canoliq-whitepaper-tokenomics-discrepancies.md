@@ -5,6 +5,14 @@
 - `canoLiq_Whitepaper_v1.1.pdf` (Technical Whitepaper, Version 1.1, May 2025)
 - `canoLiq_Tokenomics_v1.1.pdf` (CLIQ Token Design & Protocol Economics, v1.1, May 2025)
 
+> **Status (verified 2026-06-18): All four doc-vs-doc discrepancies are resolved in v1.2.**
+> See [§ Resolution in v1.2](#resolution-in-v12-verified-2026-06-18) at the end of this
+> document for the per-item verification against `canoLiq_Whitepaper_v1.2.pdf` and
+> `canoLiq_Tokenomics_v1.2.pdf`. The Community & Airdrops genesis-vesting gap noted in
+> [§ Additional code/doc gap](#additional-code-doc-gap-community--airdrops) is *not* a
+> docs issue and remains open pending dev-team confirmation that the bucket recipient
+> is a controlled distributor.
+
 ---
 
 ## Material discrepancy
@@ -90,6 +98,7 @@ validator bucket uses a **12-month cliff**. The whitepaper's "6-month cliff" is 
 outlier, contradicted by both the Tokenomics doc and the code. Fix should land in the
 whitepaper.
 
+<a id="additional-code-doc-gap-community--airdrops"></a>
 ### Additional code/doc gap (Community & Airdrops)
 
 `Community & Airdrops` and `Liquidity Incentives` are both configured
@@ -106,9 +115,85 @@ distribution (Community) and 24-month emission (Liquidity).
 
 ## Recommended actions
 
+> ⚠️ **Superseded** — actions #1–#3 below were the v1.1 recommendations and have been
+> applied in v1.2 (see [§ Resolution in v1.2](#resolution-in-v12-verified-2026-06-18)).
+> Kept for historical context.
+
 1. **#1 (validator cliff)** requires a decision — the documents contradict each other and the
    Tokenomics doc argues against the whitepaper's value. Pick 6 or 12 months and align both
    documents (and verify the codebase genesis vesting matches).
 2. **#2** is almost certainly a labeling slip in the whitepaper; update its §5.2 table to
    "Snapshot-based linear; 12-month distribution".
 3. **#3 / #4** are small wording/number alignments.
+
+---
+
+<a id="resolution-in-v12-verified-2026-06-18"></a>
+## Resolution in v1.2 (verified 2026-06-18)
+
+**Documents checked:**
+- `canoLiq_Whitepaper_v1.2.pdf` (Technical Whitepaper, Version 1.2, May 2025)
+- `canoLiq_Tokenomics_v1.2.pdf` (CLIQ Token Design & Protocol Economics, v1.2, May 2025)
+
+| # | Severity | v1.1 finding | v1.2 status |
+|---|----------|---------------------------------------------------------|-------------|
+| 1 | Material | Validator cliff: WP 6mo vs Tok 12mo                     | ✅ Resolved — WP corrected to 12mo |
+| 2 | Moderate | Community: WP "Milestone-based" vs Tok snapshot-linear  | ✅ Resolved — WP corrected to snapshot-based linear |
+| 3 | Minor    | 6mo subsidy: WP 30–45% vs Tok 33–45%                    | ✅ Resolved — both now say 30–45% |
+| 4 | Minor    | Buyback default: WP "Burn" vs Tok unstated              | ✅ Resolved — Tok now names "Burn" in three places |
+
+### #1 — Validator cliff (Material) ✅
+
+- **Whitepaper v1.2 §5.2 table (p. 7):** "Validators & Infrastructure … 3-year vesting;
+  **12-month cliff**".
+- **Whitepaper v1.2 §5.3 rationale (p. 7):** "The **12-month cliff (not 6 months)** ensures
+  validators remain committed through the highest-risk first year of mainnet operation
+  before any tokens unlock." The corrected value is explicitly called out.
+- **Tokenomics v1.2 §2.1 (p. 3):** unchanged — "3-year linear with 12-month cliff" with the
+  "A 6-month cliff is insufficient" rationale intact.
+- **Code:** `plugin/go/canoliq/genesis.testnet.json` bucket #1 = `cliffMonths: 12,
+  vestMonths: 24` (36mo total = 3yr). Matches both docs.
+
+### #2 — Community & Airdrops mechanism (Moderate) ✅
+
+- **Whitepaper v1.2 §5.2 table (p. 6):** "Community & Airdrops … **Snapshot-based linear;
+  12-month distribution**".
+- **Whitepaper v1.2 §5.3 rationale (p. 7):** "Community & Airdrops (20%) uses a
+  **snapshot-based linear emission** … **This is distinct from milestone-based grants
+  (used only for Dev Grants)**." The label collision with Dev Grants is explicitly
+  disambiguated.
+- **Tokenomics v1.2 §2.2 (p. 3) and §6 summary (p. 7):** unchanged — "snapshot-based
+  linear emission" / "Snapshot-based; linear daily emission".
+
+### #3 — 6-month subsidy reduction range (Minor) ✅
+
+- **Whitepaper v1.2 §6 scenario table (p. 9):** "Partial subsidy (6 mo.) → ~**30–45%**
+  reduction".
+- **Tokenomics v1.2 §5.3 scenario table (p. 7):** "6-month CNPY subsidy → ~**30–45%**
+  reduction in early CLIQ emission". Tokenomics moved from `33–45%` to match the
+  whitepaper.
+
+### #4 — Buyback default (Minor) ✅
+
+The Tokenomics doc, which previously never named the default, now states it in three places:
+
+- **§1 Overview table (p. 2):** "15% of all protocol fees; **default action is burn**;
+  DAO may vote quarterly to distribute to locked stakers".
+- **§3.2 fee distribution table (p. 5):** "Open-market CLIQ purchase; **default action
+  is Burn**. DAO may vote quarterly to distribute to locked CLIQ stakers instead of
+  burning."
+- **§4.1 Buyback Engine (p. 5):** "The **default action** for purchased CLIQ is to
+  **burn** it, reducing circulating supply permanently."
+
+Whitepaper v1.2 §8.1 (p. 9) is unchanged: Buyback Mechanism default = "Burn".
+
+### Still open (not a doc-vs-doc issue)
+
+The Community & Airdrops genesis-vesting gap (see
+[§ Additional code/doc gap](#additional-code-doc-gap-community--airdrops)) is unchanged
+in v1.2 and cannot be fixed by docs alone. The v1.2 Tokenomics §6 summary still lists
+the bucket as Cliff "None" / Duration "12 months / Snapshot-based; linear daily emission",
+which is internally consistent with an off-chain distributor enforcing the schedule.
+The on-chain genesis vesting (`cliffMonths: 0, vestMonths: 0`) is fine **only if** the
+bucket recipient is a controlled distributor address. Confirm with the dev team that
+this is the case for the testnet genesis address now populated for bucket #3.
