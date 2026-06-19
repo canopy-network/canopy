@@ -36,8 +36,8 @@ the critical hand-off — everything else is execution.
 | Section | What | Status |
 |---|---|---|
 | A | Genesis bucket recipient addresses | ✅ supplied (2026-06-18) |
-| B | Multisig signers | ⏳ pending — `genesis.testnet.json` still carries `…b1`–`…b5` placeholders |
-| C | Validator registry | ⏳ pending — still `…c01`, `…c02` placeholders |
+| B | Multisig signers | ✅ supplied (2026-06-18) — 3-of-5; `treasuryThreshold` lowered to 50M uCLIQ |
+| C | Validator registry | ✅ shipped empty (2026-06-18) — single-aggregator fallback for first bring-up; populate before mainnet |
 | D | Chain parameters (`chainId`, `redemptionUnstakingBlocks`) | ⏳ pending — `chainId: 2` / `redemptionUnstakingBlocks: 14400` are the template defaults |
 | E | Off-chain coordination facts | ⏳ pending (one item closed: bucket-#2/#3 recipients are controlled distributors, confirmed 2026-06-18) |
 
@@ -65,19 +65,24 @@ for buckets #2 and #3 are controlled distributors that honor those schedules;
 see [the discrepancy report](./canoliq-whitepaper-tokenomics-discrepancies.md)
 for the audit trail.
 
-### B. Multisig signers → `genesis.testnet.json` `params.multisigSigners[]`  ⏳ pending
+### B. Multisig signers → `genesis.testnet.json` `params.multisigSigners[]`  ✅ supplied 2026-06-18
 - N signer addresses (20-byte hex). `multisigThreshold` (default 3) must be ≤ N.
 - Optional: a lower `treasuryThreshold` for testnet so the multisig path is
   actually exercised on modest spends.
-- *Current placeholders in the file:* `00000000…b1` through `00000000…b5`,
-  threshold `3`, treasuryThreshold `1_000_000_000`.
+- *Wired values:* five signer addresses (`1b6454…cb84`, `2ea35a…346f`, `b749e6…a6c5`,
+  `08f564…6a4b`, `1b3894…6a44`); `multisigThreshold: 3` (3-of-5); `treasuryThreshold:
+  50_000_000` uCLIQ (lowered from the 1B template default so the multisig branch
+  is exercised on realistic testnet spends).
 
-### C. Validator registry → `genesis.testnet.json` `validatorRegistry[]`  ⏳ pending
+### C. Validator registry → `genesis.testnet.json` `validatorRegistry[]`  ✅ shipped empty 2026-06-18
 - Per opted-in committee validator: `address` (matches Canopy `Validator.Address`)
   + `stake` (mirror their `StakedAmount` in uCNPY-equivalent).
 - *Optional but strongly recommended* — leaving it empty falls back to a single
   aggregator key and obscures per-validator reward credit.
-- *Current placeholders in the file:* `0000…c01` (stake 1B) and `0000…c02` (stake 1B).
+- *Decision (2026-06-18):* ship `validatorRegistry: []` for first testnet bring-up.
+  The single-aggregator fallback is defensible while validator details are still
+  being locked, but must be populated before the WS3 T1 validator-eject scenarios
+  carry meaningful coverage, and **must** be populated before mainnet.
 
 ### D. Chain parameters → `canoliq-config.testnet.json`  ⏳ pending
 - `chainId`: the value **reserved with the Canopy team** (no collision with an
@@ -99,14 +104,14 @@ for the audit trail.
 
 ---
 
-## Workstream 1 — Wire dev-provided data (once B–D arrive; A already wired)
+## Workstream 1 — Wire dev-provided data (once D arrives; A, B, C wired)
 
 Edit the two committed files and re-verify invariants. A landed in commit
-`f3fa10e2`; B, C, D remain.
+`f3fa10e2`; B + C landed alongside this doc update; D remains.
 
 - `plugin/go/canoliq/genesis.testnet.json` — ~~replace the 7 bucket addresses~~ ✅,
-  the multisig signers, and the validator registry entries; adjust
-  `multisigThreshold` / `treasuryThreshold` if requested.
+  ~~the multisig signers~~ ✅, ~~and the validator registry entries~~ ✅ (shipped empty);
+  ~~adjust `multisigThreshold` / `treasuryThreshold` if requested~~ ✅.
 - `plugin/go/canoliq/canoliq-config.testnet.json` — set `chainId` +
   `redemptionUnstakingBlocks`.
 - Do **not** touch bucket `bps`, recipient `bps`, or vesting (`cliffMonths`/

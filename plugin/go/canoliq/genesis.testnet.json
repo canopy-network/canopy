@@ -88,26 +88,17 @@
     }
   ],
   "params": {
-    "_comment": "Fill in the real testnet multisig signer addresses before deploy. Threshold of 3 is the default and matches the bundled five-signer pattern; raise it if you list more signers.",
+    "_comment": "Multisig signers and thresholds for testnet (supplied 2026-06-18). 3-of-5; treasuryThreshold lowered to 50_000_000 uCLIQ so the multisig branch is actually exercised on modest testnet spends.",
     "multisigSigners": [
-      "00000000000000000000000000000000000000b1",
-      "00000000000000000000000000000000000000b2",
-      "00000000000000000000000000000000000000b3",
-      "00000000000000000000000000000000000000b4",
-      "00000000000000000000000000000000000000b5"
+      "1b6454361f65ac5cc13c6b775692ba3d64cbcb84",
+      "2ea35a0ef4ef34c58c176ae0ad6b6a4fbf33346f",
+      "b749e623b0b3dc8a6fce9f89c539d3351e92a6c5",
+      "08f5643e3a27d802431175354ee7e9fce91f6a4b",
+      "1b389495e4d403940734c5820d10c8d52b896a44"
     ],
     "multisigThreshold": 3,
-    "treasuryThreshold": 1000000000
+    "treasuryThreshold": 50000000
   },
-  "_validatorRegistryComment": "Seed the canoLiq committee validator set so the per-validator pro-rata reward distribution is honest from block 1. Replace each address with a real opted-in validator's account address (matches Canopy's Validator.Address). Stake should mirror that validator's StakedAmount in uCNPY-equivalent. Leaving validatorRegistry empty falls back to a single committee aggregator key — fine for bring-up but obscures per-validator credit.",
-  "validatorRegistry": [
-    {
-      "address": "0000000000000000000000000000000000000c01",
-      "stake": 1000000000
-    },
-    {
-      "address": "0000000000000000000000000000000000000c02",
-      "stake": 1000000000
-    }
-  ]
+  "_validatorRegistryComment": "Shipped empty for first testnet bring-up (2026-06-18 decision). The plugin falls back to a single committee aggregator key, which obscures per-validator pro-rata reward credit; populate before the validator-eject T1 scenarios and before mainnet.",
+  "validatorRegistry": []
 }
