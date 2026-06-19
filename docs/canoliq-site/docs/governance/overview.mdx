@@ -6,6 +6,12 @@ sidebar_label: Overview
 
 CLIQ holders stake CLIQ for governance weight. All material protocol parameters flow through the same proposal pipeline.
 
+:::tip
+Different kinds of proposals must clear different bars. The quorum / approval / timelock /
+voting-period rules are chosen per action type — see [Governance Tiers](./governance-tiers.mdx).
+The parameters below are the **scalar fallback** used when no tier matches an action.
+:::
+
 ## Key Parameters
 
 | Parameter | Default | Description |
@@ -22,9 +28,10 @@ CLIQ holders stake CLIQ for governance weight. All material protocol parameters 
 
 ## Voting Weight
 
-Voting weight is **snapshotted by stake-time**, not by proposal-time read:
+Voting weight is **snapshotted by stake-time**, not by proposal-time read, and is scaled by
+your [vote-escrow lock tier](../tokenomics/vote-escrow.mdx) (up to 4×):
 
-- A voter's weight = `CLIQStake.amount` as of the proposal's `creation_height`
+- A voter's weight = `CLIQStake.amount × tier multiplier` as of the proposal's `creation_height`
 - Votes are rejected if `staked_at_height > proposal.creation_height`
 - This defeats flash-stake attacks without storing per-(proposal, voter) snapshot balances
 

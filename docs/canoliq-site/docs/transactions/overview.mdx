@@ -4,7 +4,14 @@ sidebar_label: Overview
 
 # Transactions Overview
 
-canoLiq accepts a range of transaction messages for liquid staking, CLIQ operations, governance, and treasury management.
+A **transaction** is any action you send to the protocol. canoLiq accepts messages for four
+kinds of work: liquid staking (deposit/redeem), CLIQ operations (transfer, stake, claim),
+governance (propose, vote), and treasury management (spend, approve). Each message type is a
+distinct, explicitly supported action — there is no general-purpose scripting.
+
+Every transaction pays a small flat fee (default `10,000 uCNPY` per message type) and is
+validated before it touches state. New to the protocol? See
+[How It Works](../concepts/how-it-works.mdx) for the bigger picture first.
 
 ## Transaction Categories
 

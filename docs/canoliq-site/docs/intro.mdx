@@ -6,6 +6,12 @@ sidebar_label: Introduction
 
 canoLiq is a **liquid staking protocol** built as a Canopy Network plugin. It enables users to deposit CNPY, receive a yield-bearing receipt token (cCNPY), and earn staking rewards — while also participating in governance through CLIQ, a fixed-supply governance token.
 
+:::tip New here?
+Start with [How It Works](./concepts/how-it-works.mdx) for a plain-language walkthrough, then
+[The Two Tokens](./concepts/two-tokens.mdx) to understand cCNPY vs CLIQ. The
+[Glossary](./concepts/glossary.mdx) defines every term.
+:::
+
 ## Key Features
 
 - **Liquid Staking**: Deposit CNPY, mint cCNPY at the current exchange rate. cCNPY represents your share of the pooled CNPY backing.
@@ -13,6 +19,9 @@ canoLiq is a **liquid staking protocol** built as a Canopy Network plugin. It en
 - **CLIQ Governance Token**: A fixed supply of 100M CLIQ distributed at genesis with cliff + linear vesting schedules. CLIQ holders stake for governance weight.
 - **On-Chain Governance**: All protocol parameters are tunable through proposals — fee splits, buyback mechanics, multisig membership, and more.
 - **Buyback Mechanism**: The protocol can buy back and burn CLIQ or distribute acquired CLIQ to stakers, governed by DAO vote.
+- **Vote-Escrow**: Lock staked CLIQ for 3–24 months to multiply voting weight (up to 4×) and boost buyback rewards.
+- **Tiered Governance**: Different decisions clear different bars — quorum, approval, and timelock scale with risk.
+- **Self-Monitoring**: A peak-TVL-targeted insurance reserve, autonomy-graduation metrics, and optional push-alert webhooks.
 
 ## Architecture
 
@@ -41,17 +50,27 @@ canoLiq runs as a **Go plugin** alongside the Canopy FSM (Finite State Machine).
 └─────────────────────────────────────────────┘
 ```
 
-## Phased Rollout
+## Feature Status
 
-| Phase | Status | Features |
-|-------|--------|----------|
-| **Phase 1** | ✅ Complete | Deposit/redeem, cCNPY minting, fee split, CLIQ genesis + vesting |
-| **Phase 2** | ✅ Complete | CLIQ staking, governance proposals, buyback, treasury spend with multisig |
-| **Phase 3** | 🚧 In Progress | Read-only HTTP query layer, insurance disbursement, validator registry automation |
+| Area | Status | What it covers |
+|------|--------|----------------|
+| **Liquid staking** | ✅ | Deposit/redeem, cCNPY minting, exchange-rate accrual |
+| **Tokenomics** | ✅ | 12% fee split (40/30/15/15), CLIQ genesis + vesting |
+| **Governance** | ✅ | CLIQ staking, proposals, voting, tally & execution |
+| **Tiered governance** | ✅ | Per-action quorum / approval / timelock / voting period |
+| **Vote-escrow** | ✅ | 3–24 month lock tiers, up to 4× voting + reward boost |
+| **Buyback** | ✅ | Burn or distribute-to-stakers, DAO-governed |
+| **Treasury** | ✅ | Multisig + timelock spend above a threshold |
+| **TVL cap** | ✅ | Optional, governance-tunable deposit ceiling |
+| **Insurance fund** | ✅ | Peak-TVL-targeted reserve with auto-off skim |
+| **Autonomy graduation** | ✅ | Five health metrics + eligibility tracking |
+| **HTTP query API** | ✅ | Read-only snapshot-backed endpoints |
+| **Push alerts** | ✅ | Optional webhooks for drain / concentration / TVL-drop |
 
 ## Quick Links
 
+- [How It Works](./concepts/how-it-works.mdx) — Plain-language walkthrough of the whole protocol
 - [Getting Started](./getting-started/overview.mdx) — Build, run, and register as a committee
 - [Transaction Reference](./transactions/reference.mdx) — All supported message types
-- [API Reference](./api/endpoints.mdx) — HTTP query endpoints (Phase 3)
-- [Implementation Plan](./implementation-plan.mdx) — Phased rollout tracker
+- [API Reference](./api/endpoints.mdx) — HTTP query endpoints
+- [Implementation Plan](./implementation-plan.mdx) — Rollout tracker

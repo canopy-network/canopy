@@ -28,6 +28,12 @@ canoliqctl cliq-stake <address> <amount_uCLIQ>
 - `CanoliqGlobals.totalStakedCLIQ` is incremented
 - `staked_at_height` is recorded for vote eligibility
 
+:::tip Lock for more voting power
+A stake can commit to a [vote-escrow lock tier](../tokenomics/vote-escrow.mdx) (`LOCK_3M`
+through `LOCK_24M`) to multiply voting weight up to 4× and boost buyback rewards. Locks only
+ever strengthen, and locked stake cannot be unstaked until its `lock_end_height`.
+:::
+
 ## CLIQ Unstake
 
 Queues an unstake, returning CLIQ to liquid balance after the unbond window.

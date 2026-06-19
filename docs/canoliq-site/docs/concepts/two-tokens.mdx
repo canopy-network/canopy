@@ -1,0 +1,68 @@
+---
+sidebar_label: The Two Tokens
+sidebar_position: 2
+---
+
+# The Two Tokens: cCNPY and CLIQ
+
+canoLiq works with three assets: **CNPY** (Canopy's native coin, which the protocol does not
+issue) and two tokens it does manage — **cCNPY** and **CLIQ**. They do completely different
+jobs. The quickest way to keep them straight:
+
+| | cCNPY | CLIQ |
+|---|---|---|
+| **What it is** | Liquid-staking receipt | Governance & value-capture token |
+| **Supply** | Elastic — minted on deposit, burned on redeem | Fixed: 100,000,000 CLIQ, forever |
+| **How you get it** | Deposit CNPY | Genesis distribution (with vesting) |
+| **Why you hold it** | Earn staking yield, stay liquid | Vote, and share in protocol value |
+| **How its value grows** | Exchange rate rises as rewards accrue | Buyback-and-burn shrinks supply; lock boosts |
+
+## cCNPY — your stake, but liquid
+
+When you deposit CNPY you receive cCNPY. Think of it as a **claim check** on a growing pool
+of CNPY. You are not locked in: cCNPY is an ordinary balance you can hold, send, or use
+elsewhere, all while the underlying CNPY keeps earning.
+
+- **It is yield-bearing by price, not by balance.** Your cCNPY balance stays the same; each
+  unit just becomes redeemable for more CNPY as rewards arrive. The conversion rate is:
+
+  ```
+  exchange rate = total pooled CNPY ÷ total cCNPY supply
+  ```
+
+- **Redeeming** burns cCNPY and queues a CNPY redemption that matures after an unbonding
+  window, after which you claim it. See [Deposit & Redeem](../transactions/deposit-redeem.mdx).
+
+- **Precision:** amounts are tracked in `uCNPY` (micro-CNPY, 6 decimals), so `1 CNPY =
+  1,000,000 uCNPY`.
+
+## CLIQ — the governance token
+
+CLIQ is a **fixed supply of 100,000,000** (i.e. `100,000,000,000,000 uCLIQ` at 6-decimal
+precision). The entire supply is minted at genesis and handed out across distribution
+buckets (community, team, DAO treasury, liquidity, …), most of them on
+[cliff + linear vesting](../tokenomics/vesting.mdx) schedules.
+
+What CLIQ is for:
+
+- **Governance.** Stake CLIQ to gain voting weight, then create and vote on proposals.
+  Voting weight is **snapshotted at the moment a proposal is created**, which prevents
+  last-minute "flash-stake" vote buying.
+- **Vote-escrow boosts.** Lock your staked CLIQ for 3–24 months to multiply your voting
+  weight (up to 4×) and earn a larger share of buyback distributions. See
+  [Vote-Escrow](../tokenomics/vote-escrow.mdx).
+- **Value capture.** The protocol routes 15% of every fee into a buyback pool. Governance
+  can spend it to **buy back and burn** CLIQ (reducing supply) or **distribute** acquired
+  CLIQ to stakers. See [Buyback](../advanced/buyback.mdx).
+
+## How they fit together
+
+CNPY is the money. cCNPY makes staked CNPY liquid and productive. CLIQ governs the whole
+system and captures a slice of its earnings. A typical participant might hold cCNPY for
+yield **and** stake CLIQ to steer the protocol — the two roles are independent.
+
+## Keep reading
+
+- [How It Works](./how-it-works.mdx) — the end-to-end walkthrough
+- [Tokenomics Overview](../tokenomics/overview.mdx)
+- [Glossary](./glossary.mdx)

@@ -5,6 +5,16 @@ const sidebars: SidebarsConfig = {
     'intro',
     {
       type: 'category',
+      label: 'Core Concepts',
+      link: {type: 'doc', id: 'concepts/how-it-works'},
+      items: [
+        'concepts/how-it-works',
+        'concepts/two-tokens',
+        'concepts/glossary',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Getting Started',
       link: {type: 'doc', id: 'getting-started/overview'},
       items: [
@@ -20,6 +30,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'tokenomics/overview',
         'tokenomics/fee-structure',
+        'tokenomics/vote-escrow',
         'tokenomics/vesting',
       ],
     },
@@ -39,6 +50,7 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'governance/overview'},
       items: [
         'governance/overview',
+        'governance/governance-tiers',
         'governance/proposals',
         'governance/tally-execution',
       ],
@@ -51,6 +63,9 @@ const sidebars: SidebarsConfig = {
         'advanced/buyback',
         'advanced/treasury',
         'advanced/insurance',
+        'advanced/tvl-cap',
+        'advanced/autonomy-graduation',
+        'advanced/alerts',
         'advanced/state-keys',
       ],
     },

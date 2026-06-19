@@ -72,6 +72,38 @@ Not strictly contradictory, but the Tokenomics doc omits the stated default. Wor
 
 ---
 
+## Codebase reconciliation
+
+Checked against the on-chain vesting buckets in `plugin/go/canoliq/genesis.testnet.json`
+and `genesis.localnet.json` (both identical). The vesting convention in
+`genesis.go` is: total window = `cliffMonths + vestMonths`, with linear unlock between
+the cliff and the end height.
+
+| Bucket | Code (cliff / vest) | Total window | Whitepaper | Tokenomics |
+|---|---|---|---|---|
+| **Validators & Infrastructure** | **12mo cliff + 24mo vest** | 36mo (3yr) | 3yr, **6mo cliff** ❌ | 3yr, **12mo cliff** ✅ |
+| Founders & Core Team | 12mo + 36mo | 48mo (4yr) | 4yr, 12mo cliff ✅ | 4yr, 12mo cliff ✅ |
+| Strategic Partners | 6mo + 12mo | 18mo | 18mo, 6mo cliff ✅ | 18mo, 6mo cliff ✅ |
+
+**The implementation resolves discrepancy #1 in favor of the Tokenomics doc:** the
+validator bucket uses a **12-month cliff**. The whitepaper's "6-month cliff" is the
+outlier, contradicted by both the Tokenomics doc and the code. Fix should land in the
+whitepaper.
+
+### Additional code/doc gap (Community & Airdrops)
+
+`Community & Airdrops` and `Liquidity Incentives` are both configured
+`cliffMonths: 0, vestMonths: 0`, which per `genesis.go:231` mints the full allocation
+**liquid at TGE** with no on-chain vesting. Both documents describe a 12-month
+distribution (Community) and 24-month emission (Liquidity).
+
+- **Liquidity Incentives:** plausibly fine — docs describe "DAO-controlled emission," so
+  tokens held in a controller/distributor account is not a contradiction.
+- **Community & Airdrops:** the docs' "12-month linear / linear daily" emission is **not**
+  enforced by the genesis vesting mechanism. It must be handled by the distributor
+  address receiving the bucket. Confirm this so the airdrop is not unintentionally fully
+  unlocked at launch.
+
 ## Recommended actions
 
 1. **#1 (validator cliff)** requires a decision — the documents contradict each other and the
