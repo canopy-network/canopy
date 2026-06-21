@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -147,15 +148,19 @@ func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.E
 
 // GetBlocks() returns a page of blocks based on the page parameters
 func (t *Indexer) GetBlocks(p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
-	results, count, page := make(lib.BlockResults, 0), 0, lib.NewPage(p, lib.BlockResultsPageName)
+	results, count := make(lib.BlockResults, 0), 0
+	// request 1 extra block so the callback can compute the "Took" duration
+	// for the last block in the page using the next block's timestamp
+	extra := lib.PageParams{PageNumber: p.PageNumber, PerPage: p.PerPage + 1}
+	page = lib.NewPage(extra, lib.BlockResultsPageName)
 	err = page.Load(lib.JoinLenPrefix(blockHeightPrefix), true, &results, t.db, func(_, b []byte) lib.ErrorI {
 		// get the block from the iterator value
 		block, e := t.getBlock(b, true)
 		if e != nil {
 			return e
 		}
-		// do not capture the 1 additional block that is needed for the metadata
-		if count < page.PerPage {
+		// do not capture the extra block that is only needed for metadata
+		if count < p.PerPage {
 			results = append(results, block)
 		}
 		// calculate the time took using the N block and the N-1 block (next block aka blockHeight + 1)
@@ -165,13 +170,14 @@ func (t *Indexer) GetBlocks(p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
 			blockTime := time.UnixMicro(int64(block.BlockHeader.Time))
 			nextBlkTime := time.UnixMicro(int64(nextBlock.BlockHeader.Time))
 			nextBlock.Meta.Took = uint64(nextBlkTime.Sub(blockTime).Milliseconds())
-		} else {
-			page.PerPage += 1 // modify the perPage to get 1 additional block the block meta may be filled in
 		}
 		count++
 		return nil
 	})
-	page.PerPage = p.PerPage // reset the perPage
+	// restore the original page params so the response reflects what was requested
+	page.PerPage = p.PerPage
+	page.Count = len(results)
+	page.TotalPages = int(math.Ceil(float64(page.TotalCount) / float64(p.PerPage)))
 	return
 }
 
