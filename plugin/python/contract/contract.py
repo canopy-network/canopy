@@ -25,6 +25,10 @@ from .proto import (
     PluginEndRequest,
     PluginEndResponse,
     MessageSend,
+    MessageReward,
+    MessageFaucet,
+    Faucet,
+    Reward,
     PluginKeyRead,
     PluginStateReadRequest,
     PluginStateWriteRequest,
@@ -54,11 +58,14 @@ CONTRACT_CONFIG = {
     "name": "python_plugin_contract",
     "id": 1,
     "version": 1,
-    "supported_transactions": ["send"],
+    "supported_transactions": ["send", "reward", "faucet"],
     "transaction_type_urls": [
         "type.googleapis.com/types.MessageSend",
+        "type.googleapis.com/types.MessageReward",
+        "type.googleapis.com/types.MessageFaucet",
     ],
     "event_type_urls": [],
+    "custom_state_prefixes": [FAUCET_PREFIX, REWARD_PREFIX],
     # Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
     "file_descriptor_protos": [
         any_pb2.DESCRIPTOR.serialized_pb,
@@ -74,6 +81,8 @@ CONTRACT_CONFIG = {
 ACCOUNT_PREFIX = b"\x01"
 POOL_PREFIX = b"\x02"
 PARAMS_PREFIX = b"\x07"
+FAUCET_PREFIX = b"\x64"  # 100 - outside core reserved range 1-15
+REWARD_PREFIX = b"\x65"  # 101 - outside core reserved range 1-15
 
 
 # Key generation functions (from keys.py)
@@ -113,6 +122,16 @@ def key_for_fee_params() -> bytes:
 def key_for_fee_pool(chain_id: int) -> bytes:
     """Generate state database key for fee pool."""
     return join_len_prefix(POOL_PREFIX, format_uint64(chain_id))
+
+
+def key_for_faucet(address: bytes) -> bytes:
+    """Generate state database key for a faucet record."""
+    return join_len_prefix(FAUCET_PREFIX, address)
+
+
+def key_for_reward(address: bytes) -> bytes:
+    """Generate state database key for a reward record."""
+    return join_len_prefix(REWARD_PREFIX, address)
 
 
 # Proto marshal/unmarshal utilities
@@ -203,6 +222,14 @@ class Contract:
                 msg = MessageSend()
                 msg.ParseFromString(request.tx.msg.value)
                 return self._check_message_send(msg)
+            elif type_url.endswith("/types.MessageReward"):
+                msg = MessageReward()
+                msg.ParseFromString(request.tx.msg.value)
+                return self._check_message_reward(msg)
+            elif type_url.endswith("/types.MessageFaucet"):
+                msg = MessageFaucet()
+                msg.ParseFromString(request.tx.msg.value)
+                return self._check_message_faucet(msg)
             else:
                 raise err_invalid_message_cast()
 
@@ -228,6 +255,14 @@ class Contract:
                 msg = MessageSend()
                 msg.ParseFromString(request.tx.msg.value)
                 return await self._deliver_message_send(msg, request.tx.fee)
+            elif type_url.endswith("/types.MessageReward"):
+                msg = MessageReward()
+                msg.ParseFromString(request.tx.msg.value)
+                return await self._deliver_message_reward(msg, request.tx.fee)
+            elif type_url.endswith("/types.MessageFaucet"):
+                msg = MessageFaucet()
+                msg.ParseFromString(request.tx.msg.value)
+                return await self._deliver_message_faucet(msg)
             else:
                 raise err_invalid_message_cast()
 
@@ -266,6 +301,30 @@ class Contract:
         response = PluginCheckResponse()
         response.recipient = msg.to_address
         response.authorized_signers.append(msg.from_address)
+        return response
+
+    def _check_message_faucet(self, msg: MessageFaucet) -> PluginCheckResponse:
+        if len(msg.signer_address) != 20:
+            raise err_invalid_address()
+        if len(msg.recipient_address) != 20:
+            raise err_invalid_address()
+        if msg.amount == 0:
+            raise err_invalid_amount()
+        response = PluginCheckResponse()
+        response.recipient = msg.recipient_address
+        response.authorized_signers.append(msg.signer_address)
+        return response
+
+    def _check_message_reward(self, msg: MessageReward) -> PluginCheckResponse:
+        if len(msg.admin_address) != 20:
+            raise err_invalid_address()
+        if len(msg.recipient_address) != 20:
+            raise err_invalid_address()
+        if msg.amount == 0:
+            raise err_invalid_amount()
+        response = PluginCheckResponse()
+        response.recipient = msg.recipient_address
+        response.authorized_signers.append(msg.admin_address)
         return response
 
     async def _deliver_message_send(self, msg: MessageSend, fee: int) -> PluginDeliverResponse:
@@ -365,6 +424,163 @@ class Contract:
                         PluginSetOp(key=fee_pool_key, value=fee_pool_bytes_new),
                         PluginSetOp(key=to_key, value=to_bytes_new),
                         PluginSetOp(key=from_key, value=from_bytes_new),
+                    ],
+                ),
+            )
+
+        result = PluginDeliverResponse()
+        if write_resp.HasField("error"):
+            result.error.CopyFrom(write_resp.error)
+        return result
+
+    async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResponse:
+        if not self.plugin or not self.config:
+            raise PluginError(1, "plugin", "plugin or config not initialized")
+
+        recipient_query_id = random.randint(0, 2 ** 53)
+        faucet_query_id = random.randint(0, 2 ** 53)
+
+        recipient_key = key_for_account(msg.recipient_address)
+        faucet_key = key_for_faucet(msg.recipient_address)
+
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[
+                    PluginKeyRead(query_id=recipient_query_id, key=recipient_key),
+                    PluginKeyRead(query_id=faucet_query_id, key=faucet_key),
+                ]
+            ),
+        )
+
+        if response.HasField("error"):
+            result = PluginDeliverResponse()
+            result.error.CopyFrom(response.error)
+            return result
+
+        recipient_bytes = None
+        faucet_bytes = None
+
+        for resp in response.results:
+            if resp.query_id == recipient_query_id:
+                recipient_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == faucet_query_id:
+                faucet_bytes = resp.entries[0].value if resp.entries else None
+
+        recipient_account = unmarshal(Account, recipient_bytes) if recipient_bytes else Account()
+        faucet_record = unmarshal(Faucet, faucet_bytes) if faucet_bytes else Faucet()
+
+        recipient_account.amount += msg.amount
+        faucet_record.recipient_address = msg.recipient_address
+        faucet_record.total_amount += msg.amount
+        faucet_record.count += 1
+
+        recipient_bytes_new = marshal(recipient_account)
+        faucet_bytes_new = marshal(faucet_record)
+
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(
+                sets=[
+                    PluginSetOp(key=recipient_key, value=recipient_bytes_new),
+                    PluginSetOp(key=faucet_key, value=faucet_bytes_new),
+                ],
+            ),
+        )
+
+        result = PluginDeliverResponse()
+        if write_resp.HasField("error"):
+            result.error.CopyFrom(write_resp.error)
+        return result
+
+    async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginDeliverResponse:
+        if not self.plugin or not self.config:
+            raise PluginError(1, "plugin", "plugin or config not initialized")
+
+        admin_query_id = random.randint(0, 2 ** 53)
+        recipient_query_id = random.randint(0, 2 ** 53)
+        fee_query_id = random.randint(0, 2 ** 53)
+        reward_query_id = random.randint(0, 2 ** 53)
+
+        admin_key = key_for_account(msg.admin_address)
+        recipient_key = key_for_account(msg.recipient_address)
+        fee_pool_key = key_for_fee_pool(self.config.chain_id)
+        reward_key = key_for_reward(msg.recipient_address)
+
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[
+                    PluginKeyRead(query_id=fee_query_id, key=fee_pool_key),
+                    PluginKeyRead(query_id=admin_query_id, key=admin_key),
+                    PluginKeyRead(query_id=recipient_query_id, key=recipient_key),
+                    PluginKeyRead(query_id=reward_query_id, key=reward_key),
+                ]
+            ),
+        )
+
+        if response.HasField("error"):
+            result = PluginDeliverResponse()
+            result.error.CopyFrom(response.error)
+            return result
+
+        admin_bytes = None
+        recipient_bytes = None
+        fee_pool_bytes = None
+        reward_bytes = None
+
+        for resp in response.results:
+            if resp.query_id == admin_query_id:
+                admin_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == recipient_query_id:
+                recipient_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == fee_query_id:
+                fee_pool_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == reward_query_id:
+                reward_bytes = resp.entries[0].value if resp.entries else None
+
+        admin_account = unmarshal(Account, admin_bytes) if admin_bytes else Account()
+        recipient_account = unmarshal(Account, recipient_bytes) if recipient_bytes else Account()
+        fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
+        reward_record = unmarshal(Reward, reward_bytes) if reward_bytes else Reward()
+
+        if admin_account.amount < fee:
+            raise err_insufficient_funds()
+
+        admin_account.amount -= fee
+        recipient_account.amount += msg.amount
+        fee_pool.amount += fee
+        reward_record.recipient_address = msg.recipient_address
+        reward_record.last_admin_address = msg.admin_address
+        reward_record.total_amount += msg.amount
+        reward_record.count += 1
+
+        admin_bytes_new = marshal(admin_account)
+        recipient_bytes_new = marshal(recipient_account)
+        fee_pool_bytes_new = marshal(fee_pool)
+        reward_bytes_new = marshal(reward_record)
+
+        if admin_account.amount == 0:
+            write_resp = await self.plugin.state_write(
+                self,
+                PluginStateWriteRequest(
+                    sets=[
+                        PluginSetOp(key=fee_pool_key, value=fee_pool_bytes_new),
+                        PluginSetOp(key=recipient_key, value=recipient_bytes_new),
+                        PluginSetOp(key=reward_key, value=reward_bytes_new),
+                    ],
+                    deletes=[PluginDeleteOp(key=admin_key)],
+                ),
+            )
+        else:
+            write_resp = await self.plugin.state_write(
+                self,
+                PluginStateWriteRequest(
+                    sets=[
+                        PluginSetOp(key=fee_pool_key, value=fee_pool_bytes_new),
+                        PluginSetOp(key=admin_key, value=admin_bytes_new),
+                        PluginSetOp(key=recipient_key, value=recipient_bytes_new),
+                        PluginSetOp(key=reward_key, value=reward_bytes_new),
                     ],
                 ),
             )
