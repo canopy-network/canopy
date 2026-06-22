@@ -53,3 +53,15 @@ func TestKeyForSupply(t *testing.T) {
 		t.Errorf("KeyForSupply: got %x want %x", got, want)
 	}
 }
+
+// TestKeyForValidator verifies parity with fsm/key.go:121's KeyForValidator
+// (validatorPrefix = []byte{3}). The record key is the operator address
+// length-prefixed after the prefix byte.
+func TestKeyForValidator(t *testing.T) {
+	addr := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	// [1=validatorPrefix_len][prefix=03][4=addr_len][addr=DEADBEEF]
+	want := []byte{0x01, 0x03, 0x04, 0xDE, 0xAD, 0xBE, 0xEF}
+	if got := KeyForValidator(addr); !bytes.Equal(got, want) {
+		t.Errorf("KeyForValidator: got %x want %x", got, want)
+	}
+}

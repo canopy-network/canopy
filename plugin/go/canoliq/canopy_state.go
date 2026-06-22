@@ -64,3 +64,29 @@ func (c *Canoliq) readCanopyTotalStake() (uint64, *contract.PluginError) {
 	}
 	return supply.Staked, nil
 }
+
+// readCanopyValidator reads the Canopy validator record at the given address
+// and unmarshals it. Returns (nil, nil) when the key is absent (e.g. the
+// operator unstaked or was never registered with Canopy). Used by the
+// restaking-observation path (WP §7) to read each operator's committees[]
+// + staked_amount.
+func (c *Canoliq) readCanopyValidator(addr []byte) (*contract.Validator, *contract.PluginError) {
+	q := rand.Uint64()
+	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
+		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: contract.KeyForValidator(addr)}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 {
+		return nil, nil
+	}
+	v := new(contract.Validator)
+	if e := contract.Unmarshal(resp.Results[0].Entries[0].Value, v); e != nil {
+		return nil, e
+	}
+	return v, nil
+}

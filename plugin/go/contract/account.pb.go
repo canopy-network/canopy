@@ -147,12 +147,12 @@ type Supply struct {
 	// staked: total locked tokens (includes delegations)
 	Staked uint64 `protobuf:"varint,2,opt,name=staked,proto3" json:"staked,omitempty"`
 	// delegated_only: locked tokens that are delegate-only
-	DelegatedOnly uint64 `protobuf:"varint,3,opt,name=delegated_only,json=delegatedOnly,proto3" json:"delegated_only,omitempty"` // @gotags: json:"delegatedOnly"
+	DelegatedOnly uint64 `protobuf:"varint,3,opt,name=delegated_only,json=delegatedOnly,proto3" json:"delegatedOnly"` // @gotags: json:"delegatedOnly"
 	// committee_staked: per-committee staked totals (Pool.id = chainId,
 	// Pool.amount = staked uCNPY), sorted by stake
-	CommitteeStaked []*Pool `protobuf:"bytes,4,rep,name=committee_staked,json=committeeStaked,proto3" json:"committee_staked,omitempty"` // @gotags: json:"committeeStaked"
+	CommitteeStaked []*Pool `protobuf:"bytes,4,rep,name=committee_staked,json=committeeStaked,proto3" json:"committeeStaked"` // @gotags: json:"committeeStaked"
 	// committee_delegated_only: per-committee delegate-only totals
-	CommitteeDelegatedOnly []*Pool `protobuf:"bytes,5,rep,name=committee_delegated_only,json=committeeDelegatedOnly,proto3" json:"committee_delegated_only,omitempty"` // @gotags: json:"committeeDelegatedOnly"
+	CommitteeDelegatedOnly []*Pool `protobuf:"bytes,5,rep,name=committee_delegated_only,json=committeeDelegatedOnly,proto3" json:"committeeDelegatedOnly"` // @gotags: json:"committeeDelegatedOnly"
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }

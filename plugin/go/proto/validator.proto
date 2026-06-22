@@ -1,0 +1,23 @@
+syntax = "proto3";
+package types;
+option go_package = "github.com/canopy-network/go-plugin/contract";
+
+// Validator mirrors Canopy's lib.Validator (lib/.proto/validator.proto:26).
+// Plugins decode validator records from the FSM at contract.KeyForValidator()
+// to inspect address / staked amount / committees membership without
+// re-implementing the validator state machine. Field numbers MUST match the
+// FSM's Validator so wire-format unmarshal succeeds; fields we don't need
+// (public_key, net_address, max_paused_height, unstaking_height, output,
+// delegate, compound) are intentionally omitted — proto3 ignores unknown
+// fields during decode.
+message Validator {
+  // address: the short version of the operator public key.
+  bytes address = 1;
+  // staked_amount: the operator's surety-bonded uCNPY. Field number must
+  // be 4 to match lib.Validator.
+  uint64 staked_amount = 4; // @gotags: json:"stakedAmount"
+  // committees: the list of Canopy chain ids whose committees this
+  // validator participates in. Restaking gives each listed committee the
+  // operator's full staked_amount as exposure. Field number must be 5.
+  repeated uint64 committees = 5;
+}

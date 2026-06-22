@@ -264,10 +264,11 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 }
 
 var (
-	accountPrefix = []byte{1}  // store key prefix for accounts
-	poolPrefix    = []byte{2}  // store key prefix for pools
-	paramsPrefix  = []byte{7}  // store key prefix for governance parameters
-	supplyPrefix  = []byte{10} // store key prefix for the network-wide supply singleton (mirrors fsm/key.go:40)
+	accountPrefix   = []byte{1}  // store key prefix for accounts
+	poolPrefix      = []byte{2}  // store key prefix for pools
+	validatorPrefix = []byte{3}  // store key prefix for validators (mirrors fsm/key.go:33)
+	paramsPrefix    = []byte{7}  // store key prefix for governance parameters
+	supplyPrefix    = []byte{10} // store key prefix for the network-wide supply singleton (mirrors fsm/key.go:40)
 )
 
 // KeyForAccount() returns the state database key for an account
@@ -295,6 +296,15 @@ func KeyForFeePool(chainId uint64) []byte {
 // stake aggregates via Supply.committee_staked.
 func KeyForSupply() []byte {
 	return JoinLenPrefix(supplyPrefix)
+}
+
+// KeyForValidator returns the state database key for a Canopy validator
+// record at the given operator address. Mirrors fsm/key.go:121 byte-for-byte
+// so the plugin can decode lib.Validator records via contract.Validator
+// (proto/validator.proto). Used by canoLiq's per-committee exposure
+// observation (WP §7) to read each operator's committees[] + staked_amount.
+func KeyForValidator(addr []byte) []byte {
+	return JoinLenPrefix(validatorPrefix, addr)
 }
 
 func formatUint64(u uint64) []byte {
