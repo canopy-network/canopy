@@ -1,0 +1,106 @@
+---
+sidebar_label: Restaking Policy
+---
+
+# Restaking Policy
+
+**In one sentence:** governance declares the desired per-Canopy-committee
+allocation of canoLiq's stake; the protocol reports the *actual* observed
+exposure and flags drift so operators can react.
+
+Whitepaper §7 ("Restaking Optimization") commits canoLiq to a multi-committee
+strategy: identify high-yield committees, diversify slashing risk, keep enough
+exposure to canoLiq's own committee for redemptions, all under a
+governance-controlled allocation policy with min/max per committee.
+
+## Scope (today vs. eventually)
+
+What's implemented now:
+
+- **Policy declaration** — governance can store a list of
+  `(committee_id, target_weight_bps, min_stake_ucnpy, max_stake_ucnpy)` entries.
+- **Per-committee observation** — the protocol reads each registered operator's
+  `lib.Validator.committees[]` + `staked_amount` and sums by committee to derive
+  canoLiq's actual exposure.
+- **Drift reporting** — `/v1/restaking` surfaces observed weight vs target, plus
+  `under_min` / `over_max` flags, plus an aggregate `policy_compliant` boolean.
+
+What's deferred:
+
+- **Active rebalancing.** The protocol does not currently re-route delegations
+  in response to drift; that requires a delegation-routing primitive (a way for
+  canoLiq to atomically shift its pool's delegation between operators) that
+  isn't defined in the codebase yet. The compliance signals are designed so
+  operators can act manually in the meantime — by adjusting which operators
+  canoLiq's `ValidatorRegistry` favours, or by ejecting operators via the
+  existing `ACTION_VALIDATOR_EJECT` governance tier.
+
+## Restaking semantics
+
+Canopy lets one validator serve multiple committees with the same surety bond
+("restaking"). So if operator A bonds `1_000_000` uCNPY and lists
+`committees = [2, 7]`, A's full `1_000_000` counts toward canoLiq's exposure on
+**both** committees 2 and 7 — not split between them. Per-committee exposure is
+therefore:
+
+```
+exposure[c] = Σ operator.staked_amount  for operators whose committees[] contains c
+```
+
+The plugin reads each registered operator's Canopy `Validator` record (via
+`KeyForValidator`) and computes this sum at each snapshot.
+
+## Policy validation
+
+When governance updates `restaking_policy`:
+
+- An **empty list** is valid — it means "no policy declared; observation only".
+- A **non-empty list** must have `target_weight_bps` summing to exactly
+  `10_000` across all entries.
+- Each `committee_id` may appear at most once.
+- Per entry, if both `min_stake_ucnpy` and `max_stake_ucnpy` are set, `min ≤ max`.
+- `0` for either bound means "no constraint".
+
+A policy that fails any check is rejected by `ValidateParams` and the
+param-change proposal does not pass.
+
+## `/v1/restaking`
+
+```json
+GET /v1/restaking
+{
+  "totalExposureUcnpy": 1500000,
+  "policy": [
+    { "committeeId": 2, "targetWeightBps": 6000, "minStakeUcnpy": 500000, "maxStakeUcnpy": 0 },
+    { "committeeId": 7, "targetWeightBps": 4000, "minStakeUcnpy": 0,      "maxStakeUcnpy": 0 }
+  ],
+  "allocations": [
+    { "committeeId": 2, "stakeUcnpy": 1000000, "weightBps": 6666, "targetBps": 6000, "driftBps":  666 },
+    { "committeeId": 7, "stakeUcnpy":  500000, "weightBps": 3333, "targetBps": 4000, "driftBps": -667 }
+  ],
+  "policyCompliant": true
+}
+```
+
+- `totalExposureUcnpy` — Σ across `allocations[].stakeUcnpy`.
+- `policy` — the governance-set declaration; empty when none configured.
+- `allocations` — sorted by committee id; the union of observed committees and
+  policy-listed committees so a 0-exposure committee with a policy entry still
+  appears (as `under_min` when applicable).
+- `driftBps` — signed: positive = over target, negative = under.
+- `policyCompliant` — `false` when any allocation reports `under_min` or
+  `over_max`. Pure weight drift does not flip this flag; it's informational
+  until active rebalancing lands.
+
+## Tuning the policy
+
+Restaking policy changes go through `ACTION_PROTOCOL_UPGRADE` — the highest
+governance tier (10% quorum, 67% approval, 7-day timelock) because they affect
+the protocol's stake distribution. Smaller adjustments to existing entries
+(e.g. shifting weight bps between two committees) follow the same path.
+
+## Related
+
+- [Governance Tiers](../governance/governance-tiers.mdx) — the
+  `ACTION_PROTOCOL_UPGRADE` tier used for policy changes.
+- [API Endpoints](../api/endpoints.mdx) — `/v1/restaking`.
