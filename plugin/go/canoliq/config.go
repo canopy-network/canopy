@@ -354,6 +354,35 @@ func ValidateParams(p *contract.CanoliqParams) *contract.PluginError {
 			return ErrInvalidParams()
 		}
 	}
+	// Restaking policy (WP §7): empty list is valid (single-committee
+	// fallback). Otherwise target_weight_bps must sum to exactly 10_000
+	// across all entries; per-entry min ≤ max (when both are set);
+	// committee ids must be unique so /v1/restaking drift is unambiguous.
+	if len(p.RestakingPolicy) > 0 {
+		seenCommittee := make(map[uint64]bool, len(p.RestakingPolicy))
+		var weightSum uint64
+		for _, e := range p.RestakingPolicy {
+			if e == nil {
+				return ErrInvalidParams()
+			}
+			if seenCommittee[e.CommitteeId] {
+				return ErrInvalidParams()
+			}
+			seenCommittee[e.CommitteeId] = true
+			if e.TargetWeightBps > 10_000 {
+				return ErrInvalidParams()
+			}
+			weightSum += e.TargetWeightBps
+			// min and max are independently optional (0 = unset); enforce
+			// the ordering only when both have a value.
+			if e.MinStakeUcnpy > 0 && e.MaxStakeUcnpy > 0 && e.MinStakeUcnpy > e.MaxStakeUcnpy {
+				return ErrInvalidParams()
+			}
+		}
+		if weightSum != 10_000 {
+			return ErrInvalidParams()
+		}
+	}
 	return nil
 }
 

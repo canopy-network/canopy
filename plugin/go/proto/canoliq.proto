@@ -220,6 +220,36 @@ message CanoliqParams {
   uint64 graduation_min_daily_tx = 30; // @gotags: json:"graduationMinDailyTx"
   // graduation_min_runway_months: treasury-runway threshold in months (> 12).
   uint64 graduation_min_runway_months = 31; // @gotags: json:"graduationMinRunwayMonths"
+  // === WP §7 Restaking policy ===
+  // restaking_policy: governance-declared per-committee allocation policy.
+  // Each entry pins a committee id to a target weight (in bps; entries must
+  // sum to 10000 when the list is non-empty) plus optional min/max stake
+  // floors/ceilings in uCNPY. Currently observation-only — /v1/restaking
+  // surfaces actual vs target so operators can act manually. Automated
+  // rebalancing requires a delegation-routing primitive not yet defined in
+  // the codebase and is deferred per §11 roadmap.
+  repeated RestakingPolicyEntry restaking_policy = 32; // @gotags: json:"restakingPolicy"
+}
+
+// RestakingPolicyEntry declares the desired share of canoLiq's stake exposure
+// to one Canopy committee (WP §7). target_weight_bps fixes the share as a
+// fraction of total canoLiq exposure (sum across the policy must equal
+// 10_000); min_stake_ucnpy / max_stake_ucnpy are absolute floors/ceilings for
+// the per-committee exposure (0 = unset, i.e. no floor or no ceiling). For
+// now the values feed only the /v1/restaking drift report; they become
+// enforcement targets once active rebalancing lands.
+message RestakingPolicyEntry {
+  // committee_id: the Canopy chain id whose committee this entry governs.
+  uint64 committee_id = 1; // @gotags: json:"committeeId"
+  // target_weight_bps: desired share of canoLiq's total committee exposure,
+  // in basis points. Across an entire policy list these must sum to 10_000.
+  uint64 target_weight_bps = 2; // @gotags: json:"targetWeightBps"
+  // min_stake_ucnpy: optional floor on per-committee exposure (uCNPY). 0 = no
+  // floor. Drift "under-min" surfaces in /v1/restaking when set.
+  uint64 min_stake_ucnpy = 3; // @gotags: json:"minStakeUcnpy"
+  // max_stake_ucnpy: optional ceiling on per-committee exposure (uCNPY). 0 =
+  // no ceiling. Drift "over-max" surfaces in /v1/restaking when set.
+  uint64 max_stake_ucnpy = 4; // @gotags: json:"maxStakeUcnpy"
 }
 
 // ActionType classifies a proposal so per-action governance tiers can apply

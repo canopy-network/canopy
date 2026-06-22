@@ -102,6 +102,22 @@ func (p *Plugin) QueryHealth() *HealthView {
 	}
 }
 
+// QueryRestaking returns the WP §7 policy + observed-exposure surface.
+// Policy is the governance-declared per-committee allocation; allocations
+// are derived from canoLiq's registered operators' Canopy Validator
+// committees[] + staked_amount (restaking semantics: same bond covers
+// multiple committees). When both are empty, the response is well-formed
+// with zeros — RPC consumers can rely on the schema regardless of state.
+//
+// Phase C scope is policy + observability. Active rebalancing is out of
+// scope; operators consult drift bps + under-min / over-max flags and
+// can act manually (e.g. by re-targeting which operators canoLiq
+// delegates to via existing governance / registry mechanisms).
+func (p *Plugin) QueryRestaking() *RestakingView {
+	s := p.Snapshot()
+	return buildRestakingView(s.Params.GetRestakingPolicy(), s.CurrentRestakingAllocation)
+}
+
 // QueryGlobals returns the snapshotted globals record.
 func (p *Plugin) QueryGlobals() *contract.CanoliqGlobals {
 	return p.Snapshot().Globals

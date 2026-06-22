@@ -360,7 +360,7 @@ func (SpendDenomination) EnumDescriptor() ([]byte, []int) {
 type MessageCanoliqDeposit struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the depositor (also the cCNPY recipient)
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// amount: the CNPY amount to deposit (uCNPY)
 	Amount        uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -416,9 +416,9 @@ func (x *MessageCanoliqDeposit) GetAmount() uint64 {
 type MessageCanoliqRedeem struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the redeemer (cCNPY holder)
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// ccnpy_amount: amount of cCNPY to burn (uCCNPY)
-	CcnpyAmount   uint64 `protobuf:"varint,2,opt,name=ccnpy_amount,json=ccnpyAmount,proto3" json:"ccnpy_amount,omitempty"` // @gotags: json:"ccnpyAmount"
+	CcnpyAmount   uint64 `protobuf:"varint,2,opt,name=ccnpy_amount,json=ccnpyAmount,proto3" json:"ccnpyAmount"` // @gotags: json:"ccnpyAmount"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -472,9 +472,9 @@ func (x *MessageCanoliqRedeem) GetCcnpyAmount() uint64 {
 type MessageCanoliqClaimRedemption struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the redeemer claiming the matured redemption
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// redemption_id: the id of the redemption record to claim
-	RedemptionId  uint64 `protobuf:"varint,2,opt,name=redemption_id,json=redemptionId,proto3" json:"redemption_id,omitempty"` // @gotags: json:"redemptionId"
+	RedemptionId  uint64 `protobuf:"varint,2,opt,name=redemption_id,json=redemptionId,proto3" json:"redemptionId"` // @gotags: json:"redemptionId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -527,9 +527,9 @@ func (x *MessageCanoliqClaimRedemption) GetRedemptionId() uint64 {
 type MessageCLIQTransfer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the sender
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// to_address: the recipient
-	ToAddress []byte `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"to_address,omitempty"` // @gotags: json:"toAddress"
+	ToAddress []byte `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"toAddress"` // @gotags: json:"toAddress"
 	// amount: amount of CLIQ to transfer (uCLIQ)
 	Amount        uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -592,7 +592,7 @@ func (x *MessageCLIQTransfer) GetAmount() uint64 {
 type MessageCLIQClaimVested struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the vesting recipient
-	FromAddress   []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress   []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -638,50 +638,50 @@ func (x *MessageCLIQClaimVested) GetFromAddress() []byte {
 type CanoliqGlobals struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// total_ccnpy_supply: aggregate cCNPY in circulation (uCCNPY)
-	TotalCcnpySupply uint64 `protobuf:"varint,1,opt,name=total_ccnpy_supply,json=totalCcnpySupply,proto3" json:"total_ccnpy_supply,omitempty"` // @gotags: json:"totalCcnpySupply"
+	TotalCcnpySupply uint64 `protobuf:"varint,1,opt,name=total_ccnpy_supply,json=totalCcnpySupply,proto3" json:"totalCcnpySupply"` // @gotags: json:"totalCcnpySupply"
 	// total_pooled_cnpy: total CNPY backing cCNPY (uCNPY)
-	TotalPooledCnpy uint64 `protobuf:"varint,2,opt,name=total_pooled_cnpy,json=totalPooledCnpy,proto3" json:"total_pooled_cnpy,omitempty"` // @gotags: json:"totalPooledCnpy"
+	TotalPooledCnpy uint64 `protobuf:"varint,2,opt,name=total_pooled_cnpy,json=totalPooledCnpy,proto3" json:"totalPooledCnpy"` // @gotags: json:"totalPooledCnpy"
 	// pending_redemption_cnpy: CNPY reserved for in-flight redemptions (uCNPY)
-	PendingRedemptionCnpy uint64 `protobuf:"varint,3,opt,name=pending_redemption_cnpy,json=pendingRedemptionCnpy,proto3" json:"pending_redemption_cnpy,omitempty"` // @gotags: json:"pendingRedemptionCnpy"
+	PendingRedemptionCnpy uint64 `protobuf:"varint,3,opt,name=pending_redemption_cnpy,json=pendingRedemptionCnpy,proto3" json:"pendingRedemptionCnpy"` // @gotags: json:"pendingRedemptionCnpy"
 	// last_processed_reward_pool: pool balance observed at the last reward sweep
-	LastProcessedRewardPool uint64 `protobuf:"varint,4,opt,name=last_processed_reward_pool,json=lastProcessedRewardPool,proto3" json:"last_processed_reward_pool,omitempty"` // @gotags: json:"lastProcessedRewardPool"
+	LastProcessedRewardPool uint64 `protobuf:"varint,4,opt,name=last_processed_reward_pool,json=lastProcessedRewardPool,proto3" json:"lastProcessedRewardPool"` // @gotags: json:"lastProcessedRewardPool"
 	// cliq_total_supply: hard-cap CLIQ supply minted at genesis (uCLIQ)
-	CliqTotalSupply uint64 `protobuf:"varint,5,opt,name=cliq_total_supply,json=cliqTotalSupply,proto3" json:"cliq_total_supply,omitempty"` // @gotags: json:"cliqTotalSupply"
+	CliqTotalSupply uint64 `protobuf:"varint,5,opt,name=cliq_total_supply,json=cliqTotalSupply,proto3" json:"cliqTotalSupply"` // @gotags: json:"cliqTotalSupply"
 	// cliq_circulating_supply: CLIQ that is currently liquid (uCLIQ)
-	CliqCirculatingSupply uint64 `protobuf:"varint,6,opt,name=cliq_circulating_supply,json=cliqCirculatingSupply,proto3" json:"cliq_circulating_supply,omitempty"` // @gotags: json:"cliqCirculatingSupply"
+	CliqCirculatingSupply uint64 `protobuf:"varint,6,opt,name=cliq_circulating_supply,json=cliqCirculatingSupply,proto3" json:"cliqCirculatingSupply"` // @gotags: json:"cliqCirculatingSupply"
 	// next_redemption_id: monotonically-increasing redemption id counter
-	NextRedemptionId uint64 `protobuf:"varint,7,opt,name=next_redemption_id,json=nextRedemptionId,proto3" json:"next_redemption_id,omitempty"` // @gotags: json:"nextRedemptionId"
+	NextRedemptionId uint64 `protobuf:"varint,7,opt,name=next_redemption_id,json=nextRedemptionId,proto3" json:"nextRedemptionId"` // @gotags: json:"nextRedemptionId"
 	// genesis_complete: whether genesis distribution has run
-	GenesisComplete bool `protobuf:"varint,8,opt,name=genesis_complete,json=genesisComplete,proto3" json:"genesis_complete,omitempty"` // @gotags: json:"genesisComplete"
+	GenesisComplete bool `protobuf:"varint,8,opt,name=genesis_complete,json=genesisComplete,proto3" json:"genesisComplete"` // @gotags: json:"genesisComplete"
 	// total_staked_cliq: aggregate CLIQ locked in stake records (uCLIQ)
-	TotalStakedCliq uint64 `protobuf:"varint,9,opt,name=total_staked_cliq,json=totalStakedCliq,proto3" json:"total_staked_cliq,omitempty"` // @gotags: json:"totalStakedCliq"
+	TotalStakedCliq uint64 `protobuf:"varint,9,opt,name=total_staked_cliq,json=totalStakedCliq,proto3" json:"totalStakedCliq"` // @gotags: json:"totalStakedCliq"
 	// next_proposal_id: monotonically-increasing proposal id counter
-	NextProposalId uint64 `protobuf:"varint,10,opt,name=next_proposal_id,json=nextProposalId,proto3" json:"next_proposal_id,omitempty"` // @gotags: json:"nextProposalId"
+	NextProposalId uint64 `protobuf:"varint,10,opt,name=next_proposal_id,json=nextProposalId,proto3" json:"nextProposalId"` // @gotags: json:"nextProposalId"
 	// next_buyback_id: monotonically-increasing buyback order id counter
-	NextBuybackId uint64 `protobuf:"varint,11,opt,name=next_buyback_id,json=nextBuybackId,proto3" json:"next_buyback_id,omitempty"` // @gotags: json:"nextBuybackId"
+	NextBuybackId uint64 `protobuf:"varint,11,opt,name=next_buyback_id,json=nextBuybackId,proto3" json:"nextBuybackId"` // @gotags: json:"nextBuybackId"
 	// next_spend_id: monotonically-increasing treasury spend id counter
-	NextSpendId uint64 `protobuf:"varint,12,opt,name=next_spend_id,json=nextSpendId,proto3" json:"next_spend_id,omitempty"` // @gotags: json:"nextSpendId"
+	NextSpendId uint64 `protobuf:"varint,12,opt,name=next_spend_id,json=nextSpendId,proto3" json:"nextSpendId"` // @gotags: json:"nextSpendId"
 	// next_unstake_id: monotonically-increasing CLIQ unstake id counter
-	NextUnstakeId uint64 `protobuf:"varint,13,opt,name=next_unstake_id,json=nextUnstakeId,proto3" json:"next_unstake_id,omitempty"` // @gotags: json:"nextUnstakeId"
+	NextUnstakeId uint64 `protobuf:"varint,13,opt,name=next_unstake_id,json=nextUnstakeId,proto3" json:"nextUnstakeId"` // @gotags: json:"nextUnstakeId"
 	// peak_tvl_ucnpy: running maximum of total_pooled_cnpy (T4). Drives the
 	// insurance-fund target (5% of peak TVL); advanced each EndBlock.
-	PeakTvlUcnpy uint64 `protobuf:"varint,14,opt,name=peak_tvl_ucnpy,json=peakTvlUcnpy,proto3" json:"peak_tvl_ucnpy,omitempty"` // @gotags: json:"peakTvlUcnpy"
+	PeakTvlUcnpy uint64 `protobuf:"varint,14,opt,name=peak_tvl_ucnpy,json=peakTvlUcnpy,proto3" json:"peakTvlUcnpy"` // @gotags: json:"peakTvlUcnpy"
 	// === T5 autonomy-graduation tracking counters ===
 	// passed_proposal_count: cumulative proposals that have passed.
-	PassedProposalCount uint64 `protobuf:"varint,15,opt,name=passed_proposal_count,json=passedProposalCount,proto3" json:"passed_proposal_count,omitempty"` // @gotags: json:"passedProposalCount"
+	PassedProposalCount uint64 `protobuf:"varint,15,opt,name=passed_proposal_count,json=passedProposalCount,proto3" json:"passedProposalCount"` // @gotags: json:"passedProposalCount"
 	// daily_tx_count_window: delivered-tx counter for the in-progress window.
-	DailyTxCountWindow uint64 `protobuf:"varint,16,opt,name=daily_tx_count_window,json=dailyTxCountWindow,proto3" json:"daily_tx_count_window,omitempty"` // @gotags: json:"dailyTxCountWindow"
+	DailyTxCountWindow uint64 `protobuf:"varint,16,opt,name=daily_tx_count_window,json=dailyTxCountWindow,proto3" json:"dailyTxCountWindow"` // @gotags: json:"dailyTxCountWindow"
 	// last_window_close_height: height the current tx-count window opened.
-	LastWindowCloseHeight uint64 `protobuf:"varint,17,opt,name=last_window_close_height,json=lastWindowCloseHeight,proto3" json:"last_window_close_height,omitempty"` // @gotags: json:"lastWindowCloseHeight"
+	LastWindowCloseHeight uint64 `protobuf:"varint,17,opt,name=last_window_close_height,json=lastWindowCloseHeight,proto3" json:"lastWindowCloseHeight"` // @gotags: json:"lastWindowCloseHeight"
 	// last_daily_tx_count: tx count of the last completed window (the metric).
-	LastDailyTxCount uint64 `protobuf:"varint,18,opt,name=last_daily_tx_count,json=lastDailyTxCount,proto3" json:"last_daily_tx_count,omitempty"` // @gotags: json:"lastDailyTxCount"
+	LastDailyTxCount uint64 `protobuf:"varint,18,opt,name=last_daily_tx_count,json=lastDailyTxCount,proto3" json:"lastDailyTxCount"` // @gotags: json:"lastDailyTxCount"
 	// turnout_sum_bps: sum of per-proposal turnout (votes/snapshot) in bps.
-	TurnoutSumBps uint64 `protobuf:"varint,19,opt,name=turnout_sum_bps,json=turnoutSumBps,proto3" json:"turnout_sum_bps,omitempty"` // @gotags: json:"turnoutSumBps"
+	TurnoutSumBps uint64 `protobuf:"varint,19,opt,name=turnout_sum_bps,json=turnoutSumBps,proto3" json:"turnoutSumBps"` // @gotags: json:"turnoutSumBps"
 	// turnout_sample_count: number of tallied proposals contributing turnout.
-	TurnoutSampleCount uint64 `protobuf:"varint,20,opt,name=turnout_sample_count,json=turnoutSampleCount,proto3" json:"turnout_sample_count,omitempty"` // @gotags: json:"turnoutSampleCount"
+	TurnoutSampleCount uint64 `protobuf:"varint,20,opt,name=turnout_sample_count,json=turnoutSampleCount,proto3" json:"turnoutSampleCount"` // @gotags: json:"turnoutSampleCount"
 	// treasury_spent_total: cumulative CNPY spent from treasury/canoliq, used to
 	// estimate the monthly burn for the runway metric.
-	TreasurySpentTotal uint64 `protobuf:"varint,21,opt,name=treasury_spent_total,json=treasurySpentTotal,proto3" json:"treasury_spent_total,omitempty"` // @gotags: json:"treasurySpentTotal"
+	TreasurySpentTotal uint64 `protobuf:"varint,21,opt,name=treasury_spent_total,json=treasurySpentTotal,proto3" json:"treasurySpentTotal"` // @gotags: json:"treasurySpentTotal"
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -872,9 +872,9 @@ type Redemption struct {
 	// address: the redeeming user
 	Address []byte `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
 	// cnpy_amount: CNPY owed at maturity (uCNPY)
-	CnpyAmount uint64 `protobuf:"varint,3,opt,name=cnpy_amount,json=cnpyAmount,proto3" json:"cnpy_amount,omitempty"` // @gotags: json:"cnpyAmount"
+	CnpyAmount uint64 `protobuf:"varint,3,opt,name=cnpy_amount,json=cnpyAmount,proto3" json:"cnpyAmount"` // @gotags: json:"cnpyAmount"
 	// unbond_complete_height: block height at which the redemption matures
-	UnbondCompleteHeight uint64 `protobuf:"varint,4,opt,name=unbond_complete_height,json=unbondCompleteHeight,proto3" json:"unbond_complete_height,omitempty"` // @gotags: json:"unbondCompleteHeight"
+	UnbondCompleteHeight uint64 `protobuf:"varint,4,opt,name=unbond_complete_height,json=unbondCompleteHeight,proto3" json:"unbondCompleteHeight"` // @gotags: json:"unbondCompleteHeight"
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -991,17 +991,17 @@ type VestingSchedule struct {
 	// address: the vesting recipient
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// schedule_id: discriminator when an address has multiple tranches
-	ScheduleId uint64 `protobuf:"varint,2,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"` // @gotags: json:"scheduleId"
+	ScheduleId uint64 `protobuf:"varint,2,opt,name=schedule_id,json=scheduleId,proto3" json:"scheduleId"` // @gotags: json:"scheduleId"
 	// total_amount: total CLIQ vesting under this schedule (uCLIQ)
-	TotalAmount uint64 `protobuf:"varint,3,opt,name=total_amount,json=totalAmount,proto3" json:"total_amount,omitempty"` // @gotags: json:"totalAmount"
+	TotalAmount uint64 `protobuf:"varint,3,opt,name=total_amount,json=totalAmount,proto3" json:"totalAmount"` // @gotags: json:"totalAmount"
 	// cliff_height: no CLIQ unlocks before this height
-	CliffHeight uint64 `protobuf:"varint,4,opt,name=cliff_height,json=cliffHeight,proto3" json:"cliff_height,omitempty"` // @gotags: json:"cliffHeight"
+	CliffHeight uint64 `protobuf:"varint,4,opt,name=cliff_height,json=cliffHeight,proto3" json:"cliffHeight"` // @gotags: json:"cliffHeight"
 	// start_height: linear vest start (typically equal to cliff_height)
-	StartHeight uint64 `protobuf:"varint,5,opt,name=start_height,json=startHeight,proto3" json:"start_height,omitempty"` // @gotags: json:"startHeight"
+	StartHeight uint64 `protobuf:"varint,5,opt,name=start_height,json=startHeight,proto3" json:"startHeight"` // @gotags: json:"startHeight"
 	// end_height: linear vest completion height
-	EndHeight uint64 `protobuf:"varint,6,opt,name=end_height,json=endHeight,proto3" json:"end_height,omitempty"` // @gotags: json:"endHeight"
+	EndHeight uint64 `protobuf:"varint,6,opt,name=end_height,json=endHeight,proto3" json:"endHeight"` // @gotags: json:"endHeight"
 	// claimed_amount: CLIQ already moved to the liquid balance
-	ClaimedAmount uint64 `protobuf:"varint,7,opt,name=claimed_amount,json=claimedAmount,proto3" json:"claimed_amount,omitempty"` // @gotags: json:"claimedAmount"
+	ClaimedAmount uint64 `protobuf:"varint,7,opt,name=claimed_amount,json=claimedAmount,proto3" json:"claimedAmount"` // @gotags: json:"claimedAmount"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1090,56 +1090,56 @@ func (x *VestingSchedule) GetClaimedAmount() uint64 {
 type CanoliqParams struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// fee_bps: protocol fee on staking rewards in basis points (default 1200 = 12%)
-	FeeBps uint64 `protobuf:"varint,1,opt,name=fee_bps,json=feeBps,proto3" json:"fee_bps,omitempty"` // @gotags: json:"feeBps"
+	FeeBps uint64 `protobuf:"varint,1,opt,name=fee_bps,json=feeBps,proto3" json:"feeBps"` // @gotags: json:"feeBps"
 	// user_rebate_bps: portion of fee returned to users in bps (default 4000 = 40%)
-	UserRebateBps uint64 `protobuf:"varint,2,opt,name=user_rebate_bps,json=userRebateBps,proto3" json:"user_rebate_bps,omitempty"` // @gotags: json:"userRebateBps"
+	UserRebateBps uint64 `protobuf:"varint,2,opt,name=user_rebate_bps,json=userRebateBps,proto3" json:"userRebateBps"` // @gotags: json:"userRebateBps"
 	// treasury_bps: portion of fee to canoLiq DAO treasury in bps (default 3000 = 30%)
-	TreasuryBps uint64 `protobuf:"varint,3,opt,name=treasury_bps,json=treasuryBps,proto3" json:"treasury_bps,omitempty"` // @gotags: json:"treasuryBps"
+	TreasuryBps uint64 `protobuf:"varint,3,opt,name=treasury_bps,json=treasuryBps,proto3" json:"treasuryBps"` // @gotags: json:"treasuryBps"
 	// validator_bps: portion of fee to validator infra in bps (default 1500 = 15%)
-	ValidatorBps uint64 `protobuf:"varint,4,opt,name=validator_bps,json=validatorBps,proto3" json:"validator_bps,omitempty"` // @gotags: json:"validatorBps"
+	ValidatorBps uint64 `protobuf:"varint,4,opt,name=validator_bps,json=validatorBps,proto3" json:"validatorBps"` // @gotags: json:"validatorBps"
 	// buyback_bps: portion of fee to CLIQ buyback in bps (default 1500 = 15%)
-	BuybackBps uint64 `protobuf:"varint,5,opt,name=buyback_bps,json=buybackBps,proto3" json:"buyback_bps,omitempty"` // @gotags: json:"buybackBps"
+	BuybackBps uint64 `protobuf:"varint,5,opt,name=buyback_bps,json=buybackBps,proto3" json:"buybackBps"` // @gotags: json:"buybackBps"
 	// deposit_fee: minimum tx fee for a deposit (uCNPY)
-	DepositFee uint64 `protobuf:"varint,6,opt,name=deposit_fee,json=depositFee,proto3" json:"deposit_fee,omitempty"` // @gotags: json:"depositFee"
+	DepositFee uint64 `protobuf:"varint,6,opt,name=deposit_fee,json=depositFee,proto3" json:"depositFee"` // @gotags: json:"depositFee"
 	// redeem_fee: minimum tx fee for a redeem (uCNPY)
-	RedeemFee uint64 `protobuf:"varint,7,opt,name=redeem_fee,json=redeemFee,proto3" json:"redeem_fee,omitempty"` // @gotags: json:"redeemFee"
+	RedeemFee uint64 `protobuf:"varint,7,opt,name=redeem_fee,json=redeemFee,proto3" json:"redeemFee"` // @gotags: json:"redeemFee"
 	// claim_fee: minimum tx fee for claim_redemption / cliq_claim_vested (uCNPY)
-	ClaimFee uint64 `protobuf:"varint,8,opt,name=claim_fee,json=claimFee,proto3" json:"claim_fee,omitempty"` // @gotags: json:"claimFee"
+	ClaimFee uint64 `protobuf:"varint,8,opt,name=claim_fee,json=claimFee,proto3" json:"claimFee"` // @gotags: json:"claimFee"
 	// cliq_transfer_fee: minimum tx fee for a CLIQ transfer (uCNPY)
-	CliqTransferFee uint64 `protobuf:"varint,9,opt,name=cliq_transfer_fee,json=cliqTransferFee,proto3" json:"cliq_transfer_fee,omitempty"` // @gotags: json:"cliqTransferFee"
+	CliqTransferFee uint64 `protobuf:"varint,9,opt,name=cliq_transfer_fee,json=cliqTransferFee,proto3" json:"cliqTransferFee"` // @gotags: json:"cliqTransferFee"
 	// insurance_bps: share of treasury credit redirected to insurance (default 1500 = 15% of treasury slice)
-	InsuranceBps uint64 `protobuf:"varint,10,opt,name=insurance_bps,json=insuranceBps,proto3" json:"insurance_bps,omitempty"` // @gotags: json:"insuranceBps"
+	InsuranceBps uint64 `protobuf:"varint,10,opt,name=insurance_bps,json=insuranceBps,proto3" json:"insuranceBps"` // @gotags: json:"insuranceBps"
 	// treasury_threshold: spend amount above which multisig + timelock kick in (uCNPY-equivalent)
-	TreasuryThreshold uint64 `protobuf:"varint,11,opt,name=treasury_threshold,json=treasuryThreshold,proto3" json:"treasury_threshold,omitempty"` // @gotags: json:"treasuryThreshold"
+	TreasuryThreshold uint64 `protobuf:"varint,11,opt,name=treasury_threshold,json=treasuryThreshold,proto3" json:"treasuryThreshold"` // @gotags: json:"treasuryThreshold"
 	// multisig_signers: authorized multisig signer addresses
-	MultisigSigners [][]byte `protobuf:"bytes,12,rep,name=multisig_signers,json=multisigSigners,proto3" json:"multisig_signers,omitempty"` // @gotags: json:"multisigSigners"
+	MultisigSigners [][]byte `protobuf:"bytes,12,rep,name=multisig_signers,json=multisigSigners,proto3" json:"multisigSigners"` // @gotags: json:"multisigSigners"
 	// multisig_threshold: minimum approvals for above-threshold treasury spends
-	MultisigThreshold uint64 `protobuf:"varint,13,opt,name=multisig_threshold,json=multisigThreshold,proto3" json:"multisig_threshold,omitempty"` // @gotags: json:"multisigThreshold"
+	MultisigThreshold uint64 `protobuf:"varint,13,opt,name=multisig_threshold,json=multisigThreshold,proto3" json:"multisigThreshold"` // @gotags: json:"multisigThreshold"
 	// voting_period_blocks: blocks a proposal accepts votes for
-	VotingPeriodBlocks uint64 `protobuf:"varint,14,opt,name=voting_period_blocks,json=votingPeriodBlocks,proto3" json:"voting_period_blocks,omitempty"` // @gotags: json:"votingPeriodBlocks"
+	VotingPeriodBlocks uint64 `protobuf:"varint,14,opt,name=voting_period_blocks,json=votingPeriodBlocks,proto3" json:"votingPeriodBlocks"` // @gotags: json:"votingPeriodBlocks"
 	// quorum_bps: fraction of snapshot total_staked_cliq required to participate
-	QuorumBps uint64 `protobuf:"varint,15,opt,name=quorum_bps,json=quorumBps,proto3" json:"quorum_bps,omitempty"` // @gotags: json:"quorumBps"
+	QuorumBps uint64 `protobuf:"varint,15,opt,name=quorum_bps,json=quorumBps,proto3" json:"quorumBps"` // @gotags: json:"quorumBps"
 	// pass_threshold_bps: yes / (yes+no) needed for a proposal to pass
-	PassThresholdBps uint64 `protobuf:"varint,16,opt,name=pass_threshold_bps,json=passThresholdBps,proto3" json:"pass_threshold_bps,omitempty"` // @gotags: json:"passThresholdBps"
+	PassThresholdBps uint64 `protobuf:"varint,16,opt,name=pass_threshold_bps,json=passThresholdBps,proto3" json:"passThresholdBps"` // @gotags: json:"passThresholdBps"
 	// timelock_blocks: delay between proposal pass and above-threshold spend execution
-	TimelockBlocks uint64 `protobuf:"varint,17,opt,name=timelock_blocks,json=timelockBlocks,proto3" json:"timelock_blocks,omitempty"` // @gotags: json:"timelockBlocks"
+	TimelockBlocks uint64 `protobuf:"varint,17,opt,name=timelock_blocks,json=timelockBlocks,proto3" json:"timelockBlocks"` // @gotags: json:"timelockBlocks"
 	// cliq_unstaking_blocks: unbond window for CLIQ stake
-	CliqUnstakingBlocks uint64 `protobuf:"varint,18,opt,name=cliq_unstaking_blocks,json=cliqUnstakingBlocks,proto3" json:"cliq_unstaking_blocks,omitempty"` // @gotags: json:"cliqUnstakingBlocks"
+	CliqUnstakingBlocks uint64 `protobuf:"varint,18,opt,name=cliq_unstaking_blocks,json=cliqUnstakingBlocks,proto3" json:"cliqUnstakingBlocks"` // @gotags: json:"cliqUnstakingBlocks"
 	// proposal_fee: minimum tx fee for proposal creation (uCNPY)
-	ProposalFee uint64 `protobuf:"varint,19,opt,name=proposal_fee,json=proposalFee,proto3" json:"proposal_fee,omitempty"` // @gotags: json:"proposalFee"
+	ProposalFee uint64 `protobuf:"varint,19,opt,name=proposal_fee,json=proposalFee,proto3" json:"proposalFee"` // @gotags: json:"proposalFee"
 	// vote_fee: minimum tx fee for vote (uCNPY)
-	VoteFee uint64 `protobuf:"varint,20,opt,name=vote_fee,json=voteFee,proto3" json:"vote_fee,omitempty"` // @gotags: json:"voteFee"
+	VoteFee uint64 `protobuf:"varint,20,opt,name=vote_fee,json=voteFee,proto3" json:"voteFee"` // @gotags: json:"voteFee"
 	// stake_fee: minimum tx fee for stake/unstake/claim_unstake (uCNPY)
-	StakeFee uint64 `protobuf:"varint,21,opt,name=stake_fee,json=stakeFee,proto3" json:"stake_fee,omitempty"` // @gotags: json:"stakeFee"
+	StakeFee uint64 `protobuf:"varint,21,opt,name=stake_fee,json=stakeFee,proto3" json:"stakeFee"` // @gotags: json:"stakeFee"
 	// multisig_approve_fee: minimum tx fee for multisig approval (uCNPY)
-	MultisigApproveFee uint64 `protobuf:"varint,22,opt,name=multisig_approve_fee,json=multisigApproveFee,proto3" json:"multisig_approve_fee,omitempty"` // @gotags: json:"multisigApproveFee"
+	MultisigApproveFee uint64 `protobuf:"varint,22,opt,name=multisig_approve_fee,json=multisigApproveFee,proto3" json:"multisigApproveFee"` // @gotags: json:"multisigApproveFee"
 	// min_stake_to_propose: minimum staked CLIQ a proposer must hold
-	MinStakeToPropose uint64 `protobuf:"varint,23,opt,name=min_stake_to_propose,json=minStakeToPropose,proto3" json:"min_stake_to_propose,omitempty"` // @gotags: json:"minStakeToPropose"
+	MinStakeToPropose uint64 `protobuf:"varint,23,opt,name=min_stake_to_propose,json=minStakeToPropose,proto3" json:"minStakeToPropose"` // @gotags: json:"minStakeToPropose"
 	// governance: per-action governance tiers (Tokenomics v1.1 §7). When a
 	// tier matches a proposal's ActionType it overrides the scalar
 	// quorum_bps / pass_threshold_bps / timelock_blocks / voting_period_blocks
 	// above; an empty list (or unmatched action) falls back to those scalars.
-	Governance []*GovernanceTier `protobuf:"bytes,24,rep,name=governance,proto3" json:"governance,omitempty"` // @gotags: json:"governance"
+	Governance []*GovernanceTier `protobuf:"bytes,24,rep,name=governance,proto3" json:"governance"` // @gotags: json:"governance"
 	// tvl_cap_bps: self-imposed TVL ceiling as a fraction of total Canopy
 	// network stake, in basis points (WP §9.4: "self-impose a TVL cap of 33%
 	// of total Canopy network stake"). Default 3300 = 33%. 0 = uncapped.
@@ -1148,25 +1148,34 @@ type CanoliqParams struct {
 	// (mulDiv(canopy_total_stake, tvl_cap_bps, 10_000)) are rejected. The
 	// check fails closed when Canopy total stake is unavailable: a deposit
 	// is rejected rather than silently accepted (deliver.go).
-	TvlCapBps uint64 `protobuf:"varint,25,opt,name=tvl_cap_bps,json=tvlCapBps,proto3" json:"tvl_cap_bps,omitempty"` // @gotags: json:"tvlCapBps"
+	TvlCapBps uint64 `protobuf:"varint,25,opt,name=tvl_cap_bps,json=tvlCapBps,proto3" json:"tvlCapBps"` // @gotags: json:"tvlCapBps"
 	// insurance_target_bps: insurance-fund reserve target as a fraction of peak
 	// TVL (T4 / WP §9.2: 5%). Once insurance_pool reaches this target the
 	// per-block insurance skim turns off (the would-be amount stays in the
 	// treasury). 0 disables the gate (skim always on).
-	InsuranceTargetBps uint64 `protobuf:"varint,26,opt,name=insurance_target_bps,json=insuranceTargetBps,proto3" json:"insurance_target_bps,omitempty"` // @gotags: json:"insuranceTargetBps"
+	InsuranceTargetBps uint64 `protobuf:"varint,26,opt,name=insurance_target_bps,json=insuranceTargetBps,proto3" json:"insuranceTargetBps"` // @gotags: json:"insuranceTargetBps"
 	// === T5 autonomy-graduation thresholds (WP §10) ===
 	// graduation_min_tvl_ucnpy: TVL threshold (> $50M; flat uCNPY for now).
-	GraduationMinTvlUcnpy uint64 `protobuf:"varint,27,opt,name=graduation_min_tvl_ucnpy,json=graduationMinTvlUcnpy,proto3" json:"graduation_min_tvl_ucnpy,omitempty"` // @gotags: json:"graduationMinTvlUcnpy"
+	GraduationMinTvlUcnpy uint64 `protobuf:"varint,27,opt,name=graduation_min_tvl_ucnpy,json=graduationMinTvlUcnpy,proto3" json:"graduationMinTvlUcnpy"` // @gotags: json:"graduationMinTvlUcnpy"
 	// graduation_min_validators: active-validator threshold (> 30).
-	GraduationMinValidators uint64 `protobuf:"varint,28,opt,name=graduation_min_validators,json=graduationMinValidators,proto3" json:"graduation_min_validators,omitempty"` // @gotags: json:"graduationMinValidators"
+	GraduationMinValidators uint64 `protobuf:"varint,28,opt,name=graduation_min_validators,json=graduationMinValidators,proto3" json:"graduationMinValidators"` // @gotags: json:"graduationMinValidators"
 	// graduation_min_turnout_bps: average governance turnout threshold (> 15%).
-	GraduationMinTurnoutBps uint64 `protobuf:"varint,29,opt,name=graduation_min_turnout_bps,json=graduationMinTurnoutBps,proto3" json:"graduation_min_turnout_bps,omitempty"` // @gotags: json:"graduationMinTurnoutBps"
+	GraduationMinTurnoutBps uint64 `protobuf:"varint,29,opt,name=graduation_min_turnout_bps,json=graduationMinTurnoutBps,proto3" json:"graduationMinTurnoutBps"` // @gotags: json:"graduationMinTurnoutBps"
 	// graduation_min_daily_tx: daily-transaction threshold (> 10k).
-	GraduationMinDailyTx uint64 `protobuf:"varint,30,opt,name=graduation_min_daily_tx,json=graduationMinDailyTx,proto3" json:"graduation_min_daily_tx,omitempty"` // @gotags: json:"graduationMinDailyTx"
+	GraduationMinDailyTx uint64 `protobuf:"varint,30,opt,name=graduation_min_daily_tx,json=graduationMinDailyTx,proto3" json:"graduationMinDailyTx"` // @gotags: json:"graduationMinDailyTx"
 	// graduation_min_runway_months: treasury-runway threshold in months (> 12).
-	GraduationMinRunwayMonths uint64 `protobuf:"varint,31,opt,name=graduation_min_runway_months,json=graduationMinRunwayMonths,proto3" json:"graduation_min_runway_months,omitempty"` // @gotags: json:"graduationMinRunwayMonths"
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	GraduationMinRunwayMonths uint64 `protobuf:"varint,31,opt,name=graduation_min_runway_months,json=graduationMinRunwayMonths,proto3" json:"graduationMinRunwayMonths"` // @gotags: json:"graduationMinRunwayMonths"
+	// === WP §7 Restaking policy ===
+	// restaking_policy: governance-declared per-committee allocation policy.
+	// Each entry pins a committee id to a target weight (in bps; entries must
+	// sum to 10000 when the list is non-empty) plus optional min/max stake
+	// floors/ceilings in uCNPY. Currently observation-only — /v1/restaking
+	// surfaces actual vs target so operators can act manually. Automated
+	// rebalancing requires a delegation-routing primitive not yet defined in
+	// the codebase and is deferred per §11 roadmap.
+	RestakingPolicy []*RestakingPolicyEntry `protobuf:"bytes,32,rep,name=restaking_policy,json=restakingPolicy,proto3" json:"restakingPolicy"` // @gotags: json:"restakingPolicy"
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CanoliqParams) Reset() {
@@ -1416,26 +1425,115 @@ func (x *CanoliqParams) GetGraduationMinRunwayMonths() uint64 {
 	return 0
 }
 
+func (x *CanoliqParams) GetRestakingPolicy() []*RestakingPolicyEntry {
+	if x != nil {
+		return x.RestakingPolicy
+	}
+	return nil
+}
+
+// RestakingPolicyEntry declares the desired share of canoLiq's stake exposure
+// to one Canopy committee (WP §7). target_weight_bps fixes the share as a
+// fraction of total canoLiq exposure (sum across the policy must equal
+// 10_000); min_stake_ucnpy / max_stake_ucnpy are absolute floors/ceilings for
+// the per-committee exposure (0 = unset, i.e. no floor or no ceiling). For
+// now the values feed only the /v1/restaking drift report; they become
+// enforcement targets once active rebalancing lands.
+type RestakingPolicyEntry struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// committee_id: the Canopy chain id whose committee this entry governs.
+	CommitteeId uint64 `protobuf:"varint,1,opt,name=committee_id,json=committeeId,proto3" json:"committeeId"` // @gotags: json:"committeeId"
+	// target_weight_bps: desired share of canoLiq's total committee exposure,
+	// in basis points. Across an entire policy list these must sum to 10_000.
+	TargetWeightBps uint64 `protobuf:"varint,2,opt,name=target_weight_bps,json=targetWeightBps,proto3" json:"targetWeightBps"` // @gotags: json:"targetWeightBps"
+	// min_stake_ucnpy: optional floor on per-committee exposure (uCNPY). 0 = no
+	// floor. Drift "under-min" surfaces in /v1/restaking when set.
+	MinStakeUcnpy uint64 `protobuf:"varint,3,opt,name=min_stake_ucnpy,json=minStakeUcnpy,proto3" json:"minStakeUcnpy"` // @gotags: json:"minStakeUcnpy"
+	// max_stake_ucnpy: optional ceiling on per-committee exposure (uCNPY). 0 =
+	// no ceiling. Drift "over-max" surfaces in /v1/restaking when set.
+	MaxStakeUcnpy uint64 `protobuf:"varint,4,opt,name=max_stake_ucnpy,json=maxStakeUcnpy,proto3" json:"maxStakeUcnpy"` // @gotags: json:"maxStakeUcnpy"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestakingPolicyEntry) Reset() {
+	*x = RestakingPolicyEntry{}
+	mi := &file_canoliq_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestakingPolicyEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestakingPolicyEntry) ProtoMessage() {}
+
+func (x *RestakingPolicyEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestakingPolicyEntry.ProtoReflect.Descriptor instead.
+func (*RestakingPolicyEntry) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *RestakingPolicyEntry) GetCommitteeId() uint64 {
+	if x != nil {
+		return x.CommitteeId
+	}
+	return 0
+}
+
+func (x *RestakingPolicyEntry) GetTargetWeightBps() uint64 {
+	if x != nil {
+		return x.TargetWeightBps
+	}
+	return 0
+}
+
+func (x *RestakingPolicyEntry) GetMinStakeUcnpy() uint64 {
+	if x != nil {
+		return x.MinStakeUcnpy
+	}
+	return 0
+}
+
+func (x *RestakingPolicyEntry) GetMaxStakeUcnpy() uint64 {
+	if x != nil {
+		return x.MaxStakeUcnpy
+	}
+	return 0
+}
+
 // GovernanceTier carries the governance rules for a single ActionType.
 type GovernanceTier struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// action: the ActionType this tier governs
 	Action ActionType `protobuf:"varint,1,opt,name=action,proto3,enum=types.ActionType" json:"action,omitempty"`
 	// quorum_bps: fraction of snapshot total_staked_cliq required to participate
-	QuorumBps uint64 `protobuf:"varint,2,opt,name=quorum_bps,json=quorumBps,proto3" json:"quorum_bps,omitempty"` // @gotags: json:"quorumBps"
+	QuorumBps uint64 `protobuf:"varint,2,opt,name=quorum_bps,json=quorumBps,proto3" json:"quorumBps"` // @gotags: json:"quorumBps"
 	// approval_bps: yes / (yes+no) needed for the proposal to pass
-	ApprovalBps uint64 `protobuf:"varint,3,opt,name=approval_bps,json=approvalBps,proto3" json:"approval_bps,omitempty"` // @gotags: json:"approvalBps"
+	ApprovalBps uint64 `protobuf:"varint,3,opt,name=approval_bps,json=approvalBps,proto3" json:"approvalBps"` // @gotags: json:"approvalBps"
 	// timelock_blocks: delay between proposal pass and execution
-	TimelockBlocks uint64 `protobuf:"varint,4,opt,name=timelock_blocks,json=timelockBlocks,proto3" json:"timelock_blocks,omitempty"` // @gotags: json:"timelockBlocks"
+	TimelockBlocks uint64 `protobuf:"varint,4,opt,name=timelock_blocks,json=timelockBlocks,proto3" json:"timelockBlocks"` // @gotags: json:"timelockBlocks"
 	// voting_period_blocks: blocks the proposal accepts votes
-	VotingPeriodBlocks uint64 `protobuf:"varint,5,opt,name=voting_period_blocks,json=votingPeriodBlocks,proto3" json:"voting_period_blocks,omitempty"` // @gotags: json:"votingPeriodBlocks"
+	VotingPeriodBlocks uint64 `protobuf:"varint,5,opt,name=voting_period_blocks,json=votingPeriodBlocks,proto3" json:"votingPeriodBlocks"` // @gotags: json:"votingPeriodBlocks"
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
 func (x *GovernanceTier) Reset() {
 	*x = GovernanceTier{}
-	mi := &file_canoliq_proto_msgTypes[10]
+	mi := &file_canoliq_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1447,7 +1545,7 @@ func (x *GovernanceTier) String() string {
 func (*GovernanceTier) ProtoMessage() {}
 
 func (x *GovernanceTier) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[10]
+	mi := &file_canoliq_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1460,7 +1558,7 @@ func (x *GovernanceTier) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GovernanceTier.ProtoReflect.Descriptor instead.
 func (*GovernanceTier) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{10}
+	return file_canoliq_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GovernanceTier) GetAction() ActionType {
@@ -1503,14 +1601,14 @@ func (x *GovernanceTier) GetVotingPeriodBlocks() uint64 {
 type VestingIndex struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// schedule_ids: list of schedule_ids owned by the indexed address
-	ScheduleIds   []uint64 `protobuf:"varint,1,rep,packed,name=schedule_ids,json=scheduleIds,proto3" json:"schedule_ids,omitempty"` // @gotags: json:"scheduleIds"
+	ScheduleIds   []uint64 `protobuf:"varint,1,rep,packed,name=schedule_ids,json=scheduleIds,proto3" json:"scheduleIds"` // @gotags: json:"scheduleIds"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VestingIndex) Reset() {
 	*x = VestingIndex{}
-	mi := &file_canoliq_proto_msgTypes[11]
+	mi := &file_canoliq_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1522,7 +1620,7 @@ func (x *VestingIndex) String() string {
 func (*VestingIndex) ProtoMessage() {}
 
 func (x *VestingIndex) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[11]
+	mi := &file_canoliq_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1535,7 +1633,7 @@ func (x *VestingIndex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VestingIndex.ProtoReflect.Descriptor instead.
 func (*VestingIndex) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{11}
+	return file_canoliq_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *VestingIndex) GetScheduleIds() []uint64 {
@@ -1550,19 +1648,19 @@ func (x *VestingIndex) GetScheduleIds() []uint64 {
 type MessageCLIQStake struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the staker
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// amount: liquid CLIQ to lock (uCLIQ)
 	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	// lock_tier: vote-escrow lock to commit this stake to (T2). LOCK_NONE keeps
 	// the stake liquid-to-unstake after the standard unbond window.
-	LockTier      LockTier `protobuf:"varint,3,opt,name=lock_tier,json=lockTier,proto3,enum=types.LockTier" json:"lock_tier,omitempty"` // @gotags: json:"lockTier"
+	LockTier      LockTier `protobuf:"varint,3,opt,name=lock_tier,json=lockTier,proto3,enum=types.LockTier" json:"lockTier"` // @gotags: json:"lockTier"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MessageCLIQStake) Reset() {
 	*x = MessageCLIQStake{}
-	mi := &file_canoliq_proto_msgTypes[12]
+	mi := &file_canoliq_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1574,7 +1672,7 @@ func (x *MessageCLIQStake) String() string {
 func (*MessageCLIQStake) ProtoMessage() {}
 
 func (x *MessageCLIQStake) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[12]
+	mi := &file_canoliq_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1587,7 +1685,7 @@ func (x *MessageCLIQStake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQStake.ProtoReflect.Descriptor instead.
 func (*MessageCLIQStake) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{12}
+	return file_canoliq_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *MessageCLIQStake) GetFromAddress() []byte {
@@ -1618,7 +1716,7 @@ func (x *MessageCLIQStake) GetLockTier() LockTier {
 type MessageCLIQUnstake struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the staker
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// amount: staked CLIQ to unbond (uCLIQ)
 	Amount        uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1627,7 +1725,7 @@ type MessageCLIQUnstake struct {
 
 func (x *MessageCLIQUnstake) Reset() {
 	*x = MessageCLIQUnstake{}
-	mi := &file_canoliq_proto_msgTypes[13]
+	mi := &file_canoliq_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1639,7 +1737,7 @@ func (x *MessageCLIQUnstake) String() string {
 func (*MessageCLIQUnstake) ProtoMessage() {}
 
 func (x *MessageCLIQUnstake) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[13]
+	mi := &file_canoliq_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1652,7 +1750,7 @@ func (x *MessageCLIQUnstake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQUnstake.ProtoReflect.Descriptor instead.
 func (*MessageCLIQUnstake) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{13}
+	return file_canoliq_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MessageCLIQUnstake) GetFromAddress() []byte {
@@ -1674,16 +1772,16 @@ func (x *MessageCLIQUnstake) GetAmount() uint64 {
 type MessageCLIQClaimUnstake struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the staker
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// unstake_id: id of the UnstakingCLIQ record to claim
-	UnstakeId     uint64 `protobuf:"varint,2,opt,name=unstake_id,json=unstakeId,proto3" json:"unstake_id,omitempty"` // @gotags: json:"unstakeId"
+	UnstakeId     uint64 `protobuf:"varint,2,opt,name=unstake_id,json=unstakeId,proto3" json:"unstakeId"` // @gotags: json:"unstakeId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MessageCLIQClaimUnstake) Reset() {
 	*x = MessageCLIQClaimUnstake{}
-	mi := &file_canoliq_proto_msgTypes[14]
+	mi := &file_canoliq_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1695,7 +1793,7 @@ func (x *MessageCLIQClaimUnstake) String() string {
 func (*MessageCLIQClaimUnstake) ProtoMessage() {}
 
 func (x *MessageCLIQClaimUnstake) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[14]
+	mi := &file_canoliq_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1708,7 +1806,7 @@ func (x *MessageCLIQClaimUnstake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQClaimUnstake.ProtoReflect.Descriptor instead.
 func (*MessageCLIQClaimUnstake) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{14}
+	return file_canoliq_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MessageCLIQClaimUnstake) GetFromAddress() []byte {
@@ -1731,7 +1829,7 @@ func (x *MessageCLIQClaimUnstake) GetUnstakeId() uint64 {
 type MessageCLIQProposalCreate struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the proposer
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// payload: proposal payload (oneof param_change | buyback | treasury_spend)
 	Payload *anypb.Any `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
 	// description: optional human-readable description (≤ 256 bytes)
@@ -1742,7 +1840,7 @@ type MessageCLIQProposalCreate struct {
 
 func (x *MessageCLIQProposalCreate) Reset() {
 	*x = MessageCLIQProposalCreate{}
-	mi := &file_canoliq_proto_msgTypes[15]
+	mi := &file_canoliq_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1754,7 +1852,7 @@ func (x *MessageCLIQProposalCreate) String() string {
 func (*MessageCLIQProposalCreate) ProtoMessage() {}
 
 func (x *MessageCLIQProposalCreate) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[15]
+	mi := &file_canoliq_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1767,7 +1865,7 @@ func (x *MessageCLIQProposalCreate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQProposalCreate.ProtoReflect.Descriptor instead.
 func (*MessageCLIQProposalCreate) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{15}
+	return file_canoliq_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MessageCLIQProposalCreate) GetFromAddress() []byte {
@@ -1798,9 +1896,9 @@ func (x *MessageCLIQProposalCreate) GetDescription() string {
 type MessageCLIQVote struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the voter
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// proposal_id: target proposal
-	ProposalId uint64 `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"` // @gotags: json:"proposalId"
+	ProposalId uint64 `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposalId"` // @gotags: json:"proposalId"
 	// choice: VOTE_YES | VOTE_NO | VOTE_ABSTAIN
 	Choice        VoteChoice `protobuf:"varint,3,opt,name=choice,proto3,enum=types.VoteChoice" json:"choice,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1809,7 +1907,7 @@ type MessageCLIQVote struct {
 
 func (x *MessageCLIQVote) Reset() {
 	*x = MessageCLIQVote{}
-	mi := &file_canoliq_proto_msgTypes[16]
+	mi := &file_canoliq_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1821,7 +1919,7 @@ func (x *MessageCLIQVote) String() string {
 func (*MessageCLIQVote) ProtoMessage() {}
 
 func (x *MessageCLIQVote) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[16]
+	mi := &file_canoliq_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1834,7 +1932,7 @@ func (x *MessageCLIQVote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageCLIQVote.ProtoReflect.Descriptor instead.
 func (*MessageCLIQVote) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{16}
+	return file_canoliq_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *MessageCLIQVote) GetFromAddress() []byte {
@@ -1864,16 +1962,16 @@ func (x *MessageCLIQVote) GetChoice() VoteChoice {
 type MessageBuybackExecute struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the trigger (any address; transactional fee applies)
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// proposal_id: passed buyback proposal to execute
-	ProposalId    uint64 `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"` // @gotags: json:"proposalId"
+	ProposalId    uint64 `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposalId"` // @gotags: json:"proposalId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MessageBuybackExecute) Reset() {
 	*x = MessageBuybackExecute{}
-	mi := &file_canoliq_proto_msgTypes[17]
+	mi := &file_canoliq_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1885,7 +1983,7 @@ func (x *MessageBuybackExecute) String() string {
 func (*MessageBuybackExecute) ProtoMessage() {}
 
 func (x *MessageBuybackExecute) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[17]
+	mi := &file_canoliq_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1898,7 +1996,7 @@ func (x *MessageBuybackExecute) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageBuybackExecute.ProtoReflect.Descriptor instead.
 func (*MessageBuybackExecute) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{17}
+	return file_canoliq_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *MessageBuybackExecute) GetFromAddress() []byte {
@@ -1920,16 +2018,16 @@ func (x *MessageBuybackExecute) GetProposalId() uint64 {
 type MessageDAOTreasurySpend struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the trigger
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// proposal_id: passed treasury_spend proposal to execute
-	ProposalId    uint64 `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"` // @gotags: json:"proposalId"
+	ProposalId    uint64 `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposalId"` // @gotags: json:"proposalId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MessageDAOTreasurySpend) Reset() {
 	*x = MessageDAOTreasurySpend{}
-	mi := &file_canoliq_proto_msgTypes[18]
+	mi := &file_canoliq_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1941,7 +2039,7 @@ func (x *MessageDAOTreasurySpend) String() string {
 func (*MessageDAOTreasurySpend) ProtoMessage() {}
 
 func (x *MessageDAOTreasurySpend) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[18]
+	mi := &file_canoliq_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1954,7 +2052,7 @@ func (x *MessageDAOTreasurySpend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageDAOTreasurySpend.ProtoReflect.Descriptor instead.
 func (*MessageDAOTreasurySpend) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{18}
+	return file_canoliq_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *MessageDAOTreasurySpend) GetFromAddress() []byte {
@@ -1976,16 +2074,16 @@ func (x *MessageDAOTreasurySpend) GetProposalId() uint64 {
 type MessageMultisigApprove struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the signer
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"` // @gotags: json:"fromAddress"
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// spend_id: id of the TreasurySpend record to approve
-	SpendId       uint64 `protobuf:"varint,2,opt,name=spend_id,json=spendId,proto3" json:"spend_id,omitempty"` // @gotags: json:"spendId"
+	SpendId       uint64 `protobuf:"varint,2,opt,name=spend_id,json=spendId,proto3" json:"spendId"` // @gotags: json:"spendId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MessageMultisigApprove) Reset() {
 	*x = MessageMultisigApprove{}
-	mi := &file_canoliq_proto_msgTypes[19]
+	mi := &file_canoliq_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1997,7 +2095,7 @@ func (x *MessageMultisigApprove) String() string {
 func (*MessageMultisigApprove) ProtoMessage() {}
 
 func (x *MessageMultisigApprove) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[19]
+	mi := &file_canoliq_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2010,7 +2108,7 @@ func (x *MessageMultisigApprove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageMultisigApprove.ProtoReflect.Descriptor instead.
 func (*MessageMultisigApprove) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{19}
+	return file_canoliq_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *MessageMultisigApprove) GetFromAddress() []byte {
@@ -2037,20 +2135,20 @@ type CLIQStake struct {
 	// staked_at_height: height of the most recent stake increase. Used for
 	// proposal-vote eligibility (vote weight = 0 if staked_at_height >
 	// proposal.creation_height).
-	StakedAtHeight uint64 `protobuf:"varint,3,opt,name=staked_at_height,json=stakedAtHeight,proto3" json:"staked_at_height,omitempty"` // @gotags: json:"stakedAtHeight"
+	StakedAtHeight uint64 `protobuf:"varint,3,opt,name=staked_at_height,json=stakedAtHeight,proto3" json:"stakedAtHeight"` // @gotags: json:"stakedAtHeight"
 	// lock_tier: vote-escrow lock tier (T2). Drives voting multiplier, reward
 	// boost, and the unstake-eligibility height. Locks only ever strengthen:
 	// re-staking with a higher tier raises this and pushes lock_end_height out.
-	LockTier LockTier `protobuf:"varint,4,opt,name=lock_tier,json=lockTier,proto3,enum=types.LockTier" json:"lock_tier,omitempty"` // @gotags: json:"lockTier"
+	LockTier LockTier `protobuf:"varint,4,opt,name=lock_tier,json=lockTier,proto3,enum=types.LockTier" json:"lockTier"` // @gotags: json:"lockTier"
 	// lock_end_height: earliest height an unstake is permitted (0 for LOCK_NONE).
-	LockEndHeight uint64 `protobuf:"varint,5,opt,name=lock_end_height,json=lockEndHeight,proto3" json:"lock_end_height,omitempty"` // @gotags: json:"lockEndHeight"
+	LockEndHeight uint64 `protobuf:"varint,5,opt,name=lock_end_height,json=lockEndHeight,proto3" json:"lockEndHeight"` // @gotags: json:"lockEndHeight"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CLIQStake) Reset() {
 	*x = CLIQStake{}
-	mi := &file_canoliq_proto_msgTypes[20]
+	mi := &file_canoliq_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2062,7 +2160,7 @@ func (x *CLIQStake) String() string {
 func (*CLIQStake) ProtoMessage() {}
 
 func (x *CLIQStake) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[20]
+	mi := &file_canoliq_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2075,7 +2173,7 @@ func (x *CLIQStake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CLIQStake.ProtoReflect.Descriptor instead.
 func (*CLIQStake) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{20}
+	return file_canoliq_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CLIQStake) GetAddress() []byte {
@@ -2123,14 +2221,14 @@ type UnstakingCLIQ struct {
 	// amount: CLIQ owed at maturity (uCLIQ)
 	Amount uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
 	// mature_height: block height at which the unstake matures
-	MatureHeight  uint64 `protobuf:"varint,4,opt,name=mature_height,json=matureHeight,proto3" json:"mature_height,omitempty"` // @gotags: json:"matureHeight"
+	MatureHeight  uint64 `protobuf:"varint,4,opt,name=mature_height,json=matureHeight,proto3" json:"matureHeight"` // @gotags: json:"matureHeight"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UnstakingCLIQ) Reset() {
 	*x = UnstakingCLIQ{}
-	mi := &file_canoliq_proto_msgTypes[21]
+	mi := &file_canoliq_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2142,7 +2240,7 @@ func (x *UnstakingCLIQ) String() string {
 func (*UnstakingCLIQ) ProtoMessage() {}
 
 func (x *UnstakingCLIQ) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[21]
+	mi := &file_canoliq_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2155,7 +2253,7 @@ func (x *UnstakingCLIQ) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnstakingCLIQ.ProtoReflect.Descriptor instead.
 func (*UnstakingCLIQ) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{21}
+	return file_canoliq_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UnstakingCLIQ) GetId() uint64 {
@@ -2198,7 +2296,7 @@ type UnstakingIndex struct {
 
 func (x *UnstakingIndex) Reset() {
 	*x = UnstakingIndex{}
-	mi := &file_canoliq_proto_msgTypes[22]
+	mi := &file_canoliq_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2210,7 +2308,7 @@ func (x *UnstakingIndex) String() string {
 func (*UnstakingIndex) ProtoMessage() {}
 
 func (x *UnstakingIndex) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[22]
+	mi := &file_canoliq_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2223,7 +2321,7 @@ func (x *UnstakingIndex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnstakingIndex.ProtoReflect.Descriptor instead.
 func (*UnstakingIndex) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{22}
+	return file_canoliq_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *UnstakingIndex) GetIds() []uint64 {
@@ -2242,11 +2340,11 @@ type Proposal struct {
 	// proposer: address that opened the proposal
 	Proposer []byte `protobuf:"bytes,2,opt,name=proposer,proto3" json:"proposer,omitempty"`
 	// creation_height: block height at which the proposal was opened
-	CreationHeight uint64 `protobuf:"varint,3,opt,name=creation_height,json=creationHeight,proto3" json:"creation_height,omitempty"` // @gotags: json:"creationHeight"
+	CreationHeight uint64 `protobuf:"varint,3,opt,name=creation_height,json=creationHeight,proto3" json:"creationHeight"` // @gotags: json:"creationHeight"
 	// expiry_height: voting closes at this height
-	ExpiryHeight uint64 `protobuf:"varint,4,opt,name=expiry_height,json=expiryHeight,proto3" json:"expiry_height,omitempty"` // @gotags: json:"expiryHeight"
+	ExpiryHeight uint64 `protobuf:"varint,4,opt,name=expiry_height,json=expiryHeight,proto3" json:"expiryHeight"` // @gotags: json:"expiryHeight"
 	// snapshot_total_staked: globals.total_staked_cliq at creation_height
-	SnapshotTotalStaked uint64 `protobuf:"varint,5,opt,name=snapshot_total_staked,json=snapshotTotalStaked,proto3" json:"snapshot_total_staked,omitempty"` // @gotags: json:"snapshotTotalStaked"
+	SnapshotTotalStaked uint64 `protobuf:"varint,5,opt,name=snapshot_total_staked,json=snapshotTotalStaked,proto3" json:"snapshotTotalStaked"` // @gotags: json:"snapshotTotalStaked"
 	// payload: typed proposal payload
 	Payload *anypb.Any `protobuf:"bytes,6,opt,name=payload,proto3" json:"payload,omitempty"`
 	// description: optional human-readable description
@@ -2254,24 +2352,24 @@ type Proposal struct {
 	// status: lifecycle state
 	Status ProposalStatus `protobuf:"varint,8,opt,name=status,proto3,enum=types.ProposalStatus" json:"status,omitempty"`
 	// yes_weight: cumulative yes-vote weight
-	YesWeight uint64 `protobuf:"varint,9,opt,name=yes_weight,json=yesWeight,proto3" json:"yes_weight,omitempty"` // @gotags: json:"yesWeight"
+	YesWeight uint64 `protobuf:"varint,9,opt,name=yes_weight,json=yesWeight,proto3" json:"yesWeight"` // @gotags: json:"yesWeight"
 	// no_weight: cumulative no-vote weight
-	NoWeight uint64 `protobuf:"varint,10,opt,name=no_weight,json=noWeight,proto3" json:"no_weight,omitempty"` // @gotags: json:"noWeight"
+	NoWeight uint64 `protobuf:"varint,10,opt,name=no_weight,json=noWeight,proto3" json:"noWeight"` // @gotags: json:"noWeight"
 	// abstain_weight: cumulative abstain weight
-	AbstainWeight uint64 `protobuf:"varint,11,opt,name=abstain_weight,json=abstainWeight,proto3" json:"abstain_weight,omitempty"` // @gotags: json:"abstainWeight"
+	AbstainWeight uint64 `protobuf:"varint,11,opt,name=abstain_weight,json=abstainWeight,proto3" json:"abstainWeight"` // @gotags: json:"abstainWeight"
 	// action_type: classification inferred from the payload at creation
-	ActionType ActionType `protobuf:"varint,12,opt,name=action_type,json=actionType,proto3,enum=types.ActionType" json:"action_type,omitempty"` // @gotags: json:"actionType"
+	ActionType ActionType `protobuf:"varint,12,opt,name=action_type,json=actionType,proto3,enum=types.ActionType" json:"actionType"` // @gotags: json:"actionType"
 	// tier: governance tier snapshotted at creation. Quorum / approval are
 	// read from here at tally; timelock from here at spend-queue time. Nil for
 	// proposals created before T1 — callers fall back to the scalar params.
-	Tier          *GovernanceTier `protobuf:"bytes,13,opt,name=tier,proto3" json:"tier,omitempty"` // @gotags: json:"tier"
+	Tier          *GovernanceTier `protobuf:"bytes,13,opt,name=tier,proto3" json:"tier"` // @gotags: json:"tier"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Proposal) Reset() {
 	*x = Proposal{}
-	mi := &file_canoliq_proto_msgTypes[23]
+	mi := &file_canoliq_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2283,7 +2381,7 @@ func (x *Proposal) String() string {
 func (*Proposal) ProtoMessage() {}
 
 func (x *Proposal) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[23]
+	mi := &file_canoliq_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2296,7 +2394,7 @@ func (x *Proposal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Proposal.ProtoReflect.Descriptor instead.
 func (*Proposal) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{23}
+	return file_canoliq_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Proposal) GetId() uint64 {
@@ -2402,7 +2500,7 @@ type ProposalIndex struct {
 
 func (x *ProposalIndex) Reset() {
 	*x = ProposalIndex{}
-	mi := &file_canoliq_proto_msgTypes[24]
+	mi := &file_canoliq_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2414,7 +2512,7 @@ func (x *ProposalIndex) String() string {
 func (*ProposalIndex) ProtoMessage() {}
 
 func (x *ProposalIndex) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[24]
+	mi := &file_canoliq_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2427,7 +2525,7 @@ func (x *ProposalIndex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalIndex.ProtoReflect.Descriptor instead.
 func (*ProposalIndex) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{24}
+	return file_canoliq_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ProposalIndex) GetIds() []uint64 {
@@ -2441,7 +2539,7 @@ func (x *ProposalIndex) GetIds() []uint64 {
 type Vote struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// proposal_id: target proposal
-	ProposalId uint64 `protobuf:"varint,1,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"` // @gotags: json:"proposalId"
+	ProposalId uint64 `protobuf:"varint,1,opt,name=proposal_id,json=proposalId,proto3" json:"proposalId"` // @gotags: json:"proposalId"
 	// voter: voting address
 	Voter []byte `protobuf:"bytes,2,opt,name=voter,proto3" json:"voter,omitempty"`
 	// choice: yes / no / abstain
@@ -2454,7 +2552,7 @@ type Vote struct {
 
 func (x *Vote) Reset() {
 	*x = Vote{}
-	mi := &file_canoliq_proto_msgTypes[25]
+	mi := &file_canoliq_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2466,7 +2564,7 @@ func (x *Vote) String() string {
 func (*Vote) ProtoMessage() {}
 
 func (x *Vote) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[25]
+	mi := &file_canoliq_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2479,7 +2577,7 @@ func (x *Vote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Vote.ProtoReflect.Descriptor instead.
 func (*Vote) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{25}
+	return file_canoliq_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *Vote) GetProposalId() uint64 {
@@ -2523,7 +2621,7 @@ type ProposalParamChange struct {
 
 func (x *ProposalParamChange) Reset() {
 	*x = ProposalParamChange{}
-	mi := &file_canoliq_proto_msgTypes[26]
+	mi := &file_canoliq_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2535,7 +2633,7 @@ func (x *ProposalParamChange) String() string {
 func (*ProposalParamChange) ProtoMessage() {}
 
 func (x *ProposalParamChange) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[26]
+	mi := &file_canoliq_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2548,7 +2646,7 @@ func (x *ProposalParamChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalParamChange.ProtoReflect.Descriptor instead.
 func (*ProposalParamChange) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{26}
+	return file_canoliq_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ProposalParamChange) GetParams() *CanoliqParams {
@@ -2562,9 +2660,9 @@ func (x *ProposalParamChange) GetParams() *CanoliqParams {
 type ProposalBuyback struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// cnpy_amount: CNPY drawn from canoliq/buyback/pool (clamped to available)
-	CnpyAmount uint64 `protobuf:"varint,1,opt,name=cnpy_amount,json=cnpyAmount,proto3" json:"cnpy_amount,omitempty"` // @gotags: json:"cnpyAmount"
+	CnpyAmount uint64 `protobuf:"varint,1,opt,name=cnpy_amount,json=cnpyAmount,proto3" json:"cnpyAmount"` // @gotags: json:"cnpyAmount"
 	// price_micro_cnpy_per_cliq: price denominator. cliq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cliq
-	PriceMicroCnpyPerCliq uint64 `protobuf:"varint,2,opt,name=price_micro_cnpy_per_cliq,json=priceMicroCnpyPerCliq,proto3" json:"price_micro_cnpy_per_cliq,omitempty"` // @gotags: json:"priceMicroCnpyPerCliq"
+	PriceMicroCnpyPerCliq uint64 `protobuf:"varint,2,opt,name=price_micro_cnpy_per_cliq,json=priceMicroCnpyPerCliq,proto3" json:"priceMicroCnpyPerCliq"` // @gotags: json:"priceMicroCnpyPerCliq"
 	// mode: BURN or DISTRIBUTE_STAKERS
 	Mode          BuybackMode `protobuf:"varint,3,opt,name=mode,proto3,enum=types.BuybackMode" json:"mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2573,7 +2671,7 @@ type ProposalBuyback struct {
 
 func (x *ProposalBuyback) Reset() {
 	*x = ProposalBuyback{}
-	mi := &file_canoliq_proto_msgTypes[27]
+	mi := &file_canoliq_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2585,7 +2683,7 @@ func (x *ProposalBuyback) String() string {
 func (*ProposalBuyback) ProtoMessage() {}
 
 func (x *ProposalBuyback) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[27]
+	mi := &file_canoliq_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2598,7 +2696,7 @@ func (x *ProposalBuyback) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalBuyback.ProtoReflect.Descriptor instead.
 func (*ProposalBuyback) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{27}
+	return file_canoliq_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ProposalBuyback) GetCnpyAmount() uint64 {
@@ -2637,7 +2735,7 @@ type ProposalTreasurySpend struct {
 
 func (x *ProposalTreasurySpend) Reset() {
 	*x = ProposalTreasurySpend{}
-	mi := &file_canoliq_proto_msgTypes[28]
+	mi := &file_canoliq_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2649,7 +2747,7 @@ func (x *ProposalTreasurySpend) String() string {
 func (*ProposalTreasurySpend) ProtoMessage() {}
 
 func (x *ProposalTreasurySpend) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[28]
+	mi := &file_canoliq_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2662,7 +2760,7 @@ func (x *ProposalTreasurySpend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalTreasurySpend.ProtoReflect.Descriptor instead.
 func (*ProposalTreasurySpend) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{28}
+	return file_canoliq_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ProposalTreasurySpend) GetRecipient() []byte {
@@ -2692,14 +2790,14 @@ func (x *ProposalTreasurySpend) GetDenomination() SpendDenomination {
 type ProposalValidatorEject struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// validator_address: 20-byte address to remove from ValidatorRegistry
-	ValidatorAddress []byte `protobuf:"bytes,1,opt,name=validator_address,json=validatorAddress,proto3" json:"validator_address,omitempty"` // @gotags: json:"validatorAddress"
+	ValidatorAddress []byte `protobuf:"bytes,1,opt,name=validator_address,json=validatorAddress,proto3" json:"validatorAddress"` // @gotags: json:"validatorAddress"
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ProposalValidatorEject) Reset() {
 	*x = ProposalValidatorEject{}
-	mi := &file_canoliq_proto_msgTypes[29]
+	mi := &file_canoliq_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2711,7 +2809,7 @@ func (x *ProposalValidatorEject) String() string {
 func (*ProposalValidatorEject) ProtoMessage() {}
 
 func (x *ProposalValidatorEject) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[29]
+	mi := &file_canoliq_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2724,7 +2822,7 @@ func (x *ProposalValidatorEject) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalValidatorEject.ProtoReflect.Descriptor instead.
 func (*ProposalValidatorEject) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{29}
+	return file_canoliq_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ProposalValidatorEject) GetValidatorAddress() []byte {
@@ -2741,14 +2839,14 @@ type ProposalEmergency struct {
 	// description: human-readable rationale for the emergency action
 	Description string `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
 	// param_change: optional CanoliqParams replacement applied on pass
-	ParamChange   *ProposalParamChange `protobuf:"bytes,2,opt,name=param_change,json=paramChange,proto3" json:"param_change,omitempty"` // @gotags: json:"paramChange"
+	ParamChange   *ProposalParamChange `protobuf:"bytes,2,opt,name=param_change,json=paramChange,proto3" json:"paramChange"` // @gotags: json:"paramChange"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ProposalEmergency) Reset() {
 	*x = ProposalEmergency{}
-	mi := &file_canoliq_proto_msgTypes[30]
+	mi := &file_canoliq_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2760,7 +2858,7 @@ func (x *ProposalEmergency) String() string {
 func (*ProposalEmergency) ProtoMessage() {}
 
 func (x *ProposalEmergency) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[30]
+	mi := &file_canoliq_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2773,7 +2871,7 @@ func (x *ProposalEmergency) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalEmergency.ProtoReflect.Descriptor instead.
 func (*ProposalEmergency) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{30}
+	return file_canoliq_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ProposalEmergency) GetDescription() string {
@@ -2804,7 +2902,7 @@ type ProposalProtocolUpgrade struct {
 
 func (x *ProposalProtocolUpgrade) Reset() {
 	*x = ProposalProtocolUpgrade{}
-	mi := &file_canoliq_proto_msgTypes[31]
+	mi := &file_canoliq_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2816,7 +2914,7 @@ func (x *ProposalProtocolUpgrade) String() string {
 func (*ProposalProtocolUpgrade) ProtoMessage() {}
 
 func (x *ProposalProtocolUpgrade) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[31]
+	mi := &file_canoliq_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2829,7 +2927,7 @@ func (x *ProposalProtocolUpgrade) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposalProtocolUpgrade.ProtoReflect.Descriptor instead.
 func (*ProposalProtocolUpgrade) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{31}
+	return file_canoliq_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ProposalProtocolUpgrade) GetVersion() string {
@@ -2852,17 +2950,17 @@ func (x *ProposalProtocolUpgrade) GetPayload() []byte {
 type BuybackOrder struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// proposal_id: source proposal
-	ProposalId uint64 `protobuf:"varint,1,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"` // @gotags: json:"proposalId"
+	ProposalId uint64 `protobuf:"varint,1,opt,name=proposal_id,json=proposalId,proto3" json:"proposalId"` // @gotags: json:"proposalId"
 	// cnpy_drawn: CNPY actually drained (≤ payload.cnpy_amount)
-	CnpyDrawn uint64 `protobuf:"varint,2,opt,name=cnpy_drawn,json=cnpyDrawn,proto3" json:"cnpy_drawn,omitempty"` // @gotags: json:"cnpyDrawn"
+	CnpyDrawn uint64 `protobuf:"varint,2,opt,name=cnpy_drawn,json=cnpyDrawn,proto3" json:"cnpyDrawn"` // @gotags: json:"cnpyDrawn"
 	// cliq_acquired: CLIQ moved out of treasury_cliq
-	CliqAcquired uint64 `protobuf:"varint,3,opt,name=cliq_acquired,json=cliqAcquired,proto3" json:"cliq_acquired,omitempty"` // @gotags: json:"cliqAcquired"
+	CliqAcquired uint64 `protobuf:"varint,3,opt,name=cliq_acquired,json=cliqAcquired,proto3" json:"cliqAcquired"` // @gotags: json:"cliqAcquired"
 	// mode: BURN or DISTRIBUTE_STAKERS (mirrors proposal payload)
 	Mode BuybackMode `protobuf:"varint,4,opt,name=mode,proto3,enum=types.BuybackMode" json:"mode,omitempty"`
 	// executed: true once the buyback has been applied
 	Executed bool `protobuf:"varint,5,opt,name=executed,proto3" json:"executed,omitempty"`
 	// executed_at_height: height at which executed flipped to true
-	ExecutedAtHeight uint64 `protobuf:"varint,6,opt,name=executed_at_height,json=executedAtHeight,proto3" json:"executed_at_height,omitempty"` // @gotags: json:"executedAtHeight"
+	ExecutedAtHeight uint64 `protobuf:"varint,6,opt,name=executed_at_height,json=executedAtHeight,proto3" json:"executedAtHeight"` // @gotags: json:"executedAtHeight"
 	// payload: full original proposal payload (cnpy_amount, price, mode)
 	Payload       *ProposalBuyback `protobuf:"bytes,7,opt,name=payload,proto3" json:"payload,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2871,7 +2969,7 @@ type BuybackOrder struct {
 
 func (x *BuybackOrder) Reset() {
 	*x = BuybackOrder{}
-	mi := &file_canoliq_proto_msgTypes[32]
+	mi := &file_canoliq_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2883,7 +2981,7 @@ func (x *BuybackOrder) String() string {
 func (*BuybackOrder) ProtoMessage() {}
 
 func (x *BuybackOrder) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[32]
+	mi := &file_canoliq_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2896,7 +2994,7 @@ func (x *BuybackOrder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuybackOrder.ProtoReflect.Descriptor instead.
 func (*BuybackOrder) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{32}
+	return file_canoliq_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *BuybackOrder) GetProposalId() uint64 {
@@ -2956,13 +3054,13 @@ type TreasurySpend struct {
 	// id: per-spend id
 	Id uint64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	// proposal_id: source proposal
-	ProposalId uint64 `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"` // @gotags: json:"proposalId"
+	ProposalId uint64 `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposalId"` // @gotags: json:"proposalId"
 	// executable_height: timelock-adjusted earliest execution height
-	ExecutableHeight uint64 `protobuf:"varint,3,opt,name=executable_height,json=executableHeight,proto3" json:"executable_height,omitempty"` // @gotags: json:"executableHeight"
+	ExecutableHeight uint64 `protobuf:"varint,3,opt,name=executable_height,json=executableHeight,proto3" json:"executableHeight"` // @gotags: json:"executableHeight"
 	// payload: ProposalTreasurySpend payload
 	Payload *ProposalTreasurySpend `protobuf:"bytes,4,opt,name=payload,proto3" json:"payload,omitempty"`
 	// requires_multisig: true when amount > treasury_threshold at creation
-	RequiresMultisig bool `protobuf:"varint,5,opt,name=requires_multisig,json=requiresMultisig,proto3" json:"requires_multisig,omitempty"` // @gotags: json:"requiresMultisig"
+	RequiresMultisig bool `protobuf:"varint,5,opt,name=requires_multisig,json=requiresMultisig,proto3" json:"requiresMultisig"` // @gotags: json:"requiresMultisig"
 	// executed: true once the transfer has been applied
 	Executed      bool `protobuf:"varint,6,opt,name=executed,proto3" json:"executed,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2971,7 +3069,7 @@ type TreasurySpend struct {
 
 func (x *TreasurySpend) Reset() {
 	*x = TreasurySpend{}
-	mi := &file_canoliq_proto_msgTypes[33]
+	mi := &file_canoliq_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2983,7 +3081,7 @@ func (x *TreasurySpend) String() string {
 func (*TreasurySpend) ProtoMessage() {}
 
 func (x *TreasurySpend) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[33]
+	mi := &file_canoliq_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2996,7 +3094,7 @@ func (x *TreasurySpend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TreasurySpend.ProtoReflect.Descriptor instead.
 func (*TreasurySpend) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{33}
+	return file_canoliq_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *TreasurySpend) GetId() uint64 {
@@ -3045,7 +3143,7 @@ func (x *TreasurySpend) GetExecuted() bool {
 type MultisigApproval struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// spend_id: target TreasurySpend id
-	SpendId uint64 `protobuf:"varint,1,opt,name=spend_id,json=spendId,proto3" json:"spend_id,omitempty"` // @gotags: json:"spendId"
+	SpendId uint64 `protobuf:"varint,1,opt,name=spend_id,json=spendId,proto3" json:"spendId"` // @gotags: json:"spendId"
 	// signer: approving signer address (must be in params.multisig_signers)
 	Signer []byte `protobuf:"bytes,2,opt,name=signer,proto3" json:"signer,omitempty"`
 	// height: block at which the approval was recorded
@@ -3056,7 +3154,7 @@ type MultisigApproval struct {
 
 func (x *MultisigApproval) Reset() {
 	*x = MultisigApproval{}
-	mi := &file_canoliq_proto_msgTypes[34]
+	mi := &file_canoliq_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3068,7 +3166,7 @@ func (x *MultisigApproval) String() string {
 func (*MultisigApproval) ProtoMessage() {}
 
 func (x *MultisigApproval) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[34]
+	mi := &file_canoliq_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3081,7 +3179,7 @@ func (x *MultisigApproval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MultisigApproval.ProtoReflect.Descriptor instead.
 func (*MultisigApproval) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{34}
+	return file_canoliq_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *MultisigApproval) GetSpendId() uint64 {
@@ -3117,7 +3215,7 @@ type CLIQStakeIndex struct {
 
 func (x *CLIQStakeIndex) Reset() {
 	*x = CLIQStakeIndex{}
-	mi := &file_canoliq_proto_msgTypes[35]
+	mi := &file_canoliq_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3129,7 +3227,7 @@ func (x *CLIQStakeIndex) String() string {
 func (*CLIQStakeIndex) ProtoMessage() {}
 
 func (x *CLIQStakeIndex) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[35]
+	mi := &file_canoliq_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3142,7 +3240,7 @@ func (x *CLIQStakeIndex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CLIQStakeIndex.ProtoReflect.Descriptor instead.
 func (*CLIQStakeIndex) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{35}
+	return file_canoliq_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CLIQStakeIndex) GetAddresses() [][]byte {
@@ -3169,7 +3267,7 @@ type ValidatorRegistryEntry struct {
 
 func (x *ValidatorRegistryEntry) Reset() {
 	*x = ValidatorRegistryEntry{}
-	mi := &file_canoliq_proto_msgTypes[36]
+	mi := &file_canoliq_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3181,7 +3279,7 @@ func (x *ValidatorRegistryEntry) String() string {
 func (*ValidatorRegistryEntry) ProtoMessage() {}
 
 func (x *ValidatorRegistryEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[36]
+	mi := &file_canoliq_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3194,7 +3292,7 @@ func (x *ValidatorRegistryEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatorRegistryEntry.ProtoReflect.Descriptor instead.
 func (*ValidatorRegistryEntry) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{36}
+	return file_canoliq_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ValidatorRegistryEntry) GetAddress() []byte {
@@ -3223,7 +3321,7 @@ type ValidatorRegistry struct {
 
 func (x *ValidatorRegistry) Reset() {
 	*x = ValidatorRegistry{}
-	mi := &file_canoliq_proto_msgTypes[37]
+	mi := &file_canoliq_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3235,7 +3333,7 @@ func (x *ValidatorRegistry) String() string {
 func (*ValidatorRegistry) ProtoMessage() {}
 
 func (x *ValidatorRegistry) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[37]
+	mi := &file_canoliq_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3248,7 +3346,7 @@ func (x *ValidatorRegistry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatorRegistry.ProtoReflect.Descriptor instead.
 func (*ValidatorRegistry) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{37}
+	return file_canoliq_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ValidatorRegistry) GetEntries() []*ValidatorRegistryEntry {
@@ -3264,18 +3362,18 @@ type AlertState struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// last_fired_height: height the alert last fired (0 = not currently firing).
 	// Cleared to 0 when the condition resolves so it can fire again.
-	LastFiredHeight uint64 `protobuf:"varint,1,opt,name=last_fired_height,json=lastFiredHeight,proto3" json:"last_fired_height,omitempty"` // @gotags: json:"lastFiredHeight"
+	LastFiredHeight uint64 `protobuf:"varint,1,opt,name=last_fired_height,json=lastFiredHeight,proto3" json:"lastFiredHeight"` // @gotags: json:"lastFiredHeight"
 	// window_start_height: height the current measurement window opened.
-	WindowStartHeight uint64 `protobuf:"varint,2,opt,name=window_start_height,json=windowStartHeight,proto3" json:"window_start_height,omitempty"` // @gotags: json:"windowStartHeight"
+	WindowStartHeight uint64 `protobuf:"varint,2,opt,name=window_start_height,json=windowStartHeight,proto3" json:"windowStartHeight"` // @gotags: json:"windowStartHeight"
 	// window_baseline: the measured value at window open (e.g. pool balance).
-	WindowBaseline uint64 `protobuf:"varint,3,opt,name=window_baseline,json=windowBaseline,proto3" json:"window_baseline,omitempty"` // @gotags: json:"windowBaseline"
+	WindowBaseline uint64 `protobuf:"varint,3,opt,name=window_baseline,json=windowBaseline,proto3" json:"windowBaseline"` // @gotags: json:"windowBaseline"
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AlertState) Reset() {
 	*x = AlertState{}
-	mi := &file_canoliq_proto_msgTypes[38]
+	mi := &file_canoliq_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3287,7 +3385,7 @@ func (x *AlertState) String() string {
 func (*AlertState) ProtoMessage() {}
 
 func (x *AlertState) ProtoReflect() protoreflect.Message {
-	mi := &file_canoliq_proto_msgTypes[38]
+	mi := &file_canoliq_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3300,7 +3398,7 @@ func (x *AlertState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertState.ProtoReflect.Descriptor instead.
 func (*AlertState) Descriptor() ([]byte, []int) {
-	return file_canoliq_proto_rawDescGZIP(), []int{38}
+	return file_canoliq_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *AlertState) GetLastFiredHeight() uint64 {
@@ -3386,8 +3484,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\fstart_height\x18\x05 \x01(\x04R\vstartHeight\x12\x1d\n" +
 	"\n" +
 	"end_height\x18\x06 \x01(\x04R\tendHeight\x12%\n" +
-	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\xbd\n" +
-	"\n" +
+	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\x85\v\n" +
 	"\rCanoliqParams\x12\x17\n" +
 	"\afee_bps\x18\x01 \x01(\x04R\x06feeBps\x12&\n" +
 	"\x0fuser_rebate_bps\x18\x02 \x01(\x04R\ruserRebateBps\x12!\n" +
@@ -3426,7 +3523,13 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x19graduation_min_validators\x18\x1c \x01(\x04R\x17graduationMinValidators\x12;\n" +
 	"\x1agraduation_min_turnout_bps\x18\x1d \x01(\x04R\x17graduationMinTurnoutBps\x125\n" +
 	"\x17graduation_min_daily_tx\x18\x1e \x01(\x04R\x14graduationMinDailyTx\x12?\n" +
-	"\x1cgraduation_min_runway_months\x18\x1f \x01(\x04R\x19graduationMinRunwayMonths\"\xd8\x01\n" +
+	"\x1cgraduation_min_runway_months\x18\x1f \x01(\x04R\x19graduationMinRunwayMonths\x12F\n" +
+	"\x10restaking_policy\x18  \x03(\v2\x1b.types.RestakingPolicyEntryR\x0frestakingPolicy\"\xb5\x01\n" +
+	"\x14RestakingPolicyEntry\x12!\n" +
+	"\fcommittee_id\x18\x01 \x01(\x04R\vcommitteeId\x12*\n" +
+	"\x11target_weight_bps\x18\x02 \x01(\x04R\x0ftargetWeightBps\x12&\n" +
+	"\x0fmin_stake_ucnpy\x18\x03 \x01(\x04R\rminStakeUcnpy\x12&\n" +
+	"\x0fmax_stake_ucnpy\x18\x04 \x01(\x04R\rmaxStakeUcnpy\"\xd8\x01\n" +
 	"\x0eGovernanceTier\x12)\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x11.types.ActionTypeR\x06action\x12\x1d\n" +
 	"\n" +
@@ -3610,7 +3713,7 @@ func file_canoliq_proto_rawDescGZIP() []byte {
 }
 
 var file_canoliq_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_canoliq_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_canoliq_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_canoliq_proto_goTypes = []any{
 	(ActionType)(0),                       // 0: types.ActionType
 	(LockTier)(0),                         // 1: types.LockTier
@@ -3628,62 +3731,64 @@ var file_canoliq_proto_goTypes = []any{
 	(*RedemptionIndex)(nil),               // 13: types.RedemptionIndex
 	(*VestingSchedule)(nil),               // 14: types.VestingSchedule
 	(*CanoliqParams)(nil),                 // 15: types.CanoliqParams
-	(*GovernanceTier)(nil),                // 16: types.GovernanceTier
-	(*VestingIndex)(nil),                  // 17: types.VestingIndex
-	(*MessageCLIQStake)(nil),              // 18: types.MessageCLIQStake
-	(*MessageCLIQUnstake)(nil),            // 19: types.MessageCLIQUnstake
-	(*MessageCLIQClaimUnstake)(nil),       // 20: types.MessageCLIQClaimUnstake
-	(*MessageCLIQProposalCreate)(nil),     // 21: types.MessageCLIQProposalCreate
-	(*MessageCLIQVote)(nil),               // 22: types.MessageCLIQVote
-	(*MessageBuybackExecute)(nil),         // 23: types.MessageBuybackExecute
-	(*MessageDAOTreasurySpend)(nil),       // 24: types.MessageDAOTreasurySpend
-	(*MessageMultisigApprove)(nil),        // 25: types.MessageMultisigApprove
-	(*CLIQStake)(nil),                     // 26: types.CLIQStake
-	(*UnstakingCLIQ)(nil),                 // 27: types.UnstakingCLIQ
-	(*UnstakingIndex)(nil),                // 28: types.UnstakingIndex
-	(*Proposal)(nil),                      // 29: types.Proposal
-	(*ProposalIndex)(nil),                 // 30: types.ProposalIndex
-	(*Vote)(nil),                          // 31: types.Vote
-	(*ProposalParamChange)(nil),           // 32: types.ProposalParamChange
-	(*ProposalBuyback)(nil),               // 33: types.ProposalBuyback
-	(*ProposalTreasurySpend)(nil),         // 34: types.ProposalTreasurySpend
-	(*ProposalValidatorEject)(nil),        // 35: types.ProposalValidatorEject
-	(*ProposalEmergency)(nil),             // 36: types.ProposalEmergency
-	(*ProposalProtocolUpgrade)(nil),       // 37: types.ProposalProtocolUpgrade
-	(*BuybackOrder)(nil),                  // 38: types.BuybackOrder
-	(*TreasurySpend)(nil),                 // 39: types.TreasurySpend
-	(*MultisigApproval)(nil),              // 40: types.MultisigApproval
-	(*CLIQStakeIndex)(nil),                // 41: types.CLIQStakeIndex
-	(*ValidatorRegistryEntry)(nil),        // 42: types.ValidatorRegistryEntry
-	(*ValidatorRegistry)(nil),             // 43: types.ValidatorRegistry
-	(*AlertState)(nil),                    // 44: types.AlertState
-	(*anypb.Any)(nil),                     // 45: google.protobuf.Any
+	(*RestakingPolicyEntry)(nil),          // 16: types.RestakingPolicyEntry
+	(*GovernanceTier)(nil),                // 17: types.GovernanceTier
+	(*VestingIndex)(nil),                  // 18: types.VestingIndex
+	(*MessageCLIQStake)(nil),              // 19: types.MessageCLIQStake
+	(*MessageCLIQUnstake)(nil),            // 20: types.MessageCLIQUnstake
+	(*MessageCLIQClaimUnstake)(nil),       // 21: types.MessageCLIQClaimUnstake
+	(*MessageCLIQProposalCreate)(nil),     // 22: types.MessageCLIQProposalCreate
+	(*MessageCLIQVote)(nil),               // 23: types.MessageCLIQVote
+	(*MessageBuybackExecute)(nil),         // 24: types.MessageBuybackExecute
+	(*MessageDAOTreasurySpend)(nil),       // 25: types.MessageDAOTreasurySpend
+	(*MessageMultisigApprove)(nil),        // 26: types.MessageMultisigApprove
+	(*CLIQStake)(nil),                     // 27: types.CLIQStake
+	(*UnstakingCLIQ)(nil),                 // 28: types.UnstakingCLIQ
+	(*UnstakingIndex)(nil),                // 29: types.UnstakingIndex
+	(*Proposal)(nil),                      // 30: types.Proposal
+	(*ProposalIndex)(nil),                 // 31: types.ProposalIndex
+	(*Vote)(nil),                          // 32: types.Vote
+	(*ProposalParamChange)(nil),           // 33: types.ProposalParamChange
+	(*ProposalBuyback)(nil),               // 34: types.ProposalBuyback
+	(*ProposalTreasurySpend)(nil),         // 35: types.ProposalTreasurySpend
+	(*ProposalValidatorEject)(nil),        // 36: types.ProposalValidatorEject
+	(*ProposalEmergency)(nil),             // 37: types.ProposalEmergency
+	(*ProposalProtocolUpgrade)(nil),       // 38: types.ProposalProtocolUpgrade
+	(*BuybackOrder)(nil),                  // 39: types.BuybackOrder
+	(*TreasurySpend)(nil),                 // 40: types.TreasurySpend
+	(*MultisigApproval)(nil),              // 41: types.MultisigApproval
+	(*CLIQStakeIndex)(nil),                // 42: types.CLIQStakeIndex
+	(*ValidatorRegistryEntry)(nil),        // 43: types.ValidatorRegistryEntry
+	(*ValidatorRegistry)(nil),             // 44: types.ValidatorRegistry
+	(*AlertState)(nil),                    // 45: types.AlertState
+	(*anypb.Any)(nil),                     // 46: google.protobuf.Any
 }
 var file_canoliq_proto_depIdxs = []int32{
-	16, // 0: types.CanoliqParams.governance:type_name -> types.GovernanceTier
-	0,  // 1: types.GovernanceTier.action:type_name -> types.ActionType
-	1,  // 2: types.MessageCLIQStake.lock_tier:type_name -> types.LockTier
-	45, // 3: types.MessageCLIQProposalCreate.payload:type_name -> google.protobuf.Any
-	2,  // 4: types.MessageCLIQVote.choice:type_name -> types.VoteChoice
-	1,  // 5: types.CLIQStake.lock_tier:type_name -> types.LockTier
-	45, // 6: types.Proposal.payload:type_name -> google.protobuf.Any
-	3,  // 7: types.Proposal.status:type_name -> types.ProposalStatus
-	0,  // 8: types.Proposal.action_type:type_name -> types.ActionType
-	16, // 9: types.Proposal.tier:type_name -> types.GovernanceTier
-	2,  // 10: types.Vote.choice:type_name -> types.VoteChoice
-	15, // 11: types.ProposalParamChange.params:type_name -> types.CanoliqParams
-	4,  // 12: types.ProposalBuyback.mode:type_name -> types.BuybackMode
-	5,  // 13: types.ProposalTreasurySpend.denomination:type_name -> types.SpendDenomination
-	32, // 14: types.ProposalEmergency.param_change:type_name -> types.ProposalParamChange
-	4,  // 15: types.BuybackOrder.mode:type_name -> types.BuybackMode
-	33, // 16: types.BuybackOrder.payload:type_name -> types.ProposalBuyback
-	34, // 17: types.TreasurySpend.payload:type_name -> types.ProposalTreasurySpend
-	42, // 18: types.ValidatorRegistry.entries:type_name -> types.ValidatorRegistryEntry
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	17, // 0: types.CanoliqParams.governance:type_name -> types.GovernanceTier
+	16, // 1: types.CanoliqParams.restaking_policy:type_name -> types.RestakingPolicyEntry
+	0,  // 2: types.GovernanceTier.action:type_name -> types.ActionType
+	1,  // 3: types.MessageCLIQStake.lock_tier:type_name -> types.LockTier
+	46, // 4: types.MessageCLIQProposalCreate.payload:type_name -> google.protobuf.Any
+	2,  // 5: types.MessageCLIQVote.choice:type_name -> types.VoteChoice
+	1,  // 6: types.CLIQStake.lock_tier:type_name -> types.LockTier
+	46, // 7: types.Proposal.payload:type_name -> google.protobuf.Any
+	3,  // 8: types.Proposal.status:type_name -> types.ProposalStatus
+	0,  // 9: types.Proposal.action_type:type_name -> types.ActionType
+	17, // 10: types.Proposal.tier:type_name -> types.GovernanceTier
+	2,  // 11: types.Vote.choice:type_name -> types.VoteChoice
+	15, // 12: types.ProposalParamChange.params:type_name -> types.CanoliqParams
+	4,  // 13: types.ProposalBuyback.mode:type_name -> types.BuybackMode
+	5,  // 14: types.ProposalTreasurySpend.denomination:type_name -> types.SpendDenomination
+	33, // 15: types.ProposalEmergency.param_change:type_name -> types.ProposalParamChange
+	4,  // 16: types.BuybackOrder.mode:type_name -> types.BuybackMode
+	34, // 17: types.BuybackOrder.payload:type_name -> types.ProposalBuyback
+	35, // 18: types.TreasurySpend.payload:type_name -> types.ProposalTreasurySpend
+	43, // 19: types.ValidatorRegistry.entries:type_name -> types.ValidatorRegistryEntry
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_canoliq_proto_init() }
@@ -3697,7 +3802,7 @@ func file_canoliq_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_canoliq_proto_rawDesc), len(file_canoliq_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   39,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

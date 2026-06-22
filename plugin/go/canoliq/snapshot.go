@@ -51,6 +51,13 @@ type Snapshot struct {
 	// Canopy Supply singleton is not present (very early genesis / standalone
 	// tests).
 	CanopyTotalStake uint64
+	// CurrentRestakingAllocation maps Canopy committee id → uCNPY exposure
+	// derived from canoLiq's operator set's lib.Validator.committees[] +
+	// staked_amount (WP §7 restaking semantics: same bond, multiple
+	// committees). Computed inside refreshSnapshot from the per-operator
+	// Validator reads added to Batch 2. nil when the registry is empty or
+	// no operators are registered with Canopy yet.
+	CurrentRestakingAllocation map[uint64]uint64
 }
 
 // emptySnapshot is returned to query helpers when EndBlock has not yet run
@@ -257,6 +264,20 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		queryToValIncent[q] = addr
 		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: KeyForValidatorIncentives(addr)})
 	}
+	// Canopy validator reads — one per registered operator. The decoded
+	// committees[] feed CurrentRestakingAllocation. Falls back to the
+	// legacy aggregator addr when the registry is empty (in which case the
+	// allocation map will likely stay empty too — the aggregator usually
+	// isn't a real Canopy validator).
+	queryToCanopyVal := map[uint64][]byte{}
+	for _, e := range snap.ValidatorRegistry.Entries {
+		if e == nil || len(e.Address) == 0 {
+			continue
+		}
+		q := rand.Uint64()
+		queryToCanopyVal[q] = e.Address
+		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: contract.KeyForValidator(e.Address)})
+	}
 	if len(keys) > 0 {
 		resp2, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
 		if err != nil {
@@ -299,6 +320,19 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 			}
 			if addr, ok := queryToValIncent[r.QueryId]; ok {
 				snap.ValidatorIncentives[hexAddress(addr)] = DecodeUint64(raw)
+				continue
+			}
+			if _, ok := queryToCanopyVal[r.QueryId]; ok {
+				v := new(contract.Validator)
+				if e := contract.Unmarshal(raw, v); e != nil {
+					return e
+				}
+				if snap.CurrentRestakingAllocation == nil {
+					snap.CurrentRestakingAllocation = map[uint64]uint64{}
+				}
+				for _, committeeID := range v.Committees {
+					snap.CurrentRestakingAllocation[committeeID] += v.StakedAmount
+				}
 			}
 		}
 	}

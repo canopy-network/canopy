@@ -77,6 +77,7 @@ func (s *RPCServer) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/validators", s.handleValidators)
 	mux.HandleFunc("/v1/stakers", s.handleStakers)
 	mux.HandleFunc("/v1/graduation", s.handleGraduation)
+	mux.HandleFunc("/v1/restaking", s.handleRestaking)
 	// Phase 3 §1.1 per-address routes — fulfilled via the lazy queue
 	// drained in EndBlock (see lazy_query.go for the rationale).
 	mux.HandleFunc("/v1/account/", s.handleAccount)
@@ -119,6 +120,16 @@ func (s *RPCServer) handleGraduation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.plugin.QueryGraduation())
+}
+
+// handleRestaking returns the WP §7 policy + observed per-committee
+// exposure surface — observation-only in Phase C. Empty policy + empty
+// allocation map both serialise to a well-formed zero response.
+func (s *RPCServer) handleRestaking(w http.ResponseWriter, r *http.Request) {
+	if !methodIs(w, r, http.MethodGet) {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.plugin.QueryRestaking())
 }
 
 func (s *RPCServer) handleProposals(w http.ResponseWriter, r *http.Request) {
