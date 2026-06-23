@@ -207,3 +207,118 @@ doc/code conflict.
 
 No further action required for the v1.1 ↔ v1.2 reconciliation. This whole report
 can be considered closed.
+
+---
+
+## v1.2 → code alignment closure (2026-06-22)
+
+After the v1.1 ↔ v1.2 doc reconciliation closed above, a follow-up audit compared
+**v1.2 against the implementation** (`docs/canoliq-v1_2-implementation-plan.md`).
+That audit found ~37 of 39 verifiable spec points already implemented and two
+genuine docs-vs-code gaps:
+
+1. **§9.4 Concentration Risk** — spec said "self-impose a TVL cap of 33% of total
+   Canopy network stake"; code shipped an absolute `tvl_cap_ucnpy` parameter
+   (T3 / commit `648e7a38`).
+2. **§7 Restaking Optimization** — spec described a multi-committee allocation
+   engine; code had no multi-committee surface at all (single-committee
+   `ValidatorRegistry` only).
+
+Both gaps are now closed on branch `canoliq-spec-alignment`.
+
+### §9.4 percentage TVL cap — closed
+
+| Aspect | Status |
+|---|---|
+| Spec phrasing | "self-impose a TVL cap of 33% of total Canopy network stake pending ecosystem maturation and governance approval to lift this cap" |
+| Implementation | Phase B commits `2cf750a0` (code) + `272cf5f3` (docs) |
+| Plugin reach | New `KeyForSupply()` + `readCanopyTotalStake()` (Phase A foundation, commit `ee23a092`) read `lib.Supply.staked` live |
+| Default | `TvlCapBps = 3300` (= 33%); `0` = uncapped; governance-tunable |
+| Safety | Fail-closed when `Supply` is unreadable or `staked == 0` — `ErrCanopyStakeUnavailable` rejects the deposit rather than silently bypass the cap |
+| Surface | `/v1/health` exposes `tvlCapBps`, `canopyTotalStake`, `tvlCapUcnpyEffective`, `tvlUtilizationBps` |
+
+The cap is now live policy enforcement at every deposit, computed against the
+current Canopy total stake, exactly as §9.4 calls for.
+
+### §7 Restaking — partial close (policy + observability scope)
+
+| Aspect | Status |
+|---|---|
+| Spec phrasing | "canoLiq will implement a restaking optimization engine to... dynamically allocate canoLiq's stake to maximize aggregate APY... [under] governance-controlled allocation policy, including minimum and maximum stake per committee." |
+| Implementation | Phase C commits `ef44cd0d` (KeyForValidator + Validator proto) + `b0097d32` (engine) + `7336f1e5` + `b354bca6` (docs) |
+| What's live | Governance-declared `RestakingPolicy` (target weight + min/max per committee); per-committee exposure observation via `lib.Validator.committees[]`; drift + under-min + over-max + `policyCompliant` flag; `/v1/restaking` surface |
+| What's deferred | Active rebalancing (atomically re-routing pool delegations between operators). Requires a delegation-routing primitive not yet defined in the codebase; §11 Roadmap does not list it as a launch deliverable. Operators act on drift signals manually for now (e.g. ejecting underperforming operators via `ACTION_VALIDATOR_EJECT`). |
+
+The spec's *policy mechanism* — declare per-committee targets / min / max, surface
+compliance — is implemented faithfully. The *automation* side (the protocol itself
+re-routing in response to drift) is documented as a deferred future workstream in
+`docs/canoliq-site/docs/advanced/restaking.mdx`, with the rationale visible to
+operators reading `/v1/restaking`'s drift signals.
+
+### Related cleanups landed under the same branch
+
+The spec-alignment work also took the opportunity to land three small
+docs/test-hygiene fixes the readiness doc had previously listed as "out of scope":
+
+- **Stale insurance README narration** (`plugin/go/canoliq/README.md` — commit
+  `deb6ae56`). `default 1500 = 15% of treasury slice` → `default 500 = 5%`,
+  matching `config.go:252` and Whitepaper §9.2.
+- **`phase2_test.go:208` copylocks vet warning** (commit `f140fe1a`).
+  `proto.Clone` replaces a direct struct copy that triggered `go vet`'s
+  copylocks check.
+- **Stuck-redemption alert** (commit `c203e4b4`). Fourth T6 push-alert
+  condition: fires when the count of mature-but-unclaimed redemptions
+  exceeds a governance threshold (default 10). Not directly mandated by
+  any v1.2 section but rounds out the T6 alert surface; out-of-scope flag
+  on the readiness doc removed.
+
+### Known limitations on the spec-alignment branch
+
+Honest open items called out during PR self-review on
+[PR #3](https://github.com/SocratesDz/canopy/pull/3). None block merge;
+all are tracked here so a future reader knows the boundaries.
+
+- **Restaking observability is HTTP-only** (`/v1/restaking`). `canoliqctl`
+  is currently transaction-only — no GET wrappers exist — so adding a
+  `canoliqctl restaking-status` subcommand would introduce a new pattern
+  to the CLI. Deferred. Operators consume `/v1/restaking` directly until
+  the CLI gets read-side commands.
+- **`KeyForMatureRedemption` index has no migration story for
+  pre-Phase-D redemptions.** The index is written in the redeem handler
+  (`deliver.go`) and deleted in the claim handler. A node that restarts
+  onto Phase-D code with pre-existing queued redemptions will never
+  build index entries for them — the stuck-redemption alert would silently
+  miss them. Irrelevant for testnet (no live state); a real gap for any
+  future upgrade-in-place on mainnet. Fix would be a one-shot backfill
+  walking each address's `RedemptionIndex` at upgrade height.
+
+### Errata on commit messages
+
+- (Retracted 2026-06-22.) A previous version of this section claimed the
+  `@gotags` JSON-tag fix attributed to commit `ef44cd0d` had not actually
+  happened. That retraction was itself based on a flawed verification —
+  the grep ran against the branch-to-branch diff
+  (`canoliq..canoliq-spec-alignment`), which compresses Phase A's
+  intermediate state with Phase C's regen and hides the inter-commit
+  fix. Verifying against the actual inter-commit diff (`ee23a092..ef44cd0d
+  -- plugin/go/contract/account.pb.go`) confirms the fix did happen:
+  `json:"delegated_only,omitempty"` → `json:"delegatedOnly"` for
+  `Supply.DelegatedOnly`, `Supply.CommitteeStaked`, and
+  `Supply.CommitteeDelegatedOnly`. The Phase A regen used raw `protoc`
+  and skipped the `protoc-go-inject-tag` step; the Phase C regen via
+  `_generate.sh` applied it. `ef44cd0d`'s commit message was correct.
+  Apologies for the misdirection — keeping this self-correcting record
+  for the audit trail.
+
+### Final state
+
+`canoliq-spec-alignment` ships **15 commits** total: 11 Phase commits
+(D, A, B, C) + 1 closure commit + 3 PR-self-review follow-up commits
+(see [PR #3](https://github.com/SocratesDz/canopy/pull/3) review section
+for findings). All four phases (D, A, B, C) and the closure are
+committed; the implementation-plan document
+(`docs/canoliq-v1_2-implementation-plan.md`) records the per-phase
+commit hashes. The v1.2 whitepaper and tokenomics text are
+unchanged — the *code* now matches what the docs promised.
+
+This appendix closes both audits: v1.1 ↔ v1.2 (above) and v1.2 ↔ code (here).

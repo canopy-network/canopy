@@ -64,6 +64,7 @@ const sidebars: SidebarsConfig = {
         'advanced/treasury',
         'advanced/insurance',
         'advanced/tvl-cap',
+        'advanced/restaking',
         'advanced/autonomy-graduation',
         'advanced/alerts',
         'advanced/state-keys',

@@ -1163,9 +1163,10 @@ membership and threshold changes flow through a `ProposalParamChange`.
 
 ## Insurance fund
 
-`ProcessRewards` skims `insurance_bps` (default 1500 = 15% of the treasury
-slice → ≈1.5% of fee) into `canoliq/insurance/pool` per WP §11. Phase 3 will
-add slashing-reimbursement disbursement; Phase 2 only seeds the pool.
+`ProcessRewards` skims `insurance_bps` (default `500` = 5% of the treasury
+slice → ≈0.5% of fee) into `canoliq/insurance/pool` per WP §9.2. The skim
+auto-disables once the pool reaches the `insurance_target_bps` target
+(default 500 = 5% of `peak_tvl_ucnpy`), tracked from T4 onward.
 
 ## Per-validator pro-rata
 

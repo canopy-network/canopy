@@ -51,6 +51,7 @@ const (
 	codeInvalidLockTier
 	codeStakeLocked
 	codeTVLCapExceeded
+	codeCanopyStakeUnavailable
 )
 
 // newError constructs a PluginError stamped with the canoLiq module.
@@ -255,7 +256,15 @@ func ErrStakeLocked() *contract.PluginError {
 }
 
 // ErrTVLCapExceeded reports a deposit that would push total pooled CNPY above
-// the governance-set TVL cap.
+// the percentage TVL cap (mulDiv(canopy_total_stake, tvl_cap_bps, 10000)).
 func ErrTVLCapExceeded() *contract.PluginError {
 	return newError(codeTVLCapExceeded, "deposit would exceed the TVL cap")
+}
+
+// ErrCanopyStakeUnavailable reports that the TVL cap check could not be
+// evaluated because the Canopy Supply state was unreadable or staked = 0.
+// The deposit fails closed per WP §9.4 (the cap exists to bound systemic
+// risk; silently bypassing it would defeat the spec).
+func ErrCanopyStakeUnavailable() *contract.PluginError {
+	return newError(codeCanopyStakeUnavailable, "Canopy total stake unavailable; TVL cap cannot be enforced — deposit rejected")
 }
