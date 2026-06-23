@@ -39,13 +39,13 @@ const AccountsPage: React.FC = () => {
         },
         {
             title: 'Visible Accounts',
-            value: <StatValue stat={visibleAccounts} />,
+            value: <StatValue stat={visibleAccounts} loading={isLoading} />,
             subValue: 'Current page',
             icon: 'fa-solid fa-list',
         },
         {
             title: 'Largest Balance',
-            value: <StatValue stat={largestBalanceStat} format={(n) => n.toLocaleString(undefined, { maximumFractionDigits: 2 })} />,
+            value: <StatValue stat={largestBalanceStat} loading={isLoading} format={(n) => n.toLocaleString(undefined, { maximumFractionDigits: 2 })} />,
             subValue: 'CNPY',
             icon: 'fa-solid fa-trophy',
         },

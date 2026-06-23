@@ -100,19 +100,19 @@ const BlocksPage: React.FC = () => {
     const overviewCards = [
         {
             title: 'Latest Height',
-            value: <StatValue stat={latestHeightStat} />,
+            value: <StatValue stat={latestHeightStat} loading={isLoading} />,
             subValue: 'Current page',
             icon: 'fa-solid fa-mountain-city',
         },
         {
             title: 'Page Transactions',
-            value: <StatValue stat={pageTransactionsStat} />,
+            value: <StatValue stat={pageTransactionsStat} loading={isLoading} />,
             subValue: 'Visible rows',
             icon: 'fa-solid fa-arrow-right-arrow-left',
         },
         {
             title: 'Average Size',
-            value: <StatValue stat={averageSizeStat} format={(n) => `${n.toFixed(2)} KB`} />,
+            value: <StatValue stat={averageSizeStat} loading={isLoading} format={(n) => `${n.toFixed(2)} KB`} />,
             subValue: 'Page average',
             icon: 'fa-solid fa-weight-hanging',
         },

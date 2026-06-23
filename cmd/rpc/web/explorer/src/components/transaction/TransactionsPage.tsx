@@ -122,13 +122,13 @@ const TransactionsPage: React.FC = () => {
         },
         {
             title: 'Confirmed',
-            value: <StatValue stat={confirmedPageTxns} />,
+            value: <StatValue stat={confirmedPageTxns} loading={isTransactionsLoading} />,
             subValue: 'Current page',
             icon: 'fa-solid fa-circle-check',
         },
         {
             title: 'Visible Transactions',
-            value: <StatValue stat={visiblePageTxns} />,
+            value: <StatValue stat={visiblePageTxns} loading={isTransactionsLoading} />,
             subValue: 'Current page',
             icon: 'fa-solid fa-arrow-right-arrow-left',
         },
