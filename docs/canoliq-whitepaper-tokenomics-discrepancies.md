@@ -240,7 +240,7 @@ Both gaps are now closed on branch `canoliq-spec-alignment`.
 The cap is now live policy enforcement at every deposit, computed against the
 current Canopy total stake, exactly as §9.4 calls for.
 
-### §7 Restaking — closed in **policy + observability scope**
+### §7 Restaking — partial close (policy + observability scope)
 
 | Aspect | Status |
 |---|---|
@@ -272,12 +272,47 @@ docs/test-hygiene fixes the readiness doc had previously listed as "out of scope
   any v1.2 section but rounds out the T6 alert surface; out-of-scope flag
   on the readiness doc removed.
 
+### Known limitations on the spec-alignment branch
+
+Honest open items called out during PR self-review on
+[PR #3](https://github.com/SocratesDz/canopy/pull/3). None block merge;
+all are tracked here so a future reader knows the boundaries.
+
+- **Restaking observability is HTTP-only** (`/v1/restaking`). `canoliqctl`
+  is currently transaction-only — no GET wrappers exist — so adding a
+  `canoliqctl restaking-status` subcommand would introduce a new pattern
+  to the CLI. Deferred. Operators consume `/v1/restaking` directly until
+  the CLI gets read-side commands.
+- **`KeyForMatureRedemption` index has no migration story for
+  pre-Phase-D redemptions.** The index is written in the redeem handler
+  (`deliver.go`) and deleted in the claim handler. A node that restarts
+  onto Phase-D code with pre-existing queued redemptions will never
+  build index entries for them — the stuck-redemption alert would silently
+  miss them. Irrelevant for testnet (no live state); a real gap for any
+  future upgrade-in-place on mainnet. Fix would be a one-shot backfill
+  walking each address's `RedemptionIndex` at upgrade height.
+
+### Errata on commit messages
+
+- `ef44cd0d` (`feat(canoliq): plugin contract — KeyForValidator + Validator proto`)
+  claims its `_generate.sh` invocation also corrected `@gotags` JSON-tag
+  inject across existing `.pb.go` files that "Phases A + B used raw protoc
+  and skipped the inject-tag step". Verifying after the fact: the diff
+  shows no JSON-tag fixes outside the deliberate Phase B `tvl_cap_ucnpy`
+  → `tvl_cap_bps` rename and the new Phase C additions. The Phase A regen
+  was already correct; the claim in commit `ef44cd0d`'s message (and the
+  PR body that repeats it) is **wrong**. Leaving the commit in place
+  rather than rewriting history; this errata is the canonical record.
+
 ### Final state
 
-`canoliq-spec-alignment` ships **10 commits** closing both v1.2 docs-vs-code gaps
-plus three independent cleanups. All four phases (D, A, B, C) are committed; the
-implementation-plan document (`docs/canoliq-v1_2-implementation-plan.md`) records
-the per-phase commit hashes. The v1.2 whitepaper and tokenomics text are
+`canoliq-spec-alignment` ships **15 commits** total: 11 Phase commits
+(D, A, B, C) + 1 closure commit + 3 PR-self-review follow-up commits
+(see [PR #3](https://github.com/SocratesDz/canopy/pull/3) review section
+for findings). All four phases (D, A, B, C) and the closure are
+committed; the implementation-plan document
+(`docs/canoliq-v1_2-implementation-plan.md`) records the per-phase
+commit hashes. The v1.2 whitepaper and tokenomics text are
 unchanged — the *code* now matches what the docs promised.
 
 This appendix closes both audits: v1.1 ↔ v1.2 (above) and v1.2 ↔ code (here).

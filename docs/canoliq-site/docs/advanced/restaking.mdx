@@ -50,6 +50,15 @@ exposure[c] = Σ operator.staked_amount  for operators whose committees[] contai
 The plugin reads each registered operator's Canopy `Validator` record (via
 `KeyForValidator`) and computes this sum at each snapshot.
 
+The "registered operator" set is canoLiq's `ValidatorRegistry` — seeded at
+genesis (`plugin/go/canoliq/genesis.{localnet,testnet}.json`'s
+`validatorRegistry` block) and editable via governance. Each entry is an
+`(address, stake)` pair where `stake` is the relative weight used in
+per-validator pro-rata reward distribution; the committee membership comes
+from the operator's own Canopy `Validator.committees[]` (not from canoLiq's
+registry). An empty registry falls back to a single committee-aggregator
+key and surfaces an empty `allocations` list at `/v1/restaking`.
+
 ## Policy validation
 
 When governance updates `restaking_policy`:

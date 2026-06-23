@@ -50,6 +50,10 @@ GET /v1/health
 unavailable). `tvlUtilizationBps` is `totalPooledCnpy / tvlCapUcnpyEffective` in basis
 points. See [TVL Cap](../advanced/tvl-cap.mdx).
 
+> The example above is illustrative of a near-cap scenario (73.5% full). A freshly-launched
+> testnet typically reports `tvlUtilizationBps` well under 1000, and `canopyTotalStake` can
+> read `0` until the first MessageStake lands on Canopy.
+
 ### Pools
 
 ```json
