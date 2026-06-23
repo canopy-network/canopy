@@ -67,15 +67,20 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 	// network stake"). TvlCapBps = 0 means uncapped; any non-zero value
 	// computes a live cap of mulDiv(canopy_total_stake, TvlCapBps, 10_000).
 	//
-	// Two zero-stake sub-cases, treated differently:
+	// Three zero-cap sub-cases, all accepted (uncapped this block):
+	//   - Canopy Supply present, .Staked == 0 — legitimate fresh-network
+	//     state (Canopy is up but nobody has staked yet).
+	//   - capUcnpy == 0 due to integer truncation when Staked is very
+	//     small (e.g. Staked=1, bps=3300 → mulDiv = 0). Without this guard
+	//     Staked=0 would accept while Staked=1..3 would reject everything,
+	//     an asymmetric quirk with no policy justification.
+	// In both cases the cap re-engages automatically once Canopy stake
+	// grows past the truncation point.
+	//
+	// One zero-stake sub-case is treated differently:
 	//   - Canopy Supply singleton ABSENT → fail-closed
 	//     (ErrCanopyStakeUnavailable). The cap-policy state itself hasn't
 	//     initialized; silently bypassing the cap would defeat §9.4.
-	//   - Canopy Supply present, .Staked == 0 → accept (uncapped this
-	//     block). A freshly-bootstrapped network legitimately has zero
-	//     staked tokens before the first MessageStake; rejecting deposits
-	//     during that window would brick canoLiq on every fresh genesis.
-	//     The cap re-engages automatically once staking begins.
 	if params.TvlCapBps > 0 {
 		supply, perr := c.readCanopySupply()
 		if perr != nil {
@@ -84,11 +89,9 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 		if supply == nil {
 			return &contract.PluginDeliverResponse{Error: ErrCanopyStakeUnavailable()}
 		}
-		if supply.Staked > 0 {
-			capUcnpy := mulDiv(supply.Staked, params.TvlCapBps, 10_000)
-			if globals.TotalPooledCnpy+msg.Amount > capUcnpy {
-				return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
-			}
+		capUcnpy := mulDiv(supply.Staked, params.TvlCapBps, 10_000)
+		if capUcnpy > 0 && globals.TotalPooledCnpy+msg.Amount > capUcnpy {
+			return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
 		}
 	}
 	deduct := msg.Amount + fee

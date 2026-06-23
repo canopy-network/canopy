@@ -151,6 +151,48 @@ func TestT3FailClosedOnAbsentSupply(t *testing.T) {
 	}
 }
 
+// TestT3AcceptsWhenCapTruncatesToZero: integer-truncation edge — at
+// very low Canopy stake, mulDiv(staked, bps, 10000) truncates to 0
+// (e.g. Staked=1 with bps=3300 → cap=0). Treated same as Staked=0:
+// accept this block; the cap re-engages once Canopy stake grows past
+// the truncation point. Without this guard, Staked=0 would accept
+// while Staked=1..3 would reject everything — an asymmetric quirk.
+func TestT3AcceptsWhenCapTruncatesToZero(t *testing.T) {
+	user := addr20(0x06)
+	c, s := newTestCanoliq()
+	// Staked=1, bps=3300 → mulDiv = 1*3300/10000 = 0 (integer truncation).
+	seedCanopySupply(t, s, 1)
+	seedGlobals(s, hotPoolGlobals(10_000_000))
+	seedAccount(s, user, 100_000_000)
+
+	r := c.DeliverMessageCanoliqDeposit(
+		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000_000},
+		10_000, cappedParams(3_300),
+	)
+	if r.Error != nil {
+		t.Fatalf("deposit at truncate-to-zero cap should be accepted: %v", r.Error)
+	}
+	if g := loadGlobals(t, s); g.TotalPooledCnpy != 11_000_000 {
+		t.Errorf("pooled after deposit: got %d want 11_000_000", g.TotalPooledCnpy)
+	}
+
+	// Sanity: once Staked is large enough for capUcnpy > 0, the cap
+	// engages normally. Staked=10000, bps=3300 → cap=3300. A 1_000
+	// deposit (pooled 11_000_000 + 1_000) far exceeds 3300, so rejected.
+	c2, s2 := newTestCanoliq()
+	seedCanopySupply(t, s2, 10_000)
+	seedGlobals(s2, hotPoolGlobals(10_000_000))
+	seedAccount(s2, user, 100_000_000)
+
+	r2 := c2.DeliverMessageCanoliqDeposit(
+		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000},
+		10_000, cappedParams(3_300),
+	)
+	if r2.Error == nil || r2.Error.Code != codeTVLCapExceeded {
+		t.Errorf("cap should engage once it truncates to non-zero; got err=%v", r2.Error)
+	}
+}
+
 // TestT3AcceptsWhenSupplyPresentButStakedZero: Supply present but
 // .Staked == 0 means Canopy is up and tracking, just nobody has staked
 // yet (legitimate fresh-network state). The cap is uncapped this block
