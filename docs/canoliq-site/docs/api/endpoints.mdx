@@ -8,7 +8,7 @@ All routes are `GET` only.
 
 | Path | Returns |
 |------|---------|
-| `/v1/health` | `{height, genesisComplete, chainId, tvlCapBps, canopyTotalStake, tvlCapUcnpyEffective, tvlUtilizationBps}` |
+| `/v1/health` | `{height, genesisComplete, chainId, tvlCapBps, tvlCapStatus, canopyTotalStake, tvlCapUcnpyEffective, tvlUtilizationBps}` |
 | `/v1/globals` | `CanoliqGlobals` (singleton accounting record) |
 | `/v1/params` | `CanoliqParams` (governance-tunable knobs) |
 | `/v1/pools` | Committee pool, treasury (CNPY/CLIQ), buyback, insurance, per-validator incentives, peak TVL, insurance target & funded-bps |
@@ -38,6 +38,7 @@ GET /v1/health
   "genesisComplete": true,
   "chainId": 2,
   "tvlCapBps": 3300,
+  "tvlCapStatus": "active",
   "canopyTotalStake": 100000000000,
   "tvlCapUcnpyEffective": 33000000000,
   "tvlUtilizationBps": 7350
@@ -45,10 +46,13 @@ GET /v1/health
 ```
 
 `tvlCapBps` is the governance-set cap as a fraction of total Canopy stake (default `3300` =
-33%; `0` = uncapped). `tvlCapUcnpyEffective` is the live computed uCNPY cap
-(`mulDiv(canopyTotalStake, tvlCapBps, 10_000)`; `0` when uncapped or Canopy stake is
-unavailable). `tvlUtilizationBps` is `totalPooledCnpy / tvlCapUcnpyEffective` in basis
-points. See [TVL Cap](../advanced/tvl-cap.mdx).
+33%; `0` = uncapped). `tvlCapStatus` is one of `"uncapped"`, `"active"`,
+`"awaiting-canopy-stake"`, `"fail-closed"` — operators rely on this to tell apart "cap
+silently inactive" from "cap rejecting everything" when `tvlCapUcnpyEffective` is `0`.
+`tvlCapUcnpyEffective` is the live computed uCNPY cap (`mulDiv(canopyTotalStake, tvlCapBps,
+10_000)`; `0` when uncapped, awaiting Canopy stake, or fail-closed — pair with
+`tvlCapStatus` to disambiguate). `tvlUtilizationBps` is `totalPooledCnpy /
+tvlCapUcnpyEffective` in basis points. See [TVL Cap](../advanced/tvl-cap.mdx).
 
 > The example above is illustrative of a near-cap scenario (73.5% full). A freshly-launched
 > testnet typically reports `tvlUtilizationBps` well under 1000, and `canopyTotalStake` can

@@ -48,9 +48,16 @@ type Snapshot struct {
 	// CanopyTotalStake is Supply.Staked at snapshot height — total locked
 	// CNPY across all Canopy committees (including delegations). Feeds the
 	// /v1/health "effective TVL cap" calculation (WP §9.4). Zero when the
-	// Canopy Supply singleton is not present (very early genesis / standalone
-	// tests).
+	// Canopy Supply singleton is not present OR when Staked is just zero;
+	// CanopySupplyPresent disambiguates the two.
 	CanopyTotalStake uint64
+	// CanopySupplyPresent is true when the Canopy Supply singleton was
+	// decoded successfully at snapshot height (regardless of .Staked value).
+	// QueryHealth needs this to distinguish "fail-closed" (Supply absent →
+	// deposit handler rejects) from "awaiting-canopy-stake" (Supply present
+	// with Staked=0 → deposit handler accepts) per H3 in
+	// docs/canoliq-v1_2-implementation-plan.md.
+	CanopySupplyPresent bool
 	// CurrentRestakingAllocation maps Canopy committee id → uCNPY exposure
 	// derived from canoLiq's operator set's lib.Validator.committees[] +
 	// staked_amount (WP §7 restaking semantics: same bond, multiple
@@ -149,6 +156,24 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 			continue
 		}
 		raw := r.Entries[0].Value
+		// Special case: Canopy Supply with all-default fields (e.g.
+		// Staked == 0 on a fresh network) marshals to zero bytes by proto3
+		// elision. We need to record presence even when the value is empty
+		// so QueryHealth can distinguish 'fail-closed' (absent) from
+		// 'awaiting-canopy-stake' (present-but-default). Other QueryIds
+		// have no meaningful empty-value state, so they keep the
+		// short-circuit below.
+		if r.QueryId == qCanopySupply {
+			snap.CanopySupplyPresent = true
+			if len(raw) > 0 {
+				supply := new(contract.Supply)
+				if e := contract.Unmarshal(raw, supply); e != nil {
+					return e
+				}
+				snap.CanopyTotalStake = supply.Staked
+			}
+			continue
+		}
 		if len(raw) == 0 {
 			continue
 		}
@@ -193,12 +218,6 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 			spendIdxBz = raw
 		case qStakeIdx:
 			stakeIdxBz = raw
-		case qCanopySupply:
-			supply := new(contract.Supply)
-			if e := contract.Unmarshal(raw, supply); e != nil {
-				return e
-			}
-			snap.CanopyTotalStake = supply.Staked
 		}
 	}
 

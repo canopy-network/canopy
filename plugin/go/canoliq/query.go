@@ -49,6 +49,31 @@ type MultisigApprovalsView struct {
 	Approvals []*contract.MultisigApproval `json:"approvals"`
 }
 
+// TVL-cap status strings reported in HealthView.TVLCapStatus. Operators
+// rely on these to tell apart the three runtime behaviours of the cap
+// when TVLCapBps > 0: enforcing, silently accepting (cap underdetermined
+// due to thin Canopy state), or rejecting all deposits (Supply absent).
+const (
+	// TVLCapStatusUncapped — TvlCapBps == 0; governance has not set a cap.
+	// Deposits accepted without bound.
+	TVLCapStatusUncapped = "uncapped"
+	// TVLCapStatusActive — TvlCapBps > 0 AND the live effective uCNPY cap
+	// is non-zero. Deposits enforced against the cap.
+	TVLCapStatusActive = "active"
+	// TVLCapStatusAwaitingCanopyStake — TvlCapBps > 0 but the live
+	// effective uCNPY cap is zero, either because Canopy Supply.Staked is
+	// 0 or because mulDiv truncates to 0 at very low Canopy stake. Deposits
+	// accepted this block; the cap re-engages automatically once Canopy
+	// stake grows. Per H3 (cc5c789e) / M6 (385f3424).
+	TVLCapStatusAwaitingCanopyStake = "awaiting-canopy-stake"
+	// TVLCapStatusFailClosed — TvlCapBps > 0 AND the Canopy Supply
+	// singleton is missing from state. The deposit handler rejects every
+	// deposit with ErrCanopyStakeUnavailable. Operationally this is a
+	// misconfiguration: either seed Supply in Canopy genesis before
+	// opening canoLiq deposits, or set TvlCapBps = 0 during bring-up.
+	TVLCapStatusFailClosed = "fail-closed"
+)
+
 // HealthView is the liveness response: enough to confirm the plugin is up,
 // what height the snapshot reflects, and whether genesis has run.
 type HealthView struct {
@@ -58,16 +83,23 @@ type HealthView struct {
 	// TVLCapBps is the governance-set TVL ceiling as a fraction of total
 	// Canopy network stake (WP §9.4). 0 = uncapped.
 	TVLCapBps uint64 `json:"tvlCapBps"`
+	// TVLCapStatus is the runtime status of the cap at snapshot height —
+	// one of the TVLCapStatus* constants. Operators need this to tell
+	// apart 'cap silently inactive' from 'cap rejecting all deposits',
+	// both of which look like TVLCapUcnpyEffective=0 in isolation.
+	TVLCapStatus string `json:"tvlCapStatus"`
 	// TVLCapUcnpyEffective is the live uCNPY cap at snapshot height —
-	// mulDiv(canopy_total_stake, tvl_cap_bps, 10_000). Zero when uncapped
-	// OR when Canopy total stake is unavailable (in which case the deposit
-	// path fails closed; see deliver.go).
+	// mulDiv(canopy_total_stake, tvl_cap_bps, 10_000). Zero when uncapped,
+	// when awaiting Canopy stake, or when fail-closed. Pair with
+	// TVLCapStatus to interpret.
 	TVLCapUcnpyEffective uint64 `json:"tvlCapUcnpyEffective"`
 	// CanopyTotalStake is the snapshot-height value of lib.Supply.staked —
-	// surfaced so operators can sanity-check the effective cap.
+	// surfaced so operators can sanity-check the effective cap. Zero when
+	// Supply is absent (then TVLCapStatus = "fail-closed") OR when Supply
+	// is present with Staked = 0 (then TVLCapStatus = "awaiting-canopy-stake").
 	CanopyTotalStake uint64 `json:"canopyTotalStake"`
 	// TVLUtilizationBps is total_pooled_cnpy / tvl_cap_ucnpy_effective in bps
-	// (0 when uncapped or the live cap is zero).
+	// (0 when the effective cap is 0, regardless of status).
 	TVLUtilizationBps uint64 `json:"tvlUtilizationBps"`
 }
 
@@ -79,27 +111,44 @@ type StakerView struct {
 }
 
 // QueryHealth returns liveness info — height + genesis flag + chain id —
-// plus the live TVL cap surface (cap bps, computed effective uCNPY cap,
-// canopy total stake, utilization). Always succeeds; falls back to zeros
-// before the first snapshot.
+// plus the live TVL cap surface (status, cap bps, computed effective
+// uCNPY cap, canopy total stake, utilization). Always succeeds; falls
+// back to zeros before the first snapshot.
 func (p *Plugin) QueryHealth() *HealthView {
 	s := p.Snapshot()
 	var effectiveCap, utilBps uint64
-	if s.Params.TvlCapBps > 0 && s.CanopyTotalStake > 0 {
+	status := deriveTVLCapStatus(s)
+	if status == TVLCapStatusActive {
 		effectiveCap = mulDiv(s.CanopyTotalStake, s.Params.TvlCapBps, 10_000)
-		if effectiveCap > 0 {
-			utilBps = mulDiv(s.Globals.TotalPooledCnpy, 10_000, effectiveCap)
-		}
+		utilBps = mulDiv(s.Globals.TotalPooledCnpy, 10_000, effectiveCap)
 	}
 	return &HealthView{
 		Height:               s.Height,
 		GenesisComplete:      s.Globals.GenesisComplete,
 		ChainID:              p.config.ChainId,
 		TVLCapBps:            s.Params.TvlCapBps,
+		TVLCapStatus:         status,
 		TVLCapUcnpyEffective: effectiveCap,
 		CanopyTotalStake:     s.CanopyTotalStake,
 		TVLUtilizationBps:    utilBps,
 	}
+}
+
+// deriveTVLCapStatus maps the four-way TVL-cap runtime behaviour to the
+// reported status string. Mirrors the deliver.go branch structure: no
+// TvlCapBps → uncapped; Supply absent → fail-closed; live capUcnpy == 0
+// → awaiting-canopy-stake (deposit accepts); otherwise → active.
+func deriveTVLCapStatus(s *Snapshot) string {
+	if s.Params.TvlCapBps == 0 {
+		return TVLCapStatusUncapped
+	}
+	if !s.CanopySupplyPresent {
+		return TVLCapStatusFailClosed
+	}
+	if mulDiv(s.CanopyTotalStake, s.Params.TvlCapBps, 10_000) == 0 {
+		return TVLCapStatusAwaitingCanopyStake
+	}
+	return TVLCapStatusActive
 }
 
 // QueryRestaking returns the WP §7 policy + observed-exposure surface.

@@ -242,8 +242,11 @@ func TestT3HealthSurfacesEffectiveCap(t *testing.T) {
 	if h.TVLUtilizationBps != 2_500 { // 8.25M / 33M = 25%
 		t.Errorf("tvlUtilizationBps: got %d want 2500", h.TVLUtilizationBps)
 	}
+	if h.TVLCapStatus != TVLCapStatusActive {
+		t.Errorf("tvlCapStatus: got %q want %q", h.TVLCapStatus, TVLCapStatusActive)
+	}
 
-	// Uncapped → cap fields zero, utilization zero.
+	// Uncapped → cap fields zero, utilization zero, status "uncapped".
 	seedParams(t, c, cappedParams(0))
 	if err := c.refreshSnapshot(6); err != nil {
 		t.Fatalf("refreshSnapshot: %v", err)
@@ -253,21 +256,76 @@ func TestT3HealthSurfacesEffectiveCap(t *testing.T) {
 		t.Errorf("uncapped health: bps=%d eff=%d util=%d want 0/0/0",
 			h.TVLCapBps, h.TVLCapUcnpyEffective, h.TVLUtilizationBps)
 	}
+	if h.TVLCapStatus != TVLCapStatusUncapped {
+		t.Errorf("tvlCapStatus: got %q want %q", h.TVLCapStatus, TVLCapStatusUncapped)
+	}
+}
 
-	// Capped but Canopy stake absent → effective cap reports zero
-	// (deposit path would fail closed; health surface signals "unknown").
+// TestT3HealthTVLCapStatusAllFourStates pins the deriveTVLCapStatus
+// contract: each of the four runtime behaviours of the cap surfaces a
+// distinct status string. Operators rely on this to tell apart "cap
+// silently inactive" (deposits accepted) from "cap rejecting everything"
+// (deposits failing) when TVLCapUcnpyEffective happens to be 0 in both.
+func TestT3HealthTVLCapStatusAllFourStates(t *testing.T) {
+	// (1) Uncapped: TvlCapBps = 0.
+	c, s := newTestCanoliq()
+	seedParams(t, c, cappedParams(0))
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+	if err := c.refreshSnapshot(1); err != nil {
+		t.Fatalf("refreshSnapshot: %v", err)
+	}
+	if got := c.plugin.QueryHealth().TVLCapStatus; got != TVLCapStatusUncapped {
+		t.Errorf("uncapped: got %q want %q", got, TVLCapStatusUncapped)
+	}
+
+	// (2) Active: TvlCapBps > 0, Supply present with non-trivial Staked.
 	c2, s2 := newTestCanoliq()
-	s2.del(contract.KeyForSupply())
+	seedCanopySupply(t, s2, 100_000_000)
 	seedParams(t, c2, cappedParams(3_300))
-	seedGlobals(s2, &contract.CanoliqGlobals{TotalPooledCnpy: 1_000, GenesisComplete: true})
+	seedGlobals(s2, &contract.CanoliqGlobals{GenesisComplete: true})
 	if err := c2.refreshSnapshot(1); err != nil {
 		t.Fatalf("refreshSnapshot: %v", err)
 	}
-	h2 := c2.plugin.QueryHealth()
-	if h2.TVLCapBps != 3_300 {
-		t.Errorf("capBps should still be reported: got %d", h2.TVLCapBps)
+	if got := c2.plugin.QueryHealth().TVLCapStatus; got != TVLCapStatusActive {
+		t.Errorf("active: got %q want %q", got, TVLCapStatusActive)
 	}
-	if h2.CanopyTotalStake != 0 || h2.TVLCapUcnpyEffective != 0 {
-		t.Errorf("absent supply: stake=%d eff=%d want both 0", h2.CanopyTotalStake, h2.TVLCapUcnpyEffective)
+
+	// (3) Awaiting Canopy stake: TvlCapBps > 0, Supply present with
+	// Staked = 0 (or any value that truncates capUcnpy to 0). Deposit
+	// handler accepts; health reports "awaiting-canopy-stake".
+	c3, s3 := newTestCanoliq()
+	seedCanopySupply(t, s3, 0)
+	seedParams(t, c3, cappedParams(3_300))
+	seedGlobals(s3, &contract.CanoliqGlobals{GenesisComplete: true})
+	if err := c3.refreshSnapshot(1); err != nil {
+		t.Fatalf("refreshSnapshot: %v", err)
+	}
+	if got := c3.plugin.QueryHealth().TVLCapStatus; got != TVLCapStatusAwaitingCanopyStake {
+		t.Errorf("staked=0: got %q want %q", got, TVLCapStatusAwaitingCanopyStake)
+	}
+	// Same status for the integer-truncation edge (Staked=1, bps=3300 → 0).
+	c4, s4 := newTestCanoliq()
+	seedCanopySupply(t, s4, 1)
+	seedParams(t, c4, cappedParams(3_300))
+	seedGlobals(s4, &contract.CanoliqGlobals{GenesisComplete: true})
+	if err := c4.refreshSnapshot(1); err != nil {
+		t.Fatalf("refreshSnapshot: %v", err)
+	}
+	if got := c4.plugin.QueryHealth().TVLCapStatus; got != TVLCapStatusAwaitingCanopyStake {
+		t.Errorf("truncates-to-zero: got %q want %q", got, TVLCapStatusAwaitingCanopyStake)
+	}
+
+	// (4) Fail-closed: TvlCapBps > 0, Supply singleton absent. Deposit
+	// handler rejects; health reports "fail-closed" so operators see
+	// the misconfiguration without polling deposit attempts.
+	c5, s5 := newTestCanoliq()
+	s5.del(contract.KeyForSupply())
+	seedParams(t, c5, cappedParams(3_300))
+	seedGlobals(s5, &contract.CanoliqGlobals{GenesisComplete: true})
+	if err := c5.refreshSnapshot(1); err != nil {
+		t.Fatalf("refreshSnapshot: %v", err)
+	}
+	if got := c5.plugin.QueryHealth().TVLCapStatus; got != TVLCapStatusFailClosed {
+		t.Errorf("absent supply: got %q want %q", got, TVLCapStatusFailClosed)
 	}
 }

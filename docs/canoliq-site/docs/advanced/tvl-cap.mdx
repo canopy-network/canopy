@@ -51,14 +51,16 @@ if tvl_cap_bps > 0:
 
 ## Three states for the cap
 
-`tvl_cap_bps` interacts with Canopy's `Supply` state in three ways:
+`tvl_cap_bps` interacts with Canopy's `Supply` state in three ways. `/v1/health`
+surfaces the runtime state via `tvlCapStatus` so operators don't have to
+correlate `tvlCapBps` and `canopyTotalStake` to infer it.
 
-| `tvl_cap_bps` | Canopy `Supply` | Behaviour |
-|---|---|---|
-| `0` | any | uncapped (governance never set a cap) |
-| `> 0` | absent (key not in state) | **rejects** all deposits with `ErrCanopyStakeUnavailable` |
-| `> 0` | present, `staked == 0` | accepts (legitimate fresh-network state — cap re-engages once staking begins) |
-| `> 0` | present, `staked > 0` | enforces `mulDiv(staked, tvl_cap_bps, 10_000)` cap |
+| `tvl_cap_bps` | Canopy `Supply` | Behaviour | `tvlCapStatus` |
+|---|---|---|---|
+| `0` | any | uncapped (governance never set a cap) | `"uncapped"` |
+| `> 0` | absent (key not in state) | **rejects** all deposits with `ErrCanopyStakeUnavailable` | `"fail-closed"` |
+| `> 0` | present, computed cap is 0 (`staked == 0`, or so small that `mulDiv` truncates to 0) | accepts — cap re-engages once Canopy stake grows past the truncation point | `"awaiting-canopy-stake"` |
+| `> 0` | present, computed cap > 0 | enforces `mulDiv(staked, tvl_cap_bps, 10_000)` cap | `"active"` |
 
 The rationale:
 
@@ -96,6 +98,7 @@ GET /v1/health
   "genesisComplete": true,
   "chainId": 2,
   "tvlCapBps": 3300,
+  "tvlCapStatus": "active",
   "canopyTotalStake": 100000000000,
   "tvlCapUcnpyEffective": 33000000000,
   "tvlUtilizationBps": 7350
@@ -103,12 +106,18 @@ GET /v1/health
 ```
 
 - `tvlCapBps` — the governance-set fraction.
-- `canopyTotalStake` — `lib.Supply.staked` at snapshot height.
+- `tvlCapStatus` — one of `"uncapped"`, `"active"`, `"awaiting-canopy-stake"`,
+  `"fail-closed"`. See the [three-states table](#three-states-for-the-cap) for
+  what each means.
+- `canopyTotalStake` — `lib.Supply.staked` at snapshot height. `0` if Canopy
+  Supply is absent OR if Canopy Supply is present with `staked = 0`;
+  `tvlCapStatus` disambiguates.
 - `tvlCapUcnpyEffective` — `mulDiv(canopyTotalStake, tvlCapBps, 10_000)`. Zero
-  when uncapped OR when Canopy stake is unavailable (in which case the deposit
-  path fails closed).
+  when uncapped, awaiting Canopy stake, or fail-closed; pair with `tvlCapStatus`
+  to interpret.
 - `tvlUtilizationBps` — `total_pooled_cnpy ÷ tvl_cap_ucnpy_effective` in basis
-  points (here, 73.5% full).
+  points (here, 73.5% full). Zero when the effective cap is zero, regardless of
+  status.
 
 ## Related
 
