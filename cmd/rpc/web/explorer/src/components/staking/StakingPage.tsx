@@ -3,10 +3,12 @@ import { motion } from 'framer-motion'
 import ValidatorsTable from '../validator/ValidatorsTable'
 import { useAllDelegators, useAllValidators, useParams as useChainParams } from '../../hooks/useApi'
 import ExplorerOverviewCards from '../ExplorerOverviewCards'
+import StatValue from '../StatValue'
+import { usePersistentNumber } from '../../hooks/usePersistentNumber'
 
 interface OverviewCardProps {
     title: string
-    value: string | number
+    value: React.ReactNode
     subValue?: string
     icon: string
 }
@@ -231,28 +233,33 @@ const StakingPage: React.FC = () => {
         }
     }, [allStakers])
 
+    const validatorsStat = usePersistentNumber('staking:validators', isLoading ? null : stats.validators)
+    const delegatorsStat = usePersistentNumber('staking:delegators', isLoading ? null : stats.delegators)
+    const pausedStat = usePersistentNumber('staking:paused', isLoading ? null : stats.paused)
+    const totalStakersStat = usePersistentNumber('staking:total', isLoading ? null : stats.total)
+
     const overviewCards: OverviewCardProps[] = [
         {
             title: 'Validators',
-            value: stats.validators.toLocaleString(),
+            value: <StatValue stat={validatorsStat} />,
             subValue: 'Active validators',
             icon: 'fa-solid fa-shield-halved',
         },
         {
             title: 'Delegators',
-            value: stats.delegators.toLocaleString(),
+            value: <StatValue stat={delegatorsStat} />,
             subValue: 'Active delegators',
             icon: 'fa-solid fa-users',
         },
         {
             title: 'Paused',
-            value: stats.paused.toLocaleString(),
+            value: <StatValue stat={pausedStat} />,
             subValue: 'Paused validators',
             icon: 'fa-solid fa-pause',
         },
         {
             title: 'Total Stakers',
-            value: stats.total.toLocaleString(),
+            value: <StatValue stat={totalStakersStat} />,
             subValue: 'All stakeholders',
             icon: 'fa-solid fa-network-wired',
         },

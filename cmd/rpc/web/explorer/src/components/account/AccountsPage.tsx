@@ -4,6 +4,8 @@ import AccountsTable from './AccountsTable'
 import { useAccounts } from '../../hooks/useApi'
 import accountsTexts from '../../data/accounts.json'
 import ExplorerOverviewCards from '../ExplorerOverviewCards'
+import StatValue from '../StatValue'
+import { usePersistentNumber } from '../../hooks/usePersistentNumber'
 import { toCNPY } from '../../lib/utils'
 
 const LiveIndicator = () => (
@@ -23,22 +25,27 @@ const AccountsPage: React.FC = () => {
         () => toCNPY(accounts.reduce((max: number, account: { amount?: number; totalAmount?: number }) => Math.max(max, Number(account.totalAmount ?? account.amount ?? 0)), 0)),
         [accounts],
     )
+
+    const indexedAccounts = usePersistentNumber('accounts:indexed', accountsData ? Number(accountsData.totalCount ?? 0) : null)
+    const visibleAccounts = usePersistentNumber('accounts:visible', accountsData ? accounts.length : null)
+    const largestBalanceStat = usePersistentNumber('accounts:largestBalance', accountsData ? largestBalance : null)
+
     const overviewCards = [
         {
             title: 'Indexed Accounts',
-            value: (accountsData?.totalCount || 0).toLocaleString(),
+            value: <StatValue stat={indexedAccounts} />,
             subValue: 'Explorer index',
             icon: 'fa-solid fa-wallet',
         },
         {
             title: 'Visible Accounts',
-            value: accounts.length.toLocaleString(),
+            value: <StatValue stat={visibleAccounts} loading={isLoading} />,
             subValue: 'Current page',
             icon: 'fa-solid fa-list',
         },
         {
             title: 'Largest Balance',
-            value: largestBalance.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+            value: <StatValue stat={largestBalanceStat} loading={isLoading} format={(n) => n.toLocaleString(undefined, { maximumFractionDigits: 2 })} />,
             subValue: 'CNPY',
             icon: 'fa-solid fa-trophy',
         },

@@ -5,6 +5,8 @@ import { usePending, useTransactionsWithRealPagination } from '../../hooks/useAp
 import { extractAmountMicro } from '../../lib/utils'
 import transactionsTexts from '../../data/transactions.json'
 import ExplorerOverviewCards from '../ExplorerOverviewCards'
+import StatValue from '../StatValue'
+import { usePersistentNumber } from '../../hooks/usePersistentNumber'
 
 type ActiveTab = 'confirmed' | 'pending'
 
@@ -100,28 +102,33 @@ const TransactionsPage: React.FC = () => {
     const totalConfirmed = Number((transactionsData as Record<string, unknown> | undefined)?.totalCount ?? 0)
     const totalPending = Number((pendingData as Record<string, unknown> | undefined)?.totalCount ?? 0)
 
+    const indexedTxns = usePersistentNumber('txns:indexed', transactionsData ? totalConfirmed : null)
+    const pendingTxns = usePersistentNumber('txns:pending', pendingData ? totalPending : null)
+    const confirmedPageTxns = usePersistentNumber('txns:confirmedPage', transactionsData ? normalizeConfirmedTransactions.length : null)
+    const visiblePageTxns = usePersistentNumber('txns:visiblePage', transactionsData ? normalizeConfirmedTransactions.length : null)
+
     const overviewCards = [
         {
             title: 'Indexed Transactions',
-            value: totalConfirmed.toLocaleString(),
+            value: <StatValue stat={indexedTxns} />,
             subValue: 'Confirmed total',
             icon: 'fa-solid fa-cubes',
         },
         {
             title: 'Pending',
-            value: totalPending.toLocaleString(),
+            value: <StatValue stat={pendingTxns} />,
             subValue: 'Awaiting block',
             icon: 'fa-solid fa-clock',
         },
         {
             title: 'Confirmed',
-            value: normalizeConfirmedTransactions.length.toLocaleString(),
+            value: <StatValue stat={confirmedPageTxns} loading={isTransactionsLoading} />,
             subValue: 'Current page',
             icon: 'fa-solid fa-circle-check',
         },
         {
             title: 'Visible Transactions',
-            value: normalizeConfirmedTransactions.length.toLocaleString(),
+            value: <StatValue stat={visiblePageTxns} loading={isTransactionsLoading} />,
             subValue: 'Current page',
             icon: 'fa-solid fa-arrow-right-arrow-left',
         },
