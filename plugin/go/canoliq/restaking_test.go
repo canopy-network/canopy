@@ -9,12 +9,11 @@ import (
 // restaking_test.go covers Phase C (WP §7) policy + observability:
 //   - RestakingPolicy validation (target weights sum 10000; per-entry min ≤
 //     max; duplicate committee ids rejected; empty list OK).
-//   - observeCurrentAllocation: restake semantics (same operator stake
-//     counts toward every committee in its committees[]).
+//   - Snapshot-derived allocation: restake semantics (same operator stake
+//     counts toward every committee in its committees[]); absent-operator
+//     skip; empty registry.
 //   - buildRestakingView: weight bps, drift, under-min / over-max flags,
 //     PolicyCompliant aggregate flag.
-//   - Snapshot integration: refreshSnapshot picks up Canopy Validator
-//     records via Batch 2 and populates CurrentRestakingAllocation.
 //   - QueryRestaking returns a well-formed view for empty / populated state.
 
 // --- ValidateParams tests ---
@@ -104,10 +103,15 @@ func TestValidateRestakingPolicyMinMax(t *testing.T) {
 	}
 }
 
-// --- observeCurrentAllocation tests ---
+// --- snapshot-derived allocation tests ---
+//
+// The per-committee exposure map lives on Snapshot.CurrentRestakingAllocation,
+// populated inline by refreshSnapshot's Batch 2 (see snapshot.go's
+// qCanopyVal branch). These tests seed Canopy state, run refreshSnapshot,
+// and assert on the resulting map — exactly the production path.
 
 // seedCanopyValidator writes a lib.Validator-shaped record at the FSM
-// validator key, exercising the Phase A KeyForValidator + Validator proto.
+// validator key, exercising KeyForValidator + the Validator proto.
 func seedCanopyValidator(t *testing.T, s *fakeStore, addr []byte, staked uint64, committees []uint64) {
 	t.Helper()
 	bz, err := contract.Marshal(&contract.Validator{
@@ -121,10 +125,20 @@ func seedCanopyValidator(t *testing.T, s *fakeStore, addr []byte, staked uint64,
 	s.set(contract.KeyForValidator(addr), bz)
 }
 
-// TestObserveAllocationRestakeSemantics: an operator on N committees
-// contributes its FULL staked_amount to each — that's the point of
-// restaking. Two operators on overlapping committees stack.
-func TestObserveAllocationRestakeSemantics(t *testing.T) {
+// seedCanoliqRegistry writes a ValidatorRegistry singleton to fake state.
+func seedCanoliqRegistry(t *testing.T, s *fakeStore, entries ...*contract.ValidatorRegistryEntry) {
+	t.Helper()
+	bz, err := contract.Marshal(&contract.ValidatorRegistry{Entries: entries})
+	if err != nil {
+		t.Fatalf("marshal registry: %v", err)
+	}
+	s.set(KeyForValidatorRegistry(), bz)
+}
+
+// TestSnapshotRestakeSemantics: an operator on N committees contributes
+// its FULL staked_amount to each — that's the point of restaking. Two
+// operators on overlapping committees stack.
+func TestSnapshotRestakeSemantics(t *testing.T) {
 	c, s := newTestCanoliq()
 	a := addr20(0xA1)
 	b := addr20(0xB2)
@@ -135,16 +149,16 @@ func TestObserveAllocationRestakeSemantics(t *testing.T) {
 	// Operator B: 500 staked, committees [3] → contributes 500 to
 	// committee 3 only.
 	seedCanopyValidator(t, s, b, 500, []uint64{3})
+	seedCanoliqRegistry(t, s,
+		&contract.ValidatorRegistryEntry{Address: a, Stake: 1000},
+		&contract.ValidatorRegistryEntry{Address: b, Stake: 500},
+	)
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
 
-	registry := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{
-		{Address: a, Stake: 1000},
-		{Address: b, Stake: 500},
-	}}
-
-	got, perr := c.observeCurrentAllocation(registry)
-	if perr != nil {
-		t.Fatalf("observeCurrentAllocation: %v", perr)
+	if err := c.refreshSnapshot(1); err != nil {
+		t.Fatalf("refreshSnapshot: %v", err)
 	}
+	got := c.plugin.Snapshot().CurrentRestakingAllocation
 	if got[2] != 1000 {
 		t.Errorf("committee 2 exposure: got %d want 1000", got[2])
 	}
@@ -156,24 +170,26 @@ func TestObserveAllocationRestakeSemantics(t *testing.T) {
 	}
 }
 
-// TestObserveAllocationSkipsAbsent: an operator in canoLiq's registry
-// but absent from Canopy validators (un-bonded, never registered)
-// contributes zero, doesn't error.
-func TestObserveAllocationSkipsAbsent(t *testing.T) {
+// TestSnapshotSkipsAbsentOperator: an operator in canoLiq's registry but
+// absent from Canopy validators (un-bonded, never registered) contributes
+// zero and doesn't error.
+func TestSnapshotSkipsAbsentOperator(t *testing.T) {
 	c, s := newTestCanoliq()
 	known := addr20(0x01)
 	unknown := addr20(0x02)
 	seedCanopyValidator(t, s, known, 100, []uint64{5})
-	// `unknown` deliberately not seeded.
+	// `unknown` deliberately not seeded as a Canopy validator.
 
-	registry := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{
-		{Address: known, Stake: 100},
-		{Address: unknown, Stake: 999}, // canoLiq says they're here, Canopy disagrees
-	}}
-	got, perr := c.observeCurrentAllocation(registry)
-	if perr != nil {
-		t.Fatalf("observeCurrentAllocation: %v", perr)
+	seedCanoliqRegistry(t, s,
+		&contract.ValidatorRegistryEntry{Address: known, Stake: 100},
+		&contract.ValidatorRegistryEntry{Address: unknown, Stake: 999}, // canoLiq says here, Canopy disagrees
+	)
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+
+	if err := c.refreshSnapshot(1); err != nil {
+		t.Fatalf("refreshSnapshot: %v", err)
 	}
+	got := c.plugin.Snapshot().CurrentRestakingAllocation
 	if got[5] != 100 {
 		t.Errorf("known operator exposure: got %d want 100", got[5])
 	}
@@ -182,17 +198,18 @@ func TestObserveAllocationSkipsAbsent(t *testing.T) {
 	}
 }
 
-// TestObserveAllocationEmptyRegistry: nil / empty registry returns an
-// empty (non-nil) map without error.
-func TestObserveAllocationEmptyRegistry(t *testing.T) {
-	c, _ := newTestCanoliq()
-	got, perr := c.observeCurrentAllocation(&contract.ValidatorRegistry{})
-	if perr != nil {
-		t.Fatalf("observeCurrentAllocation: %v", perr)
+// TestSnapshotEmptyRegistry: nil / empty registry leaves the allocation
+// map nil (snapshot only allocates on first non-empty operator decode).
+// QueryRestaking handles nil cleanly — see TestQueryRestakingShapeEmpty.
+func TestSnapshotEmptyRegistry(t *testing.T) {
+	c, s := newTestCanoliq()
+	seedCanoliqRegistry(t, s) // explicit empty registry
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+
+	if err := c.refreshSnapshot(1); err != nil {
+		t.Fatalf("refreshSnapshot: %v", err)
 	}
-	if got == nil {
-		t.Fatal("expected empty map, got nil")
-	}
+	got := c.plugin.Snapshot().CurrentRestakingAllocation
 	if len(got) != 0 {
 		t.Errorf("expected empty allocation, got %+v", got)
 	}
@@ -307,6 +324,11 @@ func TestBuildViewPolicyWithoutObservation(t *testing.T) {
 // TestSnapshotPopulatesRestakingAllocation: refreshSnapshot reads the
 // per-operator Canopy Validators added to Batch 2 and builds
 // CurrentRestakingAllocation in one pass — no extra round-trip.
+//
+// Note: CurrentRestakingAllocation is a Go map (iteration order
+// undefined). Deterministic ordering for /v1/restaking comes from
+// buildRestakingView's sort on the union of committee ids — see
+// TestBuildViewDriftAndCompliance for that contract.
 func TestSnapshotPopulatesRestakingAllocation(t *testing.T) {
 	c, s := newTestCanoliq()
 

@@ -28,7 +28,10 @@ import (
 
 // CommitteeAllocation reports canoLiq's observed exposure to one Canopy
 // committee plus any policy drift against the matching policy entry.
-// Negative drift = under target (or under-min); positive = over.
+// DriftBps is signed: negative = below target weight, positive = above.
+// UnderMin / OverMax are independent absolute-bound flags — drift can be
+// negative while observed stake still sits above min_stake_ucnpy, and
+// vice versa.
 type CommitteeAllocation struct {
 	CommitteeID  uint64 `json:"committeeId"`
 	StakeUcnpy   uint64 `json:"stakeUcnpy"`
@@ -54,39 +57,13 @@ type RestakingView struct {
 	PolicyCompliant bool `json:"policyCompliant"`
 }
 
-// observeCurrentAllocation walks the canoLiq ValidatorRegistry, reads each
-// operator's Canopy Validator record, and builds a per-committee exposure
-// map. Returns an empty map (not nil) when the registry is empty or no
-// operators have committees set.
-//
-// Read shape: one StateRead per operator (sequential). The operator set
-// is small (5–10 at testnet bring-up, low tens at maturity per WP §1.2),
-// so the round-trip cost is bounded.
-func (c *Canoliq) observeCurrentAllocation(registry *contract.ValidatorRegistry) (map[uint64]uint64, *contract.PluginError) {
-	out := map[uint64]uint64{}
-	if registry == nil {
-		return out, nil
-	}
-	for _, entry := range registry.Entries {
-		if entry == nil || len(entry.Address) == 0 {
-			continue
-		}
-		v, err := c.readCanopyValidator(entry.Address)
-		if err != nil {
-			return nil, err
-		}
-		if v == nil {
-			// Operator listed in canoLiq registry but absent from Canopy
-			// validators (un-bonded, never registered with Canopy, etc.).
-			// Skip — they contribute zero exposure.
-			continue
-		}
-		for _, committeeID := range v.Committees {
-			out[committeeID] += v.StakedAmount
-		}
-	}
-	return out, nil
-}
+// The per-committee exposure map (Snapshot.CurrentRestakingAllocation)
+// is populated by refreshSnapshot inline — see snapshot.go's qCanopyVal
+// branch in Batch 2, which fans out one KeyForValidator read per
+// registered operator alongside the existing proposal/spend/staker reads
+// (no extra round-trip). This keeps the exposure derivation on the
+// snapshot path it ultimately feeds (QueryRestaking) and avoids a
+// second per-operator round-trip that a standalone helper would incur.
 
 // buildRestakingView assembles the /v1/restaking response from the policy
 // + observed exposure. Drift bps is computed against the *observed* total
