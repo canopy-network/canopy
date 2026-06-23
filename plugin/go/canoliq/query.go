@@ -116,39 +116,60 @@ type StakerView struct {
 // back to zeros before the first snapshot.
 func (p *Plugin) QueryHealth() *HealthView {
 	s := p.Snapshot()
-	var effectiveCap, utilBps uint64
-	status := deriveTVLCapStatus(s)
-	if status == TVLCapStatusActive {
-		effectiveCap = mulDiv(s.CanopyTotalStake, s.Params.TvlCapBps, 10_000)
-		utilBps = mulDiv(s.Globals.TotalPooledCnpy, 10_000, effectiveCap)
+	decision := evaluateTVLCap(s.Params.TvlCapBps, s.CanopySupplyPresent, s.CanopyTotalStake)
+	var utilBps uint64
+	if decision.CapUcnpy > 0 {
+		utilBps = mulDiv(s.Globals.TotalPooledCnpy, 10_000, decision.CapUcnpy)
 	}
 	return &HealthView{
 		Height:               s.Height,
 		GenesisComplete:      s.Globals.GenesisComplete,
 		ChainID:              p.config.ChainId,
 		TVLCapBps:            s.Params.TvlCapBps,
-		TVLCapStatus:         status,
-		TVLCapUcnpyEffective: effectiveCap,
+		TVLCapStatus:         decision.Status,
+		TVLCapUcnpyEffective: decision.CapUcnpy,
 		CanopyTotalStake:     s.CanopyTotalStake,
 		TVLUtilizationBps:    utilBps,
 	}
 }
 
-// deriveTVLCapStatus maps the four-way TVL-cap runtime behaviour to the
-// reported status string. Mirrors the deliver.go branch structure: no
-// TvlCapBps → uncapped; Supply absent → fail-closed; live capUcnpy == 0
-// → awaiting-canopy-stake (deposit accepts); otherwise → active.
-func deriveTVLCapStatus(s *Snapshot) string {
-	if s.Params.TvlCapBps == 0 {
-		return TVLCapStatusUncapped
+// tvlCapDecision is the single source of truth for the percentage TVL
+// cap's runtime behaviour (WP §9.4). Both consumers (the deposit handler
+// in deliver.go and the /v1/health surface in QueryHealth) project from
+// the same struct so the status string and the accept/reject decision
+// can never disagree.
+type tvlCapDecision struct {
+	// Status is one of the TVLCapStatus* constants.
+	Status string
+	// CapUcnpy is the effective uCNPY ceiling. Zero unless Status ==
+	// TVLCapStatusActive.
+	CapUcnpy uint64
+	// Err is set only when Status == TVLCapStatusFailClosed
+	// (ErrCanopyStakeUnavailable). The deposit handler returns it
+	// directly; QueryHealth ignores it.
+	Err *contract.PluginError
+}
+
+// evaluateTVLCap is the shared four-way decision used by both deliver.go
+// (which cares about reject/accept) and QueryHealth (which cares about
+// the status string). If the decision tree changes — e.g. flipping
+// 'Supply present + Staked=0' from accept to reject — change it here
+// and both sides update together. Previously these were parallel
+// implementations in deliver.go and deriveTVLCapStatus, with a real
+// desync risk that PR self-review caught (M9 in
+// docs/canoliq-v1_2-implementation-plan.md tracking).
+func evaluateTVLCap(tvlCapBps uint64, supplyPresent bool, staked uint64) tvlCapDecision {
+	if tvlCapBps == 0 {
+		return tvlCapDecision{Status: TVLCapStatusUncapped}
 	}
-	if !s.CanopySupplyPresent {
-		return TVLCapStatusFailClosed
+	if !supplyPresent {
+		return tvlCapDecision{Status: TVLCapStatusFailClosed, Err: ErrCanopyStakeUnavailable()}
 	}
-	if mulDiv(s.CanopyTotalStake, s.Params.TvlCapBps, 10_000) == 0 {
-		return TVLCapStatusAwaitingCanopyStake
+	capUcnpy := mulDiv(staked, tvlCapBps, 10_000)
+	if capUcnpy == 0 {
+		return tvlCapDecision{Status: TVLCapStatusAwaitingCanopyStake}
 	}
-	return TVLCapStatusActive
+	return tvlCapDecision{Status: TVLCapStatusActive, CapUcnpy: capUcnpy}
 }
 
 // QueryRestaking returns the WP §7 policy + observed-exposure surface.

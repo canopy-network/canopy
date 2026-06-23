@@ -85,6 +85,16 @@ func TestRPCHealthBeforeSnapshot(t *testing.T) {
 	if health.Height != 0 || health.GenesisComplete || health.ChainID != 2 {
 		t.Fatalf("cold-start health: %+v", health)
 	}
+	// Pin the cold-start TVLCapStatus: DefaultParams has TvlCapBps=3300
+	// and emptySnapshot has CanopySupplyPresent=false, so the status
+	// surface reports 'fail-closed' until refreshSnapshot first runs.
+	// That is runtime-accurate — a deposit handled before snapshot would
+	// reject with ErrCanopyStakeUnavailable. Pinned here so a future
+	// change doesn't silently flip the cold-start posture.
+	if health.TVLCapStatus != TVLCapStatusFailClosed {
+		t.Errorf("cold-start tvlCapStatus: got %q want %q",
+			health.TVLCapStatus, TVLCapStatusFailClosed)
+	}
 }
 
 func TestRPCHealthAndGlobalsAfterRefresh(t *testing.T) {

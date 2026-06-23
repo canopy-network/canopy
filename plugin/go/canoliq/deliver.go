@@ -63,34 +63,24 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 			}
 		}
 	}
-	// TVL self-cap (WP §9.4: "self-impose a TVL cap of 33% of total Canopy
-	// network stake"). TvlCapBps = 0 means uncapped; any non-zero value
-	// computes a live cap of mulDiv(canopy_total_stake, TvlCapBps, 10_000).
-	//
-	// Three zero-cap sub-cases, all accepted (uncapped this block):
-	//   - Canopy Supply present, .Staked == 0 — legitimate fresh-network
-	//     state (Canopy is up but nobody has staked yet).
-	//   - capUcnpy == 0 due to integer truncation when Staked is very
-	//     small (e.g. Staked=1, bps=3300 → mulDiv = 0). Without this guard
-	//     Staked=0 would accept while Staked=1..3 would reject everything,
-	//     an asymmetric quirk with no policy justification.
-	// In both cases the cap re-engages automatically once Canopy stake
-	// grows past the truncation point.
-	//
-	// One zero-stake sub-case is treated differently:
-	//   - Canopy Supply singleton ABSENT → fail-closed
-	//     (ErrCanopyStakeUnavailable). The cap-policy state itself hasn't
-	//     initialized; silently bypassing the cap would defeat §9.4.
+	// TVL self-cap (WP §9.4). evaluateTVLCap (query.go) is the single
+	// source of truth for the four-way decision tree shared with
+	// /v1/health: uncapped / active / awaiting-canopy-stake / fail-closed.
+	// See the tvl-cap docs page for the operator-facing semantics.
 	if params.TvlCapBps > 0 {
 		supply, perr := c.readCanopySupply()
 		if perr != nil {
 			return &contract.PluginDeliverResponse{Error: perr}
 		}
-		if supply == nil {
-			return &contract.PluginDeliverResponse{Error: ErrCanopyStakeUnavailable()}
+		var staked uint64
+		if supply != nil {
+			staked = supply.Staked
 		}
-		capUcnpy := mulDiv(supply.Staked, params.TvlCapBps, 10_000)
-		if capUcnpy > 0 && globals.TotalPooledCnpy+msg.Amount > capUcnpy {
+		decision := evaluateTVLCap(params.TvlCapBps, supply != nil, staked)
+		if decision.Err != nil {
+			return &contract.PluginDeliverResponse{Error: decision.Err}
+		}
+		if decision.CapUcnpy > 0 && globals.TotalPooledCnpy+msg.Amount > decision.CapUcnpy {
 			return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
 		}
 	}

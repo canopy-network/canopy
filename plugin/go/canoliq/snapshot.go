@@ -174,6 +174,16 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 			}
 			continue
 		}
+		// IMPORTANT for future Canopy reads: the short-circuit below treats
+		// 'present with empty value' as absent. That is wrong for any proto
+		// type whose all-default representation marshals to zero bytes via
+		// proto3 elision (Supply{Staked:0} is the canonical example —
+		// hence the qCanopySupply special-case above). canoLiq-owned types
+		// (CanoliqGlobals, CanoliqParams, …) always carry non-default
+		// content in normal operation so the short-circuit is safe for
+		// them. New Canopy-side readers that could legitimately decode to
+		// all-default values must be added above this line with their own
+		// presence-detection branch.
 		if len(raw) == 0 {
 			continue
 		}
