@@ -48,6 +48,8 @@ export function usePersistentNumber(key: string, candidate: number | null | unde
         return stored != null ? { value: stored, hasValue: true } : { value: 0, hasValue: false }
     })
 
+    const prevStorageKey = React.useRef(storageKey)
+
     // When the network (storageKey) changes, re-hydrate from the stored value
     // for that network instead of keeping the previous network's number.
     React.useEffect(() => {
@@ -56,6 +58,12 @@ export function usePersistentNumber(key: string, candidate: number | null | unde
     }, [storageKey])
 
     React.useEffect(() => {
+        // On a network switch `candidate` may still hold the previous network's
+        // value, so skip the write to avoid persisting it under the new key.
+        if (prevStorageKey.current !== storageKey) {
+            prevStorageKey.current = storageKey
+            return
+        }
         if (candidate == null || !Number.isFinite(candidate)) return
         setState({ value: candidate, hasValue: true })
         try {
