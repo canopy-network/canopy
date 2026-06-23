@@ -294,15 +294,21 @@ all are tracked here so a future reader knows the boundaries.
 
 ### Errata on commit messages
 
-- `ef44cd0d` (`feat(canoliq): plugin contract — KeyForValidator + Validator proto`)
-  claims its `_generate.sh` invocation also corrected `@gotags` JSON-tag
-  inject across existing `.pb.go` files that "Phases A + B used raw protoc
-  and skipped the inject-tag step". Verifying after the fact: the diff
-  shows no JSON-tag fixes outside the deliberate Phase B `tvl_cap_ucnpy`
-  → `tvl_cap_bps` rename and the new Phase C additions. The Phase A regen
-  was already correct; the claim in commit `ef44cd0d`'s message (and the
-  PR body that repeats it) is **wrong**. Leaving the commit in place
-  rather than rewriting history; this errata is the canonical record.
+- (Retracted 2026-06-22.) A previous version of this section claimed the
+  `@gotags` JSON-tag fix attributed to commit `ef44cd0d` had not actually
+  happened. That retraction was itself based on a flawed verification —
+  the grep ran against the branch-to-branch diff
+  (`canoliq..canoliq-spec-alignment`), which compresses Phase A's
+  intermediate state with Phase C's regen and hides the inter-commit
+  fix. Verifying against the actual inter-commit diff (`ee23a092..ef44cd0d
+  -- plugin/go/contract/account.pb.go`) confirms the fix did happen:
+  `json:"delegated_only,omitempty"` → `json:"delegatedOnly"` for
+  `Supply.DelegatedOnly`, `Supply.CommitteeStaked`, and
+  `Supply.CommitteeDelegatedOnly`. The Phase A regen used raw `protoc`
+  and skipped the `protoc-go-inject-tag` step; the Phase C regen via
+  `_generate.sh` applied it. `ef44cd0d`'s commit message was correct.
+  Apologies for the misdirection — keeping this self-correcting record
+  for the audit trail.
 
 ### Final state
 

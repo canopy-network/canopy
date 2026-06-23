@@ -30,12 +30,14 @@ On every deposit, the protocol:
 
 ```
 if tvl_cap_bps > 0:
-    canopy_total_stake = readCanopyTotalStake()
-    if canopy_total_stake == 0:
+    supply = readCanopySupply()
+    if supply is None:
         reject the deposit  # ErrCanopyStakeUnavailable — fail-closed
-    cap = mulDiv(canopy_total_stake, tvl_cap_bps, 10_000)
-    if (total_pooled_cnpy + deposit_amount) > cap:
-        reject the deposit  # ErrTVLCapExceeded
+    if supply.staked > 0:
+        cap = mulDiv(supply.staked, tvl_cap_bps, 10_000)
+        if (total_pooled_cnpy + deposit_amount) > cap:
+            reject the deposit  # ErrTVLCapExceeded
+    # supply present but staked == 0 → accept this block (uncapped)
 ```
 
 - **Default `tvl_cap_bps = 3300`** (= 33% per WP §9.4). Governance can raise or
@@ -47,17 +49,32 @@ if tvl_cap_bps > 0:
   balances are never affected — the cap throttles *inflows* only.
 - A deposit that would exceed the cap fails entirely, not partially.
 
-## Fail-closed posture
+## Three states for the cap
 
-If the deposit handler cannot read Canopy's `Supply` (very early genesis, FSM
-returns an error, or `Supply.staked == 0`), the deposit is **rejected** with
-`ErrCanopyStakeUnavailable`. Silently treating "unreadable" as "uncapped" would
-defeat WP §9.4 — the cap exists to bound systemic risk, so an unverifiable cap is
-a rejection, not a pass.
+`tvl_cap_bps` interacts with Canopy's `Supply` state in three ways:
 
-Operators bringing up a fresh Canopy testnet should either (a) seed `Supply` in
-the Canopy genesis before opening canoLiq deposits, or (b) set
-`tvl_cap_bps = 0` until Canopy state stabilises.
+| `tvl_cap_bps` | Canopy `Supply` | Behaviour |
+|---|---|---|
+| `0` | any | uncapped (governance never set a cap) |
+| `> 0` | absent (key not in state) | **rejects** all deposits with `ErrCanopyStakeUnavailable` |
+| `> 0` | present, `staked == 0` | accepts (legitimate fresh-network state — cap re-engages once staking begins) |
+| `> 0` | present, `staked > 0` | enforces `mulDiv(staked, tvl_cap_bps, 10_000)` cap |
+
+The rationale:
+
+- **Absent Supply** means the cap-policy state itself hasn't initialized;
+  silently bypassing the cap would defeat WP §9.4 (the cap exists to bound
+  systemic risk). Reject.
+- **Present Supply with `staked == 0`** is a legitimate fresh-network state
+  — Canopy is up and tracking, but no validator has staked yet. Rejecting
+  deposits during that window would brick canoLiq on every fresh genesis.
+  Accept; the cap re-engages automatically once the first stake lands.
+
+Operators bringing up a fresh Canopy testnet may want to set `tvl_cap_bps = 0`
+explicitly during bring-up, or rely on the `awaiting-canopy-stake` window
+without setting a cap. The fail-closed branch only triggers when the Canopy
+`Supply` singleton is genuinely missing from state — a configuration error
+rather than an expected lifecycle state.
 
 ## Tuning it
 
