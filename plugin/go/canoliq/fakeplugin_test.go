@@ -87,11 +87,12 @@ func (s *fakeStore) write(req *contract.PluginStateWriteRequest) *contract.Plugi
 // the store directly to pre-seed accounts/pools/params and to assert on the
 // resulting state after handlers run.
 //
-// A generous default Canopy Supply is seeded so the spec-default percentage
-// TVL cap (DefaultParams.TvlCapBps = 3300 = 33% of canopy_stake) doesn't
-// fail-closed in every non-cap test. The cap-specific tests in
-// t3_tvlcap_test.go either override the Supply value explicitly or delete
-// the key to exercise the absent/fail-closed branch.
+// A zero-staked Canopy Supply is seeded by default so tests that exercise
+// the deposit path with DefaultParams (which sets TvlCapBps = 3300) hit
+// the "Supply present, Staked == 0 → uncapped" branch — accepted, no
+// false fail-closed. Tests that exercise specific cap values override
+// Supply.Staked via seedCanopySupply, and TestT3FailClosedOnAbsentSupply
+// s.del()s the key to exercise the genuinely-absent branch.
 func newTestCanoliq() (*Canoliq, *fakeStore) {
 	store := newFakeStore()
 	cfg := Config{ChainId: 2, DataDirPath: "/tmp/canoliq-test"}
@@ -101,9 +102,7 @@ func newTestCanoliq() (*Canoliq, *fakeStore) {
 		plugin: p,
 		fsmId:  1,
 	}
-	// Generous default — effective cap at 33% is 33e15 uCNPY (~33 trillion
-	// CNPY in millionths), far above any test's deposit volume.
-	bz, _ := contract.Marshal(&contract.Supply{Staked: 100_000_000_000_000_000})
+	bz, _ := contract.Marshal(&contract.Supply{Staked: 0})
 	store.set(contract.KeyForSupply(), bz)
 	return c, store
 }

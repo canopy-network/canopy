@@ -125,11 +125,11 @@ func TestT3UncappedAllowsLargeDeposit(t *testing.T) {
 	}
 }
 
-// TestT3FailClosedOnAbsentSupply: with TvlCapBps > 0 and no Canopy Supply
-// state available (or staked == 0), deposits are rejected with
-// codeCanopyStakeUnavailable rather than silently allowed. This is the
-// safety posture WP §9.4 implicitly requires — the cap exists to bound
-// systemic risk, so an unreadable cap fails the deposit.
+// TestT3FailClosedOnAbsentSupply: with TvlCapBps > 0 and the Canopy Supply
+// singleton ABSENT from state, deposits are rejected with
+// codeCanopyStakeUnavailable. WP §9.4 makes the cap a safety floor; if
+// the cap-policy state itself hasn't initialized we'd rather reject than
+// silently bypass.
 func TestT3FailClosedOnAbsentSupply(t *testing.T) {
 	user := addr20(0x04)
 	c, s := newTestCanoliq()
@@ -149,17 +149,29 @@ func TestT3FailClosedOnAbsentSupply(t *testing.T) {
 	if g := loadGlobals(t, s); g.TotalPooledCnpy != 10_000_000 {
 		t.Errorf("pooled changed on fail-closed reject: got %d want 10_000_000", g.TotalPooledCnpy)
 	}
+}
 
-	// Supply present but staked == 0 → same fail-closed branch
-	// (multiplication would yield zero cap, which is indistinguishable from
-	// "unreadable"; safer to reject).
-	c2, s2 := newTestCanoliq()
-	seedCanopySupply(t, s2, 0)
-	seedGlobals(s2, hotPoolGlobals(10_000_000))
-	seedAccount(s2, user, 100_000_000)
-	r2 := c2.DeliverMessageCanoliqDeposit(&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000_000}, 10_000, cappedParams(3_300))
-	if r2.Error == nil || r2.Error.Code != codeCanopyStakeUnavailable {
-		t.Fatalf("deposit with staked=0 should fail closed; got err=%v", r2.Error)
+// TestT3AcceptsWhenSupplyPresentButStakedZero: Supply present but
+// .Staked == 0 means Canopy is up and tracking, just nobody has staked
+// yet (legitimate fresh-network state). The cap is uncapped this block
+// — deposits go through. The cap re-engages automatically once staking
+// begins. (Rejecting here would brick canoLiq on every fresh genesis.)
+func TestT3AcceptsWhenSupplyPresentButStakedZero(t *testing.T) {
+	user := addr20(0x05)
+	c, s := newTestCanoliq()
+	seedCanopySupply(t, s, 0)
+	seedGlobals(s, hotPoolGlobals(10_000_000))
+	seedAccount(s, user, 100_000_000)
+
+	r := c.DeliverMessageCanoliqDeposit(
+		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000_000},
+		10_000, cappedParams(3_300),
+	)
+	if r.Error != nil {
+		t.Fatalf("deposit with Supply.Staked=0 should be accepted: %v", r.Error)
+	}
+	if g := loadGlobals(t, s); g.TotalPooledCnpy != 11_000_000 {
+		t.Errorf("pooled after deposit: got %d want 11_000_000", g.TotalPooledCnpy)
 	}
 }
 

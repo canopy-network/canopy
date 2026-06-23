@@ -1,6 +1,8 @@
 package canoliq
 
 import (
+	"sort"
+
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -103,7 +105,7 @@ func buildRestakingView(policy []*contract.RestakingPolicyEntry, observed map[ui
 	for id := range covered {
 		ids = append(ids, id)
 	}
-	sortUint64Asc(ids)
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 
 	for _, id := range ids {
 		stake := observed[id]
@@ -129,19 +131,4 @@ func buildRestakingView(policy []*contract.RestakingPolicyEntry, observed map[ui
 	return view
 }
 
-// sortUint64Asc is a tiny in-place ascending sort to keep the
-// allocation list deterministic without pulling sort.Slice into the
-// hot path. Allocation lists are at most a few dozen entries; insertion
-// sort is fine.
-func sortUint64Asc(xs []uint64) {
-	for i := 1; i < len(xs); i++ {
-		v := xs[i]
-		j := i - 1
-		for j >= 0 && xs[j] > v {
-			xs[j+1] = xs[j]
-			j--
-		}
-		xs[j+1] = v
-	}
-}
 
