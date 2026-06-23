@@ -6,22 +6,17 @@ import (
 	"github.com/canopy-network/go-plugin/contract"
 )
 
-// canopy_state_test.go covers the Phase-A readers: a Supply seeded at
-// contract.KeyForSupply() decodes correctly through readCanopySupply and
-// readCanopyTotalStake, including the absence path (Supply not set yet).
+// canopy_state_test.go covers readCanopySupply: a Supply seeded at
+// contract.KeyForSupply() round-trips through readCanopySupply for both
+// the absent (key not in state) and present paths. The deposit handler's
+// fail-closed branch (Supply absent) and accept branch (Supply present
+// with Staked=0) are pinned by the T3 suite (t3_tvlcap_test.go); these
+// tests only verify the reader contract.
 
-func TestReadCanopyTotalStakeAbsent(t *testing.T) {
+func TestReadCanopySupplyAbsent(t *testing.T) {
 	c, s := newTestCanoliq()
 	// Clear the fixture's default Supply to exercise the absent path.
 	s.del(contract.KeyForSupply())
-
-	stake, err := c.readCanopyTotalStake()
-	if err != nil {
-		t.Fatalf("readCanopyTotalStake: %v", err)
-	}
-	if stake != 0 {
-		t.Errorf("absent supply: got %d want 0", stake)
-	}
 
 	supply, err := c.readCanopySupply()
 	if err != nil {
@@ -32,12 +27,12 @@ func TestReadCanopyTotalStakeAbsent(t *testing.T) {
 	}
 }
 
-func TestReadCanopyTotalStakePresent(t *testing.T) {
+func TestReadCanopySupplyPresent(t *testing.T) {
 	c, s := newTestCanoliq()
 
-	// Seed a Supply directly at the Canopy key. The percentage TVL cap
-	// (Phase B) reads .Staked; the restaking optimizer (Phase C) reads
-	// .CommitteeStaked entries.
+	// Seed a Supply directly at the Canopy key. The deposit handler
+	// (Phase B) reads .Staked; future restaking automation (Phase C
+	// 'active rebalancing', deferred) could read .CommitteeStaked.
 	supply := &contract.Supply{
 		Total:         100_000_000_000_000, // 100M CNPY × 1e6 uCNPY
 		Staked:        30_000_000_000_000,  // 30%
@@ -53,17 +48,6 @@ func TestReadCanopyTotalStakePresent(t *testing.T) {
 	}
 	s.set(contract.KeyForSupply(), bz)
 
-	// Total stake should match what we seeded.
-	stake, perr := c.readCanopyTotalStake()
-	if perr != nil {
-		t.Fatalf("readCanopyTotalStake: %v", perr)
-	}
-	if stake != supply.Staked {
-		t.Errorf("readCanopyTotalStake: got %d want %d", stake, supply.Staked)
-	}
-
-	// Full Supply should round-trip including the repeated CommitteeStaked
-	// — Phase C's restaking allocator reads this aggregate.
 	got, perr := c.readCanopySupply()
 	if perr != nil {
 		t.Fatalf("readCanopySupply: %v", perr)
