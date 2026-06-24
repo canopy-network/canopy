@@ -1,0 +1,67 @@
+---
+sidebar_label: CPLQ Operations
+---
+
+# CPLQ Operations
+
+## CPLQ Transfer
+
+Transfers liquid (already-vested) CPLQ between accounts.
+
+```bash
+canoliqctl cplq-transfer <from_address> <to_address_hex> <amount_uCPLQ>
+```
+
+Only vested CPLQ can be transferred. Vesting-locked CPLQ is not spendable.
+
+## CPLQ Stake
+
+Locks liquid CPLQ into a stake record, granting governance weight.
+
+```bash
+canoliqctl cplq-stake <address> <amount_uCPLQ>
+```
+
+**Effect**:
+- Liquid CPLQ is debited
+- `CPLQStake` record is created or aggregated
+- `CanoliqGlobals.totalStakedCPLQ` is incremented
+- `staked_at_height` is recorded for vote eligibility
+
+:::tip Lock for more voting power
+A stake can commit to a [vote-escrow lock tier](../tokenomics/vote-escrow.mdx) (`LOCK_3M`
+through `LOCK_24M`) to multiply voting weight up to 4× and boost buyback rewards. Locks only
+ever strengthen, and locked stake cannot be unstaked until its `lock_end_height`.
+:::
+
+## CPLQ Unstake
+
+Queues an unstake, returning CPLQ to liquid balance after the unbond window.
+
+```bash
+canoliqctl cplq-unstake <address> <amount_uCPLQ>
+```
+
+**Effect**:
+- `CPLQStake.amount` is decremented
+- An `UnstakingCPLQ` record is queued with `mature_height`
+- `CanoliqGlobals.totalStakedCPLQ` is decremented immediately
+- Voting weight drops immediately (prevents flash-unstake attacks)
+
+## CPLQ Claim Unstake
+
+Claims a matured unstake, returning CPLQ to liquid balance.
+
+```bash
+canoliqctl cplq-claim-unstake <address> <unstake_id>
+```
+
+## CPLQ Claim Vested
+
+Unlocks newly-vested CPLQ across all of the caller's vesting schedules.
+
+```bash
+canoliqctl cplq-claim-vested <address>
+```
+
+Reads the `VestingIndex` to find all schedules, then computes unlocked amounts for each.

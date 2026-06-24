@@ -13,8 +13,8 @@ required. If you are new to liquid staking, start here.
 You give the protocol **CNPY** (the Canopy native coin). In return you get **cCNPY**, a
 receipt token that quietly grows in value as staking rewards come in. You can hold or
 trade your cCNPY freely, and redeem it back for CNPY whenever you like (after a short
-cooldown). A second token, **CLIQ**, is a fixed-supply governance token: people who hold
-and stake CLIQ vote on how the protocol is run and share in the value it captures.
+cooldown). A second token, **CPLQ**, is a fixed-supply governance token: people who hold
+and stake CPLQ vote on how the protocol is run and share in the value it captures.
 
 ## Step by step
 
@@ -50,7 +50,7 @@ Before rewards lift the exchange rate, canoLiq takes a **12% protocol fee** and 
 | Stakers | 40% | Back into the pool (lifts the exchange rate for everyone) |
 | DAO treasury | 30% | Funds the protocol; a small cut is skimmed to an insurance reserve |
 | Validators | 15% | Paid to the committee validators securing the chain |
-| Buyback | 15% | Saved up to buy back CLIQ later |
+| Buyback | 15% | Saved up to buy back CPLQ later |
 
 See [Fee Structure](../tokenomics/fee-structure.mdx) for the exact math.
 
@@ -61,11 +61,11 @@ owed at the current rate, and queues a **redemption** that matures after an unbo
 window. Once mature, you claim your CNPY. The cooldown mirrors the chain's own unstaking
 delay so the pool can unwind its stake first.
 
-### 5. CLIQ holders govern the protocol
+### 5. CPLQ holders govern the protocol
 
-[CLIQ](./two-tokens.mdx) holders **stake** their CLIQ to gain voting weight, then create
+[CPLQ](./two-tokens.mdx) holders **stake** their CPLQ to gain voting weight, then create
 and vote on proposals — changing fees, spending the treasury, running buybacks, and more.
-Locking CLIQ for longer ([vote-escrow](../tokenomics/vote-escrow.mdx)) multiplies your vote
+Locking CPLQ for longer ([vote-escrow](../tokenomics/vote-escrow.mdx)) multiplies your vote
 and boosts your share of buyback distributions. Different kinds of decisions need different
 [approval thresholds](../governance/governance-tiers.mdx).
 
@@ -113,7 +113,7 @@ FSM over a Unix socket using the standard `CheckTx` → `DeliverTx` → `EndBloc
 
 ## Keep reading
 
-- [The Two Tokens](./two-tokens.mdx) — cCNPY vs CLIQ, in detail
+- [The Two Tokens](./two-tokens.mdx) — cCNPY vs CPLQ, in detail
 - [Glossary](./glossary.mdx) — quick definitions of every term used here
 - [Tokenomics Overview](../tokenomics/overview.mdx) — supply, fees, and vesting
 - [Transactions Overview](../transactions/overview.mdx) — every action you can take

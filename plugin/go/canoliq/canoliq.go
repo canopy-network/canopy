@@ -93,20 +93,20 @@ func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.Plugin
 		return c.CheckMessageCanoliqRedeem(x, request.Tx.Fee, params)
 	case *contract.MessageCanoliqClaimRedemption:
 		return c.CheckMessageCanoliqClaimRedemption(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQTransfer:
-		return c.CheckMessageCLIQTransfer(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQClaimVested:
-		return c.CheckMessageCLIQClaimVested(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQStake:
-		return c.CheckMessageCLIQStake(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQUnstake:
-		return c.CheckMessageCLIQUnstake(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQClaimUnstake:
-		return c.CheckMessageCLIQClaimUnstake(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQProposalCreate:
-		return c.CheckMessageCLIQProposalCreate(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQVote:
-		return c.CheckMessageCLIQVote(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQTransfer:
+		return c.CheckMessageCPLQTransfer(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQClaimVested:
+		return c.CheckMessageCPLQClaimVested(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQStake:
+		return c.CheckMessageCPLQStake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQUnstake:
+		return c.CheckMessageCPLQUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQClaimUnstake:
+		return c.CheckMessageCPLQClaimUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQProposalCreate:
+		return c.CheckMessageCPLQProposalCreate(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQVote:
+		return c.CheckMessageCPLQVote(x, request.Tx.Fee, params)
 	case *contract.MessageBuybackExecute:
 		return c.CheckMessageBuybackExecute(x, request.Tx.Fee, params)
 	case *contract.MessageDAOTreasurySpend:
@@ -151,20 +151,20 @@ func (c *Canoliq) dispatchDeliver(request *contract.PluginDeliverRequest) *contr
 		return c.DeliverMessageCanoliqRedeem(x, request.Tx.Fee, params)
 	case *contract.MessageCanoliqClaimRedemption:
 		return c.DeliverMessageCanoliqClaimRedemption(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQTransfer:
-		return c.DeliverMessageCLIQTransfer(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQClaimVested:
-		return c.DeliverMessageCLIQClaimVested(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQStake:
-		return c.DeliverMessageCLIQStake(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQUnstake:
-		return c.DeliverMessageCLIQUnstake(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQClaimUnstake:
-		return c.DeliverMessageCLIQClaimUnstake(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQProposalCreate:
-		return c.DeliverMessageCLIQProposalCreate(x, request.Tx.Fee, params)
-	case *contract.MessageCLIQVote:
-		return c.DeliverMessageCLIQVote(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQTransfer:
+		return c.DeliverMessageCPLQTransfer(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQClaimVested:
+		return c.DeliverMessageCPLQClaimVested(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQStake:
+		return c.DeliverMessageCPLQStake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQUnstake:
+		return c.DeliverMessageCPLQUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQClaimUnstake:
+		return c.DeliverMessageCPLQClaimUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQProposalCreate:
+		return c.DeliverMessageCPLQProposalCreate(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQVote:
+		return c.DeliverMessageCPLQVote(x, request.Tx.Fee, params)
 	case *contract.MessageBuybackExecute:
 		return c.DeliverMessageBuybackExecute(x, request.Tx.Fee, params)
 	case *contract.MessageDAOTreasurySpend:
@@ -246,15 +246,15 @@ func (c *Canoliq) CheckMessageCanoliqClaimRedemption(msg *contract.MessageCanoli
 	}
 }
 
-// CheckMessageCLIQTransfer validates a CLIQ transfer statelessly.
-func (c *Canoliq) CheckMessageCLIQTransfer(msg *contract.MessageCLIQTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+// CheckMessageCPLQTransfer validates a CPLQ transfer statelessly.
+func (c *Canoliq) CheckMessageCPLQTransfer(msg *contract.MessageCPLQTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 || len(msg.ToAddress) != 20 {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
 	}
 	if msg.Amount == 0 {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAmount()}
 	}
-	if fee < params.CliqTransferFee {
+	if fee < params.CplqTransferFee {
 		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
 	}
 	return &contract.PluginCheckResponse{
@@ -263,8 +263,8 @@ func (c *Canoliq) CheckMessageCLIQTransfer(msg *contract.MessageCLIQTransfer, fe
 	}
 }
 
-// CheckMessageCLIQClaimVested validates a CLIQ claim_vested request.
-func (c *Canoliq) CheckMessageCLIQClaimVested(msg *contract.MessageCLIQClaimVested, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+// CheckMessageCPLQClaimVested validates a CPLQ claim_vested request.
+func (c *Canoliq) CheckMessageCPLQClaimVested(msg *contract.MessageCPLQClaimVested, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
 	}

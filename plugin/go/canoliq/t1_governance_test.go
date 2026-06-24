@@ -13,7 +13,7 @@ import (
 // F13 (emergency fast-track) dispatch paths.
 
 // TestT1ActionTypeInference pins the payload → ActionType classification,
-// including the small/large treasury-spend split at the 1M CLIQ boundary.
+// including the small/large treasury-spend split at the 1M CPLQ boundary.
 func TestT1ActionTypeInference(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -21,10 +21,10 @@ func TestT1ActionTypeInference(t *testing.T) {
 		want    contract.ActionType
 	}{
 		{"param-change", &contract.ProposalParamChange{Params: DefaultParams()}, contract.ActionType_ACTION_FEE_CHANGE},
-		{"buyback-unmapped", &contract.ProposalBuyback{CnpyAmount: 1, PriceMicroCnpyPerCliq: 1}, contract.ActionType_ACTION_UNKNOWN},
+		{"buyback-unmapped", &contract.ProposalBuyback{CnpyAmount: 1, PriceMicroCnpyPerCplq: 1}, contract.ActionType_ACTION_UNKNOWN},
 		{"spend-small-cnpy", &contract.ProposalTreasurySpend{Amount: 5_000_000_000, Denomination: contract.SpendDenomination_SPEND_CNPY}, contract.ActionType_ACTION_TREASURY_SPEND_SMALL},
-		{"spend-small-cliq-at-threshold", &contract.ProposalTreasurySpend{Amount: largeSpendCliqThreshold, Denomination: contract.SpendDenomination_SPEND_CLIQ}, contract.ActionType_ACTION_TREASURY_SPEND_SMALL},
-		{"spend-large-cliq", &contract.ProposalTreasurySpend{Amount: largeSpendCliqThreshold + 1, Denomination: contract.SpendDenomination_SPEND_CLIQ}, contract.ActionType_ACTION_TREASURY_SPEND_LARGE},
+		{"spend-small-cplq-at-threshold", &contract.ProposalTreasurySpend{Amount: largeSpendCplqThreshold, Denomination: contract.SpendDenomination_SPEND_CPLQ}, contract.ActionType_ACTION_TREASURY_SPEND_SMALL},
+		{"spend-large-cplq", &contract.ProposalTreasurySpend{Amount: largeSpendCplqThreshold + 1, Denomination: contract.SpendDenomination_SPEND_CPLQ}, contract.ActionType_ACTION_TREASURY_SPEND_LARGE},
 		{"validator-eject", &contract.ProposalValidatorEject{ValidatorAddress: addr20(0x01)}, contract.ActionType_ACTION_VALIDATOR_EJECT},
 		{"emergency", &contract.ProposalEmergency{Description: "x"}, contract.ActionType_ACTION_EMERGENCY},
 		{"protocol-upgrade", &contract.ProposalProtocolUpgrade{Version: "v2"}, contract.ActionType_ACTION_PROTOCOL_UPGRADE},
@@ -108,14 +108,14 @@ func TestT1ProposalPassesUsesTier(t *testing.T) {
 	}
 }
 
-// stakeProposer seeds a proposer with CNPY + staked CLIQ above the proposal
+// stakeProposer seeds a proposer with CNPY + staked CPLQ above the proposal
 // minimum and returns its address.
 func stakeProposer(t *testing.T, c *Canoliq, s *fakeStore, params *contract.CanoliqParams, b byte) []byte {
 	t.Helper()
 	proposer := addr20(b)
 	seedAccount(s, proposer, 1_000_000)
-	seedCLIQ(s, proposer, 10_000_000)
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: proposer, Amount: 10_000_000}, 10_000, params); r.Error != nil {
+	seedCPLQ(s, proposer, 10_000_000)
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: proposer, Amount: 10_000_000}, 10_000, params); r.Error != nil {
 		t.Fatalf("stake: %v", r.Error)
 	}
 	return proposer
@@ -138,7 +138,7 @@ func TestT1CreateSnapshotsTierAndVotingPeriod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("anypb: %v", err)
 	}
-	if r := c.DeliverMessageCLIQProposalCreate(&contract.MessageCLIQProposalCreate{
+	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{
 		FromAddress: proposer, Payload: emPayload, Description: "halt",
 	}, 10_000, params); r.Error != nil {
 		t.Fatalf("create emergency: %v", r.Error)
@@ -158,7 +158,7 @@ func TestT1CreateSnapshotsTierAndVotingPeriod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("anypb: %v", err)
 	}
-	if r := c.DeliverMessageCLIQProposalCreate(&contract.MessageCLIQProposalCreate{
+	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{
 		FromAddress: proposer, Payload: pcPayload, Description: "lower fee",
 	}, 10_000, params); r.Error != nil {
 		t.Fatalf("create param-change: %v", r.Error)
@@ -173,7 +173,7 @@ func TestT1CreateSnapshotsTierAndVotingPeriod(t *testing.T) {
 }
 
 // TestT1TreasuryTimelockFromTier shows the recorded tier drives the spend
-// timelock: a small spend gets 48h, a large (>1M CLIQ) spend gets 7d.
+// timelock: a small spend gets 48h, a large (>1M CPLQ) spend gets 7d.
 func TestT1TreasuryTimelockFromTier(t *testing.T) {
 	c, s := newTestCanoliq()
 	params := DefaultParams()
@@ -192,7 +192,7 @@ func TestT1TreasuryTimelockFromTier(t *testing.T) {
 
 	large := &contract.Proposal{Id: 2, Tier: tierFor(params, contract.ActionType_ACTION_TREASURY_SPEND_LARGE)}
 	if err := c.queueTreasurySpend(large, &contract.ProposalTreasurySpend{
-		Recipient: addr20(0xbb), Amount: largeSpendCliqThreshold + 1, Denomination: contract.SpendDenomination_SPEND_CLIQ,
+		Recipient: addr20(0xbb), Amount: largeSpendCplqThreshold + 1, Denomination: contract.SpendDenomination_SPEND_CPLQ,
 	}, params, 1000); err != nil {
 		t.Fatalf("queue large: %v", err)
 	}
@@ -300,12 +300,12 @@ func TestT1MixedFlightIndependentTally(t *testing.T) {
 	b := addr20(0x42)
 	seedAccount(s, a, 1_000_000)
 	seedAccount(s, b, 1_000_000)
-	seedCLIQ(s, a, 6_000_000)
-	seedCLIQ(s, b, 4_000_000)
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: a, Amount: 6_000_000}, 10_000, params); r.Error != nil {
+	seedCPLQ(s, a, 6_000_000)
+	seedCPLQ(s, b, 4_000_000)
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: a, Amount: 6_000_000}, 10_000, params); r.Error != nil {
 		t.Fatalf("stake a: %v", r.Error)
 	}
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: b, Amount: 4_000_000}, 10_000, params); r.Error != nil {
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: b, Amount: 4_000_000}, 10_000, params); r.Error != nil {
 		t.Fatalf("stake b: %v", r.Error)
 	}
 
@@ -314,23 +314,23 @@ func TestT1MixedFlightIndependentTally(t *testing.T) {
 	feeParams := shortGovParams()
 	feeParams.FeeBps = 800
 	feePayload, _ := anypb.New(&contract.ProposalParamChange{Params: feeParams})
-	if r := c.DeliverMessageCLIQProposalCreate(&contract.MessageCLIQProposalCreate{FromAddress: a, Payload: feePayload}, 10_000, params); r.Error != nil {
+	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{FromAddress: a, Payload: feePayload}, 10_000, params); r.Error != nil {
 		t.Fatalf("create fee-change: %v", r.Error)
 	}
-	// Proposal 2: large CLIQ treasury spend (ACTION_TREASURY_SPEND_LARGE, 67%).
+	// Proposal 2: large CPLQ treasury spend (ACTION_TREASURY_SPEND_LARGE, 67%).
 	largePayload, _ := anypb.New(&contract.ProposalTreasurySpend{
-		Recipient: addr20(0xcc), Amount: largeSpendCliqThreshold + 1, Denomination: contract.SpendDenomination_SPEND_CLIQ,
+		Recipient: addr20(0xcc), Amount: largeSpendCplqThreshold + 1, Denomination: contract.SpendDenomination_SPEND_CPLQ,
 	})
-	if r := c.DeliverMessageCLIQProposalCreate(&contract.MessageCLIQProposalCreate{FromAddress: a, Payload: largePayload}, 10_000, params); r.Error != nil {
+	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{FromAddress: a, Payload: largePayload}, 10_000, params); r.Error != nil {
 		t.Fatalf("create large-spend: %v", r.Error)
 	}
 
 	// Same 60% yes ratio on both proposals.
 	for _, id := range []uint64{1, 2} {
-		if r := c.DeliverMessageCLIQVote(&contract.MessageCLIQVote{FromAddress: a, ProposalId: id, Choice: contract.VoteChoice_VOTE_YES}, 10_000, params); r.Error != nil {
+		if r := c.DeliverMessageCPLQVote(&contract.MessageCPLQVote{FromAddress: a, ProposalId: id, Choice: contract.VoteChoice_VOTE_YES}, 10_000, params); r.Error != nil {
 			t.Fatalf("vote a on %d: %v", id, r.Error)
 		}
-		if r := c.DeliverMessageCLIQVote(&contract.MessageCLIQVote{FromAddress: b, ProposalId: id, Choice: contract.VoteChoice_VOTE_NO}, 10_000, params); r.Error != nil {
+		if r := c.DeliverMessageCPLQVote(&contract.MessageCPLQVote{FromAddress: b, ProposalId: id, Choice: contract.VoteChoice_VOTE_NO}, 10_000, params); r.Error != nil {
 			t.Fatalf("vote b on %d: %v", id, r.Error)
 		}
 	}

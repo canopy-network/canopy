@@ -7,13 +7,13 @@ import (
 	"github.com/canopy-network/go-plugin/contract"
 )
 
-// stake.go implements CLIQ staking — locking liquid CLIQ for governance
+// stake.go implements CPLQ staking — locking liquid CPLQ for governance
 // weight, queueing unstakes through an unbond window, and claiming matured
 // records back to liquid balance.
 //
 // Voting weight is read against a snapshot taken at proposal creation height
 // (see governance.go::voteWeightFor); to enable that snapshot,
-// CLIQStake.staked_at_height records the latest stake increase.
+// CPLQStake.staked_at_height records the latest stake increase.
 
 // blocksPerMonth approximates a 30-day month at the 6s block time
 // (30*24*3600/6). Used to convert lock-tier durations to block counts.
@@ -76,7 +76,7 @@ func validLockTier(t contract.LockTier) bool {
 
 // voteWeightFor returns a staker's governance weight: raw stake scaled by the
 // lock tier's voting multiplier (T2). Zero for an absent record.
-func voteWeightFor(stake *contract.CLIQStake) uint64 {
+func voteWeightFor(stake *contract.CPLQStake) uint64 {
 	if stake == nil || stake.Address == nil {
 		return 0
 	}
@@ -84,8 +84,8 @@ func voteWeightFor(stake *contract.CLIQStake) uint64 {
 	return mulDiv(stake.Amount, voteMultBps, 10_000)
 }
 
-// CheckMessageCLIQStake validates a stake request statelessly.
-func (c *Canoliq) CheckMessageCLIQStake(msg *contract.MessageCLIQStake, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+// CheckMessageCPLQStake validates a stake request statelessly.
+func (c *Canoliq) CheckMessageCPLQStake(msg *contract.MessageCPLQStake, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
 	}
@@ -104,8 +104,8 @@ func (c *Canoliq) CheckMessageCLIQStake(msg *contract.MessageCLIQStake, fee uint
 	}
 }
 
-// CheckMessageCLIQUnstake validates an unstake request statelessly.
-func (c *Canoliq) CheckMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+// CheckMessageCPLQUnstake validates an unstake request statelessly.
+func (c *Canoliq) CheckMessageCPLQUnstake(msg *contract.MessageCPLQUnstake, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
 	}
@@ -121,8 +121,8 @@ func (c *Canoliq) CheckMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fee 
 	}
 }
 
-// CheckMessageCLIQClaimUnstake validates a claim_unstake request statelessly.
-func (c *Canoliq) CheckMessageCLIQClaimUnstake(msg *contract.MessageCLIQClaimUnstake, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+// CheckMessageCPLQClaimUnstake validates a claim_unstake request statelessly.
+func (c *Canoliq) CheckMessageCPLQClaimUnstake(msg *contract.MessageCPLQClaimUnstake, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
 	}
@@ -135,18 +135,18 @@ func (c *Canoliq) CheckMessageCLIQClaimUnstake(msg *contract.MessageCLIQClaimUns
 	}
 }
 
-// DeliverMessageCLIQStake debits the sender's liquid CLIQ balance, credits
-// the per-address CLIQStake record, and increments globals.total_staked_cliq.
+// DeliverMessageCPLQStake debits the sender's liquid CPLQ balance, credits
+// the per-address CPLQStake record, and increments globals.total_staked_cplq.
 // Multiple stakes from the same address aggregate; staked_at_height tracks
 // the most recent increase so the snapshot guard can reject post-creation
 // stake additions.
-func (c *Canoliq) DeliverMessageCLIQStake(msg *contract.MessageCLIQStake, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
+func (c *Canoliq) DeliverMessageCPLQStake(msg *contract.MessageCPLQStake, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	_ = params
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	balKey := KeyForCLIQBalance(msg.FromAddress)
-	stakeKey := KeyForCLIQStake(msg.FromAddress)
-	idxKey := KeyForCLIQStakeIndex()
+	balKey := KeyForCPLQBalance(msg.FromAddress)
+	stakeKey := KeyForCPLQStake(msg.FromAddress)
+	idxKey := KeyForCPLQStakeIndex()
 	gKey := KeyForGlobals()
 	cQ, fQ, bQ, sQ, iQ, gQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
@@ -167,8 +167,8 @@ func (c *Canoliq) DeliverMessageCLIQStake(msg *contract.MessageCLIQStake, fee ui
 	}
 	cnpy := new(contract.Account)
 	feePool := new(contract.Pool)
-	stake := new(contract.CLIQStake)
-	idx := new(contract.CLIQStakeIndex)
+	stake := new(contract.CPLQStake)
+	idx := new(contract.CPLQStakeIndex)
 	globals := new(contract.CanoliqGlobals)
 	var balBz []byte
 	stakePresent := false
@@ -207,7 +207,7 @@ func (c *Canoliq) DeliverMessageCLIQStake(msg *contract.MessageCLIQStake, fee ui
 	}
 	bal := DecodeUint64(balBz)
 	if bal < msg.Amount {
-		return &contract.PluginDeliverResponse{Error: ErrInsufficientCLIQ()}
+		return &contract.PluginDeliverResponse{Error: ErrInsufficientCPLQ()}
 	}
 	bal -= msg.Amount
 	cnpy.Amount -= fee
@@ -215,7 +215,7 @@ func (c *Canoliq) DeliverMessageCLIQStake(msg *contract.MessageCLIQStake, fee ui
 	height := c.currentHeight()
 	newLockEnd := height + lockTierDurationBlocks(msg.LockTier)
 	if !stakePresent {
-		stake = &contract.CLIQStake{
+		stake = &contract.CPLQStake{
 			Address:       msg.FromAddress,
 			Amount:        msg.Amount,
 			StakedAtHeight: height,
@@ -236,7 +236,7 @@ func (c *Canoliq) DeliverMessageCLIQStake(msg *contract.MessageCLIQStake, fee ui
 			stake.LockEndHeight = newLockEnd
 		}
 	}
-	globals.TotalStakedCliq += msg.Amount
+	globals.TotalStakedCplq += msg.Amount
 	stakeBz, e := contract.Marshal(stake)
 	if e != nil {
 		return &contract.PluginDeliverResponse{Error: e}
@@ -280,15 +280,15 @@ func (c *Canoliq) DeliverMessageCLIQStake(msg *contract.MessageCLIQStake, fee ui
 	return &contract.PluginDeliverResponse{}
 }
 
-// DeliverMessageCLIQUnstake debits the staker's CLIQStake by `amount`, queues
-// an UnstakingCLIQ record maturing at h + cliq_unstaking_blocks, and
-// decrements globals.total_staked_cliq immediately. The unstaked tokens
+// DeliverMessageCPLQUnstake debits the staker's CPLQStake by `amount`, queues
+// an UnstakingCPLQ record maturing at h + cplq_unstaking_blocks, and
+// decrements globals.total_staked_cplq immediately. The unstaked tokens
 // carry zero voting weight from this height onward.
-func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
+func (c *Canoliq) DeliverMessageCPLQUnstake(msg *contract.MessageCPLQUnstake, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	stakeKey := KeyForCLIQStake(msg.FromAddress)
-	idxKey := KeyForCLIQStakeIndex()
+	stakeKey := KeyForCPLQStake(msg.FromAddress)
+	idxKey := KeyForCPLQStakeIndex()
 	gKey := KeyForGlobals()
 	unstIdxKey := KeyForUnstakingIndex(msg.FromAddress)
 	cQ, fQ, sQ, iQ, gQ, uiQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
@@ -310,8 +310,8 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 	}
 	cnpy := new(contract.Account)
 	feePool := new(contract.Pool)
-	stake := new(contract.CLIQStake)
-	idx := new(contract.CLIQStakeIndex)
+	stake := new(contract.CPLQStake)
+	idx := new(contract.CPLQStakeIndex)
 	globals := new(contract.CanoliqGlobals)
 	unstIdx := new(contract.UnstakingIndex)
 	stakePresent := false
@@ -348,7 +348,7 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 		}
 	}
 	if !stakePresent || stake.Amount < msg.Amount {
-		return &contract.PluginDeliverResponse{Error: ErrInsufficientStakedCLIQ()}
+		return &contract.PluginDeliverResponse{Error: ErrInsufficientStakedCPLQ()}
 	}
 	// Vote-escrow lock: locked stake cannot unstake until lock_end_height (T2).
 	if stake.LockTier != contract.LockTier_LOCK_NONE && c.currentHeight() < stake.LockEndHeight {
@@ -360,15 +360,15 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 	stake.Amount -= msg.Amount
 	cnpy.Amount -= fee
 	feePool.Amount += fee
-	if globals.TotalStakedCliq >= msg.Amount {
-		globals.TotalStakedCliq -= msg.Amount
+	if globals.TotalStakedCplq >= msg.Amount {
+		globals.TotalStakedCplq -= msg.Amount
 	} else {
-		globals.TotalStakedCliq = 0
+		globals.TotalStakedCplq = 0
 	}
 	id := globals.NextUnstakeId
 	globals.NextUnstakeId++
-	mature := c.currentHeight() + params.CliqUnstakingBlocks
-	unstake := &contract.UnstakingCLIQ{
+	mature := c.currentHeight() + params.CplqUnstakingBlocks
+	unstake := &contract.UnstakingCPLQ{
 		Id:           id,
 		Address:      msg.FromAddress,
 		Amount:       msg.Amount,
@@ -396,7 +396,7 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 		return &contract.PluginDeliverResponse{Error: e}
 	}
 	sets := []*contract.PluginSetOp{
-		{Key: KeyForCLIQUnstaking(msg.FromAddress, id), Value: uBz},
+		{Key: KeyForCPLQUnstaking(msg.FromAddress, id), Value: uBz},
 		{Key: unstIdxKey, Value: unstIdxBz},
 		{Key: gKey, Value: gBz},
 		{Key: feePoolKey, Value: feeBz},
@@ -428,14 +428,14 @@ func (c *Canoliq) DeliverMessageCLIQUnstake(msg *contract.MessageCLIQUnstake, fe
 	return &contract.PluginDeliverResponse{}
 }
 
-// DeliverMessageCLIQClaimUnstake matures an UnstakingCLIQ record by returning
-// the CLIQ to the staker's liquid balance once mature_height has passed.
-func (c *Canoliq) DeliverMessageCLIQClaimUnstake(msg *contract.MessageCLIQClaimUnstake, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
+// DeliverMessageCPLQClaimUnstake matures an UnstakingCPLQ record by returning
+// the CPLQ to the staker's liquid balance once mature_height has passed.
+func (c *Canoliq) DeliverMessageCPLQClaimUnstake(msg *contract.MessageCPLQClaimUnstake, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	_ = params
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	uKey := KeyForCLIQUnstaking(msg.FromAddress, msg.UnstakeId)
-	balKey := KeyForCLIQBalance(msg.FromAddress)
+	uKey := KeyForCPLQUnstaking(msg.FromAddress, msg.UnstakeId)
+	balKey := KeyForCPLQBalance(msg.FromAddress)
 	unstIdxKey := KeyForUnstakingIndex(msg.FromAddress)
 	cQ, fQ, uQ, bQ, uiQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
@@ -455,7 +455,7 @@ func (c *Canoliq) DeliverMessageCLIQClaimUnstake(msg *contract.MessageCLIQClaimU
 	}
 	cnpy := new(contract.Account)
 	feePool := new(contract.Pool)
-	unstake := new(contract.UnstakingCLIQ)
+	unstake := new(contract.UnstakingCPLQ)
 	unstIdx := new(contract.UnstakingIndex)
 	var balBz []byte
 	uPresent := false
@@ -531,12 +531,12 @@ func (c *Canoliq) DeliverMessageCLIQClaimUnstake(msg *contract.MessageCLIQClaimU
 	return &contract.PluginDeliverResponse{}
 }
 
-// loadCLIQStake reads a per-address CLIQStake record. Returns (nil, nil)
+// loadCPLQStake reads a per-address CPLQStake record. Returns (nil, nil)
 // when the staker has no record, distinguishable from an empty stake.
-func (c *Canoliq) loadCLIQStake(addr []byte) (*contract.CLIQStake, *contract.PluginError) {
+func (c *Canoliq) loadCPLQStake(addr []byte) (*contract.CPLQStake, *contract.PluginError) {
 	q := rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
-		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForCLIQStake(addr)}},
+		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForCPLQStake(addr)}},
 	})
 	if err != nil {
 		return nil, err
@@ -547,7 +547,7 @@ func (c *Canoliq) loadCLIQStake(addr []byte) (*contract.CLIQStake, *contract.Plu
 	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 {
 		return nil, nil
 	}
-	stake := new(contract.CLIQStake)
+	stake := new(contract.CPLQStake)
 	if e := contract.Unmarshal(resp.Results[0].Entries[0].Value, stake); e != nil {
 		return nil, e
 	}
@@ -556,10 +556,10 @@ func (c *Canoliq) loadCLIQStake(addr []byte) (*contract.CLIQStake, *contract.Plu
 
 // loadStakeIndex reads the singleton stake index. Returns an empty index when
 // no stakers exist yet.
-func (c *Canoliq) loadStakeIndex() (*contract.CLIQStakeIndex, *contract.PluginError) {
+func (c *Canoliq) loadStakeIndex() (*contract.CPLQStakeIndex, *contract.PluginError) {
 	q := rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
-		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForCLIQStakeIndex()}},
+		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForCPLQStakeIndex()}},
 	})
 	if err != nil {
 		return nil, err
@@ -567,7 +567,7 @@ func (c *Canoliq) loadStakeIndex() (*contract.CLIQStakeIndex, *contract.PluginEr
 	if resp.Error != nil {
 		return nil, resp.Error
 	}
-	idx := new(contract.CLIQStakeIndex)
+	idx := new(contract.CPLQStakeIndex)
 	if len(resp.Results) > 0 && len(resp.Results[0].Entries) > 0 {
 		if e := contract.Unmarshal(resp.Results[0].Entries[0].Value, idx); e != nil {
 			return nil, e

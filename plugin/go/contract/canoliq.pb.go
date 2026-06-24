@@ -255,7 +255,7 @@ func (ProposalStatus) EnumDescriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{3}
 }
 
-// BuybackMode selects the post-acquisition disposition of CLIQ.
+// BuybackMode selects the post-acquisition disposition of CPLQ.
 type BuybackMode int32
 
 const (
@@ -305,13 +305,13 @@ func (BuybackMode) EnumDescriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{4}
 }
 
-// SpendDenomination distinguishes CNPY-denominated spends from CLIQ.
+// SpendDenomination distinguishes CNPY-denominated spends from CPLQ.
 type SpendDenomination int32
 
 const (
 	SpendDenomination_SPEND_UNKNOWN SpendDenomination = 0
 	SpendDenomination_SPEND_CNPY    SpendDenomination = 1
-	SpendDenomination_SPEND_CLIQ    SpendDenomination = 2
+	SpendDenomination_SPEND_CPLQ    SpendDenomination = 2
 )
 
 // Enum value maps for SpendDenomination.
@@ -319,12 +319,12 @@ var (
 	SpendDenomination_name = map[int32]string{
 		0: "SPEND_UNKNOWN",
 		1: "SPEND_CNPY",
-		2: "SPEND_CLIQ",
+		2: "SPEND_CPLQ",
 	}
 	SpendDenomination_value = map[string]int32{
 		"SPEND_UNKNOWN": 0,
 		"SPEND_CNPY":    1,
-		"SPEND_CLIQ":    2,
+		"SPEND_CPLQ":    2,
 	}
 )
 
@@ -523,33 +523,33 @@ func (x *MessageCanoliqClaimRedemption) GetRedemptionId() uint64 {
 	return 0
 }
 
-// MessageCLIQTransfer transfers liquid (already-vested) CLIQ between accounts.
-type MessageCLIQTransfer struct {
+// MessageCPLQTransfer transfers liquid (already-vested) CPLQ between accounts.
+type MessageCPLQTransfer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the sender
 	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// to_address: the recipient
 	ToAddress []byte `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"toAddress"` // @gotags: json:"toAddress"
-	// amount: amount of CLIQ to transfer (uCLIQ)
+	// amount: amount of CPLQ to transfer (uCPLQ)
 	Amount        uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MessageCLIQTransfer) Reset() {
-	*x = MessageCLIQTransfer{}
+func (x *MessageCPLQTransfer) Reset() {
+	*x = MessageCPLQTransfer{}
 	mi := &file_canoliq_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MessageCLIQTransfer) String() string {
+func (x *MessageCPLQTransfer) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MessageCLIQTransfer) ProtoMessage() {}
+func (*MessageCPLQTransfer) ProtoMessage() {}
 
-func (x *MessageCLIQTransfer) ProtoReflect() protoreflect.Message {
+func (x *MessageCPLQTransfer) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -561,35 +561,35 @@ func (x *MessageCLIQTransfer) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MessageCLIQTransfer.ProtoReflect.Descriptor instead.
-func (*MessageCLIQTransfer) Descriptor() ([]byte, []int) {
+// Deprecated: Use MessageCPLQTransfer.ProtoReflect.Descriptor instead.
+func (*MessageCPLQTransfer) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *MessageCLIQTransfer) GetFromAddress() []byte {
+func (x *MessageCPLQTransfer) GetFromAddress() []byte {
 	if x != nil {
 		return x.FromAddress
 	}
 	return nil
 }
 
-func (x *MessageCLIQTransfer) GetToAddress() []byte {
+func (x *MessageCPLQTransfer) GetToAddress() []byte {
 	if x != nil {
 		return x.ToAddress
 	}
 	return nil
 }
 
-func (x *MessageCLIQTransfer) GetAmount() uint64 {
+func (x *MessageCPLQTransfer) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
 	}
 	return 0
 }
 
-// MessageCLIQClaimVested moves any newly-unlocked CLIQ from a vesting bucket
-// into the caller's liquid CLIQ balance.
-type MessageCLIQClaimVested struct {
+// MessageCPLQClaimVested moves any newly-unlocked CPLQ from a vesting bucket
+// into the caller's liquid CPLQ balance.
+type MessageCPLQClaimVested struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the vesting recipient
 	FromAddress   []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
@@ -597,20 +597,20 @@ type MessageCLIQClaimVested struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MessageCLIQClaimVested) Reset() {
-	*x = MessageCLIQClaimVested{}
+func (x *MessageCPLQClaimVested) Reset() {
+	*x = MessageCPLQClaimVested{}
 	mi := &file_canoliq_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MessageCLIQClaimVested) String() string {
+func (x *MessageCPLQClaimVested) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MessageCLIQClaimVested) ProtoMessage() {}
+func (*MessageCPLQClaimVested) ProtoMessage() {}
 
-func (x *MessageCLIQClaimVested) ProtoReflect() protoreflect.Message {
+func (x *MessageCPLQClaimVested) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -622,12 +622,12 @@ func (x *MessageCLIQClaimVested) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MessageCLIQClaimVested.ProtoReflect.Descriptor instead.
-func (*MessageCLIQClaimVested) Descriptor() ([]byte, []int) {
+// Deprecated: Use MessageCPLQClaimVested.ProtoReflect.Descriptor instead.
+func (*MessageCPLQClaimVested) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *MessageCLIQClaimVested) GetFromAddress() []byte {
+func (x *MessageCPLQClaimVested) GetFromAddress() []byte {
 	if x != nil {
 		return x.FromAddress
 	}
@@ -645,23 +645,23 @@ type CanoliqGlobals struct {
 	PendingRedemptionCnpy uint64 `protobuf:"varint,3,opt,name=pending_redemption_cnpy,json=pendingRedemptionCnpy,proto3" json:"pendingRedemptionCnpy"` // @gotags: json:"pendingRedemptionCnpy"
 	// last_processed_reward_pool: pool balance observed at the last reward sweep
 	LastProcessedRewardPool uint64 `protobuf:"varint,4,opt,name=last_processed_reward_pool,json=lastProcessedRewardPool,proto3" json:"lastProcessedRewardPool"` // @gotags: json:"lastProcessedRewardPool"
-	// cliq_total_supply: hard-cap CLIQ supply minted at genesis (uCLIQ)
-	CliqTotalSupply uint64 `protobuf:"varint,5,opt,name=cliq_total_supply,json=cliqTotalSupply,proto3" json:"cliqTotalSupply"` // @gotags: json:"cliqTotalSupply"
-	// cliq_circulating_supply: CLIQ that is currently liquid (uCLIQ)
-	CliqCirculatingSupply uint64 `protobuf:"varint,6,opt,name=cliq_circulating_supply,json=cliqCirculatingSupply,proto3" json:"cliqCirculatingSupply"` // @gotags: json:"cliqCirculatingSupply"
+	// cplq_total_supply: hard-cap CPLQ supply minted at genesis (uCPLQ)
+	CplqTotalSupply uint64 `protobuf:"varint,5,opt,name=cplq_total_supply,json=cplqTotalSupply,proto3" json:"cplqTotalSupply"` // @gotags: json:"cplqTotalSupply"
+	// cplq_circulating_supply: CPLQ that is currently liquid (uCPLQ)
+	CplqCirculatingSupply uint64 `protobuf:"varint,6,opt,name=cplq_circulating_supply,json=cplqCirculatingSupply,proto3" json:"cplqCirculatingSupply"` // @gotags: json:"cplqCirculatingSupply"
 	// next_redemption_id: monotonically-increasing redemption id counter
 	NextRedemptionId uint64 `protobuf:"varint,7,opt,name=next_redemption_id,json=nextRedemptionId,proto3" json:"nextRedemptionId"` // @gotags: json:"nextRedemptionId"
 	// genesis_complete: whether genesis distribution has run
 	GenesisComplete bool `protobuf:"varint,8,opt,name=genesis_complete,json=genesisComplete,proto3" json:"genesisComplete"` // @gotags: json:"genesisComplete"
-	// total_staked_cliq: aggregate CLIQ locked in stake records (uCLIQ)
-	TotalStakedCliq uint64 `protobuf:"varint,9,opt,name=total_staked_cliq,json=totalStakedCliq,proto3" json:"totalStakedCliq"` // @gotags: json:"totalStakedCliq"
+	// total_staked_cplq: aggregate CPLQ locked in stake records (uCPLQ)
+	TotalStakedCplq uint64 `protobuf:"varint,9,opt,name=total_staked_cplq,json=totalStakedCplq,proto3" json:"totalStakedCplq"` // @gotags: json:"totalStakedCplq"
 	// next_proposal_id: monotonically-increasing proposal id counter
 	NextProposalId uint64 `protobuf:"varint,10,opt,name=next_proposal_id,json=nextProposalId,proto3" json:"nextProposalId"` // @gotags: json:"nextProposalId"
 	// next_buyback_id: monotonically-increasing buyback order id counter
 	NextBuybackId uint64 `protobuf:"varint,11,opt,name=next_buyback_id,json=nextBuybackId,proto3" json:"nextBuybackId"` // @gotags: json:"nextBuybackId"
 	// next_spend_id: monotonically-increasing treasury spend id counter
 	NextSpendId uint64 `protobuf:"varint,12,opt,name=next_spend_id,json=nextSpendId,proto3" json:"nextSpendId"` // @gotags: json:"nextSpendId"
-	// next_unstake_id: monotonically-increasing CLIQ unstake id counter
+	// next_unstake_id: monotonically-increasing CPLQ unstake id counter
 	NextUnstakeId uint64 `protobuf:"varint,13,opt,name=next_unstake_id,json=nextUnstakeId,proto3" json:"nextUnstakeId"` // @gotags: json:"nextUnstakeId"
 	// peak_tvl_ucnpy: running maximum of total_pooled_cnpy (T4). Drives the
 	// insurance-fund target (5% of peak TVL); advanced each EndBlock.
@@ -744,16 +744,16 @@ func (x *CanoliqGlobals) GetLastProcessedRewardPool() uint64 {
 	return 0
 }
 
-func (x *CanoliqGlobals) GetCliqTotalSupply() uint64 {
+func (x *CanoliqGlobals) GetCplqTotalSupply() uint64 {
 	if x != nil {
-		return x.CliqTotalSupply
+		return x.CplqTotalSupply
 	}
 	return 0
 }
 
-func (x *CanoliqGlobals) GetCliqCirculatingSupply() uint64 {
+func (x *CanoliqGlobals) GetCplqCirculatingSupply() uint64 {
 	if x != nil {
-		return x.CliqCirculatingSupply
+		return x.CplqCirculatingSupply
 	}
 	return 0
 }
@@ -772,9 +772,9 @@ func (x *CanoliqGlobals) GetGenesisComplete() bool {
 	return false
 }
 
-func (x *CanoliqGlobals) GetTotalStakedCliq() uint64 {
+func (x *CanoliqGlobals) GetTotalStakedCplq() uint64 {
 	if x != nil {
-		return x.TotalStakedCliq
+		return x.TotalStakedCplq
 	}
 	return 0
 }
@@ -984,7 +984,7 @@ func (x *RedemptionIndex) GetIds() []uint64 {
 	return nil
 }
 
-// VestingSchedule encodes a linear vesting schedule with a cliff for a CLIQ
+// VestingSchedule encodes a linear vesting schedule with a cliff for a CPLQ
 // allocation tranche. One schedule may exist per (address, schedule_id).
 type VestingSchedule struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -992,15 +992,15 @@ type VestingSchedule struct {
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// schedule_id: discriminator when an address has multiple tranches
 	ScheduleId uint64 `protobuf:"varint,2,opt,name=schedule_id,json=scheduleId,proto3" json:"scheduleId"` // @gotags: json:"scheduleId"
-	// total_amount: total CLIQ vesting under this schedule (uCLIQ)
+	// total_amount: total CPLQ vesting under this schedule (uCPLQ)
 	TotalAmount uint64 `protobuf:"varint,3,opt,name=total_amount,json=totalAmount,proto3" json:"totalAmount"` // @gotags: json:"totalAmount"
-	// cliff_height: no CLIQ unlocks before this height
+	// cliff_height: no CPLQ unlocks before this height
 	CliffHeight uint64 `protobuf:"varint,4,opt,name=cliff_height,json=cliffHeight,proto3" json:"cliffHeight"` // @gotags: json:"cliffHeight"
 	// start_height: linear vest start (typically equal to cliff_height)
 	StartHeight uint64 `protobuf:"varint,5,opt,name=start_height,json=startHeight,proto3" json:"startHeight"` // @gotags: json:"startHeight"
 	// end_height: linear vest completion height
 	EndHeight uint64 `protobuf:"varint,6,opt,name=end_height,json=endHeight,proto3" json:"endHeight"` // @gotags: json:"endHeight"
-	// claimed_amount: CLIQ already moved to the liquid balance
+	// claimed_amount: CPLQ already moved to the liquid balance
 	ClaimedAmount uint64 `protobuf:"varint,7,opt,name=claimed_amount,json=claimedAmount,proto3" json:"claimedAmount"` // @gotags: json:"claimedAmount"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1097,16 +1097,16 @@ type CanoliqParams struct {
 	TreasuryBps uint64 `protobuf:"varint,3,opt,name=treasury_bps,json=treasuryBps,proto3" json:"treasuryBps"` // @gotags: json:"treasuryBps"
 	// validator_bps: portion of fee to validator infra in bps (default 1500 = 15%)
 	ValidatorBps uint64 `protobuf:"varint,4,opt,name=validator_bps,json=validatorBps,proto3" json:"validatorBps"` // @gotags: json:"validatorBps"
-	// buyback_bps: portion of fee to CLIQ buyback in bps (default 1500 = 15%)
+	// buyback_bps: portion of fee to CPLQ buyback in bps (default 1500 = 15%)
 	BuybackBps uint64 `protobuf:"varint,5,opt,name=buyback_bps,json=buybackBps,proto3" json:"buybackBps"` // @gotags: json:"buybackBps"
 	// deposit_fee: minimum tx fee for a deposit (uCNPY)
 	DepositFee uint64 `protobuf:"varint,6,opt,name=deposit_fee,json=depositFee,proto3" json:"depositFee"` // @gotags: json:"depositFee"
 	// redeem_fee: minimum tx fee for a redeem (uCNPY)
 	RedeemFee uint64 `protobuf:"varint,7,opt,name=redeem_fee,json=redeemFee,proto3" json:"redeemFee"` // @gotags: json:"redeemFee"
-	// claim_fee: minimum tx fee for claim_redemption / cliq_claim_vested (uCNPY)
+	// claim_fee: minimum tx fee for claim_redemption / cplq_claim_vested (uCNPY)
 	ClaimFee uint64 `protobuf:"varint,8,opt,name=claim_fee,json=claimFee,proto3" json:"claimFee"` // @gotags: json:"claimFee"
-	// cliq_transfer_fee: minimum tx fee for a CLIQ transfer (uCNPY)
-	CliqTransferFee uint64 `protobuf:"varint,9,opt,name=cliq_transfer_fee,json=cliqTransferFee,proto3" json:"cliqTransferFee"` // @gotags: json:"cliqTransferFee"
+	// cplq_transfer_fee: minimum tx fee for a CPLQ transfer (uCNPY)
+	CplqTransferFee uint64 `protobuf:"varint,9,opt,name=cplq_transfer_fee,json=cplqTransferFee,proto3" json:"cplqTransferFee"` // @gotags: json:"cplqTransferFee"
 	// insurance_bps: share of treasury credit redirected to insurance (default 1500 = 15% of treasury slice)
 	InsuranceBps uint64 `protobuf:"varint,10,opt,name=insurance_bps,json=insuranceBps,proto3" json:"insuranceBps"` // @gotags: json:"insuranceBps"
 	// treasury_threshold: spend amount above which multisig + timelock kick in (uCNPY-equivalent)
@@ -1117,14 +1117,14 @@ type CanoliqParams struct {
 	MultisigThreshold uint64 `protobuf:"varint,13,opt,name=multisig_threshold,json=multisigThreshold,proto3" json:"multisigThreshold"` // @gotags: json:"multisigThreshold"
 	// voting_period_blocks: blocks a proposal accepts votes for
 	VotingPeriodBlocks uint64 `protobuf:"varint,14,opt,name=voting_period_blocks,json=votingPeriodBlocks,proto3" json:"votingPeriodBlocks"` // @gotags: json:"votingPeriodBlocks"
-	// quorum_bps: fraction of snapshot total_staked_cliq required to participate
+	// quorum_bps: fraction of snapshot total_staked_cplq required to participate
 	QuorumBps uint64 `protobuf:"varint,15,opt,name=quorum_bps,json=quorumBps,proto3" json:"quorumBps"` // @gotags: json:"quorumBps"
 	// pass_threshold_bps: yes / (yes+no) needed for a proposal to pass
 	PassThresholdBps uint64 `protobuf:"varint,16,opt,name=pass_threshold_bps,json=passThresholdBps,proto3" json:"passThresholdBps"` // @gotags: json:"passThresholdBps"
 	// timelock_blocks: delay between proposal pass and above-threshold spend execution
 	TimelockBlocks uint64 `protobuf:"varint,17,opt,name=timelock_blocks,json=timelockBlocks,proto3" json:"timelockBlocks"` // @gotags: json:"timelockBlocks"
-	// cliq_unstaking_blocks: unbond window for CLIQ stake
-	CliqUnstakingBlocks uint64 `protobuf:"varint,18,opt,name=cliq_unstaking_blocks,json=cliqUnstakingBlocks,proto3" json:"cliqUnstakingBlocks"` // @gotags: json:"cliqUnstakingBlocks"
+	// cplq_unstaking_blocks: unbond window for CPLQ stake
+	CplqUnstakingBlocks uint64 `protobuf:"varint,18,opt,name=cplq_unstaking_blocks,json=cplqUnstakingBlocks,proto3" json:"cplqUnstakingBlocks"` // @gotags: json:"cplqUnstakingBlocks"
 	// proposal_fee: minimum tx fee for proposal creation (uCNPY)
 	ProposalFee uint64 `protobuf:"varint,19,opt,name=proposal_fee,json=proposalFee,proto3" json:"proposalFee"` // @gotags: json:"proposalFee"
 	// vote_fee: minimum tx fee for vote (uCNPY)
@@ -1133,7 +1133,7 @@ type CanoliqParams struct {
 	StakeFee uint64 `protobuf:"varint,21,opt,name=stake_fee,json=stakeFee,proto3" json:"stakeFee"` // @gotags: json:"stakeFee"
 	// multisig_approve_fee: minimum tx fee for multisig approval (uCNPY)
 	MultisigApproveFee uint64 `protobuf:"varint,22,opt,name=multisig_approve_fee,json=multisigApproveFee,proto3" json:"multisigApproveFee"` // @gotags: json:"multisigApproveFee"
-	// min_stake_to_propose: minimum staked CLIQ a proposer must hold
+	// min_stake_to_propose: minimum staked CPLQ a proposer must hold
 	MinStakeToPropose uint64 `protobuf:"varint,23,opt,name=min_stake_to_propose,json=minStakeToPropose,proto3" json:"minStakeToPropose"` // @gotags: json:"minStakeToPropose"
 	// governance: per-action governance tiers (Tokenomics v1.1 §7). When a
 	// tier matches a proposal's ActionType it overrides the scalar
@@ -1251,9 +1251,9 @@ func (x *CanoliqParams) GetClaimFee() uint64 {
 	return 0
 }
 
-func (x *CanoliqParams) GetCliqTransferFee() uint64 {
+func (x *CanoliqParams) GetCplqTransferFee() uint64 {
 	if x != nil {
-		return x.CliqTransferFee
+		return x.CplqTransferFee
 	}
 	return 0
 }
@@ -1314,9 +1314,9 @@ func (x *CanoliqParams) GetTimelockBlocks() uint64 {
 	return 0
 }
 
-func (x *CanoliqParams) GetCliqUnstakingBlocks() uint64 {
+func (x *CanoliqParams) GetCplqUnstakingBlocks() uint64 {
 	if x != nil {
-		return x.CliqUnstakingBlocks
+		return x.CplqUnstakingBlocks
 	}
 	return 0
 }
@@ -1417,7 +1417,7 @@ type GovernanceTier struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// action: the ActionType this tier governs
 	Action ActionType `protobuf:"varint,1,opt,name=action,proto3,enum=types.ActionType" json:"action,omitempty"`
-	// quorum_bps: fraction of snapshot total_staked_cliq required to participate
+	// quorum_bps: fraction of snapshot total_staked_cplq required to participate
 	QuorumBps uint64 `protobuf:"varint,2,opt,name=quorum_bps,json=quorumBps,proto3" json:"quorumBps"` // @gotags: json:"quorumBps"
 	// approval_bps: yes / (yes+no) needed for the proposal to pass
 	ApprovalBps uint64 `protobuf:"varint,3,opt,name=approval_bps,json=approvalBps,proto3" json:"approvalBps"` // @gotags: json:"approvalBps"
@@ -1495,7 +1495,7 @@ func (x *GovernanceTier) GetVotingPeriodBlocks() uint64 {
 }
 
 // VestingIndex enumerates the vesting schedule ids belonging to an address so
-// MessageCLIQClaimVested can iterate without a state-range scan.
+// MessageCPLQClaimVested can iterate without a state-range scan.
 type VestingIndex struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// schedule_ids: list of schedule_ids owned by the indexed address
@@ -1541,13 +1541,13 @@ func (x *VestingIndex) GetScheduleIds() []uint64 {
 	return nil
 }
 
-// MessageCLIQStake locks liquid CLIQ into a stake record granting governance
+// MessageCPLQStake locks liquid CPLQ into a stake record granting governance
 // weight. Multiple stakes from the same address aggregate into one record.
-type MessageCLIQStake struct {
+type MessageCPLQStake struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the staker
 	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
-	// amount: liquid CLIQ to lock (uCLIQ)
+	// amount: liquid CPLQ to lock (uCPLQ)
 	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	// lock_tier: vote-escrow lock to commit this stake to (T2). LOCK_NONE keeps
 	// the stake liquid-to-unstake after the standard unbond window.
@@ -1556,20 +1556,20 @@ type MessageCLIQStake struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MessageCLIQStake) Reset() {
-	*x = MessageCLIQStake{}
+func (x *MessageCPLQStake) Reset() {
+	*x = MessageCPLQStake{}
 	mi := &file_canoliq_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MessageCLIQStake) String() string {
+func (x *MessageCPLQStake) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MessageCLIQStake) ProtoMessage() {}
+func (*MessageCPLQStake) ProtoMessage() {}
 
-func (x *MessageCLIQStake) ProtoReflect() protoreflect.Message {
+func (x *MessageCPLQStake) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1581,60 +1581,60 @@ func (x *MessageCLIQStake) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MessageCLIQStake.ProtoReflect.Descriptor instead.
-func (*MessageCLIQStake) Descriptor() ([]byte, []int) {
+// Deprecated: Use MessageCPLQStake.ProtoReflect.Descriptor instead.
+func (*MessageCPLQStake) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *MessageCLIQStake) GetFromAddress() []byte {
+func (x *MessageCPLQStake) GetFromAddress() []byte {
 	if x != nil {
 		return x.FromAddress
 	}
 	return nil
 }
 
-func (x *MessageCLIQStake) GetAmount() uint64 {
+func (x *MessageCPLQStake) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
 	}
 	return 0
 }
 
-func (x *MessageCLIQStake) GetLockTier() LockTier {
+func (x *MessageCPLQStake) GetLockTier() LockTier {
 	if x != nil {
 		return x.LockTier
 	}
 	return LockTier_LOCK_NONE
 }
 
-// MessageCLIQUnstake debits the staker's CLIQStake and queues an unbond
-// record that matures after cliq_unstaking_blocks. Total staked CLIQ on
+// MessageCPLQUnstake debits the staker's CPLQStake and queues an unbond
+// record that matures after cplq_unstaking_blocks. Total staked CPLQ on
 // globals is decremented immediately so unstaked tokens carry no weight in
 // proposals created from this height onward.
-type MessageCLIQUnstake struct {
+type MessageCPLQUnstake struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the staker
 	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
-	// amount: staked CLIQ to unbond (uCLIQ)
+	// amount: staked CPLQ to unbond (uCPLQ)
 	Amount        uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MessageCLIQUnstake) Reset() {
-	*x = MessageCLIQUnstake{}
+func (x *MessageCPLQUnstake) Reset() {
+	*x = MessageCPLQUnstake{}
 	mi := &file_canoliq_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MessageCLIQUnstake) String() string {
+func (x *MessageCPLQUnstake) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MessageCLIQUnstake) ProtoMessage() {}
+func (*MessageCPLQUnstake) ProtoMessage() {}
 
-func (x *MessageCLIQUnstake) ProtoReflect() protoreflect.Message {
+func (x *MessageCPLQUnstake) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1646,51 +1646,51 @@ func (x *MessageCLIQUnstake) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MessageCLIQUnstake.ProtoReflect.Descriptor instead.
-func (*MessageCLIQUnstake) Descriptor() ([]byte, []int) {
+// Deprecated: Use MessageCPLQUnstake.ProtoReflect.Descriptor instead.
+func (*MessageCPLQUnstake) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *MessageCLIQUnstake) GetFromAddress() []byte {
+func (x *MessageCPLQUnstake) GetFromAddress() []byte {
 	if x != nil {
 		return x.FromAddress
 	}
 	return nil
 }
 
-func (x *MessageCLIQUnstake) GetAmount() uint64 {
+func (x *MessageCPLQUnstake) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
 	}
 	return 0
 }
 
-// MessageCLIQClaimUnstake matures an unstake record by returning the CLIQ
+// MessageCPLQClaimUnstake matures an unstake record by returning the CPLQ
 // to the staker's liquid balance once mature_height has passed.
-type MessageCLIQClaimUnstake struct {
+type MessageCPLQClaimUnstake struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the staker
 	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
-	// unstake_id: id of the UnstakingCLIQ record to claim
+	// unstake_id: id of the UnstakingCPLQ record to claim
 	UnstakeId     uint64 `protobuf:"varint,2,opt,name=unstake_id,json=unstakeId,proto3" json:"unstakeId"` // @gotags: json:"unstakeId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MessageCLIQClaimUnstake) Reset() {
-	*x = MessageCLIQClaimUnstake{}
+func (x *MessageCPLQClaimUnstake) Reset() {
+	*x = MessageCPLQClaimUnstake{}
 	mi := &file_canoliq_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MessageCLIQClaimUnstake) String() string {
+func (x *MessageCPLQClaimUnstake) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MessageCLIQClaimUnstake) ProtoMessage() {}
+func (*MessageCPLQClaimUnstake) ProtoMessage() {}
 
-func (x *MessageCLIQClaimUnstake) ProtoReflect() protoreflect.Message {
+func (x *MessageCPLQClaimUnstake) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1702,29 +1702,29 @@ func (x *MessageCLIQClaimUnstake) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MessageCLIQClaimUnstake.ProtoReflect.Descriptor instead.
-func (*MessageCLIQClaimUnstake) Descriptor() ([]byte, []int) {
+// Deprecated: Use MessageCPLQClaimUnstake.ProtoReflect.Descriptor instead.
+func (*MessageCPLQClaimUnstake) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *MessageCLIQClaimUnstake) GetFromAddress() []byte {
+func (x *MessageCPLQClaimUnstake) GetFromAddress() []byte {
 	if x != nil {
 		return x.FromAddress
 	}
 	return nil
 }
 
-func (x *MessageCLIQClaimUnstake) GetUnstakeId() uint64 {
+func (x *MessageCPLQClaimUnstake) GetUnstakeId() uint64 {
 	if x != nil {
 		return x.UnstakeId
 	}
 	return 0
 }
 
-// MessageCLIQProposalCreate opens a new governance proposal. The proposer
+// MessageCPLQProposalCreate opens a new governance proposal. The proposer
 // must hold ≥ min_stake_to_propose at creation height. The proposal payload
 // dictates the action taken if the vote passes.
-type MessageCLIQProposalCreate struct {
+type MessageCPLQProposalCreate struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the proposer
 	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
@@ -1736,20 +1736,20 @@ type MessageCLIQProposalCreate struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MessageCLIQProposalCreate) Reset() {
-	*x = MessageCLIQProposalCreate{}
+func (x *MessageCPLQProposalCreate) Reset() {
+	*x = MessageCPLQProposalCreate{}
 	mi := &file_canoliq_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MessageCLIQProposalCreate) String() string {
+func (x *MessageCPLQProposalCreate) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MessageCLIQProposalCreate) ProtoMessage() {}
+func (*MessageCPLQProposalCreate) ProtoMessage() {}
 
-func (x *MessageCLIQProposalCreate) ProtoReflect() protoreflect.Message {
+func (x *MessageCPLQProposalCreate) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1761,37 +1761,37 @@ func (x *MessageCLIQProposalCreate) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MessageCLIQProposalCreate.ProtoReflect.Descriptor instead.
-func (*MessageCLIQProposalCreate) Descriptor() ([]byte, []int) {
+// Deprecated: Use MessageCPLQProposalCreate.ProtoReflect.Descriptor instead.
+func (*MessageCPLQProposalCreate) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{15}
 }
 
-func (x *MessageCLIQProposalCreate) GetFromAddress() []byte {
+func (x *MessageCPLQProposalCreate) GetFromAddress() []byte {
 	if x != nil {
 		return x.FromAddress
 	}
 	return nil
 }
 
-func (x *MessageCLIQProposalCreate) GetPayload() *anypb.Any {
+func (x *MessageCPLQProposalCreate) GetPayload() *anypb.Any {
 	if x != nil {
 		return x.Payload
 	}
 	return nil
 }
 
-func (x *MessageCLIQProposalCreate) GetDescription() string {
+func (x *MessageCPLQProposalCreate) GetDescription() string {
 	if x != nil {
 		return x.Description
 	}
 	return ""
 }
 
-// MessageCLIQVote records a yes/no/abstain vote for an active proposal. The
-// vote weight equals the voter's CLIQStake balance evaluated against the
+// MessageCPLQVote records a yes/no/abstain vote for an active proposal. The
+// vote weight equals the voter's CPLQStake balance evaluated against the
 // proposal's creation_height — votes from stake added after creation carry
 // zero weight.
-type MessageCLIQVote struct {
+type MessageCPLQVote struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// from_address: the voter
 	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
@@ -1803,20 +1803,20 @@ type MessageCLIQVote struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MessageCLIQVote) Reset() {
-	*x = MessageCLIQVote{}
+func (x *MessageCPLQVote) Reset() {
+	*x = MessageCPLQVote{}
 	mi := &file_canoliq_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MessageCLIQVote) String() string {
+func (x *MessageCPLQVote) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MessageCLIQVote) ProtoMessage() {}
+func (*MessageCPLQVote) ProtoMessage() {}
 
-func (x *MessageCLIQVote) ProtoReflect() protoreflect.Message {
+func (x *MessageCPLQVote) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1828,26 +1828,26 @@ func (x *MessageCLIQVote) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MessageCLIQVote.ProtoReflect.Descriptor instead.
-func (*MessageCLIQVote) Descriptor() ([]byte, []int) {
+// Deprecated: Use MessageCPLQVote.ProtoReflect.Descriptor instead.
+func (*MessageCPLQVote) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *MessageCLIQVote) GetFromAddress() []byte {
+func (x *MessageCPLQVote) GetFromAddress() []byte {
 	if x != nil {
 		return x.FromAddress
 	}
 	return nil
 }
 
-func (x *MessageCLIQVote) GetProposalId() uint64 {
+func (x *MessageCPLQVote) GetProposalId() uint64 {
 	if x != nil {
 		return x.ProposalId
 	}
 	return 0
 }
 
-func (x *MessageCLIQVote) GetChoice() VoteChoice {
+func (x *MessageCPLQVote) GetChoice() VoteChoice {
 	if x != nil {
 		return x.Choice
 	}
@@ -2023,12 +2023,12 @@ func (x *MessageMultisigApprove) GetSpendId() uint64 {
 	return 0
 }
 
-// CLIQStake is the per-address active stake record.
-type CLIQStake struct {
+// CPLQStake is the per-address active stake record.
+type CPLQStake struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// address: the staker
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
-	// amount: staked CLIQ (uCLIQ)
+	// amount: staked CPLQ (uCPLQ)
 	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	// staked_at_height: height of the most recent stake increase. Used for
 	// proposal-vote eligibility (vote weight = 0 if staked_at_height >
@@ -2044,20 +2044,20 @@ type CLIQStake struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CLIQStake) Reset() {
-	*x = CLIQStake{}
+func (x *CPLQStake) Reset() {
+	*x = CPLQStake{}
 	mi := &file_canoliq_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CLIQStake) String() string {
+func (x *CPLQStake) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CLIQStake) ProtoMessage() {}
+func (*CPLQStake) ProtoMessage() {}
 
-func (x *CLIQStake) ProtoReflect() protoreflect.Message {
+func (x *CPLQStake) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2069,54 +2069,54 @@ func (x *CLIQStake) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CLIQStake.ProtoReflect.Descriptor instead.
-func (*CLIQStake) Descriptor() ([]byte, []int) {
+// Deprecated: Use CPLQStake.ProtoReflect.Descriptor instead.
+func (*CPLQStake) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{20}
 }
 
-func (x *CLIQStake) GetAddress() []byte {
+func (x *CPLQStake) GetAddress() []byte {
 	if x != nil {
 		return x.Address
 	}
 	return nil
 }
 
-func (x *CLIQStake) GetAmount() uint64 {
+func (x *CPLQStake) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
 	}
 	return 0
 }
 
-func (x *CLIQStake) GetStakedAtHeight() uint64 {
+func (x *CPLQStake) GetStakedAtHeight() uint64 {
 	if x != nil {
 		return x.StakedAtHeight
 	}
 	return 0
 }
 
-func (x *CLIQStake) GetLockTier() LockTier {
+func (x *CPLQStake) GetLockTier() LockTier {
 	if x != nil {
 		return x.LockTier
 	}
 	return LockTier_LOCK_NONE
 }
 
-func (x *CLIQStake) GetLockEndHeight() uint64 {
+func (x *CPLQStake) GetLockEndHeight() uint64 {
 	if x != nil {
 		return x.LockEndHeight
 	}
 	return 0
 }
 
-// UnstakingCLIQ is a queued unstake awaiting maturity.
-type UnstakingCLIQ struct {
+// UnstakingCPLQ is a queued unstake awaiting maturity.
+type UnstakingCPLQ struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// id: per-address unstake id
 	Id uint64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	// address: the staker
 	Address []byte `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	// amount: CLIQ owed at maturity (uCLIQ)
+	// amount: CPLQ owed at maturity (uCPLQ)
 	Amount uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
 	// mature_height: block height at which the unstake matures
 	MatureHeight  uint64 `protobuf:"varint,4,opt,name=mature_height,json=matureHeight,proto3" json:"matureHeight"` // @gotags: json:"matureHeight"
@@ -2124,20 +2124,20 @@ type UnstakingCLIQ struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *UnstakingCLIQ) Reset() {
-	*x = UnstakingCLIQ{}
+func (x *UnstakingCPLQ) Reset() {
+	*x = UnstakingCPLQ{}
 	mi := &file_canoliq_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *UnstakingCLIQ) String() string {
+func (x *UnstakingCPLQ) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*UnstakingCLIQ) ProtoMessage() {}
+func (*UnstakingCPLQ) ProtoMessage() {}
 
-func (x *UnstakingCLIQ) ProtoReflect() protoreflect.Message {
+func (x *UnstakingCPLQ) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2149,33 +2149,33 @@ func (x *UnstakingCLIQ) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UnstakingCLIQ.ProtoReflect.Descriptor instead.
-func (*UnstakingCLIQ) Descriptor() ([]byte, []int) {
+// Deprecated: Use UnstakingCPLQ.ProtoReflect.Descriptor instead.
+func (*UnstakingCPLQ) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{21}
 }
 
-func (x *UnstakingCLIQ) GetId() uint64 {
+func (x *UnstakingCPLQ) GetId() uint64 {
 	if x != nil {
 		return x.Id
 	}
 	return 0
 }
 
-func (x *UnstakingCLIQ) GetAddress() []byte {
+func (x *UnstakingCPLQ) GetAddress() []byte {
 	if x != nil {
 		return x.Address
 	}
 	return nil
 }
 
-func (x *UnstakingCLIQ) GetAmount() uint64 {
+func (x *UnstakingCPLQ) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
 	}
 	return 0
 }
 
-func (x *UnstakingCLIQ) GetMatureHeight() uint64 {
+func (x *UnstakingCPLQ) GetMatureHeight() uint64 {
 	if x != nil {
 		return x.MatureHeight
 	}
@@ -2241,7 +2241,7 @@ type Proposal struct {
 	CreationHeight uint64 `protobuf:"varint,3,opt,name=creation_height,json=creationHeight,proto3" json:"creationHeight"` // @gotags: json:"creationHeight"
 	// expiry_height: voting closes at this height
 	ExpiryHeight uint64 `protobuf:"varint,4,opt,name=expiry_height,json=expiryHeight,proto3" json:"expiryHeight"` // @gotags: json:"expiryHeight"
-	// snapshot_total_staked: globals.total_staked_cliq at creation_height
+	// snapshot_total_staked: globals.total_staked_cplq at creation_height
 	SnapshotTotalStaked uint64 `protobuf:"varint,5,opt,name=snapshot_total_staked,json=snapshotTotalStaked,proto3" json:"snapshotTotalStaked"` // @gotags: json:"snapshotTotalStaked"
 	// payload: typed proposal payload
 	Payload *anypb.Any `protobuf:"bytes,6,opt,name=payload,proto3" json:"payload,omitempty"`
@@ -2559,8 +2559,8 @@ type ProposalBuyback struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// cnpy_amount: CNPY drawn from canoliq/buyback/pool (clamped to available)
 	CnpyAmount uint64 `protobuf:"varint,1,opt,name=cnpy_amount,json=cnpyAmount,proto3" json:"cnpyAmount"` // @gotags: json:"cnpyAmount"
-	// price_micro_cnpy_per_cliq: price denominator. cliq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cliq
-	PriceMicroCnpyPerCliq uint64 `protobuf:"varint,2,opt,name=price_micro_cnpy_per_cliq,json=priceMicroCnpyPerCliq,proto3" json:"priceMicroCnpyPerCliq"` // @gotags: json:"priceMicroCnpyPerCliq"
+	// price_micro_cnpy_per_cplq: price denominator. cplq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cplq
+	PriceMicroCnpyPerCplq uint64 `protobuf:"varint,2,opt,name=price_micro_cnpy_per_cplq,json=priceMicroCnpyPerCplq,proto3" json:"priceMicroCnpyPerCplq"` // @gotags: json:"priceMicroCnpyPerCplq"
 	// mode: BURN or DISTRIBUTE_STAKERS
 	Mode          BuybackMode `protobuf:"varint,3,opt,name=mode,proto3,enum=types.BuybackMode" json:"mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2604,9 +2604,9 @@ func (x *ProposalBuyback) GetCnpyAmount() uint64 {
 	return 0
 }
 
-func (x *ProposalBuyback) GetPriceMicroCnpyPerCliq() uint64 {
+func (x *ProposalBuyback) GetPriceMicroCnpyPerCplq() uint64 {
 	if x != nil {
-		return x.PriceMicroCnpyPerCliq
+		return x.PriceMicroCnpyPerCplq
 	}
 	return 0
 }
@@ -2623,9 +2623,9 @@ type ProposalTreasurySpend struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// recipient: 20-byte target address
 	Recipient []byte `protobuf:"bytes,1,opt,name=recipient,proto3" json:"recipient,omitempty"`
-	// amount: CNPY or CLIQ to send
+	// amount: CNPY or CPLQ to send
 	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
-	// denomination: CNPY (sourced from treasury/canoliq) or CLIQ (treasury/cliq)
+	// denomination: CNPY (sourced from treasury/canoliq) or CPLQ (treasury/cplq)
 	Denomination  SpendDenomination `protobuf:"varint,3,opt,name=denomination,proto3,enum=types.SpendDenomination" json:"denomination,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2851,8 +2851,8 @@ type BuybackOrder struct {
 	ProposalId uint64 `protobuf:"varint,1,opt,name=proposal_id,json=proposalId,proto3" json:"proposalId"` // @gotags: json:"proposalId"
 	// cnpy_drawn: CNPY actually drained (≤ payload.cnpy_amount)
 	CnpyDrawn uint64 `protobuf:"varint,2,opt,name=cnpy_drawn,json=cnpyDrawn,proto3" json:"cnpyDrawn"` // @gotags: json:"cnpyDrawn"
-	// cliq_acquired: CLIQ moved out of treasury_cliq
-	CliqAcquired uint64 `protobuf:"varint,3,opt,name=cliq_acquired,json=cliqAcquired,proto3" json:"cliqAcquired"` // @gotags: json:"cliqAcquired"
+	// cplq_acquired: CPLQ moved out of treasury_cplq
+	CplqAcquired uint64 `protobuf:"varint,3,opt,name=cplq_acquired,json=cplqAcquired,proto3" json:"cplqAcquired"` // @gotags: json:"cplqAcquired"
 	// mode: BURN or DISTRIBUTE_STAKERS (mirrors proposal payload)
 	Mode BuybackMode `protobuf:"varint,4,opt,name=mode,proto3,enum=types.BuybackMode" json:"mode,omitempty"`
 	// executed: true once the buyback has been applied
@@ -2909,9 +2909,9 @@ func (x *BuybackOrder) GetCnpyDrawn() uint64 {
 	return 0
 }
 
-func (x *BuybackOrder) GetCliqAcquired() uint64 {
+func (x *BuybackOrder) GetCplqAcquired() uint64 {
 	if x != nil {
-		return x.CliqAcquired
+		return x.CplqAcquired
 	}
 	return 0
 }
@@ -3101,30 +3101,30 @@ func (x *MultisigApproval) GetHeight() uint64 {
 	return 0
 }
 
-// CLIQStakeIndex enumerates active CLIQ staker addresses so buyback
+// CPLQStakeIndex enumerates active CPLQ staker addresses so buyback
 // DISTRIBUTE_STAKERS can iterate without a state-range scan.
-type CLIQStakeIndex struct {
+type CPLQStakeIndex struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// addresses: 20-byte staker addresses with non-zero CLIQStake.amount
+	// addresses: 20-byte staker addresses with non-zero CPLQStake.amount
 	Addresses     [][]byte `protobuf:"bytes,1,rep,name=addresses,proto3" json:"addresses,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CLIQStakeIndex) Reset() {
-	*x = CLIQStakeIndex{}
+func (x *CPLQStakeIndex) Reset() {
+	*x = CPLQStakeIndex{}
 	mi := &file_canoliq_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CLIQStakeIndex) String() string {
+func (x *CPLQStakeIndex) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CLIQStakeIndex) ProtoMessage() {}
+func (*CPLQStakeIndex) ProtoMessage() {}
 
-func (x *CLIQStakeIndex) ProtoReflect() protoreflect.Message {
+func (x *CPLQStakeIndex) ProtoReflect() protoreflect.Message {
 	mi := &file_canoliq_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3136,12 +3136,12 @@ func (x *CLIQStakeIndex) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CLIQStakeIndex.ProtoReflect.Descriptor instead.
-func (*CLIQStakeIndex) Descriptor() ([]byte, []int) {
+// Deprecated: Use CPLQStakeIndex.ProtoReflect.Descriptor instead.
+func (*CPLQStakeIndex) Descriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{35}
 }
 
-func (x *CLIQStakeIndex) GetAddresses() [][]byte {
+func (x *CPLQStakeIndex) GetAddresses() [][]byte {
 	if x != nil {
 		return x.Addresses
 	}
@@ -3334,23 +3334,23 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x1dMessageCanoliqClaimRedemption\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12#\n" +
 	"\rredemption_id\x18\x02 \x01(\x04R\fredemptionId\"o\n" +
-	"\x13MessageCLIQTransfer\x12!\n" +
+	"\x13MessageCPLQTransfer\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
 	"\n" +
 	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\x04R\x06amount\";\n" +
-	"\x16MessageCLIQClaimVested\x12!\n" +
+	"\x16MessageCPLQClaimVested\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\"\xe7\a\n" +
 	"\x0eCanoliqGlobals\x12,\n" +
 	"\x12total_ccnpy_supply\x18\x01 \x01(\x04R\x10totalCcnpySupply\x12*\n" +
 	"\x11total_pooled_cnpy\x18\x02 \x01(\x04R\x0ftotalPooledCnpy\x126\n" +
 	"\x17pending_redemption_cnpy\x18\x03 \x01(\x04R\x15pendingRedemptionCnpy\x12;\n" +
 	"\x1alast_processed_reward_pool\x18\x04 \x01(\x04R\x17lastProcessedRewardPool\x12*\n" +
-	"\x11cliq_total_supply\x18\x05 \x01(\x04R\x0fcliqTotalSupply\x126\n" +
-	"\x17cliq_circulating_supply\x18\x06 \x01(\x04R\x15cliqCirculatingSupply\x12,\n" +
+	"\x11cplq_total_supply\x18\x05 \x01(\x04R\x0fcplqTotalSupply\x126\n" +
+	"\x17cplq_circulating_supply\x18\x06 \x01(\x04R\x15cplqCirculatingSupply\x12,\n" +
 	"\x12next_redemption_id\x18\a \x01(\x04R\x10nextRedemptionId\x12)\n" +
 	"\x10genesis_complete\x18\b \x01(\bR\x0fgenesisComplete\x12*\n" +
-	"\x11total_staked_cliq\x18\t \x01(\x04R\x0ftotalStakedCliq\x12(\n" +
+	"\x11total_staked_cplq\x18\t \x01(\x04R\x0ftotalStakedCplq\x12(\n" +
 	"\x10next_proposal_id\x18\n" +
 	" \x01(\x04R\x0enextProposalId\x12&\n" +
 	"\x0fnext_buyback_id\x18\v \x01(\x04R\rnextBuybackId\x12\"\n" +
@@ -3396,7 +3396,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\n" +
 	"redeem_fee\x18\a \x01(\x04R\tredeemFee\x12\x1b\n" +
 	"\tclaim_fee\x18\b \x01(\x04R\bclaimFee\x12*\n" +
-	"\x11cliq_transfer_fee\x18\t \x01(\x04R\x0fcliqTransferFee\x12#\n" +
+	"\x11cplq_transfer_fee\x18\t \x01(\x04R\x0fcplqTransferFee\x12#\n" +
 	"\rinsurance_bps\x18\n" +
 	" \x01(\x04R\finsuranceBps\x12-\n" +
 	"\x12treasury_threshold\x18\v \x01(\x04R\x11treasuryThreshold\x12)\n" +
@@ -3407,7 +3407,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"quorum_bps\x18\x0f \x01(\x04R\tquorumBps\x12,\n" +
 	"\x12pass_threshold_bps\x18\x10 \x01(\x04R\x10passThresholdBps\x12'\n" +
 	"\x0ftimelock_blocks\x18\x11 \x01(\x04R\x0etimelockBlocks\x122\n" +
-	"\x15cliq_unstaking_blocks\x18\x12 \x01(\x04R\x13cliqUnstakingBlocks\x12!\n" +
+	"\x15cplq_unstaking_blocks\x18\x12 \x01(\x04R\x13cplqUnstakingBlocks\x12!\n" +
 	"\fproposal_fee\x18\x13 \x01(\x04R\vproposalFee\x12\x19\n" +
 	"\bvote_fee\x18\x14 \x01(\x04R\avoteFee\x12\x1b\n" +
 	"\tstake_fee\x18\x15 \x01(\x04R\bstakeFee\x120\n" +
@@ -3432,22 +3432,22 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x14voting_period_blocks\x18\x05 \x01(\x04R\x12votingPeriodBlocks\"1\n" +
 	"\fVestingIndex\x12!\n" +
 	"\fschedule_ids\x18\x01 \x03(\x04R\vscheduleIds\"{\n" +
-	"\x10MessageCLIQStake\x12!\n" +
+	"\x10MessageCPLQStake\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12,\n" +
 	"\tlock_tier\x18\x03 \x01(\x0e2\x0f.types.LockTierR\blockTier\"O\n" +
-	"\x12MessageCLIQUnstake\x12!\n" +
+	"\x12MessageCPLQUnstake\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"[\n" +
-	"\x17MessageCLIQClaimUnstake\x12!\n" +
+	"\x17MessageCPLQClaimUnstake\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
 	"\n" +
 	"unstake_id\x18\x02 \x01(\x04R\tunstakeId\"\x90\x01\n" +
-	"\x19MessageCLIQProposalCreate\x12!\n" +
+	"\x19MessageCPLQProposalCreate\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12.\n" +
 	"\apayload\x18\x02 \x01(\v2\x14.google.protobuf.AnyR\apayload\x12 \n" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\"\x80\x01\n" +
-	"\x0fMessageCLIQVote\x12!\n" +
+	"\x0fMessageCPLQVote\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1f\n" +
 	"\vproposal_id\x18\x02 \x01(\x04R\n" +
 	"proposalId\x12)\n" +
@@ -3463,13 +3463,13 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x16MessageMultisigApprove\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x19\n" +
 	"\bspend_id\x18\x02 \x01(\x04R\aspendId\"\xbd\x01\n" +
-	"\tCLIQStake\x12\x18\n" +
+	"\tCPLQStake\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12(\n" +
 	"\x10staked_at_height\x18\x03 \x01(\x04R\x0estakedAtHeight\x12,\n" +
 	"\tlock_tier\x18\x04 \x01(\x0e2\x0f.types.LockTierR\blockTier\x12&\n" +
 	"\x0flock_end_height\x18\x05 \x01(\x04R\rlockEndHeight\"v\n" +
-	"\rUnstakingCLIQ\x12\x0e\n" +
+	"\rUnstakingCPLQ\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\fR\aaddress\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\x04R\x06amount\x12#\n" +
@@ -3506,7 +3506,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x0fProposalBuyback\x12\x1f\n" +
 	"\vcnpy_amount\x18\x01 \x01(\x04R\n" +
 	"cnpyAmount\x128\n" +
-	"\x19price_micro_cnpy_per_cliq\x18\x02 \x01(\x04R\x15priceMicroCnpyPerCliq\x12&\n" +
+	"\x19price_micro_cnpy_per_cplq\x18\x02 \x01(\x04R\x15priceMicroCnpyPerCplq\x12&\n" +
 	"\x04mode\x18\x03 \x01(\x0e2\x12.types.BuybackModeR\x04mode\"\x8b\x01\n" +
 	"\x15ProposalTreasurySpend\x12\x1c\n" +
 	"\trecipient\x18\x01 \x01(\fR\trecipient\x12\x16\n" +
@@ -3525,7 +3525,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"proposalId\x12\x1d\n" +
 	"\n" +
 	"cnpy_drawn\x18\x02 \x01(\x04R\tcnpyDrawn\x12#\n" +
-	"\rcliq_acquired\x18\x03 \x01(\x04R\fcliqAcquired\x12&\n" +
+	"\rcplq_acquired\x18\x03 \x01(\x04R\fcplqAcquired\x12&\n" +
 	"\x04mode\x18\x04 \x01(\x0e2\x12.types.BuybackModeR\x04mode\x12\x1a\n" +
 	"\bexecuted\x18\x05 \x01(\bR\bexecuted\x12,\n" +
 	"\x12executed_at_height\x18\x06 \x01(\x04R\x10executedAtHeight\x120\n" +
@@ -3542,7 +3542,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\bspend_id\x18\x01 \x01(\x04R\aspendId\x12\x16\n" +
 	"\x06signer\x18\x02 \x01(\fR\x06signer\x12\x16\n" +
 	"\x06height\x18\x03 \x01(\x04R\x06height\".\n" +
-	"\x0eCLIQStakeIndex\x12\x1c\n" +
+	"\x0eCPLQStakeIndex\x12\x1c\n" +
 	"\taddresses\x18\x01 \x03(\fR\taddresses\"H\n" +
 	"\x16ValidatorRegistryEntry\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x14\n" +
@@ -3591,7 +3591,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\n" +
 	"SPEND_CNPY\x10\x01\x12\x0e\n" +
 	"\n" +
-	"SPEND_CLIQ\x10\x02B.Z,github.com/canopy-network/go-plugin/contractb\x06proto3"
+	"SPEND_CPLQ\x10\x02B.Z,github.com/canopy-network/go-plugin/contractb\x06proto3"
 
 var (
 	file_canoliq_proto_rawDescOnce sync.Once
@@ -3617,8 +3617,8 @@ var file_canoliq_proto_goTypes = []any{
 	(*MessageCanoliqDeposit)(nil),         // 6: types.MessageCanoliqDeposit
 	(*MessageCanoliqRedeem)(nil),          // 7: types.MessageCanoliqRedeem
 	(*MessageCanoliqClaimRedemption)(nil), // 8: types.MessageCanoliqClaimRedemption
-	(*MessageCLIQTransfer)(nil),           // 9: types.MessageCLIQTransfer
-	(*MessageCLIQClaimVested)(nil),        // 10: types.MessageCLIQClaimVested
+	(*MessageCPLQTransfer)(nil),           // 9: types.MessageCPLQTransfer
+	(*MessageCPLQClaimVested)(nil),        // 10: types.MessageCPLQClaimVested
 	(*CanoliqGlobals)(nil),                // 11: types.CanoliqGlobals
 	(*Redemption)(nil),                    // 12: types.Redemption
 	(*RedemptionIndex)(nil),               // 13: types.RedemptionIndex
@@ -3626,16 +3626,16 @@ var file_canoliq_proto_goTypes = []any{
 	(*CanoliqParams)(nil),                 // 15: types.CanoliqParams
 	(*GovernanceTier)(nil),                // 16: types.GovernanceTier
 	(*VestingIndex)(nil),                  // 17: types.VestingIndex
-	(*MessageCLIQStake)(nil),              // 18: types.MessageCLIQStake
-	(*MessageCLIQUnstake)(nil),            // 19: types.MessageCLIQUnstake
-	(*MessageCLIQClaimUnstake)(nil),       // 20: types.MessageCLIQClaimUnstake
-	(*MessageCLIQProposalCreate)(nil),     // 21: types.MessageCLIQProposalCreate
-	(*MessageCLIQVote)(nil),               // 22: types.MessageCLIQVote
+	(*MessageCPLQStake)(nil),              // 18: types.MessageCPLQStake
+	(*MessageCPLQUnstake)(nil),            // 19: types.MessageCPLQUnstake
+	(*MessageCPLQClaimUnstake)(nil),       // 20: types.MessageCPLQClaimUnstake
+	(*MessageCPLQProposalCreate)(nil),     // 21: types.MessageCPLQProposalCreate
+	(*MessageCPLQVote)(nil),               // 22: types.MessageCPLQVote
 	(*MessageBuybackExecute)(nil),         // 23: types.MessageBuybackExecute
 	(*MessageDAOTreasurySpend)(nil),       // 24: types.MessageDAOTreasurySpend
 	(*MessageMultisigApprove)(nil),        // 25: types.MessageMultisigApprove
-	(*CLIQStake)(nil),                     // 26: types.CLIQStake
-	(*UnstakingCLIQ)(nil),                 // 27: types.UnstakingCLIQ
+	(*CPLQStake)(nil),                     // 26: types.CPLQStake
+	(*UnstakingCPLQ)(nil),                 // 27: types.UnstakingCPLQ
 	(*UnstakingIndex)(nil),                // 28: types.UnstakingIndex
 	(*Proposal)(nil),                      // 29: types.Proposal
 	(*ProposalIndex)(nil),                 // 30: types.ProposalIndex
@@ -3649,7 +3649,7 @@ var file_canoliq_proto_goTypes = []any{
 	(*BuybackOrder)(nil),                  // 38: types.BuybackOrder
 	(*TreasurySpend)(nil),                 // 39: types.TreasurySpend
 	(*MultisigApproval)(nil),              // 40: types.MultisigApproval
-	(*CLIQStakeIndex)(nil),                // 41: types.CLIQStakeIndex
+	(*CPLQStakeIndex)(nil),                // 41: types.CPLQStakeIndex
 	(*ValidatorRegistryEntry)(nil),        // 42: types.ValidatorRegistryEntry
 	(*ValidatorRegistry)(nil),             // 43: types.ValidatorRegistry
 	(*AlertState)(nil),                    // 44: types.AlertState
@@ -3658,10 +3658,10 @@ var file_canoliq_proto_goTypes = []any{
 var file_canoliq_proto_depIdxs = []int32{
 	16, // 0: types.CanoliqParams.governance:type_name -> types.GovernanceTier
 	0,  // 1: types.GovernanceTier.action:type_name -> types.ActionType
-	1,  // 2: types.MessageCLIQStake.lock_tier:type_name -> types.LockTier
-	45, // 3: types.MessageCLIQProposalCreate.payload:type_name -> google.protobuf.Any
-	2,  // 4: types.MessageCLIQVote.choice:type_name -> types.VoteChoice
-	1,  // 5: types.CLIQStake.lock_tier:type_name -> types.LockTier
+	1,  // 2: types.MessageCPLQStake.lock_tier:type_name -> types.LockTier
+	45, // 3: types.MessageCPLQProposalCreate.payload:type_name -> google.protobuf.Any
+	2,  // 4: types.MessageCPLQVote.choice:type_name -> types.VoteChoice
+	1,  // 5: types.CPLQStake.lock_tier:type_name -> types.LockTier
 	45, // 6: types.Proposal.payload:type_name -> google.protobuf.Any
 	3,  // 7: types.Proposal.status:type_name -> types.ProposalStatus
 	0,  // 8: types.Proposal.action_type:type_name -> types.ActionType

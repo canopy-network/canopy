@@ -28,13 +28,13 @@ var CanoliqConfig = &contract.PluginConfig{
 		"canoliq_deposit",
 		"canoliq_redeem",
 		"canoliq_claim_redemption",
-		"cliq_transfer",
-		"cliq_claim_vested",
-		"cliq_stake",
-		"cliq_unstake",
-		"cliq_claim_unstake",
-		"cliq_proposal_create",
-		"cliq_vote",
+		"cplq_transfer",
+		"cplq_claim_vested",
+		"cplq_stake",
+		"cplq_unstake",
+		"cplq_claim_unstake",
+		"cplq_proposal_create",
+		"cplq_vote",
 		"buyback_execute",
 		"dao_treasury_spend",
 		"multisig_approve",
@@ -44,13 +44,13 @@ var CanoliqConfig = &contract.PluginConfig{
 		"type.googleapis.com/types.MessageCanoliqDeposit",
 		"type.googleapis.com/types.MessageCanoliqRedeem",
 		"type.googleapis.com/types.MessageCanoliqClaimRedemption",
-		"type.googleapis.com/types.MessageCLIQTransfer",
-		"type.googleapis.com/types.MessageCLIQClaimVested",
-		"type.googleapis.com/types.MessageCLIQStake",
-		"type.googleapis.com/types.MessageCLIQUnstake",
-		"type.googleapis.com/types.MessageCLIQClaimUnstake",
-		"type.googleapis.com/types.MessageCLIQProposalCreate",
-		"type.googleapis.com/types.MessageCLIQVote",
+		"type.googleapis.com/types.MessageCPLQTransfer",
+		"type.googleapis.com/types.MessageCPLQClaimVested",
+		"type.googleapis.com/types.MessageCPLQStake",
+		"type.googleapis.com/types.MessageCPLQUnstake",
+		"type.googleapis.com/types.MessageCPLQClaimUnstake",
+		"type.googleapis.com/types.MessageCPLQProposalCreate",
+		"type.googleapis.com/types.MessageCPLQVote",
 		"type.googleapis.com/types.MessageBuybackExecute",
 		"type.googleapis.com/types.MessageDAOTreasurySpend",
 		"type.googleapis.com/types.MessageMultisigApprove",
@@ -198,7 +198,7 @@ func (c Config) LogProfileBanner() {
 // SafetyCheck validates a non-localnet profile against the genesis file's
 // recipient addresses. The single-address localnet placeholder
 // (851e90…d123) being routed 100% of every bucket is safe on localnet
-// (it's just a test key), but disastrous on testnet/mainnet — every CLIQ
+// (it's just a test key), but disastrous on testnet/mainnet — every CPLQ
 // bucket would mint to one external party. This check refuses to proceed
 // when any bucket recipient matches the placeholder under a non-localnet
 // profile.
@@ -248,7 +248,7 @@ func DefaultParams() *contract.CanoliqParams {
 		DepositFee:         10_000,
 		RedeemFee:          10_000,
 		ClaimFee:           10_000,
-		CliqTransferFee:    10_000,
+		CplqTransferFee:    10_000,
 		InsuranceBps:       500,         // 5% of treasury slice — matches Tokenomics v1.1 §8 "5% of DAO treasury inflow" reading
 		InsuranceTargetBps: 500,         // T4: reserve target = 5% of peak TVL (WP §9.2); skim auto-off at target
 		// T5 autonomy-graduation thresholds (WP §10). TVL is a flat uCNPY
@@ -262,15 +262,15 @@ func DefaultParams() *contract.CanoliqParams {
 		MultisigSigners:    nil,         // populated at genesis (genesis.json) or via param-change vote
 		MultisigThreshold:  3,
 		VotingPeriodBlocks: 100_800, // ~7d at 6s blocks
-		QuorumBps:          3300,    // 33% of snapshot staked CLIQ
+		QuorumBps:          3300,    // 33% of snapshot staked CPLQ
 		PassThresholdBps:   5001,    // just-above 50% of (yes+no)
 		TimelockBlocks:     28_800,  // ~48h at 6s blocks
-		CliqUnstakingBlocks: 100_800, // ~7d at 6s — must be ≥ voting period
+		CplqUnstakingBlocks: 100_800, // ~7d at 6s — must be ≥ voting period
 		ProposalFee:        10_000,
 		VoteFee:            10_000,
 		StakeFee:           10_000,
 		MultisigApproveFee: 10_000,
-		MinStakeToPropose:  1_000_000, // 1 CLIQ minimum to deter spam
+		MinStakeToPropose:  1_000_000, // 1 CPLQ minimum to deter spam
 		Governance:         defaultGovernanceTiers(),
 	}
 }
@@ -327,7 +327,7 @@ func ValidateParams(p *contract.CanoliqParams) *contract.PluginError {
 	// Unstaking window must be ≥ voting period so a voter cannot stake → vote
 	// → unstake → unwind their position before tally. Skip the check if either
 	// is unset (zero) so DefaultParams loaded by older state still validates.
-	if p.VotingPeriodBlocks > 0 && p.CliqUnstakingBlocks > 0 && p.CliqUnstakingBlocks < p.VotingPeriodBlocks {
+	if p.VotingPeriodBlocks > 0 && p.CplqUnstakingBlocks > 0 && p.CplqUnstakingBlocks < p.VotingPeriodBlocks {
 		return ErrInvalidParams()
 	}
 	// Every governance tier must carry a known action and in-range bps. An

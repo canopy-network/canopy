@@ -88,7 +88,7 @@
     }
   ],
   "params": {
-    "_comment": "Multisig signers and thresholds for testnet (supplied 2026-06-18). 3-of-5; treasuryThreshold lowered to 50_000_000 uCLIQ so the multisig branch is actually exercised on modest testnet spends.",
+    "_comment": "Multisig signers and thresholds for testnet (supplied 2026-06-18). 3-of-5; treasuryThreshold lowered to 50_000_000 uCPLQ so the multisig branch is actually exercised on modest testnet spends.",
     "multisigSigners": [
       "1b6454361f65ac5cc13c6b775692ba3d64cbcb84",
       "2ea35a0ef4ef34c58c176ae0ad6b6a4fbf33346f",

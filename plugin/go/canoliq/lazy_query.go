@@ -77,7 +77,7 @@ type lazyResult struct {
 }
 
 // AccountView is the composite per-address response. CNPY comes from
-// the core Account record; cCNPY/CLIQ are scalar plugin keys; CLIQStake
+// the core Account record; cCNPY/CPLQ are scalar plugin keys; CPLQStake
 // and validator-incentive are direct lookups; vesting / pending
 // redemptions / pending unstakes are enumerated via per-address
 // indexes maintained by their respective Deliver handlers.
@@ -85,12 +85,12 @@ type AccountView struct {
 	Address            string                    `json:"address"`
 	CNPY               uint64                    `json:"cnpy"`
 	CCNPY              uint64                    `json:"ccnpy"`
-	CLIQLiquid         uint64                    `json:"cliqLiquid"`
-	CLIQStake          *contract.CLIQStake       `json:"cliqStake,omitempty"`
+	CPLQLiquid         uint64                    `json:"cplqLiquid"`
+	CPLQStake          *contract.CPLQStake       `json:"cplqStake,omitempty"`
 	ValidatorIncentive uint64                    `json:"validatorIncentive"`
 	Vestings           []*VestingView            `json:"vestings,omitempty"`
 	Redemptions        []*contract.Redemption    `json:"redemptions,omitempty"`
-	Unstakes           []*contract.UnstakingCLIQ `json:"unstakes,omitempty"`
+	Unstakes           []*contract.UnstakingCPLQ `json:"unstakes,omitempty"`
 }
 
 // VestingView is one schedule annotated with the cumulative unlocked
@@ -210,8 +210,8 @@ func (c *Canoliq) fulfillLazy(q *lazyQuery) {
 func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginError) {
 	cnpyKey := contract.KeyForAccount(addr)
 	ccnpyKey := KeyForCCNPYBalance(addr)
-	cliqBalKey := KeyForCLIQBalance(addr)
-	stakeKey := KeyForCLIQStake(addr)
+	cplqBalKey := KeyForCPLQBalance(addr)
+	stakeKey := KeyForCPLQStake(addr)
 	valIncentKey := KeyForValidatorIncentives(addr)
 	vestIdxKey := KeyForVestingIndex(addr)
 	redemIdxKey := KeyForRedemptionIndex(addr)
@@ -221,7 +221,7 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
 			{QueryId: ccQ, Key: ccnpyKey},
-			{QueryId: lcQ, Key: cliqBalKey},
+			{QueryId: lcQ, Key: cplqBalKey},
 			{QueryId: sQ, Key: stakeKey},
 			{QueryId: viQ, Key: valIncentKey},
 			{QueryId: vQ, Key: vestIdxKey},
@@ -252,14 +252,14 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 		case ccQ:
 			view.CCNPY = DecodeUint64(raw)
 		case lcQ:
-			view.CLIQLiquid = DecodeUint64(raw)
+			view.CPLQLiquid = DecodeUint64(raw)
 		case sQ:
-			stake := new(contract.CLIQStake)
+			stake := new(contract.CPLQStake)
 			if e := contract.Unmarshal(raw, stake); e != nil {
 				return nil, e
 			}
 			if stake.Address != nil {
-				view.CLIQStake = stake
+				view.CPLQStake = stake
 			}
 		case viQ:
 			view.ValidatorIncentive = DecodeUint64(raw)
@@ -343,14 +343,14 @@ func (c *Canoliq) readRedemptions(addr []byte, ids []uint64) ([]*contract.Redemp
 	return out, nil
 }
 
-// readUnstakings batch-reads UnstakingCLIQ records for the given ids.
-func (c *Canoliq) readUnstakings(addr []byte, ids []uint64) ([]*contract.UnstakingCLIQ, *contract.PluginError) {
+// readUnstakings batch-reads UnstakingCPLQ records for the given ids.
+func (c *Canoliq) readUnstakings(addr []byte, ids []uint64) ([]*contract.UnstakingCPLQ, *contract.PluginError) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	keys := make([]*contract.PluginKeyRead, 0, len(ids))
 	for _, id := range ids {
-		keys = append(keys, &contract.PluginKeyRead{QueryId: rand.Uint64(), Key: KeyForCLIQUnstaking(addr, id)})
+		keys = append(keys, &contract.PluginKeyRead{QueryId: rand.Uint64(), Key: KeyForCPLQUnstaking(addr, id)})
 	}
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
 	if err != nil {
@@ -359,12 +359,12 @@ func (c *Canoliq) readUnstakings(addr []byte, ids []uint64) ([]*contract.Unstaki
 	if resp.Error != nil {
 		return nil, resp.Error
 	}
-	out := make([]*contract.UnstakingCLIQ, 0, len(ids))
+	out := make([]*contract.UnstakingCPLQ, 0, len(ids))
 	for _, r := range resp.Results {
 		if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 			continue
 		}
-		u := new(contract.UnstakingCLIQ)
+		u := new(contract.UnstakingCPLQ)
 		if e := contract.Unmarshal(r.Entries[0].Value, u); e != nil {
 			return nil, e
 		}

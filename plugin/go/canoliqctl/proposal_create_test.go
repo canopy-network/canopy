@@ -53,7 +53,7 @@ func TestParseSpendDenomination(t *testing.T) {
 	}{
 		{"cnpy", contract.SpendDenomination_SPEND_CNPY},
 		{"CNPY", contract.SpendDenomination_SPEND_CNPY},
-		{"cliq", contract.SpendDenomination_SPEND_CLIQ},
+		{"cplq", contract.SpendDenomination_SPEND_CPLQ},
 	} {
 		got, err := parseSpendDenomination(tc.in)
 		if err != nil {
@@ -130,7 +130,7 @@ func TestParamsJSONToContract(t *testing.T) {
 		QuorumBps:           3300,
 		PassThresholdBps:    5001,
 		TimelockBlocks:      28_800,
-		CliqUnstakingBlocks: 100_800,
+		CplqUnstakingBlocks: 100_800,
 		MinStakeToPropose:   1_000_000,
 	}
 	p, err := raw.toContract()
@@ -161,7 +161,7 @@ func TestParamsJSONRejectsBadHex(t *testing.T) {
 func TestLoadParamsFromFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "params.json")
-	body := `{"feeBps":800,"userRebateBps":4000,"treasuryBps":3000,"validatorBps":1500,"buybackBps":1500,"depositFee":10000,"insuranceBps":1500,"treasuryThreshold":1000000000,"multisigSigners":[],"multisigThreshold":3,"votingPeriodBlocks":100800,"quorumBps":3300,"passThresholdBps":5001,"timelockBlocks":28800,"cliqUnstakingBlocks":100800,"proposalFee":10000,"voteFee":10000,"stakeFee":10000,"multisigApproveFee":10000,"minStakeToPropose":1000000}`
+	body := `{"feeBps":800,"userRebateBps":4000,"treasuryBps":3000,"validatorBps":1500,"buybackBps":1500,"depositFee":10000,"insuranceBps":1500,"treasuryThreshold":1000000000,"multisigSigners":[],"multisigThreshold":3,"votingPeriodBlocks":100800,"quorumBps":3300,"passThresholdBps":5001,"timelockBlocks":28800,"cplqUnstakingBlocks":100800,"proposalFee":10000,"voteFee":10000,"stakeFee":10000,"multisigApproveFee":10000,"minStakeToPropose":1000000}`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestProposalPayloadAnyRoundTrip(t *testing.T) {
 			build: func() proto.Message {
 				return &contract.ProposalBuyback{
 					CnpyAmount:            500_000,
-					PriceMicroCnpyPerCliq: 1_500_000,
+					PriceMicroCnpyPerCplq: 1_500_000,
 					Mode:                  contract.BuybackMode_BUYBACK_BURN,
 				}
 			},
@@ -238,16 +238,16 @@ func TestProposalPayloadAnyRoundTrip(t *testing.T) {
 }
 
 func TestProposalCreateOuterMessageMarshals(t *testing.T) {
-	// The outer MessageCLIQProposalCreate is marshaled by SubmitPluginTx;
+	// The outer MessageCPLQProposalCreate is marshaled by SubmitPluginTx;
 	// confirm it preserves payload + description across a marshal round
 	// trip so we don't accidentally drop fields between proto versions.
 	payload, err := anypb.New(&contract.ProposalBuyback{
-		CnpyAmount: 1, PriceMicroCnpyPerCliq: 1, Mode: contract.BuybackMode_BUYBACK_BURN,
+		CnpyAmount: 1, PriceMicroCnpyPerCplq: 1, Mode: contract.BuybackMode_BUYBACK_BURN,
 	})
 	if err != nil {
 		t.Fatalf("anypb.New: %v", err)
 	}
-	original := &contract.MessageCLIQProposalCreate{
+	original := &contract.MessageCPLQProposalCreate{
 		FromAddress: bytes.Repeat([]byte{0x01}, 20),
 		Payload:     payload,
 		Description: "test description",
@@ -256,7 +256,7 @@ func TestProposalCreateOuterMessageMarshals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	got := new(contract.MessageCLIQProposalCreate)
+	got := new(contract.MessageCPLQProposalCreate)
 	if err := proto.Unmarshal(bz, got); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
@@ -277,10 +277,10 @@ func TestParamsJSONShapeMatchesProto(t *testing.T) {
 	// round-trip; if a new field landed on the proto it shows up here.
 	src := &contract.CanoliqParams{
 		FeeBps: 1, UserRebateBps: 2, TreasuryBps: 3, ValidatorBps: 4, BuybackBps: 5,
-		DepositFee: 6, RedeemFee: 7, ClaimFee: 8, CliqTransferFee: 9,
+		DepositFee: 6, RedeemFee: 7, ClaimFee: 8, CplqTransferFee: 9,
 		InsuranceBps: 10, TreasuryThreshold: 11, MultisigThreshold: 12,
 		VotingPeriodBlocks: 13, QuorumBps: 14, PassThresholdBps: 15,
-		TimelockBlocks: 16, CliqUnstakingBlocks: 17, ProposalFee: 18,
+		TimelockBlocks: 16, CplqUnstakingBlocks: 17, ProposalFee: 18,
 		VoteFee: 19, StakeFee: 20, MultisigApproveFee: 21, MinStakeToPropose: 22,
 	}
 	bz, err := json.Marshal(src)

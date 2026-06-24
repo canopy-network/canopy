@@ -23,7 +23,7 @@ fee math against the v1.1 spec **on a live chain**:
 
 Findings & fixes:
 - The release plan's "param-change rejected at CheckTx" criterion was
-  **mis-specified**: `CheckMessageCLIQProposalCreate` is stateless and never
+  **mis-specified**: `CheckMessageCPLQProposalCreate` is stateless and never
   unpacks the param payload. The F4 fee bound (5%–20%) is enforced at
   `dispatchPassed` → `ValidateParams` when a proposal *passes*. Added a unit
   test (`TestValidateParamsFeeBpsBounds`) and corrected the plan.
@@ -72,18 +72,18 @@ Tokenomics §7 (per-action quorum / approval / timelock / voting period).
 ### T2 — Vote-escrow lock multipliers
 *Commit `a9fe6aad`.*
 
-Longer CLIQ locks grant higher voting weight + reward boost (Tokenomics §4.2:
+Longer CPLQ locks grant higher voting weight + reward boost (Tokenomics §4.2:
 1×–4× voting, +0/10/25/50/75% boost).
 
-- **Proto:** `LockTier` enum; `CLIQStake.lock_tier` + `lock_end_height`;
-  `MessageCLIQStake.lock_tier`.
+- **Proto:** `LockTier` enum; `CPLQStake.lock_tier` + `lock_end_height`;
+  `MessageCPLQStake.lock_tier`.
 - **Behaviour:** vote weight = raw stake × tier multiplier; buyback
   `DISTRIBUTE_STAKERS` applies the boost (remainder to largest LOCK_24M staker);
   locks only ever strengthen on re-stake; unstake gated until `lock_end_height`.
 - **Deviation (documented):** the reward boost applies only to the staker
   buyback-distribution path, **not** `distributeValidatorShare` — that path pays
-  the 15% slice to committee validators, not CLIQ stakers.
-- **CLI:** `cliq-stake --lock {none,3m,6m,12m,24m}`.
+  the 15% slice to committee validators, not CPLQ stakers.
+- **CLI:** `cplq-stake --lock {none,3m,6m,12m,24m}`.
 - **Tests:** `t2_voteescrow_test.go` (6).
 
 ### T3 — TVL self-cap

@@ -4,22 +4,22 @@ sidebar_label: Introduction
 
 # canoLiq Documentation
 
-canoLiq is a **liquid staking protocol** built as a Canopy Network plugin. It enables users to deposit CNPY, receive a yield-bearing receipt token (cCNPY), and earn staking rewards — while also participating in governance through CLIQ, a fixed-supply governance token.
+canoLiq is a **liquid staking protocol** built as a Canopy Network plugin. It enables users to deposit CNPY, receive a yield-bearing receipt token (cCNPY), and earn staking rewards — while also participating in governance through CPLQ, a fixed-supply governance token.
 
 :::tip New here?
 Start with [How It Works](./concepts/how-it-works.mdx) for a plain-language walkthrough, then
-[The Two Tokens](./concepts/two-tokens.mdx) to understand cCNPY vs CLIQ. The
+[The Two Tokens](./concepts/two-tokens.mdx) to understand cCNPY vs CPLQ. The
 [Glossary](./concepts/glossary.mdx) defines every term.
 :::
 
 ## Key Features
 
 - **Liquid Staking**: Deposit CNPY, mint cCNPY at the current exchange rate. cCNPY represents your share of the pooled CNPY backing.
-- **Reward Distribution**: A 12% protocol fee on staking rewards is split across users (40%), the canoLiq DAO treasury (30%), validators (15%), and CLIQ buyback (15%).
-- **CLIQ Governance Token**: A fixed supply of 100M CLIQ distributed at genesis with cliff + linear vesting schedules. CLIQ holders stake for governance weight.
+- **Reward Distribution**: A 12% protocol fee on staking rewards is split across users (40%), the canoLiq DAO treasury (30%), validators (15%), and CPLQ buyback (15%).
+- **CPLQ Governance Token**: A fixed supply of 100M CPLQ distributed at genesis with cliff + linear vesting schedules. CPLQ holders stake for governance weight.
 - **On-Chain Governance**: All protocol parameters are tunable through proposals — fee splits, buyback mechanics, multisig membership, and more.
-- **Buyback Mechanism**: The protocol can buy back and burn CLIQ or distribute acquired CLIQ to stakers, governed by DAO vote.
-- **Vote-Escrow**: Lock staked CLIQ for 3–24 months to multiply voting weight (up to 4×) and boost buyback rewards.
+- **Buyback Mechanism**: The protocol can buy back and burn CPLQ or distribute acquired CPLQ to stakers, governed by DAO vote.
+- **Vote-Escrow**: Lock staked CPLQ for 3–24 months to multiply voting weight (up to 4×) and boost buyback rewards.
 - **Tiered Governance**: Different decisions clear different bars — quorum, approval, and timelock scale with risk.
 - **Self-Monitoring**: A peak-TVL-targeted insurance reserve, autonomy-graduation metrics, and optional push-alert webhooks.
 
@@ -55,8 +55,8 @@ canoLiq runs as a **Go plugin** alongside the Canopy FSM (Finite State Machine).
 | Area | Status | What it covers |
 |------|--------|----------------|
 | **Liquid staking** | ✅ | Deposit/redeem, cCNPY minting, exchange-rate accrual |
-| **Tokenomics** | ✅ | 12% fee split (40/30/15/15), CLIQ genesis + vesting |
-| **Governance** | ✅ | CLIQ staking, proposals, voting, tally & execution |
+| **Tokenomics** | ✅ | 12% fee split (40/30/15/15), CPLQ genesis + vesting |
+| **Governance** | ✅ | CPLQ staking, proposals, voting, tally & execution |
 | **Tiered governance** | ✅ | Per-action quorum / approval / timelock / voting period |
 | **Vote-escrow** | ✅ | 3–24 month lock tiers, up to 4× voting + reward boost |
 | **Buyback** | ✅ | Burn or distribute-to-stakers, DAO-governed |

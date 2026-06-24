@@ -17,7 +17,7 @@ import (
 // HTTP handlers serve from this frozen value with no plugin↔FSM round-trip.
 //
 // Scope: every entity reachable from a singleton key or a plugin-maintained
-// index. Per-address records (Account, cCNPY/CLIQ balance, vesting, queued
+// index. Per-address records (Account, cCNPY/CPLQ balance, vesting, queued
 // redemptions, queued unstakes) are out of scope here — there is no
 // canoliq-side index that names every address that has ever had a balance,
 // so a snapshot cannot enumerate them. Per-address queries are deferred to
@@ -33,7 +33,7 @@ type Snapshot struct {
 	Params              *contract.CanoliqParams
 	CommitteePool       uint64
 	TreasuryCNPY        uint64
-	TreasuryCLIQ        uint64
+	TreasuryCPLQ        uint64
 	BuybackPool         uint64
 	InsurancePool       uint64
 	ValidatorIncentives map[string]uint64
@@ -43,7 +43,7 @@ type Snapshot struct {
 	PendingSpendIDs     []uint64
 	Spends              map[uint64]*contract.TreasurySpend
 	StakerAddresses     [][]byte
-	Stakers             map[string]*contract.CLIQStake
+	Stakers             map[string]*contract.CPLQStake
 	MultisigApprovals   map[uint64][]*contract.MultisigApproval
 }
 
@@ -58,7 +58,7 @@ func emptySnapshot() *Snapshot {
 		ValidatorRegistry:   &contract.ValidatorRegistry{},
 		Proposals:           map[uint64]*contract.Proposal{},
 		Spends:              map[uint64]*contract.TreasurySpend{},
-		Stakers:             map[string]*contract.CLIQStake{},
+		Stakers:             map[string]*contract.CPLQStake{},
 		MultisigApprovals:   map[uint64][]*contract.MultisigApproval{},
 	}
 }
@@ -98,7 +98,7 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		qParams
 		qPool
 		qTreasuryCNPY
-		qTreasuryCLIQ
+		qTreasuryCPLQ
 		qBuyback
 		qInsurance
 		qRegistry
@@ -111,13 +111,13 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		{QueryId: qParams, Key: KeyForParams()},
 		{QueryId: qPool, Key: contract.KeyForFeePool(c.Config.ChainId)},
 		{QueryId: qTreasuryCNPY, Key: KeyForTreasuryCNPY()},
-		{QueryId: qTreasuryCLIQ, Key: KeyForTreasuryCLIQ()},
+		{QueryId: qTreasuryCPLQ, Key: KeyForTreasuryCPLQ()},
 		{QueryId: qBuyback, Key: KeyForBuybackPool()},
 		{QueryId: qInsurance, Key: KeyForInsurancePool()},
 		{QueryId: qRegistry, Key: KeyForValidatorRegistry()},
 		{QueryId: qPropIdx, Key: KeyForProposalIndex()},
 		{QueryId: qSpendIdx, Key: KeyForSpendIndex()},
-		{QueryId: qStakeIdx, Key: KeyForCLIQStakeIndex()},
+		{QueryId: qStakeIdx, Key: KeyForCPLQStakeIndex()},
 	}
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
 	if err != nil {
@@ -158,8 +158,8 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 			snap.CommitteePool = pool.Amount
 		case qTreasuryCNPY:
 			snap.TreasuryCNPY = DecodeUint64(raw)
-		case qTreasuryCLIQ:
-			snap.TreasuryCLIQ = DecodeUint64(raw)
+		case qTreasuryCPLQ:
+			snap.TreasuryCPLQ = DecodeUint64(raw)
 		case qBuyback:
 			snap.BuybackPool = DecodeUint64(raw)
 		case qInsurance:
@@ -195,7 +195,7 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		snap.PendingSpendIDs = idx.Ids
 	}
 	if len(stakeIdxBz) > 0 {
-		idx := new(contract.CLIQStakeIndex)
+		idx := new(contract.CPLQStakeIndex)
 		if e := contract.Unmarshal(stakeIdxBz, idx); e != nil {
 			return e
 		}
@@ -233,7 +233,7 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 	for _, addr := range snap.StakerAddresses {
 		q := rand.Uint64()
 		queryToStaker[q] = addr
-		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: KeyForCLIQStake(addr)})
+		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: KeyForCPLQStake(addr)})
 	}
 	queryToValIncent := map[uint64][]byte{}
 	for _, addr := range addrs {
@@ -274,7 +274,7 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 				continue
 			}
 			if addr, ok := queryToStaker[r.QueryId]; ok {
-				stake := new(contract.CLIQStake)
+				stake := new(contract.CPLQStake)
 				if e := contract.Unmarshal(raw, stake); e != nil {
 					return e
 				}

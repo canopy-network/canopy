@@ -14,8 +14,8 @@ import (
 	"github.com/canopy-network/go-plugin/contract"
 )
 
-// cmdProposalCreate dispatches MessageCLIQProposalCreate to one of three
-// payload sub-commands. The plugin's `MessageCLIQProposalCreate.Payload`
+// cmdProposalCreate dispatches MessageCPLQProposalCreate to one of three
+// payload sub-commands. The plugin's `MessageCPLQProposalCreate.Payload`
 // is a `google.protobuf.Any` resolved by TypeUrl in
 // governance.go::unwrapPayload, so each sub-command builds its
 // concrete payload, anypb.New-wraps it, and submits the same outer
@@ -24,8 +24,8 @@ import (
 // Usage:
 //
 //	canoliqctl proposal-create param-change    <nickname> <params-json-file> [--description ...]
-//	canoliqctl proposal-create buyback         <nickname> <cnpy-amount> <price-micro-cnpy-per-cliq> <burn|distribute> [--description ...]
-//	canoliqctl proposal-create treasury-spend  <nickname> <recipient-hex> <amount> <cnpy|cliq> [--description ...]
+//	canoliqctl proposal-create buyback         <nickname> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description ...]
+//	canoliqctl proposal-create treasury-spend  <nickname> <recipient-hex> <amount> <cnpy|cplq> [--description ...]
 func cmdProposalCreate(args []string, gf globalFlags) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: %s", commandUsages["proposal-create"])
@@ -53,8 +53,8 @@ func printProposalCreateHelp() error {
 	fmt.Println()
 	fmt.Println("subcommands:")
 	fmt.Println("  param-change    full-set CanoliqParams replacement (read from JSON file)")
-	fmt.Println("  buyback         CNPY → CLIQ buyback at a vote-set price (BURN or DISTRIBUTE_STAKERS)")
-	fmt.Println("  treasury-spend  authorize a transfer from treasury_canoliq (CNPY) or treasury_cliq (CLIQ)")
+	fmt.Println("  buyback         CNPY → CPLQ buyback at a vote-set price (BURN or DISTRIBUTE_STAKERS)")
+	fmt.Println("  treasury-spend  authorize a transfer from treasury_canoliq (CNPY) or treasury_cplq (CPLQ)")
 	fmt.Println("  validator-eject remove a validator from the committee registry (F12)")
 	fmt.Println("  emergency       security-critical fast-track action with optional param diff (F13)")
 	return nil
@@ -91,12 +91,12 @@ func cmdProposalParamChange(args []string, gf globalFlags) error {
 }
 
 // cmdProposalBuyback submits a ProposalBuyback authorizing a single
-// CNPY → CLIQ extraction at a vote-set price.
+// CNPY → CPLQ extraction at a vote-set price.
 //
-// price-micro-cnpy-per-cliq is "how many uCNPY = 1 CLIQ × 10^6"; the plugin
-// computes `cliq_acquired = cnpy_amount * 10^6 / price`.
+// price-micro-cnpy-per-cplq is "how many uCNPY = 1 CPLQ × 10^6"; the plugin
+// computes `cplq_acquired = cnpy_amount * 10^6 / price`.
 func cmdProposalBuyback(args []string, gf globalFlags) error {
-	usage := "proposal-create buyback <nickname> <cnpy-amount> <price-micro-cnpy-per-cliq> <burn|distribute> [--description \"…\"]"
+	usage := "proposal-create buyback <nickname> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 4 {
 		return fmt.Errorf("expected 4 positional args (usage: %s)", usage)
@@ -113,7 +113,7 @@ func cmdProposalBuyback(args []string, gf globalFlags) error {
 	if err != nil {
 		return err
 	}
-	price, err := parseUint(rest[2], "price-micro-cnpy-per-cliq")
+	price, err := parseUint(rest[2], "price-micro-cnpy-per-cplq")
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func cmdProposalBuyback(args []string, gf globalFlags) error {
 	}
 	payload, err := anypb.New(&contract.ProposalBuyback{
 		CnpyAmount:            cnpyAmount,
-		PriceMicroCnpyPerCliq: price,
+		PriceMicroCnpyPerCplq: price,
 		Mode:                  mode,
 	})
 	if err != nil {
@@ -136,11 +136,11 @@ func cmdProposalBuyback(args []string, gf globalFlags) error {
 }
 
 // cmdProposalTreasurySpend submits a ProposalTreasurySpend authorizing a
-// transfer from treasury_canoliq (CNPY) or treasury_cliq (CLIQ).
+// transfer from treasury_canoliq (CNPY) or treasury_cplq (CPLQ).
 // Above-threshold spends additionally require multisig + timelock — those
 // are enforced at execution, not at proposal create.
 func cmdProposalTreasurySpend(args []string, gf globalFlags) error {
-	usage := "proposal-create treasury-spend <nickname> <recipient-hex> <amount> <cnpy|cliq> [--description \"…\"]"
+	usage := "proposal-create treasury-spend <nickname> <recipient-hex> <amount> <cnpy|cplq> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 4 {
 		return fmt.Errorf("expected 4 positional args (usage: %s)", usage)
@@ -243,16 +243,16 @@ func cmdProposalEmergency(args []string, gf globalFlags) error {
 }
 
 // submitProposalCreate is the shared submit path: build the outer
-// MessageCLIQProposalCreate, sign, POST. The kind label is only used for
+// MessageCPLQProposalCreate, sign, POST. The kind label is only used for
 // the success log line.
 func submitProposalCreate(gf globalFlags, signer *internal.Key, from []byte,
 	payload *anypb.Any, description, kind string) error {
-	msg := &contract.MessageCLIQProposalCreate{
+	msg := &contract.MessageCPLQProposalCreate{
 		FromAddress: from,
 		Payload:     payload,
 		Description: description,
 	}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cliq_proposal_create", msg, txParams(gf))
+	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_proposal_create", msg, txParams(gf))
 	if err != nil {
 		return err
 	}
@@ -323,7 +323,7 @@ type paramsJSON struct {
 	DepositFee          uint64   `json:"depositFee"`
 	RedeemFee           uint64   `json:"redeemFee"`
 	ClaimFee            uint64   `json:"claimFee"`
-	CliqTransferFee     uint64   `json:"cliqTransferFee"`
+	CplqTransferFee     uint64   `json:"cplqTransferFee"`
 	InsuranceBps        uint64   `json:"insuranceBps"`
 	TreasuryThreshold   uint64   `json:"treasuryThreshold"`
 	MultisigSigners     []string `json:"multisigSigners"`
@@ -332,7 +332,7 @@ type paramsJSON struct {
 	QuorumBps           uint64   `json:"quorumBps"`
 	PassThresholdBps    uint64   `json:"passThresholdBps"`
 	TimelockBlocks      uint64   `json:"timelockBlocks"`
-	CliqUnstakingBlocks uint64   `json:"cliqUnstakingBlocks"`
+	CplqUnstakingBlocks uint64   `json:"cplqUnstakingBlocks"`
 	ProposalFee         uint64   `json:"proposalFee"`
 	VoteFee             uint64   `json:"voteFee"`
 	StakeFee            uint64   `json:"stakeFee"`
@@ -361,7 +361,7 @@ func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 		DepositFee:          p.DepositFee,
 		RedeemFee:           p.RedeemFee,
 		ClaimFee:            p.ClaimFee,
-		CliqTransferFee:     p.CliqTransferFee,
+		CplqTransferFee:     p.CplqTransferFee,
 		InsuranceBps:        p.InsuranceBps,
 		TreasuryThreshold:   p.TreasuryThreshold,
 		MultisigSigners:     signers,
@@ -370,7 +370,7 @@ func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 		QuorumBps:           p.QuorumBps,
 		PassThresholdBps:    p.PassThresholdBps,
 		TimelockBlocks:      p.TimelockBlocks,
-		CliqUnstakingBlocks: p.CliqUnstakingBlocks,
+		CplqUnstakingBlocks: p.CplqUnstakingBlocks,
 		ProposalFee:         p.ProposalFee,
 		VoteFee:             p.VoteFee,
 		StakeFee:            p.StakeFee,
@@ -395,13 +395,13 @@ func parseSpendDenomination(s string) (contract.SpendDenomination, error) {
 	switch strings.ToLower(s) {
 	case "cnpy":
 		return contract.SpendDenomination_SPEND_CNPY, nil
-	case "cliq":
-		return contract.SpendDenomination_SPEND_CLIQ, nil
+	case "cplq":
+		return contract.SpendDenomination_SPEND_CPLQ, nil
 	default:
 		return contract.SpendDenomination_SPEND_UNKNOWN,
-			fmt.Errorf("invalid denomination %q (want cnpy|cliq)", s)
+			fmt.Errorf("invalid denomination %q (want cnpy|cplq)", s)
 	}
 }
 
 // guard against unused-import lint when adapting this file in the future.
-var _ proto.Message = (*contract.MessageCLIQProposalCreate)(nil)
+var _ proto.Message = (*contract.MessageCPLQProposalCreate)(nil)

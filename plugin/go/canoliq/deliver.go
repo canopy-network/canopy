@@ -366,11 +366,11 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	return &contract.PluginDeliverResponse{}
 }
 
-// DeliverMessageCLIQTransfer moves liquid CLIQ between two accounts.
-func (c *Canoliq) DeliverMessageCLIQTransfer(msg *contract.MessageCLIQTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
+// DeliverMessageCPLQTransfer moves liquid CPLQ between two accounts.
+func (c *Canoliq) DeliverMessageCPLQTransfer(msg *contract.MessageCPLQTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	_ = params
-	fromBalKey := KeyForCLIQBalance(msg.FromAddress)
-	toBalKey := KeyForCLIQBalance(msg.ToAddress)
+	fromBalKey := KeyForCPLQBalance(msg.FromAddress)
+	toBalKey := KeyForCPLQBalance(msg.ToAddress)
 	cnpyFromKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
 	fbQ, tbQ, cQ, feeQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
@@ -416,7 +416,7 @@ func (c *Canoliq) DeliverMessageCLIQTransfer(msg *contract.MessageCLIQTransfer, 
 	fromBal := DecodeUint64(fromBz)
 	toBal := DecodeUint64(toBz)
 	if fromBal < msg.Amount {
-		return &contract.PluginDeliverResponse{Error: ErrInsufficientCLIQ()}
+		return &contract.PluginDeliverResponse{Error: ErrInsufficientCPLQ()}
 	}
 	fromBal -= msg.Amount
 	toBal += msg.Amount
@@ -451,12 +451,12 @@ func (c *Canoliq) DeliverMessageCLIQTransfer(msg *contract.MessageCLIQTransfer, 
 	return &contract.PluginDeliverResponse{}
 }
 
-// DeliverMessageCLIQClaimVested unlocks any newly-vested CLIQ across all of
+// DeliverMessageCPLQClaimVested unlocks any newly-vested CPLQ across all of
 // the caller's vesting schedules and credits it to their liquid balance.
-func (c *Canoliq) DeliverMessageCLIQClaimVested(msg *contract.MessageCLIQClaimVested, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
+func (c *Canoliq) DeliverMessageCPLQClaimVested(msg *contract.MessageCPLQClaimVested, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	_ = params
 	idxKey := KeyForVestingIndex(msg.FromAddress)
-	balKey := KeyForCLIQBalance(msg.FromAddress)
+	balKey := KeyForCPLQBalance(msg.FromAddress)
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
 	iQ, bQ, cQ, feeQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
@@ -582,7 +582,7 @@ func (c *Canoliq) DeliverMessageCLIQClaimVested(msg *contract.MessageCLIQClaimVe
 	return &contract.PluginDeliverResponse{}
 }
 
-// bumpCirculating reads the globals record, increments cliq_circulating_supply
+// bumpCirculating reads the globals record, increments cplq_circulating_supply
 // by `delta`, and writes it back. Used after vesting unlocks.
 func (c *Canoliq) bumpCirculating(delta uint64) *contract.PluginError {
 	gKey := KeyForGlobals()
@@ -602,7 +602,7 @@ func (c *Canoliq) bumpCirculating(delta uint64) *contract.PluginError {
 			return e
 		}
 	}
-	globals.CliqCirculatingSupply += delta
+	globals.CplqCirculatingSupply += delta
 	bz, e := contract.Marshal(globals)
 	if e != nil {
 		return e

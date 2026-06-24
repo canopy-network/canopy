@@ -159,18 +159,18 @@ func TestUnstakingIndexAppendOnUnstake(t *testing.T) {
 	staker := addr20(0x20)
 	seedParams(t, c, DefaultParams())
 	seedAccount(s, staker, 1_000_000)
-	seedCLIQ(s, staker, 30_000_000)
+	seedCPLQ(s, staker, 30_000_000)
 
-	if resp := c.DeliverMessageCLIQStake(
-		&contract.MessageCLIQStake{FromAddress: staker, Amount: 30_000_000},
+	if resp := c.DeliverMessageCPLQStake(
+		&contract.MessageCPLQStake{FromAddress: staker, Amount: 30_000_000},
 		10_000, DefaultParams(),
 	); resp.Error != nil {
 		t.Fatalf("stake: %v", resp.Error)
 	}
 
 	for i := 0; i < 3; i++ {
-		if resp := c.DeliverMessageCLIQUnstake(
-			&contract.MessageCLIQUnstake{FromAddress: staker, Amount: 1_000_000},
+		if resp := c.DeliverMessageCPLQUnstake(
+			&contract.MessageCPLQUnstake{FromAddress: staker, Amount: 1_000_000},
 			10_000, DefaultParams(),
 		); resp.Error != nil {
 			t.Fatalf("unstake %d: %v", i, resp.Error)
@@ -199,25 +199,25 @@ func TestUnstakingIndexRemoveOnClaim(t *testing.T) {
 	staker := addr20(0x21)
 	seedParams(t, c, DefaultParams())
 	seedAccount(s, staker, 1_000_000)
-	seedCLIQ(s, staker, 10_000_000)
+	seedCPLQ(s, staker, 10_000_000)
 
-	if resp := c.DeliverMessageCLIQStake(
-		&contract.MessageCLIQStake{FromAddress: staker, Amount: 10_000_000},
+	if resp := c.DeliverMessageCPLQStake(
+		&contract.MessageCPLQStake{FromAddress: staker, Amount: 10_000_000},
 		10_000, DefaultParams(),
 	); resp.Error != nil {
 		t.Fatalf("stake: %v", resp.Error)
 	}
-	if resp := c.DeliverMessageCLIQUnstake(
-		&contract.MessageCLIQUnstake{FromAddress: staker, Amount: 5_000_000},
+	if resp := c.DeliverMessageCPLQUnstake(
+		&contract.MessageCPLQUnstake{FromAddress: staker, Amount: 5_000_000},
 		10_000, DefaultParams(),
 	); resp.Error != nil {
 		t.Fatalf("unstake: %v", resp.Error)
 	}
 
 	// Advance past the unstake maturity window and claim.
-	c.plugin.setHeight(DefaultParams().CliqUnstakingBlocks + 10)
-	if resp := c.DeliverMessageCLIQClaimUnstake(
-		&contract.MessageCLIQClaimUnstake{FromAddress: staker, UnstakeId: 0},
+	c.plugin.setHeight(DefaultParams().CplqUnstakingBlocks + 10)
+	if resp := c.DeliverMessageCPLQClaimUnstake(
+		&contract.MessageCPLQClaimUnstake{FromAddress: staker, UnstakeId: 0},
 		10_000, DefaultParams(),
 	); resp.Error != nil {
 		t.Fatalf("claim: %v", resp.Error)
@@ -234,26 +234,26 @@ func TestUnstakingIndexOutOfOrderClaims(t *testing.T) {
 	staker := addr20(0x22)
 	seedParams(t, c, DefaultParams())
 	seedAccount(s, staker, 1_000_000)
-	seedCLIQ(s, staker, 30_000_000)
+	seedCPLQ(s, staker, 30_000_000)
 
-	if resp := c.DeliverMessageCLIQStake(
-		&contract.MessageCLIQStake{FromAddress: staker, Amount: 30_000_000},
+	if resp := c.DeliverMessageCPLQStake(
+		&contract.MessageCPLQStake{FromAddress: staker, Amount: 30_000_000},
 		10_000, DefaultParams(),
 	); resp.Error != nil {
 		t.Fatalf("stake: %v", resp.Error)
 	}
 	for i := 0; i < 3; i++ {
-		if resp := c.DeliverMessageCLIQUnstake(
-			&contract.MessageCLIQUnstake{FromAddress: staker, Amount: 1_000_000},
+		if resp := c.DeliverMessageCPLQUnstake(
+			&contract.MessageCPLQUnstake{FromAddress: staker, Amount: 1_000_000},
 			10_000, DefaultParams(),
 		); resp.Error != nil {
 			t.Fatalf("unstake %d: %v", i, resp.Error)
 		}
 	}
 
-	c.plugin.setHeight(DefaultParams().CliqUnstakingBlocks + 10)
-	if resp := c.DeliverMessageCLIQClaimUnstake(
-		&contract.MessageCLIQClaimUnstake{FromAddress: staker, UnstakeId: 1},
+	c.plugin.setHeight(DefaultParams().CplqUnstakingBlocks + 10)
+	if resp := c.DeliverMessageCPLQClaimUnstake(
+		&contract.MessageCPLQClaimUnstake{FromAddress: staker, UnstakeId: 1},
 		10_000, DefaultParams(),
 	); resp.Error != nil {
 		t.Fatalf("claim middle: %v", resp.Error)
@@ -264,8 +264,8 @@ func TestUnstakingIndexOutOfOrderClaims(t *testing.T) {
 	}
 
 	for _, id := range []uint64{2, 0} {
-		if resp := c.DeliverMessageCLIQClaimUnstake(
-			&contract.MessageCLIQClaimUnstake{FromAddress: staker, UnstakeId: id},
+		if resp := c.DeliverMessageCPLQClaimUnstake(
+			&contract.MessageCPLQClaimUnstake{FromAddress: staker, UnstakeId: id},
 			10_000, DefaultParams(),
 		); resp.Error != nil {
 			t.Fatalf("claim %d: %v", id, resp.Error)
@@ -307,7 +307,7 @@ func TestAccountViewIncludesRedemptionsAndUnstakes(t *testing.T) {
 	g := &contract.CanoliqGlobals{TotalCcnpySupply: 1000, TotalPooledCnpy: 1000}
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
-	seedCLIQ(s, user, 20_000_000)
+	seedCPLQ(s, user, 20_000_000)
 
 	// Two redeems + two unstakes (after staking).
 	for i := 0; i < 2; i++ {
@@ -318,15 +318,15 @@ func TestAccountViewIncludesRedemptionsAndUnstakes(t *testing.T) {
 			t.Fatalf("redeem %d: %v", i, resp.Error)
 		}
 	}
-	if resp := c.DeliverMessageCLIQStake(
-		&contract.MessageCLIQStake{FromAddress: user, Amount: 20_000_000},
+	if resp := c.DeliverMessageCPLQStake(
+		&contract.MessageCPLQStake{FromAddress: user, Amount: 20_000_000},
 		10_000, DefaultParams(),
 	); resp.Error != nil {
 		t.Fatalf("stake: %v", resp.Error)
 	}
 	for i := 0; i < 2; i++ {
-		if resp := c.DeliverMessageCLIQUnstake(
-			&contract.MessageCLIQUnstake{FromAddress: user, Amount: 1_000_000},
+		if resp := c.DeliverMessageCPLQUnstake(
+			&contract.MessageCPLQUnstake{FromAddress: user, Amount: 1_000_000},
 			10_000, DefaultParams(),
 		); resp.Error != nil {
 			t.Fatalf("unstake %d: %v", i, resp.Error)

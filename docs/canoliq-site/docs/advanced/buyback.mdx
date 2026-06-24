@@ -4,12 +4,12 @@ sidebar_label: Buyback
 
 # Buyback Workflow
 
-The buyback mechanism allows the DAO to acquire CLIQ from the treasury and either burn it or distribute it to stakers.
+The buyback mechanism allows the DAO to acquire CPLQ from the treasury and either burn it or distribute it to stakers.
 
 ## Flow
 
-1. **Propose**: A `ProposalBuyback` is created via governance, carrying `cnpy_amount`, `price_micro_cnpy_per_cliq`, and `mode`
-2. **Vote**: CLIQ stakers vote; proposal must meet quorum and pass threshold
+1. **Propose**: A `ProposalBuyback` is created via governance, carrying `cnpy_amount`, `price_micro_cnpy_per_cplq`, and `mode`
+2. **Vote**: CPLQ stakers vote; proposal must meet quorum and pass threshold
 3. **Execute**: `MessageBuybackExecute` triggers the buyback
 
 ## Execution Details
@@ -17,29 +17,29 @@ The buyback mechanism allows the DAO to acquire CLIQ from the treasury and eithe
 On execution:
 
 1. Drains up to `cnpy_amount` from `canoliq/buyback/pool` and credits `canoliq/treasury/canoliq`
-2. Computes `cliq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cliq`
-3. Debts `canoliq/treasury/cliq` (DAO 15% bucket)
+2. Computes `cplq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cplq`
+3. Debts `canoliq/treasury/cplq` (DAO 15% bucket)
 4. Applies the selected mode
 
 ### Burn Mode
 
 ```
-globals.cliq_total_supply -= cliq_acquired
-globals.cliq_circulating_supply -= cliq_acquired
+globals.cplq_total_supply -= cplq_acquired
+globals.cplq_circulating_supply -= cplq_acquired
 ```
 
-CLIQ is permanently removed from supply. No recipient address.
+CPLQ is permanently removed from supply. No recipient address.
 
 ### Distribute Stakers Mode
 
-- Iterates `CLIQStakeIndex.Addresses`
+- Iterates `CPLQStakeIndex.Addresses`
 - Each staker's stake is **boosted by their [vote-escrow lock tier](../tokenomics/vote-escrow.mdx)**
   before the split: `boosted = stake × (10,000 + boostBps) ÷ 10,000`, so longer locks receive
   a proportionally larger share (e.g. `LOCK_24M` adds +75%)
-- Computes `mulDiv(cliqAcquired, boosted[s], totalBoosted)` per staker and credits liquid CLIQ
+- Computes `mulDiv(cplqAcquired, boosted[s], totalBoosted)` per staker and credits liquid CPLQ
 - Rounding remainder is credited to the largest-stake `LOCK_24M` staker, falling back to the
-  largest staker overall — so the total exactly matches `cliq_acquired`
-- Empty staker set → re-credit `treasury/cliq` (no-op)
+  largest staker overall — so the total exactly matches `cplq_acquired`
+- Empty staker set → re-credit `treasury/cplq` (no-op)
 
 ## Self-Contained Order
 

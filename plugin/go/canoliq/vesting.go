@@ -2,7 +2,7 @@ package canoliq
 
 import "github.com/canopy-network/go-plugin/contract"
 
-// unlockedAmount returns the cumulative CLIQ that should be unlocked for a
+// unlockedAmount returns the cumulative CPLQ that should be unlocked for a
 // vesting schedule at the given block height. Returns 0 before the cliff,
 // linearly interpolates between start and end, and saturates at total_amount
 // after end_height.

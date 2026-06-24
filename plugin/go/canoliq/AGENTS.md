@@ -42,13 +42,13 @@ All canoliq keys live under prefix `[]byte{10}`. Canopy core uses 1=accounts,
 2=pools, 7=gov; `10` was chosen to leave room and stay unambiguous. Subdomains
 are single-byte discriminators inside `JoinLenPrefix` segments — see
 `state.go` for the canonical list. Phase 1 used `domainGlobals=1` …
-`domainParams=11`; Phase 2 added `domainCliqStake=12`, `domainCliqUnstaking=13`,
+`domainParams=11`; Phase 2 added `domainCplqStake=12`, `domainCplqUnstaking=13`,
 `domainProposal=14`, `domainVote=15`, `domainBuybackOrder=16`, `domainSpend=17`,
 `domainMultisig=18`, `domainInsurance=19`, `domainStakeIndex=20`. The validator
 registry reuses `domainValIncent` + the `indexSingleton` discriminator.
 
 **There is no range-scan.** The FSM only answers point reads, so iteration
-requires an explicit index. `VestingIndex`, `ProposalIndex`, `CLIQStakeIndex`,
+requires an explicit index. `VestingIndex`, `ProposalIndex`, `CPLQStakeIndex`,
 and the spend index (also a `ProposalIndex`) all exist for this reason. If
 you add a collection that needs sweeping, add an index key alongside it.
 
@@ -92,7 +92,7 @@ the four parts sum to `feeAmount` exactly. `ValidateParams` enforces that the
 four split bps fields total 10_000, plus Phase 2 invariants:
 `insurance_bps ≤ 10_000`, `quorum_bps ≤ 10_000`, `pass_threshold_bps ≤ 10_000`,
 `multisig_threshold ≤ len(multisig_signers)` when signers present, and
-`cliq_unstaking_blocks ≥ voting_period_blocks` (so a voter cannot
+`cplq_unstaking_blocks ≥ voting_period_blocks` (so a voter cannot
 stake → vote → unstake → unwind before tally).
 
 `mulDiv` uses `math/big` for overflow safety — mirrors `lib.SafeMulDiv` in
@@ -137,11 +137,11 @@ branch cleanly. See `TestBeginBlockSelfBootstrapsGenesis`.
 
 Bucket bps must sum to 10_000, **and** recipients within each bucket must
 also sum to 10_000. Both are validated by `validateGenesis`. Liquid tranches
-(`cliffMonths==0 && vestMonths==0`) credit `KeyForCLIQBalance` directly;
+(`cliffMonths==0 && vestMonths==0`) credit `KeyForCPLQBalance` directly;
 otherwise a `VestingSchedule` is written and an entry is appended to
 `VestingIndex`.
 
-`CLIQTotalSupply = 100_000_000 * 1_000_000` (uCLIQ, 6-decimal parity with
+`CPLQTotalSupply = 100_000_000 * 1_000_000` (uCPLQ, 6-decimal parity with
 uCNPY). Don't change this unit without auditing every fee/transfer path.
 
 ## Governance lifecycle (Phase 2)
@@ -150,7 +150,7 @@ uCNPY). Don't change this unit without auditing every fee/transfer path.
 non-obvious things:
 
 - **Voting weight is snapshotted by stake-time, not by proposal-time read.**
-  The `CLIQStake` record carries `staked_at_height`. At vote delivery the
+  The `CPLQStake` record carries `staked_at_height`. At vote delivery the
   handler rejects votes whose `staked_at_height > proposal.creation_height`.
   This defeats flash-stake without storing per-(proposal, voter) snapshot
   balances. Side-effect: a staker who *increases* stake after a proposal
@@ -158,7 +158,7 @@ non-obvious things:
   voting eligibility on that proposal. That is intentional — re-staking
   cleanly resets eligibility.
 - **Total staked snapshot is taken at create.** `Proposal.snapshot_total_staked`
-  is `globals.total_staked_cliq` at the proposal's creation height. Quorum
+  is `globals.total_staked_cplq` at the proposal's creation height. Quorum
   divides against that, not against the value at tally time. Don't change
   the snapshot semantics without auditing `proposalPasses`.
 - **Tally cleanup deletes the proposal but not its votes.** Vote records are
@@ -168,7 +168,7 @@ non-obvious things:
 - **Param-change payloads are full-set replacement.** `ProposalParamChange`
   carries a complete `CanoliqParams`, not a delta. This keeps `ValidateParams`
   invariants (split bps total, threshold ≤ signers, …) checkable in one shot.
-- **`MessageCLIQProposalCreate.Payload` is a `google.protobuf.Any`.** Use
+- **`MessageCPLQProposalCreate.Payload` is a `google.protobuf.Any`.** Use
   `anypb.New(typed)` to build it; `unwrapPayload(any)` resolves it back via
   `contract.FromAny`. Only `ProposalParamChange`, `ProposalBuyback`, and
   `ProposalTreasurySpend` are accepted — any other type is rejected at
@@ -179,19 +179,19 @@ non-obvious things:
 `buyback.go::DeliverMessageBuybackExecute` consumes a passed
 `BuybackOrder` keyed by proposal id. The order is **self-contained** — it
 embeds the original `ProposalBuyback` payload (`cnpy_amount`,
-`price_micro_cnpy_per_cliq`, `mode`) — because `dispatchPassed` deletes the
+`price_micro_cnpy_per_cplq`, `mode`) — because `dispatchPassed` deletes the
 source `Proposal` record at tally cleanup. Don't rely on the proposal still
 being readable when execute runs.
 
 Modes:
 
-- `BUYBACK_BURN` decrements `globals.cliq_total_supply` and
-  `globals.cliq_circulating_supply` by `cliq_acquired`. CNPY moves from
-  `buyback/pool` to `treasury/canoliq`; CLIQ disappears (no recipient).
-- `BUYBACK_DISTRIBUTE_STAKERS` iterates `CLIQStakeIndex.Addresses`, computes
-  `mulDiv(cliqAcquired, stake[s], totalStake)` per staker, credits liquid
-  CLIQ balances, and adds the rounding remainder to the largest-stake
-  staker. Empty staker set → re-credit `treasury/cliq` (no-op buyback).
+- `BUYBACK_BURN` decrements `globals.cplq_total_supply` and
+  `globals.cplq_circulating_supply` by `cplq_acquired`. CNPY moves from
+  `buyback/pool` to `treasury/canoliq`; CPLQ disappears (no recipient).
+- `BUYBACK_DISTRIBUTE_STAKERS` iterates `CPLQStakeIndex.Addresses`, computes
+  `mulDiv(cplqAcquired, stake[s], totalStake)` per staker, credits liquid
+  CPLQ balances, and adds the rounding remainder to the largest-stake
+  staker. Empty staker set → re-credit `treasury/cplq` (no-op buyback).
 
 Idempotency is via `BuybackOrder.executed`. Re-execute is rejected with
 `ErrProposalAlreadyExecuted`. Tests rely on this — don't relax it.
@@ -236,7 +236,7 @@ saturates at `TotalAmount` after end. Degenerate schedule
 (`EndHeight <= StartHeight`) returns the full amount once past the cliff —
 used for "instant unlock at cliff" tranches.
 
-`MessageCLIQClaimVested` reads the `VestingIndex` first, then issues a second
+`MessageCPLQClaimVested` reads the `VestingIndex` first, then issues a second
 batch read for every schedule listed. Two FSM round-trips per claim is
 intentional — needed because we cannot range-scan.
 
@@ -270,11 +270,11 @@ and no shared-state contention. Snapshots are stale by up to one block.
 Only state reachable from a singleton or an existing index:
 
 - Singletons: `CanoliqGlobals`, `CanoliqParams`, committee pool,
-  treasury CNPY/CLIQ, buyback pool, insurance pool.
+  treasury CNPY/CPLQ, buyback pool, insurance pool.
 - `ValidatorRegistry` → per-validator incentive accruals.
 - `ProposalIndex` → active `Proposal` records.
 - `SpendIndex` → pending `TreasurySpend` records.
-- `CLIQStakeIndex` → active `CLIQStake` records.
+- `CPLQStakeIndex` → active `CPLQStake` records.
 - For each pending spend × each `MultisigSigners` entry → live
   `MultisigApproval` records.
 
@@ -316,7 +316,7 @@ will reject the StateRead with code 107 (see
    `Snapshot` + `refreshSnapshot` and write a `Plugin.QueryX` accessor
    in `query.go`.
 2. If not, add the index on the *write side* first (mirroring how
-   `ProposalIndex` / `SpendIndex` / `CLIQStakeIndex` are maintained).
+   `ProposalIndex` / `SpendIndex` / `CPLQStakeIndex` are maintained).
    Snapshot enumeration is bounded by the index size; never try to
    sweep state from a route handler.
 
@@ -383,7 +383,7 @@ returned `*fakeStore` (account, pool, params, globals helpers in
 ## Error codes
 
 `error.go` codes start at 100 to avoid colliding with `contract` package codes
-(1–14). Phase 1 occupies 100–116; Phase 2 extends through 117–135 (CLIQ
+(1–14). Phase 1 occupies 100–116; Phase 2 extends through 117–135 (CPLQ
 stake/unstake, governance, buyback, treasury, multisig, insurance). Always
 use the constructor functions; never build `*PluginError` literals directly
 so the module field stays consistent.
@@ -401,7 +401,7 @@ so the module field stays consistent.
   struct — make sure that is the intended semantic for that field. The cCNPY
   balance path deliberately uses `DecodeUint64` which returns 0 for nil/short.
 - **Account proto vs scalar uint64**. CNPY (in `Account`) is a protobuf
-  message; cCNPY/CLIQ balances are bare 8-byte big-endian uint64. Don't
+  message; cCNPY/CPLQ balances are bare 8-byte big-endian uint64. Don't
   cross the streams.
 - **Treating `BuybackOrder` as a thin receipt.** Phase 2 stores the full
   `ProposalBuyback` payload on the order so execute is independent of the
@@ -412,8 +412,8 @@ so the module field stays consistent.
   against the *current* signer set. If you add a fast path that just counts
   approval keys without re-checking signer membership, you reintroduce the
   "removed signer can still satisfy threshold" bug.
-- **Voting weight from the wrong source.** Always read `CLIQStake`, never
-  `KeyForCLIQBalance` (liquid). Liquid CLIQ has zero governance weight by
+- **Voting weight from the wrong source.** Always read `CPLQStake`, never
+  `KeyForCPLQBalance` (liquid). Liquid CPLQ has zero governance weight by
   design.
 - **Assuming `multisig_signers` is non-empty.** `DefaultParams()` ships
   with an empty signer set and `multisig_threshold=3`. Above-threshold

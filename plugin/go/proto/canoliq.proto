@@ -36,19 +36,19 @@ message MessageCanoliqClaimRedemption {
   uint64 redemption_id = 2; // @gotags: json:"redemptionId"
 }
 
-// MessageCLIQTransfer transfers liquid (already-vested) CLIQ between accounts.
-message MessageCLIQTransfer {
+// MessageCPLQTransfer transfers liquid (already-vested) CPLQ between accounts.
+message MessageCPLQTransfer {
   // from_address: the sender
   bytes from_address = 1; // @gotags: json:"fromAddress"
   // to_address: the recipient
   bytes to_address = 2; // @gotags: json:"toAddress"
-  // amount: amount of CLIQ to transfer (uCLIQ)
+  // amount: amount of CPLQ to transfer (uCPLQ)
   uint64 amount = 3;
 }
 
-// MessageCLIQClaimVested moves any newly-unlocked CLIQ from a vesting bucket
-// into the caller's liquid CLIQ balance.
-message MessageCLIQClaimVested {
+// MessageCPLQClaimVested moves any newly-unlocked CPLQ from a vesting bucket
+// into the caller's liquid CPLQ balance.
+message MessageCPLQClaimVested {
   // from_address: the vesting recipient
   bytes from_address = 1; // @gotags: json:"fromAddress"
 }
@@ -63,23 +63,23 @@ message CanoliqGlobals {
   uint64 pending_redemption_cnpy = 3; // @gotags: json:"pendingRedemptionCnpy"
   // last_processed_reward_pool: pool balance observed at the last reward sweep
   uint64 last_processed_reward_pool = 4; // @gotags: json:"lastProcessedRewardPool"
-  // cliq_total_supply: hard-cap CLIQ supply minted at genesis (uCLIQ)
-  uint64 cliq_total_supply = 5; // @gotags: json:"cliqTotalSupply"
-  // cliq_circulating_supply: CLIQ that is currently liquid (uCLIQ)
-  uint64 cliq_circulating_supply = 6; // @gotags: json:"cliqCirculatingSupply"
+  // cplq_total_supply: hard-cap CPLQ supply minted at genesis (uCPLQ)
+  uint64 cplq_total_supply = 5; // @gotags: json:"cplqTotalSupply"
+  // cplq_circulating_supply: CPLQ that is currently liquid (uCPLQ)
+  uint64 cplq_circulating_supply = 6; // @gotags: json:"cplqCirculatingSupply"
   // next_redemption_id: monotonically-increasing redemption id counter
   uint64 next_redemption_id = 7; // @gotags: json:"nextRedemptionId"
   // genesis_complete: whether genesis distribution has run
   bool genesis_complete = 8; // @gotags: json:"genesisComplete"
-  // total_staked_cliq: aggregate CLIQ locked in stake records (uCLIQ)
-  uint64 total_staked_cliq = 9; // @gotags: json:"totalStakedCliq"
+  // total_staked_cplq: aggregate CPLQ locked in stake records (uCPLQ)
+  uint64 total_staked_cplq = 9; // @gotags: json:"totalStakedCplq"
   // next_proposal_id: monotonically-increasing proposal id counter
   uint64 next_proposal_id = 10; // @gotags: json:"nextProposalId"
   // next_buyback_id: monotonically-increasing buyback order id counter
   uint64 next_buyback_id = 11; // @gotags: json:"nextBuybackId"
   // next_spend_id: monotonically-increasing treasury spend id counter
   uint64 next_spend_id = 12; // @gotags: json:"nextSpendId"
-  // next_unstake_id: monotonically-increasing CLIQ unstake id counter
+  // next_unstake_id: monotonically-increasing CPLQ unstake id counter
   uint64 next_unstake_id = 13; // @gotags: json:"nextUnstakeId"
   // peak_tvl_ucnpy: running maximum of total_pooled_cnpy (T4). Drives the
   // insurance-fund target (5% of peak TVL); advanced each EndBlock.
@@ -122,22 +122,22 @@ message RedemptionIndex {
   repeated uint64 ids = 1;
 }
 
-// VestingSchedule encodes a linear vesting schedule with a cliff for a CLIQ
+// VestingSchedule encodes a linear vesting schedule with a cliff for a CPLQ
 // allocation tranche. One schedule may exist per (address, schedule_id).
 message VestingSchedule {
   // address: the vesting recipient
   bytes address = 1;
   // schedule_id: discriminator when an address has multiple tranches
   uint64 schedule_id = 2; // @gotags: json:"scheduleId"
-  // total_amount: total CLIQ vesting under this schedule (uCLIQ)
+  // total_amount: total CPLQ vesting under this schedule (uCPLQ)
   uint64 total_amount = 3; // @gotags: json:"totalAmount"
-  // cliff_height: no CLIQ unlocks before this height
+  // cliff_height: no CPLQ unlocks before this height
   uint64 cliff_height = 4; // @gotags: json:"cliffHeight"
   // start_height: linear vest start (typically equal to cliff_height)
   uint64 start_height = 5; // @gotags: json:"startHeight"
   // end_height: linear vest completion height
   uint64 end_height = 6; // @gotags: json:"endHeight"
-  // claimed_amount: CLIQ already moved to the liquid balance
+  // claimed_amount: CPLQ already moved to the liquid balance
   uint64 claimed_amount = 7; // @gotags: json:"claimedAmount"
 }
 
@@ -152,16 +152,16 @@ message CanoliqParams {
   uint64 treasury_bps = 3; // @gotags: json:"treasuryBps"
   // validator_bps: portion of fee to validator infra in bps (default 1500 = 15%)
   uint64 validator_bps = 4; // @gotags: json:"validatorBps"
-  // buyback_bps: portion of fee to CLIQ buyback in bps (default 1500 = 15%)
+  // buyback_bps: portion of fee to CPLQ buyback in bps (default 1500 = 15%)
   uint64 buyback_bps = 5; // @gotags: json:"buybackBps"
   // deposit_fee: minimum tx fee for a deposit (uCNPY)
   uint64 deposit_fee = 6; // @gotags: json:"depositFee"
   // redeem_fee: minimum tx fee for a redeem (uCNPY)
   uint64 redeem_fee = 7; // @gotags: json:"redeemFee"
-  // claim_fee: minimum tx fee for claim_redemption / cliq_claim_vested (uCNPY)
+  // claim_fee: minimum tx fee for claim_redemption / cplq_claim_vested (uCNPY)
   uint64 claim_fee = 8; // @gotags: json:"claimFee"
-  // cliq_transfer_fee: minimum tx fee for a CLIQ transfer (uCNPY)
-  uint64 cliq_transfer_fee = 9; // @gotags: json:"cliqTransferFee"
+  // cplq_transfer_fee: minimum tx fee for a CPLQ transfer (uCNPY)
+  uint64 cplq_transfer_fee = 9; // @gotags: json:"cplqTransferFee"
   // insurance_bps: share of treasury credit redirected to insurance (default 1500 = 15% of treasury slice)
   uint64 insurance_bps = 10; // @gotags: json:"insuranceBps"
   // treasury_threshold: spend amount above which multisig + timelock kick in (uCNPY-equivalent)
@@ -172,14 +172,14 @@ message CanoliqParams {
   uint64 multisig_threshold = 13; // @gotags: json:"multisigThreshold"
   // voting_period_blocks: blocks a proposal accepts votes for
   uint64 voting_period_blocks = 14; // @gotags: json:"votingPeriodBlocks"
-  // quorum_bps: fraction of snapshot total_staked_cliq required to participate
+  // quorum_bps: fraction of snapshot total_staked_cplq required to participate
   uint64 quorum_bps = 15; // @gotags: json:"quorumBps"
   // pass_threshold_bps: yes / (yes+no) needed for a proposal to pass
   uint64 pass_threshold_bps = 16; // @gotags: json:"passThresholdBps"
   // timelock_blocks: delay between proposal pass and above-threshold spend execution
   uint64 timelock_blocks = 17; // @gotags: json:"timelockBlocks"
-  // cliq_unstaking_blocks: unbond window for CLIQ stake
-  uint64 cliq_unstaking_blocks = 18; // @gotags: json:"cliqUnstakingBlocks"
+  // cplq_unstaking_blocks: unbond window for CPLQ stake
+  uint64 cplq_unstaking_blocks = 18; // @gotags: json:"cplqUnstakingBlocks"
   // proposal_fee: minimum tx fee for proposal creation (uCNPY)
   uint64 proposal_fee = 19; // @gotags: json:"proposalFee"
   // vote_fee: minimum tx fee for vote (uCNPY)
@@ -188,7 +188,7 @@ message CanoliqParams {
   uint64 stake_fee = 21; // @gotags: json:"stakeFee"
   // multisig_approve_fee: minimum tx fee for multisig approval (uCNPY)
   uint64 multisig_approve_fee = 22; // @gotags: json:"multisigApproveFee"
-  // min_stake_to_propose: minimum staked CLIQ a proposer must hold
+  // min_stake_to_propose: minimum staked CPLQ a proposer must hold
   uint64 min_stake_to_propose = 23; // @gotags: json:"minStakeToPropose"
   // governance: per-action governance tiers (Tokenomics v1.1 §7). When a
   // tier matches a proposal's ActionType it overrides the scalar
@@ -236,7 +236,7 @@ enum ActionType {
 message GovernanceTier {
   // action: the ActionType this tier governs
   ActionType action = 1;
-  // quorum_bps: fraction of snapshot total_staked_cliq required to participate
+  // quorum_bps: fraction of snapshot total_staked_cplq required to participate
   uint64 quorum_bps = 2; // @gotags: json:"quorumBps"
   // approval_bps: yes / (yes+no) needed for the proposal to pass
   uint64 approval_bps = 3; // @gotags: json:"approvalBps"
@@ -247,7 +247,7 @@ message GovernanceTier {
 }
 
 // VestingIndex enumerates the vesting schedule ids belonging to an address so
-// MessageCLIQClaimVested can iterate without a state-range scan.
+// MessageCPLQClaimVested can iterate without a state-range scan.
 message VestingIndex {
   // schedule_ids: list of schedule_ids owned by the indexed address
   repeated uint64 schedule_ids = 1; // @gotags: json:"scheduleIds"
@@ -255,42 +255,42 @@ message VestingIndex {
 
 // === Phase 2 — governance, staking, buyback, treasury ===
 
-// MessageCLIQStake locks liquid CLIQ into a stake record granting governance
+// MessageCPLQStake locks liquid CPLQ into a stake record granting governance
 // weight. Multiple stakes from the same address aggregate into one record.
-message MessageCLIQStake {
+message MessageCPLQStake {
   // from_address: the staker
   bytes from_address = 1; // @gotags: json:"fromAddress"
-  // amount: liquid CLIQ to lock (uCLIQ)
+  // amount: liquid CPLQ to lock (uCPLQ)
   uint64 amount = 2;
   // lock_tier: vote-escrow lock to commit this stake to (T2). LOCK_NONE keeps
   // the stake liquid-to-unstake after the standard unbond window.
   LockTier lock_tier = 3; // @gotags: json:"lockTier"
 }
 
-// MessageCLIQUnstake debits the staker's CLIQStake and queues an unbond
-// record that matures after cliq_unstaking_blocks. Total staked CLIQ on
+// MessageCPLQUnstake debits the staker's CPLQStake and queues an unbond
+// record that matures after cplq_unstaking_blocks. Total staked CPLQ on
 // globals is decremented immediately so unstaked tokens carry no weight in
 // proposals created from this height onward.
-message MessageCLIQUnstake {
+message MessageCPLQUnstake {
   // from_address: the staker
   bytes from_address = 1; // @gotags: json:"fromAddress"
-  // amount: staked CLIQ to unbond (uCLIQ)
+  // amount: staked CPLQ to unbond (uCPLQ)
   uint64 amount = 2;
 }
 
-// MessageCLIQClaimUnstake matures an unstake record by returning the CLIQ
+// MessageCPLQClaimUnstake matures an unstake record by returning the CPLQ
 // to the staker's liquid balance once mature_height has passed.
-message MessageCLIQClaimUnstake {
+message MessageCPLQClaimUnstake {
   // from_address: the staker
   bytes from_address = 1; // @gotags: json:"fromAddress"
-  // unstake_id: id of the UnstakingCLIQ record to claim
+  // unstake_id: id of the UnstakingCPLQ record to claim
   uint64 unstake_id = 2; // @gotags: json:"unstakeId"
 }
 
-// MessageCLIQProposalCreate opens a new governance proposal. The proposer
+// MessageCPLQProposalCreate opens a new governance proposal. The proposer
 // must hold ≥ min_stake_to_propose at creation height. The proposal payload
 // dictates the action taken if the vote passes.
-message MessageCLIQProposalCreate {
+message MessageCPLQProposalCreate {
   // from_address: the proposer
   bytes from_address = 1; // @gotags: json:"fromAddress"
   // payload: proposal payload (oneof param_change | buyback | treasury_spend)
@@ -299,11 +299,11 @@ message MessageCLIQProposalCreate {
   string description = 3;
 }
 
-// MessageCLIQVote records a yes/no/abstain vote for an active proposal. The
-// vote weight equals the voter's CLIQStake balance evaluated against the
+// MessageCPLQVote records a yes/no/abstain vote for an active proposal. The
+// vote weight equals the voter's CPLQStake balance evaluated against the
 // proposal's creation_height — votes from stake added after creation carry
 // zero weight.
-message MessageCLIQVote {
+message MessageCPLQVote {
   // from_address: the voter
   bytes from_address = 1; // @gotags: json:"fromAddress"
   // proposal_id: target proposal
@@ -350,11 +350,11 @@ enum LockTier {
   LOCK_24M = 4;
 }
 
-// CLIQStake is the per-address active stake record.
-message CLIQStake {
+// CPLQStake is the per-address active stake record.
+message CPLQStake {
   // address: the staker
   bytes address = 1;
-  // amount: staked CLIQ (uCLIQ)
+  // amount: staked CPLQ (uCPLQ)
   uint64 amount = 2;
   // staked_at_height: height of the most recent stake increase. Used for
   // proposal-vote eligibility (vote weight = 0 if staked_at_height >
@@ -368,13 +368,13 @@ message CLIQStake {
   uint64 lock_end_height = 5; // @gotags: json:"lockEndHeight"
 }
 
-// UnstakingCLIQ is a queued unstake awaiting maturity.
-message UnstakingCLIQ {
+// UnstakingCPLQ is a queued unstake awaiting maturity.
+message UnstakingCPLQ {
   // id: per-address unstake id
   uint64 id = 1;
   // address: the staker
   bytes address = 2;
-  // amount: CLIQ owed at maturity (uCLIQ)
+  // amount: CPLQ owed at maturity (uCPLQ)
   uint64 amount = 3;
   // mature_height: block height at which the unstake matures
   uint64 mature_height = 4; // @gotags: json:"matureHeight"
@@ -415,7 +415,7 @@ message Proposal {
   uint64 creation_height = 3; // @gotags: json:"creationHeight"
   // expiry_height: voting closes at this height
   uint64 expiry_height = 4; // @gotags: json:"expiryHeight"
-  // snapshot_total_staked: globals.total_staked_cliq at creation_height
+  // snapshot_total_staked: globals.total_staked_cplq at creation_height
   uint64 snapshot_total_staked = 5; // @gotags: json:"snapshotTotalStaked"
   // payload: typed proposal payload
   google.protobuf.Any payload = 6;
@@ -464,7 +464,7 @@ message ProposalParamChange {
   CanoliqParams params = 1;
 }
 
-// BuybackMode selects the post-acquisition disposition of CLIQ.
+// BuybackMode selects the post-acquisition disposition of CPLQ.
 enum BuybackMode {
   BUYBACK_UNKNOWN = 0;
   BUYBACK_BURN = 1;
@@ -475,26 +475,26 @@ enum BuybackMode {
 message ProposalBuyback {
   // cnpy_amount: CNPY drawn from canoliq/buyback/pool (clamped to available)
   uint64 cnpy_amount = 1; // @gotags: json:"cnpyAmount"
-  // price_micro_cnpy_per_cliq: price denominator. cliq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cliq
-  uint64 price_micro_cnpy_per_cliq = 2; // @gotags: json:"priceMicroCnpyPerCliq"
+  // price_micro_cnpy_per_cplq: price denominator. cplq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cplq
+  uint64 price_micro_cnpy_per_cplq = 2; // @gotags: json:"priceMicroCnpyPerCplq"
   // mode: BURN or DISTRIBUTE_STAKERS
   BuybackMode mode = 3;
 }
 
-// SpendDenomination distinguishes CNPY-denominated spends from CLIQ.
+// SpendDenomination distinguishes CNPY-denominated spends from CPLQ.
 enum SpendDenomination {
   SPEND_UNKNOWN = 0;
   SPEND_CNPY = 1;
-  SPEND_CLIQ = 2;
+  SPEND_CPLQ = 2;
 }
 
 // ProposalTreasurySpend authorizes a transfer from a treasury bucket.
 message ProposalTreasurySpend {
   // recipient: 20-byte target address
   bytes recipient = 1;
-  // amount: CNPY or CLIQ to send
+  // amount: CNPY or CPLQ to send
   uint64 amount = 2;
-  // denomination: CNPY (sourced from treasury/canoliq) or CLIQ (treasury/cliq)
+  // denomination: CNPY (sourced from treasury/canoliq) or CPLQ (treasury/cplq)
   SpendDenomination denomination = 3;
 }
 
@@ -532,8 +532,8 @@ message BuybackOrder {
   uint64 proposal_id = 1; // @gotags: json:"proposalId"
   // cnpy_drawn: CNPY actually drained (≤ payload.cnpy_amount)
   uint64 cnpy_drawn = 2; // @gotags: json:"cnpyDrawn"
-  // cliq_acquired: CLIQ moved out of treasury_cliq
-  uint64 cliq_acquired = 3; // @gotags: json:"cliqAcquired"
+  // cplq_acquired: CPLQ moved out of treasury_cplq
+  uint64 cplq_acquired = 3; // @gotags: json:"cplqAcquired"
   // mode: BURN or DISTRIBUTE_STAKERS (mirrors proposal payload)
   BuybackMode mode = 4;
   // executed: true once the buyback has been applied
@@ -572,10 +572,10 @@ message MultisigApproval {
   uint64 height = 3;
 }
 
-// CLIQStakeIndex enumerates active CLIQ staker addresses so buyback
+// CPLQStakeIndex enumerates active CPLQ staker addresses so buyback
 // DISTRIBUTE_STAKERS can iterate without a state-range scan.
-message CLIQStakeIndex {
-  // addresses: 20-byte staker addresses with non-zero CLIQStake.amount
+message CPLQStakeIndex {
+  // addresses: 20-byte staker addresses with non-zero CPLQStake.amount
   repeated bytes addresses = 1;
 }
 

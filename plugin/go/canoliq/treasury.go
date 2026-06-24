@@ -26,7 +26,7 @@ func (c *Canoliq) queueTreasurySpend(prop *contract.Proposal, payload *contract.
 	if payload.Amount == 0 {
 		return ErrInvalidAmount()
 	}
-	if payload.Denomination != contract.SpendDenomination_SPEND_CNPY && payload.Denomination != contract.SpendDenomination_SPEND_CLIQ {
+	if payload.Denomination != contract.SpendDenomination_SPEND_CNPY && payload.Denomination != contract.SpendDenomination_SPEND_CPLQ {
 		return ErrInvalidProposalPayload()
 	}
 	// Multisig is still gated purely on amount vs the treasury threshold.
@@ -114,7 +114,7 @@ func (c *Canoliq) CheckMessageMultisigApprove(msg *contract.MessageMultisigAppro
 
 // DeliverMessageDAOTreasurySpend triggers execution of a queued spend by
 // proposal id. Resolves the underlying TreasurySpend record, asserts
-// timelock + multisig coverage, then moves CNPY (or CLIQ) from the
+// timelock + multisig coverage, then moves CNPY (or CPLQ) from the
 // canoLiq DAO treasury bucket to the recipient.
 func (c *Canoliq) DeliverMessageDAOTreasurySpend(msg *contract.MessageDAOTreasurySpend, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
@@ -351,13 +351,13 @@ func (c *Canoliq) applySpend(spend *contract.TreasurySpend) *contract.PluginErro
 			},
 		})
 		return err
-	case contract.SpendDenomination_SPEND_CLIQ:
-		treasury := c.readScalar(KeyForTreasuryCLIQ())
+	case contract.SpendDenomination_SPEND_CPLQ:
+		treasury := c.readScalar(KeyForTreasuryCPLQ())
 		if treasury < spend.Payload.Amount {
-			return ErrInsufficientTreasuryCLIQ()
+			return ErrInsufficientTreasuryCPLQ()
 		}
 		treasury -= spend.Payload.Amount
-		recipBalKey := KeyForCLIQBalance(spend.Payload.Recipient)
+		recipBalKey := KeyForCPLQBalance(spend.Payload.Recipient)
 		recipBal := DecodeUint64(c.readBytes(recipBalKey)) + spend.Payload.Amount
 		spend.Executed = true
 		spendBz, e := contract.Marshal(spend)
@@ -375,7 +375,7 @@ func (c *Canoliq) applySpend(spend *contract.TreasurySpend) *contract.PluginErro
 		}
 		_, err = c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
 			Sets: []*contract.PluginSetOp{
-				{Key: KeyForTreasuryCLIQ(), Value: EncodeUint64(treasury)},
+				{Key: KeyForTreasuryCPLQ(), Value: EncodeUint64(treasury)},
 				{Key: recipBalKey, Value: EncodeUint64(recipBal)},
 				{Key: KeyForTreasurySpend(spend.Id), Value: spendBz},
 				{Key: KeyForSpendIndex(), Value: idxBz},

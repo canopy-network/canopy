@@ -22,7 +22,7 @@ All `ValidateParams` invariants are checked:
 - `quorum_bps ≤ 10,000`
 - `pass_threshold_bps ≤ 10,000`
 - `multisig_threshold ≤ len(multisig_signers)` when signers present
-- `cliq_unstaking_blocks ≥ voting_period_blocks`
+- `cplq_unstaking_blocks ≥ voting_period_blocks`
 
 ## Buyback
 
@@ -31,14 +31,14 @@ Authorizes a single buyback execution:
 ```protobuf
 message ProposalBuyback {
   uint64 cnpy_amount = 1;
-  uint64 price_micro_cnpy_per_cliq = 2;
+  uint64 price_micro_cnpy_per_cplq = 2;
   BuybackMode mode = 3;  // BURN or DISTRIBUTE_STAKERS
 }
 ```
 
 - Drains CNPY from `canoliq/buyback/pool`
-- Computes `cliq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cliq`
-- Debts CLIQ from `canoliq/treasury/cliq`
+- Computes `cplq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cplq`
+- Debts CPLQ from `canoliq/treasury/cplq`
 
 ## Treasury Spend
 
@@ -48,7 +48,7 @@ Authorizes a transfer from a treasury bucket:
 message ProposalTreasurySpend {
   bytes recipient = 1;
   uint64 amount = 2;
-  SpendDenomination denomination = 3;  // CNPY or CLIQ
+  SpendDenomination denomination = 3;  // CNPY or CPLQ
 }
 ```
 

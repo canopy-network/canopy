@@ -8,8 +8,8 @@ import (
 	"github.com/canopy-network/go-plugin/contract"
 )
 
-// cmdVote submits MessageCLIQVote against an active proposal. Vote weight
-// equals the staker's CLIQStake balance evaluated at proposal.creation_height,
+// cmdVote submits MessageCPLQVote against an active proposal. Vote weight
+// equals the staker's CPLQStake balance evaluated at proposal.creation_height,
 // so post-creation stake increases carry zero weight.
 //
 // proposal-create is intentionally not implemented yet: its payload is a
@@ -39,12 +39,12 @@ func cmdVote(args []string, gf globalFlags) error {
 		return err
 	}
 
-	msg := &contract.MessageCLIQVote{
+	msg := &contract.MessageCPLQVote{
 		FromAddress: from,
 		ProposalId:  proposalID,
 		Choice:      choice,
 	}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cliq_vote", msg, txParams(gf))
+	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_vote", msg, txParams(gf))
 	if err != nil {
 		return err
 	}

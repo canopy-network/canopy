@@ -21,7 +21,7 @@ import (
 type PoolsView struct {
 	CommitteePool       uint64               `json:"committeePool"`
 	TreasuryCNPY        uint64               `json:"treasuryCnpy"`
-	TreasuryCLIQ        uint64               `json:"treasuryCliq"`
+	TreasuryCPLQ        uint64               `json:"treasuryCplq"`
 	BuybackPool         uint64               `json:"buybackPool"`
 	InsurancePool       uint64               `json:"insurancePool"`
 	ValidatorIncentives []ValidatorIncentive `json:"validatorIncentives"`
@@ -62,7 +62,7 @@ type HealthView struct {
 	TVLUtilizationBps uint64 `json:"tvlUtilizationBps"`
 }
 
-// StakerView is one entry in the active CLIQ staker list.
+// StakerView is one entry in the active CPLQ staker list.
 type StakerView struct {
 	Address        string `json:"address"`
 	Amount         uint64 `json:"amount"`
@@ -102,7 +102,7 @@ func (p *Plugin) QueryPools() *PoolsView {
 	view := &PoolsView{
 		CommitteePool: s.CommitteePool,
 		TreasuryCNPY:  s.TreasuryCNPY,
-		TreasuryCLIQ:  s.TreasuryCLIQ,
+		TreasuryCPLQ:  s.TreasuryCPLQ,
 		BuybackPool:   s.BuybackPool,
 		InsurancePool: s.InsurancePool,
 		PeakTvlUcnpy:  s.Globals.PeakTvlUcnpy,
@@ -169,7 +169,7 @@ func (p *Plugin) QueryValidatorRegistry() *contract.ValidatorRegistry {
 	return p.Snapshot().ValidatorRegistry
 }
 
-// QueryStakers returns the active CLIQ stake records, ordered by the
+// QueryStakers returns the active CPLQ stake records, ordered by the
 // snapshot's stake-index entry order.
 func (p *Plugin) QueryStakers() []*StakerView {
 	s := p.Snapshot()

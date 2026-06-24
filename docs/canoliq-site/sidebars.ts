@@ -40,7 +40,7 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'transactions/overview'},
       items: [
         'transactions/deposit-redeem',
-        'transactions/cliq-operations',
+        'transactions/cplq-operations',
         'transactions/reference',
       ],
     },

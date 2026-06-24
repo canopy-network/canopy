@@ -11,13 +11,13 @@ Complete reference of all canoLiq transaction messages.
 | `MessageCanoliqDeposit` | Deposits CNPY → mints cCNPY at current exchange rate | 1 |
 | `MessageCanoliqRedeem` | Burns cCNPY → queues `Redemption` (matures after unstaking window) | 1 |
 | `MessageCanoliqClaimRedemption` | Withdraws a matured `Redemption` to the user's CNPY account | 1 |
-| `MessageCLIQTransfer` | Transfers liquid (vested) CLIQ between accounts | 1 |
-| `MessageCLIQClaimVested` | Unlocks newly-vested CLIQ across all vesting schedules | 1 |
-| `MessageCLIQStake` | Locks liquid CLIQ for governance weight | 2 |
-| `MessageCLIQUnstake` | Queues CLIQ unstake; voting weight drops immediately | 2 |
-| `MessageCLIQClaimUnstake` | Returns matured CLIQ to liquid balance | 2 |
-| `MessageCLIQProposalCreate` | Opens a governance proposal (param change \| buyback \| treasury spend) | 2 |
-| `MessageCLIQVote` | Votes yes/no/abstain on an active proposal | 2 |
+| `MessageCPLQTransfer` | Transfers liquid (vested) CPLQ between accounts | 1 |
+| `MessageCPLQClaimVested` | Unlocks newly-vested CPLQ across all vesting schedules | 1 |
+| `MessageCPLQStake` | Locks liquid CPLQ for governance weight | 2 |
+| `MessageCPLQUnstake` | Queues CPLQ unstake; voting weight drops immediately | 2 |
+| `MessageCPLQClaimUnstake` | Returns matured CPLQ to liquid balance | 2 |
+| `MessageCPLQProposalCreate` | Opens a governance proposal (param change \| buyback \| treasury spend) | 2 |
+| `MessageCPLQVote` | Votes yes/no/abstain on an active proposal | 2 |
 | `MessageBuybackExecute` | Triggers a passed buyback proposal (BURN or DISTRIBUTE_STAKERS) | 2 |
 | `MessageDAOTreasurySpend` | Triggers a passed treasury spend (timelock + multisig above threshold) | 2 |
 | `MessageMultisigApprove` | Per-signer approval of an above-threshold spend | 2 |
@@ -30,11 +30,11 @@ Complete reference of all canoLiq transaction messages.
 | Deposit | `deposit_fee` |
 | Redeem | `redeem_fee` |
 | Claim Redemption | `claim_fee` |
-| CLIQ Transfer | `cliq_transfer_fee` |
-| CLIQ Claim Vested | `claim_fee` |
-| CLIQ Stake | `stake_fee` |
-| CLIQ Unstake | `stake_fee` |
-| CLIQ Claim Unstake | `stake_fee` |
+| CPLQ Transfer | `cplq_transfer_fee` |
+| CPLQ Claim Vested | `claim_fee` |
+| CPLQ Stake | `stake_fee` |
+| CPLQ Unstake | `stake_fee` |
+| CPLQ Claim Unstake | `stake_fee` |
 | Proposal Create | `proposal_fee` |
 | Vote | `vote_fee` |
 | Buyback Execute | — |

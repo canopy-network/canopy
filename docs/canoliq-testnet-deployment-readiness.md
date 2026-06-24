@@ -34,7 +34,7 @@ Last re-run: 2026-06-24 (build green, testnet genesis safety-check clean).
 
 **Part 1 — Files & data — DONE (verified)**
 - [x] §A — 7 bucket recipient addresses wired (bps sum 10000, no placeholder)
-- [x] §B — 5 multisig signers, `multisigThreshold: 3` (3-of-5), `treasuryThreshold: 50M uCLIQ`
+- [x] §B — 5 multisig signers, `multisigThreshold: 3` (3-of-5), `treasuryThreshold: 50M uCPLQ`
 - [x] §C — `validatorRegistry: []` (empty, single-aggregator fallback for first boot)
 - [x] §D — `chainId: 42`, `redemptionUnstakingBlocks: 30240`
 - [x] §D — chainId 42 reservation confirmed with Canopy team
@@ -59,7 +59,7 @@ Last re-run: 2026-06-24 (build green, testnet genesis safety-check clean).
 
 **Part 4 — Execution / verification (run on the image) ⚙️**
 - [ ] WS2 pre-flight: safety banner + self-bootstrap → bucket reconciliation (exactly
-      100M CLIQ) → deposit→redeem→claim smoke → multisig rehearsal
+      100M CPLQ) → deposit→redeem→claim smoke → multisig rehearsal
 - [ ] WS3 live T1–T6 run-through on the multi-node image; capture run-through log
 - [ ] WS4 governance security self-review (`governance.go` / `treasury.go` / `alerts.go`)
 
@@ -69,7 +69,7 @@ Last re-run: 2026-06-24 (build green, testnet genesis safety-check clean).
 - [ ] Verify on real chain: `/v1/health.genesisComplete`, `/v1/validators` matches seeded
       set, `/v1/pools.committeePool` growing
 
-> ⚠️ **First-block genesis is one-time and irreversible** — the 100M CLIQ mint to
+> ⚠️ **First-block genesis is one-time and irreversible** — the 100M CPLQ mint to
 > bucket addresses cannot be redone. Parts 2–4 must be signed off before Part 5.
 
 **Critical path:** the only hard external blockers are the two Part 2 items. WS4 and
@@ -87,7 +87,7 @@ the critical hand-off — everything else is execution.
 | Section | What | Status |
 |---|---|---|
 | A | Genesis bucket recipient addresses | ✅ supplied (2026-06-18) |
-| B | Multisig signers | ✅ supplied (2026-06-18) — 3-of-5; `treasuryThreshold` lowered to 50M uCLIQ |
+| B | Multisig signers | ✅ supplied (2026-06-18) — 3-of-5; `treasuryThreshold` lowered to 50M uCPLQ |
 | C | Validator registry | ✅ shipped empty (2026-06-18) — single-aggregator fallback for first bring-up; populate before mainnet |
 | D | Chain parameters (`chainId`, `redemptionUnstakingBlocks`) | ✅ supplied 2026-06-24 — `chainId: 42` (reserved with the Canopy team, confirmed 2026-06-24 — see §E); `redemptionUnstakingBlocks: 30240` matched to Canopy's official `valParams.UnstakingBlocks` |
 | E | Off-chain coordination facts | 🟡 partial — closed: bucket-#2/#3 distributors (2026-06-18), chainId `42` reservation (2026-06-24); still pending: fund committee pool 42 (self-funded `MessageSubsidy` is the simplest testnet path — no DAO vote), per-validator `MessageEditStake`, alert webhook URL(s) |
@@ -122,7 +122,7 @@ for the audit trail.
   actually exercised on modest spends.
 - *Wired values:* five signer addresses (`1b6454…cb84`, `2ea35a…346f`, `b749e6…a6c5`,
   `08f564…6a4b`, `1b3894…6a44`); `multisigThreshold: 3` (3-of-5); `treasuryThreshold:
-  50_000_000` uCLIQ (lowered from the 1B template default so the multisig branch
+  50_000_000` uCPLQ (lowered from the 1B template default so the multisig branch
   is exercised on realistic testnet spends).
 
 ### C. Validator registry → `genesis.testnet.json` `validatorRegistry[]`  ✅ shipped empty 2026-06-18
@@ -212,9 +212,9 @@ already bundles both genesis + config variants, so no rebuild logic changes.
 
 - **2.1 Safety banner + check** — boot, confirm the `profile="testnet"` banner and
   that genesis self-bootstraps.
-- **2.2 Bucket reconciliation** — assert 100M × 10⁶ uCLIQ distributed exactly per
+- **2.2 Bucket reconciliation** — assert 100M × 10⁶ uCPLQ distributed exactly per
   bucket/recipient bps; vesting buckets create `VestingSchedule` records, liquid
-  buckets credit balances + `cliqCirculatingSupply`.
+  buckets credit balances + `cplqCirculatingSupply`.
 - **2.3 Lifecycle smoke** — deposit → redeem → claim after
   `redemptionUnstakingBlocks`; confirm `/v1/account/{addr}` lists redemptions.
 - **2.4 Multisig rehearsal** — below-threshold spend rejected; execution succeeds
@@ -261,7 +261,7 @@ genesis + config, distribute the image to validators with
 `CANOPY_PLUGIN_MODE=canoliq` + `CANOLIQ_CONFIG=…/canoliq-config.testnet.json`,
 and verify on the real chain (`/v1/health.genesisComplete`, `/v1/validators`
 matches the seeded set, `/v1/pools.committeePool` growing). **First-block genesis
-is one-time and irreversible** — the 100M CLIQ mint to bucket addresses cannot be
+is one-time and irreversible** — the 100M CPLQ mint to bucket addresses cannot be
 redone, so Workstreams 1–2 must be signed off first.
 
 ---
@@ -271,7 +271,7 @@ redone, so Workstreams 1–2 must be signed off first.
 - **Unit:** `cd plugin/go && go test ./canoliq/... ./canoliqctl/...` green.
 - **Safety:** plugin boots under `profile=testnet` with the banner and no
   placeholder-refusal error.
-- **Reconciliation:** bucket distribution sums to exactly 100M × 10⁶ uCLIQ across
+- **Reconciliation:** bucket distribution sums to exactly 100M × 10⁶ uCPLQ across
   recipients (Workstream 2.2).
 - **Live features:** the Workstream 3 run-through log shows each T1–T6 behaviour on
   a multi-node chain matching unit-test expectations.

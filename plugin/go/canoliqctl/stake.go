@@ -8,16 +8,16 @@ import (
 	"github.com/canopy-network/go-plugin/contract"
 )
 
-// cmdCLIQStake submits MessageCLIQStake, locking liquid CLIQ into a stake
+// cmdCPLQStake submits MessageCPLQStake, locking liquid CPLQ into a stake
 // record that confers governance weight on proposals created from this
 // height onward. The optional --lock flag commits the stake to a vote-escrow
 // tier (T2) for a higher voting multiplier + reward boost.
-func cmdCLIQStake(args []string, gf globalFlags) error {
+func cmdCPLQStake(args []string, gf globalFlags) error {
 	rest, lockTier, err := parseLockFlag(args)
 	if err != nil {
 		return err
 	}
-	if err := requireArgs(rest, 2, commandUsages["cliq-stake"]); err != nil {
+	if err := requireArgs(rest, 2, commandUsages["cplq-stake"]); err != nil {
 		return err
 	}
 	signer, err := fetchSigner(gf.adminURL, rest[0], gf.password)
@@ -33,12 +33,12 @@ func cmdCLIQStake(args []string, gf globalFlags) error {
 		return err
 	}
 
-	msg := &contract.MessageCLIQStake{FromAddress: from, Amount: amount, LockTier: lockTier}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cliq_stake", msg, txParams(gf))
+	msg := &contract.MessageCPLQStake{FromAddress: from, Amount: amount, LockTier: lockTier}
+	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_stake", msg, txParams(gf))
 	if err != nil {
 		return err
 	}
-	fmt.Printf("cliq-stake submitted: tx_hash=%s from=%s amount=%d lock=%s\n",
+	fmt.Printf("cplq-stake submitted: tx_hash=%s from=%s amount=%d lock=%s\n",
 		hash, signer.Address, amount, strings.ToLower(strings.TrimPrefix(lockTier.String(), "LOCK_")))
 	return nil
 }
@@ -88,10 +88,10 @@ func parseLockTier(s string) (contract.LockTier, error) {
 	}
 }
 
-// cmdCLIQUnstake submits MessageCLIQUnstake, debiting the staker's record and
-// queueing an unbond entry that matures after CliqUnstakingBlocks.
-func cmdCLIQUnstake(args []string, gf globalFlags) error {
-	if err := requireArgs(args, 2, commandUsages["cliq-unstake"]); err != nil {
+// cmdCPLQUnstake submits MessageCPLQUnstake, debiting the staker's record and
+// queueing an unbond entry that matures after CplqUnstakingBlocks.
+func cmdCPLQUnstake(args []string, gf globalFlags) error {
+	if err := requireArgs(args, 2, commandUsages["cplq-unstake"]); err != nil {
 		return err
 	}
 	signer, err := fetchSigner(gf.adminURL, args[0], gf.password)
@@ -107,19 +107,19 @@ func cmdCLIQUnstake(args []string, gf globalFlags) error {
 		return err
 	}
 
-	msg := &contract.MessageCLIQUnstake{FromAddress: from, Amount: amount}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cliq_unstake", msg, txParams(gf))
+	msg := &contract.MessageCPLQUnstake{FromAddress: from, Amount: amount}
+	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_unstake", msg, txParams(gf))
 	if err != nil {
 		return err
 	}
-	fmt.Printf("cliq-unstake submitted: tx_hash=%s from=%s amount=%d\n", hash, signer.Address, amount)
+	fmt.Printf("cplq-unstake submitted: tx_hash=%s from=%s amount=%d\n", hash, signer.Address, amount)
 	return nil
 }
 
-// cmdCLIQClaimUnstake submits MessageCLIQClaimUnstake, returning matured
-// unstaked CLIQ to the staker's liquid balance.
-func cmdCLIQClaimUnstake(args []string, gf globalFlags) error {
-	if err := requireArgs(args, 2, commandUsages["cliq-claim-unstake"]); err != nil {
+// cmdCPLQClaimUnstake submits MessageCPLQClaimUnstake, returning matured
+// unstaked CPLQ to the staker's liquid balance.
+func cmdCPLQClaimUnstake(args []string, gf globalFlags) error {
+	if err := requireArgs(args, 2, commandUsages["cplq-claim-unstake"]); err != nil {
 		return err
 	}
 	signer, err := fetchSigner(gf.adminURL, args[0], gf.password)
@@ -135,11 +135,11 @@ func cmdCLIQClaimUnstake(args []string, gf globalFlags) error {
 		return err
 	}
 
-	msg := &contract.MessageCLIQClaimUnstake{FromAddress: from, UnstakeId: id}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cliq_claim_unstake", msg, txParams(gf))
+	msg := &contract.MessageCPLQClaimUnstake{FromAddress: from, UnstakeId: id}
+	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_claim_unstake", msg, txParams(gf))
 	if err != nil {
 		return err
 	}
-	fmt.Printf("cliq-claim-unstake submitted: tx_hash=%s from=%s unstake_id=%d\n", hash, signer.Address, id)
+	fmt.Printf("cplq-claim-unstake submitted: tx_hash=%s from=%s unstake_id=%d\n", hash, signer.Address, id)
 	return nil
 }

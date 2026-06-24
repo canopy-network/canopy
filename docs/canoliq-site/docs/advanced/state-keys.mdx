@@ -22,7 +22,7 @@ Subdomains are single-byte discriminators inside `JoinLenPrefix` segments:
 | Globals | 1 | Singleton | 1 |
 | Params | 11 | Singleton | 1 |
 | cCNPY Balance | 2 | Per-address | 1 |
-| CLIQ Balance | 3 | Per-address | 1 |
+| CPLQ Balance | 3 | Per-address | 1 |
 | Redemption | 4 | Per-address, per-id | 1 |
 | Vesting Schedule | 5 | Per-address, per-id | 1 |
 | Vesting Index | 6 | Per-address | 1 |
@@ -30,9 +30,9 @@ Subdomains are single-byte discriminators inside `JoinLenPrefix` segments:
 | Validator Incentive Index | 8 | Index | 1 |
 | Insurance Pool | 9 | Pool scalar | 2 |
 | Buyback Pool | 10 | Pool scalar | 2 |
-| Treasury CLIQ | 11 | Pool scalar | 2 |
-| CLIQ Stake | 12 | Per-address | 2 |
-| CLIQ Unstaking | 13 | Per-address, per-id | 2 |
+| Treasury CPLQ | 11 | Pool scalar | 2 |
+| CPLQ Stake | 12 | Per-address | 2 |
+| CPLQ Unstaking | 13 | Per-address, per-id | 2 |
 | Proposal | 14 | Per-id | 2 |
 | Vote | 15 | Per-proposal, per-voter | 2 |
 | Buyback Order | 16 | Per-id | 2 |
@@ -42,5 +42,5 @@ Subdomains are single-byte discriminators inside `JoinLenPrefix` segments:
 | Validator Registry | 7+singleton | Singleton | 2 |
 
 :::note
-There is no range-scan. The FSM only answers point reads, so iteration requires an explicit index. `VestingIndex`, `ProposalIndex`, `CLIQStakeIndex`, and the spend index all exist for this reason.
+There is no range-scan. The FSM only answers point reads, so iteration requires an explicit index. `VestingIndex`, `ProposalIndex`, `CPLQStakeIndex`, and the spend index all exist for this reason.
 :::
