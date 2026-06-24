@@ -17,6 +17,8 @@ export {
     Marshal,
     Unmarshal,
     FromAny,
-    JoinLenPrefix
+    JoinLenPrefix,
+    PLUGIN_BUILD
 } from './plugin.js';
+export { StartRPCServer } from './rpc.js';
 export * from './error.js';

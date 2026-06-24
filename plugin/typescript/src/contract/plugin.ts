@@ -43,18 +43,25 @@ let ContractAsyncClass: any;
 // socketPath is the name of the plugin socket exposed by the base SDK
 const socketPath = 'plugin.sock';
 
+// PLUGIN_BUILD is a human-readable build marker logged at startup so operators can confirm, via
+// `tail -f /tmp/plugin/typescript-plugin.log`, that the running binary includes the expected features.
+export const PLUGIN_BUILD = 'typescript-plugin v1 (base SDK + detached custom RPC query path)';
+
 // CONFIG IMPLEMENTATION
 
 export interface Config {
     ChainId: number;
     DataDirPath: string;
+    // rpcAddress is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
+    rpcAddress: string;
 }
 
 // DefaultConfig() returns the default configuration
 export function DefaultConfig(): Config {
     return {
         ChainId: 1,
-        DataDirPath: '/tmp/plugin/'
+        DataDirPath: '/tmp/plugin/',
+        rpcAddress: '0.0.0.0:50010'
     };
 }
 
@@ -125,6 +132,27 @@ export class Plugin {
             return [null, ErrUnexpectedFSMToPlugin(typeof response)];
         }
         return [response.stateWrite, null];
+    }
+
+    // queryState() executes a detached, read-only state query against Canopy at the given height (0 = latest committed).
+    // Unlike StateRead(), it is NOT tied to an in-flight tx/block lifecycle and does not require a Contract context;
+    // it allocates its own random request id, making it safe to call from custom RPC handlers (e.g. an HTTP server).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async queryState(height: number, request: any): Promise<[any | null, IPluginError | null]> {
+        // send the detached query and wait for a response
+        const [response, err] = await this.sendDetachedSync({ query: { height, read: request } });
+        if (err) {
+            return [null, err];
+        }
+        if (!response || !response.query) {
+            return [null, ErrUnexpectedFSMToPlugin(typeof response)];
+        }
+        // surface any FSM-side error attached to the query response
+        if (response.query.error) {
+            return [null, response.query.error];
+        }
+        // return the unwrapped read response
+        return [response.query.read, null];
     }
 
     ListenForInbound(): void {
@@ -199,6 +227,14 @@ export class Plugin {
             return;
         } else if (msg.stateWrite && msg.payload === 'stateWrite') {
             console.log('Received stateWrite response from FSM');
+            const handleErr = this.handleFSMResponse(msg);
+            if (handleErr) {
+                console.error(handleErr.msg);
+                process.exit(1);
+            }
+            return;
+        } else if (msg.query && msg.payload === 'query') {
+            console.log('Received query response from FSM');
             const handleErr = this.handleFSMResponse(msg);
             if (handleErr) {
                 console.error(handleErr.msg);
@@ -287,6 +323,44 @@ export class Plugin {
         return [promise, requestId, err];
     }
 
+    // sendDetachedSync() sends a detached (non-lifecycle) request to the FSM and waits for a response.
+    // It does not depend on a Contract context and allocates its own request id.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async sendDetachedSync(payload: any): Promise<[any | null, IPluginError | null]> {
+        const [promise, requestId, err] = this.sendDetachedAsync(payload);
+        if (err) {
+            return [null, err];
+        }
+        return await this.waitForResponse(promise, requestId);
+    }
+
+    // sendDetachedAsync() sends a detached (non-lifecycle) request without waiting for a response.
+    // Unlike sendToPluginAsync(), it generates its own fresh random request id and does not track a Contract.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sendDetachedAsync(payload: any): [Promise<any>, string, IPluginError | null] {
+        // generate a fresh random request id (not tied to any in-flight FSM request)
+        const requestIdLong = Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
+        const requestId = normalizeId(requestIdLong);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let resolvePromise: (value: any) => void;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const promise = new Promise<any>((resolve) => {
+            resolvePromise = resolve;
+        });
+        this.pending.set(requestId, { resolve: resolvePromise! });
+        const err = this.sendProtoMsg(
+            types.PluginToFSM.create({
+                id: requestIdLong,
+                ...payload
+            })
+        );
+        // clean up on send error
+        if (err) {
+            this.pending.delete(requestId);
+        }
+        return [promise, requestId, err];
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async waitForResponse(
         promise: Promise<any>,
@@ -326,18 +400,25 @@ export class Plugin {
     }
 }
 
-// StartPlugin() creates and starts a plugin
-export function StartPlugin(c: Config): void {
+// StartPlugin() creates and starts a plugin, returning the running Plugin so builders can
+// access detached capabilities (e.g. queryState) to back their own custom RPC endpoints.
+export function StartPlugin(c: Config): Plugin {
+    // log the build marker so the running version is obvious in the plugin log
+    console.log(`==== STARTING ${PLUGIN_BUILD} ====`);
     const sockPath = path.join(c.DataDirPath, socketPath);
+
+    // construct the plugin up front so callers get the running instance immediately; the
+    // underlying socket is (re)assigned each time we successfully (re)connect below.
+    const plugin = new Plugin(c, null as unknown as net.Socket, ContractConfigValue);
 
     const tryConnect = (): void => {
         const conn = net.createConnection(sockPath);
 
         conn.on('connect', () => {
             console.log('Connected to plugin socket');
-            const p = new Plugin(c, conn, ContractConfigValue);
-            p.ListenForInbound();
-            p.Handshake().then((err) => {
+            plugin.conn = conn;
+            plugin.ListenForInbound();
+            plugin.Handshake().then((err) => {
                 if (err) {
                     console.error(err.msg);
                     process.exit(1);
@@ -352,6 +433,7 @@ export function StartPlugin(c: Config): void {
     };
 
     tryConnect();
+    return plugin;
 }
 
 // Initialize contract references after module load

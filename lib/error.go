@@ -279,6 +279,9 @@ const (
 	CodeUnexpectedPluginToFSM     ErrorCode = 108
 	CodePluginTimeout             ErrorCode = 109
 	CodeInvalidPluginSchema       ErrorCode = 110
+	CodeNoPluginQueryProvider     ErrorCode = 111
+	CodeNilPluginQueryRead        ErrorCode = 112
+	CodeNoCommittedState          ErrorCode = 113
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -334,6 +337,7 @@ const (
 	CodeSetEntry               ErrorCode   = 13
 	CodeReadBytes              ErrorCode   = 14
 	CodeIndexBlock             ErrorCode   = 15
+	CodeCompactDB              ErrorCode   = 16
 
 	RPCModule             ErrorModule = "rpc"
 	CodeMempoolStopSignal ErrorCode   = 1
@@ -903,4 +907,16 @@ func ErrPluginTimeout() ErrorI {
 
 func ErrInvalidFSMToPluginMessage(t reflect.Type) ErrorI {
 	return NewError(CodeInvalidFSMToPluginmessage, StateMachineModule, fmt.Sprintf("unrecognized fsm_to_plugin message: %v", t))
+}
+
+func ErrNoPluginQueryProvider() ErrorI {
+	return NewError(CodeNoPluginQueryProvider, StateMachineModule, "no plugin query provider is registered")
+}
+
+func ErrNilPluginQueryRead() ErrorI {
+	return NewError(CodeNilPluginQueryRead, StateMachineModule, "plugin query request has no read")
+}
+
+func ErrNoCommittedState() ErrorI {
+	return NewError(CodeNoCommittedState, StateMachineModule, "node has no committed state yet")
 }

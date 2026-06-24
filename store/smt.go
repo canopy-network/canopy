@@ -206,53 +206,67 @@ func (s *SMT) Commit(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 // with its own Txn copy to avoid lock contention, then the results are merged back into
 // the main tree.
 func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
-	// if there are too few operations, fall back to sequential processing
-	// if len(unsortedOps) < NumSubtrees*2 {
-	// 	return s.Commit(unsortedOps)
-	// }
+	// fall back to sequential processing when operations are fewer than subtrees;
+	// addSyntheticBorders + cleanup overhead dominates for small batches
+	if len(unsortedOps) < NumSubtrees*2 {
+		return s.Commit(unsortedOps)
+	}
 
+	// parallel commit needs a *Txn-backed store to spawn independent per-subtree readers;
+	// fall back to sequential commit when the store can't provide one
 	parentTxn, ok := s.store.(*Txn)
 	if !ok {
 		return s.Commit(unsortedOps)
 	}
 
+	// partition the operations into the 8 subtrees by their 3-bit key prefix
 	groups, err := s.sortOperationsByPrefix(unsortedOps)
 	if err != nil {
 		return err
 	}
 
+	// insert synthetic border nodes so every subtree has stable left/right boundaries,
+	// keeping each subtree's edits isolated from its neighbors during the parallel commit
 	cleanup, err := s.addSyntheticBorders()
 	if err != nil {
 		return err
 	}
+	// remove the synthetic borders once the parallel commit is done (or on error)
 	defer func() {
 		if cleanupErr := cleanup(); cleanupErr != nil && err == nil {
 			err = cleanupErr
 		}
 	}()
 
+	// fetch the current root node of each of the 8 subtrees to seed the workers
 	subtreeRoots, err := s.getSubtreeRoots()
 	if err != nil {
 		return err
 	}
 
+	// result reported by each subtree worker once it finishes committing its operations
 	type subtreeResult struct {
 		index int
 		store *subtreeStore
 		err   lib.ErrorI
 	}
 
+	// buffered so workers never block on send, plus a count of the workers actually launched
 	resultChan := make(chan subtreeResult, NumSubtrees)
 	activeSubtrees := 0
 
+	// launch one worker per non-empty subtree
 	for i := 0; i < NumSubtrees; i++ {
+		// nothing to do for subtrees without operations
 		if len(groups[i]) == 0 {
 			continue
 		}
 		activeSubtrees++
+		// each worker gets its own store with an independent reader to avoid lock contention
 		st := parentTxn.newSubtreeStore()
 
 		go func(idx int, ops []*node, root *node, store *subtreeStore) {
+			// build an isolated SMT scoped to this subtree's root and operations
 			subtree := &SMT{
 				store:        store,
 				root:         root,
@@ -262,8 +276,10 @@ func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 				minKey:       s.minKey,
 				maxKey:       s.maxKey,
 			}
+			// prepare traversal state, then commit this subtree's operations
 			subtree.reset()
 			commitErr := subtree.commit(true)
+			// report the outcome back to the collector
 			resultChan <- subtreeResult{
 				index: idx,
 				store: store,
@@ -272,12 +288,13 @@ func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 		}(i, groups[i], subtreeRoots[i], st)
 	}
 
+	// collect a result from every launched worker
 	results := make([]subtreeResult, 0, activeSubtrees)
 	for completed := 0; completed < activeSubtrees; completed++ {
 		result := <-resultChan
 		if result.err != nil {
-			// Drain remaining results before returning so goroutines
-			// finish and don't race with the deferred cleanup.
+			// drain remaining results before returning so goroutines
+			// finish and don't race with the deferred cleanup
 			for completed++; completed < activeSubtrees; completed++ {
 				<-resultChan
 			}
@@ -285,10 +302,12 @@ func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 		}
 		results = append(results, result)
 	}
+	// fold each subtree's writes back into the parent transaction
 	for _, result := range results {
 		parentTxn.mergeSubtreeOps(result.store)
 	}
 
+	// reload the main tree root now that the merged subtree writes are visible
 	s.root, err = s.getNode(s.root.Key.bytes())
 	if err != nil {
 		return err
@@ -677,6 +696,10 @@ func (s *SMT) getNode(key []byte) (n *node, err lib.ErrorI) {
 	}
 	// set the key in the node for convenience
 	n.Key.fromBytes(key)
+	// cache the read result to avoid repeated PebbleDB lookups for the same node
+	if len(s.nodeCache) < MaxCacheSize {
+		s.nodeCache[string(key)] = n
+	}
 	return
 }
 

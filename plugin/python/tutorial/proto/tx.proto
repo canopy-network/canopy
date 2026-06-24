@@ -75,3 +75,25 @@ message MessageFaucet {
   // amount: tokens to mint
   uint64 amount = 3;
 }
+
+// Faucet is a state record tracking the cumulative faucet mints to a recipient (test-only)
+message Faucet {
+  // recipient_address: the address that received faucet mints
+  bytes recipient_address = 1; // @gotags: json:"recipientAddress"
+  // total_amount: the cumulative amount minted to the recipient via faucet
+  uint64 total_amount = 2; // @gotags: json:"totalAmount"
+  // count: the number of faucet transactions received
+  uint64 count = 3;
+}
+
+// Reward is a state record tracking the cumulative reward mints to a recipient
+message Reward {
+  // recipient_address: the address that received rewards
+  bytes recipient_address = 1; // @gotags: json:"recipientAddress"
+  // last_admin_address: the admin that authorized the most recent reward
+  bytes last_admin_address = 2; // @gotags: json:"lastAdminAddress"
+  // total_amount: the cumulative amount minted to the recipient via reward
+  uint64 total_amount = 3; // @gotags: json:"totalAmount"
+  // count: the number of reward transactions received
+  uint64 count = 4;
+}

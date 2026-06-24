@@ -247,11 +247,13 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 // - sets up the controller for the next height
 func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
 	start := time.Now()
-	// cancel any running mempool check
-	c.Mempool.stop()
-	// lock the mempool
-	c.Mempool.L.Lock()
-	defer c.Mempool.L.Unlock()
+	syncing := c.isSyncing.Load()
+	if !syncing {
+		// cancel any running mempool check and lock the mempool for live operation
+		c.Mempool.stop()
+		c.Mempool.L.Lock()
+		defer c.Mempool.L.Unlock()
+	}
 	// log the beginning of the commit
 	c.log.Debugf("TryCommit block %s", lib.BytesToString(qc.ResultsHash))
 	// cast the store to ensure the proper store type to complete this operation
@@ -287,7 +289,6 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// exit with error
 		return
 	}
-	syncing := c.isSyncing.Load()
 	if !syncing {
 		// delete each transaction from the mempool
 		c.Mempool.DeleteTransaction(block.Transactions...)

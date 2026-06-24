@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -90,6 +91,99 @@ func TestIndexerBlobsCached_RetainsOnlyLatestFullSnapshot(t *testing.T) {
 	require.NotNil(t, entry4.current)
 	require.NotNil(t, entry4.deltaBlobs)
 	require.NotEmpty(t, entry4.deltaBytes)
+}
+
+func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {
+	server := newTestIndexerBlobServer(t)
+	sm := server.controller.FSM
+	address := crypto.NewAddress(bytes.Repeat([]byte{0x33}, crypto.AddressSize))
+
+	require.NoError(t, sm.SetAccount(&fsm.Account{
+		Address:            address.Bytes(),
+		Amount:             150,
+		VestingAmount:      100,
+		VestingStartHeight: 1,
+		VestingCliffHeight: 2,
+		VestingEndHeight:   6,
+	}))
+	_, err := sm.Store().(lib.StoreI).Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, sm.Store().(lib.StoreI).Version())
+
+	req := httptest.NewRequest(http.MethodPost, AccountRoutePath, bytes.NewBufferString(
+		`{"height":0,"address":"`+address.String()+`"}`,
+	))
+	rec := httptest.NewRecorder()
+
+	server.Account(rec, req, nil)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var got AccountView
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Equal(t, address.Bytes(), []byte(got.Address))
+	require.Equal(t, uint64(110), got.Amount)
+	require.Equal(t, uint64(150), got.TotalAmount)
+	require.Equal(t, uint64(110), got.SpendableAmount)
+	require.Equal(t, uint64(60), got.VestedAmount)
+	require.Equal(t, uint64(40), got.LockedAmount)
+	require.Equal(t, uint64(100), got.VestingAmount)
+	require.Equal(t, uint64(1), got.VestingStartHeight)
+	require.Equal(t, uint64(2), got.VestingCliffHeight)
+	require.Equal(t, uint64(6), got.VestingEndHeight)
+}
+
+func TestAccountsQueryReturnsVestingBreakdowns(t *testing.T) {
+	server := newTestIndexerBlobServer(t)
+	sm := server.controller.FSM
+	liquid := crypto.NewAddress(bytes.Repeat([]byte{0x44}, crypto.AddressSize))
+	vested := crypto.NewAddress(bytes.Repeat([]byte{0x55}, crypto.AddressSize))
+
+	require.NoError(t, sm.SetAccount(&fsm.Account{Address: liquid.Bytes(), Amount: 25}))
+	require.NoError(t, sm.SetAccount(&fsm.Account{
+		Address:            vested.Bytes(),
+		Amount:             150,
+		VestingAmount:      100,
+		VestingStartHeight: 1,
+		VestingCliffHeight: 2,
+		VestingEndHeight:   6,
+	}))
+	_, err := sm.Store().(lib.StoreI).Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, sm.Store().(lib.StoreI).Version())
+
+	req := httptest.NewRequest(http.MethodPost, AccountsRoutePath, bytes.NewBufferString(`{"height":0,"pageNumber":1,"perPage":20}`))
+	rec := httptest.NewRecorder()
+
+	server.Accounts(rec, req, nil)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var got struct {
+		Results []AccountView `json:"results"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.NotEmpty(t, got.Results)
+
+	amounts := make(map[string]AccountView, len(got.Results))
+	for _, account := range got.Results {
+		amounts[crypto.NewAddressFromBytes(account.Address).String()] = account
+	}
+	require.Equal(t, uint64(25), amounts[liquid.String()].Amount)
+	require.Equal(t, uint64(25), amounts[liquid.String()].TotalAmount)
+	require.Equal(t, uint64(25), amounts[liquid.String()].SpendableAmount)
+	require.Zero(t, amounts[liquid.String()].VestedAmount)
+	require.Zero(t, amounts[liquid.String()].LockedAmount)
+
+	vestedAccount, ok := amounts[vested.String()]
+	require.True(t, ok)
+	require.Equal(t, uint64(110), vestedAccount.Amount)
+	require.Equal(t, uint64(150), vestedAccount.TotalAmount)
+	require.Equal(t, uint64(110), vestedAccount.SpendableAmount)
+	require.Equal(t, uint64(60), vestedAccount.VestedAmount)
+	require.Equal(t, uint64(40), vestedAccount.LockedAmount)
+	require.Equal(t, uint64(100), vestedAccount.VestingAmount)
+	require.Equal(t, uint64(1), vestedAccount.VestingStartHeight)
+	require.Equal(t, uint64(2), vestedAccount.VestingCliffHeight)
+	require.Equal(t, uint64(6), vestedAccount.VestingEndHeight)
 }
 
 func newTestIndexerBlobServer(t *testing.T) *Server {

@@ -47,9 +47,15 @@ type MessageSend struct {
 	// to_address: is the recipient of the funds
 	ToAddress []byte `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"toAddress"` // @gotags: json:"toAddress"
 	// amount: is the amount of tokens in micro-denomination (uCNPY)
-	Amount        uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Amount uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	// vesting_start_height: the block height when linear vesting begins accruing
+	VestingStartHeight uint64 `protobuf:"varint,4,opt,name=vesting_start_height,json=vestingStartHeight,proto3" json:"vestingStartHeight,omitempty"` // @gotags: json:"vestingStartHeight,omitempty"
+	// vesting_cliff_height: the block height before which vested funds are not withdrawable
+	VestingCliffHeight uint64 `protobuf:"varint,5,opt,name=vesting_cliff_height,json=vestingCliffHeight,proto3" json:"vestingCliffHeight,omitempty"` // @gotags: json:"vestingCliffHeight,omitempty"
+	// vesting_end_height: the block height when the vesting amount is fully unlocked
+	VestingEndHeight uint64 `protobuf:"varint,6,opt,name=vesting_end_height,json=vestingEndHeight,proto3" json:"vestingEndHeight,omitempty"` // @gotags: json:"vestingEndHeight,omitempty"
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *MessageSend) Reset() {
@@ -99,6 +105,27 @@ func (x *MessageSend) GetToAddress() []byte {
 func (x *MessageSend) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
+	}
+	return 0
+}
+
+func (x *MessageSend) GetVestingStartHeight() uint64 {
+	if x != nil {
+		return x.VestingStartHeight
+	}
+	return 0
+}
+
+func (x *MessageSend) GetVestingCliffHeight() uint64 {
+	if x != nil {
+		return x.VestingCliffHeight
+	}
+	return 0
+}
+
+func (x *MessageSend) GetVestingEndHeight() uint64 {
+	if x != nil {
+		return x.VestingEndHeight
 	}
 	return 0
 }
@@ -581,6 +608,8 @@ type MessageDAOTransfer struct {
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// amount: is the amount of
 	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	// mint: when true, mint the transfer amount into the DAO pool before the transfer executes
+	Mint bool `protobuf:"varint,3,opt,name=mint,proto3" json:"mint,omitempty"`
 	// start_height: is the beginning height where the parameter must be sent
 	// this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
 	StartHeight uint64 `protobuf:"varint,4,opt,name=start_height,json=startHeight,proto3" json:"startHeight"` // @gotags: json:"startHeight"
@@ -635,6 +664,13 @@ func (x *MessageDAOTransfer) GetAmount() uint64 {
 		return x.Amount
 	}
 	return 0
+}
+
+func (x *MessageDAOTransfer) GetMint() bool {
+	if x != nil {
+		return x.Mint
+	}
+	return false
 }
 
 func (x *MessageDAOTransfer) GetStartHeight() uint64 {
@@ -1265,12 +1301,15 @@ var File_message_proto protoreflect.FileDescriptor
 
 const file_message_proto_rawDesc = "" +
 	"\n" +
-	"\rmessage.proto\x12\x05types\x1a\x19google/protobuf/any.proto\x1a\x11certificate.proto\"g\n" +
+	"\rmessage.proto\x12\x05types\x1a\x19google/protobuf/any.proto\x1a\x11certificate.proto\"\xf9\x01\n" +
 	"\vMessageSend\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
 	"\n" +
 	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x04R\x06amount\"\xfd\x01\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\x120\n" +
+	"\x14vesting_start_height\x18\x04 \x01(\x04R\x12vestingStartHeight\x120\n" +
+	"\x14vesting_cliff_height\x18\x05 \x01(\x04R\x12vestingCliffHeight\x12,\n" +
+	"\x12vesting_end_height\x18\x06 \x01(\x04R\x10vestingEndHeight\"\xfd\x01\n" +
 	"\fMessageStake\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x16\n" +
@@ -1309,10 +1348,11 @@ const file_message_proto_rawDesc = "" +
 	"\n" +
 	"end_height\x18\x05 \x01(\x04R\tendHeight\x12\x16\n" +
 	"\x06signer\x18\x06 \x01(\fR\x06signer\x12#\n" +
-	"\rproposal_hash\x18\a \x01(\tR\fproposalHash\"\xad\x01\n" +
+	"\rproposal_hash\x18\a \x01(\tR\fproposalHash\"\xc1\x01\n" +
 	"\x12MessageDAOTransfer\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12!\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12\x12\n" +
+	"\x04mint\x18\x03 \x01(\bR\x04mint\x12!\n" +
 	"\fstart_height\x18\x04 \x01(\x04R\vstartHeight\x12\x1d\n" +
 	"\n" +
 	"end_height\x18\x05 \x01(\x04R\tendHeight\x12#\n" +
