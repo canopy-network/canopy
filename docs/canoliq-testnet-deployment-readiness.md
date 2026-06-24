@@ -26,6 +26,57 @@ work and pins down exactly what data the devs must supply.
 
 ---
 
+## ✅ Testnet upload checklist (at a glance)
+
+Single-source tracker for everything needed to launch on testnet. Detail and
+rationale live in the §A–E and Workstream sections below; this is the summary.
+Last re-run: 2026-06-24 (build green, testnet genesis safety-check clean).
+
+**Part 1 — Files & data — DONE (verified)**
+- [x] §A — 7 bucket recipient addresses wired (bps sum 10000, no placeholder)
+- [x] §B — 5 multisig signers, `multisigThreshold: 3` (3-of-5), `treasuryThreshold: 50M uCLIQ`
+- [x] §C — `validatorRegistry: []` (empty, single-aggregator fallback for first boot)
+- [x] §D — `chainId: 42`, `redemptionUnstakingBlocks: 30240`
+- [x] §D — chainId 42 reservation confirmed with Canopy team
+- [x] `.docker/compose.testnet.yaml` created and `docker compose config`-valid
+- [x] Economic params verified spec-faithful vs v1.2 (fee 12% / 5–20%, 40/30/15/15,
+      buyback, lock multipliers, all 7 governance tiers, insurance, graduation, vesting)
+- [x] `go test ./canoliq/... ./canoliqctl/...` green; testnet genesis safety-check clean
+
+**Part 2 — External coordination — BLOCKING (only Canopy/operators can do) 🔴**
+- [ ] Fund committee pool 42 so `ProcessRewards` is not a no-op — simplest testnet
+      path: self-funded `MessageSubsidy` (`canopy admin tx-subsidy <sender> <amount> 42 <opcode>`, no DAO vote). See §E.
+- [ ] Each committee operator runs `MessageEditStake` adding chainId `42` to their
+      `Validator.Committees[]` (no membership → no consensus, no rewards). See §E.
+- [ ] *(Optional, T6)* Alert webhook URL → `CANOLIQ_ALERT_URL`. See §E.
+
+**Part 3 — Recommended before a meaningful testnet (decisions) 🟡**
+- [ ] Populate `validatorRegistry[]` with real **operator** validator addresses (the
+      same ones doing `MessageEditStake` — **not** the §B signers). Needed for WS3 T1
+      validator-eject coverage + per-validator reward credit. See §C.
+- [ ] TVL-cap decision — genesis ships uncapped (`TvlCapUcnpy: 0`); spec §9.4 wants a
+      33%-of-network-stake cap. Set at genesis or via param-change (T3).
+
+**Part 4 — Execution / verification (run on the image) ⚙️**
+- [ ] WS2 pre-flight: safety banner + self-bootstrap → bucket reconciliation (exactly
+      100M CLIQ) → deposit→redeem→claim smoke → multisig rehearsal
+- [ ] WS3 live T1–T6 run-through on the multi-node image; capture run-through log
+- [ ] WS4 governance security self-review (`governance.go` / `treasury.go` / `alerts.go`)
+
+**Part 5 — Cutover (point of no return) 🚀**
+- [ ] WS5: hash-anchor final genesis + config
+- [ ] Distribute image to validators (`CANOPY_PLUGIN_MODE=canoliq` + testnet `CANOLIQ_CONFIG`)
+- [ ] Verify on real chain: `/v1/health.genesisComplete`, `/v1/validators` matches seeded
+      set, `/v1/pools.committeePool` growing
+
+> ⚠️ **First-block genesis is one-time and irreversible** — the 100M CLIQ mint to
+> bucket addresses cannot be redone. Parts 2–4 must be signed off before Part 5.
+
+**Critical path:** the only hard external blockers are the two Part 2 items. WS4 and
+the TVL-cap decision can be done now (no live testnet needed); WS2/WS3 need a running image.
+
+---
+
 ## 🔑 Data required from the dev team (blocking inputs)
 
 Deployment cannot proceed until the team supplies all of the following. This is
@@ -38,8 +89,8 @@ the critical hand-off — everything else is execution.
 | A | Genesis bucket recipient addresses | ✅ supplied (2026-06-18) |
 | B | Multisig signers | ✅ supplied (2026-06-18) — 3-of-5; `treasuryThreshold` lowered to 50M uCLIQ |
 | C | Validator registry | ✅ shipped empty (2026-06-18) — single-aggregator fallback for first bring-up; populate before mainnet |
-| D | Chain parameters (`chainId`, `redemptionUnstakingBlocks`) | ⏳ pending — `chainId: 2` / `redemptionUnstakingBlocks: 14400` are the template defaults |
-| E | Off-chain coordination facts | ⏳ pending (one item closed: bucket-#2/#3 recipients are controlled distributors, confirmed 2026-06-18) |
+| D | Chain parameters (`chainId`, `redemptionUnstakingBlocks`) | ✅ supplied 2026-06-24 — `chainId: 42` (reserved with the Canopy team, confirmed 2026-06-24 — see §E); `redemptionUnstakingBlocks: 30240` matched to Canopy's official `valParams.UnstakingBlocks` |
+| E | Off-chain coordination facts | 🟡 partial — closed: bucket-#2/#3 distributors (2026-06-18), chainId `42` reservation (2026-06-24); still pending: fund committee pool 42 (self-funded `MessageSubsidy` is the simplest testnet path — no DAO vote), per-validator `MessageEditStake`, alert webhook URL(s) |
 
 ### A. Genesis bucket recipient addresses → `genesis.testnet.json` `buckets[].recipients[].address`  ✅ supplied 2026-06-18
 One 20-byte hex address per bucket (7 total). Must be team-controlled testnet
@@ -83,19 +134,46 @@ for the audit trail.
   The single-aggregator fallback is defensible while validator details are still
   being locked, but must be populated before the WS3 T1 validator-eject scenarios
   carry meaningful coverage, and **must** be populated before mainnet.
+- ⚠️ **These are NOT the §B multisig signers.** The two rosters model different
+  roles and must stay distinct (no code couples them):
+  - §B `multisigSigners[]` = the **DAO treasury council** (cold/hardware keys that
+    authorize treasury spends, 3-of-5; consumed in `treasury.go`/`snapshot.go`).
+  - §C `validatorRegistry[]` = the **professional node operators** (hot keys running
+    committee infrastructure, bearing slashing risk; their addresses match each
+    operator's Canopy `Validator.Address` and must be the same operators that run
+    the §E `MessageEditStake` to join committee 42; consumed in `reward.go` for the
+    15% validator slice, plus `graduation.go`/`alerts.go`).
+  WP §1.2 is explicit that validators are independent operators "not canoLiq
+  itself"; reusing signer addresses here would concentrate treasury control and
+  validator economics in the same hands (the §8 centralization risk) and drag a
+  cold treasury key into a hot-key threat model. Fill the registry with operator
+  validator addresses, not the §B signers.
 
-### D. Chain parameters → `canoliq-config.testnet.json`  ⏳ pending
+### D. Chain parameters → `canoliq-config.testnet.json`  ✅ supplied 2026-06-24
 - `chainId`: the value **reserved with the Canopy team** (no collision with an
-  existing committee). *Current file value:* `2` (template default — confirm
-  with the Canopy team whether this is the reserved testnet value).
+  existing committee). *Current file value:* `42` (wired 2026-06-24). Reservation
+  with the Canopy team confirmed 2026-06-24 (no committee collision) — see §E.
 - `redemptionUnstakingBlocks`: must match the **Canopy testnet's
-  `valParams.UnstakingBlocks`**. *Current file value:* `14400` (the template's
-  guess — confirm against the live testnet value).
+  `valParams.UnstakingBlocks`**. *Current file value:* `30240` — Canopy's official
+  `unstakingBlocks` (supplied 2026-06-24), replacing the `14400` template guess.
 
 ### E. Off-chain coordination facts (not file edits, but gating)
-- Confirmation the **chainId is reserved**.  ⏳ pending
-- A **`MessageSubsidy` proposal** queued/passed on the Canopy DAO (until it passes,
-  `ProcessRewards` is a no-op — no rewards flow).  ⏳ pending
+- Confirmation the **chainId is reserved**.  ✅ confirmed 2026-06-24 — chainId `42`
+  reserved with the Canopy team (no committee collision).
+- **Committee reward pool (chainId 42) funded** so `ProcessRewards` is not a no-op
+  — until CNPY flows into the pool, no rewards distribute.  ⏳ pending. Three
+  non-exclusive paths:
+  - **Self-funded `MessageSubsidy`** (CLI `admin tx-subsidy <sender> <amount> 42
+    <opcode>`) — a plain transaction that debits the sender and credits pool 42
+    (`fsm/message.go::HandleMessageSubsidy`). **No Canopy DAO vote required.** This
+    is the simplest testnet unblock: seed pool 42 from a team wallet.
+  - **Auto-subsidization** — protocol auto-mints CNPY to any committee holding ≥33%
+    of total network restake (WP §6.2); requires launch validators to push chainId
+    42 over the threshold. canoLiq's day-one goal, but not required for testnet.
+  - **Canopy DAO treasury subsidy** — a `tx-dao-transfer` governance *proposal*
+    (CLI `admin tx-dao-transfer`, subject to Canopy's DAO vote) for sustained
+    funding; this is the "formal proposal to Canopy DAO" of WP §6.3. Matters more
+    for mainnet than for testnet bring-up.
 - Confirmation each committee validator has run **`MessageEditStake`** adding the
   chainId to `Validator.Committees[]`.  ⏳ pending
 - Webhook URL(s) for alerts (optional) → `CANOLIQ_ALERT_URL` / `alerts` config.  ⏳ pending
@@ -104,16 +182,17 @@ for the audit trail.
 
 ---
 
-## Workstream 1 — Wire dev-provided data (once D arrives; A, B, C wired)
+## Workstream 1 — Wire dev-provided data (A–D wired)
 
 Edit the two committed files and re-verify invariants. A landed in commit
-`f3fa10e2`; B + C landed alongside this doc update; D remains.
+`f3fa10e2`; B + C landed alongside this doc update; D (chainId `42` +
+redemptionUnstakingBlocks `30240`) wired 2026-06-24.
 
 - `plugin/go/canoliq/genesis.testnet.json` — ~~replace the 7 bucket addresses~~ ✅,
   ~~the multisig signers~~ ✅, ~~and the validator registry entries~~ ✅ (shipped empty);
   ~~adjust `multisigThreshold` / `treasuryThreshold` if requested~~ ✅.
-- `plugin/go/canoliq/canoliq-config.testnet.json` — set `chainId` +
-  `redemptionUnstakingBlocks`.
+- `plugin/go/canoliq/canoliq-config.testnet.json` — ~~set `chainId` +
+  `redemptionUnstakingBlocks`~~ ✅ (`42` / `30240`).
 - Do **not** touch bucket `bps`, recipient `bps`, or vesting (`cliffMonths`/
   `vestMonths`) — those are spec-fixed and validated (`genesis.go::validateGenesis`
   requires bucket bps and per-bucket recipient bps to each total 10000;
@@ -126,10 +205,10 @@ Edit the two committed files and re-verify invariants. A landed in commit
 
 ## Workstream 2 — Pre-flight verification on a private testnet image
 
-Follow README Phase 2 (lines 323–417). Create the missing compose file (the repo
-has none): copy `.docker/compose.yaml` → `.docker/compose.testnet.yaml`, switching
-the `CANOLIQ_CONFIG` env to `…/canoliq-config.testnet.json`. The Dockerfile already
-bundles both genesis + config variants, so no rebuild logic changes.
+Follow README Phase 2 (lines 323–417). The compose file now exists:
+`.docker/compose.testnet.yaml` (created 2026-06-24) mirrors `.docker/compose.yaml`
+with `CANOLIQ_CONFIG` pointed at `…/canoliq-config.testnet.json`. The Dockerfile
+already bundles both genesis + config variants, so no rebuild logic changes.
 
 - **2.1 Safety banner + check** — boot, confirm the `profile="testnet"` banner and
   that genesis self-bootstraps.
@@ -206,7 +285,7 @@ redone, so Workstreams 1–2 must be signed off first.
 |---|---|
 | Genesis values to fill | `plugin/go/canoliq/genesis.testnet.json` |
 | Chain config to fill | `plugin/go/canoliq/canoliq-config.testnet.json` |
-| Testnet compose (to create) | `.docker/compose.testnet.yaml` (copy of `.docker/compose.yaml`) |
+| Testnet compose | `.docker/compose.testnet.yaml` ✅ (created 2026-06-24) |
 | Safety check / param validation | `plugin/go/canoliq/config.go` (`SafetyCheck`, `ValidateParams`) |
 | Genesis invariants | `plugin/go/canoliq/genesis.go` (`validateGenesis`, `applyGenesisBuckets`) |
 | Deploy guide (reference, don't duplicate) | `plugin/go/canoliq/README.md` §"Testnet deployment" |
