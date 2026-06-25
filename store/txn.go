@@ -46,7 +46,7 @@ type Txn struct {
 
 // txn internal structure maintains the write operations sorted lexicographically by keys
 type txn struct {
-	ops    map[uint64]valueOp        // [string(key)] -> set/del operations saved in memory
+	ops    map[string]valueOp        // [hex(key)] -> set/del operations saved in memory; string keys avoid uint64 hash collisions
 	sorted *btree.BTreeG[*CacheItem] // sorted btree of keys for fast iteration
 	rbuf   []byte                    // a buffer to re-use for reads
 
@@ -97,7 +97,7 @@ func NewTxn(reader TxnReaderI, writer TxnWriterI, prefix []byte, state, sort, se
 		seek:         seek,
 		writeVersion: v,
 		txn: &txn{
-			ops:    make(map[uint64]valueOp),
+			ops:    make(map[string]valueOp),
 			sorted: btree.NewG(32, func(a, b *CacheItem) bool { return a.Less(b) }), // need to benchmark this value
 			l:      sync.Mutex{},
 		},
@@ -109,7 +109,7 @@ func (t *Txn) Get(key []byte) ([]byte, lib.ErrorI) {
 	t.txn.l.Lock()
 	defer t.txn.l.Unlock()
 	// first retrieve from the in-memory txn
-	if v, found := t.txn.ops[lib.MemHash(key)]; found {
+	if v, found := t.txn.ops[string(key)]; found {
 		if v.op == opDelete {
 			return nil, nil
 		}
@@ -142,7 +142,7 @@ func (t *Txn) DeleteAt(key []byte, version uint64) lib.ErrorI {
 
 // update() modifies or adds an operation to the txn
 func (t *Txn) update(key []byte, val []byte, version uint64, opAction op) (e lib.ErrorI) {
-	hashedKey := lib.MemHash(key)
+	hashedKey := string(key)
 	t.txn.l.Lock()
 	defer t.txn.l.Unlock()
 	if _, found := t.txn.ops[hashedKey]; !found && t.sort {
@@ -153,7 +153,7 @@ func (t *Txn) update(key []byte, val []byte, version uint64, opAction op) (e lib
 }
 
 // addToSorted() inserts a key into the sorted list of operations maintaining lexicographical order
-func (t *Txn) addToSorted(key []byte, hashedKey uint64) {
+func (t *Txn) addToSorted(key []byte, hashedKey string) {
 	t.txn.sorted.ReplaceOrInsert(&CacheItem{Key: key, HashedKey: hashedKey, Exists: true})
 }
 
