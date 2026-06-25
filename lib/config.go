@@ -73,6 +73,14 @@ type MainConfig struct {
 	Plugin              string                 `json:"plugin"`              // the configured plugin to use
 	PluginTimeoutMS     int                    `json:"pluginTimeoutMS"`     // plugin request timeout in milliseconds
 	PluginAutoUpdate    PluginAutoUpdateConfig `json:"pluginAutoUpdate"`    // plugin auto-update configuration
+	// GCPercent is the Go garbage collector target percentage (GOGC). Higher values collect less
+	// frequently, trading memory for CPU. Bounded by MemoryLimitPercent below. 0 keeps the Go default.
+	// Overridden by the GOGC environment variable when set. Does not affect on-chain behavior.
+	GCPercent int `json:"gcPercent"`
+	// MemoryLimitPercent sets a soft heap ceiling (GOMEMLIMIT) as a percentage of the memory available
+	// to the process (cgroup limit when containerized, else host memory). 0 keeps the Go default.
+	// Overridden by the GOMEMLIMIT environment variable when set. Does not affect on-chain behavior.
+	MemoryLimitPercent int `json:"memoryLimitPercent"`
 }
 
 // PluginAutoUpdateConfig holds configuration for plugin auto-updates
@@ -97,6 +105,10 @@ func DefaultMainConfig() MainConfig {
 		Headless:        false,         // serve the web wallet and block explorer by default
 		AutoUpdate:      true,          // set it as default while in inmature state
 		PluginTimeoutMS: 1000,          // 1 second default plugin timeout
+		// collect less frequently to cut the GC CPU tax driven by Pebble's on-heap read buffers,
+		// kept safe by the soft memory limit below
+		GCPercent:          200, // collect when the heap grows 2x past live (vs the Go default of 1x)
+		MemoryLimitPercent: 90,  // soft-cap heap at 90% of the memory available to the process
 	}
 }
 

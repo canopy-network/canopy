@@ -89,6 +89,10 @@ var startCmd = &cobra.Command{
 
 // Start() is the entrypoint of the application
 func Start() {
+	// tune the Go garbage collector to reduce GC CPU overhead before any heavy
+	// allocation begins (storage-driven GC pressure is the main scalability cost);
+	// this only affects runtime memory management, not on-chain behavior
+	lib.TuneRuntimeGC(config.GCPercent, config.MemoryLimitPercent, l)
 	// start the validator TCP proxy (if configured)
 	proxy := lib.NewValidatorTCPProxy(config.ValidatorTCPProxy, l)
 	if err := proxy.Start(); err != nil {
