@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"path"
-	"path/filepath"
 	"slices"
 	"sync"
 	"time"
@@ -406,11 +405,7 @@ func (p *PeerBook) WriteToFile() error {
 	if err != nil {
 		return err
 	}
-	// create all necessary directories
-	if err = os.MkdirAll(filepath.Dir(p.path), os.ModePerm); err != nil {
-		return err
-	}
-	return os.WriteFile(p.path, configBz, os.ModePerm)
+	return lib.WriteFileAtomic(p.path, configBz, os.ModePerm)
 }
 
 // SaveRoutine() periodically saves the book to a json file
