@@ -11,8 +11,8 @@ All routes are `GET` only.
 | `/v1/health` | `{height, genesisComplete, chainId, tvlCapBps, tvlCapStatus, canopyTotalStake, tvlCapUcnpyEffective, tvlUtilizationBps}` |
 | `/v1/globals` | `CanoliqGlobals` (singleton accounting record) |
 | `/v1/params` | `CanoliqParams` (governance-tunable knobs) |
-| `/v1/pools` | Committee pool, treasury (CNPY/CLIQ), buyback, insurance, per-validator incentives, peak TVL, insurance target & funded-bps |
-| `/v1/account/{addr}` | Composite per-address view: CNPY + cCNPY + liquid CLIQ + stake + validator-incentive + vesting |
+| `/v1/pools` | Committee pool, treasury (CNPY/CPLQ), buyback, insurance, per-validator incentives, peak TVL, insurance target & funded-bps |
+| `/v1/account/{addr}` | Composite per-address view: CNPY + cCNPY + liquid CPLQ + stake + validator-incentive + vesting |
 | `/v1/proposals` | Active proposal id list |
 | `/v1/proposal/{id}` | Full `Proposal` record |
 | `/v1/vote/{id}/{voter}` | Vote cast by `voter` on proposal `id` |
@@ -21,7 +21,7 @@ All routes are `GET` only.
 | `/v1/spend/{id}` | `TreasurySpend` record |
 | `/v1/spend/{id}/approvals` | Multisig approvals filtered to the *current* signer set |
 | `/v1/validators` | `ValidatorRegistry` (canoLiq committee snapshot used for pro-rata) |
-| `/v1/stakers` | Active CLIQ stakers with amount and `stakedAtHeight` |
+| `/v1/stakers` | Active CPLQ stakers with amount and `stakedAtHeight` |
 | `/v1/graduation` | Autonomy-graduation metrics + composite `eligible` flag |
 | `/v1/restaking` | Per-Canopy-committee policy + observed exposure + drift / compliance |
 | `/v1/redemption/{addr}/{id}` | A queued cCNPY → CNPY redemption record |
@@ -65,7 +65,7 @@ GET /v1/pools
 {
   "committeePool": "950000000",
   "treasuryCnpy": "30000000",
-  "treasuryCliq": "0",
+  "treasuryCplq": "0",
   "buybackPool": "17000000",
   "insurancePool": "4200000",
   "validatorIncentives": [],
@@ -125,11 +125,11 @@ GET /v1/globals
   "totalPooledCnpy": "1050000000",
   "pendingRedemptionCnpy": "50000000",
   "lastProcessedRewardPool": "950000000",
-  "cliqTotalSupply": "100000000000000",
-  "cliqCirculatingSupply": "25000000000000",
+  "cplqTotalSupply": "100000000000000",
+  "cplqCirculatingSupply": "25000000000000",
   "nextRedemptionId": 42,
   "genesisComplete": true,
-  "totalStakedCliq": "10000000000000",
+  "totalStakedCplq": "10000000000000",
   "nextProposalId": 5,
   "nextBuybackId": 2,
   "nextSpendId": 3,
@@ -144,8 +144,8 @@ GET /v1/account/{addr}
 {
   "cnpy": "500000000",
   "ccnpy": "250000000",
-  "liquidCliq": "1000000000",
-  "stakedCliq": "5000000000",
+  "liquidCplq": "1000000000",
+  "stakedCplq": "5000000000",
   "stakedAtHeight": 10000,
   "validatorIncentive": "100000",
   "vesting": [
@@ -164,4 +164,4 @@ GET /v1/account/{addr}
 
 ## Known Gaps
 
-There are no per-address indexes for redemptions or unstaking-CLIQ records. To list those for an address, the caller needs the id (returned by the originating tx). A future iteration can add per-address indexes if operator demand emerges.
+There are no per-address indexes for redemptions or unstaking-CPLQ records. To list those for an address, the caller needs the id (returned by the originating tx). A future iteration can add per-address indexes if operator demand emerges.

@@ -47,8 +47,8 @@ func TestT2TierMultipliers(t *testing.T) {
 // that a LOCK_24M staker out-votes three LOCK_NONE stakers of equal stake.
 func TestT2VoteWeightForScalesWithTier(t *testing.T) {
 	const x = 1_000_000
-	none := &contract.CLIQStake{Address: addr20(0x01), Amount: x, LockTier: contract.LockTier_LOCK_NONE}
-	max := &contract.CLIQStake{Address: addr20(0x02), Amount: x, LockTier: contract.LockTier_LOCK_24M}
+	none := &contract.CPLQStake{Address: addr20(0x01), Amount: x, LockTier: contract.LockTier_LOCK_NONE}
+	max := &contract.CPLQStake{Address: addr20(0x02), Amount: x, LockTier: contract.LockTier_LOCK_24M}
 	if got := voteWeightFor(none); got != x {
 		t.Errorf("LOCK_NONE weight: got %d want %d", got, x)
 	}
@@ -58,7 +58,7 @@ func TestT2VoteWeightForScalesWithTier(t *testing.T) {
 	if voteWeightFor(max) <= 3*voteWeightFor(none) {
 		t.Error("one LOCK_24M staker should out-vote three LOCK_NONE stakers of equal stake")
 	}
-	if voteWeightFor(nil) != 0 || voteWeightFor(&contract.CLIQStake{}) != 0 {
+	if voteWeightFor(nil) != 0 || voteWeightFor(&contract.CPLQStake{}) != 0 {
 		t.Error("absent stake should carry zero weight")
 	}
 }
@@ -77,8 +77,8 @@ func TestT2VoteTallyAppliesMultiplier(t *testing.T) {
 	no1, no2, no3 := addr20(0x31), addr20(0x32), addr20(0x33)
 	stakeAt := func(addr []byte, tier contract.LockTier) {
 		seedAccount(s, addr, 1_000_000)
-		seedCLIQ(s, addr, x)
-		if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: addr, Amount: x, LockTier: tier}, 10_000, params); r.Error != nil {
+		seedCPLQ(s, addr, x)
+		if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: addr, Amount: x, LockTier: tier}, 10_000, params); r.Error != nil {
 			t.Fatalf("stake %x: %v", addr[0], r.Error)
 		}
 	}
@@ -90,11 +90,11 @@ func TestT2VoteTallyAppliesMultiplier(t *testing.T) {
 
 	c.plugin.setHeight(10)
 	payload, _ := anypb.New(&contract.ProposalParamChange{Params: shortGovParams()})
-	if r := c.DeliverMessageCLIQProposalCreate(&contract.MessageCLIQProposalCreate{FromAddress: yes, Payload: payload}, 10_000, params); r.Error != nil {
+	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{FromAddress: yes, Payload: payload}, 10_000, params); r.Error != nil {
 		t.Fatalf("create: %v", r.Error)
 	}
 	vote := func(addr []byte, choice contract.VoteChoice) {
-		if r := c.DeliverMessageCLIQVote(&contract.MessageCLIQVote{FromAddress: addr, ProposalId: 1, Choice: choice}, 10_000, params); r.Error != nil {
+		if r := c.DeliverMessageCPLQVote(&contract.MessageCPLQVote{FromAddress: addr, ProposalId: 1, Choice: choice}, 10_000, params); r.Error != nil {
 			t.Fatalf("vote %x: %v", addr[0], r.Error)
 		}
 	}
@@ -126,37 +126,37 @@ func TestT2RewardBoostInBuybackDistribution(t *testing.T) {
 	none := addr20(0xa1)
 	locked := addr20(0xb1)
 	const stake uint64 = 100
-	s.set(KeyForCLIQStake(none), mustMarshal(&contract.CLIQStake{Address: none, Amount: stake, StakedAtHeight: 1, LockTier: contract.LockTier_LOCK_NONE}))
-	s.set(KeyForCLIQStake(locked), mustMarshal(&contract.CLIQStake{Address: locked, Amount: stake, StakedAtHeight: 1, LockTier: contract.LockTier_LOCK_12M, LockEndHeight: 9_999_999}))
-	s.set(KeyForCLIQStakeIndex(), mustMarshal(&contract.CLIQStakeIndex{Addresses: [][]byte{none, locked}}))
-	seedGlobals(s, &contract.CanoliqGlobals{TotalStakedCliq: 2 * stake})
+	s.set(KeyForCPLQStake(none), mustMarshal(&contract.CPLQStake{Address: none, Amount: stake, StakedAtHeight: 1, LockTier: contract.LockTier_LOCK_NONE}))
+	s.set(KeyForCPLQStake(locked), mustMarshal(&contract.CPLQStake{Address: locked, Amount: stake, StakedAtHeight: 1, LockTier: contract.LockTier_LOCK_12M, LockEndHeight: 9_999_999}))
+	s.set(KeyForCPLQStakeIndex(), mustMarshal(&contract.CPLQStakeIndex{Addresses: [][]byte{none, locked}}))
+	seedGlobals(s, &contract.CanoliqGlobals{TotalStakedCplq: 2 * stake})
 
 	// boosted weights: none=100, locked=150, total=250; acquire 250.
-	const treasuryCLIQ, buybackPoolAmt uint64 = 1_000_000, 1_000_000
-	s.set(KeyForTreasuryCLIQ(), EncodeUint64(treasuryCLIQ))
+	const treasuryCPLQ, buybackPoolAmt uint64 = 1_000_000, 1_000_000
+	s.set(KeyForTreasuryCPLQ(), EncodeUint64(treasuryCPLQ))
 	s.set(KeyForBuybackPool(), EncodeUint64(buybackPoolAmt))
 	const proposalID, cnpyAmount, price uint64 = 7, 250, 1_000_000
 	s.set(KeyForBuybackOrder(proposalID), mustMarshal(&contract.BuybackOrder{
 		ProposalId: proposalID,
 		Mode:       contract.BuybackMode_BUYBACK_DISTRIBUTE_STAKERS,
-		Payload:    &contract.ProposalBuyback{CnpyAmount: cnpyAmount, PriceMicroCnpyPerCliq: price, Mode: contract.BuybackMode_BUYBACK_DISTRIBUTE_STAKERS},
+		Payload:    &contract.ProposalBuyback{CnpyAmount: cnpyAmount, PriceMicroCnpyPerCplq: price, Mode: contract.BuybackMode_BUYBACK_DISTRIBUTE_STAKERS},
 	}))
 	trigger := addr20(0xcc)
 	seedAccount(s, trigger, 1_000_000)
 	if r := c.DeliverMessageBuybackExecute(&contract.MessageBuybackExecute{FromAddress: trigger, ProposalId: proposalID}, 10_000, params); r.Error != nil {
 		t.Fatalf("execute: %v", r.Error)
 	}
-	cliqAcquired := cnpyAmount * 1_000_000 / price // 250
-	gotNone := readCliq(s, none)
-	gotLocked := readCliq(s, locked)
+	cplqAcquired := cnpyAmount * 1_000_000 / price // 250
+	gotNone := readCplq(s, none)
+	gotLocked := readCplq(s, locked)
 	if gotNone != 100 || gotLocked != 150 {
 		t.Errorf("boosted distribution: none=%d locked=%d want 100/150", gotNone, gotLocked)
 	}
 	if gotLocked*2 != gotNone*3 { // 150/100 == 1.5
 		t.Errorf("LOCK_12M should get 1.5× the LOCK_NONE share: none=%d locked=%d", gotNone, gotLocked)
 	}
-	if gotNone+gotLocked != cliqAcquired {
-		t.Errorf("conservation: %d+%d != %d", gotNone, gotLocked, cliqAcquired)
+	if gotNone+gotLocked != cplqAcquired {
+		t.Errorf("conservation: %d+%d != %d", gotNone, gotLocked, cplqAcquired)
 	}
 }
 
@@ -168,17 +168,17 @@ func TestT2UnstakeLockGate(t *testing.T) {
 	seedParams(t, c, params)
 	a := addr20(0x51)
 	const amount uint64 = 5_000_000
-	s.set(KeyForCLIQStake(a), mustMarshal(&contract.CLIQStake{
+	s.set(KeyForCPLQStake(a), mustMarshal(&contract.CPLQStake{
 		Address: a, Amount: amount, StakedAtHeight: 1,
 		LockTier: contract.LockTier_LOCK_3M, LockEndHeight: 1_000,
 	}))
-	s.set(KeyForCLIQStakeIndex(), mustMarshal(&contract.CLIQStakeIndex{Addresses: [][]byte{a}}))
-	seedGlobals(s, &contract.CanoliqGlobals{TotalStakedCliq: amount})
+	s.set(KeyForCPLQStakeIndex(), mustMarshal(&contract.CPLQStakeIndex{Addresses: [][]byte{a}}))
+	seedGlobals(s, &contract.CanoliqGlobals{TotalStakedCplq: amount})
 	seedAccount(s, a, 1_000_000)
 
 	// Before lock end → rejected.
 	c.plugin.setHeight(500)
-	if r := c.DeliverMessageCLIQUnstake(&contract.MessageCLIQUnstake{FromAddress: a, Amount: 1_000_000}, 10_000, params); r.Error == nil {
+	if r := c.DeliverMessageCPLQUnstake(&contract.MessageCPLQUnstake{FromAddress: a, Amount: 1_000_000}, 10_000, params); r.Error == nil {
 		t.Fatal("expected ErrStakeLocked before lock_end_height")
 	} else if r.Error.Code != codeStakeLocked {
 		t.Fatalf("expected codeStakeLocked, got %d", r.Error.Code)
@@ -186,7 +186,7 @@ func TestT2UnstakeLockGate(t *testing.T) {
 
 	// After lock end → accepted.
 	c.plugin.setHeight(1_001)
-	if r := c.DeliverMessageCLIQUnstake(&contract.MessageCLIQUnstake{FromAddress: a, Amount: 1_000_000}, 10_000, params); r.Error != nil {
+	if r := c.DeliverMessageCPLQUnstake(&contract.MessageCPLQUnstake{FromAddress: a, Amount: 1_000_000}, 10_000, params); r.Error != nil {
 		t.Fatalf("unstake after lock end: %v", r.Error)
 	}
 	if got := loadStake(t, s, a).Amount; got != amount-1_000_000 {
@@ -202,15 +202,15 @@ func TestT2StakeLockOnlyStrengthens(t *testing.T) {
 	seedParams(t, c, params)
 	a := addr20(0x61)
 	seedAccount(s, a, 1_000_000)
-	seedCLIQ(s, a, 30_000_000)
+	seedCPLQ(s, a, 30_000_000)
 
 	c.plugin.setHeight(100)
 	// First stake: LOCK_NONE.
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: a, Amount: 10_000_000, LockTier: contract.LockTier_LOCK_NONE}, 10_000, params); r.Error != nil {
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: a, Amount: 10_000_000, LockTier: contract.LockTier_LOCK_NONE}, 10_000, params); r.Error != nil {
 		t.Fatalf("stake none: %v", r.Error)
 	}
 	// Strengthen to LOCK_12M.
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: a, Amount: 10_000_000, LockTier: contract.LockTier_LOCK_12M}, 10_000, params); r.Error != nil {
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: a, Amount: 10_000_000, LockTier: contract.LockTier_LOCK_12M}, 10_000, params); r.Error != nil {
 		t.Fatalf("stake 12m: %v", r.Error)
 	}
 	st := loadStake(t, s, a)
@@ -223,7 +223,7 @@ func TestT2StakeLockOnlyStrengthens(t *testing.T) {
 	}
 
 	// Adding LOCK_NONE must not weaken the existing 12M lock.
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: a, Amount: 10_000_000, LockTier: contract.LockTier_LOCK_NONE}, 10_000, params); r.Error != nil {
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: a, Amount: 10_000_000, LockTier: contract.LockTier_LOCK_NONE}, 10_000, params); r.Error != nil {
 		t.Fatalf("stake none again: %v", r.Error)
 	}
 	st = loadStake(t, s, a)

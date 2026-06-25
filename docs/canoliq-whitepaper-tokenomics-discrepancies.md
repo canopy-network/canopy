@@ -3,7 +3,7 @@
 **Date:** 2026-05-22
 **Documents compared:**
 - `canoLiq_Whitepaper_v1.1.pdf` (Technical Whitepaper, Version 1.1, May 2025)
-- `canoLiq_Tokenomics_v1.1.pdf` (CLIQ Token Design & Protocol Economics, v1.1, May 2025)
+- `canoLiq_Tokenomics_v1.1.pdf` (CPLQ Token Design & Protocol Economics, v1.1, May 2025)
 
 > **Status (verified 2026-06-18, closed 2026-06-18): All findings resolved.**
 > All four doc-vs-doc discrepancies are fixed in v1.2 — see
@@ -138,7 +138,7 @@ distribution (Community) and 24-month emission (Liquidity).
 
 **Documents checked:**
 - `canoLiq_Whitepaper_v1.2.pdf` (Technical Whitepaper, Version 1.2, May 2025)
-- `canoLiq_Tokenomics_v1.2.pdf` (CLIQ Token Design & Protocol Economics, v1.2, May 2025)
+- `canoLiq_Tokenomics_v1.2.pdf` (CPLQ Token Design & Protocol Economics, v1.2, May 2025)
 
 | # | Severity | v1.1 finding | v1.2 status |
 |---|----------|---------------------------------------------------------|-------------|
@@ -175,7 +175,7 @@ distribution (Community) and 24-month emission (Liquidity).
 - **Whitepaper v1.2 §6 scenario table (p. 9):** "Partial subsidy (6 mo.) → ~**30–45%**
   reduction".
 - **Tokenomics v1.2 §5.3 scenario table (p. 7):** "6-month CNPY subsidy → ~**30–45%**
-  reduction in early CLIQ emission". Tokenomics moved from `33–45%` to match the
+  reduction in early CPLQ emission". Tokenomics moved from `33–45%` to match the
   whitepaper.
 
 ### #4 — Buyback default (Minor) ✅
@@ -184,10 +184,10 @@ The Tokenomics doc, which previously never named the default, now states it in t
 
 - **§1 Overview table (p. 2):** "15% of all protocol fees; **default action is burn**;
   DAO may vote quarterly to distribute to locked stakers".
-- **§3.2 fee distribution table (p. 5):** "Open-market CLIQ purchase; **default action
-  is Burn**. DAO may vote quarterly to distribute to locked CLIQ stakers instead of
+- **§3.2 fee distribution table (p. 5):** "Open-market CPLQ purchase; **default action
+  is Burn**. DAO may vote quarterly to distribute to locked CPLQ stakers instead of
   burning."
-- **§4.1 Buyback Engine (p. 5):** "The **default action** for purchased CLIQ is to
+- **§4.1 Buyback Engine (p. 5):** "The **default action** for purchased CPLQ is to
   **burn** it, reducing circulating supply permanently."
 
 Whitepaper v1.2 §8.1 (p. 9) is unchanged: Buyback Mechanism default = "Burn".

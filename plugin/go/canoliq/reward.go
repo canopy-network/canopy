@@ -2,7 +2,6 @@ package canoliq
 
 import (
 	"bytes"
-	"math/rand"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
@@ -26,11 +25,13 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	}
 	globalsKey := KeyForGlobals()
 	poolKey := contract.KeyForFeePool(c.Config.ChainId)
-	gQ, pQ := rand.Uint64(), rand.Uint64()
+	escrowKey := KeyForEscrowPool()
+	gQ, pQ, eQ := qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: gQ, Key: globalsKey},
 			{QueryId: pQ, Key: poolKey},
+			{QueryId: eQ, Key: escrowKey},
 		},
 	})
 	if err != nil {
@@ -41,6 +42,7 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	}
 	globals := new(contract.CanoliqGlobals)
 	pool := new(contract.Pool)
+	escrow := new(contract.Pool)
 	for _, r := range resp.Results {
 		if len(r.Entries) == 0 {
 			continue
@@ -52,6 +54,10 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 			}
 		case pQ:
 			if e := contract.Unmarshal(r.Entries[0].Value, pool); e != nil {
+				return e
+			}
+		case eQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, escrow); e != nil {
 				return e
 			}
 		}
@@ -71,8 +77,19 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 		return c.SaveGlobals(globals)
 	}
 	delta := pool.Amount - globals.LastProcessedRewardPool
-	fee := FeeOnReward(delta, params.FeeBps)
-	netToUsers := delta - fee
+	// L3: the committee pool grows from two sources — Canopy committee rewards
+	// and canoLiq's own protocol tx fees (every handler credits its fee here).
+	// Only the reward portion is subject to the 12% fee + 40/30/15/15 split; the
+	// accrued tx-fee portion is protocol revenue that routes straight to the DAO
+	// treasury (see the treasury credit below). Clamp guards a never-expected
+	// accrual > pool-growth case.
+	txFees := c.readScalar(KeyForTxFeeAccrual())
+	if txFees > delta {
+		txFees = delta
+	}
+	rewardDelta := delta - txFees
+	fee := FeeOnReward(rewardDelta, params.FeeBps)
+	netToUsers := rewardDelta - fee
 	split := SplitFee(fee, &FeeSplitParams{
 		UserRebateBps: params.UserRebateBps,
 		TreasuryBps:   params.TreasuryBps,
@@ -81,23 +98,26 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	})
 	// User accrual: net rewards plus the user-rebate slice flow into the
 	// pooled CNPY backing cCNPY, lifting the cCNPY/CNPY exchange rate.
-	globals.TotalPooledCnpy += netToUsers + split.UserRebate
+	userSlice := netToUsers + split.UserRebate
+	globals.TotalPooledCnpy += userSlice
 	// Advance the peak-TVL high water mark (T4) post-accrual.
 	if globals.TotalPooledCnpy > globals.PeakTvlUcnpy {
 		globals.PeakTvlUcnpy = globals.TotalPooledCnpy
 	}
 
-	// Drain the swept reward from the committee pool. The remainder
-	// (validator + treasury + buyback shares) lives in plugin-owned keys.
+	// Drain the whole swept reward from the committee pool. Every slice now
+	// lives in a plugin-owned key: the user slice moves into the escrow pool
+	// (H1 — it backs cCNPY redemptions, kept distinct from this fee pool so it
+	// is not re-swept as reward next block); validator/treasury/buyback go to
+	// their own keys below.
 	if pool.Amount >= delta {
 		pool.Amount -= delta
 	} else {
 		pool.Amount = 0
 	}
-	// Re-credit the user-rebate + net portion back into the pool so cCNPY
-	// holders can redeem against it. Validator/treasury/buyback portions are
-	// removed from the committee pool by the subtraction above.
-	pool.Amount += netToUsers + split.UserRebate
+	// H1: credit the user slice into the escrow pool so cCNPY holders can
+	// redeem against real CNPY. Keeps escrow == TotalPooledCnpy + PendingRedemptionCnpy.
+	escrow.Amount += userSlice
 	// Record the post-sweep pool balance so the next block isolates only
 	// fresh subsidy/fee inflows as delta.
 	globals.LastProcessedRewardPool = pool.Amount
@@ -110,18 +130,23 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	if e != nil {
 		return e
 	}
+	escrowBz, e := contract.Marshal(escrow)
+	if e != nil {
+		return e
+	}
 	sets := []*contract.PluginSetOp{
 		{Key: globalsKey, Value: gBz},
 		{Key: poolKey, Value: poolBz},
+		{Key: escrowKey, Value: escrowBz},
 	}
-	// Treasury & buyback go into plugin-owned scalar keys. WP §11 prescribes
-	// 1–2% of the treasury feed into an insurance pool: skim insurance_bps
-	// off the treasury slice so every credit auto-routes a fraction.
-	if split.Treasury > 0 {
-		insurance := uint64(0)
-		if params.InsuranceBps > 0 {
-			insurance = mulDiv(split.Treasury, params.InsuranceBps, 10_000)
-		}
+	// Treasury & buyback go into plugin-owned scalar keys. WP §9.2 (slashing
+	// risk) prescribes seeding an insurance pool from treasury inflow: skim
+	// insurance_bps off the treasury reward slice so every credit auto-routes a
+	// fraction. The L3 tx-fee revenue is added to the treasury credit here too
+	// but is NOT subject to the insurance skim (it is not committee reward).
+	insurance := uint64(0)
+	if split.Treasury > 0 && params.InsuranceBps > 0 {
+		insurance = mulDiv(split.Treasury, params.InsuranceBps, 10_000)
 		// T4: once the reserve reaches its target (insurance_target_bps of peak
 		// TVL), stop skimming — the would-be insurance amount stays in the
 		// treasury so the fee-conservation invariant still holds. A target of 0
@@ -132,21 +157,26 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 				insurance = 0
 			}
 		}
-		treasuryDelta := split.Treasury - insurance
-		if treasuryDelta > 0 {
-			treasuryKey := KeyForTreasuryCNPY()
-			sets = append(sets, &contract.PluginSetOp{
-				Key:   treasuryKey,
-				Value: EncodeUint64(c.readScalar(treasuryKey) + treasuryDelta),
-			})
-		}
-		if insurance > 0 {
-			insuranceKey := KeyForInsurancePool()
-			sets = append(sets, &contract.PluginSetOp{
-				Key:   insuranceKey,
-				Value: EncodeUint64(c.readScalar(insuranceKey) + insurance),
-			})
-		}
+	}
+	treasuryDelta := (split.Treasury - insurance) + txFees
+	if treasuryDelta > 0 {
+		treasuryKey := KeyForTreasuryCNPY()
+		sets = append(sets, &contract.PluginSetOp{
+			Key:   treasuryKey,
+			Value: EncodeUint64(c.readScalar(treasuryKey) + treasuryDelta),
+		})
+	}
+	if insurance > 0 {
+		insuranceKey := KeyForInsurancePool()
+		sets = append(sets, &contract.PluginSetOp{
+			Key:   insuranceKey,
+			Value: EncodeUint64(c.readScalar(insuranceKey) + insurance),
+		})
+	}
+	// L3: the accrued tx-fees have now been routed to the treasury; zero the
+	// accumulator so the next sweep starts fresh.
+	if txFees > 0 {
+		sets = append(sets, &contract.PluginSetOp{Key: KeyForTxFeeAccrual(), Value: EncodeUint64(0)})
 	}
 	if split.Buyback > 0 {
 		buybackKey := KeyForBuybackPool()
@@ -173,7 +203,7 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 // returning 0 if absent. Used by ProcessRewards to read-modify-write
 // treasury/buyback/validator accumulators in one batch.
 func (c *Canoliq) readScalar(key []byte) uint64 {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: key}},
 	})
@@ -293,7 +323,7 @@ func (c *Canoliq) ejectValidator(addr []byte) *contract.PluginError {
 // loadValidatorRegistry reads the singleton validator registry. Returns
 // (nil, nil) when absent.
 func (c *Canoliq) loadValidatorRegistry() (*contract.ValidatorRegistry, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForValidatorRegistry()}},
 	})

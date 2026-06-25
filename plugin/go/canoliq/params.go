@@ -1,8 +1,6 @@
 package canoliq
 
 import (
-	"math/rand"
-
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -10,7 +8,7 @@ import (
 // DefaultParams() if the key is unset. Genesis is responsible for writing
 // the initial set so steady-state reads always observe the persisted value.
 func (c *Canoliq) LoadParams() (*contract.CanoliqParams, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForParams()}},
 	})
@@ -58,7 +56,7 @@ func (c *Canoliq) SaveParams(params *contract.CanoliqParams) *contract.PluginErr
 // LoadGlobals reads the singleton globals record, returning an empty struct
 // if it is not yet present. Callers must persist any mutations via SaveGlobals.
 func (c *Canoliq) LoadGlobals() (*contract.CanoliqGlobals, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForGlobals()}},
 	})

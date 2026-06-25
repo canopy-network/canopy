@@ -15,8 +15,8 @@ const (
 	codeInvalidAmount
 	codeInsufficientCNPY
 	codeInsufficientCCNPY
-	codeInsufficientCLIQ
-	codeInsufficientLockedCLIQ
+	codeInsufficientCPLQ
+	codeInsufficientLockedCPLQ
 	codeRedemptionNotFound
 	codeRedemptionNotMature
 	codeNoVestingSchedule
@@ -28,7 +28,7 @@ const (
 	codePoolMath
 	codeUnsupportedMessage
 	codeStateUnmarshal
-	codeInsufficientStakedCLIQ
+	codeInsufficientStakedCPLQ
 	codeUnstakeNotFound
 	codeUnstakeNotMature
 	codeProposalNotFound
@@ -46,7 +46,7 @@ const (
 	codeAlreadyApproved
 	codeBelowProposalMinStake
 	codeInvalidProposalPayload
-	codeInsufficientTreasuryCLIQ
+	codeInsufficientTreasuryCPLQ
 	codeInsufficientTreasuryCNPY
 	codeInvalidLockTier
 	codeStakeLocked
@@ -79,14 +79,14 @@ func ErrInsufficientCCNPY() *contract.PluginError {
 	return newError(codeInsufficientCCNPY, "insufficient cCNPY balance")
 }
 
-// ErrInsufficientCLIQ reports a liquid CLIQ balance below the requested transfer.
-func ErrInsufficientCLIQ() *contract.PluginError {
-	return newError(codeInsufficientCLIQ, "insufficient liquid CLIQ balance")
+// ErrInsufficientCPLQ reports a liquid CPLQ balance below the requested transfer.
+func ErrInsufficientCPLQ() *contract.PluginError {
+	return newError(codeInsufficientCPLQ, "insufficient liquid CPLQ balance")
 }
 
-// ErrInsufficientLockedCLIQ reports an attempt to use locked vesting CLIQ.
-func ErrInsufficientLockedCLIQ() *contract.PluginError {
-	return newError(codeInsufficientLockedCLIQ, "CLIQ is still locked under vesting schedule")
+// ErrInsufficientLockedCPLQ reports an attempt to use locked vesting CPLQ.
+func ErrInsufficientLockedCPLQ() *contract.PluginError {
+	return newError(codeInsufficientLockedCPLQ, "CPLQ is still locked under vesting schedule")
 }
 
 // ErrRedemptionNotFound reports a missing redemption record.
@@ -104,9 +104,9 @@ func ErrNoVestingSchedule() *contract.PluginError {
 	return newError(codeNoVestingSchedule, "no vesting schedule for address")
 }
 
-// ErrNothingToClaim reports a claim that would unlock zero CLIQ.
+// ErrNothingToClaim reports a claim that would unlock zero CPLQ.
 func ErrNothingToClaim() *contract.PluginError {
-	return newError(codeNothingToClaim, "no vested CLIQ available to claim")
+	return newError(codeNothingToClaim, "no vested CPLQ available to claim")
 }
 
 // ErrFeeBelowMinimum reports a tx fee under the configured minimum.
@@ -144,12 +144,12 @@ func ErrStateUnmarshal(err error) *contract.PluginError {
 	return newError(codeStateUnmarshal, fmt.Sprintf("state unmarshal failed: %s", err))
 }
 
-// ErrInsufficientStakedCLIQ reports an unstake exceeding the active stake.
-func ErrInsufficientStakedCLIQ() *contract.PluginError {
-	return newError(codeInsufficientStakedCLIQ, "insufficient staked CLIQ")
+// ErrInsufficientStakedCPLQ reports an unstake exceeding the active stake.
+func ErrInsufficientStakedCPLQ() *contract.PluginError {
+	return newError(codeInsufficientStakedCPLQ, "insufficient staked CPLQ")
 }
 
-// ErrUnstakeNotFound reports a missing UnstakingCLIQ record.
+// ErrUnstakeNotFound reports a missing UnstakingCPLQ record.
 func ErrUnstakeNotFound() *contract.PluginError {
 	return newError(codeUnstakeNotFound, "unstake record not found")
 }
@@ -227,7 +227,7 @@ func ErrAlreadyApproved() *contract.PluginError {
 
 // ErrBelowProposalMinStake reports a proposer below the configured minimum.
 func ErrBelowProposalMinStake() *contract.PluginError {
-	return newError(codeBelowProposalMinStake, "proposer staked CLIQ below minimum")
+	return newError(codeBelowProposalMinStake, "proposer staked CPLQ below minimum")
 }
 
 // ErrInvalidProposalPayload reports a malformed or self-inconsistent payload.
@@ -235,9 +235,9 @@ func ErrInvalidProposalPayload() *contract.PluginError {
 	return newError(codeInvalidProposalPayload, "invalid proposal payload")
 }
 
-// ErrInsufficientTreasuryCLIQ reports a treasury_cliq draw beyond available.
-func ErrInsufficientTreasuryCLIQ() *contract.PluginError {
-	return newError(codeInsufficientTreasuryCLIQ, "insufficient CLIQ in DAO treasury")
+// ErrInsufficientTreasuryCPLQ reports a treasury_cplq draw beyond available.
+func ErrInsufficientTreasuryCPLQ() *contract.PluginError {
+	return newError(codeInsufficientTreasuryCPLQ, "insufficient CPLQ in DAO treasury")
 }
 
 // ErrInsufficientTreasuryCNPY reports a treasury_canopy draw beyond available.

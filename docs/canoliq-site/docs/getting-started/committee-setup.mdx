@@ -35,15 +35,15 @@ Submit a `MessageSubsidy` proposal so the Canopy DAO funds the canoLiq committee
 CANOPY_PLUGIN_MODE=canoliq canopy start
 ```
 
-On first boot, the plugin runs `Genesis` once, minting the 100M CLIQ supply to recipients in `genesis.json` according to bucket weights and vesting schedules.
+On first boot, the plugin runs `Genesis` once, minting the 100M CPLQ supply to recipients in `genesis.json` according to bucket weights and vesting schedules.
 
 ## Genesis Configuration
 
-`genesis.json` lists CLIQ allocation buckets and per-recipient weights:
+`genesis.json` lists CPLQ allocation buckets and per-recipient weights:
 
 - The sum of bucket `bps` must be `10000`
 - Recipients within a bucket must also sum to `10000`
-- Buckets with `cliffMonths == 0 && vestMonths == 0` mint to a liquid CLIQ balance immediately
+- Buckets with `cliffMonths == 0 && vestMonths == 0` mint to a liquid CPLQ balance immediately
 - Otherwise, a `VestingSchedule` is written
 
 Update placeholder hex addresses before running on mainnet.

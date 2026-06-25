@@ -4,16 +4,16 @@ sidebar_label: Vote-Escrow (Lock Tiers)
 
 # Vote-Escrow Lock Tiers
 
-**In one sentence:** locking your staked CLIQ for longer gives you more voting power and a
+**In one sentence:** locking your staked CPLQ for longer gives you more voting power and a
 bigger share of buyback rewards — the longer the commitment, the larger the boost.
 
 Vote-escrow (sometimes "ve-tokenomics") rewards people who align with the protocol for the
-long term. Staking CLIQ already earns you a vote; *locking* that stake for a fixed period
+long term. Staking CPLQ already earns you a vote; *locking* that stake for a fixed period
 multiplies it.
 
 ## The tiers
 
-When you [stake CLIQ](../transactions/cliq-operations.mdx), you choose a lock tier. Each tier
+When you [stake CPLQ](../transactions/cplq-operations.mdx), you choose a lock tier. Each tier
 sets a lock duration, a **voting multiplier**, and a **reward boost** applied to buyback
 distributions:
 
@@ -42,7 +42,7 @@ voting weight = staked amount × tier multiplier
               = staked amount × (voteMultBps ÷ 10,000)
 ```
 
-A holder with 1,000 CLIQ at `LOCK_12M` votes with the weight of 3,000 unlocked CLIQ.
+A holder with 1,000 CPLQ at `LOCK_12M` votes with the weight of 3,000 unlocked CPLQ.
 
 Weight is also subject to the governance **snapshot rule**: it is measured as of the
 proposal's creation height, and stake added *after* a proposal opens has zero weight on that
@@ -53,7 +53,7 @@ proposal. See [Governance Overview](../governance/overview.mdx).
 - **Locks only ever strengthen.** Re-staking with a higher tier raises your tier, and a
   later computed lock-end extends your `lock_end_height`. You can never weaken or shorten an
   existing lock by staking again.
-- **Locked stake cannot be unstaked early.** A `MessageCLIQUnstake` is rejected until the
+- **Locked stake cannot be unstaked early.** A `MessageCPLQUnstake` is rejected until the
   current height reaches your `lock_end_height`. `LOCK_NONE` stake can be unstaked any time
   (still subject to the normal unstaking cooldown).
 
@@ -61,10 +61,10 @@ proposal. See [Governance Overview](../governance/overview.mdx).
 
 The reward boost weights your share of **buyback distributions** when a passed buyback uses
 `BUYBACK_DISTRIBUTE_STAKERS` mode — longer locks receive proportionally more of the
-distributed CLIQ. See [Buyback](../advanced/buyback.mdx).
+distributed CPLQ. See [Buyback](../advanced/buyback.mdx).
 
 ## Related
 
-- [CLIQ Operations](../transactions/cliq-operations.mdx) — staking, unstaking, claiming
+- [CPLQ Operations](../transactions/cplq-operations.mdx) — staking, unstaking, claiming
 - [Governance Overview](../governance/overview.mdx) — how votes are counted
 - [Buyback](../advanced/buyback.mdx) — where the reward boost applies

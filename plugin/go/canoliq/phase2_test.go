@@ -22,9 +22,9 @@ func seedParams(t *testing.T, c *Canoliq, params *contract.CanoliqParams) {
 	}
 }
 
-// seedCLIQ stores liquid CLIQ at the per-address balance key.
-func seedCLIQ(s *fakeStore, addr []byte, amount uint64) {
-	s.set(KeyForCLIQBalance(addr), EncodeUint64(amount))
+// seedCPLQ stores liquid CPLQ at the per-address balance key.
+func seedCPLQ(s *fakeStore, addr []byte, amount uint64) {
+	s.set(KeyForCPLQBalance(addr), EncodeUint64(amount))
 }
 
 // seedGlobals merges fields onto whatever globals already exist in state.
@@ -33,10 +33,10 @@ func seedGlobals(s *fakeStore, g *contract.CanoliqGlobals) {
 	s.set(KeyForGlobals(), bz)
 }
 
-func loadStake(t *testing.T, s *fakeStore, addr []byte) *contract.CLIQStake {
+func loadStake(t *testing.T, s *fakeStore, addr []byte) *contract.CPLQStake {
 	t.Helper()
-	bz := s.get(KeyForCLIQStake(addr))
-	stake := new(contract.CLIQStake)
+	bz := s.get(KeyForCPLQStake(addr))
+	stake := new(contract.CPLQStake)
 	if bz != nil {
 		if err := contract.Unmarshal(bz, stake); err != nil {
 			t.Fatalf("unmarshal stake: %v", err)
@@ -95,20 +95,20 @@ func loadSpend(t *testing.T, s *fakeStore, id uint64) *contract.TreasurySpend {
 
 // === §3 staking ===
 
-// TestCLIQStakeUnstakeClaim walks one staker through the lifecycle:
-// liquid → stake → unstake → claim. Verifies CLIQStake balance, total
-// staked tracker, unstake record, and that claim returns CLIQ to liquid
+// TestCPLQStakeUnstakeClaim walks one staker through the lifecycle:
+// liquid → stake → unstake → claim. Verifies CPLQStake balance, total
+// staked tracker, unstake record, and that claim returns CPLQ to liquid
 // only after mature_height has elapsed.
-func TestCLIQStakeUnstakeClaim(t *testing.T) {
+func TestCPLQStakeUnstakeClaim(t *testing.T) {
 	c, s := newTestCanoliq()
 	staker := addr20(0x21)
 	const amount uint64 = 5_000_000
 	seedParams(t, c, DefaultParams())
 	seedAccount(s, staker, 100_000) // CNPY for fees
-	seedCLIQ(s, staker, amount)
+	seedCPLQ(s, staker, amount)
 
-	// Stake 5 CLIQ.
-	resp := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: staker, Amount: amount}, 10_000, DefaultParams())
+	// Stake 5 CPLQ.
+	resp := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: staker, Amount: amount}, 10_000, DefaultParams())
 	if resp.Error != nil {
 		t.Fatalf("stake: %v", resp.Error)
 	}
@@ -117,57 +117,57 @@ func TestCLIQStakeUnstakeClaim(t *testing.T) {
 		t.Fatalf("stake amount: got %d want %d", stake.Amount, amount)
 	}
 	g := loadGlobals(t, s)
-	if g.TotalStakedCliq != amount {
-		t.Fatalf("total staked: got %d want %d", g.TotalStakedCliq, amount)
+	if g.TotalStakedCplq != amount {
+		t.Fatalf("total staked: got %d want %d", g.TotalStakedCplq, amount)
 	}
-	if liq := readCliq(s, staker); liq != 0 {
-		t.Errorf("liquid CLIQ should be drained: got %d", liq)
+	if liq := readCplq(s, staker); liq != 0 {
+		t.Errorf("liquid CPLQ should be drained: got %d", liq)
 	}
 
 	// Set height past expected unstake mature.
 	c.plugin.setHeight(10)
 
-	// Unstake 5 CLIQ. mature_height = 10 + cliq_unstaking_blocks.
-	resp = c.DeliverMessageCLIQUnstake(&contract.MessageCLIQUnstake{FromAddress: staker, Amount: amount}, 10_000, DefaultParams())
+	// Unstake 5 CPLQ. mature_height = 10 + cplq_unstaking_blocks.
+	resp = c.DeliverMessageCPLQUnstake(&contract.MessageCPLQUnstake{FromAddress: staker, Amount: amount}, 10_000, DefaultParams())
 	if resp.Error != nil {
 		t.Fatalf("unstake: %v", resp.Error)
 	}
 	g = loadGlobals(t, s)
-	if g.TotalStakedCliq != 0 {
-		t.Errorf("total staked post-unstake: got %d want 0", g.TotalStakedCliq)
+	if g.TotalStakedCplq != 0 {
+		t.Errorf("total staked post-unstake: got %d want 0", g.TotalStakedCplq)
 	}
 	// Unstake id was assigned 0 (first unstake → NextUnstakeId++ from 0).
-	uBz := s.get(KeyForCLIQUnstaking(staker, 0))
+	uBz := s.get(KeyForCPLQUnstaking(staker, 0))
 	if uBz == nil {
 		t.Fatal("unstake record missing")
 	}
-	unstake := new(contract.UnstakingCLIQ)
+	unstake := new(contract.UnstakingCPLQ)
 	if err := contract.Unmarshal(uBz, unstake); err != nil {
 		t.Fatalf("unmarshal unstake: %v", err)
 	}
 	if unstake.Amount != amount {
 		t.Errorf("unstake amount: got %d want %d", unstake.Amount, amount)
 	}
-	if unstake.MatureHeight != 10+DefaultParams().CliqUnstakingBlocks {
+	if unstake.MatureHeight != 10+DefaultParams().CplqUnstakingBlocks {
 		t.Errorf("mature height: got %d", unstake.MatureHeight)
 	}
 
 	// Claim before mature → error.
-	resp = c.DeliverMessageCLIQClaimUnstake(&contract.MessageCLIQClaimUnstake{FromAddress: staker, UnstakeId: 0}, 10_000, DefaultParams())
+	resp = c.DeliverMessageCPLQClaimUnstake(&contract.MessageCPLQClaimUnstake{FromAddress: staker, UnstakeId: 0}, 10_000, DefaultParams())
 	if resp.Error == nil {
 		t.Fatal("expected ErrUnstakeNotMature, got nil")
 	}
 
 	// Advance height past maturity, claim succeeds.
 	c.plugin.setHeight(unstake.MatureHeight + 1)
-	resp = c.DeliverMessageCLIQClaimUnstake(&contract.MessageCLIQClaimUnstake{FromAddress: staker, UnstakeId: 0}, 10_000, DefaultParams())
+	resp = c.DeliverMessageCPLQClaimUnstake(&contract.MessageCPLQClaimUnstake{FromAddress: staker, UnstakeId: 0}, 10_000, DefaultParams())
 	if resp.Error != nil {
 		t.Fatalf("claim: %v", resp.Error)
 	}
-	if liq := readCliq(s, staker); liq != amount {
-		t.Errorf("liquid CLIQ post-claim: got %d want %d", liq, amount)
+	if liq := readCplq(s, staker); liq != amount {
+		t.Errorf("liquid CPLQ post-claim: got %d want %d", liq, amount)
 	}
-	if s.get(KeyForCLIQUnstaking(staker, 0)) != nil {
+	if s.get(KeyForCPLQUnstaking(staker, 0)) != nil {
 		t.Error("unstake record should be deleted after claim")
 	}
 }
@@ -180,7 +180,7 @@ func TestCLIQStakeUnstakeClaim(t *testing.T) {
 func shortGovParams() *contract.CanoliqParams {
 	p := DefaultParams()
 	p.VotingPeriodBlocks = 5
-	p.CliqUnstakingBlocks = 5
+	p.CplqUnstakingBlocks = 5
 	p.QuorumBps = 3300
 	p.PassThresholdBps = 5001
 	p.MinStakeToPropose = 1_000_000
@@ -198,10 +198,10 @@ func TestProposalParamChangeRoundTrip(t *testing.T) {
 	seedParams(t, c, params)
 	proposer := addr20(0x31)
 	seedAccount(s, proposer, 500_000)
-	seedCLIQ(s, proposer, 10_000_000)
+	seedCPLQ(s, proposer, 10_000_000)
 
-	// Stake 10 CLIQ.
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: proposer, Amount: 10_000_000}, 10_000, params); r.Error != nil {
+	// Stake 10 CPLQ.
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: proposer, Amount: 10_000_000}, 10_000, params); r.Error != nil {
 		t.Fatalf("stake: %v", r.Error)
 	}
 
@@ -215,7 +215,7 @@ func TestProposalParamChangeRoundTrip(t *testing.T) {
 		t.Fatalf("anypb new: %v", err)
 	}
 	c.plugin.setHeight(20)
-	if r := c.DeliverMessageCLIQProposalCreate(&contract.MessageCLIQProposalCreate{
+	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{
 		FromAddress: proposer,
 		Payload:     payload,
 		Description: "lower fee to 8%",
@@ -234,7 +234,7 @@ func TestProposalParamChangeRoundTrip(t *testing.T) {
 	}
 
 	// Vote yes with full stake.
-	if r := c.DeliverMessageCLIQVote(&contract.MessageCLIQVote{
+	if r := c.DeliverMessageCPLQVote(&contract.MessageCPLQVote{
 		FromAddress: proposer,
 		ProposalId:  1,
 		Choice:      contract.VoteChoice_VOTE_YES,
@@ -247,7 +247,7 @@ func TestProposalParamChangeRoundTrip(t *testing.T) {
 	}
 
 	// Re-vote rejected.
-	if r := c.DeliverMessageCLIQVote(&contract.MessageCLIQVote{
+	if r := c.DeliverMessageCPLQVote(&contract.MessageCPLQVote{
 		FromAddress: proposer,
 		ProposalId:  1,
 		Choice:      contract.VoteChoice_VOTE_YES,
@@ -287,14 +287,14 @@ func TestVoteSnapshotRejectsLateStake(t *testing.T) {
 	flashStaker := addr20(0x42)
 	seedAccount(s, proposer, 500_000)
 	seedAccount(s, flashStaker, 500_000)
-	seedCLIQ(s, proposer, 5_000_000)
-	seedCLIQ(s, flashStaker, 5_000_000)
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: proposer, Amount: 5_000_000}, 10_000, params); r.Error != nil {
+	seedCPLQ(s, proposer, 5_000_000)
+	seedCPLQ(s, flashStaker, 5_000_000)
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: proposer, Amount: 5_000_000}, 10_000, params); r.Error != nil {
 		t.Fatalf("proposer stake: %v", r.Error)
 	}
 	c.plugin.setHeight(10)
 	payload, _ := anypb.New(&contract.ProposalParamChange{Params: shortGovParams()})
-	if r := c.DeliverMessageCLIQProposalCreate(&contract.MessageCLIQProposalCreate{
+	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{
 		FromAddress: proposer,
 		Payload:     payload,
 	}, 10_000, params); r.Error != nil {
@@ -302,11 +302,11 @@ func TestVoteSnapshotRejectsLateStake(t *testing.T) {
 	}
 	// Flash-stake AFTER proposal creation.
 	c.plugin.setHeight(11)
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: flashStaker, Amount: 5_000_000}, 10_000, params); r.Error != nil {
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: flashStaker, Amount: 5_000_000}, 10_000, params); r.Error != nil {
 		t.Fatalf("flash stake: %v", r.Error)
 	}
 	// Flash staker tries to vote — snapshot guard must reject.
-	if r := c.DeliverMessageCLIQVote(&contract.MessageCLIQVote{
+	if r := c.DeliverMessageCPLQVote(&contract.MessageCPLQVote{
 		FromAddress: flashStaker,
 		ProposalId:  1,
 		Choice:      contract.VoteChoice_VOTE_NO,
@@ -322,23 +322,33 @@ func TestProposalQuorumMiss(t *testing.T) {
 	params := shortGovParams()
 	seedParams(t, c, params)
 	proposer := addr20(0x51)
+	whale := addr20(0x52)
 	seedAccount(s, proposer, 500_000)
-	// Globals show 100M total staked but only the proposer's 1M votes — far
-	// below quorum.
-	seedGlobals(s, &contract.CanoliqGlobals{TotalStakedCliq: 100_000_000})
-	seedCLIQ(s, proposer, 1_000_000)
-	if r := c.DeliverMessageCLIQStake(&contract.MessageCLIQStake{FromAddress: proposer, Amount: 1_000_000}, 10_000, params); r.Error != nil {
+	seedAccount(s, whale, 500_000)
+	seedGlobals(s, &contract.CanoliqGlobals{})
+	// A whale stakes 100M but never votes. With the M1 boosted snapshot the
+	// quorum denominator is the real staked weight (101M), so the proposer's
+	// lone 1M YES vote is ~1% turnout — far below the 33% quorum.
+	seedCPLQ(s, whale, 100_000_000)
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: whale, Amount: 100_000_000}, 10_000, params); r.Error != nil {
+		t.Fatalf("whale stake: %v", r.Error)
+	}
+	seedCPLQ(s, proposer, 1_000_000)
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: proposer, Amount: 1_000_000}, 10_000, params); r.Error != nil {
 		t.Fatalf("stake: %v", r.Error)
 	}
 	c.plugin.setHeight(10)
-	payload, _ := anypb.New(&contract.ProposalParamChange{Params: params})
-	if r := c.DeliverMessageCLIQProposalCreate(&contract.MessageCLIQProposalCreate{
+	// Propose an actual change (FeeBps 1200 -> 1500) so pass/fail is observable.
+	changed := shortGovParams()
+	changed.FeeBps = 1500
+	payload, _ := anypb.New(&contract.ProposalParamChange{Params: changed})
+	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{
 		FromAddress: proposer,
 		Payload:     payload,
 	}, 10_000, params); r.Error != nil {
 		t.Fatalf("create: %v", r.Error)
 	}
-	if r := c.DeliverMessageCLIQVote(&contract.MessageCLIQVote{
+	if r := c.DeliverMessageCPLQVote(&contract.MessageCPLQVote{
 		FromAddress: proposer,
 		ProposalId:  1,
 		Choice:      contract.VoteChoice_VOTE_YES,
@@ -350,44 +360,44 @@ func TestProposalQuorumMiss(t *testing.T) {
 		t.Fatalf("begin block: %v", r.Error)
 	}
 	got, _ := c.LoadParams()
-	// Param change must NOT apply; FeeBps stays at the seeded 1200.
+	// Quorum missed → param change must NOT apply; FeeBps stays at 1200.
 	if got.FeeBps != 1200 {
-		t.Errorf("fee_bps after failed proposal: got %d want 1200", got.FeeBps)
+		t.Errorf("fee_bps after quorum-miss proposal: got %d want 1200", got.FeeBps)
 	}
 }
 
 // === §6 buyback ===
 
-// TestBuybackBurnReducesSupply seeds a treasury_cliq and buyback pool, runs
+// TestBuybackBurnReducesSupply seeds a treasury_cplq and buyback pool, runs
 // a passed BURN proposal end-to-end, and asserts that:
-//   - cliq_total_supply and cliq_circulating_supply are decremented.
+//   - cplq_total_supply and cplq_circulating_supply are decremented.
 //   - buyback pool is drained.
-//   - treasury_cliq is debited.
+//   - treasury_cplq is debited.
 //   - treasury_cnpy is credited.
 func TestBuybackBurnReducesSupply(t *testing.T) {
 	c, s := newTestCanoliq()
 	params := shortGovParams()
 	seedParams(t, c, params)
-	const treasuryCLIQ uint64 = 1_000_000_000_000 // 1M CLIQ in uCLIQ — well above the buyback acquisition
+	const treasuryCPLQ uint64 = 1_000_000_000_000 // 1M CPLQ in uCPLQ — well above the buyback acquisition
 	const buybackPoolAmt uint64 = 1_000_000_000
-	s.set(KeyForTreasuryCLIQ(), EncodeUint64(treasuryCLIQ))
+	s.set(KeyForTreasuryCPLQ(), EncodeUint64(treasuryCPLQ))
 	s.set(KeyForBuybackPool(), EncodeUint64(buybackPoolAmt))
 	seedGlobals(s, &contract.CanoliqGlobals{
-		CliqTotalSupply:       100_000_000_000_000, // 100M CLIQ in uCLIQ
-		CliqCirculatingSupply: 100_000_000_000_000,
+		CplqTotalSupply:       100_000_000_000_000, // 100M CPLQ in uCPLQ
+		CplqCirculatingSupply: 100_000_000_000_000,
 	})
 
 	// Seed a passed BuybackOrder directly (governance.dispatchPassed path is
 	// covered by TestProposalParamChangeRoundTrip; here we focus on execution).
 	const proposalID uint64 = 7
 	const cnpyAmount uint64 = 500_000_000
-	const price uint64 = 1_000_000 // 1 CNPY per CLIQ
+	const price uint64 = 1_000_000 // 1 CNPY per CPLQ
 	order := &contract.BuybackOrder{
 		ProposalId: proposalID,
 		Mode:       contract.BuybackMode_BUYBACK_BURN,
 		Payload: &contract.ProposalBuyback{
 			CnpyAmount:            cnpyAmount,
-			PriceMicroCnpyPerCliq: price,
+			PriceMicroCnpyPerCplq: price,
 			Mode:                  contract.BuybackMode_BUYBACK_BURN,
 		},
 	}
@@ -403,14 +413,14 @@ func TestBuybackBurnReducesSupply(t *testing.T) {
 	if resp.Error != nil {
 		t.Fatalf("execute: %v", resp.Error)
 	}
-	const cliqAcquired = cnpyAmount * 1_000_000 / price // = 500_000_000
+	const cplqAcquired = cnpyAmount * 1_000_000 / price // = 500_000_000
 
 	g := loadGlobals(t, s)
-	if g.CliqTotalSupply != 100_000_000_000_000-cliqAcquired {
-		t.Errorf("total supply: got %d want %d", g.CliqTotalSupply, 100_000_000_000_000-cliqAcquired)
+	if g.CplqTotalSupply != 100_000_000_000_000-cplqAcquired {
+		t.Errorf("total supply: got %d want %d", g.CplqTotalSupply, 100_000_000_000_000-cplqAcquired)
 	}
-	if g.CliqCirculatingSupply != 100_000_000_000_000-cliqAcquired {
-		t.Errorf("circulating supply: got %d want %d", g.CliqCirculatingSupply, 100_000_000_000_000-cliqAcquired)
+	if g.CplqCirculatingSupply != 100_000_000_000_000-cplqAcquired {
+		t.Errorf("circulating supply: got %d want %d", g.CplqCirculatingSupply, 100_000_000_000_000-cplqAcquired)
 	}
 	if got := DecodeUint64(s.get(KeyForBuybackPool())); got != buybackPoolAmt-cnpyAmount {
 		t.Errorf("buyback pool drain: got %d want %d", got, buybackPoolAmt-cnpyAmount)
@@ -418,10 +428,10 @@ func TestBuybackBurnReducesSupply(t *testing.T) {
 	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != cnpyAmount {
 		t.Errorf("treasury_cnpy credit: got %d want %d", got, cnpyAmount)
 	}
-	if got := DecodeUint64(s.get(KeyForTreasuryCLIQ())); got != treasuryCLIQ-cliqAcquired {
-		// Note: with cliqAcquired = 500M and treasuryCLIQ = 50M, this fails —
+	if got := DecodeUint64(s.get(KeyForTreasuryCPLQ())); got != treasuryCPLQ-cplqAcquired {
+		// Note: with cplqAcquired = 500M and treasuryCPLQ = 50M, this fails —
 		// adjust the seed.
-		t.Errorf("treasury_cliq debit: got %d want %d", got, treasuryCLIQ-cliqAcquired)
+		t.Errorf("treasury_cplq debit: got %d want %d", got, treasuryCPLQ-cplqAcquired)
 	}
 
 	// Idempotency: re-execute is rejected.
@@ -435,7 +445,7 @@ func TestBuybackBurnReducesSupply(t *testing.T) {
 }
 
 // TestBuybackDistributeStakers credits stakers pro-rata. Two stakers at
-// 70 / 30 receive 70 / 30 of the acquired CLIQ.
+// 70 / 30 receive 70 / 30 of the acquired CPLQ.
 func TestBuybackDistributeStakers(t *testing.T) {
 	c, s := newTestCanoliq()
 	params := shortGovParams()
@@ -443,15 +453,15 @@ func TestBuybackDistributeStakers(t *testing.T) {
 	a := addr20(0xa1)
 	b := addr20(0xb1)
 	const stakeA, stakeB uint64 = 7_000_000, 3_000_000
-	s.set(KeyForCLIQStake(a), mustMarshal(&contract.CLIQStake{Address: a, Amount: stakeA, StakedAtHeight: 1}))
-	s.set(KeyForCLIQStake(b), mustMarshal(&contract.CLIQStake{Address: b, Amount: stakeB, StakedAtHeight: 1}))
-	idx := &contract.CLIQStakeIndex{Addresses: [][]byte{a, b}}
-	s.set(KeyForCLIQStakeIndex(), mustMarshal(idx))
-	seedGlobals(s, &contract.CanoliqGlobals{TotalStakedCliq: stakeA + stakeB})
+	s.set(KeyForCPLQStake(a), mustMarshal(&contract.CPLQStake{Address: a, Amount: stakeA, StakedAtHeight: 1}))
+	s.set(KeyForCPLQStake(b), mustMarshal(&contract.CPLQStake{Address: b, Amount: stakeB, StakedAtHeight: 1}))
+	idx := &contract.CPLQStakeIndex{Addresses: [][]byte{a, b}}
+	s.set(KeyForCPLQStakeIndex(), mustMarshal(idx))
+	seedGlobals(s, &contract.CanoliqGlobals{TotalStakedCplq: stakeA + stakeB})
 
-	const treasuryCLIQ uint64 = 100_000_000
+	const treasuryCPLQ uint64 = 100_000_000
 	const buybackPoolAmt uint64 = 100_000_000
-	s.set(KeyForTreasuryCLIQ(), EncodeUint64(treasuryCLIQ))
+	s.set(KeyForTreasuryCPLQ(), EncodeUint64(treasuryCPLQ))
 	s.set(KeyForBuybackPool(), EncodeUint64(buybackPoolAmt))
 
 	const proposalID uint64 = 11
@@ -462,7 +472,7 @@ func TestBuybackDistributeStakers(t *testing.T) {
 		Mode:       contract.BuybackMode_BUYBACK_DISTRIBUTE_STAKERS,
 		Payload: &contract.ProposalBuyback{
 			CnpyAmount:            cnpyAmount,
-			PriceMicroCnpyPerCliq: price,
+			PriceMicroCnpyPerCplq: price,
 			Mode:                  contract.BuybackMode_BUYBACK_DISTRIBUTE_STAKERS,
 		},
 	}
@@ -477,18 +487,18 @@ func TestBuybackDistributeStakers(t *testing.T) {
 	if resp.Error != nil {
 		t.Fatalf("execute: %v", resp.Error)
 	}
-	cliqAcquired := cnpyAmount * 1_000_000 / price // 10M
-	wantA := cliqAcquired * stakeA / (stakeA + stakeB)
-	wantB := cliqAcquired - wantA // remainder credited to largest staker (a) — but mulDiv is exact here
+	cplqAcquired := cnpyAmount * 1_000_000 / price // 10M
+	wantA := cplqAcquired * stakeA / (stakeA + stakeB)
+	wantB := cplqAcquired - wantA // remainder credited to largest staker (a) — but mulDiv is exact here
 
-	if got := readCliq(s, a); got != wantA {
+	if got := readCplq(s, a); got != wantA {
 		t.Errorf("staker A credit: got %d want %d", got, wantA)
 	}
-	if got := readCliq(s, b); got != wantB {
+	if got := readCplq(s, b); got != wantB {
 		t.Errorf("staker B credit: got %d want %d", got, wantB)
 	}
-	if got := readCliq(s, a) + readCliq(s, b); got != cliqAcquired {
-		t.Errorf("conservation (A+B): got %d want %d", got, cliqAcquired)
+	if got := readCplq(s, a) + readCplq(s, b); got != cplqAcquired {
+		t.Errorf("conservation (A+B): got %d want %d", got, cplqAcquired)
 	}
 }
 

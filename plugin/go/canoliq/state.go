@@ -16,7 +16,7 @@ var (
 
 	domainGlobals       = []byte{1}
 	domainCcnpyBal      = []byte{2}
-	domainCliqBal       = []byte{3}
+	domainCplqBal       = []byte{3}
 	domainVesting       = []byte{4}
 	domainVestIndex     = []byte{5}
 	domainRedemption    = []byte{6}
@@ -24,8 +24,8 @@ var (
 	domainBuyback       = []byte{8}
 	domainValIncent     = []byte{9}
 	domainParams        = []byte{11}
-	domainCliqStake     = []byte{12}
-	domainCliqUnstaking = []byte{13}
+	domainCplqStake     = []byte{12}
+	domainCplqUnstaking = []byte{13}
 	domainProposal      = []byte{14}
 	domainVote          = []byte{15}
 	domainBuybackOrder  = []byte{16}
@@ -37,9 +37,11 @@ var (
 	domainUnstakeIndex  = []byte{22}
 	domainAlertState    = []byte{23}
 	domainMatureRedeem  = []byte{24}
+	domainEscrow        = []byte{25}
+	domainTxFeeAccrual  = []byte{26}
 
 	treasuryCanopy = []byte("canopy")
-	treasuryCliq   = []byte("cliq")
+	treasuryCplq   = []byte("cplq")
 	buybackPool    = []byte("pool")
 	indexSingleton = []byte("index")
 	insuranceSlot  = []byte("pool")
@@ -87,9 +89,9 @@ func KeyForCCNPYBalance(addr []byte) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainCcnpyBal, addr)
 }
 
-// KeyForCLIQBalance returns the liquid CLIQ balance key for an address.
-func KeyForCLIQBalance(addr []byte) []byte {
-	return JoinLenPrefix(canoliqPrefix, domainCliqBal, addr)
+// KeyForCPLQBalance returns the liquid CPLQ balance key for an address.
+func KeyForCPLQBalance(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainCplqBal, addr)
 }
 
 // KeyForVesting returns the vesting schedule key for an (address, schedule_id) pair.
@@ -118,12 +120,12 @@ func KeyForTreasuryCNPY() []byte {
 	return JoinLenPrefix(canoliqPrefix, domainTreasury, treasuryCanopy)
 }
 
-// KeyForTreasuryCLIQ returns the canoLiq DAO CLIQ treasury key.
-func KeyForTreasuryCLIQ() []byte {
-	return JoinLenPrefix(canoliqPrefix, domainTreasury, treasuryCliq)
+// KeyForTreasuryCPLQ returns the canoLiq DAO CPLQ treasury key.
+func KeyForTreasuryCPLQ() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainTreasury, treasuryCplq)
 }
 
-// KeyForBuybackPool returns the buyback pool (CNPY held for CLIQ buyback) key.
+// KeyForBuybackPool returns the buyback pool (CNPY held for CPLQ buyback) key.
 func KeyForBuybackPool() []byte {
 	return JoinLenPrefix(canoliqPrefix, domainBuyback, buybackPool)
 }
@@ -133,15 +135,15 @@ func KeyForValidatorIncentives(addr []byte) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainValIncent, addr)
 }
 
-// KeyForCLIQStake returns the active stake record key for an address.
-func KeyForCLIQStake(addr []byte) []byte {
-	return JoinLenPrefix(canoliqPrefix, domainCliqStake, addr)
+// KeyForCPLQStake returns the active stake record key for an address.
+func KeyForCPLQStake(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainCplqStake, addr)
 }
 
-// KeyForCLIQUnstaking returns the queued unstake record key for an
+// KeyForCPLQUnstaking returns the queued unstake record key for an
 // (address, unstake_id) pair.
-func KeyForCLIQUnstaking(addr []byte, unstakeID uint64) []byte {
-	return JoinLenPrefix(canoliqPrefix, domainCliqUnstaking, addr, FormatUint64(unstakeID))
+func KeyForCPLQUnstaking(addr []byte, unstakeID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainCplqUnstaking, addr, FormatUint64(unstakeID))
 }
 
 // KeyForUnstakingIndex returns the per-address unstake index key listing
@@ -162,8 +164,8 @@ func removeUint64(s []uint64, id uint64) []uint64 {
 	return s
 }
 
-// KeyForCLIQStakeIndex returns the singleton key listing active staker addresses.
-func KeyForCLIQStakeIndex() []byte {
+// KeyForCPLQStakeIndex returns the singleton key listing active staker addresses.
+func KeyForCPLQStakeIndex() []byte {
 	return JoinLenPrefix(canoliqPrefix, domainStakeIndex, indexSingleton)
 }
 
@@ -215,6 +217,24 @@ func KeyForValidatorRegistry() []byte {
 // KeyForAlertState returns the per-kind alert bookkeeping key (T6).
 func KeyForAlertState(kind string) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainAlertState, []byte(kind))
+}
+
+// KeyForTxFeeAccrual returns the singleton scalar accumulating protocol tx-fee
+// revenue collected into the committee pool since the last reward sweep (L3).
+// ProcessRewards subtracts it from the reward delta (so tx fees are not
+// distributed as staking reward) and routes it to the DAO treasury, then zeroes
+// it. Bumped centrally in DeliverTx on each successful tx.
+func KeyForTxFeeAccrual() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainTxFeeAccrual)
+}
+
+// KeyForEscrowPool returns the singleton CNPY escrow pool key. This pool holds
+// the real CNPY backing live cCNPY plus pending redemptions — the H1 fix
+// custodies deposited principal and the cCNPY-holder reward slice here, kept
+// distinct from the committee fee pool (KeyForFeePool) that ProcessRewards
+// sweeps. Invariant: escrow.Amount == TotalPooledCnpy + PendingRedemptionCnpy.
+func KeyForEscrowPool() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainEscrow)
 }
 
 // KeyForMatureRedemption returns the global mature-redemption index entry for

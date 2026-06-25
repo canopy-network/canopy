@@ -1,16 +1,14 @@
 package canoliq
 
 import (
-	"math/rand"
-
 	"github.com/canopy-network/go-plugin/contract"
 )
 
 // buyback.go executes a passed ProposalBuyback. WP §6 specifies "market
 // buyback and burn or direct distribution governed by DAO" — this Phase 2
 // implementation is an internal accounting swap at a proposal-set price:
-// CNPY drains from canoliq/buyback/pool into treasury/canoliq, CLIQ moves
-// out of treasury/cliq, and the disposition (BURN or DISTRIBUTE_STAKERS) is
+// CNPY drains from canoliq/buyback/pool into treasury/canoliq, CPLQ moves
+// out of treasury/cplq, and the disposition (BURN or DISTRIBUTE_STAKERS) is
 // applied. Real on-chain market routes are deferred to Phase 3.
 
 // CheckMessageBuybackExecute validates a buyback trigger statelessly.
@@ -32,7 +30,7 @@ func (c *Canoliq) CheckMessageBuybackExecute(msg *contract.MessageBuybackExecute
 func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecute, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	cQ, fQ := rand.Uint64(), rand.Uint64()
+	cQ, fQ := qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -87,25 +85,25 @@ func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecu
 	if cnpyDraw == 0 {
 		return &contract.PluginDeliverResponse{Error: ErrInvalidAmount()}
 	}
-	if payload.PriceMicroCnpyPerCliq == 0 {
+	if payload.PriceMicroCnpyPerCplq == 0 {
 		return &contract.PluginDeliverResponse{Error: ErrInvalidProposalPayload()}
 	}
-	cliqAcquired := mulDiv(cnpyDraw, 1_000_000, payload.PriceMicroCnpyPerCliq)
-	if cliqAcquired == 0 {
+	cplqAcquired := mulDiv(cnpyDraw, 1_000_000, payload.PriceMicroCnpyPerCplq)
+	if cplqAcquired == 0 {
 		return &contract.PluginDeliverResponse{Error: ErrPoolMath("buyback acquired zero")}
 	}
-	treasuryCLIQ := c.readScalar(KeyForTreasuryCLIQ())
-	if treasuryCLIQ < cliqAcquired {
-		return &contract.PluginDeliverResponse{Error: ErrInsufficientTreasuryCLIQ()}
+	treasuryCPLQ := c.readScalar(KeyForTreasuryCPLQ())
+	if treasuryCPLQ < cplqAcquired {
+		return &contract.PluginDeliverResponse{Error: ErrInsufficientTreasuryCPLQ()}
 	}
-	treasuryCLIQ -= cliqAcquired
+	treasuryCPLQ -= cplqAcquired
 	treasuryCNPY := c.readScalar(KeyForTreasuryCNPY()) + cnpyDraw
 	available -= cnpyDraw
 	cnpy.Amount -= fee
 	feePool.Amount += fee
 	sets := []*contract.PluginSetOp{
 		{Key: KeyForBuybackPool(), Value: EncodeUint64(available)},
-		{Key: KeyForTreasuryCLIQ(), Value: EncodeUint64(treasuryCLIQ)},
+		{Key: KeyForTreasuryCPLQ(), Value: EncodeUint64(treasuryCPLQ)},
 		{Key: KeyForTreasuryCNPY(), Value: EncodeUint64(treasuryCNPY)},
 	}
 	switch payload.Mode {
@@ -114,15 +112,15 @@ func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecu
 		if err != nil {
 			return &contract.PluginDeliverResponse{Error: err}
 		}
-		if globals.CliqTotalSupply >= cliqAcquired {
-			globals.CliqTotalSupply -= cliqAcquired
+		if globals.CplqTotalSupply >= cplqAcquired {
+			globals.CplqTotalSupply -= cplqAcquired
 		} else {
-			globals.CliqTotalSupply = 0
+			globals.CplqTotalSupply = 0
 		}
-		if globals.CliqCirculatingSupply >= cliqAcquired {
-			globals.CliqCirculatingSupply -= cliqAcquired
+		if globals.CplqCirculatingSupply >= cplqAcquired {
+			globals.CplqCirculatingSupply -= cplqAcquired
 		} else {
-			globals.CliqCirculatingSupply = 0
+			globals.CplqCirculatingSupply = 0
 		}
 		gBz, e := contract.Marshal(globals)
 		if e != nil {
@@ -130,7 +128,7 @@ func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecu
 		}
 		sets = append(sets, &contract.PluginSetOp{Key: KeyForGlobals(), Value: gBz})
 	case contract.BuybackMode_BUYBACK_DISTRIBUTE_STAKERS:
-		distributeSets, err := c.distributeBuybackToStakers(cliqAcquired)
+		distributeSets, err := c.distributeBuybackToStakers(cplqAcquired)
 		if err != nil {
 			return &contract.PluginDeliverResponse{Error: err}
 		}
@@ -139,7 +137,7 @@ func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecu
 		return &contract.PluginDeliverResponse{Error: ErrInvalidProposalPayload()}
 	}
 	order.CnpyDrawn = cnpyDraw
-	order.CliqAcquired = cliqAcquired
+	order.CplqAcquired = cplqAcquired
 	order.Executed = true
 	order.ExecutedAtHeight = c.currentHeight()
 	oBz, e := contract.Marshal(order)
@@ -169,24 +167,24 @@ func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecu
 	return &contract.PluginDeliverResponse{}
 }
 
-// distributeBuybackToStakers builds the set ops crediting acquired CLIQ to
-// each active staker pro-rata to their CLIQStake. Rounding remainder is
-// credited to the largest staker so the total exactly matches cliq_acquired.
-func (c *Canoliq) distributeBuybackToStakers(cliqAcquired uint64) ([]*contract.PluginSetOp, *contract.PluginError) {
+// distributeBuybackToStakers builds the set ops crediting acquired CPLQ to
+// each active staker pro-rata to their CPLQStake. Rounding remainder is
+// credited to the largest staker so the total exactly matches cplq_acquired.
+func (c *Canoliq) distributeBuybackToStakers(cplqAcquired uint64) ([]*contract.PluginSetOp, *contract.PluginError) {
 	idx, err := c.loadStakeIndex()
 	if err != nil {
 		return nil, err
 	}
 	if len(idx.Addresses) == 0 {
-		// No stakers to distribute to; treat as a buyback void (return CLIQ to
-		// treasury) by emitting no sets — caller already deducted treasury_cliq,
+		// No stakers to distribute to; treat as a buyback void (return CPLQ to
+		// treasury) by emitting no sets — caller already deducted treasury_cplq,
 		// so we re-credit it.
-		return []*contract.PluginSetOp{{Key: KeyForTreasuryCLIQ(), Value: EncodeUint64(c.readScalar(KeyForTreasuryCLIQ()) + cliqAcquired)}}, nil
+		return []*contract.PluginSetOp{{Key: KeyForTreasuryCPLQ(), Value: EncodeUint64(c.readScalar(KeyForTreasuryCPLQ()) + cplqAcquired)}}, nil
 	}
-	stakes := make([]*contract.CLIQStake, 0, len(idx.Addresses))
+	stakes := make([]*contract.CPLQStake, 0, len(idx.Addresses))
 	totalStake := uint64(0)
 	for _, addr := range idx.Addresses {
-		stake, err := c.loadCLIQStake(addr)
+		stake, err := c.loadCPLQStake(addr)
 		if err != nil {
 			return nil, err
 		}
@@ -197,10 +195,10 @@ func (c *Canoliq) distributeBuybackToStakers(cliqAcquired uint64) ([]*contract.P
 		totalStake += stake.Amount
 	}
 	if totalStake == 0 {
-		return []*contract.PluginSetOp{{Key: KeyForTreasuryCLIQ(), Value: EncodeUint64(c.readScalar(KeyForTreasuryCLIQ()) + cliqAcquired)}}, nil
+		return []*contract.PluginSetOp{{Key: KeyForTreasuryCPLQ(), Value: EncodeUint64(c.readScalar(KeyForTreasuryCPLQ()) + cplqAcquired)}}, nil
 	}
 	// Boost each staker's effective weight by their lock tier (T2 §4.2): a
-	// LOCK_12M staker's 100 CLIQ counts as 150 against the distribution.
+	// LOCK_12M staker's 100 CPLQ counts as 150 against the distribution.
 	boosted := make([]uint64, len(stakes))
 	totalBoosted := uint64(0)
 	for i, s := range stakes {
@@ -229,23 +227,23 @@ func (c *Canoliq) distributeBuybackToStakers(cliqAcquired uint64) ([]*contract.P
 	allocated := uint64(0)
 	credits := make([]uint64, len(stakes))
 	for i := range stakes {
-		credits[i] = mulDiv(cliqAcquired, boosted[i], totalBoosted)
+		credits[i] = mulDiv(cplqAcquired, boosted[i], totalBoosted)
 		allocated += credits[i]
 	}
-	if allocated < cliqAcquired {
-		credits[remainderIdx] += cliqAcquired - allocated
+	if allocated < cplqAcquired {
+		credits[remainderIdx] += cplqAcquired - allocated
 	}
 	for i, s := range stakes {
-		current := DecodeUint64(c.readBytes(KeyForCLIQBalance(s.Address)))
+		current := DecodeUint64(c.readBytes(KeyForCPLQBalance(s.Address)))
 		current += credits[i]
-		sets = append(sets, &contract.PluginSetOp{Key: KeyForCLIQBalance(s.Address), Value: EncodeUint64(current)})
+		sets = append(sets, &contract.PluginSetOp{Key: KeyForCPLQBalance(s.Address), Value: EncodeUint64(current)})
 	}
 	return sets, nil
 }
 
 // loadBuybackOrder reads the post-pass receipt for a proposal id.
 func (c *Canoliq) loadBuybackOrder(proposalID uint64) (*contract.BuybackOrder, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForBuybackOrder(proposalID)}},
 	})

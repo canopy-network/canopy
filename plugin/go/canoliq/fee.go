@@ -5,25 +5,30 @@ import (
 )
 
 // computeMint returns the amount of cCNPY to mint for a CNPY deposit.
-// For an empty pool (first deposit) it mints 1:1; otherwise it preserves the
-// exchange rate via mint = amount * total_ccnpy / total_pooled_cnpy.
+//
+// The exchange rate uses a +1 virtual-shares/virtual-assets offset (ERC-4626
+// style, M5): mint = amount * (total_ccnpy + 1) / (total_pooled_cnpy + 1). The
+// virtual unit anchors the rate so the first depositor cannot start it at a
+// manipulable 1:1 against an empty pool and skew rounding against later small
+// depositors. The first deposit still mints ~1:1 (both totals 0 -> *1/1), and
+// at a 1:1 rate the offset cancels. Flooring favors the pool (no over-mint).
 func computeMint(amount, totalCcnpy, totalPooled uint64) uint64 {
 	if amount == 0 {
 		return 0
 	}
-	if totalCcnpy == 0 || totalPooled == 0 {
-		return amount
-	}
-	return mulDiv(amount, totalCcnpy, totalPooled)
+	return mulDiv(amount, totalCcnpy+1, totalPooled+1)
 }
 
-// computeRedeem returns the amount of CNPY owed for a cCNPY burn at the
-// current exchange rate: cnpy = ccnpy_amount * total_pooled_cnpy / total_ccnpy.
+// computeRedeem returns the amount of CNPY owed for a cCNPY burn at the current
+// exchange rate, with the same +1 virtual offset as computeMint (M5):
+// cnpy = ccnpy_amount * (total_pooled_cnpy + 1) / (total_ccnpy + 1). Flooring
+// favors the pool (no over-pay); a few uCNPY of dust is permanently retained,
+// which is what keeps the pool from draining to a manipulable empty state.
 func computeRedeem(ccnpyAmount, totalCcnpy, totalPooled uint64) uint64 {
-	if ccnpyAmount == 0 || totalCcnpy == 0 || totalPooled == 0 {
+	if ccnpyAmount == 0 {
 		return 0
 	}
-	return mulDiv(ccnpyAmount, totalPooled, totalCcnpy)
+	return mulDiv(ccnpyAmount, totalPooled+1, totalCcnpy+1)
 }
 
 // mulDiv returns (a*b)/c using big.Int internally to avoid uint64 overflow.

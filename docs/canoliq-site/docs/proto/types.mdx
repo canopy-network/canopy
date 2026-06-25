@@ -16,11 +16,11 @@ message CanoliqGlobals {
   uint64 total_pooled_cnpy = 2;
   uint64 pending_redemption_cnpy = 3;
   uint64 last_processed_reward_pool = 4;
-  uint64 cliq_total_supply = 5;
-  uint64 cliq_circulating_supply = 6;
+  uint64 cplq_total_supply = 5;
+  uint64 cplq_circulating_supply = 6;
   uint64 next_redemption_id = 7;
   bool genesis_complete = 8;
-  uint64 total_staked_cliq = 9;
+  uint64 total_staked_cplq = 9;
   uint64 next_proposal_id = 10;
   uint64 next_buyback_id = 11;
   uint64 next_spend_id = 12;
@@ -52,7 +52,7 @@ message CanoliqParams {
   uint64 deposit_fee = 6;
   uint64 redeem_fee = 7;
   uint64 claim_fee = 8;
-  uint64 cliq_transfer_fee = 9;
+  uint64 cplq_transfer_fee = 9;
   uint64 insurance_bps = 10;             // Default 500 (5% of treasury slice)
   uint64 treasury_threshold = 11;        // Default 1_000_000_000
   repeated bytes multisig_signers = 12;
@@ -61,12 +61,12 @@ message CanoliqParams {
   uint64 quorum_bps = 15;                // Default 3300 (33%)  — scalar fallback
   uint64 pass_threshold_bps = 16;        // Default 5001 (50%+1) — scalar fallback
   uint64 timelock_blocks = 17;           // Default 28_800 (~48h) — scalar fallback
-  uint64 cliq_unstaking_blocks = 18;     // Default 100_800 (~7d); must be ≥ voting period
+  uint64 cplq_unstaking_blocks = 18;     // Default 100_800 (~7d); must be ≥ voting period
   uint64 proposal_fee = 19;
   uint64 vote_fee = 20;
   uint64 stake_fee = 21;
   uint64 multisig_approve_fee = 22;
-  uint64 min_stake_to_propose = 23;      // Default 1_000_000 (1 CLIQ)
+  uint64 min_stake_to_propose = 23;      // Default 1_000_000 (1 CPLQ)
   // T1 — per-action governance tiers (override the scalar knobs above)
   repeated GovernanceTier governance = 24;
   // T3 — TVL deposit cap
@@ -96,7 +96,7 @@ for the default matrix.
 ```protobuf
 message GovernanceTier {
   ActionType action = 1;
-  uint64 quorum_bps = 2;            // fraction of snapshot staked CLIQ that must vote
+  uint64 quorum_bps = 2;            // fraction of snapshot staked CPLQ that must vote
   uint64 approval_bps = 3;          // yes / (yes + no) needed to pass
   uint64 timelock_blocks = 4;       // delay between pass and execution
   uint64 voting_period_blocks = 5;  // blocks the proposal accepts votes
@@ -132,12 +132,12 @@ message VestingSchedule {
 }
 ```
 
-## CLIQStake
+## CPLQStake
 
 Per-address active stake record.
 
 ```protobuf
-message CLIQStake {
+message CPLQStake {
   bytes address = 1;
   uint64 amount = 2;
   uint64 staked_at_height = 3;
@@ -146,12 +146,12 @@ message CLIQStake {
 }
 ```
 
-## UnstakingCLIQ
+## UnstakingCPLQ
 
-Queued CLIQ unstake awaiting maturity.
+Queued CPLQ unstake awaiting maturity.
 
 ```protobuf
-message UnstakingCLIQ {
+message UnstakingCPLQ {
   uint64 id = 1;
   bytes address = 2;
   uint64 amount = 3;
@@ -202,7 +202,7 @@ Post-execution buyback record.
 message BuybackOrder {
   uint64 proposal_id = 1;
   uint64 cnpy_drawn = 2;
-  uint64 cliq_acquired = 3;
+  uint64 cplq_acquired = 3;
   BuybackMode mode = 4;
   bool executed = 5;
   uint64 executed_at_height = 6;
@@ -290,7 +290,7 @@ message RedemptionIndex {
 
 ```protobuf
 message UnstakingIndex {
-  repeated uint64 ids = 1;  // pending CLIQ unstake ids per address
+  repeated uint64 ids = 1;  // pending CPLQ unstake ids per address
 }
 ```
 
@@ -302,11 +302,11 @@ message ProposalIndex {
 }
 ```
 
-### CLIQStakeIndex
+### CPLQStakeIndex
 
 ```protobuf
-message CLIQStakeIndex {
-  repeated bytes addresses = 1;  // addresses with non-zero CLIQStake.amount
+message CPLQStakeIndex {
+  repeated bytes addresses = 1;  // addresses with non-zero CPLQStake.amount
 }
 ```
 
@@ -384,6 +384,6 @@ enum BuybackMode {
 enum SpendDenomination {
   SPEND_UNKNOWN = 0;
   SPEND_CNPY = 1;
-  SPEND_CLIQ = 2;
+  SPEND_CPLQ = 2;
 }
 ```

@@ -3,7 +3,6 @@ package canoliq
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"time"
 
 	"github.com/canopy-network/go-plugin/contract"
@@ -26,6 +25,13 @@ import (
 // lazyQueueCapacity bounds the in-flight query count to prevent OOM
 // under burst load. Excess requests get a 503; clients can retry.
 const lazyQueueCapacity = 256
+
+// maxLazyDrainPerBlock caps how many lazy queries EndBlock fulfills per block
+// (M4). Without it, an unauthenticated RPC burst could force up to
+// lazyQueueCapacity (256) serial StateReads inside the consensus-critical
+// EndBlock, stretching block production. Excess queries stay buffered and are
+// served over subsequent blocks, or time out (504) past lazyQueryTimeout.
+const maxLazyDrainPerBlock = 16
 
 // lazyQueryTimeout is the HTTP-side block timeout. ~2.5x the localnet
 // 6s block period gives one block of safety margin while still failing
@@ -77,7 +83,7 @@ type lazyResult struct {
 }
 
 // AccountView is the composite per-address response. CNPY comes from
-// the core Account record; cCNPY/CLIQ are scalar plugin keys; CLIQStake
+// the core Account record; cCNPY/CPLQ are scalar plugin keys; CPLQStake
 // and validator-incentive are direct lookups; vesting / pending
 // redemptions / pending unstakes are enumerated via per-address
 // indexes maintained by their respective Deliver handlers.
@@ -85,12 +91,12 @@ type AccountView struct {
 	Address            string                    `json:"address"`
 	CNPY               uint64                    `json:"cnpy"`
 	CCNPY              uint64                    `json:"ccnpy"`
-	CLIQLiquid         uint64                    `json:"cliqLiquid"`
-	CLIQStake          *contract.CLIQStake       `json:"cliqStake,omitempty"`
+	CPLQLiquid         uint64                    `json:"cplqLiquid"`
+	CPLQStake          *contract.CPLQStake       `json:"cplqStake,omitempty"`
 	ValidatorIncentive uint64                    `json:"validatorIncentive"`
 	Vestings           []*VestingView            `json:"vestings,omitempty"`
 	Redemptions        []*contract.Redemption    `json:"redemptions,omitempty"`
-	Unstakes           []*contract.UnstakingCLIQ `json:"unstakes,omitempty"`
+	Unstakes           []*contract.UnstakingCPLQ `json:"unstakes,omitempty"`
 }
 
 // VestingView is one schedule annotated with the cumulative unlocked
@@ -134,15 +140,16 @@ func (p *Plugin) enqueueLazy(ctx context.Context, q *lazyQuery) lazyResult {
 	}
 }
 
-// drainLazyQueries pulls every pending query off the channel and
-// fulfills it via a state read against the active FSM context.
-// Called from EndBlock after refreshSnapshot publishes the new
-// singleton/index view.
+// drainLazyQueries fulfills up to maxLazyDrainPerBlock pending queries via a
+// state read against the active FSM context. Called from EndBlock after
+// refreshSnapshot publishes the new singleton/index view. The per-block cap
+// (M4) bounds consensus-path work under an RPC burst; anything left in the
+// queue is served on a later block or times out client-side.
 func (c *Canoliq) drainLazyQueries() {
 	if c == nil || c.plugin == nil {
 		return
 	}
-	for {
+	for i := 0; i < maxLazyDrainPerBlock; i++ {
 		select {
 		case q := <-c.plugin.pendingQueries:
 			c.fulfillLazy(q)
@@ -210,18 +217,18 @@ func (c *Canoliq) fulfillLazy(q *lazyQuery) {
 func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginError) {
 	cnpyKey := contract.KeyForAccount(addr)
 	ccnpyKey := KeyForCCNPYBalance(addr)
-	cliqBalKey := KeyForCLIQBalance(addr)
-	stakeKey := KeyForCLIQStake(addr)
+	cplqBalKey := KeyForCPLQBalance(addr)
+	stakeKey := KeyForCPLQStake(addr)
 	valIncentKey := KeyForValidatorIncentives(addr)
 	vestIdxKey := KeyForVestingIndex(addr)
 	redemIdxKey := KeyForRedemptionIndex(addr)
 	unstIdxKey := KeyForUnstakingIndex(addr)
-	cQ, ccQ, lcQ, sQ, viQ, vQ, riQ, uiQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	cQ, ccQ, lcQ, sQ, viQ, vQ, riQ, uiQ := qid(), qid(), qid(), qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
 			{QueryId: ccQ, Key: ccnpyKey},
-			{QueryId: lcQ, Key: cliqBalKey},
+			{QueryId: lcQ, Key: cplqBalKey},
 			{QueryId: sQ, Key: stakeKey},
 			{QueryId: viQ, Key: valIncentKey},
 			{QueryId: vQ, Key: vestIdxKey},
@@ -252,14 +259,14 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 		case ccQ:
 			view.CCNPY = DecodeUint64(raw)
 		case lcQ:
-			view.CLIQLiquid = DecodeUint64(raw)
+			view.CPLQLiquid = DecodeUint64(raw)
 		case sQ:
-			stake := new(contract.CLIQStake)
+			stake := new(contract.CPLQStake)
 			if e := contract.Unmarshal(raw, stake); e != nil {
 				return nil, e
 			}
 			if stake.Address != nil {
-				view.CLIQStake = stake
+				view.CPLQStake = stake
 			}
 		case viQ:
 			view.ValidatorIncentive = DecodeUint64(raw)
@@ -317,7 +324,7 @@ func (c *Canoliq) readRedemptions(addr []byte, ids []uint64) ([]*contract.Redemp
 	}
 	keys := make([]*contract.PluginKeyRead, 0, len(ids))
 	for _, id := range ids {
-		keys = append(keys, &contract.PluginKeyRead{QueryId: rand.Uint64(), Key: KeyForRedemption(addr, id)})
+		keys = append(keys, &contract.PluginKeyRead{QueryId: qid(), Key: KeyForRedemption(addr, id)})
 	}
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
 	if err != nil {
@@ -343,14 +350,14 @@ func (c *Canoliq) readRedemptions(addr []byte, ids []uint64) ([]*contract.Redemp
 	return out, nil
 }
 
-// readUnstakings batch-reads UnstakingCLIQ records for the given ids.
-func (c *Canoliq) readUnstakings(addr []byte, ids []uint64) ([]*contract.UnstakingCLIQ, *contract.PluginError) {
+// readUnstakings batch-reads UnstakingCPLQ records for the given ids.
+func (c *Canoliq) readUnstakings(addr []byte, ids []uint64) ([]*contract.UnstakingCPLQ, *contract.PluginError) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	keys := make([]*contract.PluginKeyRead, 0, len(ids))
 	for _, id := range ids {
-		keys = append(keys, &contract.PluginKeyRead{QueryId: rand.Uint64(), Key: KeyForCLIQUnstaking(addr, id)})
+		keys = append(keys, &contract.PluginKeyRead{QueryId: qid(), Key: KeyForCPLQUnstaking(addr, id)})
 	}
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
 	if err != nil {
@@ -359,12 +366,12 @@ func (c *Canoliq) readUnstakings(addr []byte, ids []uint64) ([]*contract.Unstaki
 	if resp.Error != nil {
 		return nil, resp.Error
 	}
-	out := make([]*contract.UnstakingCLIQ, 0, len(ids))
+	out := make([]*contract.UnstakingCPLQ, 0, len(ids))
 	for _, r := range resp.Results {
 		if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
 			continue
 		}
-		u := new(contract.UnstakingCLIQ)
+		u := new(contract.UnstakingCPLQ)
 		if e := contract.Unmarshal(r.Entries[0].Value, u); e != nil {
 			return nil, e
 		}
@@ -381,7 +388,7 @@ func (c *Canoliq) readUnstakings(addr []byte, ids []uint64) ([]*contract.Unstaki
 // (route handler maps this to 404).
 func (c *Canoliq) buildVestingView(addr []byte) ([]*VestingView, bool, *contract.PluginError) {
 	idxKey := KeyForVestingIndex(addr)
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: idxKey}},
 	})
@@ -417,7 +424,7 @@ func (c *Canoliq) readVestingSchedules(addr []byte, ids []uint64) ([]*VestingVie
 	reads := make([]*contract.PluginKeyRead, 0, len(ids))
 	for _, id := range ids {
 		reads = append(reads, &contract.PluginKeyRead{
-			QueryId: rand.Uint64(),
+			QueryId: qid(),
 			Key:     KeyForVesting(addr, id),
 		})
 	}
@@ -456,7 +463,7 @@ func (c *Canoliq) readVestingSchedules(addr []byte, ids []uint64) ([]*VestingVie
 // readRedemption returns one redemption record by (addr, id) or
 // (nil, nil) when absent.
 func (c *Canoliq) readRedemption(addr []byte, id uint64) (*contract.Redemption, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForRedemption(addr, id)}},
 	})
@@ -479,7 +486,7 @@ func (c *Canoliq) readRedemption(addr []byte, id uint64) (*contract.Redemption, 
 
 // readVote returns one vote record by (proposalId, voter) or (nil, nil).
 func (c *Canoliq) readVote(proposalID uint64, voter []byte) (*contract.Vote, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForVote(proposalID, voter)}},
 	})
@@ -502,7 +509,7 @@ func (c *Canoliq) readVote(proposalID uint64, voter []byte) (*contract.Vote, *co
 
 // readBuyback returns one buyback order by proposal id or (nil, nil).
 func (c *Canoliq) readBuyback(id uint64) (*contract.BuybackOrder, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForBuybackOrder(id)}},
 	})

@@ -103,7 +103,7 @@ func TestRPCHealthAndGlobalsAfterRefresh(t *testing.T) {
 		TotalCcnpySupply: 1_500_000,
 		TotalPooledCnpy:  2_000_000,
 		GenesisComplete:  true,
-		CliqTotalSupply:  CLIQTotalSupply,
+		CplqTotalSupply:  CPLQTotalSupply,
 	}
 	s.set(KeyForGlobals(), mustMarshal(g))
 	refresh(42)
@@ -259,10 +259,10 @@ func TestRPCValidatorsAndStakers(t *testing.T) {
 	}
 	s.set(KeyForValidatorRegistry(), mustMarshal(registry))
 	s.set(KeyForValidatorIncentives(val), EncodeUint64(42))
-	s.set(KeyForCLIQStake(staker), mustMarshal(&contract.CLIQStake{
+	s.set(KeyForCPLQStake(staker), mustMarshal(&contract.CPLQStake{
 		Address: staker, Amount: 500_000, StakedAtHeight: 7,
 	}))
-	s.set(KeyForCLIQStakeIndex(), mustMarshal(&contract.CLIQStakeIndex{
+	s.set(KeyForCPLQStakeIndex(), mustMarshal(&contract.CPLQStakeIndex{
 		Addresses: [][]byte{staker},
 	}))
 	refresh(100)
@@ -306,8 +306,8 @@ func TestRPCAccountComposite(t *testing.T) {
 	user := addr20(0x42)
 	seedAccount(s, user, 7_000_000)
 	s.set(KeyForCCNPYBalance(user), EncodeUint64(500_000))
-	s.set(KeyForCLIQBalance(user), EncodeUint64(123_456))
-	s.set(KeyForCLIQStake(user), mustMarshal(&contract.CLIQStake{
+	s.set(KeyForCPLQBalance(user), EncodeUint64(123_456))
+	s.set(KeyForCPLQStake(user), mustMarshal(&contract.CPLQStake{
 		Address: user, Amount: 999_999, StakedAtHeight: 5,
 	}))
 	s.set(KeyForValidatorIncentives(user), EncodeUint64(7_777))
@@ -324,11 +324,11 @@ func TestRPCAccountComposite(t *testing.T) {
 	var view AccountView
 	getJSON(t, srv, "/v1/account/"+hex, http.StatusOK, &view)
 	if view.Address != hex || view.CNPY != 7_000_000 || view.CCNPY != 500_000 ||
-		view.CLIQLiquid != 123_456 || view.ValidatorIncentive != 7_777 {
+		view.CPLQLiquid != 123_456 || view.ValidatorIncentive != 7_777 {
 		t.Fatalf("account view: %+v", view)
 	}
-	if view.CLIQStake == nil || view.CLIQStake.Amount != 999_999 {
-		t.Fatalf("stake missing or wrong: %+v", view.CLIQStake)
+	if view.CPLQStake == nil || view.CPLQStake.Amount != 999_999 {
+		t.Fatalf("stake missing or wrong: %+v", view.CPLQStake)
 	}
 	if len(view.Vestings) != 1 || view.Vestings[0].UnlockedToDate != 500_000 {
 		t.Fatalf("vesting in composite: %+v", view.Vestings)
@@ -418,7 +418,7 @@ func TestRPCBuybackPointLookup(t *testing.T) {
 	order := &contract.BuybackOrder{
 		ProposalId:   3,
 		CnpyDrawn:    100_000,
-		CliqAcquired: 500_000,
+		CplqAcquired: 500_000,
 		Mode:         contract.BuybackMode_BUYBACK_BURN,
 		Executed:     true,
 	}

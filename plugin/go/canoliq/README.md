@@ -3,8 +3,8 @@
 This package implements the canoLiq liquid-staking sub-chain as a Canopy
 plugin. It accepts CNPY deposits, mints cCNPY at the current exchange rate,
 applies a 12% protocol fee on staking rewards (split 40/30/15/15 between
-users, the canoLiq DAO treasury, validator infrastructure, and CLIQ buyback),
-and tracks CLIQ — the fixed-supply (100M) governance token — with cliff +
+users, the canoLiq DAO treasury, validator infrastructure, and CPLQ buyback),
+and tracks CPLQ — the fixed-supply (100M) governance token — with cliff +
 linear-vesting schedules.
 
 The plugin is a sibling of `plugin/go/contract/`; it reuses the proto types
@@ -39,7 +39,7 @@ The fastest path to a running canoLiq chain on your machine — two
 Canopy nodes plus a plugin process per node, built and signed by the
 bundled `.docker/compose.yaml`. The validator set is pre-seeded so
 both nodes are committee-2 (canoLiq) participants out of the box; the
-plugin self-bootstraps Genesis on its first `BeginBlock` so 100M CLIQ
+plugin self-bootstraps Genesis on its first `BeginBlock` so 100M CPLQ
 supply is minted (to the localnet placeholder address) before you can
 hit the RPC.
 
@@ -157,7 +157,7 @@ State persists in `.docker/volumes/node_*/canopy/` between restarts.
 
 Plugin Genesis runs once and short-circuits on subsequent boots
 (idempotent on `globals.GenesisComplete`). To force a clean re-run
-(regenerates 100M CLIQ supply, zeroes pools, replays subsidies from
+(regenerates 100M CPLQ supply, zeroes pools, replays subsidies from
 height 1):
 
 ```bash
@@ -209,7 +209,7 @@ Testnet rollout follows the same six-phase shape as production but
 with the rigor dialed down where the cost of a mistake is recoverable:
 audits are encouraged but not blocking, multisig signers can be
 team-controlled, and "spin up a fresh testnet" is a viable recovery
-path. The localnet quick-start above mints 100M CLIQ to one
+path. The localnet quick-start above mints 100M CPLQ to one
 placeholder key and uses a 5-block redemption window — both wrong
 for any shared chain. The testnet profile keeps the same plugin
 binary but loads a distinct genesis + runtime config, with safety
@@ -243,7 +243,7 @@ are coordination tasks that can't be undone after first-block:
       `valParams.UnstakingBlocks`. The template ships with `14400`
       (~24h at 6s blocks); raise or lower based on the actual
       testnet's block time and unstaking length.
-- [ ] **Discord summary posted** with chainId, fee/split, CLIQ
+- [ ] **Discord summary posted** with chainId, fee/split, CPLQ
       bucket distribution, plugin runtime contract.
 - [ ] **Monitoring sketched out.** Even on testnet you want a
       uptime check on `/v1/health` per node — silent failure during
@@ -359,18 +359,18 @@ until curl -fsS http://127.0.0.1:8587/v1/health 2>/dev/null \
 ```
 
 Verify each bucket recipient got the expected balance, summing to
-exactly 100M × 10⁶ uCLIQ:
+exactly 100M × 10⁶ uCPLQ:
 
 ```bash
 for ADDR in <validators> <liquidity> <community> <dao> <founders> <partners> <grants>; do
   echo "=== 0x$ADDR ==="
-  curl -sS http://127.0.0.1:8587/v1/account/0x$ADDR | jq '{cliqLiquid, vestings: .vestings | map({totalAmount: .schedule.totalAmount, cliffHeight: .schedule.cliffHeight})}'
+  curl -sS http://127.0.0.1:8587/v1/account/0x$ADDR | jq '{cplqLiquid, vestings: .vestings | map({totalAmount: .schedule.totalAmount, cliffHeight: .schedule.cliffHeight})}'
 done
 ```
 
-Expected totals (in uCLIQ):
+Expected totals (in uCPLQ):
 
-| Bucket | uCLIQ | Liquid | Vesting |
+| Bucket | uCPLQ | Liquid | Vesting |
 |---|---:|:---:|:---:|
 | Validators | 22,000,000,000,000 | — | ✓ |
 | Liquidity | 15,000,000,000,000 | ✓ | — |
@@ -392,8 +392,8 @@ Expected totals (in uCLIQ):
 # Wait redemptionUnstakingBlocks blocks; then claim
 ./canoliqctl claim <test-acct> 0
 
-# Stake CLIQ + propose a no-op param-change to verify governance
-./canoliqctl cliq-stake <test-acct> 5000000
+# Stake CPLQ + propose a no-op param-change to verify governance
+./canoliqctl cplq-stake <test-acct> 5000000
 ./canoliqctl proposal-create param-change <test-acct> ./params-noop.json \
   --description "testnet smoke test"
 ./canoliqctl vote <test-acct> 1 yes
@@ -435,7 +435,7 @@ migration tool yet (Phase 3 §3 of the implementation plan).
      Dockerfile already bundles both genesis + config variants, so
      no rebuild needed.
 3. **First-block bootstrap.** Plugin's `BeginBlock` self-bootstrap
-   mints 100M CLIQ to the testnet bucket addresses on first block
+   mints 100M CPLQ to the testnet bucket addresses on first block
    observation. There is no second chance — if the genesis is
    wrong, you reserve a new chainId and start over.
 4. **Verify on real chain.** Re-run §2.2 reconciliation against
@@ -497,7 +497,7 @@ Paste-ready for a release ticket:
 [ ] canoliq-config.testnet.json: chainId + redemptionUnstakingBlocks set
 [ ] Hashes of both files recorded
 [ ] Local safety-check verification passed (banner + safety check)
-[ ] Private-chain bucket reconciliation: 100M × 10⁶ uCLIQ exact
+[ ] Private-chain bucket reconciliation: 100M × 10⁶ uCPLQ exact
 [ ] Private-chain lifecycle smoke test: deposit → redeem → claim
 [ ] Private-chain governance smoke test: propose → vote → execute
 [ ] Private-chain multisig rehearsal: above-threshold flow
@@ -561,7 +561,7 @@ production:
       `valParams.UnstakingBlocks` (typically thousands of blocks).
       Document the value with a citation to the chain it was read
       from.
-- [ ] **Discord summary posted** announcing chainId, fee/split, CLIQ
+- [ ] **Discord summary posted** announcing chainId, fee/split, CPLQ
       supply + bucket distribution, multisig signer set, plugin
       runtime contract.
 - [ ] **Monitoring + on-call rotation in place.** At minimum: a
@@ -716,19 +716,19 @@ check pass; rebuild from source.
 #### 2.3. Reconcile the bucket distribution
 
 Wait for `genesisComplete: true`, then verify every bucket recipient
-got the expected balance (uCLIQ):
+got the expected balance (uCPLQ):
 
 ```bash
 for ADDR in <multisig-validators> <multisig-liquidity> <multisig-community> \
             <multisig-dao> <timelock-founders> <timelock-partners> <multisig-grants>; do
   echo "=== 0x$ADDR ==="
-  curl -sS http://127.0.0.1:8587/v1/account/0x$ADDR | jq '{cliqLiquid, vestings: .vestings | map({totalAmount: .schedule.totalAmount, cliffHeight: .schedule.cliffHeight, endHeight: .schedule.endHeight})}'
+  curl -sS http://127.0.0.1:8587/v1/account/0x$ADDR | jq '{cplqLiquid, vestings: .vestings | map({totalAmount: .schedule.totalAmount, cliffHeight: .schedule.cliffHeight, endHeight: .schedule.endHeight})}'
 done
 ```
 
-Expected totals (in uCLIQ, where 1 CLIQ = 10⁶ uCLIQ):
+Expected totals (in uCPLQ, where 1 CPLQ = 10⁶ uCPLQ):
 
-| Bucket | uCLIQ | Liquid | Vesting |
+| Bucket | uCPLQ | Liquid | Vesting |
 |---|---:|:---:|:---:|
 | Validators | 22,000,000,000,000 | — | ✓ (24mo) |
 | Liquidity | 15,000,000,000,000 | ✓ | — |
@@ -740,7 +740,7 @@ Expected totals (in uCLIQ, where 1 CLIQ = 10⁶ uCLIQ):
 | **Total** | **100,000,000,000,000** | | |
 
 Sum the per-bucket totals across `/v1/account/{addr}` results and
-confirm exactly 100M × 10⁶ uCLIQ. Off-by-one in the sum means a
+confirm exactly 100M × 10⁶ uCPLQ. Off-by-one in the sum means a
 recipient list misallocates and the genesis is wrong.
 
 #### 2.4. Smoke-test the full lifecycle
@@ -758,8 +758,8 @@ Use canoliqctl on the private chain to exercise:
 # Wait redemptionUnstakingBlocks blocks, then claim
 ./canoliqctl claim <test-account> 0
 
-# Stake CLIQ + propose a no-op param-change to verify governance
-./canoliqctl cliq-stake <test-account> 5000000
+# Stake CPLQ + propose a no-op param-change to verify governance
+./canoliqctl cplq-stake <test-account> 5000000
 ./canoliqctl proposal-create param-change <test-account> ./params-noop.json \
   --description "production smoke test"
 ./canoliqctl vote <test-account> 1 yes
@@ -812,7 +812,7 @@ Two patterns depending on your existing infrastructure:
    land before the first canoliq block to avoid an empty validator
    set.
 5. **First-block bootstrap.** The plugin's `BeginBlock` self-bootstrap
-   runs on first observation, mints 100M CLIQ to the production
+   runs on first observation, mints 100M CPLQ to the production
    bucket addresses, and seeds the validator registry. There is no
    second chance — if the genesis file is wrong, you start over from
    step 1 with a new chainId. (This is why Phase 2 is non-negotiable.)
@@ -838,7 +838,7 @@ The full read surface lives at `:8587/v1/...` — see
 the route list. Production dashboards typically poll:
 
 - `/v1/health` (every 30s) — liveness
-- `/v1/globals` (every 5m) — `totalPooledCnpy`, CLIQ supply,
+- `/v1/globals` (every 5m) — `totalPooledCnpy`, CPLQ supply,
   `pendingRedemptionCnpy`
 - `/v1/pools` (every 5m) — fee-split health, treasury / buyback /
   insurance balances
@@ -908,7 +908,7 @@ fix is one block of activity — `EndBlock` will refresh.
 
 Plugin-owned state is point-read only; suspicious values surface in
 `/v1/globals` or `/v1/pools` first. Cross-check by enumerating
-buckets via the address routes and summing CLIQ. If the supply
+buckets via the address routes and summing CPLQ. If the supply
 doesn't equal 100M × 10⁶ minus circulating, escalate to a Canopy
 core engineer — the FSM's state DB is the canonical source of truth.
 
@@ -933,7 +933,7 @@ A condensed pre-flight you can paste into a release ticket:
 [ ] MessageSubsidy proposal queued/passed
 [ ] Validators opted into committee via MessageEditStake
 [ ] Validator registry block matches opted-in set
-[ ] Private-chain bucket reconciliation: 100M × 10⁶ uCLIQ exact
+[ ] Private-chain bucket reconciliation: 100M × 10⁶ uCPLQ exact
 [ ] Private-chain lifecycle smoke test: deposit → redeem → claim
 [ ] Private-chain governance smoke test: propose → vote → execute
 [ ] Private-chain multisig rehearsal: 4 flows verified
@@ -994,37 +994,37 @@ export CANOLIQCTL_PASSWORD=hunter2
 Phase 2 commands (governance, staking, buyback, treasury):
 
 ```bash
-./canoliqctl cliq-stake          alice 5000000
-./canoliqctl cliq-unstake        alice 1000000
-./canoliqctl cliq-claim-unstake  alice 0
+./canoliqctl cplq-stake          alice 5000000
+./canoliqctl cplq-unstake        alice 1000000
+./canoliqctl cplq-claim-unstake  alice 0
 ./canoliqctl vote                alice <proposal-id> yes
 ./canoliqctl buyback-execute     alice <proposal-id>
 ./canoliqctl spend-execute       alice <proposal-id>
 ./canoliqctl multisig-approve    signer1 <spend-id>
-./canoliqctl cliq-transfer       alice <to-hex> 1000000
-./canoliqctl cliq-claim-vested   alice
+./canoliqctl cplq-transfer       alice <to-hex> 1000000
+./canoliqctl cplq-claim-vested   alice
 ```
 
 ### Creating proposals
 
-`proposal-create` dispatches `MessageCLIQProposalCreate` with one of three
+`proposal-create` dispatches `MessageCPLQProposalCreate` with one of three
 `google.protobuf.Any` payload types. The proposer must hold ≥
-`min_stake_to_propose` CLIQ at creation height.
+`min_stake_to_propose` CPLQ at creation height.
 
 ```bash
 # 1. Param change — full-set CanoliqParams replacement (loaded from JSON)
 ./canoliqctl proposal-create param-change alice ./new-params.json \
     --description "lower fee from 12% to 8%"
 
-# 2. Buyback — CNPY → CLIQ extraction at a vote-set price
+# 2. Buyback — CNPY → CPLQ extraction at a vote-set price
 ./canoliqctl proposal-create buyback alice 100000000 1500000 burn \
     --description "Q4 buyback and burn"
-# args: cnpy-amount  price-uCNPY-per-CLIQ  mode (burn|distribute)
+# args: cnpy-amount  price-uCNPY-per-CPLQ  mode (burn|distribute)
 
 # 3. Treasury spend — transfer from canoliq treasury to a recipient
 ./canoliqctl proposal-create treasury-spend alice 0xabc...123 50000000 cnpy \
     --description "infrastructure grant"
-# args: recipient-hex  amount  denomination (cnpy|cliq)
+# args: recipient-hex  amount  denomination (cnpy|cplq)
 ```
 
 The `param-change` JSON file uses the same shape as the `params` block
@@ -1051,18 +1051,18 @@ Pre-validate by ensuring the four split bps fields total 10000 and
    reads from this pool and applies the 12% fee.
 4. **Run the plugin.** Set `~/.canopy/config.json` `"plugin": "canoliq"` (or
    start the binary directly with `CANOPY_PLUGIN_MODE=canoliq`). On first
-   boot the plugin runs `Genesis` once, minting the 100M CLIQ supply to the
+   boot the plugin runs `Genesis` once, minting the 100M CPLQ supply to the
    recipients in `genesis.json` according to the bucket weights and vesting
    schedules.
 
 ## Genesis configuration
 
-`genesis.json` lists CLIQ allocation buckets and per-recipient weights. The
+`genesis.json` lists CPLQ allocation buckets and per-recipient weights. The
 sum of bucket bps must be `10000`; recipients within a bucket must also sum
 to `10000`. Buckets with `cliffMonths == 0 && vestMonths == 0` mint to a
-liquid CLIQ balance immediately; otherwise the plugin writes a
-`VestingSchedule` and the recipient must call `MessageCLIQClaimVested` to
-unlock vested CLIQ. Update the placeholder hex addresses (`...a1` … `...a7`)
+liquid CPLQ balance immediately; otherwise the plugin writes a
+`VestingSchedule` and the recipient must call `MessageCPLQClaimVested` to
+unlock vested CPLQ. Update the placeholder hex addresses (`...a1` … `...a7`)
 before running mainnet.
 
 ⚠️ **Buckets with `0/0` are not all "no schedule".** For *Liquidity Incentives*
@@ -1083,13 +1083,13 @@ release in milestone-gated tranches at the DAO's discretion.
 | `MessageCanoliqDeposit` | Deposits CNPY → mints cCNPY |
 | `MessageCanoliqRedeem` | Burns cCNPY → queues `Redemption` (matures after the unstaking window) |
 | `MessageCanoliqClaimRedemption` | Withdraws a matured `Redemption` to the user's CNPY account |
-| `MessageCLIQTransfer` | Transfers liquid (vested) CLIQ |
-| `MessageCLIQClaimVested` | Unlocks newly-vested CLIQ across all of the caller's vesting schedules |
-| `MessageCLIQStake` | Locks liquid CLIQ for governance weight |
-| `MessageCLIQUnstake` | Queues an unbond record; voting weight drops immediately |
-| `MessageCLIQClaimUnstake` | Returns matured CLIQ to the liquid balance |
-| `MessageCLIQProposalCreate` | Opens a governance proposal (param change \| buyback \| treasury spend) |
-| `MessageCLIQVote` | Votes yes/no/abstain on an active proposal |
+| `MessageCPLQTransfer` | Transfers liquid (vested) CPLQ |
+| `MessageCPLQClaimVested` | Unlocks newly-vested CPLQ across all of the caller's vesting schedules |
+| `MessageCPLQStake` | Locks liquid CPLQ for governance weight |
+| `MessageCPLQUnstake` | Queues an unbond record; voting weight drops immediately |
+| `MessageCPLQClaimUnstake` | Returns matured CPLQ to the liquid balance |
+| `MessageCPLQProposalCreate` | Opens a governance proposal (param change \| buyback \| treasury spend) |
+| `MessageCPLQVote` | Votes yes/no/abstain on an active proposal |
 | `MessageBuybackExecute` | Triggers a passed buyback proposal (BURN or DISTRIBUTE_STAKERS) |
 | `MessageDAOTreasurySpend` | Triggers a passed treasury spend (timelock + multisig above threshold) |
 | `MessageMultisigApprove` | Per-signer approval of an above-threshold spend |
@@ -1100,21 +1100,21 @@ selected.
 
 ## Governance lifecycle
 
-CLIQ holders stake CLIQ for governance weight (and yield boosts in a future
+CPLQ holders stake CPLQ for governance weight (and yield boosts in a future
 release). All material protocol parameters — fee bps, the 40/30/15/15 split,
 buyback mechanics, multisig membership, validator-onboarding criteria — flow
 through the same proposal pipeline.
 
-1. **Stake.** `MessageCLIQStake` locks liquid CLIQ; `staked_at_height` is
-   recorded on the `CLIQStake` record. Unstake decrements voting weight
+1. **Stake.** `MessageCPLQStake` locks liquid CPLQ; `staked_at_height` is
+   recorded on the `CPLQStake` record. Unstake decrements voting weight
    immediately and queues an unbond record maturing after
-   `cliq_unstaking_blocks` (default ~7 days).
-2. **Propose.** `MessageCLIQProposalCreate` accepts a typed `google.protobuf.Any`
+   `cplq_unstaking_blocks` (default ~7 days).
+2. **Propose.** `MessageCPLQProposalCreate` accepts a typed `google.protobuf.Any`
    payload — one of `ProposalParamChange`, `ProposalBuyback`, or
    `ProposalTreasurySpend`. The proposer must hold ≥ `min_stake_to_propose`.
-   Total staked CLIQ is snapshotted into `Proposal.snapshot_total_staked`.
-3. **Vote.** `MessageCLIQVote` casts a yes/no/abstain weighted by the voter's
-   `CLIQStake.amount` *as of the proposal's creation height*. Stake added
+   Total staked CPLQ is snapshotted into `Proposal.snapshot_total_staked`.
+3. **Vote.** `MessageCPLQVote` casts a yes/no/abstain weighted by the voter's
+   `CPLQStake.amount` *as of the proposal's creation height*. Stake added
    after creation is rejected (defeats flash-stake attacks).
 4. **Tally.** On `BeginBlock` after `expiry_height`, the plugin tallies
    weights and applies the rules:
@@ -1134,16 +1134,16 @@ Phase 2 ships an internal accounting swap (whitepaper §6 allows "market
 buyback and burn or direct distribution governed by DAO"). A real on-chain
 DEX route is deferred to Phase 3.
 
-A passed `ProposalBuyback` carries `cnpy_amount`, `price_micro_cnpy_per_cliq`,
+A passed `ProposalBuyback` carries `cnpy_amount`, `price_micro_cnpy_per_cplq`,
 and `mode`. `MessageBuybackExecute`:
 
 - Drains up to `cnpy_amount` from `canoliq/buyback/pool` and credits
   `canoliq/treasury/canoliq` by the same.
-- Computes `cliq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cliq`
-  and debits `canoliq/treasury/cliq` (DAO 15% bucket).
-- **BURN**: decrements `globals.cliq_total_supply` and
-  `globals.cliq_circulating_supply` by `cliq_acquired`.
-- **DISTRIBUTE_STAKERS**: pro-rata credits all active CLIQ stakers' liquid
+- Computes `cplq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cplq`
+  and debits `canoliq/treasury/cplq` (DAO 15% bucket).
+- **BURN**: decrements `globals.cplq_total_supply` and
+  `globals.cplq_circulating_supply` by `cplq_acquired`.
+- **DISTRIBUTE_STAKERS**: pro-rata credits all active CPLQ stakers' liquid
   balances; rounding remainder credited to the largest staker.
 
 Re-execution is a no-op (`BuybackOrder.executed` flag).
@@ -1151,7 +1151,7 @@ Re-execution is a no-op (`BuybackOrder.executed` flag).
 ## Treasury spend workflow
 
 `ProposalTreasurySpend` carries `recipient`, `amount`, and `denomination`
-(CNPY or CLIQ). Below `treasury_threshold` the spend executes as a single
+(CNPY or CPLQ). Below `treasury_threshold` the spend executes as a single
 step; above threshold it requires:
 
 - A `timelock_blocks` delay before `executable_height` is reached.
@@ -1243,21 +1243,21 @@ Snapshot-served (sub-millisecond, stale by ≤1 block):
 | `/v1/health` | `{height, genesisComplete, chainId}` |
 | `/v1/globals` | `CanoliqGlobals` (singleton accounting record) |
 | `/v1/params` | `CanoliqParams` (governance-tunable knobs) |
-| `/v1/pools` | committee pool, treasury (CNPY/CLIQ), buyback, insurance, per-validator incentives |
+| `/v1/pools` | committee pool, treasury (CNPY/CPLQ), buyback, insurance, per-validator incentives |
 | `/v1/proposals` | `{ids: [active proposal ids]}` |
 | `/v1/proposal/{id}` | full `Proposal` record (404 if not in active set) |
 | `/v1/spends` | `{ids: [pending spend ids]}` |
 | `/v1/spend/{id}` | `TreasurySpend` record |
 | `/v1/spend/{id}/approvals` | multisig approvals filtered to the *current* signer set |
 | `/v1/validators` | `ValidatorRegistry` (committee snapshot used for pro-rata) |
-| `/v1/stakers` | `{stakers: [{address, amount, stakedAtHeight}]}` from `CLIQStakeIndex` |
+| `/v1/stakers` | `{stakers: [{address, amount, stakedAtHeight}]}` from `CPLQStakeIndex` |
 | `/v1/graduation` | five autonomy-graduation metrics + composite `eligible` (T5) |
 
 Lazy-fulfilled per-address (latency: up to one block ≈ 6s on localnet):
 
 | Path | Returns |
 |---|---|
-| `/v1/account/{addr}` | composite: CNPY + cCNPY + liquid CLIQ + stake + validator-incentive + vesting |
+| `/v1/account/{addr}` | composite: CNPY + cCNPY + liquid CPLQ + stake + validator-incentive + vesting |
 | `/v1/vesting/{addr}` | every vesting schedule with cumulative unlocked-to-date |
 | `/v1/redemption/{addr}/{id}` | one redemption record |
 | `/v1/vote/{id}/{voter}` | one vote record |

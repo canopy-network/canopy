@@ -1,21 +1,19 @@
 package canoliq
 
 import (
-	"math/rand"
-
 	"github.com/canopy-network/go-plugin/contract"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // governance.go drives the canoLiq DAO proposal lifecycle: create, vote,
 // tally on expiry, and dispatch the typed payload (param change | buyback |
-// treasury_spend) on pass. WP §4 specifies stake-locked CLIQ as the
+// treasury_spend) on pass. WP §4 specifies stake-locked CPLQ as the
 // governance weight source; voter weight is read against the
-// CLIQStake.staked_at_height snapshot taken at proposal creation, so flash
+// CPLQStake.staked_at_height snapshot taken at proposal creation, so flash
 // stake additions cannot retroactively gain voting power.
 
-// CheckMessageCLIQProposalCreate validates a create_proposal request statelessly.
-func (c *Canoliq) CheckMessageCLIQProposalCreate(msg *contract.MessageCLIQProposalCreate, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+// CheckMessageCPLQProposalCreate validates a create_proposal request statelessly.
+func (c *Canoliq) CheckMessageCPLQProposalCreate(msg *contract.MessageCPLQProposalCreate, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
 	}
@@ -31,8 +29,8 @@ func (c *Canoliq) CheckMessageCLIQProposalCreate(msg *contract.MessageCLIQPropos
 	}
 }
 
-// CheckMessageCLIQVote validates a vote statelessly.
-func (c *Canoliq) CheckMessageCLIQVote(msg *contract.MessageCLIQVote, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+// CheckMessageCPLQVote validates a vote statelessly.
+func (c *Canoliq) CheckMessageCPLQVote(msg *contract.MessageCPLQVote, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
 	}
@@ -48,16 +46,16 @@ func (c *Canoliq) CheckMessageCLIQVote(msg *contract.MessageCLIQVote, fee uint64
 	}
 }
 
-// DeliverMessageCLIQProposalCreate opens a new proposal: assigns the next
-// id, snapshots globals.total_staked_cliq into the record, and appends to
+// DeliverMessageCPLQProposalCreate opens a new proposal: assigns the next
+// id, snapshots globals.total_staked_cplq into the record, and appends to
 // the active proposal index.
-func (c *Canoliq) DeliverMessageCLIQProposalCreate(msg *contract.MessageCLIQProposalCreate, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
+func (c *Canoliq) DeliverMessageCPLQProposalCreate(msg *contract.MessageCPLQProposalCreate, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	stakeKey := KeyForCLIQStake(msg.FromAddress)
+	stakeKey := KeyForCPLQStake(msg.FromAddress)
 	gKey := KeyForGlobals()
 	idxKey := KeyForProposalIndex()
-	cQ, fQ, sQ, gQ, iQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	cQ, fQ, sQ, gQ, iQ := qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -75,7 +73,7 @@ func (c *Canoliq) DeliverMessageCLIQProposalCreate(msg *contract.MessageCLIQProp
 	}
 	cnpy := new(contract.Account)
 	feePool := new(contract.Pool)
-	stake := new(contract.CLIQStake)
+	stake := new(contract.CPLQStake)
 	globals := new(contract.CanoliqGlobals)
 	idx := new(contract.ProposalIndex)
 	for _, r := range resp.Results {
@@ -132,12 +130,20 @@ func (c *Canoliq) DeliverMessageCLIQProposalCreate(msg *contract.MessageCLIQProp
 	if tier != nil && tier.VotingPeriodBlocks > 0 {
 		votingPeriod = tier.VotingPeriodBlocks
 	}
+	// M1: snapshot the lock-boosted stake total as the quorum/turnout
+	// denominator so it is measured on the same basis as the boosted vote
+	// tallies (voteWeightFor). Using raw TotalStakedCplq here let a single
+	// long-lock voter clear quorum with a fraction of the implied stake.
+	snapshotTotalStaked, sErr := c.boostedStakeTotal()
+	if sErr != nil {
+		return &contract.PluginDeliverResponse{Error: sErr}
+	}
 	prop := &contract.Proposal{
 		Id:                  id,
 		Proposer:            msg.FromAddress,
 		CreationHeight:      height,
 		ExpiryHeight:        height + votingPeriod,
-		SnapshotTotalStaked: globals.TotalStakedCliq,
+		SnapshotTotalStaked: snapshotTotalStaked,
 		Payload:             msg.Payload,
 		Description:         msg.Description,
 		Status:              contract.ProposalStatus_PROPOSAL_ACTIVE,
@@ -183,18 +189,18 @@ func (c *Canoliq) DeliverMessageCLIQProposalCreate(msg *contract.MessageCLIQProp
 	return &contract.PluginDeliverResponse{}
 }
 
-// DeliverMessageCLIQVote records a single yes/no/abstain vote on an active
-// proposal. Voter weight is the CLIQStake.amount evaluated against
+// DeliverMessageCPLQVote records a single yes/no/abstain vote on an active
+// proposal. Voter weight is the CPLQStake.amount evaluated against
 // proposal.creation_height — stake whose staked_at_height postdates the
 // proposal earns zero weight.
-func (c *Canoliq) DeliverMessageCLIQVote(msg *contract.MessageCLIQVote, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
+func (c *Canoliq) DeliverMessageCPLQVote(msg *contract.MessageCPLQVote, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	_ = params
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
 	pKey := KeyForProposal(msg.ProposalId)
-	stakeKey := KeyForCLIQStake(msg.FromAddress)
+	stakeKey := KeyForCPLQStake(msg.FromAddress)
 	voteKey := KeyForVote(msg.ProposalId, msg.FromAddress)
-	cQ, fQ, pQ, sQ, vQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	cQ, fQ, pQ, sQ, vQ := qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -213,7 +219,7 @@ func (c *Canoliq) DeliverMessageCLIQVote(msg *contract.MessageCLIQVote, fee uint
 	cnpy := new(contract.Account)
 	feePool := new(contract.Pool)
 	prop := new(contract.Proposal)
-	stake := new(contract.CLIQStake)
+	stake := new(contract.CPLQStake)
 	pPresent, votePresent := false, false
 	for _, r := range resp.Results {
 		if len(r.Entries) == 0 {
@@ -322,7 +328,7 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 		return err
 	}
 	idxKey := KeyForProposalIndex()
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: idxKey}},
 	})
@@ -361,9 +367,16 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 			continue
 		}
 		// Record turnout (participation) for every tallied proposal, regardless
-		// of outcome.
+		// of outcome. M1: clamp per-proposal turnout to <=10000 bps (100%). With
+		// the boosted snapshot denominator this should hold structurally, but the
+		// clamp is a defensive floor so a stale/under-counted snapshot can never
+		// inflate the T5 graduation turnout metric past 100%.
 		if prop.SnapshotTotalStaked > 0 {
-			turnoutSumDelta += mulDiv(prop.YesWeight+prop.NoWeight+prop.AbstainWeight, 10_000, prop.SnapshotTotalStaked)
+			turnout := mulDiv(prop.YesWeight+prop.NoWeight+prop.AbstainWeight, 10_000, prop.SnapshotTotalStaked)
+			if turnout > 10_000 {
+				turnout = 10_000
+			}
+			turnoutSumDelta += turnout
 			turnoutCountDelta++
 		}
 		passed := proposalPasses(prop, params)
@@ -407,7 +420,7 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 
 // loadProposal reads a Proposal record. Returns (nil, nil) when absent.
 func (c *Canoliq) loadProposal(id uint64) (*contract.Proposal, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForProposal(id)}},
 	})
@@ -468,7 +481,7 @@ func (c *Canoliq) dispatchPassed(prop *contract.Proposal, params *contract.Canol
 		}
 		return c.SaveParams(p.Params)
 	case *contract.ProposalBuyback:
-		if p.PriceMicroCnpyPerCliq == 0 || p.CnpyAmount == 0 {
+		if p.PriceMicroCnpyPerCplq == 0 || p.CnpyAmount == 0 {
 			return ErrInvalidProposalPayload()
 		}
 		order := &contract.BuybackOrder{
@@ -546,9 +559,9 @@ func unwrapPayload(any *anypb.Any) (interface{}, *contract.PluginError) {
 	}
 }
 
-// largeSpendCliqThreshold is the "> 1M CLIQ" boundary (in uCLIQ) separating
+// largeSpendCplqThreshold is the "> 1M CPLQ" boundary (in uCPLQ) separating
 // the small- and large-treasury-spend governance tiers (Tokenomics §7).
-const largeSpendCliqThreshold = 1_000_000 * 1_000_000
+const largeSpendCplqThreshold = 1_000_000 * 1_000_000
 
 // actionTypeForPayload classifies an unwrapped proposal payload into its
 // governance ActionType. ProposalBuyback has no §7 tier and maps to
@@ -558,7 +571,7 @@ func actionTypeForPayload(payload interface{}) contract.ActionType {
 	case *contract.ProposalParamChange:
 		return contract.ActionType_ACTION_FEE_CHANGE
 	case *contract.ProposalTreasurySpend:
-		if p.Denomination == contract.SpendDenomination_SPEND_CLIQ && p.Amount > largeSpendCliqThreshold {
+		if p.Denomination == contract.SpendDenomination_SPEND_CPLQ && p.Amount > largeSpendCplqThreshold {
 			return contract.ActionType_ACTION_TREASURY_SPEND_LARGE
 		}
 		return contract.ActionType_ACTION_TREASURY_SPEND_SMALL

@@ -1,0 +1,90 @@
+# Testnet pre-flight image (canoLiq readiness Workstream 2).
+#
+# Identical to compose.yaml except CANOLIQ_CONFIG points at the *testnet*
+# plugin config (chainId 42, redemptionUnstakingBlocks 30240, real bucket
+# addresses). profile="testnet" re-enables the safety check, so the plugin
+# refuses to start if genesis.testnet.json still carries the localnet
+# placeholder address. The Dockerfile already bundles both genesis + config
+# variants, so no rebuild-logic change is needed — this file only swaps which
+# config the plugin process loads.
+#
+# Note: the Canopy node genesis is still mounted from ./volumes/node_* (the
+# localnet validator set). This image is for exercising the canoLiq *plugin*
+# testnet config on a private multi-node bring-up; cutover against the real
+# Canopy testnet (README Phase 3) uses the live chain's own genesis.
+services:
+  node-1:
+    container_name: node-1
+    build:
+      context: ..
+      dockerfile: .docker/Dockerfile
+    ports:
+      - 50000:50000 # Wallet
+      - 50001:50001 # Explorer
+      - 50002:50002 # RPC
+      - 50003:50003 # Admin RPC
+      - 9001:9001 # TCP P2P
+      - 6060:6060 # Debug
+      - 9090:9090 # Metrics
+      - 8587:8587 # canoLiq plugin read-only query RPC
+    networks:
+      - canopy
+    command: ["start"]
+    # CANOPY_PLUGIN_MODE selects which plugin implementation the go-plugin
+    # binary serves. The canopy controller starts the plugin via
+    # plugin/go/pluginctl.sh, which inherits this env var; the binary's main()
+    # at plugin/go/main.go switches on it to dispatch to canoliq.StartPlugin.
+    # CANOLIQ_RPC_ADDR turns on the read-only query HTTP server in the
+    # plugin process. Bind to 0.0.0.0 so the host port forward sees it.
+    environment:
+      - CANOPY_PLUGIN_MODE=canoliq
+      # Testnet config: 30240-block redemption window (matches Canopy's
+      # valParams.UnstakingBlocks), chainId 42, real bucket addresses,
+      # profile=testnet (placeholder safety check active — refuses to boot
+      # if genesis.testnet.json still carries the localnet placeholder).
+      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.testnet.json
+      - CANOLIQ_RPC_ADDR=0.0.0.0:8587
+    volumes:
+      - ./volumes/node_1:/root/.canopy
+  #    deploy:
+  #      resources:
+  #        limits:
+  #          memory: 2G
+  #          cpus: "1.0"
+
+  node-2:
+    container_name: node-2
+    build:
+      context: ..
+      dockerfile: .docker/Dockerfile
+    ports:
+      - 40000:40000 # Wallet
+      - 40001:40001 # Explorer
+      - 40002:40002 # RPC
+      - 40003:40003 # Admin RPC
+      - 9002:9002 # TCP P2P
+      - 6061:6060 # Debug
+      - 9091:9091 # Metrics
+      - 8588:8587 # canoLiq plugin read-only query RPC
+    networks:
+      - canopy
+    command: ["start"]
+    environment:
+      - CANOPY_PLUGIN_MODE=canoliq
+      # Testnet config: 30240-block redemption window (matches Canopy's
+      # valParams.UnstakingBlocks), chainId 42, real bucket addresses,
+      # profile=testnet (placeholder safety check active — refuses to boot
+      # if genesis.testnet.json still carries the localnet placeholder).
+      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.testnet.json
+      - CANOLIQ_RPC_ADDR=0.0.0.0:8587
+    volumes:
+      - ./volumes/node_2:/root/.canopy
+#    deploy:
+#      resources:
+#        limits:
+#          memory: 2G
+#          cpus: "1.0"
+
+networks:
+  canopy:
+    driver: bridge

@@ -14,7 +14,7 @@ On `BeginBlock` after `expiry_height`, the plugin tallies votes:
 yes + no + abstain ≥ quorum_bps × snapshot_total_staked / 10000
 ```
 
-Default: 33% of snapshot total staked CLIQ must participate.
+Default: 33% of snapshot total staked CPLQ must participate.
 
 ### Pass Threshold
 
@@ -34,8 +34,8 @@ Updated `CanoliqParams` take effect immediately and are observed by the next `Pr
 
 Writes a self-contained `BuybackOrder` record. Subsequent `MessageBuybackExecute` triggers the buyback:
 
-- **BURN**: Decrements `cliq_total_supply` and `cliq_circulating_supply`; CNPY moves to treasury
-- **DISTRIBUTE_STAKERS**: Pro-rata credits all active CLIQ stakers' liquid balances
+- **BURN**: Decrements `cplq_total_supply` and `cplq_circulating_supply`; CNPY moves to treasury
+- **DISTRIBUTE_STAKERS**: Pro-rata credits all active CPLQ stakers' liquid balances
 
 Idempotency via `BuybackOrder.executed` flag — re-execution is a no-op.
 

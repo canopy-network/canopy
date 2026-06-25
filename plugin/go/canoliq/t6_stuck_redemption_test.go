@@ -197,6 +197,7 @@ func TestStuckRedemptionIndexLifecycle(t *testing.T) {
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
 	s.set(KeyForCCNPYBalance(user), EncodeUint64(1000))
+	seedEscrow(s, 1000) // backs the pre-seeded TotalPooledCnpy (H1)
 	seedAccount(s, user, 100_000)
 
 	// Redeem → mature-redemption index entry written.

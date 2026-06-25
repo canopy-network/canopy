@@ -41,61 +41,61 @@ message MessageCanoliqClaimRedemption {
 }
 ```
 
-## CLIQ Operations
+## CPLQ Operations
 
-### MessageCLIQTransfer
+### MessageCPLQTransfer
 
-Transfers liquid CLIQ.
+Transfers liquid CPLQ.
 
 ```protobuf
-message MessageCLIQTransfer {
+message MessageCPLQTransfer {
   bytes from_address = 1;
   bytes to_address = 2;
-  uint64 amount = 3;       // CLIQ amount (uCLIQ)
+  uint64 amount = 3;       // CPLQ amount (uCPLQ)
 }
 ```
 
-### MessageCLIQClaimVested
+### MessageCPLQClaimVested
 
-Unlocks vested CLIQ.
+Unlocks vested CPLQ.
 
 ```protobuf
-message MessageCLIQClaimVested {
+message MessageCPLQClaimVested {
   bytes from_address = 1;
 }
 ```
 
-### MessageCLIQStake
+### MessageCPLQStake
 
-Locks CLIQ for governance weight. An optional `lock_tier` commits the stake to a
+Locks CPLQ for governance weight. An optional `lock_tier` commits the stake to a
 [vote-escrow](../tokenomics/vote-escrow.mdx) lock for a higher voting multiplier and reward
 boost; `LOCK_NONE` leaves the stake unstakeable after the standard unbond window.
 
 ```protobuf
-message MessageCLIQStake {
+message MessageCPLQStake {
   bytes from_address = 1;
   uint64 amount = 2;
   LockTier lock_tier = 3;  // LOCK_NONE | LOCK_3M | LOCK_6M | LOCK_12M | LOCK_24M
 }
 ```
 
-### MessageCLIQUnstake
+### MessageCPLQUnstake
 
-Queues CLIQ unstaking.
+Queues CPLQ unstaking.
 
 ```protobuf
-message MessageCLIQUnstake {
+message MessageCPLQUnstake {
   bytes from_address = 1;
   uint64 amount = 2;
 }
 ```
 
-### MessageCLIQClaimUnstake
+### MessageCPLQClaimUnstake
 
-Claims matured CLIQ unstake.
+Claims matured CPLQ unstake.
 
 ```protobuf
-message MessageCLIQClaimUnstake {
+message MessageCPLQClaimUnstake {
   bytes from_address = 1;
   uint64 unstake_id = 2;
 }
@@ -103,24 +103,24 @@ message MessageCLIQClaimUnstake {
 
 ## Governance
 
-### MessageCLIQProposalCreate
+### MessageCPLQProposalCreate
 
 Opens a governance proposal.
 
 ```protobuf
-message MessageCLIQProposalCreate {
+message MessageCPLQProposalCreate {
   bytes from_address = 1;
   google.protobuf.Any payload = 2;  // param_change | buyback | treasury_spend
   string description = 3;           // ≤ 256 bytes
 }
 ```
 
-### MessageCLIQVote
+### MessageCPLQVote
 
 Votes on a proposal.
 
 ```protobuf
-message MessageCLIQVote {
+message MessageCPLQVote {
   bytes from_address = 1;
   uint64 proposal_id = 2;
   VoteChoice choice = 3;  // VOTE_YES | VOTE_NO | VOTE_ABSTAIN
@@ -162,7 +162,7 @@ message MessageMultisigApprove {
 
 ## Proposal Payloads
 
-A `MessageCLIQProposalCreate` carries one of these payload types in its `payload`
+A `MessageCPLQProposalCreate` carries one of these payload types in its `payload`
 (`google.protobuf.Any`) field. The payload type determines the proposal's
 [action type / governance tier](../governance/governance-tiers.mdx) and what executes on
 pass.
@@ -180,13 +180,13 @@ message ProposalParamChange {
 
 ### ProposalBuyback
 
-Authorizes one buyback. `cliq_acquired = cnpy_amount × 1_000_000 ÷ price_micro_cnpy_per_cliq`.
+Authorizes one buyback. `cplq_acquired = cnpy_amount × 1_000_000 ÷ price_micro_cnpy_per_cplq`.
 → executed later by [MessageBuybackExecute](#messagebuybackexecute).
 
 ```protobuf
 message ProposalBuyback {
   uint64 cnpy_amount = 1;                 // drawn from buyback pool (clamped to available)
-  uint64 price_micro_cnpy_per_cliq = 2;   // price denominator
+  uint64 price_micro_cnpy_per_cplq = 2;   // price denominator
   BuybackMode mode = 3;                   // BUYBACK_BURN | BUYBACK_DISTRIBUTE_STAKERS
 }
 ```
@@ -200,7 +200,7 @@ multisig + timelock. → `ACTION_TREASURY_SPEND_SMALL` or `_LARGE` by amount.
 message ProposalTreasurySpend {
   bytes recipient = 1;
   uint64 amount = 2;
-  SpendDenomination denomination = 3;  // SPEND_CNPY | SPEND_CLIQ
+  SpendDenomination denomination = 3;  // SPEND_CNPY | SPEND_CPLQ
 }
 ```
 

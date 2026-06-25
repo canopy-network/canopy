@@ -16,7 +16,7 @@ plugin (no Canopy core consensus changes). The plugin:
   Canopy's committee distribution path,
 - applies a **12% protocol fee** with a **40 / 30 / 15 / 15** split
   (users / canoLiq treasury / validator incentives / buyback pool),
-- mints a fixed **100 M CLIQ** supply at genesis with the seven-bucket
+- mints a fixed **100 M CPLQ** supply at genesis with the seven-bucket
   distribution and per-bucket vesting,
 - runs governance, buyback, treasury spend, and an HTTP query/alert
   surface inside the plugin process.
@@ -54,8 +54,8 @@ remaining work are:
   v1.1 fee math (WP §3.3–§4.3, Tokenomics §3). Re-verified live 2026-05-21
   at cumulative R = 216 M uCNPY with the corrected 5 % insurance skim
   (see Localnet L1 verification).
-- **Tx surface** covers Phase 1 (deposit / redeem / claim / cliq-transfer /
-  cliq-claim-vested) and Phase 2 (vote / stake / unstake / claim /
+- **Tx surface** covers Phase 1 (deposit / redeem / claim / cplq-transfer /
+  cplq-claim-vested) and Phase 2 (vote / stake / unstake / claim /
   buyback-execute / spend-execute / multisig-approve / proposal-create with
   param-change / buyback / treasury-spend sub-commands).
 - **Read surface** — `/v1/health`, `/v1/globals`, `/v1/params`, `/v1/pools`,
@@ -155,7 +155,7 @@ Genesis JSON + one validator path. All P0 blocking spec violations. ~1 day.
       buyback 3.888 M / validators 3.888 M (Σ = 216 M). Insurance is the
       v1.1 5 %-of-treasury skim (388 800), **not** the old 15 % (1 166 400).
       Param-change bound: the F4 5 %–20 % rejection is **not** enforced at
-      `CheckTx` — `CheckMessageCLIQProposalCreate` is stateless and never
+      `CheckTx` — `CheckMessageCPLQProposalCreate` is stateless and never
       unpacks the param payload. `ValidateParams` (rejecting FeeBps 2500)
       runs in `dispatchPassed` when a proposal *passes*, so an out-of-bound
       param-change is queued but cannot apply. Covered by the new
@@ -197,7 +197,7 @@ there is no per-address index that names those records. This blocks the
 ### Proto + state
 - [x] Added typed `RedemptionIndex` and `UnstakingIndex` proto messages
       (mirrors the established `VestingIndex` / `ProposalIndex` /
-      `CLIQStakeIndex` pattern; named-type readability over wire-format
+      `CPLQStakeIndex` pattern; named-type readability over wire-format
       reuse of `VestingIndex.ScheduleIds`). Two new key helpers:
       `KeyForRedemptionIndex(addr)` (domain byte 21),
       `KeyForUnstakingIndex(addr)` (domain byte 22), plus a
@@ -208,14 +208,14 @@ there is no per-address index that names those records. This blocks the
 - [x] `DeliverMessageCanoliqClaimRedemption` removes the matured id from
       the index alongside the existing record delete; deletes the index
       key entirely when the last id is claimed.
-- [x] `DeliverMessageCLIQUnstake` appends to `KeyForUnstakingIndex(addr)`.
-- [x] `DeliverMessageCLIQClaimUnstake` removes the matured id; deletes
+- [x] `DeliverMessageCPLQUnstake` appends to `KeyForUnstakingIndex(addr)`.
+- [x] `DeliverMessageCPLQClaimUnstake` removes the matured id; deletes
       the index key when empty.
 
 ### Read-side
 - [x] Extended `buildAccountView` to load both indexes, batch-read the
       records, and add `Redemptions []*contract.Redemption` and
-      `Unstakes []*contract.UnstakingCLIQ` to `AccountView`.
+      `Unstakes []*contract.UnstakingCPLQ` to `AccountView`.
 - [ ] Optional dedicated routes: `/v1/account/{addr}/redemptions`,
       `/v1/account/{addr}/unstakes` (lazy queue, same pattern as vesting).
       Deferred — composite `/v1/account/{addr}` already exposes both
@@ -269,7 +269,7 @@ checked items below for the as-built notes.
 |---|---|---|---|
 | Fee rate adjustment | 5 % | 51 % | 48 h |
 | Treasury spend (small) | 5 % | 51 % | 48 h |
-| Treasury spend (large, > 1 M CLIQ) | 10 % | 67 % | 7 d |
+| Treasury spend (large, > 1 M CPLQ) | 10 % | 67 % | 7 d |
 | Emergency security action | 8 % | 67 % | 24 h fast-track |
 | Validator ejection | 5 % | 51 % | 48 h |
 | Protocol upgrade | 10 % | 67 % | 7 d |
@@ -296,8 +296,8 @@ checked items below for the as-built notes.
       + a snapshotted `tier`.
 
 ### Behaviour
-- [x] `DeliverMessageCLIQProposalCreate` infers `ActionType` via
-      `actionTypeForPayload` (treasury small/large split at the 1M-CLIQ
+- [x] `DeliverMessageCPLQProposalCreate` infers `ActionType` via
+      `actionTypeForPayload` (treasury small/large split at the 1M-CPLQ
       boundary) and snapshots the resolved tier + voting period into the
       `Proposal` record.
 - [x] `proposalPasses` reads quorum + approval from the proposal's recorded
@@ -350,9 +350,9 @@ Tokenomics v1.1 §4.2:
 **Status: landed and tested (2026-05-22).** Full suite green.
 
 ### Proto + state
-- [x] Extended `CLIQStake` with `lock_tier` (`LockTier` enum: LOCK_NONE /
+- [x] Extended `CPLQStake` with `lock_tier` (`LockTier` enum: LOCK_NONE /
       LOCK_3M / LOCK_6M / LOCK_12M / LOCK_24M) and `lock_end_height`.
-- [x] `MessageCLIQStake` gained `lock_tier`; voting weight, unstake
+- [x] `MessageCPLQStake` gained `lock_tier`; voting weight, unstake
       eligibility, and reward boost derive from it.
 - [x] `tierMultipliers()` returns `(voteMultBps, boostBps)` (10000 = 1×);
       `lockTierDurationBlocks()` converts tiers to blocks
@@ -366,19 +366,19 @@ Tokenomics v1.1 §4.2:
       goes to the largest-stake LOCK_24M staker (fallback: largest overall).
       **Deviation from plan:** the boost is *not* applied to
       `distributeValidatorShare` — that path pays the 15 % slice to committee
-      validators (`ValidatorRegistry`), not CLIQ stakers, so the §4.2
+      validators (`ValidatorRegistry`), not CPLQ stakers, so the §4.2
       vote-escrow boost doesn't belong there. Vote-escrow boost is a
-      CLIQ-staker reward, hence the buyback-distribution path only.
+      CPLQ-staker reward, hence the buyback-distribution path only.
 - [x] Stake aggregation rule: locks only ever **strengthen** — a higher tier
       raises the record and pushes `lock_end_height` out; adding LOCK_NONE to
       a locked record leaves the lock intact (added tokens inherit it).
-- [x] `DeliverMessageCLIQUnstake` rejects with `ErrStakeLocked` when
+- [x] `DeliverMessageCPLQUnstake` rejects with `ErrStakeLocked` when
       `lock_tier != LOCK_NONE && current_height < lock_end_height`. (Enforced
       in Deliver, not the stateless Check.) Tier range checked in
-      `CheckMessageCLIQStake` (`ErrInvalidLockTier`).
+      `CheckMessageCPLQStake` (`ErrInvalidLockTier`).
 
 ### CLI
-- [x] `canoliqctl cliq-stake` gained `--lock {none,3m,6m,12m,24m}`
+- [x] `canoliqctl cplq-stake` gained `--lock {none,3m,6m,12m,24m}`
       (`parseLockFlag` / `parseLockTier`).
 
 ### T2 tests (`t2_voteescrow_test.go`)
@@ -388,8 +388,8 @@ Tokenomics v1.1 §4.2:
       LOCK_NONE stakers (`TestT2VoteWeightForScalesWithTier`,
       `TestT2VoteTallyAppliesMultiplier` — yes 4X vs no 3X end-to-end).
 - [x] Reward boost: LOCK_NONE 100 + LOCK_12M 100 → 100 / 150 (1.5×), exact
-      conservation to `cliqAcquired` (`TestT2RewardBoostInBuybackDistribution`).
-      (Conservation target is `cliqAcquired`, not `split.Validators` — the
+      conservation to `cplqAcquired` (`TestT2RewardBoostInBuybackDistribution`).
+      (Conservation target is `cplqAcquired`, not `split.Validators` — the
       boost lives in the buyback-distribution path per the deviation above.)
 - [x] Pre-lock-end unstake rejected, post-lock-end accepted
       (`TestT2UnstakeLockGate`); lock-strengthen aggregation
@@ -595,8 +595,8 @@ isn't proposal-set, audit + bug bounty sign-off, runbooks.
 ## M1. State export tooling (old plan Phase 3 §3b)
 
 - [ ] Define `GenesisExport` proto extending `GenesisFile` with live state
-      slots: per-address cCNPY / liquid CLIQ balances, `CLIQStake` records
-      (with `staked_at_height` and tier), `UnstakingCLIQ` records,
+      slots: per-address cCNPY / liquid CPLQ balances, `CPLQStake` records
+      (with `staked_at_height` and tier), `UnstakingCPLQ` records,
       `Redemption` records, `VestingSchedule.ClaimedAmount`, treasury /
       buyback / insurance scalars, validator registry, active proposals /
       spends / votes, full `CanoliqParams` (incl. T5 graduation knobs, T3
@@ -620,9 +620,9 @@ isn't proposal-set, audit + bug bounty sign-off, runbooks.
       `export_schema_version` presence) and seed *all* live state, not just
       the bucket distribution. Treat bucket math as already applied — the
       export captures post-distribution state.
-- [ ] Validation: `cliq_total_supply` preserved (liquid + stake + unstaking
+- [ ] Validation: `cplq_total_supply` preserved (liquid + stake + unstaking
       + remaining-vesting = cap); treasury balances non-negative;
-      per-validator stake totals match registry; `CLIQStakeIndex` matches
+      per-validator stake totals match registry; `CPLQStakeIndex` matches
       the set of stake records; `peak_tvl_ucnpy >= total_pooled_cnpy`.
       Refuse to import if any check fails.
 - [ ] Live test: export from a non-trivial localnet → restart fresh docker
@@ -640,7 +640,7 @@ isn't proposal-set, audit + bug bounty sign-off, runbooks.
 - [ ] Cross-chain coordination doc (separate from the whitepaper):
       pre-graduation Canopy DAO proposal to deprecate the canoLiq committee;
       post-export, publish export hash on Canopy and the new L1;
-      cCNPY/CLIQ holders' continuity guarantee (same addresses, same
+      cCNPY/CPLQ holders' continuity guarantee (same addresses, same
       balances, same vesting schedules).
 - [ ] Tests: pre-graduation → all flows work; post-lock pre-grace →
       deposits rejected, redemptions accepted; post-grace → export captures
@@ -654,7 +654,7 @@ for mainnet so DAO mispricing is impossible.
 
 - [ ] Define a `BUYBACK_DEX` mode that routes through Canopy's DEX / swap
       surface (`fsm/dex.go` or `fsm/swap.go` per pre-existing design note).
-      Source the CLIQ via the on-chain DEX rather than `treasury/cliq`.
+      Source the CPLQ via the on-chain DEX rather than `treasury/cplq`.
 - [ ] Slippage protection: max-slippage-bps field on `ProposalBuyback`;
       abort and refund the pool if breached.
 - [ ] Plumbing: this requires a plugin → FSM tx-side helper (the plugin

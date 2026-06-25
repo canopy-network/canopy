@@ -1,8 +1,6 @@
 package canoliq
 
 import (
-	"math/rand"
-
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -28,7 +26,7 @@ import (
 // readCanopySupply reads the Canopy network-wide Supply singleton and
 // unmarshals it. Returns (nil, nil) when the key is absent.
 func (c *Canoliq) readCanopySupply() (*contract.Supply, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: contract.KeyForSupply()}},
 	})

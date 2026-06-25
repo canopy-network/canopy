@@ -5,7 +5,7 @@ sidebar_label: Overview
 # Transactions Overview
 
 A **transaction** is any action you send to the protocol. canoLiq accepts messages for four
-kinds of work: liquid staking (deposit/redeem), CLIQ operations (transfer, stake, claim),
+kinds of work: liquid staking (deposit/redeem), CPLQ operations (transfer, stake, claim),
 governance (propose, vote), and treasury management (spend, approve). Each message type is a
 distinct, explicitly supported action — there is no general-purpose scripting.
 
@@ -22,18 +22,18 @@ validated before it touches state. New to the protocol? See
 | `MessageCanoliqDeposit` | Deposits CNPY, mints cCNPY |
 | `MessageCanoliqRedeem` | Burns cCNPY, queues redemption |
 | `MessageCanoliqClaimRedemption` | Claims matured CNPY redemption |
-| `MessageCLIQTransfer` | Transfers liquid CLIQ |
-| `MessageCLIQClaimVested` | Unlocks vested CLIQ |
+| `MessageCPLQTransfer` | Transfers liquid CPLQ |
+| `MessageCPLQClaimVested` | Unlocks vested CPLQ |
 
 ### Phase 2 — Governance & Treasury
 
 | Message | Description |
 |---------|-------------|
-| `MessageCLIQStake` | Locks CLIQ for governance weight |
-| `MessageCLIQUnstake` | Queues CLIQ unstaking |
-| `MessageCLIQClaimUnstake` | Claims matured CLIQ unstake |
-| `MessageCLIQProposalCreate` | Opens a governance proposal |
-| `MessageCLIQVote` | Votes on a proposal |
+| `MessageCPLQStake` | Locks CPLQ for governance weight |
+| `MessageCPLQUnstake` | Queues CPLQ unstaking |
+| `MessageCPLQClaimUnstake` | Claims matured CPLQ unstake |
+| `MessageCPLQProposalCreate` | Opens a governance proposal |
+| `MessageCPLQVote` | Votes on a proposal |
 | `MessageBuybackExecute` | Executes a passed buyback proposal |
 | `MessageDAOTreasurySpend` | Executes a passed treasury spend |
 | `MessageMultisigApprove` | Approves an above-threshold spend |

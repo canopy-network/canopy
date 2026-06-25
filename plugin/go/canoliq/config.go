@@ -28,13 +28,13 @@ var CanoliqConfig = &contract.PluginConfig{
 		"canoliq_deposit",
 		"canoliq_redeem",
 		"canoliq_claim_redemption",
-		"cliq_transfer",
-		"cliq_claim_vested",
-		"cliq_stake",
-		"cliq_unstake",
-		"cliq_claim_unstake",
-		"cliq_proposal_create",
-		"cliq_vote",
+		"cplq_transfer",
+		"cplq_claim_vested",
+		"cplq_stake",
+		"cplq_unstake",
+		"cplq_claim_unstake",
+		"cplq_proposal_create",
+		"cplq_vote",
 		"buyback_execute",
 		"dao_treasury_spend",
 		"multisig_approve",
@@ -44,13 +44,13 @@ var CanoliqConfig = &contract.PluginConfig{
 		"type.googleapis.com/types.MessageCanoliqDeposit",
 		"type.googleapis.com/types.MessageCanoliqRedeem",
 		"type.googleapis.com/types.MessageCanoliqClaimRedemption",
-		"type.googleapis.com/types.MessageCLIQTransfer",
-		"type.googleapis.com/types.MessageCLIQClaimVested",
-		"type.googleapis.com/types.MessageCLIQStake",
-		"type.googleapis.com/types.MessageCLIQUnstake",
-		"type.googleapis.com/types.MessageCLIQClaimUnstake",
-		"type.googleapis.com/types.MessageCLIQProposalCreate",
-		"type.googleapis.com/types.MessageCLIQVote",
+		"type.googleapis.com/types.MessageCPLQTransfer",
+		"type.googleapis.com/types.MessageCPLQClaimVested",
+		"type.googleapis.com/types.MessageCPLQStake",
+		"type.googleapis.com/types.MessageCPLQUnstake",
+		"type.googleapis.com/types.MessageCPLQClaimUnstake",
+		"type.googleapis.com/types.MessageCPLQProposalCreate",
+		"type.googleapis.com/types.MessageCPLQVote",
 		"type.googleapis.com/types.MessageBuybackExecute",
 		"type.googleapis.com/types.MessageDAOTreasurySpend",
 		"type.googleapis.com/types.MessageMultisigApprove",
@@ -147,6 +147,14 @@ type AlertConfig struct {
 // into a real environment.
 const localnetPlaceholderAddress = "851e90eaef1fa27debaee2c2591503bdeec1d123"
 
+// minNonLocalnetRedemptionBlocks is the floor SafetyCheck enforces on
+// RedemptionUnstakingBlocks under testnet/mainnet (M2). Canopy's real
+// valParams.UnstakingBlocks is in the thousands (e.g. 30240); anything below
+// this floor is almost certainly a misconfiguration that would let redemptions
+// mature near-instantly, defeating the WP §9.3 liquidity-safety cooldown. The
+// 5-block localnet default is intentionally well below it.
+const minNonLocalnetRedemptionBlocks = 1000
+
 // Profile constants. Empty string is normalized to ProfileLocalnet for
 // backwards compatibility.
 const (
@@ -202,7 +210,7 @@ func (c Config) LogProfileBanner() {
 // SafetyCheck validates a non-localnet profile against the genesis file's
 // recipient addresses. The single-address localnet placeholder
 // (851e90…d123) being routed 100% of every bucket is safe on localnet
-// (it's just a test key), but disastrous on testnet/mainnet — every CLIQ
+// (it's just a test key), but disastrous on testnet/mainnet — every CPLQ
 // bucket would mint to one external party. This check refuses to proceed
 // when any bucket recipient matches the placeholder under a non-localnet
 // profile.
@@ -213,6 +221,14 @@ func (c Config) LogProfileBanner() {
 func (c Config) SafetyCheck() error {
 	if c.Profile == ProfileLocalnet || c.Profile == "" {
 		return nil
+	}
+	// M2: fail closed on an implausibly small redemption window. Under
+	// testnet/mainnet the value must mirror Canopy's valParams.UnstakingBlocks
+	// (thousands of blocks); a missing/tiny value would mature redemptions in
+	// seconds and bypass the WP §9.3 liquidity-safety cooldown.
+	if c.RedemptionUnstakingBlocks < minNonLocalnetRedemptionBlocks {
+		return fmt.Errorf("canoliq: refusing to start profile=%q with redemptionUnstakingBlocks=%d (must be >= %d — set it to match Canopy's valParams.UnstakingBlocks)",
+			c.Profile, c.RedemptionUnstakingBlocks, minNonLocalnetRedemptionBlocks)
 	}
 	if c.GenesisPath == "" {
 		return nil
@@ -252,9 +268,9 @@ func DefaultParams() *contract.CanoliqParams {
 		DepositFee:         10_000,
 		RedeemFee:          10_000,
 		ClaimFee:           10_000,
-		CliqTransferFee:    10_000,
-		InsuranceBps:       500,         // 5% of treasury slice — matches Tokenomics v1.1 §8 "5% of DAO treasury inflow" reading
-		InsuranceTargetBps: 500,         // T4: reserve target = 5% of peak TVL (WP §9.2); skim auto-off at target
+		CplqTransferFee:    10_000,
+		InsuranceBps:       500, // 5% of treasury slice — matches Tokenomics v1.2 §8 / WP §9.2 ("insurance fund of 5% of DAO treasury")
+		InsuranceTargetBps: 500, // T4: reserve target = 5% of peak TVL (WP §9.2); skim auto-off at target
 		// TvlCapBps: self-imposed TVL ceiling as a fraction of total Canopy
 		// network stake (WP §9.4: "33% of total Canopy network stake"). 0 =
 		// uncapped; spec default is 3300 (33%). The deposit check fails
@@ -267,20 +283,20 @@ func DefaultParams() *contract.CanoliqParams {
 		GraduationMinTurnoutBps:   1_500,
 		GraduationMinDailyTx:      10_000,
 		GraduationMinRunwayMonths: 12,
-		TreasuryThreshold:  1_000_000_000, // 1k CNPY-equivalent in uCNPY
-		MultisigSigners:    nil,         // populated at genesis (genesis.json) or via param-change vote
-		MultisigThreshold:  3,
-		VotingPeriodBlocks: 100_800, // ~7d at 6s blocks
-		QuorumBps:          3300,    // 33% of snapshot staked CLIQ
-		PassThresholdBps:   5001,    // just-above 50% of (yes+no)
-		TimelockBlocks:     28_800,  // ~48h at 6s blocks
-		CliqUnstakingBlocks: 100_800, // ~7d at 6s — must be ≥ voting period
-		ProposalFee:        10_000,
-		VoteFee:            10_000,
-		StakeFee:           10_000,
-		MultisigApproveFee: 10_000,
-		MinStakeToPropose:  1_000_000, // 1 CLIQ minimum to deter spam
-		Governance:         defaultGovernanceTiers(),
+		TreasuryThreshold:         1_000_000_000, // 1k CNPY-equivalent in uCNPY
+		MultisigSigners:           nil,           // populated at genesis (genesis.json) or via param-change vote
+		MultisigThreshold:         3,
+		VotingPeriodBlocks:        100_800, // ~7d at 6s blocks
+		QuorumBps:                 3300,    // 33% of snapshot staked CPLQ
+		PassThresholdBps:          5001,    // just-above 50% of (yes+no)
+		TimelockBlocks:            28_800,  // ~48h at 6s blocks
+		CplqUnstakingBlocks:       100_800, // ~7d at 6s — must be ≥ voting period
+		ProposalFee:               10_000,
+		VoteFee:                   10_000,
+		StakeFee:                  10_000,
+		MultisigApproveFee:        10_000,
+		MinStakeToPropose:         1_000_000, // 1 CPLQ minimum to deter spam
+		Governance:                defaultGovernanceTiers(),
 	}
 }
 
@@ -330,13 +346,18 @@ func ValidateParams(p *contract.CanoliqParams) *contract.PluginError {
 	if p.PassThresholdBps > 10_000 {
 		return ErrInvalidParams()
 	}
-	if signers := uint64(len(p.MultisigSigners)); signers > 0 && p.MultisigThreshold > signers {
-		return ErrInvalidParams()
+	if signers := uint64(len(p.MultisigSigners)); signers > 0 {
+		// L1: with signers configured, the threshold must be in [1, signers].
+		// A zero threshold would make RequiresMultisig pass with zero approvals,
+		// defeating the multisig gate on large treasury spends (treasury.go).
+		if p.MultisigThreshold == 0 || p.MultisigThreshold > signers {
+			return ErrInvalidParams()
+		}
 	}
 	// Unstaking window must be ≥ voting period so a voter cannot stake → vote
 	// → unstake → unwind their position before tally. Skip the check if either
 	// is unset (zero) so DefaultParams loaded by older state still validates.
-	if p.VotingPeriodBlocks > 0 && p.CliqUnstakingBlocks > 0 && p.CliqUnstakingBlocks < p.VotingPeriodBlocks {
+	if p.VotingPeriodBlocks > 0 && p.CplqUnstakingBlocks > 0 && p.CplqUnstakingBlocks < p.VotingPeriodBlocks {
 		return ErrInvalidParams()
 	}
 	// Every governance tier must carry a known action and in-range bps. An

@@ -29,6 +29,26 @@ func seedAccount(s *fakeStore, addr []byte, amount uint64) {
 	s.set(contract.KeyForAccount(addr), bz)
 }
 
+// seedEscrow seeds the CNPY escrow pool (H1). Tests that pre-seed
+// globals.TotalPooledCnpy / PendingRedemptionCnpy (simulating prior deposits
+// without driving the deposit handler) must also fund escrow to honor the
+// invariant escrow.Amount == TotalPooledCnpy + PendingRedemptionCnpy.
+func seedEscrow(s *fakeStore, amount uint64) {
+	bz, _ := contract.Marshal(&contract.Pool{Amount: amount})
+	s.set(KeyForEscrowPool(), bz)
+}
+
+// readEscrow returns the current CNPY escrow pool balance.
+func readEscrow(s *fakeStore) uint64 {
+	bz := s.get(KeyForEscrowPool())
+	if bz == nil {
+		return 0
+	}
+	p := new(contract.Pool)
+	_ = contract.Unmarshal(bz, p)
+	return p.Amount
+}
+
 // readAccount returns the CNPY balance for `addr`.
 func readAccount(s *fakeStore, addr []byte) uint64 {
 	bz := s.get(contract.KeyForAccount(addr))
@@ -60,8 +80,8 @@ func readCcnpy(s *fakeStore, addr []byte) uint64 {
 	return DecodeUint64(s.get(KeyForCCNPYBalance(addr)))
 }
 
-func readCliq(s *fakeStore, addr []byte) uint64 {
-	return DecodeUint64(s.get(KeyForCLIQBalance(addr)))
+func readCplq(s *fakeStore, addr []byte) uint64 {
+	return DecodeUint64(s.get(KeyForCPLQBalance(addr)))
 }
 
 func loadGlobals(t *testing.T, s *fakeStore) *contract.CanoliqGlobals {
@@ -168,6 +188,7 @@ func TestClaimRedemptionMaturity(t *testing.T) {
 	g := &contract.CanoliqGlobals{PendingRedemptionCnpy: 250}
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
+	seedEscrow(s, 250) // backs the pending redemption (H1)
 	seedAccount(s, user, 10_000)
 
 	// Before maturity: error.
@@ -242,13 +263,17 @@ func TestRewardSplitWhitepaperExample(t *testing.T) {
 	if got := DecodeUint64(s.get(KeyForValidatorIncentives(addr))); got != 18 {
 		t.Errorf("validators: got %d want 18", got)
 	}
-	if g2.LastProcessedRewardPool != 928 {
-		// LastProcessedRewardPool is whatever the pool ends up at after the
-		// sweep — 1000 originally - 1000 swept + 928 user-share returned.
-		t.Errorf("last_processed_reward_pool: got %d want 928", g2.LastProcessedRewardPool)
+	// H1: the committee pool fully drains (1000 in - 1000 swept). The 928 user
+	// slice now lands in the escrow pool, so the committee pool and the
+	// post-drain LastProcessedRewardPool baseline are both 0.
+	if g2.LastProcessedRewardPool != 0 {
+		t.Errorf("last_processed_reward_pool: got %d want 0", g2.LastProcessedRewardPool)
 	}
-	if got := readPool(s, c.Config.ChainId); got != 928 {
-		t.Errorf("post-sweep committee pool: got %d want 928", got)
+	if got := readPool(s, c.Config.ChainId); got != 0 {
+		t.Errorf("post-sweep committee pool: got %d want 0", got)
+	}
+	if got := readEscrow(s); got != 928 {
+		t.Errorf("escrow pool: got %d want 928", got)
 	}
 }
 
@@ -351,18 +376,18 @@ func TestVestingLinearUnlock(t *testing.T) {
 	}
 }
 
-// TestCLIQTransferRespectsLiquidBalance ensures transfers fail when the
+// TestCPLQTransferRespectsLiquidBalance ensures transfers fail when the
 // requested amount exceeds the liquid balance, and succeed when it does not.
-func TestCLIQTransferRespectsLiquidBalance(t *testing.T) {
+func TestCPLQTransferRespectsLiquidBalance(t *testing.T) {
 	c, s := newTestCanoliq()
 	from := addr20(0x05)
 	to := addr20(0x06)
 	seedAccount(s, from, 10_000)             // CNPY for fee
-	s.set(KeyForCLIQBalance(from), EncodeUint64(500))
+	s.set(KeyForCPLQBalance(from), EncodeUint64(500))
 
 	// Over-transfer fails.
-	resp := c.DeliverMessageCLIQTransfer(
-		&contract.MessageCLIQTransfer{FromAddress: from, ToAddress: to, Amount: 1000},
+	resp := c.DeliverMessageCPLQTransfer(
+		&contract.MessageCPLQTransfer{FromAddress: from, ToAddress: to, Amount: 1000},
 		10_000,
 		DefaultParams(),
 	)
@@ -371,22 +396,22 @@ func TestCLIQTransferRespectsLiquidBalance(t *testing.T) {
 	}
 
 	// Within-balance succeeds.
-	resp = c.DeliverMessageCLIQTransfer(
-		&contract.MessageCLIQTransfer{FromAddress: from, ToAddress: to, Amount: 200},
+	resp = c.DeliverMessageCPLQTransfer(
+		&contract.MessageCPLQTransfer{FromAddress: from, ToAddress: to, Amount: 200},
 		10_000,
 		DefaultParams(),
 	)
 	if resp.Error != nil {
 		t.Fatalf("transfer error: %v", resp.Error)
 	}
-	if readCliq(s, from) != 300 || readCliq(s, to) != 200 {
+	if readCplq(s, from) != 300 || readCplq(s, to) != 200 {
 		t.Fatalf("post-transfer balances: from=%d to=%d (want 300/200)",
-			readCliq(s, from), readCliq(s, to))
+			readCplq(s, from), readCplq(s, to))
 	}
 }
 
 // TestGenesisAllocationTotals: after running genesis, sum of all liquid
-// balances + sum of all VestingSchedule.TotalAmount must equal CLIQTotalSupply.
+// balances + sum of all VestingSchedule.TotalAmount must equal CPLQTotalSupply.
 func TestGenesisAllocationTotals(t *testing.T) {
 	c, s := newTestCanoliq()
 	gf := miniGenesis()
@@ -397,13 +422,13 @@ func TestGenesisAllocationTotals(t *testing.T) {
 		t.Fatalf("genesis: %v", resp.Error)
 	}
 	g := loadGlobals(t, s)
-	if g.CliqTotalSupply != CLIQTotalSupply {
-		t.Fatalf("cliq_total_supply: got %d want %d", g.CliqTotalSupply, CLIQTotalSupply)
+	if g.CplqTotalSupply != CPLQTotalSupply {
+		t.Fatalf("cplq_total_supply: got %d want %d", g.CplqTotalSupply, CPLQTotalSupply)
 	}
 	// Sum allocations across the store.
 	var allocated uint64
 	for k, v := range s.data {
-		if hasPrefix(k, KeyForCLIQBalance(nil)) {
+		if hasPrefix(k, KeyForCPLQBalance(nil)) {
 			allocated += DecodeUint64(v)
 			continue
 		}
@@ -414,8 +439,8 @@ func TestGenesisAllocationTotals(t *testing.T) {
 			}
 		}
 	}
-	if allocated != CLIQTotalSupply {
-		t.Fatalf("allocated total: got %d want %d", allocated, CLIQTotalSupply)
+	if allocated != CPLQTotalSupply {
+		t.Fatalf("allocated total: got %d want %d", allocated, CPLQTotalSupply)
 	}
 }
 
@@ -448,25 +473,25 @@ func TestBeginBlockSelfBootstrapsGenesis(t *testing.T) {
 	if !g.GenesisComplete {
 		t.Fatalf("genesis did not run; globals=%+v", g)
 	}
-	if g.CliqTotalSupply != CLIQTotalSupply {
-		t.Fatalf("supply: got %d want %d", g.CliqTotalSupply, CLIQTotalSupply)
+	if g.CplqTotalSupply != CPLQTotalSupply {
+		t.Fatalf("supply: got %d want %d", g.CplqTotalSupply, CPLQTotalSupply)
 	}
 	// Re-run is idempotent.
 	resp = c.BeginBlock(&contract.PluginBeginRequest{Height: 2})
 	if resp.Error != nil {
 		t.Fatalf("idempotent BeginBlock: %v", resp.Error)
 	}
-	if g2 := loadGlobals(t, s); g2.CliqTotalSupply != CLIQTotalSupply {
-		t.Fatalf("idempotent supply changed: %d", g2.CliqTotalSupply)
+	if g2 := loadGlobals(t, s); g2.CplqTotalSupply != CPLQTotalSupply {
+		t.Fatalf("idempotent supply changed: %d", g2.CplqTotalSupply)
 	}
 }
 
-// TestDeliverCLIQClaimVestedFlow exercises the full vesting-claim handler:
+// TestDeliverCPLQClaimVestedFlow exercises the full vesting-claim handler:
 // before-cliff returns NothingToClaim, halfway claims the linear share, an
 // idempotent second call at the same height also returns NothingToClaim, and a
 // final call past end_height drains the schedule. Closes the gap left by
 // TestVestingLinearUnlock, which only covered the unlockedAmount math helper.
-func TestDeliverCLIQClaimVestedFlow(t *testing.T) {
+func TestDeliverCPLQClaimVestedFlow(t *testing.T) {
 	c, s := newTestCanoliq()
 	holder := addr20(0x07)
 	seedAccount(s, holder, 100_000) // covers fees on the two successful claims
@@ -487,16 +512,16 @@ func TestDeliverCLIQClaimVestedFlow(t *testing.T) {
 
 	// Before cliff: nothing unlocked.
 	c.plugin.setHeight(50)
-	resp := c.DeliverMessageCLIQClaimVested(
-		&contract.MessageCLIQClaimVested{FromAddress: holder},
+	resp := c.DeliverMessageCPLQClaimVested(
+		&contract.MessageCPLQClaimVested{FromAddress: holder},
 		10_000,
 		DefaultParams(),
 	)
 	if resp.Error == nil {
 		t.Fatal("claim before cliff should error")
 	}
-	if got := readCliq(s, holder); got != 0 {
-		t.Fatalf("liquid CLIQ before cliff: got %d want 0", got)
+	if got := readCplq(s, holder); got != 0 {
+		t.Fatalf("liquid CPLQ before cliff: got %d want 0", got)
 	}
 	if got := readAccount(s, holder); got != 100_000 {
 		t.Fatalf("CNPY untouched on failed claim: got %d want 100_000", got)
@@ -504,24 +529,24 @@ func TestDeliverCLIQClaimVestedFlow(t *testing.T) {
 
 	// Halfway through the vesting span (height 150 of [100,200]): expect 500_000.
 	c.plugin.setHeight(150)
-	resp = c.DeliverMessageCLIQClaimVested(
-		&contract.MessageCLIQClaimVested{FromAddress: holder},
+	resp = c.DeliverMessageCPLQClaimVested(
+		&contract.MessageCPLQClaimVested{FromAddress: holder},
 		10_000,
 		DefaultParams(),
 	)
 	if resp.Error != nil {
 		t.Fatalf("halfway claim error: %v", resp.Error)
 	}
-	if got := readCliq(s, holder); got != 500_000 {
-		t.Fatalf("halfway liquid CLIQ: got %d want 500_000", got)
+	if got := readCplq(s, holder); got != 500_000 {
+		t.Fatalf("halfway liquid CPLQ: got %d want 500_000", got)
 	}
 	if got := readAccount(s, holder); got != 90_000 {
 		t.Fatalf("CNPY after fee: got %d want 90_000", got)
 	}
 
 	// Same height, second call: claimed_amount already covers what's unlocked.
-	resp = c.DeliverMessageCLIQClaimVested(
-		&contract.MessageCLIQClaimVested{FromAddress: holder},
+	resp = c.DeliverMessageCPLQClaimVested(
+		&contract.MessageCPLQClaimVested{FromAddress: holder},
 		10_000,
 		DefaultParams(),
 	)
@@ -531,16 +556,16 @@ func TestDeliverCLIQClaimVestedFlow(t *testing.T) {
 
 	// Past end_height: remaining 500_000 unlocks.
 	c.plugin.setHeight(250)
-	resp = c.DeliverMessageCLIQClaimVested(
-		&contract.MessageCLIQClaimVested{FromAddress: holder},
+	resp = c.DeliverMessageCPLQClaimVested(
+		&contract.MessageCPLQClaimVested{FromAddress: holder},
 		10_000,
 		DefaultParams(),
 	)
 	if resp.Error != nil {
 		t.Fatalf("past-end claim error: %v", resp.Error)
 	}
-	if got := readCliq(s, holder); got != 1_000_000 {
-		t.Fatalf("final liquid CLIQ: got %d want 1_000_000", got)
+	if got := readCplq(s, holder); got != 1_000_000 {
+		t.Fatalf("final liquid CPLQ: got %d want 1_000_000", got)
 	}
 
 	// claimed_amount must reflect the saturation.
@@ -552,8 +577,8 @@ func TestDeliverCLIQClaimVestedFlow(t *testing.T) {
 
 	// Globals must track circulating supply.
 	g := loadGlobals(t, s)
-	if g.CliqCirculatingSupply != 1_000_000 {
-		t.Fatalf("circulating CLIQ: got %d want 1_000_000", g.CliqCirculatingSupply)
+	if g.CplqCirculatingSupply != 1_000_000 {
+		t.Fatalf("circulating CPLQ: got %d want 1_000_000", g.CplqCirculatingSupply)
 	}
 }
 
@@ -586,9 +611,15 @@ func TestRewardSweepMultiBlock(t *testing.T) {
 		t.Fatalf("block 1: %v", err)
 	}
 	g1 := loadGlobals(t, s)
-	if g1.TotalPooledCnpy != 928 || g1.LastProcessedRewardPool != 928 {
-		t.Fatalf("block 1 globals: pooled=%d watermark=%d (want 928/928)",
+	// H1: the committee pool fully drains each block; the user slice (928) now
+	// lives in the escrow pool, and LastProcessedRewardPool returns to its
+	// post-drain baseline (0).
+	if g1.TotalPooledCnpy != 928 || g1.LastProcessedRewardPool != 0 {
+		t.Fatalf("block 1 globals: pooled=%d last=%d (want 928/0)",
 			g1.TotalPooledCnpy, g1.LastProcessedRewardPool)
+	}
+	if got := readEscrow(s); got != 928 {
+		t.Fatalf("block 1 escrow: got %d want 928", got)
 	}
 
 	// Block 2: +500 fresh inflow on top of the post-sweep pool. Delta must
@@ -602,8 +633,11 @@ func TestRewardSweepMultiBlock(t *testing.T) {
 	if g2.TotalPooledCnpy != 1392 {
 		t.Fatalf("block 2 pooled: got %d want 1392", g2.TotalPooledCnpy)
 	}
-	if g2.LastProcessedRewardPool != 1392 {
-		t.Fatalf("block 2 watermark: got %d want 1392", g2.LastProcessedRewardPool)
+	if g2.LastProcessedRewardPool != 0 {
+		t.Fatalf("block 2 last-processed: got %d want 0", g2.LastProcessedRewardPool)
+	}
+	if got := readEscrow(s); got != 1392 {
+		t.Fatalf("block 2 escrow: got %d want 1392", got)
 	}
 	// Per-block under insurance_bps=500: treasury 36→35 + insurance 1; block 2
 	// treasury 18→18 + insurance 0 (mulDiv(18,500,10000)=0.9 → 0). Cumulative:
@@ -629,6 +663,9 @@ func TestRewardSweepMultiBlock(t *testing.T) {
 	g3 := loadGlobals(t, s)
 	if g3.TotalPooledCnpy != 1392 {
 		t.Fatalf("block 3 pooled drift: got %d want 1392", g3.TotalPooledCnpy)
+	}
+	if got := readEscrow(s); got != 1392 {
+		t.Fatalf("block 3 escrow drift: got %d want 1392", got)
 	}
 	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 53 {
 		t.Errorf("block 3 treasury drift: got %d want 53", got)
@@ -700,7 +737,7 @@ func TestCompositeDepositRewardRedeem(t *testing.T) {
 
 	// The Redemption record must reflect the accrued yield: 1:1 redemption
 	// before reward would be 1_000_000; after reward, the same cCNPY claims
-	// 1_928_000 CNPY.
+	// ~1_928_000 CNPY (1 uCNPY retained as M5 virtual-offset dust).
 	rBz := s.get(KeyForRedemption(user, 0))
 	if rBz == nil {
 		t.Fatal("redemption record not written")
@@ -710,8 +747,8 @@ func TestCompositeDepositRewardRedeem(t *testing.T) {
 	if r.CnpyAmount <= 1_000_000 {
 		t.Fatalf("expected redemption > deposit (yield), got %d", r.CnpyAmount)
 	}
-	if r.CnpyAmount != 1_928_000 {
-		t.Fatalf("redemption amount: got %d want 1_928_000", r.CnpyAmount)
+	if r.CnpyAmount != 1_927_999 {
+		t.Fatalf("redemption amount: got %d want 1_927_999", r.CnpyAmount)
 	}
 }
 

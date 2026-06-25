@@ -4,15 +4,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"os"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
 
-// CLIQTotalSupply is the hard-coded fixed CLIQ supply (100M CLIQ in uCLIQ).
-// 1 CLIQ = 1_000_000 uCLIQ for parity with uCNPY micro-units.
-const CLIQTotalSupply uint64 = 100_000_000 * 1_000_000
+// CPLQTotalSupply is the hard-coded fixed CPLQ supply (100M CPLQ in uCPLQ).
+// 1 CPLQ = 1_000_000 uCPLQ for parity with uCNPY micro-units.
+const CPLQTotalSupply uint64 = 100_000_000 * 1_000_000
 
 // GenesisFile is the JSON shape persisted at plugin/go/canoliq/genesis.json.
 // Each Bucket lists the recipient addresses and the bps weights summing to
@@ -40,7 +39,7 @@ type GenesisValidatorRegistryEntry struct {
 	Stake   uint64 `json:"stake"`   // share-out weight
 }
 
-// GenesisBucket describes one of the CLIQ allocation tranches.
+// GenesisBucket describes one of the CPLQ allocation tranches.
 type GenesisBucket struct {
 	Name        string                 `json:"name"`
 	Bps         uint64                 `json:"bps"`
@@ -68,7 +67,7 @@ type GenesisParamsJSON struct {
 	DepositFee          uint64   `json:"depositFee"`
 	RedeemFee           uint64   `json:"redeemFee"`
 	ClaimFee            uint64   `json:"claimFee"`
-	CliqTransferFee     uint64   `json:"cliqTransferFee"`
+	CplqTransferFee     uint64   `json:"cplqTransferFee"`
 	InsuranceBps        uint64   `json:"insuranceBps"`
 	TreasuryThreshold   uint64   `json:"treasuryThreshold"`
 	MultisigSigners     []string `json:"multisigSigners"` // hex-encoded 20-byte addresses
@@ -77,7 +76,7 @@ type GenesisParamsJSON struct {
 	QuorumBps           uint64   `json:"quorumBps"`
 	PassThresholdBps    uint64   `json:"passThresholdBps"`
 	TimelockBlocks      uint64   `json:"timelockBlocks"`
-	CliqUnstakingBlocks uint64   `json:"cliqUnstakingBlocks"`
+	CplqUnstakingBlocks uint64   `json:"cplqUnstakingBlocks"`
 	ProposalFee         uint64   `json:"proposalFee"`
 	VoteFee             uint64   `json:"voteFee"`
 	StakeFee            uint64   `json:"stakeFee"`
@@ -113,7 +112,7 @@ func (c *Canoliq) runGenesis(req *contract.PluginGenesisRequest) *contract.Plugi
 	if err := c.SaveParams(params); err != nil {
 		return err
 	}
-	g.CliqTotalSupply = CLIQTotalSupply
+	g.CplqTotalSupply = CPLQTotalSupply
 	if err := c.applyGenesisBuckets(gf, g); err != nil {
 		return err
 	}
@@ -207,7 +206,7 @@ func validateGenesis(gf *GenesisFile) *contract.PluginError {
 	return nil
 }
 
-// applyGenesisBuckets allocates CLIQ to recipients and writes either a liquid
+// applyGenesisBuckets allocates CPLQ to recipients and writes either a liquid
 // balance (cliff_months==0) or a VestingSchedule with linear unlock between
 // cliff and end. Tranches with vest_months==0 unlock the full amount at the
 // cliff and are stored as a one-instant schedule for accounting clarity.
@@ -216,12 +215,15 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 	if blocksPerYear == 0 {
 		blocksPerYear = 5_256_000 // assume ~6s blocks
 	}
+	// Calendar month for vesting = blocksPerYear/12 (≈30.4 days). This is
+	// deliberately distinct from the fixed 30-day month used for lock tiers in
+	// stake.go::blocksPerMonth — see the note there (L5).
 	blocksPerMonth := blocksPerYear / 12
 	sets := make([]*contract.PluginSetOp, 0)
 	indexUpdates := make(map[string]*contract.VestingIndex)
 	scheduleCounter := uint64(0)
 	for _, b := range gf.Buckets {
-		bucketTotal := mulDiv(CLIQTotalSupply, b.Bps, 10_000)
+		bucketTotal := mulDiv(CPLQTotalSupply, b.Bps, 10_000)
 		for _, r := range b.Recipients {
 			addrBytes, _ := hex.DecodeString(r.Address)
 			amount := mulDiv(bucketTotal, r.Bps, 10_000)
@@ -230,7 +232,7 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 			}
 			if b.CliffMonths == 0 && b.VestMonths == 0 {
 				// fully liquid at TGE
-				key := KeyForCLIQBalance(addrBytes)
+				key := KeyForCPLQBalance(addrBytes)
 				existing, exists := liquidExisting(sets, key)
 				existing += amount
 				if exists {
@@ -238,7 +240,7 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 				} else {
 					sets = append(sets, &contract.PluginSetOp{Key: key, Value: EncodeUint64(existing)})
 				}
-				g.CliqCirculatingSupply += amount
+				g.CplqCirculatingSupply += amount
 				continue
 			}
 			scheduleCounter++
@@ -284,7 +286,6 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets}); err != nil {
 		return err
 	}
-	_ = rand.Uint64()
 	return nil
 }
 
@@ -308,8 +309,8 @@ func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
 	if p.ClaimFee != 0 {
 		d.ClaimFee = p.ClaimFee
 	}
-	if p.CliqTransferFee != 0 {
-		d.CliqTransferFee = p.CliqTransferFee
+	if p.CplqTransferFee != 0 {
+		d.CplqTransferFee = p.CplqTransferFee
 	}
 	if p.InsuranceBps != 0 {
 		d.InsuranceBps = p.InsuranceBps
@@ -342,8 +343,8 @@ func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
 	if p.TimelockBlocks != 0 {
 		d.TimelockBlocks = p.TimelockBlocks
 	}
-	if p.CliqUnstakingBlocks != 0 {
-		d.CliqUnstakingBlocks = p.CliqUnstakingBlocks
+	if p.CplqUnstakingBlocks != 0 {
+		d.CplqUnstakingBlocks = p.CplqUnstakingBlocks
 	}
 	if p.ProposalFee != 0 {
 		d.ProposalFee = p.ProposalFee
@@ -363,7 +364,7 @@ func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
 	return d
 }
 
-// liquidExisting returns the running CLIQ balance for `key` that is already
+// liquidExisting returns the running CPLQ balance for `key` that is already
 // staged in `sets`. Used so multiple recipients in the same bucket sharing an
 // address get aggregated into one set op rather than overwriting each other.
 func liquidExisting(sets []*contract.PluginSetOp, key []byte) (uint64, bool) {
