@@ -2,7 +2,6 @@ package canoliq
 
 import (
 	"log"
-	"math/rand"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
@@ -128,8 +127,31 @@ func (c *Canoliq) DeliverTx(request *contract.PluginDeliverRequest) *contract.Pl
 		if err := c.countGraduationTx(); err != nil {
 			return &contract.PluginDeliverResponse{Error: err}
 		}
+		// L3: every handler credits this tx's fee to the committee pool. Accrue
+		// it so ProcessRewards can exclude it from the staking-reward delta and
+		// route it to the treasury, instead of distributing tx-fee revenue as if
+		// it were a staking reward (the WP §3.3/§4 fee model applies only to
+		// committee rewards).
+		if err := c.accrueTxFee(request.Tx.Fee); err != nil {
+			return &contract.PluginDeliverResponse{Error: err}
+		}
 	}
 	return resp
+}
+
+// accrueTxFee adds a successful tx's fee to the tx-fee accrual scalar (L3).
+// No-op for a zero fee.
+func (c *Canoliq) accrueTxFee(fee uint64) *contract.PluginError {
+	if fee == 0 {
+		return nil
+	}
+	key := KeyForTxFeeAccrual()
+	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
+		Sets: []*contract.PluginSetOp{{Key: key, Value: EncodeUint64(c.readScalar(key) + fee)}},
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // dispatchDeliver routes a delivered tx to its message handler.
@@ -301,7 +323,7 @@ func (c *Canoliq) deliverMessageSend(msg *contract.MessageSend, fee uint64) *con
 	fromKey := contract.KeyForAccount(msg.FromAddress)
 	toKey := contract.KeyForAccount(msg.ToAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	fromQ, toQ, feeQ := rand.Uint64(), rand.Uint64(), rand.Uint64()
+	fromQ, toQ, feeQ := qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: feeQ, Key: feePoolKey},

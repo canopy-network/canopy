@@ -1,8 +1,6 @@
 package canoliq
 
 import (
-	"math/rand"
-
 	"github.com/canopy-network/go-plugin/contract"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -57,7 +55,7 @@ func (c *Canoliq) DeliverMessageCPLQProposalCreate(msg *contract.MessageCPLQProp
 	stakeKey := KeyForCPLQStake(msg.FromAddress)
 	gKey := KeyForGlobals()
 	idxKey := KeyForProposalIndex()
-	cQ, fQ, sQ, gQ, iQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	cQ, fQ, sQ, gQ, iQ := qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -132,12 +130,20 @@ func (c *Canoliq) DeliverMessageCPLQProposalCreate(msg *contract.MessageCPLQProp
 	if tier != nil && tier.VotingPeriodBlocks > 0 {
 		votingPeriod = tier.VotingPeriodBlocks
 	}
+	// M1: snapshot the lock-boosted stake total as the quorum/turnout
+	// denominator so it is measured on the same basis as the boosted vote
+	// tallies (voteWeightFor). Using raw TotalStakedCplq here let a single
+	// long-lock voter clear quorum with a fraction of the implied stake.
+	snapshotTotalStaked, sErr := c.boostedStakeTotal()
+	if sErr != nil {
+		return &contract.PluginDeliverResponse{Error: sErr}
+	}
 	prop := &contract.Proposal{
 		Id:                  id,
 		Proposer:            msg.FromAddress,
 		CreationHeight:      height,
 		ExpiryHeight:        height + votingPeriod,
-		SnapshotTotalStaked: globals.TotalStakedCplq,
+		SnapshotTotalStaked: snapshotTotalStaked,
 		Payload:             msg.Payload,
 		Description:         msg.Description,
 		Status:              contract.ProposalStatus_PROPOSAL_ACTIVE,
@@ -194,7 +200,7 @@ func (c *Canoliq) DeliverMessageCPLQVote(msg *contract.MessageCPLQVote, fee uint
 	pKey := KeyForProposal(msg.ProposalId)
 	stakeKey := KeyForCPLQStake(msg.FromAddress)
 	voteKey := KeyForVote(msg.ProposalId, msg.FromAddress)
-	cQ, fQ, pQ, sQ, vQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	cQ, fQ, pQ, sQ, vQ := qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -322,7 +328,7 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 		return err
 	}
 	idxKey := KeyForProposalIndex()
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: idxKey}},
 	})
@@ -361,9 +367,16 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 			continue
 		}
 		// Record turnout (participation) for every tallied proposal, regardless
-		// of outcome.
+		// of outcome. M1: clamp per-proposal turnout to <=10000 bps (100%). With
+		// the boosted snapshot denominator this should hold structurally, but the
+		// clamp is a defensive floor so a stale/under-counted snapshot can never
+		// inflate the T5 graduation turnout metric past 100%.
 		if prop.SnapshotTotalStaked > 0 {
-			turnoutSumDelta += mulDiv(prop.YesWeight+prop.NoWeight+prop.AbstainWeight, 10_000, prop.SnapshotTotalStaked)
+			turnout := mulDiv(prop.YesWeight+prop.NoWeight+prop.AbstainWeight, 10_000, prop.SnapshotTotalStaked)
+			if turnout > 10_000 {
+				turnout = 10_000
+			}
+			turnoutSumDelta += turnout
 			turnoutCountDelta++
 		}
 		passed := proposalPasses(prop, params)
@@ -407,7 +420,7 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 
 // loadProposal reads a Proposal record. Returns (nil, nil) when absent.
 func (c *Canoliq) loadProposal(id uint64) (*contract.Proposal, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForProposal(id)}},
 	})

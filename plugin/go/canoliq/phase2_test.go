@@ -319,16 +319,26 @@ func TestProposalQuorumMiss(t *testing.T) {
 	params := shortGovParams()
 	seedParams(t, c, params)
 	proposer := addr20(0x51)
+	whale := addr20(0x52)
 	seedAccount(s, proposer, 500_000)
-	// Globals show 100M total staked but only the proposer's 1M votes — far
-	// below quorum.
-	seedGlobals(s, &contract.CanoliqGlobals{TotalStakedCplq: 100_000_000})
+	seedAccount(s, whale, 500_000)
+	seedGlobals(s, &contract.CanoliqGlobals{})
+	// A whale stakes 100M but never votes. With the M1 boosted snapshot the
+	// quorum denominator is the real staked weight (101M), so the proposer's
+	// lone 1M YES vote is ~1% turnout — far below the 33% quorum.
+	seedCPLQ(s, whale, 100_000_000)
+	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: whale, Amount: 100_000_000}, 10_000, params); r.Error != nil {
+		t.Fatalf("whale stake: %v", r.Error)
+	}
 	seedCPLQ(s, proposer, 1_000_000)
 	if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: proposer, Amount: 1_000_000}, 10_000, params); r.Error != nil {
 		t.Fatalf("stake: %v", r.Error)
 	}
 	c.plugin.setHeight(10)
-	payload, _ := anypb.New(&contract.ProposalParamChange{Params: params})
+	// Propose an actual change (FeeBps 1200 -> 1500) so pass/fail is observable.
+	changed := shortGovParams()
+	changed.FeeBps = 1500
+	payload, _ := anypb.New(&contract.ProposalParamChange{Params: changed})
 	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{
 		FromAddress: proposer,
 		Payload:     payload,
@@ -347,9 +357,9 @@ func TestProposalQuorumMiss(t *testing.T) {
 		t.Fatalf("begin block: %v", r.Error)
 	}
 	got, _ := c.LoadParams()
-	// Param change must NOT apply; FeeBps stays at the seeded 1200.
+	// Quorum missed → param change must NOT apply; FeeBps stays at 1200.
 	if got.FeeBps != 1200 {
-		t.Errorf("fee_bps after failed proposal: got %d want 1200", got.FeeBps)
+		t.Errorf("fee_bps after quorum-miss proposal: got %d want 1200", got.FeeBps)
 	}
 }
 

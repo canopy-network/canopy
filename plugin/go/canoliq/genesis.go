@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"os"
 
 	"github.com/canopy-network/go-plugin/contract"
@@ -216,6 +215,9 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 	if blocksPerYear == 0 {
 		blocksPerYear = 5_256_000 // assume ~6s blocks
 	}
+	// Calendar month for vesting = blocksPerYear/12 (≈30.4 days). This is
+	// deliberately distinct from the fixed 30-day month used for lock tiers in
+	// stake.go::blocksPerMonth — see the note there (L5).
 	blocksPerMonth := blocksPerYear / 12
 	sets := make([]*contract.PluginSetOp, 0)
 	indexUpdates := make(map[string]*contract.VestingIndex)
@@ -284,7 +286,6 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets}); err != nil {
 		return err
 	}
-	_ = rand.Uint64()
 	return nil
 }
 

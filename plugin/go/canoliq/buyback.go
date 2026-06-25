@@ -1,8 +1,6 @@
 package canoliq
 
 import (
-	"math/rand"
-
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -32,7 +30,7 @@ func (c *Canoliq) CheckMessageBuybackExecute(msg *contract.MessageBuybackExecute
 func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecute, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	cQ, fQ := rand.Uint64(), rand.Uint64()
+	cQ, fQ := qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -245,7 +243,7 @@ func (c *Canoliq) distributeBuybackToStakers(cplqAcquired uint64) ([]*contract.P
 
 // loadBuybackOrder reads the post-pass receipt for a proposal id.
 func (c *Canoliq) loadBuybackOrder(proposalID uint64) (*contract.BuybackOrder, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForBuybackOrder(proposalID)}},
 	})

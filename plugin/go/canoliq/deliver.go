@@ -1,8 +1,6 @@
 package canoliq
 
 import (
-	"math/rand"
-
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -13,11 +11,11 @@ import (
 func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDeposit, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	fromKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	escrowKey := contract.KeyForFeePool(c.Config.ChainId) // canoLiq committee escrow uses same pool id
+	escrowKey := KeyForEscrowPool() // dedicated CNPY escrow pool (H1) — backs cCNPY, distinct from the committee fee pool
 	balKey := KeyForCCNPYBalance(msg.FromAddress)
 	globalsKey := KeyForGlobals()
-	fQ, gQ, bQ, eQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
-	feeQ := rand.Uint64()
+	fQ, gQ, bQ, eQ := qid(), qid(), qid(), qid()
+	feeQ := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: fQ, Key: fromKey},
@@ -78,6 +76,9 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 	}
 	from.Amount -= deduct
 	feePool.Amount += fee
+	// H1: persist the deposited principal into the dedicated escrow pool so it
+	// actually backs the cCNPY just minted. This keeps the invariant
+	// escrow.Amount == TotalPooledCnpy + PendingRedemptionCnpy.
 	escrow.Amount += msg.Amount
 	current := DecodeUint64(balanceBz)
 	current += mint
@@ -95,10 +96,15 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 	if e != nil {
 		return &contract.PluginDeliverResponse{Error: e}
 	}
+	escrowBz, e := contract.Marshal(escrow)
+	if e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
 	sets := []*contract.PluginSetOp{
 		{Key: globalsKey, Value: gBz},
 		{Key: balKey, Value: EncodeUint64(current)},
 		{Key: feePoolKey, Value: feeBz},
+		{Key: escrowKey, Value: escrowBz},
 	}
 	var deletes []*contract.PluginDeleteOp
 	if from.Amount == 0 {
@@ -106,11 +112,6 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 	} else {
 		sets = append(sets, &contract.PluginSetOp{Key: fromKey, Value: fromBz})
 	}
-	// The escrow pool is the same key as feePool (committee pool); we already
-	// updated it above by writing feePool. The escrow accumulator is implicit
-	// in the committee pool growing alongside the fee. (Phase 2 may split
-	// escrow vs fee tracking onto distinct keys.)
-	_ = escrow
 	if _, e := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets, Deletes: deletes}); e != nil {
 		return &contract.PluginDeliverResponse{Error: e}
 	}
@@ -127,7 +128,7 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 	balKey := KeyForCCNPYBalance(msg.FromAddress)
 	globalsKey := KeyForGlobals()
 	redemIdxKey := KeyForRedemptionIndex(msg.FromAddress)
-	fQ, gQ, bQ, feeQ, riQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	fQ, gQ, bQ, feeQ, riQ := qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: fQ, Key: fromKey},
@@ -260,9 +261,10 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	rKey := KeyForRedemption(msg.FromAddress, msg.RedemptionId)
 	fromKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
+	escrowKey := KeyForEscrowPool()
 	globalsKey := KeyForGlobals()
 	redemIdxKey := KeyForRedemptionIndex(msg.FromAddress)
-	rQ, fQ, gQ, feeQ, riQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	rQ, fQ, gQ, feeQ, riQ, eQ := qid(), qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: rQ, Key: rKey},
@@ -270,6 +272,7 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 			{QueryId: gQ, Key: globalsKey},
 			{QueryId: feeQ, Key: feePoolKey},
 			{QueryId: riQ, Key: redemIdxKey},
+			{QueryId: eQ, Key: escrowKey},
 		},
 	})
 	if err != nil {
@@ -282,6 +285,7 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	from := new(contract.Account)
 	globals := new(contract.CanoliqGlobals)
 	feePool := new(contract.Pool)
+	escrow := new(contract.Pool)
 	redemIdx := new(contract.RedemptionIndex)
 	var rPresent bool
 	for _, r := range resp.Results {
@@ -306,6 +310,10 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 			if e := contract.Unmarshal(r.Entries[0].Value, feePool); e != nil {
 				return &contract.PluginDeliverResponse{Error: e}
 			}
+		case eQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, escrow); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
 		case riQ:
 			if e := contract.Unmarshal(r.Entries[0].Value, redemIdx); e != nil {
 				return &contract.PluginDeliverResponse{Error: e}
@@ -322,6 +330,13 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	if from.Amount < fee {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}
 	}
+	// H1: debit the escrow pool that backs this payout before crediting the
+	// user. If escrow is short, the plugin's books have drifted — fail closed
+	// rather than fabricate CNPY (the FSM enforces no conservation, see H2).
+	if escrow.Amount < redemption.CnpyAmount {
+		return &contract.PluginDeliverResponse{Error: ErrPoolMath("escrow underflow on claim")}
+	}
+	escrow.Amount -= redemption.CnpyAmount
 	from.Amount = from.Amount - fee + redemption.CnpyAmount
 	feePool.Amount += fee
 	if globals.PendingRedemptionCnpy >= redemption.CnpyAmount {
@@ -341,10 +356,15 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	if e != nil {
 		return &contract.PluginDeliverResponse{Error: e}
 	}
+	escrowBz, e := contract.Marshal(escrow)
+	if e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
 	sets := []*contract.PluginSetOp{
 		{Key: fromKey, Value: fromBz},
 		{Key: globalsKey, Value: gBz},
 		{Key: feePoolKey, Value: feeBz},
+		{Key: escrowKey, Value: escrowBz},
 	}
 	deletes := []*contract.PluginDeleteOp{{Key: rKey}}
 	redemIdx.Ids = removeUint64(redemIdx.Ids, msg.RedemptionId)
@@ -373,7 +393,7 @@ func (c *Canoliq) DeliverMessageCPLQTransfer(msg *contract.MessageCPLQTransfer, 
 	toBalKey := KeyForCPLQBalance(msg.ToAddress)
 	cnpyFromKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	fbQ, tbQ, cQ, feeQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	fbQ, tbQ, cQ, feeQ := qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: fbQ, Key: fromBalKey},
@@ -459,7 +479,7 @@ func (c *Canoliq) DeliverMessageCPLQClaimVested(msg *contract.MessageCPLQClaimVe
 	balKey := KeyForCPLQBalance(msg.FromAddress)
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	iQ, bQ, cQ, feeQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	iQ, bQ, cQ, feeQ := qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: iQ, Key: idxKey},
@@ -510,7 +530,7 @@ func (c *Canoliq) DeliverMessageCPLQClaimVested(msg *contract.MessageCPLQClaimVe
 	scheduleReads := make([]*contract.PluginKeyRead, 0, len(idx.ScheduleIds))
 	scheduleQ := make(map[uint64]uint64, len(idx.ScheduleIds))
 	for _, id := range idx.ScheduleIds {
-		q := rand.Uint64()
+		q := qid()
 		scheduleQ[q] = id
 		scheduleReads = append(scheduleReads, &contract.PluginKeyRead{
 			QueryId: q,
@@ -586,7 +606,7 @@ func (c *Canoliq) DeliverMessageCPLQClaimVested(msg *contract.MessageCPLQClaimVe
 // by `delta`, and writes it back. Used after vesting unlocks.
 func (c *Canoliq) bumpCirculating(delta uint64) *contract.PluginError {
 	gKey := KeyForGlobals()
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: gKey}},
 	})

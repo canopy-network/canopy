@@ -4,15 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
-	"math/rand"
 	"net/http"
 	"time"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
 
-// alerts.go is the T6 push-alert subsystem (WP §11): a non-blocking webhook
-// dispatcher plus the on-chain condition checks that feed it.
+// alerts.go is the T6 push-alert subsystem (WP §9.2 real-time monitoring): a
+// non-blocking webhook dispatcher plus the on-chain condition checks that feed it.
 //
 // Design rationale:
 //   - Pull vs push: the RPC surface (Phase 3 §1) already exposes everything
@@ -303,7 +302,7 @@ func (c *Canoliq) applyAlert(kind string, fired bool, height uint64, severity, m
 
 // loadAlertState reads a per-kind AlertState, returning a zero value when absent.
 func (c *Canoliq) loadAlertState(kind string) (*contract.AlertState, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForAlertState(kind)}},
 	})

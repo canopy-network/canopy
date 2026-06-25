@@ -1,7 +1,6 @@
 package canoliq
 
 import (
-	"math/rand"
 	"sync/atomic"
 
 	"github.com/canopy-network/go-plugin/contract"
@@ -219,25 +218,25 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 	keys = keys[:0]
 	queryToProp := map[uint64]uint64{}
 	for _, id := range snap.ActiveProposalIDs {
-		q := rand.Uint64()
+		q := qid()
 		queryToProp[q] = id
 		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: KeyForProposal(id)})
 	}
 	queryToSpend := map[uint64]uint64{}
 	for _, id := range snap.PendingSpendIDs {
-		q := rand.Uint64()
+		q := qid()
 		queryToSpend[q] = id
 		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: KeyForTreasurySpend(id)})
 	}
 	queryToStaker := map[uint64][]byte{}
 	for _, addr := range snap.StakerAddresses {
-		q := rand.Uint64()
+		q := qid()
 		queryToStaker[q] = addr
 		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: KeyForCPLQStake(addr)})
 	}
 	queryToValIncent := map[uint64][]byte{}
 	for _, addr := range addrs {
-		q := rand.Uint64()
+		q := qid()
 		queryToValIncent[q] = addr
 		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: KeyForValidatorIncentives(addr)})
 	}
@@ -298,7 +297,7 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		}{}
 		for _, spendID := range snap.PendingSpendIDs {
 			for _, signer := range snap.Params.MultisigSigners {
-				q := rand.Uint64()
+				q := qid()
 				queryToApproval[q] = struct {
 					SpendID uint64
 					Signer  []byte

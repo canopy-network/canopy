@@ -35,6 +35,8 @@ var (
 	domainRedeemIndex   = []byte{21}
 	domainUnstakeIndex  = []byte{22}
 	domainAlertState    = []byte{23}
+	domainEscrow        = []byte{24}
+	domainTxFeeAccrual  = []byte{25}
 
 	treasuryCanopy = []byte("canopy")
 	treasuryCplq   = []byte("cplq")
@@ -213,6 +215,24 @@ func KeyForValidatorRegistry() []byte {
 // KeyForAlertState returns the per-kind alert bookkeeping key (T6).
 func KeyForAlertState(kind string) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainAlertState, []byte(kind))
+}
+
+// KeyForTxFeeAccrual returns the singleton scalar accumulating protocol tx-fee
+// revenue collected into the committee pool since the last reward sweep (L3).
+// ProcessRewards subtracts it from the reward delta (so tx fees are not
+// distributed as staking reward) and routes it to the DAO treasury, then zeroes
+// it. Bumped centrally in DeliverTx on each successful tx.
+func KeyForTxFeeAccrual() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainTxFeeAccrual)
+}
+
+// KeyForEscrowPool returns the singleton CNPY escrow pool key. This pool holds
+// the real CNPY backing live cCNPY plus pending redemptions — the H1 fix
+// custodies deposited principal and the cCNPY-holder reward slice here, kept
+// distinct from the committee fee pool (KeyForFeePool) that ProcessRewards
+// sweeps. Invariant: escrow.Amount == TotalPooledCnpy + PendingRedemptionCnpy.
+func KeyForEscrowPool() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainEscrow)
 }
 
 // EncodeUint64 returns the 8-byte big-endian encoding of n. Used for storing

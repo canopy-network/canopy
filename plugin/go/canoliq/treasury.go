@@ -2,7 +2,6 @@ package canoliq
 
 import (
 	"bytes"
-	"math/rand"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
@@ -14,8 +13,9 @@ import (
 //      writes a TreasurySpend with executable_height adjusted by timelock.
 //   2. (above-threshold only) MessageMultisigApprove records per-signer
 //      approvals up to multisig_threshold.
-//   3. MessageDAOTreasurySpend (or BeginBlock auto-execute) actually moves
-//      the funds when timelock + multisig conditions are satisfied.
+//   3. MessageDAOTreasurySpend actually moves the funds when the timelock +
+//      multisig conditions are satisfied. Execution is always explicit — there
+//      is no BeginBlock auto-execute path (BeginBlock only queues).
 
 // queueTreasurySpend writes a TreasurySpend record on proposal pass. Above
 // treasury_threshold spends carry a timelock and a multisig requirement.
@@ -119,7 +119,7 @@ func (c *Canoliq) CheckMessageMultisigApprove(msg *contract.MessageMultisigAppro
 func (c *Canoliq) DeliverMessageDAOTreasurySpend(msg *contract.MessageDAOTreasurySpend, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	cnpyKey := contract.KeyForAccount(msg.FromAddress)
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
-	cQ, fQ := rand.Uint64(), rand.Uint64()
+	cQ, fQ := qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -212,7 +212,7 @@ func (c *Canoliq) DeliverMessageMultisigApprove(msg *contract.MessageMultisigApp
 	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
 	approvalKey := KeyForMultisigApproval(msg.SpendId, msg.FromAddress)
 	spendKey := KeyForTreasurySpend(msg.SpendId)
-	cQ, fQ, aQ, sQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	cQ, fQ, aQ, sQ := qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -373,12 +373,27 @@ func (c *Canoliq) applySpend(spend *contract.TreasurySpend) *contract.PluginErro
 		if e != nil {
 			return e
 		}
+		// L4: CPLQ held in the DAO treasury is not circulating; paying it out to
+		// a recipient's liquid balance returns it to circulation, so bump
+		// CplqCirculatingSupply by the spend amount (CplqTotalSupply is
+		// unchanged — no mint/burn). (The deeper buyback↔circulating
+		// reconciliation remains a Phase-3 item.)
+		g, err := c.LoadGlobals()
+		if err != nil {
+			return err
+		}
+		g.CplqCirculatingSupply += spend.Payload.Amount
+		gBz, e := contract.Marshal(g)
+		if e != nil {
+			return e
+		}
 		_, err = c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
 			Sets: []*contract.PluginSetOp{
 				{Key: KeyForTreasuryCPLQ(), Value: EncodeUint64(treasury)},
 				{Key: recipBalKey, Value: EncodeUint64(recipBal)},
 				{Key: KeyForTreasurySpend(spend.Id), Value: spendBz},
 				{Key: KeyForSpendIndex(), Value: idxBz},
+				{Key: KeyForGlobals(), Value: gBz},
 			},
 		})
 		return err
@@ -390,7 +405,7 @@ func (c *Canoliq) applySpend(spend *contract.TreasurySpend) *contract.PluginErro
 // loadAccount reads an Account record. Empty when absent so callers can
 // always read-modify-write.
 func (c *Canoliq) loadAccount(key []byte) (*contract.Account, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: key}},
 	})
@@ -411,7 +426,7 @@ func (c *Canoliq) loadAccount(key []byte) (*contract.Account, *contract.PluginEr
 
 // readBytes reads a raw byte value at `key`, or nil if absent.
 func (c *Canoliq) readBytes(key []byte) []byte {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: key}},
 	})
@@ -444,7 +459,7 @@ func (c *Canoliq) findSpendForProposal(proposalID uint64) (*contract.TreasurySpe
 }
 
 func (c *Canoliq) loadSpend(id uint64) (*contract.TreasurySpend, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForTreasurySpend(id)}},
 	})
@@ -465,7 +480,7 @@ func (c *Canoliq) loadSpend(id uint64) (*contract.TreasurySpend, *contract.Plugi
 }
 
 func (c *Canoliq) loadSpendIndex() (*contract.ProposalIndex, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForSpendIndex()}},
 	})

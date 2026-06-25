@@ -81,6 +81,7 @@ func TestRedemptionIndexRemoveOnClaim(t *testing.T) {
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
 	s.set(KeyForCCNPYBalance(user), EncodeUint64(1000))
+	seedEscrow(s, 1000) // backs the pre-seeded TotalPooledCnpy (H1)
 	seedAccount(s, user, 100_000)
 
 	if resp := c.DeliverMessageCanoliqRedeem(
@@ -114,6 +115,7 @@ func TestRedemptionIndexOutOfOrderClaims(t *testing.T) {
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
 	s.set(KeyForCCNPYBalance(user), EncodeUint64(1000))
+	seedEscrow(s, 1000) // backs the pre-seeded TotalPooledCnpy (H1)
 	seedAccount(s, user, 1_000_000)
 
 	for i := 0; i < 3; i++ {

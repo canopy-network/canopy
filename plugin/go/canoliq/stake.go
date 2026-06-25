@@ -2,7 +2,6 @@ package canoliq
 
 import (
 	"bytes"
-	"math/rand"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
@@ -15,8 +14,15 @@ import (
 // (see governance.go::voteWeightFor); to enable that snapshot,
 // CPLQStake.staked_at_height records the latest stake increase.
 
-// blocksPerMonth approximates a 30-day month at the 6s block time
+// blocksPerMonth approximates a fixed 30-day month at the 6s block time
 // (30*24*3600/6). Used to convert lock-tier durations to block counts.
+//
+// Note (L5): this intentionally differs from the vesting month in genesis.go,
+// which derives a calendar month as blocksPerYear/12 (≈438_000, a ~30.4-day
+// month). Lock tiers use a round 30-day month so a "12-month lock" is exactly
+// 12×30 days regardless of the configured blocksPerYear; multi-year vesting
+// uses the calendar-accurate year/12. The ~6_000-block (~10h) monthly delta is
+// deliberate, not a bug.
 const blocksPerMonth = 432_000
 
 // blocksPerDay approximates a day at the 6s block time (24*3600/6). Bounds the
@@ -84,6 +90,29 @@ func voteWeightFor(stake *contract.CPLQStake) uint64 {
 	return mulDiv(stake.Amount, voteMultBps, 10_000)
 }
 
+// boostedStakeTotal sums every active staker's lock-boosted governance weight
+// (voteWeightFor). This is the correct quorum/turnout denominator (M1): vote
+// tallies are lock-boosted via voteWeightFor, so the snapshot they are measured
+// against must be boosted on the same basis — otherwise a single long-lock
+// voter clears quorum with a fraction of the raw stake the threshold implies,
+// and per-proposal turnout can exceed 100%. Mirrors the staker iteration in
+// distributeBuybackToStakers.
+func (c *Canoliq) boostedStakeTotal() (uint64, *contract.PluginError) {
+	idx, err := c.loadStakeIndex()
+	if err != nil {
+		return 0, err
+	}
+	total := uint64(0)
+	for _, addr := range idx.Addresses {
+		stake, err := c.loadCPLQStake(addr)
+		if err != nil {
+			return 0, err
+		}
+		total += voteWeightFor(stake)
+	}
+	return total, nil
+}
+
 // CheckMessageCPLQStake validates a stake request statelessly.
 func (c *Canoliq) CheckMessageCPLQStake(msg *contract.MessageCPLQStake, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 {
@@ -148,7 +177,7 @@ func (c *Canoliq) DeliverMessageCPLQStake(msg *contract.MessageCPLQStake, fee ui
 	stakeKey := KeyForCPLQStake(msg.FromAddress)
 	idxKey := KeyForCPLQStakeIndex()
 	gKey := KeyForGlobals()
-	cQ, fQ, bQ, sQ, iQ, gQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	cQ, fQ, bQ, sQ, iQ, gQ := qid(), qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -291,7 +320,7 @@ func (c *Canoliq) DeliverMessageCPLQUnstake(msg *contract.MessageCPLQUnstake, fe
 	idxKey := KeyForCPLQStakeIndex()
 	gKey := KeyForGlobals()
 	unstIdxKey := KeyForUnstakingIndex(msg.FromAddress)
-	cQ, fQ, sQ, iQ, gQ, uiQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	cQ, fQ, sQ, iQ, gQ, uiQ := qid(), qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -437,7 +466,7 @@ func (c *Canoliq) DeliverMessageCPLQClaimUnstake(msg *contract.MessageCPLQClaimU
 	uKey := KeyForCPLQUnstaking(msg.FromAddress, msg.UnstakeId)
 	balKey := KeyForCPLQBalance(msg.FromAddress)
 	unstIdxKey := KeyForUnstakingIndex(msg.FromAddress)
-	cQ, fQ, uQ, bQ, uiQ := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+	cQ, fQ, uQ, bQ, uiQ := qid(), qid(), qid(), qid(), qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -534,7 +563,7 @@ func (c *Canoliq) DeliverMessageCPLQClaimUnstake(msg *contract.MessageCPLQClaimU
 // loadCPLQStake reads a per-address CPLQStake record. Returns (nil, nil)
 // when the staker has no record, distinguishable from an empty stake.
 func (c *Canoliq) loadCPLQStake(addr []byte) (*contract.CPLQStake, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForCPLQStake(addr)}},
 	})
@@ -557,7 +586,7 @@ func (c *Canoliq) loadCPLQStake(addr []byte) (*contract.CPLQStake, *contract.Plu
 // loadStakeIndex reads the singleton stake index. Returns an empty index when
 // no stakers exist yet.
 func (c *Canoliq) loadStakeIndex() (*contract.CPLQStakeIndex, *contract.PluginError) {
-	q := rand.Uint64()
+	q := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{{QueryId: q, Key: KeyForCPLQStakeIndex()}},
 	})

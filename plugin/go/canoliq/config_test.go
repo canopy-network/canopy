@@ -53,6 +53,7 @@ func TestSafetyCheckTestnetRefusesPlaceholderAddress(t *testing.T) {
 	gp := writeGenesisFixture(t, localnetPlaceholderAddress)
 	c := DefaultConfig()
 	c.Profile = ProfileTestnet
+	c.RedemptionUnstakingBlocks = 30240 // valid window so we reach the placeholder check (M2)
 	c.GenesisPath = gp
 	err := c.SafetyCheck()
 	if err == nil {
@@ -73,9 +74,48 @@ func TestSafetyCheckTestnetAcceptsRealAddress(t *testing.T) {
 	gp := writeGenesisFixture(t, "0102030405060708090a0b0c0d0e0f1011121314")
 	c := DefaultConfig()
 	c.Profile = ProfileMainnet
+	c.RedemptionUnstakingBlocks = 30240 // valid window (M2) so only the address path is exercised
 	c.GenesisPath = gp
 	if err := c.SafetyCheck(); err != nil {
 		t.Fatalf("mainnet safety check rejected real address: %v", err)
+	}
+}
+
+func TestSafetyCheckRejectsSmallRedemptionWindowOnNonLocalnet(t *testing.T) {
+	// M2: testnet/mainnet must fail closed when redemptionUnstakingBlocks is
+	// below the floor (the localnet default of 5 is the common misconfig).
+	gp := writeGenesisFixture(t, "0102030405060708090a0b0c0d0e0f1011121314")
+	for _, profile := range []string{ProfileTestnet, ProfileMainnet} {
+		c := DefaultConfig() // RedemptionUnstakingBlocks defaults to 5
+		c.Profile = profile
+		c.GenesisPath = gp
+		err := c.SafetyCheck()
+		if err == nil {
+			t.Fatalf("profile=%q accepted redemptionUnstakingBlocks=%d", profile, c.RedemptionUnstakingBlocks)
+		}
+		if !strings.Contains(err.Error(), "redemptionUnstakingBlocks") {
+			t.Fatalf("profile=%q error should name redemptionUnstakingBlocks: %v", profile, err)
+		}
+	}
+
+	// At the floor it must pass (address is real).
+	c := DefaultConfig()
+	c.Profile = ProfileTestnet
+	c.RedemptionUnstakingBlocks = minNonLocalnetRedemptionBlocks
+	c.GenesisPath = gp
+	if err := c.SafetyCheck(); err != nil {
+		t.Fatalf("floor window rejected: %v", err)
+	}
+}
+
+func TestSafetyCheckLocalnetAllowsSmallRedemptionWindow(t *testing.T) {
+	// Localnet keeps the fast 5-block window for tests — the M2 floor must not
+	// apply there.
+	gp := writeGenesisFixture(t, localnetPlaceholderAddress)
+	c := DefaultConfig() // localnet, window 5
+	c.GenesisPath = gp
+	if err := c.SafetyCheck(); err != nil {
+		t.Fatalf("localnet safety check rejected small window: %v", err)
 	}
 }
 
@@ -85,6 +125,7 @@ func TestSafetyCheckHandlesPrefixedAddress(t *testing.T) {
 	gp := writeGenesisFixture(t, "0x"+strings.ToUpper(localnetPlaceholderAddress))
 	c := DefaultConfig()
 	c.Profile = ProfileTestnet
+	c.RedemptionUnstakingBlocks = 30240 // valid window so we reach the placeholder check (M2)
 	c.GenesisPath = gp
 	if err := c.SafetyCheck(); err == nil {
 		t.Fatalf("safety check missed 0x-prefixed uppercase placeholder")
@@ -151,6 +192,7 @@ func TestBundledTestnetGenesisIsSafetyCheckClean(t *testing.T) {
 	// Tests run from the package dir, so the file is in cwd.
 	c := DefaultConfig()
 	c.Profile = ProfileTestnet
+	c.RedemptionUnstakingBlocks = 30240 // matches canoliq-config.testnet.json (M2 floor)
 	c.GenesisPath = "genesis.testnet.json"
 	if _, err := os.Stat(c.GenesisPath); err != nil {
 		t.Skipf("genesis.testnet.json not present: %v", err)
@@ -185,6 +227,37 @@ func TestValidateParamsFeeBpsBounds(t *testing.T) {
 		}
 		if !tc.ok && err == nil {
 			t.Errorf("FeeBps=%d: want rejected, got nil", tc.feeBps)
+		}
+	}
+}
+
+// TestValidateParamsMultisigThreshold covers L1: with signers configured the
+// threshold must be in [1, len(signers)] — a zero threshold (which would
+// defeat the multisig gate) and an over-count are both rejected.
+func TestValidateParamsMultisigThreshold(t *testing.T) {
+	signers := [][]byte{{1}, {2}, {3}}
+	cases := []struct {
+		name      string
+		signers   [][]byte
+		threshold uint64
+		ok        bool
+	}{
+		{"zero threshold with signers rejected", signers, 0, false},
+		{"threshold above signer count rejected", signers, 4, false},
+		{"valid 2-of-3 accepted", signers, 2, true},
+		{"full 3-of-3 accepted", signers, 3, true},
+		{"zero threshold with no signers accepted", nil, 0, true},
+	}
+	for _, tc := range cases {
+		p := DefaultParams()
+		p.MultisigSigners = tc.signers
+		p.MultisigThreshold = tc.threshold
+		err := ValidateParams(p)
+		if tc.ok && err != nil {
+			t.Errorf("%s: want accepted, got %v", tc.name, err)
+		}
+		if !tc.ok && err == nil {
+			t.Errorf("%s: want rejected, got nil", tc.name)
 		}
 	}
 }

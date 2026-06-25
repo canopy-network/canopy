@@ -24,9 +24,30 @@ remediation can proceed before any testnet/mainnet deployment.
 
 ---
 
+## Remediation status (2026-06-24)
+
+Implemented on `feature/security-review`; `go test ./canoliq/... ./canoliqctl/... ./contract/...` green.
+
+| Finding | Status | Notes |
+|---|---|---|
+| H1 | ✅ remediated | Dedicated `KeyForEscrowPool` backs cCNPY; deposit credits, claim debits (fail-closed), `ProcessRewards` routes the user slice into escrow. Invariant `escrow == TotalPooled + Pending` + full-lifecycle conservation test. |
+| H2 | ✅ resolved | Investigation only — `fsm/state.go` passthrough confirmed; informs H1. |
+| M1 | ✅ remediated | Boosted `boostedStakeTotal()` snapshot as quorum/turnout denominator; per-proposal turnout clamped ≤10000 bps. |
+| M2 | ✅ remediated | `SafetyCheck` fails closed when `redemptionUnstakingBlocks < 1000` on testnet/mainnet. (Reading live `valParams.UnstakingBlocks` remains a longer-term TODO.) |
+| M3 | ⏭️ deferred | Already implemented on `canoliq-spec-alignment`; skipped here to avoid a merge conflict. |
+| M4 | ✅ remediated | `maxLazyDrainPerBlock = 16` caps EndBlock lazy-query drain. |
+| M5 | ✅ remediated | +1 virtual-shares offset in `computeMint`/`computeRedeem`; no-rounding-profit property test. |
+| L1 | ✅ remediated | `ValidateParams` rejects `MultisigThreshold == 0` when signers are configured; test. |
+| L2 | ✅ remediated | All 46 `rand.Uint64()` QueryIds replaced with a deterministic `qid()` counter; dead genesis rand call + `math/rand` imports removed. |
+| L3 | ✅ remediated | Central `accrueTxFee` in `DeliverTx` + `ProcessRewards` excludes accrued tx-fees from the reward split and routes them to the DAO treasury; tests. |
+| L4 | ✅ remediated | Treasury CPLQ spend bumps `CplqCirculatingSupply`; supply-invariant test (circulating ≤ total ≤ 100M). |
+| L5 | ✅ remediated | Removed phantom "BeginBlock auto-execute" comment; fixed WP §11 → §9.2 insurance/alert refs; documented the intentional vesting-vs-lock `blocksPerMonth` difference. |
+
+---
+
 ## Findings (severity-ranked) & Remediation
 
-### H1 — Deposit principal is never escrowed; redemption-claim credits CNPY with no backing debit  *(HIGH / must-fix)*
+### H1 — Deposit principal is never escrowed; redemption-claim credits CNPY with no backing debit  *(HIGH / must-fix — ✅ REMEDIATED 2026-06-24)*
 **Where:** `deliver.go` — `DeliverMessageCanoliqDeposit` (78-114) and `DeliverMessageCanoliqClaimRedemption` (322-360).
 
 On deposit, the user is debited `msg.Amount + fee` (`from.Amount -= deduct`, line 79) but the
@@ -72,7 +93,7 @@ no authority gating**. The plugin can write arbitrary balances to any key, inclu
 This finding no longer blocks the H1 fix design: the fix must restore conservation entirely within the
 plugin, since the FSM will not catch a mistake.
 
-### M1 — Governance quorum & T5 turnout compare boosted vote weight against un-boosted stake snapshot *(MEDIUM)*
+### M1 — Governance quorum & T5 turnout compare boosted vote weight against un-boosted stake snapshot *(MEDIUM — ✅ REMEDIATED 2026-06-24)*
 **Where:** `governance.go` — `proposalPasses` (434-452, quorum at 442) and turnout accrual (366); weight from `voteWeightFor` (`stake.go:79`).
 
 Vote weight is `stake × lockMultiplier` (up to 4× for 24-month locks), but quorum is checked as
@@ -89,7 +110,7 @@ quorum/turnout-integrity issue, not a tally inversion.
 and use it as the quorum/turnout denominator; or strip the multiplier from the quorum numerator. Clamp
 per-proposal turnout to ≤10000 bps before feeding T5. Add tests for both.
 
-### M2 — Redemption unstaking window fails open to ~5 blocks and ignores Canopy's real `UnstakingBlocks` *(MEDIUM)*
+### M2 — Redemption unstaking window fails open to ~5 blocks and ignores Canopy's real `UnstakingBlocks` *(MEDIUM — ✅ REMEDIATED 2026-06-24)*
 **Where:** `deliver.go:201-204` (`window := c.Config.RedemptionUnstakingBlocks; if window == 0 { window = 5 }`); `config.go:184` defaults it to 5 again.
 
 If an operator ships a config without `redemptionUnstakingBlocks`, redemptions mature in ~5 blocks
@@ -116,7 +137,7 @@ as a known deviation and have `SafetyCheck` warn when it is 0 on non-localnet.
 > `3300` (33%), fail-closed when Canopy stake is unavailable. Still valid on *this* branch; if that
 > branch merges into `feature/security-review`, M3 auto-resolves — coordinate to avoid double-remediation.
 
-### M4 — Unauthenticated RPC lazy-query path injects external load into the consensus EndBlock *(MEDIUM)*
+### M4 — Unauthenticated RPC lazy-query path injects external load into the consensus EndBlock *(MEDIUM — ✅ REMEDIATED 2026-06-24, drain cap)*
 **Where:** `rpc.go` per-address routes → `lazy_query.go` `enqueueLazy`/`drainLazyQueries`; drained synchronously in `EndBlock` (`canoliq.go:191`). Bind address is operator-set via `CANOLIQ_RPC_ADDR` (`main.go:47`) with no auth.
 
 Each `/v1/account|vesting|redemption|vote|buyback` request enqueues a query that `EndBlock` fulfills with
@@ -128,7 +149,7 @@ EndBlock, slowing block production. The server is off by default but can be boun
 RPC must bind to loopback / behind an authenticated proxy; consider moving per-address reads fully off
 the consensus path (a side reader over a read-only state snapshot). Add a per-IP rate limit.
 
-### M5 — Share-price math has no first-depositor / inflation guard *(LOW–MEDIUM)*
+### M5 — Share-price math has no first-depositor / inflation guard *(LOW–MEDIUM — ✅ REMEDIATED 2026-06-24)*
 **Where:** `fee.go:10` (`computeMint`) — floor `mulDiv(amount, totalCcnpy, totalPooled)`; first deposit mints 1:1.
 
 `computeMint` has no virtual-shares offset and no minimum-initial-deposit floor. Once H1 is fixed and the
@@ -146,7 +167,7 @@ relevant only after H1 restores a real backing pool.
 genesis / enforce a minimum initial deposit so the share price can't start at a manipulable 1:1 against a
 near-empty pool. Add a rounding-loss bound test.
 
-### L1 — `ValidateParams` allows `MultisigThreshold = 0` while signers are configured *(LOW–MEDIUM)*
+### L1 — `ValidateParams` allows `MultisigThreshold = 0` while signers are configured *(LOW–MEDIUM — ✅ REMEDIATED 2026-06-24)*
 **Where:** `config.go:324` only checks `threshold > len(signers)`. `treasury.go:173` gates with `approvals < threshold`.
 
 A passed param-change setting `MultisigThreshold = 0` (with signers present) makes the
@@ -156,7 +177,7 @@ Requires governance to enact, so defense-in-depth.
 **Fix:** in `ValidateParams`, require `MultisigThreshold >= 1` whenever `len(MultisigSigners) > 0` (and
 consider a sane floor like ⌈signers/2⌉). Add a unit test.
 
-### L2 — `math/rand` used for `QueryId` throughout consensus handlers *(LOW / hygiene)*
+### L2 — `math/rand` used for `QueryId` throughout consensus handlers *(LOW / hygiene — ✅ REMEDIATED 2026-06-24)*
 **Where:** every `Deliver*`/`Process*`/`load*` uses `rand.Uint64()` for read-correlation IDs; stray `_ = rand.Uint64()` at `genesis.go:287`.
 
 Functionally low-risk (global rand is concurrency-safe; collisions across ~8 keys are astronomically
@@ -166,7 +187,7 @@ mis-routing bug.
 **Fix:** replace with a deterministic per-request counter (e.g. an incrementing field on `Canoliq`).
 Remove the dead `rand` call in genesis.
 
-### L3 — Fee pool conflates protocol tx-fees with committee subsidies *(LOW / design)*
+### L3 — Fee pool conflates protocol tx-fees with committee subsidies *(LOW / design — ✅ REMEDIATED 2026-06-24)*
 **Where:** `reward.go:19-103` — `ProcessRewards` treats *any* growth of `KeyForFeePool(chainId)` since the last sweep as reward delta subject to the 12% fee + 40/30/15/15 split, but every handler also adds tx fees to that same pool.
 
 Protocol tx-fee income is therefore re-distributed as if it were staking reward (88% back to cCNPY
@@ -175,7 +196,7 @@ holders, etc.), double-handling the fee model described in WP §3.3/§4.
 **Fix:** separate the committee-reward pool key from the tx-fee accumulator, or subtract accumulated
 tx-fees from the delta before applying the protocol fee. Document the intended treatment of tx-fee revenue.
 
-### L4 — Circulating-supply bookkeeping gaps & buyback realism *(LOW / design)*
+### L4 — Circulating-supply bookkeeping gaps & buyback realism *(LOW / design — ✅ REMEDIATED 2026-06-24, circulating bump; buyback realism still Phase-3)*
 **Where:** `treasury.go:354-388` (treasury **CPLQ** spend credits recipient but never bumps `CplqCirculatingSupply`); `buyback.go` executes at a governance-set `PriceMicroCnpyPerCplq` against treasury CPLQ (internal accounting swap, Phase-3 market route deferred); burn decrements both supplies (`buyback.go:112-131`).
 
 Inconsistent circulating-supply accounting and a governance-priced (non-market) buyback. Acknowledged as
@@ -184,7 +205,7 @@ Phase-3 deferrals in comments, but worth tracking before mainnet value flows.
 **Fix:** bump `CplqCirculatingSupply` on treasury-CPLQ spend; add an invariant test
 (`circulating ≤ total`, both ≤ 100M); gate buyback price against a sanity band or real route before mainnet.
 
-### L5 — Doc/comment drift & minor inconsistencies *(LOW / cleanup)*
+### L5 — Doc/comment drift & minor inconsistencies *(LOW / cleanup — ✅ REMEDIATED 2026-06-24)*
 - `treasury.go:17` comment mentions a "BeginBlock auto-execute" of spends that does not exist — remove to avoid implying an un-gated path.
 - `reward.go:117`/`config.go:253` cite "WP §11" for the insurance fund; v1.2 places it at §9.2 — fix the reference. *(Already fixed on `canoliq-spec-alignment` per the v1.2 plan's Phase D, along with the stuck-redemption alert and README insurance narration; coordinate the merge.)*
 - `blocksPerMonth` differs between genesis (`blocksPerYear/12 = 438,000`, `genesis.go:219`) and staking/lock tiers (`432,000`, `stake.go:20`); reconcile or document why vesting vs lock use different month lengths.

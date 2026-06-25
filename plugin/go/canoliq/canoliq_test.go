@@ -29,6 +29,26 @@ func seedAccount(s *fakeStore, addr []byte, amount uint64) {
 	s.set(contract.KeyForAccount(addr), bz)
 }
 
+// seedEscrow seeds the CNPY escrow pool (H1). Tests that pre-seed
+// globals.TotalPooledCnpy / PendingRedemptionCnpy (simulating prior deposits
+// without driving the deposit handler) must also fund escrow to honor the
+// invariant escrow.Amount == TotalPooledCnpy + PendingRedemptionCnpy.
+func seedEscrow(s *fakeStore, amount uint64) {
+	bz, _ := contract.Marshal(&contract.Pool{Amount: amount})
+	s.set(KeyForEscrowPool(), bz)
+}
+
+// readEscrow returns the current CNPY escrow pool balance.
+func readEscrow(s *fakeStore) uint64 {
+	bz := s.get(KeyForEscrowPool())
+	if bz == nil {
+		return 0
+	}
+	p := new(contract.Pool)
+	_ = contract.Unmarshal(bz, p)
+	return p.Amount
+}
+
 // readAccount returns the CNPY balance for `addr`.
 func readAccount(s *fakeStore, addr []byte) uint64 {
 	bz := s.get(contract.KeyForAccount(addr))
@@ -168,6 +188,7 @@ func TestClaimRedemptionMaturity(t *testing.T) {
 	g := &contract.CanoliqGlobals{PendingRedemptionCnpy: 250}
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
+	seedEscrow(s, 250) // backs the pending redemption (H1)
 	seedAccount(s, user, 10_000)
 
 	// Before maturity: error.
@@ -242,13 +263,17 @@ func TestRewardSplitWhitepaperExample(t *testing.T) {
 	if got := DecodeUint64(s.get(KeyForValidatorIncentives(addr))); got != 18 {
 		t.Errorf("validators: got %d want 18", got)
 	}
-	if g2.LastProcessedRewardPool != 928 {
-		// LastProcessedRewardPool is whatever the pool ends up at after the
-		// sweep — 1000 originally - 1000 swept + 928 user-share returned.
-		t.Errorf("last_processed_reward_pool: got %d want 928", g2.LastProcessedRewardPool)
+	// H1: the committee pool fully drains (1000 in - 1000 swept). The 928 user
+	// slice now lands in the escrow pool, so the committee pool and the
+	// post-drain LastProcessedRewardPool baseline are both 0.
+	if g2.LastProcessedRewardPool != 0 {
+		t.Errorf("last_processed_reward_pool: got %d want 0", g2.LastProcessedRewardPool)
 	}
-	if got := readPool(s, c.Config.ChainId); got != 928 {
-		t.Errorf("post-sweep committee pool: got %d want 928", got)
+	if got := readPool(s, c.Config.ChainId); got != 0 {
+		t.Errorf("post-sweep committee pool: got %d want 0", got)
+	}
+	if got := readEscrow(s); got != 928 {
+		t.Errorf("escrow pool: got %d want 928", got)
 	}
 }
 
@@ -586,9 +611,15 @@ func TestRewardSweepMultiBlock(t *testing.T) {
 		t.Fatalf("block 1: %v", err)
 	}
 	g1 := loadGlobals(t, s)
-	if g1.TotalPooledCnpy != 928 || g1.LastProcessedRewardPool != 928 {
-		t.Fatalf("block 1 globals: pooled=%d watermark=%d (want 928/928)",
+	// H1: the committee pool fully drains each block; the user slice (928) now
+	// lives in the escrow pool, and LastProcessedRewardPool returns to its
+	// post-drain baseline (0).
+	if g1.TotalPooledCnpy != 928 || g1.LastProcessedRewardPool != 0 {
+		t.Fatalf("block 1 globals: pooled=%d last=%d (want 928/0)",
 			g1.TotalPooledCnpy, g1.LastProcessedRewardPool)
+	}
+	if got := readEscrow(s); got != 928 {
+		t.Fatalf("block 1 escrow: got %d want 928", got)
 	}
 
 	// Block 2: +500 fresh inflow on top of the post-sweep pool. Delta must
@@ -602,8 +633,11 @@ func TestRewardSweepMultiBlock(t *testing.T) {
 	if g2.TotalPooledCnpy != 1392 {
 		t.Fatalf("block 2 pooled: got %d want 1392", g2.TotalPooledCnpy)
 	}
-	if g2.LastProcessedRewardPool != 1392 {
-		t.Fatalf("block 2 watermark: got %d want 1392", g2.LastProcessedRewardPool)
+	if g2.LastProcessedRewardPool != 0 {
+		t.Fatalf("block 2 last-processed: got %d want 0", g2.LastProcessedRewardPool)
+	}
+	if got := readEscrow(s); got != 1392 {
+		t.Fatalf("block 2 escrow: got %d want 1392", got)
 	}
 	// Per-block under insurance_bps=500: treasury 36→35 + insurance 1; block 2
 	// treasury 18→18 + insurance 0 (mulDiv(18,500,10000)=0.9 → 0). Cumulative:
@@ -629,6 +663,9 @@ func TestRewardSweepMultiBlock(t *testing.T) {
 	g3 := loadGlobals(t, s)
 	if g3.TotalPooledCnpy != 1392 {
 		t.Fatalf("block 3 pooled drift: got %d want 1392", g3.TotalPooledCnpy)
+	}
+	if got := readEscrow(s); got != 1392 {
+		t.Fatalf("block 3 escrow drift: got %d want 1392", got)
 	}
 	if got := DecodeUint64(s.get(KeyForTreasuryCNPY())); got != 53 {
 		t.Errorf("block 3 treasury drift: got %d want 53", got)
@@ -700,7 +737,7 @@ func TestCompositeDepositRewardRedeem(t *testing.T) {
 
 	// The Redemption record must reflect the accrued yield: 1:1 redemption
 	// before reward would be 1_000_000; after reward, the same cCNPY claims
-	// 1_928_000 CNPY.
+	// ~1_928_000 CNPY (1 uCNPY retained as M5 virtual-offset dust).
 	rBz := s.get(KeyForRedemption(user, 0))
 	if rBz == nil {
 		t.Fatal("redemption record not written")
@@ -710,8 +747,8 @@ func TestCompositeDepositRewardRedeem(t *testing.T) {
 	if r.CnpyAmount <= 1_000_000 {
 		t.Fatalf("expected redemption > deposit (yield), got %d", r.CnpyAmount)
 	}
-	if r.CnpyAmount != 1_928_000 {
-		t.Fatalf("redemption amount: got %d want 1_928_000", r.CnpyAmount)
+	if r.CnpyAmount != 1_927_999 {
+		t.Fatalf("redemption amount: got %d want 1_927_999", r.CnpyAmount)
 	}
 }
 
