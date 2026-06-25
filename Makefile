@@ -20,7 +20,8 @@ help:
 .PHONY: build/canopy build/canopy-full build/wallet build/explorer build/auto-update build/auto-update-local run/auto-update run/auto-update-build run/auto-update-test test/all dev/deps docker/up \
 	docker/down docker/build docker/up-fast docker/down docker/logs \
 	build/plugin build/kotlin-plugin build/go-plugin build/all-plugins docker/plugin \
-	docker/run docker/run-kotlin docker/run-go docker/run-typescript docker/run-python docker/run-csharp
+	docker/run docker/run-kotlin docker/run-go docker/run-typescript docker/run-python docker/run-csharp \
+	docker/auto-update docker/auto-update-all
 
 # ==================================================================================== #
 # BUILDING
@@ -192,3 +193,31 @@ docker/run-python:
 ## docker/run-csharp: run C# plugin container
 docker/run-csharp:
 	docker run -v ~/.canopy:/root/.canopy canopy-csharp
+
+# Auto-update Docker images: directory and build branch (override with AUTO_UPDATE_BRANCH=<tag|branch>)
+AUTO_UPDATE_DOCKER_DIR := ./.docker/auto-update
+AUTO_UPDATE_BRANCH ?= latest
+
+## docker/auto-update: build an auto-update plugin Docker image (PLUGIN=kotlin|go|typescript|python|csharp|all)
+docker/auto-update:
+ifeq ($(PLUGIN),all)
+	$(MAKE) docker/auto-update PLUGIN=go
+	$(MAKE) docker/auto-update PLUGIN=kotlin
+	$(MAKE) docker/auto-update PLUGIN=typescript
+	$(MAKE) docker/auto-update PLUGIN=python
+	$(MAKE) docker/auto-update PLUGIN=csharp
+else ifneq ($(filter $(PLUGIN),kotlin go typescript python csharp),)
+	docker build \
+		-t canopynetwork/canopy:$(PLUGIN)-latest \
+		--build-arg BRANCH=$(AUTO_UPDATE_BRANCH) \
+		--build-arg BUILD_PATH=cmd/cli \
+		-f $(AUTO_UPDATE_DOCKER_DIR)/Dockerfile.$(PLUGIN) \
+		$(AUTO_UPDATE_DOCKER_DIR)
+else
+	@echo "Unknown plugin: $(PLUGIN). Options: kotlin, go, typescript, python, csharp, all"
+	@exit 1
+endif
+
+## docker/auto-update-all: build auto-update Docker images for all plugins
+docker/auto-update-all:
+	$(MAKE) docker/auto-update PLUGIN=all
