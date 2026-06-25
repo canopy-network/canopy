@@ -78,7 +78,7 @@ func (b *BFT) ProcessDSE(dse ...*DoubleSignEvidence) (results []*lib.DoubleSigne
 		// height which would require logic to handle 'switch root' in the currently played block
 		rootChainId := b.Controller.LoadRootChainId(committeeHeight - 1)
 		// load the committee from the root chain id using the n-1 height because state machine heights are 'end state' once committed
-		vs, err := b.LoadCommittee(rootChainId, committeeHeight)
+		vs, err := b.LoadCommittee(rootChainId, committeeHeight-1)
 		if err != nil {
 			return nil, err
 		}
