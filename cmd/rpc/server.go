@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -16,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/alecthomas/units"
@@ -468,8 +471,25 @@ func write(w http.ResponseWriter, payload any, code int) {
 		return
 	}
 	if _, err := w.Write(bz); err != nil {
-		logger.Errorf("[server write()] write response failed: %v", err)
+		if !isClientWriteError(err) {
+			logger.Errorf("[server write()] write response failed: %v", err)
+		}
 	}
+}
+
+// isClientWriteError reports whether an HTTP write failed because the client disconnected.
+func isClientWriteError(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "i/o timeout")
 }
 
 // StringToCommittees converts a comma separated string of committees to uint64
