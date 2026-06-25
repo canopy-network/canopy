@@ -194,18 +194,21 @@ docker/run-python:
 docker/run-csharp:
 	docker run -v ~/.canopy:/root/.canopy canopy-csharp
 
-# Auto-update Docker images: directory and build branch (override with AUTO_UPDATE_BRANCH=<tag|branch>)
+# Auto-update Docker images: directory and build branch.
+# Override the git branch/tag to build from with BRANCH=<branch|tag> (e.g. BRANCH=main).
+# AUTO_UPDATE_BRANCH is kept as an alias for backward compatibility.
 AUTO_UPDATE_DOCKER_DIR := ./.docker/auto-update
-AUTO_UPDATE_BRANCH ?= latest
+BRANCH ?= latest
+AUTO_UPDATE_BRANCH ?= $(BRANCH)
 
-## docker/auto-update: build an auto-update plugin Docker image (PLUGIN=kotlin|go|typescript|python|csharp|all)
+## docker/auto-update: build an auto-update plugin Docker image (PLUGIN=kotlin|go|typescript|python|csharp|all, BRANCH=<branch|tag>)
 docker/auto-update:
 ifeq ($(PLUGIN),all)
-	$(MAKE) docker/auto-update PLUGIN=go
-	$(MAKE) docker/auto-update PLUGIN=kotlin
-	$(MAKE) docker/auto-update PLUGIN=typescript
-	$(MAKE) docker/auto-update PLUGIN=python
-	$(MAKE) docker/auto-update PLUGIN=csharp
+	$(MAKE) docker/auto-update PLUGIN=go BRANCH=$(AUTO_UPDATE_BRANCH)
+	$(MAKE) docker/auto-update PLUGIN=kotlin BRANCH=$(AUTO_UPDATE_BRANCH)
+	$(MAKE) docker/auto-update PLUGIN=typescript BRANCH=$(AUTO_UPDATE_BRANCH)
+	$(MAKE) docker/auto-update PLUGIN=python BRANCH=$(AUTO_UPDATE_BRANCH)
+	$(MAKE) docker/auto-update PLUGIN=csharp BRANCH=$(AUTO_UPDATE_BRANCH)
 else ifneq ($(filter $(PLUGIN),kotlin go typescript python csharp),)
 	docker build \
 		-t canopynetwork/canopy:$(PLUGIN)-latest \
