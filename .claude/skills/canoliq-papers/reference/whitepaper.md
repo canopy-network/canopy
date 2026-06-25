@@ -8,7 +8,7 @@ canoLiq is a liquid staking protocol built as a **Nested Chain on Canopy
 Network**. Users deposit CNPY and receive **cCNPY** — a transferable,
 yield-bearing receipt token — while the underlying stake participates in Canopy
 committees and earns block rewards. A secondary governance and value-capture
-token (**CLIQ**) aligns long-term incentives across users, validators, and the
+token (**CPLQ**) aligns long-term incentives across users, validators, and the
 protocol treasury. Path to full chain sovereignty within the Canopy incubator
 model.
 
@@ -23,7 +23,7 @@ capital.
 
 **Key value propositions:** Liquidity (cCNPY freely transferable & composable
 while earning yield); Capital Efficiency (restaking compounds rewards on the
-same collateral); Governance (CLIQ holders direct parameters, treasury,
+same collateral); Governance (CPLQ holders direct parameters, treasury,
 validator selection); Canopy-Native (launches with shared security, maturing
 toward full sovereignty).
 
@@ -34,7 +34,7 @@ toward full sovereignty).
 | 2. Delegation | canoLiq Protocol | Pooled CNPY delegated on-chain to whitelisted professional validator operators registered with canoLiq. Operators have bonded their own CNPY as collateral on the Canopy Root Chain and listed canoLiq's committee ID in their stake config. |
 | 3. Node Operation | Validator Operators | Each whitelisted validator runs a full instance of the canoLiq Nested Chain software on their own infra, executes NestBFT consensus, produces blocks, and submits Certificate Result Transactions to the Canopy Root Chain each block. |
 | 4. Reward Accrual | Canopy Root Chain | Every Root Chain block, new CNPY is minted and sent to the canoLiq committee fund pool (auto-subsidization). Validators divide those rewards per the 70/10/10/10 default split. canoLiq's share accrues in the protocol contract. |
-| 5. Fee & Distribution | canoLiq Protocol | Applies its 12% protocol fee to received rewards. 88% flows directly to cCNPY holders via exchange-rate appreciation. The 12% fee is split 40% cCNPY / 30% DAO treasury / 15% validators / 15% CLIQ buyback. |
+| 5. Fee & Distribution | canoLiq Protocol | Applies its 12% protocol fee to received rewards. 88% flows directly to cCNPY holders via exchange-rate appreciation. The 12% fee is split 40% cCNPY / 30% DAO treasury / 15% validators / 15% CPLQ buyback. |
 | 6. Redemption | User | Returns cCNPY to the contract; contract calculates current exchange rate (original CNPY + accrued yield) and initiates unstaking from the committee. Small redemptions served from a liquidity buffer instantly; large redemptions follow Canopy's standard unstaking cooldown. |
 
 ### 1.2 Who Runs the Validators?
@@ -52,10 +52,10 @@ providers already operating on Canopy). These operators:
 - Earn 15% of canoLiq protocol fees as compensation for operational costs and
   slashing risk.
 - Are subject to ongoing performance review and can be ejected from the validator
-  set by CLIQ governance vote.
+  set by CPLQ governance vote.
 
 At launch, canoLiq partners with **5–10 established Canopy validator operators**
-to seed the initial committee. Validator set expansion is governed by CLIQ
+to seed the initial committee. Validator set expansion is governed by CPLQ
 holders.
 
 ## 2. Canopy Network: Operational Context
@@ -123,7 +123,7 @@ The canoLiq 12% fee is applied to rewards received by the protocol.
 
 ### 4.1 Fee Rate
 Default protocol fee is **12% of net rewards** received by canoLiq from committee
-participation. Governance-controlled by CLIQ holders; adjustable within bounds
+participation. Governance-controlled by CPLQ holders; adjustable within bounds
 set by the protocol constitution (**proposed range: 5%–20%**).
 
 ### 4.2 Fee Distribution
@@ -132,7 +132,7 @@ set by the protocol constitution (**proposed range: 5%–20%**).
 | cCNPY Holders | 40% | 4.8% of R | Reinvested into exchange rate; bonus yield on top of base staking APY |
 | canoLiq DAO Treasury | 30% | 3.6% of R | Protocol operations, grants, security, future development |
 | Validators & Infra | 15% | 1.8% of R | Operational incentives, uptime bonuses, slashing-risk compensation |
-| CLIQ Buyback & Burn | 15% | 1.8% of R | Open-market CLIQ purchases; default action is burn; DAO may vote quarterly to distribute to locked CLIQ stakers instead |
+| CPLQ Buyback & Burn | 15% | 1.8% of R | Open-market CPLQ purchases; default action is burn; DAO may vote quarterly to distribute to locked CPLQ stakers instead |
 
 ### 4.3 Effective Yield for cCNPY Holders
 cCNPY holders benefit from both the base staking yield (88% of received rewards)
@@ -140,12 +140,12 @@ and the fee redistribution component (40% of the 12% fee = additional 4.8% of
 received rewards). Aggregate yield passed to the exchange rate is 88% + 4.8% =
 **92.8% of received rewards**.
 
-## 5. CLIQ Tokenomics
+## 5. CPLQ Tokenomics
 (Mirrors the standalone Tokenomics document — see `reference/tokenomics.md` for
 the authoritative full version.)
 
 ### 5.1 Overview
-CLIQ is the governance and value-capture token. Fixed supply 100,000,000. Not a
+CPLQ is the governance and value-capture token. Fixed supply 100,000,000. Not a
 reward emission token used to inflate staker yields — its primary roles are
 governance participation and value capture via buybacks.
 
@@ -170,29 +170,29 @@ subsidies (§6) reduce the need to emit it all early. Founders vest over 4 years
 (longer than typical 3-year) to align with long-term success. Treasury (15%) in
 a time-locked multisig as strategic reserve.
 
-### 5.4 CLIQ Value Accrual
-Three mechanisms: (1) **Buyback pressure** — 15% of all protocol fees buy CLIQ on
+### 5.4 CPLQ Value Accrual
+Three mechanisms: (1) **Buyback pressure** — 15% of all protocol fees buy CPLQ on
 the open market, default action burn (deflationary), DAO may redirect to locked
-stakers quarterly. (2) **Governance premium** — locked CLIQ stakers get boosted
-voting power and may receive a share of buyback CLIQ rather than it being burned
-(DAO vote required). (3) **Protocol ownership** — CLIQ holders govern the most
-critical lever (the fee rate), making CLIQ a claim on future protocol cash flows.
+stakers quarterly. (2) **Governance premium** — locked CPLQ stakers get boosted
+voting power and may receive a share of buyback CPLQ rather than it being burned
+(DAO vote required). (3) **Protocol ownership** — CPLQ holders govern the most
+critical lever (the fee rate), making CPLQ a claim on future protocol cash flows.
 
 ## 6. Canopy Subsidy Strategy
 
 ### 6.1 The Bootstrap Problem
 New DeFi protocols face a chicken-and-egg liquidity problem. Standard solution
-("liquidity mining") pays early users in the native token (CLIQ), flooding the
+("liquidity mining") pays early users in the native token (CPLQ), flooding the
 market with freshly minted tokens and creating sell pressure. canoLiq instead
 uses **CNPY — subsidized from Canopy DAO** — as the bootstrap incentive; same
 user behavior (deposit early, provide liquidity) with far less inflation pressure
-on CLIQ.
+on CPLQ.
 
 > **Concrete example:** Without subsidies, attracting $5M TVL in month 1 might
-> need 500,000 CLIQ as farming rewards (0.5% of supply in month 1 alone). With
+> need 500,000 CPLQ as farming rewards (0.5% of supply in month 1 alone). With
 > CNPY subsidies, Canopy DAO seeds the committee reward pool; early depositors
 > earn bonus CNPY yield on top of base staking APY, and canoLiq emits zero
-> additional CLIQ for the same TVL outcome. The 15M CLIQ liquidity allocation
+> additional CPLQ for the same TVL outcome. The 15M CPLQ liquidity allocation
 > then stretches across 24+ months instead of front-loading.
 
 ### 6.2 Auto-Subsidization Mechanics
@@ -213,11 +213,11 @@ to Canopy DAO requesting manual CNPY subsidies during bootstrap:
 - **Alignment:** subsidies requested specifically as bootstrap support, not a
   permanent operating dependency.
 
-| Scenario | CLIQ Emitted (Liquidity Bucket) | Result |
+| Scenario | CPLQ Emitted (Liquidity Bucket) | Result |
 |---|---|---|
-| No subsidy | 15M CLIQ over 24 months (front-loaded) | Heavy early sell pressure on CLIQ |
-| Partial subsidy (6 mo.) | ~8–10M CLIQ over 24 months | ~30–45% reduction in early CLIQ emission |
-| Full subsidy (12 mo.) | ~5–8M CLIQ over 24 months | ~50–60% reduction; extended incentive runway |
+| No subsidy | 15M CPLQ over 24 months (front-loaded) | Heavy early sell pressure on CPLQ |
+| Partial subsidy (6 mo.) | ~8–10M CPLQ over 24 months | ~30–45% reduction in early CPLQ emission |
+| Full subsidy (12 mo.) | ~5–8M CPLQ over 24 months | ~50–60% reduction; extended incentive runway |
 
 ## 7. Restaking Optimization
 Canopy's restaking model lets the same bonded CNPY simultaneously secure multiple
@@ -226,12 +226,12 @@ identify high-yield committees (monitor reward per CNPY staked across active
 committees, dynamically allocate to maximize aggregate APY); manage slashing risk
 (diversify stake to limit exposure to any single committee's slashing events);
 balance liquidity (maintain enough stake in the canoLiq committee itself to
-support redemptions without large cooldown delays); governance-controlled (CLIQ
+support redemptions without large cooldown delays); governance-controlled (CPLQ
 holders vote on restaking allocation policy including min/max stake per committee).
 
 ## 8. Governance
 
-### 8.1 Scope of CLIQ Governance
+### 8.1 Scope of CPLQ Governance
 | Parameter | Default | Governance Bounds |
 |---|---|---|
 | Protocol Fee Rate | 12% | 5%–20% |
@@ -243,7 +243,7 @@ holders vote on restaking allocation policy including min/max stake per committe
 | Treasury Spending | Multisig + timelock | Thresholds set by DAO |
 
 ### 8.2 Voting Mechanics
-- CLIQ can be staked and time-locked for boosted voting power (longer lock =
+- CPLQ can be staked and time-locked for boosted voting power (longer lock =
   higher multiplier).
 - Proposals require a minimum quorum (proposed: 5% of circulating supply).
 - Emergency proposals (security-critical) may use a 24-hour fast-track with a
@@ -292,12 +292,12 @@ canoLiq DAO) to preserve historical finality and seamless UX during migration.
 ## 11. Roadmap (90-Day Launch Execution)
 | Phase | Timeline | Deliverables |
 |---|---|---|
-| Foundation | Days 1–30 | Smart contract development; fee model implementation (post-committee split); CLIQ vesting contracts; testnet deployment |
+| Foundation | Days 1–30 | Smart contract development; fee model implementation (post-committee split); CPLQ vesting contracts; testnet deployment |
 | Audit & Subsidy | Days 30–60 | Independent audit #1 & #2; Canopy DAO subsidy proposal submission; bug bounty launch; multisig treasury setup |
-| Mainnet Launch | Days 60–90 | Mainnet deployment; cCNPY minting live; CLIQ distribution begins; liquidity pools seeded; governance portal live |
+| Mainnet Launch | Days 60–90 | Mainnet deployment; cCNPY minting live; CPLQ distribution begins; liquidity pools seeded; governance portal live |
 
 ## 12. Disclaimer
 Technical/conceptual document, informational only; not financial/legal/investment
-advice. CLIQ and cCNPY involve significant risk including loss of principal.
+advice. CPLQ and cCNPY involve significant risk including loss of principal.
 Design subject to change before and after mainnet based on audit findings,
 governance decisions, and evolving Canopy Network economics.

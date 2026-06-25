@@ -2,8 +2,8 @@
 name: canoliq-papers
 description: >-
   Canonical specs for the canoLiq protocol from its official v1.2 papers — the
-  CLIQ Tokenomics document and the Liquid Staking Whitepaper. Use whenever the
-  user references "the canoliq papers", asks about canoLiq tokenomics, CLIQ or
+  CPLQ Tokenomics document and the Liquid Staking Whitepaper. Use whenever the
+  user references "the canoliq papers", asks about canoLiq tokenomics, CPLQ or
   cCNPY tokens, token distribution/vesting, the protocol fee model, buyback,
   vote-escrow, governance thresholds, Canopy subsidies, restaking, validators,
   risk framework, or autonomy graduation. Reference PROACTIVELY whenever there
@@ -15,8 +15,14 @@ description: >-
 
 Authoritative reference for canoLiq protocol specs. Two source documents:
 
-- **CLIQ Tokenomics v1.2** — `docs/canoLiq_Tokenomics_v1.2.pdf` (9 pages)
+- **CPLQ Tokenomics v1.2** — `docs/canoLiq_Tokenomics_v1.2.pdf` (9 pages)
 - **Liquid Staking Whitepaper v1.2** — `docs/canoLiq_Whitepaper_v1.2.pdf` (12 pages)
+
+> **Ticker note:** the governance token's ticker is **CPLQ**. The v1.2 source
+> PDFs predate the rename and still print the *old* ticker **CLIQ** — they are
+> binary and pending regeneration (see `docs/canoliq-pdf-ticker-rename-checklist.md`).
+> `CLIQ` and `CPLQ` refer to the same token; this skill uses the current `CPLQ`
+> to match the codebase. When quoting a PDF verbatim, expect to see `CLIQ`.
 
 When the user says "based on the canoliq papers…", or any canoLiq spec/number is
 in question, treat the figures below as canonical. The two papers are
@@ -31,33 +37,33 @@ deeper narrative beyond the figures here, read:
 Liquid staking protocol built as a **Nested Chain on Canopy Network**. Users
 deposit **CNPY** and receive **cCNPY** (transferable, yield-bearing receipt
 token) while the underlying stake participates in Canopy committees and earns
-block rewards. **CLIQ** is the separate governance + value-capture token.
+block rewards. **CPLQ** is the separate governance + value-capture token.
 
 **Three tokens — do not conflate:**
 - **CNPY** — Canopy Network's native token (deposited by users; bonded by validators).
 - **cCNPY** — canoLiq's yield-bearing liquid staking receipt. Minted 1:1 at the
   current exchange rate on deposit; appreciates via exchange-rate growth
   (auto-compounding). Fully transferable / DeFi-composable.
-- **CLIQ** — governance + value-capture token. **Fixed supply 100,000,000; no
+- **CPLQ** — governance + value-capture token. **Fixed supply 100,000,000; no
   minting after genesis.** NOT a high-emission farming token.
 
 ## Core numbers (most-cited)
 
 | Spec | Value |
 |---|---|
-| CLIQ total supply | 100,000,000 (fixed, no post-genesis minting) |
+| CPLQ total supply | 100,000,000 (fixed, no post-genesis minting) |
 | Protocol fee rate | 12% default; governance-controlled bounds **5%–20%** |
 | Fee → cCNPY holders | 40% of fee = 4.8% of rewards |
 | Fee → DAO Treasury | 30% of fee = 3.6% of rewards |
 | Fee → Validators & Infra | 15% of fee = 1.8% of rewards |
-| Fee → CLIQ Buyback | 15% of fee = 1.8% of rewards (**default: burn**) |
+| Fee → CPLQ Buyback | 15% of fee = 1.8% of rewards (**default: burn**) |
 | Effective cCNPY yield | 88% + 4.8% = **92.8% of rewards received** |
 | Canopy committee reward split | **70/10/10/10** (producer / root delegate / nested validator / nested delegate) |
 | canoLiq fee distribution split | **40/30/15/15** (cCNPY / treasury / validators / buyback) |
 | Auto-subsidization threshold | committee holds **≥33%** of total network restake |
 | TVL self-cap | 33% of total Canopy network stake (pending governance to lift) |
 
-## Token distribution (100M CLIQ)
+## Token distribution (100M CPLQ)
 
 | Allocation | Share | Tokens | Vesting (start = TGE / mainnet launch) |
 |---|---|---|---|
@@ -86,9 +92,9 @@ change requires a standard governance proposal with a 48-hour timelock.
 
 ## Value accrual & vote-escrow
 
-- **Buyback engine:** 15% of all protocol fees buy CLIQ on the open market.
+- **Buyback engine:** 15% of all protocol fees buy CPLQ on the open market.
   Default action is **burn**; the DAO may vote *quarterly* to redirect buyback
-  CLIQ to locked stakers instead of burning.
+  CPLQ to locked stakers instead of burning.
 - **Vote-escrow lock schedule** (longer lock = more voting weight + bigger reward share):
 
 | Lock | Voting multiplier | Reward share boost |
@@ -105,14 +111,14 @@ change requires a standard governance proposal with a 48-hour timelock.
 |---|---|---|---|
 | Fee rate adjustment | 5% | 51% | 48h |
 | Treasury spend (small) | 5% | 51% | 48h |
-| Treasury spend (large, >1M CLIQ equiv) | 10% | 67% | 7 days |
+| Treasury spend (large, >1M CPLQ equiv) | 10% | 67% | 7 days |
 | Emergency security action | 8% | 67% | 24h (fast-track) |
 | Validator ejection | 5% | 51% | 48h |
 | Protocol upgrade | 10% | 67% | 7 days |
 | Autonomy graduation vote | 15% | 75% | 14 days |
 
 DAO Treasury is a **3-of-5 multisig**: 48h timelock standard spends, 7-day for
-large spends (>1M CLIQ equiv).
+large spends (>1M CPLQ equiv).
 
 ## Validators
 
@@ -122,13 +128,13 @@ bond their **own CNPY** as collateral on the Canopy Root Chain (list canoLiq's
 committee ID in their MessageStake), run dedicated infra, and execute NestBFT.
 On slashing, the operator's *own* bonded CNPY is slashed — not users' deposited
 CNPY directly; the insurance fund compensates shortfalls. Operators earn 15% of
-protocol fees and can be ejected by CLIQ vote. **At launch: 5–10 established
+protocol fees and can be ejected by CPLQ vote. **At launch: 5–10 established
 Canopy validator operators** seed the initial committee.
 
 ## Canopy subsidy strategy (bootstrap)
 
-CLIQ liquidity emission is back-stopped by **CNPY subsidies from Canopy DAO**,
-used first so CLIQ emits only as needed — avoiding early sell pressure from
+CPLQ liquidity emission is back-stopped by **CNPY subsidies from Canopy DAO**,
+used first so CPLQ emits only as needed — avoiding early sell pressure from
 mercenary farmers. Auto-subsidization triggers when canoLiq's committee holds
 ≥33% of total network restake. canoLiq will also submit a **manual subsidy
 proposal** to Canopy DAO within 30 days of mainnet, tranches tied to TVL
@@ -146,7 +152,7 @@ bucket: no subsidy → full 15M front-loaded (runway exhausted ~month 18);
 - **Concentration:** self-imposed TVL cap of 33% of total Canopy stake.
 - **Oracle/price:** cCNPY/CNPY exchange rate computed entirely on-chain — no
   external price oracle, so no oracle-manipulation risk on the core yield path.
-- **Governance centralization:** a single entity >33% of circulating CLIQ could
+- **Governance centralization:** a single entity >33% of circulating CPLQ could
   sway most votes; quadratic/conviction voting may be explored post-launch.
 
 ## Autonomy graduation (Nested Chain → sovereign chain)
