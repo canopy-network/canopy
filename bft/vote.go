@@ -38,10 +38,15 @@ func (b *BFT) GetMajorityVote() (m *Message, sig *lib.AggregateSignature, err li
 }
 
 // GetLeadingVote() returns the unique Vote Message that has the most power behind it and the number and percent voted that voted for it
+// Tiebreak: when two payloads have equal power, the one with the lexicographically smallest sign-bytes hash wins,
+// ensuring all honest nodes make the same deterministic choice.
 func (b *BFT) GetLeadingVote() (m *Message, maxVotePercent uint64, maxVotes uint64) {
-	for _, voteSet := range b.Votes[b.View.Round][phaseToString(b.View.Phase-1)] {
-		if voteSet.TotalVotedPower >= maxVotes {
+	var maxPayloadHash string
+	for payloadHash, voteSet := range b.Votes[b.View.Round][phaseToString(b.View.Phase-1)] {
+		if voteSet.TotalVotedPower > maxVotes ||
+			(voteSet.TotalVotedPower == maxVotes && (m == nil || payloadHash < maxPayloadHash)) {
 			m, maxVotes, maxVotePercent = voteSet.Vote, voteSet.TotalVotedPower, lib.Uint64PercentageDiv(voteSet.TotalVotedPower, b.ValidatorSet.TotalPower)
+			maxPayloadHash = payloadHash
 		}
 	}
 	return
