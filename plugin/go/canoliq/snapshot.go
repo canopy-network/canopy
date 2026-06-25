@@ -44,6 +44,26 @@ type Snapshot struct {
 	StakerAddresses     [][]byte
 	Stakers             map[string]*contract.CPLQStake
 	MultisigApprovals   map[uint64][]*contract.MultisigApproval
+	// CanopyTotalStake is Supply.Staked at snapshot height — total locked
+	// CNPY across all Canopy committees (including delegations). Feeds the
+	// /v1/health "effective TVL cap" calculation (WP §9.4). Zero when the
+	// Canopy Supply singleton is not present OR when Staked is just zero;
+	// CanopySupplyPresent disambiguates the two.
+	CanopyTotalStake uint64
+	// CanopySupplyPresent is true when the Canopy Supply singleton was
+	// decoded successfully at snapshot height (regardless of .Staked value).
+	// QueryHealth needs this to distinguish "fail-closed" (Supply absent →
+	// deposit handler rejects) from "awaiting-canopy-stake" (Supply present
+	// with Staked=0 → deposit handler accepts) per H3 in
+	// docs/canoliq-v1_2-implementation-plan.md.
+	CanopySupplyPresent bool
+	// CurrentRestakingAllocation maps Canopy committee id → uCNPY exposure
+	// derived from canoLiq's operator set's lib.Validator.committees[] +
+	// staked_amount (WP §7 restaking semantics: same bond, multiple
+	// committees). Computed inside refreshSnapshot from the per-operator
+	// Validator reads added to Batch 2. nil when the registry is empty or
+	// no operators are registered with Canopy yet.
+	CurrentRestakingAllocation map[uint64]uint64
 }
 
 // emptySnapshot is returned to query helpers when EndBlock has not yet run
@@ -104,6 +124,7 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		qPropIdx
 		qSpendIdx
 		qStakeIdx
+		qCanopySupply
 	)
 	keys := []*contract.PluginKeyRead{
 		{QueryId: qGlobals, Key: KeyForGlobals()},
@@ -117,6 +138,9 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		{QueryId: qPropIdx, Key: KeyForProposalIndex()},
 		{QueryId: qSpendIdx, Key: KeyForSpendIndex()},
 		{QueryId: qStakeIdx, Key: KeyForCPLQStakeIndex()},
+		// Canopy-side Supply singleton — feeds the percentage TVL cap's
+		// /v1/health.tvl_cap_ucnpy_effective. Absence → CanopyTotalStake = 0.
+		{QueryId: qCanopySupply, Key: contract.KeyForSupply()},
 	}
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
 	if err != nil {
@@ -131,6 +155,34 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 			continue
 		}
 		raw := r.Entries[0].Value
+		// Special case: Canopy Supply with all-default fields (e.g.
+		// Staked == 0 on a fresh network) marshals to zero bytes by proto3
+		// elision. We need to record presence even when the value is empty
+		// so QueryHealth can distinguish 'fail-closed' (absent) from
+		// 'awaiting-canopy-stake' (present-but-default). Other QueryIds
+		// have no meaningful empty-value state, so they keep the
+		// short-circuit below.
+		if r.QueryId == qCanopySupply {
+			snap.CanopySupplyPresent = true
+			if len(raw) > 0 {
+				supply := new(contract.Supply)
+				if e := contract.Unmarshal(raw, supply); e != nil {
+					return e
+				}
+				snap.CanopyTotalStake = supply.Staked
+			}
+			continue
+		}
+		// IMPORTANT for future Canopy reads: the short-circuit below treats
+		// 'present with empty value' as absent. That is wrong for any proto
+		// type whose all-default representation marshals to zero bytes via
+		// proto3 elision (Supply{Staked:0} is the canonical example —
+		// hence the qCanopySupply special-case above). canoLiq-owned types
+		// (CanoliqGlobals, CanoliqParams, …) always carry non-default
+		// content in normal operation so the short-circuit is safe for
+		// them. New Canopy-side readers that could legitimately decode to
+		// all-default values must be added above this line with their own
+		// presence-detection branch.
 		if len(raw) == 0 {
 			continue
 		}
@@ -240,6 +292,20 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		queryToValIncent[q] = addr
 		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: KeyForValidatorIncentives(addr)})
 	}
+	// Canopy validator reads — one per registered operator. The decoded
+	// committees[] feed CurrentRestakingAllocation. Falls back to the
+	// legacy aggregator addr when the registry is empty (in which case the
+	// allocation map will likely stay empty too — the aggregator usually
+	// isn't a real Canopy validator).
+	queryToCanopyVal := map[uint64][]byte{}
+	for _, e := range snap.ValidatorRegistry.Entries {
+		if e == nil || len(e.Address) == 0 {
+			continue
+		}
+		q := qid()
+		queryToCanopyVal[q] = e.Address
+		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: contract.KeyForValidator(e.Address)})
+	}
 	if len(keys) > 0 {
 		resp2, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
 		if err != nil {
@@ -282,6 +348,19 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 			}
 			if addr, ok := queryToValIncent[r.QueryId]; ok {
 				snap.ValidatorIncentives[hexAddress(addr)] = DecodeUint64(raw)
+				continue
+			}
+			if _, ok := queryToCanopyVal[r.QueryId]; ok {
+				v := new(contract.Validator)
+				if e := contract.Unmarshal(raw, v); e != nil {
+					return e
+				}
+				if snap.CurrentRestakingAllocation == nil {
+					snap.CurrentRestakingAllocation = map[uint64]uint64{}
+				}
+				for _, committeeID := range v.Committees {
+					snap.CurrentRestakingAllocation[committeeID] += v.StakedAmount
+				}
 			}
 		}
 	}

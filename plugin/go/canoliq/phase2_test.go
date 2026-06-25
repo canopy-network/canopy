@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/canopy-network/go-plugin/contract"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -205,9 +206,11 @@ func TestProposalParamChangeRoundTrip(t *testing.T) {
 	}
 
 	// Build a param-change payload that flips fee_bps from 1200 → 800.
-	newParams := *params
+	// proto.Clone avoids copying the embedded protoimpl.MessageState mutex
+	// (caught by `go vet`'s copylocks check) and gives us a fresh CanoliqParams.
+	newParams := proto.Clone(params).(*contract.CanoliqParams)
 	newParams.FeeBps = 800
-	payload, err := anypb.New(&contract.ProposalParamChange{Params: &newParams})
+	payload, err := anypb.New(&contract.ProposalParamChange{Params: newParams})
 	if err != nil {
 		t.Fatalf("anypb new: %v", err)
 	}

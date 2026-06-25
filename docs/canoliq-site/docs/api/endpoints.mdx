@@ -8,7 +8,7 @@ All routes are `GET` only.
 
 | Path | Returns |
 |------|---------|
-| `/v1/health` | `{height, genesisComplete, chainId, tvlCapUcnpy, tvlUtilizationBps}` |
+| `/v1/health` | `{height, genesisComplete, chainId, tvlCapBps, tvlCapStatus, canopyTotalStake, tvlCapUcnpyEffective, tvlUtilizationBps}` |
 | `/v1/globals` | `CanoliqGlobals` (singleton accounting record) |
 | `/v1/params` | `CanoliqParams` (governance-tunable knobs) |
 | `/v1/pools` | Committee pool, treasury (CNPY/CPLQ), buyback, insurance, per-validator incentives, peak TVL, insurance target & funded-bps |
@@ -23,6 +23,7 @@ All routes are `GET` only.
 | `/v1/validators` | `ValidatorRegistry` (canoLiq committee snapshot used for pro-rata) |
 | `/v1/stakers` | Active CPLQ stakers with amount and `stakedAtHeight` |
 | `/v1/graduation` | Autonomy-graduation metrics + composite `eligible` flag |
+| `/v1/restaking` | Per-Canopy-committee policy + observed exposure + drift / compliance |
 | `/v1/redemption/{addr}/{id}` | A queued cCNPY → CNPY redemption record |
 | `/v1/vesting/{addr}` | Every vesting schedule for an address with cumulative unlocked-to-date |
 
@@ -36,13 +37,26 @@ GET /v1/health
   "height": 12345,
   "genesisComplete": true,
   "chainId": 2,
-  "tvlCapUcnpy": 0,
-  "tvlUtilizationBps": 0
+  "tvlCapBps": 3300,
+  "tvlCapStatus": "active",
+  "canopyTotalStake": 100000000000,
+  "tvlCapUcnpyEffective": 33000000000,
+  "tvlUtilizationBps": 7350
 }
 ```
 
-`tvlCapUcnpy` is the deposit ceiling (`0` = uncapped) and `tvlUtilizationBps` is how full it
-is in basis points. See [TVL Cap](../advanced/tvl-cap.mdx).
+`tvlCapBps` is the governance-set cap as a fraction of total Canopy stake (default `3300` =
+33%; `0` = uncapped). `tvlCapStatus` is one of `"uncapped"`, `"active"`,
+`"awaiting-canopy-stake"`, `"fail-closed"` — operators rely on this to tell apart "cap
+silently inactive" from "cap rejecting everything" when `tvlCapUcnpyEffective` is `0`.
+`tvlCapUcnpyEffective` is the live computed uCNPY cap (`mulDiv(canopyTotalStake, tvlCapBps,
+10_000)`; `0` when uncapped, awaiting Canopy stake, or fail-closed — pair with
+`tvlCapStatus` to disambiguate). `tvlUtilizationBps` is `totalPooledCnpy /
+tvlCapUcnpyEffective` in basis points. See [TVL Cap](../advanced/tvl-cap.mdx).
+
+> The example above is illustrative of a near-cap scenario (73.5% full). A freshly-launched
+> testnet typically reports `tvlUtilizationBps` well under 1000, and `canopyTotalStake` can
+> read `0` until validators begin staking on Canopy.
 
 ### Pools
 
@@ -81,6 +95,26 @@ GET /v1/graduation
 ```
 
 See [Autonomy Graduation](../advanced/autonomy-graduation.mdx) for what each metric means.
+
+### Restaking
+
+```json
+GET /v1/restaking
+{
+  "totalExposureUcnpy": 1500000,
+  "policy": [
+    { "committeeId": 2, "targetWeightBps": 6000, "minStakeUcnpy": 500000, "maxStakeUcnpy": 0 },
+    { "committeeId": 7, "targetWeightBps": 4000, "minStakeUcnpy": 0,      "maxStakeUcnpy": 0 }
+  ],
+  "allocations": [
+    { "committeeId": 2, "stakeUcnpy": 1000000, "weightBps": 6666, "targetBps": 6000, "driftBps":  666 },
+    { "committeeId": 7, "stakeUcnpy":  500000, "weightBps": 3333, "targetBps": 4000, "driftBps": -667 }
+  ],
+  "policyCompliant": true
+}
+```
+
+See [Restaking Policy](../advanced/restaking.mdx) for the policy schema and drift semantics.
 
 ### Globals
 

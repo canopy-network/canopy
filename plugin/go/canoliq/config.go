@@ -134,6 +134,10 @@ type AlertConfig struct {
 	// TvlDropBps fires when TVL drops more than this fraction over the window
 	// (default 2000 = 20%).
 	TvlDropBps uint64 `json:"tvlDropBps,omitempty"`
+	// StuckRedemptionCount fires when the number of mature unclaimed
+	// redemptions exceeds this value (default 10). Counts the global
+	// mature-redemption index up to current height; severity crit.
+	StuckRedemptionCount uint64 `json:"stuckRedemptionCount,omitempty"`
 }
 
 // localnetPlaceholderAddress is the single hex address every bundled
@@ -267,6 +271,11 @@ func DefaultParams() *contract.CanoliqParams {
 		CplqTransferFee:    10_000,
 		InsuranceBps:       500, // 5% of treasury slice — matches Tokenomics v1.2 §8 / WP §9.2 ("insurance fund of 5% of DAO treasury")
 		InsuranceTargetBps: 500, // T4: reserve target = 5% of peak TVL (WP §9.2); skim auto-off at target
+		// TvlCapBps: self-imposed TVL ceiling as a fraction of total Canopy
+		// network stake (WP §9.4: "33% of total Canopy network stake"). 0 =
+		// uncapped; spec default is 3300 (33%). The deposit check fails
+		// closed when Canopy total stake is unavailable.
+		TvlCapBps: 3300,
 		// T5 autonomy-graduation thresholds (WP §10). TVL is a flat uCNPY
 		// placeholder (~$50M at $1/CNPY) pending a real price oracle.
 		GraduationMinTvlUcnpy:     50_000_000_000_000,
@@ -363,6 +372,35 @@ func ValidateParams(p *contract.CanoliqParams) *contract.PluginError {
 		}
 		seen[t.Action] = true
 		if t.QuorumBps > 10_000 || t.ApprovalBps > 10_000 {
+			return ErrInvalidParams()
+		}
+	}
+	// Restaking policy (WP §7): empty list is valid (single-committee
+	// fallback). Otherwise target_weight_bps must sum to exactly 10_000
+	// across all entries; per-entry min ≤ max (when both are set);
+	// committee ids must be unique so /v1/restaking drift is unambiguous.
+	if len(p.RestakingPolicy) > 0 {
+		seenCommittee := make(map[uint64]bool, len(p.RestakingPolicy))
+		var weightSum uint64
+		for _, e := range p.RestakingPolicy {
+			if e == nil {
+				return ErrInvalidParams()
+			}
+			if seenCommittee[e.CommitteeId] {
+				return ErrInvalidParams()
+			}
+			seenCommittee[e.CommitteeId] = true
+			if e.TargetWeightBps > 10_000 {
+				return ErrInvalidParams()
+			}
+			weightSum += e.TargetWeightBps
+			// min and max are independently optional (0 = unset); enforce
+			// the ordering only when both have a value.
+			if e.MinStakeUcnpy > 0 && e.MaxStakeUcnpy > 0 && e.MinStakeUcnpy > e.MaxStakeUcnpy {
+				return ErrInvalidParams()
+			}
+		}
+		if weightSum != 10_000 {
 			return ErrInvalidParams()
 		}
 	}

@@ -28,6 +28,7 @@ const (
 	AlertBuybackDrain           = "buyback_drain"
 	AlertValidatorConcentration = "validator_concentration"
 	AlertTVLDrop                = "tvl_drop"
+	AlertStuckRedemption        = "stuck_redemption"
 )
 
 // Alert severities.
@@ -41,11 +42,12 @@ const alertSchemaVersion = 1
 
 // Defaults for the AlertConfig knobs (overridable via config JSON).
 const (
-	alertDefaultMinInterval  = 100   // blocks between re-fires of the same kind
-	alertDefaultWindowBlocks = 100   // tumbling window for drain/drop checks
-	alertDefaultDrainBps     = 5_000 // 50%
-	alertDefaultConcentBps   = 6_600 // 66%
-	alertDefaultTVLDropBps   = 2_000 // 20%
+	alertDefaultMinInterval         = 100   // blocks between re-fires of the same kind
+	alertDefaultWindowBlocks        = 100   // tumbling window for drain/drop checks
+	alertDefaultDrainBps            = 5_000 // 50%
+	alertDefaultConcentBps          = 6_600 // 66%
+	alertDefaultTVLDropBps          = 2_000 // 20%
+	alertDefaultStuckRedemptionCnt  = 10    // mature unclaimed redemptions
 )
 
 // AlertEnvelope is the canonical alert payload. Slack / Discord adapters
@@ -171,6 +173,12 @@ func (cfg *AlertConfig) tvlDropBps() uint64 {
 	}
 	return alertDefaultTVLDropBps
 }
+func (cfg *AlertConfig) stuckRedemptionCount() uint64 {
+	if cfg != nil && cfg.StuckRedemptionCount > 0 {
+		return cfg.StuckRedemptionCount
+	}
+	return alertDefaultStuckRedemptionCnt
+}
 func (cfg *AlertConfig) minInterval(kind string) uint64 {
 	if cfg != nil {
 		if v, ok := cfg.MinIntervalBlocks[kind]; ok {
@@ -202,7 +210,59 @@ func (c *Canoliq) evaluateAlerts(height uint64) *contract.PluginError {
 	if err := c.checkTVLDrop(s, height, cfg); err != nil {
 		return err
 	}
+	if err := c.checkStuckRedemption(height, cfg); err != nil {
+		return err
+	}
 	return nil
+}
+
+// checkStuckRedemption fires when the count of mature unclaimed redemptions
+// exceeds stuckRedemptionCount. Uses the global mature-redemption index
+// maintained by deliver.go (write on queue, delete on claim). Instantaneous
+// — no tumbling window — and `crit` severity.
+//
+// The threshold detection only needs `count > N`; the range scan is capped
+// at `threshold + 1` so we never haul a large index back over the wire.
+func (c *Canoliq) checkStuckRedemption(height uint64, cfg *AlertConfig) *contract.PluginError {
+	st, err := c.loadAlertState(AlertStuckRedemption)
+	if err != nil {
+		return err
+	}
+	threshold := cfg.stuckRedemptionCount()
+	q := qid()
+	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
+		Ranges: []*contract.PluginRangeRead{{
+			QueryId: q,
+			Prefix:  MatureRedemptionPrefix(),
+			// +1 so we observe the boundary cross. The index sorts
+			// ascending by mature height, so the first `threshold+1`
+			// entries are the oldest — exactly what we want to count.
+			Limit: threshold + 1,
+		}},
+	})
+	if err != nil {
+		return err
+	}
+	if resp.Error != nil {
+		return resp.Error
+	}
+	count := uint64(0)
+	for _, r := range resp.Results {
+		for _, e := range r.Entries {
+			mh, ok := ParseMatureRedemptionHeight(e.Key)
+			if !ok {
+				continue
+			}
+			if mh <= height {
+				count++
+			}
+		}
+	}
+	fired := count > threshold
+	return c.applyAlert(AlertStuckRedemption, fired, height, severityCrit,
+		"mature unclaimed redemptions above threshold", map[string]any{
+			"count": count, "thresholdCount": threshold,
+		}, st)
 }
 
 // checkBuybackDrain fires when the buyback pool drains more than drainBps over

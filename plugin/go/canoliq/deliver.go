@@ -61,10 +61,26 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 			}
 		}
 	}
-	// TVL self-cap (T3 / WP §9.4): reject deposits that would push total
-	// pooled CNPY above the governance-set ceiling. 0 = uncapped.
-	if params.TvlCapUcnpy > 0 && globals.TotalPooledCnpy+msg.Amount > params.TvlCapUcnpy {
-		return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
+	// TVL self-cap (WP §9.4). evaluateTVLCap (query.go) is the single
+	// source of truth for the four-way decision tree shared with
+	// /v1/health: uncapped / active / awaiting-canopy-stake / fail-closed.
+	// See the tvl-cap docs page for the operator-facing semantics.
+	if params.TvlCapBps > 0 {
+		supply, perr := c.readCanopySupply()
+		if perr != nil {
+			return &contract.PluginDeliverResponse{Error: perr}
+		}
+		var staked uint64
+		if supply != nil {
+			staked = supply.Staked
+		}
+		decision := evaluateTVLCap(params.TvlCapBps, supply != nil, staked)
+		if decision.Err != nil {
+			return &contract.PluginDeliverResponse{Error: decision.Err}
+		}
+		if decision.CapUcnpy > 0 && globals.TotalPooledCnpy+msg.Amount > decision.CapUcnpy {
+			return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
+		}
 	}
 	deduct := msg.Amount + fee
 	if from.Amount < deduct {
@@ -231,6 +247,11 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 		{Key: KeyForRedemption(msg.FromAddress, id), Value: rBz},
 		{Key: redemIdxKey, Value: riBz},
 		{Key: feePoolKey, Value: feeBz},
+		// Global mature-redemption index: lets the stuck-redemption alert
+		// evaluator range-scan keys ≤ currentHeight in one call. Key shape
+		// puts UnbondCompleteHeight first so lexicographic order matches
+		// maturity order. Deleted when the redemption is claimed.
+		{Key: KeyForMatureRedemption(redemption.UnbondCompleteHeight, msg.FromAddress, id), Value: matureRedemptionMarker},
 	}
 	var deletes []*contract.PluginDeleteOp
 	if bal == 0 {
@@ -366,7 +387,12 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 		{Key: feePoolKey, Value: feeBz},
 		{Key: escrowKey, Value: escrowBz},
 	}
-	deletes := []*contract.PluginDeleteOp{{Key: rKey}}
+	deletes := []*contract.PluginDeleteOp{
+		{Key: rKey},
+		// Remove the global mature-redemption index entry so the
+		// stuck-redemption alert evaluator stops counting this one.
+		{Key: KeyForMatureRedemption(redemption.UnbondCompleteHeight, msg.FromAddress, msg.RedemptionId)},
+	}
 	redemIdx.Ids = removeUint64(redemIdx.Ids, msg.RedemptionId)
 	if len(redemIdx.Ids) == 0 {
 		deletes = append(deletes, &contract.PluginDeleteOp{Key: redemIdxKey})
