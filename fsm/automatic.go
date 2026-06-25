@@ -144,6 +144,10 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if qc.Results.RewardRecipients == nil {
 		return lib.ErrNilRewardRecipients()
 	}
+	// guard against an empty PaymentPercents slice causing a silent no-op reward distribution
+	if len(qc.Results.RewardRecipients.PaymentPercents) == 0 && qc.Results.RewardRecipients != nil {
+		return lib.ErrInvalidPercentAllocation()
+	}
 	// ensure the committee isn't retired
 	retired, err := s.CommitteeIsRetired(qc.Header.ChainId)
 	if err != nil {
