@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -183,8 +184,8 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 
 // DialForOutboundPeers() uses the config and peer book to try to max out the outbound peer connections
 func (p *P2P) DialForOutboundPeers() {
-	// create a tracking variable to ensure not 'over dialing'
-	dialing := 0
+	// create a tracking variable to ensure not 'over dialing' (atomic to prevent data races across goroutines)
+	var dialing int32
 	getPeerFromString := func(address string) (*lib.PeerAddress, error) {
 		// start a peer address structure using the basic configurations
 		peer := &lib.PeerAddress{PeerMeta: &lib.PeerMeta{NetworkId: p.meta.NetworkId, ChainId: p.meta.ChainId}}
@@ -206,8 +207,8 @@ func (p *P2P) DialForOutboundPeers() {
 		}
 		// dial in a non-blocking fashion
 		go func() {
-			// increment dialing
-			dialing++
+			// increment dialing atomically
+			atomic.AddInt32(&dialing, 1)
 			// dial the peer with exponential backoff
 			p.DialWithBackoff(peerAddress, true)
 		}()
@@ -219,7 +220,7 @@ func (p *P2P) DialForOutboundPeers() {
 		func() {
 			// exit if maxed out config or none left to dial
 			outbound := p.PeerSet.outbound
-			if outbound > 0 && outbound+dialing >= p.config.MaxOutbound {
+			if outbound > 0 && int(outbound)+int(atomic.LoadInt32(&dialing)) >= p.config.MaxOutbound {
 				return
 			}
 			// try to get a peer to dial
@@ -243,8 +244,8 @@ func (p *P2P) DialForOutboundPeers() {
 			p.log.Debugf("Executing P2P Dial for more outbound peers")
 			// sequential operation means we'll never be dialing more than 1 peer at a time
 			// the peer should be added before the next execution of the loop
-			dialing++
-			defer func() { dialing-- }()
+			atomic.AddInt32(&dialing, 1)
+			defer func() { atomic.AddInt32(&dialing, -1) }()
 			if err := p.Dial(peer, false, false); err != nil {
 				p.book.AddFailedDialAttempt(peer)
 				p.log.Debug(err.Error())
