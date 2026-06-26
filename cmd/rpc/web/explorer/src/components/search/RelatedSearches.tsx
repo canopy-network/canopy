@@ -22,7 +22,7 @@ const RelatedSearches: React.FC = () => {
             title: 'Top Validators',
             description: 'See the most active validators',
             icon: 'fa-solid fa-chart-pie',
-            link: '/validators',
+            link: '/staking',
             color: 'text-primary bg-green-600/20 py-2.5 pr-7.5 pl-[0.610rem] rounded-full'
         }
     ]
@@ -37,7 +37,7 @@ const RelatedSearches: React.FC = () => {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.1 }}
-                        className="bg-input border border-gray-800/60 rounded-xl p-6  hover:border-gray-800/80 transition-colors group"
+                        className="bg-input border border-white/10 rounded-xl p-6  hover:border-white/10 transition-colors group"
                     >
                         <Link to={search.link} className="block">
                             <div className="flex items-start gap-4">

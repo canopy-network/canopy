@@ -74,6 +74,7 @@ const (
 	KeystoreDeleteRoutePath    = "/v1/admin/keystore-delete"
 	KeystoreGetRoutePath       = "/v1/admin/keystore-get"
 	TxSendRoutePath            = "/v1/admin/tx-send"
+	TxSendVestingRoutePath     = "/v1/admin/tx-send-vesting"
 	TxStakeRoutePath           = "/v1/admin/tx-stake"
 	TxEditStakeRoutePath       = "/v1/admin/tx-edit-stake"
 	TxUnstakeRoutePath         = "/v1/admin/tx-unstake"
@@ -172,6 +173,7 @@ const (
 	KeystoreDeleteRouteName         = "keystore-delete"
 	KeystoreGetRouteName            = "keystore-get"
 	TxSendRouteName                 = "tx-send"
+	TxSendVestingRouteName          = "tx-send-vesting"
 	TxStakeRouteName                = "tx-stake"
 	TxUnstakeRouteName              = "tx-unstake"
 	TxEditStakeRouteName            = "tx-edit-stake"
@@ -273,6 +275,7 @@ var routePaths = routes{
 	KeystoreDeleteRouteName:         {Method: http.MethodPost, Path: KeystoreDeleteRoutePath},
 	KeystoreGetRouteName:            {Method: http.MethodPost, Path: KeystoreGetRoutePath},
 	TxSendRouteName:                 {Method: http.MethodPost, Path: TxSendRoutePath},
+	TxSendVestingRouteName:          {Method: http.MethodPost, Path: TxSendVestingRoutePath},
 	TxStakeRouteName:                {Method: http.MethodPost, Path: TxStakeRoutePath},
 	TxEditOrderRouteName:            {Method: http.MethodPost, Path: TxEditOrderRoutePath},
 	TxUnstakeRouteName:              {Method: http.MethodPost, Path: TxUnstakeRoutePath},
@@ -390,6 +393,7 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		KeystoreDeleteRouteName:         s.KeystoreDelete,
 		KeystoreGetRouteName:            s.KeystoreGetKeyGroup,
 		TxSendRouteName:                 s.TransactionSend,
+		TxSendVestingRouteName:          s.TransactionSendVesting,
 		TxStakeRouteName:                s.TransactionStake,
 		TxEditStakeRouteName:            s.TransactionEditStake,
 		TxUnstakeRouteName:              s.TransactionUnstake,

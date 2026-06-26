@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"runtime/debug"
 	"strings"
@@ -730,6 +731,16 @@ func (s *StateMachine) StateRead(request *lib.PluginStateReadRequest) (response 
 
 // StateWrite() implements the 'state write' interface for plugins
 func (s *StateMachine) StateWrite(request *lib.PluginStateWriteRequest) (response lib.PluginStateWriteResponse, err lib.ErrorI) {
+	// GUARD: validate the ENTIRE batch BEFORE applying any operation, so a misconfigured plugin can
+	// never (even partially) persist records that collide with reserved core state prefixes. This
+	// panics loudly rather than silently corrupting consensus state (e.g. writing a custom record
+	// under the validators prefix, which would later be mis-decoded as a Validator).
+	for _, setRequest := range request.Sets {
+		assertPluginKeyWritable(setRequest.Key)
+	}
+	for _, delRequest := range request.Deletes {
+		assertPluginKeyWritable(delRequest.Key)
+	}
 	// for each 'set' request
 	for _, setRequest := range request.Sets {
 		// execute the 'set'
@@ -745,4 +756,63 @@ func (s *StateMachine) StateWrite(request *lib.PluginStateWriteRequest) (respons
 		}
 	}
 	return
+}
+
+// pluginWritableCorePrefixes are the only core-owned store prefixes a plugin is permitted to write.
+// Plugins share the FSM keyspace, so they may interoperate with accounts and pools (e.g. a custom
+// 'send' that moves real balances), but writing under any OTHER core prefix would corrupt consensus
+// state and collide with plugin records on range reads.
+var pluginWritableCorePrefixes = map[byte]struct{}{
+	accountPrefix[0]: {},
+	poolPrefix[0]:    {},
+}
+
+// corePrefixNames maps every reserved single-byte core store prefix to a human-readable name.
+var corePrefixNames = map[byte]string{
+	accountPrefix[0]:          "accounts",
+	poolPrefix[0]:             "pools",
+	validatorPrefix[0]:        "validators",
+	committeePrefix[0]:        "committees",
+	unstakePrefix[0]:          "unstaking",
+	pausedPrefix[0]:           "paused",
+	paramsPrefix[0]:           "params",
+	nonSignerPrefix[0]:        "non-signers",
+	lastProposersPrefix[0]:    "last-proposers",
+	supplyPrefix[0]:           "supply",
+	delegatePrefix[0]:         "delegations",
+	committeesDataPrefix[0]:   "committees-data",
+	orderBookPrefix[0]:        "order-book",
+	retiredCommitteePrefix[0]: "retired-committees",
+	dexPrefix[0]:              "dex",
+}
+
+// assertPluginKeyWritable panics if a plugin write targets a reserved core prefix it must not touch.
+// Plugins choose their own key prefixes in plugin code (nothing is declared to core up front), so a
+// state write is the earliest point at which core can deterministically detect a colliding prefix.
+// Panicking here guarantees a misconfigured plugin can NEVER silently persist records that collide
+// with core state (the bug class where, e.g., custom records written under prefix 3 are later read
+// back as core validators). Plugin-owned records must use prefixes OUTSIDE the core-reserved range.
+func assertPluginKeyWritable(key []byte) {
+	// decode the leading length-prefixed segment; core store prefixes are a single byte
+	segments, err := decodeLengthPrefixedSafe(key)
+	if err != nil || len(segments) == 0 || len(segments[0]) != 1 {
+		// not a recognizable single-byte-prefixed core key; nothing to enforce
+		return
+	}
+	prefix := segments[0][0]
+	// only reserved core prefixes are enforced; plugin-owned prefixes (outside 1-15) are always fine
+	name, isCore := corePrefixNames[prefix]
+	if !isCore {
+		return
+	}
+	// accounts/pools are explicitly shared with plugins for interoperability
+	if _, allowed := pluginWritableCorePrefixes[prefix]; allowed {
+		return
+	}
+	panic(fmt.Sprintf(
+		"plugin attempted to write to reserved core state prefix %d (%s); plugins share the FSM "+
+			"keyspace and may only write to accounts/pools or use key prefixes OUTSIDE the "+
+			"core-reserved range (1-15) for their own records — see plugin TUTORIAL.md "+
+			"'avoid prefix collisions'", prefix, name,
+	))
 }

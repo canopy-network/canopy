@@ -7,7 +7,7 @@ export type FeeBuckets = Record<
 >;
 export type FeeProviderQuery = {
   type: "query";
-  base: "rpc" | "admin" | "root";
+  base: "rpc" | "admin";
   path: string;
   method?: "GET" | "POST";
   encoding?: "json" | "text";
@@ -154,5 +154,5 @@ export function useResolvedFees(
     return applyBucket(base, bucketDef);
   }, [raw, opts.actionId, opts.bucket, buckets]);
 
-  return { raw, amount, denom };
+  return useMemo(() => ({ raw, amount, denom }), [raw, amount, denom]);
 }

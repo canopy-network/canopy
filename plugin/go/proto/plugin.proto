@@ -26,6 +26,8 @@ message FSMToPlugin {
     PluginStateReadResponse state_read = 8;
     // state_write: acknowledgment of write operation
     PluginStateWriteResponse state_write = 9;
+    // query: response to a detached, read-only state query
+    PluginQueryResponse query = 10;
     // error: any error returned by the FSM
     PluginError error = 99;
   }
@@ -53,6 +55,8 @@ message PluginToFSM {
     PluginStateReadRequest state_read = 8;
     // state_write: request to write plugin state to the FSM
     PluginStateWriteRequest state_write = 9;
+    // query: detached, read-only state query (not tied to a tx/block lifecycle)
+    PluginQueryRequest query = 10;
   }
 }
 
@@ -72,6 +76,10 @@ message PluginConfig {
   repeated string transaction_type_urls = 6; // @gotags: json:"transactionTypeUrls"
   // event_type_urls: protobuf type URLs for event messages
   repeated string event_type_urls = 7; // @gotags: json:"eventTypeUrls"
+  // custom_state_prefixes: the store key prefixes the plugin owns for its custom records (each entry
+  // is the raw prefix bytes, e.g. [100] for faucet). Canopy panics at handshake if any collides with
+  // a core-reserved prefix (1-15), preventing silent state corruption from colliding keyspaces.
+  repeated bytes custom_state_prefixes = 8; // @gotags: json:"customStatePrefixes"
 }
 
 // PluginFSMConfig is the identity information of the plugin that is communicated from the fsm to the plugin
@@ -133,6 +141,24 @@ message PluginError {
   uint64 code = 1; // error code
   string module = 2; // error module
   string msg = 3; // error message
+}
+
+// Plugin Detached Query Interface
+
+// PluginQueryRequest is a detached, read-only state query (not tied to a tx/block)
+message PluginQueryRequest {
+  // height: the height to query; 0 = latest committed
+  uint64 height = 1;
+  // read: the read request to execute against the read-only state snapshot
+  PluginStateReadRequest read = 2;
+}
+
+// PluginQueryResponse returns the results of a detached, read-only state query
+message PluginQueryResponse {
+  // read: the results of the read request
+  PluginStateReadResponse read = 1;
+  // error: if an error occurred during the request execution
+  PluginError error = 99;
 }
 
 // Plugin State Read Interface

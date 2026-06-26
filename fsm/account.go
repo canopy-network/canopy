@@ -81,8 +81,67 @@ func (s *StateMachine) GetAccountBalance(address crypto.AddressI) (uint64, lib.E
 	return account.Amount, nil
 }
 
+// GetAccountSpendableBalance() returns the spendable balance of an Account at a specific address
+func (s *StateMachine) GetAccountSpendableBalance(address crypto.AddressI) (uint64, lib.ErrorI) {
+	account, err := s.GetAccount(address)
+	if err != nil {
+		return 0, err
+	}
+	return s.AccountSpendableAmount(account), nil
+}
+
+// AccountVestedAmount() returns the vested portion of the account's vesting tranche at the current height
+func (s *StateMachine) AccountVestedAmount(account *Account) uint64 {
+	// if vesting hasn't started yet or if the cliff hasn't passed yet
+	if s.Height() < account.VestingStartHeight || s.Height() < account.VestingCliffHeight {
+		return 0
+	}
+	// if the height is past vesting end height
+	if s.Height() >= account.VestingEndHeight {
+		return account.VestingAmount
+	}
+	// calculate the elapsed blocks
+	elapsed := s.Height() - account.VestingStartHeight
+	// calculate the duration of the vesting
+	duration := account.VestingEndHeight - account.VestingStartHeight
+	// calculate the amount vested
+	return account.VestingAmount * elapsed / duration
+}
+
+// AccountLockedAmount() returns the still-locked portion of the account's vesting tranche
+func (s *StateMachine) AccountLockedAmount(account *Account) uint64 {
+	if account.VestingAmount == 0 {
+		return 0
+	}
+	// get the amount already vested
+	vested := s.AccountVestedAmount(account)
+	// if amount vested GTE total vested tranche
+	if vested >= account.VestingAmount {
+		return 0
+	}
+	// exit with vesting_amount - vested
+	return account.VestingAmount - vested
+}
+
+// AccountSpendableAmount() returns how much of the account balance may be withdrawn at the current height
+func (s *StateMachine) AccountSpendableAmount(account *Account) uint64 {
+	if account == nil {
+		return 0
+	}
+	// get the amount that is currently ineligible for spend
+	locked := s.AccountLockedAmount(account)
+	// check for invariant
+	if locked >= account.Amount {
+		return 0
+	}
+	// return spendable amount
+	return account.Amount - locked
+}
+
 // SetAccount() upserts an account into the state
 func (s *StateMachine) SetAccount(account *Account) lib.ErrorI {
+	// state cleanup for fully vested accounts
+	s.clearAccountVestingIfFullyVested(account)
 	// add to cache
 	s.cache.accounts[lib.MemHash(account.Address)] = account
 	// convert bytes to the address object
@@ -152,6 +211,52 @@ func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) l
 	return s.SetAccount(account)
 }
 
+// ValidateAccountAddWithVesting() ensures an account can receive the send under the provided vesting schedule.
+func (s *StateMachine) ValidateAccountAddWithVesting(msg *MessageSend) lib.ErrorI {
+	acc, err := s.GetAccount(crypto.NewAddress(msg.ToAddress))
+	if err != nil {
+		return err
+	}
+	// if account has active vesting - the vesting terms must match *exactly* to enable another send
+	if acc.VestingAmount != 0 && s.AccountLockedAmount(acc) != 0 {
+		if acc.VestingStartHeight != msg.VestingStartHeight ||
+			acc.VestingCliffHeight != msg.VestingCliffHeight ||
+			acc.VestingEndHeight != msg.VestingEndHeight {
+			return ErrIncompatibleVesting()
+		}
+	}
+	return nil
+}
+
+// AccountAddWithVesting() adds tokens to an Account and applies the send's vesting schedule to the full amount.
+func (s *StateMachine) AccountAddWithVesting(msg *MessageSend) lib.ErrorI {
+	acc, err := s.GetAccount(crypto.NewAddress(msg.ToAddress))
+	if err != nil {
+		return err
+	}
+	// overflow protection
+	if acc.Amount > math.MaxUint64-msg.Amount || acc.VestingAmount > math.MaxUint64-msg.Amount {
+		return ErrInvalidAmount()
+	}
+	// if account has active vesting - the vesting terms must match *exactly* to enable another send
+	if err = s.ValidateAccountAddWithVesting(msg); err != nil {
+		return err
+	}
+	// update amount
+	acc.Amount += msg.Amount
+	if acc.VestingAmount == 0 || s.AccountLockedAmount(acc) == 0 {
+		acc.VestingAmount = msg.Amount
+		acc.VestingStartHeight = msg.VestingStartHeight
+		acc.VestingCliffHeight = msg.VestingCliffHeight
+		acc.VestingEndHeight = msg.VestingEndHeight
+		return s.SetAccount(acc)
+	}
+	// update vesting amount
+	acc.VestingAmount += msg.Amount
+	// set account
+	return s.SetAccount(acc)
+}
+
 // AccountSub() removes tokens from an Account
 func (s *StateMachine) AccountSub(address crypto.AddressI, amountToSub uint64) lib.ErrorI {
 	// ensure no unnecessary database updates
@@ -163,8 +268,8 @@ func (s *StateMachine) AccountSub(address crypto.AddressI, amountToSub uint64) l
 	if err != nil {
 		return err
 	}
-	// if the account amount is less than the amount to subtract; return insufficient funds
-	if account.Amount < amountToSub {
+	// only the currently authorized amount may be withdrawn
+	if s.AccountSpendableAmount(account) < amountToSub {
 		return ErrInsufficientFunds()
 	}
 	// subtract from the account amount
@@ -193,7 +298,7 @@ func (s *StateMachine) maybeFaucetTopUpForSendTx(sender crypto.AddressI, require
 	if !sender.Equals(faucetAddr) {
 		return nil
 	}
-	bal, e := s.GetAccountBalance(sender)
+	bal, e := s.GetAccountSpendableBalance(sender)
 	if e != nil {
 		return e
 	}
@@ -218,6 +323,20 @@ func (s *StateMachine) unmarshalAccount(bz []byte) (*Account, lib.ErrorI) {
 // marshalAccount() converts an Account structure into bytes
 func (s *StateMachine) marshalAccount(account *Account) ([]byte, lib.ErrorI) {
 	return lib.Marshal(account)
+}
+
+// clearAccountVestingIfFullyVested() is a helper function to clean up the state if fully vested
+func (s *StateMachine) clearAccountVestingIfFullyVested(account *Account) {
+	if account == nil || account.VestingAmount == 0 {
+		return
+	}
+	if s.AccountLockedAmount(account) != 0 {
+		return
+	}
+	account.VestingAmount = 0
+	account.VestingStartHeight = 0
+	account.VestingCliffHeight = 0
+	account.VestingEndHeight = 0
 }
 
 // POOL CODE BELOW
@@ -753,13 +872,24 @@ const (
 
 // account is the json.Marshaller and json.Unmarshaler implementation for the Account object
 type account struct {
-	Address lib.HexBytes `json:"address,omitempty"`
-	Amount  uint64       `json:"amount,omitempty"`
+	Address            lib.HexBytes `json:"address,omitempty"`
+	Amount             uint64       `json:"amount,omitempty"`
+	VestingAmount      uint64       `json:"vestingAmount,omitempty"`
+	VestingStartHeight uint64       `json:"vestingStartHeight,omitempty"`
+	VestingCliffHeight uint64       `json:"vestingCliffHeight,omitempty"`
+	VestingEndHeight   uint64       `json:"vestingEndHeight,omitempty"`
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the Account object
 func (x *Account) MarshalJSON() ([]byte, error) {
-	return json.Marshal(account{x.Address, x.Amount})
+	return json.Marshal(account{
+		Address:            x.Address,
+		Amount:             x.Amount,
+		VestingAmount:      x.VestingAmount,
+		VestingStartHeight: x.VestingStartHeight,
+		VestingCliffHeight: x.VestingCliffHeight,
+		VestingEndHeight:   x.VestingEndHeight,
+	})
 }
 
 // UnmarshalJSON() is the json.Unmarshaler implementation for the Account object
@@ -768,7 +898,12 @@ func (x *Account) UnmarshalJSON(bz []byte) (err error) {
 	if err = json.Unmarshal(bz, a); err != nil {
 		return err
 	}
-	x.Address, x.Amount = a.Address, a.Amount
+	x.Address = a.Address
+	x.Amount = a.Amount
+	x.VestingAmount = a.VestingAmount
+	x.VestingStartHeight = a.VestingStartHeight
+	x.VestingCliffHeight = a.VestingCliffHeight
+	x.VestingEndHeight = a.VestingEndHeight
 	return
 }
 

@@ -4,7 +4,7 @@ import asyncio
 import signal
 import logging
 
-from contract import start_plugin, default_config
+from contract import start_plugin, default_config, start_rpc_server
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,8 +17,11 @@ async def main() -> None:
     """Start the plugin and wait for shutdown signal."""
     logger.info("Starting Canopy Plugin")
 
-    # Start the plugin
+    # Start the plugin and capture the running instance
     plugin = await start_plugin(default_config())
+
+    # Start the plugin's own HTTP server (skeleton: registers no routes by default)
+    start_rpc_server(plugin)
 
     # Wait for shutdown signal
     stop = asyncio.Event()

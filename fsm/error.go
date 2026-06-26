@@ -24,6 +24,14 @@ func ErrInvalidTxMessage() lib.ErrorI {
 	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid transaction message")
 }
 
+func ErrInvalidVesting() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid vesting schedule")
+}
+
+func ErrIncompatibleVesting() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "recipient account has incompatible vesting schedule")
+}
+
 func ErrTxFeeBelowStateLimit() lib.ErrorI {
 	return lib.NewError(lib.CodeFeeBelowState, lib.StateMachineModule, "tx.fee is below state limit")
 }

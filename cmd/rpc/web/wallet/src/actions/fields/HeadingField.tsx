@@ -47,7 +47,7 @@ export const HeadingField: React.FC<HeadingFieldProps> = ({
     primary: "text-foreground",
     secondary: "text-text-secondary",
     muted: "text-muted-foreground",
-    accent: "text-primary",
+    accent: "text-foreground/90",
   };
 
   const alignStyles: Record<string, string> = {

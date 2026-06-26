@@ -33,7 +33,10 @@ func main() {
 	switch mode {
 	case "", "contract":
 		log.Println("starting plugin in 'contract' mode (send tutorial)")
-		contract.StartPlugin(contract.DefaultConfig())
+		// start the plugin and capture the running instance
+		plugin := contract.StartPlugin(contract.DefaultConfig())
+		// start the plugin's own HTTP server exposing custom, chain-specific RPC endpoints
+		go plugin.StartRPCServer()
 	case "canoliq":
 		log.Println("starting plugin in 'canoliq' mode (liquid staking)")
 		cfg := canoliq.DefaultConfig()
@@ -57,6 +60,7 @@ func main() {
 	default:
 		log.Fatalf("unknown %s value %q (want '', 'contract', or 'canoliq')", pluginModeEnv, mode)
 	}
+	// create a cancellable context that listens for kill signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	<-ctx.Done()

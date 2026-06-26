@@ -21,6 +21,9 @@ namespace CanopyPlugin
             "type.googleapis.com/types.MessageSend"
         };
         public static readonly string[] EventTypeUrls = Array.Empty<string>();
+        // CustomStatePrefixes: the store key prefixes this plugin owns for its custom records, declared
+        // to Canopy at handshake. The base plugin declares none; see the tutorial for an example.
+        public static readonly byte[][] CustomStatePrefixes = Array.Empty<byte[]>();
         // Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
         public static readonly ByteString[] FileDescriptorProtos =
         {

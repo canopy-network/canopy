@@ -33,13 +33,13 @@ const tabsTriggerVariants = cva(
       },
       variant: {
         default:
-          "h-[calc(100%-1px)] flex-1 rounded-md border border-transparent text-foreground focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:outline-none data-[state=active]:border-border/90 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_0_1px_rgba(53,205,72,0.16)]",
+          "h-[calc(100%-1px)] flex-1 rounded-md border border-transparent text-foreground focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:outline-none data-[state=active]:border-border/90 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_0_1px_rgba(69,202,70,0.16)]",
         clear:
           "rounded-lg border border-transparent bg-transparent text-muted-foreground leading-none tracking-normal data-[state=active]:border-border/80 data-[state=active]:bg-secondary/70 data-[state=active]:text-foreground",
         outline:
-          "rounded-lg border border-border/80 bg-muted/65 text-muted-foreground leading-none tracking-normal data-[state=active]:border-primary/42 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_0_1px_rgba(53,205,72,0.18)]",
+          "rounded-lg border border-border/80 bg-muted/65 text-muted-foreground leading-none tracking-normal data-[state=active]:border-primary/42 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_0_1px_rgba(69,202,70,0.18)]",
         wallet:
-          "shrink-0 -mb-[1px] rounded-none border-b-[2px] border-transparent bg-transparent px-4 py-3 pb-3 font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-primary",
+          "shrink-0 -mb-[1px] rounded-none border-b-[2px] border-transparent bg-transparent px-4 py-3 pb-3 font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground",
       },
     },
     defaultVariants: {

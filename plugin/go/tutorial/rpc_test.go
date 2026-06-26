@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -192,9 +193,273 @@ func TestPluginTransactions(t *testing.T) {
 	t.Log("See documentation: https://github.com/canopy-network/canopy/blob/main/cmd/rpc/README.md#account")
 }
 
+// TestPluginCustomRPCEndpoints tests the plugin's own custom RPC endpoints (/v1/query/faucets and
+// /v1/query/rewards), which are served by the plugin process (default 0.0.0.0:50010) and backed by
+// the detached, read-only QueryState path. It:
+//  1. Creates a recipient and an admin account
+//  2. Faucets the recipient twice and asserts the faucet record aggregates (totalAmount + count)
+//  3. Faucets the admin so it can pay reward fees
+//  4. Rewards the recipient and asserts the reward record (totalAmount, count, lastAdminAddress)
+//  5. Asserts both records also appear in the list (range-read) endpoints
+func TestPluginCustomRPCEndpoints(t *testing.T) {
+	// Configuration - adjust these for your local setup
+	queryRPCURL := "http://localhost:50002"  // Canopy query/tx RPC
+	adminRPCURL := "http://localhost:50003"  // Canopy admin RPC (keystore)
+	pluginRPCURL := "http://localhost:50010" // the plugin's own custom RPC server
+	networkID := uint64(1)
+	chainID := uint64(1)
+	testPassword := "testpassword123"
+
+	// Generous timeouts: a dev node can take many blocks to finalize/index a tx (especially right
+	// after a restart while consensus warms up), so don't fail on transient finalization lag.
+	// Run with a matching overall budget, e.g. `go test -run TestPluginCustomRPCEndpoints -timeout 600s`.
+	txTimeout := 120 * time.Second    // max wait for a tx to be committed + indexed
+	recordTimeout := 60 * time.Second // max wait for the plugin RPC record to reflect committed state
+
+	// Skip early with a helpful message if the plugin RPC server isn't reachable
+	t.Logf("Checking plugin RPC server reachability at %s ...", pluginRPCURL)
+	if _, err := getRawJSON(pluginRPCURL + "/v1/query/faucets"); err != nil {
+		t.Skipf("plugin RPC server not reachable at %s (is Canopy running with the go plugin and port 50010 exposed?): %v", pluginRPCURL, err)
+	}
+	t.Log("Plugin RPC server is reachable")
+
+	// Step 1: Create a recipient and an admin account in the keystore
+	t.Log("Step 1: Creating recipient and admin accounts in keystore...")
+
+	// Use random suffixes to avoid nickname conflicts from previous test runs
+	suffix := randomSuffix()
+	recipientAddr, err := keystoreNewKey(adminRPCURL, "test_rpc_recipient_"+suffix, testPassword)
+	if err != nil {
+		t.Fatalf("Failed to create recipient account: %v", err)
+	}
+	t.Logf("Created recipient account: %s", recipientAddr)
+
+	adminAddr, err := keystoreNewKey(adminRPCURL, "test_rpc_admin_"+suffix, testPassword)
+	if err != nil {
+		t.Fatalf("Failed to create admin account: %v", err)
+	}
+	t.Logf("Created admin account: %s", adminAddr)
+
+	// Fetch signing keys for both accounts
+	recipientKey, err := keystoreGetKey(adminRPCURL, recipientAddr, testPassword)
+	if err != nil {
+		t.Fatalf("Failed to get recipient key: %v", err)
+	}
+	adminKey, err := keystoreGetKey(adminRPCURL, adminAddr, testPassword)
+	if err != nil {
+		t.Fatalf("Failed to get admin key: %v", err)
+	}
+	t.Log("Fetched signing keys for both accounts")
+
+	fee := uint64(10000)
+
+	// Step 2: Faucet the recipient twice and verify the aggregated faucet record
+	faucetAmount1 := uint64(700000000)
+	faucetAmount2 := uint64(300000000)
+
+	t.Logf("Step 2: Sending first faucet to recipient (amount=%d, fee=%d)...", faucetAmount1, fee)
+	height, _ := getHeight(queryRPCURL)
+	t.Logf("Current height: %d", height)
+	txHash, err := sendFaucetTx(queryRPCURL, recipientKey, recipientAddr, faucetAmount1, fee, networkID, chainID, height)
+	if err != nil {
+		t.Fatalf("Failed to send first faucet tx: %v", err)
+	}
+	t.Logf("First faucet transaction sent: %s", txHash)
+
+	t.Log("Waiting for first faucet transaction to be confirmed...")
+	if ok, err := waitForTxInclusion(queryRPCURL, recipientAddr, txHash, txTimeout); err != nil || !ok {
+		t.Fatalf("First faucet tx not included: ok=%v err=%v", ok, err)
+	}
+	t.Log("First faucet transaction confirmed!")
+
+	// after the first faucet, the record should exist with count=1 and totalAmount=faucetAmount1
+	t.Logf("Querying plugin endpoint GET /v1/query/faucets?address=%s ...", recipientAddr)
+	faucet, err := pollFaucetRecord(pluginRPCURL, recipientAddr, recordTimeout)
+	if err != nil {
+		t.Fatalf("Failed to query faucet record after first faucet: %v", err)
+	}
+	t.Logf("Faucet record after first faucet: recipient=%s totalAmount=%d count=%d", faucet.RecipientAddress, faucet.TotalAmount, faucet.Count)
+	if faucet.Count != 1 {
+		t.Errorf("faucet count after first faucet = %d, want 1", faucet.Count)
+	}
+	if faucet.TotalAmount != faucetAmount1 {
+		t.Errorf("faucet totalAmount after first faucet = %d, want %d", faucet.TotalAmount, faucetAmount1)
+	}
+	if !strings.EqualFold(faucet.RecipientAddress, recipientAddr) {
+		t.Errorf("faucet recipientAddress = %s, want %s", faucet.RecipientAddress, recipientAddr)
+	}
+	t.Log("Faucet record verified after first faucet (count=1)")
+
+	t.Logf("Sending second faucet to recipient (amount=%d, fee=%d)...", faucetAmount2, fee)
+	height, _ = getHeight(queryRPCURL)
+	t.Logf("Current height: %d", height)
+	txHash, err = sendFaucetTx(queryRPCURL, recipientKey, recipientAddr, faucetAmount2, fee, networkID, chainID, height)
+	if err != nil {
+		t.Fatalf("Failed to send second faucet tx: %v", err)
+	}
+	t.Logf("Second faucet transaction sent: %s", txHash)
+
+	t.Log("Waiting for second faucet transaction to be confirmed...")
+	if ok, err := waitForTxInclusion(queryRPCURL, recipientAddr, txHash, txTimeout); err != nil || !ok {
+		t.Fatalf("Second faucet tx not included: ok=%v err=%v", ok, err)
+	}
+	t.Log("Second faucet transaction confirmed!")
+
+	// after the second faucet, count should be 2 and totalAmount the sum of both
+	wantTotal := faucetAmount1 + faucetAmount2
+	t.Log("Waiting for faucet record to reflect the second faucet (count=2)...")
+	faucet, err = pollFaucetRecordUntil(pluginRPCURL, recipientAddr, 2, recordTimeout)
+	if err != nil {
+		t.Fatalf("Failed to query faucet record after second faucet: %v", err)
+	}
+	t.Logf("Faucet record after second faucet: recipient=%s totalAmount=%d count=%d", faucet.RecipientAddress, faucet.TotalAmount, faucet.Count)
+	if faucet.Count != 2 {
+		t.Errorf("faucet count after second faucet = %d, want 2", faucet.Count)
+	}
+	if faucet.TotalAmount != wantTotal {
+		t.Errorf("faucet totalAmount after second faucet = %d, want %d", faucet.TotalAmount, wantTotal)
+	}
+	t.Logf("Faucet record aggregation verified (totalAmount=%d, count=2)", wantTotal)
+
+	// the recipient should also appear in the list (range-read) endpoint
+	t.Log("Querying plugin endpoint GET /v1/query/faucets (list / range read)...")
+	faucets, err := queryFaucetList(pluginRPCURL)
+	if err != nil {
+		t.Fatalf("Failed to query faucet list: %v", err)
+	}
+	t.Logf("Faucet list returned %d record(s)", len(faucets))
+	if vErr := validateFaucetRecords(faucets); vErr != nil {
+		t.Fatalf("faucet list structural validation failed: %v", vErr)
+	}
+	t.Logf("All %d faucet list record(s) are structurally valid", len(faucets))
+	if found := findFaucet(faucets, recipientAddr); found == nil {
+		t.Errorf("recipient %s not found in faucet list endpoint", recipientAddr)
+	} else if found.TotalAmount != wantTotal {
+		t.Errorf("faucet list totalAmount = %d, want %d", found.TotalAmount, wantTotal)
+	} else {
+		t.Logf("Recipient found in faucet list with totalAmount=%d", found.TotalAmount)
+	}
+
+	// Step 3: Faucet the admin so it has balance to pay the reward fee
+	t.Log("Step 3: Funding admin via faucet so it can pay the reward fee...")
+	height, _ = getHeight(queryRPCURL)
+	t.Logf("Current height: %d", height)
+	txHash, err = sendFaucetTx(queryRPCURL, adminKey, adminAddr, uint64(100000000), fee, networkID, chainID, height)
+	if err != nil {
+		t.Fatalf("Failed to faucet admin: %v", err)
+	}
+	t.Logf("Admin faucet transaction sent: %s", txHash)
+
+	t.Log("Waiting for admin faucet transaction to be confirmed...")
+	if ok, err := waitForTxInclusion(queryRPCURL, adminAddr, txHash, txTimeout); err != nil || !ok {
+		t.Fatalf("Admin faucet tx not included: ok=%v err=%v", ok, err)
+	}
+	t.Log("Admin faucet transaction confirmed!")
+
+	// Step 4: Reward the recipient and verify the reward record
+	rewardAmount := uint64(50000000)
+	t.Logf("Step 4: Sending reward from admin to recipient (amount=%d, fee=%d)...", rewardAmount, fee)
+	height, _ = getHeight(queryRPCURL)
+	t.Logf("Current height: %d", height)
+	txHash, err = sendRewardTx(queryRPCURL, adminKey, adminAddr, recipientAddr, rewardAmount, fee, networkID, chainID, height)
+	if err != nil {
+		t.Fatalf("Failed to send reward tx: %v", err)
+	}
+	t.Logf("Reward transaction sent: %s", txHash)
+
+	t.Log("Waiting for reward transaction to be confirmed...")
+	if ok, err := waitForTxInclusion(queryRPCURL, adminAddr, txHash, txTimeout); err != nil || !ok {
+		t.Fatalf("Reward tx not included: ok=%v err=%v", ok, err)
+	}
+	t.Log("Reward transaction confirmed!")
+
+	t.Logf("Querying plugin endpoint GET /v1/query/rewards?address=%s ...", recipientAddr)
+	reward, err := pollRewardRecord(pluginRPCURL, recipientAddr, recordTimeout)
+	if err != nil {
+		t.Fatalf("Failed to query reward record: %v", err)
+	}
+	t.Logf("Reward record: recipient=%s lastAdmin=%s totalAmount=%d count=%d", reward.RecipientAddress, reward.LastAdminAddress, reward.TotalAmount, reward.Count)
+	if reward.Count != 1 {
+		t.Errorf("reward count = %d, want 1", reward.Count)
+	}
+	if reward.TotalAmount != rewardAmount {
+		t.Errorf("reward totalAmount = %d, want %d", reward.TotalAmount, rewardAmount)
+	}
+	if !strings.EqualFold(reward.RecipientAddress, recipientAddr) {
+		t.Errorf("reward recipientAddress = %s, want %s", reward.RecipientAddress, recipientAddr)
+	}
+	if !strings.EqualFold(reward.LastAdminAddress, adminAddr) {
+		t.Errorf("reward lastAdminAddress = %s, want %s", reward.LastAdminAddress, adminAddr)
+	}
+	t.Log("Reward record verified (count=1, correct amount and lastAdminAddress)")
+
+	// the recipient should also appear in the reward list (range-read) endpoint
+	t.Log("Querying plugin endpoint GET /v1/query/rewards (list / range read)...")
+	rewards, err := queryRewardList(pluginRPCURL)
+	if err != nil {
+		t.Fatalf("Failed to query reward list: %v", err)
+	}
+	t.Logf("Reward list returned %d record(s)", len(rewards))
+	if vErr := validateRewardRecords(rewards); vErr != nil {
+		t.Fatalf("reward list structural validation failed: %v", vErr)
+	}
+	t.Logf("All %d reward list record(s) are structurally valid", len(rewards))
+	if found := findReward(rewards, recipientAddr); found == nil {
+		t.Errorf("recipient %s not found in reward list endpoint", recipientAddr)
+	} else if found.TotalAmount != rewardAmount {
+		t.Errorf("reward list totalAmount = %d, want %d", found.TotalAmount, rewardAmount)
+	} else {
+		t.Logf("Recipient found in reward list with totalAmount=%d", found.TotalAmount)
+	}
+
+	// Step 5: an address that never received a faucet/reward must return an EMPTY record from both
+	// single-record endpoints (the query finds nothing, so the record is zero-valued)
+	unusedAddr := randomAddressHex()
+	t.Logf("Step 5: Querying both endpoints with an unused address (%s); expecting empty records...", unusedAddr)
+
+	t.Logf("Querying plugin endpoint GET /v1/query/faucets?address=%s ...", unusedAddr)
+	emptyFaucet, err := queryFaucetRecord(pluginRPCURL, unusedAddr)
+	if err != nil {
+		t.Fatalf("Failed to query faucet record for unused address: %v", err)
+	}
+	t.Logf("Faucet record for unused address: recipient=%q totalAmount=%d count=%d", emptyFaucet.RecipientAddress, emptyFaucet.TotalAmount, emptyFaucet.Count)
+	if emptyFaucet.Count != 0 || emptyFaucet.TotalAmount != 0 {
+		t.Errorf("faucet record for unused address = %+v, want empty (count=0, totalAmount=0)", emptyFaucet)
+	} else {
+		t.Log("Faucet endpoint correctly returned an empty record for the unused address")
+	}
+
+	t.Logf("Querying plugin endpoint GET /v1/query/rewards?address=%s ...", unusedAddr)
+	emptyReward, err := queryRewardRecord(pluginRPCURL, unusedAddr)
+	if err != nil {
+		t.Fatalf("Failed to query reward record for unused address: %v", err)
+	}
+	t.Logf("Reward record for unused address: recipient=%q totalAmount=%d count=%d", emptyReward.RecipientAddress, emptyReward.TotalAmount, emptyReward.Count)
+	if emptyReward.Count != 0 || emptyReward.TotalAmount != 0 {
+		t.Errorf("reward record for unused address = %+v, want empty (count=0, totalAmount=0)", emptyReward)
+	} else {
+		t.Log("Reward endpoint correctly returned an empty record for the unused address")
+	}
+
+	t.Log("")
+	t.Log("--- Custom RPC endpoints verified successfully! ---")
+	t.Logf("  curl '%s/v1/query/faucets?address=%s'", pluginRPCURL, recipientAddr)
+	t.Logf("  curl '%s/v1/query/rewards?address=%s'", pluginRPCURL, recipientAddr)
+	t.Logf("  curl '%s/v1/query/faucets'", pluginRPCURL)
+	t.Logf("  curl '%s/v1/query/rewards'", pluginRPCURL)
+}
+
 // randomSuffix generates a random hex suffix for unique nicknames
 func randomSuffix() string {
 	b := make([]byte, 4)
+	cryptorand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// randomAddressHex returns a random 20-byte address as hex; used to query an address that has no
+// faucet/reward record so the endpoint is expected to return an empty (zero-valued) record
+func randomAddressHex() string {
+	b := make([]byte, 20)
 	cryptorand.Read(b)
 	return hex.EncodeToString(b)
 }
@@ -546,4 +811,195 @@ func postRawJSON(url string, jsonBody string) ([]byte, error) {
 	}
 
 	return respBody, nil
+}
+
+// getRawJSON performs an HTTP GET and returns the raw response body (used by the plugin RPC endpoints)
+func getRawJSON(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return respBody, nil
+}
+
+// faucetRecord mirrors the JSON shape returned by the plugin's /v1/query/faucets endpoint
+type faucetRecord struct {
+	RecipientAddress string `json:"recipientAddress"`
+	TotalAmount      uint64 `json:"totalAmount"`
+	Count            uint64 `json:"count"`
+}
+
+// rewardRecord mirrors the JSON shape returned by the plugin's /v1/query/rewards endpoint
+type rewardRecord struct {
+	RecipientAddress string `json:"recipientAddress"`
+	LastAdminAddress string `json:"lastAdminAddress"`
+	TotalAmount      uint64 `json:"totalAmount"`
+	Count            uint64 `json:"count"`
+}
+
+// queryFaucetRecord fetches a single recipient's faucet record from the plugin RPC server
+func queryFaucetRecord(pluginURL, address string) (*faucetRecord, error) {
+	respBody, err := getRawJSON(pluginURL + "/v1/query/faucets?address=" + address)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Faucet faucetRecord `json:"faucet"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v, body: %s", err, string(respBody))
+	}
+	return &result.Faucet, nil
+}
+
+// queryFaucetList fetches all faucet records from the plugin RPC server (range read)
+func queryFaucetList(pluginURL string) ([]faucetRecord, error) {
+	respBody, err := getRawJSON(pluginURL + "/v1/query/faucets")
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Faucets []faucetRecord `json:"faucets"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v, body: %s", err, string(respBody))
+	}
+	return result.Faucets, nil
+}
+
+// queryRewardRecord fetches a single recipient's reward record from the plugin RPC server
+func queryRewardRecord(pluginURL, address string) (*rewardRecord, error) {
+	respBody, err := getRawJSON(pluginURL + "/v1/query/rewards?address=" + address)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Reward rewardRecord `json:"reward"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v, body: %s", err, string(respBody))
+	}
+	return &result.Reward, nil
+}
+
+// queryRewardList fetches all reward records from the plugin RPC server (range read)
+func queryRewardList(pluginURL string) ([]rewardRecord, error) {
+	respBody, err := getRawJSON(pluginURL + "/v1/query/rewards")
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Rewards []rewardRecord `json:"rewards"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v, body: %s", err, string(respBody))
+	}
+	return result.Rewards, nil
+}
+
+// pollFaucetRecord polls the faucet endpoint until a record with count > 0 appears or the timeout elapses
+func pollFaucetRecord(pluginURL, address string, timeout time.Duration) (*faucetRecord, error) {
+	return pollFaucetRecordUntil(pluginURL, address, 1, timeout)
+}
+
+// pollFaucetRecordUntil polls the faucet endpoint until the record's count reaches minCount or the timeout elapses
+func pollFaucetRecordUntil(pluginURL, address string, minCount uint64, timeout time.Duration) (*faucetRecord, error) {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		rec, err := queryFaucetRecord(pluginURL, address)
+		if err != nil {
+			lastErr = err
+		} else if rec.Count >= minCount {
+			return rec, nil
+		}
+		time.Sleep(1 * time.Second)
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("faucet record for %s did not reach count %d within timeout", address, minCount)
+}
+
+// pollRewardRecord polls the reward endpoint until a record with count > 0 appears or the timeout elapses
+func pollRewardRecord(pluginURL, address string, timeout time.Duration) (*rewardRecord, error) {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		rec, err := queryRewardRecord(pluginURL, address)
+		if err != nil {
+			lastErr = err
+		} else if rec.Count > 0 {
+			return rec, nil
+		}
+		time.Sleep(1 * time.Second)
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("reward record for %s not found within timeout", address)
+}
+
+// findFaucet returns the faucet record matching the address (case-insensitive), or nil
+func findFaucet(records []faucetRecord, address string) *faucetRecord {
+	for i := range records {
+		if strings.EqualFold(records[i].RecipientAddress, address) {
+			return &records[i]
+		}
+	}
+	return nil
+}
+
+// findReward returns the reward record matching the address (case-insensitive), or nil
+func findReward(records []rewardRecord, address string) *rewardRecord {
+	for i := range records {
+		if strings.EqualFold(records[i].RecipientAddress, address) {
+			return &records[i]
+		}
+	}
+	return nil
+}
+
+// validateFaucetRecords asserts every record returned by the range/list endpoint is a well-formed
+// faucet record. This guards against the endpoint scanning a colliding key prefix and returning
+// unrelated core records (e.g. validators), which a lenient decoder would silently accept as a
+// faucet with count=0. A genuine faucet record always has count>=1 and totalAmount>=1.
+func validateFaucetRecords(records []faucetRecord) error {
+	for _, rec := range records {
+		if addr, err := hex.DecodeString(rec.RecipientAddress); err != nil || len(addr) != 20 {
+			return fmt.Errorf("malformed recipientAddress %q", rec.RecipientAddress)
+		}
+		if rec.Count < 1 || rec.TotalAmount < 1 {
+			return fmt.Errorf("malformed record (recipient=%s, totalAmount=%d, count=%d); endpoint may be reading colliding core state", rec.RecipientAddress, rec.TotalAmount, rec.Count)
+		}
+	}
+	return nil
+}
+
+// validateRewardRecords asserts every record returned by the range/list endpoint is a well-formed
+// reward record (guards against colliding-prefix scans returning core state like committees).
+func validateRewardRecords(records []rewardRecord) error {
+	for _, rec := range records {
+		if addr, err := hex.DecodeString(rec.RecipientAddress); err != nil || len(addr) != 20 {
+			return fmt.Errorf("malformed recipientAddress %q", rec.RecipientAddress)
+		}
+		if addr, err := hex.DecodeString(rec.LastAdminAddress); err != nil || len(addr) != 20 {
+			return fmt.Errorf("malformed lastAdminAddress %q", rec.LastAdminAddress)
+		}
+		if rec.Count < 1 || rec.TotalAmount < 1 {
+			return fmt.Errorf("malformed record (recipient=%s, totalAmount=%d, count=%d); endpoint may be reading colliding core state", rec.RecipientAddress, rec.TotalAmount, rec.Count)
+		}
+	}
+	return nil
 }
