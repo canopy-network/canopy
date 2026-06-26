@@ -54,3 +54,32 @@ message Signature {
   // signature: the bytes of the signature output from a private key which may be verified with the message and public
   bytes signature = 2;
 }
+
+// MessageReward mints tokens to a recipient
+message MessageReward {
+  bytes admin_address = 1;
+  bytes recipient_address = 2;
+  uint64 amount = 3;
+}
+
+// MessageFaucet is a test-only transaction that mints tokens to any address
+message MessageFaucet {
+  bytes signer_address = 1;
+  bytes recipient_address = 2;
+  uint64 amount = 3;
+}
+
+// Faucet is a state record tracking cumulative faucet mints to a recipient
+message Faucet {
+  bytes recipient_address = 1;
+  uint64 total_amount = 2;
+  uint64 count = 3;
+}
+
+// Reward is a state record tracking cumulative reward mints to a recipient
+message Reward {
+  bytes recipient_address = 1;
+  bytes last_admin_address = 2;
+  uint64 total_amount = 3;
+  uint64 count = 4;
+}
