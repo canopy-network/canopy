@@ -96,7 +96,7 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	// retrieve per-block non-signers from the committed QC for this block
 	blockNonSigners, err := sm.blockNonSignerAddresses(blockHeight)
 	if err != nil {
-		return nil, err
+		blockNonSigners = nil
 	}
 	// retrieve orders
 	orderBooks, err := sm.GetOrderBooks()
@@ -218,6 +218,9 @@ func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64) ([][]byte, li
 	committee, err := s.LoadCommittee(qc.Header.ChainId, qc.Header.RootHeight)
 	if err != nil {
 		return nil, err
+	}
+	if committee.ValidatorSet == nil {
+		return nil, nil
 	}
 	nonSignerPubKeys, _, err := qc.GetNonSigners(committee.ValidatorSet)
 	if err != nil {
