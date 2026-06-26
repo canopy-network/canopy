@@ -5,6 +5,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/codec"
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 // INDEXER.GO IS ONLY USED FOR CANOPY INDEXING RPC - NOT A CRITICAL PIECE OF THE STATE MACHINE
@@ -89,6 +90,11 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	}
 	// retrieve doubleSigners
 	doubleSigners, err := st.GetDoubleSignersAsOf(blockHeight)
+	if err != nil {
+		return nil, err
+	}
+	// retrieve per-block non-signers from the committed QC for this block
+	blockNonSigners, err := sm.blockNonSignerAddresses(blockHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +200,38 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		TotalDelegatesActive:     totalDelegatesActive,
 		TotalDelegatesPaused:     totalDelegatesPaused,
 		TotalDelegatesUnstaking:  totalDelegatesUnstaking,
+		BlockNonSigners:          blockNonSigners,
 	}, nil
+}
+
+func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64) ([][]byte, lib.ErrorI) {
+	if blockHeight <= 1 {
+		return nil, nil
+	}
+	qc, err := s.LoadCertificateHashesOnly(blockHeight)
+	if err != nil {
+		return nil, err
+	}
+	if qc == nil || qc.Header == nil || qc.Signature == nil {
+		return nil, nil
+	}
+	committee, err := s.LoadCommittee(qc.Header.ChainId, qc.Header.RootHeight)
+	if err != nil {
+		return nil, err
+	}
+	nonSignerPubKeys, _, err := qc.GetNonSigners(committee.ValidatorSet)
+	if err != nil {
+		return nil, err
+	}
+	addresses := make([][]byte, 0, len(nonSignerPubKeys))
+	for _, pubKeyBytes := range nonSignerPubKeys {
+		pubKey, e := crypto.NewPublicKeyFromBytes(pubKeyBytes)
+		if e != nil {
+			return nil, lib.ErrPubKeyFromBytes(e)
+		}
+		addresses = append(addresses, pubKey.Address().Bytes())
+	}
+	return addresses, nil
 }
 
 // DeltaIndexerBlobs returns a clone of blobs where account, pool, and validator payloads
@@ -506,6 +543,7 @@ func cloneIndexerBlob(src *IndexerBlob) *IndexerBlob {
 		TotalDelegatesActive:     src.TotalDelegatesActive,
 		TotalDelegatesPaused:     src.TotalDelegatesPaused,
 		TotalDelegatesUnstaking:  src.TotalDelegatesUnstaking,
+		BlockNonSigners:          src.BlockNonSigners,
 	}
 }
 
