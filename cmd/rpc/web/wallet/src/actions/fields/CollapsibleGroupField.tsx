@@ -72,11 +72,11 @@ export const CollapsibleGroupField: React.FC<CollapsibleGroupFieldProps> = ({
       hover: "hover:bg-card/50 hover:border-border",
     },
     primary: {
-      bg: "bg-primary/5",
-      border: "border-primary/20",
-      text: "text-primary/80",
-      icon: "text-primary/60",
-      hover: "hover:bg-primary/10 hover:border-primary/30",
+      bg: "bg-white/[0.04]",
+      border: "border-white/15",
+      text: "text-foreground/85",
+      icon: "text-foreground/65",
+      hover: "hover:bg-white/[0.07] hover:border-white/20",
     },
   };
 

@@ -73,6 +73,7 @@ type Store struct {
 	sc         *SMT          // reference to the state commitment store
 	*Indexer                 // reference to the indexer store
 	metrics    *lib.Metrics  // telemetry
+	syncing    atomic.Bool   // when true, skip compaction to avoid write stalls during sync
 	log        lib.LoggerI   // logger
 	config     lib.Config    // config
 	mu         *sync.Mutex   // mutex for concurrent commits
@@ -97,7 +98,9 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		BlockSize:      64 << 10, // 64 KB data blocks
 		IndexBlockSize: 32 << 10, // 32 KB index blocks
 		Compression: func() *sstable.CompressionProfile {
-			return sstable.ZstdCompression // biggest compression at the expense of more CPU resources
+			profile := getCompressionProfile(config.CompressionProfile)
+			log.Debugf("Using %s compression for sstables", profile.Name)
+			return profile
 		},
 	}
 	db, err := pebble.Open(path, &pebble.Options{
@@ -472,6 +475,9 @@ func (s *Store) IncreaseVersion() { func() { s.version++; s.sc = nil }() }
 // number of the state. This is used to track the versioning of the state data.
 func (s *Store) Version() uint64 { return s.version }
 
+// SetSyncing tells the store whether the node is currently syncing
+func (s *Store) SetSyncing(v bool) { s.syncing.Store(v) }
+
 // NewTxn() creates and returns a new transaction for the Store, allowing atomic operations
 // on the StateStore, StateCommitStore, Indexer, and CommitIDStore.
 func (s *Store) NewTxn() lib.StoreI {
@@ -502,7 +508,12 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 		// set up the state commit store
 		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
 		// commit the SMT directly using the txn ops
-		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
+		//
+		// NOTE: the SMT node cache MUST NOT be persisted across blocks. `node.copy()` is a
+		// no-op alias, so the parallel commit mutates cached `*node` objects in place. Reusing
+		// them later can serve stale nodes (e.g. from a speculative, uncommitted `Root()` call),
+		// diverging from the on-disk snapshot. A fresh per-block cache still caches within the commit.
+		if err = s.sc.CommitParallel(s.ss.txn.ops); err != nil {
 			return nil, err
 		}
 	}
@@ -612,24 +623,32 @@ func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 
 // MaybeCompact() checks if it is time to compact the LSS and HSS respectively
 func (s *Store) MaybeCompact() {
+	// skip compaction during syncing: at scale (~1.5M+ blocks) HSS range compaction causes
+	// PebbleDB write stalls that throttle the sync loop's db.Apply calls
+	if s.syncing.Load() {
+		return
+	}
 	// check if the current version is a multiple of the cleanup block interval
 	compactionInterval := s.config.StoreConfig.LSSCompactionInterval
 	version := s.Version()
 	if compactionInterval > 0 && version%compactionInterval == 0 {
 		go func() {
-			// compactions are not allowed to run concurrently to not intertwine with the keys
-			if s.compaction.Load() {
-				s.log.Debugf("key compaction skipped [%d]: already in progress", version)
+			now := time.Now()
+			// trigger compaction of store keys
+			if err := s.Compact(version, latestStatePrefix); err != nil {
+				s.log.Errorf("LSS key compaction failed: %s", err)
 				return
 			}
-			s.compaction.Store(true)
-			defer s.compaction.Store(false)
+			s.metrics.UpdateStoreJobMetrics(time.Since(now), 0, 0)
 			// perform HSS compaction every 4th compaction
-			hssCompaction := (version/compactionInterval)%4 == 0
-			// trigger compaction of store keys
-			if err := s.Compact(version, hssCompaction); err != nil {
-				s.log.Errorf("key compaction failed: %s", err)
+			if (version/compactionInterval)%4 != 0 {
+				return
 			}
+			now = time.Now()
+			if err := s.Compact(version, historicStatePrefix); err != nil {
+				s.log.Errorf("HSS key compaction failed: %s", err)
+			}
+			s.metrics.UpdateStoreJobMetrics(0, time.Since(now), 0)
 		}()
 	}
 }
@@ -708,37 +727,44 @@ func (s *Store) MaybeBackup() {
 		if removeErr := os.RemoveAll(prevBackupDir); removeErr != nil {
 			s.log.Warnf("failed to remove previous backup: %v", removeErr)
 		}
-		s.log.Infof("backup completed at height [%d] in %s", version, time.Since(start))
+		backupDuration := time.Since(start)
+		// log results
+		s.log.Infof("backup completed at height [%d] in %s", version, backupDuration)
+		// update metrics
+		s.metrics.UpdateStoreJobMetrics(0, 0, backupDuration)
 	}()
 }
 
-// Compact runs Pebble range compaction over the latest and optional historic state prefixes.
-func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
-	// first compaction: latest state  keys
-	startPrefix, endPrefix := latestStatePrefix, prefixEnd(latestStatePrefix)
-	// track current time and version
+// Compact runs Pebble range compaction over the prefix range
+func (s *Store) Compact(version uint64, prefix []byte) lib.ErrorI {
+	// compactions are not allowed to run concurrently to not intertwine with the keys
+	if !s.compaction.CompareAndSwap(false, true) {
+		s.log.Debugf("key compaction skipped [%d] [%s]: already in progress", version, prefix)
+		return nil
+	}
+	defer s.compaction.Store(false)
 	now := time.Now()
-	s.log.Debugf("key compaction started at height %d", version)
-	// create a timeout to limit the duration of the compaction process
-	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
+	s.log.Debugf("key compaction [%s] started at height %d", prefix, version)
+	// TODO: per-prefix budget was chosen arbitrarily, update once multiple tests are run
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	// flush and compact the range
-	if err := s.db.Compact(ctx, startPrefix, endPrefix, true); err != nil {
-		return ErrCommitDB(err)
+	// compact prefix range
+	if err := s.db.Compact(ctx, prefix, prefixEnd(prefix), true); err != nil {
+		return ErrCompactDB(err)
 	}
-	lssTime := time.Since(now)
-	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssTime)
-	// second compaction: historic state keys
-	if compactHSS {
-		startPrefix, endPrefix = historicStatePrefix, prefixEnd(historicStatePrefix)
-		hssTime := time.Now()
-		if err := s.db.Compact(ctx, startPrefix, endPrefix, false); err != nil {
-			return ErrCommitDB(err)
+	// log the duration of the compaction
+	duration := time.Since(now)
+	s.log.Debugf("key compaction finished [%s] [%d] time: %s", prefix, version, duration)
+	return nil
+}
+
+// CompactAll is a helper function that runs compaction for all store prefixes sequentially
+func (s *Store) CompactAll(version uint64) lib.ErrorI {
+	prefixes := [][]byte{latestStatePrefix, historicStatePrefix, stateCommitmentPrefix, indexerPrefix}
+	for _, prefix := range prefixes {
+		if err := s.Compact(version, prefix); err != nil {
+			return err
 		}
-		// log results
-		s.log.Debugf("key compaction finished [HSS] [%d] time: %s, total time: %s", version,
-			time.Since(hssTime), time.Since(now))
 	}
 	return nil
 }

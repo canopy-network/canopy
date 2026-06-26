@@ -10,6 +10,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
+	"github.com/canopy-network/canopy/store"
 )
 
 const (
@@ -74,6 +75,10 @@ func (c *Controller) Sync() {
 	c.log.Infof("Sync started 🔄 for committee %d", c.Config.ChainId)
 	// set the Controller as 'syncing'
 	c.isSyncing.Store(true)
+	// notify the store to defer compaction during sync
+	if st, ok := c.FSM.Store().(*store.Store); ok {
+		st.SetSyncing(true)
+	}
 	// check if node is alone in the validator set
 	singleNode, err := c.singleNodeNetwork()
 	if err != nil {
@@ -740,12 +745,32 @@ func (c *Controller) finishSyncing() {
 	c.Lock()
 	// when function completes, unlock
 	defer c.Unlock()
+	// reinitialize the mempool now that sync is complete
+	c.Mempool.L.Lock()
+	c.Mempool.Clear()
+	c.Mempool.FSM.Discard()
+	if mFSM, err := c.FSM.Copy(); err == nil {
+		c.Mempool.FSM = mFSM
+	}
+	c.Mempool.CheckMempool()
+	c.Mempool.FSM.Reset()
+	c.Mempool.L.Unlock()
 	// set the startup block metric (block height when first sync completed)
 	c.Metrics.SetStartupBlock(c.FSM.Height())
 	// signal a reset of bft for the chain
 	c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: c.LoadLastCommitTime(c.FSM.Height())}
 	// set syncing to false
 	c.isSyncing.Store(false)
+	// notify the store to resume compaction and trigger a full compaction of all prefixes
+	// (including SMT/indexer which are never compacted during normal operation)
+	if st, ok := c.FSM.Store().(*store.Store); ok {
+		st.SetSyncing(false)
+		go func() {
+			if err := st.CompactAll(st.Version()); err != nil {
+				c.log.Errorf("post-sync compaction failed: %s", err)
+			}
+		}()
+	}
 	// enable listening for a block
 	go c.ListenForBlock()
 }

@@ -38,6 +38,8 @@ interface ValidatorRewardsProps {
 
 const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
     const [activeTab, setActiveTab] = useState('rewardsHistory')
+    const [blockRewardsPageSize, setBlockRewardsPageSize] = useState(10)
+    const [crossChainRewardsPageSize, setCrossChainRewardsPageSize] = useState(10)
 
     const formatNumber = (num: number) => {
         return num.toLocaleString()
@@ -77,7 +79,7 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
             <div className="mb-6">
 
                 {/* Tab navigation */}
-                <div className="flex gap-1 border-b border-gray-700">
+                <div className="flex gap-1 border-b border-white/10">
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
@@ -153,7 +155,10 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                                         <span className="text-primary">{formatReward(reward.netReward)} {validatorDetailTexts.metrics.units.cnpy}</span>
                                     ])}
                                     paginate={true}
-                                    pageSize={10}
+                                    pageSize={blockRewardsPageSize}
+                                    showEntriesSelector={true}
+                                    currentEntriesPerPage={blockRewardsPageSize}
+                                    onEntriesPerPageChange={setBlockRewardsPageSize}
                                 />
                             </div>
                         ) : (
@@ -191,20 +196,23 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                                         </div>,
                                         <span className="text-gray-400">{reward.committeeId}</span>,
                                         <span className="text-gray-400">{reward.timestamp}</span>,
-                                        <span className="text-green-400">{formatReward(reward.reward)} {reward.chain.split(' ')[0].toUpperCase()}</span>,
+                                        <span className="text-primary">{formatReward(reward.reward)} {reward.chain.split(' ')[0].toUpperCase()}</span>,
                                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-normal ${getProgressBarColor(reward.color)}`}>
                                             {validatorDetailTexts.rewards.types.tag}
                                         </span>
                                     ])}
                                     paginate={true}
-                                    pageSize={10}
+                                    pageSize={crossChainRewardsPageSize}
+                                    showEntriesSelector={true}
+                                    currentEntriesPerPage={crossChainRewardsPageSize}
+                                    onEntriesPerPageChange={setCrossChainRewardsPageSize}
                                 />
                             </div>
                         )}
 
                         {/* Daily average */}
                         {validator.rewards && validator.rewards.averageDaily && (
-                            <div className="pt-6 border-t border-gray-700">
+                            <div className="pt-6 border-t border-white/10">
                                 <div className="text-sm text-gray-400 text-center">
                                     {validatorDetailTexts.rewards.averageDaily}: {formatNumber(validator.rewards.averageDaily)} {validatorDetailTexts.metrics.units.cnpy}/day
                                 </div>

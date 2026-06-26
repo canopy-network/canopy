@@ -47,7 +47,7 @@ export const DividerField: React.FC<DividerFieldProps> = ({
         <div className="relative">
           <div className={variantStyles[variant]} />
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="bg-background px-3 text-xs text-muted-foreground uppercase tracking-wider">
+            <span className="bg-background px-3 text-xs text-foreground/70 font-medium tracking-normal">
               {label}
             </span>
           </div>

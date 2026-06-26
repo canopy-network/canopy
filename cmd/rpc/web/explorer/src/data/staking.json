@@ -88,10 +88,17 @@
           "visible": true
         },
         {
-          "title": "Total Parameters",
-          "icon": "fa-sliders",
+          "title": "Fee Parameters",
+          "icon": "fa-coins",
+          "color": "yellow",
+          "description": "Network fee settings",
+          "visible": true
+        },
+        {
+          "title": "Governance Parameters",
+          "icon": "fa-vote-yea",
           "color": "purple",
-          "description": "All governance settings",
+          "description": "DAO reward settings",
           "visible": true
         }
       ]

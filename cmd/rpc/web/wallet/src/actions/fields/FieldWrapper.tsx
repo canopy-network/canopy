@@ -20,7 +20,7 @@ export const FieldWrapper: React.FC<FieldWrapperProps> = ({
         <div className={spanClasses(field, templateContext?.layout)}>
             <label className="block">
                 {resolveTemplate(field.label) && (
-                    <div className="text-[11px] sm:text-xs uppercase tracking-[0.08em] mb-1.5 text-muted-foreground/90">
+                    <div className="text-sm mb-1.5 text-foreground/90 font-medium tracking-normal">
                         {resolveTemplate(field.label)}
                     </div>
                 )}

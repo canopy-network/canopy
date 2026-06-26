@@ -78,10 +78,11 @@ func NewServer(controller *controller.Controller, config lib.Config, logger lib.
 
 // Start initializes the Canopy RPC servers
 func (s *Server) Start() {
+	hostport := strings.Split(s.config.ListenAddress, ":")
 	// Start the Query and Admin RPC servers concurrently
-	go s.startRPC(createRouter(s), s.config.RPCPort)
-	go s.startRPC(createAdminRouter(s), s.config.AdminPort)
-	go s.startRPC(createDebugRouter(), s.config.ProfilingPort)
+	go s.startRPC(createRouter(s), hostport[0], s.config.RPCPort)
+	go s.startRPC(createAdminRouter(s), hostport[0], s.config.AdminPort)
+	go s.startRPC(createDebugRouter(), hostport[0], s.config.ProfilingPort)
 
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
@@ -102,7 +103,7 @@ func (s *Server) Start() {
 }
 
 // startRPC starts an RPC server with the provided router and port
-func (s *Server) startRPC(router *httprouter.Router, port string) {
+func (s *Server) startRPC(router *httprouter.Router, host, port string) {
 
 	// Create CORS policy
 	cor := cors.New(cors.Options{
@@ -114,9 +115,9 @@ func (s *Server) startRPC(router *httprouter.Router, port string) {
 	timeout := time.Duration(s.config.TimeoutS) * time.Second
 
 	// Start RPC server
-	s.logger.Infof("Starting RPC server at 0.0.0.0:%s", port)
+	s.logger.Infof("Starting RPC server at %s:%s", host, port)
 	s.logger.Fatal((&http.Server{
-		Addr:              colon + port,
+		Addr:              host + colon + port,
 		ReadHeaderTimeout: timeout,
 		ReadTimeout:       timeout,
 		WriteTimeout:      timeout,
@@ -155,7 +156,7 @@ func (s *Server) updatePollResults() {
 			return nil
 
 		}(); err != nil {
-			s.logger.Error(err.Error())
+			// s.logger.Error(err.Error())
 		}
 		time.Sleep(time.Second * 3)
 	}
@@ -163,9 +164,11 @@ func (s *Server) updatePollResults() {
 
 // startStaticFileServers starts a file server for the wallet and explorer
 func (s *Server) startStaticFileServers() {
-	s.logger.Infof("Starting Web Wallet 🔑 http://localhost:%s ⬅️", s.config.WalletPort)
+	hostport := strings.Split(s.config.ListenAddress, ":")
+	s.logger.Infof("Starting Web Wallet 🔑 http://%s:%s ⬅️", hostport[0], s.config.WalletPort)
+
 	s.runStaticFileServer(walletFS, walletStaticDir, s.config.WalletPort, s.config)
-	s.logger.Infof("Starting Block Explorer 🔍️ http://localhost:%s ⬅️", s.config.ExplorerPort)
+	s.logger.Infof("Starting Block Explorer 🔍️ http://%s:%s ⬅️", hostport[0], s.config.ExplorerPort)
 	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
 }
 
@@ -371,7 +374,7 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 			}
 
 			// Inject the configuration into the HTML file content
-			injectedHTML := injectConfig(string(htmlBytes), conf)
+			injectedHTML := injectConfig(string(htmlBytes), conf, r)
 
 			// Set the response header as HTML and write the injected content to the response
 			w.Header().Set("Content-Type", "text/html")
@@ -420,14 +423,19 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 }
 
 // injectConfig() injects the config.json into the HTML file
-func injectConfig(html string, config lib.Config) string {
+func injectConfig(html string, config lib.Config, r *http.Request) string {
+	injectedConfig, err := json.Marshal(map[string]any{
+		"rpcURL":      config.RPCUrl,
+		"adminRPCURL": config.AdminRPCUrl,
+		"chainId":     config.ChainId,
+	})
+	if err != nil {
+		injectedConfig = []byte("{}")
+	}
+
 	script := fmt.Sprintf(`<script>
-		window.__CONFIG__ = {
-            rpcURL: "%s",
-            adminRPCURL: "%s",
-            chainId: %d
-        };
-	</script>`, config.RPCUrl, config.AdminRPCUrl, config.ChainId)
+		window.__CONFIG__ = %s;
+	</script>`, injectedConfig)
 
 	// inject the script just before </head>
 	return strings.Replace(html, "</head>", script+"</head>", 1)

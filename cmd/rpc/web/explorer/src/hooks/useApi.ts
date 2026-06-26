@@ -5,6 +5,7 @@ import {
     Transactions,
     AllTransactions,
     getTransactionsWithRealPagination,
+    getRecentTransactionsPreview,
     Accounts,
     Validators,
     ValidatorsWithFilters,
@@ -41,13 +42,13 @@ export const queryKeys = {
     transactions: (page: number, height: number) => ['transactions', page, height],
     allTransactions: (page: number, perPage: number, filters?: any) => ['allTransactions', page, perPage, filters],
     realPaginationTransactions: (page: number, perPage: number, filters?: any) => ['realPaginationTransactions', page, perPage, filters],
-    accounts: (page: number) => ['accounts', page],
-    validators: (page: number) => ['validators', page],
+    accounts: (page: number, perPage?: number) => ['accounts', page, perPage],
+    validators: (page: number, perPage?: number) => ['validators', page, perPage],
     validatorsWithFilters: (page: number, unstaking: number, paused: number, delegate: number, committee: number) => ['validatorsWithFilters', page, unstaking, paused, delegate, committee],
     committee: (page: number, chainId: number) => ['committee', page, chainId],
     dao: (height: number) => ['dao', height],
     account: (height: number, address: string) => ['account', height, address],
-    accountWithTxs: (height: number, address: string, page: number) => ['accountWithTxs', height, address, page],
+    accountWithTxs: (height: number, address: string, page: number, perPage: number = 10) => ['accountWithTxs', height, address, page, perPage],
     params: (height: number) => ['params', height],
     supply: (height: number) => ['supply', height],
     validator: (height: number, address: string) => ['validator', height, address],
@@ -56,7 +57,7 @@ export const queryKeys = {
     txByHash: (hash: string) => ['txByHash', hash],
     transactionsBySender: (page: number, sender: string) => ['transactionsBySender', page, sender],
     transactionsByRec: (page: number, rec: string) => ['transactionsByRec', page, rec],
-    pending: (page: number) => ['pending', page],
+    pending: (page: number, perPage: number) => ['pending', page, perPage],
     ecoParams: (chainId: number) => ['ecoParams', chainId],
     orders: (chainId: number) => ['orders', chainId],
     config: () => ['config'],
@@ -65,18 +66,114 @@ export const queryKeys = {
     tableData: (page: number, category: number, committee?: number) => ['tableData', page, category, committee],
 };
 
+// Block polling interval (ms). Defaults to 2s so a plain explorer/wallet —
+// especially a simple private deployment — doesn't poll the node aggressively.
+// Override with VITE_BLOCKS_POLL_MS in the environment for snappier updates.
+const DEFAULT_BLOCKS_POLL_MS = 2000;
+const MIN_BLOCKS_POLL_MS = 500;
+const BLOCKS_POLL_MS = (() => {
+    const raw = Number(import.meta.env.VITE_BLOCKS_POLL_MS);
+    return Number.isFinite(raw) && raw > 0
+        ? Math.max(MIN_BLOCKS_POLL_MS, raw)
+        : DEFAULT_BLOCKS_POLL_MS;
+})();
+
+// Backoff helper: when a polling query keeps failing, slow it down so we
+// don't hammer a degraded RPC node (and so we don't flood the browser
+// console with one [Error] line per request — those are emitted natively
+// by the browser for every 4xx/5xx and can't be silenced from JS).
+const errorAwareInterval = (baseMs: number, maxMs: number = 60000) =>
+    (query: { state: { error: unknown; fetchFailureCount: number } }) => {
+        const fails = query.state.fetchFailureCount || 0;
+        if (!query.state.error || fails <= 0) return baseMs;
+        return Math.min(baseMs * Math.pow(2, fails), maxMs);
+    };
+
+// Lightweight hook for the latest block height (polls every BLOCKS_POLL_MS,
+// with backoff on errors so a degraded RPC node doesn't spam the console).
+export const useLatestBlock = () => {
+    return useQuery({
+        queryKey: ['latestBlock'],
+        queryFn: () => Blocks(1, 0),
+        staleTime: 0,
+        refetchInterval: errorAwareInterval(BLOCKS_POLL_MS),
+        refetchIntervalInBackground: true,
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
+        refetchOnMount: 'always',
+        retry: false,
+    });
+};
+
+// Extracts the height of the most recent block from a Blocks(1,0) response.
+const extractLatestBlockHeight = (payload: any): number => {
+    if (!payload) return 0;
+    const totalCount = payload?.totalCount ?? payload?.count;
+    if (typeof totalCount === 'number' && totalCount > 0) return totalCount;
+    const list = payload?.results || payload?.blocks || payload?.list || payload?.data;
+    const first = Array.isArray(list) && list.length > 0 ? list[0] : null;
+    return Number(first?.blockHeader?.height ?? first?.height ?? 0) || 0;
+};
+
+// Queries that must refresh whenever a new block is produced. Adding a key here
+// makes that query participate in the global "new block" invalidation pulse.
+const BLOCK_DEPENDENT_QUERY_KEYS: Array<readonly unknown[]> = [
+    ['cardData'],
+    ['allBlocksCache'],
+    ['blocks'],
+    ['recentTransactionsPreview'],
+    ['realPaginationTransactions'],
+    ['allTransactions'],
+    ['transactions'],
+    ['txsByHeight'],
+    ['pending'],
+    ['all-validators'],
+    ['all-delegators'],
+    ['validators'],
+    ['validatorsWithFilters'],
+    ['supply'],
+    ['orders'],
+    ['dexBatch'],
+    ['nextDexBatch'],
+];
+
+// Global subscription: polls the latest block height and, whenever it changes,
+// invalidates every dashboard-facing query so the UI reflects the new chain
+// state without requiring a manual page refresh.
+export const useBlockSubscription = () => {
+    const queryClient = useQueryClient();
+    const { data } = useLatestBlock();
+    const lastHeightRef = React.useRef<number>(0);
+
+    React.useEffect(() => {
+        const height = extractLatestBlockHeight(data);
+        if (height <= 0) return;
+        if (lastHeightRef.current === height) return;
+
+        const previousHeight = lastHeightRef.current;
+        lastHeightRef.current = height;
+
+        // Skip invalidation on the very first observation; queries are already
+        // fetching their initial data and we want to avoid a redundant burst.
+        if (previousHeight === 0) return;
+
+        BLOCK_DEPENDENT_QUERY_KEYS.forEach((key) => {
+            queryClient.invalidateQueries({ queryKey: key });
+        });
+    }, [data, queryClient]);
+};
+
 // Hooks for Blocks
 export const useBlocks = (page: number, perPage: number = 10, filter: string = 'all') => {
-    // Load more blocks if the filter is week or 24h to have enough data to filter
     const blockCount = filter === 'week' ? 50 : filter === '24h' ? 30 : perPage;
 
     return useQuery({
         queryKey: queryKeys.blocks(page, blockCount, filter),
         queryFn: () => Blocks(page, blockCount),
-        staleTime: 300000, // Cache for 5 minutes (increased from 30 seconds)
-        refetchInterval: REFRESH_INTERVAL_MS,
-        refetchOnWindowFocus: false, // Don't refetch when window regains focus
-        gcTime: 600000 // Keep in cache for 10 minutes
+        staleTime: 0,
+        refetchInterval: BLOCKS_POLL_MS,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
     });
 };
 
@@ -92,11 +189,23 @@ export const useTransactions = (page: number, height: number = 0) => {
     });
 };
 
+// Hook for transactions at a specific block height with configurable perPage
+export const useTransactionsByHeight = (height: number, perPage: number = 1000, enabled: boolean = true) => {
+    return useQuery({
+        queryKey: ['txsByHeight', height, perPage],
+        queryFn: () => Transactions(1, height, perPage),
+        staleTime: 30000,
+        enabled,
+    });
+};
+
 // Hook for all transactions with filters
 export const useAllTransactions = (page: number, perPage: number = 10, filters?: {
     type?: string;
     fromDate?: string;
     toDate?: string;
+    fromBlock?: string;
+    toBlock?: string;
     status?: string;
     address?: string;
     minAmount?: number;
@@ -115,6 +224,8 @@ export const useTransactionsWithRealPagination = (page: number, perPage: number 
     type?: string;
     fromDate?: string;
     toDate?: string;
+    fromBlock?: string;
+    toBlock?: string;
     status?: string;
     address?: string;
     minAmount?: number;
@@ -128,20 +239,36 @@ export const useTransactionsWithRealPagination = (page: number, perPage: number 
     });
 };
 
-// Hooks for Accounts
-export const useAccounts = (page: number) => {
+export const useRecentTransactionsPreview = (blocks: any[] | undefined, limit: number = 5) => {
+    const latestBlockHeight = Number(blocks?.[0]?.blockHeader?.height ?? blocks?.[0]?.height ?? 0);
+
     return useQuery({
-        queryKey: queryKeys.accounts(page),
-        queryFn: () => Accounts(page, 0),
+        queryKey: ['recentTransactionsPreview', latestBlockHeight, limit],
+        queryFn: () => getRecentTransactionsPreview(limit, blocks),
+        staleTime: 5000,
+        refetchInterval: errorAwareInterval(10000),
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
+        enabled: Array.isArray(blocks) && blocks.length > 0,
+        placeholderData: (previousData) => previousData,
+        retry: false,
+    });
+};
+
+// Hooks for Accounts
+export const useAccounts = (page: number, perPage: number = 10) => {
+    return useQuery({
+        queryKey: queryKeys.accounts(page, perPage),
+        queryFn: () => Accounts(page, 0, perPage),
         staleTime: 30000,
     });
 };
 
 // Hooks for Validators
-export const useValidators = (page: number) => {
+export const useValidators = (page: number, perPage: number = 10) => {
     return useQuery({
-        queryKey: queryKeys.validators(page),
-        queryFn: () => Validators(page, 0),
+        queryKey: queryKeys.validators(page, perPage),
+        queryFn: () => Validators(page, 0, perPage),
         staleTime: 30000,
     });
 };
@@ -262,10 +389,10 @@ export const useAccount = (height: number, address: string) => {
 };
 
 // Hooks for Account with Transactions
-export const useAccountWithTxs = (height: number, address: string, page: number) => {
+export const useAccountWithTxs = (height: number, address: string, page: number, perPage: number = 10) => {
     return useQuery({
-        queryKey: queryKeys.accountWithTxs(height, address, page),
-        queryFn: () => AccountWithTxs(height, address, page),
+        queryKey: queryKeys.accountWithTxs(height, address, page, perPage),
+        queryFn: () => AccountWithTxs(height, address, page, perPage),
         staleTime: 30000,
         enabled: !!address,
     });
@@ -350,11 +477,11 @@ export const useTransactionsByRec = (page: number, rec: string) => {
 };
 
 // Hooks for Pending Transactions
-export const usePending = (page: number) => {
+export const usePending = (page: number, perPage: number = 10) => {
     return useQuery({
-        queryKey: queryKeys.pending(page),
-        queryFn: () => Pending(page, 0),
-        staleTime: 10000, // Shorter stale time for pending transactions
+        queryKey: queryKeys.pending(page, perPage),
+        queryFn: () => Pending(page, perPage),
+        staleTime: 10000,
     });
 };
 
@@ -389,11 +516,21 @@ export const useModalData = (query: string | number, page: number) => {
 
 // Hooks for Card Data
 export const useCardData = () => {
+    const queryClient = useQueryClient();
+    const queryKey = [...queryKeys.cardData(), rpcURL];
+
     return useQuery({
-        queryKey: [...queryKeys.cardData(), rpcURL], // Include RPC URL to invalidate on network change
-        queryFn: () => getCardData(),
-        staleTime: 5000, // Reduced stale time for more frequent updates
-        refetchOnWindowFocus: true, // Refetch when window regains focus
+        queryKey,
+        queryFn: () => {
+            const previousCardData = queryClient.getQueryData(queryKey);
+            return getCardData(previousCardData);
+        },
+        staleTime: 0,
+        refetchInterval: errorAwareInterval(BLOCKS_POLL_MS),
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
+        placeholderData: (previousData) => previousData,
+        retry: false,
     });
 };
 
@@ -406,79 +543,49 @@ export const useTableData = (page: number, category: number, committee?: number)
     });
 };
 
-// Hook to load all blocks once and reuse the data
+// Hook to load the most recent block page and reuse the data across the app.
+// Previously this fanned out 10 parallel page fetches every 10s; with a
+// degraded upstream that produced 10 browser-emitted error lines per poll.
+// One page (10 blocks) is enough for Home, Navbar, and the dashboard tables.
 export const useAllBlocksCache = () => {
     return useQuery({
         queryKey: ['allBlocksCache'],
         queryFn: async () => {
-            const allBlocks: any[] = [];
-            const perPage = 10; // Max blocks per page from API
-            const maxPages = 10; // Maximum 10 pages (100 blocks)
+            const response = await fetch(`${rpcURL}/v1/query/blocks`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ perPage: 10, pageNumber: 1 }),
+            });
 
-            // Make only the required requests
-            const requests = [];
-            for (let page = 1; page <= maxPages; page++) {
-                requests.push(
-                    fetch(`${rpcURL}/v1/query/blocks`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            perPage: perPage,
-                            pageNumber: page,
-                        }),
-                    })
-                );
+            if (!response.ok) {
+                throw new Error(`blocks RPC returned ${response.status}`);
             }
 
-            try {
-                // Keep updates resilient: one failed page should not freeze navbar/dashboard.
-                const settled = await Promise.allSettled(requests);
+            const data = await response.json();
+            const blocks: any[] = Array.isArray(data?.results) ? [...data.results] : [];
 
-                for (let i = 0; i < settled.length; i++) {
-                    const result = settled[i];
-                    if (result.status !== 'fulfilled') {
-                        console.error(`Failed to fetch blocks page ${i + 1}: request rejected`);
-                        continue;
-                    }
+            // Keep newest block first for Navbar and Home blocks table.
+            blocks.sort((a: any, b: any) => {
+                const ah = Number((a?.blockHeader?.height ?? a?.height) || 0);
+                const bh = Number((b?.blockHeader?.height ?? b?.height) || 0);
+                return bh - ah;
+            });
 
-                    const response = result.value;
-                    if (!response.ok) {
-                        console.error(`Failed to fetch blocks page ${i + 1}: status ${response.status}`);
-                        continue;
-                    }
-
-                    const data = await response.json();
-                    if (data.results && Array.isArray(data.results)) {
-                        allBlocks.push(...data.results);
-                    }
-                    if (typeof data.totalCount === 'number') {
-                        (allBlocks as any).totalCount = data.totalCount;
-                    }
-                }
-
-                // Always keep newest block first for Navbar and Home blocks table.
-                allBlocks.sort((a: any, b: any) => {
-                    const ah = Number((a?.blockHeader?.height ?? a?.height) || 0);
-                    const bh = Number((b?.blockHeader?.height ?? b?.height) || 0);
-                    return bh - ah;
-                });
-
-                if (allBlocks.length === 0) {
-                    throw new Error('No blocks fetched from RPC');
-                }
-
-                return allBlocks;
-            } catch (error: any) {
-                console.error(`Error fetching blocks:`, error);
-                throw new Error(`Error fetching blocks: ${error.message}`);
+            if (typeof data?.totalCount === 'number') {
+                (blocks as any).totalCount = data.totalCount;
             }
+
+            if (blocks.length === 0) {
+                throw new Error('No blocks returned from RPC');
+            }
+
+            return blocks;
         },
-        staleTime: 300000, // Cache for 5 minutes
-        // Keep this in sync with live widgets (Navbar + Home Blocks table)
-        refetchInterval: REFRESH_INTERVAL_MS,
-        gcTime: 600000, // Keep in cache for 10 minutes
+        staleTime: 5000,
+        refetchInterval: errorAwareInterval(10000),
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
+        retry: false,
     });
 };
 
@@ -573,8 +680,8 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
             });
         }
 
-        // Limit to a maximum of 50 blocks to avoid too many requests
-        const limitedBlocks = Math.min(maxBlocksToFetch, 50);
+        // limit blocks to the requested max (capped at 100 to stay reasonable)
+        const limitedBlocks = Math.min(maxBlocksToFetch, 100);
         const finalBlocks = filteredBlocks.slice(0, limitedBlocks);
 
         const allTransactions: any[] = [];
@@ -607,24 +714,22 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
 };
 
 // Hook for fetching orders (swaps)
-export const useOrders = (chainId: number = 1) => {
+export const useOrders = () => {
     return useQuery({
-        queryKey: ['orders', chainId],
-        // Orders() already returns parsed JSON via POST(), not a Response object.
-        queryFn: () => Orders(chainId),
+        queryKey: ['orders'],
+        queryFn: () => Orders(),
         staleTime: 30000, // Cache for 30 seconds
         refetchInterval: REFRESH_INTERVAL_MS,
     });
 };
 
 // Hook for fetching a specific order
-export const useOrder = (chainId: number, orderId: string, height: number = 0) => {
+export const useOrder = (committee: number, orderId: string, height: number = 0) => {
     return useQuery({
-        queryKey: ['order', chainId, orderId, height],
-        // Order() already returns parsed JSON via POST(), not a Response object.
-        queryFn: () => Order(chainId, orderId, height),
-        enabled: !!orderId, // Only run if orderId is provided
-        staleTime: 30000, // Cache for 30 seconds
+        queryKey: ['order', committee, orderId, height],
+        queryFn: () => Order(committee, orderId, height),
+        enabled: !!orderId,
+        staleTime: 30000,
     });
 };
 
@@ -654,8 +759,6 @@ export const useNetworkChangeHandler = () => {
 
     React.useEffect(() => {
         const handleApiConfigChange = (event: any) => {
-            console.log('🔄 Network changed, invalidating queries...', event.detail);
-
             // Invalidate specific queries that depend on network data
             queryClient.invalidateQueries({ queryKey: ['cardData'] });
             queryClient.invalidateQueries({ queryKey: ['blocks'] });
@@ -681,5 +784,3 @@ export const useNetworkChangeHandler = () => {
         };
     }, [queryClient]);
 };
-
-

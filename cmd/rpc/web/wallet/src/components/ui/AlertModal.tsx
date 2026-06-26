@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface AlertModalProps {
@@ -29,43 +30,43 @@ export const AlertModal: React.FC<AlertModalProps> = ({
     switch (type) {
       case 'success':
         return {
-          icon: 'fa-solid fa-check-circle',
-          iconColor: 'text-green-400',
-          iconBg: 'bg-green-500/20',
-          buttonColor: 'bg-green-500 hover:bg-green-600',
-          borderColor: 'border-green-500/30'
+          icon: CheckCircle2,
+          iconColor: 'text-[#35cd48]',
+          iconBg: 'bg-[#35cd48]/12',
+          buttonColor: 'bg-[#35cd48] hover:bg-[#35cd48]/90 text-[#0f0f0f]',
+          borderColor: 'border-[#35cd48]/35'
         };
       case 'error':
         return {
-          icon: 'fa-solid fa-exclamation-circle',
-          iconColor: 'text-red-400',
-          iconBg: 'bg-red-500/20',
-          buttonColor: 'bg-red-500 hover:bg-red-600',
-          borderColor: 'border-red-500/30'
+          icon: XCircle,
+          iconColor: 'text-[#ff1845]',
+          iconBg: 'bg-[#ff1845]/12',
+          buttonColor: 'bg-[#ff1845] hover:bg-[#ff1845]/90 text-white',
+          borderColor: 'border-[#ff1845]/35'
         };
       case 'warning':
         return {
-          icon: 'fa-solid fa-exclamation-triangle',
-          iconColor: 'text-yellow-400',
-          iconBg: 'bg-yellow-500/20',
-          buttonColor: 'bg-yellow-500 hover:bg-yellow-600',
-          borderColor: 'border-yellow-500/30'
+          icon: AlertTriangle,
+          iconColor: 'text-[#ddb228]',
+          iconBg: 'bg-[#ddb228]/12',
+          buttonColor: 'bg-[#ddb228] hover:bg-[#ddb228]/90 text-[#0f0f0f]',
+          borderColor: 'border-[#ddb228]/35'
         };
       case 'info':
         return {
-          icon: 'fa-solid fa-info-circle',
-          iconColor: 'text-blue-400',
-          iconBg: 'bg-blue-500/20',
-          buttonColor: 'bg-blue-500 hover:bg-blue-600',
-          borderColor: 'border-blue-500/30'
+          icon: Info,
+          iconColor: 'text-[#216cd0]',
+          iconBg: 'bg-[#216cd0]/12',
+          buttonColor: 'bg-[#216cd0] hover:bg-[#216cd0]/90 text-white',
+          borderColor: 'border-[#216cd0]/35'
         };
       default:
         return {
-          icon: 'fa-solid fa-info-circle',
-          iconColor: 'text-blue-400',
-          iconBg: 'bg-blue-500/20',
-          buttonColor: 'bg-blue-500 hover:bg-blue-600',
-          borderColor: 'border-blue-500/30'
+          icon: Info,
+          iconColor: 'text-[#216cd0]',
+          iconBg: 'bg-[#216cd0]/12',
+          buttonColor: 'bg-[#216cd0] hover:bg-[#216cd0]/90 text-white',
+          borderColor: 'border-[#216cd0]/35'
         };
     }
   };
@@ -87,19 +88,19 @@ export const AlertModal: React.FC<AlertModalProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-[#0f0f0f]/80 backdrop-blur-md flex items-center justify-center z-50 p-4"
         onClick={onClose}
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className={`bg-card rounded-xl border ${styles.borderColor} p-6 w-full max-w-md`}
+          className={`bg-[#171717] rounded-2xl border ${styles.borderColor} p-6 w-full max-w-md shadow-[0_24px_72px_rgba(0,0,0,0.55)]`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-4 mb-4">
             <div className={`w-12 h-12 ${styles.iconBg} rounded-full flex items-center justify-center`}>
-              <i className={`${styles.icon} ${styles.iconColor} text-xl`}></i>
+              <styles.icon className={`${styles.iconColor} w-5 h-5`} />
             </div>
             <div>
               <h3 className="text-lg font-semibold text-foreground">{title}</h3>
@@ -115,14 +116,14 @@ export const AlertModal: React.FC<AlertModalProps> = ({
               <Button
                 onClick={onClose}
                 variant="secondary"
-                className="px-4 py-2"
+                className="px-4 py-2 border-[#272729] bg-[#0f0f0f] text-white hover:bg-[#272729]"
               >
                 {cancelText}
               </Button>
             )}
             <Button
               onClick={handleConfirm}
-              className={`px-4 py-2 ${styles.buttonColor} text-foreground`}
+              className={`px-4 py-2 ${styles.buttonColor}`}
               variant={type === 'error' ? 'destructive' : 'default'}
             >
               {confirmText}

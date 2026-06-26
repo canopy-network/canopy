@@ -1,7 +1,8 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import { useCardData } from '../../hooks/useApi'
-import { getTotalTransactionCount, getTotalAccountCount } from '../../lib/api'
+import { usePersistentNumber } from '../../hooks/usePersistentNumber'
+import { getTotalTransactionCount, getTotalAccountCount, Validators, ValidatorsWithFilters } from '../../lib/api'
 import { convertNumber, toCNPY } from '../../lib/utils'
 import AnimatedNumber from '../AnimatedNumber'
 
@@ -9,16 +10,21 @@ interface StageCardProps {
     title: string
     subtitle?: React.ReactNode
     data: string
-    isProgressBar: boolean
     icon: React.ReactNode
-    metric: string // Added for key and differentiation
-    category?: string // Category for hierarchy
+    metric: string
+    loading?: boolean
 }
+
+const stageCardSubtitleClass = 'explorer-overview-card-subvalue'
 
 const Stages = () => {
     const { data: cardData } = useCardData()
 
-    const latestBlockHeight: number = React.useMemo(() => {
+    // Candidate values are derived straight from cardData. They are `null`
+    // whenever cardData isn't available yet so the persistent hooks below keep
+    // showing the last known value instead of flickering to zero.
+    const latestBlockHeightCandidate: number | null = React.useMemo(() => {
+        if (!cardData) return null
         const list = (cardData as any)?.blocks
         const totalCount = list?.totalCount || list?.count
         if (typeof totalCount === 'number' && totalCount > 0) return totalCount
@@ -42,14 +48,16 @@ const Stages = () => {
     }, [cardData])
 
 
-    const totalSupplyCNPY: number = React.useMemo(() => {
+    const totalSupplyCandidate: number | null = React.useMemo(() => {
+        if (!cardData) return null
         const s = (cardData as any)?.supply || {}
         // new format: total in uCNPY
         const total = s.total ?? s.totalSupply ?? s.total_cnpy ?? s.totalCNPY ?? 0
         return toCNPY(Number(total) || 0)
     }, [cardData])
 
-    const totalStakeCNPY: number = React.useMemo(() => {
+    const totalStakeCandidate: number | null = React.useMemo(() => {
+        if (!cardData) return null
         const s = (cardData as any)?.supply || {}
         // prefer supply.staked; fallback to pool.bondedTokens
         const st = s.staked ?? 0
@@ -59,7 +67,8 @@ const Stages = () => {
         return toCNPY(Number(bonded) || 0)
     }, [cardData])
 
-    const liquidSupplyCNPY: number = React.useMemo(() => {
+    const liquidSupplyCandidate: number | null = React.useMemo(() => {
+        if (!cardData) return null
         const s = (cardData as any)?.supply || {}
         const total = Number(s.total ?? 0)
         const staked = Number(s.staked ?? 0)
@@ -69,166 +78,143 @@ const Stages = () => {
         return toCNPY(Number(liquid) || 0)
     }, [cardData])
 
-    const stakingPercent: number = React.useMemo(() => {
-        if (totalSupplyCNPY <= 0) return 0
-        return Math.max(0, Math.min(100, (totalStakeCNPY / totalSupplyCNPY) * 100))
-    }, [totalStakeCNPY, totalSupplyCNPY])
-
-    const [totalAccounts, setTotalAccounts] = React.useState(0)
-    const [accountsLast24h, setAccountsLast24h] = React.useState(0)
-    const [totalTxs, setTotalTxs] = React.useState(0)
-    const [txsLast24h, setTxsLast24h] = React.useState(0)
-    const [isLoadingStats, setIsLoadingStats] = React.useState(true)
+    // Async stats stay `null` until a fetch succeeds. We never reset them to a
+    // value on failure, so a transient RPC error can't blank the cards.
+    const [totalAccountsCandidate, setTotalAccountsCandidate] = React.useState<number | null>(null)
+    const [totalTxsCandidate, setTotalTxsCandidate] = React.useState<number | null>(null)
+    const [totalValidatingCandidate, setTotalValidatingCandidate] = React.useState<number | null>(null)
+    const [totalDelegatingCandidate, setTotalDelegatingCandidate] = React.useState<number | null>(null)
 
     React.useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                setIsLoadingStats(true)
+        if (!cardData) return
 
-                // Use totalTxs from block if available, otherwise fetch from API
-                if (totalTxsFromBlock !== null) {
-                    setTotalTxs(totalTxsFromBlock)
-                    // For last24h, we still need to fetch from API if available
+        let cancelled = false
+
+        const fetchStats = async () => {
+            if (totalTxsFromBlock !== null) {
+                if (!cancelled) setTotalTxsCandidate(totalTxsFromBlock)
+            } else {
+                const hasRealTransactions = cardData?.hasRealTransactions ?? true
+                if (hasRealTransactions) {
                     try {
                         const txStats = await getTotalTransactionCount()
-                        setTxsLast24h(txStats.last24h)
+                        if (!cancelled) setTotalTxsCandidate(txStats.total)
                     } catch (error) {
-                        console.error('Error fetching tx stats for last24h:', error)
-                        setTxsLast24h(0)
+                        console.error('Error fetching transaction stats:', error)
                     }
-                } else {
-                    // Check if this network has real transactions
-                    const hasRealTransactions = cardData?.hasRealTransactions ?? true
-
-                    if (hasRealTransactions) {
-                        const txStats = await getTotalTransactionCount()
-                        setTotalTxs(txStats.total)
-                        setTxsLast24h(txStats.last24h)
-                    } else {
-                        setTotalTxs(0)
-                        setTxsLast24h(0)
-                    }
+                } else if (!cancelled) {
+                    setTotalTxsCandidate(0)
                 }
+            }
 
-                // Always fetch account stats
-                try {
-                    const accountStats = await getTotalAccountCount()
-                    setTotalAccounts(accountStats.total)
-                    setAccountsLast24h(accountStats.last24h)
-                } catch (error) {
-                    console.error('Error fetching account stats:', error)
-                    setTotalAccounts(0)
-                    setAccountsLast24h(0)
+            try {
+                const accountStats = await getTotalAccountCount()
+                if (!cancelled) setTotalAccountsCandidate(accountStats.total)
+            } catch (error) {
+                console.error('Error fetching account stats:', error)
+            }
+
+            try {
+                const [validatorsStats, delegatorsStats] = await Promise.all([
+                    Validators(1, 0),
+                    ValidatorsWithFilters(1, 0, 0, 1, 0, 1),
+                ])
+
+                const totalValidatorsCount = Number(validatorsStats?.totalCount ?? validatorsStats?.count ?? 0)
+                const totalDelegatorsCount = Number(delegatorsStats?.totalCount ?? delegatorsStats?.count ?? 0)
+
+                if (!cancelled) {
+                    setTotalDelegatingCandidate(totalDelegatorsCount)
+                    setTotalValidatingCandidate(Math.max(0, totalValidatorsCount - totalDelegatorsCount))
                 }
             } catch (error) {
-                console.error('Error fetching stats:', error)
-                // Set zeros on error
-                setTotalTxs(0)
-                setTxsLast24h(0)
-                setTotalAccounts(0)
-                setAccountsLast24h(0)
-            } finally {
-                setIsLoadingStats(false)
+                console.error('Error fetching validator stats:', error)
             }
         }
 
-        if (cardData) {
-            fetchStats()
+        fetchStats()
+
+        return () => {
+            cancelled = true
         }
     }, [cardData, totalTxsFromBlock])
 
-    // delegated only as staking delta proxy
-    const delegatedOnlyCNPY: number = React.useMemo(() => {
-        const s = (cardData as any)?.supply || {}
-        const d = s.delegatedOnly ?? 0
-        return toCNPY(Number(d) || 0)
-    }, [cardData])
-
+    // Sticky values: hydrated from localStorage on mount (so a page refresh
+    // shows the previous numbers immediately) and only ever updated with fresh,
+    // valid data. This eliminates the flicker-to-zero on refresh and on polls.
+    const latestBlockHeight = usePersistentNumber('blockHeight', latestBlockHeightCandidate)
+    const totalSupplyCNPY = usePersistentNumber('totalSupply', totalSupplyCandidate)
+    const totalStakeCNPY = usePersistentNumber('totalStake', totalStakeCandidate)
+    const liquidSupplyCNPY = usePersistentNumber('liquidSupply', liquidSupplyCandidate)
+    const totalAccounts = usePersistentNumber('totalAccounts', totalAccountsCandidate)
+    const totalTxs = usePersistentNumber('totalTxs', totalTxsCandidate)
+    const totalValidating = usePersistentNumber('totalValidating', totalValidatingCandidate)
+    const totalDelegating = usePersistentNumber('totalDelegating', totalDelegatingCandidate)
 
     const stages: StageCardProps[] = [
         {
-            title: 'Staking %',
-            data: `${stakingPercent.toFixed(1)}%`,
-            isProgressBar: true,
-            icon: <i className="fa-solid fa-chart-pie"></i>,
-            metric: 'stakingPercent',
-
-        },
-        {
-            title: 'CNPY Staking',
-            data: `+${convertNumber(delegatedOnlyCNPY)}`,
-            isProgressBar: false,
-            subtitle: <p className="text-sm text-primary">delta</p>,
-            icon: <i className="fa-solid fa-coins"></i>,
-            metric: 'cnpyStakingDelta',
-            category: 'Staking'
+            title: 'Blocks',
+            data: latestBlockHeight.value.toString(),
+            loading: !latestBlockHeight.hasValue,
+            subtitle: <p className={stageCardSubtitleClass}>Heights</p>,
+            icon: <i className="fa-solid fa-cube"></i>,
+            metric: 'blocks',
         },
         {
             title: 'Total Supply',
-            data: convertNumber(totalSupplyCNPY),
-            isProgressBar: false,
-            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
+            data: convertNumber(totalSupplyCNPY.value),
+            loading: !totalSupplyCNPY.hasValue,
+            subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-wallet"></i>,
             metric: 'totalSupply',
-            category: 'Supply'
         },
         {
             title: 'Liquid Supply',
-            data: convertNumber(liquidSupplyCNPY),
-            isProgressBar: false,
-            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
+            data: convertNumber(liquidSupplyCNPY.value),
+            loading: !liquidSupplyCNPY.hasValue,
+            subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-droplet"></i>,
             metric: 'liquidSupply',
-            category: 'Supply'
-        },
-        {
-            title: 'Blocks',
-            data: latestBlockHeight.toString(),
-            isProgressBar: false,
-            subtitle: (
-                <span className="inline-flex items-center gap-1 text-sm text-primary bg-green-500/10 rounded-full px-2 py-0.5">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400"></span>
-                    Live
-                </span>
-            ),
-            icon: <i className="fa-solid fa-cube"></i>,
-            metric: 'blocks',
-            category: 'Network'
         },
         {
             title: 'Total Stake',
-            data: convertNumber(totalStakeCNPY),
-            isProgressBar: false,
-            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
+            data: convertNumber(totalStakeCNPY.value),
+            loading: !totalStakeCNPY.hasValue,
+            subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-lock"></i>,
             metric: 'totalStake',
-            category: 'Staking'
+        },
+        {
+            title: 'Total Validating',
+            data: convertNumber(totalValidating.value),
+            loading: !totalValidating.hasValue,
+            subtitle: <p className={stageCardSubtitleClass}>Validators</p>,
+            icon: <i className="fa-solid fa-shield-halved"></i>,
+            metric: 'totalValidating',
+        },
+        {
+            title: 'Total Delegating',
+            data: convertNumber(totalDelegating.value),
+            loading: !totalDelegating.hasValue,
+            subtitle: <p className={stageCardSubtitleClass}>Delegators</p>,
+            icon: <i className="fa-solid fa-coins"></i>,
+            metric: 'totalDelegating',
         },
         {
             title: 'Total Accounts',
-            data: isLoadingStats ? 'Loading...' : convertNumber(totalAccounts),
-            isProgressBar: false,
-            subtitle: isLoadingStats ? (
-                <div className="h-4 bg-gray-700/30 rounded w-1/2 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
-                </div>
-            ) : <p className="text-sm text-primary">+ {convertNumber(accountsLast24h)} last 24h</p>,
+            data: convertNumber(totalAccounts.value),
+            loading: !totalAccounts.hasValue,
             icon: <i className="fa-solid fa-users"></i>,
             metric: 'accounts',
-            category: 'Network Activity'
+            subtitle: <p className={stageCardSubtitleClass}>Indexed accounts</p>,
         },
         {
             title: 'Total Txs',
-            data: isLoadingStats ? 'Loading...' : convertNumber(totalTxs),
-            isProgressBar: false,
-            subtitle: isLoadingStats ? (
-                <div className="h-4 bg-gray-700/30 rounded w-1/2 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
-                </div>
-            ) : <p className="text-sm text-primary">+ {convertNumber(txsLast24h)} last 24h</p>,
+            data: convertNumber(totalTxs.value),
+            loading: !totalTxs.hasValue,
             icon: <i className="fa-solid fa-arrow-right-arrow-left"></i>,
             metric: 'txs',
-            category: 'Network Activity'
+            subtitle: <p className={stageCardSubtitleClass}>Confirmed txs</p>,
         },
     ]
 
@@ -244,42 +230,37 @@ const Stages = () => {
         return { number, prefix, suffix }
     }
 
-    const [activated, setActivated] = React.useState<Set<number>>(new Set())
-    const markActive = (index: number) => setActivated(prev => {
-        if (prev.has(index)) return prev
-        const next = new Set(prev)
-        next.add(index)
-        return next
-    })
-
-    const parsePercent = (value: string): number => {
-        const match = value.match(/([0-9]+(?:\.[0-9]+)?)%/)
-        return match ? Math.max(0, Math.min(100, parseFloat(match[1]))) : 0
-    }
-
     return (
-        <section className="w-full">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <section className="explorer-overview-section">
+            <div className="explorer-overview-header">
+                <h2 className="explorer-overview-title">
+                    Overview
+                </h2>
+            </div>
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 sm:gap-4">
                 {stages.map((stage, index) => (
                     <motion.article
                         key={stage.metric}
                         initial={{ opacity: 0, y: 10, scale: 0.98 }}
                         whileInView={{ opacity: 1, y: 0, scale: 1 }}
                         viewport={{ amount: 0.6 }}
-                        onViewportEnter={() => markActive(index)}
                         transition={{ duration: 0.22, delay: index * 0.03, ease: 'easeOut' }}
-                        className="relative rounded-xl border border-gray-800/60 bg-card shadow-xl p-5"
+                        className="explorer-overview-card"
                     >
-                        <div className="flex items-start justify-between">
-                            <h3 className="text-sm text-gray-300">{stage.title}</h3>
-                            <div className="h-7 w-7 rounded-md grid place-items-center">
-                                <span className="text-[#1B4435] text-base leading-none">{stage.icon}</span>
+                        <div className="flex items-center gap-2">
+                            <span className="inline-flex shrink-0 items-center justify-center text-sm leading-none text-[#35cd48]">
+                                {stage.icon}
+                            </span>
+                            <div className="min-w-0">
+                                <h3 className="explorer-overview-card-label">{stage.title}</h3>
                             </div>
                         </div>
 
-                        <div className="mt-3">
-                            <div className="text-3xl md:text-4xl font-semibold tracking-tight text-white">
-                                {(() => {
+                        <div className="mt-2 min-h-[2.5rem]">
+                            <div className="explorer-overview-card-value">
+                                {stage.loading ? (
+                                    <span className="text-white/40">Loading…</span>
+                                ) : (() => {
                                     const { number, prefix, suffix } = parseNumberFromString(stage.data)
                                     return (
                                         <>
@@ -296,54 +277,21 @@ const Stages = () => {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                            {stage.subtitle && (
-                                <div className="mt-2">
-                                    {stage.subtitle}
+                        {(() => {
+                            const subtitleBlock = stage.subtitle && (
+                                <div className="mt-1.5 flex items-center justify-between gap-2">
+                                    <div className="flex-1">
+                                        {stage.subtitle}
+                                    </div>
                                 </div>
-                            )}
+                            )
 
-                            {stage.category && (
-                                <div className="mt-2">
-                                    <p className="text-xs text-gray-400 font-light uppercase tracking-wider">{stage.category}</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {(stage.isProgressBar || /%/.test(stage.data)) && (
-                            <div className="mt-2">
-                                <div className="h-2 w-full rounded bg-gray-700/40 overflow-hidden relative flex">
-                                    {stage.metric === 'stakingPercent' ? (
-                                        <>
-                                            {/* Staked portion in green */}
-                                            <motion.div
-                                                className="h-2 rounded-l bg-primary"
-                                                initial={{ width: 0 }}
-                                                animate={{ width: activated.has(index) ? `${parsePercent(stage.data)}%` : 0 }}
-                                                transition={{ duration: 0.9, ease: 'easeOut' }}
-                                            />
-                                            {/* Liquid portion in gray */}
-                                            <motion.div
-                                                className="h-2 rounded-r bg-gray-500/60"
-                                                initial={{ width: 0 }}
-                                                animate={{ width: activated.has(index) ? `${100 - parsePercent(stage.data)}%` : 0 }}
-                                                transition={{ duration: 0.9, ease: 'easeOut' }}
-                                            />
-                                        </>
-                                    ) : (
-                                        <motion.div
-                                            className="h-2 rounded bg-primary"
-                                            initial={{ width: 0 }}
-                                            animate={{ width: activated.has(index) ? `${parsePercent(stage.data)}%` : 0 }}
-                                            transition={{ duration: 0.9, ease: 'easeOut' }}
-                                        />
-                                    )}
-                                </div>
-                                {stage.metric === 'stakingPercent' && (
-                                    <p className="text-xs text-gray-400 absolute mt-1">{convertNumber(liquidSupplyCNPY)} CNPY liquid</p>
-                                )}
-                            </div>
-                        )}
+                            return (
+                                <>
+                                    {subtitleBlock}
+                                </>
+                            )
+                        })()}
                     </motion.article>
                 ))}
             </div>

@@ -14,7 +14,6 @@ import {
     Menu,
     X,
 } from 'lucide-react';
-import { CnpyLogoIcon } from '@/components/ui/CnpyLogo';
 
 const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -26,76 +25,95 @@ const navItems = [
     { name: 'Keys', path: '/key-management', icon: KeyRound },
 ];
 
-const NAV_BASE =
-    'relative flex w-full min-w-0 items-center gap-3 rounded-lg border py-2 pr-2.5 pl-4 text-sm font-medium transition-all duration-150';
-const NAV_ACTIVE =
-    'nav-item-active border-primary/30 text-primary shadow-[0_0_0_1px_rgba(53,205,72,0.16)]';
-const NAV_INACTIVE =
-    'border-transparent text-muted-foreground hover:border-primary/20 hover:bg-accent/65 hover:text-foreground';
+/** Matches canopy-frontend `MainNav` + shell: rounded-xl rows, zinc borders, white/active pill. */
+function navLinkClass(isActive: boolean, collapsed: boolean): string {
+    const base =
+        'group relative flex w-full min-w-0 font-medium rounded-xl transition-all duration-200 text-[14px]';
+    const layout = collapsed
+        ? 'w-[57px] flex-col items-center justify-center gap-1 py-2'
+        : 'items-center gap-3 px-3 py-2';
+    const state = isActive
+        ? 'text-white bg-white/[0.08]'
+        : 'text-zinc-400 bg-transparent hover:text-white hover:bg-white/5';
+    return `${base} ${layout} ${state}`;
+}
+
+function navIconClass(isActive: boolean): string {
+    const size = 'h-4 w-4 flex-shrink-0 transition-colors duration-200';
+    if (isActive) {
+        return `${size} text-primary drop-shadow-[0_0_10px_rgba(69,202,70,0.8)]`;
+    }
+    return `${size} text-zinc-400 group-hover:text-white`;
+}
 
 export const AppSidebar = (): JSX.Element => {
     const [collapsed, setCollapsed] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
 
-    const sidebarW = collapsed ? 72 : 238;
+    const sidebarW = collapsed ? 90 : 240;
 
     return (
         <>
             <motion.aside
-                className="relative z-30 hidden h-screen flex-shrink-0 flex-col overflow-hidden border-r border-border/70 bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.95))] backdrop-blur-xl lg:flex"
+                className="relative z-30 hidden h-screen min-h-screen flex-shrink-0 flex-col overflow-hidden border-r border-zinc-800 bg-bg-secondary pb-4 lg:flex"
                 animate={{ width: sidebarW }}
                 transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
             >
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-
-                <div className="h-[52px] flex-shrink-0 border-b border-border/70 px-3">
+                <div
+                    className={`flex h-16 flex-shrink-0 items-center border-b border-zinc-800 transition-all duration-300 ${
+                        collapsed ? 'px-5' : 'px-4'
+                    }`}
+                >
                     <Link
                         to="/"
-                        className={`group flex h-full w-full items-center ${collapsed ? 'justify-center' : 'justify-start gap-3'}`}
+                        className={`flex h-full w-full min-w-0 items-center overflow-hidden transition-all duration-300 ${
+                            collapsed ? 'justify-center' : 'justify-start py-1 pl-4 pr-2'
+                        }`}
                     >
-                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center text-primary">
-                            <CnpyLogoIcon className="h-5 w-5 drop-shadow-[0_0_10px_rgba(53,205,72,0.35)]" />
-                        </div>
-                        <AnimatePresence>
-                            {!collapsed && (
-                                <motion.span
-                                    initial={{ opacity: 0, width: 0 }}
-                                    animate={{ opacity: 1, width: 'auto' }}
-                                    exit={{ opacity: 0, width: 0 }}
+                        <AnimatePresence mode="wait" initial={false}>
+                            {collapsed ? (
+                                <motion.img
+                                    key="symbol"
+                                    src="/canopy-symbol.png"
+                                    alt="Canopy"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
                                     transition={{ duration: 0.18 }}
-                                    className="overflow-hidden whitespace-nowrap font-display text-base font-bold tracking-tight text-foreground"
-                                >
-                                    Canopy Wallet
-                                </motion.span>
+                                    className="h-8 w-8 flex-shrink-0 object-contain drop-shadow-[0_0_4px_rgba(34,197,94,0.22)]"
+                                />
+                            ) : (
+                                <motion.img
+                                    key="logo"
+                                    src="/canopy-wallet-logo.svg"
+                                    alt="Canopy Wallet"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.18 }}
+                                    className="h-[22px] w-auto flex-shrink-0 object-contain"
+                                />
                             )}
                         </AnimatePresence>
                     </Link>
                 </div>
 
-                <nav className="flex-1 space-y-1 overflow-x-hidden overflow-y-auto px-2 py-3">
+                <nav
+                    className={`flex flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto py-4 scrollbar-hide [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+                        collapsed ? 'px-5' : 'px-4'
+                    }`}
+                >
                     {navItems.map(({ name, path, icon: Icon }) => (
                         <NavLink
                             key={name}
                             to={path}
                             end={path === '/'}
                             title={collapsed ? name : undefined}
-                            className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`}
+                            className={({ isActive }) => navLinkClass(isActive, collapsed)}
                         >
                             {({ isActive }) => (
                                 <>
-                                    <span
-                                        className={`absolute left-0 top-1/2 w-0.5 -translate-y-1/2 rounded-r-full transition-all duration-150 ${
-                                            isActive ? 'h-5 bg-primary' : 'h-0 bg-transparent'
-                                        }`}
-                                    />
-                                    <Icon
-                                        style={{ width: 17, height: 17 }}
-                                        className={`flex-shrink-0 transition-colors duration-150 ${
-                                            isActive
-                                                ? 'text-primary'
-                                                : 'text-muted-foreground group-hover:text-foreground'
-                                        }`}
-                                    />
+                                    <Icon className={navIconClass(isActive)} />
                                     <AnimatePresence>
                                         {!collapsed && (
                                             <motion.span
@@ -103,7 +121,7 @@ export const AppSidebar = (): JSX.Element => {
                                                 animate={{ opacity: 1, width: 'auto' }}
                                                 exit={{ opacity: 0, width: 0 }}
                                                 transition={{ duration: 0.18 }}
-                                                className="truncate overflow-hidden whitespace-nowrap font-body"
+                                                className={`truncate overflow-hidden whitespace-nowrap ${collapsed ? 'text-[10px]' : ''}`}
                                             >
                                                 {name}
                                             </motion.span>
@@ -115,18 +133,21 @@ export const AppSidebar = (): JSX.Element => {
                     ))}
                 </nav>
 
-                <div className="flex-shrink-0 border-t border-border/70 px-2 pb-4 pt-2">
+                <div
+                    className={`flex-shrink-0 border-t border-zinc-800 pb-2 pt-2 ${collapsed ? 'px-5' : 'px-4'}`}
+                >
                     <button
+                        type="button"
                         onClick={() => setCollapsed((c) => !c)}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-muted-foreground transition-all duration-150 hover:border-primary/20 hover:bg-accent/65 hover:text-foreground"
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-white"
                         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                     >
                         {collapsed ? (
                             <ChevronRight className="h-4 w-4" />
                         ) : (
                             <>
-                                <ChevronLeft className="h-4 w-4 flex-shrink-0" />
-                                <span className="text-xs font-semibold">Collapse</span>
+                                <ChevronLeft className="h-3.5 w-3.5 flex-shrink-0" />
+                                <span className="text-xs">Collapse</span>
                             </>
                         )}
                     </button>
@@ -134,19 +155,17 @@ export const AppSidebar = (): JSX.Element => {
             </motion.aside>
 
             <div className="lg:hidden">
-                <header className="fixed inset-x-0 top-0 z-40 flex h-[52px] items-center justify-between border-b border-border/70 bg-[linear-gradient(180deg,rgba(20,20,20,0.94),rgba(12,12,12,0.92))] px-4 backdrop-blur-xl">
+                <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between border-b border-border/40 bg-bg-secondary px-4">
                     <button
+                        type="button"
                         onClick={() => setMobileOpen(true)}
-                        className="rounded-lg border border-transparent p-2 transition-all hover:border-primary/20 hover:bg-accent/65"
+                        className="rounded-xl p-2 text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
                         aria-label="Open menu"
                     >
-                        <Menu className="h-5 w-5 text-muted-foreground" />
+                        <Menu className="h-5 w-5" />
                     </button>
-                    <Link to="/" className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center text-primary">
-                            <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(53,205,72,0.3)]" />
-                        </div>
-                        <span className="font-display text-sm font-bold text-foreground">Canopy Wallet</span>
+                    <Link to="/" className="flex items-center px-1 py-1">
+                        <img src="/canopy-wallet-logo.svg" alt="Canopy Wallet" className="h-[18px] w-auto object-contain" />
                     </Link>
                     <div className="w-9" />
                 </header>
@@ -169,57 +188,41 @@ export const AppSidebar = (): JSX.Element => {
                                 animate={{ x: 0 }}
                                 exit={{ x: '-100%' }}
                                 transition={{ duration: 0.26, ease: 'easeOut' }}
-                                className="fixed bottom-0 left-0 top-0 z-50 flex w-72 flex-col border-r border-border/70 bg-[linear-gradient(180deg,rgba(20,20,20,0.96),rgba(10,10,10,0.98))]"
+                                className="fixed bottom-0 left-0 top-0 z-50 flex w-72 flex-col border-r border-zinc-800 bg-bg-secondary"
                             >
-                                <div className="h-[52px] flex-shrink-0 border-b border-border/70 px-4">
-                                    <div className="flex h-full items-center justify-between">
+                                <div className="flex h-16 flex-shrink-0 items-center border-b border-zinc-800 px-4">
+                                    <div className="flex h-full w-full items-center justify-between">
                                         <Link
                                             to="/"
                                             onClick={() => setMobileOpen(false)}
-                                            className="flex items-center gap-2.5"
+                                            className="flex items-center px-1 py-1"
                                         >
-                                            <div className="flex h-7 w-7 items-center justify-center text-primary">
-                                                <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(53,205,72,0.3)]" />
-                                            </div>
-                                            <span className="font-display text-sm font-bold text-foreground">
-                                                Canopy Wallet
-                                            </span>
+                                            <img src="/canopy-wallet-logo.svg" alt="Canopy Wallet" className="h-[18px] w-auto object-contain" />
                                         </Link>
                                         <button
+                                            type="button"
                                             onClick={() => setMobileOpen(false)}
-                                            className="rounded-lg border border-transparent p-1.5 transition-all hover:border-primary/20 hover:bg-accent/65"
+                                            className="rounded-xl p-1.5 text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
                                             aria-label="Close menu"
                                         >
-                                            <X className="h-4 w-4 text-muted-foreground" />
+                                            <X className="h-4 w-4" />
                                         </button>
                                     </div>
                                 </div>
 
-                                <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3">
+                                <nav className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-4">
                                     {navItems.map(({ name, path, icon: Icon }) => (
                                         <NavLink
                                             key={name}
                                             to={path}
                                             end={path === '/'}
                                             onClick={() => setMobileOpen(false)}
-                                            className={({ isActive }) =>
-                                                `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_INACTIVE}`
-                                            }
+                                            className={({ isActive }) => navLinkClass(isActive, false)}
                                         >
                                             {({ isActive }) => (
                                                 <>
-                                                    <span
-                                                        className={`absolute left-0 top-1/2 w-0.5 -translate-y-1/2 rounded-r-full transition-all duration-150 ${
-                                                            isActive ? 'h-5 bg-primary' : 'h-0 bg-transparent'
-                                                        }`}
-                                                    />
-                                                    <Icon
-                                                        style={{ width: 17, height: 17 }}
-                                                        className={`flex-shrink-0 ${
-                                                            isActive ? 'text-primary' : 'text-muted-foreground'
-                                                        }`}
-                                                    />
-                                                    <span className="font-body">{name}</span>
+                                                    <Icon className={navIconClass(isActive)} />
+                                                    <span>{name}</span>
                                                 </>
                                             )}
                                         </NavLink>

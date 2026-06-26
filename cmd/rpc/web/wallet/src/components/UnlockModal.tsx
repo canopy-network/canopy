@@ -68,7 +68,7 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                 >
                     {/* Backdrop */}
                     <motion.div
-                        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+                        className="absolute inset-0 bg-[#0f0f0f]/80 backdrop-blur-md"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -77,19 +77,16 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
 
                     {/* Modal */}
                     <motion.div
-                        className="relative w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-gradient-to-b from-bg-secondary to-bg-primary border border-border/50 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                        className="relative w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-[#171717] border border-[#272729] rounded-2xl shadow-[0_24px_72px_rgba(0,0,0,0.55)] overflow-hidden flex flex-col"
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         transition={{ duration: 0.2, ease: 'easeOut' }}
                     >
-                        {/* Header accent */}
-                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/50" />
-
                         {/* Close button */}
                         <button
                             onClick={onClose}
-                            className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+                            className="absolute top-4 right-4 rounded-lg border border-[#272729] bg-[#0f0f0f] p-1.5 text-white/60 hover:bg-[#272729] hover:text-white transition-colors"
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -97,11 +94,8 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                         <div className="p-4 pt-7 sm:p-6 sm:pt-8 overflow-y-auto min-h-0">
                             {/* Icon */}
                             <div className="flex justify-center mb-5">
-                                <div className="relative">
-                                    <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl" />
-                                    <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/30 flex items-center justify-center">
-                                        <Shield className="w-8 h-8 text-primary" />
-                                    </div>
+                                <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-[#272729] bg-[#0f0f0f]">
+                                    <Shield className="h-8 w-8 text-[#35cd48]" />
                                 </div>
                             </div>
 
@@ -132,12 +126,12 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                                         onKeyDown={handleKeyDown}
                                         placeholder="Enter your wallet password"
                                         className={`
-                                            w-full bg-background/50 text-foreground rounded-xl px-4 py-3 pr-12
+                                            w-full bg-[#0f0f0f] text-foreground rounded-xl px-4 py-3 pr-12
                                             border transition-all duration-200 outline-none
                                             placeholder:text-muted-foreground
                                             ${err
-                                                ? 'border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
-                                                : 'border-border/50 focus:border-primary/50 focus:ring-2 focus:ring-primary/20'
+                                                ? 'border-[#ff1845]/50 focus:border-[#ff1845] focus:ring-2 focus:ring-[#ff1845]/20'
+                                                : 'border-[#272729] focus:border-[#35cd48]/50 focus:ring-2 focus:ring-[#35cd48]/20'
                                             }
                                         `}
                                         disabled={isSubmitting}
@@ -163,7 +157,7 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                                             initial={{ opacity: 0, y: -10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: -10 }}
-                                            className="flex items-center gap-2 text-red-400 text-sm"
+                                            className="flex items-center gap-2 text-[#ff1845] text-sm"
                                         >
                                             <AlertCircle className="w-4 h-4" />
                                             {err}
@@ -177,8 +171,8 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                                 <button
                                     onClick={onClose}
                                     disabled={isSubmitting}
-                                    className="flex-1 px-4 py-3 rounded-xl bg-muted/50 text-foreground/80 font-medium
-                                        hover:bg-muted/70 hover:text-foreground transition-all duration-200
+                                    className="flex-1 px-4 py-3 rounded-xl border border-[#272729] bg-[#0f0f0f] text-white font-medium
+                                        hover:bg-[#272729] transition-all duration-200
                                         disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Cancel
@@ -187,14 +181,13 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                                     onClick={submit}
                                     disabled={isSubmitting || !pwd}
                                     className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl
-                                        bg-gradient-to-r from-primary to-primary/80 text-bg-primary font-semibold
-                                        hover:from-primary/90 hover:to-primary/70 transition-all duration-200
-                                        disabled:opacity-50 disabled:cursor-not-allowed
-                                        shadow-lg shadow-primary/20"
+                                        bg-[#35cd48] text-[#0f0f0f] font-semibold
+                                        hover:bg-[#35cd48]/90 transition-all duration-200
+                                        disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isSubmitting ? (
                                         <motion.div
-                                            className="w-5 h-5 border-2 border-bg-primary/30 border-t-bg-primary rounded-full"
+                                            className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
                                             animate={{ rotate: 360 }}
                                             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                                         />
@@ -213,4 +206,3 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
         </AnimatePresence>
     )
 }
-

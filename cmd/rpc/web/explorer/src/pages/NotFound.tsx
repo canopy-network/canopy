@@ -9,9 +9,9 @@ const NotFoundPage: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="mx-auto px-4 sm:px-6 lg:px-8 py-16 max-w-[60rem]"
+      className="w-full max-w-[60rem]"
     >
-      <div className="rounded-xl border border-gray-800/60 bg-card shadow-xl p-10 text-center">
+      <div className="rounded-xl border border-white/10 bg-card shadow-xl p-10 text-center">
         <p className="text-primary text-sm font-semibold tracking-widest mb-2">ERROR 404</p>
         <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">Page not found</h1>
         <p className="text-gray-400 mb-8">

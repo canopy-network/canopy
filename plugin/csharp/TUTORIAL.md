@@ -76,11 +76,18 @@ public static class ContractConfig
         "type.googleapis.com/types.MessageFaucet"   // Add here
     };
     public static readonly string[] EventTypeUrls = Array.Empty<string>();
+    public static readonly byte[][] CustomStatePrefixes =
+    {
+        new byte[] { 0x64 },  // faucet records
+        new byte[] { 0x65 }   // reward records
+    };
     // ... rest of config
 }
 ```
 
 **Important**: The order of `SupportedTransactions` must match the order of `TransactionTypeUrls`.
+
+Declare every custom record prefix in `CustomStatePrefixes`. Canopy reserves single-byte prefixes 1-15 and panics at handshake — before processing any block — if a declared prefix collides with that range, so use prefixes outside 1-15 (e.g. 0x64=100, 0x65=101) for your own records.
 
 ## Step 4: Add CheckTx Validation
 
@@ -468,6 +475,77 @@ private async Task<PluginDeliverResponse> DeliverMessageRewardAsync(MessageRewar
 }
 ```
 
+## Step 5b: Expose Custom RPC Endpoints
+
+A plugin can serve its own RPC endpoints for chain-specific data. Canopy core only exposes a single, generic, read-only transport over the unix socket: `Plugin.QueryStateAsync(height, read)`, which returns raw key/value state at a historical height (`0` = latest committed). The plugin process owns its HTTP server entirely, so you can register as many routes as you want and decode your own keys/protobufs into any response shape. Canopy never needs to know about your endpoints.
+
+> Note: account and pool queries already exist in the Canopy node's own RPC (`/v1/query/account`, `/v1/query/pool`), so they make poor examples of a *custom* endpoint. This tutorial exposes faucet and reward data instead, which only the plugin knows about.
+
+### Persist queryable records during DeliverTx
+
+For data to be queryable, it has to live in state. The `DeliverMessageFaucetAsync` and `DeliverMessageRewardAsync` handlers persist a small record alongside the balance update:
+
+- A `Faucet` record per recipient (`recipientAddress`, `totalAmount`, `count`), stored under prefix `0x64` (100) via `KeyForFaucet(addr)`.
+- A `Reward` record per recipient (`recipientAddress`, `lastAdminAddress`, `totalAmount`, `count`), stored under prefix `0x65` (101) via `KeyForReward(addr)`.
+
+> **Important — avoid prefix collisions:** the plugin reads and writes Canopy's FSM keyspace directly (that's why `send` works on real accounts at prefix `1`). Canopy reserves single-byte prefixes `1–15` for its own state (e.g. `3` = validators, `4` = committees). Your plugin-specific records must use prefixes outside that range — otherwise a range/list scan over your prefix will return core records (validators, committees, …) that fail to decode as your type. We use `100`/`101` here.
+
+These `Faucet`/`Reward` messages live in `proto/tx.proto`, and the `KeyForFaucet`/`KeyForReward`/`FaucetPrefix`/`RewardPrefix` helpers live in `src/CanopyPlugin/contract.cs`.
+
+### The detached query interface
+
+`proto/plugin.proto` adds a `PluginQueryRequest`/`PluginQueryResponse` pair (wired as `query = 10` in both the `FSMToPlugin` and `PluginToFSM` oneofs). The framework method `Plugin.QueryStateAsync(height, read)` sends a `PluginQueryRequest` with a fresh **random** request id (not tied to any in-flight tx/block) and awaits the matching `query` response, returning the read results. This makes it safe to call from HTTP handlers.
+
+### Register the endpoints
+
+The base plugin already ships a **skeleton** HTTP server in `src/CanopyPlugin/rpc.cs`. It runs the plugin's HTTP server using `System.Net.HttpListener`, reads the listen address from the `RpcAddress` config field (default `0.0.0.0:50010`), and starts the accept loop — but it registers **no routes** by default. It is also already wired into `Program.cs`, which calls it right after the plugin starts:
+
+```csharp
+await plugin.StartAsync();
+// already present in the base plugin
+_ = plugin.StartRpcServerAsync();
+```
+
+So your job is just to **add your routes and handlers to the existing skeleton**. Add a `case` per route to the `RouteRequestAsync` dispatch in `rpc.cs` and implement the matching handler. Here we add two custom routes (add as many as you like):
+
+```csharp
+public async Task StartRpcServerAsync()
+{
+    var listener = new HttpListener();
+    listener.Prefixes.Add(ToListenerPrefix(_config.RpcAddress));
+    listener.Start();
+    // GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
+    // GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
+    // ... accept loop dispatches to HandleQueryFaucetsAsync / HandleQueryRewardsAsync ...
+}
+```
+
+Each handler calls the detached, read-only `QueryStateAsync`:
+
+- Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
+- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
+
+Because the skeleton already starts the server from `Program.cs`, no change to `Program.cs` is needed — your new routes are served as soon as you rebuild.
+
+### Query the endpoints
+
+After faucet/reward transactions have been included in blocks:
+
+```bash
+# all faucet records
+curl 'http://localhost:50010/v1/query/faucets'
+# {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
+
+# a single recipient's faucet record
+curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+
+# all reward records (optionally at a historical height)
+curl 'http://localhost:50010/v1/query/rewards?height=42'
+
+# a single recipient's reward record
+curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
+```
+
 ## Step 6: Build and Deploy
 
 Build the plugin:
@@ -593,18 +671,18 @@ docker run -it --entrypoint /bin/sh canopy-csharp
 
 ## Step 8: Testing
 
-Run the RPC tests from the `tutorial` directory:
+Run the integration tests from the plugin directory. `make test` runs the transaction tests **and** the custom RPC endpoints test:
+
+```bash
+cd plugin/csharp
+make test
+```
+
+`make test` invokes `dotnet test`, which runs every test in the tutorial test project — both `TestPluginTransactions` and `TestPluginCustomRPCEndpoints` — so the custom RPC endpoints test runs at the end of the standard test flow. To focus on just the tutorial project you can still run:
 
 ```bash
 cd plugin/csharp
 make test-tutorial
-```
-
-Or run directly:
-
-```bash
-cd plugin/csharp/tutorial
-dotnet test --logger "console;verbosity=detailed"
 ```
 
 ### Test Prerequisites
@@ -613,13 +691,23 @@ dotnet test --logger "console;verbosity=detailed"
 
 2. **Plugin must have the new transaction types registered** (faucet, reward)
 
+3. **The plugin's RPC server must be reachable** on port `50010` (Step 5b) for the custom RPC test
+
 ### What the Tests Do
+
+`TestPluginTransactions` exercises the transaction flow:
 
 1. **Create test accounts** - Creates two new accounts in the Canopy keystore
 2. **Faucet test** - Mints tokens to account 1 using the faucet transaction
 3. **Send test** - Sends tokens from account 1 to account 2
 4. **Reward test** - Account 2 rewards tokens back to account 1
 5. **Balance verification** - Confirms balances changed as expected
+
+`TestPluginCustomRPCEndpoints` then verifies the custom RPC endpoints (Step 5b):
+
+1. **Submit faucet/reward transactions** and wait for inclusion
+2. **Query `/v1/query/faucets` and `/v1/query/rewards`** (both the list and single-recipient forms)
+3. **Validate the returned records' structure** (valid hex addresses, `count >= 1`, `totalAmount >= 1`), which also guards against prefix-collision regressions
 
 ## Transaction Signing Details
 
@@ -678,9 +766,9 @@ After implementing the new transaction types and starting Canopy with the plugin
 cd ~/canopy
 ~/go/bin/canopy start
 
-# Terminal 2: Run the tests
+# Terminal 2: Run the tests (transactions + custom RPC endpoints)
 cd ~/canopy/plugin/csharp
-make test-tutorial
+make test
 ```
 
 The test will:

@@ -1,5 +1,6 @@
 import * as React from 'react'
-import { templateBool } from '@/core/templater' // adjust path if needed
+import { templateBool } from '@/core/templater'
+import { getCanopySymbolByHash } from '@/lib/utils/canopySymbols'
 
 /** Basic manifest types */
 type ColAlign = 'left' | 'center' | 'right'
@@ -203,8 +204,6 @@ const TableSelect: React.FC<TableSelectProps> = ({
         const src = col.src ? safe(template(col.src, local)) : ''
         const alt = col.alt ? safe(template(col.alt, local)) : safe((col.key ? row[col.key] : row.name) ?? '')
         const basis = col.initialsFrom ? safe(template(col.initialsFrom, local)) : safe((col.key ? row[col.key] : row.name) ?? '')
-        const initials = getInitials(basis)
-        const color = hashColor(basis)
 
         if (src) {
             return (
@@ -219,32 +218,28 @@ const TableSelect: React.FC<TableSelectProps> = ({
             )
         }
         return (
-            <span
-                className="inline-flex items-center justify-center rounded-full text-xs font-semibold"
-                style={{ width: size, height: size, background: color, color: 'white' }}
-                aria-label={alt}
-            >
-        {initials}
-      </span>
+            <img
+                src={getCanopySymbolByHash(basis)}
+                alt={alt}
+                className="rounded-full object-contain inline-block"
+                style={{ width: size, height: size }}
+            />
         )
     }
 
     const renderCommitteeCell = (row: any) => {
         const name = row.name ?? '—'
         const minStake = row.minStake ?? ''
-        const initials = getInitials(name)
-        const color = hashColor(name)
         const size = 36
 
         return (
             <div className="flex items-center gap-3">
-                <span
-                    className="inline-flex items-center justify-center rounded-full text-sm font-semibold flex-shrink-0"
-                    style={{ width: size, height: size, background: color, color: 'white' }}
-                    aria-label={name}
-                >
-                    {initials}
-                </span>
+                <img
+                    src={getCanopySymbolByHash(name)}
+                    alt={name}
+                    className="rounded-full object-contain flex-shrink-0"
+                    style={{ width: size, height: size }}
+                />
                 <div className="flex flex-col">
                     <span className="text-foreground font-medium">{name}</span>
                     <span className="text-muted-foreground text-xs">Min: {minStake}</span>
@@ -280,7 +275,7 @@ const TableSelect: React.FC<TableSelectProps> = ({
         <div className="col-span-12 w-full">
             {!!label && <div className="text-sm mb-3 text-foreground/80 font-medium">{label}</div>}
 
-            <div className="rounded-lg bg-[#1a1d24] overflow-x-auto overflow-y-hidden">
+            <div className="rounded-lg bg-[#1a1a1a] overflow-x-auto overflow-y-hidden">
                 <div className="min-w-full">
                     {/* Header */}
                     <div className="grid grid-cols-12 gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-xs text-muted-foreground font-medium">
