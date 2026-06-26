@@ -131,6 +131,19 @@ func TestDeltaIndexerBlobs_NoPreviousKeepsCurrent(t *testing.T) {
 	require.Nil(t, delta.Previous)
 }
 
+func TestDeltaIndexerBlobs_KeepsBlockNonSigners(t *testing.T) {
+	currentNonSigners := [][]byte{bytes.Repeat([]byte{12}, 20)}
+	previousNonSigners := [][]byte{bytes.Repeat([]byte{13}, 20)}
+
+	delta, err := DeltaIndexerBlobs(&IndexerBlobs{
+		Current:  &IndexerBlob{BlockNonSigners: currentNonSigners},
+		Previous: &IndexerBlob{BlockNonSigners: previousNonSigners},
+	})
+	require.NoError(t, err)
+	require.Equal(t, currentNonSigners, delta.Current.BlockNonSigners)
+	require.Equal(t, previousNonSigners, delta.Previous.BlockNonSigners)
+}
+
 func mustMarshalProto(t *testing.T, message any) []byte {
 	t.Helper()
 	bz, err := lib.Marshal(message)
