@@ -144,6 +144,13 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if qc.Results.RewardRecipients == nil {
 		return lib.ErrNilRewardRecipients()
 	}
+	// Guard: an empty PaymentPercents slice would pass the nil check above but be
+	// silently persisted by UpsertCommitteeData, skipped by DistributeCommitteeRewards,
+	// and distort later reward accounting (NumberOfSamples accumulates without recipients).
+	// RewardRecipients non-nil is already guaranteed above; no need to re-check here.
+	if len(qc.Results.RewardRecipients.PaymentPercents) == 0 {
+		return lib.ErrInvalidPercentAllocation()
+	}
 	// ensure the committee isn't retired
 	retired, err := s.CommitteeIsRetired(qc.Header.ChainId)
 	if err != nil {
