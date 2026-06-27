@@ -211,6 +211,9 @@ func (p *P2P) DialForOutboundPeers() {
 			atomic.AddInt32(&dialing, 1)
 			// dial the peer with exponential backoff
 			p.DialWithBackoff(peerAddress, true)
+			// decrement after DialWithBackoff completes so the outbound capacity
+			// loop does not permanently treat this dial as still in-flight.
+			atomic.AddInt32(&dialing, -1)
 		}()
 	}
 	// Continuous service until program exit, dial timeout loop frequency for resource break
@@ -219,7 +222,11 @@ func (p *P2P) DialForOutboundPeers() {
 		// for each supported plugin, try to max out peer config by dialing
 		func() {
 			// exit if maxed out config or none left to dial
+			// Read outbound under the PeerSet's mux to avoid a data race:
+			// outbound is mutated by Add/Remove paths on other goroutines.
+			p.PeerSet.mux.RLock()
 			outbound := p.PeerSet.outbound
+			p.PeerSet.mux.RUnlock()
 			if outbound > 0 && int(outbound)+int(atomic.LoadInt32(&dialing)) >= p.config.MaxOutbound {
 				return
 			}
