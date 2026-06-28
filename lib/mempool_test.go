@@ -221,6 +221,39 @@ func TestAddTransaction(t *testing.T) {
 	}
 }
 
+func TestAddTransactionNormalizesNegativeDropPercentage(t *testing.T) {
+	sig := &Signature{
+		PublicKey: newTestPublicKeyBytes(t),
+		Signature: newTestPublicKeyBytes(t),
+	}
+	a, e := NewAny(sig)
+	require.NoError(t, e)
+
+	mempool := NewMempool(MempoolConfig{
+		MaxTotalBytes:       math.MaxUint64,
+		MaxTransactionCount: 4,
+		IndividualMaxTxSize: math.MaxUint32,
+		DropPercentage:      -35,
+	})
+
+	for i := uint64(1); i <= 4; i++ {
+		tx, err := Marshal(&Transaction{
+			MessageType:   testMessageName,
+			Msg:           a,
+			Signature:     sig,
+			CreatedHeight: 1,
+			Time:          uint64(time.Now().UnixMicro()),
+			Fee:           i,
+			NetworkId:     1,
+			ChainId:       i,
+		})
+		require.NoError(t, err)
+		require.NoError(t, mempool.AddTransactions(tx))
+	}
+
+	require.Equal(t, 2, mempool.TxCount())
+}
+
 func TestGetAndContainsTransaction(t *testing.T) {
 	// pre-define a test message
 	sig := &Signature{

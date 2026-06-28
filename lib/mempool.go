@@ -41,11 +41,7 @@ type MempoolTx struct {
 
 // NewMempool() creates a new FeeMempool instance of a Mempool
 func NewMempool(config MempoolConfig) Mempool {
-	// if the config drop percentage is set to 0
-	if config.DropPercentage == 0 {
-		// set the drop percentage to the default mempool config
-		config.DropPercentage = DefaultMempoolConfig().DropPercentage
-	}
+	config.DropPercentage = normalizeDropPercentage(config.DropPercentage)
 	// return the default mempool
 	return &FeeMempool{
 		pool:   MempoolTxs{},
@@ -281,6 +277,7 @@ func (t *MempoolTxs) delete(txs [][]byte) (deleted []MempoolTx, deletedBz int) {
 
 // drop() removes the bottom (the lowest fee) X percent of Transactions
 func (t *MempoolTxs) drop(percent int) (dropped []MempoolTx) {
+	percent = normalizeDropPercentage(percent)
 	// calculate the percent using integer division
 	numDrop := (len(t.s)*percent)/100 + 1
 	// avoid slicing out of bounds
@@ -298,6 +295,13 @@ func (t *MempoolTxs) drop(percent int) (dropped []MempoolTx) {
 	}
 	// exit
 	return
+}
+
+func normalizeDropPercentage(percent int) int {
+	if percent <= 0 {
+		return DefaultMempoolConfig().DropPercentage
+	}
+	return percent
 }
 
 // copy() returns a shallow copy of the MempoolTxs
