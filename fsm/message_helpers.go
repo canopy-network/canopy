@@ -661,7 +661,7 @@ func (x *MessageEditOrder) Check() lib.ErrorI {
 	if len(x.Data) > 100 {
 		return ErrInvalidOpcode()
 	}
-	if x.AmountForSale == 0 || x.RequestedAmount == 0 {
+	if x.AmountForSale == 0 {
 		return ErrInvalidAmount()
 	}
 	return checkExternalAddress(x.SellerReceiveAddress)
