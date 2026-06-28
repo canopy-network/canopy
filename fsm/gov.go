@@ -495,17 +495,24 @@ func (s *StateMachine) PollsToResults(polls *ActivePolls) (result Poll, err lib.
 			}
 		}
 		// calculate stats for validators
-		r.Validators.ApprovePercentage = uint64(float64(r.Validators.ApproveTokens) / float64(r.Validators.TotalTokens) * 100)
-		r.Validators.RejectPercentage = uint64(float64(r.Validators.RejectTokens) / float64(r.Validators.TotalTokens) * 100)
-		r.Validators.VotedPercentage = uint64(float64(r.Validators.ApproveTokens+r.Validators.RejectTokens) / float64(r.Validators.TotalTokens) * 100)
+		r.Validators.ApprovePercentage = votePercentage(r.Validators.ApproveTokens, r.Validators.TotalTokens)
+		r.Validators.RejectPercentage = votePercentage(r.Validators.RejectTokens, r.Validators.TotalTokens)
+		r.Validators.VotedPercentage = votePercentage(r.Validators.ApproveTokens+r.Validators.RejectTokens, r.Validators.TotalTokens)
 		// calculate stats for accounts
-		r.Accounts.ApprovePercentage = uint64(float64(r.Accounts.ApproveTokens) / float64(r.Accounts.TotalTokens) * 100)
-		r.Accounts.RejectPercentage = uint64(float64(r.Accounts.RejectTokens) / float64(r.Accounts.TotalTokens) * 100)
-		r.Accounts.VotedPercentage = uint64(float64(r.Accounts.ApproveTokens+r.Accounts.RejectTokens) / float64(r.Accounts.TotalTokens) * 100)
+		r.Accounts.ApprovePercentage = votePercentage(r.Accounts.ApproveTokens, r.Accounts.TotalTokens)
+		r.Accounts.RejectPercentage = votePercentage(r.Accounts.RejectTokens, r.Accounts.TotalTokens)
+		r.Accounts.VotedPercentage = votePercentage(r.Accounts.ApproveTokens+r.Accounts.RejectTokens, r.Accounts.TotalTokens)
 		// set results
 		result[proposalHash] = r
 	}
 	return
+}
+
+func votePercentage(part, total uint64) uint64 {
+	if total == 0 {
+		return 0
+	}
+	return uint64(float64(part) / float64(total) * 100)
 }
 
 // UPGRADE CODE BELOW
