@@ -177,8 +177,8 @@ func (s *Server) TransactionStake(w http.ResponseWriter, r *http.Request, _ http
 		if err != nil {
 			return nil, err
 		}
-		// Convert the public key from string to a crypto.PublicKey
-		pk, err := crypto.NewPublicKeyFromString(ptr.PubKey)
+		// Convert and validate the public key from string to a crypto.PublicKey
+		pk, err := stakePublicKeyFromRequest(ptr)
 		if err != nil {
 			return nil, err
 		}
@@ -584,8 +584,8 @@ func (s *Server) txHandler(w http.ResponseWriter, r *http.Request, callback func
 		write(w, err, http.StatusBadRequest)
 		return
 	}
-	// Set the public key in transaction request for reference.
-	ptr.PubKey = privateKey.PublicKey().String()
+	// Set the public key in transaction request for reference when one was not supplied.
+	setRequestPublicKey(ptr, privateKey)
 
 	// Call the provided callback function with the private key and transaction request.
 	p, err := callback(privateKey, ptr)
@@ -608,6 +608,23 @@ func (s *Server) txHandler(w http.ResponseWriter, r *http.Request, callback func
 			s.logger.Error(err.Error())
 			return
 		}
+	}
+}
+
+func stakePublicKeyFromRequest(ptr *txRequest) (crypto.PublicKeyI, error) {
+	pk, err := crypto.NewPublicKeyFromString(ptr.PubKey)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(pk.Address().Bytes(), ptr.Address) {
+		return nil, fmt.Errorf("stake public key address must match validator address")
+	}
+	return pk, nil
+}
+
+func setRequestPublicKey(ptr *txRequest, privateKey crypto.PrivateKeyI) {
+	if ptr.PubKey == "" {
+		ptr.PubKey = privateKey.PublicKey().String()
 	}
 }
 
