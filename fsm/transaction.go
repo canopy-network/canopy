@@ -243,7 +243,7 @@ func (s *StateMachine) CheckReplay(tx *lib.Transaction, txHash string) lib.Error
 		}
 	}
 	// this gives the protocol a theoretically safe tx indexer prune height
-	maxHeight, minHeight := s.Height()+BlockAcceptanceRange, uint64(0)
+	maxHeight, minHeight := maxAcceptedTxHeight(s.Height()), uint64(0)
 	// if height is after the BlockAcceptanceRange blocks
 	if s.Height() > BlockAcceptanceRange {
 		// update the minimum height
@@ -255,6 +255,13 @@ func (s *StateMachine) CheckReplay(tx *lib.Transaction, txHash string) lib.Error
 	}
 	// exit
 	return nil
+}
+
+func maxAcceptedTxHeight(height uint64) uint64 {
+	if height > math.MaxUint64-BlockAcceptanceRange {
+		return math.MaxUint64
+	}
+	return height + BlockAcceptanceRange
 }
 
 // CheckMessage() performs basic validations on the msg payload

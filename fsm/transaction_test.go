@@ -665,6 +665,16 @@ func TestCheckReplay(t *testing.T) {
 			},
 			height: 122,
 		},
+		{
+			name:   "maximum height overflow guard",
+			detail: "near max uint64 height should not wrap the maximum accepted tx height",
+			tx: &lib.Transaction{
+				CreatedHeight: math.MaxUint64 - 1,
+				NetworkId:     1,
+				ChainId:       1,
+			},
+			height: math.MaxUint64 - 1,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
