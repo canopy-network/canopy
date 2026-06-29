@@ -1,0 +1,93 @@
+---
+sidebar_label: Insurance Fund
+---
+
+# Insurance Fund
+
+**In one sentence:** a reserve that quietly skims a small slice of treasury inflows to build a
+safety buffer, and automatically stops topping up once it is big enough relative to the
+protocol's size.
+
+The insurance fund exists to absorb future losses — for example, reimbursing the pool after a
+validator slashing event. It fills itself passively from protocol fees and is sized as a
+fraction of how large the protocol has ever grown.
+
+## How it fills
+
+On every reward sweep, after the [protocol fee](../tokenomics/fee-structure.mdx) is split, a
+fraction of the **treasury slice** is diverted into the insurance pool
+(`canoliq/insurance/pool`):
+
+```
+insurance = treasury_slice × insurance_bps ÷ 10,000
+```
+
+- **`insurance_bps` default: 500 (5% of the treasury slice).** Since the treasury is 30% of
+  the fee, this is roughly 1.5% of the total fee — consistent with the whitepaper's "small
+  fraction of treasury inflow" framing.
+- The skimmed amount is taken **out of** the treasury credit, not added on top, so fee
+  conservation still holds exactly (see below).
+
+## The target-based auto-off (T4)
+
+A reserve that grows forever is wasteful. canoLiq caps the fund relative to **peak TVL** —
+the largest the pool has ever been — and switches the skim off once the target is reached:
+
+```
+target = peak_tvl_ucnpy × insurance_target_bps ÷ 10,000
+
+if insurance_target_bps > 0 and insurance_pool >= target:
+    insurance = 0    # skim turns off; the slice stays in the treasury
+```
+
+- **`insurance_target_bps` default: 500 (5% of peak TVL).**
+- Setting `insurance_target_bps = 0` disables the gate entirely, so the skim is always on.
+- **Peak TVL only ratchets upward.** It is updated each block as
+  `peak_tvl = max(peak_tvl, total_pooled_cnpy)`. When the protocol grows to a new high, the
+  target rises with it; if the fund now sits below the new target, the skim **automatically
+  resumes** until it catches up.
+
+This makes the reserve self-balancing: it fills to ~5% of the protocol's high-water mark,
+pauses, and tops up again only as the protocol grows.
+
+## Fee conservation
+
+Whether or not the skim is active, every component of a reward sweep must sum exactly to the
+reward delta — the would-be insurance amount simply stays in the treasury when the skim is
+off:
+
+```
+user_rebate + treasury + insurance + validators + buyback = fee amount
+```
+
+Any test asserting conservation must include the insurance line item.
+
+## Monitoring
+
+The `/v1/pools` endpoint exposes the current balance, the computed target, and how funded the
+reserve is:
+
+```json
+GET /v1/pools
+{
+  "insurancePool": 4200000,
+  "peakTvlUcnpy": 1050000000,
+  "insuranceTargetUcnpy": 52500000,
+  "insuranceFundedBps": 800
+}
+```
+
+`insuranceFundedBps` is `insurance_pool ÷ target` in basis points (here, 8% funded).
+
+## Status
+
+| Phase | Usage |
+|-------|-------|
+| Now | Passive accumulation with target-based auto-off (T4) |
+| Future | Slashing-reimbursement disbursement |
+
+## Related
+
+- [Fee Structure](../tokenomics/fee-structure.mdx) — where the treasury slice comes from
+- [Push Alerts](./alerts.mdx) — the `tvl_drop` alert that warns of the events insurance covers
+- [API Endpoints](../api/endpoints.mdx) — `/v1/pools`

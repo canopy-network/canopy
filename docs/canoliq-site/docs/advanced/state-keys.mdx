@@ -1,0 +1,46 @@
+---
+sidebar_label: State Keys
+---
+
+# State Key Layout
+
+All canoLiq keys live under prefix `[]byte{10}` to stay clear of Canopy core prefixes:
+
+| Prefix | Owner |
+|--------|-------|
+| `1` | Accounts (Canopy core) |
+| `2` | Pools (Canopy core) |
+| `7` | Governance (Canopy core) |
+| `10` | canoLiq plugin |
+
+## Subdomain Discriminators
+
+Subdomains are single-byte discriminators inside `JoinLenPrefix` segments:
+
+| Domain | ID | Type | Phase |
+|--------|----|------|-------|
+| Globals | 1 | Singleton | 1 |
+| Params | 11 | Singleton | 1 |
+| cCNPY Balance | 2 | Per-address | 1 |
+| CPLQ Balance | 3 | Per-address | 1 |
+| Redemption | 4 | Per-address, per-id | 1 |
+| Vesting Schedule | 5 | Per-address, per-id | 1 |
+| Vesting Index | 6 | Per-address | 1 |
+| Validator Incentive | 7 | Per-validator | 1 |
+| Validator Incentive Index | 8 | Index | 1 |
+| Insurance Pool | 9 | Pool scalar | 2 |
+| Buyback Pool | 10 | Pool scalar | 2 |
+| Treasury CPLQ | 11 | Pool scalar | 2 |
+| CPLQ Stake | 12 | Per-address | 2 |
+| CPLQ Unstaking | 13 | Per-address, per-id | 2 |
+| Proposal | 14 | Per-id | 2 |
+| Vote | 15 | Per-proposal, per-voter | 2 |
+| Buyback Order | 16 | Per-id | 2 |
+| Treasury Spend | 17 | Per-id | 2 |
+| Multisig Approval | 18 | Per-spend, per-signer | 2 |
+| Stake Index | 20 | Index singleton | 2 |
+| Validator Registry | 7+singleton | Singleton | 2 |
+
+:::note
+There is no range-scan. The FSM only answers point reads, so iteration requires an explicit index. `VestingIndex`, `ProposalIndex`, `CPLQStakeIndex`, and the spend index all exist for this reason.
+:::

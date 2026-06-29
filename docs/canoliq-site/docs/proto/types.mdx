@@ -1,0 +1,389 @@
+---
+sidebar_label: Types
+---
+
+# Protobuf Types
+
+Stored types used by the canoLiq plugin.
+
+## CanoliqGlobals
+
+Singleton accounting record.
+
+```protobuf
+message CanoliqGlobals {
+  uint64 total_ccnpy_supply = 1;
+  uint64 total_pooled_cnpy = 2;
+  uint64 pending_redemption_cnpy = 3;
+  uint64 last_processed_reward_pool = 4;
+  uint64 cplq_total_supply = 5;
+  uint64 cplq_circulating_supply = 6;
+  uint64 next_redemption_id = 7;
+  bool genesis_complete = 8;
+  uint64 total_staked_cplq = 9;
+  uint64 next_proposal_id = 10;
+  uint64 next_buyback_id = 11;
+  uint64 next_spend_id = 12;
+  uint64 next_unstake_id = 13;
+  // T4 — insurance-fund sizing
+  uint64 peak_tvl_ucnpy = 14;            // running max of total_pooled_cnpy
+  // T5 — autonomy-graduation tracking counters
+  uint64 passed_proposal_count = 15;     // cumulative proposals passed
+  uint64 daily_tx_count_window = 16;     // in-progress daily-tx counter
+  uint64 last_window_close_height = 17;  // height the current window opened
+  uint64 last_daily_tx_count = 18;       // last completed window's count (the metric)
+  uint64 turnout_sum_bps = 19;           // sum of per-proposal turnout (bps)
+  uint64 turnout_sample_count = 20;      // tallied proposals contributing turnout
+  uint64 treasury_spent_total = 21;      // cumulative treasury spend (runway burn)
+}
+```
+
+## CanoliqParams
+
+Governance-tunable parameters.
+
+```protobuf
+message CanoliqParams {
+  uint64 fee_bps = 1;                    // Default 1200 (12%)
+  uint64 user_rebate_bps = 2;            // Default 4000 (40%)
+  uint64 treasury_bps = 3;               // Default 3000 (30%)
+  uint64 validator_bps = 4;              // Default 1500 (15%)
+  uint64 buyback_bps = 5;                // Default 1500 (15%)
+  uint64 deposit_fee = 6;
+  uint64 redeem_fee = 7;
+  uint64 claim_fee = 8;
+  uint64 cplq_transfer_fee = 9;
+  uint64 insurance_bps = 10;             // Default 500 (5% of treasury slice)
+  uint64 treasury_threshold = 11;        // Default 1_000_000_000
+  repeated bytes multisig_signers = 12;
+  uint64 multisig_threshold = 13;        // Default 3
+  uint64 voting_period_blocks = 14;      // Default 100_800 (~7d)
+  uint64 quorum_bps = 15;                // Default 3300 (33%)  — scalar fallback
+  uint64 pass_threshold_bps = 16;        // Default 5001 (50%+1) — scalar fallback
+  uint64 timelock_blocks = 17;           // Default 28_800 (~48h) — scalar fallback
+  uint64 cplq_unstaking_blocks = 18;     // Default 100_800 (~7d); must be ≥ voting period
+  uint64 proposal_fee = 19;
+  uint64 vote_fee = 20;
+  uint64 stake_fee = 21;
+  uint64 multisig_approve_fee = 22;
+  uint64 min_stake_to_propose = 23;      // Default 1_000_000 (1 CPLQ)
+  // T1 — per-action governance tiers (override the scalar knobs above)
+  repeated GovernanceTier governance = 24;
+  // T3 — TVL deposit cap
+  uint64 tvl_cap_ucnpy = 25;             // 0 = uncapped
+  // T4 — insurance reserve target as a fraction of peak TVL
+  uint64 insurance_target_bps = 26;      // Default 500 (5%); 0 disables the auto-off gate
+  // T5 — autonomy-graduation thresholds
+  uint64 graduation_min_tvl_ucnpy = 27;       // Default 50_000_000_000_000
+  uint64 graduation_min_validators = 28;      // Default 30
+  uint64 graduation_min_turnout_bps = 29;     // Default 1500 (15%)
+  uint64 graduation_min_daily_tx = 30;        // Default 10_000
+  uint64 graduation_min_runway_months = 31;   // Default 12
+}
+```
+
+:::note
+`quorum_bps`, `pass_threshold_bps`, `timelock_blocks`, and `voting_period_blocks` are the
+**scalar fallback**. When a proposal's action matches a `governance` tier, that tier's values
+take precedence. See [Governance Tiers](../governance/governance-tiers.mdx).
+:::
+
+## GovernanceTier
+
+Per-action governance rules (T1). See [Governance Tiers](../governance/governance-tiers.mdx)
+for the default matrix.
+
+```protobuf
+message GovernanceTier {
+  ActionType action = 1;
+  uint64 quorum_bps = 2;            // fraction of snapshot staked CPLQ that must vote
+  uint64 approval_bps = 3;          // yes / (yes + no) needed to pass
+  uint64 timelock_blocks = 4;       // delay between pass and execution
+  uint64 voting_period_blocks = 5;  // blocks the proposal accepts votes
+}
+```
+
+## Redemption
+
+Queued cCNPY → CNPY conversion.
+
+```protobuf
+message Redemption {
+  uint64 id = 1;
+  bytes address = 2;
+  uint64 cnpy_amount = 3;
+  uint64 unbond_complete_height = 4;
+}
+```
+
+## VestingSchedule
+
+Linear vesting schedule with cliff.
+
+```protobuf
+message VestingSchedule {
+  bytes address = 1;
+  uint64 schedule_id = 2;
+  uint64 total_amount = 3;
+  uint64 cliff_height = 4;
+  uint64 start_height = 5;
+  uint64 end_height = 6;
+  uint64 claimed_amount = 7;
+}
+```
+
+## CPLQStake
+
+Per-address active stake record.
+
+```protobuf
+message CPLQStake {
+  bytes address = 1;
+  uint64 amount = 2;
+  uint64 staked_at_height = 3;
+  LockTier lock_tier = 4;       // vote-escrow tier (T2); drives voting multiplier + reward boost
+  uint64 lock_end_height = 5;   // earliest height an unstake is permitted (0 for LOCK_NONE)
+}
+```
+
+## UnstakingCPLQ
+
+Queued CPLQ unstake awaiting maturity.
+
+```protobuf
+message UnstakingCPLQ {
+  uint64 id = 1;
+  bytes address = 2;
+  uint64 amount = 3;
+  uint64 mature_height = 4;
+}
+```
+
+## Proposal
+
+Governance proposal record.
+
+```protobuf
+message Proposal {
+  uint64 id = 1;
+  bytes proposer = 2;
+  uint64 creation_height = 3;
+  uint64 expiry_height = 4;
+  uint64 snapshot_total_staked = 5;
+  google.protobuf.Any payload = 6;
+  string description = 7;
+  ProposalStatus status = 8;
+  uint64 yes_weight = 9;
+  uint64 no_weight = 10;
+  uint64 abstain_weight = 11;
+  ActionType action_type = 12;  // classification inferred from the payload at creation
+  GovernanceTier tier = 13;     // tier snapshotted at creation; nil for pre-T1 proposals
+}
+```
+
+## Vote
+
+Single recorded vote.
+
+```protobuf
+message Vote {
+  uint64 proposal_id = 1;
+  bytes voter = 2;
+  VoteChoice choice = 3;
+  uint64 weight = 4;
+}
+```
+
+## BuybackOrder
+
+Post-execution buyback record.
+
+```protobuf
+message BuybackOrder {
+  uint64 proposal_id = 1;
+  uint64 cnpy_drawn = 2;
+  uint64 cplq_acquired = 3;
+  BuybackMode mode = 4;
+  bool executed = 5;
+  uint64 executed_at_height = 6;
+  ProposalBuyback payload = 7;
+}
+```
+
+## TreasurySpend
+
+Pending or completed spend.
+
+```protobuf
+message TreasurySpend {
+  uint64 id = 1;
+  uint64 proposal_id = 2;
+  uint64 executable_height = 3;
+  ProposalTreasurySpend payload = 4;
+  bool requires_multisig = 5;
+  bool executed = 6;
+}
+```
+
+## MultisigApproval
+
+Per-signer spend approval.
+
+```protobuf
+message MultisigApproval {
+  uint64 spend_id = 1;
+  bytes signer = 2;
+  uint64 height = 3;
+}
+```
+
+## ValidatorRegistry
+
+Per-validator stake records for pro-rata distribution.
+
+```protobuf
+message ValidatorRegistry {
+  repeated ValidatorRegistryEntry entries = 1;
+}
+
+message ValidatorRegistryEntry {
+  bytes address = 1;
+  uint64 stake = 2;
+}
+```
+
+## AlertState
+
+Per-kind bookkeeping for the [push-alert subsystem](../advanced/alerts.mdx) (T6): the debounce
+watermark and the tumbling-window baseline.
+
+```protobuf
+message AlertState {
+  uint64 last_fired_height = 1;     // 0 = not currently firing; cleared on resolution
+  uint64 window_start_height = 2;   // height the current window opened
+  uint64 window_baseline = 3;       // measured value at window open
+}
+```
+
+## Indexes
+
+All indexes exist because the FSM does not support range scans — each enumerates ids/addresses
+so callers can iterate without scanning all keys.
+
+### VestingIndex
+
+```protobuf
+message VestingIndex {
+  repeated uint64 schedule_ids = 1;
+}
+```
+
+### RedemptionIndex
+
+```protobuf
+message RedemptionIndex {
+  repeated uint64 ids = 1;  // pending redemption ids per address
+}
+```
+
+### UnstakingIndex
+
+```protobuf
+message UnstakingIndex {
+  repeated uint64 ids = 1;  // pending CPLQ unstake ids per address
+}
+```
+
+### ProposalIndex
+
+```protobuf
+message ProposalIndex {
+  repeated uint64 ids = 1;  // active proposal ids
+}
+```
+
+### CPLQStakeIndex
+
+```protobuf
+message CPLQStakeIndex {
+  repeated bytes addresses = 1;  // addresses with non-zero CPLQStake.amount
+}
+```
+
+## Enums
+
+### ActionType
+
+Classifies a proposal so the matching [governance tier](../governance/governance-tiers.mdx)
+applies. Inferred from the payload at creation.
+
+```protobuf
+enum ActionType {
+  ACTION_UNKNOWN = 0;
+  ACTION_FEE_CHANGE = 1;
+  ACTION_TREASURY_SPEND_SMALL = 2;
+  ACTION_TREASURY_SPEND_LARGE = 3;
+  ACTION_EMERGENCY = 4;
+  ACTION_VALIDATOR_EJECT = 5;
+  ACTION_PROTOCOL_UPGRADE = 6;
+  ACTION_AUTONOMY_GRADUATE = 7;
+}
+```
+
+### LockTier
+
+[Vote-escrow](../tokenomics/vote-escrow.mdx) lock duration a staker commits to (T2). Longer
+locks grant a higher voting multiplier and reward boost.
+
+```protobuf
+enum LockTier {
+  LOCK_NONE = 0;   // 1.0× voting, +0% boost
+  LOCK_3M = 1;     // 1.5× voting, +10% boost
+  LOCK_6M = 2;     // 2.0× voting, +25% boost
+  LOCK_12M = 3;    // 3.0× voting, +50% boost
+  LOCK_24M = 4;    // 4.0× voting, +75% boost
+}
+```
+
+### VoteChoice
+
+```protobuf
+enum VoteChoice {
+  VOTE_UNKNOWN = 0;
+  VOTE_YES = 1;
+  VOTE_NO = 2;
+  VOTE_ABSTAIN = 3;
+}
+```
+
+### ProposalStatus
+
+```protobuf
+enum ProposalStatus {
+  PROPOSAL_UNKNOWN = 0;
+  PROPOSAL_ACTIVE = 1;
+  PROPOSAL_PASSED = 2;
+  PROPOSAL_FAILED = 3;
+  PROPOSAL_EXECUTED = 4;
+}
+```
+
+### BuybackMode
+
+```protobuf
+enum BuybackMode {
+  BUYBACK_UNKNOWN = 0;
+  BUYBACK_BURN = 1;
+  BUYBACK_DISTRIBUTE_STAKERS = 2;
+}
+```
+
+### SpendDenomination
+
+```protobuf
+enum SpendDenomination {
+  SPEND_UNKNOWN = 0;
+  SPEND_CNPY = 1;
+  SPEND_CPLQ = 2;
+}
+```

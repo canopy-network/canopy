@@ -1,0 +1,49 @@
+---
+sidebar_label: Overview
+---
+
+# Getting Started Overview
+
+canoLiq runs as a Go plugin for the Canopy Network. A single binary serves both the send tutorial contract and the canoLiq protocol, selected via the `CANOPY_PLUGIN_MODE` environment variable.
+
+## Prerequisites
+
+- **Go 1.21+** for building the plugin
+- **Canopy Network** node running locally or in Docker
+- **Docker** (optional, for containerized localnet)
+
+## Architecture
+
+canoLiq is implemented as a sibling of `plugin/go/contract/`. It reuses the proto types from the `contract` package and runs its own FSM connection.
+
+### Key Components
+
+| File | Purpose |
+|------|---------|
+| `canoliq.go` | Main contract logic, CheckTx/DeliverTx handlers |
+| `plugin.go` | FSM socket communication and plugin lifecycle |
+| `state.go` | State key definitions and read/write helpers |
+| `deliver.go` | Transaction delivery routing |
+| `genesis.go` | Genesis initialization and CPLQ distribution |
+| `fee.go` | Protocol fee splitting (40/30/15/15) |
+| `reward.go` | Reward sweep and distribution |
+| `governance.go` | Proposal creation, voting, tallying |
+| `buyback.go` | Buyback execution (burn or distribute) |
+| `treasury.go` | Treasury spend with multisig + timelock |
+| `vesting.go` | Vesting schedule tracking and claim |
+| `stake.go` | CPLQ staking and unstaking |
+| `rpc.go` | Read-only HTTP query server (Phase 3) |
+| `query.go` | Query helpers for RPC endpoints |
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CANOPY_PLUGIN_MODE` | Selects plugin mode: `contract` or `canoliq` | `contract` |
+| `CANOLIQ_CONFIG` | Path to JSON config file | — |
+| `CANOLIQCTL_RPC_URL` | Node query RPC URL | `http://localhost:50002` |
+| `CANOLIQCTL_ADMIN_URL` | Admin RPC URL (keystore) | `http://localhost:50003` |
+| `CANOLIQCTL_NETWORK_ID` | Canopy network ID | `1` |
+| `CANOLIQCTL_CHAIN_ID` | canoLiq committee chain ID | `2` |
+| `CANOLIQCTL_PASSWORD` | Keystore password | — |
+| `CANOLIQ_RPC_ADDR` | Plugin RPC listen address (Phase 3) | — (disabled) |

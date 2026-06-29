@@ -1,0 +1,239 @@
+---
+sidebar_label: Messages
+---
+
+# Protobuf Messages
+
+All messages are defined in `plugin/go/proto/canoliq.proto`.
+
+## Deposit & Redeem
+
+### MessageCanoliqDeposit
+
+Deposits CNPY into the canoLiq pool and mints cCNPY.
+
+```protobuf
+message MessageCanoliqDeposit {
+  bytes from_address = 1;  // 20-byte address
+  uint64 amount = 2;       // CNPY amount (uCNPY)
+}
+```
+
+### MessageCanoliqRedeem
+
+Burns cCNPY and queues a CNPY redemption.
+
+```protobuf
+message MessageCanoliqRedeem {
+  bytes from_address = 1;  // 20-byte address
+  uint64 ccnpy_amount = 2; // cCNPY to burn (uCCNPY)
+}
+```
+
+### MessageCanoliqClaimRedemption
+
+Withdraws a matured CNPY redemption.
+
+```protobuf
+message MessageCanoliqClaimRedemption {
+  bytes from_address = 1;  // 20-byte address
+  uint64 redemption_id = 2;
+}
+```
+
+## CPLQ Operations
+
+### MessageCPLQTransfer
+
+Transfers liquid CPLQ.
+
+```protobuf
+message MessageCPLQTransfer {
+  bytes from_address = 1;
+  bytes to_address = 2;
+  uint64 amount = 3;       // CPLQ amount (uCPLQ)
+}
+```
+
+### MessageCPLQClaimVested
+
+Unlocks vested CPLQ.
+
+```protobuf
+message MessageCPLQClaimVested {
+  bytes from_address = 1;
+}
+```
+
+### MessageCPLQStake
+
+Locks CPLQ for governance weight. An optional `lock_tier` commits the stake to a
+[vote-escrow](../tokenomics/vote-escrow.mdx) lock for a higher voting multiplier and reward
+boost; `LOCK_NONE` leaves the stake unstakeable after the standard unbond window.
+
+```protobuf
+message MessageCPLQStake {
+  bytes from_address = 1;
+  uint64 amount = 2;
+  LockTier lock_tier = 3;  // LOCK_NONE | LOCK_3M | LOCK_6M | LOCK_12M | LOCK_24M
+}
+```
+
+### MessageCPLQUnstake
+
+Queues CPLQ unstaking.
+
+```protobuf
+message MessageCPLQUnstake {
+  bytes from_address = 1;
+  uint64 amount = 2;
+}
+```
+
+### MessageCPLQClaimUnstake
+
+Claims matured CPLQ unstake.
+
+```protobuf
+message MessageCPLQClaimUnstake {
+  bytes from_address = 1;
+  uint64 unstake_id = 2;
+}
+```
+
+## Governance
+
+### MessageCPLQProposalCreate
+
+Opens a governance proposal.
+
+```protobuf
+message MessageCPLQProposalCreate {
+  bytes from_address = 1;
+  google.protobuf.Any payload = 2;  // param_change | buyback | treasury_spend
+  string description = 3;           // ≤ 256 bytes
+}
+```
+
+### MessageCPLQVote
+
+Votes on a proposal.
+
+```protobuf
+message MessageCPLQVote {
+  bytes from_address = 1;
+  uint64 proposal_id = 2;
+  VoteChoice choice = 3;  // VOTE_YES | VOTE_NO | VOTE_ABSTAIN
+}
+```
+
+### MessageBuybackExecute
+
+Executes a passed buyback proposal.
+
+```protobuf
+message MessageBuybackExecute {
+  bytes from_address = 1;
+  uint64 proposal_id = 2;
+}
+```
+
+### MessageDAOTreasurySpend
+
+Executes a passed treasury spend.
+
+```protobuf
+message MessageDAOTreasurySpend {
+  bytes from_address = 1;
+  uint64 proposal_id = 2;
+}
+```
+
+### MessageMultisigApprove
+
+Approves an above-threshold spend.
+
+```protobuf
+message MessageMultisigApprove {
+  bytes from_address = 1;
+  uint64 spend_id = 2;
+}
+```
+
+## Proposal Payloads
+
+A `MessageCPLQProposalCreate` carries one of these payload types in its `payload`
+(`google.protobuf.Any`) field. The payload type determines the proposal's
+[action type / governance tier](../governance/governance-tiers.mdx) and what executes on
+pass.
+
+### ProposalParamChange
+
+Atomically replaces the **entire** `CanoliqParams` set (the fee-split fields must still sum to
+10,000). → `ACTION_FEE_CHANGE`.
+
+```protobuf
+message ProposalParamChange {
+  CanoliqParams params = 1;
+}
+```
+
+### ProposalBuyback
+
+Authorizes one buyback. `cplq_acquired = cnpy_amount × 1_000_000 ÷ price_micro_cnpy_per_cplq`.
+→ executed later by [MessageBuybackExecute](#messagebuybackexecute).
+
+```protobuf
+message ProposalBuyback {
+  uint64 cnpy_amount = 1;                 // drawn from buyback pool (clamped to available)
+  uint64 price_micro_cnpy_per_cplq = 2;   // price denominator
+  BuybackMode mode = 3;                   // BUYBACK_BURN | BUYBACK_DISTRIBUTE_STAKERS
+}
+```
+
+### ProposalTreasurySpend
+
+Authorizes a transfer from a treasury bucket. Amounts above `treasury_threshold` require
+multisig + timelock. → `ACTION_TREASURY_SPEND_SMALL` or `_LARGE` by amount.
+
+```protobuf
+message ProposalTreasurySpend {
+  bytes recipient = 1;
+  uint64 amount = 2;
+  SpendDenomination denomination = 3;  // SPEND_CNPY | SPEND_CPLQ
+}
+```
+
+### ProposalValidatorEject
+
+Removes a validator from the committee registry on pass. → `ACTION_VALIDATOR_EJECT`.
+
+```protobuf
+message ProposalValidatorEject {
+  bytes validator_address = 1;
+}
+```
+
+### ProposalEmergency
+
+A security-critical action on the fast-track tier (24h voting, no timelock), optionally
+carrying a param change applied immediately on pass. → `ACTION_EMERGENCY`.
+
+```protobuf
+message ProposalEmergency {
+  string description = 1;
+  ProposalParamChange param_change = 2;  // optional
+}
+```
+
+### ProposalProtocolUpgrade
+
+Signals an off-chain coordinated upgrade; the payload is opaque and recorded for audit (no
+on-chain dispatch). → `ACTION_PROTOCOL_UPGRADE`.
+
+```protobuf
+message ProposalProtocolUpgrade {
+  string version = 1;
+  bytes payload = 2;  // opaque upgrade descriptor
+}
+```

@@ -1,0 +1,645 @@
+syntax = "proto3";
+package types;
+option go_package = "github.com/canopy-network/go-plugin/contract";
+
+import "google/protobuf/any.proto";
+
+// canoliq.proto defines transaction messages and stored types for the canoLiq
+// liquid-staking plugin. All messages live in the same `contract` Go package
+// so they share the existing plugin runtime (PluginConfig, PluginCheckRequest,
+// google.protobuf.Any registration, etc.).
+
+// MessageCanoliqDeposit deposits CNPY into the canoLiq pool and mints cCNPY
+// to the sender at the current exchange rate.
+message MessageCanoliqDeposit {
+  // from_address: the depositor (also the cCNPY recipient)
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // amount: the CNPY amount to deposit (uCNPY)
+  uint64 amount = 2;
+}
+
+// MessageCanoliqRedeem burns cCNPY and queues a CNPY redemption for the sender
+// after the standard validator unstaking cooldown.
+message MessageCanoliqRedeem {
+  // from_address: the redeemer (cCNPY holder)
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // ccnpy_amount: amount of cCNPY to burn (uCCNPY)
+  uint64 ccnpy_amount = 2; // @gotags: json:"ccnpyAmount"
+}
+
+// MessageCanoliqClaimRedemption withdraws a matured CNPY redemption to the
+// user's account.
+message MessageCanoliqClaimRedemption {
+  // from_address: the redeemer claiming the matured redemption
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // redemption_id: the id of the redemption record to claim
+  uint64 redemption_id = 2; // @gotags: json:"redemptionId"
+}
+
+// MessageCPLQTransfer transfers liquid (already-vested) CPLQ between accounts.
+message MessageCPLQTransfer {
+  // from_address: the sender
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // to_address: the recipient
+  bytes to_address = 2; // @gotags: json:"toAddress"
+  // amount: amount of CPLQ to transfer (uCPLQ)
+  uint64 amount = 3;
+}
+
+// MessageCPLQClaimVested moves any newly-unlocked CPLQ from a vesting bucket
+// into the caller's liquid CPLQ balance.
+message MessageCPLQClaimVested {
+  // from_address: the vesting recipient
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+}
+
+// CanoliqGlobals is the singleton record tracking pool-wide accounting.
+message CanoliqGlobals {
+  // total_ccnpy_supply: aggregate cCNPY in circulation (uCCNPY)
+  uint64 total_ccnpy_supply = 1; // @gotags: json:"totalCcnpySupply"
+  // total_pooled_cnpy: total CNPY backing cCNPY (uCNPY)
+  uint64 total_pooled_cnpy = 2; // @gotags: json:"totalPooledCnpy"
+  // pending_redemption_cnpy: CNPY reserved for in-flight redemptions (uCNPY)
+  uint64 pending_redemption_cnpy = 3; // @gotags: json:"pendingRedemptionCnpy"
+  // last_processed_reward_pool: pool balance observed at the last reward sweep
+  uint64 last_processed_reward_pool = 4; // @gotags: json:"lastProcessedRewardPool"
+  // cplq_total_supply: hard-cap CPLQ supply minted at genesis (uCPLQ)
+  uint64 cplq_total_supply = 5; // @gotags: json:"cplqTotalSupply"
+  // cplq_circulating_supply: CPLQ that is currently liquid (uCPLQ)
+  uint64 cplq_circulating_supply = 6; // @gotags: json:"cplqCirculatingSupply"
+  // next_redemption_id: monotonically-increasing redemption id counter
+  uint64 next_redemption_id = 7; // @gotags: json:"nextRedemptionId"
+  // genesis_complete: whether genesis distribution has run
+  bool genesis_complete = 8; // @gotags: json:"genesisComplete"
+  // total_staked_cplq: aggregate CPLQ locked in stake records (uCPLQ)
+  uint64 total_staked_cplq = 9; // @gotags: json:"totalStakedCplq"
+  // next_proposal_id: monotonically-increasing proposal id counter
+  uint64 next_proposal_id = 10; // @gotags: json:"nextProposalId"
+  // next_buyback_id: monotonically-increasing buyback order id counter
+  uint64 next_buyback_id = 11; // @gotags: json:"nextBuybackId"
+  // next_spend_id: monotonically-increasing treasury spend id counter
+  uint64 next_spend_id = 12; // @gotags: json:"nextSpendId"
+  // next_unstake_id: monotonically-increasing CPLQ unstake id counter
+  uint64 next_unstake_id = 13; // @gotags: json:"nextUnstakeId"
+  // peak_tvl_ucnpy: running maximum of total_pooled_cnpy (T4). Drives the
+  // insurance-fund target (5% of peak TVL); advanced each EndBlock.
+  uint64 peak_tvl_ucnpy = 14; // @gotags: json:"peakTvlUcnpy"
+  // === T5 autonomy-graduation tracking counters ===
+  // passed_proposal_count: cumulative proposals that have passed.
+  uint64 passed_proposal_count = 15; // @gotags: json:"passedProposalCount"
+  // daily_tx_count_window: delivered-tx counter for the in-progress window.
+  uint64 daily_tx_count_window = 16; // @gotags: json:"dailyTxCountWindow"
+  // last_window_close_height: height the current tx-count window opened.
+  uint64 last_window_close_height = 17; // @gotags: json:"lastWindowCloseHeight"
+  // last_daily_tx_count: tx count of the last completed window (the metric).
+  uint64 last_daily_tx_count = 18; // @gotags: json:"lastDailyTxCount"
+  // turnout_sum_bps: sum of per-proposal turnout (votes/snapshot) in bps.
+  uint64 turnout_sum_bps = 19; // @gotags: json:"turnoutSumBps"
+  // turnout_sample_count: number of tallied proposals contributing turnout.
+  uint64 turnout_sample_count = 20; // @gotags: json:"turnoutSampleCount"
+  // treasury_spent_total: cumulative CNPY spent from treasury/canoliq, used to
+  // estimate the monthly burn for the runway metric.
+  uint64 treasury_spent_total = 21; // @gotags: json:"treasurySpentTotal"
+}
+
+// Redemption is a queued cCNPY → CNPY conversion that matures after the
+// validator unstaking window.
+message Redemption {
+  // id: unique redemption identifier per address
+  uint64 id = 1;
+  // address: the redeeming user
+  bytes address = 2;
+  // cnpy_amount: CNPY owed at maturity (uCNPY)
+  uint64 cnpy_amount = 3; // @gotags: json:"cnpyAmount"
+  // unbond_complete_height: block height at which the redemption matures
+  uint64 unbond_complete_height = 4; // @gotags: json:"unbondCompleteHeight"
+}
+
+// RedemptionIndex enumerates pending redemption ids per address so the
+// account view can list them without a state-range scan.
+message RedemptionIndex {
+  // ids: pending redemption ids owned by the indexed address
+  repeated uint64 ids = 1;
+}
+
+// VestingSchedule encodes a linear vesting schedule with a cliff for a CPLQ
+// allocation tranche. One schedule may exist per (address, schedule_id).
+message VestingSchedule {
+  // address: the vesting recipient
+  bytes address = 1;
+  // schedule_id: discriminator when an address has multiple tranches
+  uint64 schedule_id = 2; // @gotags: json:"scheduleId"
+  // total_amount: total CPLQ vesting under this schedule (uCPLQ)
+  uint64 total_amount = 3; // @gotags: json:"totalAmount"
+  // cliff_height: no CPLQ unlocks before this height
+  uint64 cliff_height = 4; // @gotags: json:"cliffHeight"
+  // start_height: linear vest start (typically equal to cliff_height)
+  uint64 start_height = 5; // @gotags: json:"startHeight"
+  // end_height: linear vest completion height
+  uint64 end_height = 6; // @gotags: json:"endHeight"
+  // claimed_amount: CPLQ already moved to the liquid balance
+  uint64 claimed_amount = 7; // @gotags: json:"claimedAmount"
+}
+
+// CanoliqParams holds governance-tunable parameters for the canoLiq plugin.
+// Stored under the params prefix so Phase 2 can mutate via on-chain governance.
+message CanoliqParams {
+  // fee_bps: protocol fee on staking rewards in basis points (default 1200 = 12%)
+  uint64 fee_bps = 1; // @gotags: json:"feeBps"
+  // user_rebate_bps: portion of fee returned to users in bps (default 4000 = 40%)
+  uint64 user_rebate_bps = 2; // @gotags: json:"userRebateBps"
+  // treasury_bps: portion of fee to canoLiq DAO treasury in bps (default 3000 = 30%)
+  uint64 treasury_bps = 3; // @gotags: json:"treasuryBps"
+  // validator_bps: portion of fee to validator infra in bps (default 1500 = 15%)
+  uint64 validator_bps = 4; // @gotags: json:"validatorBps"
+  // buyback_bps: portion of fee to CPLQ buyback in bps (default 1500 = 15%)
+  uint64 buyback_bps = 5; // @gotags: json:"buybackBps"
+  // deposit_fee: minimum tx fee for a deposit (uCNPY)
+  uint64 deposit_fee = 6; // @gotags: json:"depositFee"
+  // redeem_fee: minimum tx fee for a redeem (uCNPY)
+  uint64 redeem_fee = 7; // @gotags: json:"redeemFee"
+  // claim_fee: minimum tx fee for claim_redemption / cplq_claim_vested (uCNPY)
+  uint64 claim_fee = 8; // @gotags: json:"claimFee"
+  // cplq_transfer_fee: minimum tx fee for a CPLQ transfer (uCNPY)
+  uint64 cplq_transfer_fee = 9; // @gotags: json:"cplqTransferFee"
+  // insurance_bps: share of treasury credit redirected to insurance (default 1500 = 15% of treasury slice)
+  uint64 insurance_bps = 10; // @gotags: json:"insuranceBps"
+  // treasury_threshold: spend amount above which multisig + timelock kick in (uCNPY-equivalent)
+  uint64 treasury_threshold = 11; // @gotags: json:"treasuryThreshold"
+  // multisig_signers: authorized multisig signer addresses
+  repeated bytes multisig_signers = 12; // @gotags: json:"multisigSigners"
+  // multisig_threshold: minimum approvals for above-threshold treasury spends
+  uint64 multisig_threshold = 13; // @gotags: json:"multisigThreshold"
+  // voting_period_blocks: blocks a proposal accepts votes for
+  uint64 voting_period_blocks = 14; // @gotags: json:"votingPeriodBlocks"
+  // quorum_bps: fraction of snapshot total_staked_cplq required to participate
+  uint64 quorum_bps = 15; // @gotags: json:"quorumBps"
+  // pass_threshold_bps: yes / (yes+no) needed for a proposal to pass
+  uint64 pass_threshold_bps = 16; // @gotags: json:"passThresholdBps"
+  // timelock_blocks: delay between proposal pass and above-threshold spend execution
+  uint64 timelock_blocks = 17; // @gotags: json:"timelockBlocks"
+  // cplq_unstaking_blocks: unbond window for CPLQ stake
+  uint64 cplq_unstaking_blocks = 18; // @gotags: json:"cplqUnstakingBlocks"
+  // proposal_fee: minimum tx fee for proposal creation (uCNPY)
+  uint64 proposal_fee = 19; // @gotags: json:"proposalFee"
+  // vote_fee: minimum tx fee for vote (uCNPY)
+  uint64 vote_fee = 20; // @gotags: json:"voteFee"
+  // stake_fee: minimum tx fee for stake/unstake/claim_unstake (uCNPY)
+  uint64 stake_fee = 21; // @gotags: json:"stakeFee"
+  // multisig_approve_fee: minimum tx fee for multisig approval (uCNPY)
+  uint64 multisig_approve_fee = 22; // @gotags: json:"multisigApproveFee"
+  // min_stake_to_propose: minimum staked CPLQ a proposer must hold
+  uint64 min_stake_to_propose = 23; // @gotags: json:"minStakeToPropose"
+  // governance: per-action governance tiers (Tokenomics v1.1 §7). When a
+  // tier matches a proposal's ActionType it overrides the scalar
+  // quorum_bps / pass_threshold_bps / timelock_blocks / voting_period_blocks
+  // above; an empty list (or unmatched action) falls back to those scalars.
+  repeated GovernanceTier governance = 24; // @gotags: json:"governance"
+  // tvl_cap_bps: self-imposed TVL ceiling as a fraction of total Canopy
+  // network stake, in basis points (WP §9.4: "self-impose a TVL cap of 33%
+  // of total Canopy network stake"). Default 3300 = 33%. 0 = uncapped.
+  // Governance-tunable; raising or lifting requires DAO approval (WP §9.4).
+  // Deposits that would push total_pooled_cnpy above the computed cap
+  // (mulDiv(canopy_total_stake, tvl_cap_bps, 10_000)) are rejected. The
+  // check fails closed when Canopy total stake is unavailable: a deposit
+  // is rejected rather than silently accepted (deliver.go).
+  uint64 tvl_cap_bps = 25; // @gotags: json:"tvlCapBps"
+  // insurance_target_bps: insurance-fund reserve target as a fraction of peak
+  // TVL (T4 / WP §9.2: 5%). Once insurance_pool reaches this target the
+  // per-block insurance skim turns off (the would-be amount stays in the
+  // treasury). 0 disables the gate (skim always on).
+  uint64 insurance_target_bps = 26; // @gotags: json:"insuranceTargetBps"
+  // === T5 autonomy-graduation thresholds (WP §10) ===
+  // graduation_min_tvl_ucnpy: TVL threshold (> $50M; flat uCNPY for now).
+  uint64 graduation_min_tvl_ucnpy = 27; // @gotags: json:"graduationMinTvlUcnpy"
+  // graduation_min_validators: active-validator threshold (> 30).
+  uint64 graduation_min_validators = 28; // @gotags: json:"graduationMinValidators"
+  // graduation_min_turnout_bps: average governance turnout threshold (> 15%).
+  uint64 graduation_min_turnout_bps = 29; // @gotags: json:"graduationMinTurnoutBps"
+  // graduation_min_daily_tx: daily-transaction threshold (> 10k).
+  uint64 graduation_min_daily_tx = 30; // @gotags: json:"graduationMinDailyTx"
+  // graduation_min_runway_months: treasury-runway threshold in months (> 12).
+  uint64 graduation_min_runway_months = 31; // @gotags: json:"graduationMinRunwayMonths"
+  // === WP §7 Restaking policy ===
+  // restaking_policy: governance-declared per-committee allocation policy.
+  // Each entry pins a committee id to a target weight (in bps; entries must
+  // sum to 10000 when the list is non-empty) plus optional min/max stake
+  // floors/ceilings in uCNPY. Currently observation-only — /v1/restaking
+  // surfaces actual vs target so operators can act manually. Automated
+  // rebalancing requires a delegation-routing primitive not yet defined in
+  // the codebase and is deferred per §11 roadmap.
+  repeated RestakingPolicyEntry restaking_policy = 32; // @gotags: json:"restakingPolicy"
+}
+
+// RestakingPolicyEntry declares the desired share of canoLiq's stake exposure
+// to one Canopy committee (WP §7). target_weight_bps fixes the share as a
+// fraction of total canoLiq exposure (sum across the policy must equal
+// 10_000); min_stake_ucnpy / max_stake_ucnpy are absolute floors/ceilings for
+// the per-committee exposure (0 = unset, i.e. no floor or no ceiling). For
+// now the values feed only the /v1/restaking drift report; they become
+// enforcement targets once active rebalancing lands.
+message RestakingPolicyEntry {
+  // committee_id: the Canopy chain id whose committee this entry governs.
+  uint64 committee_id = 1; // @gotags: json:"committeeId"
+  // target_weight_bps: desired share of canoLiq's total committee exposure,
+  // in basis points. Across an entire policy list these must sum to 10_000.
+  uint64 target_weight_bps = 2; // @gotags: json:"targetWeightBps"
+  // min_stake_ucnpy: optional floor on per-committee exposure (uCNPY). 0 = no
+  // floor. Drift "under-min" surfaces in /v1/restaking when set.
+  uint64 min_stake_ucnpy = 3; // @gotags: json:"minStakeUcnpy"
+  // max_stake_ucnpy: optional ceiling on per-committee exposure (uCNPY). 0 =
+  // no ceiling. Drift "over-max" surfaces in /v1/restaking when set.
+  uint64 max_stake_ucnpy = 4; // @gotags: json:"maxStakeUcnpy"
+}
+
+// ActionType classifies a proposal so per-action governance tiers can apply
+// distinct quorum / approval / timelock / voting-period rules (Tokenomics
+// v1.1 §7). Inferred from the proposal payload at creation time.
+enum ActionType {
+  ACTION_UNKNOWN = 0;
+  ACTION_FEE_CHANGE = 1;
+  ACTION_TREASURY_SPEND_SMALL = 2;
+  ACTION_TREASURY_SPEND_LARGE = 3;
+  ACTION_EMERGENCY = 4;
+  ACTION_VALIDATOR_EJECT = 5;
+  ACTION_PROTOCOL_UPGRADE = 6;
+  ACTION_AUTONOMY_GRADUATE = 7;
+}
+
+// GovernanceTier carries the governance rules for a single ActionType.
+message GovernanceTier {
+  // action: the ActionType this tier governs
+  ActionType action = 1;
+  // quorum_bps: fraction of snapshot total_staked_cplq required to participate
+  uint64 quorum_bps = 2; // @gotags: json:"quorumBps"
+  // approval_bps: yes / (yes+no) needed for the proposal to pass
+  uint64 approval_bps = 3; // @gotags: json:"approvalBps"
+  // timelock_blocks: delay between proposal pass and execution
+  uint64 timelock_blocks = 4; // @gotags: json:"timelockBlocks"
+  // voting_period_blocks: blocks the proposal accepts votes
+  uint64 voting_period_blocks = 5; // @gotags: json:"votingPeriodBlocks"
+}
+
+// VestingIndex enumerates the vesting schedule ids belonging to an address so
+// MessageCPLQClaimVested can iterate without a state-range scan.
+message VestingIndex {
+  // schedule_ids: list of schedule_ids owned by the indexed address
+  repeated uint64 schedule_ids = 1; // @gotags: json:"scheduleIds"
+}
+
+// === Phase 2 — governance, staking, buyback, treasury ===
+
+// MessageCPLQStake locks liquid CPLQ into a stake record granting governance
+// weight. Multiple stakes from the same address aggregate into one record.
+message MessageCPLQStake {
+  // from_address: the staker
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // amount: liquid CPLQ to lock (uCPLQ)
+  uint64 amount = 2;
+  // lock_tier: vote-escrow lock to commit this stake to (T2). LOCK_NONE keeps
+  // the stake liquid-to-unstake after the standard unbond window.
+  LockTier lock_tier = 3; // @gotags: json:"lockTier"
+}
+
+// MessageCPLQUnstake debits the staker's CPLQStake and queues an unbond
+// record that matures after cplq_unstaking_blocks. Total staked CPLQ on
+// globals is decremented immediately so unstaked tokens carry no weight in
+// proposals created from this height onward.
+message MessageCPLQUnstake {
+  // from_address: the staker
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // amount: staked CPLQ to unbond (uCPLQ)
+  uint64 amount = 2;
+}
+
+// MessageCPLQClaimUnstake matures an unstake record by returning the CPLQ
+// to the staker's liquid balance once mature_height has passed.
+message MessageCPLQClaimUnstake {
+  // from_address: the staker
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // unstake_id: id of the UnstakingCPLQ record to claim
+  uint64 unstake_id = 2; // @gotags: json:"unstakeId"
+}
+
+// MessageCPLQProposalCreate opens a new governance proposal. The proposer
+// must hold ≥ min_stake_to_propose at creation height. The proposal payload
+// dictates the action taken if the vote passes.
+message MessageCPLQProposalCreate {
+  // from_address: the proposer
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // payload: proposal payload (oneof param_change | buyback | treasury_spend)
+  google.protobuf.Any payload = 2;
+  // description: optional human-readable description (≤ 256 bytes)
+  string description = 3;
+}
+
+// MessageCPLQVote records a yes/no/abstain vote for an active proposal. The
+// vote weight equals the voter's CPLQStake balance evaluated against the
+// proposal's creation_height — votes from stake added after creation carry
+// zero weight.
+message MessageCPLQVote {
+  // from_address: the voter
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // proposal_id: target proposal
+  uint64 proposal_id = 2; // @gotags: json:"proposalId"
+  // choice: VOTE_YES | VOTE_NO | VOTE_ABSTAIN
+  VoteChoice choice = 3;
+}
+
+// MessageBuybackExecute idempotently runs a passed ProposalBuyback by
+// referencing the proposal id. Re-execution is a no-op once the BuybackOrder
+// is marked executed.
+message MessageBuybackExecute {
+  // from_address: the trigger (any address; transactional fee applies)
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // proposal_id: passed buyback proposal to execute
+  uint64 proposal_id = 2; // @gotags: json:"proposalId"
+}
+
+// MessageDAOTreasurySpend idempotently runs a passed ProposalTreasurySpend
+// subject to multisig + timelock gating for above-threshold amounts.
+message MessageDAOTreasurySpend {
+  // from_address: the trigger
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // proposal_id: passed treasury_spend proposal to execute
+  uint64 proposal_id = 2; // @gotags: json:"proposalId"
+}
+
+// MessageMultisigApprove records a per-signer approval for an above-threshold
+// TreasurySpend. The signer must appear in CanoliqParams.multisig_signers.
+message MessageMultisigApprove {
+  // from_address: the signer
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // spend_id: id of the TreasurySpend record to approve
+  uint64 spend_id = 2; // @gotags: json:"spendId"
+}
+
+// LockTier is the vote-escrow lock duration a staker commits to (Tokenomics
+// v1.1 §4.2). Longer locks grant a higher voting multiplier and reward boost.
+enum LockTier {
+  LOCK_NONE = 0;
+  LOCK_3M = 1;
+  LOCK_6M = 2;
+  LOCK_12M = 3;
+  LOCK_24M = 4;
+}
+
+// CPLQStake is the per-address active stake record.
+message CPLQStake {
+  // address: the staker
+  bytes address = 1;
+  // amount: staked CPLQ (uCPLQ)
+  uint64 amount = 2;
+  // staked_at_height: height of the most recent stake increase. Used for
+  // proposal-vote eligibility (vote weight = 0 if staked_at_height >
+  // proposal.creation_height).
+  uint64 staked_at_height = 3; // @gotags: json:"stakedAtHeight"
+  // lock_tier: vote-escrow lock tier (T2). Drives voting multiplier, reward
+  // boost, and the unstake-eligibility height. Locks only ever strengthen:
+  // re-staking with a higher tier raises this and pushes lock_end_height out.
+  LockTier lock_tier = 4; // @gotags: json:"lockTier"
+  // lock_end_height: earliest height an unstake is permitted (0 for LOCK_NONE).
+  uint64 lock_end_height = 5; // @gotags: json:"lockEndHeight"
+}
+
+// UnstakingCPLQ is a queued unstake awaiting maturity.
+message UnstakingCPLQ {
+  // id: per-address unstake id
+  uint64 id = 1;
+  // address: the staker
+  bytes address = 2;
+  // amount: CPLQ owed at maturity (uCPLQ)
+  uint64 amount = 3;
+  // mature_height: block height at which the unstake matures
+  uint64 mature_height = 4; // @gotags: json:"matureHeight"
+}
+
+// UnstakingIndex enumerates pending unstake ids per address so the
+// account view can list them without a state-range scan.
+message UnstakingIndex {
+  // ids: pending unstake ids owned by the indexed address
+  repeated uint64 ids = 1;
+}
+
+// VoteChoice enumerates the legal vote selections.
+enum VoteChoice {
+  VOTE_UNKNOWN = 0;
+  VOTE_YES = 1;
+  VOTE_NO = 2;
+  VOTE_ABSTAIN = 3;
+}
+
+// ProposalStatus tracks proposal state through its lifecycle.
+enum ProposalStatus {
+  PROPOSAL_UNKNOWN = 0;
+  PROPOSAL_ACTIVE = 1;
+  PROPOSAL_PASSED = 2;
+  PROPOSAL_FAILED = 3;
+  PROPOSAL_EXECUTED = 4;
+}
+
+// Proposal is a governance proposal record. Payload is opaque to the
+// governance lifecycle; tally + execute dispatch on the contained Any type.
+message Proposal {
+  // id: unique proposal id
+  uint64 id = 1;
+  // proposer: address that opened the proposal
+  bytes proposer = 2;
+  // creation_height: block height at which the proposal was opened
+  uint64 creation_height = 3; // @gotags: json:"creationHeight"
+  // expiry_height: voting closes at this height
+  uint64 expiry_height = 4; // @gotags: json:"expiryHeight"
+  // snapshot_total_staked: globals.total_staked_cplq at creation_height
+  uint64 snapshot_total_staked = 5; // @gotags: json:"snapshotTotalStaked"
+  // payload: typed proposal payload
+  google.protobuf.Any payload = 6;
+  // description: optional human-readable description
+  string description = 7;
+  // status: lifecycle state
+  ProposalStatus status = 8;
+  // yes_weight: cumulative yes-vote weight
+  uint64 yes_weight = 9; // @gotags: json:"yesWeight"
+  // no_weight: cumulative no-vote weight
+  uint64 no_weight = 10; // @gotags: json:"noWeight"
+  // abstain_weight: cumulative abstain weight
+  uint64 abstain_weight = 11; // @gotags: json:"abstainWeight"
+  // action_type: classification inferred from the payload at creation
+  ActionType action_type = 12; // @gotags: json:"actionType"
+  // tier: governance tier snapshotted at creation. Quorum / approval are
+  // read from here at tally; timelock from here at spend-queue time. Nil for
+  // proposals created before T1 — callers fall back to the scalar params.
+  GovernanceTier tier = 13; // @gotags: json:"tier"
+}
+
+// ProposalIndex enumerates active proposal ids so BeginBlock can scan
+// without a state-range scan. Passed/failed proposals are removed.
+message ProposalIndex {
+  // ids: active proposal ids
+  repeated uint64 ids = 1;
+}
+
+// Vote is a single recorded vote on a proposal.
+message Vote {
+  // proposal_id: target proposal
+  uint64 proposal_id = 1; // @gotags: json:"proposalId"
+  // voter: voting address
+  bytes voter = 2;
+  // choice: yes / no / abstain
+  VoteChoice choice = 3;
+  // weight: snapshot stake at proposal.creation_height
+  uint64 weight = 4;
+}
+
+// ProposalParamChange replaces the entire CanoliqParams atomically. Full-set
+// replacement matches the existing ValidateParams invariant (split bps must
+// total 10000).
+message ProposalParamChange {
+  // params: the new parameter set
+  CanoliqParams params = 1;
+}
+
+// BuybackMode selects the post-acquisition disposition of CPLQ.
+enum BuybackMode {
+  BUYBACK_UNKNOWN = 0;
+  BUYBACK_BURN = 1;
+  BUYBACK_DISTRIBUTE_STAKERS = 2;
+}
+
+// ProposalBuyback authorizes a single buyback execution.
+message ProposalBuyback {
+  // cnpy_amount: CNPY drawn from canoliq/buyback/pool (clamped to available)
+  uint64 cnpy_amount = 1; // @gotags: json:"cnpyAmount"
+  // price_micro_cnpy_per_cplq: price denominator. cplq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cplq
+  uint64 price_micro_cnpy_per_cplq = 2; // @gotags: json:"priceMicroCnpyPerCplq"
+  // mode: BURN or DISTRIBUTE_STAKERS
+  BuybackMode mode = 3;
+}
+
+// SpendDenomination distinguishes CNPY-denominated spends from CPLQ.
+enum SpendDenomination {
+  SPEND_UNKNOWN = 0;
+  SPEND_CNPY = 1;
+  SPEND_CPLQ = 2;
+}
+
+// ProposalTreasurySpend authorizes a transfer from a treasury bucket.
+message ProposalTreasurySpend {
+  // recipient: 20-byte target address
+  bytes recipient = 1;
+  // amount: CNPY or CPLQ to send
+  uint64 amount = 2;
+  // denomination: CNPY (sourced from treasury/canoliq) or CPLQ (treasury/cplq)
+  SpendDenomination denomination = 3;
+}
+
+// ProposalValidatorEject removes a validator from the canoLiq committee
+// registry on pass (F12). Future reward sweeps skip the ejected address and
+// its accrued validator-incentive balance is cleared.
+message ProposalValidatorEject {
+  // validator_address: 20-byte address to remove from ValidatorRegistry
+  bytes validator_address = 1; // @gotags: json:"validatorAddress"
+}
+
+// ProposalEmergency is a security-critical action on the fast-track tier
+// (F13). It optionally carries a param diff applied immediately on pass.
+message ProposalEmergency {
+  // description: human-readable rationale for the emergency action
+  string description = 1;
+  // param_change: optional CanoliqParams replacement applied on pass
+  ProposalParamChange param_change = 2; // @gotags: json:"paramChange"
+}
+
+// ProposalProtocolUpgrade signals an off-chain coordinated upgrade. The
+// payload is opaque to the plugin (recorded for audit; no on-chain dispatch).
+message ProposalProtocolUpgrade {
+  // version: target version string
+  string version = 1;
+  // payload: opaque upgrade descriptor
+  bytes payload = 2;
+}
+
+// BuybackOrder is the queued + post-execution record of a buyback. Carries
+// the full proposal payload so MessageBuybackExecute is self-contained after
+// the source proposal record is cleaned up at tally time.
+message BuybackOrder {
+  // proposal_id: source proposal
+  uint64 proposal_id = 1; // @gotags: json:"proposalId"
+  // cnpy_drawn: CNPY actually drained (≤ payload.cnpy_amount)
+  uint64 cnpy_drawn = 2; // @gotags: json:"cnpyDrawn"
+  // cplq_acquired: CPLQ moved out of treasury_cplq
+  uint64 cplq_acquired = 3; // @gotags: json:"cplqAcquired"
+  // mode: BURN or DISTRIBUTE_STAKERS (mirrors proposal payload)
+  BuybackMode mode = 4;
+  // executed: true once the buyback has been applied
+  bool executed = 5;
+  // executed_at_height: height at which executed flipped to true
+  uint64 executed_at_height = 6; // @gotags: json:"executedAtHeight"
+  // payload: full original proposal payload (cnpy_amount, price, mode)
+  ProposalBuyback payload = 7;
+}
+
+// TreasurySpend is a pending or completed authorized spend. BeginBlock
+// executes when current_height >= executable_height AND multisig threshold
+// satisfied (above treasury_threshold).
+message TreasurySpend {
+  // id: per-spend id
+  uint64 id = 1;
+  // proposal_id: source proposal
+  uint64 proposal_id = 2; // @gotags: json:"proposalId"
+  // executable_height: timelock-adjusted earliest execution height
+  uint64 executable_height = 3; // @gotags: json:"executableHeight"
+  // payload: ProposalTreasurySpend payload
+  ProposalTreasurySpend payload = 4;
+  // requires_multisig: true when amount > treasury_threshold at creation
+  bool requires_multisig = 5; // @gotags: json:"requiresMultisig"
+  // executed: true once the transfer has been applied
+  bool executed = 6;
+}
+
+// MultisigApproval is one signer's approval of an above-threshold spend.
+message MultisigApproval {
+  // spend_id: target TreasurySpend id
+  uint64 spend_id = 1; // @gotags: json:"spendId"
+  // signer: approving signer address (must be in params.multisig_signers)
+  bytes signer = 2;
+  // height: block at which the approval was recorded
+  uint64 height = 3;
+}
+
+// CPLQStakeIndex enumerates active CPLQ staker addresses so buyback
+// DISTRIBUTE_STAKERS can iterate without a state-range scan.
+message CPLQStakeIndex {
+  // addresses: 20-byte staker addresses with non-zero CPLQStake.amount
+  repeated bytes addresses = 1;
+}
+
+// ValidatorRegistryEntry is a per-validator stake record used to drive
+// canoLiq's pro-rata distribution of the 15% validator-incentive slice.
+// Phase 2 ships this as a plugin-internal registry (seeded at genesis or
+// via param-change governance); Phase 1.5 will later replace the source
+// with a real Canopy validator-set readback.
+message ValidatorRegistryEntry {
+  // address: 20-byte validator address
+  bytes address = 1;
+  // stake: weight used for share-out (uCNPY-equivalent)
+  uint64 stake = 2;
+}
+
+// ValidatorRegistry is the singleton list of canoLiq committee validators
+// with their stake weights. Read by reward.go::distributeValidatorShare.
+message ValidatorRegistry {
+  // entries: per-validator stake records
+  repeated ValidatorRegistryEntry entries = 1;
+}
+
+// AlertState is the per-kind bookkeeping for the T6 alert subsystem: the
+// debounce watermark and the tumbling-window baseline for windowed conditions.
+message AlertState {
+  // last_fired_height: height the alert last fired (0 = not currently firing).
+  // Cleared to 0 when the condition resolves so it can fire again.
+  uint64 last_fired_height = 1; // @gotags: json:"lastFiredHeight"
+  // window_start_height: height the current measurement window opened.
+  uint64 window_start_height = 2; // @gotags: json:"windowStartHeight"
+  // window_baseline: the measured value at window open (e.g. pool balance).
+  uint64 window_baseline = 3; // @gotags: json:"windowBaseline"
+}

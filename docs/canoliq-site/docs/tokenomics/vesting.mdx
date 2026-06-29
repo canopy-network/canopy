@@ -1,0 +1,44 @@
+---
+sidebar_label: Vesting
+---
+
+# Vesting Schedules
+
+CPLQ allocations at genesis are distributed via vesting schedules with cliff and linear unlock periods.
+
+## Vesting Model
+
+Each `VestingSchedule` record tracks:
+
+| Field | Description |
+|-------|-------------|
+| `address` | Recipient address |
+| `schedule_id` | Discriminator for multiple tranches per address |
+| `total_amount` | Total CPLQ vesting under this schedule (uCPLQ) |
+| `cliff_height` | No CPLQ unlocks before this block height |
+| `start_height` | Linear vest start (typically equals cliff height) |
+| `end_height` | Linear vest completion height |
+| `claimed_amount` | CPLQ already moved to liquid balance |
+
+## Unlock Calculation
+
+The `unlockedAmount` function computes cumulative unlock:
+
+- **Before cliff**: Returns 0
+- **Between start and end**: Linear interpolation
+- **After end**: Returns full `total_amount`
+- **Degenerate** (`endHeight <= startHeight`): Returns full amount once past cliff
+
+## Claiming Vested CPLQ
+
+Recipients must call `MessageCPLQClaimVested` to unlock vested CPLQ into their liquid balance:
+
+```bash
+canoliqctl cplq-claim-vested <address>
+```
+
+The handler reads the `VestingIndex` to find all schedule IDs for the address, then checks each schedule for newly unlocked amounts.
+
+:::note
+The FSM does not support range scans. A `VestingIndex` exists per address to enable enumeration without scanning all keys.
+:::

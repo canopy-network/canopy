@@ -1,0 +1,56 @@
+---
+sidebar_label: Tally & Execution
+---
+
+# Tally & Execution
+
+## Tally Rules
+
+On `BeginBlock` after `expiry_height`, the plugin tallies votes:
+
+### Quorum
+
+```
+yes + no + abstain ≥ quorum_bps × snapshot_total_staked / 10000
+```
+
+Default: 33% of snapshot total staked CPLQ must participate.
+
+### Pass Threshold
+
+```
+yes ≥ pass_threshold_bps × (yes + no) / 10000
+```
+
+Default: 50%+1 of participating votes (excluding abstentions) must be yes.
+
+## Execution
+
+### Param Change
+
+Updated `CanoliqParams` take effect immediately and are observed by the next `ProcessRewards` sweep.
+
+### Buyback
+
+Writes a self-contained `BuybackOrder` record. Subsequent `MessageBuybackExecute` triggers the buyback:
+
+- **BURN**: Decrements `cplq_total_supply` and `cplq_circulating_supply`; CNPY moves to treasury
+- **DISTRIBUTE_STAKERS**: Pro-rata credits all active CPLQ stakers' liquid balances
+
+Idempotency via `BuybackOrder.executed` flag — re-execution is a no-op.
+
+### Treasury Spend
+
+Writes a `TreasurySpend` record with:
+
+- `executable_height`: Current height + `timelock_blocks` (if above threshold)
+- `requires_multisig`: True if amount exceeds `treasury_threshold`
+
+Above-threshold gating requires:
+
+1. `current_height >= executable_height` (timelock elapsed)
+2. `count(approvals) >= multisig_threshold` from current signer set
+
+:::note
+Tally cleanup deletes the proposal record but not its votes. Stale vote keys are inert and cheap.
+:::

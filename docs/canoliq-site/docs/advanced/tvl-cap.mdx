@@ -1,0 +1,126 @@
+---
+sidebar_label: TVL Cap
+---
+
+# TVL Cap
+
+**In one sentence:** a self-imposed ceiling on canoLiq's TVL expressed as a
+percentage of **total Canopy network stake** — the protocol declines deposits that
+would push its share past the governance-set fraction.
+
+Whitepaper §9.4 ("Concentration Risk") commits canoLiq to *"self-impose a TVL cap of
+33% of total Canopy network stake pending ecosystem maturation and governance approval
+to lift this cap."* The mechanism below implements that exactly: the cap rides on
+live Canopy state, so it widens as Canopy's stake grows and tightens if Canopy's
+stake shrinks.
+
+## How it works
+
+On every deposit, the protocol:
+
+1. Reads the network-wide `lib.Supply.staked` from Canopy state (the total locked
+   CNPY across all committees, including delegations).
+2. Computes the **effective cap** in uCNPY:
+
+   ```
+   cap_ucnpy = canopy_total_stake × tvl_cap_bps ÷ 10_000
+   ```
+
+3. Rejects the deposit if `total_pooled_cnpy + deposit_amount > cap_ucnpy`.
+
+```
+if tvl_cap_bps > 0:
+    supply = readCanopySupply()
+    if supply is None:
+        reject the deposit  # ErrCanopyStakeUnavailable — fail-closed
+    if supply.staked > 0:
+        cap = mulDiv(supply.staked, tvl_cap_bps, 10_000)
+        if (total_pooled_cnpy + deposit_amount) > cap:
+            reject the deposit  # ErrTVLCapExceeded
+    # supply present but staked == 0 → accept this block (uncapped)
+```
+
+- **Default `tvl_cap_bps = 3300`** (= 33% per WP §9.4). Governance can raise or
+  lower it; setting it to `0` removes the cap entirely.
+- The cap moves with Canopy. As Canopy's network stake grows, the effective uCNPY
+  cap grows proportionally — operators do **not** need to file a parameter change
+  for every Canopy growth tick.
+- The check applies only to **deposits**. Reward accrual to the pool and existing
+  balances are never affected — the cap throttles *inflows* only.
+- A deposit that would exceed the cap fails entirely, not partially.
+
+## Three states for the cap
+
+`tvl_cap_bps` interacts with Canopy's `Supply` state in three ways. `/v1/health`
+surfaces the runtime state via `tvlCapStatus` so operators don't have to
+correlate `tvlCapBps` and `canopyTotalStake` to infer it.
+
+| `tvl_cap_bps` | Canopy `Supply` | Behaviour | `tvlCapStatus` |
+|---|---|---|---|
+| `0` | any | uncapped (governance never set a cap) | `"uncapped"` |
+| `> 0` | absent (key not in state) | **rejects** all deposits with `ErrCanopyStakeUnavailable` | `"fail-closed"` |
+| `> 0` | present, computed cap is 0 (`staked == 0`, or so small that `mulDiv` truncates to 0) | accepts — cap re-engages once Canopy stake grows past the truncation point | `"awaiting-canopy-stake"` |
+| `> 0` | present, computed cap > 0 | enforces `mulDiv(staked, tvl_cap_bps, 10_000)` cap | `"active"` |
+
+The rationale:
+
+- **Absent Supply** means the cap-policy state itself hasn't initialized;
+  silently bypassing the cap would defeat WP §9.4 (the cap exists to bound
+  systemic risk). Reject.
+- **Present Supply with `staked == 0`** is a legitimate fresh-network state
+  — Canopy is up and tracking, but no validator has staked yet. Rejecting
+  deposits during that window would brick canoLiq on every fresh genesis.
+  Accept; the cap re-engages automatically once the first stake lands.
+
+Operators bringing up a fresh Canopy testnet may want to set `tvl_cap_bps = 0`
+explicitly during bring-up, or rely on the `awaiting-canopy-stake` window
+without setting a cap. The fail-closed branch only triggers when the Canopy
+`Supply` singleton is genuinely missing from state — a configuration error
+rather than an expected lifecycle state.
+
+## Tuning it
+
+The cap is a governance parameter (`tvl_cap_bps`). A
+[parameter-change proposal](../governance/overview.mdx) raises it, lowers it, or
+sets it to `0` to remove the limit. Per WP §9.4, lifting the cap requires DAO
+approval — it is a governance lever, not an operator setting.
+
+## Watching utilization
+
+`/v1/health` reports the cap configuration, the live computed cap, the observed
+Canopy total stake, and current utilization — enough for operators and front ends
+to show *"X% of effective cap used"* and warn before deposits start bouncing:
+
+```json
+GET /v1/health
+{
+  "height": 12345,
+  "genesisComplete": true,
+  "chainId": 2,
+  "tvlCapBps": 3300,
+  "tvlCapStatus": "active",
+  "canopyTotalStake": 100000000000,
+  "tvlCapUcnpyEffective": 33000000000,
+  "tvlUtilizationBps": 7350
+}
+```
+
+- `tvlCapBps` — the governance-set fraction.
+- `tvlCapStatus` — one of `"uncapped"`, `"active"`, `"awaiting-canopy-stake"`,
+  `"fail-closed"`. See the [three-states table](#three-states-for-the-cap) for
+  what each means.
+- `canopyTotalStake` — `lib.Supply.staked` at snapshot height. `0` if Canopy
+  Supply is absent OR if Canopy Supply is present with `staked = 0`;
+  `tvlCapStatus` disambiguates.
+- `tvlCapUcnpyEffective` — `mulDiv(canopyTotalStake, tvlCapBps, 10_000)`. Zero
+  when uncapped, awaiting Canopy stake, or fail-closed; pair with `tvlCapStatus`
+  to interpret.
+- `tvlUtilizationBps` — `total_pooled_cnpy ÷ tvl_cap_ucnpy_effective` in basis
+  points (here, 73.5% full). Zero when the effective cap is zero, regardless of
+  status.
+
+## Related
+
+- [Deposit & Redeem](../transactions/overview.mdx)
+- [Governance](../governance/overview.mdx) — how to change the cap
+- [API Endpoints](../api/endpoints.mdx) — `/v1/health`

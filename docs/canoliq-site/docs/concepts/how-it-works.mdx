@@ -1,0 +1,119 @@
+---
+sidebar_label: How It Works
+sidebar_position: 1
+---
+
+# How canoLiq Works
+
+This page is a plain-language walkthrough of the whole protocol — no proto knowledge
+required. If you are new to liquid staking, start here.
+
+## The one-paragraph version
+
+You give the protocol **CNPY** (the Canopy native coin). In return you get **cCNPY**, a
+receipt token that quietly grows in value as staking rewards come in. You can hold or
+trade your cCNPY freely, and redeem it back for CNPY whenever you like (after a short
+cooldown). A second token, **CPLQ**, is a fixed-supply governance token: people who hold
+and stake CPLQ vote on how the protocol is run and share in the value it captures.
+
+## Step by step
+
+### 1. You deposit CNPY and receive cCNPY
+
+When you deposit, the protocol adds your CNPY to a shared pool and mints cCNPY to you at
+the **current exchange rate**:
+
+```
+cCNPY minted = deposit amount × (total cCNPY supply ÷ total pooled CNPY)
+```
+
+The very first deposit is minted 1:1. After that, the rate reflects how much CNPY the pool
+has accumulated per cCNPY in circulation.
+
+### 2. Rewards accrue and your cCNPY gets more valuable
+
+The pooled CNPY earns staking rewards each block. Those rewards flow back into the pool,
+so the same cCNPY is now backed by **more** CNPY than before. You don't claim rewards — the
+exchange rate simply rises, and your cCNPY is worth more CNPY over time. This is what
+"yield-bearing receipt token" means.
+
+```
+exchange rate = total pooled CNPY ÷ total cCNPY supply   (rises as rewards arrive)
+```
+
+### 3. A protocol fee is taken and split four ways
+
+Before rewards lift the exchange rate, canoLiq takes a **12% protocol fee** and splits it:
+
+| Slice | Share | Where it goes |
+|-------|-------|---------------|
+| Stakers | 40% | Back into the pool (lifts the exchange rate for everyone) |
+| DAO treasury | 30% | Funds the protocol; a small cut is skimmed to an insurance reserve |
+| Validators | 15% | Paid to the committee validators securing the chain |
+| Buyback | 15% | Saved up to buy back CPLQ later |
+
+See [Fee Structure](../tokenomics/fee-structure.mdx) for the exact math.
+
+### 4. Redeeming back to CNPY
+
+When you want out, you redeem cCNPY. The protocol burns it, calculates the CNPY you're
+owed at the current rate, and queues a **redemption** that matures after an unbonding
+window. Once mature, you claim your CNPY. The cooldown mirrors the chain's own unstaking
+delay so the pool can unwind its stake first.
+
+### 5. CPLQ holders govern the protocol
+
+[CPLQ](./two-tokens.mdx) holders **stake** their CPLQ to gain voting weight, then create
+and vote on proposals — changing fees, spending the treasury, running buybacks, and more.
+Locking CPLQ for longer ([vote-escrow](../tokenomics/vote-escrow.mdx)) multiplies your vote
+and boosts your share of buyback distributions. Different kinds of decisions need different
+[approval thresholds](../governance/governance-tiers.mdx).
+
+### 6. The protocol earns its independence
+
+canoLiq starts as a Canopy *nested chain*. As it grows — more TVL, more validators, healthy
+voter turnout, real transaction volume, and a self-sustaining treasury — it can
+[graduate to autonomy](../advanced/autonomy-graduation.mdx) and become a sovereign chain.
+The protocol continuously measures itself against five thresholds and reports whether it is
+eligible.
+
+## Where canoLiq runs
+
+canoLiq is a **Go plugin** that runs alongside the Canopy FSM (Finite State Machine). The
+FSM handles consensus; the plugin owns all canoLiq-specific state and logic, talking to the
+FSM over a Unix socket using the standard `CheckTx` → `DeliverTx` → `EndBlock` lifecycle.
+
+```
+┌─────────────────────────────────────────────┐
+│                  Canopy FSM                  │
+│  ┌─────────┐  ┌──────────┐  ┌────────────┐  │
+│  │Controller│→│   BFT    │→│  Consensus  │  │
+│  └────┬────┘  └──────────┘  └──────┬─────┘  │
+│       │                            │         │
+│       └────────────┬───────────────┘         │
+│                    │ Unix socket              │
+└────────────────────┼─────────────────────────┘
+                     │
+┌────────────────────┼─────────────────────────┐
+│          canoLiq Plugin                       │
+│  ┌─────────┐  ┌──────────┐  ┌────────────┐  │
+│  │ CheckTx │→│ DeliverTx │→│  EndBlock   │  │
+│  └─────────┘  └──────────┘  └──────┬─────┘  │
+│                                    │         │
+│                          ┌─────────▼──────┐  │
+│                          │  ProcessRewards│  │
+│                          └────────────────┘  │
+└─────────────────────────────────────────────┘
+```
+
+- **CheckTx** — fast, stateless checks (fee paid? valid address? authorized signer?).
+- **DeliverTx** — the real work: read state, apply the message, write state.
+- **EndBlock** — periodic upkeep: sweep and split rewards, tally proposals, execute
+  matured treasury spends, evaluate alerts.
+
+## Keep reading
+
+- [The Two Tokens](./two-tokens.mdx) — cCNPY vs CPLQ, in detail
+- [Glossary](./glossary.mdx) — quick definitions of every term used here
+- [Tokenomics Overview](../tokenomics/overview.mdx) — supply, fees, and vesting
+- [Transactions Overview](../transactions/overview.mdx) — every action you can take

@@ -1,0 +1,66 @@
+---
+sidebar_label: Proposal Types
+---
+
+# Proposal Types
+
+canoLiq supports three proposal types, each carried as a `google.protobuf.Any` payload.
+
+## Param Change
+
+Updates the entire `CanoliqParams` set. This is a **full-set replacement**, not a delta.
+
+```protobuf
+message ProposalParamChange {
+  CanoliqParams params = 1;
+}
+```
+
+All `ValidateParams` invariants are checked:
+- Fee split BPS must total 10,000
+- `insurance_bps ≤ 10,000`
+- `quorum_bps ≤ 10,000`
+- `pass_threshold_bps ≤ 10,000`
+- `multisig_threshold ≤ len(multisig_signers)` when signers present
+- `cplq_unstaking_blocks ≥ voting_period_blocks`
+
+## Buyback
+
+Authorizes a single buyback execution:
+
+```protobuf
+message ProposalBuyback {
+  uint64 cnpy_amount = 1;
+  uint64 price_micro_cnpy_per_cplq = 2;
+  BuybackMode mode = 3;  // BURN or DISTRIBUTE_STAKERS
+}
+```
+
+- Drains CNPY from `canoliq/buyback/pool`
+- Computes `cplq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cplq`
+- Debts CPLQ from `canoliq/treasury/cplq`
+
+## Treasury Spend
+
+Authorizes a transfer from a treasury bucket:
+
+```protobuf
+message ProposalTreasurySpend {
+  bytes recipient = 1;
+  uint64 amount = 2;
+  SpendDenomination denomination = 3;  // CNPY or CPLQ
+}
+```
+
+- Below `treasury_threshold`: Executes directly
+- Above threshold: Requires timelock + multisig approvals
+
+## Creating a Proposal
+
+```bash
+canoliqctl vote <address> <proposal-id> yes
+```
+
+:::note
+`proposal-create` is intentionally not yet wired as a standalone CLI command. Its payload is a `google.protobuf.Any` carrying one of three sub-types, each with a distinct argument surface. Construct proposals via in-process tests or hand-built JSON.
+:::

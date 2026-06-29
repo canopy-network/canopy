@@ -1,0 +1,65 @@
+---
+sidebar_label: Fee Structure
+---
+
+# Fee Structure
+
+canoLiq applies a **12% protocol fee** (`fee_bps = 1200`) on staking rewards. The rest of the
+reward — the other 88% — lifts the exchange rate for everyone. The fee itself is split across
+four destinations.
+
+## Fee Split (40/30/15/15)
+
+| Destination | BPS | Percentage | In plain terms |
+|-------------|-----|------------|----------------|
+| User Rebate | 4000 | 40% | Goes straight back into the pool, raising the cCNPY exchange rate for all holders |
+| DAO Treasury | 3000 | 30% | Funds the protocol's operations and grants (`treasury/canoliq`) |
+| Validators | 1500 | 15% | Pays the committee validators securing the chain, pro-rata to stake |
+| Buyback | 1500 | 15% | Saved in `buyback/pool` to buy back CPLQ later |
+
+The four split fields must always sum to `10,000` bps (100% of the fee).
+
+## Insurance Auto-Routing
+
+A small fraction of the **treasury slice** is skimmed into an insurance reserve:
+
+- **`insurance_bps`**: default **500 (5% of the treasury slice ≈ 1.5% of the total fee)**
+- The skim **turns off automatically** once the reserve reaches its target (a fraction of
+  peak TVL), and resumes as the protocol grows. See [Insurance Fund](../advanced/insurance.mdx)
+  for the full mechanism.
+
+## Fee Conservation
+
+All fee components must sum exactly to the original fee amount. Integer truncation residuals
+are added to the treasury to ensure conservation:
+
+```
+userRebate + treasury + insurance + validators + buyback = feeAmount
+```
+
+When the insurance skim is off, the would-be insurance amount stays in the treasury — the
+equation still balances.
+
+## Reference Values
+
+For a 1000 uCNPY reward with the 12% fee and default split (insurance skim active):
+
+| Component | Amount (uCNPY) |
+|-----------|----------------|
+| Post-DAO (5% cut applied upstream) | 950 |
+| Fee (12% of 950) | 114 |
+| User Rebate (40%) | 45 |
+| Treasury (30% = 34, minus insurance skim) | 32 |
+| Insurance (5% of the 34 treasury slice) | 1 |
+| Validators (15%) | 17 |
+| Buyback (15%) | 17 |
+| **Sum** | **114** |
+
+:::note
+Integer truncation means the per-component values are rounded; residuals are folded into the
+treasury so the column still sums to the full fee.
+:::
+
+:::note
+The 5% DAO cut is applied **upstream** by Canopy core. The plugin's pool sees only `0.95 × X`. Do not double-apply the DAO cut inside the plugin.
+:::

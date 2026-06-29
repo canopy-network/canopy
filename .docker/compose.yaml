@@ -12,9 +12,24 @@ services:
       - 9001:9001 # TCP P2P
       - 6060:6060 # Debug
       - 9090:9090 # Metrics
+      - 8587:8587 # canoLiq plugin read-only query RPC
     networks:
       - canopy
     command: ["start"]
+    # CANOPY_PLUGIN_MODE selects which plugin implementation the go-plugin
+    # binary serves. The canopy controller starts the plugin via
+    # plugin/go/pluginctl.sh, which inherits this env var; the binary's main()
+    # at plugin/go/main.go switches on it to dispatch to canoliq.StartPlugin.
+    # CANOLIQ_RPC_ADDR turns on the read-only query HTTP server in the
+    # plugin process. Bind to 0.0.0.0 so the host port forward sees it.
+    environment:
+      - CANOPY_PLUGIN_MODE=canoliq
+      # Localnet config: 5-block redemption window, placeholder bucket
+      # addresses, profile=localnet (placeholder safety check disabled).
+      # For testnet, swap to canoliq-config.testnet.json (real addresses
+      # required; safety check refuses placeholders).
+      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.localnet.json
+      - CANOLIQ_RPC_ADDR=0.0.0.0:8587
     volumes:
       - ./volumes/node_1:/root/.canopy
   #    deploy:
@@ -36,9 +51,18 @@ services:
       - 9002:9002 # TCP P2P
       - 6061:6060 # Debug
       - 9091:9091 # Metrics
+      - 8588:8587 # canoLiq plugin read-only query RPC
     networks:
       - canopy
     command: ["start"]
+    environment:
+      - CANOPY_PLUGIN_MODE=canoliq
+      # Localnet config: 5-block redemption window, placeholder bucket
+      # addresses, profile=localnet (placeholder safety check disabled).
+      # For testnet, swap to canoliq-config.testnet.json (real addresses
+      # required; safety check refuses placeholders).
+      - CANOLIQ_CONFIG=/app/plugin/go/canoliq/canoliq-config.localnet.json
+      - CANOLIQ_RPC_ADDR=0.0.0.0:8587
     volumes:
       - ./volumes/node_2:/root/.canopy
 #    deploy:

@@ -1,0 +1,44 @@
+---
+sidebar_label: Overview
+---
+
+# Tokenomics Overview
+
+canoLiq manages two tokens alongside CNPY — a yield-bearing receipt and a fixed-supply
+governance token. If you want the friendly version first, read
+[The Two Tokens](../concepts/two-tokens.mdx); this page is the reference.
+
+## cCNPY — Liquid Staking Receipt
+
+cCNPY is minted 1:1 against deposited CNPY at the current exchange rate. It represents the holder's share of the total pooled CNPY backing.
+
+- **Minting**: Users deposit CNPY via `MessageCanoliqDeposit`, receiving cCNPY at the current rate
+- **Redemption**: Users burn cCNPY via `MessageCanoliqRedeem`, queuing a CNPY redemption
+- **Claim**: After the unstaking window, users claim matured redemptions via `MessageCanoliqClaimRedemption`
+
+The exchange rate fluctuates as staking rewards accrue:
+
+```
+exchangeRate = totalPooledCNPY / totalCCNPYSupply
+```
+
+## CPLQ — Governance Token
+
+CPLQ is a **fixed-supply** (100M) governance and value-capture token.
+
+- **Total Supply**: 100,000,000 CPLQ (100,000,000,000,000 uCPLQ with 6-decimal precision)
+- **Minting**: Entire supply minted at genesis, distributed across vesting buckets
+- **Governance**: CPLQ holders stake for governance weight; voting weight is snapshotted at proposal creation
+- **Vote-Escrow**: Locking staked CPLQ for 3–24 months multiplies voting weight (up to 4×) and boosts buyback rewards — see [Vote-Escrow](./vote-escrow.mdx)
+- **Vesting**: Allocations follow cliff + linear vesting schedules; recipients must call `MessageCPLQClaimVested` to unlock
+
+### Genesis Distribution Buckets
+
+| Bucket | BPS | Vesting |
+|--------|-----|---------|
+| Community | Varies | Cliff + linear |
+| Team | Varies | Cliff + linear |
+| DAO Treasury | Varies | Immediate (liquid) |
+| Liquidity | Varies | Varies |
+
+Configure your specific distribution in `genesis.json`.

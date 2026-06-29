@@ -1,0 +1,77 @@
+---
+sidebar_label: Governance Tiers
+---
+
+# Governance Tiers
+
+**In one sentence:** not every decision is equally risky, so canoLiq applies different
+voting rules — quorum, approval, timelock, and voting period — depending on *what* a proposal
+does.
+
+A routine fee tweak and a multi-million-CNPY treasury spend should not clear the same bar.
+canoLiq classifies each proposal by its **action type** and applies the matching tier of
+rules.
+
+## The seven tiers
+
+When a proposal is created, its payload is inspected and assigned one of seven `ActionType`
+values. Each carries its own rule set (defaults shown; all are governance-tunable):
+
+| Action | Quorum | Approval | Timelock | Voting period |
+|--------|--------|----------|----------|---------------|
+| `ACTION_FEE_CHANGE` | 5% | 51% | 48h | 7 days |
+| `ACTION_TREASURY_SPEND_SMALL` | 5% | 51% | 48h | 7 days |
+| `ACTION_TREASURY_SPEND_LARGE` | 10% | 67% | 7 days | 7 days |
+| `ACTION_EMERGENCY` | 8% | 67% | none (immediate) | 24h (fast-track) |
+| `ACTION_VALIDATOR_EJECT` | 5% | 51% | 48h | 7 days |
+| `ACTION_PROTOCOL_UPGRADE` | 10% | 67% | 7 days | 7 days |
+| `ACTION_AUTONOMY_GRADUATE` | 15% | 75% | 14 days | 7 days |
+
+Percentages are stored in basis points (e.g. 67% = `6,700 bps`). Time periods are stored as
+block counts at the 6-second block time: 24h ≈ `14,400`, 48h ≈ `28,800`, 7d ≈ `100,800`,
+14d ≈ `201,600` blocks.
+
+### What each field means
+
+- **Quorum** — the minimum total voting weight (as a fraction of the staked-CPLQ snapshot
+  taken at proposal creation) that must participate, counting yes + no + abstain. Too little
+  turnout and the proposal fails regardless of the result.
+- **Approval** — the share of `yes ÷ (yes + no)` weight required to pass. Abstain votes count
+  toward quorum but not toward approval.
+- **Timelock** — how long after passing the protocol waits before the change executes. The
+  highest-stakes actions (large spends, upgrades, graduation) wait longest; emergencies wait
+  not at all.
+- **Voting period** — how long the proposal accepts votes. Emergencies use a 24h fast-track;
+  everything else uses the standard 7-day window.
+
+## How the tier is chosen
+
+The tier is **inferred from the proposal payload** at creation time and **frozen onto the
+proposal record**. A recount later uses the tier captured at creation, so changing the
+governance parameters mid-vote cannot move the goalposts on an in-flight proposal.
+
+- A `ProposalParamChange` that edits fee fields → `ACTION_FEE_CHANGE`.
+- A `ProposalTreasurySpend` → `ACTION_TREASURY_SPEND_SMALL` or `_LARGE` depending on amount.
+- `ProposalValidatorEject`, `ProposalProtocolUpgrade`, `ProposalEmergency`, and the autonomy
+  graduation proposal map to their matching action types.
+
+## Scalar fallback
+
+The tier matrix is the modern path, but each rule also exists as a single scalar parameter
+on `CanoliqParams` (`quorum_bps`, `pass_threshold_bps`, `timelock_blocks`,
+`voting_period_blocks`). If a proposal's action has **no matching tier configured**, the
+engine falls back to these scalars. This keeps older state and minimal configurations valid.
+
+| Scalar parameter | Default |
+|------------------|---------|
+| `quorum_bps` | 3300 (33%) |
+| `pass_threshold_bps` | 5001 (just over 50%) |
+| `timelock_blocks` | 28,800 (~48h) |
+| `voting_period_blocks` | 100,800 (~7 days) |
+
+## Related
+
+- [Governance Overview](./overview.mdx) — voting weight and the snapshot rule
+- [Proposals](./proposals.mdx) — proposal types and payloads
+- [Tally & Execution](./tally-execution.mdx) — how votes are counted and dispatched
+- [Vote-Escrow](../tokenomics/vote-escrow.mdx) — how voting weight is boosted

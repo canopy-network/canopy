@@ -1,0 +1,104 @@
+{
+  "_comment": "TESTNET GENESIS TEMPLATE — every address below is a TODO placeholder. Fill in real bucket-recipient addresses before pointing a node at this file. The plugin's safety check (config.go::SafetyCheck) refuses to start under profile=\"testnet\" or \"mainnet\" if any recipient still matches the localnet placeholder (851e90eaef1fa27debaee2c2591503bdeec1d123); the addresses below are pre-distinct so the check passes, but they still must be replaced.",
+  "blocksPerYear": 5256000,
+  "buckets": [
+    {
+      "name": "Validators & Infrastructure",
+      "bps": 2200,
+      "cliffMonths": 12,
+      "vestMonths": 24,
+      "recipients": [
+        {
+          "address": "83e993da4f7489b48dc2488632b85e1b2d1f58cb",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Liquidity Incentives",
+      "bps": 1500,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "5c9de695843551ecf5467b0cf428916e99bb4206",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Community & Airdrops",
+      "bps": 2000,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "7d941defe4a129128ed3f37a61fec9094c49e478",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "DAO Treasury (canoLiq)",
+      "bps": 1500,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "696798986a6d000fe03555aa72e93dbd6837b4bf",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Founders & Core Team",
+      "bps": 1200,
+      "cliffMonths": 12,
+      "vestMonths": 36,
+      "recipients": [
+        {
+          "address": "4a0b0aa323b18dc4ce09890a5f90d6198c624d22",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Strategic Partners & Integrations",
+      "bps": 1000,
+      "cliffMonths": 6,
+      "vestMonths": 12,
+      "recipients": [
+        {
+          "address": "8e2c25c9dcbf490b1b22d6d4aa5f598b6ba46d24",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Developer Grants & Ecosystem",
+      "bps": 600,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "81be5fbdc670934a6639b1d7be37fdc08f768f87",
+          "bps": 10000
+        }
+      ]
+    }
+  ],
+  "params": {
+    "_comment": "Multisig signers and thresholds for testnet (supplied 2026-06-18). 3-of-5; treasuryThreshold lowered to 50_000_000 uCPLQ so the multisig branch is actually exercised on modest testnet spends.",
+    "multisigSigners": [
+      "1b6454361f65ac5cc13c6b775692ba3d64cbcb84",
+      "2ea35a0ef4ef34c58c176ae0ad6b6a4fbf33346f",
+      "b749e623b0b3dc8a6fce9f89c539d3351e92a6c5",
+      "08f5643e3a27d802431175354ee7e9fce91f6a4b",
+      "1b389495e4d403940734c5820d10c8d52b896a44"
+    ],
+    "multisigThreshold": 3,
+    "treasuryThreshold": 50000000
+  },
+  "_validatorRegistryComment": "Shipped empty for first testnet bring-up (2026-06-18 decision). The plugin falls back to a single committee aggregator key, which obscures per-validator pro-rata reward credit; populate before the validator-eject T1 scenarios and before mainnet.",
+  "validatorRegistry": []
+}
