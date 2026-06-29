@@ -1,5 +1,6 @@
 name: Release Go Plugin
 
+# Manually dispatched (workflow_dispatch) to cut a tagged Go plugin release.
 on:
   workflow_dispatch:
     inputs:
