@@ -827,7 +827,7 @@ type MessageCreateOrder struct {
 	// amount_for_sale: the amount of uCNPY listed for sale, transferred to escrow
 	AmountForSale uint64 `protobuf:"varint,3,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the amount of the 'counter asset' the buyer must send in order to complete a swap
-	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"requestAmount"` // @gotags: json:"requestAmount"
+	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
 	// sellers_receive_address: the address of the seller where the 'counter asset' will be received
 	SellerReceiveAddress []byte `protobuf:"bytes,5,opt,name=SellerReceiveAddress,proto3" json:"sellerReceiveAddress"` // @gotags: json:"sellerReceiveAddress"
 	// sellers_send_address: the Canopy address the seller is selling and signing from
@@ -1077,7 +1077,7 @@ type MessageDexLimitOrder struct {
 	// amount_for_sale: the amount of asset listed for sale, transferred to escrow
 	AmountForSale uint64 `protobuf:"varint,2,opt,name=amount_for_sale,json=amountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the minimum amount of the 'counter asset' the seller is willing to receive
-	RequestedAmount uint64 `protobuf:"varint,3,opt,name=requested_amount,json=requestedAmount,proto3" json:"requestAmount"` // @gotags: json:"requestAmount"
+	RequestedAmount uint64 `protobuf:"varint,3,opt,name=requested_amount,json=requestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
 	// sellers_send_address: the address the seller is selling and signing from
 	Address []byte `protobuf:"bytes,4,opt,name=address,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
 	// OrderId: auto-populated by the state machine to assign the unique bytes to the order
