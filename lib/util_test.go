@@ -1,12 +1,16 @@
 package lib
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/types/known/anypb"
-	"testing"
-	"time"
 )
 
 // NOTE: pages are covered in the FSM module
@@ -479,6 +483,32 @@ func TestStopTimer(t *testing.T) {
 		// timer channel was drained successfully
 	default:
 	}
+}
+
+func TestWriteFileAtomicReplacesFile(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "config.json")
+	require.NoError(t, os.WriteFile(filePath, []byte("old"), 0600))
+
+	require.NoError(t, WriteFileAtomic(filePath, []byte("new"), 0600))
+
+	got, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	require.Equal(t, "new", string(got))
+	tempFiles, err := filepath.Glob(filepath.Join(dir, ".config.json.tmp-*"))
+	require.NoError(t, err)
+	require.Empty(t, tempFiles)
+}
+
+func TestWriteFileAtomicCreatesParentDirectories(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "nested", "book.json")
+
+	require.NoError(t, WriteFileAtomic(filePath, []byte(`{"book":[]}`), 0600))
+
+	got, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	require.True(t, strings.Contains(string(got), `"book"`))
 }
 
 func TestUnmarshalRejectsUnknownBlockFields(t *testing.T) {

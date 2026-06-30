@@ -499,13 +499,71 @@ func SaveJSONToFile(j any, dataDirPath, filePath string) (err ErrorI) {
 		// exit with error
 		return
 	}
-	// attempt to write the json bytes to a json file at the path
-	if e := os.WriteFile(filepath.Join(dataDirPath, filePath), jsonBytes, os.ModePerm); e != nil {
+	// attempt to atomically write the json bytes to a json file at the path
+	if e := WriteFileAtomic(filepath.Join(dataDirPath, filePath), jsonBytes, os.ModePerm); e != nil {
 		// exit with error
 		return ErrWriteFile(e)
 	}
 	// exit
 	return
+}
+
+// WriteFileAtomic replaces a file using a temporary file in the same directory.
+func WriteFileAtomic(filePath string, bz []byte, perm os.FileMode) (err error) {
+	// create all necessary directories
+	if err = os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+		// exit with error
+		return
+	}
+	// create a temporary file next to the destination file
+	tempFile, err := os.CreateTemp(filepath.Dir(filePath), "."+filepath.Base(filePath)+".tmp-*")
+	// if an error occurred during file creation
+	if err != nil {
+		// exit with error
+		return
+	}
+	// track the temporary file path for cleanup
+	tempPath := tempFile.Name()
+	// remove the temporary file on failure
+	defer func() {
+		// if an error occurred before the rename, remove the temporary file
+		if err != nil {
+			_ = os.Remove(tempPath)
+		}
+	}()
+	// write all bytes to the temporary file
+	if _, err = tempFile.Write(bz); err != nil {
+		// close before returning so Windows can remove the temporary file
+		_ = tempFile.Close()
+		// exit with error
+		return
+	}
+	// apply the requested permissions before the rename
+	if err = tempFile.Chmod(perm); err != nil {
+		// close before returning so Windows can remove the temporary file
+		_ = tempFile.Close()
+		// exit with error
+		return
+	}
+	// flush the temporary file to disk before replacing the destination
+	if err = tempFile.Sync(); err != nil {
+		// close before returning so Windows can remove the temporary file
+		_ = tempFile.Close()
+		// exit with error
+		return
+	}
+	// close the temporary file before renaming it
+	if err = tempFile.Close(); err != nil {
+		// exit with error
+		return
+	}
+	// atomically replace the destination file with the temporary file
+	if err = os.Rename(tempPath, filePath); err != nil {
+		// exit with error
+		return
+	}
+	// exit
+	return nil
 }
 
 // NewAny() converts a proto.Message into an anypb.Any type
