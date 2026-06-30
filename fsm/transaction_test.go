@@ -704,6 +704,17 @@ func TestCheckMessage(t *testing.T) {
 	// convert the message to 'any' for transaction wrapping
 	msgSendAny, e := lib.NewAny(sendMsg)
 	require.NoError(t, e)
+	// predefine an edit-order message that leaves requested amount at zero
+	editOrderMsg := &MessageEditOrder{
+		OrderId:              newTestOrderId(t, 0),
+		ChainId:              lib.CanopyChainId,
+		AmountForSale:        1,
+		RequestedAmount:      0,
+		SellerReceiveAddress: newTestAddressBytes(t),
+	}
+	// convert the message to 'any' for transaction wrapping
+	msgEditOrderAny, e := lib.NewAny(editOrderMsg)
+	require.NoError(t, e)
 	tests := []struct {
 		name     string
 		detail   string
@@ -745,6 +756,12 @@ func TestCheckMessage(t *testing.T) {
 			detail:   "a valid message passes",
 			msg:      msgSendAny,
 			expected: sendMsg,
+		},
+		{
+			name:     "valid edit order keeps requested amount zero",
+			detail:   "an edit order may keep the requested amount at zero",
+			msg:      msgEditOrderAny,
+			expected: editOrderMsg,
 		},
 	}
 	for _, test := range tests {
