@@ -345,11 +345,15 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 // CommitCertificate() the experimental and parallelized version of the above
 func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
 	start := time.Now()
-	// cancel any running mempool check
-	c.Mempool.stop()
-	// lock the mempool
-	c.Mempool.L.Lock()
-	defer c.Mempool.L.Unlock()
+	// evaluate the duration at actual return time so it captures the full commit
+	defer func() { c.UpdateTelemetry(qc, block, time.Since(start)) }()
+	syncing := c.isSyncing.Load()
+	if !syncing {
+		// cancel any running mempool check and lock the mempool for live operation
+		c.Mempool.stop()
+		c.Mempool.L.Lock()
+		defer c.Mempool.L.Unlock()
+	}
 	// log the beginning of the commit
 	c.log.Debugf("TryCommit block %s", lib.BytesToString(qc.ResultsHash))
 	// cast the store to ensure the proper store type to complete this operation
@@ -365,8 +369,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 			c.FSM.SetRootDexCache(qc.Results.RootDexBatch)
 		}
 		// apply the block against the state machine
-		blockResult, err = c.ApplyAndValidateBlock(block, true)
-		if err != nil {
+		if blockResult, err = c.ApplyAndValidateBlock(block, true); err != nil {
 			// exit with error
 			return
 		}
@@ -385,53 +388,46 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// exit with error
 		return
 	}
+	// parse committed block for straw polls
+	c.FSM.ParsePollTransactions(blockResult)
+	// sync path: no mempool maintenance and no parallelism, only commit inline
+	if syncing {
+		return c.commitToStore(storeI, qc, block.BlockHeader.Height)
+	}
+	// live path: commit and mempool refresh run in parallel
 	// create an ephemeral store copy for the mempool
-	memPoolStore, err := storeI.Copy()
-	if err != nil {
-		return err
+	memPoolStore, e := storeI.Copy()
+	if e != nil {
+		return e
 	}
 	// increase the version number of the ephemeral store
 	memPoolStore.IncreaseVersion()
-	// delete each transaction from the mempool
+	// delete each committed transaction from the mempool
 	c.Mempool.DeleteTransaction(block.Transactions...)
-	// parse committed block for straw polls
-	c.FSM.ParsePollTransactions(blockResult)
-	// if self was the proposer
-	if bytes.Equal(qc.ProposerKey, c.PublicKey) && !c.isSyncing.Load() {
-		// send the certificate results transaction on behalf of the quorum
+	// if self was the proposer, send the certificate results tx on behalf of the quorum
+	if bytes.Equal(qc.ProposerKey, c.PublicKey) {
 		c.SendCertificateResultsTx(qc)
 	}
 	// create an error group to run the commit and mempool update in parallel
 	eg := errgroup.Group{}
 	eg.Go(func() error {
-		// log the start of the commit
-		c.log.Debug("Committing to store")
-		// atomically write all from the ephemeral database batch to the actual database
-		if _, err = storeI.Commit(); err != nil {
+		// atomically commit and set up the FSM for the next height
+		if err = c.commitToStore(storeI, qc, block.BlockHeader.Height); err != nil {
 			// exit with error
 			return err
 		}
-		// log to signal finishing the commit
-		c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
-		// set up the finite state machine for the next height
-		c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
-		if err != nil {
-			// exit with error
-			return err
-		}
-		// publish root chain information to all nested chain subscribers.
+		// publish root chain information to all nested chain subscribers
 		for _, id := range c.RCManager.ChainIds() {
 			// get the root chain info
-			info, e := c.FSM.LoadRootChainInfo(id, 0)
-			if e != nil {
+			info, er := c.FSM.LoadRootChainInfo(id, 0)
+			if er != nil {
 				// don't log 'no-validators' error as this is possible
-				if e.Error() != lib.ErrNoValidators().Error() {
-					c.log.Error(e.Error())
+				if er.Error() != lib.ErrNoValidators().Error() {
+					c.log.Error(er.Error())
 				}
 				continue
 			}
-			// publish root chain information
-			// set the timestamp
+			// set the timestamp and publish root chain information
 			info.Timestamp = ts
 			go c.RCManager.Publish(id, info)
 		}
@@ -440,8 +436,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	})
 	eg.Go(func() error {
 		// set up the mempool for the next height with the temporary FSM
-		c.Mempool.FSM, err = fsm.New(c.Config, memPoolStore, c.Plugin, c.Metrics, c.log)
-		if err != nil {
+		if c.Mempool.FSM, err = fsm.New(c.Config, memPoolStore, c.Plugin, c.Metrics, c.log); err != nil {
 			// exit with error
 			return err
 		}
@@ -464,10 +459,24 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// exit with error
 		return err
 	}
-	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
-	defer c.UpdateTelemetry(qc, block, time.Since(start))
 	// exit
 	return
+}
+
+// commitToStore() atomically writes the ephemeral batch to disk and sets up the FSM for the next height
+func (c *Controller) commitToStore(storeI lib.StoreI, qc *lib.QuorumCertificate, height uint64) (err lib.ErrorI) {
+	// log the start of the commit
+	c.log.Debug("Committing to store")
+	// atomically write all from the ephemeral database batch to the actual database
+	if _, err = storeI.Commit(); err != nil {
+		// exit with error
+		return err
+	}
+	// log to signal finishing the commit
+	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), height)
+	// set up the finite state machine for the next height
+	c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
+	return err
 }
 
 // INTERNAL HELPERS BELOW
