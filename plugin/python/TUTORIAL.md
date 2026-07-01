@@ -6,7 +6,7 @@ This tutorial walks you through implementing two custom transaction types for th
 
 ## Prerequisites
 
-- Go 1.24.0 or higher (required to build Canopy)
+- Go 1.26.0 or higher (required to build Canopy)
 - Python 3.9 or later
 - `protoc` compiler installed (or use `grpcio-tools`)
 - The python plugin base code from `plugin/python`

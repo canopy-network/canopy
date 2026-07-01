@@ -1,4 +1,4 @@
-FROM node:24-alpine AS builder 
+FROM node:24-alpine AS builder
 
 ARG BRANCH='latest'
 ARG CLI_DIR
@@ -21,13 +21,13 @@ RUN echo "Building from BRANCH=${BRANCH}" && \
         echo "Cloning branch $BRANCH" && \
         git clone -b "$BRANCH" https://github.com/canopy-network/canopy.git .; \
     fi
-# copy golang 
-COPY --from=golang:1.24-alpine  /usr/local/go/ /usr/local/go/
+# copy golang
+COPY --from=golang:1.26-alpine  /usr/local/go/ /usr/local/go/
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 RUN go version
-# Builds 
-RUN apk update && apk add --no-cache make bash nodejs npm 
+# Builds
+RUN apk update && apk add --no-cache make bash nodejs npm
 RUN make build/wallet
 RUN make build/explorer
 

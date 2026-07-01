@@ -3,18 +3,18 @@ on:
   pull_request:
     branches: "*"
     paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
   push:
     branches:
       - main
       - staging
     paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/**'
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/**"
 jobs:
   build:
     name: Build
@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.24
+          go-version: 1.26
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Build Services
@@ -35,7 +35,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.24
+          go-version: 1.26
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Set up cache

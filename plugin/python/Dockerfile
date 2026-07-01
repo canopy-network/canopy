@@ -2,7 +2,7 @@
 # Build from repository root: docker build -f plugin/python/Dockerfile -t canopy-python .
 
 # Stage 1: Build Canopy (Go)
-FROM golang:1.24-alpine AS canopy-builder
+FROM golang:1.26-alpine AS canopy-builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download

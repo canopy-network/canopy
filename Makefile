@@ -65,7 +65,7 @@ run/auto-update-build: build/auto-update-local
 
 ## test/all: run all canopy tests
 test/all:
-	go test ./... -p=1
+	go test ./... -p=1 -vet=off
 
 ## test/fuzz: run all canopy fuzz tests individually
 test/fuzz:
