@@ -23,6 +23,8 @@ const (
 )
 
 var (
+	logOnce sync.Once // helper to log the compression method used once
+
 	latestStatePrefix     = lib.JoinLenPrefix([]byte("s/")) // prefix designated for the LatestStateStore where the most recent blobs of state data are held
 	historicStatePrefix   = lib.JoinLenPrefix([]byte("h/")) // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
 	stateCommitmentPrefix = lib.JoinLenPrefix([]byte("c/")) // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
@@ -99,7 +101,9 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		IndexBlockSize: 32 << 10, // 32 KB index blocks
 		Compression: func() *sstable.CompressionProfile {
 			profile := getCompressionProfile(config.CompressionProfile)
-			log.Debugf("Using %s compression for sstables", profile.Name)
+			logOnce.Do(func() {
+				log.Debugf("Using %s compression for sstables", profile.Name)
+			})
 			return profile
 		},
 	}
