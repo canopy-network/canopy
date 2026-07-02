@@ -260,7 +260,7 @@ func (x *QuorumCertificate) GetNonSigners(vs *ConsensusValidators) (nonSignerPub
 		// exit with empty qc error
 		return nil, 0, ErrEmptyQuorumCertificate()
 	}
-	// retrieve the non-signers from the signature using teh validator set
+	// retrieve the non-signers from the signature using the validator set
 	return x.Signature.GetNonSigners(vs)
 }
 

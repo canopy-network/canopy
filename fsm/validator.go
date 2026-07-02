@@ -188,7 +188,7 @@ func (s *StateMachine) SetValidators(validators []*Validator, supply *Supply) li
 
 // SetValidator() upserts a Validator object into the state
 func (s *StateMachine) SetValidator(validator *Validator) (err lib.ErrorI) {
-	// covert the validator object to bytes
+	// convert the validator object to bytes
 	bz, err := s.marshalValidator(validator)
 	if err != nil {
 		return
