@@ -243,6 +243,10 @@ func (m *mockTransaction) From() string {
 	return m.from
 }
 
+func (m *mockTransaction) FromBytes() ([]byte, error) {
+	return lib.StringToBytes(strings.TrimPrefix(m.from, "0x"))
+}
+
 func (m *mockTransaction) To() string {
 	return m.to
 }

@@ -154,6 +154,10 @@ type TransactionI interface {
 	// clean mismatch and (false, err) only when the inputs cannot be interpreted for this chain.
 	// Replaces the two Ethereum-specific checks that previously lived in oracle.go's validateCloseOrder.
 	MatchesOrderDestination(contractBytes, recipientBytes []byte) (bool, error)
+	// FromBytes decodes From() into the raw address bytes stored on-chain for this transaction's
+	// source chain (hex for Ethereum, base58 for Solana), so callers can compare against
+	// SellOrder.BuyerSendAddress without needing to know the source chain's address encoding.
+	FromBytes() ([]byte, error)
 }
 
 // Note: the OrderStore and BlockProvider interfaces are defined at their consumer,

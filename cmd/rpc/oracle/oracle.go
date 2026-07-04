@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -400,7 +399,7 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	}
 	// ensure the closer is the same buyer that locked the order - without this check, anyone
 	// could send the requested tokens to the seller and claim an order they never locked
-	sender, err := lib.StringToBytes(strings.TrimPrefix(tx.From(), "0x"))
+	sender, err := tx.FromBytes()
 	if err != nil {
 		o.metrics.IncrementValidationFailure("sender_conversion_error")
 		return ErrOrderValidation(fmt.Sprintf("error converting sender address %q to bytes: %v", tx.From(), err))

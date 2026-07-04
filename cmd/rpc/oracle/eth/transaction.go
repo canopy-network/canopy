@@ -190,6 +190,11 @@ func (t *Transaction) From() string {
 	return t.from
 }
 
+// FromBytes decodes From()'s hex-encoded address into raw bytes
+func (t *Transaction) FromBytes() ([]byte, error) {
+	return lib.StringToBytes(strings.TrimPrefix(t.from, "0x"))
+}
+
 // To returns the recipient address of the transaction
 func (t *Transaction) To() string {
 	return t.to

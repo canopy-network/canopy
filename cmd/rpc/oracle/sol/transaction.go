@@ -53,6 +53,15 @@ type Transaction struct {
 // From returns the fee payer (first signer).
 func (t *Transaction) From() string { return t.feePayer }
 
+// FromBytes decodes From()'s base58-encoded pubkey into raw bytes.
+func (t *Transaction) FromBytes() ([]byte, error) {
+	pubkey, err := solana.PublicKeyFromBase58(t.feePayer)
+	if err != nil {
+		return nil, err
+	}
+	return pubkey.Bytes(), nil
+}
+
 // To returns the transfer destination token/wallet account (empty for lock orders).
 func (t *Transaction) To() string { return t.destination }
 
