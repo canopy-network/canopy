@@ -34,9 +34,9 @@ import (
 // - UpdateRootChainInfo
 type Oracle struct {
 	// blockProvider is where the oracle will receive new blocks from
-	blockProvider types.BlockProvider
+	blockProvider BlockProvider
 	// the store with which the oracle can persist witnessed orders
-	orderStore types.OrderStore
+	orderStore OrderStore
 	// copy of the latest root chain order book
 	orderBook *lib.OrderBook
 	// mutex to protect order book
@@ -56,8 +56,36 @@ type Oracle struct {
 	metrics *lib.Metrics
 }
 
+// OrderStore defines the order-persistence methods the Oracle consumes.
+// Defined here at the consumer; adapters (e.g. OracleDiskStorage) satisfy it structurally.
+type OrderStore interface {
+	// VerifyOrder verifies the byte data of a stored order
+	VerifyOrder(order *types.WitnessedOrder, orderType types.OrderType) lib.ErrorI
+	// WriteOrder writes an order
+	WriteOrder(order *types.WitnessedOrder, orderType types.OrderType) lib.ErrorI
+	// ReadOrder reads a witnessed order
+	ReadOrder(orderId []byte, orderType types.OrderType) (*types.WitnessedOrder, lib.ErrorI)
+	// RemoveOrder removes an order
+	RemoveOrder(order []byte, orderType types.OrderType) lib.ErrorI
+	// GetAllOrderIds gets all order ids present in the store
+	GetAllOrderIds(orderType types.OrderType) ([][]byte, lib.ErrorI)
+	// ArchiveOrder archives a witnessed order for historical retention
+	ArchiveOrder(order *types.WitnessedOrder, orderType types.OrderType) lib.ErrorI
+}
+
+// BlockProvider defines the source-chain block feed the Oracle consumes.
+// Defined here at the consumer; adapters (e.g. eth.EthBlockProvider) satisfy it structurally.
+type BlockProvider interface {
+	// Start the block provider at height
+	Start(ctx context.Context, height uint64)
+	// BlockCh returns the channel this provider will send new blocks through
+	BlockCh() chan types.BlockI
+	// IsSynced returns whether the provider has synced to the top of the chain
+	IsSynced() bool
+}
+
 // NewOracle creates a new Oracle instance
-func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types.BlockProvider, transactionStore types.OrderStore, logger lib.LoggerI, metrics *lib.Metrics) (*Oracle, error) {
+func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider BlockProvider, transactionStore OrderStore, logger lib.LoggerI, metrics *lib.Metrics) (*Oracle, error) {
 	// create context cancel function for the passed context
 	ctx, cancel := context.WithCancel(ctx)
 	// create new oracle instance
@@ -74,6 +102,13 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 	}
 	// return new oracle instance
 	return o, nil
+}
+
+// hasOrderBook reports whether the root chain order book has been set, guarding the read with orderBookMu
+func (o *Oracle) hasOrderBook() bool {
+	o.orderBookMu.RLock()
+	defer o.orderBookMu.RUnlock()
+	return o.orderBook != nil
 }
 
 // reorgRollback gets the last known good height and removes orders from the store until
@@ -152,10 +187,15 @@ func (o *Oracle) Start(ctx context.Context, syncCh chan<- bool) {
 		firstRun := true
 		for {
 			// an order book must be present to validate incoming orders
-			// wait for the controller to set it
-			for o.orderBook == nil {
+			// wait for the controller to set it, bailing out if the context is cancelled
+			for !o.hasOrderBook() {
 				o.log.Warnf("[ORACLE-LIFECYCLE] Oracle waiting for order book")
-				time.Sleep(1 * time.Second)
+				select {
+				case <-ctx.Done():
+					o.log.Info("[ORACLE-LIFECYCLE] Context cancelled while waiting for order book, stopping")
+					return
+				case <-time.After(1 * time.Second):
+				}
 			}
 			// listen for blocks
 			// only pass syncCh on the first run to avoid closing it multiple times
@@ -327,7 +367,7 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 
 	sellOrderDataHex := common.BytesToAddress(sellOrder.Data).String()
 	if sellOrderDataHex != tx.To() {
-		fmt.Println(sellOrderDataHex, tx.To())
+		o.log.Warnf("[ORACLE-ORDER] close order data mismatch: sellOrderData=%s txRecipient=%s", sellOrderDataHex, tx.To())
 		o.metrics.IncrementValidationFailure("close_data_mismatch")
 		return ErrOrderValidation("sell order data field does not match transaction recipient")
 	}
@@ -340,6 +380,18 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	if closeOrder.ChainId != sellOrder.Committee {
 		o.metrics.IncrementValidationFailure("close_chain_mismatch")
 		return ErrOrderValidation("close order chain ID does not match sell order committee")
+	}
+	// ensure the closer is the same buyer that locked the order - without this check, anyone
+	// could send the requested tokens to the seller and claim an order they never locked
+	sender, err := lib.StringToBytes(strings.TrimPrefix(tx.From(), "0x"))
+	if err != nil {
+		o.metrics.IncrementValidationFailure("sender_conversion_error")
+		return ErrOrderValidation("error converting sender address to bytes")
+	}
+	if !bytes.Equal(sellOrder.BuyerSendAddress, sender) {
+		o.log.Warnf("[ORACLE-ORDER] close order buyer mismatch: lockedBuyer=%x txSender=%s", sellOrder.BuyerSendAddress, tx.From())
+		o.metrics.IncrementValidationFailure("close_buyer_mismatch")
+		return ErrOrderValidation("closing transaction sender does not match the order's locked buyer")
 	}
 	// convenience variable
 	tokenTransfer := tx.TokenTransfer()
@@ -754,7 +806,7 @@ func (o *Oracle) DebugOrder(orderId []byte) *types.OracleDebugOrder {
 		return nil
 	}
 	safeHeight := o.state.GetSafeHeight()
-	sourceHeight := o.state.sourceChainHeight
+	sourceHeight := o.state.GetSourceChainHeight()
 	var confirmationLag uint64
 	if sourceHeight > safeHeight {
 		confirmationLag = sourceHeight - safeHeight
@@ -907,10 +959,9 @@ func (o *Oracle) updateMetrics() {
 	// get current state metrics
 	safeHeight := o.state.GetSafeHeight()
 	lastHeight := o.state.GetLastHeight()
-	sourceHeight := o.state.sourceChainHeight
+	sourceHeight := o.state.GetSourceChainHeight()
 	// get submission history sizes
-	lockOrderSubmissionsSize := len(o.state.lockOrderSubmissions)
-	closeOrderSubmissionsSize := len(o.state.closeOrderSubmissions)
+	lockOrderSubmissionsSize, closeOrderSubmissionsSize := o.state.SubmissionCounts()
 	// get order store counts
 	lockOrderIds, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
 	lockOrders := 0

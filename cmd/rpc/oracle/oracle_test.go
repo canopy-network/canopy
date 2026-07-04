@@ -391,7 +391,9 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 	tests := []struct {
 		name          string
 		orders        *lib.Orders
-		orderStore    types.OrderStore
+		orderStore    OrderStore
+		orderBook     *lib.OrderBook
+		safeHeight    uint64
 		expectedError bool
 		errorContains string
 	}{
@@ -491,7 +493,7 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 
 	tests := []struct {
 		name                   string
-		orderStore             types.OrderStore
+		orderStore             OrderStore
 		orderBook              *lib.OrderBook
 		orderBookOrders        []*lib.SellOrder
 		storeLockOrders        map[string]*lib.LockOrder
@@ -1104,7 +1106,7 @@ func TestOracle_validateLockOrder(t *testing.T) {
 }
 
 func TestOracle_validateCloseOrder(t *testing.T) {
-	oracle := &Oracle{}
+	oracle := &Oracle{log: lib.NewDefaultLogger()}
 
 	// Base test data
 	baseOrderId := []byte("order-123")

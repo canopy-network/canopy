@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/ethereum/go-ethereum"
@@ -29,8 +30,8 @@ const (
 	processBlockTimeLimitS = 12
 )
 
-// Ensures *EthBlockProvider implements BlockProvider interface
-var _ types.BlockProvider = &EthBlockProvider{}
+// Ensures *EthBlockProvider implements the consumer-defined BlockProvider interface
+var _ oracle.BlockProvider = &EthBlockProvider{}
 
 /* This file contains the high level functionality of the continued agreement on the blocks of the chain */
 

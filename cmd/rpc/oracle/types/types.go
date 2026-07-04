@@ -1,7 +1,6 @@
 package types
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -153,30 +152,8 @@ type TransactionI interface {
 	TokenTransfer() TokenTransfer
 }
 
-// OrderStore defines the methods that are required for order persistence.
-type OrderStore interface {
-	// VerifyOrder verifies the byte data of a stored order
-	VerifyOrder(order *WitnessedOrder, orderType OrderType) lib.ErrorI
-	// WriteOrder writes an order
-	WriteOrder(order *WitnessedOrder, orderType OrderType) lib.ErrorI
-	// ReadOrder reads a witnessed order
-	ReadOrder(orderId []byte, orderType OrderType) (*WitnessedOrder, lib.ErrorI)
-	// RemoveOrder removes an order
-	RemoveOrder(order []byte, orderType OrderType) lib.ErrorI
-	// GetAllOrderIds gets all order ids present in the store
-	GetAllOrderIds(orderType OrderType) ([][]byte, lib.ErrorI)
-	// ArchiveOrder archives a witnessed order to the archive directory for historical retention
-	ArchiveOrder(order *WitnessedOrder, orderType OrderType) lib.ErrorI
-}
-
-type BlockProvider interface {
-	// Start the block provider at height
-	Start(ctx context.Context, height uint64)
-	// Block returns the channel this provider will send new blocks through
-	BlockCh() chan BlockI
-	// IsSynced returns whether the provider has synced to the top of the chain
-	IsSynced() bool
-}
+// Note: the OrderStore and BlockProvider interfaces are defined at their consumer,
+// package oracle (see oracle.go). Adapters here satisfy them structurally.
 
 // TokenInfo holds the basic information about an ERC20 token
 type TokenInfo struct {
