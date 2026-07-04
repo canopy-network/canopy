@@ -68,11 +68,11 @@ type EthBlockProvider struct {
 }
 
 // NewEthBlockProvider creates a new EthBlockProvider instance
-func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator OrderValidator, logger lib.LoggerI, metrics *lib.Metrics) *EthBlockProvider {
+func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator OrderValidator, logger lib.LoggerI, metrics *lib.Metrics) (*EthBlockProvider, error) {
 	// create an ethereum client for the token cache
 	ethClient, ethErr := ethclient.Dial(config.NodeUrl)
 	if ethErr != nil {
-		logger.Fatal("[ETH-CONN] " + ethErr.Error())
+		return nil, fmt.Errorf("[ETH-CONN] failed to dial token-cache client: %w", ethErr)
 	}
 	// create a new erc20 token cache
 	tokenCache := NewERC20TokenCache(ethClient, metrics)
@@ -94,7 +94,7 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 	}
 	// log provider creation
 	p.logger.Infof("[ETH-CONN] created block provider with rpc: %s, ws: %s, chain id: %d", p.config.NodeUrl, p.config.NodeWSUrl, p.chainId)
-	return p
+	return p, nil
 }
 
 // fetchBlock fetches the block at the specified height and wraps each transaction

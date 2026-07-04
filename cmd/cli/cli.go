@@ -97,6 +97,40 @@ func Start() {
 	if err != nil {
 		l.Fatal(err.Error())
 	}
+	var o *oracle.Oracle
+	// only enable oracle if configuration is present
+	if config.OracleEnabled {
+		oracleRoot := filepath.Join(DataDir, "oracle")
+		l.Infof("Oracle enabled, see oracle log in %s for details", oracleRoot)
+		// create a seperate logger for the oracle and all oracle components
+		oracleLogger := lib.NewOracleLogger(
+			lib.LoggerConfig{Level: config.GetLogLevel()},
+			oracleRoot,
+		)
+		// create a new ethereum disk storage instance for the oracle order store
+		oracleStorage, e := oracle.NewOracleDiskStorage(filepath.Join(oracleRoot, "store"), oracleLogger)
+		if e != nil {
+			l.Fatal(e.Error())
+		}
+		// create a new order validator
+		orderValidator := oracle.NewOrderValidator()
+		// create the ethereum block provider
+		ethBlockProvider, e := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger, metrics)
+		if e != nil {
+			l.Fatal(e.Error())
+		}
+
+		// create an absolute path for the state save file
+		config.OracleConfig.StateFile = filepath.Join(oracleRoot, config.OracleConfig.StateFile)
+		// create a new oracle instance and pass the ethereum block provider with shared context
+		o, e = oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger, metrics)
+		if e != nil {
+			l.Fatal(e.Error())
+		}
+	} else {
+		l.Infof("Oracle not enabled")
+	}
+
 	// create a new instance of the application
 	app, err := controller.New(sm, config, validatorKey, metrics, l)
 	if err != nil {

@@ -58,6 +58,14 @@ func (m *mockOrderValidator) ValidateOrderJsonBytes(jsonBytes []byte, orderType 
 	return nil
 }
 
+func TestNewEthBlockProvider_dialError(t *testing.T) {
+	cfg := lib.EthBlockProviderConfig{NodeUrl: "not-a-valid-url://%%%"}
+	_, err := NewEthBlockProvider(cfg, &mockOrderValidator{}, lib.NewDefaultLogger(), nil)
+	if err == nil {
+		t.Fatal("expected error from invalid NodeUrl, got nil")
+	}
+}
+
 func createTransaction(toAddress common.Address, data []byte) *ethtypes.Transaction {
 	tx := ethtypes.NewTransaction(
 		0,
