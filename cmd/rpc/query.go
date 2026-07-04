@@ -328,6 +328,10 @@ func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprout
 // oracle's local witness state for it, so troubleshooting doesn't require cross-referencing
 // /v1/query/order, the oracle's order store, and the metrics endpoint by hand
 type OracleDebugOrderResponse struct {
+	// OrderId is the order's unique identifier, duplicated at the top level (it's also
+	// Order.Id) so a caller listing every order in a book doesn't have to dig into the
+	// nested order to tell entries apart
+	OrderId lib.HexBytes `json:"orderId"`
 	// Order is the canonical root-chain order book entry (BuyerChainDeadline is in canopy-height units)
 	Order *lib.SellOrder `json:"order"`
 	// BuyDeadlineBlocks is the canopy gov param used to compute BuyerChainDeadline for canopy-chain buyers
@@ -336,49 +340,103 @@ type OracleDebugOrderResponse struct {
 	OracleState *types.OracleDebugOrder `json:"oracleState,omitempty"`
 }
 
-// OracleDebugOrder returns a combined view of a single order for troubleshooting: the canonical
-// order book entry, the canopy-side deadline gov param, and (if this node runs the oracle) the
-// oracle's locally witnessed lock/close order plus its current safe/source chain height and
-// confirmation config
+// OracleDebugOrdersResponse lists every order in a chain's book alongside the oracle's node-global
+// status. OracleState is surfaced here (not just per-order) because it reflects this node's
+// current safe/source chain height regardless of whether any order exists to attach it to - an
+// empty order book shouldn't read as "oracle not running"
+type OracleDebugOrdersResponse struct {
+	Orders []*OracleDebugOrderResponse `json:"orders"`
+	// OracleState is nil if this node doesn't run the oracle
+	OracleState *types.OracleDebugOrder `json:"oracleState,omitempty"`
+	// RootChainHeight is this node's cached view of the root chain's height (via its
+	// root-chain-info websocket subscription, RCManager.GetHeight()) - NOT the same thing
+	// /v1/query/root-chain-info returns when queried directly on a non-root node: that
+	// endpoint answers with the responding node's OWN local height, since LoadRootChainInfo()
+	// is a peer-protocol call meant to be served BY the root chain, not asked of it
+	RootChainHeight uint64 `json:"rootChainHeight"`
+}
+
+// resolveOrderBook returns the order book for chainId as received from the root chain via
+// Controller.GetOrderBook() (the order book already pushed to this node's root-chain-info
+// websocket subscription, never a live RPC call to root - see CLAUDE.md's Oracle Process
+// section). Deliberately does NOT consult local FSM state: on a nested/oracle chain node, local
+// state can hold orphaned orders from a CreateOrder tx mistakenly submitted directly to it
+// instead of to root, which would look like real data but was never seen by the root order book
+// the oracle actually validates against. That subscription is scoped to this node's own
+// committee and cannot serve a different one, so a mismatched chainId is rejected explicitly.
+func (s *Server) resolveOrderBook(chainId uint64) (*lib.OrderBook, lib.ErrorI) {
+	if chainId != s.config.ChainId {
+		return nil, lib.NewError(1, "rpc", fmt.Sprintf(
+			"this node only serves order book for chainId %d, not %d", s.config.ChainId, chainId))
+	}
+	return s.controller.GetOrderBook()
+}
+
+// buildOracleDebugOrder joins a single order with the oracle's local witness state for it
+func (s *Server) buildOracleDebugOrder(order *lib.SellOrder, buyDeadlineBlocks uint64) *OracleDebugOrderResponse {
+	response := &OracleDebugOrderResponse{
+		OrderId:           order.Id,
+		Order:             order,
+		BuyDeadlineBlocks: buyDeadlineBlocks,
+	}
+	if o := s.controller.Oracle(); o != nil {
+		response.OracleState = o.DebugOrder(order.Id)
+	}
+	return response
+}
+
+// OracleMonitor serves a self-contained HTML dashboard that polls this node's own query
+// endpoints (height, root-chain-info, oracle-debug-order) on an interval to show live order/oracle
+// status, without needing an external tool
+func (s *Server) OracleMonitor(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write(monitorHTML); err != nil {
+		s.logger.Error(err.Error())
+	}
+}
+
+// OracleDebugOrder returns a combined view of an order (or, with orderId omitted, every order in
+// the chain's book) for troubleshooting: the canonical order book entry/entries, the canopy-side
+// deadline gov param, and (if this node runs the oracle) the oracle's locally witnessed lock/close
+// order plus its current safe/source chain height and confirmation config
 func (s *Server) OracleDebugOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	s.orderParams(w, r, func(state *fsm.StateMachine, p *orderRequest) (any, lib.ErrorI) {
-		orderId, err := lib.StringToBytes(p.OrderId)
-		if err != nil {
-			return nil, err
-		}
-		// the order book is only ever authoritative on the root chain (see CLAUDE.md's Oracle
-		// Process section): a nested/committee chain node (where the oracle actually runs) has no
-		// local copy of it, so fall back to Controller.GetOrderBook(), which reads the order book
-		// already pushed to this node's root-chain-info websocket subscription - never a live RPC
-		// call to root. That subscription is scoped to this node's own committee and cannot serve a
-		// different one, so reject a mismatched chainId explicitly instead of silently ignoring it
-		// and returning the wrong committee's order.
-		order, err := state.GetOrder(orderId, p.ChainId)
-		if err != nil {
-			if p.ChainId != s.config.ChainId {
-				return nil, lib.NewError(1, "rpc", fmt.Sprintf(
-					"order not found locally and this node only serves order book for chainId %d, not %d", s.config.ChainId, p.ChainId))
-			}
-			var book *lib.OrderBook
-			if book, err = s.controller.GetOrderBook(); err == nil {
-				order, err = book.GetOrder(orderId)
-			}
-			if err != nil {
-				return nil, err
-			}
-		}
 		params, err := state.GetParams()
 		if err != nil {
 			return nil, err
 		}
-		response := &OracleDebugOrderResponse{
-			Order:             order,
-			BuyDeadlineBlocks: params.Validator.BuyDeadlineBlocks,
+		buyDeadlineBlocks := params.Validator.BuyDeadlineBlocks
+
+		book, err := s.resolveOrderBook(p.ChainId)
+		if err != nil {
+			return nil, err
 		}
-		if o := s.controller.Oracle(); o != nil {
-			response.OracleState = o.DebugOrder(orderId)
+
+		if p.OrderId == "" {
+			responses := make([]*OracleDebugOrderResponse, 0, len(book.Orders))
+			for _, order := range book.Orders {
+				responses = append(responses, s.buildOracleDebugOrder(order, buyDeadlineBlocks))
+			}
+			var oracleState *types.OracleDebugOrder
+			if o := s.controller.Oracle(); o != nil {
+				oracleState = o.DebugOrder(nil)
+			}
+			return &OracleDebugOrdersResponse{
+				Orders:          responses,
+				OracleState:     oracleState,
+				RootChainHeight: s.controller.RootChainHeight(),
+			}, nil
 		}
-		return response, nil
+
+		orderId, err := lib.StringToBytes(p.OrderId)
+		if err != nil {
+			return nil, err
+		}
+		order, err := book.GetOrder(orderId)
+		if err != nil {
+			return nil, err
+		}
+		return s.buildOracleDebugOrder(order, buyDeadlineBlocks), nil
 	})
 }
 

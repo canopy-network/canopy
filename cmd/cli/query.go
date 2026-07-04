@@ -183,10 +183,14 @@ var (
 	}
 
 	oracleDebugOrderCmd = &cobra.Command{
-		Use:   "oracle-debug-order <order_id> --height=1 --committee=1",
-		Short: "query the combined order-book + oracle witness/height view of a specific order, for troubleshooting",
-		Args:  cobra.MinimumNArgs(1),
+		Use:   "oracle-debug-order [order_id] --height=1 --committee=1",
+		Short: "query the combined order-book + oracle witness/height view of a specific order, or every order in the book if order_id is omitted, for troubleshooting",
+		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) == 0 {
+				writeToConsole(client.OracleDebugOrders(height, committee))
+				return
+			}
 			writeToConsole(client.OracleDebugOrder(height, args[0], committee))
 		},
 	}

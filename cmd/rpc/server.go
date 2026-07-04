@@ -345,6 +345,9 @@ var explorerFS embed.FS
 //go:embed all:web/wallet/out
 var walletFS embed.FS
 
+//go:embed web/monitor/index.html
+var monitorHTML []byte
+
 // runStaticFileServer creates a web server serving static files with SPA fallback
 func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.Config) {
 	// Attempt to get a sub-filesystem rooted at the specified directory

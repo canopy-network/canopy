@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>oracle monitor</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    background: #0d1117; color: #c9d1d9; margin: 0; padding: 1.25rem;
+    font-size: 13px;
+  }
+  h1 { font-size: 1.05rem; color: #58a6ff; margin: 0 0 .9rem; display: flex; align-items: center; gap: .6rem; }
+  h1 .dot { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+  h1 .dot.stale { background: #d29922; box-shadow: 0 0 6px #d29922; }
+  h1 .chain { margin-left: auto; font-size: .8rem; color: #8b949e; font-weight: normal; }
+  h1 .chain input {
+    width: 4em; background: #161b22; border: 1px solid #30363d; color: #c9d1d9;
+    border-radius: 4px; padding: 2px 6px; font: inherit;
+  }
+  h2 { font-size: .85rem; color: #8b949e; font-weight: normal; text-transform: uppercase; letter-spacing: .04em; margin: 1.4rem 0 .5rem; }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem; }
+  .stat { border: 1px solid #30363d; border-radius: 6px; padding: .6rem .75rem; background: #161b22; }
+  .stat .label { color: #8b949e; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; }
+  .stat .value { font-size: 1.25rem; color: #e6edf3; margin-top: .15rem; font-variant-numeric: tabular-nums; }
+  .stat .value.err { font-size: .8rem; color: #f85149; }
+  .panel { border: 1px solid #30363d; border-radius: 6px; background: #161b22; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; padding: 6px 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th { color: #8b949e; font-weight: normal; border-bottom: 1px solid #30363d; position: sticky; top: 0; background: #161b22; }
+  tbody tr:hover { background: #1c2129; }
+  tbody tr:not(:last-child) td { border-bottom: 1px dashed #21262d; }
+  .id { color: #3fb950; }
+  .muted { color: #8b949e; }
+  .err { color: #f85149; }
+  .ok { color: #3fb950; }
+  .warn { color: #d29922; }
+  .empty { padding: .9rem; color: #8b949e; }
+  footer { margin-top: 1rem; color: #484f58; font-size: .72rem; }
+</style>
+</head>
+<body>
+<h1><span class="dot" id="liveDot"></span> oracle monitor
+  <span class="chain">chain <input id="chainId" type="number" value="3"></span>
+</h1>
+
+<h2>Status</h2>
+<div class="summary" id="summary"></div>
+
+<h2>Orders</h2>
+<div class="panel" id="orders"><div class="empty">loading&hellip;</div></div>
+
+<footer id="footer"></footer>
+
+<script>
+const POLL_MS = 5000;
+const chainInput = document.getElementById('chainId');
+const liveDot = document.getElementById('liveDot');
+
+function currentChain() {
+  const n = parseInt(chainInput.value, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+async function post(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json && json.msg ? json.msg : JSON.stringify(json));
+  return json;
+}
+
+function statCard(label, value, isErr) {
+  return `<div class="stat"><div class="label">${label}</div>` +
+         `<div class="value${isErr ? ' err' : ''}">${value}</div></div>`;
+}
+
+function orderStatus(o) {
+  if (!o.oracleState) return { text: 'no oracle', cls: 'muted' };
+  if (o.oracleState.closeOrder) return { text: 'closed', cls: 'ok' };
+  if (o.oracleState.lockOrder) return { text: 'locked', cls: 'warn' };
+  return { text: 'open', cls: 'muted' };
+}
+
+function shortId(id) {
+  return id && id.length > 16 ? id.slice(0, 8) + '…' + id.slice(-8) : (id || '—');
+}
+
+function renderOrders(orders) {
+  const el = document.getElementById('orders');
+  if (!orders.length) {
+    el.innerHTML = '<div class="empty">no orders</div>';
+    return;
+  }
+  const rows = orders.map(o => {
+    const st = orderStatus(o);
+    const os = o.oracleState;
+    return `<tr>
+      <td class="id" title="${o.orderId}">${shortId(o.orderId)}</td>
+      <td>${o.order ? o.order.committee : '—'}</td>
+      <td>${o.order && o.order.buyerChainDeadline ? o.order.buyerChainDeadline : '—'}</td>
+      <td>${os ? os.safeHeight : '—'}</td>
+      <td>${os ? os.sourceChainHeight : '—'}</td>
+      <td>${os ? os.confirmationLag : '—'}</td>
+      <td>${os ? os.safeBlockConfirmations : '—'}</td>
+      <td class="${st.cls}">${st.text}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>order</th><th>chain</th><th>deadline</th><th>safeHeight</th>
+      <th>sourceHeight</th><th>lag</th><th>confirmations</th><th>status</th>
+    </tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+async function poll() {
+  const chainId = currentChain();
+  const stats = [];
+  let orders = [];
+
+  try {
+    const height = await post('/v1/query/height', {});
+    stats.push(statCard('node height', height.height));
+  } catch (e) {
+    stats.push(statCard('node height', e.message, true));
+  }
+
+  try {
+    const resp = await post('/v1/query/oracle-debug-order', { chainId, orderId: '' });
+    orders = resp.orders || [];
+    stats.push(statCard('root chain height', resp.rootChainHeight || '—'));
+    if (resp.oracleState) {
+      const os = resp.oracleState;
+      stats.push(statCard('eth safe height', os.safeHeight));
+      stats.push(statCard('eth source height', os.sourceChainHeight));
+      stats.push(statCard('confirmation lag', os.confirmationLag));
+    } else {
+      stats.push(statCard('oracle', 'not running on this node'));
+    }
+  } catch (e) {
+    stats.push(statCard('orders', e.message, true));
+  }
+
+  document.getElementById('summary').innerHTML = stats.join('');
+  renderOrders(orders);
+  document.getElementById('footer').textContent = 'updated ' + new Date().toLocaleTimeString() + ' · auto-refresh ' + (POLL_MS / 1000) + 's';
+  liveDot.classList.remove('stale');
+}
+
+chainInput.addEventListener('change', poll);
+poll();
+setInterval(() => {
+  liveDot.classList.add('stale');
+  poll();
+}, POLL_MS);
+</script>
+</body>
+</html>

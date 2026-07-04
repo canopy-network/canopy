@@ -289,6 +289,14 @@ func (c *Client) OracleDebugOrder(height uint64, orderId string, chainId uint64)
 	return
 }
 
+// OracleDebugOrders returns the oracle debug view for every order in the chain's book, plus the
+// oracle's node-global status independent of any specific order
+func (c *Client) OracleDebugOrders(height, chainId uint64) (p *OracleDebugOrdersResponse, err lib.ErrorI) {
+	p = new(OracleDebugOrdersResponse)
+	err = c.orderRequest(OracleDebugOrderRouteName, height, "", chainId, p)
+	return
+}
+
 func (c *Client) LastProposers(height uint64) (p *lib.Proposers, err lib.ErrorI) {
 	p = new(lib.Proposers)
 	err = c.heightRequest(LastProposersRouteName, height, p)
