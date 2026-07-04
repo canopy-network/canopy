@@ -12,7 +12,6 @@ import (
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // Terminology
@@ -370,14 +369,15 @@ func (o *Oracle) validateLockOrder(lockOrder *lib.LockOrder, sellOrder *lib.Sell
 // as each field is user-supplied arbitrary data coming from off chain, strict validation
 // is required to protect against costly erroneous behavior or malicious activity
 func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.SellOrder, tx types.TransactionI) lib.ErrorI {
-	// Order data being equal to transaction To address is Ethereum-specific validation
-	// TODO move this logic into the block provider
-
-	sellOrderDataHex := common.BytesToAddress(sellOrder.Data).String()
-	if sellOrderDataHex != tx.To() {
-		o.log.Warnf("[ORACLE-ORDER] close order data mismatch: sellOrderData=%s txRecipient=%s", sellOrderDataHex, tx.To())
-		o.metrics.IncrementValidationFailure("close_data_mismatch")
-		return ErrOrderValidation("sell order data field does not match transaction recipient")
+	// chain-specific asset + recipient validation, delegated to the block provider's transaction type
+	ok, err := tx.MatchesOrderDestination(sellOrder.Data, sellOrder.SellerReceiveAddress)
+	if err != nil {
+		o.metrics.IncrementValidationFailure("destination_conversion_error")
+		return ErrOrderValidation("error validating transaction destination")
+	}
+	if !ok {
+		o.metrics.IncrementValidationFailure("destination_mismatch")
+		return ErrOrderValidation("transaction destination does not match sell order")
 	}
 	// ensure the order ids are a match
 	if !bytes.Equal(closeOrder.OrderId, sellOrder.Id) {
@@ -403,16 +403,6 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	}
 	// convenience variable
 	tokenTransfer := tx.TokenTransfer()
-	recipient, err := lib.StringToBytes(strings.TrimPrefix(tokenTransfer.RecipientAddress, "0x"))
-	if err != nil {
-		o.metrics.IncrementValidationFailure("recipient_conversion_error")
-		return ErrOrderValidation("error converting recipient address to bytes")
-	}
-	// verify the recipient of the transfer was the seller receive address
-	if !bytes.Equal(sellOrder.SellerReceiveAddress, recipient) {
-		o.metrics.IncrementValidationFailure("recipient_mismatch")
-		return ErrOrderValidation("tokens not transferred to sell receive address")
-	}
 	// ensure transfer amount is not nil
 	// TODO validate further fields here?
 	if tokenTransfer.TokenBaseAmount == nil {

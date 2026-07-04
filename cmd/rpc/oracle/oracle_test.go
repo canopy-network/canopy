@@ -1,6 +1,7 @@
 package oracle
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -260,6 +261,22 @@ func (m *mockTransaction) Order() *types.WitnessedOrder {
 
 func (m *mockTransaction) TokenTransfer() types.TokenTransfer {
 	return m.tokenTransfer
+}
+
+// MatchesOrderDestination mirrors eth.Transaction: contractBytes formatted as an EVM address
+// must equal the mock's `to`, and the token transfer recipient must equal recipientBytes.
+func (m *mockTransaction) MatchesOrderDestination(contractBytes, recipientBytes []byte) (bool, error) {
+	if common.BytesToAddress(contractBytes).String() != m.to {
+		return false, nil
+	}
+	recipient, err := lib.StringToBytes(strings.TrimPrefix(m.tokenTransfer.RecipientAddress, "0x"))
+	if err != nil {
+		return false, err
+	}
+	if !bytes.Equal(recipientBytes, recipient) {
+		return false, nil
+	}
+	return true, nil
 }
 
 func createMockBlockWithTransactions(blockNumber uint64, blockHash string, transactions []types.TransactionI) types.BlockI {
