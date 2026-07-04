@@ -11,6 +11,8 @@ var (
 	ErrNilTransaction = errors.New("transaction is nil")
 	// ErrMintAccountTooSmall indicates a Mint account's data was shorter than the decimals offset.
 	ErrMintAccountTooSmall = errors.New("mint account data too small to decode decimals")
+	// ErrTokenAccountTooSmall indicates a Token account's data was shorter than the mint field.
+	ErrTokenAccountTooSmall = errors.New("token account data too small to decode mint")
 	// ErrSourceSlot indicates the observed finalized slot went backwards below nextSlot.
 	ErrSourceSlot = errors.New("solana finalized slot lower than expected")
 )

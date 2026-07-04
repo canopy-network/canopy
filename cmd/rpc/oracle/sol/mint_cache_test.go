@@ -32,6 +32,66 @@ func TestDecodeMintDecimals(t *testing.T) {
 	}
 }
 
+// makeTokenAccountData builds a byte slice with `mint` at offset 0, mimicking an SPL Token Account.
+func makeTokenAccountData(mint solana.PublicKey) []byte {
+	data := make([]byte, 165) // SPL Token Account is 165 bytes
+	copy(data[tokenAccountMintOffset:], mint.Bytes())
+	return data
+}
+
+func TestDecodeTokenAccountMint(t *testing.T) {
+	mint := solana.NewWallet().PublicKey()
+	got, err := decodeTokenAccountMint(makeTokenAccountData(mint))
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !got.Equals(mint) {
+		t.Fatalf("expected mint %s, got %s", mint, got)
+	}
+
+	// too-small data must error, not panic
+	if _, err := decodeTokenAccountMint(make([]byte, 10)); err == nil {
+		t.Fatal("expected error for undersized token account data")
+	}
+}
+
+func TestResolveTokenAccountMint_HappyPath(t *testing.T) {
+	mint := solana.NewWallet().PublicKey()
+	fetcher := &fakeAccountFetcher{
+		result: &rpc.GetAccountInfoResult{
+			Value: &rpc.Account{Data: rpc.DataBytesOrJSONFromBytes(makeTokenAccountData(mint))},
+		},
+	}
+	got, err := resolveTokenAccountMint(context.Background(), fetcher, solana.NewWallet().PublicKey())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !got.Equals(mint) {
+		t.Fatalf("expected mint %s, got %s", mint, got)
+	}
+}
+
+func TestResolveTokenAccountMint_FetcherError(t *testing.T) {
+	fetcher := &fakeAccountFetcher{err: errors.New("rpc unavailable")}
+	if _, err := resolveTokenAccountMint(context.Background(), fetcher, solana.NewWallet().PublicKey()); err == nil {
+		t.Fatal("expected error when fetcher fails")
+	}
+}
+
+func TestResolveTokenAccountMint_NilResult(t *testing.T) {
+	fetcher := &fakeAccountFetcher{result: nil}
+	if _, err := resolveTokenAccountMint(context.Background(), fetcher, solana.NewWallet().PublicKey()); err == nil {
+		t.Fatal("expected error when fetcher returns nil result")
+	}
+}
+
+func TestResolveTokenAccountMint_NilValue(t *testing.T) {
+	fetcher := &fakeAccountFetcher{result: &rpc.GetAccountInfoResult{Value: nil}}
+	if _, err := resolveTokenAccountMint(context.Background(), fetcher, solana.NewWallet().PublicKey()); err == nil {
+		t.Fatal("expected error when fetcher returns a result with a nil Value")
+	}
+}
+
 func TestMintCache_HitMiss(t *testing.T) {
 	c := newMintCache(2)
 	mintA := "MintAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"

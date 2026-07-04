@@ -41,11 +41,13 @@ type Transaction struct {
 	order *types.WitnessedOrder // parsed order, if any
 
 	// transfer fields, populated for close orders
-	isTransfer  bool
-	destination string   // token account (SPL) or wallet (native) receiving funds
-	mint        string   // SPL mint (base58), empty for native SOL
-	amount      *big.Int // base-unit amount
-	decimals    uint8    // resolved by the provider via mint cache; 0 for native SOL by convention
+	isTransfer      bool
+	destination     string   // token account (SPL) or wallet (native) receiving funds
+	mint            string   // SPL mint (base58), empty for native SOL or when needsMintLookup is true
+	amount          *big.Int // base-unit amount
+	decimals        uint8    // resolved by the provider via mint cache; 0 for native SOL by convention
+	needsMintLookup bool     // true for a bare SPL Transfer (tag 3), whose instruction omits the mint;
+	// the provider must resolve it from the destination token account before decimals can be looked up
 }
 
 // From returns the fee payer (first signer).
@@ -67,6 +69,7 @@ func (t *Transaction) Order() *types.WitnessedOrder { return t.order }
 func (t *Transaction) clearOrder() {
 	t.order = nil
 	t.isTransfer = false
+	t.needsMintLookup = false
 }
 
 // TokenTransfer returns the generic token transfer view.
@@ -150,7 +153,9 @@ func (t *Transaction) parseSPLTransfer(in *instruction) error {
 			return fmt.Errorf("spl transfer missing accounts")
 		}
 		t.destination = in.accounts[1].String()
-		// mint not present in bare Transfer; left empty, matched via ATA derivation
+		// mint not present in bare Transfer; the provider resolves it from the destination
+		// token account (see needsMintLookup) so decimals can still be looked up
+		t.needsMintLookup = true
 	case 12: // TransferChecked: accounts [source, mint, destination, owner]
 		if len(in.accounts) < 3 {
 			return fmt.Errorf("spl transferChecked missing accounts")

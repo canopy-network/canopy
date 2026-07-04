@@ -188,6 +188,72 @@ func TestParseSPLTransfer_TransferChecked(t *testing.T) {
 	}
 }
 
+func TestParseSPLTransfer_Tag3_SetsNeedsMintLookup(t *testing.T) {
+	source := solana.NewWallet().PublicKey()
+	dest := solana.NewWallet().PublicKey()
+	owner := solana.NewWallet().PublicKey()
+	data := append([]byte{3}, u64LE(500)...)
+	in := &instruction{
+		programID: solana.TokenProgramID,
+		accounts:  []solana.PublicKey{source, dest, owner},
+		data:      data,
+	}
+	tx := &Transaction{}
+	if err := tx.parseSPLTransfer(in); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !tx.needsMintLookup {
+		t.Fatal("expected needsMintLookup=true for bare Transfer (tag 3)")
+	}
+	if tx.mint != "" {
+		t.Fatalf("expected empty mint for bare Transfer, got %s", tx.mint)
+	}
+}
+
+func TestParseSPLTransfer_TransferChecked_DoesNotNeedMintLookup(t *testing.T) {
+	source := solana.NewWallet().PublicKey()
+	mint := solana.NewWallet().PublicKey()
+	dest := solana.NewWallet().PublicKey()
+	owner := solana.NewWallet().PublicKey()
+	data := append([]byte{12}, u64LE(750)...)
+	in := &instruction{
+		programID: solana.TokenProgramID,
+		accounts:  []solana.PublicKey{source, mint, dest, owner},
+		data:      data,
+	}
+	tx := &Transaction{}
+	if err := tx.parseSPLTransfer(in); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if tx.needsMintLookup {
+		t.Fatal("expected needsMintLookup=false when TransferChecked already supplies the mint")
+	}
+}
+
+func TestParseNativeTransfer_DoesNotNeedMintLookup(t *testing.T) {
+	from := solana.NewWallet().PublicKey()
+	to := solana.NewWallet().PublicKey()
+	data := make([]byte, 12)
+	binary.LittleEndian.PutUint32(data[0:4], 2)
+	binary.LittleEndian.PutUint64(data[4:12], 100)
+	in := &instruction{programID: solana.SystemProgramID, accounts: []solana.PublicKey{from, to}, data: data}
+	tx := &Transaction{}
+	if err := tx.parseNativeTransfer(in); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if tx.needsMintLookup {
+		t.Fatal("expected needsMintLookup=false for a native SOL transfer (no token account to look up)")
+	}
+}
+
+func TestClearOrder_ResetsNeedsMintLookup(t *testing.T) {
+	tx := &Transaction{isTransfer: true, needsMintLookup: true}
+	tx.clearOrder()
+	if tx.needsMintLookup {
+		t.Fatal("expected clearOrder to reset needsMintLookup")
+	}
+}
+
 func TestParseSPLTransfer_DataTooShort(t *testing.T) {
 	in := &instruction{programID: solana.TokenProgramID, data: []byte{3, 1, 2}}
 	tx := &Transaction{}

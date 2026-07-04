@@ -13,6 +13,11 @@ import (
 // Layout: mintAuthority (COption<Pubkey>) 0-35, supply (u64) 36-43, decimals (u8) 44, ...
 const mintDecimalsOffset = 44
 
+// tokenAccountMintOffset is the byte offset of the `mint` Pubkey field in an SPL Token Account.
+// Layout: mint (Pubkey) 0-31, owner (Pubkey) 32-63, amount (u64) 64-71, ...
+const tokenAccountMintOffset = 0
+const tokenAccountMintLen = 32
+
 // AccountFetcher is the minimal RPC surface the mint cache needs (satisfied by *rpc.Client);
 // declared as an interface so tests can inject a fake without a live RPC endpoint.
 type AccountFetcher interface {
@@ -78,6 +83,29 @@ func (c *mintCache) put(mint string, decimals uint8) {
 			delete(c.items, oldest.Value.(*mintEntry).mint)
 		}
 	}
+}
+
+// decodeTokenAccountMint extracts the mint pubkey from raw SPL Token Account data.
+func decodeTokenAccountMint(data []byte) (solana.PublicKey, error) {
+	if len(data) < tokenAccountMintOffset+tokenAccountMintLen {
+		return solana.PublicKey{}, ErrTokenAccountTooSmall
+	}
+	return solana.PublicKeyFromBytes(data[tokenAccountMintOffset : tokenAccountMintOffset+tokenAccountMintLen]), nil
+}
+
+// resolveTokenAccountMint fetches a token account and returns its mint. Used for bare SPL
+// `Transfer` instructions (tag 3), which don't carry the mint inline unlike `TransferChecked`.
+// Not cached here — each token account is looked up once per transaction, unlike mints which
+// recur across many transactions.
+func resolveTokenAccountMint(ctx context.Context, fetcher AccountFetcher, tokenAccount solana.PublicKey) (solana.PublicKey, error) {
+	res, err := fetcher.GetAccountInfo(ctx, tokenAccount)
+	if err != nil {
+		return solana.PublicKey{}, err
+	}
+	if res == nil || res.Value == nil {
+		return solana.PublicKey{}, ErrTokenAccountTooSmall
+	}
+	return decodeTokenAccountMint(res.Value.Data.GetBinary())
 }
 
 // Decimals returns the decimals for a mint, fetching + caching on a miss.
