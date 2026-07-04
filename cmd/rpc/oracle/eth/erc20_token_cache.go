@@ -3,6 +3,7 @@ package eth
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -64,7 +65,7 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 	nameBytes, err := m.callContract(ctx, contractAddress, erc20NameFunction)
 	if err != nil {
 		m.metrics.IncrementEthTokenInfoFetchError("name")
-		return types.TokenInfo{}, ErrTokenInfo
+		return types.TokenInfo{}, fmt.Errorf("%w: name: %v", ErrTokenInfo, err)
 	}
 	// decode name from bytes
 	name := decodeString(nameBytes)
@@ -72,7 +73,7 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 	symbolBytes, err := m.callContract(ctx, contractAddress, erc20SymbolFunction)
 	if err != nil {
 		m.metrics.IncrementEthTokenInfoFetchError("symbol")
-		return types.TokenInfo{}, ErrTokenInfo
+		return types.TokenInfo{}, fmt.Errorf("%w: symbol: %v", ErrTokenInfo, err)
 	}
 	// decode symbol from bytes
 	symbol := decodeString(symbolBytes)
@@ -80,7 +81,7 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 	decimalsBytes, err := m.callContract(ctx, contractAddress, erc20DecimalsFunction)
 	if err != nil {
 		m.metrics.IncrementEthTokenInfoFetchError("decimals")
-		return types.TokenInfo{}, ErrTokenInfo
+		return types.TokenInfo{}, fmt.Errorf("%w: decimals: %v", ErrTokenInfo, err)
 	}
 	// decode decimals from bytes
 	decimals := decodeUint8(decimalsBytes)
