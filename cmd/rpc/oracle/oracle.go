@@ -246,7 +246,16 @@ func (o *Oracle) run(ctx context.Context, syncCh chan<- bool) lib.ErrorI {
 	defer cancelBlockProvider()
 	// get the last height processed by the oracle
 	if height := o.state.GetLastHeight(); height == 0 { // no height found
-		// zero signals the block provider to determine its own starting height
+		// NOTE: despite older comments here claiming "zero signals the block provider to
+		// determine its own starting height", neither EthBlockProvider.Start nor
+		// SolBlockProvider.Start special-case 0 - they set nextHeight/nextSlot to it literally,
+		// i.e. this resyncs from the source chain's genesis. That's harmless for a dev anvil
+		// chain (which retains full history), but on a source chain with ledger pruning (e.g.
+		// Solana's solana-test-validator) genesis is very likely already gone, causing a
+		// permanent stall the first time a scan hits a pruned slot. Log loudly so this is
+		// diagnosable instead of looking like a silent hang.
+		o.log.Warnf("[ORACLE-LIFECYCLE] no oracle state found; starting block provider from height 0 (genesis) - " +
+			"this will stall permanently if the source chain has already pruned genesis")
 		o.blockProvider.Start(blockProviderCtx, height)
 	} else { // height found
 		// set the starting height for the block provider
@@ -373,7 +382,7 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	ok, err := tx.MatchesOrderDestination(sellOrder.Data, sellOrder.SellerReceiveAddress)
 	if err != nil {
 		o.metrics.IncrementValidationFailure("destination_conversion_error")
-		return ErrOrderValidation("error validating transaction destination")
+		return ErrOrderValidation(fmt.Sprintf("error validating transaction destination: %v", err))
 	}
 	if !ok {
 		o.metrics.IncrementValidationFailure("destination_mismatch")
@@ -394,7 +403,7 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	sender, err := lib.StringToBytes(strings.TrimPrefix(tx.From(), "0x"))
 	if err != nil {
 		o.metrics.IncrementValidationFailure("sender_conversion_error")
-		return ErrOrderValidation("error converting sender address to bytes")
+		return ErrOrderValidation(fmt.Sprintf("error converting sender address %q to bytes: %v", tx.From(), err))
 	}
 	if !bytes.Equal(sellOrder.BuyerSendAddress, sender) {
 		o.log.Warnf("[ORACLE-ORDER] close order buyer mismatch: lockedBuyer=%x txSender=%s", sellOrder.BuyerSendAddress, tx.From())

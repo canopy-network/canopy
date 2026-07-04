@@ -83,14 +83,14 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 	// propose lead time validation check
 	if m.sourceChainHeight < order.WitnessedHeight+config.ProposeDelayBlocks {
 		blocksNeeded := (order.WitnessedHeight + config.ProposeDelayBlocks) - m.sourceChainHeight
-		m.log.Infof("[ORACLE-STATE] Order %s held: propose delay (witnessed=%d, need %d more source chain blocks)",
+		m.log.Debugf("[ORACLE-STATE] Order %s held: propose delay (witnessed=%d, need %d more source chain blocks)",
 			orderIdStr, order.WitnessedHeight, blocksNeeded)
 		return false
 	}
 	// resubmit delay check
 	if rootHeight <= order.LastSubmitHeight+config.OrderResubmitDelayBlocks {
 		eligibleAt := order.LastSubmitHeight + config.OrderResubmitDelayBlocks + 1
-		m.log.Infof("[ORACLE-STATE] Order %s held: resubmit delay (lastSubmit=%d, eligible at rootHeight=%d, current=%d)",
+		m.log.Debugf("[ORACLE-STATE] Order %s held: resubmit delay (lastSubmit=%d, eligible at rootHeight=%d, current=%d)",
 			orderIdStr, order.LastSubmitHeight, eligibleAt, rootHeight)
 		return false
 	}
@@ -100,7 +100,7 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 		if height, exists := m.lockOrderSubmissions[orderIdStr]; exists {
 			// test if already submitted at this root height
 			if height == rootHeight {
-				m.log.Infof("[ORACLE-STATE] Lock order %s held: already submitted at rootHeight=%d", orderIdStr, rootHeight)
+				m.log.Debugf("[ORACLE-STATE] Lock order %s held: already submitted at rootHeight=%d", orderIdStr, rootHeight)
 				return false
 			}
 			// calculate blocks since last submission
@@ -108,7 +108,7 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 			// check if enough time has passed
 			if blocksSinceSubmission < config.LockOrderCooldownBlocks {
 				blocksNeeded := config.LockOrderCooldownBlocks - blocksSinceSubmission
-				m.log.Infof("[ORACLE-STATE] Lock order %s held: cooldown (lastSubmit=%d, need %d more blocks)",
+				m.log.Debugf("[ORACLE-STATE] Lock order %s held: cooldown (lastSubmit=%d, need %d more blocks)",
 					orderIdStr, height, blocksNeeded)
 				return false
 			}
@@ -118,7 +118,7 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 		if height, exists := m.closeOrderSubmissions[orderIdStr]; exists {
 			// test if already submitted at this root height
 			if height == rootHeight {
-				m.log.Infof("[ORACLE-STATE] Close order %s held: already submitted at rootHeight=%d", orderIdStr, rootHeight)
+				m.log.Debugf("[ORACLE-STATE] Close order %s held: already submitted at rootHeight=%d", orderIdStr, rootHeight)
 				return false
 			}
 		}
@@ -238,11 +238,11 @@ func (m *OracleState) GetLastHeight() uint64 {
 	defer m.rwLock.RUnlock()
 	// check for previous state from last run (loaded into cache at startup / updated on save)
 	if m.blockState != nil {
-		m.log.Infof("[ORACLE-STATE] Found previous block state: height %d", m.blockState.Height)
+		m.log.Debugf("[ORACLE-STATE] Found previous block state: height %d", m.blockState.Height)
 		// start from the next block after the last successfully processed one
 		return m.blockState.Height
 	}
-	m.log.Infof("[ORACLE-STATE] no previous state found, returning start height 0")
+	m.log.Debugf("[ORACLE-STATE] no previous state found, returning start height 0")
 	return 0
 }
 

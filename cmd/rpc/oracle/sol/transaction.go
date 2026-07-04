@@ -96,14 +96,17 @@ func (t *Transaction) findInstruction(programID solana.PublicKey) *instruction {
 }
 
 // parseInstructions scans top-level instructions for a Memo (order JSON) and, for close orders,
-// a transfer instruction. No order found is not an error (returns nil, order stays nil).
-func (t *Transaction) parseInstructions(v OrderValidator) error {
+// a transfer instruction. No order found is not an error (returns nil, order stays nil) - a memo
+// that matches neither schema is only logged (Debugf), not returned as an error, since on a real
+// chain most memos are unrelated third-party traffic and would otherwise spam logs/callers.
+func (t *Transaction) parseInstructions(v OrderValidator, logger lib.LoggerI) error {
 	memo := t.findInstruction(memoProgramID)
 	if memo == nil {
 		return nil // not an order transaction
 	}
 	// try lock order first (no transfer required)
-	if v.ValidateOrderJsonBytes(memo.data, types.LockOrderType) == nil {
+	lockErr := v.ValidateOrderJsonBytes(memo.data, types.LockOrderType)
+	if lockErr == nil {
 		lo := &lib.LockOrder{}
 		if err := lo.UnmarshalJSON(memo.data); err != nil {
 			return fmt.Errorf("failed to unmarshal lock order json: %w", err)
@@ -112,7 +115,8 @@ func (t *Transaction) parseInstructions(v OrderValidator) error {
 		return nil
 	}
 	// try close order (requires a transfer instruction)
-	if v.ValidateOrderJsonBytes(memo.data, types.CloseOrderType) == nil {
+	closeErr := v.ValidateOrderJsonBytes(memo.data, types.CloseOrderType)
+	if closeErr == nil {
 		co := &lib.CloseOrder{}
 		if err := co.UnmarshalJSON(memo.data); err != nil {
 			return fmt.Errorf("failed to unmarshal close order json: %w", err)
@@ -123,7 +127,13 @@ func (t *Transaction) parseInstructions(v OrderValidator) error {
 		}
 		return nil
 	}
-	// memo present but not a canopy order - normal condition
+	// memo present but matched neither schema - this used to be entirely silent, which hid a
+	// real bug where a genuine close order memo failed schema validation for a subtle reason
+	// and was indistinguishable from ordinary non-order memo traffic. Debug (not Warn/Error)
+	// because on a real chain this fires for every unrelated third-party memo transaction.
+	if logger != nil {
+		logger.Debugf("[SOL-TX] memo present but matched neither order schema (lock: %v; close: %v); treating as non-order memo", lockErr, closeErr)
+	}
 	return nil
 }
 

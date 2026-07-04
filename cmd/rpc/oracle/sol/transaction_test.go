@@ -78,7 +78,7 @@ func TestParse_MemoOnly_IsLockOrder(t *testing.T) {
 		{programID: memoProgramID, data: lockOrderJSONFixture(t)},
 	}
 	tx := newTestTransaction("sig-lock", instrs, nil)
-	err := tx.parseInstructions(&fakeValidator{})
+	err := tx.parseInstructions(&fakeValidator{}, lib.NewDefaultLogger())
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestParse_NoMemo_IsNoOp(t *testing.T) {
 		{programID: solana.SystemProgramID, data: []byte{}},
 	}
 	tx := newTestTransaction("sig-noop", instrs, nil)
-	if err := tx.parseInstructions(&fakeValidator{}); err != nil {
+	if err := tx.parseInstructions(&fakeValidator{}, lib.NewDefaultLogger()); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if tx.Order() != nil {
@@ -117,7 +117,7 @@ func TestParse_MemoPlusSPLTransfer_IsCloseOrder(t *testing.T) {
 	// close order fixture accepts close type only
 	v := &fakeValidator{lockErr: errNotOrder, closeErr: nil}
 	tx := newTestTransaction("sig-close", instrs, nil)
-	if err := tx.parseInstructions(v); err != nil {
+	if err := tx.parseInstructions(v, lib.NewDefaultLogger()); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if tx.Order() == nil || tx.Order().CloseOrder == nil {
@@ -399,7 +399,7 @@ func TestParseInstructions_LockValidates_UnmarshalFails(t *testing.T) {
 	instrs := []instruction{{programID: memoProgramID, data: []byte("not valid json")}}
 	tx := newTestTransaction("sig-bad-lock", instrs, nil)
 	v := &fakeValidator{lockErr: nil, closeErr: errNotOrder}
-	if err := tx.parseInstructions(v); err == nil {
+	if err := tx.parseInstructions(v, lib.NewDefaultLogger()); err == nil {
 		t.Fatal("expected unmarshal error when lock JSON validates but is malformed")
 	}
 }
@@ -408,7 +408,7 @@ func TestParseInstructions_CloseValidates_UnmarshalFails(t *testing.T) {
 	instrs := []instruction{{programID: memoProgramID, data: []byte("not valid json")}}
 	tx := newTestTransaction("sig-bad-close", instrs, nil)
 	v := &fakeValidator{lockErr: errNotOrder, closeErr: nil}
-	if err := tx.parseInstructions(v); err == nil {
+	if err := tx.parseInstructions(v, lib.NewDefaultLogger()); err == nil {
 		t.Fatal("expected unmarshal error when close JSON validates but is malformed")
 	}
 }
@@ -417,7 +417,7 @@ func TestParseInstructions_MemoPresent_NeitherTypeValidates_IsNoOp(t *testing.T)
 	instrs := []instruction{{programID: memoProgramID, data: []byte("just a note")}}
 	tx := newTestTransaction("sig-plain-memo", instrs, nil)
 	v := &fakeValidator{lockErr: errNotOrder, closeErr: errNotOrder}
-	if err := tx.parseInstructions(v); err != nil {
+	if err := tx.parseInstructions(v, lib.NewDefaultLogger()); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if tx.Order() != nil {
@@ -429,7 +429,7 @@ func TestParseInstructions_CloseValidated_TransferParseFails_Propagates(t *testi
 	instrs := []instruction{{programID: memoProgramID, data: closeOrderJSONFixture(t)}}
 	tx := newTestTransaction("sig-close-no-transfer", instrs, nil)
 	v := &fakeValidator{lockErr: errNotOrder, closeErr: nil}
-	if err := tx.parseInstructions(v); err == nil {
+	if err := tx.parseInstructions(v, lib.NewDefaultLogger()); err == nil {
 		t.Fatal("expected parseTransfer error to propagate when close order has no transfer instruction")
 	}
 }

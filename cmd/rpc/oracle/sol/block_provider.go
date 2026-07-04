@@ -271,7 +271,7 @@ func (c *realClient) GetBlock(ctx context.Context, slot uint64) (*Block, error) 
 			sig = solTx.Signatures[0].String()
 		}
 		tx := newTransaction(sig, feePayer, instrs)
-		if err := tx.parseInstructions(c.validator); err != nil {
+		if err := tx.parseInstructions(c.validator, c.logger); err != nil {
 			c.logger.Warnf("[SOL-TX] parse error in slot %d tx %s: %v", slot, sig, err)
 			tx.clearOrder()
 			continue
