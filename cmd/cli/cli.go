@@ -56,6 +56,13 @@ func init() {
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
+	cobra.OnInitialize(initializeConfig)
+}
+
+// initializeConfig() loads the config after cobra has parsed flags (including --data-dir),
+// so it must run via cobra.OnInitialize rather than package init() — package init() runs
+// before argv parsing, which would silently ignore any --data-dir override.
+func initializeConfig() {
 	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
 	l = lib.NewLogger(lib.LoggerConfig{
 		Level:      config.GetLogLevel(),
