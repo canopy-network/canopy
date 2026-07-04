@@ -366,3 +366,52 @@ func TestParseInstructions_CloseValidated_TransferParseFails_Propagates(t *testi
 		t.Fatal("expected parseTransfer error to propagate when close order has no transfer instruction")
 	}
 }
+
+func TestMatchesOrderDestination_NotATransfer_ReturnsFalseNil(t *testing.T) {
+	tx := &Transaction{isTransfer: false}
+	ok, err := tx.MatchesOrderDestination(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if ok {
+		t.Fatal("expected false when transaction is not a transfer")
+	}
+}
+
+func TestMatchesOrderDestination_NativeSOL_Mismatch(t *testing.T) {
+	actualRecipient := solana.NewWallet().PublicKey()
+	expectedRecipient := solana.NewWallet().PublicKey()
+	tx := &Transaction{isTransfer: true, destination: actualRecipient.String()}
+	ok, err := tx.MatchesOrderDestination(nil, expectedRecipient.Bytes())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if ok {
+		t.Fatal("expected mismatch for different native SOL recipient")
+	}
+}
+
+func TestMatchesOrderDestination_TransferChecked_ATA_Integration(t *testing.T) {
+	source := solana.NewWallet().PublicKey()
+	mint := solana.NewWallet().PublicKey()
+	recipientWallet := solana.NewWallet().PublicKey()
+	owner := solana.NewWallet().PublicKey()
+	expectedATA, _, err := solana.FindAssociatedTokenAddress(recipientWallet, mint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := append([]byte{12}, u64LE(42)...)
+	in := &instruction{
+		programID: solana.TokenProgramID,
+		accounts:  []solana.PublicKey{source, mint, expectedATA, owner},
+		data:      data,
+	}
+	tx := &Transaction{}
+	if err := tx.parseSPLTransfer(in); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	ok, err := tx.MatchesOrderDestination(mint.Bytes(), recipientWallet.Bytes())
+	if err != nil || !ok {
+		t.Fatalf("expected TransferChecked destination to match derived ATA, ok=%v err=%v", ok, err)
+	}
+}
