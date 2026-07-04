@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,9 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/eth"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/sol"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
@@ -77,6 +81,8 @@ var startCmd = &cobra.Command{
 
 // Start() is the entrypoint of the application
 func Start() {
+	// create a context for the oracle
+	ctx := context.Background()
 	// start the validator TCP proxy (if configured)
 	proxy := lib.NewValidatorTCPProxy(config.ValidatorTCPProxy, l)
 	if err := proxy.Start(); err != nil {
@@ -118,16 +124,22 @@ func Start() {
 		}
 		// create a new order validator
 		orderValidator := oracle.NewOrderValidator()
-		// create the ethereum block provider
-		ethBlockProvider, e := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger, metrics)
+		// select the source-chain block provider by configuration
+		var blockProvider oracle.BlockProvider
+		switch config.OracleConfig.SourceChain {
+		case "solana":
+			blockProvider, e = sol.NewSolBlockProvider(config.SolBlockProviderConfig, orderValidator, oracleLogger, metrics)
+		default: // "ethereum" or unset
+			blockProvider, e = eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger, metrics)
+		}
 		if e != nil {
 			l.Fatal(e.Error())
 		}
 
 		// create an absolute path for the state save file
 		config.OracleConfig.StateFile = filepath.Join(oracleRoot, config.OracleConfig.StateFile)
-		// create a new oracle instance and pass the ethereum block provider with shared context
-		o, e = oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger, metrics)
+		// create a new oracle instance and pass the selected block provider with shared context
+		o, e = oracle.NewOracle(ctx, config.OracleConfig, blockProvider, oracleStorage, oracleLogger, metrics)
 		if e != nil {
 			l.Fatal(e.Error())
 		}

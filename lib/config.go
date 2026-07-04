@@ -404,6 +404,7 @@ type OracleConfig struct {
 	ReorgRollbackBlocks      uint64 `json:"reorgRollbackBlocks"`      // how far back to rollback the order store on reorgs
 	LockOrderCooldownBlocks  uint64 `json:"lockOrderCooldownBlocks"`  // how many root blocks to wait to prevent resubmission of lock orders with same ID
 	SafeBlockConfirmations   uint64 `json:"safeBlockConfirmations"`   // number of block confirmations required before considering a block safe
+	SourceChain              string `json:"oracleSourceChain"`        // which source chain to witness: "ethereum" (default) or "solana"
 }
 
 // DefaultOracleConfig() returns the default ethereum block provider configuration
@@ -417,6 +418,7 @@ func DefaultOracleConfig() OracleConfig {
 		ReorgRollbackBlocks:      60,
 		LockOrderCooldownBlocks:  2,
 		SafeBlockConfirmations:   5,
+		SourceChain:              "ethereum",
 	}
 }
 
