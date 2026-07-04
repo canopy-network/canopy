@@ -1,8 +1,10 @@
 package eth
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
@@ -221,6 +223,27 @@ func (t *Transaction) TokenTransfer() types.TokenTransfer {
 		TokenBaseAmount:  t.erc20Amount,
 		ContractAddress:  t.To(),
 	}
+}
+
+// MatchesOrderDestination reproduces the pre-refactor Ethereum checks from oracle.go:
+// contractBytes (sell order Data) formatted as an EVM address must equal the tx recipient
+// (the ERC20 contract), and the ERC20 transfer recipient must equal recipientBytes
+// (sell order SellerReceiveAddress). Returns (false, err) only when the transfer recipient
+// string cannot be decoded to bytes.
+func (t *Transaction) MatchesOrderDestination(contractBytes, recipientBytes []byte) (bool, error) {
+	// asset/contract check: sell order Data formatted as an EVM address must equal tx recipient
+	if common.BytesToAddress(contractBytes).String() != t.To() {
+		return false, nil
+	}
+	// recipient check: decode the ERC20 transfer recipient (0x-prefixed hex) to bytes
+	recipient, err := lib.StringToBytes(strings.TrimPrefix(t.erc20Recipient, "0x"))
+	if err != nil {
+		return false, err
+	}
+	if !bytes.Equal(recipientBytes, recipient) {
+		return false, nil
+	}
+	return true, nil
 }
 
 // parseERC20Transfer parses the transaction data looking for ERC20 transfers and any auxiliary data beyond the standard transfer call

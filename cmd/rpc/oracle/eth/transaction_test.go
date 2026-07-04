@@ -385,6 +385,40 @@ func TestTransaction_parseDataForOrders(t *testing.T) {
 	}
 }
 
+// TestMatchesOrderDestination verifies the eth implementation reproduces the pre-refactor
+// oracle.go checks: sellOrder.Data formatted as an EVM address must equal tx.To() (the ERC20
+// contract), and the ERC20 transfer recipient must equal sellOrder.SellerReceiveAddress.
+func TestMatchesOrderDestination(t *testing.T) {
+	// 20-byte contract address and 20-byte recipient address as raw bytes
+	contractBytes := common.HexToAddress("0x1111111111111111111111111111111111111111").Bytes()
+	recipientBytes := common.HexToAddress("0x2222222222222222222222222222222222222222").Bytes()
+
+	tx := &Transaction{
+		to:             common.BytesToAddress(contractBytes).String(),      // tx recipient == contract
+		erc20Recipient: common.BytesToAddress(recipientBytes).Hex(),         // 0x-prefixed, as set by parseERC20Transfer
+	}
+
+	// happy path: both match
+	ok, err := tx.MatchesOrderDestination(contractBytes, recipientBytes)
+	if err != nil || !ok {
+		t.Fatalf("expected match, got ok=%v err=%v", ok, err)
+	}
+
+	// contract mismatch
+	otherContract := common.HexToAddress("0x9999999999999999999999999999999999999999").Bytes()
+	ok, err = tx.MatchesOrderDestination(otherContract, recipientBytes)
+	if err != nil || ok {
+		t.Fatalf("expected contract mismatch (ok=false, err=nil), got ok=%v err=%v", ok, err)
+	}
+
+	// recipient mismatch
+	otherRecipient := common.HexToAddress("0x8888888888888888888888888888888888888888").Bytes()
+	ok, err = tx.MatchesOrderDestination(contractBytes, otherRecipient)
+	if err != nil || ok {
+		t.Fatalf("expected recipient mismatch (ok=false, err=nil), got ok=%v err=%v", ok, err)
+	}
+}
+
 func TestDecodeString(t *testing.T) {
 	tests := []struct {
 		name string
