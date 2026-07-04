@@ -34,28 +34,34 @@ const (
 
 // Config is the structure of the user configuration options for a Canopy node
 type Config struct {
-	MainConfig         // main options spanning over all modules
-	LoggerConfig       // logger options
-	RPCConfig          // rpc API options
-	StateMachineConfig // FSM options
-	StoreConfig        // persistence options
-	P2PConfig          // peer-to-peer options
-	ConsensusConfig    // bft options
-	MempoolConfig      // mempool options
-	MetricsConfig      // telemetry options
+	MainConfig             // main options spanning over all modules
+	LoggerConfig           // logger options
+	RPCConfig              // rpc API options
+	StateMachineConfig     // FSM options
+	StoreConfig            // persistence options
+	P2PConfig              // peer-to-peer options
+	ConsensusConfig        // bft options
+	MempoolConfig          // mempool options
+	MetricsConfig          // telemetry options
+	EthBlockProviderConfig // ethereum block provider configuration
+	SolBlockProviderConfig // solana block provider configuration
+	OracleConfig           // oracle configuration
 }
 
 // DefaultConfig() returns a Config with developer set options
 func DefaultConfig() Config {
 	return Config{
-		MainConfig:         DefaultMainConfig(),
-		RPCConfig:          DefaultRPCConfig(),
-		StateMachineConfig: DefaultStateMachineConfig(),
-		StoreConfig:        DefaultStoreConfig(),
-		P2PConfig:          DefaultP2PConfig(),
-		ConsensusConfig:    DefaultConsensusConfig(),
-		MempoolConfig:      DefaultMempoolConfig(),
-		MetricsConfig:      DefaultMetricsConfig(),
+		MainConfig:             DefaultMainConfig(),
+		RPCConfig:              DefaultRPCConfig(),
+		StateMachineConfig:     DefaultStateMachineConfig(),
+		StoreConfig:            DefaultStoreConfig(),
+		P2PConfig:              DefaultP2PConfig(),
+		ConsensusConfig:        DefaultConsensusConfig(),
+		MempoolConfig:          DefaultMempoolConfig(),
+		MetricsConfig:          DefaultMetricsConfig(),
+		EthBlockProviderConfig: DefaultEthBlockProviderConfig(),
+		SolBlockProviderConfig: DefaultSolBlockProviderConfig(),
+		OracleConfig:           DefaultOracleConfig(),
 	}
 }
 
@@ -368,6 +374,23 @@ func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 		EVMChainId:        1,
 		RetryDelay:        5, // default 5 seconds reconnect retry delay
 		StartupBlockDepth: 1000,
+	}
+}
+
+// SolBlockProviderConfig configures the Solana block provider. Solana polls at `finalized`
+// commitment, so there is no WebSocket URL and no startup block-depth heuristic.
+type SolBlockProviderConfig struct {
+	NodeUrl        string `json:"solNodeUrl"`        // solana http rpc node url (e.g. Alchemy)
+	PollIntervalMs int    `json:"solPollIntervalMs"` // poll interval in milliseconds for getSlot(finalized)
+	RetryDelay     int    `json:"solRetryDelay"`     // retry delay in seconds for transient rpc failures
+}
+
+// DefaultSolBlockProviderConfig returns the default solana block provider configuration
+func DefaultSolBlockProviderConfig() SolBlockProviderConfig {
+	return SolBlockProviderConfig{
+		NodeUrl:        "http://localhost:8899", // solana-test-validator default
+		PollIntervalMs: 400,                     // ~1 slot; Solana slot time is ~400ms
+		RetryDelay:     5,                       // 5s backoff on transient rpc errors
 	}
 }
 
