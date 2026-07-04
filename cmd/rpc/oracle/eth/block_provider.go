@@ -47,6 +47,7 @@ type EthereumWsClient interface {
 	Close()
 }
 
+// OrderValidator validates canopy order JSON found embedded in ethereum transaction data.
 type OrderValidator interface {
 	ValidateOrderJsonBytes(jsonBytes []byte, orderType types.OrderType) error
 }
@@ -602,7 +603,7 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 		p.metrics.IncrementEthTransactionSuccessStatus("success")
 		return true, nil
 	}
-	p.logger.Errorf("[ETH-TX] tx %s ERC20 transfer failed on-chain, ignoring", txHashStr)
+	p.logger.Warnf("[ETH-TX] tx %s ERC20 transfer failed on-chain, ignoring", txHashStr)
 	p.metrics.IncrementEthTransactionSuccessStatus("failed")
 	// return unsuccessful transaction
 	return false, nil
