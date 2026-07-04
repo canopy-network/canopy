@@ -11,6 +11,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/gagliardetto/solana-go/rpc/jsonrpc"
 )
 
 const processBlocksTimeLimitS = 12
@@ -22,20 +23,42 @@ var _ oracle.BlockProvider = &SolBlockProvider{}
 type SolanaRpcClient interface {
 	GetSlot(ctx context.Context) (uint64, error)
 	GetBlock(ctx context.Context, slot uint64) (*Block, error)
+	// GetFirstAvailableBlock returns the lowest slot not yet purged from the ledger. Used to
+	// recover from a pruned-slot error by jumping the whole gap in one shot.
+	GetFirstAvailableBlock(ctx context.Context) (uint64, error)
 	Close()
 }
 
-// coder is implemented by the SDK's jsonrpc error and by the test skipErr; used to read the code.
-type coder interface{ Code() int }
+// rpcErrCode extracts the JSON-RPC error code from err, if err (or something it wraps) is a
+// *jsonrpc.RPCError. NOTE: jsonrpc.RPCError.Code is a struct field, not a method - an earlier
+// version of this file declared a `coder interface{ Code() int }` and used errors.As against
+// that, which can never match a real *jsonrpc.RPCError (no such method exists) and silently
+// always returned false. That bug meant isSkippedSlotErr/isPrunedSlotErr never fired in
+// production - only in tests, which used a hand-rolled type that actually had a Code() method.
+// A pruned-slot error was consequently always misclassified as a generic transient error and
+// retried forever, since a pruned slot never becomes available again (see git history for the
+// live incident this was caught from).
+func rpcErrCode(err error) (int, bool) {
+	var rpcErr *jsonrpc.RPCError
+	if errors.As(err, &rpcErr) {
+		return rpcErr.Code, true
+	}
+	return 0, false
+}
 
 // isSkippedSlotErr reports whether err indicates a skipped slot (jsonrpc -32007 or -32009).
 func isSkippedSlotErr(err error) bool {
-	var c coder
-	if errors.As(err, &c) {
-		code := c.Code()
-		return code == -32007 || code == -32009
-	}
-	return false
+	code, ok := rpcErrCode(err)
+	return ok && (code == -32007 || code == -32009)
+}
+
+// isPrunedSlotErr reports whether err indicates the slot has been pruned from the ledger
+// (jsonrpc -32001, BlockCleanedUp). Unlike a skipped slot, a pruned slot never becomes
+// available again, so the caller must jump forward to the first available block instead of
+// just advancing by one.
+func isPrunedSlotErr(err error) bool {
+	code, ok := rpcErrCode(err)
+	return ok && code == -32001
 }
 
 // resolveInstructions converts a message's compiled instructions into resolved instructions
@@ -90,6 +113,18 @@ func newSolBlockProviderWithClient(cfg lib.SolBlockProviderConfig, client Solana
 // BlockCh returns the block delivery channel.
 func (p *SolBlockProvider) BlockCh() chan types.BlockI { return p.blockChan }
 
+// backoff blocks for the configured retry delay, or until ctx is canceled (returning false in
+// that case). Used on genuine RPC failures so repeated errors don't hammer the endpoint at the
+// bare poll interval (400ms) with no growth, e.g. during an outage or rate-limit (429) storm.
+func (p *SolBlockProvider) backoff(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(time.Duration(p.config.RetryDelay) * time.Second):
+		return true
+	}
+}
+
 // IsSynced reports whether the provider has caught up to the finalized tip.
 func (p *SolBlockProvider) IsSynced() bool { return p.synced }
 
@@ -114,6 +149,9 @@ func (p *SolBlockProvider) run(ctx context.Context) {
 		current, err := p.client.GetSlot(ctx)
 		if err != nil {
 			p.logger.Errorf("[SOL-RPC] GetSlot failed: %v", err)
+			if !p.backoff(ctx) {
+				return
+			}
 			continue
 		}
 		// metrics update - SetChainHeadHeight is optional for testing
@@ -150,7 +188,28 @@ func (p *SolBlockProvider) processSlots(ctx context.Context, current uint64) {
 				p.nextSlot++ // advance past skipped slot, do not retry
 				continue
 			}
-			p.logger.Errorf("[SOL-RPC] GetBlock(%d) failed: %v; retrying", p.nextSlot, err)
+			if isPrunedSlotErr(err) {
+				first, ferr := p.client.GetFirstAvailableBlock(timeoutCtx)
+				if ferr != nil {
+					p.logger.Errorf("[SOL-RPC] GetFirstAvailableBlock failed: %v; retrying", ferr)
+					p.backoff(ctx)
+					return // retry same slot next tick, do not advance
+				}
+				if first <= p.nextSlot {
+					// first available already caught up past our target between the two calls;
+					// just step forward one to avoid spinning on the same pruned slot.
+					first = p.nextSlot + 1
+				}
+				p.logger.Warnf("[SOL-BLOCK] slot %d pruned; jumping to first available slot %d", p.nextSlot, first)
+				p.nextSlot = first
+				continue
+			}
+			if code, ok := rpcErrCode(err); ok {
+				p.logger.Errorf("[SOL-RPC] GetBlock(%d) failed with unclassified rpc code %d: %v; retrying", p.nextSlot, code, err)
+			} else {
+				p.logger.Errorf("[SOL-RPC] GetBlock(%d) failed: %v; retrying", p.nextSlot, err)
+			}
+			p.backoff(ctx)
 			return // retry same slot next tick, do not advance
 		}
 		select {
@@ -187,7 +246,11 @@ func (c *realClient) GetBlock(ctx context.Context, slot uint64) (*Block, error) 
 	for i := range res.Transactions {
 		twm := res.Transactions[i]
 		if twm.Meta != nil && twm.Meta.Err != nil {
-			continue // failed transaction, ignore
+			// a tx that failed on-chain could still carry an order memo (e.g. a close whose SPL
+			// transfer failed on insufficient balance) - log it so that case isn't indistinguishable
+			// from "no order transaction ever showed up" during debugging.
+			c.logger.Debugf("[SOL-TX] skipping failed on-chain tx in slot %d: %v", slot, twm.Meta.Err)
+			continue
 		}
 		solTx, err := twm.GetTransaction()
 		if err != nil || solTx == nil {
@@ -217,17 +280,38 @@ func (c *realClient) GetBlock(ctx context.Context, slot uint64) (*Block, error) 
 			continue // not an order transaction
 		}
 		tx.order.WitnessedHeight = slot
-		// resolve SPL decimals (display-only; non-fatal on failure)
-		if tx.isTransfer && tx.mint != "" {
-			if mintPK, e := solana.PublicKeyFromBase58(tx.mint); e == nil {
-				if d, e2 := c.mints.Decimals(ctx, c.rpc, mintPK); e2 == nil {
-					tx.decimals = d
+		if tx.isTransfer {
+			// bare SPL Transfer (tag 3) doesn't carry the mint inline; resolve it from the
+			// destination token account before decimals can be looked up (non-fatal on failure)
+			if tx.needsMintLookup {
+				if destPK, e := solana.PublicKeyFromBase58(tx.destination); e == nil {
+					if mintPK, e2 := resolveTokenAccountMint(ctx, c.rpc, destPK); e2 == nil {
+						tx.mint = mintPK.String()
+					} else {
+						c.logger.Warnf("[SOL-TX] failed to resolve mint for token account %s in slot %d: %v", tx.destination, slot, e2)
+					}
+				}
+			}
+			// resolve SPL decimals (display-only; non-fatal on failure)
+			if tx.mint != "" {
+				if mintPK, e := solana.PublicKeyFromBase58(tx.mint); e == nil {
+					if d, e2 := c.mints.Decimals(ctx, c.rpc, mintPK); e2 == nil {
+						tx.decimals = d
+					} else {
+						c.logger.Warnf("[SOL-TX] failed to resolve decimals for mint %s in slot %d: %v", tx.mint, slot, e2)
+					}
+				} else {
+					c.logger.Warnf("[SOL-TX] failed to parse mint pubkey %q in slot %d: %v", tx.mint, slot, e)
 				}
 			}
 		}
 		txs = append(txs, tx)
 	}
 	return newBlock(slot, res.Blockhash.String(), res.PreviousBlockhash.String(), txs), nil
+}
+
+func (c *realClient) GetFirstAvailableBlock(ctx context.Context) (uint64, error) {
+	return c.rpc.GetFirstAvailableBlock(ctx)
 }
 
 func (c *realClient) Close() {} // *rpc.Client has no persistent connection to close
