@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	"errors"
 	"log"
 	"math/big"
 	"sync"
@@ -372,6 +373,481 @@ func TestEthBlockProvider_syncedNoRace(t *testing.T) {
 		}
 	}()
 	wg.Wait()
+}
+
+// fakeSubscription is a minimal ethereum.Subscription implementation that lets tests
+// fully control Unsubscribe/Err behavior deterministically.
+type fakeSubscription struct {
+	errCh        chan error
+	unsubscribed bool
+	unsubCalled  chan struct{}
+}
+
+func newFakeSubscription() *fakeSubscription {
+	return &fakeSubscription{
+		errCh:       make(chan error, 1),
+		unsubCalled: make(chan struct{}, 1),
+	}
+}
+
+func (f *fakeSubscription) Unsubscribe() {
+	f.unsubscribed = true
+	select {
+	case f.unsubCalled <- struct{}{}:
+	default:
+	}
+}
+
+func (f *fakeSubscription) Err() <-chan error {
+	return f.errCh
+}
+
+// mockEthWsClient implements EthereumWsClient for tests, letting the test control the
+// header channel and subscription (or subscription error) returned to monitorHeaders.
+type mockEthWsClient struct {
+	sub       ethereum.Subscription
+	subErr    error
+	headerCh  chan<- *ethtypes.Header
+	subscribe func(ctx context.Context, ch chan<- *ethtypes.Header) (ethereum.Subscription, error)
+}
+
+func (m *mockEthWsClient) SubscribeNewHead(ctx context.Context, ch chan<- *ethtypes.Header) (ethereum.Subscription, error) {
+	if m.subscribe != nil {
+		return m.subscribe(ctx, ch)
+	}
+	m.headerCh = ch
+	return m.sub, m.subErr
+}
+
+func (m *mockEthWsClient) Close() {}
+
+// TestEthBlockProvider_monitorHeaders_ReorgDetected exercises the reorg-detection branch:
+// when a header arrives whose number is lower than nextHeight (i.e. nextHeight is ahead of
+// the reported chain head), monitorHeaders must unsubscribe and return ErrSourceHeight.
+func TestEthBlockProvider_monitorHeaders_ReorgDetected(t *testing.T) {
+	sub := newFakeSubscription()
+	headerCh := make(chan *ethtypes.Header, 1)
+	wsClient := &mockEthWsClient{
+		sub: sub,
+		subscribe: func(ctx context.Context, ch chan<- *ethtypes.Header) (ethereum.Subscription, error) {
+			// capture the channel passed by monitorHeaders so the test can push a header into it
+			go func() {
+				h := <-headerCh
+				ch <- h
+			}()
+			return sub, nil
+		},
+	}
+	provider := &EthBlockProvider{
+		wsClient:   wsClient,
+		logger:     lib.NewDefaultLogger(),
+		nextHeight: big.NewInt(100), // ahead of the header we're about to deliver
+		heightMu:   &sync.Mutex{},
+	}
+	// header number (99) is lower than nextHeight (100) -> reorg condition
+	headerCh <- &ethtypes.Header{Number: big.NewInt(99)}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- provider.monitorHeaders(context.Background())
+	}()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, ErrSourceHeight) {
+			t.Errorf("expected ErrSourceHeight, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("monitorHeaders did not return on reorg detection")
+	}
+	select {
+	case <-sub.unsubCalled:
+	case <-time.After(time.Second):
+		t.Error("expected Unsubscribe to be called on reorg detection")
+	}
+}
+
+// TestEthBlockProvider_monitorHeaders_WsClientNil verifies monitorHeaders fails fast
+// with a descriptive error when the websocket client was never established.
+func TestEthBlockProvider_monitorHeaders_WsClientNil(t *testing.T) {
+	provider := &EthBlockProvider{
+		logger:   lib.NewDefaultLogger(),
+		heightMu: &sync.Mutex{},
+	}
+	err := provider.monitorHeaders(context.Background())
+	if err == nil {
+		t.Fatal("expected error when wsClient is nil, got nil")
+	}
+}
+
+// TestEthBlockProvider_monitorHeaders_SubscribeError verifies the subscription-error path
+// returns the underlying error without panicking.
+func TestEthBlockProvider_monitorHeaders_SubscribeError(t *testing.T) {
+	wantErr := errors.New("subscribe boom")
+	wsClient := &mockEthWsClient{subErr: wantErr}
+	provider := &EthBlockProvider{
+		wsClient:   wsClient,
+		logger:     lib.NewDefaultLogger(),
+		nextHeight: big.NewInt(1),
+		heightMu:   &sync.Mutex{},
+	}
+	err := provider.monitorHeaders(context.Background())
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected %v, got %v", wantErr, err)
+	}
+}
+
+// TestEthBlockProvider_monitorHeaders_ContextCancelled verifies a context cancellation while
+// waiting on headers causes Unsubscribe to be called and ctx.Err() to be returned.
+func TestEthBlockProvider_monitorHeaders_ContextCancelled(t *testing.T) {
+	sub := newFakeSubscription()
+	wsClient := &mockEthWsClient{sub: sub}
+	provider := &EthBlockProvider{
+		wsClient:   wsClient,
+		logger:     lib.NewDefaultLogger(),
+		nextHeight: big.NewInt(1),
+		heightMu:   &sync.Mutex{},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- provider.monitorHeaders(ctx)
+	}()
+	cancel()
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("monitorHeaders did not return on context cancellation")
+	}
+	select {
+	case <-sub.unsubCalled:
+	case <-time.After(time.Second):
+		t.Error("expected Unsubscribe to be called on context cancellation")
+	}
+}
+
+// TestEthBlockProvider_monitorHeaders_SubscriptionErrChan verifies that an error surfaced on
+// sub.Err() causes monitorHeaders to unsubscribe and propagate the error.
+func TestEthBlockProvider_monitorHeaders_SubscriptionErrChan(t *testing.T) {
+	sub := newFakeSubscription()
+	wsClient := &mockEthWsClient{sub: sub}
+	provider := &EthBlockProvider{
+		wsClient:   wsClient,
+		logger:     lib.NewDefaultLogger(),
+		nextHeight: big.NewInt(1),
+		heightMu:   &sync.Mutex{},
+	}
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- provider.monitorHeaders(context.Background())
+	}()
+	wantErr := errors.New("subscription dropped")
+	sub.errCh <- wantErr
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, wantErr) {
+			t.Errorf("expected %v, got %v", wantErr, err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("monitorHeaders did not return on subscription error")
+	}
+	select {
+	case <-sub.unsubCalled:
+	case <-time.After(time.Second):
+		t.Error("expected Unsubscribe to be called on subscription error")
+	}
+}
+
+// TestEthBlockProvider_transactionSuccess covers the receipt-fetch error path along with
+// both receipt status outcomes (success and failure).
+func TestEthBlockProvider_transactionSuccess(t *testing.T) {
+	toAddress := common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")
+
+	tests := []struct {
+		name          string
+		setupReceipts func(hash common.Hash) map[common.Hash]*ethtypes.Receipt
+		expectSuccess bool
+		expectErr     error
+	}{
+		{
+			name: "receipt fetch error",
+			setupReceipts: func(hash common.Hash) map[common.Hash]*ethtypes.Receipt {
+				// no receipt registered -> mockEthClient.TransactionReceipt returns ethereum.NotFound
+				return map[common.Hash]*ethtypes.Receipt{}
+			},
+			expectSuccess: false,
+			expectErr:     ErrTransactionReceipt,
+		},
+		{
+			name: "receipt status success",
+			setupReceipts: func(hash common.Hash) map[common.Hash]*ethtypes.Receipt {
+				return map[common.Hash]*ethtypes.Receipt{
+					hash: {Status: TransactionStatusSuccess},
+				}
+			},
+			expectSuccess: true,
+			expectErr:     nil,
+		},
+		{
+			name: "receipt status failure",
+			setupReceipts: func(hash common.Hash) map[common.Hash]*ethtypes.Receipt {
+				return map[common.Hash]*ethtypes.Receipt{
+					hash: {Status: 0},
+				}
+			},
+			expectSuccess: false,
+			expectErr:     nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ethTx := createTransaction(toAddress, []byte("data"))
+			tx, err := NewTransaction(ethTx, 1)
+			if err != nil {
+				t.Fatalf("NewTransaction: %v", err)
+			}
+			mockClient := &mockEthClient{
+				receipts: tt.setupReceipts(ethTx.Hash()),
+			}
+			provider := &EthBlockProvider{
+				rpcClient: mockClient,
+				logger:    lib.NewDefaultLogger(),
+				heightMu:  &sync.Mutex{},
+			}
+			success, err := provider.transactionSuccess(context.Background(), tx)
+			if success != tt.expectSuccess {
+				t.Errorf("expected success=%v, got %v", tt.expectSuccess, success)
+			}
+			if tt.expectErr == nil {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
+			} else if !errors.Is(err, tt.expectErr) {
+				t.Errorf("expected error %v, got %v", tt.expectErr, err)
+			}
+		})
+	}
+}
+
+// retryingReceiptClient wraps mockEthClient, failing the first N TransactionReceipt calls
+// with ethereum.NotFound (triggering ErrTransactionReceipt) before succeeding.
+type retryingReceiptClient struct {
+	*mockEthClient
+	hash       common.Hash
+	failFirstN int
+	calls      int
+	onCall     func()
+}
+
+func (r *retryingReceiptClient) TransactionReceipt(ctx context.Context, txHash common.Hash) (*ethtypes.Receipt, error) {
+	r.calls++
+	if r.onCall != nil {
+		r.onCall()
+	}
+	if r.calls <= r.failFirstN {
+		return nil, ethereum.NotFound
+	}
+	return &ethtypes.Receipt{Status: TransactionStatusSuccess}, nil
+}
+
+// TestEthBlockProvider_processBlockTransactions_RetryableThenSuccess verifies that a
+// receipt-fetch error (retryable per ErrTransactionReceipt) causes a retry with backoff,
+// and a subsequent successful receipt fetch completes processing without error.
+func TestEthBlockProvider_processBlockTransactions_RetryableThenSuccess(t *testing.T) {
+	toAddress := common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")
+	transferData := createERC20TransferData("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", big.NewInt(1000000000000000000), []byte(`{"order_id":"abc"}`))
+	ethTx := createTransaction(toAddress, transferData)
+	tx, err := NewTransaction(ethTx, 1)
+	if err != nil {
+		t.Fatalf("NewTransaction: %v", err)
+	}
+	block := &Block{transactions: []*Transaction{tx}}
+
+	var receiptCalls int
+	rpc := &retryingReceiptClient{
+		mockEthClient: &mockEthClient{},
+		hash:          ethTx.Hash(),
+		failFirstN:    1,
+		onCall:        func() { receiptCalls++ },
+	}
+	provider := &EthBlockProvider{
+		rpcClient:      rpc,
+		orderValidator: &mockOrderValidator{},
+		erc20TokenCache: setupTokenCache(toAddress, types.TokenInfo{
+			Name: "Test", Symbol: "TST", Decimals: 18,
+		}),
+		logger:   lib.NewDefaultLogger(),
+		heightMu: &sync.Mutex{},
+	}
+	start := time.Now()
+	err = provider.processBlockTransactions(context.Background(), block)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receiptCalls < 2 {
+		t.Errorf("expected at least 2 receipt calls (1 failure + 1 retry), got %d", receiptCalls)
+	}
+	// first backoff is 1<<0 == 1 second
+	if elapsed < time.Second {
+		t.Errorf("expected backoff delay of at least 1s before retry, elapsed %v", elapsed)
+	}
+}
+
+// TestEthBlockProvider_processBlockTransactions_ExhaustedRetries verifies that when every
+// attempt fails with a retryable error, processing exhausts all attempts (metrics/log the
+// exhaustion) but still returns nil overall - exhaustion of a single transaction does not
+// fail the whole block's processing.
+//
+// Note: processTransaction can only return ErrTransactionReceipt (receipt fetch failure) or
+// ErrTokenInfo (token info fetch failure) as errors - both are retryable per the `!errors.Is`
+// check in processBlockTransactions. There is no reachable non-retryable error out of
+// processTransaction without modifying production code, so the "non-retryable breaks
+// immediately" case is not independently testable; this test instead exercises full
+// exhaustion of maxTransactionProcessAttempts.
+func TestEthBlockProvider_processBlockTransactions_ExhaustedRetries(t *testing.T) {
+	toAddress := common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")
+	transferData := createERC20TransferData("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", big.NewInt(1000000000000000000), []byte(`{"order_id":"abc"}`))
+	ethTx := createTransaction(toAddress, transferData)
+	tx, err := NewTransaction(ethTx, 1)
+	if err != nil {
+		t.Fatalf("NewTransaction: %v", err)
+	}
+	block := &Block{transactions: []*Transaction{tx}}
+
+	rpc := &retryingReceiptClient{
+		mockEthClient: &mockEthClient{},
+		hash:          ethTx.Hash(),
+		failFirstN:    maxTransactionProcessAttempts, // fail every attempt
+	}
+	provider := &EthBlockProvider{
+		rpcClient:      rpc,
+		orderValidator: &mockOrderValidator{},
+		logger:         lib.NewDefaultLogger(),
+		heightMu:       &sync.Mutex{},
+	}
+	err = provider.processBlockTransactions(context.Background(), block)
+	// processBlockTransactions always returns nil at the top level; exhaustion is logged/metriced
+	// per-transaction rather than surfaced as a return error.
+	if err != nil {
+		t.Errorf("expected nil error (exhaustion handled internally), got %v", err)
+	}
+	if rpc.calls != maxTransactionProcessAttempts {
+		t.Errorf("expected %d receipt fetch attempts, got %d", maxTransactionProcessAttempts, rpc.calls)
+	}
+}
+
+// TestEthBlockProvider_processBlockTransactions_CtxCancelledDuringBackoff verifies that if
+// the context is cancelled while waiting in the exponential backoff, processBlockTransactions
+// returns ctx.Err() immediately rather than continuing to retry.
+func TestEthBlockProvider_processBlockTransactions_CtxCancelledDuringBackoff(t *testing.T) {
+	toAddress := common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")
+	transferData := createERC20TransferData("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", big.NewInt(1000000000000000000), []byte(`{"order_id":"abc"}`))
+	ethTx := createTransaction(toAddress, transferData)
+	tx, err := NewTransaction(ethTx, 1)
+	if err != nil {
+		t.Fatalf("NewTransaction: %v", err)
+	}
+	block := &Block{transactions: []*Transaction{tx}}
+
+	rpc := &retryingReceiptClient{
+		mockEthClient: &mockEthClient{},
+		hash:          ethTx.Hash(),
+		failFirstN:    maxTransactionProcessAttempts, // always fail, so it will hit backoff before attempt 2
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	provider := &EthBlockProvider{
+		rpcClient:      rpc,
+		orderValidator: &mockOrderValidator{},
+		logger:         lib.NewDefaultLogger(),
+		heightMu:       &sync.Mutex{},
+	}
+	// cancel shortly after starting so cancellation lands during the 1s backoff sleep
+	// following the first failed attempt.
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		cancel()
+	}()
+	done := make(chan error, 1)
+	go func() {
+		done <- provider.processBlockTransactions(ctx, block)
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("processBlockTransactions did not return promptly on context cancellation")
+	}
+}
+
+// TestEthBlockProvider_fetchBlock_SkipsMalformedTransaction verifies that a transaction which
+// fails NewTransaction wrapping (e.g. a contract-creation tx with no recipient address) is
+// logged and skipped rather than failing the entire block fetch.
+func TestEthBlockProvider_fetchBlock_SkipsMalformedTransaction(t *testing.T) {
+	recipientAddress := common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")
+	goodTx := createTransaction(recipientAddress, []byte("regular data"))
+	// a contract-creation transaction has a nil `to`, which fails common.IsHexAddress("")
+	// inside NewTransaction, returning *InvalidAddressError - this is the "malformed" tx path.
+	badTx := ethtypes.NewContractCreation(1, big.NewInt(0), 21000, big.NewInt(1000000000), []byte("create"))
+	privateKey, kerr := crypto.GenerateKey()
+	if kerr != nil {
+		t.Fatalf("failed to generate key: %v", kerr)
+	}
+	signer := ethtypes.NewEIP155Signer(big.NewInt(0))
+	signedBadTx, serr := ethtypes.SignTx(badTx, signer, privateKey)
+	if serr != nil {
+		t.Fatalf("failed to sign contract-creation tx: %v", serr)
+	}
+
+	mockClient := &mockEthClient{
+		blocks: map[uint64]*ethtypes.Block{
+			7: createEthereumBlock(7, []*ethtypes.Transaction{goodTx, signedBadTx}),
+		},
+	}
+	provider := &EthBlockProvider{
+		rpcClient: mockClient,
+		logger:    lib.NewDefaultLogger(),
+		chainId:   1,
+		config:    lib.EthBlockProviderConfig{},
+		heightMu:  &sync.Mutex{},
+	}
+
+	block, err := provider.fetchBlock(context.Background(), big.NewInt(7))
+	if err != nil {
+		t.Fatalf("expected fetchBlock to succeed despite malformed tx, got error: %v", err)
+	}
+	if block == nil {
+		t.Fatal("expected block, got nil")
+	}
+	// only the well-formed transaction should have been kept
+	txs := block.Transactions()
+	if len(txs) != 1 {
+		t.Fatalf("expected 1 surviving transaction, got %d", len(txs))
+	}
+	if txs[0].Hash() != goodTx.Hash().Hex() {
+		t.Errorf("expected surviving tx hash %s, got %s", goodTx.Hash().Hex(), txs[0].Hash())
+	}
+}
+
+// TestNewBlock_NilInput verifies NewBlock rejects a nil ethereum block with lib.ErrNilBlock().
+func TestNewBlock_NilInput(t *testing.T) {
+	block, err := NewBlock(nil)
+	if block != nil {
+		t.Errorf("expected nil block, got %+v", block)
+	}
+	if err == nil {
+		t.Fatal("expected error for nil input, got nil")
+	}
+	wantErr := lib.ErrNilBlock()
+	if err.Error() != wantErr.Error() {
+		t.Errorf("expected error %q, got %q", wantErr.Error(), err.Error())
+	}
 }
 
 func TestEthBlockProvider_processBlocksCancelledSend(t *testing.T) {

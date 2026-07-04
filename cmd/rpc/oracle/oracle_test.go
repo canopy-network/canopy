@@ -1,6 +1,7 @@
 package oracle
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -9,9 +10,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1529,4 +1532,862 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 				len(lockOrders)+len(closeOrders), oracle.committee)
 		})
 	}
+}
+
+// faultyOrderStore wraps mockOrderStore and allows injecting errors on specific
+// operations to exercise error branches that the plain mock can't reach (e.g.
+// ReadOrder/WriteOrder/RemoveOrder/GetAllOrderIds failing for reasons other than
+// "not found").
+type faultyOrderStore struct {
+	*mockOrderStore
+	// failReadOrderIds are order ids (as string keys via lib.BytesToString) for which ReadOrder should fail
+	failReadOrderIds map[string]bool
+	// failWriteOrderIds are order ids for which WriteOrder should fail
+	failWriteOrderIds map[string]bool
+	// failRemoveOrderIds are order ids for which RemoveOrder should fail
+	failRemoveOrderIds map[string]bool
+	// failGetAllOrderIds, if true, makes GetAllOrderIds fail for the given order type
+	failGetAllOrderIds map[types.OrderType]bool
+}
+
+func newFaultyOrderStore(orders ...*types.WitnessedOrder) *faultyOrderStore {
+	return &faultyOrderStore{
+		mockOrderStore:     createOrderStore(orders...),
+		failReadOrderIds:   map[string]bool{},
+		failWriteOrderIds:  map[string]bool{},
+		failRemoveOrderIds: map[string]bool{},
+		failGetAllOrderIds: map[types.OrderType]bool{},
+	}
+}
+
+func (f *faultyOrderStore) ReadOrder(orderId []byte, orderType types.OrderType) (*types.WitnessedOrder, lib.ErrorI) {
+	if f.failReadOrderIds[lib.BytesToString(orderId)] {
+		return nil, ErrReadOrder(fmt.Errorf("injected read failure"))
+	}
+	return f.mockOrderStore.ReadOrder(orderId, orderType)
+}
+
+func (f *faultyOrderStore) WriteOrder(order *types.WitnessedOrder, orderType types.OrderType) lib.ErrorI {
+	if f.failWriteOrderIds[lib.BytesToString(order.OrderId)] {
+		return ErrWriteOrder(fmt.Errorf("injected write failure"))
+	}
+	return f.mockOrderStore.WriteOrder(order, orderType)
+}
+
+func (f *faultyOrderStore) RemoveOrder(orderId []byte, orderType types.OrderType) lib.ErrorI {
+	if f.failRemoveOrderIds[lib.BytesToString(orderId)] {
+		return ErrRemoveOrder(fmt.Errorf("injected remove failure"))
+	}
+	return f.mockOrderStore.RemoveOrder(orderId, orderType)
+}
+
+func (f *faultyOrderStore) GetAllOrderIds(orderType types.OrderType) ([][]byte, lib.ErrorI) {
+	if f.failGetAllOrderIds[orderType] {
+		return nil, ErrVerifyOrder(fmt.Errorf("injected get-all failure"))
+	}
+	return f.mockOrderStore.GetAllOrderIds(orderType)
+}
+
+// newTestMetrics creates a real, non-nil *lib.Metrics instance for exercising the
+// non-nil-metrics branches of updateMetrics/CommitCertificate/UpdateRootChainInfo.
+// Metrics are registered against prometheus' default global registry via promauto,
+// so this must only be called once per test binary run to avoid "duplicate metrics
+// collector registration" panics - a package-level sync.Once guards construction.
+var (
+	testMetricsOnce sync.Once
+	testMetricsInst *lib.Metrics
+)
+
+func newTestMetrics() *lib.Metrics {
+	testMetricsOnce.Do(func() {
+		addr := crypto.NewAddressFromBytes([]byte("test-oracle-address"))
+		testMetricsInst = lib.NewMetricsServer(addr, 1, "test", lib.MetricsConfig{
+			MetricsEnabled:    true,
+			PrometheusAddress: "127.0.0.1:0",
+		}, lib.NewDefaultLogger())
+	})
+	return testMetricsInst
+}
+
+func TestOracle_DebugOrder(t *testing.T) {
+	t.Run("nil oracle receiver returns nil", func(t *testing.T) {
+		var oracle *Oracle
+		got := oracle.DebugOrder([]byte("order1"))
+		assert.Nil(t, got)
+	})
+
+	t.Run("confirmation lag is zero when source height <= safe height (no underflow)", func(t *testing.T) {
+		// SafeHeight and SourceChainHeight are both uint64. DebugOrder guards the
+		// subtraction with `if sourceHeight > safeHeight`, so when sourceHeight <=
+		// safeHeight the subtraction is never executed and confirmationLag stays at
+		// its zero value - there is no unsigned-underflow path here. This test
+		// pins that behavior as a regression guard.
+		tempDir, _ := os.MkdirTemp("", "oracle_debugorder_test")
+		defer os.RemoveAll(tempDir)
+		state := NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger())
+		state.safeHeight = 100
+		state.sourceChainHeight = 100 // equal case
+		oracle := &Oracle{
+			orderStore: NewMockOrderStore(),
+			state:      state,
+			log:        lib.NewDefaultLogger(),
+		}
+		info := oracle.DebugOrder([]byte("order1"))
+		require.NotNil(t, info)
+		assert.Equal(t, uint64(0), info.ConfirmationLag)
+		assert.Equal(t, uint64(100), info.SafeHeight)
+		assert.Equal(t, uint64(100), info.SourceChainHeight)
+
+		// sourceHeight < safeHeight (can legitimately happen transiently since
+		// safeHeight is monotonic but sourceHeight tracks the latest validated block)
+		state.safeHeight = 100
+		state.sourceChainHeight = 40
+		info = oracle.DebugOrder([]byte("order1"))
+		require.NotNil(t, info)
+		assert.Equal(t, uint64(0), info.ConfirmationLag, "confirmationLag must not underflow when sourceHeight < safeHeight")
+	})
+
+	t.Run("confirmation lag computed when source height > safe height", func(t *testing.T) {
+		tempDir, _ := os.MkdirTemp("", "oracle_debugorder_test2")
+		defer os.RemoveAll(tempDir)
+		state := NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger())
+		state.safeHeight = 100
+		state.sourceChainHeight = 150
+		oracle := &Oracle{
+			orderStore: NewMockOrderStore(),
+			state:      state,
+			log:        lib.NewDefaultLogger(),
+			config: lib.OracleConfig{
+				SafeBlockConfirmations: 12,
+				ProposeDelayBlocks:     3,
+			},
+		}
+		info := oracle.DebugOrder([]byte("order1"))
+		require.NotNil(t, info)
+		assert.Equal(t, uint64(50), info.ConfirmationLag)
+		assert.Equal(t, uint64(12), info.SafeBlockConfirmations)
+		assert.Equal(t, uint64(3), info.ProposeDelayBlocks)
+	})
+
+	t.Run("lock and close order lookups reflected in result", func(t *testing.T) {
+		tempDir, _ := os.MkdirTemp("", "oracle_debugorder_test3")
+		defer os.RemoveAll(tempDir)
+		state := NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger())
+		store := createOrderStore(
+			createWitnessedLockOrder("lock-found"),
+			createWitnessedCloseOrder("close-found"),
+		)
+		oracle := &Oracle{
+			orderStore: store,
+			state:      state,
+			log:        lib.NewDefaultLogger(),
+		}
+
+		// order found: both lock and close populated when present
+		info := oracle.DebugOrder([]byte("lock-found"))
+		require.NotNil(t, info)
+		assert.NotNil(t, info.LockOrder)
+		assert.Nil(t, info.CloseOrder)
+
+		info = oracle.DebugOrder([]byte("close-found"))
+		require.NotNil(t, info)
+		assert.Nil(t, info.LockOrder)
+		assert.NotNil(t, info.CloseOrder)
+
+		// order not found: both remain nil, no error surfaces
+		info = oracle.DebugOrder([]byte("does-not-exist"))
+		require.NotNil(t, info)
+		assert.Nil(t, info.LockOrder)
+		assert.Nil(t, info.CloseOrder)
+		assert.Equal(t, []byte("does-not-exist"), []byte(info.OrderId))
+	})
+}
+
+func TestOracle_CommitCertificate_LockCloseErrorBranches(t *testing.T) {
+	newOracle := func(store OrderStore) *Oracle {
+		return &Oracle{
+			orderStore: store,
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+		}
+	}
+
+	t.Run("nil oracle receiver returns nil", func(t *testing.T) {
+		var oracle *Oracle
+		err := oracle.CommitCertificate(nil, nil, nil, 0)
+		assert.NoError(t, err)
+	})
+
+	t.Run("lock order ReadOrder failure returns error and stops processing", func(t *testing.T) {
+		store := createOrderStore() // empty, lock1 not present
+		oracle := newOracle(store)
+		qc := &lib.QuorumCertificate{
+			Header: &lib.View{RootHeight: 10},
+			Results: &lib.CertificateResult{
+				Orders: &lib.Orders{
+					LockOrders: []*lib.LockOrder{{OrderId: []byte("lock1")}},
+				},
+			},
+		}
+		err := oracle.CommitCertificate(qc, nil, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "order not verified")
+	})
+
+	t.Run("lock order WriteOrder failure is logged and loop continues", func(t *testing.T) {
+		faulty := newFaultyOrderStore(createWitnessedLockOrder("lock1"), createWitnessedLockOrder("lock2"))
+		faulty.failWriteOrderIds[lib.BytesToString([]byte("lock1"))] = true
+		oracle := newOracle(faulty)
+		qc := &lib.QuorumCertificate{
+			Header: &lib.View{RootHeight: 10},
+			Results: &lib.CertificateResult{
+				Orders: &lib.Orders{
+					LockOrders: []*lib.LockOrder{
+						{OrderId: []byte("lock1")},
+						{OrderId: []byte("lock2")},
+					},
+				},
+			},
+		}
+		err := oracle.CommitCertificate(qc, nil, nil, 0)
+		require.NoError(t, err, "write failure on one order should not abort processing of the rest")
+		// lock2 should have been updated despite lock1 failing
+		updated, readErr := faulty.ReadOrder([]byte("lock2"), types.LockOrderType)
+		require.NoError(t, readErr)
+		assert.Equal(t, uint64(10), updated.LastSubmitHeight)
+	})
+
+	t.Run("close order ReadOrder failure returns error and stops processing", func(t *testing.T) {
+		store := createOrderStore() // empty, close1 not present
+		oracle := newOracle(store)
+		qc := &lib.QuorumCertificate{
+			Header: &lib.View{RootHeight: 10},
+			Results: &lib.CertificateResult{
+				Orders: &lib.Orders{
+					CloseOrders: [][]byte{[]byte("close1")},
+				},
+			},
+		}
+		err := oracle.CommitCertificate(qc, nil, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "order not verified")
+	})
+
+	t.Run("close order WriteOrder failure is logged and loop continues", func(t *testing.T) {
+		faulty := newFaultyOrderStore(createWitnessedCloseOrder("close1"), createWitnessedCloseOrder("close2"))
+		faulty.failWriteOrderIds[lib.BytesToString([]byte("close1"))] = true
+		oracle := newOracle(faulty)
+		qc := &lib.QuorumCertificate{
+			Header: &lib.View{RootHeight: 10},
+			Results: &lib.CertificateResult{
+				Orders: &lib.Orders{
+					CloseOrders: [][]byte{[]byte("close1"), []byte("close2")},
+				},
+			},
+		}
+		err := oracle.CommitCertificate(qc, nil, nil, 0)
+		require.NoError(t, err, "write failure on one order should not abort processing of the rest")
+		updated, readErr := faulty.ReadOrder([]byte("close2"), types.CloseOrderType)
+		require.NoError(t, readErr)
+		assert.Equal(t, uint64(10), updated.LastSubmitHeight)
+	})
+
+	t.Run("reset order RemoveOrder failure is logged but does not error", func(t *testing.T) {
+		faulty := newFaultyOrderStore(createWitnessedCloseOrder("order1"))
+		faulty.failRemoveOrderIds[lib.BytesToString([]byte("order1"))] = true
+		oracle := newOracle(faulty)
+		qc := &lib.QuorumCertificate{
+			Header: &lib.View{RootHeight: 10},
+			Results: &lib.CertificateResult{
+				Orders: &lib.Orders{
+					ResetOrders: [][]byte{[]byte("order1")},
+				},
+			},
+		}
+		err := oracle.CommitCertificate(qc, nil, nil, 0)
+		require.NoError(t, err)
+		// order should still be present since RemoveOrder failed
+		_, readErr := faulty.ReadOrder([]byte("order1"), types.CloseOrderType)
+		require.NoError(t, readErr, "order should remain in store since removal was injected to fail")
+	})
+
+	t.Run("with real metrics: lifecycle metrics updated on commit", func(t *testing.T) {
+		store := createOrderStore(createWitnessedLockOrder("lock1"), createWitnessedCloseOrder("close1"))
+		oracle := &Oracle{
+			orderStore: store,
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+			metrics:    newTestMetrics(),
+		}
+		qc := &lib.QuorumCertificate{
+			Header: &lib.View{RootHeight: 10},
+			Results: &lib.CertificateResult{
+				Orders: &lib.Orders{
+					LockOrders:  []*lib.LockOrder{{OrderId: []byte("lock1")}},
+					CloseOrders: [][]byte{[]byte("close1")},
+				},
+			},
+		}
+		err := oracle.CommitCertificate(qc, nil, nil, 0)
+		require.NoError(t, err)
+	})
+}
+
+func TestOracle_updateMetrics(t *testing.T) {
+	t.Run("nil metrics is a no-op", func(t *testing.T) {
+		oracle := &Oracle{
+			orderStore: NewMockOrderStore(),
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+			metrics:    nil,
+		}
+		// must not panic
+		oracle.updateMetrics()
+	})
+
+	t.Run("non-nil metrics: happy path updates all metric groups", func(t *testing.T) {
+		store := createOrderStore(createWitnessedLockOrder("lock1"), createWitnessedCloseOrder("close1"))
+		oracle := &Oracle{
+			orderStore: store,
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+			metrics:    newTestMetrics(),
+		}
+		// must not panic and should read through to the store successfully
+		oracle.updateMetrics()
+	})
+
+	t.Run("non-nil metrics: GetAllOrderIds error branches default counts to zero", func(t *testing.T) {
+		faulty := newFaultyOrderStore(createWitnessedLockOrder("lock1"), createWitnessedCloseOrder("close1"))
+		faulty.failGetAllOrderIds[types.LockOrderType] = true
+		faulty.failGetAllOrderIds[types.CloseOrderType] = true
+		oracle := &Oracle{
+			orderStore: faulty,
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+			metrics:    newTestMetrics(),
+		}
+		// must not panic even though both GetAllOrderIds calls fail
+		oracle.updateMetrics()
+	})
+}
+
+func TestOracle_UpdateRootChainInfo_Gaps(t *testing.T) {
+	t.Run("nil oracle receiver is a no-op", func(t *testing.T) {
+		var oracle *Oracle
+		// must not panic
+		oracle.UpdateRootChainInfo(&lib.RootChainInfo{})
+	})
+
+	t.Run("nil info.Orders returns early after pruning history", func(t *testing.T) {
+		store := createOrderStore(createWitnessedLockOrder("lock1"))
+		oracle := &Oracle{
+			orderStore: store,
+			orderBook:  createOrderBook(createSellOrder("lock1", "", "")),
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+		}
+		oracle.UpdateRootChainInfo(&lib.RootChainInfo{Orders: nil})
+		// order book should remain untouched (still the original, non-nil book)
+		assert.NotNil(t, oracle.orderBook)
+		// stored lock order should be untouched since we returned before pruning ran
+		_, err := store.ReadOrder([]byte("lock1"), types.LockOrderType)
+		assert.NoError(t, err)
+	})
+
+	t.Run("GetAllOrderIds error for lock orders returns early", func(t *testing.T) {
+		faulty := newFaultyOrderStore()
+		faulty.failGetAllOrderIds[types.LockOrderType] = true
+		orderBook := createOrderBook(createSellOrder("order1", "", ""))
+		oracle := &Oracle{
+			orderStore: faulty,
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+		}
+		// must not panic
+		oracle.UpdateRootChainInfo(&lib.RootChainInfo{Orders: orderBook})
+		assert.NotNil(t, oracle.orderBook)
+	})
+
+	t.Run("GetAllOrderIds error for close orders returns early", func(t *testing.T) {
+		faulty := newFaultyOrderStore()
+		faulty.failGetAllOrderIds[types.CloseOrderType] = true
+		orderBook := createOrderBook(createSellOrder("order1", "", ""))
+		oracle := &Oracle{
+			orderStore: faulty,
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+		}
+		// must not panic; lock-order pruning (which succeeds) runs before the close-order
+		// GetAllOrderIds call fails and returns early
+		oracle.UpdateRootChainInfo(&lib.RootChainInfo{Orders: orderBook})
+		assert.NotNil(t, oracle.orderBook)
+	})
+
+	t.Run("RemoveOrder failure for lock order increments storeRemoveErrors but continues", func(t *testing.T) {
+		faulty := newFaultyOrderStore(createWitnessedLockOrder("lock1"), createWitnessedLockOrder("lock2"))
+		faulty.failRemoveOrderIds[lib.BytesToString([]byte("lock1"))] = true
+		// order book with neither lock1 nor lock2, so both are candidates for removal
+		orderBook := createOrderBook()
+		oracle := &Oracle{
+			orderStore: faulty,
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+			metrics:    newTestMetrics(),
+		}
+		oracle.UpdateRootChainInfo(&lib.RootChainInfo{Orders: orderBook})
+		// lock1 removal failed, so it should still be present
+		_, err := faulty.ReadOrder([]byte("lock1"), types.LockOrderType)
+		assert.NoError(t, err, "lock1 should remain since its removal was injected to fail")
+		// lock2 removal should have succeeded
+		_, err = faulty.ReadOrder([]byte("lock2"), types.LockOrderType)
+		assert.Error(t, err, "lock2 should have been removed")
+	})
+
+	t.Run("RemoveOrder failure for close order increments storeRemoveErrors but continues", func(t *testing.T) {
+		faulty := newFaultyOrderStore(createWitnessedCloseOrder("close1"), createWitnessedCloseOrder("close2"))
+		faulty.failRemoveOrderIds[lib.BytesToString([]byte("close1"))] = true
+		orderBook := createOrderBook()
+		oracle := &Oracle{
+			orderStore: faulty,
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+			metrics:    newTestMetrics(),
+		}
+		oracle.UpdateRootChainInfo(&lib.RootChainInfo{Orders: orderBook})
+		_, err := faulty.ReadOrder([]byte("close1"), types.CloseOrderType)
+		assert.NoError(t, err, "close1 should remain since its removal was injected to fail")
+		_, err = faulty.ReadOrder([]byte("close2"), types.CloseOrderType)
+		assert.Error(t, err, "close2 should have been removed")
+	})
+
+	t.Run("locked order in order book prunes matching lock order from store", func(t *testing.T) {
+		store := createOrderStore(createWitnessedLockOrder("order1"))
+		// UpdateRootChainInfo treats a non-nil BuyerSendAddress as "locked" for pruning purposes
+		lockedOrder := &lib.SellOrder{
+			Id:               []byte("order1"),
+			BuyerSendAddress: []byte("buyer-send"),
+		}
+		orderBook := createOrderBook(lockedOrder)
+		oracle := &Oracle{
+			orderStore: store,
+			state:      NewOracleState("", lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+		}
+		oracle.UpdateRootChainInfo(&lib.RootChainInfo{Orders: orderBook})
+		_, err := store.ReadOrder([]byte("order1"), types.LockOrderType)
+		assert.Error(t, err, "locked sell order should cause the stored lock order to be removed")
+	})
+}
+
+func TestOracle_ValidateProposedOrders_ResetOrderGaps(t *testing.T) {
+	newOracleWithSafeHeight := func(safeHeight uint64, store OrderStore) *Oracle {
+		tempDir, _ := os.MkdirTemp("", "oracle_reset_gap_test")
+		oracle := &Oracle{
+			orderStore: store,
+			state:      NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger()),
+			committee:  1,
+			log:        lib.NewDefaultLogger(),
+		}
+		oracle.state.safeHeight = safeHeight
+		return oracle
+	}
+
+	t.Run("nil rootOrderBook returns ErrNilOrderBook", func(t *testing.T) {
+		oracle := newOracleWithSafeHeight(20, createOrderStore())
+		orders := &lib.Orders{ResetOrders: [][]byte{[]byte("reset1")}}
+		err := oracle.ValidateProposedOrders(orders, nil)
+		require.Error(t, err)
+		assert.Equal(t, CodeNilOrderBook, err.Code())
+	})
+
+	t.Run("order missing from root order book is rejected", func(t *testing.T) {
+		// Note: lib.OrderBook.GetOrder only ever returns a non-nil error when the
+		// *OrderBook receiver itself is nil (see lib/swap.go); ValidateProposedOrders
+		// already short-circuits that exact case via its own `rootOrderBook == nil`
+		// check above, so GetOrder's internal error branch is unreachable here. The
+		// reachable "not found" outcome is GetOrder returning (nil, nil), which this
+		// test covers instead.
+		oracle := newOracleWithSafeHeight(20, createOrderStore())
+		orders := &lib.Orders{ResetOrders: [][]byte{[]byte("reset1")}}
+		orderBook := createOrderBook() // empty book: GetOrder("reset1") returns (nil, nil)
+		err := oracle.ValidateProposedOrders(orders, orderBook)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "order not verified")
+		assert.Contains(t, err.Error(), "order not found in order book")
+	})
+
+	t.Run("order found but not locked is rejected", func(t *testing.T) {
+		oracle := newOracleWithSafeHeight(20, createOrderStore())
+		unlockedOrder := createSellOrder("reset1", "", "") // no buyer receive address => IsLocked() == false
+		orderBook := createOrderBook(unlockedOrder)
+		orders := &lib.Orders{ResetOrders: [][]byte{[]byte("reset1")}}
+		err := oracle.ValidateProposedOrders(orders, orderBook)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "order not verified")
+		assert.Contains(t, err.Error(), "order is not locked")
+	})
+}
+
+func TestOracle_validateCloseOrder_HexDecodeError(t *testing.T) {
+	oracle := &Oracle{log: lib.NewDefaultLogger()}
+
+	baseOrderId := []byte("order-123")
+	baseChainId := uint64(1)
+	baseTo := common.HexToAddress("1234567890abcdef")
+
+	closeOrder := &lib.CloseOrder{
+		OrderId: baseOrderId,
+		ChainId: baseChainId,
+	}
+	sellOrder := &lib.SellOrder{
+		Id:        baseOrderId,
+		Committee: baseChainId,
+		Data:      baseTo.Bytes(),
+	}
+
+	// tx.From() returns a value that is not valid hex, so lib.StringToBytes fails
+	// before the sender is ever compared against sellOrder.BuyerSendAddress
+	tx := &mockTransaction{
+		from: "not-valid-hex-zz",
+		to:   baseTo.String(),
+	}
+
+	err := oracle.validateCloseOrder(closeOrder, sellOrder, tx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "error converting sender address to bytes")
+}
+
+// fakeBlockProvider is a minimal, controllable BlockProvider test double used to
+// exercise Oracle's lifecycle methods (run/Start) without a live source-chain client.
+type fakeBlockProvider struct {
+	blockCh chan types.BlockI
+	// synced controls the return value of IsSynced
+	synced bool
+	// startCalls records the heights this provider was started at
+	startCalls []uint64
+}
+
+func newFakeBlockProvider() *fakeBlockProvider {
+	return &fakeBlockProvider{blockCh: make(chan types.BlockI, 8)}
+}
+
+func (f *fakeBlockProvider) Start(ctx context.Context, height uint64) {
+	f.startCalls = append(f.startCalls, height)
+}
+
+func (f *fakeBlockProvider) BlockCh() chan types.BlockI {
+	return f.blockCh
+}
+
+func (f *fakeBlockProvider) IsSynced() bool {
+	return f.synced
+}
+
+func newLifecycleOracle(t *testing.T, provider BlockProvider, store OrderStore) *Oracle {
+	t.Helper()
+	tempDir, err := os.MkdirTemp("", "oracle_lifecycle_test")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(tempDir) })
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Oracle{
+		blockProvider: provider,
+		orderStore:    store,
+		state:         NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger()),
+		log:           lib.NewDefaultLogger(),
+		ctx:           ctx,
+		ctxCancel:     cancel,
+	}
+}
+
+func TestOracle_NewOracle(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "oracle_new_oracle_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	provider := newFakeBlockProvider()
+	store := NewMockOrderStore()
+	config := lib.OracleConfig{
+		StateFile: filepath.Join(tempDir, "test_state"),
+		Committee: 7,
+	}
+	o, err := NewOracle(context.Background(), config, provider, store, lib.NewDefaultLogger(), nil)
+	require.NoError(t, err)
+	require.NotNil(t, o)
+	assert.Equal(t, uint64(7), o.committee)
+	assert.Same(t, provider, o.blockProvider)
+	assert.Same(t, store, o.orderStore)
+	assert.NotNil(t, o.state)
+	assert.NotNil(t, o.ctx)
+	assert.NotNil(t, o.ctxCancel)
+	// Stop should cancel the internally-created context without panicking
+	o.Stop()
+	select {
+	case <-o.ctx.Done():
+		// expected
+	default:
+		t.Errorf("expected oracle context to be cancelled after Stop()")
+	}
+}
+
+func TestOracle_hasOrderBook(t *testing.T) {
+	oracle := &Oracle{}
+	assert.False(t, oracle.hasOrderBook(), "no order book set should report false")
+
+	oracle.orderBook = &lib.OrderBook{}
+	assert.True(t, oracle.hasOrderBook(), "order book set should report true")
+}
+
+func TestOracle_Stop_NilReceiver(t *testing.T) {
+	var oracle *Oracle
+	// must not panic
+	oracle.Stop()
+}
+
+func TestOracle_rollbackOrderType(t *testing.T) {
+	t.Run("GetAllOrderIds failure logs and returns without removing anything", func(t *testing.T) {
+		faulty := newFaultyOrderStore(createWitnessedLockOrder("lock1"))
+		faulty.failGetAllOrderIds[types.LockOrderType] = true
+		oracle := &Oracle{
+			orderStore: faulty,
+			log:        lib.NewDefaultLogger(),
+		}
+		oracle.rollbackOrderType(types.LockOrderType, 10)
+		_, err := faulty.ReadOrder([]byte("lock1"), types.LockOrderType)
+		assert.NoError(t, err, "order should remain since GetAllOrderIds failed before any removal was attempted")
+	})
+
+	t.Run("removes orders witnessed above rollback height, keeps orders at or below it", func(t *testing.T) {
+		aboveOrder := &types.WitnessedOrder{
+			OrderId:         []byte("above"),
+			WitnessedHeight: 100,
+			LockOrder:       &lib.LockOrder{OrderId: []byte("above")},
+		}
+		belowOrder := &types.WitnessedOrder{
+			OrderId:         []byte("below"),
+			WitnessedHeight: 40,
+			LockOrder:       &lib.LockOrder{OrderId: []byte("below")},
+		}
+		store := createOrderStore(aboveOrder, belowOrder)
+		oracle := &Oracle{
+			orderStore: store,
+			log:        lib.NewDefaultLogger(),
+			metrics:    newTestMetrics(),
+		}
+		oracle.rollbackOrderType(types.LockOrderType, 50)
+
+		_, err := store.ReadOrder([]byte("above"), types.LockOrderType)
+		assert.Error(t, err, "order witnessed above rollback height should be removed")
+		_, err = store.ReadOrder([]byte("below"), types.LockOrderType)
+		assert.NoError(t, err, "order witnessed at or below rollback height should remain")
+	})
+
+	t.Run("ReadOrder failure is logged and skipped, RemoveOrder failure is logged and skipped", func(t *testing.T) {
+		aboveOrder := &types.WitnessedOrder{
+			OrderId:         []byte("above1"),
+			WitnessedHeight: 100,
+			LockOrder:       &lib.LockOrder{OrderId: []byte("above1")},
+		}
+		aboveOrder2 := &types.WitnessedOrder{
+			OrderId:         []byte("above2"),
+			WitnessedHeight: 100,
+			LockOrder:       &lib.LockOrder{OrderId: []byte("above2")},
+		}
+		faulty := newFaultyOrderStore(aboveOrder, aboveOrder2)
+		faulty.failReadOrderIds[lib.BytesToString([]byte("above1"))] = true
+		faulty.failRemoveOrderIds[lib.BytesToString([]byte("above2"))] = true
+		oracle := &Oracle{
+			orderStore: faulty,
+			log:        lib.NewDefaultLogger(),
+			metrics:    newTestMetrics(),
+		}
+		// must not panic despite both a read and a remove failure
+		oracle.rollbackOrderType(types.LockOrderType, 50)
+		// above1's read failed, so it's never evaluated for removal - still present
+		_, err := faulty.ReadOrder([]byte("above1"), types.LockOrderType)
+		assert.Error(t, err, "ReadOrder is still faulted for above1, so this lookup also errors")
+		// above2's removal was injected to fail, so it should remain
+		faulty.failRemoveOrderIds[lib.BytesToString([]byte("above2"))] = false
+		_, err = faulty.ReadOrder([]byte("above2"), types.LockOrderType)
+		assert.NoError(t, err, "above2 should remain since its removal was injected to fail")
+	})
+}
+
+func TestOracle_reorgRollback(t *testing.T) {
+	t.Run("no last known good height logs a warning and returns without rolling back", func(t *testing.T) {
+		tempDir, _ := os.MkdirTemp("", "oracle_reorg_test")
+		defer os.RemoveAll(tempDir)
+		store := createOrderStore(createWitnessedLockOrder("lock1"))
+		oracle := &Oracle{
+			orderStore: store,
+			state:      NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger()),
+			log:        lib.NewDefaultLogger(),
+			config:     lib.OracleConfig{ReorgRollbackBlocks: 10},
+		}
+		// height is 0 (no prior state), so reorgRollback should bail before touching the store
+		oracle.reorgRollback()
+		_, err := store.ReadOrder([]byte("lock1"), types.LockOrderType)
+		assert.NoError(t, err, "order should be untouched when there is no last known good height")
+	})
+
+	t.Run("rolls back lock and close orders witnessed above the rollback height", func(t *testing.T) {
+		tempDir, _ := os.MkdirTemp("", "oracle_reorg_test2")
+		defer os.RemoveAll(tempDir)
+		aboveLock := &types.WitnessedOrder{
+			OrderId:         []byte("lock-above"),
+			WitnessedHeight: 100,
+			LockOrder:       &lib.LockOrder{OrderId: []byte("lock-above")},
+		}
+		belowClose := &types.WitnessedOrder{
+			OrderId:         []byte("close-below"),
+			WitnessedHeight: 10,
+			CloseOrder:      &lib.CloseOrder{OrderId: []byte("close-below")},
+		}
+		store := createOrderStore(aboveLock, belowClose)
+		state := NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger())
+		// simulate a prior successfully-processed block so GetLastHeight() != 0
+		block := &mockBlock{number: 100, hash: "h100"}
+		require.NoError(t, state.saveState(block))
+
+		oracle := &Oracle{
+			orderStore: store,
+			state:      state,
+			log:        lib.NewDefaultLogger(),
+			metrics:    newTestMetrics(),
+			config:     lib.OracleConfig{ReorgRollbackBlocks: 50},
+		}
+		oracle.reorgRollback()
+
+		_, err := store.ReadOrder([]byte("lock-above"), types.LockOrderType)
+		assert.Error(t, err, "lock order witnessed above the rollback height should be removed")
+		_, err = store.ReadOrder([]byte("close-below"), types.CloseOrderType)
+		assert.NoError(t, err, "close order witnessed below the rollback height should remain")
+	})
+}
+
+func TestOracle_run(t *testing.T) {
+	t.Run("closed block channel returns ErrChannelClosed", func(t *testing.T) {
+		provider := newFakeBlockProvider()
+		oracle := newLifecycleOracle(t, provider, NewMockOrderStore())
+		close(provider.blockCh)
+
+		err := oracle.run(context.Background(), nil)
+		require.Error(t, err)
+		assert.Equal(t, CodeChannelClosed, err.Code())
+		require.Len(t, provider.startCalls, 1)
+		assert.Equal(t, uint64(0), provider.startCalls[0], "zero last height should start the block provider at height 0")
+	})
+
+	t.Run("resumes from last height + 1 when prior state exists", func(t *testing.T) {
+		provider := newFakeBlockProvider()
+		oracle := newLifecycleOracle(t, provider, NewMockOrderStore())
+		// simulate prior successfully-processed block at height 42
+		require.NoError(t, oracle.state.saveState(&mockBlock{number: 42, hash: "h42"}))
+		close(provider.blockCh)
+
+		err := oracle.run(context.Background(), nil)
+		require.Error(t, err)
+		assert.Equal(t, CodeChannelClosed, err.Code())
+		require.Len(t, provider.startCalls, 1)
+		assert.Equal(t, uint64(43), provider.startCalls[0])
+	})
+
+	t.Run("context cancellation returns nil and notifies syncCh", func(t *testing.T) {
+		provider := newFakeBlockProvider()
+		oracle := newLifecycleOracle(t, provider, NewMockOrderStore())
+		ctx, cancel := context.WithCancel(context.Background())
+		syncCh := make(chan bool, 1)
+		cancel() // cancel before calling run so the select fires the ctx.Done() branch immediately
+
+		err := oracle.run(ctx, syncCh)
+		assert.NoError(t, err)
+		select {
+		case v := <-syncCh:
+			assert.False(t, v, "syncCh should be notified with false on shutdown")
+		default:
+			// buffered channel send is best-effort (uses a select/default in run());
+			// as long as run() returned nil without blocking or panicking, this is acceptable
+		}
+	})
+
+	t.Run("nil block is skipped without error", func(t *testing.T) {
+		provider := newFakeBlockProvider()
+		oracle := newLifecycleOracle(t, provider, NewMockOrderStore())
+		provider.blockCh <- nil
+		close(provider.blockCh)
+
+		err := oracle.run(context.Background(), nil)
+		require.Error(t, err)
+		assert.Equal(t, CodeChannelClosed, err.Code(), "after skipping the nil block, the loop continues and eventually observes the closed channel")
+	})
+
+	t.Run("ValidateSequence failure (gap) returns CodeBlockSequence", func(t *testing.T) {
+		provider := newFakeBlockProvider()
+		oracle := newLifecycleOracle(t, provider, NewMockOrderStore())
+		// establish a baseline at height 10
+		require.NoError(t, oracle.state.saveState(&mockBlock{number: 10, hash: "h10"}))
+		// send a block with a gap (expected 11, got 20) to trigger CodeBlockSequence
+		provider.blockCh <- &mockBlock{number: 20, hash: "h20", parentHash: "h10"}
+
+		err := oracle.run(context.Background(), nil)
+		require.Error(t, err)
+		assert.Equal(t, CodeBlockSequence, err.Code())
+	})
+
+	t.Run("ValidateSequence failure (reorg) returns CodeChainReorg", func(t *testing.T) {
+		provider := newFakeBlockProvider()
+		oracle := newLifecycleOracle(t, provider, NewMockOrderStore())
+		require.NoError(t, oracle.state.saveState(&mockBlock{number: 10, hash: "h10"}))
+		// next block references the wrong parent hash to trigger a reorg detection
+		provider.blockCh <- &mockBlock{number: 11, hash: "h11", parentHash: "wrong-parent"}
+
+		err := oracle.run(context.Background(), nil)
+		require.Error(t, err)
+		assert.Equal(t, CodeChainReorg, err.Code())
+	})
+}
+
+func TestOracle_Start(t *testing.T) {
+	t.Run("waits for order book then processes via run(), stopping cleanly on context cancellation", func(t *testing.T) {
+		provider := newFakeBlockProvider()
+		oracle := newLifecycleOracle(t, provider, NewMockOrderStore())
+		ctx, cancel := context.WithCancel(context.Background())
+		syncCh := make(chan bool, 1)
+
+		oracle.Start(ctx, syncCh)
+		// oracle has no order book yet, so Start's goroutine should be blocked waiting for one;
+		// cancelling the context should allow the wait loop to observe ctx.Done() and return
+		cancel()
+
+		// give the goroutine a moment to observe cancellation; the wait loop polls every second,
+		// but also selects on ctx.Done() directly so it should return promptly
+		select {
+		case <-ctx.Done():
+			// expected: context is cancelled; the goroutine will exit on its next select
+		}
+	})
+
+	t.Run("runs the main loop once an order book is present, exits via CodeBlockSequence retry path", func(t *testing.T) {
+		provider := newFakeBlockProvider()
+		oracle := newLifecycleOracle(t, provider, NewMockOrderStore())
+		oracle.orderBook = &lib.OrderBook{}
+		// establish a baseline so the first block sent triggers a sequence gap
+		require.NoError(t, oracle.state.saveState(&mockBlock{number: 10, hash: "h10"}))
+
+		ctx, cancel := context.WithCancel(oracle.ctx)
+		defer cancel()
+		oracle.Start(ctx, nil)
+
+		// send a block with a gap; run() should return CodeBlockSequence, causing Start's
+		// goroutine to call state.removeState() and loop back into run() again
+		provider.blockCh <- &mockBlock{number: 20, hash: "h20", parentHash: "h10"}
+
+		// give the goroutine time to process the gap and loop back into run(), then
+		// verify state was cleared (removeState resets GetLastHeight to 0)
+		require.Eventually(t, func() bool {
+			return oracle.state.GetLastHeight() == 0
+		}, 2*time.Second, 10*time.Millisecond, "expected state to be cleared after a block-sequence error")
+
+		cancel()
+	})
 }

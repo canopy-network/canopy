@@ -2,11 +2,14 @@ package eth
 
 import (
 	"encoding/hex"
+	"errors"
 	"math/big"
 	"testing"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // configurableValidator returns validationErr for LockOrderType and CloseOrderType
@@ -50,6 +53,54 @@ func createERC20TransferData(recipient string, amount *big.Int, extra []byte) []
 	}
 	// Return the complete encoded transaction data
 	return data
+}
+
+// TestNewTransaction_InvalidAddress verifies that a contract-creation transaction (nil `To()`)
+// is rejected by NewTransaction with an *InvalidAddressError, and that the error message
+// includes the (empty) address as formatted by InvalidAddressError.Error().
+func TestNewTransaction_InvalidAddress(t *testing.T) {
+	// a contract-creation transaction has no recipient, so ethTx.To() is nil and tx.to
+	// remains "" - common.IsHexAddress("") is false, triggering the invalid-address branch.
+	ethTx := ethtypes.NewContractCreation(0, big.NewInt(0), 21000, big.NewInt(1000000000), []byte("create"))
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	signer := ethtypes.NewEIP155Signer(big.NewInt(0))
+	signedTx, err := ethtypes.SignTx(ethTx, signer, privateKey)
+	if err != nil {
+		t.Fatalf("failed to sign contract-creation tx: %v", err)
+	}
+
+	tx, err := NewTransaction(signedTx, 1)
+	if tx != nil {
+		t.Errorf("expected nil transaction on invalid address, got %+v", tx)
+	}
+	if err == nil {
+		t.Fatal("expected error for invalid address, got nil")
+	}
+	var invalidAddrErr *InvalidAddressError
+	if !errors.As(err, &invalidAddrErr) {
+		t.Fatalf("expected *InvalidAddressError, got %T: %v", err, err)
+	}
+	if invalidAddrErr.Address != "" {
+		t.Errorf("expected empty address in error, got %q", invalidAddrErr.Address)
+	}
+	wantMsg := "invalid address: "
+	if invalidAddrErr.Error() != wantMsg {
+		t.Errorf("expected error message %q, got %q", wantMsg, invalidAddrErr.Error())
+	}
+}
+
+// TestNewTransaction_NilEthTx verifies NewTransaction rejects a nil ethereum transaction.
+func TestNewTransaction_NilEthTx(t *testing.T) {
+	tx, err := NewTransaction(nil, 1)
+	if tx != nil {
+		t.Errorf("expected nil transaction, got %+v", tx)
+	}
+	if !errors.Is(err, ErrNilTransaction) {
+		t.Errorf("expected ErrNilTransaction, got %v", err)
+	}
 }
 
 func TestParseERC20Transfer(t *testing.T) {
@@ -353,6 +404,27 @@ func TestDecodeString(t *testing.T) {
 			copy(b[64:], []byte("abc"))
 			return b
 		}(), want: "abc"},
+		{name: "offset+32 exactly overflows available data", data: func() []byte {
+			// len(data)=64, offset=64 -> offset < len(data) (64<64 is false, so this actually
+			// hits the offset>=len(data) guard); use offset=63 so offset<len but offset+32>len
+			b := make([]byte, 64)
+			b[31] = 63 // offset = 63, valid (< 64) but offset+32=95 > len(data)=64
+			return b
+		}(), want: ""},
+		{name: "offset+32+length overflows available data", data: func() []byte {
+			// offset=32 is valid, offset+32=64 <= len(data), but the declared length pushes
+			// offset+32+length beyond the buffer, hitting the second bounds check
+			b := make([]byte, 64)
+			b[31] = 0x20 // offset = 32
+			// length field lives at data[32:64]; set it larger than remaining data allows
+			b[63] = 0xff // length = 255, offset+32+length = 32+32+255 = 319 > len(data)=64
+			return b
+		}(), want: ""},
+		{name: "offset exactly at len(data) - out of range guard", data: func() []byte {
+			b := make([]byte, 64)
+			b[31] = 64 // offset == len(data), fails offset < len(data) check
+			return b
+		}(), want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -303,4 +304,242 @@ func setUnexportedField(t *testing.T, target any, name string, value any) {
 	field := reflect.ValueOf(target).Elem().FieldByName(name)
 	require.True(t, field.IsValid(), name)
 	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(value))
+}
+
+// newTestServer builds a *Server with just the fields trackClosedOrders touches
+// (closedOrdersMu, lastOrderIDs, closedOrders). It deliberately leaves controller nil -
+// trackClosedOrders never calls s.controller, so this is safe.
+func newTestServer() *Server {
+	return &Server{
+		lastOrderIDs: make(map[string]*lib.SellOrder),
+		closedOrders: make(map[string]*closedOracleOrder),
+	}
+}
+
+func sellOrder(id string) *lib.SellOrder {
+	return &lib.SellOrder{Id: []byte(id)}
+}
+
+// Gap 1: an order present last call but missing from live now gets snapshotted into
+// closedOrders with a fresh, non-zero ClosedAt.
+func TestTrackClosedOrders_NewlyClosedOrderIsSnapshotted(t *testing.T) {
+	s := newTestServer()
+
+	// first call: order1 is live
+	s.trackClosedOrders([]*lib.SellOrder{sellOrder("order1")}, 10)
+
+	before := time.Now()
+	// second call: order1 has disappeared from the live book
+	responses := s.trackClosedOrders(nil, 10)
+	after := time.Now()
+
+	if len(responses) != 1 {
+		t.Fatalf("expected 1 closed order, got %d", len(responses))
+	}
+	if responses[0].ClosedAt == nil {
+		t.Fatal("expected ClosedAt to be set")
+	}
+	closedAt := *responses[0].ClosedAt
+	if closedAt.IsZero() {
+		t.Fatal("expected ClosedAt to be non-zero")
+	}
+	if closedAt.Before(before) || closedAt.After(after) {
+		t.Fatalf("expected ClosedAt %v to be between %v and %v", closedAt, before, after)
+	}
+
+	s.closedOrdersMu.Lock()
+	entry, ok := s.closedOrders[lib.BytesToString([]byte("order1"))]
+	s.closedOrdersMu.Unlock()
+	if !ok {
+		t.Fatal("expected order1 to be present in closedOrders map")
+	}
+	if entry.ClosedAt.IsZero() {
+		t.Fatal("expected map entry ClosedAt to be non-zero")
+	}
+}
+
+// Gap 2: an order already recorded as closed, still missing from live, is not re-added or
+// re-timestamped - ClosedAt must be unchanged across calls.
+func TestTrackClosedOrders_AlreadyClosedOrderNotRetimestamped(t *testing.T) {
+	s := newTestServer()
+
+	s.trackClosedOrders([]*lib.SellOrder{sellOrder("order1")}, 10)
+	first := s.trackClosedOrders(nil, 10)
+	if len(first) != 1 {
+		t.Fatalf("expected 1 closed order after first close, got %d", len(first))
+	}
+	firstClosedAt := *first[0].ClosedAt
+
+	// sleep a tiny amount so that if the code incorrectly re-stamps ClosedAt, the test would
+	// have a chance to observe a different timestamp
+	time.Sleep(2 * time.Millisecond)
+
+	second := s.trackClosedOrders(nil, 10)
+	if len(second) != 1 {
+		t.Fatalf("expected 1 closed order after second call, got %d", len(second))
+	}
+	secondClosedAt := *second[0].ClosedAt
+
+	if !firstClosedAt.Equal(secondClosedAt) {
+		t.Fatalf("expected ClosedAt to remain unchanged, got %v then %v", firstClosedAt, secondClosedAt)
+	}
+}
+
+// Gap 3: an order that was closed and then reappears in the live order book gets deleted from
+// closedOrders (regression test for the reopen bug fix).
+func TestTrackClosedOrders_ReopenedOrderIsRemovedFromClosed(t *testing.T) {
+	s := newTestServer()
+
+	s.trackClosedOrders([]*lib.SellOrder{sellOrder("order1")}, 10)
+	closedResp := s.trackClosedOrders(nil, 10)
+	if len(closedResp) != 1 {
+		t.Fatalf("expected order1 to be closed, got %d closed orders", len(closedResp))
+	}
+
+	// order1 reappears in the live book
+	reopenedResp := s.trackClosedOrders([]*lib.SellOrder{sellOrder("order1")}, 10)
+	if len(reopenedResp) != 0 {
+		t.Fatalf("expected 0 closed orders once order1 reappeared, got %d", len(reopenedResp))
+	}
+
+	s.closedOrdersMu.Lock()
+	_, stillClosed := s.closedOrders[lib.BytesToString([]byte("order1"))]
+	s.closedOrdersMu.Unlock()
+	if stillClosed {
+		t.Fatal("expected order1 to be removed from closedOrders after reappearing live")
+	}
+}
+
+// Gap 4: trackClosedOrders must defensively copy the order it snapshots - mutating the
+// original *lib.SellOrder after the snapshot must not affect the stored copy.
+func TestTrackClosedOrders_SnapshotIsDefensiveCopy(t *testing.T) {
+	s := newTestServer()
+
+	original := sellOrder("order1")
+	original.AmountForSale = 100
+
+	s.trackClosedOrders([]*lib.SellOrder{original}, 10)
+	s.trackClosedOrders(nil, 10) // order1 disappears and gets snapshotted
+
+	// mutate the original after it has been snapshotted
+	original.AmountForSale = 999999
+
+	s.closedOrdersMu.Lock()
+	entry, ok := s.closedOrders[lib.BytesToString([]byte("order1"))]
+	s.closedOrdersMu.Unlock()
+	if !ok {
+		t.Fatal("expected order1 to be present in closedOrders map")
+	}
+	if entry.Order == original {
+		t.Fatal("expected stored order to be a distinct copy, not the same pointer as original")
+	}
+	if entry.Order.AmountForSale != 100 {
+		t.Fatalf("expected stored copy to be unaffected by later mutation, got AmountForSale=%d", entry.Order.AmountForSale)
+	}
+}
+
+// Gap 5: an entry whose ClosedAt predates closedOrderRetention is pruned on a subsequent call -
+// it must not appear in the returned slice nor remain in the map. No sleeping: ClosedAt is
+// manually backdated.
+func TestTrackClosedOrders_ExpiredEntryIsPruned(t *testing.T) {
+	s := newTestServer()
+
+	s.trackClosedOrders([]*lib.SellOrder{sellOrder("order1")}, 10)
+	s.trackClosedOrders(nil, 10) // order1 closes
+
+	// manually backdate ClosedAt beyond the retention window
+	s.closedOrdersMu.Lock()
+	s.closedOrders[lib.BytesToString([]byte("order1"))].ClosedAt = time.Now().Add(-closedOrderRetention - time.Minute)
+	s.closedOrdersMu.Unlock()
+
+	responses := s.trackClosedOrders(nil, 10)
+	if len(responses) != 0 {
+		t.Fatalf("expected expired entry to be pruned from returned slice, got %d entries", len(responses))
+	}
+
+	s.closedOrdersMu.Lock()
+	_, stillPresent := s.closedOrders[lib.BytesToString([]byte("order1"))]
+	s.closedOrdersMu.Unlock()
+	if stillPresent {
+		t.Fatal("expected expired entry to be pruned from the map")
+	}
+}
+
+// Gap 6: the returned slice is sorted by ClosedAt descending (most recently closed first).
+func TestTrackClosedOrders_SortedByClosedAtDescending(t *testing.T) {
+	s := newTestServer()
+
+	now := time.Now()
+
+	s.closedOrdersMu.Lock()
+	s.closedOrders["a"] = &closedOracleOrder{Order: sellOrder("a"), ClosedAt: now.Add(-3 * time.Hour)}
+	s.closedOrders["b"] = &closedOracleOrder{Order: sellOrder("b"), ClosedAt: now.Add(-1 * time.Hour)}
+	s.closedOrders["c"] = &closedOracleOrder{Order: sellOrder("c"), ClosedAt: now.Add(-2 * time.Hour)}
+	s.closedOrdersMu.Unlock()
+
+	responses := s.trackClosedOrders(nil, 10)
+	if len(responses) != 3 {
+		t.Fatalf("expected 3 closed orders, got %d", len(responses))
+	}
+
+	for i := 0; i < len(responses)-1; i++ {
+		if responses[i].ClosedAt.Before(*responses[i+1].ClosedAt) {
+			t.Fatalf("expected descending ClosedAt order, but entry %d (%v) is before entry %d (%v)",
+				i, *responses[i].ClosedAt, i+1, *responses[i+1].ClosedAt)
+		}
+	}
+
+	// double-check the exact expected order: b (most recent), c, a (oldest)
+	wantOrder := []string{"b", "c", "a"}
+	for i, id := range wantOrder {
+		got := string(responses[i].OrderId)
+		if got != id {
+			t.Fatalf("expected responses[%d] to have OrderId %q, got %q", i, id, got)
+		}
+	}
+}
+
+// Gap 7: nil/empty live input with nothing previously tracked returns a non-panicking, empty
+// slice.
+func TestTrackClosedOrders_EmptyInputReturnsEmptySlice(t *testing.T) {
+	s := newTestServer()
+
+	responses := s.trackClosedOrders(nil, 10)
+	if len(responses) != 0 {
+		t.Fatalf("expected empty slice, got %d entries", len(responses))
+	}
+
+	responses = s.trackClosedOrders([]*lib.SellOrder{}, 10)
+	if len(responses) != 0 {
+		t.Fatalf("expected empty slice, got %d entries", len(responses))
+	}
+}
+
+// Gap 8: concurrent calls to trackClosedOrders on the same *Server with overlapping order sets
+// must not race. Run with `go test -race`.
+func TestTrackClosedOrders_ConcurrentAccessNoRace(t *testing.T) {
+	s := newTestServer()
+
+	const goroutines = 20
+	const itersPerGoroutine = 50
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < itersPerGoroutine; i++ {
+				// build an overlapping but varying set of orders per goroutine/iteration
+				live := []*lib.SellOrder{
+					sellOrder("shared-order"),
+					sellOrder(string(rune('A' + (g % 26)))),
+				}
+				if i%2 == 0 {
+					live = live[:1]
+				}
+				_ = s.trackClosedOrders(live, uint64(i))
+			}
+		}(g)
+	}
+	wg.Wait()
 }

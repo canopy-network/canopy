@@ -114,6 +114,89 @@ func encodeUint8(s string) []byte {
 	return result
 }
 
+// TestERC20TokenCache_TokenInfo_SymbolFetchError verifies that a name() success followed by
+// a symbol() failure returns ErrTokenInfo and does not proceed to fetch decimals.
+func TestERC20TokenCache_TokenInfo_SymbolFetchError(t *testing.T) {
+	usdcAddress := "0xa0b86a33e6441e6c7c5c8c8c8c8c8c8c8c8c8c8c"
+	mockCaller := &mockContractCaller{
+		names: buildContractResponse(usdcAddress, nameFunction, "USD Coin"),
+		// symbols intentionally left nil so the symbol() call misses and returns ErrContractNotFound
+		decimals: buildContractResponse(usdcAddress, decimalsFunction, "6"),
+	}
+	cache := NewERC20TokenCache(mockCaller, nil)
+	_, err := cache.TokenInfo(context.Background(), usdcAddress)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrTokenInfo) {
+		t.Errorf("expected error to wrap ErrTokenInfo, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "symbol") {
+		t.Errorf("expected error message to mention symbol field, got %q", err.Error())
+	}
+	// only name + symbol should have been attempted; decimals must not be called
+	if mockCaller.numCalls != 2 {
+		t.Errorf("expected 2 calls (name, symbol), got %d", mockCaller.numCalls)
+	}
+}
+
+// TestERC20TokenCache_TokenInfo_DecimalsFetchError verifies that name() and symbol() success
+// followed by a decimals() failure returns ErrTokenInfo.
+func TestERC20TokenCache_TokenInfo_DecimalsFetchError(t *testing.T) {
+	usdcAddress := "0xa0b86a33e6441e6c7c5c8c8c8c8c8c8c8c8c8c8c"
+	mockCaller := &mockContractCaller{
+		names:   buildContractResponse(usdcAddress, nameFunction, "USD Coin"),
+		symbols: buildContractResponse(usdcAddress, symbolFunction, "USDC"),
+		// decimals intentionally left nil so the decimals() call misses and returns ErrContractNotFound
+	}
+	cache := NewERC20TokenCache(mockCaller, nil)
+	_, err := cache.TokenInfo(context.Background(), usdcAddress)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrTokenInfo) {
+		t.Errorf("expected error to wrap ErrTokenInfo, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "decimals") {
+		t.Errorf("expected error message to mention decimals field, got %q", err.Error())
+	}
+	// all three calls should have been attempted (name, symbol succeed; decimals fails)
+	if mockCaller.numCalls != 3 {
+		t.Errorf("expected 3 calls (name, symbol, decimals), got %d", mockCaller.numCalls)
+	}
+}
+
+// TestERC20TokenCache_callContract_TimeoutVsGenericError verifies that a context-deadline-exceeded
+// condition and a generic contract-call error both surface as ErrContractNotFound from callContract
+// (the distinction is only observable via the IncrementEthTokenContractCallTimeout metric call,
+// which is nil-safe and not independently readable in tests without a real prometheus registry -
+// see callContract's ctx.Err()/callCtx.Err() check). This test exercises both branches for
+// coverage of callContract's timeout-detection code path without asserting on the metric itself.
+func TestERC20TokenCache_callContract_TimeoutVsGenericError(t *testing.T) {
+	t.Run("context already cancelled - timeout branch", func(t *testing.T) {
+		mockCaller := &mockContractCaller{
+			names: make(map[string][]byte),
+		}
+		cache := NewERC20TokenCache(mockCaller, nil)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // ctx.Err() != nil before callContract even runs
+		_, err := cache.callContract(ctx, "0xa0b86a33e6441e6c7c5c8c8c8c8c8c8c8c8c8c8c", erc20NameFunction)
+		if !errors.Is(err, ErrContractNotFound) {
+			t.Errorf("expected ErrContractNotFound, got %v", err)
+		}
+	})
+	t.Run("generic contract error - non-timeout branch", func(t *testing.T) {
+		mockCaller := &mockContractCaller{
+			names: make(map[string][]byte), // causes ErrContractNotFound from the mock, ctx not cancelled
+		}
+		cache := NewERC20TokenCache(mockCaller, nil)
+		_, err := cache.callContract(context.Background(), "0xa0b86a33e6441e6c7c5c8c8c8c8c8c8c8c8c8c8c", erc20NameFunction)
+		if !errors.Is(err, ErrContractNotFound) {
+			t.Errorf("expected ErrContractNotFound, got %v", err)
+		}
+	})
+}
+
 func TestERC20TokenCache_TokenInfo_WrapsSentinel(t *testing.T) {
 	cache := NewERC20TokenCache(&mockContractCaller{
 		names:    make(map[string][]byte),
