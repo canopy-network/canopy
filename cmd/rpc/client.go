@@ -283,6 +283,12 @@ func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.D
 	return
 }
 
+func (c *Client) OracleDebugOrder(height uint64, orderId string, chainId uint64) (p *OracleDebugOrderResponse, err lib.ErrorI) {
+	p = new(OracleDebugOrderResponse)
+	err = c.orderRequest(OracleDebugOrderRouteName, height, orderId, chainId, p)
+	return
+}
+
 func (c *Client) LastProposers(height uint64) (p *lib.Proposers, err lib.ErrorI) {
 	p = new(lib.Proposers)
 	err = c.heightRequest(LastProposersRouteName, height, p)

@@ -236,6 +236,14 @@ func (c *Controller) LoadRootChainOrderBook(rootChainId, rootHeight uint64) (*li
 	return c.RCManager.GetOrders(rootChainId, rootHeight, c.Config.ChainId)
 }
 
+// GetOrderBook fetches the root chain order book at the latest height, for this node's own
+// configured committee. A committee-chain node's RCManager subscription is already scoped to its
+// own committee at the root chain level, so this can only ever return that committee's book - there
+// is no way to fetch a different committee's book from here regardless of what id is passed in.
+func (c *Controller) GetOrderBook() (*lib.OrderBook, lib.ErrorI) {
+	return c.RCManager.GetOrders(c.LoadRootChainId(c.ChainHeight()), c.RootChainHeight(), c.Config.ChainId)
+}
+
 // GetRootChainLotteryWinner() gets the pseudorandomly selected delegate to reward and their cut
 func (c *Controller) GetRootChainLotteryWinner(fsm *fsm.StateMachine, rootHeight uint64) (winner *lib.LotteryWinner, err lib.ErrorI) {
 	// get the root chain id from the state machine
@@ -507,6 +515,9 @@ func (c *Controller) RootChainHeight() uint64 {
 
 // ChainHeight() returns the height of this target chain
 func (c *Controller) ChainHeight() uint64 { return c.FSM.Height() }
+
+// Oracle() returns the controller's witness oracle (nil if the oracle is disabled on this node)
+func (c *Controller) Oracle() *oracle.Oracle { return c.oracle }
 
 // emptyInbox() discards all unread messages for a specific topic
 func (c *Controller) emptyInbox(topic lib.Topic) {

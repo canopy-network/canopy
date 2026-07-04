@@ -39,6 +39,7 @@ func init() {
 	queryCmd.AddCommand(retiredCommitteeCmd)
 	queryCmd.AddCommand(orderCmd)
 	queryCmd.AddCommand(ordersCmd)
+	queryCmd.AddCommand(oracleDebugOrderCmd)
 	queryCmd.AddCommand(nonSignersCmd)
 	queryCmd.AddCommand(paramsCmd)
 	queryCmd.AddCommand(supplyCmd)
@@ -178,6 +179,15 @@ var (
 		Short: "query all sell orders for a committee",
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.Orders(height, committee))
+		},
+	}
+
+	oracleDebugOrderCmd = &cobra.Command{
+		Use:   "oracle-debug-order <order_id> --height=1 --committee=1",
+		Short: "query the combined order-book + oracle witness/height view of a specific order, for troubleshooting",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.OracleDebugOrder(height, args[0], committee))
 		},
 	}
 

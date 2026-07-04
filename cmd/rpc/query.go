@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -322,6 +323,88 @@ func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprout
 		return s.GetDexBatch(id, false, points)
 	})
 }
+
+// OracleDebugOrderResponse joins the canonical root-chain order book entry for an order with the
+// oracle's local witness state for it, so troubleshooting doesn't require cross-referencing
+// /v1/query/order, the oracle's order store, and the metrics endpoint by hand
+type OracleDebugOrderResponse struct {
+	// Order is the canonical root-chain order book entry (BuyerChainDeadline is in canopy-height units)
+	Order *lib.SellOrder `json:"order"`
+	// BuyDeadlineBlocks is the canopy gov param used to compute BuyerChainDeadline for canopy-chain buyers
+	BuyDeadlineBlocks uint64 `json:"buyDeadlineBlocks"`
+	// OracleState is the oracle's local view of this order, nil if this node doesn't run the oracle
+	OracleState *types.OracleDebugOrder `json:"oracleState,omitempty"`
+}
+
+// OracleDebugOrder returns a combined view of a single order for troubleshooting: the canonical
+// order book entry, the canopy-side deadline gov param, and (if this node runs the oracle) the
+// oracle's locally witnessed lock/close order plus its current safe/source chain height and
+// confirmation config
+func (s *Server) OracleDebugOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	s.orderParams(w, r, func(state *fsm.StateMachine, p *orderRequest) (any, lib.ErrorI) {
+		orderId, err := lib.StringToBytes(p.OrderId)
+		if err != nil {
+			return nil, err
+		}
+		// the order book is only ever authoritative on the root chain (see CLAUDE.md's Oracle
+		// Process section): a nested/committee chain node (where the oracle actually runs) has no
+		// local copy of it, so fall back to Controller.GetOrderBook(), which reads the order book
+		// already pushed to this node's root-chain-info websocket subscription - never a live RPC
+		// call to root. That subscription is scoped to this node's own committee and cannot serve a
+		// different one, so reject a mismatched chainId explicitly instead of silently ignoring it
+		// and returning the wrong committee's order.
+		order, err := state.GetOrder(orderId, p.ChainId)
+		if err != nil {
+			if p.ChainId != s.config.ChainId {
+				return nil, lib.NewError(1, "rpc", fmt.Sprintf(
+					"order not found locally and this node only serves order book for chainId %d, not %d", s.config.ChainId, p.ChainId))
+			}
+			var book *lib.OrderBook
+			if book, err = s.controller.GetOrderBook(); err == nil {
+				order, err = book.GetOrder(orderId)
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+		params, err := state.GetParams()
+		if err != nil {
+			return nil, err
+		}
+		response := &OracleDebugOrderResponse{
+			Order:             order,
+			BuyDeadlineBlocks: params.Validator.BuyDeadlineBlocks,
+		}
+		if o := s.controller.Oracle(); o != nil {
+			response.OracleState = o.DebugOrder(orderId)
+		}
+		return response, nil
+	})
+}
+
+// // orderMatchesAddress checks if a witnessed order is related to the given address
+// func (s *Server) orderMatchesAddress(order *types.WitnessedOrder, address crypto.AddressI) bool {
+// 	// check if address matches any address in lock order
+// 	if order.LockOrder != nil {
+// 		if order.LockOrder.BuyerReceiveAddress != nil {
+// 			if bytes.Equal(order.LockOrder.BuyerReceiveAddress, address.Bytes()) {
+// 				return true
+// 			}
+// 		}
+// 		if order.LockOrder.BuyerSendAddress != nil {
+// 			if bytes.Equal(order.LockOrder.BuyerSendAddress, address.Bytes()) {
+// 				return true
+// 			}
+// 		}
+// 	}
+// 	// check if address matches any address in close order (close orders have limited address info)
+// 	if order.CloseOrder != nil {
+// 		// CloseOrder doesn't have specific address fields, so we'll rely on OrderId matching
+// 		// which would be related to the original SellOrder
+// 		return true
+// 	}
+// 	return false
+// }
 
 // LastProposers returns the last Proposer addresses
 func (s *Server) LastProposers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {

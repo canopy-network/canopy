@@ -51,6 +51,7 @@ const (
 	DexPriceRoutePath              = "/v1/query/dex-price"
 	DexBatchRoutePath              = "/v1/query/dex-batch"
 	NextDexBatchRoutePath          = "/v1/query/next-dex-batch"
+	OracleDebugOrderRoutePath      = "/v1/query/oracle-debug-order"
 	LastProposersRoutePath         = "/v1/query/last-proposers"
 	IsValidDoubleSignerRoutePath   = "/v1/query/valid-double-signer"
 	DoubleSignersRoutePath         = "/v1/query/double-signers"
@@ -151,6 +152,7 @@ const (
 	DexPriceRouteName              = "dex-price"
 	DexBatchRouteName              = "dex-batch"
 	NextDexBatchRouteName          = "next-dex-batch"
+	OracleDebugOrderRouteName      = "oracle-debug-order"
 	LastProposersRouteName         = "last-proposers"
 	IsValidDoubleSignerRouteName   = "valid-double-signer"
 	DoubleSignersRouteName         = "double-signers"
@@ -253,6 +255,7 @@ var routePaths = routes{
 	DexPriceRouteName:              {Method: http.MethodPost, Path: DexPriceRoutePath},
 	DexBatchRouteName:              {Method: http.MethodPost, Path: DexBatchRoutePath},
 	NextDexBatchRouteName:          {Method: http.MethodPost, Path: NextDexBatchRoutePath},
+	OracleDebugOrderRouteName:      {Method: http.MethodPost, Path: OracleDebugOrderRoutePath},
 	LastProposersRouteName:         {Method: http.MethodPost, Path: LastProposersRoutePath},
 	IsValidDoubleSignerRouteName:   {Method: http.MethodPost, Path: IsValidDoubleSignerRoutePath},
 	DoubleSignersRouteName:         {Method: http.MethodPost, Path: DoubleSignersRoutePath},
@@ -354,6 +357,7 @@ func createRouter(s *Server) *httprouter.Router {
 		DexPriceRouteName:              s.DexPrice,
 		DexBatchRouteName:              s.DexBatch,
 		NextDexBatchRouteName:          s.NextDexBatch,
+		OracleDebugOrderRouteName:      s.OracleDebugOrder,
 		LastProposersRouteName:         s.LastProposers,
 		IsValidDoubleSignerRouteName:   s.IsValidDoubleSigner,
 		DoubleSignersRouteName:         s.DoubleSigners,
