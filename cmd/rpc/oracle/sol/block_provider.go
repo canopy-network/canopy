@@ -3,11 +3,14 @@ package sol
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle"
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
+	"github.com/gagliardetto/solana-go"
+	"github.com/gagliardetto/solana-go/rpc"
 )
 
 const processBlocksTimeLimitS = 12
@@ -33,6 +36,31 @@ func isSkippedSlotErr(err error) bool {
 		return code == -32007 || code == -32009
 	}
 	return false
+}
+
+// resolveInstructions converts a message's compiled instructions into resolved instructions
+// using the message's static account key list. Requires transactions with all accounts listed
+// inline (no Address Lookup Tables — see docs/SOLANA_ORACLE_REQUIREMENTS.md).
+func resolveInstructions(msg *solana.Message) ([]instruction, error) {
+	out := make([]instruction, 0, len(msg.Instructions))
+	for _, ci := range msg.Instructions {
+		if int(ci.ProgramIDIndex) >= len(msg.AccountKeys) {
+			return nil, fmt.Errorf("program id index %d out of range", ci.ProgramIDIndex)
+		}
+		accts := make([]solana.PublicKey, 0, len(ci.Accounts))
+		for _, ai := range ci.Accounts {
+			if int(ai) >= len(msg.AccountKeys) {
+				return nil, fmt.Errorf("account index %d out of range", ai)
+			}
+			accts = append(accts, msg.AccountKeys[ai])
+		}
+		out = append(out, instruction{
+			programID: msg.AccountKeys[ci.ProgramIDIndex],
+			accounts:  accts,
+			data:      []byte(ci.Data),
+		})
+	}
+	return out, nil
 }
 
 // SolBlockProvider polls a Solana RPC endpoint at finalized commitment and delivers blocks.
@@ -132,4 +160,86 @@ func (p *SolBlockProvider) processSlots(ctx context.Context, current uint64) {
 		}
 		p.nextSlot++
 	}
+}
+
+// realClient adapts *rpc.Client to SolanaRpcClient, decoding raw blocks into *Block.
+type realClient struct {
+	rpc       *rpc.Client
+	validator OrderValidator
+	mints     *mintCache
+	logger    lib.LoggerI
+}
+
+func (c *realClient) GetSlot(ctx context.Context) (uint64, error) {
+	return c.rpc.GetSlot(ctx, rpc.CommitmentFinalized)
+}
+
+func (c *realClient) GetBlock(ctx context.Context, slot uint64) (*Block, error) {
+	maxVer := uint64(0)
+	res, err := c.rpc.GetBlockWithOpts(ctx, slot, &rpc.GetBlockOpts{
+		Commitment:                     rpc.CommitmentFinalized,
+		MaxSupportedTransactionVersion: &maxVer,
+	})
+	if err != nil {
+		return nil, err // caller classifies skip vs transient
+	}
+	txs := make([]*Transaction, 0, len(res.Transactions))
+	for i := range res.Transactions {
+		twm := res.Transactions[i]
+		if twm.Meta != nil && twm.Meta.Err != nil {
+			continue // failed transaction, ignore
+		}
+		solTx, err := twm.GetTransaction()
+		if err != nil || solTx == nil {
+			c.logger.Warnf("[SOL-TX] failed to decode transaction in slot %d: %v", slot, err)
+			continue
+		}
+		instrs, err := resolveInstructions(&solTx.Message)
+		if err != nil {
+			c.logger.Warnf("[SOL-TX] failed to resolve instructions in slot %d: %v", slot, err)
+			continue
+		}
+		feePayer := ""
+		if len(solTx.Message.AccountKeys) > 0 {
+			feePayer = solTx.Message.AccountKeys[0].String()
+		}
+		sig := ""
+		if len(solTx.Signatures) > 0 {
+			sig = solTx.Signatures[0].String()
+		}
+		tx := newTransaction(sig, feePayer, instrs)
+		if err := tx.parseInstructions(c.validator); err != nil {
+			c.logger.Warnf("[SOL-TX] parse error in slot %d tx %s: %v", slot, sig, err)
+			tx.clearOrder()
+			continue
+		}
+		if tx.Order() == nil {
+			continue // not an order transaction
+		}
+		tx.order.WitnessedHeight = slot
+		// resolve SPL decimals (display-only; non-fatal on failure)
+		if tx.isTransfer && tx.mint != "" {
+			if mintPK, e := solana.PublicKeyFromBase58(tx.mint); e == nil {
+				if d, e2 := c.mints.Decimals(ctx, c.rpc, mintPK); e2 == nil {
+					tx.decimals = d
+				}
+			}
+		}
+		txs = append(txs, tx)
+	}
+	return newBlock(slot, res.Blockhash.String(), res.PreviousBlockhash.String(), txs), nil
+}
+
+func (c *realClient) Close() {} // *rpc.Client has no persistent connection to close
+
+// NewSolBlockProvider constructs a production Solana block provider.
+func NewSolBlockProvider(cfg lib.SolBlockProviderConfig, v OrderValidator, logger lib.LoggerI, metrics *lib.Metrics) (*SolBlockProvider, error) {
+	client := &realClient{
+		rpc:       rpc.New(cfg.NodeUrl),
+		validator: v,
+		mints:     newMintCache(1024),
+		logger:    logger,
+	}
+	logger.Infof("[SOL-CONN] created solana block provider with rpc: %s", cfg.NodeUrl)
+	return newSolBlockProviderWithClient(cfg, client, v, logger, metrics), nil
 }
