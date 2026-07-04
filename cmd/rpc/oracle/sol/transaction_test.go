@@ -23,6 +23,8 @@ func (f *fakeValidator) ValidateOrderJsonBytes(b []byte, ot types.OrderType) err
 	return f.closeErr
 }
 
+var errNotOrder = errors.New("not an order")
+
 // newTestTransaction is a thin wrapper matching the test call sites.
 func newTestTransaction(sig string, instrs []instruction, _ interface{}) *Transaction {
 	return newTransaction(sig, "FeePayer1111111111111111111111111111111111", instrs)
@@ -34,8 +36,6 @@ func u64LE(v uint64) []byte {
 	binary.LittleEndian.PutUint64(b, v)
 	return b
 }
-
-var errNotOrder = errors.New("not an order")
 
 // lockOrderJSONFixture produces bytes that (*lib.LockOrder).UnmarshalJSON accepts
 func lockOrderJSONFixture(t *testing.T) []byte {

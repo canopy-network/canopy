@@ -32,19 +32,7 @@ func (f *fakeRPC) GetBlock(ctx context.Context, slot uint64) (*Block, error) {
 
 func (f *fakeRPC) Close() {}
 
-// fakeValidator is a minimal OrderValidator for testing.
-type fakeValidator struct {
-	lockErr  error
-	closeErr error
-}
-
-func (f *fakeValidator) ValidateOrderJsonBytes(jsonBytes []byte, orderType string) error {
-	return nil
-}
-
-var (
-	errNotOrder = errors.New("not an order")
-)
+// Note: fakeValidator and errNotOrder are defined in transaction_test.go
 
 func TestProvider_SkipsMissingSlot(t *testing.T) {
 	// slot 2 is missing (skipped); provider must advance past it and deliver 1 and 3.

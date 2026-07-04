@@ -117,9 +117,9 @@ func (p *SolBlockProvider) run(ctx context.Context) {
 			continue
 		}
 		// metrics update - SetChainHeadHeight is optional for testing
-		// if p.metrics != nil {
-		// 	p.metrics.SetChainHeadHeight(current)
-		// }
+		if p.metrics != nil {
+			p.metrics.SetChainHeadHeight(current)
+		}
 		if current < p.nextSlot {
 			// under finalized commitment slots are monotonic; log and wait
 			p.logger.Warnf("[SOL-SYNC] finalized slot %d below nextSlot %d", current, p.nextSlot)
