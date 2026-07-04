@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
@@ -555,4 +556,44 @@ func TestEthBlockProvider_syncedNoRace(t *testing.T) {
 		}
 	}()
 	wg.Wait()
+}
+
+func TestEthBlockProvider_processBlocksCancelledSend(t *testing.T) {
+	mockClient := &mockEthClient{
+		blocks: map[uint64]*ethtypes.Block{
+			50: createEthereumBlock(50, []*ethtypes.Transaction{}),
+		},
+	}
+	provider := &EthBlockProvider{
+		rpcClient:      mockClient,
+		orderValidator: &mockOrderValidator{},
+		logger:         lib.NewDefaultLogger(),
+		blockChan:      make(chan types.BlockI), // unbuffered, no receiver
+		chainId:        1,
+		config:         lib.EthBlockProviderConfig{},
+		heightMu:       &sync.Mutex{},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	// cancel shortly after processBlocks starts — by then the top-of-loop guard
+	// has passed and the block fetch has completed, so processBlocks is blocked
+	// on the channel send (unbuffered, no receiver) when cancellation lands.
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		cancel()
+	}()
+
+	done := make(chan *big.Int, 1)
+	go func() {
+		done <- provider.processBlocks(ctx, big.NewInt(50), big.NewInt(50))
+	}()
+
+	select {
+	case next := <-done:
+		// block 50 was never delivered, so next height stays at 50 for retry
+		if next.Cmp(big.NewInt(50)) != 0 {
+			t.Errorf("expected next height 50 (unsent block retried), got %s", next.String())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("processBlocks blocked on channel send despite cancelled context")
+	}
 }

@@ -410,8 +410,15 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 			return next
 		}
 		txProcessTime := time.Since(txProcessStart)
-		// send block through channel
-		p.blockChan <- block
+		// send block through channel, aborting if the context is cancelled or the
+		// processBlock time limit is hit so a stalled consumer cannot block shutdown
+		select {
+		case p.blockChan <- block:
+		case <-timeoutCtx.Done():
+			p.logger.Warnf("[ETH-BLOCK] context done before sending block %d, will retry", next)
+			p.metrics.IncrementEthBlockProcessingTimeout()
+			return next
+		}
 		// log successful block processing
 		// p.logger.Infof("eth block provider sent safe block at height %d through channel", next)
 		// update counters
