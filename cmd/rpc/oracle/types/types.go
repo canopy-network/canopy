@@ -148,6 +148,12 @@ type TransactionI interface {
 	Hash() string
 	Order() *WitnessedOrder
 	TokenTransfer() TokenTransfer
+	// MatchesOrderDestination reports whether this transaction's transfer satisfies the
+	// sell order's expected asset/contract (contractBytes) and recipient (recipientBytes),
+	// using chain-specific address formatting and/or derivation. Returns (false, nil) for a
+	// clean mismatch and (false, err) only when the inputs cannot be interpreted for this chain.
+	// Replaces the two Ethereum-specific checks that previously lived in oracle.go's validateCloseOrder.
+	MatchesOrderDestination(contractBytes, recipientBytes []byte) (bool, error)
 }
 
 // Note: the OrderStore and BlockProvider interfaces are defined at their consumer,
