@@ -67,8 +67,6 @@ type WitnessedOrder struct {
 type OracleDebugOrder struct {
 	// OrderId this debug info is for
 	OrderId lib.HexBytes `json:"orderId"`
-	// OracleEnabled indicates whether this node runs the witness oracle at all
-	OracleEnabled bool `json:"oracleEnabled"`
 	// SafeHeight is the source (buyer) chain height the oracle currently considers confirmed/safe
 	SafeHeight uint64 `json:"safeHeight"`
 	// SourceChainHeight is the last seen height on the source (buyer) chain

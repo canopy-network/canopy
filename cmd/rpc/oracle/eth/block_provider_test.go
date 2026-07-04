@@ -22,11 +22,17 @@ type mockEthClient struct {
 	blocks      map[uint64]*ethtypes.Block
 	receipts    map[common.Hash]*ethtypes.Receipt
 	contractErr error
+	// onBlockFetch, if set, is called after a block is fetched; tests use it to deterministically
+	// drive events (e.g. cancel the context) once the loop guard has passed and the send is next
+	onBlockFetch func(height uint64)
 }
 
 func (m *mockEthClient) BlockByNumber(ctx context.Context, number *big.Int) (*ethtypes.Block, error) {
 	height := number.Uint64()
 	if block, exists := m.blocks[height]; exists {
+		if m.onBlockFetch != nil {
+			m.onBlockFetch(height)
+		}
 		return block, nil
 	}
 	return nil, ethereum.NotFound
@@ -374,6 +380,11 @@ func TestEthBlockProvider_processBlocksCancelledSend(t *testing.T) {
 			50: createEthereumBlock(50, []*ethtypes.Transaction{}),
 		},
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	// cancel the moment block 50 is fetched: the top-of-loop guard for this iteration has already
+	// passed, so cancellation deterministically lands on the channel send (unbuffered, no receiver)
+	// rather than racing a wall-clock timer.
+	mockClient.onBlockFetch = func(uint64) { cancel() }
 	provider := &EthBlockProvider{
 		rpcClient:      mockClient,
 		orderValidator: &mockOrderValidator{},
@@ -383,14 +394,6 @@ func TestEthBlockProvider_processBlocksCancelledSend(t *testing.T) {
 		config:         lib.EthBlockProviderConfig{},
 		heightMu:       &sync.Mutex{},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	// cancel shortly after processBlocks starts — by then the top-of-loop guard
-	// has passed and the block fetch has completed, so processBlocks is blocked
-	// on the channel send (unbuffered, no receiver) when cancellation lands.
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		cancel()
-	}()
 
 	done := make(chan *big.Int, 1)
 	go func() {

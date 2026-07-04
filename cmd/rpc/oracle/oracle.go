@@ -813,7 +813,6 @@ func (o *Oracle) DebugOrder(orderId []byte) *types.OracleDebugOrder {
 	}
 	info := &types.OracleDebugOrder{
 		OrderId:                orderId,
-		OracleEnabled:          true,
 		SafeHeight:             safeHeight,
 		SourceChainHeight:      sourceHeight,
 		ConfirmationLag:        confirmationLag,

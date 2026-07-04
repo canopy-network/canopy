@@ -164,14 +164,16 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	}
 	// ensure the chain height isn't too old
 	if qc.Header.Height <= data.LastChainHeightUpdated {
-		s.log.Errorf("DEBUG HandleCertificateResults FAILED: qc.Height=%d <= data.LastChainHeightUpdated=%d, chainId=%d, fsmHeight=%d",
-			qc.Header.Height, data.LastChainHeightUpdated, qc.Header.ChainId, s.Height())
 		return lib.ErrInvalidQCCommitteeHeight()
 	}
 	// setup convenience variables
 	results, chainId, isNested := qc.Results, qc.Header.ChainId, committee == nil
 	// handle dex action ordered by the quorum
 	if qc.Header.ChainId != s.Config.ChainId || isNested {
+		// a dex-batch failure intentionally aborts the entire certificate result: the remaining
+		// handlers below (committee swaps, checkpoint, byzantine, committee-data upsert) are skipped
+		// for this certificate. HandleDexBatch/HandleRemoteDexBatch return only deterministic
+		// FSM/store errors, so aborting here stays consensus-safe across validators.
 		if err = s.HandleDexBatch(qc.Header.ChainId, results, isNested); err != nil {
 			return err
 		}

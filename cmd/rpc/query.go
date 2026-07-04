@@ -405,6 +405,12 @@ func (s *Server) trackClosedOrders(live []*lib.SellOrder, buyDeadlineBlocks uint
 		current[lib.BytesToString(order.Id)] = order
 	}
 
+	// an order that reappears in the live book is no longer closed - drop any stale closed entry so
+	// it isn't reported in both Orders and ClosedOrders simultaneously
+	for id := range current {
+		delete(s.closedOrders, id)
+	}
+
 	// anything open last call and missing now just closed - snapshot it before it's forgotten
 	for id, prev := range s.lastOrderIDs {
 		if _, stillOpen := current[id]; stillOpen {
@@ -413,7 +419,9 @@ func (s *Server) trackClosedOrders(live []*lib.SellOrder, buyDeadlineBlocks uint
 		if _, alreadyClosed := s.closedOrders[id]; alreadyClosed {
 			continue
 		}
-		s.closedOrders[id] = &closedOracleOrder{Order: prev, ClosedAt: now}
+		// copy the order: prev aliases the live controller order book, which may be mutated/reused
+		orderCopy := *prev
+		s.closedOrders[id] = &closedOracleOrder{Order: &orderCopy, ClosedAt: now}
 	}
 	s.lastOrderIDs = current
 

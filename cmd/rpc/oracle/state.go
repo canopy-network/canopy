@@ -61,6 +61,10 @@ func NewOracleState(stateSaveFile string, logger lib.LoggerI) *OracleState {
 	// never performs synchronous file I/O under lock (see ValidateSequence/GetLastHeight)
 	if state, err := s.readBlockState(); err == nil {
 		s.blockState = state
+	} else if _, statErr := os.Stat(stateSaveFile); statErr == nil {
+		// the file exists but couldn't be read/parsed - that's data loss on restart, not a clean
+		// first run, so surface it loudly instead of silently resuming from height 0
+		logger.Errorf("[ORACLE-STATE] failed to load existing block state from %s: %v (resuming from height 0)", stateSaveFile, err)
 	}
 	return s
 }
@@ -136,6 +140,8 @@ func (m *OracleState) ValidateSequence(block types.BlockI) lib.ErrorI {
 		m.sourceChainHeight = block.Number()
 		return nil
 	}
+	// note: sourceChainHeight is deliberately NOT advanced on the gap/reorg error returns below -
+	// a rejected block must not move the height forward; it only advances on accepted blocks.
 	// check for block sequence gaps
 	expectedHeight := lastState.Height + 1
 	if block.Number() != expectedHeight {

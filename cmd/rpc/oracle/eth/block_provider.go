@@ -292,7 +292,8 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 	for {
 		select {
 		case <-statusTicker.C:
-			// periodic status update
+			// periodic status update. nextHeight is read unlocked here: it is owned exclusively by
+			// this single header-processing goroutine, so no synchronization is required.
 			p.logger.Infof("[ETH-SYNC] status: nextHeight=%s, synced=%v", p.nextHeight.String(), p.IsSynced())
 		case <-ctx.Done():
 			p.logger.Info("[ETH-SYNC] context cancelled")
