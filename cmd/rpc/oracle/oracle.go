@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -419,10 +420,12 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 		return ErrOrderValidation("token transfer amount cannot be nil")
 	}
 	// ensure the correct amount was transferred
-	if tokenTransfer.TokenBaseAmount.Uint64() != sellOrder.RequestedAmount {
+	// compare in big.Int: TokenBaseAmount can hold up to 2^256, and .Uint64() silently keeps only
+	// the low 64 bits, so a value of RequestedAmount+2^64 would wrongly pass an equality on Uint64()
+	if tokenTransfer.TokenBaseAmount.Cmp(new(big.Int).SetUint64(sellOrder.RequestedAmount)) != 0 {
 		o.metrics.IncrementValidationFailure("amount_mismatch")
-		return ErrOrderValidation(fmt.Sprintf("transfer amount %d does not match requested amount %d",
-			tokenTransfer.TokenBaseAmount.Uint64(), sellOrder.RequestedAmount))
+		return ErrOrderValidation(fmt.Sprintf("transfer amount %s does not match requested amount %d",
+			tokenTransfer.TokenBaseAmount.String(), sellOrder.RequestedAmount))
 	}
 	return nil
 }

@@ -1368,6 +1368,24 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			},
 			expectError: false,
 		},
+		{
+			// regression: TokenBaseAmount can exceed 2^64 (parsed from a 32-byte ERC20 amount).
+			// requested + 2^64 has the same low 64 bits as requested, so the old .Uint64()
+			// comparison truncated and wrongly accepted it. The big.Int comparison must reject it.
+			name:       "transfer amount exceeding uint64 range is rejected",
+			closeOrder: baseCloseOrder,
+			sellOrder:  baseSellOrder,
+			tx: &mockTransaction{
+				from: baseBuyer.String(),
+				to:   baseTo.String(),
+				tokenTransfer: types.TokenTransfer{
+					TokenBaseAmount:  new(big.Int).Add(new(big.Int).SetUint64(baseRequestedAmount), new(big.Int).Lsh(big.NewInt(1), 64)),
+					RecipientAddress: baseSellerReceiveAddressHex,
+				},
+			},
+			expectError: true,
+			errorMsg:    "does not match requested amount",
+		},
 	}
 
 	for _, tt := range tests {
