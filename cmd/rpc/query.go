@@ -3,6 +3,7 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -471,7 +472,7 @@ func (s *Server) OracleMonitor(w http.ResponseWriter, _ *http.Request, _ httprou
 // deadline gov param, and (if this node runs the oracle) the oracle's locally witnessed lock/close
 // order plus its current safe/source chain height and confirmation config
 func (s *Server) OracleDebugOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	s.orderParams(w, r, func(state *fsm.StateMachine, p *orderRequest) (any, lib.ErrorI) {
+	s.oracleDebugOrderParams(w, r, func(state *fsm.StateMachine, p *oracleDebugOrderRequest) (any, lib.ErrorI) {
 		params, err := state.GetParams()
 		if err != nil {
 			return nil, err
@@ -878,6 +879,23 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 func (s *Server) orderParams(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine, request *orderRequest) (any, lib.ErrorI)) {
 	// initialize a new orderRequest object
 	req := new(orderRequest)
+	// execute the callback with the state machine and request
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		p, err := callback(state, req)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
+		return
+	})
+}
+
+// oracleDebugOrderParams is a helper function to abstract common workflows around a callback
+// requiring a state machine and oracleDebugOrderRequest (the "chainId"-keyed sibling of orderParams)
+func (s *Server) oracleDebugOrderParams(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine, request *oracleDebugOrderRequest) (any, lib.ErrorI)) {
+	// initialize a new oracleDebugOrderRequest object
+	req := new(oracleDebugOrderRequest)
 	// execute the callback with the state machine and request
 	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
 		p, err := callback(state, req)

@@ -30,6 +30,15 @@ type orderRequest struct {
 	heightRequest
 }
 
+// oracleDebugOrderRequest is the request shape for the oracle-debug-order endpoint, which
+// predates and is independent of orderRequest's "committee" naming - its "chainId" key is
+// documented in CLAUDE.md and consumed by the oracle-monitor web UI
+type oracleDebugOrderRequest struct {
+	ChainId uint64 `json:"chainId"`
+	OrderId string `json:"orderId"`
+	heightRequest
+}
+
 type ordersRequest struct {
 	Committee uint64 `json:"committee"`
 	heightRequest

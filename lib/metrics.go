@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -72,6 +73,7 @@ type Metrics struct {
 	FSMMetrics     // fsm telemetry
 	StoreMetrics   // persistence telemetry
 	MempoolMetrics // tx memory pool telemetry
+	OracleMetrics  // oracle-specific telemetry
 }
 
 // NodeMetrics represents general telemetry for the node's health
@@ -182,6 +184,81 @@ type StoreMetrics struct {
 type MempoolMetrics struct {
 	MempoolSize    prometheus.Gauge // how many bytes are in the mempool?
 	MempoolTxCount prometheus.Gauge // how many transactions are in the mempool?
+}
+
+// OracleMetrics represents oracle-specific telemetry
+type OracleMetrics struct {
+	OracleBlockProcessingTime   prometheus.Histogram   // how long does it take for the oracle to process a block?
+	OrdersWitnessed             prometheus.Counter     // how many orders has the oracle witnessed?
+	OrdersValidated             prometheus.Counter     // how many orders has the oracle validated?
+	OrdersSubmitted             prometheus.Counter     // how many orders has the oracle submitted?
+	OrdersRejected              prometheus.Counter     // how many orders has the oracle rejected?
+	OrderValidationTime         prometheus.Histogram   // how long does order validation take?
+	SafeHeight                  prometheus.Gauge       // the safe (confirmed) height on the source chain
+	SourceChainHeight           prometheus.Gauge       // the latest observed height on the source chain
+	LockOrderSubmissionsSize    prometheus.Gauge       // the number of pending lock order submissions
+	CloseOrderSubmissionsSize   prometheus.Gauge       // the number of pending close order submissions
+	TotalOrdersStored           prometheus.Gauge       // total orders stored
+	LockOrdersStored            prometheus.Gauge       // lock orders stored
+	CloseOrdersStored           prometheus.Gauge       // close orders stored
+	ChainReorgs                 prometheus.Counter     // chain reorganizations
+	OrdersPruned                prometheus.Counter     // orders pruned
+	BlockProcessingErrors       prometheus.Counter     // block processing errors
+	BlockFetchTime              prometheus.Histogram   // time to fetch a block
+	TransactionProcessTime      prometheus.Histogram   // time to process transactions
+	ReceiptFetchTime            prometheus.Histogram   // time to fetch receipts
+	TokenCacheHits              prometheus.Counter     // token cache hits
+	TokenCacheMisses            prometheus.Counter     // token cache misses
+	ConnectionErrors            prometheus.Counter     // connection errors
+	BlocksProcessed             prometheus.Counter     // blocks processed
+	TransactionsProcessed       prometheus.Counter     // transactions processed
+	TransactionRetries          prometheus.Counter     // transaction retries
+	LastProcessedHeight         prometheus.Gauge       // last processed height
+	ConfirmationLag             prometheus.Gauge       // confirmation lag
+	OrdersAwaitingConfirmation  prometheus.Gauge       // orders awaiting confirmation
+	ReorgRollbackDepth          prometheus.Histogram   // reorg rollback depth
+	ValidationFailures          *prometheus.CounterVec // order validation failures by reason
+	OrdersNotInOrderbook        prometheus.Counter     // orders not in orderbook
+	OrdersDuplicate             prometheus.Counter     // duplicate orders
+	OrdersArchived              prometheus.Counter     // orders archived
+	LockOrdersCommitted         prometheus.Counter     // lock orders committed
+	CloseOrdersCommitted        prometheus.Counter     // close orders committed
+	OrdersHeldAwaitingSafe      prometheus.Counter     // orders held awaiting safe height
+	OrdersHeldProposeDelay      prometheus.Counter     // orders held due to propose delay
+	OrdersHeldResubmitDelay     prometheus.Counter     // orders held due to resubmit delay
+	LockOrderResubmissions      prometheus.Counter     // lock order resubmissions
+	CloseOrderResubmissions     prometheus.Counter     // close order resubmissions
+	StoreWriteErrors            prometheus.Counter     // store write errors
+	StoreReadErrors             prometheus.Counter     // store read errors
+	StoreRemoveErrors           prometheus.Counter     // store remove errors
+	ConnectionState             prometheus.Gauge       // eth connection state
+	SyncStatus                  prometheus.Gauge       // eth sync status
+	BlockHeightLag              prometheus.Gauge       // eth block height lag
+	ChainHeadHeight             prometheus.Gauge       // eth chain head height
+	EthLastProcessedHeight      prometheus.Gauge       // eth last processed height
+	EthSafeHeight               prometheus.Gauge       // eth safe height
+	RPCConnectionAttempts       prometheus.Counter     // eth rpc connection attempts
+	RPCConnectionErrors         *prometheus.CounterVec // eth rpc connection errors
+	WSConnectionAttempts        prometheus.Counter     // eth ws connection attempts
+	WSSubscriptionErrors        prometheus.Counter     // eth ws subscription errors
+	BlockFetchErrors            *prometheus.CounterVec // eth block fetch errors
+	BlockProcessingTimeouts     prometheus.Counter     // eth block processing timeouts
+	ReorgDetected               prometheus.Counter     // eth reorg detected
+	TransactionsTotal           prometheus.Counter     // eth transactions total
+	TransactionParseErrors      *prometheus.CounterVec // eth transaction parse errors
+	TransactionRetryByAttempt   *prometheus.CounterVec // eth transaction retries by attempt
+	TransactionExhaustedRetries prometheus.Counter     // eth transactions exhausted retries
+	TransactionSuccessStatus    *prometheus.CounterVec // eth transaction success status
+	ReceiptFetchErrors          prometheus.Counter     // eth receipt fetch errors
+	ERC20TransferDetected       prometheus.Counter     // eth erc20 transfer detected
+	LockOrderDetected           prometheus.Counter     // eth lock order detected
+	CloseOrderDetected          prometheus.Counter     // eth close order detected
+	OrderValidationErrors       *prometheus.CounterVec // eth order validation errors
+	TokenInfoFetchErrors        *prometheus.CounterVec // eth token info fetch errors
+	TokenContractCallTimeouts   prometheus.Counter     // eth token contract call timeouts
+	ProcessBlocksBatchSize      prometheus.Histogram   // eth process blocks batch size
+	OrderBookUpdateTime         prometheus.Histogram   // orderbook update time
+	RootChainSyncTime           prometheus.Histogram   // root chain sync time
 }
 
 // NewMetricsServer() creates a new telemetry server
@@ -519,6 +596,292 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			MempoolTxCount: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_mempool_tx_count",
 				Help: "Count of transactions in the transaction memory pool",
+			}),
+		},
+		OracleMetrics: OracleMetrics{
+			OracleBlockProcessingTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_block_processing_time",
+				Help: "Time taken for the oracle to process a block",
+			}),
+			OrdersWitnessed: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_orders_witnessed",
+				Help: "Total number of orders witnessed by the oracle",
+			}),
+			OrdersValidated: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_orders_validated",
+				Help: "Total number of orders validated by the oracle",
+			}),
+			OrdersSubmitted: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_orders_submitted",
+				Help: "Total number of orders submitted by the oracle",
+			}),
+			OrdersRejected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_orders_rejected",
+				Help: "Total number of orders rejected by the oracle",
+			}),
+			OrderValidationTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_order_validation_time",
+				Help: "Time taken to validate an order",
+			}),
+			SafeHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_safe_height",
+				Help: "Safe (confirmed) height on the source chain",
+			}),
+			SourceChainHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_source_chain_height",
+				Help: "Latest observed height on the source chain",
+			}),
+			LockOrderSubmissionsSize: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_lock_order_submissions_size",
+				Help: "Number of pending lock order submissions",
+			}),
+			CloseOrderSubmissionsSize: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_close_order_submissions_size",
+				Help: "Number of pending close order submissions",
+			}),
+			TotalOrdersStored: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_total_orders_stored",
+				Help: "Total orders stored in the oracle",
+			}),
+			LockOrdersStored: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_lock_orders_stored",
+				Help: "Lock orders stored in the oracle",
+			}),
+			CloseOrdersStored: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_close_orders_stored",
+				Help: "Close orders stored in the oracle",
+			}),
+			ChainReorgs: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_chain_reorgs",
+				Help: "Chain reorganizations detected by the oracle",
+			}),
+			OrdersPruned: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_pruned",
+				Help: "Orders pruned by the oracle",
+			}),
+			BlockProcessingErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_block_processing_errors",
+				Help: "Block processing errors in the oracle",
+			}),
+			BlockFetchTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_block_fetch_time",
+				Help: "Time to fetch a block",
+			}),
+			TransactionProcessTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_transaction_process_time",
+				Help: "Time to process transactions",
+			}),
+			ReceiptFetchTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_receipt_fetch_time",
+				Help: "Time to fetch receipts",
+			}),
+			TokenCacheHits: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_token_cache_hits",
+				Help: "Token cache hits",
+			}),
+			TokenCacheMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_token_cache_misses",
+				Help: "Token cache misses",
+			}),
+			ConnectionErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_connection_errors",
+				Help: "Connection errors",
+			}),
+			BlocksProcessed: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_blocks_processed",
+				Help: "Blocks processed",
+			}),
+			TransactionsProcessed: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_transactions_processed",
+				Help: "Transactions processed",
+			}),
+			TransactionRetries: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_transaction_retries",
+				Help: "Transaction retries",
+			}),
+			LastProcessedHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_last_processed_height",
+				Help: "Last processed block height",
+			}),
+			ConfirmationLag: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_confirmation_lag",
+				Help: "Confirmation lag",
+			}),
+			OrdersAwaitingConfirmation: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_orders_awaiting_confirmation",
+				Help: "Orders awaiting confirmation",
+			}),
+			ReorgRollbackDepth: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_reorg_rollback_depth",
+				Help: "Reorg rollback depth",
+			}),
+			ValidationFailures: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_oracle_validation_failures",
+				Help: "Order validation failures by reason",
+			}, []string{"reason"}),
+			OrdersNotInOrderbook: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_not_in_orderbook",
+				Help: "Orders not in orderbook",
+			}),
+			OrdersDuplicate: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_duplicate",
+				Help: "Duplicate orders",
+			}),
+			OrdersArchived: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_archived",
+				Help: "Orders archived",
+			}),
+			LockOrdersCommitted: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_lock_orders_committed",
+				Help: "Lock orders committed",
+			}),
+			CloseOrdersCommitted: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_close_orders_committed",
+				Help: "Close orders committed",
+			}),
+			OrdersHeldAwaitingSafe: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_held_awaiting_safe",
+				Help: "Orders held awaiting safe height",
+			}),
+			OrdersHeldProposeDelay: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_held_propose_delay",
+				Help: "Orders held due to propose delay",
+			}),
+			OrdersHeldResubmitDelay: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_held_resubmit_delay",
+				Help: "Orders held due to resubmit delay",
+			}),
+			LockOrderResubmissions: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_lock_order_resubmissions",
+				Help: "Lock order resubmissions",
+			}),
+			CloseOrderResubmissions: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_close_order_resubmissions",
+				Help: "Close order resubmissions",
+			}),
+			StoreWriteErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_store_write_errors",
+				Help: "Store write errors",
+			}),
+			StoreReadErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_store_read_errors",
+				Help: "Store read errors",
+			}),
+			StoreRemoveErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_store_remove_errors",
+				Help: "Store remove errors",
+			}),
+			ConnectionState: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_connection_state",
+				Help: "ETH connection state",
+			}),
+			SyncStatus: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_sync_status",
+				Help: "ETH sync status",
+			}),
+			BlockHeightLag: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_block_height_lag",
+				Help: "ETH block height lag",
+			}),
+			ChainHeadHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_chain_head_height",
+				Help: "ETH chain head height",
+			}),
+			EthLastProcessedHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_last_processed_height",
+				Help: "ETH last processed height",
+			}),
+			EthSafeHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_safe_height",
+				Help: "ETH safe height",
+			}),
+			RPCConnectionAttempts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_rpc_connection_attempts",
+				Help: "ETH RPC connection attempts",
+			}),
+			RPCConnectionErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_rpc_connection_errors",
+				Help: "ETH RPC connection errors",
+			}, []string{"error_type"}),
+			WSConnectionAttempts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_ws_connection_attempts",
+				Help: "ETH WS connection attempts",
+			}),
+			WSSubscriptionErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_ws_subscription_errors",
+				Help: "ETH WS subscription errors",
+			}),
+			BlockFetchErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_block_fetch_errors",
+				Help: "ETH block fetch errors",
+			}, []string{"error_type"}),
+			BlockProcessingTimeouts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_block_processing_timeouts",
+				Help: "ETH block processing timeouts",
+			}),
+			ReorgDetected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_reorg_detected",
+				Help: "ETH reorganizations detected",
+			}),
+			TransactionsTotal: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_transactions_total",
+				Help: "ETH total transactions",
+			}),
+			TransactionParseErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_transaction_parse_errors",
+				Help: "ETH transaction parse errors",
+			}, []string{"error_type"}),
+			TransactionRetryByAttempt: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_transaction_retry_by_attempt",
+				Help: "ETH transaction retries by attempt",
+			}, []string{"attempt"}),
+			TransactionExhaustedRetries: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_transaction_exhausted_retries",
+				Help: "ETH transactions exhausted retries",
+			}),
+			TransactionSuccessStatus: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_transaction_success_status",
+				Help: "ETH transaction success status",
+			}, []string{"status"}),
+			ReceiptFetchErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_receipt_fetch_errors",
+				Help: "ETH receipt fetch errors",
+			}),
+			ERC20TransferDetected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_erc20_transfer_detected",
+				Help: "ETH ERC20 transfers detected",
+			}),
+			LockOrderDetected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_lock_order_detected",
+				Help: "ETH lock orders detected",
+			}),
+			CloseOrderDetected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_close_order_detected",
+				Help: "ETH close orders detected",
+			}),
+			OrderValidationErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_order_validation_errors",
+				Help: "ETH order validation errors",
+			}, []string{"order_type", "error_type"}),
+			TokenInfoFetchErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_token_info_fetch_errors",
+				Help: "ETH token info fetch errors",
+			}, []string{"field"}),
+			TokenContractCallTimeouts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_token_contract_call_timeouts",
+				Help: "ETH token contract call timeouts",
+			}),
+			ProcessBlocksBatchSize: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_eth_process_blocks_batch_size",
+				Help: "ETH process blocks batch size",
+			}),
+			OrderBookUpdateTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_orderbook_update_time",
+				Help: "Order book update time",
+			}),
+			RootChainSyncTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_root_chain_sync_time",
+				Help: "Root chain sync time",
 			}),
 		},
 	}

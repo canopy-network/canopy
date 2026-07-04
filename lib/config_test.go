@@ -20,6 +20,11 @@ func TestDefaultConfig(t *testing.T) {
 		ConsensusConfig:    DefaultConsensusConfig(),
 		MempoolConfig:      DefaultMempoolConfig(),
 		MetricsConfig:      DefaultMetricsConfig(),
+		// oracle + block-provider defaults are populated by DefaultConfig(); the golden
+		// expectation must include them or the embedded structs stay zero-valued and mismatch
+		EthBlockProviderConfig: DefaultEthBlockProviderConfig(),
+		SolBlockProviderConfig: DefaultSolBlockProviderConfig(),
+		OracleConfig:           DefaultOracleConfig(),
 	}
 	// execute the function call
 	got := DefaultConfig()

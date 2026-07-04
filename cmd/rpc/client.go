@@ -285,7 +285,7 @@ func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.D
 
 func (c *Client) OracleDebugOrder(height uint64, orderId string, chainId uint64) (p *OracleDebugOrderResponse, err lib.ErrorI) {
 	p = new(OracleDebugOrderResponse)
-	err = c.orderRequest(OracleDebugOrderRouteName, height, orderId, chainId, p)
+	err = c.oracleDebugOrderRequest(OracleDebugOrderRouteName, height, orderId, chainId, p)
 	return
 }
 
@@ -293,7 +293,7 @@ func (c *Client) OracleDebugOrder(height uint64, orderId string, chainId uint64)
 // oracle's node-global status independent of any specific order
 func (c *Client) OracleDebugOrders(height, chainId uint64) (p *OracleDebugOrdersResponse, err lib.ErrorI) {
 	p = new(OracleDebugOrdersResponse)
-	err = c.orderRequest(OracleDebugOrderRouteName, height, "", chainId, p)
+	err = c.oracleDebugOrderRequest(OracleDebugOrderRouteName, height, "", chainId, p)
 	return
 }
 
@@ -1061,6 +1061,24 @@ func (c *Client) orderRequest(routeName string, height uint64, orderId string, c
 	bz, err := lib.MarshalJSON(orderRequest{
 		Committee: committee,
 		OrderId:   orderId,
+		heightRequest: heightRequest{
+			Height: height,
+		},
+	})
+	if err != nil {
+		return
+	}
+	err = c.post(routeName, bz, ptr)
+	return
+}
+
+// oracleDebugOrderRequest backs the oracle-debug-order endpoint, whose "chainId" key is
+// documented in CLAUDE.md and shared with the oracle-monitor web UI - independent of
+// orderRequest's "committee" naming used by the unrelated Order() endpoint
+func (c *Client) oracleDebugOrderRequest(routeName string, height uint64, orderId string, chainId uint64, ptr any) (err lib.ErrorI) {
+	bz, err := lib.MarshalJSON(oracleDebugOrderRequest{
+		ChainId: chainId,
+		OrderId: orderId,
 		heightRequest: heightRequest{
 			Height: height,
 		},

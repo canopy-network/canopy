@@ -158,6 +158,16 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 	p.Block.BlockHeader.TotalVdfIterations = vdf.GetIterations() + lastBlock.BlockHeader.TotalVdfIterations
 	// set the certificate results variable and rcBuildHeight
 	results, rcBuildHeight = p.CertResults, p.rcBuildHeight
+	// TODO change 1 to c.config.ChainId
+	orderBook, err := c.LoadRootChainOrderBook(1, rcBuildHeight)
+	if err != nil {
+		return
+	}
+	// append any witnessed orders to the on chain orders
+	lockOrders, closeOrders, resetOrders := c.oracle.WitnessedOrders(orderBook, rcBuildHeight)
+	results.Orders.LockOrders = lockOrders
+	results.Orders.CloseOrders = closeOrders
+	results.Orders.ResetOrders = resetOrders
 	// execute the hash
 	if _, err = p.Block.BlockHeader.SetHash(); err != nil {
 		// exit with error
@@ -219,6 +229,27 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 	}
 	// create a comparable certificate results (includes reward recipients, slash recipients, swap commands, etc)
 	compareResults := c.NewCertificateResults(c.FSM, block, blockResult, evidence, rcBuildHeight)
+	// Validate proposed oracle orders only when oracle is configured.
+	// This preserves existing behavior for oracle-disabled nodes and avoids introducing
+	// extra root-chain RPC dependencies in that mode.
+	if c.oracle != nil {
+		// Only load root-chain snapshot when reset orders are present; lock/close validation
+		// remains local-store based and should not depend on root RPC liveness.
+		var rootOrderBook *lib.OrderBook
+		if qc.Results != nil && qc.Results.Orders != nil && len(qc.Results.Orders.ResetOrders) > 0 {
+			// load root-chain order book at the proposal build height to validate reset orders deterministically
+			rootOrderBook, err = c.LoadRootChainOrderBook(1, rcBuildHeight)
+			if err != nil {
+				return
+			}
+		}
+		// validate the proposed orders were witnessed by the oracle
+		err = c.oracle.ValidateProposedOrders(qc.Results.Orders, rootOrderBook)
+		if err != nil {
+			return
+		}
+	}
+	compareResults.Orders = qc.Results.Orders
 	// ensure generated the same results
 	if !qc.Results.Equals(compareResults) {
 		// exit with error
@@ -302,6 +333,11 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	// set up the finite state machine for the next height
 	c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
 	if err != nil {
+		// exit with error
+		return err
+	}
+	// execute Oracle CommitCertificate
+	if err = c.oracle.CommitCertificate(qc, block, blockResult, ts); err != nil {
 		// exit with error
 		return err
 	}

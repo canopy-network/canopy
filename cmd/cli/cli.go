@@ -147,8 +147,8 @@ func Start() {
 		l.Infof("Oracle not enabled")
 	}
 
-	// create a new instance of the application
-	app, err := controller.New(sm, config, validatorKey, metrics, l)
+	// create a new instance of the application (pass the oracle so the controller can drive it)
+	app, err := controller.New(sm, o, config, validatorKey, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}

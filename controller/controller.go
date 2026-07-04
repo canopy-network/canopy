@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/bft"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -44,11 +46,12 @@ type Controller struct {
 	checkpoints map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
 	isSyncing   *atomic.Bool                       // is the chain currently being downloaded from peers
 	log         lib.LoggerI                        // object for logging
+	oracle      *oracle.Oracle                     // witness oracle
 	*sync.Mutex                                    // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
-func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
+func New(fsm *fsm.StateMachine, oracle *oracle.Oracle, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
 	address := valKey.PublicKey().Address()
 	// load the maximum validators param to set limits on P2P
 	maxMembersPerCommittee, err := fsm.GetMaxValidators()
@@ -77,6 +80,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
 		isSyncing:  &atomic.Bool{},
 		log:        l,
+		oracle:     oracle,
 		Mutex:      &sync.Mutex{},
 	}
 	// log validator identity for debugging
@@ -132,6 +136,18 @@ func (c *Controller) Start() {
 				c.Mempool.CheckMempool()
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
+				// oracle specific initialization
+				if c.Config.OracleEnabled {
+					// update oracle's order book so it can start processing blocks
+					c.oracle.UpdateRootChainInfo(rootChainInfo)
+					c.log.Info("Starting Oracle, waiting for source chain sync")
+					// channel to indicate source chain is synced
+					syncCh := make(chan bool)
+					// start the oracle with context and a channel to wait for source chain sync
+					c.oracle.Start(context.Background(), syncCh)
+					<-syncCh // wait for syncCh to be closed
+					c.log.Info("Oracle is synced to top, starting Canopy")
+				}
 				// exit the loop
 				break
 			}
@@ -224,6 +240,8 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	}
 	// update the peer 'must connect'
 	c.UpdateP2PMustConnect(info.ValidatorSet)
+	// sync the order store
+	c.oracle.UpdateRootChainInfo(info)
 }
 
 // LoadCommittee() gets the ValidatorSet that is authorized to come to Consensus agreement on the Proposal for a specific height/chainId

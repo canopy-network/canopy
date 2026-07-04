@@ -867,6 +867,27 @@ func (x *CloseOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
 	return
 }
 
+// Equals() compares two LockOrders for equality
+func (x *CloseOrder) Equals(y *CloseOrder) bool {
+	// if both the lock orders are empty
+	if x == nil && y == nil {
+		// exit with 'equal'
+		return true
+	}
+	// if either of the lock orders are empty
+	if x == nil || y == nil {
+		// exit with 'unequal'
+		return false
+	}
+	// if the chain ids aren't the same
+	if x.ChainId != y.ChainId {
+		// exit with 'unequal'
+		return false
+	}
+	// if the order ids are not the same
+	return bytes.Equal(x.OrderId, y.OrderId)
+}
+
 // DEX BATCH CODE BELOW
 
 // CheckBasic() performs stateless validation on a DexBatch object
