@@ -289,3 +289,41 @@ func TestParseNativeTransfer_MissingAccounts(t *testing.T) {
 		t.Fatal("expected error for missing accounts")
 	}
 }
+
+func TestParseTransfer_SPLTakesPrecedenceOverNative(t *testing.T) {
+	splSource := solana.NewWallet().PublicKey()
+	mint := solana.NewWallet().PublicKey()
+	splDest := solana.NewWallet().PublicKey()
+	splOwner := solana.NewWallet().PublicKey()
+	splData := append([]byte{12}, u64LE(1)...)
+
+	nativeFrom := solana.NewWallet().PublicKey()
+	nativeTo := solana.NewWallet().PublicKey()
+	nativeData := make([]byte, 12)
+	binary.LittleEndian.PutUint32(nativeData[0:4], 2)
+	binary.LittleEndian.PutUint64(nativeData[4:12], 999)
+
+	tx := &Transaction{
+		instrs: []instruction{
+			{programID: solana.SystemProgramID, accounts: []solana.PublicKey{nativeFrom, nativeTo}, data: nativeData},
+			{programID: solana.TokenProgramID, accounts: []solana.PublicKey{splSource, mint, splDest, splOwner}, data: splData},
+		},
+	}
+	if err := tx.parseTransfer(); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	// mint is only ever set by the SPL path — a non-empty mint proves SPL, not native, was chosen.
+	if tx.mint != mint.String() {
+		t.Fatalf("expected SPL transfer to take precedence, got mint=%q destination=%q", tx.mint, tx.destination)
+	}
+	if tx.destination != splDest.String() {
+		t.Fatalf("expected spl destination %s, got %s", splDest.String(), tx.destination)
+	}
+}
+
+func TestParseTransfer_NoTransferInstruction_Errors(t *testing.T) {
+	tx := &Transaction{instrs: []instruction{{programID: memoProgramID, data: closeOrderJSONFixture(t)}}}
+	if err := tx.parseTransfer(); err == nil {
+		t.Fatal("expected error when no transfer instruction is present")
+	}
+}
