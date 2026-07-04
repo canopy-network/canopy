@@ -32,3 +32,42 @@ func TestResolveInstructions(t *testing.T) {
 		t.Fatalf("data mismatch: %q", got[0].data)
 	}
 }
+
+func TestResolveInstructions_ProgramIDIndexOutOfRange(t *testing.T) {
+	msg := &solana.Message{
+		AccountKeys: []solana.PublicKey{solana.NewWallet().PublicKey()},
+		Instructions: []solana.CompiledInstruction{
+			{ProgramIDIndex: 5, Accounts: nil, Data: solana.Base58([]byte("x"))},
+		},
+	}
+	if _, err := resolveInstructions(msg); err == nil {
+		t.Fatal("expected error for out-of-range program id index")
+	}
+}
+
+func TestResolveInstructions_AccountIndexOutOfRange(t *testing.T) {
+	prog := memoProgramID
+	msg := &solana.Message{
+		AccountKeys: []solana.PublicKey{prog},
+		Instructions: []solana.CompiledInstruction{
+			{ProgramIDIndex: 0, Accounts: []uint16{7}, Data: solana.Base58([]byte("x"))},
+		},
+	}
+	if _, err := resolveInstructions(msg); err == nil {
+		t.Fatal("expected error for out-of-range account index")
+	}
+}
+
+func TestResolveInstructions_Empty(t *testing.T) {
+	msg := &solana.Message{
+		AccountKeys:  []solana.PublicKey{solana.NewWallet().PublicKey()},
+		Instructions: nil,
+	}
+	got, err := resolveInstructions(msg)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected 0 resolved instructions, got %d", len(got))
+	}
+}
