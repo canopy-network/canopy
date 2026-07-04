@@ -2,6 +2,7 @@
 
 Date: 2026-07-04
 Status: Approved for planning
+Verified: 2026-07-04 (web verification of critical Solana claims — see "Verification" below), by Claude Opus 4.8 (1M context)
 
 ## Goal
 
@@ -259,6 +260,36 @@ Mirror the existing `eth` test structure:
   `eth.Transaction` (regression — behavior must be unchanged) and a fake
   chain-agnostic transaction type, to confirm `oracle.go`'s refactored
   `validateCloseOrder` calls the interface method correctly.
+
+## Verification
+
+Critical Solana technical claims in this doc were verified against current
+public documentation on 2026-07-04 by Claude Opus 4.8 (1M context). All
+load-bearing claims held; no factual corrections were required.
+
+| Claim | Source | Verdict |
+|-------|--------|---------|
+| `blockSubscribe` is unstable, off by default, requires `--rpc-pubsub-enable-block-subscription` + `--enable-rpc-transaction-history` | Agave / Solana RPC docs | Confirmed exactly |
+| Alchemy does not expose `blockSubscribe` (supports only `accountSubscribe`, `programSubscribe`, `logsSubscribe`, `signatureSubscribe`, `rootSubscribe`, `slotSubscribe`) | Alchemy Subscription API docs | Confirmed |
+| SPL Mint `decimals` is a `u8` at fixed byte offset 44, decodable from one `getAccountInfo` | `spl-token` `Mint` layout (mintAuthority 4–35, supply 36–43, **decimals 44**, freezeAuthority 45–76) | Confirmed, offset 44 |
+| Memo program ID `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` | Official `spl-memo` | Confirmed exactly |
+| Skipped slot returns a distinct `getBlock` RPC error | Confirmed — **two** codes: `-32007` (skipped / snapshot jump) and `-32009` (missing in long-term storage) | Confirmed (see note 1) |
+| ATA derivation is deterministic, off-curve PDA, no RPC needed | Associated Token Program (seeds: owner, token program, mint) | Confirmed |
+| `finalized` is a native commitment RPC parameter | Solana RPC docs | Confirmed |
+| `github.com/gagliardetto/solana-go` provides `GetSlot`/`GetBlock`/`GetAccountInfo` | pkg.go.dev / repo | Confirmed (see note 2) |
+
+**Note 1 — skipped-slot detection.** There are two skip-indicating error codes,
+`-32007` and `-32009`; the poll loop's skip handling (§ "Skipped slots",
+"Data flow" step 4) must match on **both**, not just one. Additionally, these
+codes can also fire transiently when an RPC node is overwhelmed or rebooting, so
+the "advance past, never retry" rule could theoretically skip a genuine block on
+a provider hiccup. Under `finalized` commitment on Alchemy this is unlikely, but
+the skip path should emit a log line for observability.
+
+**Note 2 — Go SDK.** A `solana-foundation/solana-go` fork now exists alongside
+`gagliardetto/solana-go`. Gagliardetto remains the widely-used community
+standard (latest tag v1.16.0, alpha, unaudited, "APIs subject to change"); the
+foundation fork may become canonical. Confirm the import path before pinning.
 
 ## Explicitly out of scope (see `docs/SOLANA_ORACLE_REQUIREMENTS.md`)
 

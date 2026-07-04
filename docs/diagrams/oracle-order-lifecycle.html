@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oracle order lifecycle · Sequence</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="nav.js" defer></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1160px; margin: 0 auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      color: var(--color-muted);
+      margin-bottom: 1.5rem;
+      max-width: 640px;
+    }
+
+    svg { width: 100%; min-width: 900px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · Canopy Oracle Chain</p>
+    <h1>Sell order path: creation to settlement</h1>
+    <p class="subtitle">Bob lists CNPY for USDC on the oracle chain. Alice locks the order and pays on the Ethereum side (Anvil devnet). The oracle validator is the only component that watches both chains — it witnesses the Ethereum transactions and relays them back into the Canopy FSM as a quorum-certified fact.</p>
+
+    <svg viewBox="0 0 1120 712" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/>
+          </marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- =================================================================
+             LIFELINES — Seller(120) · RootChainFSM(340) · OracleValidator(560) · Anvil(780) · Buyer(1000)
+             ================================================================= -->
+        <line x1="120" y1="120" x2="120" y2="620" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="340" y1="120" x2="340" y2="620" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="560" y1="120" x2="560" y2="620" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="780" y1="120" x2="780" y2="620" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="1000" y1="120" x2="1000" y2="620" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+
+        <!-- =================================================================
+             ACTIVATION BAR — Oracle Validator is continuously watching Anvil
+             across the whole witness window (M3 → M7).
+             ================================================================= -->
+        <rect x="556" y="280" width="8" height="224" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+
+        <!-- =================================================================
+             MESSAGE ARROWS — time flows top → down.
+             ================================================================= -->
+
+        <!-- M1: Seller → Root Chain FSM (create order, escrow CNPY) -->
+        <line x1="120" y1="168" x2="336" y2="168" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- M2: Buyer → Anvil (lock-order tx, self-send with embedded JSON) -->
+        <line x1="1000" y1="224" x2="784" y2="224" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- M3: Anvil → Oracle Validator (new block carries lock-order tx) -->
+        <line x1="780" y1="280" x2="568" y2="280" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+
+        <!-- M4: Oracle Validator → Root Chain FSM (witnessed lock, quorum cert) -->
+        <line x1="556" y1="336" x2="344" y2="336" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- M5: Buyer → Anvil (USDC transfer, close-order tx) -->
+        <line x1="1000" y1="392" x2="784" y2="392" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- M6: Anvil → Oracle Validator (new block carries close-order tx) -->
+        <line x1="780" y1="448" x2="568" y2="448" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+
+        <!-- M7: Oracle Validator → Root Chain FSM (witnessed close, quorum cert) -->
+        <line x1="556" y1="504" x2="344" y2="504" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- M8: Root Chain FSM self-message (release escrow → credit buyer) -->
+        <path d="M 348 560 L 384 560 L 384 592 L 348 592" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+        <!-- =================================================================
+             MESSAGE LABELS — each masked so it never bleeds through the line.
+             ================================================================= -->
+
+        <rect x="176" y="152" width="104" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="228" y="162" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CREATE ORDER</text>
+
+        <rect x="836" y="208" width="112" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="892" y="218" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LOCK ORDER TX</text>
+
+        <rect x="618" y="264" width="112" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="674" y="274" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">NEW BLOCK · LOCK</text>
+
+        <rect x="392" y="320" width="120" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="452" y="330" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">WITNESSED LOCK · QC</text>
+
+        <rect x="836" y="376" width="128" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="900" y="386" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TRANSFER USDC</text>
+
+        <rect x="614" y="432" width="120" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="674" y="442" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">NEW BLOCK · CLOSE</text>
+
+        <rect x="390" y="488" width="124" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="452" y="498" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">WITNESSED CLOSE · QC</text>
+
+        <rect x="388" y="568" width="144" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="460" y="578" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RELEASE ESCROW · PAY BUYER</text>
+
+        <!-- =================================================================
+             ACTOR BOXES — drawn after arrows/labels. 144–160 wide × 56 tall.
+             ================================================================= -->
+
+        <!-- Actor 1: Seller (Bob) — user / soft -->
+        <rect x="48" y="64" width="144" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="48" y="64" width="144" height="56" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="56" y="72" width="32" height="12" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/>
+        <text x="72" y="81" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">USER</text>
+        <text x="120" y="96" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Seller · Bob</text>
+        <text x="120" y="111" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">canopy addr</text>
+
+        <!-- Actor 2: Root Chain FSM — store/state -->
+        <rect x="268" y="64" width="144" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="268" y="64" width="144" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="276" y="72" width="24" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.40)" stroke-width="0.8"/>
+        <text x="288" y="81" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FSM</text>
+        <text x="340" y="96" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Root Chain FSM</text>
+        <text x="340" y="111" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">order book · escrow pool</text>
+
+        <!-- Actor 3: Oracle Validator — focal / accent -->
+        <rect x="488" y="64" width="144" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="488" y="64" width="144" height="56" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <rect x="496" y="72" width="40" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text x="516" y="81" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">BRIDGE</text>
+        <text x="560" y="96" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Oracle Validator</text>
+        <text x="560" y="111" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">block provider · committee</text>
+
+        <!-- Actor 4: Anvil (Ethereum) — external/cloud -->
+        <rect x="708" y="64" width="144" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="708" y="64" width="144" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="716" y="72" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="730" y="81" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">EVM</text>
+        <text x="780" y="96" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Anvil</text>
+        <text x="780" y="111" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">:8545 · USDC contract</text>
+
+        <!-- Actor 5: Buyer (Alice) — user / soft -->
+        <rect x="928" y="64" width="144" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="928" y="64" width="144" height="56" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="936" y="72" width="32" height="12" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/>
+        <text x="952" y="81" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">USER</text>
+        <text x="1000" y="96" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Buyer · Alice</text>
+        <text x="1000" y="111" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">eth + canopy addr</text>
+
+        <!-- =================================================================
+             LEGEND — horizontal strip at the bottom.
+             ================================================================= -->
+        <line x1="48" y1="644" x2="1072" y2="644" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="48" y="660" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">LEGEND</text>
+
+        <rect x="48" y="680" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <text x="68" y="688" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Bridge component (focal)</text>
+
+        <rect x="248" y="676" width="4" height="18" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+        <text x="260" y="688" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Watching / activation</text>
+
+        <line x1="440" y1="686" x2="468" y2="686" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="476" y="688" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Ethereum block event</text>
+
+        <line x1="668" y1="686" x2="696" y2="686" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="704" y="688" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Canopy tx / QC</text>
+
+        <line x1="852" y1="686" x2="880" y2="686" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <text x="888" y="688" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Settlement</text>
+
+      </svg>
+  </div>
+</body>
+</html>

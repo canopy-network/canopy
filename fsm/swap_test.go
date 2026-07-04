@@ -270,6 +270,105 @@ func TestHandleCommitteeSwapsNilLockOrderDoesNotPanic(t *testing.T) {
 	})
 }
 
+// TestProcessRootChainOrderBook covers the deadline-expiry and amount-mismatch
+// decisions inside ProcessRootChainOrderBook that had no direct test coverage:
+// a locked order whose BuyerChainDeadline has passed must be reset (regardless
+// of any close order witnessed for it), and a witnessed close order whose sent
+// amount doesn't match the order's RequestedAmount must not be treated as closed.
+func TestProcessRootChainOrderBook(t *testing.T) {
+	tests := []struct {
+		name                string
+		detail              string
+		height              uint64
+		order               *lib.SellOrder
+		closeAmount         uint64 // 0 means no close order transaction is included in the block
+		expectedLockOrders  int
+		expectedResetOrders int
+		expectedCloseOrders int
+	}{
+		{
+			name:   "locked order past deadline is reset",
+			detail: "a locked order whose deadline has already passed must be reset, even though a matching close order was witnessed",
+			height: 200,
+			order: &lib.SellOrder{
+				Id:                  newTestOrderId(t, 0),
+				Committee:           lib.CanopyChainId,
+				AmountForSale:       100,
+				RequestedAmount:     100,
+				BuyerReceiveAddress: newTestAddressBytes(t, 1),
+				BuyerChainDeadline:  100, // already passed at height 200
+			},
+			closeAmount:         100, // matches RequestedAmount, but deadline check must win
+			expectedResetOrders: 1,
+		},
+		{
+			name:   "locked order before deadline is not reset",
+			detail: "a locked order whose deadline has not passed must not be reset",
+			height: 50,
+			order: &lib.SellOrder{
+				Id:                  newTestOrderId(t, 0),
+				Committee:           lib.CanopyChainId,
+				AmountForSale:       100,
+				RequestedAmount:     100,
+				BuyerReceiveAddress: newTestAddressBytes(t, 1),
+				BuyerChainDeadline:  100,
+			},
+			closeAmount:         100,
+			expectedCloseOrders: 1,
+		},
+		{
+			name:   "close amount mismatch is not closed",
+			detail: "a witnessed close order whose sent amount does not equal the order's requested amount must be ignored",
+			height: 50,
+			order: &lib.SellOrder{
+				Id:                  newTestOrderId(t, 0),
+				Committee:           lib.CanopyChainId,
+				AmountForSale:       100,
+				RequestedAmount:     100,
+				BuyerReceiveAddress: newTestAddressBytes(t, 1),
+				BuyerChainDeadline:  100,
+			},
+			closeAmount: 99, // mismatched
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sm := newTestStateMachine(t)
+			sm.height = test.height
+			var block lib.BlockResult
+			block.BlockHeader = &lib.BlockHeader{Height: test.height}
+			if test.closeAmount != 0 {
+				// governance defaults: SendFee=10000, LockOrderFeeMultiplier=2 (see gov_params.go)
+				closeMemo, e := lib.MarshalJSON(&lib.CloseOrder{
+					OrderId:    test.order.Id,
+					ChainId:    lib.CanopyChainId,
+					CloseOrder: true,
+				})
+				require.NoError(t, e)
+				block.Transactions = []*lib.TxResult{{
+					MessageType: MessageSendName,
+					Transaction: &lib.Transaction{
+						MessageType: MessageSendName,
+						Msg: msg(t, &MessageSend{
+							FromAddress: newTestAddressBytes(t, 1),
+							ToAddress:   test.order.SellerReceiveAddress,
+							Amount:      test.closeAmount,
+						}),
+						Fee:     20000,
+						Memo:    string(closeMemo),
+						ChainId: lib.CanopyChainId,
+					},
+				}}
+			}
+			book := &lib.OrderBook{ChainId: lib.CanopyChainId, Orders: []*lib.SellOrder{test.order}}
+			lockOrders, closedOrders, resetOrders := sm.ProcessRootChainOrderBook(book, &block)
+			require.Len(t, lockOrders, test.expectedLockOrders)
+			require.Len(t, resetOrders, test.expectedResetOrders)
+			require.Len(t, closedOrders, test.expectedCloseOrders)
+		})
+	}
+}
+
 func TestSetOrder(t *testing.T) {
 	tests := []struct {
 		name     string

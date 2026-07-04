@@ -1116,12 +1116,14 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 
 	baseSellerReceiveAddress := []byte("seller_receive_addr")
 	baseSellerReceiveAddressHex := fmt.Sprintf("%x", baseSellerReceiveAddress)
+	baseBuyer := common.HexToAddress("abcdef1234567890")
 	baseSellOrder := &lib.SellOrder{
 		Id:                   baseOrderId,
 		Committee:            baseChainId,
 		RequestedAmount:      baseRequestedAmount,
 		Data:                 baseTo.Bytes(),
 		SellerReceiveAddress: baseSellerReceiveAddress,
+		BuyerSendAddress:     baseBuyer.Bytes(),
 	}
 
 	baseCloseOrder := &lib.CloseOrder{
@@ -1130,7 +1132,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 	}
 
 	baseTx := &mockTransaction{
-		to: baseTo.String(),
+		from: baseBuyer.String(),
+		to:   baseTo.String(),
 		tokenTransfer: types.TokenTransfer{
 			TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
 			RecipientAddress: baseSellerReceiveAddressHex,
@@ -1171,7 +1174,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyer.String(),
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
 					RecipientAddress: fmt.Sprintf("%x", []byte("different_recipient_address")),
@@ -1185,7 +1189,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyer.String(),
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
 					RecipientAddress: "invalid_hex_address_gg",
@@ -1193,6 +1198,21 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			},
 			expectError: true,
 			errorMsg:    "error converting recipient address to bytes",
+		},
+		{
+			name:       "closing transaction sender does not match locked buyer",
+			closeOrder: baseCloseOrder,
+			sellOrder:  baseSellOrder,
+			tx: &mockTransaction{
+				from: common.HexToAddress("deadbeef00000000").String(),
+				to:   baseTo.String(),
+				tokenTransfer: types.TokenTransfer{
+					TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
+					RecipientAddress: baseSellerReceiveAddressHex,
+				},
+			},
+			expectError: true,
+			errorMsg:    "closing transaction sender does not match the order's locked buyer",
 		},
 		{
 			name: "close order ID does not match sell order ID",
@@ -1221,7 +1241,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyer.String(),
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  nil,
 					RecipientAddress: baseSellerReceiveAddressHex,
@@ -1235,7 +1256,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyer.String(),
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  big.NewInt(500), // Different from requested amount
 					RecipientAddress: baseSellerReceiveAddressHex,

@@ -1,0 +1,66 @@
+# syntax=docker/dockerfile:1
+#
+# Ultra-Optimized Dockerfile with Maximum Caching
+# This version adds additional optimizations for multi-binary builds
+
+FROM golang:1.24.0-alpine AS builder
+
+# Install build dependencies in separate layer
+RUN apk update && apk add --no-cache make bash nodejs npm git
+
+ARG EXPLORER_BASE_PATH
+ARG WALLET_BASE_PATH
+
+WORKDIR /go/src/github.com/canopy-network/canopy
+
+# ============================================
+# OPTIMIZATION 1: Cache Go module dependencies
+# ============================================
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download && \
+    go mod verify
+
+# ============================================
+# OPTIMIZATION 2: Copy only necessary files for build
+# Exclude test files, docs, and unnecessary directories
+# ============================================
+COPY cmd ./cmd
+COPY bft ./bft
+COPY cache ./cache
+COPY controller ./controller
+COPY fsm ./fsm
+# Add other necessary source directories here
+COPY *.go ./
+
+ENV EXPLORER_BASE_PATH=${EXPLORER_BASE_PATH}
+ENV WALLET_BASE_PATH=${WALLET_BASE_PATH}
+
+# ============================================
+# OPTIMIZATION 3: Aggressive caching with build mounts
+# ============================================
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/tmp/go-build-cache \
+    GOCACHE=/root/.cache/go-build \
+    CGO_ENABLED=0 \
+    go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o bin \
+    ./cmd/main/...
+
+# ============================================
+# OPTIMIZATION 4: Ultra-minimal runtime stage
+# ============================================
+FROM scratch
+
+WORKDIR /app
+
+# Copy CA certificates for HTTPS (if needed)
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# Copy only the built binaries
+COPY --from=builder /go/src/github.com/canopy-network/canopy/bin /app/bin
+
+ENTRYPOINT ["/app/bin"]

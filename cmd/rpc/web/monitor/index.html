@@ -40,10 +40,23 @@
   .empty { padding: .9rem; color: #8b949e; }
   footer { margin-top: 1rem; color: #484f58; font-size: .72rem; }
   tr.closed { opacity: .65; }
-  details.json summary { cursor: pointer; color: #8b949e; }
-  details.json pre { margin: .35rem 0 .1rem; padding: .6rem; background: #0d1117; border: 1px solid #30363d;
-    border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
-  td.expand { white-space: normal; }
+  tr.detail td { border-bottom: 1px dashed #21262d; padding-top: 0; color: #8b949e; font-size: .82em; }
+  tr.detail .field { margin-right: 1.4em; }
+  tr.detail .field .k { color: #6e7681; margin-right: .35em; }
+  tbody tr.main:not(:last-of-type) td { border-bottom: none; }
+  .json-trigger { cursor: help; color: #8b949e; border-bottom: 1px dotted #484f58; }
+  .json-trigger:hover { color: #58a6ff; }
+  #jsonPopover {
+    position: fixed; z-index: 1000; display: none; max-width: min(560px, 90vw); max-height: 90vh;
+    overflow: auto; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(1,4,9,.8); padding: .7rem .8rem;
+  }
+  #jsonPopover pre { margin: 0; white-space: pre-wrap; word-break: break-all; line-height: 1.45; }
+  #jsonPopover .key { color: #7ee787; }
+  #jsonPopover .str { color: #a5d6ff; }
+  #jsonPopover .num { color: #79c0ff; }
+  #jsonPopover .bool { color: #ff7b72; }
+  #jsonPopover .null { color: #8b949e; }
 </style>
 </head>
 <body>
@@ -61,6 +74,8 @@
 <div class="panel" id="closedOrders"><div class="empty">loading&hellip;</div></div>
 
 <footer id="footer"></footer>
+
+<div id="jsonPopover"><pre id="jsonPopoverContent"></pre></div>
 
 <script>
 const POLL_MS = 5000;
@@ -95,6 +110,11 @@ function orderStatus(o) {
   return { text: 'open', cls: 'muted' };
 }
 
+function fmtAmount(v) {
+  if (v === undefined || v === null) return '—';
+  return (Number(v) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+}
+
 function shortId(id) {
   return id && id.length > 16 ? id.slice(0, 8) + '…' + id.slice(-8) : (id || '—');
 }
@@ -103,8 +123,24 @@ function escapeHtml(s) {
   return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
+function syntaxHighlight(obj) {
+  const json = escapeHtml(JSON.stringify(obj, null, 2));
+  return json.replace(
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    match => {
+      let cls = 'num';
+      if (/^"/.test(match)) cls = /:$/.test(match) ? 'key' : 'str';
+      else if (/true|false/.test(match)) cls = 'bool';
+      else if (/null/.test(match)) cls = 'null';
+      return `<span class="${cls}">${match}</span>`;
+    }
+  );
+}
+
+let jsonPopoverData = null;
 function orderJsonDetails(o) {
-  return `<details class="json" open><summary>json</summary><pre>${escapeHtml(JSON.stringify(o, null, 2))}</pre></details>`;
+  const idx = jsonPopoverData.push(o) - 1;
+  return `<span class="json-trigger" data-json-idx="${idx}">json</span>`;
 }
 
 function renderOrders(orders) {
@@ -116,22 +152,27 @@ function renderOrders(orders) {
   const rows = orders.map(o => {
     const st = orderStatus(o);
     const os = o.oracleState;
-    return `<tr>
+    return `<tr class="main">
       <td class="id" title="${o.orderId}">${shortId(o.orderId)}</td>
       <td>${o.order ? o.order.committee : '—'}</td>
-      <td>${o.order && o.order.buyerChainDeadline ? o.order.buyerChainDeadline : '—'}</td>
-      <td>${os ? os.safeHeight : '—'}</td>
-      <td>${os ? os.sourceChainHeight : '—'}</td>
-      <td>${os ? os.confirmationLag : '—'}</td>
-      <td>${os ? os.safeBlockConfirmations : '—'}</td>
+      <td>${o.order ? fmtAmount(o.order.amountForSale) : '—'}</td>
+      <td>${o.order ? fmtAmount(o.order.requestedAmount) : '—'}</td>
       <td class="${st.cls}">${st.text}</td>
-      <td class="expand">${orderJsonDetails(o)}</td>
+      <td>${orderJsonDetails(o)}</td>
+    </tr>
+    <tr class="detail">
+      <td colspan="6">
+        <span class="field"><span class="k">deadline</span>${o.order && o.order.buyerChainDeadline ? o.order.buyerChainDeadline : '—'}</span>
+        <span class="field"><span class="k">safeHeight</span>${os ? os.safeHeight : '—'}</span>
+        <span class="field"><span class="k">sourceHeight</span>${os ? os.sourceChainHeight : '—'}</span>
+        <span class="field"><span class="k">lag</span>${os ? os.confirmationLag : '—'}</span>
+        <span class="field"><span class="k">confirmations</span>${os ? os.safeBlockConfirmations : '—'}</span>
+      </td>
     </tr>`;
   }).join('');
   el.innerHTML = `<table>
     <thead><tr>
-      <th>order</th><th>chain</th><th>deadline</th><th>safeHeight</th>
-      <th>sourceHeight</th><th>lag</th><th>confirmations</th><th>status</th><th>json</th>
+      <th>order</th><th>chain</th><th>CNPY</th><th>USDC</th><th>status</th><th>json</th>
     </tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
@@ -143,18 +184,30 @@ function renderClosedOrders(orders) {
     return;
   }
   const rows = orders.map(o => {
-    return `<tr class="closed">
+    const st = orderStatus(o);
+    const os = o.oracleState;
+    return `<tr class="main closed">
       <td class="id" title="${o.orderId}">${shortId(o.orderId)}</td>
       <td>${o.order ? o.order.committee : '—'}</td>
-      <td>${o.order ? o.order.amountForSale : '—'}</td>
-      <td>${o.order ? o.order.requestedAmount : '—'}</td>
+      <td>${o.order ? fmtAmount(o.order.amountForSale) : '—'}</td>
+      <td>${o.order ? fmtAmount(o.order.requestedAmount) : '—'}</td>
+      <td class="${st.cls}">${st.text}</td>
       <td>${o.closedAt ? new Date(o.closedAt).toLocaleString() : '—'}</td>
-      <td class="expand">${orderJsonDetails(o)}</td>
+      <td>${orderJsonDetails(o)}</td>
+    </tr>
+    <tr class="detail closed">
+      <td colspan="7">
+        <span class="field"><span class="k">deadline</span>${o.order && o.order.buyerChainDeadline ? o.order.buyerChainDeadline : '—'}</span>
+        <span class="field"><span class="k">safeHeight</span>${os ? os.safeHeight : '—'}</span>
+        <span class="field"><span class="k">sourceHeight</span>${os ? os.sourceChainHeight : '—'}</span>
+        <span class="field"><span class="k">lag</span>${os ? os.confirmationLag : '—'}</span>
+        <span class="field"><span class="k">confirmations</span>${os ? os.safeBlockConfirmations : '—'}</span>
+      </td>
     </tr>`;
   }).join('');
   el.innerHTML = `<table>
     <thead><tr>
-      <th>order</th><th>chain</th><th>CNPY</th><th>requested</th><th>closed at</th><th>json</th>
+      <th>order</th><th>chain</th><th>CNPY</th><th>USDC</th><th>status</th><th>closed at</th><th>json</th>
     </tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
@@ -164,6 +217,7 @@ async function poll() {
   const stats = [];
   let orders = [];
   let closedOrders = [];
+  jsonPopoverData = [];
 
   try {
     const height = await post('/v1/query/height', {});
@@ -195,6 +249,43 @@ async function poll() {
   document.getElementById('footer').textContent = 'updated ' + new Date().toLocaleTimeString() + ' · auto-refresh ' + (POLL_MS / 1000) + 's';
   liveDot.classList.remove('stale');
 }
+
+const jsonPopover = document.getElementById('jsonPopover');
+const jsonPopoverContent = document.getElementById('jsonPopoverContent');
+
+function showJsonPopover(trigger) {
+  const idx = parseInt(trigger.dataset.jsonIdx, 10);
+  const data = jsonPopoverData[idx];
+  if (data === undefined) return;
+  jsonPopoverContent.innerHTML = syntaxHighlight(data);
+  jsonPopover.style.display = 'block';
+
+  const rect = trigger.getBoundingClientRect();
+  const popRect = jsonPopover.getBoundingClientRect();
+  const gap = -4; // slight overlap so the cursor never crosses dead space between trigger and popover
+  let left = rect.left - popRect.width - gap;
+  if (left < 8) left = rect.right + gap; // not enough room on the left, fall back to the right
+  let top = rect.top + rect.height / 2 - popRect.height / 2;
+  top = Math.max(8, Math.min(top, window.innerHeight - popRect.height - 8));
+  jsonPopover.style.left = Math.max(8, left) + 'px';
+  jsonPopover.style.top = top + 'px';
+}
+
+function hideJsonPopover() {
+  jsonPopover.style.display = 'none';
+}
+
+function inTriggerOrPopover(el) {
+  return !!(el && (el.closest('.json-trigger') || el.closest('#jsonPopover')));
+}
+
+document.body.addEventListener('mouseover', e => {
+  const trigger = e.target.closest('.json-trigger');
+  if (trigger) showJsonPopover(trigger);
+});
+document.body.addEventListener('mouseout', e => {
+  if (inTriggerOrPopover(e.target) && !inTriggerOrPopover(e.relatedTarget)) hideJsonPopover();
+});
 
 chainInput.addEventListener('change', poll);
 poll();
