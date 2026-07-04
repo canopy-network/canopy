@@ -157,3 +157,77 @@ func TestMatchesOrderDestination_NativeSOL(t *testing.T) {
 		t.Fatalf("expected native match, ok=%v err=%v", ok, err)
 	}
 }
+
+func TestParseSPLTransfer_TransferChecked(t *testing.T) {
+	source := solana.NewWallet().PublicKey()
+	mint := solana.NewWallet().PublicKey()
+	dest := solana.NewWallet().PublicKey()
+	owner := solana.NewWallet().PublicKey()
+	data := append([]byte{12}, u64LE(750)...)
+	in := &instruction{
+		programID: solana.TokenProgramID,
+		accounts:  []solana.PublicKey{source, mint, dest, owner},
+		data:      data,
+	}
+	tx := &Transaction{}
+	if err := tx.parseSPLTransfer(in); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !tx.isTransfer {
+		t.Fatal("expected isTransfer=true")
+	}
+	if tx.mint != mint.String() {
+		t.Fatalf("expected mint %s, got %s", mint.String(), tx.mint)
+	}
+	if tx.destination != dest.String() {
+		t.Fatalf("expected destination %s, got %s", dest.String(), tx.destination)
+	}
+	if tx.amount.Uint64() != 750 {
+		t.Fatalf("expected amount 750, got %s", tx.amount)
+	}
+}
+
+func TestParseSPLTransfer_DataTooShort(t *testing.T) {
+	in := &instruction{programID: solana.TokenProgramID, data: []byte{3, 1, 2}}
+	tx := &Transaction{}
+	if err := tx.parseSPLTransfer(in); err == nil {
+		t.Fatal("expected error for undersized spl transfer data")
+	}
+}
+
+func TestParseSPLTransfer_Tag3_MissingAccounts(t *testing.T) {
+	source := solana.NewWallet().PublicKey()
+	data := append([]byte{3}, u64LE(1)...)
+	in := &instruction{programID: solana.TokenProgramID, accounts: []solana.PublicKey{source}, data: data}
+	tx := &Transaction{}
+	if err := tx.parseSPLTransfer(in); err == nil {
+		t.Fatal("expected error for tag 3 with <2 accounts")
+	}
+}
+
+func TestParseSPLTransfer_Tag12_MissingAccounts(t *testing.T) {
+	source := solana.NewWallet().PublicKey()
+	mint := solana.NewWallet().PublicKey()
+	data := append([]byte{12}, u64LE(1)...)
+	in := &instruction{programID: solana.TokenProgramID, accounts: []solana.PublicKey{source, mint}, data: data}
+	tx := &Transaction{}
+	if err := tx.parseSPLTransfer(in); err == nil {
+		t.Fatal("expected error for tag 12 with <3 accounts")
+	}
+}
+
+func TestParseSPLTransfer_UnsupportedTag(t *testing.T) {
+	source := solana.NewWallet().PublicKey()
+	dest := solana.NewWallet().PublicKey()
+	owner := solana.NewWallet().PublicKey()
+	data := append([]byte{99}, u64LE(1)...)
+	in := &instruction{
+		programID: solana.TokenProgramID,
+		accounts:  []solana.PublicKey{source, dest, owner},
+		data:      data,
+	}
+	tx := &Transaction{}
+	if err := tx.parseSPLTransfer(in); err == nil {
+		t.Fatal("expected error for unsupported spl token instruction tag")
+	}
+}
