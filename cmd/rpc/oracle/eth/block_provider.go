@@ -384,7 +384,12 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 			p.logger.Errorf("[ETH-BLOCK] failed to get block at height %d: %v", next, err)
 			p.metrics.IncrementEthBlockFetchError("fetch_error")
 			// update metrics before returning
-			p.metrics.UpdateEthBlockProviderMetrics(0, 0, 0, 0, 0, 1, blocksProcessed, transactionsProcessed, retries)
+			p.metrics.UpdateEthBlockProvider(lib.EthBlockProviderMetricUpdate{
+				ConnectionErrors:      1,
+				BlocksProcessed:       blocksProcessed,
+				TransactionsProcessed: transactionsProcessed,
+				Retries:               retries,
+			})
 			// record batch size before returning
 			batchSize := int(next.Int64() - batchStart.Int64())
 			if batchSize > 0 {
@@ -401,7 +406,13 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		if err := p.processBlockTransactions(timeoutCtx, block); err != nil {
 			p.logger.Errorf("[ETH-TX] failed to process block transactions: %v", err)
 			// update metrics before returning
-			p.metrics.UpdateEthBlockProviderMetrics(fetchTime, 0, 0, 0, 0, 1, blocksProcessed, transactionsProcessed, retries)
+			p.metrics.UpdateEthBlockProvider(lib.EthBlockProviderMetricUpdate{
+				BlockFetchTime:        fetchTime,
+				ConnectionErrors:      1,
+				BlocksProcessed:       blocksProcessed,
+				TransactionsProcessed: transactionsProcessed,
+				Retries:               retries,
+			})
 			// record batch size before returning
 			batchSize := int(next.Int64() - batchStart.Int64())
 			if batchSize > 0 {
@@ -425,7 +436,12 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		blocksProcessed++
 		transactionsProcessed += len(block.transactions)
 		// update metrics with current block data
-		p.metrics.UpdateEthBlockProviderMetrics(fetchTime, txProcessTime, 0, 0, 0, 0, 1, len(block.transactions), 0)
+		p.metrics.UpdateEthBlockProvider(lib.EthBlockProviderMetricUpdate{
+			BlockFetchTime:         fetchTime,
+			TransactionProcessTime: txProcessTime,
+			BlocksProcessed:        1,
+			TransactionsProcessed:  len(block.transactions),
+		})
 		// increment height for next iteration
 		next.Add(next, big.NewInt(1))
 	}
@@ -484,7 +500,7 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 	}
 	// update retry metrics if there were retries
 	if retryCount > 0 {
-		p.metrics.UpdateEthBlockProviderMetrics(0, 0, 0, 0, 0, 0, 0, 0, retryCount)
+		p.metrics.UpdateEthBlockProvider(lib.EthBlockProviderMetricUpdate{Retries: retryCount})
 	}
 	return nil
 }
@@ -565,7 +581,10 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 	if err != nil {
 		p.logger.Warnf("[ETH-RPC] failed to get receipt for tx %s: %v", txHashStr, err)
 		// update receipt fetch metrics on error
-		p.metrics.UpdateEthBlockProviderMetrics(0, 0, receiptTime, 0, 0, 1, 0, 0, 0)
+		p.metrics.UpdateEthBlockProvider(lib.EthBlockProviderMetricUpdate{
+			ReceiptFetchTime: receiptTime,
+			ConnectionErrors: 1,
+		})
 		p.metrics.IncrementEthReceiptFetchError()
 		p.metrics.IncrementEthTransactionSuccessStatus("unknown")
 		return false, ErrTransactionReceipt
@@ -579,7 +598,7 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 	// token-specific quirks and get a universal success indicator.
 	if receipt.Status == TransactionStatusSuccess {
 		// update receipt fetch metrics on success
-		p.metrics.UpdateEthBlockProviderMetrics(0, 0, receiptTime, 0, 0, 0, 0, 0, 0)
+		p.metrics.UpdateEthBlockProvider(lib.EthBlockProviderMetricUpdate{ReceiptFetchTime: receiptTime})
 		p.metrics.IncrementEthTransactionSuccessStatus("success")
 		return true, nil
 	}
