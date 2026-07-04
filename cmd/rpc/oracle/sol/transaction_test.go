@@ -231,3 +231,61 @@ func TestParseSPLTransfer_UnsupportedTag(t *testing.T) {
 		t.Fatal("expected error for unsupported spl token instruction tag")
 	}
 }
+
+func TestParseNativeTransfer_HappyPath(t *testing.T) {
+	from := solana.NewWallet().PublicKey()
+	to := solana.NewWallet().PublicKey()
+	data := make([]byte, 12)
+	binary.LittleEndian.PutUint32(data[0:4], 2)
+	binary.LittleEndian.PutUint64(data[4:12], 12345)
+	in := &instruction{programID: solana.SystemProgramID, accounts: []solana.PublicKey{from, to}, data: data}
+	tx := &Transaction{}
+	if err := tx.parseNativeTransfer(in); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !tx.isTransfer {
+		t.Fatal("expected isTransfer=true")
+	}
+	if tx.destination != to.String() {
+		t.Fatalf("expected destination %s, got %s", to.String(), tx.destination)
+	}
+	if tx.amount.Uint64() != 12345 {
+		t.Fatalf("expected amount 12345, got %s", tx.amount)
+	}
+	if tx.mint != "" {
+		t.Fatalf("expected empty mint for native transfer, got %s", tx.mint)
+	}
+}
+
+func TestParseNativeTransfer_DataTooShort(t *testing.T) {
+	in := &instruction{programID: solana.SystemProgramID, data: make([]byte, 8)}
+	tx := &Transaction{}
+	if err := tx.parseNativeTransfer(in); err == nil {
+		t.Fatal("expected error for undersized system transfer data")
+	}
+}
+
+func TestParseNativeTransfer_WrongDiscriminator(t *testing.T) {
+	from := solana.NewWallet().PublicKey()
+	to := solana.NewWallet().PublicKey()
+	data := make([]byte, 12)
+	binary.LittleEndian.PutUint32(data[0:4], 5) // not 2 (Transfer)
+	binary.LittleEndian.PutUint64(data[4:12], 100)
+	in := &instruction{programID: solana.SystemProgramID, accounts: []solana.PublicKey{from, to}, data: data}
+	tx := &Transaction{}
+	if err := tx.parseNativeTransfer(in); err == nil {
+		t.Fatal("expected error for wrong discriminator")
+	}
+}
+
+func TestParseNativeTransfer_MissingAccounts(t *testing.T) {
+	from := solana.NewWallet().PublicKey()
+	data := make([]byte, 12)
+	binary.LittleEndian.PutUint32(data[0:4], 2)
+	binary.LittleEndian.PutUint64(data[4:12], 100)
+	in := &instruction{programID: solana.SystemProgramID, accounts: []solana.PublicKey{from}, data: data}
+	tx := &Transaction{}
+	if err := tx.parseNativeTransfer(in); err == nil {
+		t.Fatal("expected error for missing accounts")
+	}
+}
