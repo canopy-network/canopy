@@ -541,6 +541,35 @@ func (s *Server) PeerInfo(w http.ResponseWriter, _ *http.Request, _ httprouter.P
 	}, http.StatusOK)
 }
 
+func newSystemResourceUsage(pm *mem.VirtualMemoryStat, c []cpu.TimesStat, cp []float64, d *disk.UsageStat, ioCounters []net.IOCountersStat) (SystemResourceUsage, error) {
+	if len(cp) == 0 {
+		return SystemResourceUsage{}, fmt.Errorf("missing cpu percent stats")
+	}
+	if len(c) == 0 {
+		return SystemResourceUsage{}, fmt.Errorf("missing cpu time stats")
+	}
+	if len(ioCounters) == 0 {
+		return SystemResourceUsage{}, fmt.Errorf("missing network io stats")
+	}
+	return SystemResourceUsage{
+		TotalRAM:        pm.Total,
+		AvailableRAM:    pm.Available,
+		UsedRAM:         pm.Used,
+		UsedRAMPercent:  pm.UsedPercent,
+		FreeRAM:         pm.Free,
+		UsedCPUPercent:  cp[0],
+		UserCPU:         c[0].User,
+		SystemCPU:       c[0].System,
+		IdleCPU:         c[0].Idle,
+		TotalDisk:       d.Total,
+		UsedDisk:        d.Used,
+		UsedDiskPercent: d.UsedPercent,
+		FreeDisk:        d.Free,
+		ReceivedBytesIO: ioCounters[0].BytesRecv,
+		WrittenBytesIO:  ioCounters[0].BytesSent,
+	}, nil
+}
+
 // PeerBook retrieves the node's peer book
 func (s *Server) PeerBook(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	write(w, s.controller.P2P.GetBookPeers(), http.StatusOK)
@@ -732,6 +761,11 @@ func (s *Server) ResourceUsage(w http.ResponseWriter, _ *http.Request, _ httprou
 		write(w, err, http.StatusInternalServerError)
 		return
 	}
+	systemUsage, err := newSystemResourceUsage(pm, c, cp, d, ioCounters)
+	if err != nil {
+		write(w, err, http.StatusInternalServerError)
+		return
+	}
 	write(w, resourceUsageResponse{
 		Process: ProcessResourceUsage{
 			Name:          name,
@@ -742,23 +776,7 @@ func (s *Server) ResourceUsage(w http.ResponseWriter, _ *http.Request, _ httprou
 			MemoryPercent: float64(memPercent),
 			CPUPercent:    cpuPercent,
 		},
-		System: SystemResourceUsage{
-			TotalRAM:        pm.Total,
-			AvailableRAM:    pm.Available,
-			UsedRAM:         pm.Used,
-			UsedRAMPercent:  pm.UsedPercent,
-			FreeRAM:         pm.Free,
-			UsedCPUPercent:  cp[0],
-			UserCPU:         c[0].User,
-			SystemCPU:       c[0].System,
-			IdleCPU:         c[0].Idle,
-			TotalDisk:       d.Total,
-			UsedDisk:        d.Used,
-			UsedDiskPercent: d.UsedPercent,
-			FreeDisk:        d.Free,
-			ReceivedBytesIO: ioCounters[0].BytesRecv,
-			WrittenBytesIO:  ioCounters[0].BytesSent,
-		},
+		System: systemUsage,
 	}, http.StatusOK)
 }
 
