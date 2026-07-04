@@ -3,6 +3,7 @@ package sol
 import (
 	"encoding/binary"
 	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
@@ -413,5 +414,56 @@ func TestMatchesOrderDestination_TransferChecked_ATA_Integration(t *testing.T) {
 	ok, err := tx.MatchesOrderDestination(mint.Bytes(), recipientWallet.Bytes())
 	if err != nil || !ok {
 		t.Fatalf("expected TransferChecked destination to match derived ATA, ok=%v err=%v", ok, err)
+	}
+}
+
+func TestTokenTransfer_FieldMapping(t *testing.T) {
+	tx := newTransaction("sig-transfer", "FeePayer1111111111111111111111111111111111", nil)
+	tx.destination = "Dest1111111111111111111111111111111111111"
+	tx.mint = "Mint1111111111111111111111111111111111111"
+	tx.amount = new(big.Int).SetUint64(555)
+	tx.decimals = 6
+
+	got := tx.TokenTransfer()
+	if got.Blockchain != solanaBlockchain {
+		t.Fatalf("expected blockchain %q, got %q", solanaBlockchain, got.Blockchain)
+	}
+	if got.TokenInfo.Decimals != 6 {
+		t.Fatalf("expected decimals 6, got %d", got.TokenInfo.Decimals)
+	}
+	if got.TransactionID != "sig-transfer" {
+		t.Fatalf("expected transaction id sig-transfer, got %s", got.TransactionID)
+	}
+	if got.SenderAddress != "FeePayer1111111111111111111111111111111111" {
+		t.Fatalf("expected sender FeePayer1111111111111111111111111111111111, got %s", got.SenderAddress)
+	}
+	if got.RecipientAddress != tx.destination {
+		t.Fatalf("expected recipient %s, got %s", tx.destination, got.RecipientAddress)
+	}
+	if got.TokenBaseAmount.Uint64() != 555 {
+		t.Fatalf("expected amount 555, got %s", got.TokenBaseAmount)
+	}
+	if got.ContractAddress != tx.mint {
+		t.Fatalf("expected contract address %s, got %s", tx.mint, got.ContractAddress)
+	}
+}
+
+func TestTransaction_Accessors(t *testing.T) {
+	tx := newTransaction("sig-accessors", "FeePayer1111111111111111111111111111111111", nil)
+	tx.destination = "Dest1111111111111111111111111111111111111"
+	if tx.From() != "FeePayer1111111111111111111111111111111111" {
+		t.Fatalf("unexpected From(): %s", tx.From())
+	}
+	if tx.To() != "Dest1111111111111111111111111111111111111" {
+		t.Fatalf("unexpected To(): %s", tx.To())
+	}
+	if tx.Hash() != "sig-accessors" {
+		t.Fatalf("unexpected Hash(): %s", tx.Hash())
+	}
+	if tx.Blockchain() != solanaBlockchain {
+		t.Fatalf("unexpected Blockchain(): %s", tx.Blockchain())
+	}
+	if tx.Order() != nil {
+		t.Fatal("expected nil Order() before any parse")
 	}
 }
