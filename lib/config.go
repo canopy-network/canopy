@@ -2,6 +2,7 @@ package lib
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -349,6 +350,74 @@ func DefaultMetricsConfig() MetricsConfig {
 		HeapProfilingEnabled:   false,          // disabled by default (causes GC pauses)
 		HeapProfilingIntervalS: 10,             // 10 second interval when enabled
 	}
+}
+
+type EthBlockProviderConfig struct {
+	NodeUrl           string `json:"ethNodeUrl"`        // ethereum rpc node url
+	NodeWSUrl         string `json:"ethNodeWsUrl"`      // ethereum node websocket url
+	EVMChainId        uint64 `json:"evmChainId"`        // ethereum chain id
+	RetryDelay        int    `json:"retryDelay"`        // retry delay in seconds for connection failures
+	StartupBlockDepth uint64 `json:"startupBlockDepth"` // how far back to start processing blocks when no next height was provided
+}
+
+// DefaultEthBlockProviderConfig() returns the default ethereum block provider configuration
+func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
+	return EthBlockProviderConfig{
+		NodeUrl:           "http://localhost:8545",
+		NodeWSUrl:         "ws://localhost:8545",
+		EVMChainId:        1,
+		RetryDelay:        5, // default 5 seconds reconnect retry delay
+		StartupBlockDepth: 1000,
+	}
+}
+
+// OracleConfig represents the configuration of the off-chain order witness oracle
+type OracleConfig struct {
+	OracleEnabled            bool   `json:"oracleEnabled"`            // enables or disables the oracle functionality
+	StateFile                string `json:"stateSaveFile"`            // file to save oracle state
+	OrderResubmitDelayBlocks uint64 `json:"orderResubmitDelayBlocks"` // how many root blocks to wait to resubmit order
+	Committee                uint64 `json:"committee"`                // committee this oracle will witnessed orders for
+	ProposeDelayBlocks       uint64 `json:"proposeDelayBlocks"`       // source-chain blocks a newly witnessed order is held before a proposer includes it; MUST exceed SafeBlockConfirmations, since effective validator-lag tolerance = ProposeDelayBlocks - SafeBlockConfirmations (see OracleConfig.Validate)
+	ReorgRollbackBlocks      uint64 `json:"reorgRollbackBlocks"`      // how far back to rollback the order store on reorgs
+	LockOrderCooldownBlocks  uint64 `json:"lockOrderCooldownBlocks"`  // how many root blocks to wait to prevent resubmission of lock orders with same ID
+	SafeBlockConfirmations   uint64 `json:"safeBlockConfirmations"`   // number of block confirmations required before considering a block safe
+}
+
+// DefaultOracleConfig() returns the default ethereum block provider configuration
+func DefaultOracleConfig() OracleConfig {
+	return OracleConfig{
+		OracleEnabled:            false,
+		StateFile:                "oracle.state",
+		OrderResubmitDelayBlocks: 2,
+		Committee:                2,
+		ProposeDelayBlocks:       7, // SafeBlockConfirmations (5) + 2 blocks of validator-lag tolerance
+		ReorgRollbackBlocks:      60,
+		LockOrderCooldownBlocks:  2,
+		SafeBlockConfirmations:   5,
+	}
+}
+
+// Validate checks the oracle config invariants and returns an error for any that would silently
+// break liveness. It only enforces constraints when the oracle is enabled.
+func (o OracleConfig) Validate() error {
+	if !o.OracleEnabled {
+		return nil
+	}
+	// A validator accepts a proposed order using only the safe gate (WitnessedHeight <= safeHeight,
+	// where safeHeight = processed - SafeBlockConfirmations); it does NOT apply the propose delay.
+	// A proposer only includes an order once BOTH its safe gate and propose delay pass. So the
+	// blocks of validator-lag a proposer's choices can tolerate is exactly:
+	//   ProposeDelayBlocks - SafeBlockConfirmations
+	// If ProposeDelayBlocks <= SafeBlockConfirmations the safe gate dominates, the propose delay
+	// buys nothing, and any validator whose source-chain node lags the proposer by a single block
+	// rejects freshly-eligible orders - which fails the whole proposal. Reject the config outright
+	// so this can never ship silently.
+	if o.ProposeDelayBlocks <= o.SafeBlockConfirmations {
+		return fmt.Errorf("oracle config: proposeDelayBlocks (%d) must be greater than safeBlockConfirmations (%d); "+
+			"validator-lag tolerance = proposeDelayBlocks - safeBlockConfirmations and would otherwise be zero",
+			o.ProposeDelayBlocks, o.SafeBlockConfirmations)
+	}
+	return nil
 }
 
 // WriteToFile() saves the Config object to a JSON file

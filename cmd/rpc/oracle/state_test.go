@@ -437,6 +437,33 @@ func TestOracleState_removeState(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, uint64(0), bsm.GetLastHeight())
 	})
+
+	t.Run("resets monotonic safeHeight and sourceChainHeight so a reorg re-sync cannot inherit stale height", func(t *testing.T) {
+		tempDir := createTempDirForState(t)
+		stateFile := filepath.Join(tempDir, "test_state")
+		logger := lib.NewDefaultLogger()
+		bsm := NewOracleState(stateFile, logger)
+
+		// simulate a synced oracle: high safeHeight/sourceChainHeight and a persisted block
+		cfg := lib.OracleConfig{SafeBlockConfirmations: 5}
+		bsm.updateSafeHeight(1000, cfg) // safeHeight -> 995
+		require.NoError(t, bsm.saveState(createTestBlock(1000, "0xblock1000", "0xparent1000")))
+		require.NoError(t, bsm.ValidateSequence(createTestBlock(1001, "0xblock1001", "0xblock1000")))
+		require.Equal(t, uint64(995), bsm.GetSafeHeight())
+		require.Equal(t, uint64(1001), bsm.GetSourceChainHeight())
+
+		// reorg/gap restart path
+		require.NoError(t, bsm.removeState())
+
+		// all derived height state must be cleared (as if a fresh process start)
+		assert.Equal(t, uint64(0), bsm.GetLastHeight(), "blockState should be cleared")
+		assert.Equal(t, uint64(0), bsm.GetSafeHeight(), "safeHeight must reset, not stay frozen high")
+		assert.Equal(t, uint64(0), bsm.GetSourceChainHeight(), "sourceChainHeight must reset")
+
+		// and the monotonic guard must let it rebuild from the re-sync point afterward
+		bsm.updateSafeHeight(1000, cfg)
+		assert.Equal(t, uint64(995), bsm.GetSafeHeight(), "safeHeight should rebuild after reset")
+	})
 }
 
 func TestOracleState_GetLastHeight(t *testing.T) {
@@ -764,14 +791,8 @@ func TestOracleState_Getters(t *testing.T) {
 		require.NoError(t, bsm.ValidateSequence(block))
 		assert.Equal(t, uint64(1), bsm.GetSourceChainHeight())
 
-		order := &types.WitnessedOrder{
-			OrderId:          []byte("order-a"),
-			LastSubmitHeight: 0,
-			WitnessedHeight:  0,
-			LockOrder:        &lib.LockOrder{OrderId: []byte("order-a")},
-		}
-		config := lib.OracleConfig{}
-		bsm.shouldSubmit(order, 10, config)
+		// submission history is advanced by recordSubmission (on commit), not by shouldSubmit
+		bsm.recordSubmission([]byte("order-a"), types.LockOrderType, 10)
 
 		lockCount, closeCount := bsm.SubmissionCounts()
 		assert.Equal(t, 1, lockCount)
@@ -779,14 +800,7 @@ func TestOracleState_Getters(t *testing.T) {
 	})
 
 	t.Run("after multiple mutations", func(t *testing.T) {
-		order2 := &types.WitnessedOrder{
-			OrderId:          []byte("order-b"),
-			LastSubmitHeight: 0,
-			WitnessedHeight:  0,
-			CloseOrder:       &lib.CloseOrder{OrderId: []byte("order-b")},
-		}
-		config := lib.OracleConfig{}
-		bsm.shouldSubmit(order2, 10, config)
+		bsm.recordSubmission([]byte("order-b"), types.CloseOrderType, 10)
 
 		block2 := createTestBlock(2, "0xblock2", "0xblock1")
 		require.NoError(t, bsm.ValidateSequence(block2))

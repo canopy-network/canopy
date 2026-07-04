@@ -584,6 +584,63 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			expectedCloseOrdersLen: 1,
 			expectedLockOrderIds:   []string{},
 			expectedCloseOrderIds:  []string{orderIdOne},
+			expectedResetOrderIds:  []string{},
+		},
+		{
+			name: "expired locked order with no witnessed close should be submitted as reset",
+			orderBook: createOrderBook(func() *lib.SellOrder {
+				order := createSellOrder(orderIdOne, contractAddress, buyerReceiveAddress)
+				order.BuyerChainDeadline = 10
+				return order
+			}()),
+			orderStore:             createOrderStore(),
+			safeHeight:             20,
+			expectedLockOrdersLen:  0,
+			expectedCloseOrdersLen: 0,
+			expectedResetOrdersLen: 1,
+			expectedLockOrderIds:   []string{},
+			expectedCloseOrderIds:  []string{},
+			expectedResetOrderIds:  []string{orderIdOne},
+		},
+		{
+			name: "expired locked order with a LATE close (witnessed after deadline) should reset, not close",
+			orderBook: createOrderBook(func() *lib.SellOrder {
+				order := createSellOrder(orderIdOne, contractAddress, buyerReceiveAddress)
+				order.BuyerChainDeadline = 10
+				return order
+			}()),
+			orderStore: createOrderStore(func() *types.WitnessedOrder {
+				o := createWitnessedCloseOrder(orderIdOne)
+				o.WitnessedHeight = 15 // mined AFTER the deadline of 10 - late payment
+				return o
+			}()),
+			safeHeight:             20,
+			expectedLockOrdersLen:  0,
+			expectedCloseOrdersLen: 0,
+			expectedResetOrdersLen: 1,
+			expectedLockOrderIds:   []string{},
+			expectedCloseOrderIds:  []string{},
+			expectedResetOrderIds:  []string{orderIdOne},
+		},
+		{
+			name: "expired locked order with an ON-TIME close (witnessed on or before deadline) must close, not reset",
+			orderBook: createOrderBook(func() *lib.SellOrder {
+				order := createSellOrder(orderIdOne, contractAddress, buyerReceiveAddress)
+				order.BuyerChainDeadline = 10
+				return order
+			}()),
+			orderStore: createOrderStore(func() *types.WitnessedOrder {
+				o := createWitnessedCloseOrder(orderIdOne)
+				o.WitnessedHeight = 5 // mined at/before the deadline of 10 - buyer paid on time
+				return o
+			}()),
+			safeHeight:             20,
+			expectedLockOrdersLen:  0,
+			expectedCloseOrdersLen: 1,
+			expectedResetOrdersLen: 0,
+			expectedLockOrderIds:   []string{},
+			expectedCloseOrderIds:  []string{orderIdOne},
+			expectedResetOrderIds:  []string{},
 		},
 		{
 			name: "mixed scenario with multiple orders",
@@ -609,6 +666,10 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 				state:      NewOracleState("file", log),
 				log:        log,
 			}
+			oracle.state.safeHeight = tt.safeHeight
+			// sourceChainHeight (the chain tip) is always >= safeHeight in reality; set it high so
+			// the propose-delay gate in shouldSubmit does not hold orders in these selection tests
+			oracle.state.sourceChainHeight = tt.safeHeight + 1000
 			// 100 to specify a high enough root height that shouldSubmit always passes
 			witnessedLockOrders, witnessedCloseOrders := oracle.WitnessedOrders(tt.orderBook, 100)
 			if len(witnessedLockOrders) != tt.expectedLockOrdersLen {
@@ -2262,6 +2323,34 @@ func TestOracle_reorgRollback(t *testing.T) {
 		assert.Error(t, err, "lock order witnessed above the rollback height should be removed")
 		_, err = store.ReadOrder([]byte("close-below"), types.CloseOrderType)
 		assert.NoError(t, err, "close order witnessed below the rollback height should remain")
+	})
+
+	t.Run("rollback delta larger than last height clamps to 0 and rolls back all orders (no uint64 underflow)", func(t *testing.T) {
+		tempDir, _ := os.MkdirTemp("", "oracle_reorg_test3")
+		defer os.RemoveAll(tempDir)
+		// order witnessed at height 3; whole chain is within the rollback window
+		order := &types.WitnessedOrder{
+			OrderId:         []byte("lock-early"),
+			WitnessedHeight: 3,
+			LockOrder:       &lib.LockOrder{OrderId: []byte("lock-early")},
+		}
+		store := createOrderStore(order)
+		state := NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger())
+		// last processed height 5, well below the rollback delta of 50 (reorg near startup)
+		require.NoError(t, state.saveState(&mockBlock{number: 5, hash: "h5"}))
+
+		oracle := &Oracle{
+			orderStore: store,
+			state:      state,
+			log:        lib.NewDefaultLogger(),
+			metrics:    newTestMetrics(),
+			config:     lib.OracleConfig{ReorgRollbackBlocks: 50},
+		}
+		oracle.reorgRollback()
+
+		// pre-fix: rollbackHeight underflowed to ~2^64 so nothing was removed. clamped: all removed.
+		_, err := store.ReadOrder([]byte("lock-early"), types.LockOrderType)
+		assert.Error(t, err, "order should be rolled back when the whole chain is within the rollback window")
 	})
 }
 

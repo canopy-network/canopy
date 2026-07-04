@@ -69,12 +69,15 @@ func NewOracleState(stateSaveFile string, logger lib.LoggerI) *OracleState {
 	return s
 }
 
-// shouldSubmit determines if the current oracle state allows for submitting this order
-// Performs all submission checks including lead time, resubmit delay, lock order restrictions, and history tracking
+// shouldSubmit determines if the current oracle state allows for submitting this order.
+// It performs all submission checks (propose lead time, resubmit delay, lock order cooldown) but is
+// READ-ONLY: it records nothing. Submission history is advanced only when an order actually commits
+// (see Oracle.CommitCertificate -> recordSubmission), so building a proposal that never commits does
+// not throttle a later, legitimate resubmission and does not diverge state from non-proposer nodes.
 func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, config lib.OracleConfig) bool {
-	// protect all oracle state fields with write lock
-	m.rwLock.Lock()
-	defer m.rwLock.Unlock()
+	// read-only: guard the state fields with a read lock
+	m.rwLock.RLock()
+	defer m.rwLock.RUnlock()
 	// convert order ID to string for use as map key
 	orderIdStr := lib.BytesToString(order.OrderId)
 	// propose lead time validation check
@@ -111,8 +114,6 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 			}
 			m.log.Debugf("[ORACLE-STATE] Lock order %s submitted at height %d, %d blocks ago, allowing resubmission", orderIdStr, height, blocksSinceSubmission)
 		}
-		// record the submission height for this lock order
-		m.lockOrderSubmissions[orderIdStr] = rootHeight
 	} else if order.CloseOrder != nil {
 		if height, exists := m.closeOrderSubmissions[orderIdStr]; exists {
 			// test if already submitted at this root height
@@ -121,10 +122,27 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 				return false
 			}
 		}
-		// record the submission height for this close order
-		m.closeOrderSubmissions[orderIdStr] = rootHeight
 	}
 	return true
+}
+
+// recordSubmission advances the local submission history for an order that has actually committed.
+// This is the sole writer of the lock/close submission maps; it is driven by CommitCertificate so
+// resubmit-delay and lock-order cooldown throttle future retries based on committed submissions
+// rather than on speculative proposals that may never reach quorum.
+func (m *OracleState) recordSubmission(orderID []byte, orderType types.OrderType, rootHeight uint64) {
+	if len(orderID) == 0 {
+		return
+	}
+	orderIdStr := lib.BytesToString(orderID)
+	m.rwLock.Lock()
+	defer m.rwLock.Unlock()
+	switch orderType {
+	case types.LockOrderType:
+		m.lockOrderSubmissions[orderIdStr] = rootHeight
+	case types.CloseOrderType:
+		m.closeOrderSubmissions[orderIdStr] = rootHeight
+	}
 }
 
 // ValidateSequence performs sequence validation and reorg detection
@@ -189,10 +207,22 @@ func (m *OracleState) saveState(block types.BlockI) lib.ErrorI {
 	return nil
 }
 
-// removeState removes the state file from disk and clears the in-memory cache
+// removeState resets the oracle to a fresh, first-run state: it deletes the on-disk block state
+// and clears ALL in-memory derived height state. Both callers (the block-sequence-gap and the
+// chain-reorg restart paths) re-sync the block provider from scratch, so any retained height would
+// be stale.
+//
+// safeHeight in particular must be cleared here: it is monotonic (updateSafeHeight only raises it),
+// so if left alone after a reorg it stays frozen at the pre-reorg value (~tip - confirmations) for
+// the entire ~StartupBlockDepth re-sync. During that window it would claim blocks are safe that
+// this pass has not re-processed - most dangerously on the reset path, which gates purely on
+// safeHeight vs the deadline with no witnessed evidence. Resetting to 0 is conservative: it holds
+// all orders until the first re-processed block re-derives safeHeight from the current pass.
 func (m *OracleState) removeState() lib.ErrorI {
 	m.rwLock.Lock()
 	m.blockState = nil
+	m.safeHeight = 0
+	m.sourceChainHeight = 0
 	m.rwLock.Unlock()
 	err := os.Remove(m.stateSaveFile)
 	if err != nil && !os.IsNotExist(err) {

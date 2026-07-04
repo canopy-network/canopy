@@ -120,8 +120,15 @@ func (o *Oracle) reorgRollback() {
 		o.log.Warnf("[ORACLE-REORG] Reorg detected but no last known good height")
 		return
 	}
-	// calculate the rollback height - orders witnessed above this height will be removed
-	rollbackHeight := height - o.config.ReorgRollbackBlocks
+	// calculate the rollback height - orders witnessed above this height will be removed.
+	// clamp at 0: when the delta exceeds the last height (reorg near startup / small chain) an
+	// unclamped subtraction underflows uint64 to a huge value, so `WitnessedHeight > rollbackHeight`
+	// is never true and NOTHING is rolled back - the exact opposite of the intent. Clamping to 0
+	// rolls back every witnessed order, which is the conservative choice that deep into a reorg.
+	var rollbackHeight uint64
+	if height > o.config.ReorgRollbackBlocks {
+		rollbackHeight = height - o.config.ReorgRollbackBlocks
+	}
 	o.log.Infof("[ORACLE-REORG] Rolling back orders witnessed above height %d (last height %d - delta %d)", rollbackHeight, height, o.config.ReorgRollbackBlocks)
 	// process lock orders first
 	o.rollbackOrderType(types.LockOrderType, rollbackHeight)
@@ -615,6 +622,16 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders, rootOrderBook *lib.O
 				orderIDStr, order.BuyerChainDeadline, safeHeight)
 			return ErrOrderNotVerified(orderIDStr, errors.New("order deadline not passed"))
 		}
+		// mirror the proposer's precedence rule: a reset must not override a close the buyer
+		// earned on time. If this node witnessed a close mined on or before the deadline, the
+		// buyer paid and this proposal is refunding the seller anyway - reject it so a lagging
+		// or malicious proposer cannot burn the buyer's payment past nodes that saw it. A close
+		// mined after the deadline is a late payment and does not block the reset.
+		if wOrder, cErr := o.orderStore.ReadOrder(orderId, types.CloseOrderType); cErr == nil && wOrder.WitnessedHeight <= order.BuyerChainDeadline {
+			o.log.Warnf("[ORACLE-VALIDATE] Reset order %s rejected: on-time close witnessed (witnessed=%d, deadline=%d)",
+				orderIDStr, wOrder.WitnessedHeight, order.BuyerChainDeadline)
+			return ErrOrderNotVerified(orderIDStr, errors.New("on-time close witnessed for order proposed as reset"))
+		}
 		o.log.Infof("[ORACLE-VALIDATE] Reset order %s valid (deadline=%d, safe=%d)", orderIDStr, order.BuyerChainDeadline, safeHeight)
 	}
 	// summary log
@@ -647,6 +664,8 @@ func (o *Oracle) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, 
 			o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 			continue
 		}
+		// advance local submission history on commit (drives resubmit-delay / lock cooldown)
+		o.state.recordSubmission(order.OrderId, types.LockOrderType, qc.Header.RootHeight)
 		o.log.Infof("[ORACLE-COMMIT] Updated last submit height for lock order %s: %d", lib.BytesToString(order.OrderId), qc.Header.RootHeight)
 	}
 	// Update the last submit height for all close orders in this certificate
@@ -667,6 +686,8 @@ func (o *Oracle) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, 
 			o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 			continue
 		}
+		// advance local submission history on commit (drives resubmit-delay dedup)
+		o.state.recordSubmission(orderId, types.CloseOrderType, qc.Header.RootHeight)
 		o.log.Infof("[ORACLE-COMMIT] Updated last submit height for close order %s: %d", lib.BytesToString(orderId), qc.Header.RootHeight)
 	}
 	// Reset orders are deterministic (deadline-based), so clear stale local close-order witness state.
@@ -884,7 +905,15 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			lockOrders = append(lockOrders, wOrder.LockOrder)
 		} else {
 			stats.resetChecked++
-			if order.BuyerChainDeadline > 0 && safeHeight > order.BuyerChainDeadline {
+			// A close the buyer earned on time takes precedence over a reset. Read the close
+			// store BEFORE the deadline check: if the buyer's payment was mined on or before the
+			// deadline, refunding the seller would burn that payment. WitnessedHeight is the
+			// source-chain block the tx was mined in (globally objective), so "on time" is
+			// compared against the deadline, not against the local safe height. A close mined
+			// AFTER the deadline is a late payment and must not block a legitimate reset.
+			wOrder, err := o.orderStore.ReadOrder(order.Id, types.CloseOrderType)
+			haveOnTimeClose := err == nil && wOrder.WitnessedHeight <= order.BuyerChainDeadline
+			if order.BuyerChainDeadline > 0 && safeHeight > order.BuyerChainDeadline && !haveOnTimeClose {
 				stats.resetSubmitting++
 				o.log.Infof("[ORACLE-SUBMIT] Submitting reset order %s (deadline=%d, safe=%d)",
 					orderId, order.BuyerChainDeadline, safeHeight)
@@ -893,7 +922,6 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			}
 			stats.closeChecked++
 			// process locked orders - look for witnessed close orders
-			wOrder, err := o.orderStore.ReadOrder(order.Id, types.CloseOrderType)
 			if err != nil {
 				if err.Code() != CodeReadOrder {
 					o.log.Errorf("[ORACLE-SUBMIT] Failed to read close order %s: %v", orderId, err)
@@ -915,15 +943,10 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				stats.closeHeldDelay++
 				continue
 			}
-			// update the last height this order was submitted
-			wOrder.LastSubmitHeight = rootHeight
-			// update the witnessed order in the store
-			err = o.orderStore.WriteOrder(wOrder, types.CloseOrderType)
-			if err != nil {
-				o.log.Errorf("[ORACLE-SUBMIT] Failed to write close order %s: %v", orderId, err)
-				o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
-				continue
-			}
+			// note: LastSubmitHeight is NOT advanced here. Selecting an order for a proposal must not
+			// mutate persistent store state, since the proposal may never commit (view change) and
+			// non-proposer nodes never run this path. CommitCertificate is the sole writer of
+			// LastSubmitHeight, keeping store state identical across proposer and validators.
 			o.log.Infof("[ORACLE-SUBMIT] Submitting close order %s (witnessed=%d)", orderId, wOrder.WitnessedHeight)
 			stats.closeSubmitting++
 			// submit this witnessed close order by returning it in the closeOrders slice

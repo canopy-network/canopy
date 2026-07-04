@@ -100,6 +100,10 @@ func Start() {
 	var o *oracle.Oracle
 	// only enable oracle if configuration is present
 	if config.OracleEnabled {
+		// fail fast on config invariants that would silently break oracle liveness/consensus
+		if e := config.OracleConfig.Validate(); e != nil {
+			l.Fatal(e.Error())
+		}
 		oracleRoot := filepath.Join(DataDir, "oracle")
 		l.Infof("Oracle enabled, see oracle log in %s for details", oracleRoot)
 		// create a seperate logger for the oracle and all oracle components
