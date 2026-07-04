@@ -60,6 +60,15 @@ type Server struct {
 	// handles the indexer blob caching
 	indexerBlobCache *indexerBlobCache
 
+	// closedOrdersMu guards lastOrderIDs and closedOrders, populated by
+	// OracleDebugOrder so the oracle-monitor dashboard can keep showing an
+	// order for a while after it drops out of the live root-chain order book
+	closedOrdersMu sync.Mutex
+	// lastOrderIDs is the live order book as of the last OracleDebugOrder call, keyed by hex order id
+	lastOrderIDs map[string]*lib.SellOrder
+	// closedOrders holds orders that have disappeared from the live book, pruned after closedOrderRetention
+	closedOrders map[string]*closedOracleOrder
+
 	logger lib.LoggerI
 }
 
@@ -73,6 +82,8 @@ func NewServer(controller *controller.Controller, config lib.Config, logger lib.
 		poll:             make(fsm.Poll),
 		pollMux:          &sync.RWMutex{},
 		indexerBlobCache: newIndexerBlobCache(100),
+		lastOrderIDs:     make(map[string]*lib.SellOrder),
+		closedOrders:     make(map[string]*closedOracleOrder),
 	}
 }
 

@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
+	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/fsm"
@@ -338,6 +340,20 @@ type OracleDebugOrderResponse struct {
 	BuyDeadlineBlocks uint64 `json:"buyDeadlineBlocks"`
 	// OracleState is the oracle's local view of this order, nil if this node doesn't run the oracle
 	OracleState *types.OracleDebugOrder `json:"oracleState,omitempty"`
+	// ClosedAt is set only for entries returned in OracleDebugOrdersResponse.ClosedOrders - it's
+	// when this order was last observed in the live order book before disappearing
+	ClosedAt *time.Time `json:"closedAt,omitempty"`
+}
+
+// closedOrderRetention is how long OracleDebugOrder keeps reporting an order after it drops out
+// of the live root-chain order book, so the monitor dashboard doesn't lose it the instant it closes
+const closedOrderRetention = 24 * time.Hour
+
+// closedOracleOrder is a sell order that has disappeared from the live order book (completed or
+// deleted), retained in memory so OracleDebugOrder can keep surfacing it for a while
+type closedOracleOrder struct {
+	Order    *lib.SellOrder
+	ClosedAt time.Time
 }
 
 // OracleDebugOrdersResponse lists every order in a chain's book alongside the oracle's node-global
@@ -346,6 +362,9 @@ type OracleDebugOrderResponse struct {
 // empty order book shouldn't read as "oracle not running"
 type OracleDebugOrdersResponse struct {
 	Orders []*OracleDebugOrderResponse `json:"orders"`
+	// ClosedOrders lists orders seen in a previous call that have since disappeared from the live
+	// book, kept around for closedOrderRetention so a completed order doesn't just vanish
+	ClosedOrders []*OracleDebugOrderResponse `json:"closedOrders,omitempty"`
 	// OracleState is nil if this node doesn't run the oracle
 	OracleState *types.OracleDebugOrder `json:"oracleState,omitempty"`
 	// RootChainHeight is this node's cached view of the root chain's height (via its
@@ -370,6 +389,50 @@ func (s *Server) resolveOrderBook(chainId uint64) (*lib.OrderBook, lib.ErrorI) {
 			"this node only serves order book for chainId %d, not %d", s.config.ChainId, chainId))
 	}
 	return s.controller.GetOrderBook()
+}
+
+// trackClosedOrders diffs the live order book against the previous OracleDebugOrder call's
+// snapshot: any order present last time but missing now has completed (or been deleted) and gets
+// recorded so it stays in ClosedOrders for closedOrderRetention. Expired entries are pruned here too.
+func (s *Server) trackClosedOrders(live []*lib.SellOrder, buyDeadlineBlocks uint64) []*OracleDebugOrderResponse {
+	s.closedOrdersMu.Lock()
+	defer s.closedOrdersMu.Unlock()
+
+	now := time.Now()
+
+	current := make(map[string]*lib.SellOrder, len(live))
+	for _, order := range live {
+		current[lib.BytesToString(order.Id)] = order
+	}
+
+	// anything open last call and missing now just closed - snapshot it before it's forgotten
+	for id, prev := range s.lastOrderIDs {
+		if _, stillOpen := current[id]; stillOpen {
+			continue
+		}
+		if _, alreadyClosed := s.closedOrders[id]; alreadyClosed {
+			continue
+		}
+		s.closedOrders[id] = &closedOracleOrder{Order: prev, ClosedAt: now}
+	}
+	s.lastOrderIDs = current
+
+	responses := make([]*OracleDebugOrderResponse, 0, len(s.closedOrders))
+	for id, c := range s.closedOrders {
+		if now.Sub(c.ClosedAt) > closedOrderRetention {
+			delete(s.closedOrders, id)
+			continue
+		}
+		closedAt := c.ClosedAt
+		responses = append(responses, &OracleDebugOrderResponse{
+			OrderId:           c.Order.Id,
+			Order:             c.Order,
+			BuyDeadlineBlocks: buyDeadlineBlocks,
+			ClosedAt:          &closedAt,
+		})
+	}
+	sort.Slice(responses, func(i, j int) bool { return responses[i].ClosedAt.After(*responses[j].ClosedAt) })
+	return responses
 }
 
 // buildOracleDebugOrder joins a single order with the oracle's local witness state for it
@@ -423,6 +486,7 @@ func (s *Server) OracleDebugOrder(w http.ResponseWriter, r *http.Request, _ http
 			}
 			return &OracleDebugOrdersResponse{
 				Orders:          responses,
+				ClosedOrders:    s.trackClosedOrders(book.Orders, buyDeadlineBlocks),
 				OracleState:     oracleState,
 				RootChainHeight: s.controller.RootChainHeight(),
 			}, nil
