@@ -64,7 +64,7 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 	// fetch name from contract
 	nameBytes, err := m.callContract(ctx, contractAddress, erc20NameFunction)
 	if err != nil {
-		m.metrics.IncrementEthTokenInfoFetchError("name")
+		m.metrics.IncrementTokenInfoFetchError("name")
 		return types.TokenInfo{}, fmt.Errorf("%w: name: %v", ErrTokenInfo, err)
 	}
 	// decode name from bytes
@@ -72,7 +72,7 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 	// fetch symbol from contract
 	symbolBytes, err := m.callContract(ctx, contractAddress, erc20SymbolFunction)
 	if err != nil {
-		m.metrics.IncrementEthTokenInfoFetchError("symbol")
+		m.metrics.IncrementTokenInfoFetchError("symbol")
 		return types.TokenInfo{}, fmt.Errorf("%w: symbol: %v", ErrTokenInfo, err)
 	}
 	// decode symbol from bytes
@@ -80,7 +80,7 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 	// fetch decimals from contract
 	decimalsBytes, err := m.callContract(ctx, contractAddress, erc20DecimalsFunction)
 	if err != nil {
-		m.metrics.IncrementEthTokenInfoFetchError("decimals")
+		m.metrics.IncrementTokenInfoFetchError("decimals")
 		return types.TokenInfo{}, fmt.Errorf("%w: decimals: %v", ErrTokenInfo, err)
 	}
 	// decode decimals from bytes
@@ -122,7 +122,7 @@ func (m *ERC20TokenCache) callContract(ctx context.Context, address, function st
 	if err != nil {
 		// check if this was a timeout
 		if ctx.Err() != nil || callCtx.Err() != nil {
-			m.metrics.IncrementEthTokenContractCallTimeout()
+			m.metrics.IncrementTokenContractCallTimeout()
 		}
 		return nil, ErrContractNotFound
 	}

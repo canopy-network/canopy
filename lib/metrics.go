@@ -1010,34 +1010,34 @@ func (m *Metrics) UpdateOracleStoreErrorMetrics(writeErrors, readErrors, removeE
 
 // ========== Eth Block Provider Metrics Helper Functions ==========
 
-// SetEthConnectionState sets the current connection state
+// SetConnectionState sets the current connection state
 // States: 0=disconnected, 1=connecting, 2=rpc_connected, 3=fully_connected
-func (m *Metrics) SetEthConnectionState(state int) {
+func (m *Metrics) SetConnectionState(state int) {
 	if m == nil {
 		return
 	}
 	m.ConnectionState.Set(float64(state))
 }
 
-// SetEthSyncStatus sets the current sync status
+// SetSyncStatus sets the current sync status
 // States: 0=unsynced, 1=syncing, 2=synced
-func (m *Metrics) SetEthSyncStatus(status int) {
+func (m *Metrics) SetSyncStatus(status int) {
 	if m == nil {
 		return
 	}
 	m.SyncStatus.Set(float64(status))
 }
 
-// SetEthBlockHeightLag sets the number of blocks behind chain head
-func (m *Metrics) SetEthBlockHeightLag(lag uint64) {
+// SetBlockHeightLag sets the number of blocks behind chain head
+func (m *Metrics) SetBlockHeightLag(lag uint64) {
 	if m == nil {
 		return
 	}
 	m.BlockHeightLag.Set(float64(lag))
 }
 
-// SetEthChainHeadHeight sets the latest block height from chain head
-func (m *Metrics) SetEthChainHeadHeight(height uint64) {
+// SetChainHeadHeight sets the latest block height from chain head
+func (m *Metrics) SetChainHeadHeight(height uint64) {
 	if m == nil {
 		return
 	}
@@ -1060,161 +1060,161 @@ func (m *Metrics) SetEthSafeHeight(height uint64) {
 	m.EthSafeHeight.Set(float64(height))
 }
 
-// IncrementEthRPCConnectionAttempt increments the RPC connection attempt counter
-func (m *Metrics) IncrementEthRPCConnectionAttempt() {
+// IncrementRPCConnectionAttempt increments the RPC connection attempt counter
+func (m *Metrics) IncrementRPCConnectionAttempt() {
 	if m == nil {
 		return
 	}
 	m.RPCConnectionAttempts.Inc()
 }
 
-// IncrementEthRPCConnectionError increments the RPC connection error counter for a specific error type
-func (m *Metrics) IncrementEthRPCConnectionError(errorType string) {
+// IncrementRPCConnectionError increments the RPC connection error counter for a specific error type
+func (m *Metrics) IncrementRPCConnectionError(errorType string) {
 	if m == nil {
 		return
 	}
 	m.RPCConnectionErrors.WithLabelValues(errorType).Inc()
 }
 
-// IncrementEthWSConnectionAttempt increments the WebSocket connection attempt counter
-func (m *Metrics) IncrementEthWSConnectionAttempt() {
+// IncrementWSConnectionAttempt increments the WebSocket connection attempt counter
+func (m *Metrics) IncrementWSConnectionAttempt() {
 	if m == nil {
 		return
 	}
 	m.WSConnectionAttempts.Inc()
 }
 
-// IncrementEthWSSubscriptionError increments the WebSocket subscription error counter
-func (m *Metrics) IncrementEthWSSubscriptionError() {
+// IncrementWSSubscriptionError increments the WebSocket subscription error counter
+func (m *Metrics) IncrementWSSubscriptionError() {
 	if m == nil {
 		return
 	}
 	m.WSSubscriptionErrors.Inc()
 }
 
-// IncrementEthBlockFetchError increments the block fetch error counter for a specific error type
-func (m *Metrics) IncrementEthBlockFetchError(errorType string) {
+// IncrementBlockFetchError increments the block fetch error counter for a specific error type
+func (m *Metrics) IncrementBlockFetchError(errorType string) {
 	if m == nil {
 		return
 	}
 	m.BlockFetchErrors.WithLabelValues(errorType).Inc()
 }
 
-// IncrementEthBlockProcessingTimeout increments the block processing timeout counter
-func (m *Metrics) IncrementEthBlockProcessingTimeout() {
+// IncrementBlockProcessingTimeout increments the block processing timeout counter
+func (m *Metrics) IncrementBlockProcessingTimeout() {
 	if m == nil {
 		return
 	}
 	m.BlockProcessingTimeouts.Inc()
 }
 
-// RecordEthProcessBlocksBatchSize records the number of blocks processed in a batch
-func (m *Metrics) RecordEthProcessBlocksBatchSize(batchSize int) {
+// RecordProcessBlocksBatchSize records the number of blocks processed in a batch
+func (m *Metrics) RecordProcessBlocksBatchSize(batchSize int) {
 	if m == nil {
 		return
 	}
 	m.ProcessBlocksBatchSize.Observe(float64(batchSize))
 }
 
-// IncrementEthReorgDetected increments the chain reorganization detected counter
-func (m *Metrics) IncrementEthReorgDetected() {
+// IncrementReorgDetected increments the chain reorganization detected counter
+func (m *Metrics) IncrementReorgDetected() {
 	if m == nil {
 		return
 	}
 	m.ReorgDetected.Inc()
 }
 
-// IncrementEthTransactionsTotal increments the total transactions counter
-func (m *Metrics) IncrementEthTransactionsTotal(count int) {
+// IncrementTransactionsTotal increments the total transactions counter
+func (m *Metrics) IncrementTransactionsTotal(count int) {
 	if m == nil {
 		return
 	}
 	m.TransactionsTotal.Add(float64(count))
 }
 
-// IncrementEthTransactionParseError increments the transaction parse error counter for a specific error type
-func (m *Metrics) IncrementEthTransactionParseError(errorType string) {
+// IncrementTransactionParseError increments the transaction parse error counter for a specific error type
+func (m *Metrics) IncrementTransactionParseError(errorType string) {
 	if m == nil {
 		return
 	}
 	m.TransactionParseErrors.WithLabelValues(errorType).Inc()
 }
 
-// IncrementEthTransactionRetryByAttempt increments the transaction retry counter for a specific attempt number
-func (m *Metrics) IncrementEthTransactionRetryByAttempt(attempt int) {
+// IncrementTransactionRetryByAttempt increments the transaction retry counter for a specific attempt number
+func (m *Metrics) IncrementTransactionRetryByAttempt(attempt int) {
 	if m == nil {
 		return
 	}
 	m.TransactionRetryByAttempt.WithLabelValues(fmt.Sprintf("%d", attempt)).Inc()
 }
 
-// IncrementEthTransactionExhaustedRetries increments the exhausted retries counter
-func (m *Metrics) IncrementEthTransactionExhaustedRetries() {
+// IncrementTransactionExhaustedRetries increments the exhausted retries counter
+func (m *Metrics) IncrementTransactionExhaustedRetries() {
 	if m == nil {
 		return
 	}
 	m.TransactionExhaustedRetries.Inc()
 }
 
-// IncrementEthTransactionSuccessStatus increments the transaction success status counter
+// IncrementTransactionSuccessStatus increments the transaction success status counter
 // Status values: "success", "failed", "unknown"
-func (m *Metrics) IncrementEthTransactionSuccessStatus(status string) {
+func (m *Metrics) IncrementTransactionSuccessStatus(status string) {
 	if m == nil {
 		return
 	}
 	m.TransactionSuccessStatus.WithLabelValues(status).Inc()
 }
 
-// IncrementEthReceiptFetchError increments the receipt fetch error counter
-func (m *Metrics) IncrementEthReceiptFetchError() {
+// IncrementReceiptFetchError increments the receipt fetch error counter
+func (m *Metrics) IncrementReceiptFetchError() {
 	if m == nil {
 		return
 	}
 	m.ReceiptFetchErrors.Inc()
 }
 
-// IncrementEthERC20TransferDetected increments the ERC20 transfer detected counter
-func (m *Metrics) IncrementEthERC20TransferDetected() {
+// IncrementERC20TransferDetected increments the ERC20 transfer detected counter
+func (m *Metrics) IncrementERC20TransferDetected() {
 	if m == nil {
 		return
 	}
 	m.ERC20TransferDetected.Inc()
 }
 
-// IncrementEthLockOrderDetected increments the lock order detected counter
-func (m *Metrics) IncrementEthLockOrderDetected() {
+// IncrementLockOrderDetected increments the lock order detected counter
+func (m *Metrics) IncrementLockOrderDetected() {
 	if m == nil {
 		return
 	}
 	m.LockOrderDetected.Inc()
 }
 
-// IncrementEthCloseOrderDetected increments the close order detected counter
-func (m *Metrics) IncrementEthCloseOrderDetected() {
+// IncrementCloseOrderDetected increments the close order detected counter
+func (m *Metrics) IncrementCloseOrderDetected() {
 	if m == nil {
 		return
 	}
 	m.CloseOrderDetected.Inc()
 }
 
-// IncrementEthOrderValidationError increments the order validation error counter
-func (m *Metrics) IncrementEthOrderValidationError(orderType, errorType string) {
+// IncrementOrderValidationError increments the order validation error counter
+func (m *Metrics) IncrementOrderValidationError(orderType, errorType string) {
 	if m == nil {
 		return
 	}
 	m.OrderValidationErrors.WithLabelValues(orderType, errorType).Inc()
 }
 
-// IncrementEthTokenInfoFetchError increments the token info fetch error counter for a specific field
-func (m *Metrics) IncrementEthTokenInfoFetchError(field string) {
+// IncrementTokenInfoFetchError increments the token info fetch error counter for a specific field
+func (m *Metrics) IncrementTokenInfoFetchError(field string) {
 	if m == nil {
 		return
 	}
 	m.TokenInfoFetchErrors.WithLabelValues(field).Inc()
 }
 
-// IncrementEthTokenContractCallTimeout increments the token contract call timeout counter
-func (m *Metrics) IncrementEthTokenContractCallTimeout() {
+// IncrementTokenContractCallTimeout increments the token contract call timeout counter
+func (m *Metrics) IncrementTokenContractCallTimeout() {
 	if m == nil {
 		return
 	}

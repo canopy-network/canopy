@@ -225,38 +225,38 @@ func (p *EthBlockProvider) connect(ctx context.Context) error {
 	// close any existing connections
 	p.closeConnections()
 	// set connection state to connecting
-	p.metrics.SetEthConnectionState(1) // connecting
+	p.metrics.SetConnectionState(1) // connecting
 	// attempt to connect to rpc client
-	p.metrics.IncrementEthRPCConnectionAttempt()
+	p.metrics.IncrementRPCConnectionAttempt()
 	rpcClient, err := ethclient.DialContext(ctx, p.config.NodeUrl)
 	if err != nil {
 		// log error and retry
 		p.logger.Errorf("[ETH-CONN] failed to connect to rpc client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
-		p.metrics.IncrementEthRPCConnectionError("dial_error")
-		p.metrics.SetEthConnectionState(0) // disconnected
+		p.metrics.IncrementRPCConnectionError("dial_error")
+		p.metrics.SetConnectionState(0) // disconnected
 		return err
 	}
 	// set rpc client
 	p.rpcClient = rpcClient
 	// log successful rpc connection
 	p.logger.Infof("[ETH-CONN] connected to RPC at %s", p.config.NodeUrl)
-	p.metrics.SetEthConnectionState(2) // rpc_connected
+	p.metrics.SetConnectionState(2) // rpc_connected
 	// attempt to connect to websocket client
-	p.metrics.IncrementEthWSConnectionAttempt()
+	p.metrics.IncrementWSConnectionAttempt()
 	wsClient, err := ethclient.DialContext(ctx, p.config.NodeWSUrl)
 	if err != nil {
 		p.rpcClient.Close()
 		// log error and retry
 		p.logger.Errorf("[ETH-WS] failed to connect: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
-		p.metrics.IncrementEthRPCConnectionError("ws_dial_error")
-		p.metrics.SetEthConnectionState(0) // disconnected
+		p.metrics.IncrementRPCConnectionError("ws_dial_error")
+		p.metrics.SetConnectionState(0) // disconnected
 		return err
 	}
 	// set websocket client
 	p.wsClient = wsClient
 	// log successful websocket connection
 	p.logger.Infof("[ETH-WS] connected at %s", p.config.NodeWSUrl)
-	p.metrics.SetEthConnectionState(3) // fully_connected
+	p.metrics.SetConnectionState(3) // fully_connected
 	return nil
 }
 
@@ -267,7 +267,7 @@ func (p *EthBlockProvider) connect(ctx context.Context) error {
 func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 	if p.wsClient == nil {
 		p.logger.Error("[ETH-WS] websocket client not initialized")
-		p.metrics.IncrementEthWSSubscriptionError()
+		p.metrics.IncrementWSSubscriptionError()
 		return fmt.Errorf("websocket client not initialized")
 	}
 	// create header channel
@@ -277,14 +277,14 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 	if err != nil {
 		// log error and return
 		p.logger.Errorf("[ETH-WS] failed to subscribe to headers: %v", err)
-		p.metrics.IncrementEthWSSubscriptionError()
+		p.metrics.IncrementWSSubscriptionError()
 		return err
 	}
 	// log successful subscription
 	p.logger.Info("[ETH-WS] subscribed to new headers")
 	// reset sync state for reconnection scenarios
 	p.setSynced(false)
-	p.metrics.SetEthSyncStatus(1) // syncing
+	p.metrics.SetSyncStatus(1) // syncing
 	// create status ticker for periodic updates
 	statusTicker := time.NewTicker(30 * time.Second)
 	defer statusTicker.Stop()
@@ -306,16 +306,16 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 			}
 			// update block height metrics
 			chainHead := header.Number.Uint64()
-			p.metrics.SetEthChainHeadHeight(chainHead)
+			p.metrics.SetChainHeadHeight(chainHead)
 			if chainHead >= p.nextHeight.Uint64() {
-				p.metrics.SetEthBlockHeightLag(chainHead - p.nextHeight.Uint64())
+				p.metrics.SetBlockHeightLag(chainHead - p.nextHeight.Uint64())
 			}
 			// ensure we haven't gotten ahead of the current chain height
 			if p.nextHeight.Cmp(header.Number) > 0 {
 				p.logger.Errorf("[ETH-SYNC] next height %d higher than current chain height %d", p.nextHeight, header.Number)
 				p.logger.Error("[ETH-SYNC] remove state file and restart node if expected")
 				// record reorg detection
-				p.metrics.IncrementEthReorgDetected()
+				p.metrics.IncrementReorgDetected()
 				// unsubscribe from new headers
 				sub.Unsubscribe()
 				// stop listening to new headers and return an error
@@ -328,7 +328,7 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 					// we've caught up to the latest block, mark as synced
 					p.setSynced(true)
 					p.logger.Infof("[ETH-SYNC] synced at height %s", p.nextHeight.String())
-					p.metrics.SetEthSyncStatus(2) // synced
+					p.metrics.SetSyncStatus(2) // synced
 				}
 			}
 			// process all blocks up to current height
@@ -342,7 +342,7 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 		case err := <-sub.Err():
 			// log subscription error
 			p.logger.Errorf("[ETH-WS] subscription error received: %v", err)
-			p.metrics.IncrementEthWSSubscriptionError()
+			p.metrics.IncrementWSSubscriptionError()
 			// unsubscribe from new headers
 			sub.Unsubscribe()
 			// return the error
@@ -370,11 +370,11 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		select {
 		case <-timeoutCtx.Done():
 			p.logger.Errorf("[ETH-BLOCK] max run time hit, returning")
-			p.metrics.IncrementEthBlockProcessingTimeout()
+			p.metrics.IncrementBlockProcessingTimeout()
 			// record batch size before returning
 			batchSize := int(next.Int64() - batchStart.Int64())
 			if batchSize > 0 {
-				p.metrics.RecordEthProcessBlocksBatchSize(batchSize)
+				p.metrics.RecordProcessBlocksBatchSize(batchSize)
 			}
 			return next
 		default:
@@ -385,7 +385,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		if err != nil {
 			// log error and return without continuing
 			p.logger.Errorf("[ETH-BLOCK] failed to get block at height %d: %v", next, err)
-			p.metrics.IncrementEthBlockFetchError("fetch_error")
+			p.metrics.IncrementBlockFetchError("fetch_error")
 			// update metrics before returning
 			p.metrics.UpdateEthBlockProvider(lib.EthBlockProviderMetricUpdate{
 				ConnectionErrors:      1,
@@ -396,14 +396,14 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 			// record batch size before returning
 			batchSize := int(next.Int64() - batchStart.Int64())
 			if batchSize > 0 {
-				p.metrics.RecordEthProcessBlocksBatchSize(batchSize)
+				p.metrics.RecordProcessBlocksBatchSize(batchSize)
 			}
 			// return same height so the provider tries this block again
 			return next
 		}
 		fetchTime := time.Since(fetchStart)
 		// track transactions encountered
-		p.metrics.IncrementEthTransactionsTotal(len(block.transactions))
+		p.metrics.IncrementTransactionsTotal(len(block.transactions))
 		// process each transaction, populating orders and transfer data
 		txProcessStart := time.Now()
 		if err := p.processBlockTransactions(timeoutCtx, block); err != nil {
@@ -419,7 +419,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 			// record batch size before returning
 			batchSize := int(next.Int64() - batchStart.Int64())
 			if batchSize > 0 {
-				p.metrics.RecordEthProcessBlocksBatchSize(batchSize)
+				p.metrics.RecordProcessBlocksBatchSize(batchSize)
 			}
 			return next
 		}
@@ -430,7 +430,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		case p.blockChan <- block:
 		case <-timeoutCtx.Done():
 			p.logger.Warnf("[ETH-BLOCK] context done before sending block %d, will retry", next)
-			p.metrics.IncrementEthBlockProcessingTimeout()
+			p.metrics.IncrementBlockProcessingTimeout()
 			return next
 		}
 		// log successful block processing
@@ -451,7 +451,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 	// record batch size on successful completion
 	batchSize := int(next.Int64() - batchStart.Int64())
 	if batchSize > 0 {
-		p.metrics.RecordEthProcessBlocksBatchSize(batchSize)
+		p.metrics.RecordProcessBlocksBatchSize(batchSize)
 	}
 	return next
 }
@@ -483,7 +483,7 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 			// count retry for metrics and track by attempt number
 			if attempt > 0 {
 				retryCount++
-				p.metrics.IncrementEthTransactionRetryByAttempt(attempt + 1)
+				p.metrics.IncrementTransactionRetryByAttempt(attempt + 1)
 			}
 			// implement exponential backoff for failed attempts
 			if attempt < maxTransactionProcessAttempts-1 {
@@ -498,7 +498,7 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 		}
 		if err != nil {
 			p.logger.Errorf("[ETH-TX] tx %s in block %s failed after all attempts: %v", tx.Hash(), block.Hash(), err)
-			p.metrics.IncrementEthTransactionExhaustedRetries()
+			p.metrics.IncrementTransactionExhaustedRetries()
 		}
 	}
 	// update retry metrics if there were retries
@@ -529,10 +529,10 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 	}
 	// track order detection metrics
 	if tx.order.LockOrder != nil {
-		p.metrics.IncrementEthLockOrderDetected()
+		p.metrics.IncrementLockOrderDetected()
 	}
 	if tx.order.CloseOrder != nil {
-		p.metrics.IncrementEthCloseOrderDetected()
+		p.metrics.IncrementCloseOrderDetected()
 	}
 	// set the ethereum height this order was witnessed
 	tx.order.WitnessedHeight = block.Number()
@@ -554,7 +554,7 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 		return nil
 	}
 	// track ERC20 transfer detection
-	p.metrics.IncrementEthERC20TransferDetected()
+	p.metrics.IncrementERC20TransferDetected()
 	// fetch erc20 token info (name, symbol, decimals)
 	tokenInfo, err := p.erc20TokenCache.TokenInfo(ctx, tx.To())
 	if err != nil {
@@ -588,8 +588,8 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 			ReceiptFetchTime: receiptTime,
 			ConnectionErrors: 1,
 		})
-		p.metrics.IncrementEthReceiptFetchError()
-		p.metrics.IncrementEthTransactionSuccessStatus("unknown")
+		p.metrics.IncrementReceiptFetchError()
+		p.metrics.IncrementTransactionSuccessStatus("unknown")
 		return false, ErrTransactionReceipt
 	}
 	// check for success using transaction receipt status
@@ -602,11 +602,11 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 	if receipt.Status == TransactionStatusSuccess {
 		// update receipt fetch metrics on success
 		p.metrics.UpdateEthBlockProvider(lib.EthBlockProviderMetricUpdate{ReceiptFetchTime: receiptTime})
-		p.metrics.IncrementEthTransactionSuccessStatus("success")
+		p.metrics.IncrementTransactionSuccessStatus("success")
 		return true, nil
 	}
 	p.logger.Warnf("[ETH-TX] tx %s ERC20 transfer failed on-chain, ignoring", txHashStr)
-	p.metrics.IncrementEthTransactionSuccessStatus("failed")
+	p.metrics.IncrementTransactionSuccessStatus("failed")
 	// return unsuccessful transaction
 	return false, nil
 }
