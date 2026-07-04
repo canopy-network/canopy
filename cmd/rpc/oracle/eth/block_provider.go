@@ -145,6 +145,13 @@ func (p *EthBlockProvider) IsSynced() bool {
 	return p.synced
 }
 
+// setSynced safely updates the synced flag under heightMu
+func (p *EthBlockProvider) setSynced(v bool) {
+	p.heightMu.Lock()
+	p.synced = v
+	p.heightMu.Unlock()
+}
+
 func (p *EthBlockProvider) closeConnections() {
 	if p.rpcClient != nil {
 		p.logger.Debug("[ETH-CONN] closing RPC connection")
@@ -274,7 +281,7 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 	// log successful subscription
 	p.logger.Info("[ETH-WS] subscribed to new headers")
 	// reset sync state for reconnection scenarios
-	p.synced = false
+	p.setSynced(false)
 	p.metrics.SetEthSyncStatus(1) // syncing
 	// create status ticker for periodic updates
 	statusTicker := time.NewTicker(30 * time.Second)
@@ -284,7 +291,7 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 		select {
 		case <-statusTicker.C:
 			// periodic status update
-			p.logger.Infof("[ETH-SYNC] status: nextHeight=%s, synced=%v", p.nextHeight.String(), p.synced)
+			p.logger.Infof("[ETH-SYNC] status: nextHeight=%s, synced=%v", p.nextHeight.String(), p.IsSynced())
 		case <-ctx.Done():
 			p.logger.Info("[ETH-SYNC] context cancelled")
 			sub.Unsubscribe()
@@ -312,11 +319,11 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 				return ErrSourceHeight
 			}
 			// not synced to top
-			if !p.synced {
+			if !p.IsSynced() {
 				// check for source chain sync
 				if p.nextHeight.Cmp(header.Number) == 0 {
 					// we've caught up to the latest block, mark as synced
-					p.synced = true
+					p.setSynced(true)
 					p.logger.Infof("[ETH-SYNC] synced at height %s", p.nextHeight.String())
 					p.metrics.SetEthSyncStatus(2) // synced
 				}
