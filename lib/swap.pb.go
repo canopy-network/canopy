@@ -7,11 +7,12 @@
 package lib
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -184,6 +185,35 @@ func (x *SellOrder) GetSellersSendAddress() []byte {
 	return nil
 }
 
+func (x *SellOrder) IsLocked() bool {
+	if x == nil {
+		return false
+	}
+	if x.BuyerReceiveAddress == nil {
+		return false
+	}
+	return true
+}
+
+// Copy returns a reference to a clone of the SellOrder
+func (s *SellOrder) Copy() *SellOrder {
+	if s == nil {
+		return nil
+	}
+	return &SellOrder{
+		Id:                   append([]byte(nil), s.Id...),
+		Committee:            s.Committee,
+		Data:                 append([]byte(nil), s.Data...),
+		AmountForSale:        s.AmountForSale,
+		RequestedAmount:      s.RequestedAmount,
+		SellerReceiveAddress: append([]byte(nil), s.SellerReceiveAddress...),
+		BuyerSendAddress:     append([]byte(nil), s.BuyerSendAddress...),
+		BuyerReceiveAddress:  append([]byte(nil), s.BuyerReceiveAddress...),
+		BuyerChainDeadline:   s.BuyerChainDeadline,
+		SellersSendAddress:   append([]byte(nil), s.SellersSendAddress...),
+	}
+}
+
 // OrderBooks: is a list of order book objects held in the blockchain state
 type OrderBooks struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -283,6 +313,26 @@ func (x *OrderBook) GetOrders() []*SellOrder {
 		return x.Orders
 	}
 	return nil
+}
+
+// Copy returns a reference to a clone of the OrderBook
+func (x *OrderBook) Copy() *OrderBook {
+	if x == nil {
+		return nil
+	}
+
+	copy := &OrderBook{
+		ChainId: x.ChainId,
+	}
+
+	if x.Orders != nil {
+		copy.Orders = make([]*SellOrder, len(x.Orders))
+		for i, order := range x.Orders {
+			copy.Orders[i] = order.Copy()
+		}
+	}
+
+	return copy
 }
 
 var File_swap_proto protoreflect.FileDescriptor

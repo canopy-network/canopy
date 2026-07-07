@@ -1,0 +1,71 @@
+services:
+  node-1:
+    container_name: node-1
+    image: canopy-node:latest
+    ports:
+      - 50000:50000 # Wallet
+      - 50001:50001 # Explorer
+      - 50002:50002 # RPC
+      - 50003:50003 # Admin RPC
+      - 9001:9001   # TCP P2P
+      - 6060:6060   # Debug
+      - 9090:9090   # Metrics
+    networks:
+      - canopy
+    command: ["start"]
+    volumes:
+      - ./volumes/node_1:/root/.canopy
+#    deploy:
+#      resources:
+#        limits:
+#          memory: 2G
+#          cpus: "1.0"
+  node-2:
+    container_name: node-2
+    image: canopy-node:latest
+    ports:
+      - 40000:40000 # Wallet
+      - 40001:40001 # Explorer
+      - 40002:40002 # RPC
+      - 40003:40003 # Admin RPC
+      - 9003:9003   # TCP P2P
+      - 6061:6060   # Debug
+      - 9091:9091   # Metrics
+    networks:
+      - canopy
+    command: ["start"]
+    volumes:
+      - ./volumes/node_2:/root/.canopy
+   # deploy:
+   #   resources:
+   #     limits:
+   #       memory: 1G
+   #       cpus: "1.0"
+  # node-3:
+  #   container_name: node-3
+  #   build:
+  #     context: ..
+  #     dockerfile: .docker/Dockerfile
+  #     args:
+  #       EXPLORER_BASE_PATH: ""
+  #       WALLET_BASE_PATH: ""
+  #   ports:
+  #     - 30000:30000 # Wallet
+  #     - 30001:30001 # Explorer
+  #     - 30002:30002 # RPC
+  #     - 30003:30003 # Admin RPC
+  #     - 9003:9003   # TCP P2P
+  #   networks:
+  #     - canopy
+  #   command: ["start"]
+  #   volumes:
+  #     - ./volumes/node_3:/root/.canopy
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 2G
+  #         cpus: "1.0"
+
+networks:
+  canopy:
+    driver: bridge
