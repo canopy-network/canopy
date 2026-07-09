@@ -76,7 +76,7 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 	for _, ip := range c.BannedIPs {
 		i, err := net.ResolveIPAddr("", ip)
 		if err != nil {
-			l.Fatalf(err.Error())
+			l.Fatal(err.Error())
 		}
 		bannedIPs = append(bannedIPs, *i)
 	}
@@ -200,7 +200,7 @@ func (p *P2P) DialForOutboundPeers() {
 		peerAddress, err := getPeerFromString(peerString)
 		if err != nil {
 			// log the invalid format
-			p.log.Errorf(err.Error())
+			p.log.Error(err.Error())
 			// continue with the next
 			continue
 		}
@@ -232,7 +232,7 @@ func (p *P2P) DialForOutboundPeers() {
 				// otherwise, fallback to config's dial peers
 				dialPeer, err := getPeerFromString(p.config.DialPeers[rand.Intn(len(p.config.DialPeers))])
 				if err != nil {
-					p.log.Errorf(err.Error())
+					p.log.Error(err.Error())
 					return
 				}
 				peer = dialPeer
@@ -585,19 +585,7 @@ func (p *P2P) SelfSend(fromPublicKey []byte, topic lib.Topic, payload proto.Mess
 		case p.Inbox(topic) <- m:
 		default:
 			p.log.Errorf("CRITICAL: Inbox %s queue full in self send", lib.Topic_name[int32(topic)])
-			p.log.Error("Dropping all messages")
-			// drain inbox
-			func() {
-				for {
-					select {
-					case <-p.Inbox(topic):
-						// drop
-					default:
-						// channel is empty now
-						return
-					}
-				}
-			}()
+			p.log.Error("Dropping newest message")
 		}
 	}()
 	return nil

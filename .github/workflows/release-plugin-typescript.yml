@@ -42,10 +42,21 @@ jobs:
         working-directory: plugin/typescript
         run: |
           mkdir -p release
-          # Create tarball with dist/, node_modules, package.json (for "type": "module")
+          # Create tarball with dist/, node_modules, package.json (for "type": "module"),
+          # AND proto/ — the raw .proto schema files are loaded at runtime by
+          # protobufjs.loadSync() from the compiled dist/contract/*.js. Without
+          # proto/ in the tarball, plugins that build with the canonical tutorial
+          # pattern crash on startup with ENOENT (see canopy-network/canopy#<TODO>).
+          # If a chain author has no proto/ directory, fall back to the legacy
+          # tarball shape so their build doesn't break.
+          #
           # Note: pluginctl.sh is NOT included - it's copied separately by Dockerfile
           # and we don't want old releases to overwrite newer pluginctl.sh versions
-          tar -czf release/typescript-plugin.tar.gz dist/ node_modules/ package.json
+          if [ -d proto ]; then
+            tar -czf release/typescript-plugin.tar.gz dist/ node_modules/ package.json proto/
+          else
+            tar -czf release/typescript-plugin.tar.gz dist/ node_modules/ package.json
+          fi
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2

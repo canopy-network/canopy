@@ -9,7 +9,6 @@ interface AccountBalance {
     address: string
     amount: number
     totalAmount: number
-    spendableAmount: number
     vestedAmount: number
     lockedAmount: number
     vestingAmount: number
@@ -83,16 +82,15 @@ export function useAccountData() {
                                 const parsed = typeof res === 'number'
                                     ? { amount: res }
                                     : parseMaybeJson(res) ?? {}
-                                const spendable = Number(parsed?.spendableAmount ?? parsed?.amount ?? 0)
-                                const total = Number(parsed?.totalAmount ?? spendable)
+                                const amount = Number(parsed?.amount ?? 0)
+                                const total = Number(parsed?.totalAmount ?? amount)
                                 const vested = Number(parsed?.vestedAmount ?? 0)
                                 const locked = Number(parsed?.lockedAmount ?? 0)
                                 const vesting = Number(parsed?.vestingAmount ?? 0)
                                 return {
                                     address: acc.address,
-                                    amount: spendable || 0,
+                                    amount: amount || 0,
                                     totalAmount: total || 0,
-                                    spendableAmount: spendable || 0,
                                     vestedAmount: vested || 0,
                                     lockedAmount: locked || 0,
                                     vestingAmount: vesting || 0,
@@ -103,7 +101,6 @@ export function useAccountData() {
                                     address: acc.address,
                                     amount: 0,
                                     totalAmount: 0,
-                                    spendableAmount: 0,
                                     vestedAmount: 0,
                                     lockedAmount: 0,
                                     vestingAmount: 0,

@@ -32,18 +32,42 @@ import (
 
 // EthereumHandler is a helper function that abstracts common workflows of ethereum calls using the JSON rpc 2.0 specification
 func (s *Server) EthereumHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var err error
-	// create a new ethereumRequest instance to populate with request data
-	ptr := new(ethRPCRequest)
-	// attempt to unmarshal the request body into the keystoreRequest
-	if ok := unmarshal(w, r, ptr); !ok {
+	var raw json.RawMessage
+	if ok := unmarshal(w, r, &raw); !ok {
 		return
 	}
-	var args []any
-	// convert the params to a list
-	if err = json.Unmarshal(ptr.Params, &args); err != nil {
+	if strings.HasPrefix(strings.TrimSpace(string(raw)), "[") {
+		var requests []ethRPCRequest
+		if err := json.Unmarshal(raw, &requests); err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		responses := make([]ethRPCResponse, 0, len(requests))
+		for i := range requests {
+			responses = append(responses, s.handleEthereumRPCRequest(&requests[i]))
+		}
+		write(w, responses, http.StatusOK)
+		return
+	}
+	ptr := new(ethRPCRequest)
+	if err := json.Unmarshal(raw, ptr); err != nil {
 		write(w, err, http.StatusBadRequest)
 		return
+	}
+	write(w, s.handleEthereumRPCRequest(ptr), http.StatusOK)
+}
+
+func (s *Server) handleEthereumRPCRequest(ptr *ethRPCRequest) ethRPCResponse {
+	var err error
+	var args []any
+	if len(ptr.Params) != 0 && string(ptr.Params) != "null" {
+		if err = json.Unmarshal(ptr.Params, &args); err != nil {
+			return ethRPCResponse{
+				ID:      ptr.ID,
+				JSONRPC: "2.0",
+				Error:   &ethereumRPCError{Code: -32603, Message: err.Error()},
+			}
+		}
 	}
 	var ethResponse any
 	switch ptr.Method {
@@ -57,6 +81,8 @@ func (s *Server) EthereumHandler(w http.ResponseWriter, r *http.Request, _ httpr
 		ethResponse, err = s.NetListening(args)
 	case `net_peerCount`:
 		ethResponse, err = s.NetPeerCount(args)
+	case `eth_protocolVersion`:
+		ethResponse, err = s.EthProtocolVersion(args)
 	case `eth_syncing`:
 		ethResponse, err = s.EthSyncing(args)
 	case `eth_chainId`:
@@ -121,28 +147,18 @@ func (s *Server) EthereumHandler(w http.ResponseWriter, r *http.Request, _ httpr
 		ethResponse, err = s.EthBlobBaseFee(args)
 	default:
 		// purposefully don't support any method that requires private key unlocks
-		err = fmt.Errorf("the method %s does not exist/is not available", ptr.Method)
+		err = ethMethodNotFound(ptr.Method)
 	}
-	// convert the error to ethError
-	var ethError *ethereumRPCError
-	if err != nil {
-		ethError = &ethereumRPCError{
-			Code:    -32601,
-			Message: err.Error(),
-		}
-	}
-	// write the final result
-	write(w, ethRPCResponse{
+	return ethRPCResponse{
 		ID:      ptr.ID,
 		JSONRPC: "2.0",
 		Result:  ethResponse,
-		Error:   ethError,
-	}, http.StatusOK)
+		Error:   ethereumRPCErrorFrom(err),
+	}
 }
 
 // startEthRPCService() runs the needed routines for the eth rpc wrapper
 func (s *Server) startEthRPCService() {
-	go s.startEthPseudoNonceService()
 	go s.startEthPendingTxsExpireService()
 	go s.startEthFilterExpireService()
 }
@@ -178,16 +194,20 @@ func (s *Server) NetPeerCount(_ []any) (any, error) {
 	return hexutil.Uint64(s.controller.P2P.PeerCount()), nil
 }
 
+// EthProtocolVersion() returns a compatibility protocol version string
+func (s *Server) EthProtocolVersion(_ []any) (any, error) { return "0x41", nil }
+
 // EthSyncing() returns the syncing status of the node
 func (s *Server) EthSyncing(_ []any) (any, error) {
 	if !s.controller.Syncing().Load() {
 		return false, nil
 	}
+	currentBlock := s.currentEthBlockNumber()
 	// return the syncing response
 	return ethSyncingResponse{
 		StartingBlock: hexutil.Uint64(1),
-		CurrentBlock:  hexutil.Uint64(s.controller.ChainHeight()),
-		HighestBlock:  hexutil.Uint64(s.controller.ChainHeight()),
+		CurrentBlock:  hexutil.Uint64(currentBlock),
+		HighestBlock:  hexutil.Uint64(currentBlock),
 	}, nil
 }
 
@@ -252,7 +272,7 @@ func (s *Server) EthGetBalance(args []any) (result any, err error) {
 		return
 	}
 	// create a read-only state for the block tag
-	_ = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
+	err = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
 		// get the balance for the address
 		balance, e := state.GetAccountSpendableBalance(address)
 		if e != nil {
@@ -266,33 +286,81 @@ func (s *Server) EthGetBalance(args []any) (result any, err error) {
 	return
 }
 
-// EthGetTransactionCount() returns a pseudo-nonce in the form of a random 'created_at' height
+// EthGetTransactionCount() returns the next nonce for Ethereum accounts and a pseudo-nonce fallback for read-only addresses.
 func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 	address, err := addressFromArgs(args)
 	if err != nil {
 		return nil, err
 	}
-	return hexutil.Uint64(getAndIncPseudoNonce(address.String())), nil
+	blockTag := latestBlockTag
+	if len(args) >= 2 {
+		blockTag, err = strFromArgs(args, 1)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s.withStore(func(st *store.Store) (any, error) {
+		base := s.currentEthBlockNumber()
+		hasMinedHistory := false
+		if minedNonce, ok, nonceErr := s.latestMinedNonceForAddress(st, address); nonceErr != nil {
+			return nil, nonceErr
+		} else if ok {
+			base = minedNonce
+			hasMinedHistory = true
+		}
+		switch blockTag {
+		case pendingBlockTag:
+			pending := base
+			maxNonce := s.maximumAcceptedEthereumNonce()
+			if highestPending, ok, pendingErr := s.highestPendingNonceForAddress(st, address.String()); pendingErr != nil {
+				return nil, pendingErr
+			} else if ok && highestPending >= pending {
+				if highestPending >= maxNonce {
+					return nil, ethInvalidParams("no acceptable pending nonce available")
+				}
+				if highestPending == math.MaxUint64 {
+					pending = math.MaxUint64
+				} else {
+					pending = highestPending + 1
+				}
+			}
+			if pending > maxNonce {
+				pending = maxNonce
+			}
+			return hexutil.Uint64(pending), nil
+		case latestBlockTag, safeBlockTag, finalizedBlockTag:
+			return hexutil.Uint64(base), nil
+		case earliestBlockTag:
+			return hexutil.Uint64(0), nil
+		default:
+			// Explicit historical block-number queries are compatibility-oriented: validate the tag but
+			// return the latest confirmed nonce for Ethereum-derived accounts and the height fallback otherwise.
+			height, parseErr := parseBlockTag(blockTag)
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			if hasMinedHistory {
+				return hexutil.Uint64(base), nil
+			}
+			return hexutil.Uint64(height), nil
+		}
+	})
 }
 
 // EthGetBlockTransactionCountByHash() returns the number of transactions in a block by hash
 func (s *Server) EthGetBlockTransactionCountByHash(args []any) (any, error) {
 	return s.withStore(func(st *store.Store) (any, error) {
-		// get the block hash
 		blockHash, err := bytesFromArgs(args)
 		if err != nil {
 			return nil, err
 		}
-		// get the block from hash
-		block, err := st.GetBlockByHash(blockHash)
+		block, err := blockByHashOrNil(st, blockHash)
 		if err != nil {
 			return nil, err
 		}
-		// check for a nil block
-		if block == nil || block.BlockHeader == nil {
-			return nil, lib.ErrNilBlock()
+		if block == nil {
+			return ethNullResult(), nil
 		}
-		// return the result
 		return hexutil.Uint64(block.BlockHeader.NumTxs), nil
 	})
 }
@@ -300,17 +368,17 @@ func (s *Server) EthGetBlockTransactionCountByHash(args []any) (any, error) {
 // EthGetBlockTransactionCountByNumber() returns the number of transactions in a block by height
 func (s *Server) EthGetBlockTransactionCountByNumber(args []any) (any, error) {
 	return s.withStore(func(st *store.Store) (any, error) {
-		// get the block height
-		blockHeight, err := intFromArgs(args, 0)
+		blockHeight, err := s.blockHeightFromNumberArg(args, 0)
 		if err != nil {
 			return nil, err
 		}
-		// get the block from hash
-		block, err := st.GetBlockByHeight(uint64(blockHeight))
+		block, err := blockByHeightOrNil(st, blockHeight)
 		if err != nil {
 			return nil, err
 		}
-		// get and increment the pseudo-nonce
+		if block == nil {
+			return ethNullResult(), nil
+		}
 		return hexutil.Uint64(block.BlockHeader.NumTxs), nil
 	})
 }
@@ -346,22 +414,22 @@ func (s *Server) EthSendRawTransaction(args []any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	var ethTx types.Transaction
+	if err = ethTx.UnmarshalBinary(rawTx); err != nil {
+		return nil, err
+	}
 	// convert it to a Canopy send transaction
 	transaction, err := fsm.RLPToCanopyTransaction(rawTx)
 	if err != nil {
 		return nil, err
 	}
-	// ensure created height isn't too close to the limit
-	if int64(transaction.CreatedHeight) < int64(s.controller.ChainHeight())-fsm.BlockAcceptanceRange/2 {
+	// ensure created height stays inside Canopy's accepted replay window
+	if transaction.CreatedHeight < s.minimumAcceptedEthereumNonce() {
 		return nil, lib.ErrInvalidTxHeight()
 	}
-	// extract the public key from the message
-	pubKey, err := crypto.NewPublicKeyFromBytes(transaction.Signature.PublicKey)
-	if err != nil {
-		return nil, err
+	if transaction.CreatedHeight > s.maximumAcceptedEthereumNonce() {
+		return nil, lib.ErrInvalidTxHeight()
 	}
-	// increment the pseudo-nonce
-	incPseudoNonce(pubKey.Address().String())
 	// marshal the transaction to protobuf
 	bz, err := lib.Marshal(transaction)
 	if err != nil {
@@ -371,18 +439,17 @@ func (s *Server) EthSendRawTransaction(args []any) (any, error) {
 	if err = s.controller.SendTxMsgs([][]byte{bz}); err != nil {
 		return nil, err
 	}
-	// get the tx hash string
-	txHashString := crypto.HashString(bz)
-	// set in pending
-	shouldSimultePending(txHashString)
+	// track the pending transaction using the canonical ethereum tx hash
+	txHashString := strings.ToLower(ethTx.Hash().Hex())
+	registerPendingEthTx(txHashString, transaction)
 	// return the transaction hash
-	return "0x" + txHashString, nil
+	return txHashString, nil
 }
 
 // EthCall() simulates a call to a 'smart contract' for Canopy
 func (s *Server) EthCall(args []any) (any, error) {
 	if len(args) < 1 {
-		return nil, errors.New("missing call arguments")
+		return nil, ethInvalidParams("missing call arguments")
 	}
 	// handle the block tag
 	height, err := blockTagFromArgs(args)
@@ -392,7 +459,7 @@ func (s *Server) EthCall(args []any) (any, error) {
 	// extract the call data
 	callParams, ok := args[0].(map[string]any)
 	if !ok {
-		return nil, errors.New("invalid call argument format")
+		return nil, ethInvalidParams("invalid call argument format")
 	}
 	// get the sender address hex
 	fromHex, ok := callParams["from"].(string)
@@ -402,7 +469,7 @@ func (s *Server) EthCall(args []any) (any, error) {
 	// parse the `data` field from the call data
 	dataHex, ok := callParams["data"].(string)
 	if !ok {
-		return nil, errors.New("invalid or missing 'data' field")
+		return nil, ethInvalidParams("invalid or missing 'data' field")
 	}
 	// parse the `to` field from the call data
 	toHex, _ := callParams["to"].(string)
@@ -421,11 +488,11 @@ func (s *Server) EthCall(args []any) (any, error) {
 	// decode the data from hex
 	data, err := lib.StringToBytes(cleanHex(dataHex[:]))
 	if err != nil {
-		return nil, fmt.Errorf("invalid hex: %w", err)
+		return nil, ethInvalidParams(fmt.Sprintf("invalid hex: %v", err))
 	}
 	// validate the data length
 	if len(data) < 4 {
-		return nil, errors.New("insufficient data length")
+		return nil, ethInvalidParams("insufficient data length")
 	}
 	// parse the selector
 	selector := lib.BytesToString(data[:4])
@@ -570,17 +637,17 @@ func (s *Server) EthEstimateGas(args []any) (any, error) {
 // EthGetBlockByHash() returns a dummy-ish block (based on the actual Canopy block) that is EIP-1559 compatible
 func (s *Server) EthGetBlockByHash(args []any) (any, error) {
 	return s.withStore(func(st *store.Store) (any, error) {
-		// get the block hash
 		blockHash, e := bytesFromArgs(args)
 		if e != nil {
 			return nil, e
 		}
-		// extract full txs option
 		fullTxs := boolFromArgs(args)
-		// get the block from hash
-		block, e := st.GetBlockByHash(blockHash)
+		block, e := blockByHashOrNil(st, blockHash)
 		if e != nil {
 			return nil, e
+		}
+		if block == nil {
+			return ethNullResult(), nil
 		}
 		return s.blockToEIP1559Block(block, fullTxs)
 	})
@@ -589,135 +656,118 @@ func (s *Server) EthGetBlockByHash(args []any) (any, error) {
 // EthGetBlockByNumber() returns a dummy-ish block (based on the actual Canopy block) that is EIP-1559 compatible
 func (s *Server) EthGetBlockByNumber(args []any) (any, error) {
 	return s.withStore(func(st *store.Store) (any, error) {
-		// get the block height
-		blockHeight, err := intFromArgs(args, 0)
+		blockHeight, err := s.blockHeightFromNumberArg(args, 0)
 		if err != nil {
 			return nil, err
 		}
-		// extract full txs option
 		fullTxs := boolFromArgs(args)
-		// get the block from hash
-		block, err := st.GetBlockByHeight(uint64(blockHeight))
+		block, err := blockByHeightOrNil(st, blockHeight)
 		if err != nil {
 			return nil, err
+		}
+		if block == nil {
+			return ethNullResult(), nil
 		}
 		return s.blockToEIP1559Block(block, fullTxs)
 	})
 }
 
-// EthGetTransactionByHash() returns an EIP-1559 compatible tx + receipt
+// EthGetTransactionByHash() returns a canonical Ethereum transaction object for mined or pending transactions
 func (s *Server) EthGetTransactionByHash(args []any) (any, error) {
 	return s.withStore(func(st *store.Store) (any, error) {
-		// get the tx hash
-		txHash, e := bytesFromArgs(args)
-		if e != nil {
-			return nil, e
+		hashString, err := normalizedHashFromArgs(args)
+		if err != nil {
+			return nil, err
 		}
-		// get the transaction by hash
-		tx, e := st.GetTxByHash(txHash)
-		if e != nil || tx.TxHash == "" {
-			hashString := lib.BytesToString(txHash)
-			// check mempool
-			if pending := s.controller.Mempool.Contains(hashString); pending {
-				return nil, errors.New("tx pending")
-			}
-			// check eth pending cache
-			if isPending := shouldSimultePending(hashString); isPending {
-				return nil, errors.New("tx pending")
-			}
-			// pseudo-failed height
-			failedHeight := s.controller.ChainHeight() - 1
-			// get the block associated with the transaction height
-			b, _ := st.GetBlockHeaderByHeight(failedHeight)
-			// return failed to prevent 'resend'
-			return ethRPCTransaction{
-				BlockHash:         common.BytesToHash(b.BlockHeader.Hash),
-				BlockNumber:       hexutil.Big(*big.NewInt(int64(tx.Height))),
-				From:              common.BytesToAddress(tx.Sender),
-				Gas:               hexutil.Uint64(21000),
-				Hash:              common.HexToHash("0x" + lib.BytesToString(txHash)),
-				TxHash:            common.HexToHash("0x" + lib.BytesToString(txHash)),
-				TransactionIndex:  hexutil.Uint64(tx.Index),
-				Type:              types.DynamicFeeTxType,
-				ChainID:           hexutil.Big(*big.NewInt(int64(fsm.CanopyIdsToEVMChainId(s.config.ChainId, s.config.NetworkID)))),
-				Status:            hexutil.Uint64(types.ReceiptStatusFailed),
-				CumulativeGasUsed: hexutil.Uint64(21000 * uint64(math.Min(1, float64(b.BlockHeader.NumTxs)))),
-				Bloom:             make([]byte, 256),
-				ContractAddress:   common.Address{},
-				GasUsed:           hexutil.Uint64(int64(21000)),
-			}, nil
+		tx, block, err := s.findIndexedTxByHash(st, hashString)
+		if err != nil {
+			return nil, err
 		}
-		// get the block associated with the transaction height
-		block, _ := st.GetBlockHeaderByHeight(tx.Height)
-		// convert to eip 1559 transaction
-		return s.txToEIP1559(block, tx)
+		if tx != nil {
+			clearPendingEthTx(hashString)
+			return s.txToEthTransaction(block, tx, false)
+		}
+		if pending := s.findPendingEthTx(hashString); pending != nil {
+			return s.pendingTxToEthTransaction(pending), nil
+		}
+		return ethNullResult(), nil
 	})
 }
 
 // EthGetTransactionByBlockHashAndIndex() returns an EIP-1559 compatible tx + receipt
 func (s *Server) EthGetTransactionByBlockHashAndIndex(args []any) (any, error) {
 	return s.withStore(func(st *store.Store) (any, error) {
-		// get the block hash
 		blockHash, e := bytesFromArgs(args)
 		if e != nil {
 			return nil, e
 		}
-		// get the index
 		index, e := intFromArgs(args, 1)
 		if e != nil {
 			return nil, e
 		}
-		// get the tx from hash
-		block, e := st.GetBlockByHash(blockHash)
+		block, e := blockByHashOrNil(st, blockHash)
 		if e != nil {
 			return nil, e
 		}
-		// ensure index isn't out of bounds
-		if len(block.Transactions) <= int(index) {
-			return nil, fmt.Errorf("index %d invalid for block 0x%s", index, lib.BytesToString(blockHash))
+		tx, ok := txAtBlockIndex(block, index)
+		if !ok {
+			return ethNullResult(), nil
 		}
-		// convert to eip 1559 transaction
-		return s.txToEIP1559(block, block.Transactions[index])
+		return s.txToEthTransaction(block, tx, false)
 	})
 }
 
 // EthGetTransactionByBlockNumAndIndex() returns an EIP-1559 compatible tx + receipt
 func (s *Server) EthGetTransactionByBlockNumAndIndex(args []any) (any, error) {
 	return s.withStore(func(st *store.Store) (any, error) {
-		// get the block height
-		blockHeight, e := intFromArgs(args, 0)
+		blockHeight, e := s.blockHeightFromNumberArg(args, 0)
 		if e != nil {
 			return nil, e
 		}
-		// get the index
 		index, e := intFromArgs(args, 1)
 		if e != nil {
 			return nil, e
 		}
-		// get the tx from hash
-		block, e := st.GetBlockByHeight(uint64(blockHeight))
+		block, e := blockByHeightOrNil(st, blockHeight)
 		if e != nil {
 			return nil, e
 		}
-		// ensure index isn't out of bounds
-		if len(block.Transactions) <= int(index) {
-			return nil, fmt.Errorf("index %d invalid for block height: %d", index, blockHeight)
+		tx, ok := txAtBlockIndex(block, index)
+		if !ok {
+			return ethNullResult(), nil
 		}
-		// convert to eip 1559 transaction
-		return s.txToEIP1559(block, block.Transactions[index])
+		return s.txToEthTransaction(block, tx, false)
 	})
 }
 
-// EthGetTransactionReceipt() returns an EIP-1559 compatible tx + receipt
+// EthGetTransactionReceipt() returns a canonical Ethereum receipt only for mined transactions
 func (s *Server) EthGetTransactionReceipt(args []any) (any, error) {
-	return s.EthGetTransactionByHash(args)
+	return s.withStore(func(st *store.Store) (any, error) {
+		hashString, err := normalizedHashFromArgs(args)
+		if err != nil {
+			return nil, err
+		}
+		tx, block, err := s.findIndexedTxByHash(st, hashString)
+		if err != nil {
+			return nil, err
+		}
+		if tx == nil {
+			return ethNullResult(), nil
+		}
+		clearPendingEthTx(hashString)
+		return s.txToEthReceipt(block, tx)
+	})
 }
 
 // EthGetUncleByBlockHashAndIndex() returns null (no uncles) as expected
-func (s *Server) EthGetUncleByBlockHashAndIndex(_ []any) (any, error) { return nil, nil }
+func (s *Server) EthGetUncleByBlockHashAndIndex(_ []any) (any, error) {
+	return ethNullResult(), nil
+}
 
 // EthGetUncleByBlockNumAndIndex() returns null (no uncles) as expected
-func (s *Server) EthGetUncleByBlockNumAndIndex(_ []any) (any, error) { return nil, nil }
+func (s *Server) EthGetUncleByBlockNumAndIndex(_ []any) (any, error) {
+	return ethNullResult(), nil
+}
 
 // EthNewFilter() creates a filter object, based on filter options, to notify when the state changes
 func (s *Server) EthNewFilter(args []any) (any, error) {
@@ -781,7 +831,7 @@ func (s *Server) EthGetFilterLogs(args []any) (any, error) {
 		return nil, err
 	}
 	// call ethGetLogs
-	return s.ethGetLogs(filter, 1)
+	return s.ethGetLogs(filter, 0)
 }
 
 // EthGetLogs() returns an array of all logs matching the passed filter argument
@@ -792,7 +842,7 @@ func (s *Server) EthGetLogs(args []any) (any, error) {
 		return nil, err
 	}
 	// call ethGetLogs
-	return s.ethGetLogs(&params.filter, 1)
+	return s.ethGetLogs(&params.filter, 0)
 }
 
 // MAJOR HELPER FUNCTIONS BELOW
@@ -811,22 +861,22 @@ func (s *Server) blockToEIP1559Block(block *lib.BlockResult, fullTx bool) (ethRP
 	// tx.Fee x 100 to ensure always above 21,000
 	sendFee := big.NewInt(int64(tx.Fee * 100))
 	// make a structure to capture the EIP-1559 transactions
-	var txs []ethRPCTransaction
-	transactions := make([]interface{}, len(txs))
+	transactions := make([]interface{}, 0, len(block.Transactions))
 	for _, tx := range block.Transactions {
 		if fullTx {
-			eip1559Tx, e := s.txToEIP1559(block, tx)
+			eip1559Tx, e := s.txToEthTransaction(block, tx, false)
 			if e != nil {
 				return ethRPCBlock{}, e
 			}
 			transactions = append(transactions, eip1559Tx)
 		} else {
-			transactions = append(transactions, "0x"+tx.TxHash)
+			transactions = append(transactions, ethHashStringFromTxResult(tx))
 		}
 	}
 	// create the EIP-1559 block
 	return ethRPCBlock{
 		Number:                hexutil.Big(*big.NewInt(int64(block.BlockHeader.Height))),
+		Difficulty:            hexutil.Big(*big.NewInt(0)),
 		Hash:                  common.BytesToHash(block.BlockHeader.Hash),
 		ParentHash:            common.BytesToHash(block.BlockHeader.LastBlockHash),
 		Sha3Uncles:            types.EmptyUncleHash,
@@ -849,54 +899,52 @@ func (s *Server) blockToEIP1559Block(block *lib.BlockResult, fullTx bool) (ethRP
 	}, nil
 }
 
-// txToEIP1559() attempts to convert a Canopy transaction to EIP1559 for display only
-func (s *Server) txToEIP1559(b *lib.BlockResult, tx *lib.TxResult) (ethRPCTransaction, error) {
-	var amount uint64
-	var logs []string
-	// extract the hash and numTxs from the block result
-	// extract the amount if it's send message
-	if tx.MessageType == fsm.MessageSendName {
-		sendMsg, err := msgToSend(tx.Transaction.Msg)
-		if err != nil {
-			return ethRPCTransaction{}, err
-		}
-		amount = sendMsg.Amount
-		// generate a pseudo log for it
-		logs = []string{transferEventFilterHash,
-			fmt.Sprintf("0x%064s", lib.BytesToString(sendMsg.FromAddress)),
-			fmt.Sprintf("0x%064s", lib.BytesToString(sendMsg.ToAddress)),
-		}
+// txToEthTransaction() converts a Canopy transaction into a canonical Ethereum transaction object
+func (s *Server) txToEthTransaction(b *lib.BlockResult, tx *lib.TxResult, pending bool) (any, error) {
+	if ethTx, ok := ethTransactionFromCanopyTx(tx.Transaction); ok {
+		return marshalCanonicalEthTransaction(ethTx, common.BytesToAddress(tx.Sender), b, tx, pending)
 	}
-	// get the recipient if applicable
-	var to common.Address
+	hash := common.HexToHash(ethHashStringFromTxResult(tx))
+	from := common.BytesToAddress(tx.Sender)
+	gasPrice := big.NewInt(ethGasPrice)
+	gasFeeCap := big.NewInt(ethGasPrice)
+	gasTipCap := big.NewInt(0)
+	gas := uint64(tx.Transaction.Fee)
+	nonce := tx.Transaction.CreatedHeight
+	input := []byte{}
+	value := fsm.UpscaleTo18Decimals(sendAmountFromTxResult(tx))
+	chainID := big.NewInt(int64(evmChainIDFromTx(tx.Transaction)))
+	var to *common.Address
 	if len(tx.Recipient) != 0 {
-		to = common.BytesToAddress(tx.Recipient)
+		recipient := common.BytesToAddress(tx.Recipient)
+		to = &recipient
 	}
-	// convert to an EIP1559Tx and add to the list
-	return ethRPCTransaction{
-		BlockHash:         common.BytesToHash(b.BlockHeader.Hash),
-		BlockNumber:       hexutil.Big(*big.NewInt(int64(tx.Height))),
-		From:              common.BytesToAddress(tx.Sender),
-		Gas:               hexutil.Uint64(tx.Transaction.Fee),
-		GasPrice:          hexutil.Big(*big.NewInt(ethGasPrice)),
-		GasFeeCap:         hexutil.Big(*big.NewInt(ethGasPrice)),
-		GasTipCap:         hexutil.Big(*big.NewInt(0)),
-		Hash:              common.HexToHash("0x" + tx.TxHash),
-		TxHash:            common.HexToHash("0x" + tx.TxHash),
-		Nonce:             hexutil.Uint64(tx.Transaction.CreatedHeight),
-		To:                to,
-		TransactionIndex:  hexutil.Uint64(tx.Index),
-		Value:             hexutil.Big(*fsm.UpscaleTo18Decimals(amount)),
-		Type:              types.DynamicFeeTxType,
-		ChainID:           hexutil.Big(*big.NewInt(int64(tx.Transaction.ChainId))),
-		Status:            hexutil.Uint64(types.ReceiptStatusSuccessful),
-		CumulativeGasUsed: hexutil.Uint64(tx.Transaction.Fee * uint64(math.Min(1, float64(b.BlockHeader.NumTxs)))),
-		Bloom:             make([]byte, 256),
-		Logs:              logs,
-		ContractAddress:   common.Address{},
-		GasUsed:           hexutil.Uint64(int64(tx.Transaction.Fee)),
-		EffectiveGasPrice: hexutil.Big(*big.NewInt(ethGasPrice)),
-	}, nil
+	result := ethRPCTransaction{
+		BlockHash:        nil,
+		BlockNumber:      nil,
+		From:             from,
+		Gas:              hexutil.Uint64(gas),
+		GasPrice:         (*hexutil.Big)(gasPrice),
+		GasFeeCap:        (*hexutil.Big)(gasFeeCap),
+		GasTipCap:        (*hexutil.Big)(gasTipCap),
+		Hash:             hash,
+		Input:            hexutil.Bytes(input),
+		Nonce:            hexutil.Uint64(nonce),
+		To:               to,
+		TransactionIndex: nil,
+		Value:            hexutil.Big(*value),
+		Type:             types.DynamicFeeTxType,
+		ChainID:          (*hexutil.Big)(chainID),
+	}
+	if !pending {
+		blockHash := common.BytesToHash(b.BlockHeader.Hash)
+		blockNumber := hexutil.Big(*big.NewInt(int64(tx.Height)))
+		txIndex := hexutil.Uint64(tx.Index)
+		result.BlockHash = &blockHash
+		result.BlockNumber = &blockNumber
+		result.TransactionIndex = &txIndex
+	}
+	return result, nil
 }
 
 // ethGetLogs() simulates eth_getLogs call by executing queries over the indexer and mempool
@@ -911,6 +959,13 @@ func (s *Server) ethGetLogs(filter *ethFilter, lastReadHeight uint64) (any, erro
 			transactions := s.controller.Mempool.GetTransactions(math.MaxUint64)
 			s.controller.Mempool.L.Unlock()
 			for _, tx := range transactions {
+				transaction := new(lib.Transaction)
+				if err := lib.Unmarshal(tx, transaction); err == nil {
+					if ethHash := ethHashStringFromTransaction(transaction); ethHash != "" {
+						strResults = append(strResults, ethHash)
+						continue
+					}
+				}
 				strResults = append(strResults, "0x"+crypto.HashString(tx))
 			}
 			return strResults, nil
@@ -927,18 +982,59 @@ func (s *Server) ethGetLogs(filter *ethFilter, lastReadHeight uint64) (any, erro
 			}
 			return strResults, nil
 		}
+		if !filterSupportsPseudoTransferLogs(filter) {
+			return make([]ethRPCLog, 0), nil
+		}
+		if filter.BlockHash != "" {
+			if lastReadHeight != 0 {
+				return make([]ethRPCLog, 0), nil
+			}
+			blockHash, err := lib.StringToBytes(cleanHex(filter.BlockHash))
+			if err != nil {
+				return nil, ethInvalidParams(err.Error())
+			}
+			block, err := st.GetBlockByHash(blockHash)
+			if err != nil {
+				if isNotFoundErr(err) {
+					return make([]ethRPCLog, 0), nil
+				}
+				return nil, err
+			}
+			if isNilBlock(block) {
+				return make([]ethRPCLog, 0), nil
+			}
+			response := make([]ethRPCLog, 0)
+			for _, tx := range block.Transactions {
+				if tx.MessageType != fsm.MessageSendName ||
+					!s.passesAddressFilter(tx.Sender, filter.Sender) ||
+					!s.passesAddressFilter(tx.Recipient, filter.Recipient) {
+					continue
+				}
+				converted, e := s.txToGetLogsResp(block.BlockHeader.Hash, tx)
+				if e != nil {
+					return nil, e
+				}
+				response = append(response, converted...)
+			}
+			return response, nil
+		}
 		// set the start height
 		startHeight := filter.StartHeight
 		if lastReadHeight != 0 {
 			startHeight = lastReadHeight
+		} else if startHeight == 0 {
+			startHeight = s.currentEthBlockNumber()
 		}
 		// set height at latest block
 		endHeight := filter.EndHeight
 		if endHeight == 0 {
-			endHeight = s.controller.ChainHeight()
+			endHeight = s.currentEthBlockNumber()
+		}
+		if startHeight > endHeight {
+			return make([]ethRPCLog, 0), nil
 		}
 		// parse blocks looking for an appropriate response
-		response := make([]ethGetLogsResponse, 0)
+		response := make([]ethRPCLog, 0)
 		for i := startHeight; i <= endHeight; i++ {
 			// get the block
 			block, err := st.GetBlockByHeight(i)
@@ -959,31 +1055,34 @@ func (s *Server) ethGetLogs(filter *ethFilter, lastReadHeight uint64) (any, erro
 					return nil, e
 				}
 				// add to the list
-				response = append(response, converted)
+				response = append(response, converted...)
 			}
 		}
 		return response, nil
 	})
 }
 
-// txToGetLogsResp() converts a send message into an ethGetLogsResponse
-func (s *Server) txToGetLogsResp(blockHash []byte, tx *lib.TxResult) (ethGetLogsResponse, error) {
-	sendMessage, err := msgToSend(tx.Transaction.Msg)
+// txToGetLogsResp() converts a send message into canonical Ethereum log objects
+func (s *Server) txToGetLogsResp(blockHash []byte, tx *lib.TxResult) ([]ethRPCLog, error) {
+	gethLogs, err := ethLogsFromTx(blockHash, tx)
 	if err != nil {
-		return ethGetLogsResponse{}, err
+		return nil, err
 	}
-	return ethGetLogsResponse{
-		LogIndex:              fmt.Sprintf("0x%x", tx.Index),
-		BlockNumber:           fmt.Sprintf("0x%x", tx.Height),
-		BlockHash:             fmt.Sprintf("0x%s", lib.BytesToString(blockHash)),
-		TransactionHash:       fmt.Sprintf("0x%s", tx.TxHash),
-		TransactionIndex:      fmt.Sprintf("0x%x", tx.Index),
-		PseudoContractAddress: strings.ToLower(fsm.CNPYContractAddress),
-		Amount:                fmt.Sprintf("0x%x", sendMessage.Amount),
-		Topics: []string{transferEventFilterHash,
-			fmt.Sprintf("0x%064s", lib.BytesToString(sendMessage.FromAddress)),
-			fmt.Sprintf("0x%064s", lib.BytesToString(sendMessage.ToAddress))},
-	}, nil
+	response := make([]ethRPCLog, 0, len(gethLogs))
+	for _, log := range gethLogs {
+		response = append(response, ethRPCLog{
+			Address:     log.Address,
+			Topics:      log.Topics,
+			Data:        hexutil.Bytes(log.Data),
+			BlockNumber: hexutil.Uint64(log.BlockNumber),
+			TxHash:      log.TxHash,
+			TxIndex:     hexutil.Uint64(log.TxIndex),
+			BlockHash:   log.BlockHash,
+			Index:       hexutil.Uint64(log.Index),
+			Removed:     log.Removed,
+		})
+	}
+	return response, nil
 }
 
 // passesAddressFilter() ensures the address is in the slice (nil slice means all)
@@ -1053,69 +1152,20 @@ func (s *Server) newEthFilter(params newFilterParams) (id string, err error) {
 	return
 }
 
-// Canopy-specific pseudo-nonce logic for eth_getTransactionCount: enables replay protection using
-// created_at_height+timestamp, with per-address pending tx counters that decay over ±4320 blocks
+// Canopy only saves valid transactions in blocks, so the RPC keeps a lightweight local pending cache for
+// canonical eth_sendRawTransaction / eth_getTransactionByHash behavior until the tx is mined or expires.
+var pseudoPendingTxsMap = sync.Map{}   // [ethHash] -> *ethPendingTx
+var pendingSenderNonceMap = sync.Map{} // [sender:nonce] -> ethHash
 
-var pseudoNonceMap = sync.Map{}    // [address] -> count
-var latestHeight = atomic.Uint64{} // latest known height
+const ethPendingTxTTL = 15 * time.Minute
 
-// getAndIncPseudoNonce() retrieves and increments the pseudo-nonce
-func getAndIncPseudoNonce(addr string) uint64 { return latestHeight.Load() + incPseudoNonce(addr) }
-
-// incPseudoNonce() increments the pseudo-nonce and returns the old value
-func incPseudoNonce(addr string) (old uint64) {
-	v, _ := pseudoNonceMap.LoadOrStore(addr, new(atomic.Int64))
-	got := v.(*atomic.Int64).Add(1) - 1
-	return uint64(math.Max(float64(got), 0)) // defensive
-}
-
-// startEthPseudoNonceService() ensures if a new block is processed the nonce map is updated appropriately
-func (s *Server) startEthPseudoNonceService() {
-	for range time.Tick(time.Second) {
-		currentHeight := s.controller.ChainHeight()
-		prevHeight := latestHeight.Load()
-		// only proceed if block height has increased
-		if currentHeight > prevHeight {
-			latestHeight.Store(currentHeight)
-			// for each key in the map, decrement the count
-			pseudoNonceMap.Range(func(key, value any) bool {
-				count := value.(*atomic.Int64)
-				// decrement count
-				if count.Add(-1) <= 0 {
-					// delete when count reaches 0
-					pseudoNonceMap.Delete(key)
-				}
-				return true
-			})
-		}
-	}
-}
-
-// Canopy only saves valid transactions in blocks - so the RPC mocks 'failed or dropped' txs for ethereum tooling compatibility
-//
-// - Node maps a txHash to the latest block height either when queried through eth_getTransactionReceipt or sent through eth_sendRawTransaction
-// - After 15 blocks, if not found in the indexer - return status_failed
-// - After appx 6 hours evict the txHash from the map
-var pseudoPendingTxsMap = sync.Map{} // [hash] -> height
-
-// shouldSimultePending() sets a pending tx in the map and returns the status of the transaction
-func shouldSimultePending(txHash string) (pending bool) {
-	storedHeight, found := pseudoPendingTxsMap.LoadOrStore(txHash, latestHeight.Load())
-	// if not found after 5 minutes
-	if found && storedHeight.(uint64)+15 < latestHeight.Load() {
-		return false
-	}
-	return true
-}
-
-// startEthPendingTxsExpireService() evicts pending txs after 6 hours
+// startEthPendingTxsExpireService() evicts locally tracked pending txs after a short wall-clock grace period.
 func (s *Server) startEthPendingTxsExpireService() {
 	for range time.Tick(time.Second) {
-		// for each key in the map, decrement the count
 		pseudoPendingTxsMap.Range(func(key, value any) bool {
-			// evict if older than 6 hours
-			if value.(uint64)+1080 < latestHeight.Load() {
-				pseudoPendingTxsMap.Delete(key)
+			pending := value.(*ethPendingTx)
+			if pendingTxExpired(pending) {
+				clearPendingEthTx(key.(string))
 			}
 			return true
 		})
@@ -1149,6 +1199,7 @@ type ethereumRPCError struct {
 // ethRPCBlock matches the ethereum block header (which isn't exposed)
 type ethRPCBlock struct {
 	Number                hexutil.Big    `json:"number"`
+	Difficulty            hexutil.Big    `json:"difficulty"`
 	Hash                  common.Hash    `json:"hash"`
 	ParentHash            common.Hash    `json:"parentHash"`
 	Sha3Uncles            common.Hash    `json:"sha3Uncles"`
@@ -1170,38 +1221,62 @@ type ethRPCBlock struct {
 	Uncles                []common.Hash  `json:"uncles"`
 }
 
-// ethRPCTransaction matches the ethereum rpc transaction (which isn't exposed)
-// - combines receipt and transaction into 1 object for simplicity
+// ethRPCTransaction matches the Ethereum transaction object
 type ethRPCTransaction struct {
-	BlockHash         common.Hash    `json:"blockHash"`
-	BlockNumber       hexutil.Big    `json:"blockNumber"`
-	From              common.Address `json:"from"`
-	Gas               hexutil.Uint64 `json:"gas"`
-	GasPrice          hexutil.Big    `json:"gasPrice"`
-	GasFeeCap         hexutil.Big    `json:"maxFeePerGas,omitempty"`
-	GasTipCap         hexutil.Big    `json:"maxPriorityFeePerGas,omitempty"`
-	Hash              common.Hash    `json:"hash"`
-	Nonce             hexutil.Uint64 `json:"nonce"`
-	To                common.Address `json:"to"`
-	TransactionIndex  hexutil.Uint64 `json:"transactionIndex"`
-	Value             hexutil.Big    `json:"value"`
-	Type              hexutil.Uint64 `json:"type"`
-	ChainID           hexutil.Big    `json:"chainId,omitempty"`
-	Status            hexutil.Uint64 `json:"status"`
-	CumulativeGasUsed hexutil.Uint64 `json:"cumulativeGasUsed"`
-	Bloom             hexutil.Bytes  `json:"logsBloom"`
-	Logs              []string       `json:"logs"`
-	TxHash            common.Hash    `json:"transactionHash"`
-	ContractAddress   common.Address `json:"contractAddress"`
-	GasUsed           hexutil.Uint64 `json:"gasUsed"`
-	EffectiveGasPrice hexutil.Big    `json:"effectiveGasPrice"`
+	BlockHash        *common.Hash    `json:"blockHash"`
+	BlockNumber      *hexutil.Big    `json:"blockNumber"`
+	From             common.Address  `json:"from"`
+	Gas              hexutil.Uint64  `json:"gas"`
+	GasPrice         *hexutil.Big    `json:"gasPrice,omitempty"`
+	GasFeeCap        *hexutil.Big    `json:"maxFeePerGas,omitempty"`
+	GasTipCap        *hexutil.Big    `json:"maxPriorityFeePerGas,omitempty"`
+	Hash             common.Hash     `json:"hash"`
+	Input            hexutil.Bytes   `json:"input"`
+	Nonce            hexutil.Uint64  `json:"nonce"`
+	To               *common.Address `json:"to"`
+	TransactionIndex *hexutil.Uint64 `json:"transactionIndex"`
+	Value            hexutil.Big     `json:"value"`
+	Type             hexutil.Uint64  `json:"type"`
+	ChainID          *hexutil.Big    `json:"chainId,omitempty"`
+}
+
+// ethRPCReceipt matches the Ethereum receipt object
+type ethRPCReceipt struct {
+	Type              hexutil.Uint64  `json:"type,omitempty"`
+	Status            hexutil.Uint64  `json:"status"`
+	CumulativeGasUsed hexutil.Uint64  `json:"cumulativeGasUsed"`
+	Bloom             types.Bloom     `json:"logsBloom"`
+	Logs              []ethRPCLog     `json:"logs"`
+	TxHash            common.Hash     `json:"transactionHash"`
+	From              common.Address  `json:"from"`
+	To                *common.Address `json:"to"`
+	ContractAddress   *common.Address `json:"contractAddress"`
+	GasUsed           hexutil.Uint64  `json:"gasUsed"`
+	EffectiveGasPrice *hexutil.Big    `json:"effectiveGasPrice,omitempty"`
+	BlockHash         common.Hash     `json:"blockHash"`
+	BlockNumber       hexutil.Big     `json:"blockNumber"`
+	TransactionIndex  hexutil.Uint64  `json:"transactionIndex"`
+}
+
+// ethRPCLog matches the Ethereum log object
+type ethRPCLog struct {
+	Address     common.Address `json:"address"`
+	Topics      []common.Hash  `json:"topics"`
+	Data        hexutil.Bytes  `json:"data"`
+	BlockNumber hexutil.Uint64 `json:"blockNumber"`
+	TxHash      common.Hash    `json:"transactionHash"`
+	TxIndex     hexutil.Uint64 `json:"transactionIndex"`
+	BlockHash   common.Hash    `json:"blockHash"`
+	Index       hexutil.Uint64 `json:"logIndex"`
+	Removed     bool           `json:"removed"`
 }
 
 // newFilterParams() is the params object for eth_newFilter()
 type newFilterParams struct {
 	StartBlock string    `json:"fromBlock"`
 	EndBlock   string    `json:"toBlock"`
-	Address    any       `json:"address"` // ignore as it's always going to be null or the pseudo-canopy contract address
+	BlockHash  string    `json:"blockHash"`
+	Address    any       `json:"address"`
 	Topics     []any     `json:"topics"`
 	filter     ethFilter // internal
 }
@@ -1214,21 +1289,11 @@ type ethFilter struct {
 	LastReadHeight *atomic.Uint64 // track the height last read for eth_getFilterChanges
 	Blocks         bool
 	PendingTxs     bool
+	BlockHash      string
+	Address        []string
 	Topic          []string
 	Sender         []string
 	Recipient      []string
-}
-
-// ethGetLogsResponse is the response structure to an eth_getLogs request
-type ethGetLogsResponse struct {
-	LogIndex              string   `json:"logIndex"` // always tx index
-	BlockNumber           string   `json:"blockNumber"`
-	BlockHash             string   `json:"blockHash"`
-	TransactionHash       string   `json:"transactionHash"`
-	TransactionIndex      string   `json:"transactionIndex"`
-	PseudoContractAddress string   `json:"address"`
-	Amount                string   `json:"data"`   // amount
-	Topics                []string `json:"topics"` // [0]=event signature, [1]=from (indexed), [2]=to (indexed)
 }
 
 // ethSyncingResponse is the response structure to an eth_syncing request
@@ -1240,9 +1305,520 @@ type ethSyncingResponse struct {
 
 // HELPERS BELOW
 
+type ethPendingTx struct {
+	AcceptedAt time.Time
+	Tx         *lib.Transaction
+}
+
+func ethNullResult() json.RawMessage { return json.RawMessage("null") }
+
+// isNilBlock() reports whether the fetched block result is usable.
+func isNilBlock(block *lib.BlockResult) bool {
+	return block == nil || block.BlockHeader == nil || len(block.BlockHeader.Hash) == 0
+}
+
+// isNotFoundErr() identifies backend lookup misses that should serialize as null/empty results.
+func isNotFoundErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "not found")
+}
+
+func blockByHashOrNil(st *store.Store, hash []byte) (*lib.BlockResult, error) {
+	block, err := st.GetBlockByHash(hash)
+	if err != nil {
+		if isNotFoundErr(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if isNilBlock(block) {
+		return nil, nil
+	}
+	return block, nil
+}
+
+func blockByHeightOrNil(st *store.Store, height uint64) (*lib.BlockResult, error) {
+	block, err := st.GetBlockByHeight(height)
+	if err != nil {
+		if isNotFoundErr(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if isNilBlock(block) {
+		return nil, nil
+	}
+	return block, nil
+}
+
+func txAtBlockIndex(block *lib.BlockResult, index int64) (*lib.TxResult, bool) {
+	if isNilBlock(block) || index < 0 || len(block.Transactions) <= int(index) {
+		return nil, false
+	}
+	return block.Transactions[index], true
+}
+
+type ethRPCMethodError struct {
+	code    int
+	message string
+}
+
+func (e *ethRPCMethodError) Error() string { return e.message }
+
+// ethMethodNotFound() wraps an unsupported method in the expected JSON-RPC error code.
+func ethMethodNotFound(method string) error {
+	return &ethRPCMethodError{
+		code:    -32601,
+		message: fmt.Sprintf("the method %s does not exist/is not available", method),
+	}
+}
+
+// ethInvalidParams() wraps invalid input in the expected JSON-RPC error code.
+func ethInvalidParams(message string) error {
+	return &ethRPCMethodError{code: -32602, message: message}
+}
+
+// ethereumRPCErrorFrom() converts internal errors into JSON-RPC error payloads.
+func ethereumRPCErrorFrom(err error) *ethereumRPCError {
+	if err == nil {
+		return nil
+	}
+	var rpcErr *ethRPCMethodError
+	if errors.As(err, &rpcErr) {
+		return &ethereumRPCError{Code: rpcErr.code, Message: rpcErr.message}
+	}
+	return &ethereumRPCError{Code: -32603, Message: err.Error()}
+}
+
+// normalizedHashFromArgs() returns a lower-cased 0x-prefixed hash argument.
+func normalizedHashFromArgs(args []any) (string, error) {
+	hash, err := strFromArgs(args, 0)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(hash, "0x") {
+		hash = "0x" + hash
+	}
+	return strings.ToLower(hash), nil
+}
+
+// evmChainIDFromTx() returns the packed EVM chain id for a Canopy transaction.
+func evmChainIDFromTx(tx *lib.Transaction) uint64 {
+	return fsm.CanopyIdsToEVMChainId(tx.ChainId, tx.NetworkId)
+}
+
+// marshalCanonicalEthTransaction() overlays Ethereum RPC inclusion fields onto a signed tx JSON object.
+func marshalCanonicalEthTransaction(ethTx *types.Transaction, from common.Address, block *lib.BlockResult, tx *lib.TxResult, pending bool) (map[string]any, error) {
+	bz, err := ethTx.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]any)
+	if err = json.Unmarshal(bz, &result); err != nil {
+		return nil, err
+	}
+	result["from"] = from.Hex()
+	// Ethereum RPC transaction objects report gasPrice for dynamic-fee txs too; MetaMask expects it during polling.
+	if result["gasPrice"] == nil {
+		result["gasPrice"] = (*hexutil.Big)(ethTx.GasPrice())
+	}
+	if pending {
+		result["blockHash"] = nil
+		result["blockNumber"] = nil
+		result["transactionIndex"] = nil
+		return result, nil
+	}
+	result["blockHash"] = common.BytesToHash(block.BlockHeader.Hash).Hex()
+	result["blockNumber"] = hexutil.EncodeUint64(tx.Height)
+	result["transactionIndex"] = hexutil.EncodeUint64(tx.Index)
+	return result, nil
+}
+
+// ethTransactionFromCanopyTx() decodes the original signed Ethereum tx from an RLP-backed Canopy tx.
+func ethTransactionFromCanopyTx(tx *lib.Transaction) (*types.Transaction, bool) {
+	if tx == nil || tx.Memo != fsm.RLPIndicator || tx.Signature == nil || len(tx.Signature.Signature) == 0 {
+		return nil, false
+	}
+	var ethTx types.Transaction
+	if err := ethTx.UnmarshalBinary(tx.Signature.Signature); err != nil {
+		return nil, false
+	}
+	return &ethTx, true
+}
+
+// ethHashStringFromTransaction() returns the canonical Ethereum tx hash for an RLP-backed tx.
+func ethHashStringFromTransaction(tx *lib.Transaction) string {
+	if ethTx, ok := ethTransactionFromCanopyTx(tx); ok {
+		return strings.ToLower(ethTx.Hash().Hex())
+	}
+	return ""
+}
+
+// ethHashStringFromTxResult() returns the Ethereum hash when available, else the stored Canopy tx hash.
+func ethHashStringFromTxResult(tx *lib.TxResult) string {
+	if hash := ethHashStringFromTransaction(tx.Transaction); hash != "" {
+		return hash
+	}
+	return "0x" + tx.TxHash
+}
+
+// sendAmountFromTxResult() extracts the transfer amount for send transactions.
+func sendAmountFromTxResult(tx *lib.TxResult) uint64 {
+	if tx.MessageType != fsm.MessageSendName {
+		return 0
+	}
+	sendMsg, err := msgToSend(tx.Transaction.Msg)
+	if err != nil {
+		return 0
+	}
+	return sendMsg.Amount
+}
+
+// gasLimitFromTxResult() reports the Ethereum gas limit for RLP-backed txs or the Canopy fee field otherwise.
+func gasLimitFromTxResult(tx *lib.TxResult) uint64 {
+	if ethTx, ok := ethTransactionFromCanopyTx(tx.Transaction); ok {
+		return ethTx.Gas()
+	}
+	return tx.Transaction.Fee
+}
+
+// effectiveGasPriceFromEthTx() returns the gas price Canopy actually charges for the Ethereum tx.
+func effectiveGasPriceFromEthTx(ethTx *types.Transaction) *big.Int {
+	return new(big.Int).Set(ethTx.GasPrice())
+}
+
+// cumulativeGasUsedForTx() sums gas usage through the target tx index within the block.
+func cumulativeGasUsedForTx(block *lib.BlockResult, index uint64) uint64 {
+	var total uint64
+	for _, blockTx := range block.Transactions {
+		total += gasLimitFromTxResult(blockTx)
+		if blockTx.Index == index {
+			break
+		}
+	}
+	return total
+}
+
+// senderFromTransaction() derives the sender address from the transaction signature payload.
+func senderFromTransaction(tx *lib.Transaction) string {
+	if tx == nil || tx.Signature == nil {
+		return ""
+	}
+	pubKey, err := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+	if err == nil {
+		return pubKey.Address().String()
+	}
+	return ""
+}
+
+// pendingTxExpired() reports whether a locally tracked pending tx has exceeded the wallet-compatibility grace window.
+func pendingTxExpired(pending *ethPendingTx) bool {
+	return pending == nil || time.Since(pending.AcceptedAt) > ethPendingTxTTL
+}
+
+// pendingSenderNonceKey() keys pending entries by sender and nonce for replacement cleanup.
+func pendingSenderNonceKey(sender string, nonce uint64) string {
+	return fmt.Sprintf("%s:%d", strings.ToLower(sender), nonce)
+}
+
+// registerPendingEthTx() stores a locally accepted pending Ethereum tx for short-lived lookup compatibility.
+func registerPendingEthTx(hash string, tx *lib.Transaction) {
+	hash = strings.ToLower(hash)
+	if tx != nil {
+		if sender := senderFromTransaction(tx); sender != "" {
+			key := pendingSenderNonceKey(sender, tx.CreatedHeight)
+			if existing, loaded := pendingSenderNonceMap.Load(key); loaded {
+				oldHash := strings.ToLower(existing.(string))
+				if oldHash != hash {
+					pseudoPendingTxsMap.Delete(oldHash)
+				}
+			}
+			pendingSenderNonceMap.Store(key, hash)
+		}
+	}
+	pseudoPendingTxsMap.Store(hash, &ethPendingTx{AcceptedAt: time.Now(), Tx: tx})
+}
+
+// clearPendingEthTx() removes a pending tx from the local lookup maps.
+func clearPendingEthTx(hash string) {
+	hash = strings.ToLower(hash)
+	if pending, ok := pseudoPendingTxsMap.Load(hash); ok {
+		tx := pending.(*ethPendingTx).Tx
+		if tx != nil {
+			if sender := senderFromTransaction(tx); sender != "" {
+				pendingSenderNonceMap.Delete(pendingSenderNonceKey(sender, tx.CreatedHeight))
+			}
+		}
+	}
+	pseudoPendingTxsMap.Delete(hash)
+}
+
+// highestPendingNonceForAddress() returns the highest still-live pending nonce for the sender.
+func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) (highest uint64, ok bool, err error) {
+	address = strings.ToLower(address)
+	pseudoPendingTxsMap.Range(func(key, value any) bool {
+		hash := strings.ToLower(key.(string))
+		pending := value.(*ethPendingTx)
+		if pendingTxExpired(pending) {
+			clearPendingEthTx(hash)
+			return true
+		}
+		if tx, _, lookupErr := s.findIndexedTxByHash(st, hash); lookupErr != nil {
+			err = lookupErr
+			return false
+		} else if tx != nil {
+			clearPendingEthTx(hash)
+			return true
+		}
+		if pending.Tx == nil || strings.ToLower(senderFromTransaction(pending.Tx)) != address {
+			return true
+		}
+		nonce := pending.Tx.CreatedHeight
+		if !ok || nonce > highest {
+			highest, ok = nonce, true
+		}
+		return true
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	s.controller.Mempool.L.Lock()
+	defer s.controller.Mempool.L.Unlock()
+	for _, txBz := range s.controller.Mempool.GetTransactions(math.MaxUint64) {
+		tx := new(lib.Transaction)
+		if err := lib.Unmarshal(txBz, tx); err != nil {
+			continue
+		}
+		if strings.ToLower(senderFromTransaction(tx)) != address {
+			continue
+		}
+		nonce := tx.CreatedHeight
+		if !ok || nonce > highest {
+			highest, ok = nonce, true
+		}
+	}
+	return
+}
+
+// findPendingEthTx() resolves a pending tx by hash from the live mempool, with a short local grace fallback after eviction.
+func (s *Server) findPendingEthTx(hash string) *ethPendingTx {
+	hash = strings.ToLower(hash)
+	s.controller.Mempool.L.Lock()
+	defer s.controller.Mempool.L.Unlock()
+	for _, txBz := range s.controller.Mempool.GetTransactions(math.MaxUint64) {
+		tx := new(lib.Transaction)
+		if err := lib.Unmarshal(txBz, tx); err != nil {
+			continue
+		}
+		if ethHashStringFromTransaction(tx) != hash {
+			continue
+		}
+		return &ethPendingTx{AcceptedAt: time.Now(), Tx: tx}
+	}
+	if pending, ok := pseudoPendingTxsMap.Load(hash); ok {
+		cached := pending.(*ethPendingTx)
+		if !pendingTxExpired(cached) {
+			return cached
+		}
+		clearPendingEthTx(hash)
+	}
+	return nil
+}
+
+// pendingTxToEthTransaction() serializes a pending tx using the Ethereum transaction object shape.
+func (s *Server) pendingTxToEthTransaction(pending *ethPendingTx) any {
+	ethTx, ok := ethTransactionFromCanopyTx(pending.Tx)
+	if !ok {
+		return ethNullResult()
+	}
+	result, _ := marshalCanonicalEthTransaction(ethTx, common.HexToAddress("0x"+senderFromTransaction(pending.Tx)), nil, nil, true)
+	return result
+}
+
+// currentEthBlockNumber() returns the Ethereum-facing latest block number.
+func (s *Server) currentEthBlockNumber() uint64 {
+	height := s.controller.ChainHeight()
+	if height == 0 {
+		return 0
+	}
+	return height - 1
+}
+
+// minimumAcceptedEthereumNonce() returns the lowest nonce/createdHeight currently accepted by Canopy.
+func (s *Server) minimumAcceptedEthereumNonce() uint64 {
+	height := s.currentEthBlockNumber()
+	if height <= fsm.BlockAcceptanceRange {
+		return 0
+	}
+	return height - fsm.BlockAcceptanceRange
+}
+
+// maximumAcceptedEthereumNonce() returns the highest nonce/createdHeight currently accepted by Canopy.
+func (s *Server) maximumAcceptedEthereumNonce() uint64 {
+	height := s.currentEthBlockNumber()
+	if height > math.MaxUint64-fsm.BlockAcceptanceRange {
+		return math.MaxUint64
+	}
+	return height + fsm.BlockAcceptanceRange
+}
+
+// latestMinedNonceForAddress() returns the next confirmed nonce for an address when it has mined Ethereum-backed tx history.
+func (s *Server) latestMinedNonceForAddress(st *store.Store, address crypto.AddressI) (uint64, bool, error) {
+	nonce, ok, err := st.GetLatestMinedEthereumNonce(address)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	nextNonce := nonce + 1
+	if currentNonce := s.currentEthBlockNumber(); nextNonce < currentNonce {
+		nextNonce = currentNonce
+	}
+	return nextNonce, true, nil
+}
+
+// blockHeightFromNumberArg() resolves block-number method arguments to indexed Canopy block heights.
+func (s *Server) blockHeightFromNumberArg(args []any, position int) (uint64, error) {
+	blockTag, err := strFromArgs(args, position)
+	if err != nil {
+		return 0, err
+	}
+	switch blockTag {
+	case latestBlockTag, pendingBlockTag, safeBlockTag, finalizedBlockTag:
+		return s.currentEthBlockNumber(), nil
+	case earliestBlockTag:
+		return 0, nil
+	}
+	return parseBlockTag(blockTag)
+}
+
+// findIndexedTxByHash() resolves a mined tx by stored Canopy hash or persisted Ethereum-hash alias.
+func (s *Server) findIndexedTxByHash(st *store.Store, hash string) (*lib.TxResult, *lib.BlockResult, error) {
+	txHash, err := lib.StringToBytes(cleanHex(hash))
+	if err == nil {
+		tx, txErr := st.GetTxByHash(txHash)
+		if txErr == nil && tx.TxHash != "" {
+			block, blockErr := st.GetBlockByHeight(tx.Height)
+			if blockErr == nil && !isNilBlock(block) {
+				return tx, block, nil
+			}
+			// Treat a partially indexed mined tx as unresolved so callers can fall back to pending/null
+			// instead of surfacing a transient backend error during MetaMask polling.
+			if blockErr == nil || isNotFoundErr(blockErr) {
+				return nil, nil, nil
+			}
+			return nil, nil, blockErr
+		}
+	}
+	return nil, nil, nil
+}
+
+// txToEthReceipt() converts a Canopy tx result into an Ethereum receipt response object.
+func (s *Server) txToEthReceipt(block *lib.BlockResult, tx *lib.TxResult) (ethRPCReceipt, error) {
+	logs, err := s.txToGetLogsResp(block.BlockHeader.Hash, tx)
+	if err != nil {
+		return ethRPCReceipt{}, err
+	}
+	gethLogs, err := ethLogsFromTx(block.BlockHeader.Hash, tx)
+	if err != nil {
+		return ethRPCReceipt{}, err
+	}
+	receipt := &types.Receipt{Logs: gethLogs}
+	receipt.Bloom = types.CreateBloom(receipt)
+	gasPrice := big.NewInt(ethGasPrice)
+	txType := uint64(types.DynamicFeeTxType)
+	from := common.BytesToAddress(tx.Sender)
+	var to *common.Address
+	if len(tx.Recipient) != 0 {
+		recipient := common.BytesToAddress(tx.Recipient)
+		to = &recipient
+	}
+	if ethTx, ok := ethTransactionFromCanopyTx(tx.Transaction); ok {
+		gasPrice = effectiveGasPriceFromEthTx(ethTx)
+		txType = uint64(ethTx.Type())
+		if recipient := ethTx.To(); recipient != nil {
+			recipientCopy := *recipient
+			to = &recipientCopy
+		} else {
+			to = nil
+		}
+	}
+	return ethRPCReceipt{
+		Type:              hexutil.Uint64(txType),
+		Status:            hexutil.Uint64(types.ReceiptStatusSuccessful),
+		CumulativeGasUsed: hexutil.Uint64(cumulativeGasUsedForTx(block, tx.Index)),
+		Bloom:             receipt.Bloom,
+		Logs:              logs,
+		TxHash:            common.HexToHash(ethHashStringFromTxResult(tx)),
+		From:              from,
+		To:                to,
+		ContractAddress:   nil,
+		GasUsed:           hexutil.Uint64(gasLimitFromTxResult(tx)),
+		EffectiveGasPrice: (*hexutil.Big)(gasPrice),
+		BlockHash:         common.BytesToHash(block.BlockHeader.Hash),
+		BlockNumber:       hexutil.Big(*big.NewInt(int64(tx.Height))),
+		TransactionIndex:  hexutil.Uint64(tx.Index),
+	}, nil
+}
+
+// ethLogsFromTx() synthesizes supported pseudo-token Transfer logs for a tx result.
+func ethLogsFromTx(blockHash []byte, tx *lib.TxResult) ([]*types.Log, error) {
+	if tx.MessageType != fsm.MessageSendName {
+		return nil, nil
+	}
+	sendMessage, err := msgToSend(tx.Transaction.Msg)
+	if err != nil {
+		return nil, err
+	}
+	amount, err := pack(ABIUint256Type, new(big.Int).SetUint64(sendMessage.Amount))
+	if err != nil {
+		return nil, err
+	}
+	return []*types.Log{{
+		Address:     common.HexToAddress(fsm.CNPYContractAddress),
+		Topics:      []common.Hash{common.HexToHash(transferEventFilterHash), common.BytesToHash(common.LeftPadBytes(sendMessage.FromAddress, 32)), common.BytesToHash(common.LeftPadBytes(sendMessage.ToAddress, 32))},
+		Data:        amount,
+		BlockNumber: tx.Height,
+		TxHash:      common.HexToHash(ethHashStringFromTxResult(tx)),
+		TxIndex:     uint(tx.Index),
+		BlockHash:   common.BytesToHash(blockHash),
+		Index:       uint(tx.Index),
+		Removed:     false,
+	}}, nil
+}
+
+// filterSupportsPseudoTransferLogs() rejects log filters outside the supported pseudo-token Transfer subset.
+func filterSupportsPseudoTransferLogs(filter *ethFilter) bool {
+	if len(filter.Address) != 0 {
+		supported := false
+		for _, address := range filter.Address {
+			if strings.EqualFold(address, fsm.CNPYContractAddress) {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			return false
+		}
+	}
+	if len(filter.Topic) != 0 {
+		supported := false
+		for _, topic := range filter.Topic {
+			if strings.EqualFold(topic, transferEventFilterHash) {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			return false
+		}
+	}
+	return true
+}
+
 // filterParamsFromArgs() creates newFilterParams from args
 func filterParamsFromArgs(args []any) (params newFilterParams, err error) {
-	params.filter.StartHeight, params.filter.EndHeight = uint64(1), uint64(0)
+	params.filter.StartHeight, params.filter.EndHeight = uint64(0), uint64(0)
 	// convert first argument into the params structure
 	if len(args) > 0 {
 		bz, e := json.Marshal(args[0])
@@ -1250,22 +1826,35 @@ func filterParamsFromArgs(args []any) (params newFilterParams, err error) {
 			return newFilterParams{}, e
 		}
 		if err = json.Unmarshal(bz, &params); err != nil {
-			return newFilterParams{}, fmt.Errorf("failed to unmarshal filter params: %w", err)
+			return newFilterParams{}, ethInvalidParams(fmt.Sprintf("failed to unmarshal filter params: %v", err))
 		}
+	}
+	if params.BlockHash != "" {
+		if params.StartBlock != "" || params.EndBlock != "" {
+			return newFilterParams{}, ethInvalidParams("blockHash is mutually exclusive with fromBlock/toBlock")
+		}
+		if _, err = lib.StringToBytes(cleanHex(params.BlockHash)); err != nil {
+			return newFilterParams{}, ethInvalidParams(err.Error())
+		}
+		params.filter.BlockHash = strings.ToLower(params.BlockHash)
 	}
 	// parse start block
 	if params.StartBlock != "" {
-		params.filter.StartHeight, err = parseBlockTag(params.StartBlock)
+		params.filter.StartHeight, err = filterBlockHeightFromTag(params.StartBlock)
 		if err != nil {
 			return newFilterParams{}, err
 		}
 	}
 	// parse end block
 	if params.EndBlock != "" {
-		params.filter.EndHeight, err = parseBlockTag(params.EndBlock)
+		params.filter.EndHeight, err = filterBlockHeightFromTag(params.EndBlock)
 		if err != nil {
 			return newFilterParams{}, err
 		}
+	}
+	params.filter.Address, err = stringArrayFromAny(params.Address)
+	if err != nil {
+		return newFilterParams{}, err
 	}
 	// handle topics
 	for i, topic := range params.Topics {
@@ -1317,7 +1906,11 @@ func addressFromArgs(args []any) (crypto.AddressI, error) {
 	if err != nil {
 		return nil, err
 	}
-	return crypto.NewAddressFromString(cleanHex(str))
+	address, err := crypto.NewAddressFromString(cleanHex(str))
+	if err != nil {
+		return nil, ethInvalidParams(err.Error())
+	}
+	return address, nil
 }
 
 // bytesFromArgs() extracts a hash from the first argument
@@ -1326,7 +1919,11 @@ func bytesFromArgs(args []any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return lib.StringToBytes(cleanHex(str))
+	bz, err := lib.StringToBytes(cleanHex(str))
+	if err != nil {
+		return nil, ethInvalidParams(err.Error())
+	}
+	return bz, nil
 }
 
 // intFromArgs() extracts an integer from the first argument
@@ -1335,17 +1932,21 @@ func intFromArgs(args []any, position int) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return strconv.ParseInt(str, 0, 64)
+	n, err := strconv.ParseInt(str, 0, 64)
+	if err != nil {
+		return 0, ethInvalidParams(err.Error())
+	}
+	return n, nil
 }
 
 // strFromArgs() extracts a string from the first argument
 func strFromArgs(args []any, position int) (string, error) {
 	if len(args) <= position {
-		return "", errors.New("missing arguments")
+		return "", ethInvalidParams("missing arguments")
 	}
 	str, ok := args[position].(string)
 	if !ok {
-		return "", errors.New("invalid argument format")
+		return "", ethInvalidParams("invalid argument format")
 	}
 	return str, nil
 }
@@ -1371,7 +1972,7 @@ func blockTagFromArgs(args []any) (height uint64, err error) {
 		}
 	}
 	// convert blockTag to height
-	return parseBlockTag(blockTag)
+	return stateHeightFromBlockTag(blockTag)
 }
 
 // ABI Encoder helpers below
@@ -1409,11 +2010,37 @@ func parseBlockTag(tag string) (uint64, error) {
 	if strings.HasPrefix(tag, "0x") {
 		n, err := strconv.ParseUint(tag[2:], 16, 64)
 		if err != nil {
-			return 0, fmt.Errorf("invalid block number: %w", err)
+			return 0, ethInvalidParams(fmt.Sprintf("invalid block number: %v", err))
 		}
 		return n, nil
 	}
-	return 0, fmt.Errorf("unsupported block tag: %s", tag)
+	return 0, ethInvalidParams(fmt.Sprintf("unsupported block tag: %s", tag))
+}
+
+func stateHeightFromBlockTag(tag string) (uint64, error) {
+	switch tag {
+	case latestBlockTag, pendingBlockTag, safeBlockTag, finalizedBlockTag:
+		return 0, nil
+	case earliestBlockTag:
+		return 1, nil
+	}
+	height, err := parseBlockTag(tag)
+	if err != nil {
+		return 0, err
+	}
+	if height == math.MaxUint64 {
+		return 0, ethInvalidParams("block number overflow")
+	}
+	return height + 1, nil
+}
+
+// filterBlockHeightFromTag() resolves log filter block tags to indexed Canopy heights.
+func filterBlockHeightFromTag(tag string) (uint64, error) {
+	switch tag {
+	case earliestBlockTag, "0x0":
+		return 1, nil
+	}
+	return parseBlockTag(tag)
 }
 
 // parseAddressFromABI() extracts the address from the ABI data

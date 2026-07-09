@@ -20,44 +20,49 @@ func TestAddTransactionFeeOrdering(t *testing.T) {
 	a, e := NewAny(sig)
 	require.NoError(t, e)
 	// add a transaction
-	err := mempool.AddTransactions(func() []byte {
+	changed, err := mempool.AddTransactions(func() []byte {
 		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
 			Time: uint64(time.Now().UnixMicro()), Fee: 1000, NetworkId: 1, ChainId: 2})
 		require.NoError(t, err)
 		return bz
 	}())
+	require.True(t, changed)
 	require.NoError(t, err)
 	// add another transaction with the same fee
-	err = mempool.AddTransactions(func() []byte {
+	changed, err = mempool.AddTransactions(func() []byte {
 		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
 			Time: uint64(time.Now().UnixMicro()), Fee: 1000, NetworkId: 1, ChainId: 3})
 		require.NoError(t, err)
 		return bz
 	}())
+	require.True(t, changed)
 	require.NoError(t, err)
 	// add another transaction with a higher fee
-	err = mempool.AddTransactions(func() []byte {
+	changed, err = mempool.AddTransactions(func() []byte {
 		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
 			Time: uint64(time.Now().UnixMicro()), Fee: 1001, NetworkId: 1, ChainId: 1})
 		require.NoError(t, err)
 		return bz
 	}())
+	require.True(t, changed)
 	require.NoError(t, err)
 	// add another transaction with the lowest fee
-	err = mempool.AddTransactions(func() []byte {
+	changed, err = mempool.AddTransactions(func() []byte {
 		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
 			Time: uint64(time.Now().UnixMicro()), Fee: 1, NetworkId: 1, ChainId: 5})
 		require.NoError(t, err)
 		return bz
 	}())
+	require.True(t, changed)
 	require.NoError(t, err)
 	// add another transaction with the same fee
-	err = mempool.AddTransactions(func() []byte {
+	changed, err = mempool.AddTransactions(func() []byte {
 		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
 			Time: uint64(time.Now().UnixMicro()), Fee: 1000, NetworkId: 1, ChainId: 4})
 		require.NoError(t, err)
 		return bz
 	}())
+	require.True(t, changed)
 	require.NoError(t, err)
 	it := mempool.Iterator()
 	defer it.Close()
@@ -92,6 +97,7 @@ func TestAddTransaction(t *testing.T) {
 		mempool FeeMempool
 		toAdd   []byte
 		// expected
+		recheck      bool
 		transactions [][]byte
 		count        int
 		error        string
@@ -117,7 +123,8 @@ func TestAddTransaction(t *testing.T) {
 					DropPercentage:      10,
 				},
 			},
-			toAdd: transaction,
+			toAdd:   transaction,
+			recheck: false,
 		},
 		{
 			name:   "recheck max tx count",
@@ -135,7 +142,8 @@ func TestAddTransaction(t *testing.T) {
 					DropPercentage:      10,
 				},
 			},
-			toAdd: transaction,
+			toAdd:   transaction,
+			recheck: true,
 		},
 		{
 			name:   "recheck max total bytes",
@@ -153,7 +161,8 @@ func TestAddTransaction(t *testing.T) {
 					DropPercentage:      10,
 				},
 			},
-			toAdd: transaction,
+			toAdd:   transaction,
+			recheck: true,
 		},
 		{
 			name:   "no recheck",
@@ -170,8 +179,9 @@ func TestAddTransaction(t *testing.T) {
 					DropPercentage:      10,
 				},
 			},
-			count: 1,
-			toAdd: transaction,
+			count:   1,
+			toAdd:   transaction,
+			recheck: true,
 			transactions: [][]byte{
 				transaction,
 			},
@@ -191,8 +201,9 @@ func TestAddTransaction(t *testing.T) {
 					DropPercentage:      10,
 				},
 			},
-			count: 1,
-			toAdd: transaction,
+			count:   1,
+			toAdd:   transaction,
+			recheck: true,
 			transactions: [][]byte{
 				transaction,
 			},
@@ -201,7 +212,7 @@ func TestAddTransaction(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// execute function call
-			err = test.mempool.AddTransactions(test.toAdd)
+			recheck, err := test.mempool.AddTransactions(test.toAdd)
 			// validate if an error is expected
 			require.Equal(t, err != nil, test.error != "", err)
 			// validate actual error if any
@@ -209,6 +220,7 @@ func TestAddTransaction(t *testing.T) {
 				require.ErrorContains(t, err, test.error, err)
 				return
 			}
+			require.Equal(t, test.recheck, recheck)
 			require.Equal(t, test.count, test.mempool.TxCount())
 			// call get transaction
 			gotTxs := test.mempool.GetTransactions(math.MaxUint64)
@@ -316,7 +328,7 @@ func TestGetAndContainsTransaction(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// pre-add the transactions
 			for _, txn := range test.txs {
-				err := test.mempool.AddTransactions(txn)
+				_, err := test.mempool.AddTransactions(txn)
 				require.NoError(t, err)
 			}
 			// get the transactions

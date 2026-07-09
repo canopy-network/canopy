@@ -305,7 +305,6 @@ $ curl -X POST localhost:50002/v1/query/indexer-blobs \
 - **address**: `hex string` - the 20 byte identifier
 - **amount**: `uint64` - the spendable balance of funds the account can currently withdraw
 - **totalAmount**: `uint64` - the total balance recorded for the account before vesting locks are applied
-- **spendableAmount**: `uint64` - the spendable balance of funds the account can currently withdraw
 - **vestedAmount**: `uint64` - the portion of `vestingAmount` that has vested at the queried height
 - **lockedAmount**: `uint64` - the portion of `vestingAmount` that is still locked at the queried height
 - **vestingAmount**: `uint64` - the total amount governed by the vesting schedule (omitted when zero)
@@ -327,7 +326,6 @@ $ curl -X POST localhost:50002/v1/query/account \
     "address": "0971d5d96f1533479ab1a6472fe0260df6ae732d",
     "amount": 99990000,
     "totalAmount": 100000000,
-    "spendableAmount": 99990000,
     "vestedAmount": 500000,
     "lockedAmount": 10000,
     "vestingAmount": 510000,
@@ -357,7 +355,6 @@ $ curl -X POST localhost:50002/v1/query/account \
   - **address**: - `hex string` the 20 byte unique identifier of the account
   - **amount**: - `uint64` the spendable balance in micro denomination
   - **totalAmount**: - `uint64` the total recorded balance before vesting locks are applied
-  - **spendableAmount**: - `uint64` the spendable balance in micro denomination
   - **vestedAmount**: - `uint64` the vested portion of the vesting tranche at the queried height
   - **lockedAmount**: - `uint64` the still-locked portion of the vesting tranche at the queried height
   - **vestingAmount**: - `uint64` the total amount on the vesting schedule, omitted when zero
@@ -388,7 +385,6 @@ $ curl -X POST localhost:50002/v1/query/accounts \
         "address": "180c9d067ce4275612896dc7ce01390329e7f101",
         "amount": 969901,
         "totalAmount": 969901,
-        "spendableAmount": 969901,
         "vestedAmount": 0,
         "lockedAmount": 0
       },
@@ -396,7 +392,6 @@ $ curl -X POST localhost:50002/v1/query/accounts \
         "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
         "amount": 18239045002,
         "totalAmount": 18239045002,
-        "spendableAmount": 18239045002,
         "vestedAmount": 0,
         "lockedAmount": 0
       },
@@ -404,7 +399,6 @@ $ curl -X POST localhost:50002/v1/query/accounts \
         "address": "551f21e333012027b81701a35023efc88b864975",
         "amount": 130,
         "totalAmount": 1000,
-        "spendableAmount": 130,
         "vestedAmount": 30,
         "lockedAmount": 870,
         "vestingAmount": 900,

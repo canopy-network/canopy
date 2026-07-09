@@ -9,7 +9,7 @@ Canopy implements an **Ethereum translation layer** that allows popular Ethereum
 
 Special pseudo-contract addresses map common Ethereum function selectors (e.g., transfer(), stake(), unstake()) to equivalent Canopy message types, enabling users to perform common actions like transfers, staking, and swaps through familiar Ethereum interfaces.
 
-💡 While Canopy does not run an EVM, this translation layer **allows EVM compatibility**, particularly for transaction signing, serialization, and tooling but *not bytecode execution*.
+💡 While Canopy does not run an EVM, this translation layer provides **Ethereum tooling compatibility** for signing, serialization, and RPC/indexer workflows but *not bytecode execution*.
 
 ### Quick Reference
 Pseudo-Contracts
@@ -29,6 +29,30 @@ Selectors
 
 EVM Chain Id 
 - Mainnet: `4294967297`
+
+### Compatibility Scope
+
+Canopy's ETH RPC is a compatibility layer for centralized exchange onboarding, wallets, and standard Ethereum indexer-style tooling around native transfers.
+
+It is **not** a claim of full EVM equivalence.
+
+- The chain does not execute arbitrary Ethereum smart contracts.
+- `eth_call` only supports Canopy's fixed pseudo-contract surface.
+- Logs are synthesized for Canopy's supported token-style transfer model, not for arbitrary contract events.
+- Nonce handling is compatibility-oriented and intentionally lighter than a full Ethereum account-history subsystem.
+
+### Address Model
+
+Canopy's ETH RPC intentionally exposes a mixed address model:
+
+- Any Canopy account address that fits the standard 20-byte hex format can be queried through Ethereum-style read APIs such as `eth_getBalance`, transaction lookups, and supported log queries.
+- Only Ethereum-derived `secp256k1` accounts are writable through Ethereum tooling such as MetaMask, `eth_sendRawTransaction`, and Ethereum-style nonce handling.
+
+Implications:
+
+- A `0x...` address being readable through ETH RPC does **not** imply that it is spendable through Ethereum wallets.
+- Read-only compatibility exists for non-Ethereum-derived Canopy addresses.
+- Full read/write compatibility exists only for Ethereum-derived accounts created and controlled with Ethereum-compatible keys.
 
 RPC
 
@@ -61,7 +85,6 @@ RPC
 - [x] eth_call
 - [x] eth_estimateGas
 - [x] eth_getBlockByHash
-- [x] eth_getBlockByNumber
 - [x] eth_getBlockByNumber
 - [x] eth_getTransactionByHash
 - [x] eth_getTransactionByBlockHashAndIndex
@@ -257,7 +280,7 @@ Canopy's RPC wrapper fully supports the following getter methods for blocks and 
 - [x] eth_getTransactionByBlockNumberAndIndex
 - [x] eth_getTransactionReceipt
 
-However, it's important to note that block and transaction hashes will correspond to the Canopy block structure, not Ethereum, and some Ethereum fields may be placeholders and some Canopy fields may be missing.
+However, it's important to note that block hashes correspond to the Canopy block structure, not Ethereum, and some Ethereum fields may be placeholders and some Canopy fields may be missing.
 
 Example: `logsBloom` is a placeholder and `totalVDFIterations` is missing
 
@@ -290,7 +313,7 @@ Example: `logsBloom` is a placeholder and `totalVDFIterations` is missing
 }
 ```
 
-Also, Canopy combines the Ethereum transaction and receipt structures. In practice, this means additional data may be present - but all calls RPC are fully compatible and satisfied.
+Transactions and receipts are exposed as separate Ethereum-style RPC objects.
 
 ```json
 {
@@ -300,18 +323,16 @@ Also, Canopy combines the Ethereum transaction and receipt structures. In practi
     "blockHash": "0x64e57bce8f087f83efbfcacde6e9afb9fdee8c0319bdbcfc87034bdc4c8574c1",
     "blockNumber": "0x2bf",
     "from": "0x502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
-    "gas": "0x61a8",
-    "gasPrice": "0x5d21dba000",
-    "maxFeePerGas": "0x5d21dba000",
-    "maxPriorityFeePerGas": "0x0",
-    "hash": "0x4cee33e51f911a3bc8b4fb0b873df9666d31daa7288b6be5aea81e95998ad2a0",
-    "nonce": "0x2be",
+    "transactionHash": "0x4cee33e51f911a3bc8b4fb0b873df9666d31daa7288b6be5aea81e95998ad2a0",
     "to": "0x4bee8effd84b86cc93044fa59d9624d04f5a5cd0",
     "transactionIndex": "0x0",
-    "value": "0x3635c9adc5dea00000",
     "type": "0x2",
-    "chainId": "0x1",
+    "status": "0x1",
+    "cumulativeGasUsed": "0x61a8",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "logs": [],
     "gasUsed": "0x61a8",
+    "contractAddress": null,
     "effectiveGasPrice": "0x5d21dba000"
   }
 }
@@ -319,49 +340,53 @@ Also, Canopy combines the Ethereum transaction and receipt structures. In practi
 
 ##### Ethereum-Compatible Pending Transaction Simulation
 
-Canopy only includes valid transactions in blocks, so to maintain compatibility with Ethereum tooling (e.g., MetaMask, Hardhat, ethers.js), a pseudo-pending transaction txn is used to simulate mempool behavior.
+Canopy only includes valid transactions in blocks, so the RPC keeps a lightweight local pending cache to support Ethereum-style pending transaction lookups.
 
 #### Design Goals
 
-- Expose "pending" transactions via `eth_getTransactionReceipt` even if not yet included.
-- Return `status: 0` (failed) after a threshold number of blocks if the transaction was never included in a block.
-- Evict old entries after approximately 6 hours to prevent unbounded memory growth.
+- Expose pending transactions via `eth_getTransactionByHash` with `blockHash = null`, `blockNumber = null`, and `transactionIndex = null`.
+- Return `null` from `eth_getTransactionReceipt` until a transaction is actually included in a block.
+- Evict old pending-cache entries after approximately 15 minutes to prevent unbounded memory growth.
 
 #### Logic
 
-- When a transaction hash is first seen (via `eth_sendRawTransaction` or `eth_getTransactionReceipt`), the node maps it to the current block height.
-- If the transaction is queried again and more than 15 blocks have passed without it appearing in the canonical indexer, the RPC layer simulates a failed transaction.
-- Every minute, a background service evicts transactions that are older than 1080 blocks (approximately 6 hours at 20s block times).
+- When a transaction hash is first seen via `eth_sendRawTransaction`, the node stores a local pending entry keyed by the canonical Ethereum transaction hash.
+- `eth_getTransactionByHash` checks the canonical mined view first, then the local pending cache and live mempool.
+- `eth_getTransactionReceipt` returns a canonical receipt only once the transaction is indexed in a block.
+- A background service evicts local pending-cache entries once they are older than roughly 15 minutes.
 
-This mechanism ensures compatibility with Ethereum clients while maintaining Canopy’s constraint that only valid transactions are saved in blocks.
+This mechanism preserves Ethereum-style null-vs-mined receipt semantics while maintaining Canopy’s constraint that only valid transactions are saved in blocks.
+
+Pending visibility is node-local, just like Ethereum mempool visibility is node-local. In multi-node or load-balanced deployments, pending transaction lookups can differ between nodes until the transaction is mined and indexed.
 
 
 #### eth_getTransactionCount
-➪ Canopy implements a non-standard Ethereum-compatible mechanism used by Canopy to support transaction replay protection without maintaining full account nonce history.
+➪ Canopy implements a non-standard Ethereum-compatible compatibility layer for account nonces.
 
 *Context:*
 - Canopy does not use Ethereum-style monotonic nonces.
-- Instead, each transaction includes a `created_at_height` (the block height when it was created), and a timestamp.
-- This enables safe pruning and replay protection without requiring persistent per-account nonces.
+- Ethereum-submitted Canopy transactions use `createdHeight` as the replay-protection field that is carried through the translation layer.
+- Canopy does not persist full Ethereum-style historical account nonce state for arbitrary block heights.
 
 *BlockAcceptanceRange:*
 - Transactions are only valid if their `created_at_height` is within ±4320 blocks of the current chain height. (Assuming 20s block times, this represents roughly 24 hours of leeway).
 
 *Implementation:*
 
-- Canopy maintains an **in-memory map** that tracks how many pending transactions have been submitted per address. (Map: `map[string]int` where key = address string, value = pseudo-nonce count)
-
-- Each time a transaction is submitted via `eth_sendTransaction` or `eth_sendRawTransaction`, the count for that address is incremented.
-
-- On every new block:
-    - Each count is decremented by 1 (representing aging of pending txs).
-    - When the count for an address reaches 0, its entry is removed from the map.
+- For Ethereum-derived accounts with mined ETH-backed tx history, `eth_getTransactionCount(..., "latest")` returns the sender's highest mined Ethereum nonce plus one.
+- `eth_getTransactionCount(..., "pending")` returns the same confirmed base plus a local pending offset derived from the node's in-memory pending view.
+- For addresses without mined Ethereum-backed tx history, the RPC falls back to Canopy's height-based pseudo-nonce behavior for compatibility.
 
 *Purpose in RPC compatibility:*
 - `eth_getTransactionCount` is expected by many Ethereum tools and wallets to return a usable nonce.
-- Our implementation returns: `LatestBlockHeight + count(address)`
-    - This ensures each new tx from a given address gets a unique pseudo-nonce and avoids reuse within the pruning window.
-    - Mimics nonce behavior sufficiently for compatibility with Ethereum tooling.
+- The implementation is intended to be wallet-compatible for active Ethereum-derived accounts without introducing a full persistent Ethereum nonce subsystem into Canopy.
+- Canopy tolerates nonce gaps for Ethereum-submitted transactions; the values only need to remain distinct within the local pending set for a given block-building window.
+
+*Limitations:*
+
+- Explicit historical block-number queries are **not** canonical Ethereum account-history semantics. If a caller asks for `eth_getTransactionCount(address, "0x...")`, the RPC validates the tag but serves a compatibility value instead of reconstructing the exact historical nonce for that address at that block.
+- Pending nonce visibility is local to the node's mempool and pending cache.
+- The method should be treated as compatibility-oriented rather than a full Ethereum archival nonce implementation.
 
 #### eth_getChainId
 

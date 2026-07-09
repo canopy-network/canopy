@@ -2,11 +2,19 @@ package codec
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+// ErrFieldNotFound is returned by GetRawProtoField when the requested field
+// number is absent from the wire bytes. In proto3, absent scalar fields
+// represent the zero value, so callers that expect zero-valued fields
+// (e.g. Pool{Id:0}, Account{Address:nil}) should detect this via errors.Is
+// and treat the field as empty rather than as a parse error.
+var ErrFieldNotFound = errors.New("field number not found")
 
 // BinaryCodec is an interface model that defines the requirements for binary encoding and decoding
 // A binary encoder converts data into a compact, non-human-readable binary format, which is highly
@@ -107,7 +115,7 @@ func GetRawProtoField(protoBytes []byte, fieldNumber int) ([]byte, error) {
 			offset += skipLen
 		}
 	}
-	return nil, fmt.Errorf("field number %d not found", fieldNumber)
+	return nil, fmt.Errorf("%w: %d", ErrFieldNotFound, fieldNumber)
 }
 
 // NullifyProtoField removes a field from protobytes without unmarshalling

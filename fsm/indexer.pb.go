@@ -61,6 +61,7 @@ type IndexerBlob struct {
 	TotalDelegatesActive     uint32                 `protobuf:"varint,20,opt,name=total_delegates_active,json=totalDelegatesActive,proto3" json:"total_delegates_active,omitempty"`
 	TotalDelegatesPaused     uint32                 `protobuf:"varint,21,opt,name=total_delegates_paused,json=totalDelegatesPaused,proto3" json:"total_delegates_paused,omitempty"`
 	TotalDelegatesUnstaking  uint32                 `protobuf:"varint,22,opt,name=total_delegates_unstaking,json=totalDelegatesUnstaking,proto3" json:"total_delegates_unstaking,omitempty"`
+	BlockNonSigners          [][]byte               `protobuf:"bytes,23,rep,name=block_non_signers,json=blockNonSigners,proto3" json:"block_non_signers,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -249,6 +250,13 @@ func (x *IndexerBlob) GetTotalDelegatesUnstaking() uint32 {
 	return 0
 }
 
+func (x *IndexerBlob) GetBlockNonSigners() [][]byte {
+	if x != nil {
+		return x.BlockNonSigners
+	}
+	return nil
+}
+
 // IndexerBlobs groups the current and previous indexer blobs.
 type IndexerBlobs struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -306,7 +314,7 @@ var File_indexer_proto protoreflect.FileDescriptor
 
 const file_indexer_proto_rawDesc = "" +
 	"\n" +
-	"\rindexer.proto\x12\x05types\"\xfd\x06\n" +
+	"\rindexer.proto\x12\x05types\"\xa9\a\n" +
 	"\vIndexerBlob\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\fR\x05block\x12\x1a\n" +
 	"\baccounts\x18\x02 \x03(\fR\baccounts\x12\x14\n" +
@@ -335,7 +343,8 @@ const file_indexer_proto_rawDesc = "" +
 	"\x10validators_delta\x18\x13 \x01(\bR\x0fvalidatorsDelta\x124\n" +
 	"\x16total_delegates_active\x18\x14 \x01(\rR\x14totalDelegatesActive\x124\n" +
 	"\x16total_delegates_paused\x18\x15 \x01(\rR\x14totalDelegatesPaused\x12:\n" +
-	"\x19total_delegates_unstaking\x18\x16 \x01(\rR\x17totalDelegatesUnstaking\"l\n" +
+	"\x19total_delegates_unstaking\x18\x16 \x01(\rR\x17totalDelegatesUnstaking\x12*\n" +
+	"\x11block_non_signers\x18\x17 \x03(\fR\x0fblockNonSigners\"l\n" +
 	"\fIndexerBlobs\x12,\n" +
 	"\acurrent\x18\x01 \x01(\v2\x12.types.IndexerBlobR\acurrent\x12.\n" +
 	"\bprevious\x18\x02 \x01(\v2\x12.types.IndexerBlobR\bpreviousB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
