@@ -1,0 +1,155 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/ARBOR-L/ARBOR/plugin/go/contract";
+
+// ─────────────────────────────────────────────
+// Market lifecycle
+// ─────────────────────────────────────────────
+
+// MessageCreateMarket creates a new isolated lending market (ARCM §3, §19.2)
+message MessageCreateMarket {
+  string market_id = 1;
+  string collateral_asset_id = 2;
+  string debt_asset_id = 3;
+  uint32 asset_tier = 4;           // 0-4, ARCM §4 LTV table
+  uint64 reserve_factor_bps = 5;   // 200-3000 bps, AYIS §13
+  bytes  creator = 6;
+  repeated bytes authorized_submitters = 7; // ARCM §10 permissioned price feed;
+                                             // trusted addresses for update_price on
+                                             // this market's two assets (shared list,
+                                             // not per-asset). Immutable as of this
+                                             // version -- no governance-gated
+                                             // add/remove path exists yet. Must satisfy
+                                             // MinReporters (hardcoded 3, mirrors
+                                             // interest_rate.go's precedent of
+                                             // hardcoding pending {22}'s governance
+                                             // param store, which does not exist yet).
+}
+
+// MessageUpdateMarketParams updates governance-bounded per-market params (ARCM §13, §15)
+message MessageUpdateMarketParams {
+  string market_id = 1;
+  bytes  authority = 2;
+  uint64 reserve_factor_bps = 3;
+}
+
+// MessagePauseMarket halts a market via governance/risk-committee action (ARCM §13, §16)
+message MessagePauseMarket {
+  string market_id = 1;
+  bytes  authority = 2;
+}
+
+// MessageResumeMarket resumes a paused market
+message MessageResumeMarket {
+  string market_id = 1;
+  bytes  authority = 2;
+}
+
+// MessageDeprecateMarket permanently retires a market
+message MessageDeprecateMarket {
+  string market_id = 1;
+  bytes  authority = 2;
+}
+
+// ─────────────────────────────────────────────
+// Oracle (ARCM §10)
+// ─────────────────────────────────────────────
+
+// MessageUpdatePrice submits a permissioned price feed reading
+message MessageUpdatePrice {
+  string asset_id = 1;             // must match this market's collateral_asset_id
+                                    // or debt_asset_id (checked at DeliverTx)
+  uint64 price = 2;                // USD per unit, x1e8
+  uint32 confidence_bps = 3;
+  bytes  submitter = 4;
+  string market_id = 5;            // scopes this submission to one market's
+                                    // authorized_submitters list (ARCM Section
+                                    // 10 is a PER-MARKET permissioned feed, not
+                                    // a global asset-price authority -- added
+                                    // to avoid an unbounded PrefixMarkets scan
+                                    // to reverse-lookup market from asset_id)
+}
+
+// ─────────────────────────────────────────────
+// Collateral (borrower side, ARCM §6)
+// ─────────────────────────────────────────────
+
+// MessageDepositCollateral posts collateral against a borrower position
+message MessageDepositCollateral {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 quantity = 3;             // native units, 9-decimal convention (ARCM §2.1a)
+}
+
+// MessageWithdrawCollateral removes collateral, subject to post-withdrawal HF check
+message MessageWithdrawCollateral {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 quantity = 3;
+}
+
+// ─────────────────────────────────────────────
+// Supply / lending side (AYIS §4)
+// ─────────────────────────────────────────────
+
+// MessageDeposit supplies the market's asset in exchange for aToken shares (AYIS MintShares)
+message MessageDeposit {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 amount = 3;                // native asset units
+}
+
+// MessageWithdraw redeems aToken shares for the underlying asset (AYIS RedeemShares)
+message MessageWithdraw {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 shares = 3;                 // aToken shares, not underlying amount
+}
+
+// ─────────────────────────────────────────────
+// Borrow / repay (ARCM §6, §19.2.1)
+// ─────────────────────────────────────────────
+
+// MessageBorrow opens or increases a borrow position against posted collateral
+message MessageBorrow {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 borrow_amount = 3;
+}
+
+// MessageRepay reduces or closes a borrow position
+message MessageRepay {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 repay_amount = 3;
+}
+
+// ─────────────────────────────────────────────
+// Liquidation (ARCM §6, §19.2.2)
+// ─────────────────────────────────────────────
+
+// MessageLiquidatePosition liquidates an undercollateralized borrower position
+message MessageLiquidatePosition {
+  string market_id = 1;
+  bytes  liquidator = 2;
+  bytes  borrower_address = 3;
+  uint64 repay_amount = 4;           // capped at debt x close_factor, ARCM §7
+}
+
+// ─────────────────────────────────────────────
+// Asset tier registry (ARCM §3.1/§3.2)
+// ─────────────────────────────────────────────
+
+// MessageSetAssetTier registers or updates an asset's canonical risk tier
+// (0=Tier0/CNPY .. 3=Tier3/Restricted; Tier 4/Blacklisted is never stored,
+// see state_keys.go PrefixAssetTier). Authority-gated -- single hardcoded
+// address for now, standing in for the risk-committee multisig ARCM §13
+// names as the intended actor for tier promotion/demotion; same disclosed-
+// placeholder pattern as authorized_submitters above. Real governance-gated
+// multisig/timelock is a future milestone, not implemented here.
+message MessageSetAssetTier {
+  string asset_id = 1;
+  uint32 tier = 2;                 // 0-3 only; checked at DeliverTx
+  bytes  authority = 3;
+}

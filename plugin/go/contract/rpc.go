@@ -1,12 +1,18 @@
 package contract
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"log"
+	"math/rand"
 	"net/http"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 /*
-This file is the SKELETON for a plugin's own HTTP server, where a builder exposes custom,
+This file is the plugin's own HTTP server, where a builder exposes custom,
 chain-specific RPC endpoints.
 
 Canopy core only exposes a single, generic, read-only transport over the unix socket:
@@ -14,33 +20,141 @@ Canopy core only exposes a single, generic, read-only transport over the unix so
 (0 = latest committed). The plugin process owns its HTTP server entirely, so builders may register
 as many routes as they want and decode their own keys/protobufs into whatever response shapes they
 like. Canopy never needs to know about chain-specific endpoints.
-
-No routes are registered by default. See TUTORIAL.md ("Custom RPC endpoints") for a full, worked
-example you can follow to add your own handlers backed by QueryState.
 */
 
-// StartRPCServer() launches the plugin's own HTTP server. By default it registers NO routes;
-// builders add their own with mux.HandleFunc(...), each backed by the detached, read-only
-// QueryState() path to fetch state snapshots from Canopy.
+// StartRPCServer() launches the plugin's own HTTP server.
 func (p *Plugin) StartRPCServer() {
-	// resolve the listen address from config
 	addr := p.config.RPCAddress
-	// if no address is configured, the RPC server is disabled
 	if addr == "" {
 		log.Println("plugin RPC server disabled (no rpcAddress configured)")
 		return
 	}
-	// build a router; register your custom endpoints here, e.g.:
-	//
-	//   mux.HandleFunc("/v1/query/myrecords", func(w http.ResponseWriter, r *http.Request) {
-	//       resp, err := p.QueryState(0 /* latest */, &PluginStateReadRequest{ ... })
-	//       // decode resp into your own protobuf type and write the JSON response
-	//   })
-	//
 	mux := http.NewServeMux()
-	// log the build marker so the running version is obvious in the log
-	log.Printf("plugin RPC server (%s) listening on %s (no custom routes registered)", PluginBuild, addr)
+	mux.HandleFunc("/v1/query/markets", p.handleQueryMarkets)
+	mux.HandleFunc("/v1/query/lenderposition", p.handleQueryLenderPosition)
+	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
 	}
+}
+
+// handleQueryMarkets serves GET /v1/query/markets?marketId=<id>
+// Returns the decoded Market record ({16}) for the given market_id, reading
+// the latest committed state via the detached QueryState() path.
+func (p *Plugin) handleQueryMarkets(w http.ResponseWriter, r *http.Request) {
+	marketId := r.URL.Query().Get("marketId")
+	if marketId == "" {
+		http.Error(w, `{"error":"missing marketId query param"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateMarketID(marketId); err != nil {
+		http.Error(w, `{"error":"invalid marketId: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForMarket(marketId)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "market not found", "marketId": marketId})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	market := &Market{}
+	if err := proto.Unmarshal(raw, market); err != nil {
+		http.Error(w, `{"error":"failed to decode market record: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	marketJSON, err := protojson.Marshal(market)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode market json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(marketJSON)
+}
+
+// handleQueryLenderPosition serves GET /v1/query/lenderposition?marketId=<id>&address=<hex>
+// Returns the decoded LenderPosition record ({24}) for the given market_id/address pair,
+// reading the latest committed state via the detached QueryState() path.
+func (p *Plugin) handleQueryLenderPosition(w http.ResponseWriter, r *http.Request) {
+	marketId := r.URL.Query().Get("marketId")
+	if marketId == "" {
+		http.Error(w, `{"error":"missing marketId query param"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateMarketID(marketId); err != nil {
+		http.Error(w, `{"error":"invalid marketId: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	addressHex := r.URL.Query().Get("address")
+	if addressHex == "" {
+		http.Error(w, `{"error":"missing address query param"}`, http.StatusBadRequest)
+		return
+	}
+	address, err := hex.DecodeString(addressHex)
+	if err != nil {
+		http.Error(w, `{"error":"invalid address hex: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	if len(address) != 20 {
+		http.Error(w, `{"error":"address must decode to 20 bytes"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForLenderPosition(marketId, address)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "lender position not found", "marketId": marketId, "address": addressHex})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	position := &LenderPosition{}
+	if err := proto.Unmarshal(raw, position); err != nil {
+		http.Error(w, `{"error":"failed to decode lender position: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	positionJSON, err := protojson.Marshal(position)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode lender position json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(positionJSON)
 }

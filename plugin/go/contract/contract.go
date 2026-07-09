@@ -16,14 +16,75 @@ import (
 
 // PluginConfig: the configuration of the contract
 var ContractConfig = &PluginConfig{
-	Name:                  "go_plugin_contract",
-	Id:                    1,
-	Version:               1,
-	SupportedTransactions: []string{"send"},
+	Name:    "arbor",
+	Id:      1,
+	Version: 1,
+	SupportedTransactions: []string{
+		"send",
+		"create_market",
+		"update_market_params",
+		"pause_market",
+		"resume_market",
+		"deprecate_market",
+		"update_price",
+		"deposit_collateral",
+		"withdraw_collateral",
+		"deposit",
+		"withdraw",
+		"borrow",
+		"repay",
+		"liquidate_position",
+		"set_asset_tier",
+	},
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
+		"type.googleapis.com/types.MessageCreateMarket",
+		"type.googleapis.com/types.MessageUpdateMarketParams",
+		"type.googleapis.com/types.MessagePauseMarket",
+		"type.googleapis.com/types.MessageResumeMarket",
+		"type.googleapis.com/types.MessageDeprecateMarket",
+		"type.googleapis.com/types.MessageUpdatePrice",
+		"type.googleapis.com/types.MessageDepositCollateral",
+		"type.googleapis.com/types.MessageWithdrawCollateral",
+		"type.googleapis.com/types.MessageDeposit",
+		"type.googleapis.com/types.MessageWithdraw",
+		"type.googleapis.com/types.MessageBorrow",
+		"type.googleapis.com/types.MessageRepay",
+		"type.googleapis.com/types.MessageLiquidatePosition",
+		"type.googleapis.com/types.MessageSetAssetTier",
 	},
-	EventTypeUrls: nil,
+	EventTypeUrls: []string{
+		"type.googleapis.com/types.EventIndexEncodingOverflowHalted",
+		"type.googleapis.com/types.EventInsolventMarketValueRecovered",
+		"type.googleapis.com/types.EventTotalSuppliedDustClamp",
+		"type.googleapis.com/types.EventTotalSharesOutstandingDustClamp",
+		"type.googleapis.com/types.EventLayer4PendingCountWarning",
+		"type.googleapis.com/types.EventLayer4PendingBadDebtTotalSaturated",
+		"type.googleapis.com/types.EventLayer4PendingCountUnderflow",
+		"type.googleapis.com/types.EventDepositWithdrawBlockedDuringPendingLoss",
+		"type.googleapis.com/types.EventLossFactorExhausted",
+		"type.googleapis.com/types.EventBadDebtSocialization",
+		"type.googleapis.com/types.EventLossFactorAppliedToAlreadyInsolventMarket",
+		"type.googleapis.com/types.EventReserveFundEncodingMigrationCompleted",
+	},
+	// CustomStatePrefixes registers Arbor's reserved state-key range {16}-{28}
+	// with Canopy at handshake. Canopy panics if any of these collide with the
+	// core-reserved {1}-{15} range. See ARCM v3.11.1 Section 19.1.
+	CustomStatePrefixes: [][]byte{
+		PrefixMarkets,
+		PrefixBorrowerPositions,
+		PrefixReserveFund,
+		PrefixPriceCache,
+		PrefixCircuitBreaker,
+		PrefixEmergencyMode,
+		PrefixGovernanceParams,
+		PrefixBackstopQueue,
+		PrefixLenderPositions,
+		PrefixBorrowIndex,
+		PrefixSupplyIndex,
+		PrefixLossFactor,
+		PrefixLossFactorQueue,
+	},
 }
 
 // init sets FileDescriptorProtos after ensuring .pb.go files are initialized
@@ -33,12 +94,16 @@ func init() {
 	file_event_proto_init()
 	file_plugin_proto_init()
 	file_tx_proto_init()
+	file_arbor_proto_init()
+	file_arbor_events_proto_init()
+	file_arbor_state_proto_init()
 
 	var fds [][]byte
 	// Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
 	for _, file := range []protoreflect.FileDescriptor{
 		anypb.File_google_protobuf_any_proto,
 		File_account_proto, File_event_proto, File_plugin_proto, File_tx_proto,
+		File_arbor_proto, File_arbor_events_proto, File_arbor_state_proto,
 	} {
 		fd, _ := proto.Marshal(protodesc.ToFileDescriptorProto(file))
 		fds = append(fds, fd)
@@ -60,7 +125,11 @@ func (c *Contract) Genesis(_ *PluginGenesisRequest) *PluginGenesisResponse {
 }
 
 // BeginBlock() is code that is executed at the start of `applying` the block
-func (c *Contract) BeginBlock(_ *PluginBeginRequest) *PluginBeginResponse {
+func (c *Contract) BeginBlock(request *PluginBeginRequest) *PluginBeginResponse {
+	// A fresh *Contract is constructed per inbound message (see Plugin.ListenForInbound),
+	// so height is recorded on the long-lived *Plugin, not this short-lived Contract,
+	// to survive across the BeginBlock -> DeliverTx sequence within the same block.
+	c.plugin.SetCurrentHeight(request.Height)
 	return &PluginBeginResponse{}
 }
 
@@ -96,6 +165,18 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 	switch x := msg.(type) {
 	case *MessageSend:
 		return c.CheckMessageSend(x)
+	case *MessageCreateMarket:
+		return c.CheckMessageCreateMarket(x)
+	case *MessageDeposit:
+		return c.CheckMessageDeposit(x)
+	case *MessageWithdraw:
+		return c.CheckMessageWithdraw(x)
+	case *MessageUpdatePrice:
+		return c.CheckMessageUpdatePrice(x)
+	case *MessageDepositCollateral:
+		return c.CheckMessageDepositCollateral(x)
+	case *MessageSetAssetTier:
+		return c.CheckMessageSetAssetTier(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -112,6 +193,18 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 	switch x := msg.(type) {
 	case *MessageSend:
 		return c.DeliverMessageSend(x, request.Tx.Fee)
+	case *MessageCreateMarket:
+		return c.DeliverMessageCreateMarket(x, request.Tx.Fee)
+	case *MessageDeposit:
+		return c.DeliverMessageDeposit(x, request.Tx.Fee)
+	case *MessageWithdraw:
+		return c.DeliverMessageWithdraw(x, request.Tx.Fee)
+	case *MessageUpdatePrice:
+		return c.DeliverMessageUpdatePrice(x, request.Tx.Fee)
+	case *MessageDepositCollateral:
+		return c.DeliverMessageDepositCollateral(x, request.Tx.Fee)
+	case *MessageSetAssetTier:
+		return c.DeliverMessageSetAssetTier(x, request.Tx.Fee)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

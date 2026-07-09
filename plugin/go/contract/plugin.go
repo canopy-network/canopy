@@ -28,6 +28,21 @@ type Plugin struct {
 	requestContract map[uint64]*Contract                  // maps request IDs to their contract context for concurrent operations
 	l               sync.Mutex                            // thread safety
 	config          Config                                // general app config
+	currentHeight   uint64                                // most recent BeginBlock height; a fresh *Contract is constructed per inbound message (see ListenForInbound), so this MUST live on Plugin, not Contract, to survive across BeginBlock -> DeliverTx within the same block
+}
+
+// SetCurrentHeight records the height from the most recent BeginBlock call. Mutex-guarded: BeginBlock and DeliverTx run in separate goroutines (see ListenForInbound) and may race on this field otherwise.
+func (p *Plugin) SetCurrentHeight(height uint64) {
+	p.l.Lock()
+	defer p.l.Unlock()
+	p.currentHeight = height
+}
+
+// CurrentHeight returns the height set by the most recent BeginBlock call.
+func (p *Plugin) CurrentHeight() uint64 {
+	p.l.Lock()
+	defer p.l.Unlock()
+	return p.currentHeight
 }
 
 // socketPath is the name of the plugin socket exposed by the base SDK

@@ -1,0 +1,111 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/ARBOR-L/ARBOR/plugin/go/contract";
+
+// ─────────────────────────────────────────────
+// Encoding-boundary / freeze events (ARCM §9.3a, AYIS §3.2/4.6, Principle 14)
+// ─────────────────────────────────────────────
+
+// EventIndexEncodingOverflowHalted fires when a BeginBlock-context TryEncodeUint128
+// call fails for B_index, S_rate, or R_fund's interest-routing leg. Sets
+// index_overflow_halted for this market only.
+message EventIndexEncodingOverflowHalted {
+  string market_id = 1;
+  string field = 2;              // "B_index" | "S_rate" | "R_fund"
+  string attempted_value = 3;    // decimal string, the value that failed to encode
+}
+
+// ─────────────────────────────────────────────
+// Insolvent-market value routing (ARCM §9.3, J1/K1)
+// ─────────────────────────────────────────────
+
+// EventInsolventMarketValueRecovered fires each time recovered value routes to
+// R_fund for an Insolvent market (interest, repay principal, or liquidation proceeds).
+message EventInsolventMarketValueRecovered {
+  string market_id = 1;
+  uint64 recovered_amount = 2;
+  string source = 3;              // "interest" | "repay_principal" | "liquidation_proceeds"
+}
+
+// ─────────────────────────────────────────────
+// Dust-clamp events (ARCM §19.2.1b, AYIS §4.4 — H4 fix: pre-clamp value, not post-clamp zero)
+// ─────────────────────────────────────────────
+
+// EventTotalSuppliedDustClamp fires when a withdrawal clamps market.total_supplied to zero
+message EventTotalSuppliedDustClamp {
+  string market_id = 1;
+  uint64 actual_withdrawn = 2;
+  uint64 pre_clamp_value = 3;     // [H4] the amount actually clamped away
+}
+
+// EventTotalSharesOutstandingDustClamp fires when a redemption clamps
+// total_shares_outstanding to zero
+message EventTotalSharesOutstandingDustClamp {
+  string market_id = 1;
+  uint64 shares_redeemed = 2;
+  uint64 pre_clamp_value = 3;     // [H4] the amount actually clamped away
+}
+
+// ─────────────────────────────────────────────
+// Layer 4 (bad-debt socialization) events (ARCM §9.2b, §9.2, AYIS §5.4.3)
+// ─────────────────────────────────────────────
+
+// EventLayer4PendingCountWarning fires when the soft backlog threshold is crossed
+message EventLayer4PendingCountWarning {
+  string market_id = 1;
+  uint32 pending_count = 2;
+  string pending_bad_debt_total = 3;  // decimal string, uint128-scale (L2-widen)
+}
+
+// EventLayer4PendingBadDebtTotalSaturated fires when the widened uint128 counter
+// would overflow (astronomically unlikely post-widen; retained as a tripwire)
+message EventLayer4PendingBadDebtTotalSaturated {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+}
+
+// EventLayer4PendingCountUnderflow fires on a decrement-below-zero attempt
+// (should never occur; defensive signal only)
+message EventLayer4PendingCountUnderflow {
+  string market_id = 1;
+}
+
+// EventDepositWithdrawBlockedDuringPendingLoss fires when deposit/withdraw/borrow
+// is rejected due to layer4_pending_count > 0
+message EventDepositWithdrawBlockedDuringPendingLoss {
+  string market_id = 1;
+  string tx_type = 2;
+}
+
+// EventLossFactorExhausted fires when bad_debt >= total_supplied_equiv, driving
+// loss_factor to zero and transitioning the market to Insolvent
+message EventLossFactorExhausted {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+  uint64 total_supplied_equiv = 3;
+}
+
+// EventBadDebtSocialization fires on every non-exhausting Layer 4 haircut application
+message EventBadDebtSocialization {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+  string new_loss_factor = 3;     // decimal string, uint128-scale, RAY-precision
+}
+
+// EventLossFactorAppliedToAlreadyInsolventMarket fires on the K3 idempotency
+// guard's early-return path (queued application against an already-Insolvent market)
+message EventLossFactorAppliedToAlreadyInsolventMarket {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+}
+
+// ─────────────────────────────────────────────
+// Migration (ARCM §12.4, M4)
+// ─────────────────────────────────────────────
+
+// EventReserveFundEncodingMigrationCompleted fires once, at the announced upgrade
+// height, after the one-time {18} uint64->uint128 zero-extension pass completes
+message EventReserveFundEncodingMigrationCompleted {
+  uint64 completed_at_height = 1;
+}
