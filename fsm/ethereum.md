@@ -40,12 +40,16 @@ It is **not** a claim of full EVM equivalence.
 - `eth_call` only supports Canopy's fixed pseudo-contract surface.
 - Logs are synthesized for Canopy's supported token-style transfer model, not for arbitrary contract events.
 - Nonce handling is compatibility-oriented and intentionally lighter than a full Ethereum account-history subsystem.
+- Custom ETH-RPC reads are available for native Canopy state that does not map cleanly to Ethereum accounts:
+  - `canopy_getStake(address, blockTag?)` returns validator `stakedAmount` as an `eth_getBalance`-style 18-decimal hex amount.
+  - `canopy_getPool(id, blockTag?)` returns pool `amount` as an `eth_getBalance`-style 18-decimal hex amount.
 
 ### Address Model
 
 Canopy's ETH RPC intentionally exposes a mixed address model:
 
 - Any Canopy account address that fits the standard 20-byte hex format can be queried through Ethereum-style read APIs such as `eth_getBalance`, transaction lookups, and supported log queries.
+- The reserved read-only pseudo-address `0x000000000000000000000000000000000001ffff` maps `eth_getBalance` to the DAO pool balance for exchange compatibility.
 - Only Ethereum-derived `secp256k1` accounts are writable through Ethereum tooling such as MetaMask, `eth_sendRawTransaction`, and Ethereum-style nonce handling.
 
 Implications:
@@ -71,6 +75,8 @@ RPC
 - [x] eth_accounts
 - [x] eth_blockNumber
 - [x] eth_getBalance
+- [x] canopy_getStake
+- [x] canopy_getPool
 - [ ] eth_getStorageAt
 - [x] eth_getTransactionCount
 - [x] eth_getBlockTransactionCountByHash
@@ -373,17 +379,68 @@ Pending visibility is node-local, just like Ethereum mempool visibility is node-
 
 *Implementation:*
 
-- For Ethereum-derived accounts with mined ETH-backed tx history, `eth_getTransactionCount(..., "latest")` returns the sender's highest mined Ethereum nonce plus one.
-- `eth_getTransactionCount(..., "pending")` returns the same confirmed base plus a local pending offset derived from the node's in-memory pending view.
-- For addresses without mined Ethereum-backed tx history, the RPC falls back to Canopy's height-based pseudo-nonce behavior for compatibility.
+- The RPC persists a **confirmed replay nonce floor** for senders with mined RLP-backed transactions.
+  - This is the sender's highest indexed mined replay nonce.
+  - It prevents `eth_getTransactionCount` from moving backwards after pending state clears.
+- The RPC also tracks a short-lived **local pending set** for Ethereum-submitted transactions accepted by this node.
+  - These pending entries exist before full block indexing catches up.
+  - They are cleared once the tx is observable as mined, or after expiry.
+
+*Tag behavior:*
+
+- `latest`
+  - Starts from the confirmed replay-safe value: the higher of:
+    - the current Ethereum-facing block height, or
+    - the sender's highest confirmed replay nonce plus one.
+  - Then may clamp that value down to the **earliest unresolved local pending nonce** for the sender, but only when that does not move below the confirmed replay floor.
+  - Pending nonces below the confirmed replay floor are ignored, except for the immediate-predecessor partial-index case where the tx row is visible but the mined block row is not yet visible.
+  - This is intentional wallet-compatibility behavior: it prevents a wallet from concluding that an earlier tx was dropped just because the node accepted later txs before receipts became visible.
+- `pending`
+  - Starts from the confirmed replay-safe value.
+  - Then advances past the **highest unresolved local pending nonce** for the sender.
+  - In other words, `pending` means "what nonce should I use for the next new tx on this node?"
+- `safe` and `finalized`
+  - Use only the confirmed replay-safe value.
+  - They do **not** use the local pending clamp.
+- Explicit numeric block tags
+  - Current-head and future-facing numeric tags are treated as compatibility views, not strict archival Ethereum nonce history.
+  - They use the same confirmed replay-safe logic as `latest`, including the same confirmed-floor-aware local pending clamp.
+  - Historical numeric tags are still compatibility values; the RPC does not reconstruct the exact historical Ethereum account nonce for that address at that height.
+
+*Why `latest` sees local pending state:*
+
+- Pure Ethereum semantics would treat `latest` as confirmed-chain state only.
+- That was not sufficient for wallet compatibility on Canopy.
+- A wallet such as MetaMask may:
+  - submit tx `A`,
+  - fail to see a receipt for `A` yet,
+  - ask `eth_getTransactionCount(..., "latest")` or `eth_getTransactionCount(..., "<current block>")`,
+  - and infer that `A` was dropped if the returned value has already advanced past `A`.
+- Clamping `latest` to the earliest still-relevant unresolved local pending nonce avoids that false-drop heuristic while the transaction is still unresolved on this node.
+- The clamp is intentionally narrower than "any lowest pending nonce": once a pending nonce is already below confirmed mined history, it is ignored unless it is the immediate predecessor still stuck in the partial-index window.
+
+*Mental model:*
+
+- The **confirmed floor** answers: "what has definitely mined historically?"
+- The **earliest still-relevant unresolved local pending nonce** answers: "what is the earliest tx this node still cannot prove resolved without contradicting confirmed mined history?"
+- The **highest unresolved local pending nonce** answers: "what nonce has this node already accepted up through?"
+
+Together they produce:
+
+- `latest`: "confirmed-compatible, but do not jump ahead of the earliest still-relevant unresolved local tx"
+- `pending`: "next usable nonce after everything this node already accepted"
 
 *Purpose in RPC compatibility:*
 - `eth_getTransactionCount` is expected by many Ethereum tools and wallets to return a usable nonce.
-- The implementation is intended to be wallet-compatible for active Ethereum-derived accounts without introducing a full persistent Ethereum nonce subsystem into Canopy.
+- The implementation is intended to be wallet-compatible without introducing a full persistent Ethereum nonce subsystem into Canopy.
 - Canopy tolerates nonce gaps for Ethereum-submitted transactions; the values only need to remain distinct within the local pending set for a given block-building window.
 
 *Limitations:*
 
+- `latest` is intentionally not a pure archival Ethereum-confirmed nonce view while unresolved local pending txs exist.
+- The local pending clamp does not treat every stale pending entry as authoritative; below-floor entries are ignored except for the immediate-predecessor partial-index case.
+- Because the pending clamp is node-local, the behavior is best when a wallet reads and writes through the same RPC node.
+- A client that expects `latest` to ignore local pending state completely may observe lower values than on Ethereum during unresolved local tx windows.
 - Explicit historical block-number queries are **not** canonical Ethereum account-history semantics. If a caller asks for `eth_getTransactionCount(address, "0x...")`, the RPC validates the tag but serves a compatibility value instead of reconstructing the exact historical nonce for that address at that block.
 - Pending nonce visibility is local to the node's mempool and pending cache.
 - The method should be treated as compatibility-oriented rather than a full Ethereum archival nonce implementation.

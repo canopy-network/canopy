@@ -30,6 +30,8 @@ import (
 
 /* This file wraps Canopy with the Ethereum JSON-RPC interface as specified here: https://ethereum.org/en/developers/docs/apis/json-rpc */
 
+const daoPoolPseudoAddress = "0x000000000000000000000000000000000001ffff"
+
 // EthereumHandler is a helper function that abstracts common workflows of ethereum calls using the JSON rpc 2.0 specification
 func (s *Server) EthereumHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var raw json.RawMessage
@@ -95,6 +97,10 @@ func (s *Server) handleEthereumRPCRequest(ptr *ethRPCRequest) ethRPCResponse {
 		ethResponse, err = s.EthBlockNumber(args)
 	case `eth_getBalance`:
 		ethResponse, err = s.EthGetBalance(args)
+	case `canopy_getStake`:
+		ethResponse, err = s.CanopyGetStake(args)
+	case `canopy_getPool`:
+		ethResponse, err = s.CanopyGetPool(args)
 	case `eth_getTransactionCount`:
 		ethResponse, err = s.EthGetTransactionCount(args)
 	case `eth_getBlockTransactionCountByHash`:
@@ -273,10 +279,21 @@ func (s *Server) EthGetBalance(args []any) (result any, err error) {
 	}
 	// create a read-only state for the block tag
 	err = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
-		// get the balance for the address
-		balance, e := state.GetAccountSpendableBalance(address)
-		if e != nil {
-			return
+		addressString := "0x" + strings.ToLower(address.String())
+		var balance uint64
+		switch addressString {
+		case daoPoolPseudoAddress:
+			pool, poolErr := state.GetPool(lib.DAOPoolID)
+			if poolErr != nil {
+				return poolErr
+			}
+			balance = pool.Amount
+		default:
+			// get the balance for the address
+			balance, e = state.GetAccountSpendableBalance(address)
+			if e != nil {
+				return
+			}
 		}
 		// upscale to 18 dec in hex string format
 		result = hexutil.Big(*fsm.UpscaleTo18Decimals(balance))
@@ -286,7 +303,59 @@ func (s *Server) EthGetBalance(args []any) (result any, err error) {
 	return
 }
 
-// EthGetTransactionCount() returns the next nonce for Ethereum accounts and a pseudo-nonce fallback for read-only addresses.
+// CanopyGetStake returns the validator stake record for an address.
+func (s *Server) CanopyGetStake(args []any) (result any, err error) {
+	address, err := addressFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	height, err := blockTagFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	err = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
+		balance := uint64(0)
+		validator, e := state.GetValidator(address)
+		if e != nil {
+			if e.Code() == lib.CodeValidatorNotExists {
+				result = hexutil.Big(*fsm.UpscaleTo18Decimals(balance))
+				return nil
+			}
+			return e
+		}
+		balance = validator.StakedAmount
+		result = hexutil.Big(*fsm.UpscaleTo18Decimals(balance))
+		return
+	})
+	return
+}
+
+// CanopyGetPool returns the pool balance for a pool id.
+func (s *Server) CanopyGetPool(args []any) (result any, err error) {
+	idStr, err := strFromArgs(args, 0)
+	if err != nil {
+		return nil, err
+	}
+	id, err := strconv.ParseUint(idStr, 0, 64)
+	if err != nil {
+		return nil, ethInvalidParams(err.Error())
+	}
+	height, err := blockTagFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	err = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
+		pool, e := state.GetPool(id)
+		if e != nil {
+			return e
+		}
+		result = hexutil.Big(*fsm.UpscaleTo18Decimals(pool.Amount))
+		return
+	})
+	return
+}
+
+// EthGetTransactionCount() returns the next replay-safe nonce using current height plus local pending txs.
 func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 	address, err := addressFromArgs(args)
 	if err != nil {
@@ -300,47 +369,45 @@ func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 		}
 	}
 	return s.withStore(func(st *store.Store) (any, error) {
-		base := s.currentEthBlockNumber()
-		hasMinedHistory := false
-		if minedNonce, ok, nonceErr := s.latestMinedNonceForAddress(st, address); nonceErr != nil {
-			return nil, nonceErr
-		} else if ok {
-			base = minedNonce
-			hasMinedHistory = true
-		}
 		switch blockTag {
-		case pendingBlockTag:
-			pending := base
-			maxNonce := s.maximumAcceptedEthereumNonce()
-			if highestPending, ok, pendingErr := s.highestPendingNonceForAddress(st, address.String()); pendingErr != nil {
-				return nil, pendingErr
-			} else if ok && highestPending >= pending {
-				if highestPending >= maxNonce {
-					return nil, ethInvalidParams("no acceptable pending nonce available")
-				}
-				if highestPending == math.MaxUint64 {
-					pending = math.MaxUint64
-				} else {
-					pending = highestPending + 1
-				}
-			}
-			if pending > maxNonce {
-				pending = maxNonce
-			}
-			return hexutil.Uint64(pending), nil
-		case latestBlockTag, safeBlockTag, finalizedBlockTag:
-			return hexutil.Uint64(base), nil
 		case earliestBlockTag:
 			return hexutil.Uint64(0), nil
+		case latestBlockTag:
+			nonce, nonceErr := s.nextLatestReplayProtectedNonce(st, address, s.currentEthBlockNumber())
+			if nonceErr != nil {
+				return nil, nonceErr
+			}
+			return hexutil.Uint64(nonce), nil
+		case safeBlockTag, finalizedBlockTag:
+			nonce, nonceErr := s.nextConfirmedReplayProtectedNonce(st, address, s.currentEthBlockNumber())
+			if nonceErr != nil {
+				return nil, nonceErr
+			}
+			return hexutil.Uint64(nonce), nil
+		case pendingBlockTag:
+			nonce, nonceErr := s.nextPendingReplayProtectedNonce(st, address)
+			if nonceErr != nil {
+				return nil, nonceErr
+			}
+			return hexutil.Uint64(nonce), nil
 		default:
-			// Explicit historical block-number queries are compatibility-oriented: validate the tag but
-			// return the latest confirmed nonce for Ethereum-derived accounts and the height fallback otherwise.
 			height, parseErr := parseBlockTag(blockTag)
 			if parseErr != nil {
 				return nil, parseErr
 			}
-			if hasMinedHistory {
-				return hexutil.Uint64(base), nil
+			// Wallets may reconcile a just-submitted tx against an explicit current-head block number
+			// before its receipt becomes visible. For current/future numeric tags, keep that confirmed
+			// view from jumping ahead of the prior head unless a confirmed sender floor requires it.
+			if height >= s.currentEthBlockNumber() {
+				base := uint64(0)
+				if height != 0 {
+					base = height - 1
+				}
+				nonce, nonceErr := s.nextLatestReplayProtectedNonce(st, address, base)
+				if nonceErr != nil {
+					return nil, nonceErr
+				}
+				return hexutil.Uint64(nonce), nil
 			}
 			return hexutil.Uint64(height), nil
 		}
@@ -684,8 +751,10 @@ func (s *Server) EthGetTransactionByHash(args []any) (any, error) {
 			return nil, err
 		}
 		if tx != nil {
-			clearPendingEthTx(hashString)
-			return s.txToEthTransaction(block, tx, false)
+			if block != nil {
+				clearPendingEthTx(hashString)
+			}
+			return s.txToEthTransaction(block, tx, block == nil)
 		}
 		if pending := s.findPendingEthTx(hashString); pending != nil {
 			return s.pendingTxToEthTransaction(pending), nil
@@ -751,7 +820,7 @@ func (s *Server) EthGetTransactionReceipt(args []any) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if tx == nil {
+		if tx == nil || block == nil {
 			return ethNullResult(), nil
 		}
 		clearPendingEthTx(hashString)
@@ -1555,8 +1624,10 @@ func clearPendingEthTx(hash string) {
 	pseudoPendingTxsMap.Delete(hash)
 }
 
-// highestPendingNonceForAddress() returns the highest still-live pending nonce for the sender.
-func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) (highest uint64, ok bool, err error) {
+// pendingNonceRangeForAddress() returns the lowest and highest still-live pending nonces for the sender.
+// Entries below minNonce are ignored unless they are the immediate predecessor of minNonce and are
+// still in the partial-index state (tx row visible, block row not yet visible).
+func (s *Server) pendingNonceRangeForAddress(st *store.Store, address string, minNonce uint64) (lowest, highest uint64, ok bool, err error) {
 	address = strings.ToLower(address)
 	pseudoPendingTxsMap.Range(func(key, value any) bool {
 		hash := strings.ToLower(key.(string))
@@ -1565,10 +1636,12 @@ func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) 
 			clearPendingEthTx(hash)
 			return true
 		}
-		if tx, _, lookupErr := s.findIndexedTxByHash(st, hash); lookupErr != nil {
+		tx, block, lookupErr := s.findIndexedTxByHash(st, hash)
+		if lookupErr != nil {
 			err = lookupErr
 			return false
-		} else if tx != nil {
+		}
+		if tx != nil && block != nil {
 			clearPendingEthTx(hash)
 			return true
 		}
@@ -1576,13 +1649,23 @@ func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) 
 			return true
 		}
 		nonce := pending.Tx.CreatedHeight
-		if !ok || nonce > highest {
-			highest, ok = nonce, true
+		if minNonce != 0 && nonce < minNonce && !(tx != nil && block == nil && nonce+1 == minNonce) {
+			return true
+		}
+		if !ok {
+			lowest, highest, ok = nonce, nonce, true
+			return true
+		}
+		if nonce < lowest {
+			lowest = nonce
+		}
+		if nonce > highest {
+			highest = nonce
 		}
 		return true
 	})
 	if err != nil {
-		return 0, false, err
+		return 0, 0, false, err
 	}
 	s.controller.Mempool.L.Lock()
 	defer s.controller.Mempool.L.Unlock()
@@ -1595,8 +1678,18 @@ func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) 
 			continue
 		}
 		nonce := tx.CreatedHeight
-		if !ok || nonce > highest {
-			highest, ok = nonce, true
+		if nonce < minNonce {
+			continue
+		}
+		if !ok {
+			lowest, highest, ok = nonce, nonce, true
+			continue
+		}
+		if nonce < lowest {
+			lowest = nonce
+		}
+		if nonce > highest {
+			highest = nonce
 		}
 	}
 	return
@@ -1664,17 +1757,70 @@ func (s *Server) maximumAcceptedEthereumNonce() uint64 {
 	return height + fsm.BlockAcceptanceRange
 }
 
-// latestMinedNonceForAddress() returns the next confirmed nonce for an address when it has mined Ethereum-backed tx history.
-func (s *Server) latestMinedNonceForAddress(st *store.Store, address crypto.AddressI) (uint64, bool, error) {
-	nonce, ok, err := st.GetLatestMinedEthereumNonce(address)
-	if err != nil || !ok {
-		return 0, ok, err
+// nextConfirmedReplayProtectedNonce() returns the next confirmed replay-safe nonce for an address from the supplied base view.
+func (s *Server) nextConfirmedReplayProtectedNonce(st *store.Store, address crypto.AddressI, nonce uint64) (uint64, error) {
+	maxNonce := s.maximumAcceptedEthereumNonce()
+	if confirmedNonce, ok, err := st.GetHighestConfirmedEthereumReplayNonce(address); err != nil {
+		return 0, err
+	} else if ok {
+		if confirmedNonce >= maxNonce {
+			return 0, fmt.Errorf("no replay-safe nonce available within accepted window")
+		}
+		if confirmedNonce == math.MaxUint64 {
+			return math.MaxUint64, nil
+		}
+		confirmedFloor := confirmedNonce + 1
+		if confirmedFloor > nonce {
+			nonce = confirmedFloor
+		}
 	}
-	nextNonce := nonce + 1
-	if currentNonce := s.currentEthBlockNumber(); nextNonce < currentNonce {
-		nextNonce = currentNonce
+	if nonce > maxNonce {
+		nonce = maxNonce
 	}
-	return nextNonce, true, nil
+	return nonce, nil
+}
+
+// nextLatestReplayProtectedNonce returns the confirmed replay-safe nonce, clamped by the earliest unresolved local pending nonce.
+func (s *Server) nextLatestReplayProtectedNonce(st *store.Store, address crypto.AddressI, base uint64) (uint64, error) {
+	nonce, err := s.nextConfirmedReplayProtectedNonce(st, address, base)
+	if err != nil {
+		return 0, err
+	}
+	confirmedFloor := uint64(0)
+	if confirmedNonce, ok, err := st.GetHighestConfirmedEthereumReplayNonce(address); err != nil {
+		return 0, err
+	} else if ok {
+		confirmedFloor = confirmedNonce + 1
+	}
+	lowestPending, _, ok, err := s.pendingNonceRangeForAddress(st, address.String(), confirmedFloor)
+	if err != nil {
+		return 0, err
+	}
+	if ok && lowestPending < nonce {
+		return lowestPending, nil
+	}
+	return nonce, nil
+}
+
+// nextPendingReplayProtectedNonce() returns the next replay-safe nonce including local pending state.
+func (s *Server) nextPendingReplayProtectedNonce(st *store.Store, address crypto.AddressI) (uint64, error) {
+	nonce, err := s.nextConfirmedReplayProtectedNonce(st, address, s.currentEthBlockNumber())
+	if err != nil {
+		return 0, err
+	}
+	maxNonce := s.maximumAcceptedEthereumNonce()
+	if _, highestPending, ok, err := s.pendingNonceRangeForAddress(st, address.String(), 0); err != nil {
+		return 0, err
+	} else if ok && highestPending >= nonce {
+		if highestPending >= maxNonce {
+			return 0, fmt.Errorf("no replay-safe nonce available within accepted window")
+		}
+		nonce = highestPending + 1
+	}
+	if nonce > maxNonce {
+		nonce = maxNonce
+	}
+	return nonce, nil
 }
 
 // blockHeightFromNumberArg() resolves block-number method arguments to indexed Canopy block heights.
@@ -1693,24 +1839,49 @@ func (s *Server) blockHeightFromNumberArg(args []any, position int) (uint64, err
 }
 
 // findIndexedTxByHash() resolves a mined tx by stored Canopy hash or persisted Ethereum-hash alias.
+// Cached blocks are only trusted to complete an already-indexed tx while block rows are catching up.
 func (s *Server) findIndexedTxByHash(st *store.Store, hash string) (*lib.TxResult, *lib.BlockResult, error) {
 	txHash, err := lib.StringToBytes(cleanHex(hash))
 	if err == nil {
 		tx, txErr := st.GetTxByHash(txHash)
 		if txErr == nil && tx.TxHash != "" {
 			block, blockErr := st.GetBlockByHeight(tx.Height)
-			if blockErr == nil && !isNilBlock(block) {
+			if blockErr == nil && !isNilBlock(block) && blockContainsTxHash(block, hash) {
 				return tx, block, nil
 			}
-			// Treat a partially indexed mined tx as unresolved so callers can fall back to pending/null
-			// instead of surfacing a transient backend error during MetaMask polling.
+			if cachedTx, cachedBlock, cacheErr := st.FindCachedTxByHash(txHash); cacheErr != nil {
+				return nil, nil, cacheErr
+			} else if cachedTx != nil && cachedBlock != nil {
+				return cachedTx, cachedBlock, nil
+			}
+			// Surface a partially indexed tx as pending-shaped instead of null so wallet pollers
+			// don't misclassify a mined tx as dropped while block rows are catching up.
 			if blockErr == nil || isNotFoundErr(blockErr) {
-				return nil, nil, nil
+				return tx, nil, nil
 			}
 			return nil, nil, blockErr
 		}
 	}
 	return nil, nil, nil
+}
+
+func blockContainsTxHash(block *lib.BlockResult, hash string) bool {
+	if isNilBlock(block) {
+		return false
+	}
+	normalizedHash := strings.ToLower(hash)
+	for _, tx := range block.Transactions {
+		if tx == nil {
+			continue
+		}
+		if ethHash := ethHashStringFromTxResult(tx); ethHash != "" && ethHash == normalizedHash {
+			return true
+		}
+		if canopyHash := cleanHex(tx.TxHash); canopyHash != "" && "0x"+strings.ToLower(canopyHash) == normalizedHash {
+			return true
+		}
+	}
+	return false
 }
 
 // txToEthReceipt() converts a Canopy tx result into an Ethereum receipt response object.

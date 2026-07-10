@@ -81,17 +81,66 @@ func TestDeleteTxsForHeightRemovesEthereumHashAlias(t *testing.T) {
 	require.True(t, got == nil || got.TxHash == "")
 }
 
-func TestGetLatestMinedEthereumNonce(t *testing.T) {
+func TestDeleteTxsForHeightEvictsCachedBlock(t *testing.T) {
+	store, _, cleanup := testStore(t)
+	defer cleanup()
+
+	txResult, ethHash := newRLPBackedTxResult(t)
+	block := &lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: testHeight,
+			Hash:   bytes.Repeat([]byte{0x33}, 32),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+		Transactions: []*lib.TxResult{txResult},
+	}
+	require.NoError(t, store.IndexBlock(block))
+	_, err := store.Commit()
+	require.NoError(t, err)
+
+	_, err = store.GetBlockByHeight(testHeight)
+	require.NoError(t, err)
+	require.NoError(t, store.DeleteTxsForHeight(testHeight))
+
+	gotTx, gotBlock, err := store.FindCachedTxByHash(ethHash.Bytes())
+	require.NoError(t, err)
+	require.Nil(t, gotTx)
+	require.Nil(t, gotBlock)
+}
+
+func TestGetHighestConfirmedEthereumReplayNonce(t *testing.T) {
 	store, _, cleanup := testStore(t)
 	defer cleanup()
 
 	txResult, _ := newRLPBackedTxResult(t)
 	require.NoError(t, store.IndexTx(txResult))
 
-	nonce, ok, err := store.GetLatestMinedEthereumNonce(crypto.NewAddress(txResult.Sender))
+	nonce, ok, err := store.GetHighestConfirmedEthereumReplayNonce(crypto.NewAddress(txResult.Sender))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, txResult.Transaction.CreatedHeight, nonce)
+}
+
+func TestFindCachedTxByHash(t *testing.T) {
+	store, _, cleanup := testStore(t)
+	defer cleanup()
+
+	txResult, ethHash := newRLPBackedTxResult(t)
+	block := &lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: testHeight,
+			Hash:   bytes.Repeat([]byte{0x22}, 32),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+		Transactions: []*lib.TxResult{txResult},
+	}
+	blockCache.Add(block.BlockHeader.Height, block)
+	t.Cleanup(blockCache.Purge)
+
+	gotTx, gotBlock, err := store.FindCachedTxByHash(ethHash.Bytes())
+	require.NoError(t, err)
+	require.Equal(t, txResult.TxHash, gotTx.TxHash)
+	require.Equal(t, block.BlockHeader.Height, gotBlock.BlockHeader.Height)
 }
 
 const ethGasPriceTestValue = 10_000_000_000

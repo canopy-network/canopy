@@ -16,20 +16,20 @@ import (
 var _ lib.RWIndexerI = &Indexer{}
 
 var (
-	txHashPrefix       = []byte{1}  // store key prefix for transaction by hash
-	txHeightPrefix     = []byte{2}  // store key prefix for transactions by height
-	txSenderPrefix     = []byte{3}  // store key prefix for transactions from sender
-	txRecipientPrefix  = []byte{4}  // store key prefix for transaction by recipient
-	blockHashPrefix    = []byte{5}  // store key prefix for block by hash
-	blockHeightPrefix  = []byte{6}  // store key prefix for block by height
-	qcHeightPrefix     = []byte{7}  // store key prefix for quorum certificate by height
-	doubleSignerPrefix = []byte{8}  // store key prefix for double signers by height
-	checkPointPrefix   = []byte{9}  // store key prefix for checkpoints for committee chains
-	eventAddressPrefix = []byte{10} // store key prefix for events by address
-	eventHeightPrefix  = []byte{11} // store key prefix for events by block height
-	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
-	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
-	ethNoncePrefix     = []byte{14} // store key prefix for latest mined Ethereum nonce by sender
+	txHashPrefix         = []byte{1}  // store key prefix for transaction by hash
+	txHeightPrefix       = []byte{2}  // store key prefix for transactions by height
+	txSenderPrefix       = []byte{3}  // store key prefix for transactions from sender
+	txRecipientPrefix    = []byte{4}  // store key prefix for transaction by recipient
+	blockHashPrefix      = []byte{5}  // store key prefix for block by hash
+	blockHeightPrefix    = []byte{6}  // store key prefix for block by height
+	qcHeightPrefix       = []byte{7}  // store key prefix for quorum certificate by height
+	doubleSignerPrefix   = []byte{8}  // store key prefix for double signers by height
+	checkPointPrefix     = []byte{9}  // store key prefix for checkpoints for committee chains
+	eventAddressPrefix   = []byte{10} // store key prefix for events by address
+	eventHeightPrefix    = []byte{11} // store key prefix for events by block height
+	eventChainIdPrefix   = []byte{12} // store key prefix for events by chainId
+	eventHashPrefix      = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
+	ethReplayNoncePrefix = []byte{14} // store key prefix for highest confirmed replay nonce by RLP-backed sender
 	// create indexer cache
 	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
@@ -285,7 +285,7 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 			return err
 		}
 	}
-	if err = t.indexLatestEthereumNonce(result); err != nil {
+	if err = t.indexHighestConfirmedEthereumReplayNonce(result); err != nil {
 		return err
 	}
 
@@ -322,6 +322,27 @@ func (t *Indexer) GetTxByHash(hash []byte) (*lib.TxResult, lib.ErrorI) {
 	return t.getTx(t.txHashKey(hash))
 }
 
+// FindCachedTxByHash() searches the recent in-memory block cache for a tx hash during live indexing races.
+func (t *Indexer) FindCachedTxByHash(hash []byte) (*lib.TxResult, *lib.BlockResult, lib.ErrorI) {
+	for _, block := range blockCache.Values() {
+		if block == nil {
+			continue
+		}
+		for _, tx := range block.Transactions {
+			hashes, err := indexedTxHashes(tx)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, candidate := range hashes {
+				if bytes.Equal(candidate, hash) {
+					return tx, block, nil
+				}
+			}
+		}
+	}
+	return nil, nil, nil
+}
+
 // GetTxsByHeight() returns a page of transactions for a height
 func (t *Indexer) GetTxsByHeight(height uint64, newestToOldest bool, p lib.PageParams) (*lib.Page, lib.ErrorI) {
 	return t.getTxs(t.txHeightKey(height), newestToOldest, p)
@@ -342,9 +363,9 @@ func (t *Indexer) GetTxsByRecipient(address crypto.AddressI, newestToOldest bool
 	return t.getTxs(t.txRecipientKey(address.Bytes(), nil), newestToOldest, p)
 }
 
-// GetLatestMinedEthereumNonce() returns the highest mined Ethereum nonce recorded for the sender.
-func (t *Indexer) GetLatestMinedEthereumNonce(address crypto.AddressI) (nonce uint64, ok bool, err lib.ErrorI) {
-	bz, err := t.db.Get(t.ethNonceKey(address.Bytes()))
+// GetHighestConfirmedEthereumReplayNonce() returns the highest confirmed replay nonce recorded for an RLP-backed sender.
+func (t *Indexer) GetHighestConfirmedEthereumReplayNonce(address crypto.AddressI) (nonce uint64, ok bool, err lib.ErrorI) {
+	bz, err := t.db.Get(t.ethReplayNonceKey(address.Bytes()))
 	if err != nil {
 		return 0, false, err
 	}
@@ -356,6 +377,8 @@ func (t *Indexer) GetLatestMinedEthereumNonce(address crypto.AddressI) (nonce ui
 
 // DeleteTxsForHeight() deletes the transaction object for a specific height
 func (t *Indexer) DeleteTxsForHeight(height uint64) lib.ErrorI {
+	// Evict any warmed block snapshot so deleted tx rows cannot still leak through recent cache lookups.
+	blockCache.Remove(height)
 	txs, err := t.GetTxsByHeightNonPaginated(height, false)
 	if err != nil {
 		return err
@@ -391,7 +414,7 @@ func (t *Indexer) DeleteTxsForHeight(height uint64) lib.ErrorI {
 		return err
 	}
 	for _, sender := range affectedSenders {
-		if err = t.reindexLatestEthereumNonce(sender); err != nil {
+		if err = t.reindexHighestConfirmedEthereumReplayNonce(sender); err != nil {
 			return err
 		}
 	}
@@ -845,25 +868,25 @@ func (t *Indexer) indexTxByRecipient(recipient, heightAndIndexKey []byte, bz []b
 	return t.db.Set(t.txRecipientKey(recipient, heightAndIndexKey), bz)
 }
 
-// indexLatestEthereumNonce() persists the highest mined Ethereum nonce seen for an RLP-backed sender.
-func (t *Indexer) indexLatestEthereumNonce(result *lib.TxResult) lib.ErrorI {
+// indexHighestConfirmedEthereumReplayNonce() persists the highest confirmed replay nonce seen for an RLP-backed sender.
+func (t *Indexer) indexHighestConfirmedEthereumReplayNonce(result *lib.TxResult) lib.ErrorI {
 	if result == nil || result.Transaction == nil || len(result.Sender) == 0 || ethTxHash(result.Transaction) == nil {
 		return nil
 	}
-	current, ok, err := t.GetLatestMinedEthereumNonce(crypto.NewAddress(result.Sender))
+	current, ok, err := t.GetHighestConfirmedEthereumReplayNonce(crypto.NewAddress(result.Sender))
 	if err != nil {
 		return err
 	}
 	if ok && current >= result.Transaction.CreatedHeight {
 		return nil
 	}
-	return t.db.Set(t.ethNonceKey(result.Sender), t.encodeBigEndian(result.Transaction.CreatedHeight))
+	return t.db.Set(t.ethReplayNonceKey(result.Sender), t.encodeBigEndian(result.Transaction.CreatedHeight))
 }
 
-// reindexLatestEthereumNonce() recomputes the latest mined Ethereum nonce for a sender after index deletions.
-func (t *Indexer) reindexLatestEthereumNonce(address crypto.AddressI) lib.ErrorI {
+// reindexHighestConfirmedEthereumReplayNonce() recomputes the confirmed replay nonce floor for a sender after index deletions.
+func (t *Indexer) reindexHighestConfirmedEthereumReplayNonce(address crypto.AddressI) lib.ErrorI {
 	if !t.config.IndexByAccount {
-		return t.db.Delete(t.ethNonceKey(address.Bytes()))
+		return t.db.Delete(t.ethReplayNonceKey(address.Bytes()))
 	}
 	it, err := t.db.RevIterator(t.txSenderKey(address.Bytes(), nil))
 	if err != nil {
@@ -875,9 +898,9 @@ func (t *Indexer) reindexLatestEthereumNonce(address crypto.AddressI) lib.ErrorI
 		if e != nil || tx == nil || tx.Transaction == nil || ethTxHash(tx.Transaction) == nil {
 			continue
 		}
-		return t.db.Set(t.ethNonceKey(address.Bytes()), t.encodeBigEndian(tx.Transaction.CreatedHeight))
+		return t.db.Set(t.ethReplayNonceKey(address.Bytes()), t.encodeBigEndian(tx.Transaction.CreatedHeight))
 	}
-	return t.db.Delete(t.ethNonceKey(address.Bytes()))
+	return t.db.Delete(t.ethReplayNonceKey(address.Bytes()))
 }
 
 func (t *Indexer) indexQCByHeight(height uint64, bz []byte) lib.ErrorI {
@@ -929,9 +952,8 @@ func (t *Indexer) txRecipientKey(address, heightAndIndexKey []byte) []byte {
 	return t.key(txRecipientPrefix, address, heightAndIndexKey)
 }
 
-// ethNonceKey() stores the latest mined Ethereum nonce for a sender address.
-func (t *Indexer) ethNonceKey(address []byte) []byte {
-	return t.key(ethNoncePrefix, address, nil)
+func (t *Indexer) ethReplayNonceKey(address []byte) []byte {
+	return t.key(ethReplayNoncePrefix, address, nil)
 }
 
 func (t *Indexer) blockHashKey(hash []byte) []byte {
