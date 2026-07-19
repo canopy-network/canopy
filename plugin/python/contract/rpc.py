@@ -49,13 +49,18 @@ A builder would extend the handler below with their own path, e.g.::
     #        ...  # decode resp, unmarshal(MyRecord, value), and self._write_json(...)
 """
 
+import asyncio
 import json
 import logging
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
+from urllib.parse import urlparse, parse_qs
 
 from .plugin import Plugin, PLUGIN_BUILD
+from .proto import PluginStateReadRequest, PluginKeyRead, PluginRangeRead
+from .proto import Faucet, Reward
+from .contract import key_for_faucet, key_for_reward, FAUCET_PREFIX, REWARD_PREFIX, unmarshal
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +76,15 @@ class PluginRPCHandler(BaseHTTPRequestHandler):
     plugin: Optional[Plugin] = None
 
     def do_GET(self) -> None:  # noqa: N802 (http.server API)
-        # No routes are registered by default. Builders add route dispatch here.
-        self._write_json_error(404, "not found")
+        parsed = urlparse(self.path)
+        query = parse_qs(parsed.query)
+
+        if parsed.path == "/v1/query/faucets":
+            self._handle_query_faucets(query)
+        elif parsed.path == "/v1/query/rewards":
+            self._handle_query_rewards(query)
+        else:
+            self._write_json_error(404, "not found")
 
     def _write_json(self, body: dict, status: int = 200) -> None:
         """Write a JSON success response."""
@@ -91,6 +103,122 @@ class PluginRPCHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _handle_query_faucets(self, query: dict) -> None:
+        plugin = self.plugin
+        if not plugin:
+            self._write_json_error(500, "plugin not initialized")
+            return
+
+        height = int(query.get("height", [0])[0])
+        addresses = query.get("address")
+
+        if addresses:
+            addr_bytes = bytes.fromhex(addresses[0])
+            key = key_for_faucet(addr_bytes)
+            request = PluginStateReadRequest(keys=[PluginKeyRead(query_id=0, key=key)])
+        else:
+            request = PluginStateReadRequest(
+                ranges=[PluginRangeRead(query_id=0, prefix=FAUCET_PREFIX, limit=0, reverse=False)]
+            )
+
+        coro = plugin.query_state(height, request)
+        future = asyncio.run_coroutine_threadsafe(coro, plugin._loop)
+
+        try:
+            resp = future.result(timeout=15.0)
+        except Exception as e:
+            self._write_json_error(500, str(e))
+            return
+
+        if addresses:
+            faucet = None
+            if resp.results and resp.results[0].entries:
+                faucet_bytes = resp.results[0].entries[0].value
+                if faucet_bytes:
+                    faucet_pb = Faucet()
+                    faucet_pb.ParseFromString(faucet_bytes)
+                    faucet = {
+                        "recipientAddress": faucet_pb.recipient_address.hex(),
+                        "totalAmount": faucet_pb.total_amount,
+                        "count": faucet_pb.count,
+                    }
+            self._write_json({
+                "faucet": faucet or {"recipientAddress": addresses[0], "totalAmount": 0, "count": 0},
+                "height": height,
+            })
+        else:
+            faucets = []
+            for result in resp.results:
+                for entry in result.entries:
+                    if entry.value:
+                        faucet_pb = Faucet()
+                        faucet_pb.ParseFromString(entry.value)
+                        faucets.append({
+                            "recipientAddress": faucet_pb.recipient_address.hex(),
+                            "totalAmount": faucet_pb.total_amount,
+                            "count": faucet_pb.count,
+                        })
+            self._write_json({"faucets": faucets, "count": len(faucets), "height": height})
+
+    def _handle_query_rewards(self, query: dict) -> None:
+        plugin = self.plugin
+        if not plugin:
+            self._write_json_error(500, "plugin not initialized")
+            return
+
+        height = int(query.get("height", [0])[0])
+        addresses = query.get("address")
+
+        if addresses:
+            addr_bytes = bytes.fromhex(addresses[0])
+            key = key_for_reward(addr_bytes)
+            request = PluginStateReadRequest(keys=[PluginKeyRead(query_id=0, key=key)])
+        else:
+            request = PluginStateReadRequest(
+                ranges=[PluginRangeRead(query_id=0, prefix=REWARD_PREFIX, limit=0, reverse=False)]
+            )
+
+        coro = plugin.query_state(height, request)
+        future = asyncio.run_coroutine_threadsafe(coro, plugin._loop)
+
+        try:
+            resp = future.result(timeout=15.0)
+        except Exception as e:
+            self._write_json_error(500, str(e))
+            return
+
+        if addresses:
+            reward = None
+            if resp.results and resp.results[0].entries:
+                reward_bytes = resp.results[0].entries[0].value
+                if reward_bytes:
+                    reward_pb = Reward()
+                    reward_pb.ParseFromString(reward_bytes)
+                    reward = {
+                        "recipientAddress": reward_pb.recipient_address.hex(),
+                        "lastAdminAddress": reward_pb.last_admin_address.hex(),
+                        "totalAmount": reward_pb.total_amount,
+                        "count": reward_pb.count,
+                    }
+            self._write_json({
+                "reward": reward or {"recipientAddress": addresses[0], "lastAdminAddress": "", "totalAmount": 0, "count": 0},
+                "height": height,
+            })
+        else:
+            rewards = []
+            for result in resp.results:
+                for entry in result.entries:
+                    if entry.value:
+                        reward_pb = Reward()
+                        reward_pb.ParseFromString(entry.value)
+                        rewards.append({
+                            "recipientAddress": reward_pb.recipient_address.hex(),
+                            "lastAdminAddress": reward_pb.last_admin_address.hex(),
+                            "totalAmount": reward_pb.total_amount,
+                            "count": reward_pb.count,
+                        })
+            self._write_json({"rewards": rewards, "count": len(rewards), "height": height})
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002 (http.server API)
         """Route default access logging through the module logger at debug level."""
