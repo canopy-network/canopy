@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strconv"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -34,6 +35,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/lenderposition", p.handleQueryLenderPosition)
 	mux.HandleFunc("/v1/query/borrowerposition", p.handleQueryBorrowerPosition)
 	mux.HandleFunc("/v1/query/pool", p.handleQueryPool)
+	mux.HandleFunc("/v1/query/reservefund", p.handleQueryReserveFund)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -293,7 +295,7 @@ func (p *Plugin) handleQueryPool(w http.ResponseWriter, r *http.Request) {
 		// newly-created market's pools legitimately don't exist yet until the
 		// first deposit/deposit_collateral.
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"id": poolId, "amount": "0", "note": "pool has zero balance or does not yet exist"})
+		json.NewEncoder(w).Encode(map[string]interface{}{"id": strconv.FormatUint(poolId, 10), "amount": "0", "note": "pool has zero balance or does not yet exist"})
 		return
 	}
 
@@ -312,4 +314,53 @@ func (p *Plugin) handleQueryPool(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(poolJSON)
+}
+
+// handleQueryReserveFund serves GET /v1/query/reservefund?marketId=<id>
+// Returns R_fund ({18}) for the given market, decoded via DecodeUint128 --
+// same raw-read shape as handleQueryPool (single scalar keyed by marketId,
+// not a composite key, not a protobuf record). Added specifically because
+// no prior route exposed R_fund directly (ARBOR_HANDOFF_LAYER2.md Section
+// 2.4): its value could previously only be inferred indirectly via a
+// liquidation's covered/badDebt outcome. Mirrors handleQueryPool's
+// zero-value convention: a market with R_fund == 0 (e.g. newly created,
+// no interest/repay/liquidation inflow yet) returns {"amount":"0"} rather
+// than a 404, since a legitimately-zero reserve is not an error state.
+func (p *Plugin) handleQueryReserveFund(w http.ResponseWriter, r *http.Request) {
+	marketId := r.URL.Query().Get("marketId")
+	if marketId == "" {
+		http.Error(w, `{"error":"missing marketId query param"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateMarketID(marketId); err != nil {
+		http.Error(w, `{"error":"invalid marketId: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForReserveFund(marketId)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"marketId": marketId, "amount": "0", "note": "R_fund has zero balance or does not yet exist"})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	rFund := DecodeUint128(raw)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"marketId": marketId, "amount": rFund.String()})
 }

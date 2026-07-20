@@ -73,6 +73,17 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 		}
 		assetTier, _ := fields["assetTier"].(float64)
 		reserveFactorBps, _ := fields["reserveFactorBps"].(float64)
+		var submitters [][]byte
+		if rawList, ok := fields["authorizedSubmitters"].([]interface{}); ok {
+			for _, item := range rawList {
+				s, _ := item.(string)
+				addrBytes, dErr := hex.DecodeString(s)
+				if dErr != nil {
+					return "", nil, fmt.Errorf("decode authorizedSubmitters entry %q: %w", s, dErr)
+				}
+				submitters = append(submitters, addrBytes)
+			}
+		}
 		msg := &contract.MessageCreateMarket{
 			MarketId:          str(fields["marketId"]),
 			CollateralAssetId: str(fields["collateralAssetId"]),
@@ -80,6 +91,7 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			AssetTier:         uint32(assetTier),
 			ReserveFactorBps:  uint64(reserveFactorBps),
 			Creator:           creator,
+			AuthorizedSubmitters: submitters,
 		}
 		return "type.googleapis.com/types.MessageCreateMarket", msg, nil
 	case "deposit":
@@ -118,6 +130,128 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			Authority: authority,
 		}
 		return "type.googleapis.com/types.MessageSetAssetTier", msg, nil
+	case "update_price":
+		submitter, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode submitter address: %w", err)
+		}
+		price, _ := fields["price"].(float64)
+		confidenceBps, _ := fields["confidenceBps"].(float64)
+		msg := &contract.MessageUpdatePrice{
+			MarketId:      str(fields["marketId"]),
+			AssetId:       str(fields["assetId"]),
+			Price:         uint64(price),
+			ConfidenceBps: uint32(confidenceBps),
+			Submitter:     submitter,
+		}
+		return "type.googleapis.com/types.MessageUpdatePrice", msg, nil
+	case "deposit_collateral":
+		addr, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode address: %w", err)
+		}
+		quantity, _ := fields["quantity"].(float64)
+		msg := &contract.MessageDepositCollateral{
+			MarketId: str(fields["marketId"]),
+			Address:  addr,
+			Quantity: uint64(quantity),
+		}
+		return "type.googleapis.com/types.MessageDepositCollateral", msg, nil
+	case "borrow":
+		addr, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode address: %w", err)
+		}
+		borrowAmount, _ := fields["borrowAmount"].(float64)
+		msg := &contract.MessageBorrow{
+			MarketId:     str(fields["marketId"]),
+			Address:      addr,
+			BorrowAmount: uint64(borrowAmount),
+		}
+		return "type.googleapis.com/types.MessageBorrow", msg, nil
+	case "repay":
+		addr, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode address: %w", err)
+		}
+		repayAmount, _ := fields["repayAmount"].(float64)
+		msg := &contract.MessageRepay{
+			MarketId:    str(fields["marketId"]),
+			Address:     addr,
+			RepayAmount: uint64(repayAmount),
+		}
+		return "type.googleapis.com/types.MessageRepay", msg, nil
+	case "liquidate_position":
+		liquidator, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode liquidator address: %w", err)
+		}
+		borrowerAddr, err := hex.DecodeString(str(fields["borrowerAddress"]))
+		if err != nil {
+			return "", nil, fmt.Errorf("decode borrowerAddress: %w", err)
+		}
+		repayAmount, _ := fields["repayAmount"].(float64)
+		msg := &contract.MessageLiquidatePosition{
+			MarketId:        str(fields["marketId"]),
+			Liquidator:      liquidator,
+			BorrowerAddress: borrowerAddr,
+			RepayAmount:     uint64(repayAmount),
+		}
+		return "type.googleapis.com/types.MessageLiquidatePosition", msg, nil
+	case "pause_market":
+		authority, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode authority: %w", err)
+		}
+		msg := &contract.MessagePauseMarket{
+			MarketId:  str(fields["marketId"]),
+			Authority: authority,
+		}
+		return "type.googleapis.com/types.MessagePauseMarket", msg, nil
+	case "resume_market":
+		authority, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode authority: %w", err)
+		}
+		msg := &contract.MessageResumeMarket{
+			MarketId:  str(fields["marketId"]),
+			Authority: authority,
+		}
+		return "type.googleapis.com/types.MessageResumeMarket", msg, nil
+	case "deprecate_market":
+		authority, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode authority: %w", err)
+		}
+		msg := &contract.MessageDeprecateMarket{
+			MarketId:  str(fields["marketId"]),
+			Authority: authority,
+		}
+		return "type.googleapis.com/types.MessageDeprecateMarket", msg, nil
+	case "update_market_params":
+		authority, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode authority: %w", err)
+		}
+		reserveFactorBps, _ := fields["reserveFactorBps"].(float64)
+		msg := &contract.MessageUpdateMarketParams{
+			MarketId:         str(fields["marketId"]),
+			Authority:        authority,
+			ReserveFactorBps: uint64(reserveFactorBps),
+		}
+		return "type.googleapis.com/types.MessageUpdateMarketParams", msg, nil
+	case "withdraw_collateral":
+		addr, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode address: %w", err)
+		}
+		quantity, _ := fields["quantity"].(float64)
+		msg := &contract.MessageWithdrawCollateral{
+			MarketId: str(fields["marketId"]),
+			Address:  addr,
+			Quantity: uint64(quantity),
+		}
+		return "type.googleapis.com/types.MessageWithdrawCollateral", msg, nil
 	default:
 		return "", nil, fmt.Errorf("unknown or not-yet-wired msgType: %s", msgType)
 	}

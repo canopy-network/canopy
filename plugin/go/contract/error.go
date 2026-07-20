@@ -161,9 +161,93 @@ func ErrCollateralOverflow(marketID string, current uint64, amount uint64) *Plug
 }
 
 func ErrInvalidAssetID(err error) *PluginError {
-return NewError(200, ArborModule, fmt.Sprintf("invalid asset_id: %s", err.Error()))
+	return NewError(215, ArborModule, fmt.Sprintf("invalid asset_id: %s", err.Error()))
 }
 
 func ErrTierOutOfRange(tier uint32) *PluginError {
-return NewError(201, ArborModule, fmt.Sprintf("tier %d invalid: set_asset_tier accepts 0-3 only (tier 4/Blacklisted cannot be set via this transaction, ARCM Section 3)", tier))
+	return NewError(216, ArborModule, fmt.Sprintf("tier %d invalid: set_asset_tier accepts 0-3 only (tier 4/Blacklisted cannot be set via this transaction, ARCM Section 3)", tier))
+}
+
+func ErrAssetTierNotFound(assetID string) *PluginError {
+	return NewError(217, ArborModule, fmt.Sprintf("asset %q has no tier registry entry, cannot be used as collateral (ARCM Section 3, state_keys.go PrefixAssetTier)", assetID))
+}
+
+func ErrNoCollateralPosition(marketID string, addr []byte) *PluginError {
+	return NewError(218, ArborModule, fmt.Sprintf("no collateral position for address %x in market %q -- deposit_collateral must run before borrow", addr, marketID))
+}
+
+func ErrPriceUnavailable(marketID, assetID string) *PluginError {
+	return NewError(219, ArborModule, fmt.Sprintf("market %q: no resolvable oracle price for asset %q (ARCM Section 10, quorum/freshness not met)", marketID, assetID))
+}
+
+func ErrExceedsMaxLTV(marketID string, requestedDebt, maxBorrow uint64) *PluginError {
+	return NewError(220, ArborModule, fmt.Sprintf("market %q: requested total debt %d exceeds max-LTV borrow capacity %d (ARCM Section 4)", marketID, requestedDebt, maxBorrow))
+}
+
+func ErrTotalBorrowedOverflow(marketID string, current uint64, amount uint64) *PluginError {
+	return NewError(221, ArborModule, fmt.Sprintf("market %q: adding amount %d to total_borrowed/debt %d would overflow uint64", marketID, amount, current))
+}
+
+func ErrBorrowerPositionNotFound(marketID string, addr []byte) *PluginError {
+	return NewError(222, ArborModule, fmt.Sprintf("no borrower position for address %x in market %q", addr, marketID))
+}
+
+func ErrTotalBorrowedUnderflow(marketID string, current uint64, amount uint64) *PluginError {
+	return NewError(223, ArborModule, fmt.Sprintf("market %q: subtracting repaid amount %d from total_borrowed %d would underflow", marketID, amount, current))
+}
+
+func ErrMarketIndexNotInitialized(marketID string) *PluginError {
+	return NewError(224, ArborModule, fmt.Sprintf("market %q: borrow index ({25}) not initialized -- create_market invariant violated", marketID))
+}
+
+func ErrAccountBalanceOverflow(addr []byte, current uint64, amount uint64) *PluginError {
+	return NewError(225, ArborModule, fmt.Sprintf("account %x: adding amount %d to balance %d would overflow uint64", addr, amount, current))
+}
+
+func ErrInt64CastOverflow(context string, value uint64) *PluginError {
+	return NewError(226, ArborModule, fmt.Sprintf("%s: value %d exceeds math.MaxInt64, cannot be safely represented as a signed delta (ARCM Section 19.3, C1)", context, value))
+}
+
+func ErrTotalBorrowedOverflowCentralized(marketID string, current uint64, increase uint64) *PluginError {
+	return NewError(227, ArborModule, fmt.Sprintf("market %q: applyDebtDelta increase %d would overflow total_borrowed %d", marketID, increase, current))
+}
+
+func ErrInsufficientCollateral(marketID string, have uint64, want uint64) *PluginError {
+	return NewError(228, ArborModule, fmt.Sprintf("market %q: position has %d collateral, cannot withdraw %d", marketID, have, want))
+}
+
+func ErrWithdrawalExceedsHF(marketID string, resultingHFScaled string) *PluginError {
+	return NewError(229, ArborModule, fmt.Sprintf("market %q: withdrawal would leave health factor at %s (scaled, liquidatable at <=1000000), ARCM Section 5", marketID, resultingHFScaled))
+}
+
+func ErrMarketPoolOverflow(marketID string, current uint64, amount uint64) *PluginError {
+	return NewError(230, ArborModule, fmt.Sprintf("market %q: adding amount %d to escrow pool balance %d would overflow uint64", marketID, amount, current))
+}
+
+func ErrRepayExceedsDebt(marketID string, currentDebt uint64, repayAmount uint64) *PluginError {
+	return NewError(231, ArborModule, fmt.Sprintf("market %q: repay amount %d exceeds current debt %d -- no escrow exists to refund an overpayment, resubmit with amount <= current debt", marketID, repayAmount, currentDebt))
+}
+
+func ErrPositionNotLiquidatable(marketID string, hfScaled string) *PluginError {
+	return NewError(232, ArborModule, fmt.Sprintf("market %q: position health factor %s (scaled) is above the liquidation threshold (<=1000000), ARCM Section 5", marketID, hfScaled))
+}
+
+func ErrRepayExceedsCloseFactor(marketID string, requested, maxAllowed uint64) *PluginError {
+	return NewError(233, ArborModule, fmt.Sprintf("market %q: liquidation repay amount %d exceeds close-factor cap %d for this position's HF tier, ARCM Section 7", marketID, requested, maxAllowed))
+}
+
+func ErrLiquidationBadDebt(marketID string, badDebt uint64) *PluginError {
+	return NewError(234, ArborModule, fmt.Sprintf("market %q: liquidation leaves bad debt %d (debt-asset-native units) -- Layer 2 (reserve fund) checked and insufficient to cover; Layer 3 (protocol treasury) and Layer 4 (lender socialization) not yet implemented, ARCM Section 9.2", marketID, badDebt))
+}
+
+func ErrMarketPaused(marketID string) *PluginError {
+	return NewError(235, ArborModule, fmt.Sprintf("market %q: paused by governance/risk-committee action -- no deposit/withdraw/borrow/repay/collateral/liquidation activity permitted until resumed, ARCM Section 13/16", marketID))
+}
+
+func ErrMarketDeprecated(marketID string) *PluginError {
+	return NewError(236, ArborModule, fmt.Sprintf("market %q: permanently deprecated (ARCM Section 19.2) -- no new deposits, borrows, or collateral additions permitted; existing positions may still withdraw, repay, or be liquidated", marketID))
+}
+
+func ErrMarketNotPaused(marketID string) *PluginError {
+	return NewError(237, ArborModule, fmt.Sprintf("market %q: not currently paused, nothing to resume", marketID))
 }

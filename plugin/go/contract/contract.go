@@ -125,11 +125,60 @@ func (c *Contract) Genesis(_ *PluginGenesisRequest) *PluginGenesisResponse {
 }
 
 // BeginBlock() is code that is executed at the start of `applying` the block
+//
+// Wires AYIS Section 12.3's Accrual Ordering Contract into the chain's actual
+// BeginBlock hook: "AccrueInterest() MUST be the first call in BeginBlock,
+// before... loss-factor-application queue processing." Loss-factor-queue
+// processing does not exist yet (Layer 4 is unbuilt), so this is currently
+// the ONLY BeginBlock step -- but the ordering requirement is stated here
+// now so a future addition (queue draining, circuit breaker eval) is added
+// AFTER this call, not before it.
+//
+// Per-market isolation (Principle 2): one market's AccrueInterest failure is
+// logged and skipped, not propagated as a block-level error. Only a failure
+// to even ENUMERATE the market list (the range-read itself) aborts the
+// block, since at that point no per-market isolation is possible.
 func (c *Contract) BeginBlock(request *PluginBeginRequest) *PluginBeginResponse {
 	// A fresh *Contract is constructed per inbound message (see Plugin.ListenForInbound),
 	// so height is recorded on the long-lived *Plugin, not this short-lived Contract,
 	// to survive across the BeginBlock -> DeliverTx sequence within the same block.
 	c.plugin.SetCurrentHeight(request.Height)
+
+	const qMarketsRange = 0
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Ranges: []*PluginRangeRead{
+			{QueryId: qMarketsRange, Prefix: JoinLenPrefix(PrefixMarkets)},
+		},
+	})
+	if err != nil {
+		log.Printf("BeginBlock: markets range read failed: %v", err)
+		return &PluginBeginResponse{Error: err}
+	}
+	if readResp.Error != nil {
+		log.Printf("BeginBlock: markets range read FSM error: %v", readResp.Error)
+		return &PluginBeginResponse{Error: readResp.Error}
+	}
+
+	var marketEntries []*PluginStateEntry
+	for _, result := range readResp.Results {
+		if result.QueryId == qMarketsRange {
+			marketEntries = result.Entries
+			break
+		}
+	}
+
+	for _, entry := range marketEntries {
+		market := &Market{}
+		if uErr := Unmarshal(entry.Value, market); uErr != nil {
+			log.Printf("BeginBlock: failed to decode market at key %x: %v", entry.Key, uErr)
+			continue
+		}
+		if aErr := AccrueInterest(c, market.MarketId); aErr != nil {
+			log.Printf("BeginBlock: AccrueInterest failed for market %s: %v", market.MarketId, aErr)
+			continue
+		}
+	}
+
 	return &PluginBeginResponse{}
 }
 
@@ -177,6 +226,22 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 		return c.CheckMessageDepositCollateral(x)
 	case *MessageSetAssetTier:
 		return c.CheckMessageSetAssetTier(x)
+	case *MessageBorrow:
+		return c.CheckMessageBorrow(x)
+	case *MessageRepay:
+		return c.CheckMessageRepay(x)
+	case *MessageWithdrawCollateral:
+		return c.CheckMessageWithdrawCollateral(x)
+	case *MessageLiquidatePosition:
+		return c.CheckMessageLiquidatePosition(x)
+	case *MessagePauseMarket:
+		return c.CheckMessagePauseMarket(x)
+	case *MessageResumeMarket:
+		return c.CheckMessageResumeMarket(x)
+	case *MessageDeprecateMarket:
+		return c.CheckMessageDeprecateMarket(x)
+	case *MessageUpdateMarketParams:
+		return c.CheckMessageUpdateMarketParams(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -205,6 +270,22 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 		return c.DeliverMessageDepositCollateral(x, request.Tx.Fee)
 	case *MessageSetAssetTier:
 		return c.DeliverMessageSetAssetTier(x, request.Tx.Fee)
+	case *MessageBorrow:
+		return c.DeliverMessageBorrow(x, request.Tx.Fee)
+	case *MessageRepay:
+		return c.DeliverMessageRepay(x, request.Tx.Fee)
+	case *MessageWithdrawCollateral:
+		return c.DeliverMessageWithdrawCollateral(x, request.Tx.Fee)
+	case *MessageLiquidatePosition:
+		return c.DeliverMessageLiquidatePosition(x, request.Tx.Fee)
+	case *MessagePauseMarket:
+		return c.DeliverMessagePauseMarket(x, request.Tx.Fee)
+	case *MessageResumeMarket:
+		return c.DeliverMessageResumeMarket(x, request.Tx.Fee)
+	case *MessageDeprecateMarket:
+		return c.DeliverMessageDeprecateMarket(x, request.Tx.Fee)
+	case *MessageUpdateMarketParams:
+		return c.DeliverMessageUpdateMarketParams(x, request.Tx.Fee)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

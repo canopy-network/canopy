@@ -31,7 +31,7 @@ func (c *Contract) CheckMessageCreateMarket(msg *MessageCreateMarket) *PluginChe
 	// Hardcoded to the Section 15 default (3) pending {22}'s governance
 	// param store, which does not exist yet (same precedent as
 	// interest_rate.go's hardcoded rate constants).
-	const minReporters = 3
+	const minReporters = MinReporters // shared with price_resolve.go's oracle quorum floor -- see its own devnet-override comment
 	if len(msg.AuthorizedSubmitters) < minReporters {
 		return &PluginCheckResponse{Error: ErrInsufficientSubmitters(msg.MarketId, len(msg.AuthorizedSubmitters), minReporters)}
 	}
@@ -49,7 +49,7 @@ func (c *Contract) DeliverMessageCreateMarket(msg *MessageCreateMarket, fee uint
 	// ARCM Section 10: MinReporters, re-checked here since DeliverTx does not
 	// call CheckMessageCreateMarket and cannot assume it ran (a block may
 	// arrive from a proposer whose mempool never ran this node's CheckTx).
-	const minReporters = 3
+	const minReporters = MinReporters // shared with price_resolve.go's oracle quorum floor -- see its own devnet-override comment
 	if len(msg.AuthorizedSubmitters) < minReporters {
 		return &PluginDeliverResponse{Error: ErrInsufficientSubmitters(msg.MarketId, len(msg.AuthorizedSubmitters), minReporters)}
 	}

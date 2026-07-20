@@ -236,3 +236,29 @@ func SetReserveFundTry(c *Contract, marketID string, rFund *big.Int) (ok bool, p
 	}
 	return true, nil
 }
+
+// SetReserveFund writes R_fund using the reverting EncodeUint128 wrapper --
+// the DeliverTx-context-safe path (ARCM Section 9.3, repay/liquidation
+// principal-routing legs; ARCM Section 9.2 Layer 2 draw-down). Unlike
+// SetReserveFundTry (BeginBlock-context, freezes the market on overflow),
+// a DeliverTx caller has a real transaction to revert, so an out-of-range
+// value here reverts the whole transaction via EncodeUint128's own
+// PluginError return, per Principle 14's context-dependent response rule.
+func SetReserveFund(c *Contract, marketID string, rFund *big.Int) *PluginError {
+encoded, encErr := EncodeUint128(rFund)
+if encErr != nil {
+return encErr
+}
+writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+Sets: []*PluginSetOp{
+{Key: KeyForReserveFund(marketID), Value: encoded},
+},
+})
+if err != nil {
+return err
+}
+if writeResp.Error != nil {
+return writeResp.Error
+}
+return nil
+}

@@ -39,19 +39,30 @@ func (c *Contract) DeliverMessageDepositCollateral(msg *MessageDepositCollateral
 
 	marketKey := KeyForMarket(msg.MarketId)
 	borrowerPosKey := KeyForBorrowerPosition(msg.MarketId, msg.Address)
+	// [CUSTODY FIX] The depositor's real account and the market's
+	// COLLATERAL escrow pool -- deliberately PoolPurposeCollateral, not
+	// PoolPurposeSupply. create_market.go never validates
+	// CollateralAssetId != DebtAssetId, so even a same-asset market must
+	// keep these two custody domains structurally separate.
+	acctKey := KeyForAccount(msg.Address)
+	poolId := KeyForMarketPoolId(msg.MarketId, PoolPurposeCollateral)
+	poolKey := KeyForFeePool(poolId)
 
-	// Batched read: Market (existence check only) and this address's
-	// existing BorrowerPosition ({17}, may not exist yet -- first collateral
-	// deposit for this address in this market). One round trip, matching
-	// deposit.go's pattern.
+	// Batched read: Market (existence check only), this address's existing
+	// BorrowerPosition ({17}, may not exist yet), the depositor's Account,
+	// and the market's collateral escrow Pool. One round trip.
 	const (
 		qMarket = iota
 		qBorrowerPos
+		qAccount
+		qPool
 	)
 	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 		Keys: []*PluginKeyRead{
 			{QueryId: qMarket, Key: marketKey},
 			{QueryId: qBorrowerPos, Key: borrowerPosKey},
+			{QueryId: qAccount, Key: acctKey},
+			{QueryId: qPool, Key: poolKey},
 		},
 	})
 	if err != nil {
@@ -65,9 +76,24 @@ func (c *Contract) DeliverMessageDepositCollateral(msg *MessageDepositCollateral
 	if len(marketBytes) == 0 {
 		return &PluginDeliverResponse{Error: ErrMarketNotFound(msg.MarketId)}
 	}
-	// Market is read only to confirm existence -- no field of it is
-	// consulted or mutated by this transaction (see admission-gate note
-	// above: none of Market's flags gate deposit_collateral).
+	// [DEPRECATE-MARKET, added alongside deprecate_market.go] Unlike
+	// PAUSED (see this function's other admission-gate note: pause is
+	// deliberately NOT checked here, since adding safety-margin collateral
+	// to an existing position is a defensive action a pause shouldn't
+	// block), DEPRECATED is checked. The reasoning is different, not
+	// inconsistent: a deprecated market is permanently winding down --
+	// deposit and borrow are blocked forever, so there is no future
+	// borrow this collateral could ever protect. Allowing a deposit here
+	// would not create risk, but it WOULD strand real funds in a market
+	// with no path to ever using them productively again -- the deposit
+	// itself becomes the harm, not a defense against one.
+	market := &Market{}
+	if uErr := Unmarshal(marketBytes, market); uErr != nil {
+		return &PluginDeliverResponse{Error: uErr}
+	}
+	if pErr := checkMarketNotDeprecated(market, msg.MarketId); pErr != nil {
+		return &PluginDeliverResponse{Error: pErr}
+	}
 
 	borrowerPosBytes := entryValue(readResp, qBorrowerPos)
 	borrowerPos := &BorrowerPosition{}
@@ -95,9 +121,44 @@ func (c *Contract) DeliverMessageDepositCollateral(msg *MessageDepositCollateral
 		return &PluginDeliverResponse{Error: mErr}
 	}
 
+	// [CUSTODY FIX] Debit depositor's real Account.Amount, credit the
+	// market's collateral escrow Pool.Amount, by msg.Quantity.
+	acctBytes := entryValue(readResp, qAccount)
+	account := &Account{}
+	if len(acctBytes) > 0 {
+		if uErr := Unmarshal(acctBytes, account); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+	}
+	if dErr := debitAccountAmount(account, msg.Quantity); dErr != nil {
+		return &PluginDeliverResponse{Error: dErr}
+	}
+	acctBytesOut, mErr := Marshal(account)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
+
+	poolBytes := entryValue(readResp, qPool)
+	pool := &Pool{Id: poolId}
+	if len(poolBytes) > 0 {
+		if uErr := Unmarshal(poolBytes, pool); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+		pool.Id = poolId
+	}
+	if cErr := creditPoolAmount(msg.MarketId, pool, msg.Quantity); cErr != nil {
+		return &PluginDeliverResponse{Error: cErr}
+	}
+	poolBytesOut, mErr := Marshal(pool)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
+
 	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
 		Sets: []*PluginSetOp{
 			{Key: borrowerPosKey, Value: borrowerPosBytesOut},
+			{Key: acctKey, Value: acctBytesOut},
+			{Key: poolKey, Value: poolBytesOut},
 		},
 	})
 	if err != nil {
@@ -106,5 +167,263 @@ func (c *Contract) DeliverMessageDepositCollateral(msg *MessageDepositCollateral
 	if writeResp.Error != nil {
 		return &PluginDeliverResponse{Error: writeResp.Error}
 	}
+	return &PluginDeliverResponse{}
+}
+
+// CheckMessageWithdrawCollateral statelessly validates a
+// 'withdraw_collateral' message.
+func (c *Contract) CheckMessageWithdrawCollateral(msg *MessageWithdrawCollateral) *PluginCheckResponse {
+	if err := ValidateMarketID(msg.MarketId); err != nil {
+		return &PluginCheckResponse{Error: ErrInvalidMarketID(err)}
+	}
+	if len(msg.Address) != 20 {
+		return &PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.Quantity == 0 {
+		return &PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.Address}}
+}
+
+// DeliverMessageWithdrawCollateral handles 'withdraw_collateral'.
+//
+// [DISCLOSED GAP, matches deposit_collateral's existing design] Like
+// deposit_collateral, this handler is bookkeeping-only against
+// BorrowerPosition.CollateralQuantity -- no Account.Amount fund transfer
+// occurs on either side of collateral management in this codebase today.
+// Building withdraw_collateral to actually move tokens while
+// deposit_collateral does not would be an inconsistent, asymmetric fix;
+// both sides need real custody wired in together, as a separate,
+// deliberate piece of work, not silently introduced on one side only.
+//
+// Admission gates deliberately NOT applied here, matching
+// deposit_collateral's own established reasoning (see that function's
+// comment): NOT gated by market.status == Insolvent (a lender-side
+// wipeout doesn't prevent a borrower from managing their own collateral
+// position -- the real protection against an unsafe withdrawal is the
+// health-factor check below, not market-wide status), NOT gated by
+// index_overflow_halted or layer4_pending_count (ARCM's admission-set
+// text for both names the LENDER-side 'deposit'/'withdraw'/'borrow'
+// message types, not the borrower-side deposit_collateral/
+// withdraw_collateral pair). The health-factor check IS the safety gate
+// for this transaction, and it is unconditional -- it applies regardless
+// of any market-wide flag.
+//
+// [DISCLOSED GAP] Emergency Mode (ARCM Section 16, P15: "collateral
+// withdrawals... BLOCKED unconditionally during staleness") is NOT
+// enforced here. Emergency Mode has no implementation anywhere in this
+// codebase yet ({21} is a reserved key prefix only) -- this handler
+// cannot honor a rule that doesn't exist yet to be read. Flagged
+// explicitly rather than silently omitted.
+func (c *Contract) DeliverMessageWithdrawCollateral(msg *MessageWithdrawCollateral, fee uint64) *PluginDeliverResponse {
+	if err := ValidateMarketID(msg.MarketId); err != nil {
+		return &PluginDeliverResponse{Error: ErrInvalidMarketID(err)}
+	}
+	if len(msg.Address) != 20 {
+		return &PluginDeliverResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.Quantity == 0 {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+
+	market, found, err := GetMarket(c, msg.MarketId)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if !found {
+		return &PluginDeliverResponse{Error: ErrMarketNotFound(msg.MarketId)}
+	}
+	if pErr := checkMarketNotPaused(market, msg.MarketId); pErr != nil {
+		return &PluginDeliverResponse{Error: pErr}
+	}
+
+	posKey := KeyForBorrowerPosition(msg.MarketId, msg.Address)
+	// [CUSTODY FIX] Inverse of deposit_collateral: debit the market's
+	// collateral escrow pool, credit the withdrawer's real account. Read
+	// alongside the existing BorrowerPosition query in one batch.
+	acctKey := KeyForAccount(msg.Address)
+	poolId := KeyForMarketPoolId(msg.MarketId, PoolPurposeCollateral)
+	poolKey := KeyForFeePool(poolId)
+	const (
+		qPos = iota
+		qAccount
+		qPool
+	)
+	posReadResp, rErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: qPos, Key: posKey},
+			{QueryId: qAccount, Key: acctKey},
+			{QueryId: qPool, Key: poolKey},
+		},
+	})
+	if rErr != nil {
+		return &PluginDeliverResponse{Error: rErr}
+	}
+	if posReadResp.Error != nil {
+		return &PluginDeliverResponse{Error: posReadResp.Error}
+	}
+	posBytes := entryValue(posReadResp, qPos)
+	if len(posBytes) == 0 {
+		return &PluginDeliverResponse{Error: ErrNoCollateralPosition(msg.MarketId, msg.Address)}
+	}
+	pos := &BorrowerPosition{}
+	if uErr := Unmarshal(posBytes, pos); uErr != nil {
+		return &PluginDeliverResponse{Error: uErr}
+	}
+
+	if msg.Quantity > pos.CollateralQuantity {
+		return &PluginDeliverResponse{Error: ErrInsufficientCollateral(msg.MarketId, pos.CollateralQuantity, msg.Quantity)}
+	}
+
+	// AccrueInterest MUST run before any debt read (AYIS Section 12.3).
+	if aErr := AccrueInterest(c, msg.MarketId); aErr != nil {
+		return &PluginDeliverResponse{Error: aErr}
+	}
+
+	bIndexNow, biFound, biErr := GetBorrowIndex(c, msg.MarketId)
+	if biErr != nil {
+		return &PluginDeliverResponse{Error: biErr}
+	}
+	if !biFound {
+		return &PluginDeliverResponse{Error: ErrMarketIndexNotInitialized(msg.MarketId)}
+	}
+
+	currentDebt := ScaledDebt(pos, bIndexNow)
+	newCollateralQty := pos.CollateralQuantity - msg.Quantity
+
+	// Only enforce the health-factor check when there is actual debt open
+	// against this position (ComputeHealthFactorScaled's own documented
+	// precondition). Zero debt means any withdrawal amount up to the full
+	// collateral balance is unconditionally safe.
+	if currentDebt > 0 {
+		tier, tierFound, tErr := GetAssetTier(c, market.CollateralAssetId)
+		if tErr != nil {
+			return &PluginDeliverResponse{Error: tErr}
+		}
+		if !tierFound {
+			return &PluginDeliverResponse{Error: ErrAssetTierNotFound(market.CollateralAssetId)}
+		}
+		tierParams, tpFound := GetTierParams(tier)
+		if !tpFound {
+			return &PluginDeliverResponse{Error: ErrAssetTierNotFound(market.CollateralAssetId)}
+		}
+
+		collateralPrice, cpFound, cpErr := ResolvePrice(c, market.CollateralAssetId)
+		if cpErr != nil {
+			return &PluginDeliverResponse{Error: cpErr}
+		}
+		if !cpFound {
+			return &PluginDeliverResponse{Error: ErrPriceUnavailable(msg.MarketId, market.CollateralAssetId)}
+		}
+		debtPrice, dpFound, dpErr := ResolvePrice(c, market.DebtAssetId)
+		if dpErr != nil {
+			return &PluginDeliverResponse{Error: dpErr}
+		}
+		if !dpFound {
+			return &PluginDeliverResponse{Error: ErrPriceUnavailable(msg.MarketId, market.DebtAssetId)}
+		}
+
+		resultingHF := ComputeHealthFactorScaled(newCollateralQty, collateralPrice, tierParams.LTVLiqBps, currentDebt, debtPrice)
+		if resultingHF.Cmp(HFLiquidatableThresholdScaled) <= 0 {
+			return &PluginDeliverResponse{Error: ErrWithdrawalExceedsHF(msg.MarketId, resultingHF.String())}
+		}
+	}
+
+	// [CUSTODY FIX] Debit the market's collateral pool, credit the
+	// withdrawer's real account, by msg.Quantity -- runs AFTER the HF
+	// check above passes, so a withdrawal that would leave the position
+	// liquidatable is rejected before any custody or position state
+	// mutates, matching this file's existing guard-before-mutation order.
+	acctBytes := entryValue(posReadResp, qAccount)
+	account := &Account{}
+	if len(acctBytes) > 0 {
+		if uErr := Unmarshal(acctBytes, account); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+	}
+	poolBytes := entryValue(posReadResp, qPool)
+	pool := &Pool{Id: poolId}
+	if len(poolBytes) > 0 {
+		if uErr := Unmarshal(poolBytes, pool); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+		pool.Id = poolId
+	}
+	if dErr := debitPoolAmount(pool, msg.Quantity); dErr != nil {
+		return &PluginDeliverResponse{Error: dErr}
+	}
+	// [FIX] Match fsm/account.go's SetPool() convention: a pool drained to
+	// zero is DELETED, not written as an explicit zero-value record.
+	var poolBytesOut []byte
+	var deletePool bool
+	if pool.Amount == 0 {
+		deletePool = true
+	} else {
+		var mErr *PluginError
+		poolBytesOut, mErr = Marshal(pool)
+		if mErr != nil {
+			return &PluginDeliverResponse{Error: mErr}
+		}
+	}
+	if cErr := creditAccountAmount(msg.Address, account, msg.Quantity); cErr != nil {
+		return &PluginDeliverResponse{Error: cErr}
+	}
+	acctBytesOut, mErr := Marshal(account)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
+	custodyWriteReq := &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{{Key: acctKey, Value: acctBytesOut}},
+	}
+	if deletePool {
+		custodyWriteReq.Deletes = []*PluginDeleteOp{{Key: poolKey}}
+	} else {
+		custodyWriteReq.Sets = append(custodyWriteReq.Sets, &PluginSetOp{Key: poolKey, Value: poolBytesOut})
+	}
+	custodyWriteResp, cwErr := c.plugin.StateWrite(c, custodyWriteReq)
+	if cwErr != nil {
+		return &PluginDeliverResponse{Error: cwErr}
+	}
+	if custodyWriteResp.Error != nil {
+		return &PluginDeliverResponse{Error: custodyWriteResp.Error}
+	}
+
+	pos.CollateralQuantity = newCollateralQty
+
+	// [Matches repay.go's dual-zero-delete convention] Only delete the
+	// record when BOTH collateral and debt are zero; otherwise always
+	// re-save. Since currentDebt > 0 already forced a real HF check above
+	// (which would have rejected any withdrawal down to zero collateral
+	// against open debt, as an HF of zero collateral / positive debt is
+	// definitionally liquidatable), reaching newCollateralQty == 0 here
+	// with currentDebt > 0 should be unreachable -- this guard exists for
+	// the same defense-in-depth reason repay.go's mirror check does.
+	if newCollateralQty == 0 && currentDebt == 0 {
+		writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+			Deletes: []*PluginDeleteOp{{Key: posKey}},
+		})
+		if wErr != nil {
+			return &PluginDeliverResponse{Error: wErr}
+		}
+		if writeResp.Error != nil {
+			return &PluginDeliverResponse{Error: writeResp.Error}
+		}
+	} else {
+		posBytesOut, mErr := Marshal(pos)
+		if mErr != nil {
+			return &PluginDeliverResponse{Error: mErr}
+		}
+		writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+			Sets: []*PluginSetOp{{Key: posKey, Value: posBytesOut}},
+		})
+		if wErr != nil {
+			return &PluginDeliverResponse{Error: wErr}
+		}
+		if writeResp.Error != nil {
+			return &PluginDeliverResponse{Error: writeResp.Error}
+		}
+	}
+
+	_ = fee
 	return &PluginDeliverResponse{}
 }

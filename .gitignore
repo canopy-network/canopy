@@ -53,4 +53,5 @@ rag
 node_modules
 
 # Hardhat
-cache/solidity-files-cache.json
+cache/solidity-files-cache.jsonnode.log
+*.bak

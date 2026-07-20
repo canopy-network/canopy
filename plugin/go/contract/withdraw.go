@@ -34,12 +34,21 @@ func (c *Contract) DeliverMessageWithdraw(msg *MessageWithdraw, fee uint64) *Plu
 	supplyIndexKey := KeyForSupplyIndex(msg.MarketId)
 	lossFactorKey := KeyForLossFactor(msg.MarketId)
 	lenderPosKey := KeyForLenderPosition(msg.MarketId, msg.Address)
+	// [CUSTODY FIX] Inverse of deposit's custody fix: debit the market's
+	// escrow pool, credit the withdrawer's real account. See deposit.go's
+	// custody-fix comment for the poolPrefix/escrow rationale; unchanged
+	// here.
+	acctKey := KeyForAccount(msg.Address)
+	poolId := KeyForMarketPoolId(msg.MarketId, PoolPurposeSupply)
+	poolKey := KeyForFeePool(poolId)
 
 	const (
 		qMarket = iota
 		qSupplyIndex
 		qLossFactor
 		qLenderPos
+		qAccount
+		qPool
 	)
 	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 		Keys: []*PluginKeyRead{
@@ -47,6 +56,8 @@ func (c *Contract) DeliverMessageWithdraw(msg *MessageWithdraw, fee uint64) *Plu
 			{QueryId: qSupplyIndex, Key: supplyIndexKey},
 			{QueryId: qLossFactor, Key: lossFactorKey},
 			{QueryId: qLenderPos, Key: lenderPosKey},
+			{QueryId: qAccount, Key: acctKey},
+			{QueryId: qPool, Key: poolKey},
 		},
 	})
 	if err != nil {
@@ -63,6 +74,10 @@ func (c *Contract) DeliverMessageWithdraw(msg *MessageWithdraw, fee uint64) *Plu
 	market := &Market{}
 	if uErr := Unmarshal(marketBytes, market); uErr != nil {
 		return &PluginDeliverResponse{Error: uErr}
+	}
+
+	if pErr := checkMarketNotPaused(market, msg.MarketId); pErr != nil {
+		return &PluginDeliverResponse{Error: pErr}
 	}
 
 	// [ARCM Section 9.2b, C2-confirmed admission set] layer4_pending_count
@@ -118,6 +133,62 @@ func (c *Contract) DeliverMessageWithdraw(msg *MessageWithdraw, fee uint64) *Plu
 		return &PluginDeliverResponse{Error: ErrTokenOverflow(msg.MarketId, msg.Shares, tokensBig.String())}
 	}
 	actualWithdrawn := tokensBig.Uint64()
+
+	// [CUSTODY FIX] Debit the market's escrow Pool.Amount, credit the
+	// withdrawer's real Account.Amount -- by actualWithdrawn (the real
+	// loss_factor-adjusted token payout), not msg.Shares. Prior to this
+	// fix, withdraw computed a real payout amount, decremented
+	// total_supplied, and updated LenderPosition, but never moved a real
+	// token to the withdrawer -- symmetric gap to deposit's.
+	acctBytes := entryValue(readResp, qAccount)
+	account := &Account{}
+	if len(acctBytes) > 0 {
+		if uErr := Unmarshal(acctBytes, account); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+	}
+
+	poolBytes := entryValue(readResp, qPool)
+	pool := &Pool{Id: poolId}
+	if len(poolBytes) > 0 {
+		if uErr := Unmarshal(poolBytes, pool); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+		pool.Id = poolId
+	}
+
+	// actualWithdrawn == 0 is reachable (fully Insolvent market, loss_factor
+	// == 0 -- see this file's own comment above tokensBig's computation).
+	// debitPoolAmount/creditAccountAmount both handle amount==0 correctly
+	// (no-op mutation, no spurious error), so no special-case branch is
+	// needed here -- but noted explicitly since a withdrawal that moves
+	// zero real tokens while still deleting/updating LenderPosition is a
+	// real, correct, if unusual, path through this function.
+	if dErr := debitPoolAmount(pool, actualWithdrawn); dErr != nil {
+		return &PluginDeliverResponse{Error: dErr}
+	}
+	// [FIX] Match fsm/account.go's SetPool() convention: a pool drained to
+	// zero is DELETED, not written as an explicit zero-value record. See
+	// borrow.go's identical fix for the full rationale.
+	var poolBytesOut []byte
+	var deletePool bool
+	if pool.Amount == 0 {
+		deletePool = true
+	} else {
+		var mErr *PluginError
+		poolBytesOut, mErr = Marshal(pool)
+		if mErr != nil {
+			return &PluginDeliverResponse{Error: mErr}
+		}
+	}
+
+	if cErr := creditAccountAmount(msg.Address, account, actualWithdrawn); cErr != nil {
+		return &PluginDeliverResponse{Error: cErr}
+	}
+	acctBytesOut, mErr := Marshal(account)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
 
 	// [AYIS Section 4.4, H4-corrected] total_shares_outstanding decrement:
 	// compare-before-subtract, cannot overflow (a decrement, not an
@@ -198,10 +269,24 @@ func (c *Contract) DeliverMessageWithdraw(msg *MessageWithdraw, fee uint64) *Plu
 		Sets: []*PluginSetOp{
 			{Key: marketKey, Value: marketBytesOut},
 			{Key: supplyIndexKey, Value: newSupplyIndexBytes},
+			{Key: acctKey, Value: acctBytesOut},
 		},
 	}
+	// [FIX] poolKey's write is now conditional (delete at zero, set otherwise --
+	// see the debitPoolAmount block above) rather than always a Sets entry.
+	// Two independent zero-conditions (pool, lenderPos) can both fire in the
+	// same withdrawal (e.g. a full withdrawal that also drains the pool to
+	// zero), so both must be able to append to Deletes independently -- using
+	// writeReq.Deletes = []*PluginDeleteOp{...} (assignment, not append) for
+	// only ONE of them would silently clobber the other if both conditions
+	// are true in the same call.
+	if deletePool {
+		writeReq.Deletes = append(writeReq.Deletes, &PluginDeleteOp{Key: poolKey})
+	} else {
+		writeReq.Sets = append(writeReq.Sets, &PluginSetOp{Key: poolKey, Value: poolBytesOut})
+	}
 	if lenderPos.Shares == 0 {
-		writeReq.Deletes = []*PluginDeleteOp{{Key: lenderPosKey}}
+		writeReq.Deletes = append(writeReq.Deletes, &PluginDeleteOp{Key: lenderPosKey})
 	} else {
 		lenderPosBytesOut, mErr := Marshal(lenderPos)
 		if mErr != nil {

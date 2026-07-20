@@ -45,16 +45,20 @@ func (c *Contract) DeliverMessageDeposit(msg *MessageDeposit, fee uint64) *Plugi
 	supplyIndexKey := KeyForSupplyIndex(msg.MarketId)
 	lossFactorKey := KeyForLossFactor(msg.MarketId)
 	lenderPosKey := KeyForLenderPosition(msg.MarketId, msg.Address)
+	// [CUSTODY FIX] The depositor's real account and the market's escrow
+	// pool. Prior to this fix, deposit computed shares and updated
+	// total_supplied/LenderPosition but never moved a real token.
+	acctKey := KeyForAccount(msg.Address)
+	poolId := KeyForMarketPoolId(msg.MarketId, PoolPurposeSupply)
+	poolKey := KeyForFeePool(poolId)
 
-	// Batched read: Market, SupplyIndexRecord ({26}), loss_factor ({27}),
-	// and this address's existing LenderPosition ({24}, may not exist yet --
-	// first deposit for this address in this market). One round trip,
-	// matching create_market's existence-check pattern.
 	const (
 		qMarket = iota
 		qSupplyIndex
 		qLossFactor
 		qLenderPos
+		qAccount
+		qPool
 	)
 	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 		Keys: []*PluginKeyRead{
@@ -62,6 +66,8 @@ func (c *Contract) DeliverMessageDeposit(msg *MessageDeposit, fee uint64) *Plugi
 			{QueryId: qSupplyIndex, Key: supplyIndexKey},
 			{QueryId: qLossFactor, Key: lossFactorKey},
 			{QueryId: qLenderPos, Key: lenderPosKey},
+			{QueryId: qAccount, Key: acctKey},
+			{QueryId: qPool, Key: poolKey},
 		},
 	})
 	if err != nil {
@@ -78,6 +84,13 @@ func (c *Contract) DeliverMessageDeposit(msg *MessageDeposit, fee uint64) *Plugi
 	market := &Market{}
 	if uErr := Unmarshal(marketBytes, market); uErr != nil {
 		return &PluginDeliverResponse{Error: uErr}
+	}
+
+	if pErr := checkMarketNotPaused(market, msg.MarketId); pErr != nil {
+		return &PluginDeliverResponse{Error: pErr}
+	}
+	if pErr := checkMarketNotDeprecated(market, msg.MarketId); pErr != nil {
+		return &PluginDeliverResponse{Error: pErr}
 	}
 
 	// Admission checks, in order: index_overflow_halted (ARCM Section 9.3a --
@@ -185,11 +198,47 @@ func (c *Contract) DeliverMessageDeposit(msg *MessageDeposit, fee uint64) *Plugi
 		return &PluginDeliverResponse{Error: mErr}
 	}
 
+	// [CUSTODY FIX] Debit depositor's real Account.Amount, credit the
+	// market's escrow Pool.Amount by the identical amount -- pure transfer,
+	// checked-add/checked-subtract via custody_arith.go's shared functions.
+	acctBytes := entryValue(readResp, qAccount)
+	account := &Account{}
+	if len(acctBytes) > 0 {
+		if uErr := Unmarshal(acctBytes, account); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+	}
+	if dErr := debitAccountAmount(account, msg.Amount); dErr != nil {
+		return &PluginDeliverResponse{Error: dErr}
+	}
+	acctBytesOut, mErr := Marshal(account)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
+
+	poolBytes := entryValue(readResp, qPool)
+	pool := &Pool{Id: poolId}
+	if len(poolBytes) > 0 {
+		if uErr := Unmarshal(poolBytes, pool); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+		pool.Id = poolId
+	}
+	if cErr := creditPoolAmount(msg.MarketId, pool, msg.Amount); cErr != nil {
+		return &PluginDeliverResponse{Error: cErr}
+	}
+	poolBytesOut, mErr := Marshal(pool)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
+
 	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
 		Sets: []*PluginSetOp{
 			{Key: marketKey, Value: marketBytesOut},
 			{Key: supplyIndexKey, Value: newSupplyIndexBytes},
 			{Key: lenderPosKey, Value: lenderPosBytesOut},
+			{Key: acctKey, Value: acctBytesOut},
+			{Key: poolKey, Value: poolBytesOut},
 		},
 	})
 	if err != nil {

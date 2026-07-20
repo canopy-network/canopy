@@ -46,10 +46,22 @@ func ComputeUtilizationBps(totalBorrowed, totalSupplied uint64) uint64 {
 }
 
 // AnnualRateToPerBlockRateRay converts an annual rate in bps to a per-block
-// rate scaled by RAY (AYIS Section 3, Section 5). BLOCKS_PER_YEAR = 15,768,000
-// (2s block time, immutable, AYIS Section 13).
+// rate scaled by RAY (AYIS Section 3, Section 5).
+//
+// [CORRECTED] AYIS Section 13 states BLOCKS_PER_YEAR = 15,768,000, derived
+// from an assumed 2-second block time (365*24*3600/2). Arbor's actual,
+// confirmed block time is 20 seconds, not 2 -- a 10x discrepancy. Left as
+// originally spec'd, this constant would have understated every accrued
+// interest amount by roughly 10x (per-block rate 10x too small, applied
+// at a block cadence 10x slower than assumed -- both errors compound in
+// the same direction). Corrected here to the true value:
+// 365 * 24 * 3600 / 20 = 1,576,800. AYIS's own spec text still states the
+// old 2s-derived figure -- this is a known, disclosed code/spec mismatch;
+// the spec document itself should be corrected to match in a future
+// revision, but the live constant here is what actually governs accrual,
+// so it takes priority over the stale spec figure.
 func AnnualRateToPerBlockRateRay(annualRateBps uint64) *big.Int {
-	const blocksPerYear = 15_768_000
+	const blocksPerYear = 1_576_800 // 20s block time: 365*24*3600/20
 	numerator := new(big.Int).Mul(big.NewInt(int64(annualRateBps)), RAY)
 	numerator.Div(numerator, big.NewInt(bpsScale))
 	numerator.Div(numerator, big.NewInt(blocksPerYear))
