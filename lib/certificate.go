@@ -24,6 +24,9 @@ const (
 	MaxOrdersPerDexBatch    = 10_000
 	MaxReceipts             = MaxOrdersPerDexBatch
 	MaxLiquidityProviders   = 50_000
+	// MaxOrdersSettledPerBlock caps DEX orders settled per block so begin_block can't exceed the consensus
+	// round budget; orders beyond the cap are failed (receipt 0) and refunded to the seller on the origin chain
+	MaxOrdersSettledPerBlock = 250
 )
 
 // MaxBlockHeaderSize is a consensus breaking change because it affects how the state machine

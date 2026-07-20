@@ -3,6 +3,7 @@ module github.com/ARBOR-L/ARBOR/plugin/go
 go 1.24.0
 
 toolchain go1.24.5
+go 1.26
 
 require (
 	github.com/drand/kyber v1.3.0

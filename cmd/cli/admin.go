@@ -435,7 +435,7 @@ var (
 			}
 			defer func() {
 				if closeErr := db.Close(); closeErr != nil {
-					l.Errorf(closeErr.Error())
+					l.Error(closeErr.Error())
 				}
 			}()
 			st, ok := db.(*store.Store)

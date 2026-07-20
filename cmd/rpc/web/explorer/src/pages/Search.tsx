@@ -198,7 +198,7 @@ const SearchPage: React.FC = () => {
                 {/* Related Searches */}
                 {searchTerm && (
                     <div
-                        className="container mx-auto p-8 py-4 mb-4 bg-card md:rounded-xl">
+                        className="container mx-auto p-8 py-4 mt-4 mb-4 bg-card md:rounded-xl">
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}

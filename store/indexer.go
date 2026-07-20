@@ -9,6 +9,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -28,8 +29,9 @@ var (
 	eventHeightPrefix  = []byte{11} // store key prefix for events by block height
 	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
 	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
+	ethNoncePrefix     = []byte{14} // store key prefix for latest mined Ethereum nonce by sender
 	// create indexer cache
-	blockCache, _ = lru.New[uint64, *lib.BlockResult](4)
+	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
 )
 
@@ -127,12 +129,18 @@ func (t *Indexer) GetBlockByHeight(height uint64) (*lib.BlockResult, lib.ErrorI)
 		return nil, err
 	}
 	// get block from hash key
-	return t.getBlock(hashKey, true)
+	block, err := t.getBlock(hashKey, true)
+	if err != nil {
+		return nil, err
+	}
+	// populate cache on read so historical blocks are warm after a restart
+	blockCache.Add(height, block)
+	return block, nil
 }
 
 // GetBlockHeaderByHeight() returns the block result without transactions
 func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.ErrorI) {
-	// check cache
+	// check cache (full block result may be cached from GetBlockByHeight or IndexBlock)
 	if got, found := blockCache.Get(height); found {
 		return got, nil
 	}
@@ -142,7 +150,13 @@ func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.E
 		return nil, err
 	}
 	// get block from hash key
-	return t.getBlock(hashKey, false)
+	block, err := t.getBlock(hashKey, false)
+	if err != nil {
+		return nil, err
+	}
+	// populate cache on read so historical blocks are warm after a restart
+	blockCache.Add(height, block)
+	return block, nil
 }
 
 // GetBlocks() returns a page of blocks based on the page parameters
@@ -241,14 +255,18 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 	if err != nil {
 		return err
 	}
-	// store the tx by hash key
-	hash, err := lib.StringToBytes(result.GetTxHash())
+	hashes, err := indexedTxHashes(result)
 	if err != nil {
 		return err
 	}
-	hashKey, err := t.indexTxByHash(hash, bz)
+	hashKey, err := t.indexTxByHash(hashes[0], bz)
 	if err != nil {
 		return err
+	}
+	for _, hash := range hashes[1:] {
+		if _, err = t.indexTxByHash(hash, bz); err != nil {
+			return err
+		}
 	}
 	// store the hash key by height.index
 	heightAndIndexKey := t.txHeightAndIndexKey(result.GetHeight(), result.GetIndex())
@@ -267,8 +285,36 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 			return err
 		}
 	}
+	if err = t.indexLatestEthereumNonce(result); err != nil {
+		return err
+	}
 
 	return nil
+}
+
+// indexedTxHashes() returns the primary Canopy tx hash plus any persisted lookup aliases.
+func indexedTxHashes(result *lib.TxResult) ([][]byte, lib.ErrorI) {
+	hash, err := lib.StringToBytes(result.GetTxHash())
+	if err != nil {
+		return nil, err
+	}
+	hashes := [][]byte{hash}
+	if ethHash := ethTxHash(result.Transaction); len(ethHash) != 0 && !bytes.Equal(ethHash, hash) {
+		hashes = append(hashes, ethHash)
+	}
+	return hashes, nil
+}
+
+// ethTxHash() returns the canonical Ethereum tx hash for an RLP-backed transaction.
+func ethTxHash(tx *lib.Transaction) []byte {
+	if tx == nil || tx.Memo != "RLP" || tx.Signature == nil || len(tx.Signature.Signature) == 0 {
+		return nil
+	}
+	var ethTx types.Transaction
+	if err := ethTx.UnmarshalBinary(tx.Signature.Signature); err != nil {
+		return nil
+	}
+	return ethTx.Hash().Bytes()
 }
 
 // GetTxByHash() returns the tx by hash
@@ -296,9 +342,60 @@ func (t *Indexer) GetTxsByRecipient(address crypto.AddressI, newestToOldest bool
 	return t.getTxs(t.txRecipientKey(address.Bytes(), nil), newestToOldest, p)
 }
 
+// GetLatestMinedEthereumNonce() returns the highest mined Ethereum nonce recorded for the sender.
+func (t *Indexer) GetLatestMinedEthereumNonce(address crypto.AddressI) (nonce uint64, ok bool, err lib.ErrorI) {
+	bz, err := t.db.Get(t.ethNonceKey(address.Bytes()))
+	if err != nil {
+		return 0, false, err
+	}
+	if len(bz) == 0 {
+		return 0, false, nil
+	}
+	return t.decodeBigEndian(bz), true, nil
+}
+
 // DeleteTxsForHeight() deletes the transaction object for a specific height
 func (t *Indexer) DeleteTxsForHeight(height uint64) lib.ErrorI {
-	return t.deleteAll(t.txHeightKey(height))
+	txs, err := t.GetTxsByHeightNonPaginated(height, false)
+	if err != nil {
+		return err
+	}
+	affectedSenders := make(map[string]crypto.AddressI)
+	for _, tx := range txs {
+		heightAndIndexKey := t.txHeightAndIndexKey(tx.GetHeight(), tx.GetIndex())
+		if tx != nil && tx.Transaction != nil && len(tx.Sender) != 0 && ethTxHash(tx.Transaction) != nil {
+			addr := crypto.NewAddress(tx.Sender)
+			affectedSenders[addr.String()] = addr
+		}
+		hashes, e := indexedTxHashes(tx)
+		if e != nil {
+			return e
+		}
+		for _, hash := range hashes {
+			if e = t.db.Delete(t.txHashKey(hash)); e != nil {
+				return e
+			}
+		}
+		if t.config.IndexByAccount {
+			if e = t.db.Delete(t.txSenderKey(tx.GetSender(), heightAndIndexKey)); e != nil {
+				return e
+			}
+			if recipient := tx.GetRecipient(); recipient != nil {
+				if e = t.db.Delete(t.txRecipientKey(recipient, heightAndIndexKey)); e != nil {
+					return e
+				}
+			}
+		}
+	}
+	if err = t.deleteAll(t.txHeightKey(height)); err != nil {
+		return err
+	}
+	for _, sender := range affectedSenders {
+		if err = t.reindexLatestEthereumNonce(sender); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DOUBLE SIGNER CODE BELOW
@@ -748,6 +845,41 @@ func (t *Indexer) indexTxByRecipient(recipient, heightAndIndexKey []byte, bz []b
 	return t.db.Set(t.txRecipientKey(recipient, heightAndIndexKey), bz)
 }
 
+// indexLatestEthereumNonce() persists the highest mined Ethereum nonce seen for an RLP-backed sender.
+func (t *Indexer) indexLatestEthereumNonce(result *lib.TxResult) lib.ErrorI {
+	if result == nil || result.Transaction == nil || len(result.Sender) == 0 || ethTxHash(result.Transaction) == nil {
+		return nil
+	}
+	current, ok, err := t.GetLatestMinedEthereumNonce(crypto.NewAddress(result.Sender))
+	if err != nil {
+		return err
+	}
+	if ok && current >= result.Transaction.CreatedHeight {
+		return nil
+	}
+	return t.db.Set(t.ethNonceKey(result.Sender), t.encodeBigEndian(result.Transaction.CreatedHeight))
+}
+
+// reindexLatestEthereumNonce() recomputes the latest mined Ethereum nonce for a sender after index deletions.
+func (t *Indexer) reindexLatestEthereumNonce(address crypto.AddressI) lib.ErrorI {
+	if !t.config.IndexByAccount {
+		return t.db.Delete(t.ethNonceKey(address.Bytes()))
+	}
+	it, err := t.db.RevIterator(t.txSenderKey(address.Bytes(), nil))
+	if err != nil {
+		return err
+	}
+	defer it.Close()
+	for ; it.Valid(); it.Next() {
+		tx, e := t.getTx(it.Value())
+		if e != nil || tx == nil || tx.Transaction == nil || ethTxHash(tx.Transaction) == nil {
+			continue
+		}
+		return t.db.Set(t.ethNonceKey(address.Bytes()), t.encodeBigEndian(tx.Transaction.CreatedHeight))
+	}
+	return t.db.Delete(t.ethNonceKey(address.Bytes()))
+}
+
 func (t *Indexer) indexQCByHeight(height uint64, bz []byte) lib.ErrorI {
 	return t.db.Set(t.qcHeightKey(height), bz)
 }
@@ -795,6 +927,11 @@ func (t *Indexer) txSenderKey(address, heightAndIndexKey []byte) []byte {
 
 func (t *Indexer) txRecipientKey(address, heightAndIndexKey []byte) []byte {
 	return t.key(txRecipientPrefix, address, heightAndIndexKey)
+}
+
+// ethNonceKey() stores the latest mined Ethereum nonce for a sender address.
+func (t *Indexer) ethNonceKey(address []byte) []byte {
+	return t.key(ethNoncePrefix, address, nil)
 }
 
 func (t *Indexer) blockHashKey(hash []byte) []byte {

@@ -28,7 +28,44 @@ const (
 	defaultRCSubscriberPingPeriod     = 50 * time.Second
 	defaultMaxRCSubscribers           = 512
 	defaultMaxRCSubscribersPerChain   = 128
+	// maxReconnectBackoff caps the exponential backoff between root-chain reconnect attempts so
+	// recovery happens within seconds of the root chain becoming reachable again.
+	maxReconnectBackoff = 5 * time.Second
+	// maxReconnectRetries is effectively "retry indefinitely" — the root-chain subscription is
+	// essential, so we keep attempting to reconnect (at the capped interval) rather than giving up.
+	maxReconnectRetries = uint64(1) << 62
 )
+
+// lotteryCache holds a single cached lottery result keyed by (height, id).
+// The lottery winner is derived from chain height and last proposers — it changes
+// once per block (~20s). CheckMempool calls GetLotteryWinner every 2s, so without
+// this cache every call triggers a full HTTP round-trip + TimeMachine SST read.
+type lotteryCache struct {
+	height uint64
+	id     uint64
+	result *lib.LotteryWinner
+}
+
+// dexBatchCache holds a single cached dex batch result keyed by (height, committee).
+// The locked batch is set at block commit and does not change between blocks (~20s).
+// CheckMempool calls GetDexBatch every 2s with the same (height, committee) pair,
+// so without this cache each call triggers a full HTTP round-trip + TimeMachine SST read.
+type dexBatchCache struct {
+	height    uint64
+	committee uint64
+	result    *lib.DexBatch
+}
+
+// ordersCache holds a single cached order book result keyed by (height, id).
+// The root chain order book at a given height is immutable — it changes only when
+// the root chain commits a new block (~20s). CheckMempool calls GetOrders every 2s
+// with the same (height, id) pair; without this cache each miss triggers a full
+// HTTP round-trip + TimeMachine SST read.
+type ordersCache struct {
+	height uint64
+	id     uint64
+	result *lib.OrderBook
+}
 
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
@@ -40,6 +77,9 @@ type RCManager struct {
 	afterRCUpdate func(info *lib.RootChainInfo) // callback after the root chain info update
 	upgrader      websocket.Upgrader            // upgrade http connection to ws
 	log           lib.LoggerI                   // stdout log
+	lottery       lotteryCache                  // per-height cache for GetLotteryWinner
+	dexBatch      dexBatchCache                 // per-height cache for GetDexBatch
+	orders        ordersCache                   // per-height cache for GetOrders
 	// rc subscriber limits
 	rcSubscriberReadLimitBytes int64
 	rcSubscriberWriteTimeout   time.Duration
@@ -227,6 +267,11 @@ func (r *RCManager) GetOrders(rootChainId, rootHeight, id uint64) (*lib.OrderBoo
 		// exit with the order books from memory
 		return sub.Info.Orders, nil
 	}
+	// return cached result if height and id match — the order book at a given root chain
+	// height is immutable; it changes only when the root chain commits a new block (~20s).
+	if r.orders.height == rootHeight && r.orders.id == id {
+		return r.orders.result, nil
+	}
 	// warn of the remote RPC call to the root chain API
 	r.log.Warnf("Executing remote GetOrders call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, sub.Info.Height)
 	// execute the remote call
@@ -241,8 +286,10 @@ func (r *RCManager) GetOrders(rootChainId, rootHeight, id uint64) (*lib.OrderBoo
 		// exit with error
 		return nil, lib.ErrEmptyOrderBook()
 	}
+	result := books.OrderBooks[0]
+	r.orders = ordersCache{height: rootHeight, id: id, result: result}
 	// exit with the first (and only) order book in the list
-	return books.OrderBooks[0], nil
+	return result, nil
 }
 
 // Order() returns a specific order from the root order book
@@ -311,8 +358,20 @@ func (r *RCManager) GetLotteryWinner(rootChainId, height, id uint64) (*lib.Lotte
 		// exit with the lottery winner
 		return sub.Info.LotteryWinner, nil
 	}
-	// exit with the results of the remote RPC call to the API of the 'root chain'
-	return sub.Lottery(height, id)
+	// return cached result if height and id match — the lottery winner is derived from
+	// chain height and last proposers, so it is constant for the duration of a block (~20s).
+	// CheckMempool calls this every 2s, so without the cache each call triggers a full
+	// HTTP round-trip and TimeMachine SST read for the same (height, id) pair.
+	if r.lottery.height == height && r.lottery.id == id {
+		return r.lottery.result, nil
+	}
+	// cache miss: fetch from root chain and cache for this height
+	result, err := sub.Lottery(height, id)
+	if err != nil {
+		return nil, err
+	}
+	r.lottery = lotteryCache{height: height, id: id, result: result}
+	return result, nil
 }
 
 // Transaction() executes a transaction on the root chain
@@ -336,7 +395,19 @@ func (r *RCManager) GetDexBatch(rootChainId, height, committee uint64, withPoint
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
 	}
-	return sub.DexBatch(height, committee, withPoints)
+	// only cache the withPoints=false path used by CheckMempool — withPoints=true adds
+	// pool points that could differ if called at different times within a block
+	if !withPoints && r.dexBatch.height == height && r.dexBatch.committee == committee {
+		return r.dexBatch.result, nil
+	}
+	result, err := sub.DexBatch(height, committee, withPoints)
+	if err != nil {
+		return nil, err
+	}
+	if !withPoints {
+		r.dexBatch = dexBatchCache{height: height, committee: committee, result: result}
+	}
+	return result, nil
 }
 
 // SUBSCRIPTION CODE BELOW (OUTBOUND)
@@ -387,7 +458,12 @@ func (r *RCSubscription) dialWithBackoff(chainId uint64, config lib.RootChain) {
 	// create a URL to connect to the root chain with
 	u := url.URL{Scheme: wsScheme, Host: host, Path: SubscribeRCInfoPath, RawQuery: fmt.Sprintf("%s=%d", chainIdParamName, chainId)}
 	// create a new retry for backoff
-	retry := lib.NewRetry(uint64(time.Second.Milliseconds()), 25)
+	// IMPORTANT: a nested chain cannot make progress (build/validate dex batches, learn the
+	// root height, etc.) while its root-chain subscription is down, so reconnection must be
+	// prompt and persistent. Cap the exponential backoff at maxReconnectBackoff and keep retrying
+	// rather than letting the delay balloon into minutes — an uncapped doubling backoff turns a
+	// brief root-chain blip into a multi-minute chain stall before the connection is re-established.
+	retry := lib.NewCappedRetry(uint64(time.Second.Milliseconds()), uint64(maxReconnectBackoff.Milliseconds()), maxReconnectRetries)
 	// until backoff fails or connection succeeds
 	for retry.WaitAndDoRetry() {
 		// log the connection

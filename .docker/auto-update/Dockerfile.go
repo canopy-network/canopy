@@ -22,7 +22,7 @@ RUN echo "Building from BRANCH=${BRANCH}" && \
     fi
 
 # Copy golang
-COPY --from=golang:1.24-alpine /usr/local/go/ /usr/local/go/
+COPY --from=golang:1.26-alpine /usr/local/go/ /usr/local/go/
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 RUN go version

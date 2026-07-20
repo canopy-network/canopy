@@ -2,9 +2,11 @@ package fsm
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/codec"
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 // INDEXER.GO IS ONLY USED FOR CANOPY INDEXING RPC - NOT A CRITICAL PIECE OF THE STATE MACHINE
@@ -91,6 +93,11 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	doubleSigners, err := st.GetDoubleSignersAsOf(blockHeight)
 	if err != nil {
 		return nil, err
+	}
+	// retrieve per-block non-signers from the committed QC for this block
+	blockNonSigners, err := sm.blockNonSignerAddresses(blockHeight)
+	if err != nil {
+		blockNonSigners = nil
 	}
 	// retrieve orders
 	orderBooks, err := sm.GetOrderBooks()
@@ -194,7 +201,41 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		TotalDelegatesActive:     totalDelegatesActive,
 		TotalDelegatesPaused:     totalDelegatesPaused,
 		TotalDelegatesUnstaking:  totalDelegatesUnstaking,
+		BlockNonSigners:          blockNonSigners,
 	}, nil
+}
+
+func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64) ([][]byte, lib.ErrorI) {
+	if blockHeight <= 1 {
+		return nil, nil
+	}
+	qc, err := s.LoadCertificateHashesOnly(blockHeight)
+	if err != nil {
+		return nil, err
+	}
+	if qc == nil || qc.Header == nil || qc.Signature == nil {
+		return nil, nil
+	}
+	committee, err := s.LoadCommittee(qc.Header.ChainId, qc.Header.RootHeight)
+	if err != nil {
+		return nil, err
+	}
+	if committee.ValidatorSet == nil {
+		return nil, nil
+	}
+	nonSignerPubKeys, _, err := qc.GetNonSigners(committee.ValidatorSet)
+	if err != nil {
+		return nil, err
+	}
+	addresses := make([][]byte, 0, len(nonSignerPubKeys))
+	for _, pubKeyBytes := range nonSignerPubKeys {
+		pubKey, e := crypto.NewPublicKeyFromBytes(pubKeyBytes)
+		if e != nil {
+			return nil, lib.ErrPubKeyFromBytes(e)
+		}
+		addresses = append(addresses, pubKey.Address().Bytes())
+	}
+	return addresses, nil
 }
 
 // DeltaIndexerBlobs returns a clone of blobs where account, pool, and validator payloads
@@ -314,20 +355,27 @@ func entriesByKey(entries [][]byte, keyExtractor func([]byte) (string, error)) (
 	return out, entryMap, nil
 }
 
-func accountEntryKey(entry []byte) (string, error) {
-	field, err := codec.GetRawProtoField(entry, 1) // Account.address
+// entryKeyOrZero extracts field #1 as a map key. In proto3, absent scalar
+// fields represent the zero value on the wire (Pool{Id:0}, Account{Address:nil}),
+// so codec.ErrFieldNotFound is a legal zero-value signal, not a parse error.
+// Real proto-parse errors (invalid tags, buffer overruns) still surface.
+func entryKeyOrZero(entry []byte) (string, error) {
+	field, err := codec.GetRawProtoField(entry, 1)
 	if err != nil {
+		if errors.Is(err, codec.ErrFieldNotFound) {
+			return "", nil
+		}
 		return "", err
 	}
 	return string(field), nil
 }
 
+func accountEntryKey(entry []byte) (string, error) {
+	return entryKeyOrZero(entry) // Account.address
+}
+
 func poolEntryKey(entry []byte) (string, error) {
-	field, err := codec.GetRawProtoField(entry, 1) // Pool.id
-	if err != nil {
-		return "", err
-	}
-	return string(field), nil
+	return entryKeyOrZero(entry) // Pool.id
 }
 
 func changedBlobKeys(current, previous map[string][]byte) (map[string]struct{}, map[string]struct{}) {
@@ -506,6 +554,7 @@ func cloneIndexerBlob(src *IndexerBlob) *IndexerBlob {
 		TotalDelegatesActive:     src.TotalDelegatesActive,
 		TotalDelegatesPaused:     src.TotalDelegatesPaused,
 		TotalDelegatesUnstaking:  src.TotalDelegatesUnstaking,
+		BlockNonSigners:          src.BlockNonSigners,
 	}
 }
 

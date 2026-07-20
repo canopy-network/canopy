@@ -6,6 +6,7 @@ import (
 	"math"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -13,7 +14,8 @@ import (
 )
 
 const (
-	CurrentProtocolVersion = 1
+	CurrentProtocolVersion         = 1
+	slowApplyTransactionsThreshold = 2 * time.Second
 )
 
 /* This is the 'main' file of the state machine store, with the structure definition and other high level operations */
@@ -38,16 +40,39 @@ type StateMachine struct {
 	Plugin             *lib.Plugin                             // extensible plugin for the FSM
 }
 
-// cache is the set of items to be cached used by the state machine
-type cache struct {
-	accounts     map[uint64]*Account // cache of accounts accessed
-	feeParams    *FeeParams          // fee params for the current block
-	valParams    *ValidatorParams    // validator params for the current block
-	rootDexBatch *lib.DexBatch       // root dex batch
+type rootCacheStateStore interface {
+	IsRootCached() bool
 }
 
-// New() creates a new instance of a StateMachine
-func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+// cache is the set of items to be cached used by the state machine
+type cache struct {
+	accounts           map[uint64]*Account   // cache of accounts accessed
+	pools              map[uint64]*Pool      // cache of pools accessed
+	feeParams          *FeeParams            // fee params for the current block
+	valParams          *ValidatorParams      // validator params for the current block
+	rootDexBatch       *lib.DexBatch         // root dex batch
+	liveValidators     []*Validator          // private validator cache for the FSM's current height
+	sharedValidatorSet uint64                // historical height eligible for insertion into the shared validator cache
+	sharedCache        *validatorSharedCache // shared rolling cache of historical validators by height
+}
+
+// validatorSharedCache stores historical validator lists for reuse across FSM snapshots
+type validatorSharedCache struct {
+	sync.RWMutex
+	heights []uint64
+	sets    map[uint64][]*Validator
+}
+
+func newValidatorSharedCache() *validatorSharedCache {
+	return &validatorSharedCache{
+		sets: make(map[uint64][]*Validator),
+	}
+}
+
+func newStateMachine(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI, sharedCache *validatorSharedCache) (*StateMachine, lib.ErrorI) {
+	if sharedCache == nil {
+		sharedCache = newValidatorSharedCache()
+	}
 	// create the state machine object reference
 	sm := &StateMachine{
 		store:             nil,
@@ -61,7 +86,9 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 		log:               log,
 		events:            new(lib.EventsTracker),
 		cache: &cache{
-			accounts: make(map[uint64]*Account),
+			accounts:    make(map[uint64]*Account),
+			pools:       make(map[uint64]*Pool),
+			sharedCache: sharedCache,
 		},
 	}
 	// initialize the state machine
@@ -75,6 +102,11 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 	}
 	// initialize the state machine and exit
 	return sm, nil
+}
+
+// New() creates a new instance of a StateMachine
+func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+	return newStateMachine(c, store, plugin, metrics, log, nil)
 }
 
 // Initialize() initializes a StateMachine object using the StoreI
@@ -123,22 +155,34 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 		return nil, nil, ErrWrongStoreType()
 	}
 	// automated execution at the 'beginning of a block'
+	beginBlockStartTime := time.Now()
 	events, err := s.BeginBlock()
 	if err != nil {
 		return nil, nil, err
 	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyBlockBeginTime.Observe(time.Since(beginBlockStartTime).Seconds())
+	}
 	// add the events from begin block
 	r.AddEvent(events...)
 	// apply all Transactions in the block
+	applyTransactionsStartTime := time.Now()
 	if err = s.ApplyTransactions(ctx, b.Transactions, r, allowOversize); err != nil {
 		return nil, nil, err
+	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyBlockTransactionsTime.Observe(time.Since(applyTransactionsStartTime).Seconds())
 	}
 	// sub-out transactions for those that succeeded (only useful for mempool application)
 	b.Transactions = r.Txs
 	// automated execution at the 'ending of a block'
+	endBlockStartTime := time.Now()
 	events, err = s.EndBlock(b.BlockHeader.ProposerAddress)
 	if err != nil {
 		return nil, nil, err
+	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyBlockEndTime.Observe(time.Since(endBlockStartTime).Seconds())
 	}
 	// add the events from end block
 	r.AddEvent(events...)
@@ -157,9 +201,20 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 		return nil, nil, err
 	}
 	// calculate the merkle root of the state database to enable consensus on the result of the state after applying the block
+	rootWasCached := false
+	if cacheAwareStore, ok := store.(rootCacheStateStore); ok {
+		rootWasCached = cacheAwareStore.IsRootCached()
+	}
+	rootStartTime := time.Time{}
+	if !rootWasCached {
+		rootStartTime = time.Now()
+	}
 	stateRoot, err := store.Root()
 	if err != nil {
 		return nil, nil, err
+	}
+	if !rootStartTime.IsZero() {
+		s.Metrics.UpdateFSMApplyBlockRootTime(rootStartTime)
 	}
 	// load the last block from the indexer
 	lastBlock, err := s.LoadBlock(s.height - 1)
@@ -204,6 +259,7 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 // 4. Returns the following for successful transactions within a block: <results, tx-list, root, count>
 // 5. Returns all transactions that failed during processing
 func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *lib.ApplyBlockResults, allowOversize bool) lib.ErrorI {
+	startTime := time.Now()
 	// use a map to check for 'same-block' duplicate transactions
 	deDuplicator := lib.NewDeDuplicator[string]()
 	// use a batch verifier for signatures
@@ -218,6 +274,7 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	// map signature batch indices back to original tx indices
 	batchToTxIdx := make([]int, 0, len(txs))
 	// first batch validate signatures over the entire set
+	checkStartTime := time.Now()
 	for i, tx := range txs {
 		preCount := batchVerifier.Count()
 		checkStore := s.Store().(lib.StoreI)
@@ -235,18 +292,28 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			batchToTxIdx = append(batchToTxIdx, i)
 		}
 	}
+	checkDuration := time.Since(checkStartTime)
+	if s.Metrics != nil {
+		s.Metrics.ApplyTxsCheckTime.Observe(checkDuration.Seconds())
+	}
 	// execute batch verification of the signatures in the block
+	batchVerifyStartTime := time.Now()
 	for _, failedIdx := range batchVerifier.Verify() {
 		if failedIdx < 0 || failedIdx >= len(batchToTxIdx) {
 			return ErrInvalidSignature()
 		}
 		failedCheckTxs[batchToTxIdx[failedIdx]] = ErrInvalidSignature()
 	}
+	batchVerifyDuration := time.Since(batchVerifyStartTime)
+	if s.Metrics != nil {
+		s.Metrics.ApplyTxsBatchVerifyTime.Observe(batchVerifyDuration.Seconds())
+	}
 	// set the store back to the original at the end of processing
 	originalStore := s.Store().(lib.StoreI)
 	defer s.SetStore(originalStore)
 	// create a variable to track if the block is over size
 	var oversize bool
+	var executeDuration, flushDuration time.Duration
 	// iterates over each transaction in the block
 	for i, tx := range txs {
 		// if interrupt signal
@@ -289,7 +356,9 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			return e
 		}
 		// apply the tx to the state machine, generating a transaction result
+		executeStartTime := time.Now()
 		result, events, e := s.ApplyTransaction(uint64(r.Count), tx, hashString, crypto.NewBatchVerifier(true))
+		executeDuration += time.Since(executeStartTime)
 		if e != nil {
 			// add to the failed list
 			r.AddFailed(lib.NewFailedTx(tx, e))
@@ -304,9 +373,11 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			continue
 		} else {
 			// write the transaction to the underlying store
+			flushStartTime := time.Now()
 			if err = txn.Flush(); err != nil {
 				return err
 			}
+			flushDuration += time.Since(flushStartTime)
 			s.SetStore(currentStore)
 		}
 		// encode the result to bytes
@@ -318,6 +389,15 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	}
 	// update metrics
 	s.Metrics.UpdateLargestTxSize(r.LargestTx)
+	if s.Metrics != nil {
+		s.Metrics.ApplyTxsExecuteTime.Observe(executeDuration.Seconds())
+		s.Metrics.ApplyTxsFlushTime.Observe(flushDuration.Seconds())
+	}
+	totalDuration := time.Since(startTime)
+	if totalDuration >= slowApplyTransactionsThreshold {
+		s.log.Warnf("Slow ApplyTransactions height=%d txs=%d failed=%d oversized=%d check=%s batch_verify=%s execute=%s flush=%s total=%s",
+			s.Height(), len(txs), len(r.Failed), len(r.Oversized), checkDuration, batchVerifyDuration, executeDuration, flushDuration, totalDuration)
+	}
 	// return and exit
 	return err
 }
@@ -344,20 +424,47 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 		return nil, err
 	}
 	// initialize a new state machine
-	return New(s.Config, heightStore, s.Plugin, s.Metrics, s.log)
+	historicalFSM, err := newStateMachine(s.Config, heightStore, s.Plugin, s.Metrics, s.log, s.cache.sharedCache)
+	if err != nil {
+		return nil, err
+	}
+	if height < s.height && s.cache.sharedCache != nil {
+		s.cache.sharedCache.RLock()
+		// set the live validators using the historical cache
+		if validators, ok := s.cache.sharedCache.sets[height]; ok {
+			historicalFSM.cache.liveValidators = validators
+		} else {
+			// defer insertion until first validator access to avoid unnecessary historical scans
+			historicalFSM.cache.sharedValidatorSet = height
+		}
+		s.cache.sharedCache.RUnlock()
+	}
+	return historicalFSM, nil
 }
 
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
 func (s *StateMachine) LoadCommittee(chainId uint64, height uint64) (lib.ValidatorSet, lib.ErrorI) {
+	startTime := time.Now()
+	observeStage := func(stage string, stageStartTime time.Time) {
+		if s.Metrics != nil {
+			s.Metrics.LoadCommitteeStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+		}
+	}
+	defer observeStage("total", startTime)
 	// get the historical state at the height
+	timeMachineStartTime := time.Now()
 	historicalFSM, err := s.TimeMachine(height)
+	observeStage("time_machine", timeMachineStartTime)
 	if err != nil {
 		return lib.ValidatorSet{}, err
 	}
 	// memory management for the historical FSM call
 	defer historicalFSM.Discard()
 	// return the 'committee members' (validator set) for that height
-	return historicalFSM.GetCommitteeMembers(chainId)
+	getCommitteeMembersStartTime := time.Now()
+	vs, err := historicalFSM.GetCommitteeMembers(chainId)
+	observeStage("get_committee_members", getCommitteeMembersStartTime)
+	return vs, err
 }
 
 // LoadCertificate() loads a quorum certificate (block, results + 2/3rd committee signatures)
@@ -540,7 +647,9 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		log:                s.log,
 		cache: &cache{
 			accounts:     make(map[uint64]*Account),
+			pools:        make(map[uint64]*Pool),
 			rootDexBatch: s.cache.rootDexBatch,
+			sharedCache:  s.cache.sharedCache,
 		},
 		LastValidatorSet: s.LastValidatorSet,
 	}, nil
@@ -650,6 +759,9 @@ func (s *StateMachine) Reset() {
 // ResetCaches() dumps the state machine caches
 func (s *StateMachine) ResetCaches() {
 	s.cache.accounts = make(map[uint64]*Account)
+	s.cache.pools = make(map[uint64]*Pool)
+	s.cache.liveValidators = nil
+	s.cache.sharedValidatorSet = 0
 	// Params caches must not outlive the current store view, otherwise Reset()/rollback
 	// can leave the FSM reading stale values that disagree with the underlying store.
 	s.cache.valParams = nil
@@ -672,6 +784,7 @@ func (s *StateMachine) SetStore(store lib.RWStoreI)                   { s.store 
 func (s *StateMachine) Height() uint64                                { return s.height }
 func (s *StateMachine) TotalVDFIterations() uint64                    { return s.totalVDFIterations }
 func (s *StateMachine) Discard()                                      { s.store.(lib.StoreI).Discard() }
+func (s *StateMachine) ProposalVoteConfig() GovProposalVoteConfig     { return s.proposeVoteConfig }
 func (s *StateMachine) SetProposalVoteConfig(c GovProposalVoteConfig) { s.proposeVoteConfig = c }
 
 var _ lib.PluginCompatibleFSM = new(StateMachine)

@@ -20,7 +20,7 @@ func TestGetLatestPluginReleaseFiltersByPluginAssetStream(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/repos/my-org/my-plugin-repo/releases", r.URL.Path)
-		_, _ = w.Write([]byte(fmt.Sprintf(`[
+		_, _ = fmt.Fprintf(w, `[
 			{
 				"tag_name": "v9.9.9",
 				"assets": [{"name": "cli-linux-amd64", "browser_download_url": "https://example.com/cli"}],
@@ -39,7 +39,7 @@ func TestGetLatestPluginReleaseFiltersByPluginAssetStream(t *testing.T) {
 				"draft": false,
 				"prerelease": false
 			}
-		]`, assetName, assetName)))
+		]`, assetName, assetName)
 	}))
 	defer server.Close()
 
@@ -70,20 +70,20 @@ func TestGetLatestCLIReleaseIgnoresPluginOnlyReleases(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/repos/canopy-network/canopy/releases", r.URL.Path)
-		_, _ = w.Write([]byte(`[
+		_, _ = fmt.Fprintf(w, `[
 			{
 				"tag_name": "plugin-go-v2026.82.1774298104",
-				"assets": [{"name": "go-plugin-linux-amd64.tar.gz", "browser_download_url": "https://example.com/plugin"}],
+				"assets": [{"name": "go-plugin-%s-%s.tar.gz", "browser_download_url": "https://example.com/plugin"}],
 				"draft": false,
 				"prerelease": false
 			},
 			{
 				"tag_name": "v0.1.18+beta",
-				"assets": [{"name": "cli-linux-amd64", "browser_download_url": "https://example.com/cli"}],
+				"assets": [{"name": "cli-%s-%s", "browser_download_url": "https://example.com/cli"}],
 				"draft": false,
 				"prerelease": false
 			}
-		]`))
+		]`, runtime.GOOS, runtime.GOARCH, runtime.GOOS, runtime.GOARCH)
 	}))
 	defer server.Close()
 
@@ -100,4 +100,3 @@ func TestGetLatestCLIReleaseIgnoresPluginOnlyReleases(t *testing.T) {
 	require.Equal(t, "v0.1.18+beta", release.Version)
 	require.Equal(t, "https://example.com/cli", release.DownloadURL)
 }
-

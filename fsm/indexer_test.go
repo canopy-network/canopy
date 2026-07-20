@@ -131,6 +131,19 @@ func TestDeltaIndexerBlobs_NoPreviousKeepsCurrent(t *testing.T) {
 	require.Nil(t, delta.Previous)
 }
 
+func TestDeltaIndexerBlobs_KeepsBlockNonSigners(t *testing.T) {
+	currentNonSigners := [][]byte{bytes.Repeat([]byte{12}, 20)}
+	previousNonSigners := [][]byte{bytes.Repeat([]byte{13}, 20)}
+
+	delta, err := DeltaIndexerBlobs(&IndexerBlobs{
+		Current:  &IndexerBlob{BlockNonSigners: currentNonSigners},
+		Previous: &IndexerBlob{BlockNonSigners: previousNonSigners},
+	})
+	require.NoError(t, err)
+	require.Equal(t, currentNonSigners, delta.Current.BlockNonSigners)
+	require.Equal(t, previousNonSigners, delta.Previous.BlockNonSigners)
+}
+
 func mustMarshalProto(t *testing.T, message any) []byte {
 	t.Helper()
 	bz, err := lib.Marshal(message)
@@ -149,4 +162,34 @@ func requireEntriesAsSet(t *testing.T, got [][]byte, expected ...[]byte) {
 		expSet[string(entry)]++
 	}
 	require.Equal(t, expSet, gotSet)
+}
+
+// TestDeltaIndexerBlobs_ZeroValuePoolAndAccount is a regression for the
+// proto3-zero-value bug that permanently 400s /v1/query/indexer-blobs when
+// chain state contains a Pool{Id:0} or Account{Address:nil}. Because proto3
+// omits zero-valued scalar fields from the wire, marshalling Pool{Id:0,Amount:5000}
+// produces bytes with only field #2 (Amount). Pre-fix, poolEntryKey called
+// codec.GetRawProtoField(entry, 1) and returned "field number 1 not found",
+// which bubbled up as lib.ErrUnmarshal and HTTP 400 on every affected height.
+// Post-fix, the missing field is treated as an empty (zero-value) key.
+func TestDeltaIndexerBlobs_ZeroValuePoolAndAccount(t *testing.T) {
+	zeroPool := mustMarshalProto(t, &Pool{Id: 0, Amount: 5000})
+	normalPool := mustMarshalProto(t, &Pool{Id: 32768, Amount: 25_000_000_000_000})
+	zeroAcc := mustMarshalProto(t, &Account{Address: nil, Amount: 1})
+	normalAcc := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{7}, 20), Amount: 42})
+
+	curr := &IndexerBlob{
+		Block:    mustMarshalProto(t, &lib.BlockResult{}),
+		Accounts: [][]byte{zeroAcc, normalAcc},
+		Pools:    [][]byte{zeroPool, normalPool},
+	}
+	prev := &IndexerBlob{
+		Block:    mustMarshalProto(t, &lib.BlockResult{}),
+		Accounts: [][]byte{zeroAcc, normalAcc},
+		Pools:    [][]byte{zeroPool, normalPool},
+	}
+
+	delta, err := DeltaIndexerBlobs(&IndexerBlobs{Current: curr, Previous: prev})
+	require.NoError(t, err, "zero-value Pool.Id / Account.Address must not error")
+	require.NotNil(t, delta)
 }

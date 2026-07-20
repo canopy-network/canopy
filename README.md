@@ -28,9 +28,14 @@ forming an `unstoppable` web of utility and security.
 
 For more information on the Canopy Network Protocol visit [https://canopynetwork.org](https://canopynetwork.org)
 
-## Network Status
+## Standard
 
-⪢ Canopy is in `Betanet` 🚀 ➝ learn more about the [road-to-mainnet](https://www.canopynetwork.org/learn-more/road-to-mainnet)
+➪ Canopy is an Ethereum-RPC compatible L1, so it can plug into existing Ethereum exchange, wallet, and indexer tooling for native transfers,
+  including MetaMask. Simply use the `/v1/eth` endpoint as a custom Ethereum rpc [eth-spec](./fsm/ethereum.md)
+
+## RPC
+
+➪ [Full RPC Specification](./cmd/rpc/README.md)
 
 ## Protocol Documentation
 
@@ -98,7 +103,6 @@ make test
 - PRs should be opened against the `development` branch.
 
 [![Pre-Release](https://img.shields.io/github/release-pre/canopy-network/canopy.svg)](https://github.com/canopy-network/canopy/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/canopy-network/canopy)](https://goreportcard.com/report/github.com/canopy-network/canopy)
 [![Contributors](https://img.shields.io/github/contributors/canopy-network/canopy.svg)](https://github.com/canopy-network/canopy/pulse)
 [![Last Commit](https://img.shields.io/github/last-commit/canopy-network/canopy.svg)](https://github.com/canopy-network/canopy/pulse)
 

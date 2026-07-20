@@ -335,8 +335,12 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, x, y *uin
 	if *x == 0 || *y == 0 {
 		return nil, ErrInvalidLiquidityPool()
 	}
-	// for each order
-	for _, order := range sorted {
+	// for each order (pseudorandomly ordered above so the settlement cap selects fairly)
+	for i, order := range sorted {
+		// per-block settlement cap: remaining orders keep a zero receipt and get refunded on the origin chain
+		if i >= lib.MaxOrdersSettledPerBlock {
+			break
+		}
 		// set up 'deltaX'
 		dX := order.AmountForSale
 		// 'deltaY' = (dX * y) / (x + dX)
@@ -496,22 +500,70 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	if err != nil {
 		return err
 	}
-	// define variables
-	var totalDeposit, distributed uint64
 	// x = the initial 'deposit' pool balance
 	// y = the 'counter' pool balance
 	// L = initial pool points
 	L := p.TotalPoolPoints
-	// sum all deposits
+	// sum all deposits for the invariant guard below
+	var rawTotalDeposit uint64
 	for _, deposit := range batch.Deposits {
+		var overflow bool
+		rawTotalDeposit, overflow = lib.AddUint64(rawTotalDeposit, deposit.Amount)
+		if overflow {
+			return ErrInvalidLiquidityPool()
+		}
+	}
+	// nothing to add or failed invariant check
+	if rawTotalDeposit == 0 || *x == 0 || *y == 0 {
+		return nil
+	}
+	// PASS 1: enforce the LP holder cap per-deposit. Remote batches skip the enqueue-time cap check, so
+	// an at-cap deposit from a brand-new LP is refunded/failed individually here instead of erroring the
+	// whole batch (which would brick the chain: the batch is re-served every block and can never rotate).
+	accepted := make([]bool, len(batch.Deposits))
+	seenNewHolders := make(map[string]struct{})
+	projectedHolders := len(p.Points)
+	var totalDeposit uint64
+	for i, deposit := range batch.Deposits {
+		// a zero-amount deposit can't create a holder, so it never counts against the cap
+		isNewHolder := false
+		if deposit.Amount > 0 {
+			if _, e := p.GetPointsFor(deposit.Address); e != nil && e.Code() == lib.CodePointHolderNotFound {
+				if _, seen := seenNewHolders[string(deposit.Address)]; !seen {
+					isNewHolder = true
+				}
+			}
+		}
+		// new LP at capacity: refund (local side) and skip its points
+		if isNewHolder && projectedHolders >= lib.MaxLiquidityProviders {
+			if local {
+				// return the escrowed funds to the depositor
+				if err = s.PoolSub(chainId+HoldingPoolAddend, deposit.Amount); err != nil {
+					return err
+				}
+				if err = s.AccountAdd(crypto.NewAddress(deposit.Address), deposit.Amount); err != nil {
+					return err
+				}
+			}
+			// emit a failed (zero-share) deposit event
+			if err = s.EventDexLiquidityDeposit(deposit.Address, deposit.OrderId, deposit.Amount, 0, chainId, local); err != nil {
+				return err
+			}
+			continue
+		}
+		if isNewHolder {
+			seenNewHolders[string(deposit.Address)] = struct{}{}
+			projectedHolders++
+		}
+		accepted[i] = true
 		var overflow bool
 		totalDeposit, overflow = lib.AddUint64(totalDeposit, deposit.Amount)
 		if overflow {
 			return ErrInvalidLiquidityPool()
 		}
 	}
-	// nothing to add or failed invariant check
-	if totalDeposit == 0 || *x == 0 || *y == 0 {
+	// all deposits refunded/skipped - pool object untouched, nothing to persist
+	if totalDeposit == 0 {
 		return nil
 	}
 	// if no liq points yet assigned - initialize to 'dead' address
@@ -530,6 +582,7 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	if oldK == 0 {
 		return ErrInvalidLiquidityPool()
 	}
+	// only accepted deposits enter the reserves
 	xAfterTotalDeposit, overflow := lib.AddUint64(*x, totalDeposit)
 	if overflow {
 		return ErrInvalidLiquidityPool()
@@ -538,20 +591,18 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	if newK < oldK {
 		return ErrInvalidLiquidityPool()
 	}
-	// totalDL is calculated as if all deposits is just 1 big deposit
+	// totalDL is calculated as if all accepted deposits are just 1 big deposit
 	totalDL := lib.SafeMulDiv(L, newK-oldK, oldK)
-	// distribute the points
-	for _, deposit := range batch.Deposits {
+	// PASS 2: distribute points for the accepted deposits
+	var distributed uint64
+	for i, deposit := range batch.Deposits {
+		if !accepted[i] {
+			continue
+		}
 		// calculate pro-rate share for this particular deposit
 		share := lib.SafeMulDiv(totalDL, deposit.Amount, totalDeposit)
 		// update the distributed counter
 		distributed += share
-		// enforce LP holder cap at execution time too (remote batches bypass local enqueue checks)
-		if share > 0 {
-			if _, e := p.GetPointsFor(deposit.Address); e != nil && e.Code() == lib.CodePointHolderNotFound && len(p.Points) >= lib.MaxLiquidityProviders {
-				return ErrInvalidLiquidityPool()
-			}
-		}
 		// add points to pool
 		if err = p.AddPoints(deposit.Address, share); err != nil {
 			return err
