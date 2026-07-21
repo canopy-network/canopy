@@ -251,7 +251,10 @@ func (c *Contract) DeliverMessageBorrow(msg *MessageBorrow, fee uint64) *PluginD
 	if !safeOk {
 		return &PluginDeliverResponse{Error: ErrInt64CastOverflow("borrow.BorrowAmount", msg.BorrowAmount)}
 	}
-	if dErr := applyDebtDelta(market, msg.MarketId, borrowDelta); dErr != nil {
+	// [UPDATED] applyDebtDelta now returns (clampedFrom, pErr) -- the
+	// increase branch never clamps, so clampedFrom is always 0 here and
+	// is intentionally discarded.
+	if _, dErr := applyDebtDelta(market, msg.MarketId, borrowDelta); dErr != nil {
 		return &PluginDeliverResponse{Error: dErr}
 	}
 

@@ -1,6 +1,10 @@
 package contract
 
-import "math/big"
+import (
+	"math/big"
+
+	"google.golang.org/protobuf/types/known/anypb"
+)
 
 // CheckMessageRepay statelessly validates a 'repay' message.
 func (c *Contract) CheckMessageRepay(msg *MessageRepay) *PluginCheckResponse {
@@ -175,13 +179,34 @@ func (c *Contract) DeliverMessageRepay(msg *MessageRepay, fee uint64) *PluginDel
 	// delta < 0 branch implements -- this is not new underflow logic, only
 	// its relocation into the one function every total_borrowed mutation
 	// (borrow, repay, liquidation) is meant to share.
+	var events []*Event
 	if actualRepaid > 0 {
 		repaidDelta, safeOk := SafeInt64FromUint64(actualRepaid)
 		if !safeOk {
 			return &PluginDeliverResponse{Error: ErrInt64CastOverflow("repay.actualRepaid", actualRepaid)}
 		}
-		if dErr := applyDebtDelta(market, msg.MarketId, -repaidDelta); dErr != nil {
+		clampedFrom, dErr := applyDebtDelta(market, msg.MarketId, -repaidDelta)
+		if dErr != nil {
 			return &PluginDeliverResponse{Error: dErr}
+		}
+		if clampedFrom > 0 {
+			// [NEW] applyDebtDelta's decrement branch clamped TotalBorrowed to
+			// zero -- emit the dust-clamp event with the real pre-clamp value,
+			// mirroring withdraw.go's H4 fix for total_supplied.
+			payload := &EventTotalBorrowedDustClamp{
+				MarketId:       msg.MarketId,
+				Source:         "repay",
+				DecreaseAmount: actualRepaid,
+				PreClampValue:  clampedFrom,
+			}
+			anyMsg, aErr := anypb.New(payload)
+			if aErr != nil {
+				return &PluginDeliverResponse{Error: ErrMarshal(aErr)}
+			}
+			events = append(events, &Event{
+				EventType: "total_borrowed_dust_clamp",
+				Msg:       &Event_Custom{Custom: &EventCustom{Msg: anyMsg}},
+			})
 		}
 
 		// [CUSTODY FIX] Commit the account debit (always) and pool credit
@@ -269,5 +294,5 @@ func (c *Contract) DeliverMessageRepay(msg *MessageRepay, fee uint64) *PluginDel
 
 	_ = fee
 
-	return &PluginDeliverResponse{}
+	return &PluginDeliverResponse{Events: events}
 }

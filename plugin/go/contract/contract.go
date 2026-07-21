@@ -58,6 +58,7 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.EventInsolventMarketValueRecovered",
 		"type.googleapis.com/types.EventTotalSuppliedDustClamp",
 		"type.googleapis.com/types.EventTotalSharesOutstandingDustClamp",
+		"type.googleapis.com/types.EventTotalBorrowedDustClamp",
 		"type.googleapis.com/types.EventLayer4PendingCountWarning",
 		"type.googleapis.com/types.EventLayer4PendingBadDebtTotalSaturated",
 		"type.googleapis.com/types.EventLayer4PendingCountUnderflow",

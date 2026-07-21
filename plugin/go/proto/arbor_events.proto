@@ -47,6 +47,22 @@ message EventTotalSharesOutstandingDustClamp {
   uint64 pre_clamp_value = 3;     // [H4] the amount actually clamped away
 }
 
+// EventTotalBorrowedDustClamp fires when applyDebtDelta's decrement branch
+// clamps market.TotalBorrowed to zero because the decrease amount (from
+// repay or liquidation) was >= the current aggregate. Mirrors
+// EventTotalSuppliedDustClamp's fix (ARCM v3.11.1 Section III.6 / AYIS
+// Section 4.4) for the identical failure class on the borrower-side
+// aggregate: without this event, the clamp is silent and the resulting
+// total_borrowed == 0 (while a position may still show nonzero
+// debtPrincipal, per ARCM Invariant I3's drift tolerance) is
+// indistinguishable from a market with genuinely no outstanding debt.
+message EventTotalBorrowedDustClamp {
+  string market_id = 1;
+  string source = 2;              // "repay" | "liquidation"
+  uint64 decrease_amount = 3;     // the delta that triggered the clamp
+  uint64 pre_clamp_value = 4;     // the amount actually clamped away
+}
+
 // ─────────────────────────────────────────────
 // Layer 4 (bad-debt socialization) events (ARCM §9.2b, §9.2, AYIS §5.4.3)
 // ─────────────────────────────────────────────

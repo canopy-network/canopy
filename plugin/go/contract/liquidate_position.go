@@ -1,6 +1,10 @@
 package contract
 
-import "math/big"
+import (
+	"math/big"
+
+	"google.golang.org/protobuf/types/known/anypb"
+)
 
 // CheckMessageLiquidatePosition statelessly validates a 'liquidate_position'
 // message. Market/position existence, HF eligibility, close-factor cap, and
@@ -274,13 +278,34 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 	}
 	pos.BorrowIndexAtOpen = bIndexEncoded
 
+	var events []*Event
 	// Step 7 -- ARCM Principle 9. Single mandatory write path for total_borrowed.
 	repaidDelta, safeOk := SafeInt64FromUint64(msg.RepayAmount)
 	if !safeOk {
 		return &PluginDeliverResponse{Error: ErrInt64CastOverflow("liquidate.repayAmount", msg.RepayAmount)}
 	}
-	if dErr := applyDebtDelta(market, msg.MarketId, -repaidDelta); dErr != nil {
+	clampedFrom, dErr := applyDebtDelta(market, msg.MarketId, -repaidDelta)
+	if dErr != nil {
 		return &PluginDeliverResponse{Error: dErr}
+	}
+	if clampedFrom > 0 {
+		// [NEW] applyDebtDelta's decrement branch clamped TotalBorrowed to
+		// zero -- emit the dust-clamp event with the real pre-clamp value,
+		// mirroring withdraw.go's H4 fix for total_supplied.
+		payload := &EventTotalBorrowedDustClamp{
+			MarketId:       msg.MarketId,
+			Source:         "liquidation",
+			DecreaseAmount: msg.RepayAmount,
+			PreClampValue:  clampedFrom,
+		}
+		anyMsg, aErr := anypb.New(payload)
+		if aErr != nil {
+			return &PluginDeliverResponse{Error: ErrMarshal(aErr)}
+		}
+		events = append(events, &Event{
+			EventType: "total_borrowed_dust_clamp",
+			Msg:       &Event_Custom{Custom: &EventCustom{Msg: anyMsg}},
+		})
 	}
 
 	if sErr := SaveMarket(c, msg.MarketId, market); sErr != nil {
@@ -327,5 +352,5 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 
 	_ = fee
 	_ = borrowerAcctKey
-	return &PluginDeliverResponse{}
+	return &PluginDeliverResponse{Events: events}
 }

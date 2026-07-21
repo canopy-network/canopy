@@ -38,11 +38,20 @@ return int64(u), true
 // caller is responsible for the actual SaveMarket() write, matching this
 // codebase's existing GetMarket/mutate/SaveMarket pattern rather than
 // this function owning its own state I/O.
-func applyDebtDelta(market *Market, marketID string, delta int64) *PluginError {
+// [NEW] clampedFrom is 0 unless the decrement branch below clamps
+// market.TotalBorrowed to zero on an oversized decrease -- in which case
+// it carries the PRE-CLAMP value, so the caller (repay.go, liquidate_position.go)
+// can emit EventTotalBorrowedDustClamp with the real amount clamped away,
+// mirroring EventTotalSuppliedDustClamp's fix (ARCM v3.11.1 Section III.6)
+// for the identical silent-clamp failure class. This adds one named return
+// value; the function's existing *PluginError-only error contract for
+// callers that don't care about the clamp (borrow.go's increase branch
+// never clamps) is unchanged -- they can simply discard it with _.
+func applyDebtDelta(market *Market, marketID string, delta int64) (clampedFrom uint64, pErr *PluginError) {
 if delta > 0 {
 increase := uint64(delta)
 if increase > (^uint64(0) - market.TotalBorrowed) {
-return ErrTotalBorrowedOverflowCentralized(marketID, market.TotalBorrowed, increase)
+return 0, ErrTotalBorrowedOverflowCentralized(marketID, market.TotalBorrowed, increase)
 }
 market.TotalBorrowed += increase
 } else if delta < 0 {
@@ -55,11 +64,14 @@ market.TotalBorrowed += increase
 // place).
 decrease := uint64(-delta)
 if decrease >= market.TotalBorrowed {
+// [NEW] Capture the pre-clamp value BEFORE zeroing it, same
+// discipline as H4's fix for total_supplied/total_shares_outstanding.
+clampedFrom = market.TotalBorrowed
 market.TotalBorrowed = 0
 } else {
 market.TotalBorrowed -= decrease
 }
 }
 // delta == 0: no-op, matches ARCM's own pseudocode (no else branch for zero).
-return nil
+return clampedFrom, nil
 }
