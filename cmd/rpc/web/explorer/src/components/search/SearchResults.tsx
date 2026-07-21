@@ -30,7 +30,139 @@ const formatAccountBalance = (amount: number | undefined) =>
         maximumFractionDigits: 2,
     })
 
-const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
+const copyToClipboard = (text: string) => {
+    if (text && text !== 'N/A') {
+        navigator.clipboard.writeText(text)
+        toast.success('Copied to clipboard')
+    }
+}
+
+// Address card with live balance/tx counts. Kept at module scope (stable
+// identity) so slot-keyed cards update in place instead of remounting/blinking.
+const AddressResult: React.FC<{ address: string; initialData?: any }> = ({ address, initialData }) => {
+    const [accountData, setAccountData] = useState<any>(null)
+    const [transactions, setTransactions] = useState<{ sent: any[]; received: any[] }>({ sent: [], received: [] })
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        // Ignore a stale response if `address` changes before it resolves.
+        let cancelled = false
+
+        const fetchAddressData = async () => {
+            if (!address) return
+
+            setLoading(true)
+            try {
+                // Get account balance
+                const account = await Account(0, address)
+                if (cancelled) return
+                setAccountData(account)
+
+                // Get transactions (sent and received)
+                const [sentTxs, recTxs] = await Promise.all([
+                    TransactionsBySender(1, address).catch(() => ({ results: [] })),
+                    TransactionsByRec(1, address).catch(() => ({ results: [] }))
+                ])
+                if (cancelled) return
+
+                setTransactions({
+                    sent: sentTxs?.results || sentTxs || [],
+                    received: recTxs?.results || recTxs || []
+                })
+            } catch (error) {
+                if (!cancelled) console.error('Error fetching address data:', error)
+            } finally {
+                if (!cancelled) setLoading(false)
+            }
+        }
+
+        fetchAddressData()
+
+        return () => { cancelled = true }
+    }, [address])
+
+    const balance = formatAccountBalance(accountData?.amount ?? initialData?.amount)
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-card border border-white/5 rounded-xl p-4 md:p-6 hover:border-white/10 transition-colors"
+        >
+            <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                    <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-0 mb-3'>
+                        <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 bg-green-700/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                <i className="fa-solid fa-wallet text-primary text-lg"></i>
+                            </div>
+                            <span className="text-white text-lg">Address</span>
+                        </div>
+                        <div className={GREEN_BADGE_CLASS}>
+                            Address
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                        <div className="flex items-start flex-col">
+                            <span className="text-gray-400 text-sm mb-1">Address:</span>
+                            <Link
+                                to={`/account/${address}`}
+                                className="text-white font-mono text-sm sm:text-base md:text-lg break-all hover:text-primary hover:underline transition-colors w-full"
+                            >
+                                {address || 'N/A'}
+                            </Link>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-2 mt-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                            <span className="text-gray-400 text-sm">Balance:</span>
+                            {loading ? (
+                                <span className="text-white text-sm">Loading...</span>
+                            ) : (
+                                <span className="text-white text-sm">{balance} CNPY</span>
+                            )}
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                            <span className="text-gray-400 text-sm">Sent Transactions:</span>
+                            {loading ? (
+                                <span className="text-white text-sm">Loading...</span>
+                            ) : (
+                                <span className="text-white text-sm">{transactions.sent?.length || 0}</span>
+                            )}
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 sm:col-span-2 lg:col-span-1">
+                            <span className="text-gray-400 text-sm">Received Transactions:</span>
+                            {loading ? (
+                                <span className="text-white text-sm">Loading...</span>
+                            ) : (
+                                <span className="text-white text-sm">{transactions.received?.length || 0}</span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                        <Link
+                            to={`/account/${address}`}
+                            className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium transition-colors text-center sm:text-left"
+                        >
+                            <i className="fa-solid fa-eye text-white mr-2"></i> View Details
+                        </Link>
+                        <button
+                            onClick={() => copyToClipboard(address)}
+                            className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
+                        >
+                            <i className="fa-solid fa-copy text-white mr-2"></i> Copy Address
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </motion.div>
+    )
+}
+
+const SearchResults: React.FC<SearchResultsProps> = ({ results, searchTerm, filters }) => {
     // Sync activeTab with filter.type if filter is set
     const initialTab = filters?.type !== 'all' ? filters.type : 'all'
     const [activeTab, setActiveTab] = useState(initialTab)
@@ -189,13 +321,6 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
         return `${hash.slice(0, length)}...${hash.slice(-length)}`
     }
 
-    const copyToClipboard = (text: string) => {
-        if (text && text !== 'N/A') {
-            navigator.clipboard.writeText(text)
-            toast.success('Copied to clipboard')
-        }
-    }
-
     const handlePageChange = (page: number) => {
         setCurrentPage(page)
     }
@@ -218,129 +343,20 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
         setCurrentPage(1)
     }, [activeTab])
 
-    // Component to render address with balance and transactions
-    const AddressResult: React.FC<{ address: string; initialData?: any }> = ({ address, initialData }) => {
-        const [accountData, setAccountData] = useState<any>(null)
-        const [transactions, setTransactions] = useState<{ sent: any[]; received: any[] }>({ sent: [], received: [] })
-        const [loading, setLoading] = useState(true)
+    // New term resets pagination (panel stays mounted, so we do this manually).
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [searchTerm])
 
-        useEffect(() => {
-            const fetchAddressData = async () => {
-                if (!address) return
-
-                setLoading(true)
-                try {
-                    // Get account balance
-                    const account = await Account(0, address)
-                    setAccountData(account)
-
-                    // Get transactions (sent and received)
-                    const [sentTxs, recTxs] = await Promise.all([
-                        TransactionsBySender(1, address).catch(() => ({ results: [] })),
-                        TransactionsByRec(1, address).catch(() => ({ results: [] }))
-                    ])
-
-                    setTransactions({
-                        sent: sentTxs?.results || sentTxs || [],
-                        received: recTxs?.results || recTxs || []
-                    })
-                } catch (error) {
-                    console.error('Error fetching address data:', error)
-                } finally {
-                    setLoading(false)
-                }
-            }
-
-            fetchAddressData()
-        }, [address])
-
-        const balance = formatAccountBalance(accountData?.amount ?? initialData?.amount)
-
-        return (
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-white/5 rounded-xl p-4 md:p-6 hover:border-white/10 transition-colors"
-            >
-                <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                        <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-0 mb-3'>
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 bg-green-700/30 rounded-full flex items-center justify-center flex-shrink-0">
-                                    <i className="fa-solid fa-wallet text-primary text-lg"></i>
-                                </div>
-                                <span className="text-white text-lg">Address</span>
-                            </div>
-                            <div className={GREEN_BADGE_CLASS}>
-                                Address
-                            </div>
-                        </div>
-
-                        <div className="space-y-2 mb-4">
-                            <div className="flex items-start flex-col">
-                                <span className="text-gray-400 text-sm mb-1">Address:</span>
-                                <Link
-                                    to={`/account/${address}`}
-                                    className="text-white font-mono text-sm sm:text-base md:text-lg break-all hover:text-primary hover:underline transition-colors w-full"
-                                >
-                                    {address || 'N/A'}
-                                </Link>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-2 mt-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                <span className="text-gray-400 text-sm">Balance:</span>
-                                {loading ? (
-                                    <span className="text-white text-sm">Loading...</span>
-                                ) : (
-                                    <span className="text-white text-sm">{balance} CNPY</span>
-                                )}
-                            </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                <span className="text-gray-400 text-sm">Sent Transactions:</span>
-                                {loading ? (
-                                    <span className="text-white text-sm">Loading...</span>
-                                ) : (
-                                    <span className="text-white text-sm">{transactions.sent?.length || 0}</span>
-                                )}
-                            </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 sm:col-span-2 lg:col-span-1">
-                                <span className="text-gray-400 text-sm">Received Transactions:</span>
-                                {loading ? (
-                                    <span className="text-white text-sm">Loading...</span>
-                                ) : (
-                                    <span className="text-white text-sm">{transactions.received?.length || 0}</span>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-2 mt-4">
-                            <Link
-                                to={`/account/${address}`}
-                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium transition-colors text-center sm:text-left"
-                            >
-                                <i className="fa-solid fa-eye text-white mr-2"></i> View Details
-                            </Link>
-                            <button
-                                onClick={() => copyToClipboard(address)}
-                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
-                            >
-                                <i className="fa-solid fa-copy text-white mr-2"></i> Copy Address
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </motion.div>
-        )
-    }
-
-    const renderResult = (item: any, type: string) => {
+    const renderResult = (item: any, type: string, index: number) => {
         if (!item) return null
+
+        // Slot-based key so cards update in place across searches (no blink).
+        const slotKey = `result-${index}`
 
         // If it's an address, use the AddressResult component
         if (type === 'address' && item.address) {
-            return <AddressResult key={item.address} address={item.address} initialData={item} />
+            return <AddressResult key={slotKey} address={item.address} initialData={item} />
         }
 
         // settings for each type
@@ -447,7 +463,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
 
         return (
             <motion.div
-                key={config.copyValue}
+                key={slotKey}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={`bg-card border ${config.borderColor} rounded-xl p-4 md:p-6 ${config.hoverColor} transition-colors`}
@@ -742,8 +758,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                             exit={{ opacity: 0 }}
                             className="space-y-4"
                         >
-                            {filteredResults.map((result: any) =>
-                                renderResult(result, result.resultType || activeTab)
+                            {filteredResults.map((result: any, index: number) =>
+                                renderResult(result, result.resultType || activeTab, index)
                             )}
                         </motion.div>
                     ) : (

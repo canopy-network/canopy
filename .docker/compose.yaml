@@ -41,34 +41,35 @@ services:
     command: ["start"]
     volumes:
       - ./volumes/node_2:/root/.canopy
-#    deploy:
-#      resources:
-#        limits:
-#          memory: 2G
-#          cpus: "1.0"
-#  node-3:
-#    container_name: node-3
-#    build:
-#      context: ..
-#      dockerfile: .docker/Dockerfile
-#      args:
-#        BUILD_PATH: cmd/cli
-#    ports:
-#      - 30000:30000 # Wallet
-#      - 30001:30001 # Explorer
-#      - 30002:30002 # RPC
-#      - 30003:30003 # Admin RPC
-#      - 9003:9003   # TCP P2P
-#    networks:
-#      - canopy
-#    command: ["start"]
-#    volumes:
-#      - ./volumes/node_3:/root/.canopy
-#    deploy:
-#      resources:
-#        limits:
-#          memory: 2G
-#          cpus: "1.0"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+
+  # node-3:
+  #   container_name: node-3
+  #   build:
+  #     context: ..
+  #     dockerfile: .docker/Dockerfile
+  #     args:
+  #       BUILD_PATH: cmd/cli
+  #   ports:
+  #     - 30000:30000 # Wallet
+  #     - 30001:30001 # Explorer
+  #     - 30002:30002 # RPC
+  #     - 30003:30003 # Admin RPC
+  #     - 9003:9003 # TCP P2P
+  #   networks:
+  #     - canopy
+  #   command: ["start"]
+  #   volumes:
+  #     - ./volumes/node_3:/root/.canopy
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 2G
+  #         cpus: "1.0"
 
 networks:
   canopy:

@@ -94,6 +94,10 @@ type BlockMetrics struct {
 	LargestTxSize       prometheus.Gauge     // what is the largest tx size in a block?
 	BlockVDFIterations  prometheus.Gauge     // how many vdf iterations are included in the block?
 	NonSignerPercent    prometheus.Gauge     // what percent of the voting power were non signers
+	CertResultsRewards  prometheus.Histogram // how long does reward recipient calculation take?
+	CertResultsSwaps    prometheus.Histogram // how long does certificate swap handling take?
+	CertResultsDex      prometheus.Histogram // how long does certificate dex handling take?
+	CertResultsFinalize prometheus.Histogram // how long do slash/checkpoint/retired finalizers take?
 }
 
 // PeerMetrics represents the telemetry for the P2P module
@@ -152,16 +156,35 @@ type BFTMetrics struct {
 
 // FSMMetrics represents the telemetry of the FSM module for the node's address
 type FSMMetrics struct {
-	ValidatorStatus            *prometheus.GaugeVec // what's the status of this validator?
-	ValidatorType              *prometheus.GaugeVec // what's the type of this validator?
-	ValidatorCompounding       *prometheus.GaugeVec // is this validator compounding?
-	ValidatorStakeAmount       *prometheus.GaugeVec // what's the stake amount of this validator
-	ValidatorBlockProducer     *prometheus.GaugeVec // was this validator a block producer? // TODO duplicate of canopy_proposer_count
-	ValidatorNonSigner         *prometheus.GaugeVec // was this validator a non signer?
-	ValidatorNonSignerCount    *prometheus.GaugeVec // was any validator a non signer?
-	ValidatorDoubleSigner      *prometheus.GaugeVec // was this validator a double signer?
-	ValidatorDoubleSignerCount *prometheus.GaugeVec // was any validator a double signer?
-	ValidatorCount             *prometheus.GaugeVec // how many validators are there?
+	ApplyBlockBeginTime                      prometheus.Histogram // how long does BeginBlock() take inside ApplyBlock()?
+	ApplyBlockTransactionsTime               prometheus.Histogram // how long does ApplyTransactions() take inside ApplyBlock()?
+	ApplyBlockEndTime                        prometheus.Histogram // how long does EndBlock() take inside ApplyBlock()?
+	ApplyBlockRootTime                       prometheus.Histogram // how long does the uncached ApplyBlock() state root step take?
+	LoadCommitteeStageTime                   *prometheus.HistogramVec
+	GetValidatorSetStageTime                 *prometheus.HistogramVec
+	HandleMessageCertificateResultsStageTime *prometheus.HistogramVec
+	HandleCertificateResultsStageTime        *prometheus.HistogramVec
+	ApplyTransactionStageTime                *prometheus.HistogramVec
+	ApplyTxsCheckTime                        prometheus.Histogram // how long does the first CheckTx pass in ApplyTransactions() take?
+	ApplyTxsBatchVerifyTime                  prometheus.Histogram // how long does batch signature verification in ApplyTransactions() take?
+	ApplyTxsExecuteTime                      prometheus.Histogram // how long does ApplyTransaction() execution in ApplyTransactions() take?
+	ApplyTxsFlushTime                        prometheus.Histogram // how long does nested txn flush time in ApplyTransactions() take?
+	CheckTxDecodeTime                        prometheus.Histogram // how long does tx decode/basic validation take?
+	CheckTxReplayLookupTime                  prometheus.Histogram // how long does the indexed tx-hash lookup take in CheckReplay()?
+	CheckTxReplayTime                        prometheus.Histogram // how long does replay validation take?
+	CheckTxMessageTime                       prometheus.Histogram // how long does message validation/fee/signer resolution take?
+	CheckTxSignatureTime                     prometheus.Histogram // how long does signature validation take?
+	StateOperationTime                       *prometheus.HistogramVec
+	ValidatorStatus                          *prometheus.GaugeVec // what's the status of this validator?
+	ValidatorType                            *prometheus.GaugeVec // what's the type of this validator?
+	ValidatorCompounding                     *prometheus.GaugeVec // is this validator compounding?
+	ValidatorStakeAmount                     *prometheus.GaugeVec // what's the stake amount of this validator
+	ValidatorBlockProducer                   *prometheus.GaugeVec // was this validator a block producer? // TODO duplicate of canopy_proposer_count
+	ValidatorNonSigner                       *prometheus.GaugeVec // was this validator a non signer?
+	ValidatorNonSignerCount                  *prometheus.GaugeVec // was any validator a non signer?
+	ValidatorDoubleSigner                    *prometheus.GaugeVec // was this validator a double signer?
+	ValidatorDoubleSignerCount               *prometheus.GaugeVec // was any validator a double signer?
+	ValidatorCount                           *prometheus.GaugeVec // how many validators are there?
 }
 
 // StoreMetrics represents the telemetry of the 'store' package
@@ -173,6 +196,13 @@ type StoreMetrics struct {
 	DBCommitTime         prometheus.Histogram // how long does the db commit take?
 	DBCommitEntries      prometheus.Gauge     // how many entries in the commit batch?
 	DBCommitSize         prometheus.Gauge     // how big is the commit batch?
+	RootTime             prometheus.Histogram // how long does uncached store.Root() take?
+	RootOps              prometheus.Histogram // how many pending state ops were applied to compute an uncached store.Root()?
+	RootNodeReads        prometheus.Histogram // how many SMT getNode() calls happened while computing an uncached store.Root()?
+	RootNodeCacheHits    prometheus.Histogram // how many SMT getNode() cache hits happened while computing an uncached store.Root()?
+	RootNodeCacheMisses  prometheus.Histogram // how many SMT getNode() cache misses happened while computing an uncached store.Root()?
+	RootTraverseSteps    prometheus.Histogram // how many SMT traversal steps happened while computing an uncached store.Root()?
+	RootRehashes         prometheus.Histogram // how many parent rehash steps happened while computing an uncached store.Root()?
 	DBBackupTime         prometheus.Histogram // how long does the db backup take?
 	DBLSSCompactionTime  prometheus.Histogram // how long does the db LSS compaction take?
 	DBHSSCompactionTime  prometheus.Histogram // how long does the db HSS compaction take?
@@ -180,8 +210,11 @@ type StoreMetrics struct {
 
 // MempoolMetrics represents the telemetry of the memory pool of pending transactions
 type MempoolMetrics struct {
-	MempoolSize    prometheus.Gauge // how many bytes are in the mempool?
-	MempoolTxCount prometheus.Gauge // how many transactions are in the mempool?
+	MempoolSize             prometheus.Gauge     // how many bytes are in the mempool?
+	MempoolTxCount          prometheus.Gauge     // how many transactions are in the mempool?
+	ProposalBuildTime       prometheus.Histogram // how long does mempool proposal building take?
+	ProposalApplyBlockTime  prometheus.Histogram // how long does ApplyBlock() take during proposal building?
+	ProposalCertResultsTime prometheus.Histogram // how long does NewCertificateResults() take during proposal building?
 }
 
 // NewMetricsServer() creates a new telemetry server
@@ -255,6 +288,22 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			NonSignerPercent: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_block_non_signer_percentage",
 				Help: "The percent (%) of voting power that did not sign the last block",
+			}),
+			CertResultsRewards: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_block_cert_results_rewards_time",
+				Help: "Execution time of the reward recipient stage of NewCertificateResults",
+			}),
+			CertResultsSwaps: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_block_cert_results_swaps_time",
+				Help: "Execution time of the swap stage of NewCertificateResults",
+			}),
+			CertResultsDex: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_block_cert_results_dex_time",
+				Help: "Execution time of the dex stage of NewCertificateResults",
+			}),
+			CertResultsFinalize: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_block_cert_results_finalize_time",
+				Help: "Execution time of the slash/checkpoint/retired stages of NewCertificateResults",
 			}),
 		},
 		// PEER
@@ -426,6 +475,82 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 		},
 		// FSM
 		FSMMetrics: FSMMetrics{
+			ApplyBlockBeginTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_apply_block_begin_time",
+				Help: "Execution time of BeginBlock inside FSM ApplyBlock",
+			}),
+			ApplyBlockTransactionsTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_apply_block_transactions_time",
+				Help: "Execution time of ApplyTransactions inside FSM ApplyBlock",
+			}),
+			ApplyBlockEndTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_apply_block_end_time",
+				Help: "Execution time of EndBlock inside FSM ApplyBlock",
+			}),
+			ApplyBlockRootTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_apply_block_root_time",
+				Help: "Execution time of the uncached state root step inside FSM ApplyBlock",
+			}),
+			LoadCommitteeStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_fsm_load_committee_stage_time",
+				Help: "Execution time of LoadCommittee stages",
+			}, []string{"stage"}),
+			GetValidatorSetStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_fsm_get_validator_set_stage_time",
+				Help: "Execution time of getValidatorSet stages",
+			}, []string{"stage"}),
+			HandleMessageCertificateResultsStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_fsm_handle_message_certificate_results_stage_time",
+				Help: "Execution time of HandleMessageCertificateResults stages",
+			}, []string{"stage"}),
+			HandleCertificateResultsStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_fsm_handle_certificate_results_stage_time",
+				Help: "Execution time of HandleCertificateResults stages",
+			}, []string{"stage"}),
+			ApplyTransactionStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_fsm_apply_transaction_stage_time",
+				Help: "Execution time of ApplyTransaction stages by message type",
+			}, []string{"stage", "message_type"}),
+			ApplyTxsCheckTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_apply_transactions_check_time",
+				Help: "Execution time of the first CheckTx pass inside ApplyTransactions",
+			}),
+			ApplyTxsBatchVerifyTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_apply_transactions_batch_verify_time",
+				Help: "Execution time of batch signature verification inside ApplyTransactions",
+			}),
+			ApplyTxsExecuteTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_apply_transactions_execute_time",
+				Help: "Execution time of ApplyTransaction inside ApplyTransactions",
+			}),
+			ApplyTxsFlushTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_apply_transactions_flush_time",
+				Help: "Execution time of nested txn flushes inside ApplyTransactions",
+			}),
+			CheckTxDecodeTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_check_tx_decode_time",
+				Help: "Execution time of tx decode/basic checks in CheckTx",
+			}),
+			CheckTxReplayLookupTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_check_tx_replay_lookup_time",
+				Help: "Execution time of the tx-hash index lookup in CheckReplay",
+			}),
+			CheckTxReplayTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_check_tx_replay_time",
+				Help: "Execution time of replay validation in CheckTx",
+			}),
+			CheckTxMessageTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_check_tx_message_time",
+				Help: "Execution time of message validation, fee checks, and signer resolution in CheckTx",
+			}),
+			CheckTxSignatureTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_fsm_check_tx_signature_time",
+				Help: "Execution time of signature validation in CheckTx",
+			}),
+			StateOperationTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_fsm_state_operation_time",
+				Help: "Execution time of hot FSM state operations",
+			}, []string{"operation"}),
 			ValidatorStatus: promauto.NewGaugeVec(prometheus.GaugeOpts{
 				Name: "canopy_validator_status",
 				Help: "Validator status (0: Unstaked, 1: Staked, 2: Unstaking, 3: Paused)",
@@ -497,6 +622,34 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_store_commit_size",
 				Help: "Number of bytes in the commit batch",
 			}),
+			RootTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_root_time",
+				Help: "Execution time of uncached store.Root()",
+			}),
+			RootOps: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_root_ops",
+				Help: "Pending state operation count used to compute uncached store.Root()",
+			}),
+			RootNodeReads: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_root_node_reads",
+				Help: "SMT getNode() calls while computing uncached store.Root()",
+			}),
+			RootNodeCacheHits: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_root_node_cache_hits",
+				Help: "SMT getNode() cache hits while computing uncached store.Root()",
+			}),
+			RootNodeCacheMisses: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_root_node_cache_misses",
+				Help: "SMT getNode() cache misses while computing uncached store.Root()",
+			}),
+			RootTraverseSteps: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_root_traverse_steps",
+				Help: "SMT traversal steps while computing uncached store.Root()",
+			}),
+			RootRehashes: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_store_root_rehashes",
+				Help: "SMT parent rehash steps while computing uncached store.Root()",
+			}),
 			DBBackupTime: promauto.NewHistogram(prometheus.HistogramOpts{
 				Name: "canopy_store_backup_time",
 				Help: "Execution time of the database backup",
@@ -519,6 +672,18 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			MempoolTxCount: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_mempool_tx_count",
 				Help: "Count of transactions in the transaction memory pool",
+			}),
+			ProposalBuildTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_mempool_proposal_build_time",
+				Help: "Execution time of CheckMempool proposal building",
+			}),
+			ProposalApplyBlockTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_mempool_proposal_apply_block_time",
+				Help: "Execution time of ApplyBlock during CheckMempool proposal building",
+			}),
+			ProposalCertResultsTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_mempool_proposal_cert_results_time",
+				Help: "Execution time of NewCertificateResults during CheckMempool proposal building",
 			}),
 		},
 	}
@@ -753,6 +918,38 @@ func (m *Metrics) UpdateStoreJobMetrics(LSScompactionTime, HSSCompactionTime, ba
 		// update the backup time metric
 		m.DBBackupTime.Observe(backupTime.Seconds())
 	}
+}
+
+// UpdateStoreRootTime() updates the time it took to compute an uncached store root.
+func (m *Metrics) UpdateStoreRootTime(startTime time.Time) {
+	// exit if empty
+	if m == nil || startTime.IsZero() {
+		return
+	}
+	m.RootTime.Observe(time.Since(startTime).Seconds())
+}
+
+// UpdateStoreRootStats() updates counters collected during an uncached store.Root() build.
+func (m *Metrics) UpdateStoreRootStats(ops, nodeReads, cacheHits, cacheMisses, traverseSteps, rehashes int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.RootOps.Observe(float64(ops))
+	m.RootNodeReads.Observe(float64(nodeReads))
+	m.RootNodeCacheHits.Observe(float64(cacheHits))
+	m.RootNodeCacheMisses.Observe(float64(cacheMisses))
+	m.RootTraverseSteps.Observe(float64(traverseSteps))
+	m.RootRehashes.Observe(float64(rehashes))
+}
+
+// UpdateFSMApplyBlockRootTime() updates the time it took to compute an uncached state root during ApplyBlock().
+func (m *Metrics) UpdateFSMApplyBlockRootTime(startTime time.Time) {
+	// exit if empty
+	if m == nil || startTime.IsZero() {
+		return
+	}
+	m.ApplyBlockRootTime.Observe(time.Since(startTime).Seconds())
 }
 
 // UpdateBlockMetrics() updates the metrics about the last block

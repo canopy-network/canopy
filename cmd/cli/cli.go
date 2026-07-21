@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +29,22 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "canopy",
 	Short: "the canopy blockchain software",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
+		l = lib.NewLogger(lib.LoggerConfig{
+			Level:      config.GetLogLevel(),
+			Structured: config.Structured,
+			JSON:       config.JSON,
+		})
+		if rpcURLFlag != "" {
+			config.RPCUrl = rpcURLFlag
+		}
+		if adminURLFlag != "" {
+			config.AdminRPCUrl = adminURLFlag
+		}
+		client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
+		return nil
+	},
 }
 
 var versionCmd = &cobra.Command{
@@ -38,9 +55,32 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var newValidatorKeyCmd = &cobra.Command{
+	Use:   "new-validator-key",
+	Short: "Generate a new validator key (replaces current one if exists)",
+	// prevents the canopy root command to run and initialize directories
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		privateValKeyPath := filepath.Join(DataDir, lib.ValKeyPath)
+		if _, err := os.Stat(privateValKeyPath); err == nil {
+			if !confirm("Are you sure you want to replace the existing validator key?") {
+				log.Fatal("Aborting key replacement")
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			log.Fatalf("validator_key.json stat: %s", err.Error())
+		}
+		if err := WriteValidatorKeyToFile(DataDir, lib.NewDefaultLogger()); err != nil {
+			log.Fatalf("writing validator key: %s", err.Error())
+		}
+	},
+}
+
 var (
-	client, config, l     = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
-	DataDir, validatorKey = "", crypto.PrivateKeyI(nil)
+	client, config, l        = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
+	DataDir, validatorKey    = "", crypto.PrivateKeyI(nil)
+	rpcURLFlag, adminURLFlag string
 )
 
 func init() {
@@ -49,16 +89,12 @@ func init() {
 	rootCmd.AddCommand(queryCmd)
 	rootCmd.AddCommand(adminCmd)
 	rootCmd.AddCommand(autoCompleteCmd)
+	rootCmd.AddCommand(newValidatorKeyCmd)
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
-	l = lib.NewLogger(lib.LoggerConfig{
-		Level:      config.GetLogLevel(),
-		Structured: config.Structured,
-		JSON:       config.JSON,
-	})
-	client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
+	rootCmd.PersistentFlags().StringVar(&rpcURLFlag, "rpc-url", "", "override the RPC URL from config")
+	rootCmd.PersistentFlags().StringVar(&adminURLFlag, "admin-url", "", "override the admin RPC URL from config")
 }
 
 func Execute() {
@@ -132,7 +168,10 @@ func waitForKill() {
 
 func getFirstPassword(log lib.LoggerI) string {
 	// allow flag config to skip initial password
-	if pwd == "" {
+	if pwd != "" {
+		return pwd
+	}
+	for {
 		// get the password from the user
 		log.Infof("Enter password for your new private key:")
 		password, e := term.ReadPassword(int(os.Stdin.Fd()))
@@ -141,12 +180,10 @@ func getFirstPassword(log lib.LoggerI) string {
 		}
 		if password == nil {
 			log.Infof("Password cannot be empty")
-			return getFirstPassword(log)
+			continue
 		}
 		return string(password)
 	}
-
-	return pwd
 }
 
 // InitializeDataDirectory() populates the data directory with configuration and data files if missing
@@ -166,38 +203,9 @@ func InitializeDataDirectory(dataDirPath string, log lib.LoggerI) (c lib.Config,
 	// make the private key file if missing
 	privateValKeyPath := filepath.Join(dataDirPath, lib.ValKeyPath)
 	if _, err := os.Stat(privateValKeyPath); errors.Is(err, os.ErrNotExist) {
-		blsPrivateKey, _ := crypto.NewBLS12381PrivateKey()
-		log.Infof("Creating %s file", lib.ValKeyPath)
-		if err = crypto.PrivateKeyToFile(blsPrivateKey, privateValKeyPath); err != nil {
+		if err := WriteValidatorKeyToFile(dataDirPath, log); err != nil {
 			log.Fatal(err.Error())
 		}
-		pwd = getFirstPassword(log)
-		// allow flag config to skip initial nickname
-		if nick == "" {
-			// get nickname from the user
-			log.Infof("Enter nickname for your new private key:")
-			_, e := fmt.Scanln(&nick)
-			if e != nil {
-				log.Fatal(e.Error())
-			}
-		}
-		// load the keystore from file
-		k, e := crypto.NewKeystoreFromFile(dataDirPath)
-		if e != nil {
-			log.Fatal(e.Error())
-		}
-		// import the validator key
-		address, e := k.ImportRaw(blsPrivateKey.Bytes(), pwd, crypto.ImportRawOpts{
-			Nickname: nick,
-		})
-		if e != nil {
-			log.Fatal(e.Error())
-		}
-		// save keystore to the file
-		if e = k.SaveToFile(dataDirPath); e != nil {
-			log.Fatal(e.Error())
-		}
-		log.Infof("Imported validator key %s to keystore", address)
 	}
 	// make the proposals.json file if missing
 	if _, err := os.Stat(filepath.Join(dataDirPath, lib.ProposalsFilePath)); errors.Is(err, os.ErrNotExist) {
@@ -291,6 +299,51 @@ func WriteDefaultGenesisFile(validatorPrivateKey crypto.PrivateKeyI, genesisFile
 	if err := os.WriteFile(genesisFilePath, bz, 0777); err != nil {
 		panic(err)
 	}
+}
+
+func WriteValidatorKeyToFile(dataDirPath string, log lib.LoggerI) error {
+	privateValKeyPath := filepath.Join(dataDirPath, lib.ValKeyPath)
+	blsPrivateKey, _ := crypto.NewBLS12381PrivateKey()
+	log.Infof("Creating %s file", lib.ValKeyPath)
+	if err := crypto.PrivateKeyToFile(blsPrivateKey, privateValKeyPath); err != nil {
+		return err
+	}
+	pwd = getFirstPassword(log)
+	// allow flag config to skip initial nickname
+	if nick == "" {
+		// get nickname from the user
+		log.Infof("Enter nickname for your new private key:")
+		_, e := fmt.Scanln(&nick)
+		if e != nil {
+			return e
+		}
+	}
+	// load the keystore from file
+	k, e := crypto.NewKeystoreFromFile(dataDirPath)
+	if e != nil {
+		return e
+	}
+	// import the validator key
+	address, e := k.ImportRaw(blsPrivateKey.Bytes(), pwd, crypto.ImportRawOpts{
+		Nickname: nick,
+	})
+	if e != nil {
+		return e
+	}
+	// save keystore to the file
+	if e = k.SaveToFile(dataDirPath); e != nil {
+		return e
+	}
+	log.Infof("Imported validator key %s to keystore", address)
+	return nil
+}
+
+func confirm(prompt string) bool {
+	fmt.Printf("%s [y/N]: ", prompt)
+	reader := bufio.NewReader(os.Stdin)
+	resp, _ := reader.ReadString('\n')
+	resp = strings.ToLower(strings.TrimSpace(resp))
+	return resp == "y" || resp == "yes"
 }
 
 func writeToConsole(a any, err error) {

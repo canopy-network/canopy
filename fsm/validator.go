@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"math"
 	"slices"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -67,6 +68,39 @@ func (s *StateMachine) GetValidators() (result []*Validator, err lib.ErrorI) {
 	}
 	// exit
 	return
+}
+
+// getCurrentValidators() lazily loads the validator list for the FSM's current store view.
+// The returned slice may alias the shared historical validator cache, so callers must treat
+// the returned validators as read-only.
+func (s *StateMachine) getCurrentValidators() ([]*Validator, lib.ErrorI) {
+	// if cached locally, return immediately
+	if s.cache.liveValidators != nil {
+		return s.cache.liveValidators, nil
+	}
+	// otherwise, load the validator list from the current store view
+	validators, err := s.GetValidators()
+	if err != nil {
+		return nil, err
+	}
+	s.cache.liveValidators = validators
+	if s.cache.sharedValidatorSet != 0 && s.cache.sharedCache != nil {
+		// historical FSMs insert their height-scoped validator list into the shared rolling cache
+		s.cache.sharedCache.Lock()
+		if cached, ok := s.cache.sharedCache.sets[s.cache.sharedValidatorSet]; ok {
+			s.cache.liveValidators = cached
+		} else {
+			s.cache.sharedCache.sets[s.cache.sharedValidatorSet] = validators
+			s.cache.sharedCache.heights = append(s.cache.sharedCache.heights, s.cache.sharedValidatorSet)
+			if len(s.cache.sharedCache.heights) > 64 {
+				evict := s.cache.sharedCache.heights[0]
+				s.cache.sharedCache.heights = s.cache.sharedCache.heights[1:]
+				delete(s.cache.sharedCache.sets, evict)
+			}
+		}
+		s.cache.sharedCache.Unlock()
+	}
+	return s.cache.liveValidators, nil
 }
 
 // GetValidatorsPaginated() returns a page of filtered validators
@@ -431,8 +465,17 @@ func (s *StateMachine) GetAuthorizedSignersForValidator(address []byte) (signers
 
 // getValidatorSet() is a helper function to get a validator set ordered by stake to the maximum parameter
 func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.ValidatorSet, err lib.ErrorI) {
+	startTime := time.Now()
+	observeStage := func(stage string, stageStartTime time.Time) {
+		if s.Metrics != nil {
+			s.Metrics.GetValidatorSetStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+		}
+	}
+	defer observeStage("total", startTime)
 	// get the validator params
+	getParamsStartTime := time.Now()
 	p, err := s.GetParamsVal()
+	observeStage("get_params", getParamsStartTime)
 	if err != nil {
 		return
 	}
@@ -440,25 +483,14 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 	if delegate {
 		maxPerCommittee, delegateFilter = p.MaximumDelegatesPerCommittee, lib.FilterOption_MustBe
 	}
-	validators := make([]*Validator, 0)
-	// reverse iterator is slightly more efficient than forward iterator for large datasets
-	it, err := s.RevIterator(ValidatorPrefix())
+	iterateUnmarshalStartTime := time.Now()
+	validators, err := s.getCurrentValidators()
 	if err != nil {
 		return vs, err
 	}
-	// ensure memory cleanup
-	defer it.Close()
-	// for each item of the iterator
-	for ; it.Valid(); it.Next() {
-		// convert the bytes into a validator object reference
-		val, e := s.unmarshalValidator(it.Value())
-		if e != nil {
-			return vs, e
-		}
-		// add it to the list
-		validators = append(validators, val)
-	}
+	observeStage("iterate_unmarshal", iterateUnmarshalStartTime)
 	// filter out validators not part of the committee
+	filterStartTime := time.Now()
 	filtered := slices.Collect(func(yield func(*Validator) bool) {
 		for _, v := range validators {
 			// exclude validators not part of the committee
@@ -476,7 +508,9 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 			}
 		}
 	})
+	observeStage("filter", filterStartTime)
 	// sort by highest stake then address
+	sortStartTime := time.Now()
 	slices.SortFunc(filtered, func(a, b *Validator) int {
 		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
 		if result == 0 {
@@ -484,6 +518,7 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 		}
 		return result
 	})
+	observeStage("sort", sortStartTime)
 	// create a variable to hold the committee members
 	members := make([]*lib.ConsensusValidator, 0)
 	// determine slice size — if MaxCommitteeSize == 0, use all
@@ -492,6 +527,7 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 		limit = min(uint64(len(filtered)), maxPerCommittee)
 	}
 	// for each validator up to the limit
+	buildMembersStartTime := time.Now()
 	for _, v := range filtered[:limit] {
 		members = append(members, &lib.ConsensusValidator{
 			PublicKey:   v.PublicKey,
@@ -499,8 +535,12 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 			NetAddress:  v.NetAddress,
 		})
 	}
+	observeStage("build_members", buildMembersStartTime)
 	// convert list to a validator set (includes shared public key)
-	return lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members}, delegate)
+	newValidatorSetStartTime := time.Now()
+	vs, err = lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members}, delegate)
+	observeStage("new_validator_set", newValidatorSetStartTime)
+	return
 }
 
 // pubKeyBytesToAddress() is a convenience function that converts a public key to an address

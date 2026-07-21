@@ -42,6 +42,7 @@ message IndexerBlob {
   uint32 total_delegates_active = 20;
   uint32 total_delegates_paused = 21;
   uint32 total_delegates_unstaking = 22;
+  repeated bytes block_non_signers = 23;
 }
 
 // IndexerBlobs groups the current and previous indexer blobs.

@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -335,8 +336,17 @@ func (s *StateMachine) HandleMessageDAOTransfer(msg *MessageDAOTransfer) lib.Err
 
 // HandleMessageCertificateResults() is the proper handler for a `CertificateResults` message
 func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateResults) lib.ErrorI {
+	startTime := time.Now()
+	observeStage := func(stage string, stageStartTime time.Time) {
+		if s.Metrics != nil {
+			s.Metrics.HandleMessageCertificateResultsStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+		}
+	}
+	defer observeStage("total", startTime)
 	// load the root chain id from state
+	rootChainIdStartTime := time.Now()
 	rootChainId, err := s.GetRootChainId()
+	observeStage("get_root_chain_id", rootChainIdStartTime)
 	if err != nil {
 		return err
 	}
@@ -354,7 +364,9 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 	}
 	if committee == nil {
 		// otherwise, retrieve it from the store
+		loadCommitteeStartTime := time.Now()
 		valSet, err := s.LoadCommittee(chainId, msg.Qc.Header.RootHeight)
+		observeStage("load_committee", loadCommitteeStartTime)
 		if err != nil {
 			return err
 		}
@@ -362,7 +374,9 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 	}
 	// ensure it's a valid QC
 	// max block size is 0 here because there should not be a block attached to this QC
+	qcCheckStartTime := time.Now()
 	isPartialQC, err := msg.Qc.Check(*committee, 0, &lib.View{NetworkId: uint64(s.NetworkID), ChainId: chainId}, false)
+	observeStage("qc_check", qcCheckStartTime)
 	if err != nil {
 		return err
 	}
@@ -371,7 +385,10 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 		return lib.ErrNoMaj23()
 	}
 	// handle the certificate results
-	return s.HandleCertificateResults(msg.Qc, committee)
+	handleCertificateResultsStartTime := time.Now()
+	err = s.HandleCertificateResults(msg.Qc, committee)
+	observeStage("handle_certificate_results", handleCertificateResultsStartTime)
+	return err
 }
 
 // HandleMessageSubsidy() is the proper handler for a `Subsidy` message

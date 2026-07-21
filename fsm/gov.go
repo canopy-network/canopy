@@ -135,7 +135,7 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 		// prune checkpoints
 		storeI, ok := s.store.(lib.StoreI)
 		if !ok {
-			s.log.Errorf(ErrWrongStoreType().Error())
+			s.log.Error(ErrWrongStoreType().Error())
 		} else {
 			if err = storeI.DeleteCheckpointsForChain(params.Consensus.ResetCommittee); err != nil {
 				return err
@@ -574,7 +574,7 @@ func (s *StateMachine) LoadRootChainId(height uint64) (uint64, lib.ErrorI) {
 		return 0, err
 	}
 	// memory cleanup
-	if height != s.Height() {
+	if historicalFSM != s {
 		defer historicalFSM.Discard()
 	}
 	// return the root chain id at that height

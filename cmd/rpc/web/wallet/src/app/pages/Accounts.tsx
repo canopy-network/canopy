@@ -90,7 +90,7 @@ export const Accounts = () => {
 
   const getRealTotal = (address: string) => {
     const balance = balances.find(b => b.address === address);
-    const liquid = balance?.spendableAmount ?? balance?.amount ?? 0;
+    const liquid = balance?.amount ?? 0;
     const locked = balance?.lockedAmount ?? 0;
     const vested = balance?.vestedAmount ?? 0;
     const vestingAmount = balance?.vestingAmount ?? 0;
