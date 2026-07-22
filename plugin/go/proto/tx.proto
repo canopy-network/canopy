@@ -24,10 +24,8 @@ message Transaction {
   uint64 network_id = 8; // @gotags: json:"networkID"
   // chain_id: The identity of the committee the transaction is intended for
   uint64 chain_id = 9; // @gotags: json:"chainID"
-  // nonce: The sender's protocol replay-protection nonce
-  uint64 nonce = 10;
   // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
-  // NO CONFLICT STARTING AT FIELD = 25
+  // NO CONFLICT STARTING AT FIELD = 10
 }
 
 // MessageSend is a standard transfer transaction, taking tokens from the sender and transferring
@@ -37,14 +35,140 @@ message MessageSend {
   bytes from_address = 1; // @gotags: json:"fromAddress"
   // to_address: is the recipient of the funds
   bytes to_address = 2; // @gotags: json:"toAddress"
-  // amount: is the amount of tokens in micro-denomination (uCNPY)
+  // amount: is the amount of tokens in micro-denomination (uKNBT)
   uint64 amount = 3;
+}
+
+// =============================================================================
+// KnowBet - Betting Protocol Messages
+// =============================================================================
+
+// MessageBetCreate creates a new betting question.
+// The creator must stake a minimum of 100 KNBT (100,000,000 uknbt)
+// and pre-commit the answer as a SHA-256 hash for trustless reveal.
+message MessageBetCreate {
+  // creator_address: the address of the question creator (20 bytes)
+  bytes creator_address = 1; // @gotags: json:"creatorAddress"
+  // question_text: the betting question text (e.g. "BTC > $100k on 2026-12-31?")
+  string question_text = 2; // @gotags: json:"questionText"
+  // options: the possible answer choices (2-5 options)
+  repeated string options = 3;
+  // answer_hash: SHA-256 hash of the correct answer, hex-encoded
+  // The creator pre-commits the answer hash so they cannot change it later.
+  string answer_hash = 4; // @gotags: json:"answerHash"
+  // stake_amount: the amount locked by the creator as a good-faith stake (in uknbt)
+  uint64 stake_amount = 5; // @gotags: json:"stakeAmount"
+  // duration: the betting period in seconds before the question closes.
+  // After this period, no more bets can be placed.
+  int64 duration = 6;
+}
+
+// MessageBetPlace places a bet on a specific option of a question.
+message MessageBetPlace {
+  // participant_address: the address of the participant placing the bet (20 bytes)
+  bytes participant_address = 1; // @gotags: json:"participantAddress"
+  // question_id: the unique ID of the question to bet on
+  uint64 question_id = 2; // @gotags: json:"questionId"
+  // option_index: the index of the chosen option (0-based)
+  uint32 option_index = 3; // @gotags: json:"optionIndex"
+  // amount: the amount to bet (in uknbt, range 10-10000 KNBT)
+  uint64 amount = 4;
+}
+
+// MessageBetReveal reveals the answer to a question.
+// Only the question creator can reveal the answer.
+// The revealed answer is verified against the pre-committed SHA-256 hash.
+message MessageBetReveal {
+  // revealer_address: the address revealing the answer (must be the creator, 20 bytes)
+  bytes revealer_address = 1; // @gotags: json:"revealerAddress"
+  // question_id: the unique ID of the question
+  uint64 question_id = 2; // @gotags: json:"questionId"
+  // answer: the plaintext answer that matches one of the options
+  string answer = 3;
+}
+
+// MessageBetSettle settles a question after the answer has been revealed.
+// Distributes the prize pool: 80% to winners, 15% to question creator, 5% burned.
+// This can be called by anyone after the answer is revealed.
+message MessageBetSettle {
+  // question_id: the unique ID of the question to settle
+  uint64 question_id = 1; // @gotags: json:"questionId"
+}
+
+// MessageBetRefund triggers an automatic refund for an expired question.
+// If the creator does not reveal within 7 days (604800 seconds) of question close,
+// all bets are refunded to the participants and the creator's stake is burned.
+message MessageBetRefund {
+  // question_id: the unique ID of the question to refund
+  uint64 question_id = 1; // @gotags: json:"questionId"
+}
+
+// =============================================================================
+// KnowBet - State Storage Messages
+// =============================================================================
+
+// Question stores the on-chain state of a betting question.
+message Question {
+  // id: the unique question ID
+  uint64 id = 1;
+  // creator_address: the address that created this question (20 bytes)
+  bytes creator_address = 2; // @gotags: json:"creatorAddress"
+  // question_text: the betting question
+  string question_text = 3; // @gotags: json:"questionText"
+  // options: the possible answer choices
+  repeated string options = 4;
+  // answer_hash: SHA-256 hash of the correct answer, hex-encoded
+  string answer_hash = 5; // @gotags: json:"answerHash"
+  // stake_amount: the creator's locked stake (in uknbt)
+  uint64 stake_amount = 6; // @gotags: json:"stakeAmount"
+  // total_pool: the total amount in the prize pool (all bets + stake, in uknbt)
+  uint64 total_pool = 7; // @gotags: json:"totalPool"
+  // option_pools: accumulated bets per option index (index matches options order)
+  repeated uint64 option_pools = 8; // @gotags: json:"optionPools"
+  // created_height: the block height when the question was created
+  uint64 created_height = 9; // @gotags: json:"createdHeight"
+  // close_time: the unix timestamp (in seconds) when betting closes
+  int64 close_time = 10; // @gotags: json:"closeTime"
+  // revealed: whether the answer has been revealed
+  bool revealed = 11;
+  // revealed_answer: the revealed answer text, empty if not yet revealed
+  string revealed_answer = 12; // @gotags: json:"revealedAnswer"
+  // settled: whether the question has been settled
+  bool settled = 13;
+  // refunded: whether the question has been refunded
+  bool refunded = 14;
+  // close_height: the block height when betting closes
+  uint64 close_height = 15; // @gotags: json:"closeHeight"
+  // participant_addresses: list of all participant addresses for refund/settlement iteration
+  repeated bytes participant_addresses = 16; // @gotags: json:"participantAddresses"
+}
+
+// BetRecord stores an individual participant's bet on a question.
+message BetRecord {
+  // participant_address: the address of the participant (20 bytes)
+  bytes participant_address = 1; // @gotags: json:"participantAddress"
+  // question_id: the question this bet belongs to
+  uint64 question_id = 2; // @gotags: json:"questionId"
+  // option_index: which option was bet on (0-based)
+  uint32 option_index = 3; // @gotags: json:"optionIndex"
+  // amount: the amount bet (in uknbt)
+  uint64 amount = 4;
 }
 
 // FeeParams is the parameter space that defines various amounts for transaction fees
 message FeeParams {
-  // send_fee: is the fee amount (in uCNPY) for Message Send
+  // send_fee: is the fee amount (in uknbt) for Message Send
   uint64 send_fee = 1; // @gotags: json:"sendFee"
+  // bet_create_fee: fee for MessageBetCreate
+  uint64 bet_create_fee = 2; // @gotags: json:"betCreateFee"
+  // bet_place_fee: fee for MessageBetPlace
+  uint64 bet_place_fee = 3; // @gotags: json:"betPlaceFee"
+  // bet_reveal_fee: fee for MessageBetReveal
+  uint64 bet_reveal_fee = 4; // @gotags: json:"betRevealFee"
+  // bet_settle_fee: fee for MessageBetSettle
+  uint64 bet_settle_fee = 5; // @gotags: json:"betSettleFee"
+  // bet_refund_fee: fee for MessageBetRefund
+  uint64 bet_refund_fee = 6; // @gotags: json:"betRefundFee"
   // NO CONFLICT STARTING AT FIELD = 14
 }
 

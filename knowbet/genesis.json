@@ -1,0 +1,87 @@
+{
+  "time": "2026-07-23 00:00:00",
+  "accounts": [
+    {
+      "address": "1111111111111111111111111111111111111111",
+      "amount": 30000000000000,
+      "vestingAmount": 30000000000000,
+      "vestingStartHeight": 0,
+      "vestingCliffHeight": 0,
+      "vestingEndHeight": 3110400
+    },
+    {
+      "address": "2222222222222222222222222222222222222222",
+      "amount": 25000000000000
+    },
+    {
+      "address": "3333333333333333333333333333333333333333",
+      "amount": 20000000000000
+    },
+    {
+      "address": "4444444444444444444444444444444444444444",
+      "amount": 15000000000000
+    },
+    {
+      "address": "5555555555555555555555555555555555555555",
+      "amount": 10000000000000
+    }
+  ],
+  "nonSigners": null,
+  "validators": [],
+  "params": {
+    "consensus": {
+      "blockSize": 1000000,
+      "protocolVersion": "1/0",
+      "rootChainID": 1,
+      "retired": 0
+    },
+    "validator": {
+      "unstakingBlocks": 777600,
+      "maxPauseBlocks": 4380,
+      "doubleSignSlashPercentage": 10,
+      "nonSignSlashPercentage": 1,
+      "maxNonSign": 4,
+      "nonSignWindow": 100,
+      "maxCommittees": 15,
+      "maxCommitteeSize": 100,
+      "earlyWithdrawalPenalty": 20,
+      "delegateUnstakingBlocks": 777600,
+      "minimumOrderSize": 1000,
+      "stakePercentForSubsidizedCommittee": 33,
+      "maxSlashPerCommittee": 15,
+      "delegateRewardPercentage": 10,
+      "buyDeadlineBlocks": 15,
+      "lockOrderFeeMultiplier": 2,
+      "minimumStakeForValidators": 1000000000,
+      "minimumStakeForDelegates": 100000000,
+      "maximumDelegatesPerCommittee": 100
+    },
+    "fee": {
+      "sendFee": 10000,
+      "stakeFee": 10000,
+      "editStakeFee": 10000,
+      "unstakeFee": 10000,
+      "pauseFee": 10000,
+      "unpauseFee": 10000,
+      "changeParameterFee": 100000,
+      "daoTransferFee": 100000,
+      "certificateResultsFee": 10000,
+      "subsidyFee": 10000,
+      "createOrderFee": 10000,
+      "editOrderFee": 10000,
+      "deleteOrderFee": 10000,
+      "dexLimitOrderFee": 10000,
+      "dexLiquidityDeposit": 10000,
+      "dexLiquidityWithdraw": 10000,
+      "betCreateFee": 50000,
+      "betPlaceFee": 10000,
+      "betRevealFee": 20000,
+      "betSettleFee": 20000,
+      "betRefundFee": 10000
+    },
+    "governance": {
+      "daoRewardPercentage": 10
+    }
+  },
+  "supply": null
+}
