@@ -46,10 +46,31 @@ For more information on the Canopy Network Protocol visit [https://canopynetwork
 Welcome to the Canopy Network reference implementation. This repository can be well understood reading about the core modules:
 
 - [Controller](controller/README.md): Coordinates communication between all the major parts of the Canopy blockchain, like a central hub or "bus" that connects the system together.
-- [Finite State Machine (FSM)](fsm/README.md): Defines the logic for how transactions change the blockchain's state — it decides what’s valid and how state transitions happen from one block to the next.
+- [Finite State Machine (FSM)](fsm/README.md): Defines the logic for how transactions change the blockchain's state — it decides what's valid and how state transitions happen from one block to the next.
 - [Byzantine Fault Tolerant (BFT) Consensus](bft/README.md): A consensus mechanism that allows the network to agree on new blocks even if some nodes are unreliable or malicious.
 - [Peer-to-Peer Networking](p2p/README.md): A secure and encrypted communication system that lets nodes talk directly to each other without needing a central server.
-- [Persistence](store/README.md): Manages the blockchain’s storage — it saves the current state (ledger), indexes past transactions, and ensures fast and reliable data verification.
+- [Persistence](store/README.md): Manages the blockchain's storage — it saves the current state (ledger), indexes past transactions, and ensures fast and reliable data verification.
+- [Go Plugin SDK](plugin/go/): Build custom chain logic in Go using Canopy's plugin framework.
+- [KnowBet Chain](knowbet/): A prediction/betting protocol chain built on the Go Plugin SDK.
+
+## KnowBet Chain — Custom Plugin Chain (Betting Protocol)
+
+**KnowBet** is a prediction/betting protocol chain built on Canopy's [Go Plugin SDK](plugin/go/). Users can create questions, place bets, cryptographically commit answers via SHA-256, and settle payouts — all on-chain.
+
+| Parameter | Value |
+|-----------|-------|
+| **Chain ID** | 20484732 |
+| **Token** | KNBT (6 decimals, base: uknbt) |
+| **Genesis Supply** | 100,000,000 KNBT |
+| **Block Reward** | 10 KNBT per block |
+| **Halving** | Every 365 days (~1,576,800 blocks) |
+
+**Core Rules**: Minimum 100 KNBT stake to create a question · Bet range 10–10,000 KNBT · 2–5 options · Prize split: 80% winners, 15% creator, 5% burned · SHA-256 answer commitment · 7-day auto-refund · Creator cannot participate · Built-in sensitive word filter.
+
+| File | Purpose |
+|------|---------|
+| [knowbet/](knowbet/) | Chain configuration (chain.json, config.json, genesis.json) |
+| [plugin/go/rpc/web/knowbet/](plugin/go/rpc/web/knowbet/) | Web UI for KnowBet (dark theme, no external deps) |
 
 ## How to Run It
 
