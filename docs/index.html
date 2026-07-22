@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KnowBet — 链上竞猜</title>
+<style>
+/* ===== Reset & Base ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f1a;
+  --surface:#1a1a2e;
+  --surface2:#16213e;
+  --surface3:#1e2a4a;
+  --primary:#2c9b5a;
+  --primary-dim:#1a6b3e;
+  --primary-glow:rgba(44,155,90,.25);
+  --accent:#4fc3a0;
+  --text:#e8e8f0;
+  --text-dim:#8a8aa0;
+  --text-muted:#5a5a72;
+  --red:#e74c5e;
+  --orange:#f09b3e;
+  --blue:#4a8fe0;
+  --border:rgba(255,255,255,.06);
+  --radius:12px;
+  --radius-sm:8px;
+  --shadow:0 4px 24px rgba(0,0,0,.3);
+  --font:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+}
+html{font-size:15px}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  line-height:1.5;
+}
+a{color:var(--primary);text-decoration:none}
+input,select,textarea,button{font-family:inherit;font-size:inherit}
+
+/* ===== Layout ===== */
+.app{max-width:1100px;margin:0 auto;padding:0 16px}
+header{
+  padding:16px 0;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom:1px solid var(--border);
+  margin-bottom:20px;
+  flex-wrap:wrap;gap:12px;
+}
+.logo{display:flex;align-items:center;gap:10px;font-size:1.3rem;font-weight:700}
+.logo-icon{width:36px;height:36px;background:var(--primary);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:1.1rem}
+.logo span{color:var(--text-dim);font-weight:400;font-size:.85rem}
+
+/* ===== Wallet Bar ===== */
+.wallet-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wallet-bar input{padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text);width:200px;font-size:.85rem}
+.wallet-bar input:focus{outline:none;border-color:var(--primary)}
+.wallet-bar .addr-display{padding:6px 12px;background:var(--surface);border-radius:var(--radius-sm);font-size:.8rem;color:var(--text-dim);font-family:monospace}
+.btn{
+  padding:8px 18px;
+  border-radius:var(--radius-sm);
+  border:none;
+  cursor:pointer;
+  font-weight:600;
+  font-size:.85rem;
+  transition:all .2s;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#34b06a;box-shadow:0 0 20px var(--primary-glow)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--primary);color:var(--primary)}
+.btn-red{background:var(--red);color:#fff}
+.btn-red:hover{background:#ff5a6e}
+.btn-sm{padding:5px 12px;font-size:.8rem}
+.btn-ghost{background:transparent;border:none;color:var(--text-dim);padding:6px;cursor:pointer}
+.btn-ghost:hover{color:var(--text)}
+
+/* ===== Tabs ===== */
+.tabs{display:flex;gap:4px;background:var(--surface);border-radius:var(--radius);padding:4px;flex-wrap:wrap}
+.tab{
+  padding:10px 20px;
+  border-radius:var(--radius-sm);
+  border:none;
+  background:transparent;
+  color:var(--text-dim);
+  cursor:pointer;
+  font-weight:500;
+  font-size:.9rem;
+  transition:all .2s;
+}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--primary);color:#fff;box-shadow:0 0 16px var(--primary-glow)}
+
+/* ===== Cards ===== */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-bottom:24px}
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:20px;
+  transition:all .2s;
+}
+.card:hover{border-color:rgba(44,155,90,.3)}
+.card-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:12px;gap:8px}
+.card-title{font-weight:600;font-size:1rem;line-height:1.4}
+.card-status{
+  font-size:.7rem;
+  padding:3px 10px;
+  border-radius:20px;
+  white-space:nowrap;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+}
+.status-open{background:rgba(44,155,90,.15);color:var(--primary)}
+.status-revealed{background:rgba(74,143,224,.15);color:var(--blue)}
+.status-settled{background:rgba(79,195,163,.15);color:var(--accent)}
+.status-refunded{background:rgba(90,90,114,.15);color:var(--text-muted)}
+.status-expired{background:rgba(240,155,62,.15);color:var(--orange)}
+.card-body{font-size:.85rem;color:var(--text-dim)}
+.card-meta{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:.8rem}
+.card-meta span{display:flex;align-items:center;gap:4px}
+.card-meta .label{color:var(--text-muted)}
+.card-meta .value{color:var(--text);font-weight:500}
+.card-options{margin:12px 0;display:flex;flex-direction:column;gap:6px}
+.option-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;background:var(--surface2);border-radius:var(--radius-sm);
+  font-size:.85rem;gap:8px;
+}
+.option-row .opt-label{font-weight:500;flex:1}
+.option-row .opt-pool{color:var(--text-dim);font-size:.8rem}
+.option-row .opt-bar{height:4px;border-radius:2px;background:var(--primary-dim);flex:0 0 80px;overflow:hidden}
+.option-row .opt-bar-fill{height:100%;background:var(--primary);border-radius:2px;transition:width .3s}
+.card-actions{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap}
+
+/* ===== Page Header ===== */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.page-header h2{font-size:1.2rem;font-weight:600}
+
+/* ===== Forms ===== */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:.85rem;color:var(--text-dim);margin-bottom:6px;font-weight:500}
+.form-group input,.form-group textarea,.form-group select{
+  width:100%;padding:10px 14px;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--text);font-size:.9rem;
+  transition:border .2s;
+}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{outline:none;border-color:var(--primary)}
+.form-group textarea{resize:vertical;min-height:60px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.options-list{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.option-input{display:flex;gap:8px;align-items:center}
+.option-input input{flex:1}
+.option-input .btn-ghost{color:var(--red);font-size:1.1rem;padding:4px 8px}
+.add-option-btn{background:transparent;border:1px dashed var(--border);color:var(--text-dim);padding:8px;border-radius:var(--radius-sm);cursor:pointer;font-size:.85rem;width:100%;transition:all .2s}
+.add-option-btn:hover{border-color:var(--primary);color:var(--primary)}
+
+/* ===== Modal ===== */
+.modal-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.6);
+  backdrop-filter:blur(4px);
+  z-index:1000;
+  align-items:center;justify-content:center;
+  padding:20px;
+}
+.modal-overlay.active{display:flex}
+.modal{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:24px;
+  max-width:480px;
+  width:100%;
+  max-height:85vh;
+  overflow-y:auto;
+  animation:modalIn .2s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.modal-header h3{font-size:1.05rem}
+.modal-close{background:none;border:none;color:var(--text-dim);font-size:1.3rem;cursor:pointer;padding:4px}
+.modal-close:hover{color:var(--text)}
+
+/* ===== User Stats ===== */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:16px;
+  text-align:center;
+}
+.stat-card .stat-value{font-size:1.5rem;font-weight:700;color:var(--primary)}
+.stat-card .stat-label{font-size:.8rem;color:var(--text-dim);margin-top:4px}
+.stat-card.negative .stat-value{color:var(--red)}
+.stat-card.total .stat-value{color:var(--text)}
+
+/* ===== Filter Bar ===== */
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-btn{
+  padding:6px 16px;
+  border-radius:20px;
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--text-dim);
+  cursor:pointer;
+  font-size:.82rem;
+  transition:all .2s;
+}
+.filter-btn:hover{color:var(--text)}
+.filter-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* ===== Loading & Empty ===== */
+.loading{text-align:center;padding:48px 0;color:var(--text-dim)}
+.loading .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:48px 0;color:var(--text-dim)}
+.empty-state .icon{font-size:2.5rem;margin-bottom:12px;opacity:.4}
+
+/* ===== Toast ===== */
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:8px}
+.toast{
+  padding:12px 20px;
+  border-radius:var(--radius-sm);
+  background:var(--surface3);
+  border:1px solid var(--border);
+  color:var(--text);
+  font-size:.85rem;
+  animation:slideIn .3s ease;
+  box-shadow:var(--shadow);
+  max-width:360px;
+}
+.toast.success{border-color:var(--primary)}
+.toast.error{border-color:var(--red)}
+.toast.info{border-color:var(--blue)}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+/* ===== Mix ===== */
+.page{display:none}
+.page.active{display:block}
+.hash-text{font-family:monospace;font-size:.78rem;color:var(--text-dim);word-break:break-all}
+.pagination{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:20px}
+.pagination .page-btn{padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;font-size:.82rem}
+.pagination .page-btn:hover{color:var(--text)}
+.pagination .page-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.pagination .page-btn:disabled{opacity:.3;cursor:not-allowed}
+.pagination .page-info{font-size:.82rem;color:var(--text-dim)}
+
+/* ===== Responsive ===== */
+@media(max-width:768px){
+  .card-grid{grid-template-columns:1fr}
+  .form-row{grid-template-columns:1fr}
+  header{flex-direction:column;align-items:stretch}
+  .wallet-bar input{width:100%}
+  .wallet-bar{flex-direction:column}
+  .tabs{overflow-x:auto;flex-wrap:nowrap}
+  .tab{padding:8px 14px;font-size:.82rem;white-space:nowrap}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:480px){
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .modal{padding:16px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">K</div>
+      <div>
+        KnowBet
+        <span>— 链上竞猜协议</span>
+      </div>
+    </div>
+    <div class="wallet-bar">
+      <input type="text" id="walletInput" placeholder="输入你的 Canopy 地址 (0x...)" spellcheck="false">
+      <button class="btn btn-sm btn-outline" onclick="connectWallet()">连接</button>
+      <span id="addrDisplay" class="addr-display" style="display:none"></span>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="tabs" id="tabNav">
+    <button class="tab active" data-page="questions">📋 问题广场</button>
+    <button class="tab" data-page="create">✏️ 创建问题</button>
+    <button class="tab" data-page="reveal">🔓 揭晓答案</button>
+    <button class="tab" data-page="profile">👤 个人中心</button>
+  </nav>
+
+  <!-- ====== Page: 问题广场 ====== -->
+  <div class="page active" id="pageQuestions">
+    <div class="page-header">
+      <h2>📋 问题广场</h2>
+      <div class="filter-bar" id="questionFilter">
+        <button class="filter-btn active" data-status="">全部</button>
+        <button class="filter-btn" data-status="open">进行中</button>
+        <button class="filter-btn" data-status="revealed">已揭晓</button>
+        <button class="filter-btn" data-status="settled">已结算</button>
+        <button class="filter-btn" data-status="expired">已过期</button>
+        <button class="filter-btn" data-status="refunded">已退款</button>
+      </div>
+    </div>
+    <div id="questionGrid" class="card-grid"></div>
+    <div id="questionsPagination" class="pagination"></div>
+  </div>
+
+  <!-- ====== Page: 创建问题 ====== -->
+  <div class="page" id="pageCreate">
+    <div class="page-header"><h2>✏️ 创建新问题</h2></div>
+    <div style="max-width:600px">
+      <div class="form-group">
+        <label>问题文本</label>
+        <textarea id="createQuestionText" placeholder="例：BTC 在 2026-12-31 前能否突破 $150,000？" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label>选项（2-5 个）</label>
+        <div class="options-list" id="optionsList">
+          <div class="option-input"><input class="option-val" placeholder="选项 1"><button class="btn-ghost" onclick="removeOption(this)">✕</button></div>
+          <div class="option-input"><input class="option-val" placeholder="选项 2"><button class="btn-ghost" onclick="removeOption(this)">✕</button></div>
+        </div>
+        <button class="add-option-btn" onclick="addOption()">+ 添加选项</button>
+        <div style="font-size:.78rem;color:var(--text-muted);margin-top:4px">至少 2 个，最多 5 个</div>
+      </div>
+      <div class="form-group">
+        <label>正确答案</label>
+        <input type="text" id="createAnswer" placeholder="输入正确答案（与某个选项完全一致）">
+        <div style="font-size:.78rem;color:var(--text-muted);margin-top:4px">答案将被 SHA-256 加密后上链，揭晓时公开验证</div>
+      </div>
+      <div class="form-group">
+        <label>SHA-256 哈希预览</label>
+        <div class="hash-text" id="hashPreview">—</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>质押金额 (KNBT)</label>
+          <input type="number" id="createStake" value="100" min="100" step="1">
+          <div style="font-size:.78rem;color:var(--text-muted)">最低 100 KNBT</div>
+        </div>
+        <div class="form-group">
+          <label>截止时间</label>
+          <select id="createDuration">
+            <option value="3600">1 小时</option>
+            <option value="14400">4 小时</option>
+            <option value="43200">12 小时</option>
+            <option value="86400" selected>1 天</option>
+            <option value="259200">3 天</option>
+            <option value="604800">7 天</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:20px">
+        <button class="btn btn-primary" onclick="submitCreateQuestion()" id="createBtn">🚀 创建问题</button>
+        <span style="font-size:.8rem;color:var(--text-dim);margin-left:12px" id="createFeeInfo">费用：50,000 uknbt</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Page: 揭晓答案 ====== -->
+  <div class="page" id="pageReveal">
+    <div class="page-header"><h2>🔓 揭晓答案</h2></div>
+    <div id="revealList"></div>
+  </div>
+
+  <!-- ====== Page: 个人中心 ====== -->
+  <div class="page" id="pageProfile">
+    <div class="page-header">
+      <h2>👤 个人中心</h2>
+      <div id="profileAddress" style="font-size:.82rem;color:var(--text-dim)"></div>
+    </div>
+    <div id="statsContainer" class="stats-grid"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <h3 style="font-size:.95rem;margin-bottom:12px;color:var(--text-dim)">我的提问</h3>
+        <div id="myQuestions"></div>
+      </div>
+      <div>
+        <h3 style="font-size:.95rem;margin-bottom:12px;color:var(--text-dim)">我的押注</h3>
+        <div id="myBets"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal ===== -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">押注</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ===== Configuration =====
+const CONFIG = {
+  pluginRpc: 'http://localhost:50010',
+  canopyRpc: 'http://localhost:50002',
+  canopyAdmin: 'http://localhost:50003',
+  chainId: 20484732,
+  networkId: 1,
+};
+
+// ===== State =====
+let state = {
+  wallet: '',
+  currentStatus: '',
+  questionPage: 1,
+  questionLimit: 20,
+};
+
+// ===== Toast =====
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ===== Wallet =====
+function connectWallet() {
+  const input = document.getElementById('walletInput');
+  let addr = input.value.trim();
+  if (!addr) { toast('请输入钱包地址', 'error'); return; }
+  if (!addr.startsWith('0x')) addr = '0x' + addr;
+  state.wallet = addr;
+  document.getElementById('addrDisplay').textContent = addr.slice(0,10)+'...'+addr.slice(-6);
+  document.getElementById('addrDisplay').style.display = 'inline';
+  document.getElementById('walletInput').style.display = 'none';
+  document.querySelector('.wallet-bar .btn-outline').textContent = '切换';
+  toast('钱包已连接: ' + addr, 'success');
+  loadProfileData();
+  loadRevealData();
+}
+function disconnectWallet() {
+  state.wallet = '';
+  document.getElementById('walletInput').style.display = '';
+  document.getElementById('walletInput').value = '';
+  document.getElementById('addrDisplay').style.display = 'none';
+  document.querySelector('.wallet-bar .btn-outline').textContent = '连接';
+}
+
+// ===== Tabs =====
+document.getElementById('tabNav').addEventListener('click', e => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page' + tab.dataset.page.charAt(0).toUpperCase() + tab.dataset.page.slice(1)).classList.add('active');
+  // Refresh data on tab switch
+  const page = tab.dataset.page;
+  if (page === 'questions') loadQuestions();
+  if (page === 'profile' && state.wallet) loadProfileData();
+  if (page === 'reveal' && state.wallet) loadRevealData();
+});
+
+// ===== Question Filter =====
+document.getElementById('questionFilter').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn');
+  if (!btn) return;
+  document.querySelectorAll('#questionFilter .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.currentStatus = btn.dataset.status;
+  state.questionPage = 1;
+  loadQuestions();
+});
+
+// ===== API Helpers =====
+async function apiGet(endpoint) {
+  try {
+    const res = await fetch(CONFIG.pluginRpc + endpoint);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.error('API GET error:', endpoint, e);
+    return null;
+  }
+}
+
+// ===== Load Questions =====
+async function loadQuestions() {
+  const grid = document.getElementById('questionGrid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
+
+  const params = new URLSearchParams({ page: state.questionPage, limit: state.questionLimit });
+  if (state.currentStatus) params.set('status', state.currentStatus);
+
+  const data = await apiGet('/v1/knowbet/questions?' + params.toString());
+  if (!data) {
+    grid.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div>无法加载问题列表，请确认 RPC 服务已启动</div>';
+    return;
+  }
+
+  const questions = data.questions || [];
+  if (questions.length === 0) {
+    grid.innerHTML = '<div class="empty-state"><div class="icon">📭</div>暂无问题</div>';
+    document.getElementById('questionsPagination').innerHTML = '';
+    return;
+  }
+
+  grid.innerHTML = '';
+  questions.forEach(q => {
+    const totalPool = formatAmount(q.totalPool);
+    const maxPool = Math.max(...(q.optionPools || [0]), 1);
+    const closed = q.closeTime ? (new Date(q.closeTime * 1000).toLocaleString()) : '—';
+    const participants = q.participantCount || 0;
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="card-title">${escHtml(q.questionText)}</div>
+        <span class="card-status status-${q.status}">${statusLabel(q.status)}</span>
+      </div>
+      <div class="card-options">
+        ${(q.options || []).map((opt, i) => {
+          const pool = (q.optionPools && q.optionPools[i]) || 0;
+          const pct = maxPool > 0 ? (pool / maxPool * 100) : 0;
+          return `<div class="option-row">
+            <span class="opt-label">${escHtml(opt)}</span>
+            <span class="opt-pool">${formatAmount(pool)} KNBT</span>
+            <div class="opt-bar"><div class="opt-bar-fill" style="width:${pct}%"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="card-meta">
+        <span><span class="label">🏆 奖池</span> <span class="value">${totalPool} KNBT</span></span>
+        <span><span class="label">👥 参与</span> <span class="value">${participants} 人</span></span>
+        <span><span class="label">⏰ 截止</span> <span class="value">${closed}</span></span>
+      </div>
+      <div class="card-actions">
+        ${q.status === 'open' ? `<button class="btn btn-sm btn-primary" onclick="openBetModal(${q.id}, '${escHtml(q.questionText)}', ${JSON.stringify(q.options).replace(/'/g,"\\'")})">押注</button>` : ''}
+        <button class="btn btn-sm btn-outline" onclick="viewQuestionDetail(${q.id})">详情</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  // Pagination
+  const total = data.total || 0;
+  const totalPages = Math.ceil(total / state.questionLimit);
+  renderPagination('questionsPagination', state.questionPage, totalPages, p => {
+    state.questionPage = p;
+    loadQuestions();
+  });
+}
+
+function statusLabel(s) {
+  const map = { open:'进行中', revealed:'已揭晓', settled:'已结算', expired:'已过期', refunded:'已退款' };
+  return map[s] || s;
+}
+
+function formatAmount(v) {
+  if (!v && v !== 0) return '0';
+  return (v / 1_000_000).toLocaleString(undefined, {maximumFractionDigits:2});
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ===== Pagination =====
+function renderPagination(containerId, current, total, onPage) {
+  const c = document.getElementById(containerId);
+  if (total <= 1) { c.innerHTML = ''; return; }
+  let html = '';
+  html += `<button class="page-btn" ${current <= 1 ? 'disabled' : ''} onclick="onPage(${current-1})">‹</button>`;
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i === current ? 'active' : ''}" onclick="onPage(${i})">${i}</button>`;
+  }
+  html += `<button class="page-btn" ${current >= total ? 'disabled' : ''} onclick="onPage(${current+1})">›</button>`;
+  html += `<span class="page-info">${current}/${total}</span>`;
+  c.innerHTML = html;
+  // Replace onpage calls with real function
+  c.querySelectorAll('button').forEach(btn => {
+    const match = btn.getAttribute('onclick');
+    if (match) {
+      const page = parseInt(match.match(/\d+/)[0]);
+      btn.onclick = () => onPage(page);
+      btn.removeAttribute('onclick');
+    }
+  });
+}
+
+// ===== SHA-256 =====
+async function sha256Hex(str) {
+  const enc = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ===== Create Question =====
+document.getElementById('createAnswer').addEventListener('input', async function() {
+  if (this.value.trim()) {
+    const hash = await sha256Hex(this.value.trim());
+    document.getElementById('hashPreview').textContent = '0x' + hash;
+  } else {
+    document.getElementById('hashPreview').textContent = '—';
+  }
+});
+
+function addOption() {
+  const list = document.getElementById('optionsList');
+  if (list.children.length >= 5) { toast('最多 5 个选项', 'error'); return; }
+  const div = document.createElement('div');
+  div.className = 'option-input';
+  div.innerHTML = `<input class="option-val" placeholder="选项 ${list.children.length + 1}"><button class="btn-ghost" onclick="removeOption(this)">✕</button>`;
+  list.appendChild(div);
+}
+
+function removeOption(btn) {
+  const list = document.getElementById('optionsList');
+  if (list.children.length <= 2) { toast('至少需要 2 个选项', 'error'); return; }
+  btn.parentElement.remove();
+}
+
+async function submitCreateQuestion() {
+  const questionText = document.getElementById('createQuestionText').value.trim();
+  const options = [...document.querySelectorAll('.option-val')].map(i => i.value.trim()).filter(v => v);
+  const answer = document.getElementById('createAnswer').value.trim();
+  const stake = parseFloat(document.getElementById('createStake').value);
+  const duration = parseInt(document.getElementById('createDuration').value);
+
+  if (!questionText) { toast('请输入问题文本', 'error'); return; }
+  if (options.length < 2) { toast('至少需要 2 个选项', 'error'); return; }
+  if (!answer) { toast('请输入正确答案', 'error'); return; }
+  if (!options.includes(answer)) { toast('正确答案必须与某个选项完全一致', 'error'); return; }
+  if (!stake || stake < 100) { toast('质押金额至少 100 KNBT', 'error'); return; }
+  if (!state.wallet) { toast('请先连接钱包', 'error'); return; }
+
+  const btn = document.getElementById('createBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 创建中...';
+
+  const answerHash = await sha256Hex(answer);
+  const stakeUknbt = Math.floor(stake * 1_000_000);
+
+  // Build the transaction parameters
+  const txData = {
+    chainId: CONFIG.chainId,
+    networkId: CONFIG.networkId,
+    messageType: 'betCreate',
+    creatorAddress: state.wallet,
+    questionText,
+    options,
+    answerHash,
+    stakeAmount: stakeUknbt,
+    duration,
+  };
+
+  // For MVP: show the CLI command to submit
+  const cmd = `canopy tx bet-create \\
+  --chain-id ${CONFIG.chainId} \\
+  --from ${state.wallet} \\
+  --question "${questionText}" \\
+  --options "${options.join('|')}" \\
+  --answer-hash "${answerHash}" \\
+  --stake ${stake} \\
+  --duration ${duration}`;
+
+  toast('请使用以下命令提交交易：\n' + cmd, 'info');
+  console.log('TX Data:', JSON.stringify(txData, null, 2));
+  console.log('CLI Command:', cmd);
+
+  btn.disabled = false;
+  btn.textContent = '🚀 创建问题';
+}
+
+// ===== Bet Modal =====
+function openBetModal(questionId, questionText, options) {
+  document.getElementById('modalTitle').textContent = '押注';
+  document.getElementById('modalBody').innerHTML = `
+    <div style="margin-bottom:12px;font-size:.9rem">${escHtml(questionText)}</div>
+    <div class="form-group">
+      <label>选择选项</label>
+      <select id="betOption">
+        ${options.map((opt, i) => `<option value="${i}">${escHtml(opt)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>押注金额 (KNBT)</label>
+      <input type="number" id="betAmount" value="10" min="10" max="10000" step="1">
+      <div style="font-size:.78rem;color:var(--text-muted)">范围: 10 - 10,000 KNBT</div>
+    </div>
+    <button class="btn btn-primary" onclick="submitBet(${questionId})">✅ 确认押注</button>
+  `;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+async function submitBet(questionId) {
+  const option = parseInt(document.getElementById('betOption').value);
+  const amount = parseFloat(document.getElementById('betAmount').value);
+
+  if (!state.wallet) { toast('请先连接钱包', 'error'); return; }
+  if (!amount || amount < 10 || amount > 10000) { toast('押注金额需在 10-10000 KNBT 之间', 'error'); return; }
+
+  const amountUknbt = Math.floor(amount * 1_000_000);
+  const cmd = `canopy tx bet-place \\
+  --chain-id ${CONFIG.chainId} \\
+  --from ${state.wallet} \\
+  --question-id ${questionId} \\
+  --option-index ${option} \\
+  --amount ${amount}`;
+
+  toast('请使用以下命令提交押注：\n' + cmd, 'info');
+  console.log('Bet Place CLI:', cmd);
+  closeModal();
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+
+// ===== Question Detail =====
+async function viewQuestionDetail(id) {
+  const data = await apiGet('/v1/knowbet/question?id=' + id);
+  if (!data) { toast('无法加载问题详情', 'error'); return; }
+
+  // Fetch bets for this question
+  const betsData = await apiGet('/v1/knowbet/question-bets?question_id=' + id);
+  const bets = betsData ? (betsData.bets || []) : [];
+
+  document.getElementById('modalTitle').textContent = '问题详情 #' + id;
+  let html = `
+    <div style="margin-bottom:12px"><strong>${escHtml(data.questionText)}</strong></div>
+    <div style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">
+      状态: ${statusLabel(data.status)} | 奖池: ${formatAmount(data.totalPool)} KNBT | 参与: ${data.participantCount || 0} 人
+    </div>
+    <div style="font-size:.82rem;margin-bottom:12px">
+      <div>创建者: ${data.creatorAddress}</div>
+      <div>截止: ${data.closeTime ? new Date(data.closeTime*1000).toLocaleString() : '—'}</div>
+      ${data.revealed ? `<div>已揭晓: ${data.revealedAnswer || '—'}</div>` : ''}
+    </div>
+  `;
+
+  if (bets.length > 0) {
+    html += `<div style="font-size:.85rem;margin-top:12px"><strong>押注记录 (${bets.length})</strong></div>`;
+    bets.forEach(b => {
+      html += `<div style="font-size:.8rem;color:var(--text-dim);padding:4px 0;border-top:1px solid var(--border)">
+        ${b.participantAddress.slice(0,14)}... → 选项 ${b.optionIndex} | ${formatAmount(b.amount)} KNBT
+      </div>`;
+    });
+  }
+
+  // Handle onpage via temp var
+  window._tmpBetData = { id, questionText: data.questionText, options: data.options };
+  html += data.status === 'open' ? `<div style="margin-top:16px"><button class="btn btn-sm btn-primary" onclick="openBetModal(window._tmpBetData.id,'${escHtml(data.questionText)}',${JSON.stringify(data.options).replace(/'/g,"\\'")})">押注</button></div>` : '';
+
+  document.getElementById('modalBody').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+// ===== Reveal =====
+async function loadRevealData() {
+  const container = document.getElementById('revealList');
+  if (!state.wallet) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">🔑</div>请先连接钱包</div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
+  const data = await apiGet('/v1/knowbet/questions?status=revealed&limit=100');
+  if (!data) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div>无法加载数据</div>';
+    return;
+  }
+
+  const questions = (data.questions || []).filter(q => {
+    const addr = q.creatorAddress || '';
+    return addr.toLowerCase() === state.wallet.toLowerCase();
+  });
+
+  const unrevealed = await apiGet('/v1/knowbet/questions?status=open&limit=100');
+  const myUnrevealed = (unrevealed?.questions || []).filter(q => {
+    const addr = q.creatorAddress || '';
+    return addr.toLowerCase() === state.wallet.toLowerCase() && q.closeTime && q.closeTime * 1000 > Date.now();
+  });
+
+  const allItems = [...myUnrevealed, ...questions];
+  if (allItems.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">🔓</div>暂无需要揭晓的问题</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  allItems.forEach(q => {
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.innerHTML = `
+      <div class="card-header">
+        <div class="card-title">${escHtml(q.questionText)}</div>
+        <span class="card-status status-${q.status}">${statusLabel(q.status)}</span>
+      </div>
+      <div class="card-meta">
+        <span><span class="label">⏰ 截止</span> <span class="value">${q.closeTime ? new Date(q.closeTime*1000).toLocaleString() : '—'}</span></span>
+        <span><span class="label">🏆 奖池</span> <span class="value">${formatAmount(q.totalPool)} KNBT</span></span>
+      </div>
+      ${!q.revealed ? `
+        <div style="margin-top:12px">
+          <input type="text" id="revealAnswer_${q.id}" placeholder="输入正确答案" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);width:calc(100% - 90px);margin-right:8px">
+          <button class="btn btn-sm btn-primary" onclick="submitReveal(${q.id})">揭晓</button>
+        </div>
+      ` : `
+        <div style="margin-top:12px;font-size:.85rem;color:var(--text-dim)">
+          已揭晓: ${q.revealedAnswer || '—'} | ${q.settled ? '✅ 已结算' : '⏳ 待结算'}
+          ${!q.settled ? `<button class="btn btn-sm btn-outline" style="margin-left:8px" onclick="submitSettle(${q.id})">结算</button>` : ''}
+        </div>
+      `}
+    `;
+    container.appendChild(div);
+  });
+}
+
+async function submitReveal(questionId) {
+  const answer = document.getElementById('revealAnswer_' + questionId).value.trim();
+  if (!answer) { toast('请输入正确答案', 'error'); return; }
+  if (!state.wallet) { toast('请先连接钱包', 'error'); return; }
+
+  const cmd = `canopy tx bet-reveal \\
+  --chain-id ${CONFIG.chainId} \\
+  --from ${state.wallet} \\
+  --question-id ${questionId} \\
+  --answer "${answer}"`;
+
+  toast('揭晓命令已生成：\n' + cmd, 'info');
+  console.log('Reveal CLI:', cmd);
+}
+
+async function submitSettle(questionId) {
+  if (!state.wallet) { toast('请先连接钱包', 'error'); return; }
+
+  const cmd = `canopy tx bet-settle \\
+  --chain-id ${CONFIG.chainId} \\
+  --from ${state.wallet} \\
+  --question-id ${questionId}`;
+
+  toast('结算命令已生成：\n' + cmd, 'info');
+  console.log('Settle CLI:', cmd);
+}
+
+// ===== Profile =====
+async function loadProfileData() {
+  if (!state.wallet) return;
+  const addr = state.wallet.startsWith('0x') ? state.wallet.slice(2) : state.wallet;
+  document.getElementById('profileAddress').textContent = '地址: ' + state.wallet;
+
+  // Load stats
+  const stats = await apiGet('/v1/knowbet/user-stats?user=0x' + addr);
+  const statsContainer = document.getElementById('statsContainer');
+  if (stats) {
+    statsContainer.innerHTML = `
+      <div class="stat-card"><div class="stat-value">${stats.questionsCreated || 0}</div><div class="stat-label">出题数</div></div>
+      <div class="stat-card"><div class="stat-value">${stats.betsPlaced || 0}</div><div class="stat-label">押注数</div></div>
+      <div class="stat-card"><div class="stat-value">${stats.betsWon || 0}</div><div class="stat-label">赢次数</div></div>
+      <div class="stat-card"><div class="stat-value">${(stats.winRate || 0).toFixed(1)}%</div><div class="stat-label">胜率</div></div>
+      <div class="stat-card total"><div class="stat-value">${formatAmount(stats.totalBetAmount || 0)}</div><div class="stat-label">总投注</div></div>
+      <div class="stat-card total"><div class="stat-value">${formatAmount(stats.totalWonAmount || 0)}</div><div class="stat-label">总赢取</div></div>
+      <div class="stat-card ${(stats.netProfit || 0) < 0 ? 'negative' : ''}"><div class="stat-value">${formatAmount(Math.abs(stats.netProfit || 0))}</div><div class="stat-label">${(stats.netProfit || 0) >= 0 ? '净利润' : '净亏损'}</div></div>
+    `;
+  } else {
+    statsContainer.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  }
+
+  // My questions
+  const myQs = await apiGet('/v1/knowbet/questions?limit=100');
+  const myQuestions = document.getElementById('myQuestions');
+  if (myQs && myQs.questions) {
+    const mine = myQs.questions.filter(q => {
+      const addr = (q.creatorAddress || '').toLowerCase();
+      return addr === state.wallet.toLowerCase();
+    });
+    if (mine.length === 0) {
+      myQuestions.innerHTML = '<div style="color:var(--text-dim);font-size:.85rem">暂无提问</div>';
+    } else {
+      myQuestions.innerHTML = mine.map(q => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem">
+          <div style="font-weight:500;margin-bottom:4px">${escHtml(q.questionText)}</div>
+          <div style="color:var(--text-dim);font-size:.78rem">
+            奖池: ${formatAmount(q.totalPool)} KNBT | ${statusLabel(q.status)}
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+
+  // My bets
+  const myBetsData = await apiGet('/v1/knowbet/user-bets?user=0x' + addr + '&limit=50');
+  const myBetsContainer = document.getElementById('myBets');
+  if (myBetsData && myBetsData.bets) {
+    if (myBetsData.bets.length === 0) {
+      myBetsContainer.innerHTML = '<div style="color:var(--text-dim);font-size:.85rem">暂无押注</div>';
+    } else {
+      myBetsContainer.innerHTML = myBetsData.bets.map(b => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem">
+          <div style="margin-bottom:4px">
+            <span style="color:var(--text-dim)">问题 #${b.questionId}</span>
+            ${b.question ? escHtml(b.question.questionText) : ''}
+          </div>
+          <div style="color:var(--text-dim);font-size:.78rem">
+            选项 ${b.optionIndex} | ${formatAmount(b.amount)} KNBT
+            ${b.question ? `<span class="card-status status-${b.question.status}" style="font-size:.7rem;margin-left:8px">${statusLabel(b.question.status)}</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+}
+
+// ===== Init =====
+loadQuestions();
+</script>
+</body>
+</html>
