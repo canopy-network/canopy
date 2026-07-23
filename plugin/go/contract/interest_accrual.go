@@ -206,14 +206,39 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 	// (SumLenderBalancesInMarket, {28} queue peek) do not exist yet.
 	if market.Status == MarketStatus_INSOLVENT {
 		// [AYIS Section 7, Step 8, J1/K1] Full interest_earned routes to
-		// R_fund instead of being split. R_fund is ARCM-owned ({18});
-		// writing it here requires the same context-dependent encoding
-		// ARCM Section 9.3 specifies. R_fund read/write is not yet
-		// implemented via a shared accessor -- deferred alongside C4,
-		// since both require Layer 4 / ARCM-side state this pass does not
-		// touch. TODO: wire R_fund routing once ARCM's reserve-fund
-		// accessors exist.
-		//
+		// R_fund for an Insolvent market -- fixed: previously computed and
+		// discarded, an accounting leak identical in shape to the
+		// reserveCut leak fixed at Step 10 below, just on the Insolvent
+		// branch instead. Written BEFORE B_index/SaveMarket so that an
+		// overflow here freezes the market before anything else commits
+		// this block (Principle 8 atomicity, same discipline as Step 10).
+		rFund, rFundFound, rErr := GetReserveFund(c, marketID)
+		if rErr != nil {
+			return rErr
+		}
+		if !rFundFound {
+			// Unreachable in practice: create_market always initializes {18} to
+			// zero (Section 4.5's zero-init contract). Guarded explicitly rather
+			// than assumed, per this project's established standard.
+			return ErrMarketNotFound(marketID)
+		}
+		newRFundInsolvent := new(big.Int).Add(rFund, interestEarned)
+		rOkInsolvent, rWriteErrInsolvent := SetReserveFundTry(c, marketID, newRFundInsolvent)
+		if rWriteErrInsolvent != nil {
+			return rWriteErrInsolvent
+		}
+		if !rOkInsolvent {
+			// [ARCM Section 9.3a] R_fund would not fit in 128 bits. Freeze this
+			// market, matching the non-Insolvent path's own overflow response.
+			// B_index has not been written yet at this point, so nothing
+			// partially commits (Principle 8).
+			market.IndexOverflowHalted = true
+			if sErr := SaveMarket(c, marketID, market); sErr != nil {
+				return sErr
+			}
+			return nil
+		}
+
 		// B_index still advances normally for an Insolvent market
 		// (ScaledDebt() must remain computable for existing borrowers,
 		// AYIS Section 6) -- only the S_rate split is skipped.
