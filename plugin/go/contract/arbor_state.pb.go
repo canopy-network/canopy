@@ -454,6 +454,77 @@ func (x *LenderPosition) GetDepositBlock() uint64 {
 	return 0
 }
 
+// LossFactorQueueEntry is a {28} record (AYIS Section 12.4, ARCM v3.11.1
+// Section 9.3b Rule 3). One entry per market_id: a backstop-triggered
+// Layer 4 exhaustion enqueues a bad_debt amount here (via
+// EnqueueLossFactorApplication) rather than calling ApplyLossFactor()
+// synchronously, so BeginBlock's ProcessLossFactorQueue() can drain it
+// later in the same call under Section 12.3's Accrual Ordering Contract
+// (AccrueInterest MUST run before this queue drains). A market has at
+// most one outstanding entry at a time -- K3's idempotency guard in
+// ApplyLossFactor() means a second enqueue against an already-Insolvent
+// market is a no-op at drain time, not a second queued entry, so this
+// message does not need its own sequence/ordering field.
+type LossFactorQueueEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MarketId      string                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	BadDebt       uint64                 `protobuf:"varint,2,opt,name=bad_debt,json=badDebt,proto3" json:"bad_debt,omitempty"`
+	EnqueuedBlock uint64                 `protobuf:"varint,3,opt,name=enqueued_block,json=enqueuedBlock,proto3" json:"enqueued_block,omitempty"` // observability only; not read by any
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LossFactorQueueEntry) Reset() {
+	*x = LossFactorQueueEntry{}
+	mi := &file_arbor_state_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LossFactorQueueEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LossFactorQueueEntry) ProtoMessage() {}
+
+func (x *LossFactorQueueEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LossFactorQueueEntry.ProtoReflect.Descriptor instead.
+func (*LossFactorQueueEntry) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *LossFactorQueueEntry) GetMarketId() string {
+	if x != nil {
+		return x.MarketId
+	}
+	return ""
+}
+
+func (x *LossFactorQueueEntry) GetBadDebt() uint64 {
+	if x != nil {
+		return x.BadDebt
+	}
+	return 0
+}
+
+func (x *LossFactorQueueEntry) GetEnqueuedBlock() uint64 {
+	if x != nil {
+		return x.EnqueuedBlock
+	}
+	return 0
+}
+
 var File_arbor_state_proto protoreflect.FileDescriptor
 
 const file_arbor_state_proto_rawDesc = "" +
@@ -492,7 +563,11 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\fR\aaddress\x12\x16\n" +
 	"\x06shares\x18\x03 \x01(\x04R\x06shares\x12#\n" +
-	"\rdeposit_block\x18\x04 \x01(\x04R\fdepositBlock*E\n" +
+	"\rdeposit_block\x18\x04 \x01(\x04R\fdepositBlock\"u\n" +
+	"\x14LossFactorQueueEntry\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12\x19\n" +
+	"\bbad_debt\x18\x02 \x01(\x04R\abadDebt\x12%\n" +
+	"\x0eenqueued_block\x18\x03 \x01(\x04R\renqueuedBlock*E\n" +
 	"\fMarketStatus\x12\n" +
 	"\n" +
 	"\x06ACTIVE\x10\x00\x12\n" +
@@ -515,13 +590,14 @@ func file_arbor_state_proto_rawDescGZIP() []byte {
 }
 
 var file_arbor_state_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_arbor_state_proto_goTypes = []any{
-	(MarketStatus)(0),        // 0: types.MarketStatus
-	(*Market)(nil),           // 1: types.Market
-	(*BorrowerPosition)(nil), // 2: types.BorrowerPosition
-	(*PriceRecord)(nil),      // 3: types.PriceRecord
-	(*LenderPosition)(nil),   // 4: types.LenderPosition
+	(MarketStatus)(0),            // 0: types.MarketStatus
+	(*Market)(nil),               // 1: types.Market
+	(*BorrowerPosition)(nil),     // 2: types.BorrowerPosition
+	(*PriceRecord)(nil),          // 3: types.PriceRecord
+	(*LenderPosition)(nil),       // 4: types.LenderPosition
+	(*LossFactorQueueEntry)(nil), // 5: types.LossFactorQueueEntry
 }
 var file_arbor_state_proto_depIdxs = []int32{
 	0, // 0: types.Market.status:type_name -> types.MarketStatus
@@ -543,7 +619,7 @@ func file_arbor_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_state_proto_rawDesc), len(file_arbor_state_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

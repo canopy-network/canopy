@@ -74,3 +74,24 @@ message LenderPosition {
   uint64 shares = 3;
   uint64 deposit_block = 4;
 }
+
+// LossFactorQueueEntry is a {28} record (AYIS Section 12.4, ARCM v3.11.1
+// Section 9.3b Rule 3). One entry per market_id: a backstop-triggered
+// Layer 4 exhaustion enqueues a bad_debt amount here (via
+// EnqueueLossFactorApplication) rather than calling ApplyLossFactor()
+// synchronously, so BeginBlock's ProcessLossFactorQueue() can drain it
+// later in the same call under Section 12.3's Accrual Ordering Contract
+// (AccrueInterest MUST run before this queue drains). A market has at
+// most one outstanding entry at a time -- K3's idempotency guard in
+// ApplyLossFactor() means a second enqueue against an already-Insolvent
+// market is a no-op at drain time, not a second queued entry, so this
+// message does not need its own sequence/ordering field.
+message LossFactorQueueEntry {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+  uint64 enqueued_block = 3;  // observability only; not read by any
+                              // drain-order logic (drain order is
+                              // unspecified/immaterial per AYIS 5.4.3,
+                              // MAX_LOSS_FACTOR_APPLICATIONS_PER_BLOCK
+                              // bounds work per block, not by age)
+}

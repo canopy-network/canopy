@@ -149,8 +149,14 @@ func KeyForLossFactor(marketID string) []byte {
 	return JoinLenPrefix(PrefixLossFactor, []byte(marketID))
 }
 
-func KeyForLossFactorQueue() []byte {
-	return JoinLenPrefix(PrefixLossFactorQueue)
+// KeyForLossFactorQueue is per-market, matching every other {16}-{28}
+// key helper in this file. A market has at most one outstanding queue
+// entry at a time (see LossFactorQueueEntry's doc comment in
+// arbor_state.proto for why no separate sequence/ordering key is
+// needed): EnqueueLossFactorApplication overwrites any existing entry
+// for that market_id rather than appending a second one.
+func KeyForLossFactorQueue(marketID string) []byte {
+	return JoinLenPrefix(PrefixLossFactorQueue, []byte(marketID))
 }
 
 // MaxAssetIDLen bounds asset_id length. Asset IDs ("CNPY", "BTC", "USDC")
