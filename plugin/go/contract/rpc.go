@@ -198,11 +198,16 @@ func (p *Plugin) handleQueryBorrowerPosition(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	key := KeyForBorrowerPosition(marketId, address)
-	queryId := rand.Uint64()
+	posKey := KeyForBorrowerPosition(marketId, address)
+	bIndexKey := KeyForBorrowIndex(marketId)
+	posQueryId := rand.Uint64()
+	bIndexQueryId := rand.Uint64()
 
 	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
-		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+		Keys: []*PluginKeyRead{
+			{QueryId: posQueryId, Key: posKey},
+			{QueryId: bIndexQueryId, Key: bIndexKey},
+		},
 	})
 	if pErr != nil {
 		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
@@ -213,16 +218,30 @@ func (p *Plugin) handleQueryBorrowerPosition(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+	// QueryId lives on PluginReadResult, not on individual entries (see
+	// plugin.pb.go's PluginReadResult / PluginStateEntry definitions) --
+	// matches the pattern already used in deposit.go, contract.go, and
+	// price_resolve.go. Each of our two queries is a single-key lookup, so
+	// the matching result's Entries has at most one element.
+	var posRaw, bIndexRaw []byte
+	for _, result := range resp.Results {
+		if result.QueryId == posQueryId && len(result.Entries) > 0 {
+			posRaw = result.Entries[0].Value
+		}
+		if result.QueryId == bIndexQueryId && len(result.Entries) > 0 {
+			bIndexRaw = result.Entries[0].Value
+		}
+	}
+
+	if len(posRaw) == 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]string{"error": "borrower position not found", "marketId": marketId, "address": addressHex})
 		return
 	}
 
-	raw := resp.Results[0].Entries[0].Value
 	position := &BorrowerPosition{}
-	if err := proto.Unmarshal(raw, position); err != nil {
+	if err := proto.Unmarshal(posRaw, position); err != nil {
 		http.Error(w, `{"error":"failed to decode borrower position: `+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
@@ -233,8 +252,35 @@ func (p *Plugin) handleQueryBorrowerPosition(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Additive field: debtPrincipal above is the raw stored principal as of
+	// the last write to this position, NOT the current owed amount -- see
+	// ScaledDebt()'s doc comment (AYIS Section 6, ARCM Section 2.2's mandatory
+	// rule that pos.DebtPrincipal alone must never be treated as current debt).
+	// currentDebt is included here so callers of this endpoint (liquidation
+	// bots, frontends, manual inspection) are not misled into treating raw
+	// principal as owed debt. Computed best-effort: if B_index is missing
+	// (should not happen for any market with an open position), currentDebt
+	// is simply omitted rather than failing the whole request, since the raw
+	// position data is still valid and useful on its own.
+	var responseMap map[string]interface{}
+	if err := json.Unmarshal(positionJSON, &responseMap); err != nil {
+		http.Error(w, `{"error":"failed to build response json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if len(bIndexRaw) > 0 {
+		bIndexNow := DecodeUint128(bIndexRaw)
+		currentDebt := ScaledDebt(position, bIndexNow)
+		responseMap["currentDebt"] = strconv.FormatUint(currentDebt, 10)
+	}
+
+	finalJSON, err := json.Marshal(responseMap)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode final response json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(positionJSON)
+	w.Write(finalJSON)
 }
 
 // handleQueryPool serves GET /v1/query/pool?marketId=<id>&purpose=supply|collateral
