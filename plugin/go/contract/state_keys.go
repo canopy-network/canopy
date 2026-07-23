@@ -171,7 +171,7 @@ const MaxAssetIDLen = 32
 type ErrAssetIDTooLong struct{ Len int }
 
 func (e ErrAssetIDTooLong) Error() string {
-return fmt.Sprintf("asset_id length %d exceeds maximum of %d bytes", e.Len, MaxAssetIDLen)
+	return fmt.Sprintf("asset_id length %d exceeds maximum of %d bytes", e.Len, MaxAssetIDLen)
 }
 
 // ValidateAssetID enforces MaxAssetIDLen. MUST be called at
@@ -179,11 +179,11 @@ return fmt.Sprintf("asset_id length %d exceeds maximum of %d bytes", e.Len, MaxA
 // ever written to state or used in any JoinLenPrefix-based key
 // (KeyForAssetTier, KeyForPriceRecord). Mirrors ValidateMarketID exactly.
 func ValidateAssetID(assetID string) error {
-if len(assetID) == 0 {
-return fmt.Errorf("asset_id must not be empty")
-}
-if len(assetID) > MaxAssetIDLen {
-return ErrAssetIDTooLong{Len: len(assetID)}
-}
-return nil
+	if len(assetID) == 0 {
+		return fmt.Errorf("asset_id must not be empty")
+	}
+	if len(assetID) > MaxAssetIDLen {
+		return ErrAssetIDTooLong{Len: len(assetID)}
+	}
+	return nil
 }
