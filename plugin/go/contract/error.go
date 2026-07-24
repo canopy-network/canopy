@@ -251,3 +251,14 @@ func ErrMarketDeprecated(marketID string) *PluginError {
 func ErrMarketNotPaused(marketID string) *PluginError {
 	return NewError(237, ArborModule, fmt.Sprintf("market %q: not currently paused, nothing to resume", marketID))
 }
+
+// [NEW] ErrSelfLiquidation -- liquidator and borrower are the same address.
+// Without this guard, a borrower could liquidate their own underwater
+// position and collect the LIF bonus (ARCM Section 8) risk-free -- that
+// bonus exists to compensate an INDEPENDENT liquidator for monitoring and
+// execution risk a self-liquidating borrower never bears. repay.go already
+// covers the legitimate case of a borrower closing their own position
+// without a bonus.
+func ErrSelfLiquidation() *PluginError {
+	return NewError(238, ArborModule, "liquidator and borrower_address must not be the same address -- self-liquidation is not permitted; use repay to close your own position instead")
+}

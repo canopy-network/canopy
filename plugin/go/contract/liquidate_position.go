@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"bytes"
 	"math/big"
 
 	"google.golang.org/protobuf/types/known/anypb"
@@ -59,6 +60,19 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 	if len(msg.BorrowerAddress) != 20 {
 		return &PluginDeliverResponse{Error: ErrInvalidAddress()}
 	}
+	// [NEW] Self-liquidation guard. Without this, an address can liquidate
+	// its own underwater position and collect the LIF bonus (ARCM Section 8)
+	// risk-free -- that bonus exists to compensate an INDEPENDENT liquidator
+	// for monitoring/execution risk a self-liquidating borrower never bears.
+	// A borrower who wants to close their own underwater position without a
+	// bonus already has repay.go for that; this path has no legitimate use
+	// case repay.go doesn't already cover, and this guard closes a real
+	// economic exploit (worse if the same address is also an authorized
+	// price oracle submitter for this market -- see the separate, still-open
+	// oracle/borrower-role-separation gap this does NOT fix).
+	if bytes.Equal(msg.Liquidator, msg.BorrowerAddress) {
+		return &PluginDeliverResponse{Error: ErrSelfLiquidation()}
+	}
 	if msg.RepayAmount == 0 {
 		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 	}
@@ -70,6 +84,13 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 	if !found {
 		return &PluginDeliverResponse{Error: ErrMarketNotFound(msg.MarketId)}
 	}
+
+	// [MOVED, session finding] events must be declared before Layer 4's
+	// ApplyLossFactor call (Layer 2 miss fallthrough, below) can append to
+	// it -- previously declared later, at Step 7, when this was the only
+	// place an event could originate. Now declared here so both the new
+	// Layer 4 path and the existing Step 7 dust-clamp path share one slice.
+	var events []*Event
 	if pErr := checkMarketNotPaused(market, msg.MarketId); pErr != nil {
 		return &PluginDeliverResponse{Error: pErr}
 	}
@@ -212,10 +233,39 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 			return &PluginDeliverResponse{Error: l2Err}
 		}
 		if !covered {
-			// Layer 2 insufficient (or R_fund empty); Layer 3/4 not
-			// implemented. Hard reject, matching Layer 1's existing
-			// disclosure pattern (ErrLiquidationBadDebt).
-			return &PluginDeliverResponse{Error: ErrLiquidationBadDebt(msg.MarketId, badDebtNative.Uint64())}
+			// [DISCLOSED, session finding] Layer 3 (Arbor protocol treasury)
+			// does NOT exist in this codebase -- no state key, no accessor,
+			// nothing. It is a standalone, unbuilt piece shared by ARCM's own
+			// waterfall and (per NASM Section 11.2) NASM's NUSD waterfall,
+			// deferred until Arbor's core lending protocol is complete. This
+			// is NOT a NASM prerequisite issue -- NASM's own Layer 3 row
+			// assumes Arbor treasury already exists ("Arbor protocol treasury
+			// covers remaining shortfall"); it does not define or build it.
+			//
+			// Given that, this liquidation intentionally skips straight from
+			// Layer 2 (just missed, above) to Layer 4 (lender socialization
+			// via ApplyLossFactor) rather than hard-rejecting as before. This
+			// is a deliberate interim design choice, not a silent omission:
+			// bad debt Layer 3 might have partially absorbed instead lands
+			// fully on lenders via loss_factor. Open item, tracked separately
+			// from this comment: "Layer 3 (Arbor protocol treasury): standalone,
+			// unbuilt, blocks full four-layer waterfall fidelity."
+			// [FIXED] Now passes the already-in-memory market struct (read once
+			// near the top of this function) instead of letting ApplyLossFactor
+			// fetch its own separate copy. This closes the two-copy race that
+			// caused a confirmed on-chain bug: SetMarketInsolvent() used to save
+			// its own copy of market mid-call, which this function's own
+			// end-of-function SaveMarket(market) at line ~337 then silently
+			// overwrote with its stale copy -- losing the Status write while
+			// loss_factor correctly persisted to 0. See market_insolvency.go and
+			// apply_loss_factor.go for the full fix.
+			layer4Event, alErr := ApplyLossFactor(c, market, msg.MarketId, badDebtNative.Uint64())
+			if alErr != nil {
+				return &PluginDeliverResponse{Error: alErr}
+			}
+			if layer4Event != nil {
+				events = append(events, layer4Event)
+			}
 		}
 
 		// Layer 2 fully covered the shortfall's value. Cap seizure at what
@@ -278,7 +328,6 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 	}
 	pos.BorrowIndexAtOpen = bIndexEncoded
 
-	var events []*Event
 	// Step 7 -- ARCM Principle 9. Single mandatory write path for total_borrowed.
 	repaidDelta, safeOk := SafeInt64FromUint64(msg.RepayAmount)
 	if !safeOk {

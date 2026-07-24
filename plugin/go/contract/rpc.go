@@ -36,6 +36,9 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/borrowerposition", p.handleQueryBorrowerPosition)
 	mux.HandleFunc("/v1/query/pool", p.handleQueryPool)
 	mux.HandleFunc("/v1/query/reservefund", p.handleQueryReserveFund)
+	mux.HandleFunc("/v1/query/lossfactor", p.handleQueryLossFactor)
+	mux.HandleFunc("/v1/query/all-markets", p.handleQueryAllMarkets)
+	mux.HandleFunc("/v1/query/prices", p.handleQueryPrices)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -409,4 +412,148 @@ func (p *Plugin) handleQueryReserveFund(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"marketId": marketId, "amount": rFund.String()})
+}
+
+// handleQueryLossFactor serves GET /v1/query/lossfactor?marketId=<id>
+// Returns the market's current loss_factor ({27}, uint128, RAY-scaled) as a
+// decimal string. RAY (1e18) means no haircut has ever been applied; a value
+// below RAY means Layer 4 has fired at least once (AYIS Section 5.4.3);
+// exactly 0 means the market has been fully exhausted (Insolvent, I11).
+// Added this session specifically to make ApplyLossFactor's real on-chain
+// effect observable -- prior to this route, no query surfaced loss_factor
+// at all, making Layer 4's haircut branch unverifiable except by indirect
+// inference (see this session's own liquidate_position test for why that
+// was insufficient).
+func (p *Plugin) handleQueryLossFactor(w http.ResponseWriter, r *http.Request) {
+	marketId := r.URL.Query().Get("marketId")
+	if marketId == "" {
+		http.Error(w, `{"error":"missing marketId query param"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateMarketID(marketId); err != nil {
+		http.Error(w, `{"error":"invalid marketId: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForLossFactor(marketId)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"marketId": marketId, "note": "loss_factor not yet initialized -- market may not exist"})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	lossFactor := DecodeUint128(raw)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"marketId": marketId, "lossFactor": lossFactor.String()})
+}
+
+// handleQueryAllMarkets serves GET /v1/query/all-markets
+// Returns every Market record by range-iterating the {16} market prefix --
+// the same PrefixMarkets walk BeginBlock's interest accrual uses (contract.go),
+// exposed over HTTP so the frontend can discover all markets dynamically
+// instead of a hand-maintained id list. Emits a bare JSON array of protojson
+// Market objects (uint64 fields as decimal strings; omitted status => ACTIVE).
+func (p *Plugin) handleQueryAllMarkets(w http.ResponseWriter, r *http.Request) {
+	queryId := rand.Uint64()
+	resp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Ranges: []*PluginRangeRead{
+			{QueryId: queryId, Prefix: JoinLenPrefix(PrefixMarkets)},
+		},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	out := make([]json.RawMessage, 0)
+	for _, result := range resp.Results {
+		if result.QueryId != queryId {
+			continue
+		}
+		for _, entry := range result.Entries {
+			if len(entry.Value) == 0 {
+				continue
+			}
+			m := &Market{}
+			if err := proto.Unmarshal(entry.Value, m); err != nil {
+				continue
+			}
+			b, err := protojson.Marshal(m)
+			if err != nil {
+				continue
+			}
+			out = append(out, b)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
+}
+
+// handleQueryPrices serves GET /v1/query/prices?assetId=<id>
+// Returns every PriceRecord for an asset by range-iterating the {19} price
+// cache scoped to (assetId) -- the same prefix price_resolve.go aggregates for
+// quorum/median/deviation -- so the frontend can compute freshness, quorum, and
+// the median itself from the raw per-submitter readings. Bare JSON array of
+// protojson PriceRecord objects (price & block_height as decimal strings).
+func (p *Plugin) handleQueryPrices(w http.ResponseWriter, r *http.Request) {
+	assetId := r.URL.Query().Get("assetId")
+	if assetId == "" {
+		http.Error(w, `{"error":"missing assetId query param"}`, http.StatusBadRequest)
+		return
+	}
+	queryId := rand.Uint64()
+	resp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Ranges: []*PluginRangeRead{
+			{QueryId: queryId, Prefix: JoinLenPrefix(PrefixPriceCache, []byte(assetId))},
+		},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	out := make([]json.RawMessage, 0)
+	for _, result := range resp.Results {
+		if result.QueryId != queryId {
+			continue
+		}
+		for _, entry := range result.Entries {
+			if len(entry.Value) == 0 {
+				continue
+			}
+			pr := &PriceRecord{}
+			if err := proto.Unmarshal(entry.Value, pr); err != nil {
+				continue
+			}
+			b, err := protojson.Marshal(pr)
+			if err != nil {
+				continue
+			}
+			out = append(out, b)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }

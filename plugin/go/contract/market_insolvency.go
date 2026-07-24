@@ -33,19 +33,20 @@ func GetMarketStatus(c *Contract, marketID string) (status MarketStatus, found b
 // still become Insolvent for the first time. This function has no
 // dependency on that flag at all, by construction, which is how Rule 1 is
 // satisfied: there is simply nothing here that could block it.
-func SetMarketInsolvent(c *Contract, marketID string) *PluginError {
-	market, found, pErr := GetMarket(c, marketID)
-	if pErr != nil {
-		return pErr
-	}
-	if !found {
-		// Unreachable in practice: ApplyLossFactor()'s own caller chain
-		// (ProcessLossFactorQueue, or a synchronous liquidation) already
-		// read this market to compute bad_debt in the first place.
-		return ErrMarketNotFound(marketID)
-	}
+// [FIXED] Signature changed from (c, marketID) to (market *Market).
+// Mutates the CALLER's already-in-memory *Market in place, matching
+// applyDebtDelta()'s pattern (debt_delta.go) -- caller owns the single
+// SaveMarket() write. The previous fetch-mutate-save-internally version
+// raced against liquidate_position.go's own stale in-memory copy: that
+// function reads market once near the top of its DeliverTx handler, this
+// function used to independently GetMarket/mutate/SaveMarket a SEPARATE
+// copy mid-call, and liquidate_position.go's own end-of-function SaveMarket
+// then silently overwrote the Status write with its stale copy. Confirmed
+// on-chain: a liquidation driving loss_factor to 0 left market.status
+// reading as unset/ACTIVE instead of INSOLVENT. Taking *Market by pointer
+// removes the second copy entirely.
+func SetMarketInsolvent(market *Market) {
 	market.Status = MarketStatus_INSOLVENT
-	return SaveMarket(c, marketID, market)
 }
 
 // SetLossFactor writes a market's {27} loss_factor value, using the
@@ -84,15 +85,12 @@ func SetLossFactor(c *Contract, marketID string, lossFactor *big.Int) *PluginErr
 // own Principle 8 (aggregates must reflect reality) applies to both halves
 // of this pair identically -- there is no scenario where one should move
 // without the other.
-func DecrementLayer4Pending(c *Contract, marketID string, badDebtAmount uint64) *PluginError {
-	market, found, pErr := GetMarket(c, marketID)
-	if pErr != nil {
-		return pErr
-	}
-	if !found {
-		return ErrMarketNotFound(marketID)
-	}
-
+// [FIXED] Signature changed from (c, marketID) to (market *Market), same
+// reasoning and fix shape as SetMarketInsolvent above -- this function
+// previously did its own independent GetMarket/mutate/SaveMarket round-trip,
+// exposing it to the identical stale-outer-copy race the moment any future
+// caller holds its own *Market across a call into this function.
+func DecrementLayer4Pending(market *Market, badDebtAmount uint64) *PluginError {
 	if market.Layer4PendingCount == 0 {
 		// [ARCM Section 9.2b] Underflow guard -- mirrors the spec's own
 		// Layer4PendingCountUnderflowEvent pseudocode. This indicates a
@@ -140,5 +138,5 @@ func DecrementLayer4Pending(c *Contract, marketID string, badDebtAmount uint64) 
 	}
 	market.Layer4PendingBadDebtTotal = encodedTotal
 
-	return SaveMarket(c, marketID, market)
+	return nil
 }
