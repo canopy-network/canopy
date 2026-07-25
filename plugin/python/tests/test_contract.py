@@ -1,171 +1,168 @@
-"""
-Unit tests for Contract class.
-
-Tests transaction validation, processing logic, and error conditions.
-"""
-
 import pytest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
+from google.protobuf.any_pb2 import Any
 
-from plugin.core import Contract, ContractOptions
-from plugin.config import Config
-from plugin.core.exceptions import PluginException
+from contract import Contract, Config, PluginError
+from contract.proto import (
+    PluginCheckRequest,
+    PluginCheckResponse,
+    PluginDeliverRequest,
+    PluginDeliverResponse,
+    PluginGenesisRequest,
+    PluginGenesisResponse,
+    PluginBeginRequest,
+    PluginBeginResponse,
+    PluginEndRequest,
+    PluginEndResponse,
+    MessageSend,
+    PluginKeyRead,
+    PluginStateReadRequest,
+    PluginStateReadResponse,
+    PluginStateWriteRequest,
+    PluginStateWriteResponse,
+    PluginReadResult,
+    PluginStateEntry,
+    PluginSetOp,
+    PluginDeleteOp,
+    Transaction,
+    Account,
+    Pool,
+    FeeParams,
+)
 
+@pytest.fixture
+def config():
+    return Config(chain_id=1, data_dir_path="/tmp/plugin/")
+
+@pytest.fixture
+def mock_plugin():
+    plugin = MagicMock()
+    
+    async def side_effect_read(contract, request):
+        results = []
+        for key_read in request.keys:
+            val = b""
+            # Because of join_len_prefix, the prefixes are length-prefixed:
+            # - ACCOUNT_PREFIX (b"\x01") -> b"\x01\x01..."
+            # - POOL_PREFIX (b"\x02")    -> b"\x01\x02..."
+            # - PARAMS_PREFIX (b"\x07")  -> b"\x01\x07..."
+            if key_read.key.startswith(b"\x01\x01"):
+                acc = Account(amount=10000)
+                val = acc.SerializeToString()
+            elif key_read.key.startswith(b"\x01\x02"):
+                pool = Pool(amount=500)
+                val = pool.SerializeToString()
+            elif key_read.key.startswith(b"\x01\x07"):
+                params = FeeParams(send_fee=100)
+                val = params.SerializeToString()
+            results.append(PluginReadResult(
+                query_id=key_read.query_id,
+                entries=[PluginStateEntry(value=val)]
+            ))
+        return PluginStateReadResponse(results=results)
+
+    plugin.state_read = AsyncMock(side_effect=side_effect_read)
+    plugin.state_write = AsyncMock(return_value=PluginStateWriteResponse())
+    return plugin
+
+@pytest.fixture
+def contract(config, mock_plugin):
+    return Contract(config=config, plugin=mock_plugin, fsm_id=1)
 
 class TestContract:
-    """Test cases for Contract class."""
-    
-    @pytest.fixture
-    def config(self):
-        """Create test configuration."""
-        return Config()
-    
-    @pytest.fixture
-    def mock_plugin(self):
-        """Create mock socket client plugin."""
-        plugin = Mock()
-        plugin.state_read = AsyncMock()
-        plugin.state_write = AsyncMock()
-        return plugin
-    
-    @pytest.fixture
-    def contract(self, config, mock_plugin):
-        """Create contract instance for testing."""
-        options = ContractOptions(
-            config=config,
-            plugin=mock_plugin,
-            fsm_id=1
-        )
-        return Contract(options)
-    
     def test_genesis(self, contract):
-        """Test genesis method."""
-        result = contract.genesis({})
-        assert result.error is None
-    
+        req = PluginGenesisRequest()
+        resp = contract.genesis(req)
+        assert isinstance(resp, PluginGenesisResponse)
+
     def test_begin_block(self, contract):
-        """Test begin block method."""
-        result = contract.begin_block({})
-        assert result.error is None
-    
+        req = PluginBeginRequest()
+        resp = contract.begin_block(req)
+        assert isinstance(resp, PluginBeginResponse)
+
     def test_end_block(self, contract):
-        """Test end block method.""" 
-        result = contract.end_block({})
-        assert result.error is None
-    
-    def test_is_message_send_dict(self, contract):
-        """Test _is_message_send with dict format."""
-        msg = {
-            'from_address': b'a' * 20,
-            'to_address': b'b' * 20,
-            'amount': 1000
-        }
-        assert contract._is_message_send(msg) is True
-    
-    def test_is_message_send_invalid(self, contract):
-        """Test _is_message_send with invalid message."""
-        msg = {'invalid': 'message'}
-        assert contract._is_message_send(msg) is False
-    
-    def test_check_message_send_valid(self, contract):
-        """Test _check_message_send with valid message."""
-        msg = {
-            'from_address': b'a' * 20,
-            'to_address': b'b' * 20, 
-            'amount': 1000
-        }
-        result = contract._check_message_send(msg)
-        
-        assert result.error is None
-        assert result.recipient == b'b' * 20
-        assert result.authorized_signers == [b'a' * 20]
-    
-    def test_check_message_send_invalid_from_address(self, contract):
-        """Test _check_message_send with invalid from address."""
-        msg = {
-            'from_address': b'short',  # Not 20 bytes
-            'to_address': b'b' * 20,
-            'amount': 1000
-        }
-        result = contract._check_message_send(msg)
-        
-        assert result.error is not None
-        assert result.error['code'] == 12  # Invalid address error code
-    
-    def test_check_message_send_invalid_to_address(self, contract):
-        """Test _check_message_send with invalid to address."""
-        msg = {
-            'from_address': b'a' * 20,
-            'to_address': b'short',  # Not 20 bytes
-            'amount': 1000
-        }
-        result = contract._check_message_send(msg)
-        
-        assert result.error is not None
-        assert result.error['code'] == 12  # Invalid address error code
-    
-    def test_check_message_send_invalid_amount(self, contract):
-        """Test _check_message_send with invalid amount."""
-        msg = {
-            'from_address': b'a' * 20,
-            'to_address': b'b' * 20,
-            'amount': 0  # Invalid amount
-        }
-        result = contract._check_message_send(msg)
-        
-        assert result.error is not None
-        assert result.error['code'] == 13  # Invalid amount error code
-    
-    def test_generate_query_ids(self, contract):
-        """Test _generate_query_ids method."""
-        ids = contract._generate_query_ids()
-        
-        assert 'from_query_id' in ids
-        assert 'to_query_id' in ids
-        assert 'fee_query_id' in ids
-        
-        # All IDs should be different
-        assert ids['from_query_id'] != ids['to_query_id']
-        assert ids['to_query_id'] != ids['fee_query_id']
-        assert ids['from_query_id'] != ids['fee_query_id']
+        req = PluginEndRequest()
+        resp = contract.end_block(req)
+        assert isinstance(resp, PluginEndResponse)
 
+    @pytest.mark.asyncio
+    async def test_check_tx_valid(self, contract):
+        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=500)
+        any_msg = Any()
+        any_msg.Pack(msg)
+        
+        tx = Transaction(fee=200, msg=any_msg)
+        req = PluginCheckRequest(tx=tx)
+        
+        resp = await contract.check_tx(req)
+        assert not resp.HasField("error")
+        assert resp.recipient == b'b'*20
+        assert list(resp.authorized_signers) == [b'a'*20]
 
-@pytest.mark.asyncio
-class TestContractAsync:
-    """Async test cases for Contract class."""
-    
-    @pytest.fixture
-    def config(self):
-        """Create test configuration."""
-        return Config()
-    
-    @pytest.fixture
-    def mock_plugin(self):
-        """Create mock socket client plugin."""
-        plugin = Mock()
-        plugin.state_read = AsyncMock(return_value={
-            'error': None,
-            'results': [{'entries': [{'value': b'test_data'}]}]
-        })
-        plugin.state_write = AsyncMock(return_value={'error': None})
-        return plugin
-    
-    @pytest.fixture
-    def contract(self, config, mock_plugin):
-        """Create contract instance for testing."""
-        options = ContractOptions(
-            config=config,
-            plugin=mock_plugin,
-            fsm_id=1
-        )
-        return Contract(options)
-    
-    async def test_check_tx_no_plugin(self, config):
-        """Test check_tx without plugin."""
-        contract = Contract(ContractOptions(config=config))
+    @pytest.mark.asyncio
+    async def test_check_tx_insufficient_fee(self, contract):
+        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=500)
+        any_msg = Any()
+        any_msg.Pack(msg)
         
-        request = {'tx': {'fee': 1000, 'msg': {}}}
-        result = await contract.check_tx(request)
+        # Fee is 50, but min is 100
+        tx = Transaction(fee=50, msg=any_msg)
+        req = PluginCheckRequest(tx=tx)
         
-        assert result.error is not None
-        assert 'Plugin or config not initialized' in result.error['msg']
+        resp = await contract.check_tx(req)
+        assert resp.HasField("error")
+        assert resp.error.code == 14  # CodeTxFeeBelowLimit
+
+    @pytest.mark.asyncio
+    async def test_check_tx_invalid_address(self, contract):
+        # Invalid address length
+        msg = MessageSend(from_address=b'a'*10, to_address=b'b'*20, amount=500)
+        any_msg = Any()
+        any_msg.Pack(msg)
+        
+        tx = Transaction(fee=200, msg=any_msg)
+        req = PluginCheckRequest(tx=tx)
+        
+        resp = await contract.check_tx(req)
+        assert resp.HasField("error")
+        assert resp.error.code == 12  # CodeInvalidAddress
+
+    @pytest.mark.asyncio
+    async def test_check_tx_invalid_amount(self, contract):
+        # Amount is 0
+        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=0)
+        any_msg = Any()
+        any_msg.Pack(msg)
+        
+        tx = Transaction(fee=200, msg=any_msg)
+        req = PluginCheckRequest(tx=tx)
+        
+        resp = await contract.check_tx(req)
+        assert resp.HasField("error")
+        assert resp.error.code == 13  # CodeInvalidAmount
+
+    @pytest.mark.asyncio
+    async def test_deliver_tx_valid(self, contract, mock_plugin):
+        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=500)
+        any_msg = Any()
+        any_msg.Pack(msg)
+        
+        tx = Transaction(fee=200, msg=any_msg)
+        req = PluginDeliverRequest(tx=tx)
+        
+        resp = await contract.deliver_tx(req)
+        assert not resp.HasField("error")
+        assert mock_plugin.state_write.called
+
+    @pytest.mark.asyncio
+    async def test_deliver_tx_insufficient_funds(self, contract, mock_plugin):
+        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=50000) # exceeds 10000 balance
+        any_msg = Any()
+        any_msg.Pack(msg)
+        
+        tx = Transaction(fee=200, msg=any_msg)
+        req = PluginDeliverRequest(tx=tx)
+        
+        resp = await contract.deliver_tx(req)
+        assert resp.HasField("error")
+        assert resp.error.code == 9  # CodeInsufficientFunds (err_insufficient_funds is code 9)
