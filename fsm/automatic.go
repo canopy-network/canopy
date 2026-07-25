@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"github.com/canopy-network/canopy/lib"
+	"time"
 )
 
 /* This file handles 'automatic' (non-transaction-induced) state changes that occur at the beginning and ending of a block */
@@ -85,6 +86,10 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
 	}
+	// optimization to include any last minute dex ops in the batch
+	if err = s.IncludeSameBlockDex(); err != nil {
+		return
+	}
 	// execute plugin end block if enabled
 	if s.Plugin != nil {
 		resp, e := s.Plugin.EndBlock(s, &lib.PluginEndRequest{
@@ -128,9 +133,24 @@ func (s *StateMachine) CheckProtocolVersion() (err lib.ErrorI) {
 
 // HandleCertificateResults() is a handler for the results of a quorum certificate
 func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, committee *lib.ValidatorSet) lib.ErrorI {
+	startTime := time.Now()
+	observeStage := func(stage string, stageStartTime time.Time) {
+		if s.Metrics != nil {
+			s.Metrics.HandleCertificateResultsStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+		}
+	}
+	defer observeStage("total", startTime)
 	// ensure the certificate results are not nil
 	if qc == nil || qc.Results == nil {
 		return lib.ErrNilCertResults()
+	}
+	// ensure the certificate header is not nil
+	if qc.Header == nil {
+		return lib.ErrEmptyView()
+	}
+	// ensure reward recipients are present before dereferencing
+	if qc.Results.RewardRecipients == nil {
+		return lib.ErrNilRewardRecipients()
 	}
 	// ensure the committee isn't retired
 	retired, err := s.CommitteeIsRetired(qc.Header.ChainId)
@@ -158,39 +178,60 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	results, chainId, isNested := qc.Results, qc.Header.ChainId, committee == nil
 	// handle dex action ordered by the quorum
 	if qc.Header.ChainId != s.Config.ChainId || isNested {
+		dexBatchStartTime := time.Now()
 		if err = s.HandleDexBatch(qc.Header.ChainId, results, isNested); err != nil {
 			return err
 		}
+		observeStage("dex_batch", dexBatchStartTime)
 	}
 	// handle the token swaps ordered by the quorum
+	committeeSwapsStartTime := time.Now()
 	s.HandleCommitteeSwaps(results.Orders, chainId)
+	observeStage("committee_swaps", committeeSwapsStartTime)
 	// index the 'nested chain' checkpoint
+	checkpointStartTime := time.Now()
 	if err = s.HandleCheckpoint(chainId, results); err != nil {
 		return err
 	}
+	observeStage("checkpoint", checkpointStartTime)
 	// handle byzantine evidence
+	byzantineStartTime := time.Now()
 	nonSignerPercent, err := s.HandleByzantine(qc, committee)
 	if err != nil {
 		return err
 	}
+	observeStage("byzantine", byzantineStartTime)
 	// reduce all payment percents proportional to the non-signer percent
+	reducePercentsStartTime := time.Now()
 	for i, p := range results.RewardRecipients.PaymentPercents {
+		if p == nil {
+			return lib.ErrInvalidPercentAllocation()
+		}
 		results.RewardRecipients.PaymentPercents[i].Percent = lib.Uint64ReducePercentage(p.Percent, uint64(nonSignerPercent))
 	}
+	observeStage("reduce_payment_percents", reducePercentsStartTime)
 	// if the quorum is signalling 'retire' for a 'nestedChain'
 	if qc.Results.Retired && qc.Header.ChainId != s.Config.ChainId {
 		// retire the committeeId on this root
+		retireCommitteeStartTime := time.Now()
 		if err = s.RetireCommittee(qc.Header.ChainId); err != nil {
 			return err
 		}
+		observeStage("retire_committee", retireCommitteeStartTime)
 	}
 	// update the committee data
-	return s.UpsertCommitteeData(&lib.CommitteeData{
+	upsertCommitteeDataStartTime := time.Now()
+	err = s.UpsertCommitteeData(&lib.CommitteeData{
 		ChainId:                chainId,
 		LastRootHeightUpdated:  qc.Header.RootHeight,
 		LastChainHeightUpdated: qc.Header.Height,
 		PaymentPercents:        results.RewardRecipients.PaymentPercents,
 	})
+	if err != nil {
+		return err
+	}
+	observeStage("upsert_committee_data", upsertCommitteeDataStartTime)
+	return nil
 }
 
 // HandleCheckpoint() handles the `checkpoint-as-a-service` root-chain functionality
@@ -229,7 +270,8 @@ func (s *StateMachine) ForceUnstakeMaxPaused() lib.ErrorI {
 		// extract the address from the key
 		addr, err := AddressFromKey(key)
 		if err != nil {
-			return err
+			s.log.Warnf("skipping malformed paused key: %x", key)
+			return nil
 		}
 		// force unstake the validator
 		return s.ForceUnstakeValidator(addr)

@@ -25,6 +25,7 @@
   "externalAddress": "node-1",
   "maxInbound": 21,
   "maxOutbound": 7,
+  "autoUpdate": true,
   "trustedPeerIDs": null,
   "dialPeers": [],
   "bannedPeerIDs": null,

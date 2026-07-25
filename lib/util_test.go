@@ -540,3 +540,13 @@ func TestUnmarshalPreflightRejectsHugeFieldLengths(t *testing.T) {
 
 	require.Error(t, Unmarshal(bz, &Block{}))
 }
+
+func TestAddUint64(t *testing.T) {
+	sum, overflow := AddUint64(2, 3)
+	require.Equal(t, uint64(5), sum)
+	require.False(t, overflow)
+
+	sum, overflow = AddUint64(^uint64(0), 1)
+	require.Equal(t, uint64(0), sum)
+	require.True(t, overflow)
+}

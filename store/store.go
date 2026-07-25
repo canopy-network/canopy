@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -22,6 +23,8 @@ const (
 )
 
 var (
+	logOnce sync.Once // helper to log the compression method used once
+
 	latestStatePrefix     = lib.JoinLenPrefix([]byte("s/")) // prefix designated for the LatestStateStore where the most recent blobs of state data are held
 	historicStatePrefix   = lib.JoinLenPrefix([]byte("h/")) // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
 	stateCommitmentPrefix = lib.JoinLenPrefix([]byte("c/")) // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
@@ -72,10 +75,12 @@ type Store struct {
 	sc         *SMT          // reference to the state commitment store
 	*Indexer                 // reference to the indexer store
 	metrics    *lib.Metrics  // telemetry
+	syncing    atomic.Bool   // when true, skip compaction to avoid write stalls during sync
 	log        lib.LoggerI   // logger
 	config     lib.Config    // config
 	mu         *sync.Mutex   // mutex for concurrent commits
 	compaction atomic.Bool   // atomic boolean for compaction status
+	backup     atomic.Bool   // atomic boolean for backup status
 	isTxn      bool          // flag indicating if the store is in transaction mode
 }
 
@@ -95,7 +100,11 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		BlockSize:      64 << 10, // 64 KB data blocks
 		IndexBlockSize: 32 << 10, // 32 KB index blocks
 		Compression: func() *sstable.CompressionProfile {
-			return sstable.ZstdCompression // biggest compression at the expense of more CPU resources
+			profile := getCompressionProfile(config.CompressionProfile)
+			logOnce.Do(func() {
+				log.Debugf("Using %s compression for sstables", profile.Name)
+			})
+			return profile
 		},
 	}
 	db, err := pebble.Open(path, &pebble.Options{
@@ -176,6 +185,7 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 		config:     config,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
+		backup:     atomic.Bool{},
 	}, nil
 }
 
@@ -203,6 +213,7 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
+		backup:     atomic.Bool{},
 	}, nil
 }
 
@@ -225,6 +236,7 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
+		backup:     atomic.Bool{},
 	}, nil
 }
 
@@ -242,33 +254,40 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
-	// update the version (height) number
-	s.version++
+	nextVersion := s.version + 1
 	// set the new CommitID (to the Transaction not the actual DB)
-	if err = s.setCommitID(s.version, root); err != nil {
+	if err = s.setCommitID(nextVersion, root); err != nil {
+		s.Reset()
 		return nil, err
 	}
 	// collect LSS tombstones before Flush() clears the txn operations
 	lssDeleteKeys := s.collectLssDeleteKeys()
 	// commit the in-memory txn to the pebbleDB batch
 	if e := s.Flush(); e != nil {
+		s.Reset()
 		return nil, e
 	}
 	if err = s.purgeLssTombstones(lssDeleteKeys); err != nil {
+		s.Reset()
 		return nil, err
 	}
 	// extract the internal metrics from the pebble batch
 	size, count := len(s.writer.Repr()), s.writer.Count()
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
 	if err := s.db.Apply(s.writer, pebble.NoSync); err != nil {
-		return nil, ErrCommitDB(err)
+		commitErr := ErrCommitDB(err)
+		s.Reset()
+		return nil, commitErr
 	}
 	// update the metrics once complete
 	s.metrics.UpdateStoreMetrics(int64(size), int64(count), time.Time{}, startTime)
+	s.version = nextVersion
 	// reset the writer for the next height
 	s.Reset()
 	// compact if necessary
 	s.MaybeCompact()
+	// backup if enabled
+	s.MaybeBackup()
 	// return the root
 	return
 }
@@ -465,6 +484,9 @@ func (s *Store) IncreaseVersion() { func() { s.version++; s.sc = nil }() }
 // number of the state. This is used to track the versioning of the state data.
 func (s *Store) Version() uint64 { return s.version }
 
+// SetSyncing tells the store whether the node is currently syncing
+func (s *Store) SetSyncing(v bool) { s.syncing.Store(v) }
+
 // NewTxn() creates and returns a new transaction for the Store, allowing atomic operations
 // on the StateStore, StateCommitStore, Indexer, and CommitIDStore.
 func (s *Store) NewTxn() lib.StoreI {
@@ -486,18 +508,36 @@ func (s *Store) NewTxn() lib.StoreI {
 // to the database for direct operations and management.
 func (s *Store) DB() *pebble.DB { return s.db }
 
+// IsRootCached() reports whether the SMT root is already cached on this store instance.
+func (s *Store) IsRootCached() bool { return s.sc != nil }
+
 // Root() retrieves the root hash of the StateCommitStore, representing the current root of the
 // Sparse Merkle Tree. This hash is used for verifying the integrity and consistency of the state.
 func (s *Store) Root() (root []byte, err lib.ErrorI) {
 	// if smt not cached
 	if s.sc == nil {
+		startTime := time.Now()
+		defer s.metrics.UpdateStoreRootTime(startTime)
 		nextVersion := s.version + 1
 		// set up the state commit store
 		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
 		// commit the SMT directly using the txn ops
-		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
+		//
+		// NOTE: the SMT node cache MUST NOT be persisted across blocks. `node.copy()` is a
+		// no-op alias, so the parallel commit mutates cached `*node` objects in place. Reusing
+		// them later can serve stale nodes (e.g. from a speculative, uncommitted `Root()` call),
+		// diverging from the on-disk snapshot. A fresh per-block cache still caches within the commit.
+		if err = s.sc.CommitParallel(s.ss.txn.ops); err != nil {
 			return nil, err
 		}
+		s.metrics.UpdateStoreRootStats(
+			len(s.ss.txn.ops),
+			s.sc.stats.NodeReads,
+			s.sc.stats.NodeCacheHits,
+			s.sc.stats.NodeCacheMisses,
+			s.sc.stats.TraverseSteps,
+			s.sc.stats.Rehashes,
+		)
 	}
 	// return the root
 	return s.sc.Root(), nil
@@ -605,55 +645,148 @@ func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 
 // MaybeCompact() checks if it is time to compact the LSS and HSS respectively
 func (s *Store) MaybeCompact() {
+	// skip compaction during syncing: at scale (~1.5M+ blocks) HSS range compaction causes
+	// PebbleDB write stalls that throttle the sync loop's db.Apply calls
+	if s.syncing.Load() {
+		return
+	}
 	// check if the current version is a multiple of the cleanup block interval
 	compactionInterval := s.config.StoreConfig.LSSCompactionInterval
 	version := s.Version()
 	if compactionInterval > 0 && version%compactionInterval == 0 {
 		go func() {
-			// compactions are not allowed to run concurrently to not intertwine with the keys
-			if s.compaction.Load() {
-				s.log.Debugf("key compaction skipped [%d]: already in progress", version)
+			now := time.Now()
+			// trigger compaction of store keys
+			if err := s.Compact(version, latestStatePrefix); err != nil {
+				s.log.Errorf("LSS key compaction failed: %s", err)
 				return
 			}
-			s.compaction.Store(true)
-			defer s.compaction.Store(false)
+			s.metrics.UpdateStoreJobMetrics(time.Since(now), 0, 0)
 			// perform HSS compaction every 4th compaction
-			hssCompaction := (version/compactionInterval)%4 == 0
-			// trigger compaction of store keys
-			if err := s.Compact(version, hssCompaction); err != nil {
-				s.log.Errorf("key compaction failed: %s", err)
+			if (version/compactionInterval)%4 != 0 {
+				return
 			}
+			now = time.Now()
+			if err := s.Compact(version, historicStatePrefix); err != nil {
+				s.log.Errorf("HSS key compaction failed: %s", err)
+			}
+			s.metrics.UpdateStoreJobMetrics(0, time.Since(now), 0)
 		}()
 	}
 }
 
-// Compact runs Pebble range compaction over the latest and optional historic state prefixes.
-func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
-	// first compaction: latest state  keys
-	startPrefix, endPrefix := latestStatePrefix, prefixEnd(latestStatePrefix)
-	// track current time and version
+// MaybeBackup() checks if it is time to backup the current state of the database
+func (s *Store) MaybeBackup() {
+	// helper variables
+	backupInterval := s.config.StoreConfig.BackupInterval
+	backupDir := s.config.StoreConfig.BackupDirectory
+	// ensure only complete backups exists on the actual backup directory
+	tempBackupDir := backupDir + "_temp"
+	// retrieve the current version
+	version := s.Version()
+	// verify that backups are enabled in the config
+	if backupInterval == 0 || backupDir == "" {
+		return
+	}
+	// check if the current version is a multiple of the backup block interval
+	if version%backupInterval != 0 {
+		return
+	}
+	// ensure that only one backup can run at a time to avoid overlapping backups
+	if s.backup.Load() {
+		s.log.Debugf("data backup skipped [%d]: already in progress", version)
+		return
+	}
+	s.backup.Store(true)
+	// perform the backup in a separate goroutine to avoid blocking the main thread
+	go func() {
+		var err error
+		start := time.Now()
+		defer func() {
+			s.backup.Store(false)
+			if err == nil {
+				return
+			}
+			s.log.Errorf("backup failed at height [%d]: %v", version, err)
+		}()
+		// delete current backup files as pebbleDB expects an empty directory
+		if err = os.RemoveAll(tempBackupDir); err != nil {
+			err = fmt.Errorf("remove temporary backup: %w", err)
+			return
+		}
+		// flush the memtable to SST before checkpointing so the backup does not
+		// depend on WAL replay for recovery (commits use NoSync so WAL records
+		// may not be durable on disk at checkpoint time)
+		if err = s.db.Flush(); err != nil {
+			err = fmt.Errorf("flush before checkpoint: %w", err)
+			return
+		}
+		// perform the backup using pebble's checkpointing mechanism which creates a
+		// consistent snapshot of the database at the specified directory
+		if err = s.db.Checkpoint(tempBackupDir); err != nil {
+			err = fmt.Errorf("checkpoint creation: %w", err)
+			return
+		}
+		// write the current height to a separate file
+		heightFile := filepath.Join(tempBackupDir, "height.txt")
+		if err = os.WriteFile(heightFile, fmt.Appendf(nil, "%d", version), 0644); err != nil {
+			err = fmt.Errorf("write height file: %w", err)
+			return
+		}
+		// rotate: atomically move current backup to a previous slot so there is
+		// always at least one valid backup on disk during the swap
+		prevBackupDir := backupDir + "_prev"
+		if err = os.Rename(backupDir, prevBackupDir); err != nil && !os.IsNotExist(err) {
+			err = fmt.Errorf("rotate backup: %w", err)
+			return
+		}
+		// promote: atomically move the temp backup into the active slot
+		if err = os.Rename(tempBackupDir, backupDir); err != nil {
+			err = fmt.Errorf("finalize backup: %w", err)
+			return
+		}
+		// clean up the previous backup now that the new one is safely in place
+		if removeErr := os.RemoveAll(prevBackupDir); removeErr != nil {
+			s.log.Warnf("failed to remove previous backup: %v", removeErr)
+		}
+		backupDuration := time.Since(start)
+		// log results
+		s.log.Infof("backup completed at height [%d] in %s", version, backupDuration)
+		// update metrics
+		s.metrics.UpdateStoreJobMetrics(0, 0, backupDuration)
+	}()
+}
+
+// Compact runs Pebble range compaction over the prefix range
+func (s *Store) Compact(version uint64, prefix []byte) lib.ErrorI {
+	// compactions are not allowed to run concurrently to not intertwine with the keys
+	if !s.compaction.CompareAndSwap(false, true) {
+		s.log.Debugf("key compaction skipped [%d] [%s]: already in progress", version, prefix)
+		return nil
+	}
+	defer s.compaction.Store(false)
 	now := time.Now()
-	s.log.Debugf("key compaction started at height %d", version)
-	// create a timeout to limit the duration of the compaction process
-	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
+	s.log.Debugf("key compaction [%s] started at height %d", prefix, version)
+	// TODO: per-prefix budget was chosen arbitrarily, update once multiple tests are run
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	// flush and compact the range
-	if err := s.db.Compact(ctx, startPrefix, endPrefix, true); err != nil {
-		return ErrCommitDB(err)
+	// compact prefix range
+	if err := s.db.Compact(ctx, prefix, prefixEnd(prefix), true); err != nil {
+		return ErrCompactDB(err)
 	}
-	lssTime := time.Since(now)
-	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssTime)
-	// second compaction: historic state keys
-	if compactHSS {
-		startPrefix, endPrefix = historicStatePrefix, prefixEnd(historicStatePrefix)
-		hssTime := time.Now()
-		if err := s.db.Compact(ctx, startPrefix, endPrefix, false); err != nil {
-			return ErrCommitDB(err)
+	// log the duration of the compaction
+	duration := time.Since(now)
+	s.log.Debugf("key compaction finished [%s] [%d] time: %s", prefix, version, duration)
+	return nil
+}
+
+// CompactAll is a helper function that runs compaction for all store prefixes sequentially
+func (s *Store) CompactAll(version uint64) lib.ErrorI {
+	prefixes := [][]byte{latestStatePrefix, historicStatePrefix, stateCommitmentPrefix, indexerPrefix}
+	for _, prefix := range prefixes {
+		if err := s.Compact(version, prefix); err != nil {
+			return err
 		}
-		// log results
-		s.log.Debugf("key compaction finished [HSS] [%d] time: %s, total time: %s", version,
-			time.Since(hssTime), time.Since(now))
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -29,7 +30,7 @@ var (
 	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
 	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
 	// create indexer cache
-	blockCache, _ = lru.New[uint64, *lib.BlockResult](4)
+	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
 )
 
@@ -127,12 +128,18 @@ func (t *Indexer) GetBlockByHeight(height uint64) (*lib.BlockResult, lib.ErrorI)
 		return nil, err
 	}
 	// get block from hash key
-	return t.getBlock(hashKey, true)
+	block, err := t.getBlock(hashKey, true)
+	if err != nil {
+		return nil, err
+	}
+	// populate cache on read so historical blocks are warm after a restart
+	blockCache.Add(height, block)
+	return block, nil
 }
 
 // GetBlockHeaderByHeight() returns the block result without transactions
 func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.ErrorI) {
-	// check cache
+	// check cache (full block result may be cached from GetBlockByHeight or IndexBlock)
 	if got, found := blockCache.Get(height); found {
 		return got, nil
 	}
@@ -142,7 +149,13 @@ func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.E
 		return nil, err
 	}
 	// get block from hash key
-	return t.getBlock(hashKey, false)
+	block, err := t.getBlock(hashKey, false)
+	if err != nil {
+		return nil, err
+	}
+	// populate cache on read so historical blocks are warm after a restart
+	blockCache.Add(height, block)
+	return block, nil
 }
 
 // GetBlocks() returns a page of blocks based on the page parameters
@@ -241,14 +254,18 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 	if err != nil {
 		return err
 	}
-	// store the tx by hash key
-	hash, err := lib.StringToBytes(result.GetTxHash())
+	hashes, err := indexedTxHashes(result)
 	if err != nil {
 		return err
 	}
-	hashKey, err := t.indexTxByHash(hash, bz)
+	hashKey, err := t.indexTxByHash(hashes[0], bz)
 	if err != nil {
 		return err
+	}
+	for _, hash := range hashes[1:] {
+		if _, err = t.indexTxByHash(hash, bz); err != nil {
+			return err
+		}
 	}
 	// store the hash key by height.index
 	heightAndIndexKey := t.txHeightAndIndexKey(result.GetHeight(), result.GetIndex())
@@ -267,8 +284,32 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 			return err
 		}
 	}
-
 	return nil
+}
+
+// indexedTxHashes() returns the primary Canopy tx hash plus any persisted lookup aliases.
+func indexedTxHashes(result *lib.TxResult) ([][]byte, lib.ErrorI) {
+	hash, err := lib.StringToBytes(result.GetTxHash())
+	if err != nil {
+		return nil, err
+	}
+	hashes := [][]byte{hash}
+	if ethHash := ethTxHash(result.Transaction); len(ethHash) != 0 && !bytes.Equal(ethHash, hash) {
+		hashes = append(hashes, ethHash)
+	}
+	return hashes, nil
+}
+
+// ethTxHash() returns the canonical Ethereum tx hash for an RLP-backed transaction.
+func ethTxHash(tx *lib.Transaction) []byte {
+	if tx == nil || !lib.IsRLPMemo(tx.Memo) || tx.Signature == nil || len(tx.Signature.Signature) == 0 {
+		return nil
+	}
+	var ethTx types.Transaction
+	if err := ethTx.UnmarshalBinary(tx.Signature.Signature); err != nil {
+		return nil
+	}
+	return ethTx.Hash().Bytes()
 }
 
 // GetTxByHash() returns the tx by hash
@@ -298,7 +339,36 @@ func (t *Indexer) GetTxsByRecipient(address crypto.AddressI, newestToOldest bool
 
 // DeleteTxsForHeight() deletes the transaction object for a specific height
 func (t *Indexer) DeleteTxsForHeight(height uint64) lib.ErrorI {
-	return t.deleteAll(t.txHeightKey(height))
+	txs, err := t.GetTxsByHeightNonPaginated(height, false)
+	if err != nil {
+		return err
+	}
+	for _, tx := range txs {
+		heightAndIndexKey := t.txHeightAndIndexKey(tx.GetHeight(), tx.GetIndex())
+		hashes, e := indexedTxHashes(tx)
+		if e != nil {
+			return e
+		}
+		for _, hash := range hashes {
+			if e = t.db.Delete(t.txHashKey(hash)); e != nil {
+				return e
+			}
+		}
+		if t.config.IndexByAccount {
+			if e = t.db.Delete(t.txSenderKey(tx.GetSender(), heightAndIndexKey)); e != nil {
+				return e
+			}
+			if recipient := tx.GetRecipient(); recipient != nil {
+				if e = t.db.Delete(t.txRecipientKey(recipient, heightAndIndexKey)); e != nil {
+					return e
+				}
+			}
+		}
+	}
+	if err = t.deleteAll(t.txHeightKey(height)); err != nil {
+		return err
+	}
+	return nil
 }
 
 // DOUBLE SIGNER CODE BELOW

@@ -29,6 +29,9 @@ from .plugin_pb2 import (  # type: ignore[attr-defined]
     PluginEndRequest,
     PluginEndResponse,
     PluginError,
+    # Detached query types
+    PluginQueryRequest,
+    PluginQueryResponse,
     # State management types
     PluginStateReadRequest,
     PluginStateReadResponse,
@@ -71,6 +74,9 @@ __all__ = [
     "PluginEndRequest",
     "PluginEndResponse",
     "PluginError",
+    # Detached query types
+    "PluginQueryRequest",
+    "PluginQueryResponse",
     # State management types
     "PluginStateReadRequest",
     "PluginStateReadResponse",

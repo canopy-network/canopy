@@ -2,7 +2,7 @@
 # Build from repository root: docker build -f plugin/csharp/Dockerfile -t canopy-csharp .
 
 # Stage 1: Build Canopy (Go)
-FROM golang:1.24-alpine AS canopy-builder
+FROM golang:1.26-alpine AS canopy-builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -17,7 +17,7 @@ COPY plugin/csharp/ ./
 RUN dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-x64 --self-contained true -o /out
 
 # Stage 3: Runtime (Alpine-based, self-contained binary includes .NET runtime)
-FROM alpine:3.19
+FROM alpine:3.23
 WORKDIR /app
 
 # Install runtime dependencies

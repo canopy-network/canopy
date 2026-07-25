@@ -40,6 +40,8 @@ message Transaction {
   uint64 network_id = 8; // @gotags: json:"networkID"
   // chain_id: The identity of the committee the transaction is intended for
   uint64 chain_id = 9; // @gotags: json:"chainID"
+  // nonce: the sequence number for nonce-protected transactions
+  uint64 nonce = 10;
 }
 
 // TxResult represents the result of a processed transaction, including information about the sender, recipient,

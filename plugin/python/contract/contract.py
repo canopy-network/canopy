@@ -9,6 +9,8 @@ import random
 import struct
 from typing import Optional, Dict, Any, Union, Protocol, TYPE_CHECKING
 
+UINT64_MAX = (1 << 64) - 1
+
 if TYPE_CHECKING:
     from .plugin import Plugin, Config
 
@@ -227,7 +229,7 @@ class Contract:
             if type_url.endswith("/types.MessageSend"):
                 msg = MessageSend()
                 msg.ParseFromString(request.tx.msg.value)
-                return await self._deliver_message_send(msg, request.tx.fee)
+                return await self._deliver_message_send(msg, request.tx.fee, request.tx.memo)
             else:
                 raise err_invalid_message_cast()
 
@@ -268,7 +270,7 @@ class Contract:
         response.authorized_signers.append(msg.from_address)
         return response
 
-    async def _deliver_message_send(self, msg: MessageSend, fee: int) -> PluginDeliverResponse:
+    async def _deliver_message_send(self, msg: MessageSend, fee: int, memo: str) -> PluginDeliverResponse:
         """DeliverMessageSend handles a 'send' message."""
         if not self.plugin or not self.config:
             raise PluginError(1, "plugin", "plugin or config not initialized")
@@ -314,6 +316,9 @@ class Contract:
             elif resp.query_id == fee_query_id:
                 fee_pool_bytes = resp.entries[0].value if resp.entries else None
 
+        if msg.amount > UINT64_MAX - fee:
+            raise err_invalid_amount()
+
         # Add fee to amount to deduct
         amount_to_deduct = msg.amount + fee
 
@@ -330,6 +335,11 @@ class Contract:
         if from_key == to_key:
             to_account = from_account
 
+        if fee_pool.amount > UINT64_MAX - fee or (
+            from_key != to_key and to_account.amount > UINT64_MAX - msg.amount
+        ):
+            raise err_invalid_amount()
+
         # Subtract from sender
         from_account.amount -= amount_to_deduct
 
@@ -344,30 +354,23 @@ class Contract:
         to_bytes_new = marshal(to_account)
         fee_pool_bytes_new = marshal(fee_pool)
 
-        # Execute writes to database
-        if from_account.amount == 0:
-            # If sender account is drained, delete it
-            write_resp = await self.plugin.state_write(
-                self,
-                PluginStateWriteRequest(
-                    sets=[
-                        PluginSetOp(key=fee_pool_key, value=fee_pool_bytes_new),
-                        PluginSetOp(key=to_key, value=to_bytes_new),
-                    ],
-                    deletes=[PluginDeleteOp(key=from_key)],
-                ),
-            )
+        # Retain drained accounts only when they carry nonce state or core will advance the nonce after RLP.V2 delivery.
+        sets = [
+            PluginSetOp(key=fee_pool_key, value=fee_pool_bytes_new),
+            PluginSetOp(key=to_key, value=to_bytes_new),
+        ]
+        deletes = []
+        if from_account.amount == 0 and from_account.nonce == 0 and memo != "RLP.V2":
+            deletes.append(PluginDeleteOp(key=from_key))
         else:
-            write_resp = await self.plugin.state_write(
-                self,
-                PluginStateWriteRequest(
-                    sets=[
-                        PluginSetOp(key=fee_pool_key, value=fee_pool_bytes_new),
-                        PluginSetOp(key=to_key, value=to_bytes_new),
-                        PluginSetOp(key=from_key, value=from_bytes_new),
-                    ],
-                ),
-            )
+            sets.append(PluginSetOp(key=from_key, value=from_bytes_new))
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(
+                sets=sets,
+                deletes=deletes,
+            ),
+        )
 
         result = PluginDeliverResponse()
         if write_resp.HasField("error"):

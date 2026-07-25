@@ -175,14 +175,9 @@ func (x *PeerMeta) Sign(key crypto.PrivateKeyI) *PeerMeta {
 
 // SignBytes() returns the canonical byte representation used to digitally sign the bytes
 func (x *PeerMeta) SignBytes() (signBytes []byte) {
-	// save the signature in a temporary variable
-	temp := x.Signature
-	// nullify the signature
-	x.Signature = nil
-	// convert the structure into proto bytes
-	signBytes, _ = Marshal(x)
-	// set the signature back into the object
-	x.Signature = temp
+	// marshal a copy with the signature omitted to avoid race conditions across
+	// concurrent handshake goroutines
+	signBytes, _ = Marshal(&PeerMeta{NetworkId: x.NetworkId, ChainId: x.ChainId})
 	// exit
 	return
 }

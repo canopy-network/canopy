@@ -3,11 +3,45 @@ package crypto
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/drand/kyber"
 	"github.com/stretchr/testify/require"
 	math "math/rand"
 	"testing"
 	"time"
 )
+
+func TestBatchVerifierAcceptsSerializedMultiBLSKey(t *testing.T) {
+	msg := []byte("hello world")
+	k1, err := NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	k2, err := NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	k3, err := NewBLS12381PrivateKey()
+	require.NoError(t, err)
+
+	publicKeys := [][]byte{k1.PublicKey().Bytes(), k2.PublicKey().Bytes(), k3.PublicKey().Bytes()}
+	points := make([]kyber.Point, 0, len(publicKeys))
+	for _, bz := range publicKeys {
+		point, e := BytesToBLS12381Point(bz)
+		require.NoError(t, e)
+		points = append(points, point)
+	}
+
+	multiKey, err := NewMultiBLSFromPoints(points, nil)
+	require.NoError(t, err)
+	require.NoError(t, multiKey.AddSigner(k1.Sign(msg), 0))
+	require.NoError(t, multiKey.AddSigner(k3.Sign(msg), 2))
+	sig, err := multiKey.AggregateSignatures()
+	require.NoError(t, err)
+
+	publicKeyBytes := multiKey.(*BLS12381MultiPublicKey).Bytes()
+	publicKey, err := NewPublicKeyFromBytes(publicKeyBytes)
+	require.NoError(t, err)
+
+	b := NewBatchVerifier()
+	require.NoError(t, b.Add(publicKey, publicKeyBytes, msg, sig))
+	require.Equal(t, []int(nil), b.Verify())
+}
 
 func TestKeyBatchFuzz(t *testing.T) {
 	for i := 0; i < 100; i++ {

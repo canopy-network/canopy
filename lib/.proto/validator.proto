@@ -76,6 +76,16 @@ message NonSigner {
   bytes address = 1;
   // counter: increments when a Validator doesn't sign a block and resets every non-sign-window
   uint64 counter = 2;
+  // chain_counters: optional per-chain non-sign counters for protocol-versioned chain-scoped slashing
+  repeated NonSignerChainCounter chain_counters = 3;
+}
+
+// NonSignerChainCounter tracks a non-signer counter scoped to a specific chain id within a non-sign window
+message NonSignerChainCounter {
+  // chain_id: the chain committee id this counter applies to
+  uint64 chain_id = 1;
+  // counter: number of missed signatures for this chain during the current non-sign window
+  uint64 counter = 2;
 }
 
 // NonSignerList is a list of information that tracks the number of blocks not signed by the Validator within the Non-Sign-Window

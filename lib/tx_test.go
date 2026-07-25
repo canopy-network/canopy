@@ -10,6 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestTransactionNonceUsesProtocolFieldNumber(t *testing.T) {
+	field := new(Transaction).ProtoReflect().Descriptor().Fields().ByName("nonce")
+	require.NotNil(t, field)
+	require.EqualValues(t, 10, field.Number())
+}
+
 func TestTransactionCheckBasic(t *testing.T) {
 	// pre-define a test message
 	sig := &Signature{

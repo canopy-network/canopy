@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"net/http"
+	"net/http/pprof"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -19,7 +20,6 @@ const (
 	PoolsRoutePath                 = "/v1/query/pools"
 	ValidatorRoutePath             = "/v1/query/validator"
 	ValidatorsRoutePath            = "/v1/query/validators"
-	CommitteeRoutePath             = "/v1/query/committee"
 	CommitteeDataRoutePath         = "/v1/query/committee-data"
 	CommitteesDataRoutePath        = "/v1/query/committees-data"
 	SubsidizedCommitteesRoutePath  = "/v1/query/subsidized-committees"
@@ -64,11 +64,6 @@ const (
 	ValidatorSetRoutePath          = "/v1/query/validator-set"
 	CheckpointRoutePath            = "/v1/query/checkpoint"
 	SubscribeRCInfoPath            = "/v1/subscribe-rc-info"
-	// debug
-	DebugBlockedRoutePath   = "/debug/blocked"
-	DebugHeapRoutePath      = "/debug/heap"
-	DebugCPURoutePath       = "/debug/cpu"
-	DebugGoroutineRoutePath = "/debug/goroutine"
 	// eth
 	EthereumRoutePath = "/v1/eth"
 	// admin
@@ -79,6 +74,7 @@ const (
 	KeystoreDeleteRoutePath    = "/v1/admin/keystore-delete"
 	KeystoreGetRoutePath       = "/v1/admin/keystore-get"
 	TxSendRoutePath            = "/v1/admin/tx-send"
+	TxSendVestingRoutePath     = "/v1/admin/tx-send-vesting"
 	TxStakeRoutePath           = "/v1/admin/tx-stake"
 	TxEditStakeRoutePath       = "/v1/admin/tx-edit-stake"
 	TxUnstakeRoutePath         = "/v1/admin/tx-unstake"
@@ -120,7 +116,6 @@ const (
 	ValidatorRouteName             = "validator"
 	ValidatorsRouteName            = "validators"
 	ValidatorSetRouteName          = "validator-set"
-	CommitteeRouteName             = "committee"
 	CommitteeDataRouteName         = "committee-data"
 	CommitteesDataRouteName        = "committees-data"
 	SubsidizedCommitteesRouteName  = "subsidized-committees"
@@ -178,6 +173,7 @@ const (
 	KeystoreDeleteRouteName         = "keystore-delete"
 	KeystoreGetRouteName            = "keystore-get"
 	TxSendRouteName                 = "tx-send"
+	TxSendVestingRouteName          = "tx-send-vesting"
 	TxStakeRouteName                = "tx-stake"
 	TxUnstakeRouteName              = "tx-unstake"
 	TxEditStakeRouteName            = "tx-edit-stake"
@@ -226,7 +222,6 @@ var routePaths = routes{
 	PoolsRouteName:                 {Method: http.MethodPost, Path: PoolsRoutePath},
 	ValidatorRouteName:             {Method: http.MethodPost, Path: ValidatorRoutePath},
 	ValidatorsRouteName:            {Method: http.MethodPost, Path: ValidatorsRoutePath},
-	CommitteeRouteName:             {Method: http.MethodPost, Path: CommitteeRoutePath},
 	CommitteeDataRouteName:         {Method: http.MethodPost, Path: CommitteeDataRoutePath},
 	CommitteesDataRouteName:        {Method: http.MethodPost, Path: CommitteesDataRoutePath},
 	SubsidizedCommitteesRouteName:  {Method: http.MethodPost, Path: SubsidizedCommitteesRoutePath},
@@ -270,11 +265,6 @@ var routePaths = routes{
 	RootChainInfoRouteName:         {Method: http.MethodPost, Path: RootChainInfoRoutePath},
 	ValidatorSetRouteName:          {Method: http.MethodPost, Path: ValidatorSetRoutePath},
 	CheckpointRouteName:            {Method: http.MethodPost, Path: CheckpointRoutePath},
-	// debug
-	DebugBlockedRouteName:   {Method: http.MethodGet, Path: DebugBlockedRoutePath},
-	DebugHeapRouteName:      {Method: http.MethodGet, Path: DebugHeapRoutePath},
-	DebugCPURouteName:       {Method: http.MethodGet, Path: DebugCPURoutePath},
-	DebugGoroutineRouteName: {Method: http.MethodGet, Path: DebugGoroutineRoutePath},
 	// eth
 	EthereumRouteName: {Method: http.MethodPost, Path: EthereumRoutePath},
 	// admin
@@ -285,6 +275,7 @@ var routePaths = routes{
 	KeystoreDeleteRouteName:         {Method: http.MethodPost, Path: KeystoreDeleteRoutePath},
 	KeystoreGetRouteName:            {Method: http.MethodPost, Path: KeystoreGetRoutePath},
 	TxSendRouteName:                 {Method: http.MethodPost, Path: TxSendRoutePath},
+	TxSendVestingRouteName:          {Method: http.MethodPost, Path: TxSendVestingRoutePath},
 	TxStakeRouteName:                {Method: http.MethodPost, Path: TxStakeRoutePath},
 	TxEditOrderRouteName:            {Method: http.MethodPost, Path: TxEditOrderRoutePath},
 	TxUnstakeRouteName:              {Method: http.MethodPost, Path: TxUnstakeRoutePath},
@@ -331,7 +322,6 @@ func createRouter(s *Server) *httprouter.Router {
 		PoolsRouteName:                 s.Pools,
 		ValidatorRouteName:             s.Validator,
 		ValidatorsRouteName:            s.Validators,
-		CommitteeRouteName:             s.Committee,
 		ValidatorSetRouteName:          s.ValidatorSet,
 		CommitteeDataRouteName:         s.CommitteeData,
 		CommitteesDataRouteName:        s.CommitteesData,
@@ -403,6 +393,7 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		KeystoreDeleteRouteName:         s.KeystoreDelete,
 		KeystoreGetRouteName:            s.KeystoreGetKeyGroup,
 		TxSendRouteName:                 s.TransactionSend,
+		TxSendVestingRouteName:          s.TransactionSendVesting,
 		TxStakeRouteName:                s.TransactionStake,
 		TxEditStakeRouteName:            s.TransactionEditStake,
 		TxUnstakeRouteName:              s.TransactionUnstake,
@@ -429,11 +420,6 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		LogsRouteName:                   logsHandler(s),
 		AddVoteRouteName:                s.AddVote,
 		DelVoteRouteName:                s.DelVote,
-		// debug
-		DebugBlockedRouteName:   debugHandler(DebugBlockedRouteName),
-		DebugHeapRouteName:      debugHandler(DebugHeapRouteName),
-		DebugCPURouteName:       debugHandler(DebugCPURouteName),
-		DebugGoroutineRouteName: debugHandler(DebugGoroutineRouteName),
 	}
 
 	// Initialize a new router using the httprouter package.
@@ -447,5 +433,19 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		router.Handle(path.Method, path.Path, logHandler{path.Path, handler}.Handle)
 	}
 
+	return router
+}
+
+func createDebugRouter() *httprouter.Router {
+	httpRoute := func(f http.HandlerFunc) httprouter.Handle {
+		return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			f(w, r)
+		}
+	}
+
+	router := httprouter.New()
+	router.GET("/debug/pprof", httpRoute(pprof.Index))
+	// importing "net/http/pprof" auto-registers all handlers on DefaultServeMux via init().
+	router.GET("/debug/pprof/*name", httpRoute(http.DefaultServeMux.ServeHTTP))
 	return router
 }

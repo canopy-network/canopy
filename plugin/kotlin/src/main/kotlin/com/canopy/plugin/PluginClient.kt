@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
 import kotlin.concurrent.withLock
+import kotlin.random.Random
 
 private val logger = KotlinLogging.logger {}
 
@@ -21,12 +22,21 @@ private const val SOCKET_PATH = "plugin.sock"
 private const val TIMEOUT_SECONDS = 10L
 
 /**
+ * PLUGIN_BUILD is a human-readable build marker logged at startup so operators can confirm, via
+ * `tail -f /tmp/plugin/kotlin-plugin.log`, that the running binary includes the expected features.
+ */
+const val PLUGIN_BUILD = "kotlin-plugin v1 (base SDK + detached custom RPC query path)"
+
+/**
  * PluginClient handles communication with the Canopy FSM via Unix domain socket
  * Matches Go implementation structure
  */
 class PluginClient(
-    private val config: Config
+    val config: Config
 ) {
+    /** The plugin's configured RPC listen address (used by the custom RPC server). */
+    val rpcAddress: String get() = config.rpcAddress
+
     private var fsmConfig: PluginFSMConfig? = null
     private var socket: AFUNIXSocket? = null
     private var inputStream: DataInputStream? = null
@@ -45,6 +55,8 @@ class PluginClient(
      * Start the plugin and connect to FSM
      */
     fun start() {
+        // log the build marker so the running version is obvious in the plugin log
+        logger.info { "==== STARTING $PLUGIN_BUILD ====" }
         connect()
         startListening()
         handshake()
@@ -141,6 +153,46 @@ class PluginClient(
     }
 
     /**
+     * Execute a detached, read-only state query against Canopy at the given height (0 = latest committed).
+     *
+     * Unlike [stateRead], it is NOT tied to an in-flight tx/block lifecycle and does not require a
+     * Contract context; it allocates its own fresh RANDOM request id, making it safe to call from
+     * custom RPC handlers (e.g. the plugin's own HTTP server).
+     */
+    fun queryState(height: Long, request: PluginStateReadRequest): PluginStateReadResponse {
+        // generate a fresh random request id (not tied to any in-flight FSM request)
+        val requestId = Random.nextLong()
+        val msg = PluginToFSM.newBuilder()
+            .setId(requestId)
+            .setQuery(
+                PluginQueryRequest.newBuilder()
+                    .setHeight(height)
+                    .setRead(request)
+                    .build()
+            )
+            .build()
+
+        // detached send: no Contract context is tracked for this request id
+        val response = sendSync(null, msg)
+
+        return when {
+            response.hasQuery() -> {
+                val query = response.query
+                // surface any FSM-side error attached to the query response
+                if (query.hasError() && query.error.code != 0L) {
+                    PluginStateReadResponse.newBuilder().setError(query.error).build()
+                } else {
+                    query.read
+                }
+            }
+            response.hasError() -> PluginStateReadResponse.newBuilder()
+                .setError(response.error)
+                .build()
+            else -> throw Exception("Unexpected query response")
+        }
+    }
+
+    /**
      * Start listening for inbound messages from FSM
      */
     private fun startListening() {
@@ -170,8 +222,8 @@ class PluginClient(
         thread(name = "msg-handler-${msg.id}") {
             try {
                 when {
-                    // Response to plugin request
-                    msg.hasConfig() || msg.hasStateRead() || msg.hasStateWrite() -> {
+                    // Response to plugin request (including detached, read-only query responses)
+                    msg.hasConfig() || msg.hasStateRead() || msg.hasStateWrite() || msg.hasQuery() -> {
                         logger.debug { "Received FSM response for id ${msg.id}" }
                         handleResponse(msg)
                     }

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/cockroachdb/pebble/v2"
@@ -62,8 +63,8 @@ type VersionedStore struct {
 	db           pebble.Reader
 	batch        *pebble.Batch
 	closed       bool
+	parallel     bool // when true, the store shares (does not own) the underlying reader and must never be closed
 	version      uint64
-	keyBuffer    []byte
 	decodeBuffer [][]byte
 }
 
@@ -74,7 +75,19 @@ func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) *V
 		batch:        batch,
 		closed:       false,
 		version:      version,
-		keyBuffer:    make([]byte, 0, 256),
+		decodeBuffer: make([][]byte, 0, 5),
+	}
+}
+
+// NewParallelReader creates a read-only VersionedStore sharing the same
+// underlying database (snapshot) but with its own buffers, safe for concurrent
+// use from a separate goroutine. The returned store must NOT be closed, as it
+// does not own the underlying reader.
+func (vs *VersionedStore) NewParallelReader() *VersionedStore {
+	return &VersionedStore{
+		db:           vs.db,
+		parallel:     true,
+		version:      vs.version,
 		decodeBuffer: make([][]byte, 0, 5),
 	}
 }
@@ -173,6 +186,10 @@ func (vs *VersionedStore) Commit() (e lib.ErrorI) {
 
 // Close closes the store and releases resources
 func (vs *VersionedStore) Close() lib.ErrorI {
+	// a parallel reader does not own the underlying reader and must never be closed
+	if vs.parallel {
+		panic("Close() called on a parallel VersionedStore reader")
+	}
 	// prevent panic due to double close
 	if vs.closed {
 		return nil
@@ -506,14 +523,11 @@ func (vs *VersionedStore) makeVersionedKey(userKey []byte, version uint64) []byt
 	// validate key is length-prefixed
 	_ = lib.DecodeLengthPrefixed(userKey)
 	keyLength := len(userKey) + VersionSize
-	vs.keyBuffer = ensureCapacity(vs.keyBuffer, keyLength)
-	// copy user key into buffer
-	offset := copy(vs.keyBuffer, userKey)
-	// use the inverted version (^version) so newer versions sort first
-	binary.BigEndian.PutUint64(vs.keyBuffer[offset:], ^version)
-	// return a copy to prevent buffer reuse issues
 	result := make([]byte, keyLength)
-	copy(result, vs.keyBuffer)
+	// copy user key into buffer
+	offset := copy(result, userKey)
+	// use the inverted version (^version) so newer versions sort first
+	binary.BigEndian.PutUint64(result[offset:], ^version)
 	// exit
 	return result
 }
@@ -645,4 +659,24 @@ func newTargetWindowFilter(low, high uint64) sstable.BlockPropertyFilter {
 		high+1,
 		nil,
 	)
+}
+
+// getCompressionProfile returns the compression profile (algorithm) to use for the versioned store
+func getCompressionProfile(profile string) *sstable.CompressionProfile {
+	switch strings.ToLower(profile) {
+	case "zstd":
+		return sstable.ZstdCompression
+	case "snappy":
+		return sstable.SnappyCompression
+	case "nocompression":
+		return sstable.NoCompression
+	case "fastest":
+		return sstable.FastestCompression
+	case "balanced":
+		return sstable.BalancedCompression
+	case "good":
+		return sstable.GoodCompression
+	default:
+		return sstable.ZstdCompression
+	}
 }

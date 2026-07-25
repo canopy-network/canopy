@@ -200,14 +200,33 @@ docker exec -it <container_id> tail -f /tmp/plugin/typescript-plugin.log
 
 ### Running Tests
 
-Tests are in the `tutorial/` subdirectory (separate project):
+Run the integration tests from the plugin directory:
+
+```bash
+cd plugin/typescript
+make test
+```
+
+`make test` runs both the transaction integration tests and the custom RPC endpoints test (`npm test && npm test -- custom` in the `tutorial/` subdirectory). Equivalent direct invocation:
 
 ```bash
 cd tutorial
 npm install
-npm run build:proto
-npm test             # Runs RPC integration tests
+npm test             # transaction tests
+npm test -- custom   # custom RPC endpoints test
 ```
+
+Requires Canopy running with the plugin enabled, faucet/reward transactions implemented, and the plugin's RPC server reachable on port `50010` for the custom RPC test.
+
+## Adding Custom RPC Endpoints
+
+A plugin can expose its own read-only HTTP endpoints for chain-specific data (e.g. `/v1/query/faucets`, `/v1/query/rewards`). The plugin owns its HTTP server entirely — Canopy never needs to know about these routes. See `TUTORIAL.md` "Step 5b: Expose Custom RPC Endpoints" for the full walkthrough.
+
+1. **Persist queryable records during `DeliverTx`** — write a small protobuf record to state under a plugin-owned key prefix (e.g. `Faucet` under `[100]` via `KeyForFaucet(addr)` in `src/contract/contract.ts`). Endpoints can only return data that lives in state.
+2. **Declare the prefix** — add every custom record prefix to `ContractConfig.customStatePrefixes` (e.g. `customStatePrefixes: [faucetPrefix, rewardPrefix]`). Canopy validates this at handshake and **panics before the plugin starts** if a prefix collides with a core-reserved prefix (`1-15`). See "Key Prefixes" below.
+3. **Register routes** — the base plugin already ships a skeleton `src/contract/rpc.ts` whose `StartRPCServer()` runs the node `http` server with **no routes registered by default**, and it is already started from `src/main.ts` with `StartRPCServer(plugin)`. Just add your routes+handlers (backed by `queryState`) to the existing `http.createServer` callback in `StartRPCServer()` (add as many as you want).
+4. **Back each handler with `queryState`** — the detached, read-only query path on the `Plugin` class: `plugin.queryState(height, read)` returns raw key/value state at a historical height (`0` = latest committed). Use a single-key read (`KeyForFaucet(addr)`) for one record, or a range read over the prefix (`FaucetPrefix()`) to list all records. Decode the raw bytes into your own protobuf type and shape the JSON response however you like.
+5. **Listen address** comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
 
 ## Code Patterns
 
@@ -224,6 +243,15 @@ function KeyForAccount(addr: Uint8Array): Uint8Array {
     return JoinLenPrefix(accountPrefix, Buffer.from(addr));
 }
 ```
+
+#### Key Prefixes
+
+- `[1]` - Account storage (shared with core; plugins may interoperate)
+- `[2]` - Pool storage (shared with core; plugins may interoperate)
+- `[7]` - Governance parameters
+- `[100]` / `[101]` - Example plugin-owned custom records (faucet/reward) **added by the tutorial**, not part of the base plugin
+
+> **Avoid prefix collisions:** the plugin shares Canopy's FSM keyspace. Canopy reserves the single-byte prefixes `1-15` for its own state (accounts, pools, validators, committees, params, …). Custom plugin records **must** use prefixes outside that range (e.g. `100`, `101`). Declare them in `ContractConfig.customStatePrefixes`; Canopy panics at handshake — before the plugin starts — if any declared prefix collides, and the core FSM additionally rejects any write to a reserved prefix.
 
 ### Reading State
 

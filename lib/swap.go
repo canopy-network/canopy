@@ -7,6 +7,12 @@ import (
 
 /* This file implements 'sell order book' logic for token swaps that is used throughout the app */
 
+const OrdersPageName = "orders" // the name of a page of orders
+
+func init() {
+	RegisteredPageables[OrdersPageName] = new(SellOrders) // preregister the page type for unmarshalling
+}
+
 // GetOrder() retrieves a sell order from the OrderBook
 func (x *OrderBook) GetOrder(orderId []byte) (order *SellOrder, err ErrorI) {
 	// ensure non-nil

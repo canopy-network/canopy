@@ -36,7 +36,9 @@ clean:
 	rm -rf dist/
 	rm -rf node_modules/
 
-# Run tests (in tutorial directory)
+# Run the integration tests (in tutorial directory).
+# `npm test` runs the default "all" selector: the transaction tests AND the custom RPC endpoints
+# test (/v1/query/faucets, /v1/query/rewards) — the latter needs the plugin's RPC server on port 50010.
 test:
 	@echo "Running tests..."
 	cd tutorial && npm install && npm test
@@ -72,7 +74,7 @@ help:
 	@echo "  make build-descriptors - Build descriptors"
 	@echo "  make build-all        - Full build (install + proto + descriptors + TypeScript)"
 	@echo "  make clean            - Clean build artifacts"
-	@echo "  make test             - Run tests (tutorial)"
+	@echo "  make test             - Run tests (tutorial transactions + custom RPC endpoints)"
 	@echo "  make run              - Run the application"
 	@echo "  make dev              - Run in development mode"
 	@echo "  make validate         - Run all validation checks"

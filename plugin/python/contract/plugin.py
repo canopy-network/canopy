@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,12 +43,18 @@ logger = logging.getLogger(__name__)
 # Socket path name (matching Go)
 SOCKET_PATH = "plugin.sock"
 
+# PLUGIN_BUILD is a human-readable build marker logged at startup so operators can confirm, via
+# `tail -f /tmp/plugin/python-plugin.log`, that the running binary includes the expected features.
+PLUGIN_BUILD = "python-plugin v1 (base SDK + detached custom RPC query path)"
+
 
 @dataclass
 class Config:
     """Plugin configuration matching Go's Config struct."""
     chain_id: int = 1
     data_dir_path: str = "/tmp/plugin/"
+    # rpc_address is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
+    rpc_address: str = "0.0.0.0:50010"
 
     def __post_init__(self) -> None:
         if not isinstance(self.chain_id, int) or self.chain_id < 1:
@@ -58,7 +65,7 @@ class Config:
 
 def default_config() -> Config:
     """Return the default configuration (matching Go's DefaultConfig)."""
-    return Config(chain_id=1, data_dir_path="/tmp/plugin/")
+    return Config(chain_id=1, data_dir_path="/tmp/plugin/", rpc_address="0.0.0.0:50010")
 
 
 def new_config_from_file(filepath: str) -> Config:
@@ -68,6 +75,7 @@ def new_config_from_file(filepath: str) -> Config:
         return Config(
             chain_id=config_data.get("chainId", 1),
             data_dir_path=config_data.get("dataDirPath", "/tmp/plugin/"),
+            rpc_address=config_data.get("rpcAddress", "0.0.0.0:50010"),
         )
     except Exception as err:
         raise ValueError(f"Failed to load config from {filepath}: {err}")
@@ -90,6 +98,9 @@ class Plugin:
         self._listen_task: Optional[asyncio.Task] = None
         self._message_tasks: Set[asyncio.Task] = set()
         self._is_connected = False
+        # the event loop the plugin runs on; captured at start() so detached callers (e.g. the
+        # custom RPC server running in a background thread) can schedule coroutines safely
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
         # Setup plugin config
         self.plugin_config.name = CONTRACT_CONFIG["name"]
@@ -103,9 +114,15 @@ class Plugin:
             self.plugin_config.event_type_urls.append(url)
         for fd in CONTRACT_CONFIG.get("file_descriptor_protos", []):
             self.plugin_config.file_descriptor_protos.append(fd)
+        for prefix in CONTRACT_CONFIG.get("custom_state_prefixes", []):
+            self.plugin_config.custom_state_prefixes.append(prefix)
 
     async def start(self) -> None:
         """Start the plugin - connect to socket and begin listening."""
+        # log the build marker so the running version is obvious in the plugin log
+        logger.info(f"==== STARTING {PLUGIN_BUILD} ====")
+        # capture the running loop so detached callers can schedule coroutines onto it
+        self._loop = asyncio.get_running_loop()
         sock_path = os.path.join(self.config.data_dir_path, SOCKET_PATH)
 
         # Connect to the socket with retry (matching Go's polling loop)
@@ -232,6 +249,55 @@ class Plugin:
         finally:
             self._pending.pop(fsm_id, None)
             self._request_contracts.pop(fsm_id, None)
+
+    async def query_state(
+        self, height: int, request: PluginStateReadRequest
+    ) -> PluginStateReadResponse:
+        """QueryState executes a detached, read-only state query against Canopy at the given height
+        (0 = latest committed).
+
+        Unlike state_read(), it is NOT tied to an in-flight tx/block lifecycle and does not require
+        a Contract context; it allocates its own RANDOM request id, making it safe to call from
+        custom RPC handlers (e.g. an HTTP server). Matches Go's Plugin.QueryState.
+        """
+        # generate a fresh random request id (not tied to any in-flight FSM request)
+        request_id = random.getrandbits(64)
+
+        # create future for response
+        future: asyncio.Future = asyncio.Future()
+        self._pending[request_id] = future
+
+        # send the detached query request
+        message = PluginToFSM()
+        message.id = request_id
+        message.query.height = height
+        message.query.read.CopyFrom(request)
+
+        try:
+            logger.debug(f"0x{request_id:x}: query_state (height={height})")
+            await self._send_proto_msg(message)
+
+            # wait for response with timeout
+            response = await asyncio.wait_for(future, timeout=10.0)
+
+            if not response.HasField("query"):
+                raise err_unexpected_fsm_to_plugin(type(response))
+
+            query_response = response.query
+            # surface any FSM-side error attached to the query response
+            if query_response.HasField("error"):
+                raise PluginError(
+                    query_response.error.code,
+                    query_response.error.module,
+                    query_response.error.msg,
+                )
+            # return the unwrapped read response
+            return query_response.read
+
+        except asyncio.TimeoutError:
+            raise err_plugin_timeout()
+        finally:
+            self._pending.pop(request_id, None)
 
     async def _listen_for_inbound(self) -> None:
         """ListenForInbound routes inbound requests from the plugin."""

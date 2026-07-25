@@ -1,10 +1,18 @@
 package fsm
 
 import (
+	"context"
+	"crypto/ecdsa"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/drand/kyber"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/anypb"
+	"math"
+	"math/big"
 	"testing"
 	"time"
 )
@@ -155,6 +163,59 @@ func TestApplyTransaction_FaucetSendNeverFails(t *testing.T) {
 	require.Equal(t, fee+(amount-1), sup.Total)
 }
 
+func TestApplyTransactionVestingSend(t *testing.T) {
+	const (
+		amount             = uint64(10)
+		vestingStartHeight = uint64(4)
+		vestingCliffHeight = uint64(8)
+		vestingEndHeight   = uint64(14)
+		fee                = uint64(1)
+	)
+	kg := newTestKeyGroup(t)
+	to := newTestAddress(t, 1)
+	sendTx, err := NewSendTransactionWithVesting(
+		kg.PrivateKey, to, amount,
+		vestingStartHeight, vestingCliffHeight, vestingEndHeight,
+		1, 1, fee, 1, "",
+	)
+	require.NoError(t, err)
+
+	sm := newTestStateMachine(t)
+	s := sm.store.(lib.StoreI)
+	sm.height = vestingStartHeight
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: fee}))
+	require.NoError(t, sm.AccountAdd(kg.Address, amount+fee))
+	require.NoError(t, s.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 1,
+			Hash:   crypto.Hash([]byte("block_hash")),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+	}))
+
+	txBytes, err := lib.Marshal(sendTx)
+	require.NoError(t, err)
+	txHash := crypto.HashString(txBytes)
+
+	got, _, err := sm.ApplyTransaction(0, txBytes, txHash, nil)
+	require.NoError(t, err)
+	require.Equal(t, vestingStartHeight, got.Height)
+	require.Equal(t, txHash, got.TxHash)
+
+	recipient, err := sm.GetAccount(to)
+	require.NoError(t, err)
+	require.Equal(t, amount, recipient.Amount)
+	require.Equal(t, amount, recipient.VestingAmount)
+	require.Equal(t, vestingStartHeight, recipient.VestingStartHeight)
+	require.Equal(t, vestingCliffHeight, recipient.VestingCliffHeight)
+	require.Equal(t, vestingEndHeight, recipient.VestingEndHeight)
+	require.Zero(t, sm.AccountSpendableAmount(recipient))
+
+	senderBal, err := sm.GetAccountBalance(kg.Address)
+	require.NoError(t, err)
+	require.Zero(t, senderBal)
+}
+
 func TestCheckTx(t *testing.T) {
 	const amount = uint64(100)
 	// predefine a keygroup for signing the transaction
@@ -194,6 +255,11 @@ func TestCheckTx(t *testing.T) {
 	// convert the object to bytes
 	txBadSig, e := lib.Marshal(sendTxBadSig)
 	require.NoError(t, e)
+	// define a version with both a bad height and signature
+	sendTxBadHeightAndSig := cloneTx(t, sendTxBadHeight)
+	sendTxBadHeightAndSig.Signature.Signature = []byte("bad sig")
+	txBadHeightAndSig, e := lib.Marshal(sendTxBadHeightAndSig)
+	require.NoError(t, e)
 	// define test cases
 	tests := []struct {
 		name         string
@@ -218,6 +284,12 @@ func TestCheckTx(t *testing.T) {
 			name:   "tx height fails",
 			detail: "failure on transaction height",
 			tx:     txBadHeight,
+			error:  "invalid tx height",
+		},
+		{
+			name:   "tx replay validation precedes signature validation",
+			detail: "failure on transaction height before signature verification",
+			tx:     txBadHeightAndSig,
 			error:  "invalid tx height",
 		},
 		{
@@ -267,6 +339,143 @@ func TestCheckTx(t *testing.T) {
 			require.EqualExportedValues(t, test.expected, got)
 		})
 	}
+}
+
+func TestCheckTxAcceptsSerializedMultiBLSSigner(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 1}))
+
+	signers := newTestKeyGroups(t, 3)
+	points := make([]kyber.Point, 0, len(signers))
+	for _, kg := range signers {
+		point, err := crypto.BytesToBLS12381Point(kg.PublicKey.Bytes())
+		require.NoError(t, err)
+		points = append(points, point)
+	}
+
+	multiKey, err := crypto.NewAccountAuthMultiBLSFromPoints(points, nil, 2)
+	require.NoError(t, err)
+
+	msg := &MessageSend{
+		FromAddress: multiKey.Address().Bytes(),
+		ToAddress:   newTestAddressBytes(t, 4),
+		Amount:      100,
+	}
+	a, err := lib.NewAny(msg)
+	require.NoError(t, err)
+
+	tx := &lib.Transaction{
+		MessageType:   msg.Name(),
+		Msg:           a,
+		CreatedHeight: sm.Height(),
+		Time:          uint64(time.Now().UnixMicro()),
+		Fee:           1,
+		NetworkId:     uint64(sm.NetworkID),
+		ChainId:       sm.Config.ChainId,
+	}
+	signBytes, err := tx.GetSignBytes()
+	require.NoError(t, err)
+
+	require.NoError(t, multiKey.AddSigner(signers[0].PrivateKey.Sign(signBytes), 0))
+	require.NoError(t, multiKey.AddSigner(signers[2].PrivateKey.Sign(signBytes), 2))
+	aggregateSignature, err := multiKey.AggregateSignatures()
+	require.NoError(t, err)
+	tx.Signature = &lib.Signature{
+		PublicKey: multiKey.Bytes(),
+		Signature: aggregateSignature,
+	}
+
+	txBytes, err := lib.Marshal(tx)
+	require.NoError(t, err)
+
+	got, err := sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, tx, got.tx)
+	require.Equal(t, multiKey.Address().Bytes(), got.sender.Bytes())
+	gotMsg, ok := got.msg.(*MessageSend)
+	require.True(t, ok)
+	require.EqualExportedValues(t, msg, gotMsg)
+}
+
+func TestCheckTxRejectsReversedGovernanceRange(t *testing.T) {
+	sm := newTestStateMachine(t)
+	kg := newTestKeyGroup(t)
+	proposalValue, err := lib.NewAny(&lib.UInt64Wrapper{Value: 1})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		msg  lib.MessageI
+	}{
+		{
+			name: "dao transfer",
+			msg: &MessageDAOTransfer{
+				Address:     kg.Address.Bytes(),
+				Amount:      1,
+				StartHeight: math.MaxUint64 - 5,
+				EndHeight:   3,
+			},
+		},
+		{
+			name: "change parameter",
+			msg: &MessageChangeParameter{
+				ParameterSpace: ParamSpaceVal,
+				ParameterKey:   ParamUnstakingBlocks,
+				ParameterValue: proposalValue,
+				StartHeight:    math.MaxUint64 - 5,
+				EndHeight:      3,
+				Signer:         kg.Address.Bytes(),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fee, e := sm.GetFeeForMessageName(tt.msg.Name())
+			require.NoError(t, e)
+			tx, e := NewTransaction(kg.PrivateKey, tt.msg, uint64(sm.NetworkID), sm.Config.ChainId, fee, sm.Height(), "")
+			require.NoError(t, e)
+			txBz, e := lib.Marshal(tx)
+			require.NoError(t, e)
+
+			_, err = sm.CheckTx(txBz, crypto.HashString(txBz), nil)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "proposal block range is invalid")
+		})
+	}
+}
+
+func TestCheckTxCreateOrderNilSellerSignerDoesNotPanic(t *testing.T) {
+	sm := newTestStateMachine(t)
+	s := sm.store.(lib.StoreI)
+	kg := newTestKeyGroup(t)
+
+	require.NoError(t, sm.UpdateParam("fee", ParamCreateOrderFee, &lib.UInt64Wrapper{Value: 1}))
+	require.NoError(t, s.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 1,
+			Hash:   crypto.Hash([]byte("block_hash")),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+	}))
+
+	tx, err := NewTransaction(kg.PrivateKey, &MessageCreateOrder{
+		ChainId:              lib.CanopyChainId,
+		AmountForSale:        1,
+		RequestedAmount:      1,
+		SellerReceiveAddress: newTestAddressBytes(t, 1),
+		SellersSendAddress:   nil,
+	}, 1, lib.CanopyChainId, 1, 2, "")
+	require.NoError(t, err)
+
+	txBytes, err := lib.Marshal(tx)
+	require.NoError(t, err)
+
+	var checkErr lib.ErrorI
+	require.NotPanics(t, func() {
+		_, checkErr = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	})
+	require.Error(t, checkErr)
+	require.ErrorContains(t, checkErr, "address")
 }
 
 func TestCheckSignature(t *testing.T) {
@@ -425,7 +634,7 @@ func TestCheckReplay(t *testing.T) {
 		},
 		{
 			name:   "before height 2",
-			detail: "before height 2 so timestamps are ignored",
+			detail: "before height 2 timestamps are ignored",
 			tx: &lib.Transaction{
 				NetworkId: 1,
 				ChainId:   1,
@@ -492,6 +701,259 @@ func TestCheckReplay(t *testing.T) {
 	}
 }
 
+func TestAccountNonceReplayProtection(t *testing.T) {
+	sm := newTestStateMachine(t)
+	tx, errI := RLPToCanopyTransactionV2(newTestRawEthereumTxWithNonce(t, 2))
+	require.NoError(t, errI)
+	require.Equal(t, RLPV2CreatedHeight, tx.CreatedHeight)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: tx.Fee}))
+	publicKey, err := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+	require.NoError(t, err)
+	account := &Account{Address: publicKey.Address().Bytes(), Amount: 1_000, Nonce: tx.Nonce + 1}
+	require.NoError(t, sm.SetAccount(account))
+	txBytes, errI := lib.Marshal(tx)
+	require.NoError(t, errI)
+	_, errI = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.ErrorContains(t, errI, "invalid tx nonce")
+	require.Equal(t, lib.CodeInvalidTxNonce, errI.Code())
+
+	// Gaps are valid: nonce 2 may execute while the account floor is 0.
+	account.Nonce = 0
+	require.NoError(t, sm.SetAccount(account))
+	_, _, errI = sm.ApplyTransaction(0, txBytes, crypto.HashString(txBytes), nil)
+	require.NoError(t, errI)
+	account, errI = sm.GetAccount(publicKey.Address())
+	require.NoError(t, errI)
+	require.Equal(t, tx.Nonce+1, account.Nonce)
+
+	// Once the floor advances, the same transaction is too old.
+	_, errI = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.ErrorContains(t, errI, "invalid tx nonce")
+
+	maxTx, errI := RLPToCanopyTransactionV2(newTestRawEthereumTxWithNonce(t, math.MaxUint64))
+	require.NoError(t, errI)
+	maxTxBytes, errI := lib.Marshal(maxTx)
+	require.NoError(t, errI)
+	_, errI = sm.CheckTx(maxTxBytes, crypto.HashString(maxTxBytes), nil)
+	require.ErrorContains(t, errI, "invalid tx nonce")
+}
+
+func TestFailedRLPV2TransactionDoesNotAdvanceNonce(t *testing.T) {
+	sm := newTestStateMachine(t)
+	tx, errI := RLPToCanopyTransactionV2(newTestRawEthereumTxWithNonce(t, 2))
+	require.NoError(t, errI)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: tx.Fee}))
+	publicKey, err := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+	require.NoError(t, err)
+	require.NoError(t, sm.SetAccount(&Account{
+		Address: publicKey.Address().Bytes(),
+		Amount:  tx.Fee,
+		Nonce:   1,
+	}))
+	txBytes, errI := lib.Marshal(tx)
+	require.NoError(t, errI)
+
+	results := new(lib.ApplyBlockResults)
+	require.NoError(t, sm.ApplyTransactions(context.Background(), [][]byte{txBytes}, results, false))
+	require.Empty(t, results.Results)
+	require.Len(t, results.Failed, 1)
+	require.ErrorContains(t, results.Failed[0].Error, "insufficient funds")
+
+	account, errI := sm.GetAccount(publicKey.Address())
+	require.NoError(t, errI)
+	require.EqualValues(t, 1, account.Nonce)
+	require.Equal(t, tx.Fee, account.Amount)
+}
+
+func TestFeeOrderedSameNonceReplacementExecutesOnlyWinner(t *testing.T) {
+	sm := newTestStateMachine(t)
+	nonce := uint64(3)
+	key, err := ethCrypto.GenerateKey()
+	require.NoError(t, err)
+	lowTx, errI := RLPToCanopyTransactionV2(newTestRawEthereumTxWithKey(t, key, nonce, 10_000_000_000))
+	require.NoError(t, errI)
+	highTx, errI := RLPToCanopyTransactionV2(newTestRawEthereumTxWithFees(t, key, nonce, 20_000_000_000, 10_000_000_000))
+	require.NoError(t, errI)
+	require.Greater(t, highTx.Fee, lowTx.Fee)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: lowTx.Fee}))
+	publicKey, err := crypto.NewPublicKeyFromBytes(highTx.Signature.PublicKey)
+	require.NoError(t, err)
+	require.NoError(t, sm.SetAccount(&Account{Address: publicKey.Address().Bytes(), Amount: highTx.Fee + 1}))
+	lowBytes, errI := lib.Marshal(lowTx)
+	require.NoError(t, errI)
+	highBytes, errI := lib.Marshal(highTx)
+	require.NoError(t, errI)
+
+	mempool := lib.NewMempool(lib.DefaultMempoolConfig())
+	changed, errI := mempool.AddTransactions(lowBytes, highBytes)
+	require.NoError(t, errI)
+	require.True(t, changed)
+	ordered := mempool.GetTransactions(math.MaxUint64)
+	require.Len(t, ordered, 2)
+	require.Equal(t, highBytes, ordered[0])
+
+	results := new(lib.ApplyBlockResults)
+	require.NoError(t, sm.ApplyTransactions(context.Background(), ordered, results, false))
+	require.Len(t, results.Results, 1)
+	require.Equal(t, highBytes, results.Txs[0])
+	require.Equal(t, highTx.Fee, results.Results[0].Transaction.Fee)
+	require.Len(t, results.Failed, 1)
+	require.Equal(t, lowBytes, results.Failed[0].GetBytes())
+	require.ErrorContains(t, results.Failed[0].Error, "invalid tx nonce")
+
+	account, errI := sm.GetAccount(publicKey.Address())
+	require.NoError(t, errI)
+	require.Equal(t, nonce+1, account.Nonce)
+}
+
+func TestRLPSigningDomainsCannotBeRewrapped(t *testing.T) {
+	_, errI := RLPToCanopyTransactionV2(newTestRawEthereumTxLegacy(t))
+	require.ErrorContains(t, errI, "expected 1")
+
+	_, errI = RLPToCanopyTransaction(newTestRawEthereumTx(t))
+	require.ErrorContains(t, errI, "expected 0")
+}
+
+func TestCheckTxAcceptsLegacyRLPBeforeProtocolVersion2(t *testing.T) {
+	sm := newTestStateMachine(t)
+	tx, errI := RLPToCanopyTransaction(newTestRawEthereumTxLegacy(t))
+	require.NoError(t, errI)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: tx.Fee}))
+	publicKey, err := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+	require.NoError(t, err)
+	require.NoError(t, sm.SetAccount(&Account{Address: publicKey.Address().Bytes(), Amount: tx.Fee + 1}))
+	txBytes, errI := lib.Marshal(tx)
+	require.NoError(t, errI)
+
+	_, errI = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.NoError(t, errI)
+}
+
+func TestCheckTxRejectsLegacyRLPAtProtocolVersion2(t *testing.T) {
+	sm := newTestStateMachine(t)
+	activateProtocolV2(t, sm)
+
+	rawEthTx := newTestRawEthereumTxLegacy(t)
+	legacyTx, errI := RLPToCanopyTransaction(rawEthTx)
+	require.NoError(t, errI)
+	txBytes, errI := lib.Marshal(legacyTx)
+	require.NoError(t, errI)
+
+	_, errI = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.ErrorContains(t, errI, "invalid protocol version")
+}
+
+func TestCheckTxAcceptsRLPV2BeforeProtocolVersion2(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = BlockAcceptanceRange * 2
+	tx, errI := RLPToCanopyTransactionV2(newTestRawEthereumTx(t))
+	require.NoError(t, errI)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: tx.Fee}))
+	publicKey, err := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+	require.NoError(t, err)
+	require.NoError(t, sm.SetAccount(&Account{Address: publicKey.Address().Bytes(), Amount: tx.Fee + 1}))
+	txBytes, errI := lib.Marshal(tx)
+	require.NoError(t, errI)
+
+	_, errI = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.NoError(t, errI)
+
+	// CreatedHeight is canonical wrapper metadata, not an unsigned caller-selected value.
+	tx.CreatedHeight++
+	txBytes, errI = lib.Marshal(tx)
+	require.NoError(t, errI)
+	_, errI = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.ErrorContains(t, errI, "invalid signature")
+}
+
+func TestCheckTxAcceptsLegacyRLPMemoSignedByNonEthereumKeyBeforeProtocolVersion2(t *testing.T) {
+	sm := newTestStateMachine(t)
+	key, err := crypto.NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	fee, errI := sm.GetFeeForMessageName((&MessageSend{}).Name())
+	require.NoError(t, errI)
+	tx, errI := NewSendTransaction(key, key.PublicKey().Address(), 1, 1, 1, fee, 1, RLPIndicator)
+	require.NoError(t, errI)
+	txBytes, errI := lib.Marshal(tx)
+	require.NoError(t, errI)
+
+	_, errI = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.NoError(t, errI)
+}
+
+func TestCheckTxRejectsRLPV2SignedByNonEthereumKey(t *testing.T) {
+	sm := newTestStateMachine(t)
+
+	key, err := crypto.NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	fee, errI := sm.GetFeeForMessageName((&MessageSend{}).Name())
+	require.NoError(t, errI)
+	txI, errI := NewSendTransaction(key, key.PublicKey().Address(), 1, 1, 1, fee, 1, "")
+	require.NoError(t, errI)
+
+	tx := txI.(*lib.Transaction)
+	tx.Memo = RLPV2Indicator
+	tx.Nonce = 0
+	txBytes, errI := lib.Marshal(tx)
+	require.NoError(t, errI)
+
+	_, errI = sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.ErrorContains(t, errI, "invalid signature")
+}
+
+func activateProtocolV2(t *testing.T, sm StateMachine) {
+	t.Helper()
+	consParams, err := sm.GetParamsCons()
+	require.NoError(t, err)
+	consParams.ProtocolVersion = NewProtocolVersion(sm.Height(), legacyRLPDisabledProtocolVersion)
+	require.NoError(t, sm.SetParamsCons(consParams))
+}
+
+func newTestRawEthereumTx(t *testing.T) []byte {
+	return newTestRawEthereumTxWithNonce(t, 2)
+}
+
+func newTestRawEthereumTxWithNonce(t *testing.T, nonce uint64) []byte {
+	t.Helper()
+	key, err := ethCrypto.GenerateKey()
+	require.NoError(t, err)
+	return newTestRawEthereumTxWithKey(t, key, nonce, 10_000_000_000)
+}
+
+func newTestRawEthereumTxWithKey(t *testing.T, key *ecdsa.PrivateKey, nonce, gasFeeCap uint64) []byte {
+	return newTestRawEthereumTxWithFees(t, key, nonce, gasFeeCap, 1)
+}
+
+func newTestRawEthereumTxWithFees(t *testing.T, key *ecdsa.PrivateKey, nonce, gasFeeCap, gasTipCap uint64) []byte {
+	t.Helper()
+	recipient := common.HexToAddress("0x0000000000000000000000000000000000000004")
+	evmChainID, ok := CanopyIdsToEVMChainIdV2(1, 1)
+	require.True(t, ok)
+	chainID := new(big.Int).SetUint64(evmChainID)
+	tx := types.MustSignNewTx(key, types.LatestSignerForChainID(chainID), &types.DynamicFeeTx{
+		ChainID: chainID, Nonce: nonce, GasTipCap: new(big.Int).SetUint64(gasTipCap), GasFeeCap: new(big.Int).SetUint64(gasFeeCap),
+		Gas: 21_000, To: &recipient, Value: big.NewInt(1_000_000_000_000),
+	})
+	bz, err := tx.MarshalBinary()
+	require.NoError(t, err)
+	return bz
+}
+
+func newTestRawEthereumTxLegacy(t *testing.T) []byte {
+	t.Helper()
+	key, err := ethCrypto.GenerateKey()
+	require.NoError(t, err)
+	recipient := common.HexToAddress("0x0000000000000000000000000000000000000004")
+	chainID := new(big.Int).SetUint64(CanopyIdsToEVMChainId(1, 1))
+	tx := types.MustSignNewTx(key, types.LatestSignerForChainID(chainID), &types.DynamicFeeTx{
+		ChainID: chainID, Nonce: 2, GasTipCap: big.NewInt(1), GasFeeCap: big.NewInt(10_000_000_000),
+		Gas: 21_000, To: &recipient, Value: big.NewInt(1_000_000_000_000),
+	})
+	bz, err := tx.MarshalBinary()
+	require.NoError(t, err)
+	return bz
+}
+
 func TestCheckMessage(t *testing.T) {
 	// predefine non message any
 	nonTxAny, e := lib.NewAny(&lib.UInt64Wrapper{})
@@ -530,6 +992,23 @@ func TestCheckMessage(t *testing.T) {
 			detail: "a invalid message that fails check()",
 			msg:    invalidMsgSendAny,
 			error:  "recipient address is empty",
+		},
+		{
+			name:   "invalid vesting send",
+			detail: "a send message with an invalid vesting schedule fails",
+			msg: func() *anypb.Any {
+				anyMsg, err := lib.NewAny(&MessageSend{
+					FromAddress:        newTestAddressBytes(t),
+					ToAddress:          newTestAddressBytes(t),
+					Amount:             100,
+					VestingStartHeight: 2,
+					VestingCliffHeight: 3,
+					VestingEndHeight:   2,
+				})
+				require.NoError(t, err)
+				return anyMsg
+			}(),
+			error: "invalid vesting schedule",
 		},
 		{
 			name:     "valid message",

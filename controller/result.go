@@ -2,13 +2,15 @@ package controller
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/fsm"
 	"slices"
 	"time"
 
 	"github.com/canopy-network/canopy/bft"
+	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 )
+
+const slowCertificateResultsThreshold = 500 * time.Millisecond
 
 /* This file implements the 'Certificate Result' logic which ensures the */
 
@@ -16,19 +18,45 @@ import (
 func (c *Controller) NewCertificateResults(
 	fsm *fsm.StateMachine, block *lib.Block, blockResult *lib.BlockResult,
 	evidence *bft.ByzantineEvidence, rcBuildHeight uint64) (results *lib.CertificateResult) {
-	defer lib.TimeTrack(c.log, time.Now(), 500*time.Millisecond)
+	startTime := time.Now()
+	defer lib.TimeTrack(c.log, startTime, slowCertificateResultsThreshold)
 	// calculate reward recipients, creating a 'certificate results' object reference in the process
+	rewardsStartTime := time.Now()
 	results = c.CalculateRewardRecipients(fsm, block.BlockHeader.ProposerAddress, rcBuildHeight)
+	rewardsDuration := time.Since(rewardsStartTime)
+	if c.Metrics != nil {
+		c.Metrics.CertResultsRewards.Observe(rewardsDuration.Seconds())
+	}
 	// handle swaps
+	swapsStartTime := time.Now()
 	c.HandleSwaps(fsm, blockResult, results, rcBuildHeight)
+	swapsDuration := time.Since(swapsStartTime)
+	if c.Metrics != nil {
+		c.Metrics.CertResultsSwaps.Observe(swapsDuration.Seconds())
+	}
 	// handle dex
+	dexStartTime := time.Now()
 	c.HandleDex(fsm, results, rcBuildHeight)
+	dexDuration := time.Since(dexStartTime)
+	if c.Metrics != nil {
+		c.Metrics.CertResultsDex.Observe(dexDuration.Seconds())
+	}
 	// set slash recipients
+	finalizeStartTime := time.Now()
 	c.CalculateSlashRecipients(results, evidence)
 	// set checkpoint
 	c.CalculateCheckpoint(blockResult, results)
 	// handle retired status
 	c.HandleRetired(fsm, results)
+	finalizeDuration := time.Since(finalizeStartTime)
+	if c.Metrics != nil {
+		c.Metrics.CertResultsFinalize.Observe(finalizeDuration.Seconds())
+	}
+	totalDuration := time.Since(startTime)
+	if totalDuration >= slowCertificateResultsThreshold {
+		c.log.Warnf("Slow NewCertificateResults height=%d txs=%d rewards=%s swaps=%s dex=%s finalize=%s total=%s",
+			blockResult.BlockHeader.Height, len(block.Transactions), rewardsDuration, swapsDuration, dexDuration, finalizeDuration, totalDuration)
+	}
 	// exit
 	return
 }

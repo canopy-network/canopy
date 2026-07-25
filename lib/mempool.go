@@ -15,10 +15,10 @@ var _ Mempool = &FeeMempool{} // Mempool interface enforcement for FeeMempool im
 
 // Mempool interface is a model for a pre-block, in-memory, Transaction store
 type Mempool interface {
-	Contains(txHash string) bool               // whether the mempool has this transaction already (de-duplicated by hash)
-	AddTransactions(tx ...[]byte) (err ErrorI) // insert new unconfirmed transaction
-	DeleteTransaction(tx ...[]byte)            // delete unconfirmed transaction
-	GetTransactions(maxBytes uint64) [][]byte  // retrieve transactions from the highest fee to lowest
+	Contains(txHash string) bool                             // whether the mempool has this transaction already (de-duplicated by hash)
+	AddTransactions(tx ...[]byte) (recheck bool, err ErrorI) // insert new unconfirmed transaction
+	DeleteTransaction(tx ...[]byte)                          // delete unconfirmed transaction
+	GetTransactions(maxBytes uint64) [][]byte                // retrieve transactions from the highest fee to lowest
 
 	Clear()              // reset the entire store
 	TxCount() int        // number of Transactions in the pool
@@ -55,30 +55,35 @@ func NewMempool(config MempoolConfig) Mempool {
 
 // AddTransaction() inserts a new unconfirmed Transaction to the Pool and returns if this addition
 // requires a recheck of the Mempool due to dropping or re-ordering of the Transactions
-func (f *FeeMempool) AddTransactions(txs ...[]byte) (err ErrorI) {
+func (f *FeeMempool) AddTransactions(txs ...[]byte) (recheck bool, err ErrorI) {
 	// create a list of MempoolTxs
 	mempoolTxs := make([]MempoolTx, 0, len(txs))
+	batchTxs := make(map[string]struct{}, len(txs))
+	txsBytes := 0
 	for _, tx := range txs {
-		// ensure the size of the Transaction doesn't exceed the individual limit
 		txBytes := len(tx)
-		// if the transaction bytes is larger than the max size
-		if uint32(txBytes) > f.config.IndividualMaxTxSize {
-			// exit with error
-			return ErrMaxTxSize()
-		}
 		// check if the mempool already contains the transaction
-		if _, found := f.pool.m[crypto.HashString(tx)]; found {
+		hash := crypto.HashString(tx)
+		if _, found := f.pool.m[hash]; found {
 			continue // skip already contains
 		}
+		if _, found := batchTxs[hash]; found {
+			continue // skip duplicate in this batch
+		}
+		batchTxs[hash] = struct{}{}
 		// create a new transaction object reference to ensure a non-nil transaction
 		transaction := new(Transaction)
 		// populate the object ref with the bytes of the transaction
 		if err = Unmarshal(tx, transaction); err != nil {
-			return
+			return false, err
 		}
 		// perform basic validations against the tx object
 		if err = transaction.CheckBasic(); err != nil {
-			return
+			return false, err
+		}
+		// certificate results may contain a full DEX batch and remain bounded by MaxTotalBytes
+		if uint32(txBytes) > f.config.IndividualMaxTxSize && transaction.MessageType != "certificateResults" {
+			return false, ErrMaxTxSize()
 		}
 		// extract the fee from the transaction result
 		fee := transaction.Fee
@@ -90,8 +95,10 @@ func (f *FeeMempool) AddTransactions(txs ...[]byte) (err ErrorI) {
 		// add to the list
 		mempoolTxs = append(mempoolTxs, MempoolTx{Tx: tx, Fee: fee})
 		// update the number of bytes
-		f.txsBytes += txBytes
+		txsBytes += txBytes
 	}
+	f.txsBytes += txsBytes
+	recheck = len(mempoolTxs) != 0
 	// insert the transactions into the pool
 	f.pool.insert(mempoolTxs...)
 	// assess if limits are exceeded - if so, drop from the bottom
@@ -111,7 +118,7 @@ func (f *FeeMempool) AddTransactions(txs ...[]byte) (err ErrorI) {
 		}
 	}
 	// if any are dropped or re-order happened
-	return nil
+	return recheck, nil
 }
 
 // GetTransactions() returns a list of the Transactions from the pool up to 'max collective Transaction bytes'
@@ -219,8 +226,8 @@ type MempoolTxs struct {
 func (t *MempoolTxs) insert(txs ...MempoolTx) {
 	// combine existing and incoming txs
 	combined := append(t.s, txs...)
-	// sort by Fee descending
-	sort.Slice(combined, func(i, j int) bool {
+	// sort by fee descending while preserving arrival order among equal-fee transactions
+	sort.SliceStable(combined, func(i, j int) bool {
 		return combined[i].Fee > combined[j].Fee
 	})
 	// prepare new map and slice

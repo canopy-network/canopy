@@ -69,6 +69,8 @@ message EventDexLiquidityWithdrawal {
   bytes order_id = 3; // @gotags: json:"orderId"
   // pointsBurned: the amount of points burned
   uint64 points_burned = 4; // @gotags: json:"pointsBurned"
+  // percent: the percentage of the provider's points withdrawn
+  uint64 percent = 5;
 }
 
 message EventDexSwap {

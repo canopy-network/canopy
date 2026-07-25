@@ -216,6 +216,16 @@ private async Task<PluginDeliverResponse> DeliverMessageXxxAsync(MessageXxx msg,
 }
 ```
 
+### Adding Custom RPC Endpoints
+
+A plugin can expose its own read-only HTTP endpoints for chain-specific data (e.g. `/v1/query/faucets`, `/v1/query/rewards`). The plugin owns its HTTP server entirely — Canopy never needs to know about these routes. See `TUTORIAL.md` "Step 5b: Expose Custom RPC Endpoints" for the full walkthrough.
+
+1. **Persist queryable records during `DeliverTx`** — write a small protobuf record to state under a plugin-owned key prefix (e.g. `Faucet` under `0x64` via `KeyForFaucet(addr)`). Endpoints can only return data that lives in state.
+2. **Declare the prefix** — add every custom record prefix to `ContractConfig.CustomStatePrefixes` (in `src/CanopyPlugin/contract.cs`). `HandshakeAsync` in `src/CanopyPlugin/plugin.cs` copies these into the `PluginConfig` sent to Canopy. Canopy validates them at handshake and **panics before the plugin starts** if a prefix collides with a core-reserved prefix (`1-15`). See "Key Prefixes" below.
+3. **Register routes** in `src/CanopyPlugin/rpc.cs`. The base plugin already ships a **skeleton** `StartRpcServerAsync()` that runs an `HttpListener` accept loop but registers **no routes** by default, and it is already started from `Program.cs` with `_ = plugin.StartRpcServerAsync();`. Just add a `case` per route to the `RouteRequestAsync` dispatch and implement the matching per-route handler (add as many as you want) — no change to `Program.cs` is needed.
+4. **Back each handler with `QueryStateAsync`** — the detached, read-only query path: `Plugin.QueryStateAsync(height, read)` sends a `PluginQueryRequest` with a fresh random id (not tied to any in-flight tx/block) and returns raw key/value state at a historical height (`0` = latest committed). Use a single-key read (`KeyForFaucet(addr)`) for one record, or a range read over the prefix (`FaucetPrefix()`) to list all records. Decode the raw bytes into your own protobuf type and shape the JSON response however you like.
+5. **Listen address** comes from the `RpcAddress` config field in `src/CanopyPlugin/config.cs` (default `0.0.0.0:50010`).
+
 ### State Keys
 
 State keys are constructed using length-prefixed encoding:
@@ -230,6 +240,15 @@ public static byte[] KeyForFeePool(ulong chainId) => JoinLenPrefix(PoolPrefix, F
 // Fee params key: 0x07 prefix + "/f/"
 public static byte[] KeyForFeeParams() => JoinLenPrefix(ParamsPrefix, Encoding.UTF8.GetBytes("/f/"));
 ```
+
+### Key Prefixes
+
+- `0x01` (1) - Account storage (shared with core; plugins may interoperate)
+- `0x02` (2) - Pool storage (shared with core; plugins may interoperate)
+- `0x07` (7) - Governance parameters
+- `0x64` (100) / `0x65` (101) - Example plugin-owned custom records (faucet/reward) **added by the tutorial**, not part of the base plugin
+
+> **Avoid prefix collisions:** the plugin shares Canopy's FSM keyspace. Canopy reserves the single-byte prefixes `1-15` for its own state (accounts, pools, validators, committees, params, …). Custom plugin records **must** use prefixes outside that range (e.g. `0x64`/100, `0x65`/101). Declare them in `ContractConfig.CustomStatePrefixes`; Canopy panics at handshake — before the plugin starts — if any declared prefix collides, and the core FSM additionally rejects any write to a reserved prefix.
 
 ### BLS Signatures
 
@@ -265,8 +284,10 @@ ErrTxFeeBelowStateLimit() // Code 14
 ### Running Tests
 ```bash
 cd plugin/csharp
-make test-tutorial
+make test
 ```
+
+`make test` runs `dotnet test`, which executes both the transaction integration tests (`TestPluginTransactions`) and the custom RPC endpoints test (`TestPluginCustomRPCEndpoints`) in the tutorial test project. Use `make test-tutorial` to focus on the tutorial project with detailed logging. The custom RPC test additionally requires the plugin's RPC server to be reachable on port `50010`.
 
 ### Test Structure
 The tutorial tests (`tutorial/RpcTest.cs`) demonstrate:
@@ -275,6 +296,7 @@ The tutorial tests (`tutorial/RpcTest.cs`) demonstrate:
 3. Sending transfer transaction
 4. Sending reward transaction
 5. Verifying balances
+6. Querying the custom `/v1/query/faucets` and `/v1/query/rewards` endpoints and validating returned record structure
 
 ## RPC Endpoints
 

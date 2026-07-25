@@ -69,6 +69,9 @@ The system uses a "non-sign window" concept:
 - Tracks non-signing over a configurable number of blocks
 - When the end of a window is reached, validators exceeding the maximum non-signs are slashed
 - After slashing, the non-signer tracking is reset for the next window
+- In protocol v2, reset semantics are intentionally single-settlement-per-window:
+  the first chain processed during reset performs settlement, then all non-signer
+  evidence for that window is erased before later chains are processed.
 
 This approach allows for occasional missed signatures (which might happen due to network issues) while still penalizing persistent non-participation.
 

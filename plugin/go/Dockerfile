@@ -2,7 +2,7 @@
 # Build from repository root: docker build -f plugin/go/Dockerfile -t canopy-go .
 
 # Stage 1: Build Canopy
-FROM golang:1.25-alpine AS canopy-builder
+FROM golang:1.26-alpine AS canopy-builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -10,7 +10,7 @@ COPY . .
 RUN go build -trimpath -ldflags="-s -w" -o /canopy ./cmd/main/...
 
 # Stage 2: Build Go Plugin
-FROM golang:1.25-alpine AS plugin-builder
+FROM golang:1.26-alpine AS plugin-builder
 WORKDIR /app
 COPY plugin/go/ ./
 RUN go build -o /plugin .

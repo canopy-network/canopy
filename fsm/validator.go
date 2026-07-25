@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
+	"math"
 	"slices"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -66,6 +68,39 @@ func (s *StateMachine) GetValidators() (result []*Validator, err lib.ErrorI) {
 	}
 	// exit
 	return
+}
+
+// getCurrentValidators() lazily loads the validator list for the FSM's current store view.
+// The returned slice may alias the shared historical validator cache, so callers must treat
+// the returned validators as read-only.
+func (s *StateMachine) getCurrentValidators() ([]*Validator, lib.ErrorI) {
+	// if cached locally, return immediately
+	if s.cache.liveValidators != nil {
+		return s.cache.liveValidators, nil
+	}
+	// otherwise, load the validator list from the current store view
+	validators, err := s.GetValidators()
+	if err != nil {
+		return nil, err
+	}
+	s.cache.liveValidators = validators
+	if s.cache.sharedValidatorSet != 0 && s.cache.sharedCache != nil {
+		// historical FSMs insert their height-scoped validator list into the shared rolling cache
+		s.cache.sharedCache.Lock()
+		if cached, ok := s.cache.sharedCache.sets[s.cache.sharedValidatorSet]; ok {
+			s.cache.liveValidators = cached
+		} else {
+			s.cache.sharedCache.sets[s.cache.sharedValidatorSet] = validators
+			s.cache.sharedCache.heights = append(s.cache.sharedCache.heights, s.cache.sharedValidatorSet)
+			if len(s.cache.sharedCache.heights) > 64 {
+				evict := s.cache.sharedCache.heights[0]
+				s.cache.sharedCache.heights = s.cache.sharedCache.heights[1:]
+				delete(s.cache.sharedCache.sets, evict)
+			}
+		}
+		s.cache.sharedCache.Unlock()
+	}
+	return s.cache.liveValidators, nil
 }
 
 // GetValidatorsPaginated() returns a page of filtered validators
@@ -131,6 +166,13 @@ func (s *StateMachine) GetValidatorsPaginated(p lib.PageParams, f lib.ValidatorF
 func (s *StateMachine) SetValidators(validators []*Validator, supply *Supply) lib.ErrorI {
 	// for each validator in the list
 	for _, val := range validators {
+		// ensure add operations are safe from uint64 overflow
+		if supply.Total > math.MaxUint64-val.StakedAmount || supply.Staked > math.MaxUint64-val.StakedAmount {
+			return ErrInvalidAmount()
+		}
+		if val.Delegate && supply.DelegatedOnly > math.MaxUint64-val.StakedAmount {
+			return ErrInvalidAmount()
+		}
 		// if the unstaking height or the max paused height is set
 		if val.UnstakingHeight != 0 {
 			// if the validator is unstaking - update it accordingly in state
@@ -318,7 +360,8 @@ func (s *StateMachine) DeleteFinishedUnstaking() lib.ErrorI {
 		// get the address from the key
 		addr, err := AddressFromKey(unstakingKey)
 		if err != nil {
-			return err
+			s.log.Warnf("skipping malformed unstaking key: %x", unstakingKey)
+			return nil
 		}
 		// get the validator associated with that address
 		validator, err := s.GetValidator(addr)
@@ -358,12 +401,12 @@ func (s *StateMachine) SetValidatorsPaused(chainId uint64, addresses [][]byte) {
 			// move on to the next iteration
 			continue
 		}
-		// ensure no unauthorized auto-pauses
-		if !slices.Contains(val.Committees, chainId) {
+		// protocol v2+ requires committee membership for chain-scoped auto-pause.
+		if s.IsFeatureEnabled(2) && !slices.Contains(val.Committees, chainId) {
 			// NOTE: expected - this can happen during a race between edit-stake and pause
 			s.log.Warnf("unauthorized pause from %d, this can happen occasionally", chainId)
-			// exit
-			return
+			// skip this validator and keep processing the remaining list
+			continue
 		}
 		// handle pausing the validator
 		if err = s.HandleMessagePause(&MessagePause{Address: addr}); err != nil {
@@ -422,8 +465,17 @@ func (s *StateMachine) GetAuthorizedSignersForValidator(address []byte) (signers
 
 // getValidatorSet() is a helper function to get a validator set ordered by stake to the maximum parameter
 func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.ValidatorSet, err lib.ErrorI) {
+	startTime := time.Now()
+	observeStage := func(stage string, stageStartTime time.Time) {
+		if s.Metrics != nil {
+			s.Metrics.GetValidatorSetStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+		}
+	}
+	defer observeStage("total", startTime)
 	// get the validator params
+	getParamsStartTime := time.Now()
 	p, err := s.GetParamsVal()
+	observeStage("get_params", getParamsStartTime)
 	if err != nil {
 		return
 	}
@@ -431,25 +483,14 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 	if delegate {
 		maxPerCommittee, delegateFilter = p.MaximumDelegatesPerCommittee, lib.FilterOption_MustBe
 	}
-	validators := make([]*Validator, 0)
-	// reverse iterator is slightly more efficient than forward iterator for large datasets
-	it, err := s.RevIterator(ValidatorPrefix())
+	iterateUnmarshalStartTime := time.Now()
+	validators, err := s.getCurrentValidators()
 	if err != nil {
 		return vs, err
 	}
-	// ensure memory cleanup
-	defer it.Close()
-	// for each item of the iterator
-	for ; it.Valid(); it.Next() {
-		// convert the bytes into a validator object reference
-		val, e := s.unmarshalValidator(it.Value())
-		if e != nil {
-			return vs, e
-		}
-		// add it to the list
-		validators = append(validators, val)
-	}
+	observeStage("iterate_unmarshal", iterateUnmarshalStartTime)
 	// filter out validators not part of the committee
+	filterStartTime := time.Now()
 	filtered := slices.Collect(func(yield func(*Validator) bool) {
 		for _, v := range validators {
 			// exclude validators not part of the committee
@@ -467,7 +508,9 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 			}
 		}
 	})
+	observeStage("filter", filterStartTime)
 	// sort by highest stake then address
+	sortStartTime := time.Now()
 	slices.SortFunc(filtered, func(a, b *Validator) int {
 		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
 		if result == 0 {
@@ -475,6 +518,7 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 		}
 		return result
 	})
+	observeStage("sort", sortStartTime)
 	// create a variable to hold the committee members
 	members := make([]*lib.ConsensusValidator, 0)
 	// determine slice size — if MaxCommitteeSize == 0, use all
@@ -483,6 +527,7 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 		limit = min(uint64(len(filtered)), maxPerCommittee)
 	}
 	// for each validator up to the limit
+	buildMembersStartTime := time.Now()
 	for _, v := range filtered[:limit] {
 		members = append(members, &lib.ConsensusValidator{
 			PublicKey:   v.PublicKey,
@@ -490,8 +535,12 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 			NetAddress:  v.NetAddress,
 		})
 	}
+	observeStage("build_members", buildMembersStartTime)
 	// convert list to a validator set (includes shared public key)
-	return lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members}, delegate)
+	newValidatorSetStartTime := time.Now()
+	vs, err = lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members}, delegate)
+	observeStage("new_validator_set", newValidatorSetStartTime)
+	return
 }
 
 // pubKeyBytesToAddress() is a convenience function that converts a public key to an address
@@ -647,7 +696,7 @@ type nonSignerJSON struct {
 	Counter uint64       `protobuf:"varint,2,opt,name=counter,proto3" json:"counter,omitempty"`
 }
 
-// UnmarshalJSON() is the json.Unmarshaler implementation for the non signers object
+// MarshalJSON() is the json.MarshalJSON implementation for the non signers object
 func (x *NonSigner) MarshalJSON() (bz []byte, err error) {
 	if x == nil {
 		return nil, nil

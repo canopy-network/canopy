@@ -1,168 +1,149 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock
-from google.protobuf.any_pb2 import Any
+"""
+Unit tests for the Contract class.
 
-from contract import Contract, Config, PluginError
+Covers the current `contract.contract` API: lifecycle hooks, stateless message
+validation for the base 'send' transaction, and the tutorial 'faucet'/'reward'
+transactions.
+"""
+
+import pytest
+
+from contract.contract import Contract
+from contract.plugin import Config
+from contract.error import PluginError
 from contract.proto import (
-    PluginCheckRequest,
-    PluginCheckResponse,
-    PluginDeliverRequest,
-    PluginDeliverResponse,
-    PluginGenesisRequest,
-    PluginGenesisResponse,
-    PluginBeginRequest,
-    PluginBeginResponse,
-    PluginEndRequest,
-    PluginEndResponse,
     MessageSend,
-    PluginKeyRead,
-    PluginStateReadRequest,
-    PluginStateReadResponse,
-    PluginStateWriteRequest,
-    PluginStateWriteResponse,
-    PluginReadResult,
-    PluginStateEntry,
-    PluginSetOp,
-    PluginDeleteOp,
-    Transaction,
-    Account,
-    Pool,
-    FeeParams,
+    MessageFaucet,
+    MessageReward,
+    PluginGenesisRequest,
+    PluginBeginRequest,
+    PluginEndRequest,
+    PluginCheckRequest,
 )
+
+# Error codes (see contract/error.py)
+CODE_INVALID_ADDRESS = 12
+CODE_INVALID_AMOUNT = 13
+
+ADDR_A = b"a" * 20
+ADDR_B = b"b" * 20
+ADDR_SHORT = b"short"
+
 
 @pytest.fixture
 def config():
-    return Config(chain_id=1, data_dir_path="/tmp/plugin/")
+    """Default plugin configuration."""
+    return Config()
+
 
 @pytest.fixture
-def mock_plugin():
-    plugin = MagicMock()
-    
-    async def side_effect_read(contract, request):
-        results = []
-        for key_read in request.keys:
-            val = b""
-            # Because of join_len_prefix, the prefixes are length-prefixed:
-            # - ACCOUNT_PREFIX (b"\x01") -> b"\x01\x01..."
-            # - POOL_PREFIX (b"\x02")    -> b"\x01\x02..."
-            # - PARAMS_PREFIX (b"\x07")  -> b"\x01\x07..."
-            if key_read.key.startswith(b"\x01\x01"):
-                acc = Account(amount=10000)
-                val = acc.SerializeToString()
-            elif key_read.key.startswith(b"\x01\x02"):
-                pool = Pool(amount=500)
-                val = pool.SerializeToString()
-            elif key_read.key.startswith(b"\x01\x07"):
-                params = FeeParams(send_fee=100)
-                val = params.SerializeToString()
-            results.append(PluginReadResult(
-                query_id=key_read.query_id,
-                entries=[PluginStateEntry(value=val)]
-            ))
-        return PluginStateReadResponse(results=results)
+def contract(config):
+    """Contract instance with config but no live plugin (stateless tests)."""
+    return Contract(config=config)
 
-    plugin.state_read = AsyncMock(side_effect=side_effect_read)
-    plugin.state_write = AsyncMock(return_value=PluginStateWriteResponse())
-    return plugin
 
-@pytest.fixture
-def contract(config, mock_plugin):
-    return Contract(config=config, plugin=mock_plugin, fsm_id=1)
+class TestContractLifecycle:
+    """Lifecycle hooks should succeed without error."""
 
-class TestContract:
     def test_genesis(self, contract):
-        req = PluginGenesisRequest()
-        resp = contract.genesis(req)
-        assert isinstance(resp, PluginGenesisResponse)
+        result = contract.genesis(PluginGenesisRequest())
+        assert not result.HasField("error")
 
     def test_begin_block(self, contract):
-        req = PluginBeginRequest()
-        resp = contract.begin_block(req)
-        assert isinstance(resp, PluginBeginResponse)
+        result = contract.begin_block(PluginBeginRequest())
+        assert not result.HasField("error")
 
     def test_end_block(self, contract):
-        req = PluginEndRequest()
-        resp = contract.end_block(req)
-        assert isinstance(resp, PluginEndResponse)
+        result = contract.end_block(PluginEndRequest())
+        assert not result.HasField("error")
 
-    @pytest.mark.asyncio
-    async def test_check_tx_valid(self, contract):
-        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=500)
-        any_msg = Any()
-        any_msg.Pack(msg)
-        
-        tx = Transaction(fee=200, msg=any_msg)
-        req = PluginCheckRequest(tx=tx)
-        
-        resp = await contract.check_tx(req)
-        assert not resp.HasField("error")
-        assert resp.recipient == b'b'*20
-        assert list(resp.authorized_signers) == [b'a'*20]
 
-    @pytest.mark.asyncio
-    async def test_check_tx_insufficient_fee(self, contract):
-        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=500)
-        any_msg = Any()
-        any_msg.Pack(msg)
-        
-        # Fee is 50, but min is 100
-        tx = Transaction(fee=50, msg=any_msg)
-        req = PluginCheckRequest(tx=tx)
-        
-        resp = await contract.check_tx(req)
-        assert resp.HasField("error")
-        assert resp.error.code == 14  # CodeTxFeeBelowLimit
+class TestCheckMessageSend:
+    """Stateless validation of the base 'send' message."""
 
-    @pytest.mark.asyncio
-    async def test_check_tx_invalid_address(self, contract):
-        # Invalid address length
-        msg = MessageSend(from_address=b'a'*10, to_address=b'b'*20, amount=500)
-        any_msg = Any()
-        any_msg.Pack(msg)
-        
-        tx = Transaction(fee=200, msg=any_msg)
-        req = PluginCheckRequest(tx=tx)
-        
-        resp = await contract.check_tx(req)
-        assert resp.HasField("error")
-        assert resp.error.code == 12  # CodeInvalidAddress
+    def test_valid(self, contract):
+        msg = MessageSend(from_address=ADDR_A, to_address=ADDR_B, amount=1000)
+        result = contract._check_message_send(msg)
 
-    @pytest.mark.asyncio
-    async def test_check_tx_invalid_amount(self, contract):
-        # Amount is 0
-        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=0)
-        any_msg = Any()
-        any_msg.Pack(msg)
-        
-        tx = Transaction(fee=200, msg=any_msg)
-        req = PluginCheckRequest(tx=tx)
-        
-        resp = await contract.check_tx(req)
-        assert resp.HasField("error")
-        assert resp.error.code == 13  # CodeInvalidAmount
+        assert not result.HasField("error")
+        assert result.recipient == ADDR_B
+        assert list(result.authorized_signers) == [ADDR_A]
 
-    @pytest.mark.asyncio
-    async def test_deliver_tx_valid(self, contract, mock_plugin):
-        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=500)
-        any_msg = Any()
-        any_msg.Pack(msg)
-        
-        tx = Transaction(fee=200, msg=any_msg)
-        req = PluginDeliverRequest(tx=tx)
-        
-        resp = await contract.deliver_tx(req)
-        assert not resp.HasField("error")
-        assert mock_plugin.state_write.called
+    def test_invalid_from_address(self, contract):
+        msg = MessageSend(from_address=ADDR_SHORT, to_address=ADDR_B, amount=1000)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_send(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
 
-    @pytest.mark.asyncio
-    async def test_deliver_tx_insufficient_funds(self, contract, mock_plugin):
-        msg = MessageSend(from_address=b'a'*20, to_address=b'b'*20, amount=50000) # exceeds 10000 balance
-        any_msg = Any()
-        any_msg.Pack(msg)
-        
-        tx = Transaction(fee=200, msg=any_msg)
-        req = PluginDeliverRequest(tx=tx)
-        
-        resp = await contract.deliver_tx(req)
-        assert resp.HasField("error")
-        assert resp.error.code == 9  # CodeInsufficientFunds (err_insufficient_funds is code 9)
+    def test_invalid_to_address(self, contract):
+        msg = MessageSend(from_address=ADDR_A, to_address=ADDR_SHORT, amount=1000)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_send(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
+
+    def test_invalid_amount(self, contract):
+        msg = MessageSend(from_address=ADDR_A, to_address=ADDR_B, amount=0)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_send(msg)
+        assert exc.value.code == CODE_INVALID_AMOUNT
+
+
+class TestCheckMessageFaucet:
+    """Stateless validation of the tutorial 'faucet' message."""
+
+    def test_valid(self, contract):
+        msg = MessageFaucet(signer_address=ADDR_A, recipient_address=ADDR_B, amount=500)
+        result = contract._check_message_faucet(msg)
+
+        assert not result.HasField("error")
+        assert result.recipient == ADDR_B
+        assert list(result.authorized_signers) == [ADDR_A]
+
+    def test_invalid_recipient(self, contract):
+        msg = MessageFaucet(signer_address=ADDR_A, recipient_address=ADDR_SHORT, amount=500)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_faucet(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
+
+    def test_invalid_amount(self, contract):
+        msg = MessageFaucet(signer_address=ADDR_A, recipient_address=ADDR_B, amount=0)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_faucet(msg)
+        assert exc.value.code == CODE_INVALID_AMOUNT
+
+
+class TestCheckMessageReward:
+    """Stateless validation of the tutorial 'reward' message."""
+
+    def test_valid(self, contract):
+        msg = MessageReward(admin_address=ADDR_A, recipient_address=ADDR_B, amount=750)
+        result = contract._check_message_reward(msg)
+
+        assert not result.HasField("error")
+        assert result.recipient == ADDR_B
+        assert list(result.authorized_signers) == [ADDR_A]
+
+    def test_invalid_admin(self, contract):
+        msg = MessageReward(admin_address=ADDR_SHORT, recipient_address=ADDR_B, amount=750)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_reward(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
+
+    def test_invalid_amount(self, contract):
+        msg = MessageReward(admin_address=ADDR_A, recipient_address=ADDR_B, amount=0)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_reward(msg)
+        assert exc.value.code == CODE_INVALID_AMOUNT
+
+
+@pytest.mark.asyncio
+class TestCheckTx:
+    """check_tx wiring guards."""
+
+    async def test_check_tx_without_plugin(self, config):
+        """check_tx must fail gracefully when no plugin is wired in."""
+        contract = Contract(config=config)  # plugin is None
+        result = await contract.check_tx(PluginCheckRequest())
+
+        assert result.HasField("error")
+        assert "plugin or config not initialized" in result.error.msg

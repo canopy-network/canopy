@@ -102,14 +102,14 @@ Batch read operation for:
 - **Recipient**: `to.Amount += msg.Amount`  
 - **Fee Pool**: `feePool.Amount += fee`
 
-**State Writing** (contract.go:189-211):
+**State Writing**:
 ```
 StateWrite() → FSM via Socket → Commits state changes
 ```
 
-Two write patterns:
-- **Account Deletion**: If sender balance reaches 0, delete sender account (contract.go:191-198)
-- **Normal Update**: Update all three entities (contract.go:199-207)
+- **Fee Pool**: Write the updated fee pool.
+- **Accounts**: Write the updated sender and recipient records.
+- **Drained Accounts**: Delete nonce-zero native senders; retain records with committed nonce state and senders whose nonce will advance after `RLP.V2` delivery.
 
 ### 7. State Key Structure
 

@@ -2,6 +2,7 @@ package com.canopy.plugin
 
 import mu.KotlinLogging
 import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.thread
 
 private val logger = KotlinLogging.logger {}
 
@@ -16,6 +17,11 @@ fun main() {
     val config = Config.default()
     val plugin = PluginClient(config)
     plugin.start()
+
+    // Start the plugin's own HTTP server exposing custom, chain-specific RPC endpoints
+    thread(isDaemon = true, name = "plugin-rpc-server") {
+        RpcServer(plugin).start()
+    }
 
     // Wait for shutdown signal
     val shutdownLatch = CountDownLatch(1)

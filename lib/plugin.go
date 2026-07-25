@@ -25,15 +25,24 @@ type PluginCompatibleFSM interface {
 	StateWrite(request *PluginStateWriteRequest) (response PluginStateWriteResponse, err ErrorI)
 }
 
+// PluginQueryProvider: defines the 'expected' interface for serving detached, read-only state
+// queries from the plugin. Unlike PluginCompatibleFSM, these queries are not tied to an
+// in-flight tx/block lifecycle and operate against a historical read-only snapshot of state.
+type PluginQueryProvider interface {
+	// QueryState() executes a 'read request' against a read-only state snapshot at the given height (0 = latest committed)
+	QueryState(height uint64, request *PluginStateReadRequest) (response PluginStateReadResponse, err ErrorI)
+}
+
 // Plugin defines the 'VM-less' extension of the Finite State Machine
 type Plugin struct {
-	config      *PluginConfig                         // the plugin configuration
-	conn        net.Conn                              // the underlying unix sock file connection
-	pending     map[uint64]chan isPluginToFSM_Payload // the outstanding requests from the FSM
-	requestFSMs map[uint64]PluginCompatibleFSM        // maps request IDs to their FSM context for concurrent operations
-	l           sync.Mutex                            // thread safety
-	log         LoggerI                               // the logger associated with the plugin
-	timeout     time.Duration                         // plugin request timeout
+	config        *PluginConfig                         // the plugin configuration
+	conn          net.Conn                              // the underlying unix sock file connection
+	pending       map[uint64]chan isPluginToFSM_Payload // the outstanding requests from the FSM
+	requestFSMs   map[uint64]PluginCompatibleFSM        // maps request IDs to their FSM context for concurrent operations
+	queryProvider PluginQueryProvider                   // serves detached, read-only state queries from the plugin
+	l             sync.Mutex                            // thread safety
+	log           LoggerI                               // the logger associated with the plugin
+	timeout       time.Duration                         // plugin request timeout
 }
 
 // NewPlugin() creates and starts a plguin
@@ -58,6 +67,19 @@ func NewPlugin(conn net.Conn, log LoggerI, timeout time.Duration) (p *Plugin) {
 	log.Debugf("Started plugin listening service for connection: %s", conn.RemoteAddr())
 	// exit
 	return
+}
+
+// SetQueryProvider() registers the provider that serves detached, read-only state queries from the plugin
+func (p *Plugin) SetQueryProvider(provider PluginQueryProvider) {
+	// defensive nil check
+	if p == nil {
+		return
+	}
+	// thread safety
+	p.l.Lock()
+	defer p.l.Unlock()
+	// set the query provider
+	p.queryProvider = provider
 }
 
 // Genesis() is the fsm calling the genesis function of the plugin
@@ -252,6 +274,9 @@ func (p *Plugin) ListenForInbound() {
 				case *PluginToFSM_StateWrite:
 					p.log.Debugf("ListenForInbound() routing state write request ID %d", msg.Id)
 					return p.handleStateWriteRequest(msg)
+				case *PluginToFSM_Query:
+					p.log.Debugf("ListenForInbound() routing detached query request ID %d", msg.Id)
+					return p.handleQueryRequest(msg)
 				default:
 					p.log.Debugf("ListenForInbound() unknown message type: %T for message ID %d", payload, msg.Id)
 					return ErrInvalidPluginToFSMMessage(reflect.TypeOf(payload))
@@ -284,6 +309,10 @@ func (p *Plugin) handleConfigMessage(msg *PluginToFSM) ErrorI {
 	}
 	// debug log received config
 	p.log.Debugf("handleConfigMessage() received valid config: %+v", m.Config)
+	// GUARD: reject (panic) a plugin that declares custom record prefixes colliding with core-reserved
+	// prefixes. This runs at handshake — BEFORE the plugin processes any genesis/block — so a
+	// misconfigured plugin fails fast instead of silently corrupting state at the first write.
+	assertNoReservedPrefixCollision(m.Config)
 	// set config
 	p.config = m.Config
 	// debug log config set
@@ -307,6 +336,32 @@ func (p *Plugin) handleConfigMessage(msg *PluginToFSM) ErrorI {
 		p.log.Debug("handleConfigMessage() config acknowledgment sent successfully")
 	}
 	return err
+}
+
+// CoreReservedPrefixMax is the highest single-byte store key prefix reserved by Canopy core. Core
+// reserves the contiguous single-byte prefixes 1..CoreReservedPrefixMax (accounts, pools, validators,
+// committees, params, ...). Plugins share the FSM keyspace, so their OWN custom records MUST use key
+// prefixes OUTSIDE this range. Kept intentionally in sync with the prefixes defined in fsm/key.go.
+const CoreReservedPrefixMax = 15
+
+// assertNoReservedPrefixCollision panics if the plugin config declares a custom state prefix that
+// collides with a core-reserved prefix. A collision is a single-byte prefix in the range
+// 1..CoreReservedPrefixMax: because store keys are length-prefixed, only single-byte plugin prefixes
+// can ever alias a (single-byte) core prefix, so multi-byte plugin prefixes are always safe.
+func assertNoReservedPrefixCollision(config *PluginConfig) {
+	if config == nil {
+		return
+	}
+	for _, prefix := range config.CustomStatePrefixes {
+		if len(prefix) == 1 && prefix[0] >= 1 && prefix[0] <= CoreReservedPrefixMax {
+			panic(fmt.Sprintf(
+				"plugin %q declared custom state prefix %d which collides with a core-reserved "+
+					"prefix (1-%d, e.g. accounts/pools/validators/committees); custom records MUST "+
+					"use a key prefix OUTSIDE that range — see plugin TUTORIAL.md 'avoid prefix "+
+					"collisions'", config.Name, prefix[0], CoreReservedPrefixMax,
+			))
+		}
+	}
 }
 
 // HandleStateReadRequest() handles an inbound state read request from a specific FSM context
@@ -348,6 +403,62 @@ func (p *Plugin) handleStateReadRequest(msg *PluginToFSM) ErrorI {
 		p.log.Debugf("handleStateReadRequest() error sending response: %v", sendErr)
 	} else {
 		p.log.Debug("handleStateReadRequest() response sent successfully")
+	}
+	return sendErr
+}
+
+// handleQueryRequest() handles an inbound detached, read-only state query from the plugin.
+// Unlike handleStateReadRequest(), it does NOT look up an in-flight FSM context (requestFSMs);
+// instead it serves the query against a historical read-only snapshot via the query provider.
+func (p *Plugin) handleQueryRequest(msg *PluginToFSM) ErrorI {
+	// debug log query request start
+	p.log.Debugf("handleQueryRequest() processing message ID %d", msg.Id)
+	// get the query request
+	request := msg.GetQuery()
+	p.log.Debugf("handleQueryRequest() query request: %+v", request)
+	// defensive nil check on the request
+	if request == nil {
+		p.log.Debugf("handleQueryRequest() nil query request for message ID %d", msg.Id)
+		return ErrInvalidPluginToFSMMessage(reflect.TypeOf(msg.Payload))
+	}
+	// get the query provider under lock
+	p.l.Lock()
+	provider := p.queryProvider
+	p.l.Unlock()
+	// build the response container
+	response := new(PluginQueryResponse)
+	// check if a query provider is registered
+	if provider == nil {
+		p.log.Debugf("handleQueryRequest() no query provider registered for message ID %d", msg.Id)
+		response.Error = NewPluginError(ErrNoPluginQueryProvider())
+	} else if request.GetRead() == nil {
+		// guard: a query with no inner read request would nil-deref in StateRead(); return a plugin
+		// error so a malformed/empty query reports cleanly instead of panicking the node
+		p.log.Debugf("handleQueryRequest() nil read in query request for message ID %d", msg.Id)
+		response.Error = NewPluginError(ErrNilPluginQueryRead())
+	} else {
+		// execute the detached read-only query
+		read, err := provider.QueryState(request.GetHeight(), request.GetRead())
+		if err != nil {
+			p.log.Debugf("handleQueryRequest() query provider error: %v", err)
+			response.Error = NewPluginError(err)
+		} else {
+			p.log.Debugf("handleQueryRequest() query provider success: %+v", read)
+			response.Read = &read
+		}
+	}
+	// send response back to the plugin
+	p.log.Debugf("handleQueryRequest() sending response back for message ID %d", msg.Id)
+	sendErr := p.sendProtoMsg(&FSMToPlugin{
+		Id: msg.Id,
+		Payload: &FSMToPlugin_Query{
+			Query: response,
+		},
+	})
+	if sendErr != nil {
+		p.log.Debugf("handleQueryRequest() error sending response: %v", sendErr)
+	} else {
+		p.log.Debug("handleQueryRequest() response sent successfully")
 	}
 	return sendErr
 }
