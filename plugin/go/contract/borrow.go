@@ -225,21 +225,6 @@ func (c *Contract) DeliverMessageBorrow(msg *MessageBorrow, fee uint64) *PluginD
 	if mErr != nil {
 		return &PluginDeliverResponse{Error: mErr}
 	}
-	custodyWriteReq := &PluginStateWriteRequest{
-		Sets: []*PluginSetOp{{Key: acctKey, Value: acctBytesOut}},
-	}
-	if deletePool {
-		custodyWriteReq.Deletes = []*PluginDeleteOp{{Key: poolKey}}
-	} else {
-		custodyWriteReq.Sets = append(custodyWriteReq.Sets, &PluginSetOp{Key: poolKey, Value: poolBytesOut})
-	}
-	custodyWriteResp, cwErr := c.plugin.StateWrite(c, custodyWriteReq)
-	if cwErr != nil {
-		return &PluginDeliverResponse{Error: cwErr}
-	}
-	if custodyWriteResp.Error != nil {
-		return &PluginDeliverResponse{Error: custodyWriteResp.Error}
-	}
 
 	// Step 4 -- [REFACTORED, ARCM Section 19.3, C1] Now routes through the
 	// single mandatory applyDebtDelta() write path instead of inline
@@ -262,12 +247,36 @@ func (c *Contract) DeliverMessageBorrow(msg *MessageBorrow, fee uint64) *PluginD
 	if mErr != nil {
 		return &PluginDeliverResponse{Error: mErr}
 	}
-	if sErr := SaveMarket(c, msg.MarketId, market); sErr != nil {
-		return &PluginDeliverResponse{Error: sErr}
+
+	// [FIX, session finding] Custody (account credit + pool debit/delete),
+	// market.TotalBorrowed (via applyDebtDelta above), and the borrower's
+	// position used to commit via TWO independent StateWrite calls -- a
+	// non-atomic split matching the exact bug class found and fixed this
+	// session in liquidate_position.go. Per the Canopy builder docs'
+	// canonical pattern (batch-read, batch-write, ONE StateWrite call is
+	// atomic -- no cross-call guarantee exists), a failure in the second
+	// write used to leave the borrower already credited with real funds
+	// while market.TotalBorrowed and pos.DebtPrincipal never reflected the
+	// new debt. Now a single marketBytesOut marshal plus one bundled sets/
+	// deletes, one StateWrite call for the whole transaction.
+	marketBytesOut, mErr := Marshal(market)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
 	}
-	writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-		Sets: []*PluginSetOp{{Key: posKey, Value: posBytesOut}},
-	})
+
+	sets := []*PluginSetOp{
+		{Key: KeyForMarket(msg.MarketId), Value: marketBytesOut},
+		{Key: acctKey, Value: acctBytesOut},
+		{Key: posKey, Value: posBytesOut},
+	}
+	var deletes []*PluginDeleteOp
+	if deletePool {
+		deletes = append(deletes, &PluginDeleteOp{Key: poolKey})
+	} else {
+		sets = append(sets, &PluginSetOp{Key: poolKey, Value: poolBytesOut})
+	}
+
+	writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets, Deletes: deletes})
 	if wErr != nil {
 		return &PluginDeliverResponse{Error: wErr}
 	}

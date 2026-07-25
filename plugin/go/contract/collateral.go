@@ -187,14 +187,14 @@ func (c *Contract) CheckMessageWithdrawCollateral(msg *MessageWithdrawCollateral
 
 // DeliverMessageWithdrawCollateral handles 'withdraw_collateral'.
 //
-// [DISCLOSED GAP, matches deposit_collateral's existing design] Like
-// deposit_collateral, this handler is bookkeeping-only against
-// BorrowerPosition.CollateralQuantity -- no Account.Amount fund transfer
-// occurs on either side of collateral management in this codebase today.
-// Building withdraw_collateral to actually move tokens while
-// deposit_collateral does not would be an inconsistent, asymmetric fix;
-// both sides need real custody wired in together, as a separate,
-// deliberate piece of work, not silently introduced on one side only.
+// [CUSTODY FIX, session finding] The comment previously here claimed this
+// handler was "bookkeeping-only... no Account.Amount fund transfer occurs
+// on either side" -- stale relative to the code below it, which debits the
+// market's collateral escrow pool and credits the withdrawer's real
+// account, mirroring deposit_collateral's own (already-real) custody move.
+// Whichever prior session wired this up did not update this header
+// comment to match; corrected here rather than left to mislead a future
+// reader into believing no real funds move on this path.
 //
 // Admission gates deliberately NOT applied here, matching
 // deposit_collateral's own established reasoning (see that function's
@@ -372,23 +372,28 @@ func (c *Contract) DeliverMessageWithdrawCollateral(msg *MessageWithdrawCollater
 	if mErr != nil {
 		return &PluginDeliverResponse{Error: mErr}
 	}
-	custodyWriteReq := &PluginStateWriteRequest{
-		Sets: []*PluginSetOp{{Key: acctKey, Value: acctBytesOut}},
-	}
-	if deletePool {
-		custodyWriteReq.Deletes = []*PluginDeleteOp{{Key: poolKey}}
-	} else {
-		custodyWriteReq.Sets = append(custodyWriteReq.Sets, &PluginSetOp{Key: poolKey, Value: poolBytesOut})
-	}
-	custodyWriteResp, cwErr := c.plugin.StateWrite(c, custodyWriteReq)
-	if cwErr != nil {
-		return &PluginDeliverResponse{Error: cwErr}
-	}
-	if custodyWriteResp.Error != nil {
-		return &PluginDeliverResponse{Error: custodyWriteResp.Error}
-	}
 
 	pos.CollateralQuantity = newCollateralQty
+
+	// [FIX, session finding] Custody (account credit + pool debit/delete)
+	// and the borrower's position used to commit via TWO independent
+	// StateWrite calls -- the same non-atomicity bug class found and fixed
+	// this session in liquidate_position.go, borrow.go, and repay.go. Per
+	// the Canopy builder docs' canonical pattern (batch-read, batch-write,
+	// ONE StateWrite call is atomic -- no cross-call guarantee exists), a
+	// failure in the second write used to leave the withdrawer already
+	// credited with real funds while pos.CollateralQuantity still showed
+	// the old, larger amount -- overstating remaining collateral and
+	// potentially permitting a further borrow or passing an HF check
+	// against collateral no longer actually held. Now one bundled sets/
+	// deletes pair, one StateWrite call for the whole transaction.
+	sets := []*PluginSetOp{{Key: acctKey, Value: acctBytesOut}}
+	var deletes []*PluginDeleteOp
+	if deletePool {
+		deletes = append(deletes, &PluginDeleteOp{Key: poolKey})
+	} else {
+		sets = append(sets, &PluginSetOp{Key: poolKey, Value: poolBytesOut})
+	}
 
 	// [Matches repay.go's dual-zero-delete convention] Only delete the
 	// record when BOTH collateral and debt are zero; otherwise always
@@ -399,31 +404,23 @@ func (c *Contract) DeliverMessageWithdrawCollateral(msg *MessageWithdrawCollater
 	// with currentDebt > 0 should be unreachable -- this guard exists for
 	// the same defense-in-depth reason repay.go's mirror check does.
 	if newCollateralQty == 0 && currentDebt == 0 {
-		writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Deletes: []*PluginDeleteOp{{Key: posKey}},
-		})
-		if wErr != nil {
-			return &PluginDeliverResponse{Error: wErr}
-		}
-		if writeResp.Error != nil {
-			return &PluginDeliverResponse{Error: writeResp.Error}
-		}
+		deletes = append(deletes, &PluginDeleteOp{Key: posKey})
 	} else {
 		posBytesOut, mErr := Marshal(pos)
 		if mErr != nil {
 			return &PluginDeliverResponse{Error: mErr}
 		}
-		writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Sets: []*PluginSetOp{{Key: posKey, Value: posBytesOut}},
-		})
-		if wErr != nil {
-			return &PluginDeliverResponse{Error: wErr}
-		}
-		if writeResp.Error != nil {
-			return &PluginDeliverResponse{Error: writeResp.Error}
-		}
+		sets = append(sets, &PluginSetOp{Key: posKey, Value: posBytesOut})
 	}
 
 	_ = fee
+
+	writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets, Deletes: deletes})
+	if wErr != nil {
+		return &PluginDeliverResponse{Error: wErr}
+	}
+	if writeResp.Error != nil {
+		return &PluginDeliverResponse{Error: writeResp.Error}
+	}
 	return &PluginDeliverResponse{}
 }

@@ -357,10 +357,24 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 		})
 	}
 
-	if sErr := SaveMarket(c, msg.MarketId, market); sErr != nil {
-		return &PluginDeliverResponse{Error: sErr}
+	// [FIX, session finding] SaveMarket's own internal StateWrite used to
+	// fire here as a SECOND, independent write, separate from the
+	// liquidator/pool/position write below -- the exact non-atomicity bug
+	// class this session found and fixed in market_insolvency.go, except
+	// here it was a genuine two-StateWrite split within DeliverTx itself,
+	// not two GetMarket/SaveMarket round-trips. Per the Canopy builder
+	// docs' own canonical pattern ("batch-read... batch-write... in one
+	// StateWrite call" -- operations in one StateWrite call are atomic,
+	// no cross-call guarantee exists), a failure in the write below this
+	// used to leave market.TotalBorrowed already decremented while the
+	// liquidator never actually received funds/collateral and the
+	// borrower's position still showed the old debt/collateral. Now
+	// marshaled here and appended to the same sets slice as everything
+	// else, so the whole transaction commits or fails as one write.
+	marketBytesOut, mErr := Marshal(market)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
 	}
-
 	liquidatorAcctOut, mErr := Marshal(liquidatorAcct)
 	if mErr != nil {
 		return &PluginDeliverResponse{Error: mErr}
@@ -375,6 +389,7 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 	}
 
 	sets := []*PluginSetOp{
+		{Key: KeyForMarket(msg.MarketId), Value: marketBytesOut},
 		{Key: liquidatorAcctKey, Value: liquidatorAcctOut},
 		{Key: debtPoolKey, Value: debtPoolOut},
 		{Key: collateralPoolKey, Value: collateralPoolOut},

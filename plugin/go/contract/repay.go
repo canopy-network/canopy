@@ -122,6 +122,7 @@ func (c *Contract) DeliverMessageRepay(msg *MessageRepay, fee uint64) *PluginDel
 	// any amount above currentDebt was already rejected above via
 	// ErrRepayExceedsDebt, so actualRepaid is exactly what should leave
 	// custody on the debit side.
+	var sets []*PluginSetOp
 	var custodyAcctBytesOut []byte
 	var custodyPoolBytesOut []byte
 	if actualRepaid > 0 {
@@ -209,20 +210,21 @@ func (c *Contract) DeliverMessageRepay(msg *MessageRepay, fee uint64) *PluginDel
 			})
 		}
 
-		// [CUSTODY FIX] Commit the account debit (always) and pool credit
-		// (non-Insolvent only, custodyPoolBytesOut is nil otherwise).
-		custodySets := []*PluginSetOp{{Key: custodyAcctKey, Value: custodyAcctBytesOut}}
+		// [FIX, session finding] Custody (account debit + pool credit),
+		// R_fund routing, market.TotalBorrowed, and the borrower's position
+		// used to commit via up to FOUR independent StateWrite calls -- the
+		// same non-atomicity bug class found and fixed this session in
+		// liquidate_position.go and borrow.go. Per the Canopy builder docs'
+		// canonical pattern (batch-read, batch-write, ONE StateWrite call is
+		// atomic -- no cross-call guarantee exists), a failure partway
+		// through used to leave some of these committed and others not --
+		// e.g. the repayer's account already debited while
+		// market.TotalBorrowed still showed the old, higher debt. All four
+		// are now accumulated into one sets/deletes pair, committed in a
+		// single StateWrite at the end of this function.
+		sets = append(sets, &PluginSetOp{Key: custodyAcctKey, Value: custodyAcctBytesOut})
 		if custodyPoolBytesOut != nil {
-			custodySets = append(custodySets, &PluginSetOp{Key: poolKey, Value: custodyPoolBytesOut})
-		}
-		custodyWriteResp, cwErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Sets: custodySets,
-		})
-		if cwErr != nil {
-			return &PluginDeliverResponse{Error: cwErr}
-		}
-		if custodyWriteResp.Error != nil {
-			return &PluginDeliverResponse{Error: custodyWriteResp.Error}
+			sets = append(sets, &PluginSetOp{Key: poolKey, Value: custodyPoolBytesOut})
 		}
 	}
 
@@ -242,20 +244,14 @@ func (c *Contract) DeliverMessageRepay(msg *MessageRepay, fee uint64) *PluginDel
 		if rfEncErr != nil {
 			return &PluginDeliverResponse{Error: rfEncErr}
 		}
-		rfWriteResp, rfwErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Sets: []*PluginSetOp{{Key: KeyForReserveFund(msg.MarketId), Value: rFundEncoded}},
-		})
-		if rfwErr != nil {
-			return &PluginDeliverResponse{Error: rfwErr}
-		}
-		if rfWriteResp.Error != nil {
-			return &PluginDeliverResponse{Error: rfWriteResp.Error}
-		}
+		sets = append(sets, &PluginSetOp{Key: KeyForReserveFund(msg.MarketId), Value: rFundEncoded})
 	}
 
-	if sErr := SaveMarket(c, msg.MarketId, market); sErr != nil {
-		return &PluginDeliverResponse{Error: sErr}
+	marketBytesOut, mErr := Marshal(market)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
 	}
+	sets = append(sets, &PluginSetOp{Key: KeyForMarket(msg.MarketId), Value: marketBytesOut})
 
 	// [FIX] A BorrowerPosition record holds BOTH collateral_quantity and
 	// debt_principal (arbor_state.pb.go). Deleting the whole record on
@@ -266,33 +262,26 @@ func (c *Contract) DeliverMessageRepay(msg *MessageRepay, fee uint64) *PluginDel
 	// record is only ever deleted when BOTH debt and collateral are zero;
 	// otherwise it is always re-saved, even when newDebt == 0, so
 	// surviving collateral is preserved for future withdrawal or borrow.
+	var deletes []*PluginDeleteOp
 	if newDebt == 0 && pos.CollateralQuantity == 0 {
-		writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Deletes: []*PluginDeleteOp{{Key: posKey}},
-		})
-		if wErr != nil {
-			return &PluginDeliverResponse{Error: wErr}
-		}
-		if writeResp.Error != nil {
-			return &PluginDeliverResponse{Error: writeResp.Error}
-		}
+		deletes = append(deletes, &PluginDeleteOp{Key: posKey})
 	} else {
 		posBytesOut, mErr := Marshal(pos)
 		if mErr != nil {
 			return &PluginDeliverResponse{Error: mErr}
 		}
-		writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Sets: []*PluginSetOp{{Key: posKey, Value: posBytesOut}},
-		})
-		if wErr != nil {
-			return &PluginDeliverResponse{Error: wErr}
-		}
-		if writeResp.Error != nil {
-			return &PluginDeliverResponse{Error: writeResp.Error}
-		}
+		sets = append(sets, &PluginSetOp{Key: posKey, Value: posBytesOut})
 	}
 
 	_ = fee
+
+	writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets, Deletes: deletes})
+	if wErr != nil {
+		return &PluginDeliverResponse{Error: wErr}
+	}
+	if writeResp.Error != nil {
+		return &PluginDeliverResponse{Error: writeResp.Error}
+	}
 
 	return &PluginDeliverResponse{Events: events}
 }
