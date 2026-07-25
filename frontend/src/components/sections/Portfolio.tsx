@@ -1,0 +1,263 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useMarkets, type MarketWithIndices } from "@/lib/hooks/useMarkets";
+import { useWalletStore } from "@/lib/stores/walletStore";
+import { useLenderPosition } from "@/lib/hooks/useLenderPosition";
+import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
+import { formatAmount } from "@/lib/arbor/format";
+
+const TIER_LABEL: Record<number, string> = {
+  0: "Tier 0 · CNPY",
+  1: "Tier 1 · BTC / ETH",
+  2: "Tier 2 · Majors",
+  3: "Tier 3 · Restricted",
+};
+
+function Monogram({ symbol }: { symbol: string }) {
+  return (
+    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-indigo-500/80 to-emerald-400/80 text-[10px] font-bold text-[#05070d]">
+      {symbol.slice(0, 4).toUpperCase()}
+    </div>
+  );
+}
+
+function MarketCell({ entry }: { entry: MarketWithIndices }) {
+  const m = entry.market;
+  return (
+    <td className="py-3 pr-4">
+      <div className="flex items-center gap-3">
+        <Monogram symbol={m.collateralAssetId} />
+        <div className="leading-tight">
+          <p className="text-sm font-medium text-zinc-100">{m.marketId}</p>
+          <p className="text-[11px] text-zinc-500">
+            {TIER_LABEL[m.assetTier] ?? `Tier ${m.assetTier}`}
+          </p>
+        </div>
+      </div>
+    </td>
+  );
+}
+
+function LendingRow({
+  entry,
+  address,
+  onPresent,
+}: {
+  entry: MarketWithIndices;
+  address: string;
+  onPresent: (id: string, v: boolean) => void;
+}) {
+  const m = entry.market;
+  const { data: lp } = useLenderPosition(m.marketId, address);
+  const shares = lp?.shares ?? 0n;
+
+  useEffect(() => {
+    onPresent(m.marketId, shares > 0n);
+    return () => onPresent(m.marketId, false);
+  }, [onPresent, m.marketId, shares]);
+
+  if (shares === 0n) return null;
+
+  return (
+    <tr className="border-t border-white/5">
+      <MarketCell entry={entry} />
+      <td className="py-3 pr-4 text-right tabular-nums text-zinc-100">
+        {formatAmount(shares, 9)}
+      </td>
+      <td className="py-3 text-right text-zinc-600">—</td>
+    </tr>
+  );
+}
+
+function BorrowingRow({
+  entry,
+  address,
+  onPresent,
+}: {
+  entry: MarketWithIndices;
+  address: string;
+  onPresent: (id: string, v: boolean) => void;
+}) {
+  const m = entry.market;
+  const { data: bp } = useBorrowerPosition(m.marketId, address);
+  const debt = bp?.currentDebt ?? 0n;
+  const coll = bp?.collateralQuantity ?? 0n;
+  const present = debt > 0n || coll > 0n;
+
+  useEffect(() => {
+    onPresent(m.marketId, present);
+    return () => onPresent(m.marketId, false);
+  }, [onPresent, m.marketId, present]);
+
+  if (!present) return null;
+
+  return (
+    <tr className="border-t border-white/5">
+      <MarketCell entry={entry} />
+      <td className="py-3 pr-4 text-right">
+        <p className="tabular-nums text-zinc-100">{formatAmount(debt, 9)}</p>
+        <p className="text-[10px] uppercase text-zinc-600">{m.debtAssetId}</p>
+      </td>
+      <td className="py-3 pr-4 text-right">
+        <p className="tabular-nums text-zinc-100">{formatAmount(coll, 9)}</p>
+        <p className="text-[10px] uppercase text-zinc-600">
+          {m.collateralAssetId}
+        </p>
+      </td>
+      <td className="py-3 text-right text-zinc-600">—</td>
+    </tr>
+  );
+}
+
+function PanelShell({
+  title,
+  count,
+  connected,
+  hasMarkets,
+  hasAny,
+  emptyCopy,
+  children,
+}: {
+  title: string;
+  count: number;
+  connected: boolean;
+  hasMarkets: boolean;
+  hasAny: boolean;
+  emptyCopy: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
+        {connected && (
+          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+            {count} active
+          </span>
+        )}
+      </div>
+
+      {!connected ? (
+        <p className="mt-4 text-sm text-zinc-500">
+          Connect a wallet to view your {title.toLowerCase()}.
+        </p>
+      ) : !hasMarkets ? (
+        <p className="mt-4 text-sm text-zinc-500">
+          No markets exist yet to hold positions in.
+        </p>
+      ) : !hasAny ? (
+        <p className="mt-4 text-sm text-zinc-500">{emptyCopy}</p>
+      ) : (
+        <div className="no-scrollbar mt-3 overflow-x-auto">{children}</div>
+      )}
+    </div>
+  );
+}
+
+export function Portfolio() {
+  const wallet = useWalletStore();
+  const { data: markets } = useMarkets();
+
+  const [lend, setLend] = useState<Record<string, boolean>>({});
+  const [borr, setBorr] = useState<Record<string, boolean>>({});
+
+  const markLend = useCallback(
+    (id: string, v: boolean) => setLend((p) => ({ ...p, [id]: v })),
+    []
+  );
+  const markBorr = useCallback(
+    (id: string, v: boolean) => setBorr((p) => ({ ...p, [id]: v })),
+    []
+  );
+
+  const list = markets ?? [];
+  const connected = wallet.isConnected && !!wallet.address;
+  const address = wallet.address ?? "";
+  const hasMarkets = list.length > 0;
+  const lendCount = Object.values(lend).filter(Boolean).length;
+  const borrCount = Object.values(borr).filter(Boolean).length;
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold tracking-tight text-white">
+          Your portfolio
+        </h2>
+        {connected && (
+          <span className="text-xs tabular-nums text-zinc-500">
+            {address.slice(0, 6)}…{address.slice(-4)}
+          </span>
+        )}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <PanelShell
+          title="Lending positions"
+          count={lendCount}
+          connected={connected}
+          hasMarkets={hasMarkets}
+          hasAny={lendCount > 0}
+          emptyCopy="No open lending positions. Supply assets in a market to see them here."
+        >
+          <table className="w-full min-w-[26rem] text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                <th className="pb-2 pr-4 font-medium">Market</th>
+                <th className="pb-2 pr-4 text-right font-medium">Shares</th>
+                <th className="pb-2 text-right font-medium">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((entry) => (
+                <LendingRow
+                  key={entry.market.marketId}
+                  entry={entry}
+                  address={address}
+                  onPresent={markLend}
+                />
+              ))}
+            </tbody>
+          </table>
+        </PanelShell>
+
+        <PanelShell
+          title="Borrowing positions"
+          count={borrCount}
+          connected={connected}
+          hasMarkets={hasMarkets}
+          hasAny={borrCount > 0}
+          emptyCopy="No open borrowing positions. Deposit collateral and borrow to see them here."
+        >
+          <table className="w-full min-w-[30rem] text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                <th className="pb-2 pr-4 font-medium">Market</th>
+                <th className="pb-2 pr-4 text-right font-medium">Debt</th>
+                <th className="pb-2 pr-4 text-right font-medium">Collateral</th>
+                <th className="pb-2 text-right font-medium">Health</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((entry) => (
+                <BorrowingRow
+                  key={entry.market.marketId}
+                  entry={entry}
+                  address={address}
+                  onPresent={markBorr}
+                />
+              ))}
+            </tbody>
+          </table>
+        </PanelShell>
+      </div>
+
+      {!connected && (
+        <p className="text-center text-xs text-zinc-600">
+          Positions are read live from the ARBOR plugin once a wallet is
+          connected.
+        </p>
+      )}
+    </section>
+  );
+}
