@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	CurrentProtocolVersion         = 1
+	CurrentProtocolVersion         = 2
 	slowApplyTransactionsThreshold = 2 * time.Second
 )
 
@@ -854,6 +854,9 @@ func (s *StateMachine) StateWrite(request *lib.PluginStateWriteRequest) (respons
 	for _, delRequest := range request.Deletes {
 		assertPluginKeyWritable(delRequest.Key)
 	}
+	// Plugin writes bypass typed setters, so cached accounts and pools may be stale.
+	s.cache.accounts = make(map[uint64]*Account)
+	s.cache.pools = make(map[uint64]*Pool)
 	// for each 'set' request
 	for _, setRequest := range request.Sets {
 		// execute the 'set'

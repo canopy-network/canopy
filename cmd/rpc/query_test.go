@@ -101,6 +101,7 @@ func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {
 	require.NoError(t, sm.SetAccount(&fsm.Account{
 		Address:            address.Bytes(),
 		Amount:             150,
+		Nonce:              7,
 		VestingAmount:      100,
 		VestingStartHeight: 1,
 		VestingCliffHeight: 2,
@@ -122,6 +123,7 @@ func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	require.Equal(t, address.Bytes(), []byte(got.Address))
 	require.Equal(t, uint64(110), got.Amount)
+	require.Equal(t, uint64(7), got.Nonce)
 	require.Equal(t, uint64(150), got.TotalAmount)
 	require.Equal(t, uint64(60), got.VestedAmount)
 	require.Equal(t, uint64(40), got.LockedAmount)
@@ -137,10 +139,11 @@ func TestAccountsQueryReturnsVestingBreakdowns(t *testing.T) {
 	liquid := crypto.NewAddress(bytes.Repeat([]byte{0x44}, crypto.AddressSize))
 	vested := crypto.NewAddress(bytes.Repeat([]byte{0x55}, crypto.AddressSize))
 
-	require.NoError(t, sm.SetAccount(&fsm.Account{Address: liquid.Bytes(), Amount: 25}))
+	require.NoError(t, sm.SetAccount(&fsm.Account{Address: liquid.Bytes(), Amount: 25, Nonce: 3}))
 	require.NoError(t, sm.SetAccount(&fsm.Account{
 		Address:            vested.Bytes(),
 		Amount:             150,
+		Nonce:              8,
 		VestingAmount:      100,
 		VestingStartHeight: 1,
 		VestingCliffHeight: 2,
@@ -167,6 +170,7 @@ func TestAccountsQueryReturnsVestingBreakdowns(t *testing.T) {
 		amounts[crypto.NewAddressFromBytes(account.Address).String()] = account
 	}
 	require.Equal(t, uint64(25), amounts[liquid.String()].Amount)
+	require.Equal(t, uint64(3), amounts[liquid.String()].Nonce)
 	require.Equal(t, uint64(25), amounts[liquid.String()].TotalAmount)
 	require.Zero(t, amounts[liquid.String()].VestedAmount)
 	require.Zero(t, amounts[liquid.String()].LockedAmount)
@@ -174,6 +178,7 @@ func TestAccountsQueryReturnsVestingBreakdowns(t *testing.T) {
 	vestedAccount, ok := amounts[vested.String()]
 	require.True(t, ok)
 	require.Equal(t, uint64(110), vestedAccount.Amount)
+	require.Equal(t, uint64(8), vestedAccount.Nonce)
 	require.Equal(t, uint64(150), vestedAccount.TotalAmount)
 	require.Equal(t, uint64(60), vestedAccount.VestedAmount)
 	require.Equal(t, uint64(40), vestedAccount.LockedAmount)

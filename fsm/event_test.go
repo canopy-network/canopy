@@ -394,7 +394,7 @@ func TestEventDexLiquidityWithdraw(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
 			// execute the function call
-			err := sm.EventDexLiquidityWithdraw(test.address, test.orderId, test.localAmount, test.remoteAmount, test.points, test.chainId)
+			err := sm.EventDexLiquidityWithdraw(test.address, test.orderId, test.localAmount, test.remoteAmount, test.points, 100, test.chainId)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
@@ -407,6 +407,7 @@ func TestEventDexLiquidityWithdraw(t *testing.T) {
 			require.Equal(t, test.expected, events[0].EventType)
 			require.Equal(t, test.address, events[0].Address)
 			require.Equal(t, test.chainId, events[0].ChainId)
+			require.Equal(t, uint64(100), events[0].GetDexLiquidityWithdrawal().Percent)
 		})
 	}
 }

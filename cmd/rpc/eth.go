@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -89,6 +90,8 @@ func (s *Server) handleEthereumRPCRequest(ptr *ethRPCRequest) ethRPCResponse {
 		ethResponse, err = s.EthChainId(args)
 	case `eth_gasPrice`:
 		ethResponse, err = s.EthGasPrice(args)
+	case `eth_maxPriorityFeePerGas`:
+		ethResponse, err = s.EthMaxPriorityFeePerGas(args)
 	case `eth_accounts`:
 		ethResponse, err = s.EthAccounts(args)
 	case `eth_blockNumber`:
@@ -117,6 +120,8 @@ func (s *Server) handleEthereumRPCRequest(ptr *ethRPCRequest) ethRPCResponse {
 		ethResponse, err = s.EthGetBlockByHash(args)
 	case `eth_getBlockByNumber`:
 		ethResponse, err = s.EthGetBlockByNumber(args)
+	case `eth_feeHistory`:
+		ethResponse, err = s.EthFeeHistory(args)
 	case `eth_getTransactionByHash`:
 		ethResponse, err = s.EthGetTransactionByHash(args)
 	case `eth_getTransactionByBlockHashAndIndex`:
@@ -157,12 +162,6 @@ func (s *Server) handleEthereumRPCRequest(ptr *ethRPCRequest) ethRPCResponse {
 	}
 }
 
-// startEthRPCService() runs the needed routines for the eth rpc wrapper
-func (s *Server) startEthRPCService() {
-	go s.startEthPendingTxsExpireService()
-	go s.startEthFilterExpireService()
-}
-
 // Web3ClientVersion() return a dummy string for compatibility
 func (s *Server) Web3ClientVersion(_ []any) (any, error) { return "Canopy_Eth_Wrapper", nil }
 
@@ -183,7 +182,11 @@ func (s *Server) Web3Sha3(args []any) (any, error) {
 
 // NetVersion() returns the network id
 func (s *Server) NetVersion(_ []any) (any, error) {
-	return strconv.FormatUint(fsm.CanopyIdsToEVMChainId(s.config.ChainId, s.config.NetworkID), 10), nil
+	chainID, ok := fsm.CanopyIdsToEVMChainIdV2(s.config.ChainId, s.config.NetworkID)
+	if !ok {
+		return nil, ethInvalidParams("Canopy network or chain ID exceeds the RLP.V2 signing domain")
+	}
+	return strconv.FormatUint(chainID, 10), nil
 }
 
 // NetListening() canopy is always listening for peers
@@ -213,16 +216,28 @@ func (s *Server) EthSyncing(_ []any) (any, error) {
 
 // EthChainId() returns the chain id of this node
 func (s *Server) EthChainId(_ []any) (any, error) {
-	return hexutil.Uint64(fsm.CanopyIdsToEVMChainId(s.config.ChainId, s.config.NetworkID)), nil
+	chainID, ok := fsm.CanopyIdsToEVMChainIdV2(s.config.ChainId, s.config.NetworkID)
+	if !ok {
+		return nil, ethInvalidParams("Canopy network or chain ID exceeds the RLP.V2 signing domain")
+	}
+	return hexutil.Uint64(chainID), nil
 }
 
 // gas = tx.Fee * 100
 // gasPrice = 1e10 (10,000,000,000 wei = 0.01 uCNPY)
 // fee = gas * gasPrice = tx.Fee * 100 * 1e10 = tx.Fee * 1e12
-var ethGasPrice = int64(10_000_000_000)
+const ethGasPrice = fsm.EthereumBaseFeePerGas
+
+const ethFeeHistoryMaxBlockCount = 1024
+const ethFeeHistoryMaxRewardPercentiles = 100
 
 // EthGasPrice() returns minimum_fee / eth_gas_limit to be compatible with the
 func (s *Server) EthGasPrice(_ []any) (any, error) { return hexutil.Big(*big.NewInt(ethGasPrice)), nil }
+
+// EthMaxPriorityFeePerGas() returns zero because Canopy does not model a separate priority tip market.
+func (s *Server) EthMaxPriorityFeePerGas(_ []any) (any, error) {
+	return hexutil.Big(*big.NewInt(0)), nil
+}
 
 // EthAccounts() return all keystore addresses
 func (s *Server) EthAccounts(_ []any) (any, error) {
@@ -274,7 +289,7 @@ func (s *Server) EthGetBalance(args []any) (result any, err error) {
 	// create a read-only state for the block tag
 	err = s.readOnlyState(height, func(state *fsm.StateMachine) (e lib.ErrorI) {
 		// get the balance for the address
-		balance, e := state.GetAccountSpendableBalance(address)
+		balance, e := state.GetAccountBalance(address)
 		if e != nil {
 			return
 		}
@@ -286,7 +301,8 @@ func (s *Server) EthGetBalance(args []any) (result any, err error) {
 	return
 }
 
-// EthGetTransactionCount() returns the next nonce for Ethereum accounts and a pseudo-nonce fallback for read-only addresses.
+// EthGetTransactionCount() returns the committed nonce floor for confirmed state.
+// "pending" overlays local pending views to recommend the next unallocated nonce.
 func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 	address, err := addressFromArgs(args)
 	if err != nil {
@@ -299,52 +315,33 @@ func (s *Server) EthGetTransactionCount(args []any) (any, error) {
 			return nil, err
 		}
 	}
-	return s.withStore(func(st *store.Store) (any, error) {
-		base := s.ethereumNonceFloor(s.currentEthBlockNumber())
-		hasMinedHistory := false
-		if minedNonce, ok, nonceErr := s.latestMinedNonceForAddress(st, address); nonceErr != nil {
-			return nil, nonceErr
-		} else if ok {
-			base = minedNonce
-			hasMinedHistory = true
+	stateHeight, err := stateHeightFromBlockTag(blockTag)
+	if err != nil {
+		return nil, err
+	}
+	var nonce uint64
+	err = s.readOnlyState(stateHeight, func(state *fsm.StateMachine) lib.ErrorI {
+		account, accountErr := state.GetAccount(address)
+		if accountErr == nil {
+			nonce = account.Nonce
 		}
-		switch blockTag {
-		case pendingBlockTag:
-			pending := base
-			maxNonce := s.maximumAcceptedEthereumNonce()
-			if highestPending, ok, pendingErr := s.highestPendingNonceForAddress(st, address.String()); pendingErr != nil {
-				return nil, pendingErr
-			} else if ok && highestPending >= pending {
-				if highestPending >= maxNonce {
-					return nil, ethInvalidParams("no acceptable pending nonce available")
-				}
-				if highestPending == math.MaxUint64 {
-					pending = math.MaxUint64
-				} else {
-					pending = highestPending + 1
-				}
-			}
-			if pending > maxNonce {
-				pending = maxNonce
-			}
-			return hexutil.Uint64(pending), nil
-		case latestBlockTag, safeBlockTag, finalizedBlockTag:
-			return hexutil.Uint64(base), nil
-		case earliestBlockTag:
-			return hexutil.Uint64(0), nil
-		default:
-			// Explicit historical block-number queries are compatibility-oriented: validate the tag but
-			// return the latest confirmed nonce for Ethereum-derived accounts and the height fallback otherwise.
-			height, parseErr := parseBlockTag(blockTag)
-			if parseErr != nil {
-				return nil, parseErr
-			}
-			if hasMinedHistory {
-				return hexutil.Uint64(base), nil
-			}
-			return hexutil.Uint64(s.ethereumNonceFloor(height)), nil
-		}
+		return accountErr
 	})
+	if err == nil && blockTag == pendingBlockTag {
+		nonce = s.controller.GetPendingNonce(address, nonce)
+		pseudoPendingTxsMap.Range(func(_, value any) bool {
+			tx, ok := value.(*lib.Transaction)
+			if !ok || tx.Memo != fsm.RLPV2Indicator || tx.Signature == nil || tx.Nonce < nonce || tx.Nonce == math.MaxUint64 {
+				return true
+			}
+			publicKey, keyErr := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+			if keyErr == nil && publicKey.Address().Equals(address) {
+				nonce = tx.Nonce + 1
+			}
+			return true
+		})
+	}
+	return hexutil.Uint64(nonce), err
 }
 
 // EthGetBlockTransactionCountByHash() returns the number of transactions in a block by hash
@@ -414,34 +411,33 @@ func (s *Server) EthSendRawTransaction(args []any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var ethTx types.Transaction
-	if err = ethTx.UnmarshalBinary(rawTx); err != nil {
-		return nil, err
-	}
-	// convert it to a Canopy send transaction
-	transaction, err := fsm.RLPToCanopyTransaction(rawTx)
+	// convert it to a Canopy send transaction using account-sequenced nonce protection.
+	transaction, err := fsm.RLPToCanopyTransactionV2(rawTx)
 	if err != nil {
 		return nil, err
-	}
-	// ensure created height stays inside Canopy's accepted replay window
-	if transaction.CreatedHeight < s.minimumAcceptedEthereumNonce() {
-		return nil, lib.ErrInvalidTxHeight()
-	}
-	if transaction.CreatedHeight > s.maximumAcceptedEthereumNonce() {
-		return nil, lib.ErrInvalidTxHeight()
 	}
 	// marshal the transaction to protobuf
 	bz, err := lib.Marshal(transaction)
 	if err != nil {
 		return nil, err
 	}
-	// send transaction to controller
-	if err = s.controller.SendTxMsgs([][]byte{bz}); err != nil {
+	txHashString := ethHashStringFromTransaction(transaction)
+	pendingEthTxMu.Lock()
+	defer pendingEthTxMu.Unlock()
+	oldHash, oldBz, underpriced := s.pendingEthReplacement(transaction)
+	if underpriced {
+		return nil, &ethRPCMethodError{code: -32000, message: "replacement transaction underpriced"}
+	}
+	cachePendingEthTx(txHashString, transaction)
+	if s.controller.Syncing().Load() {
+		removePendingEthTx(txHashString)
+		return nil, lib.ErrMempoolStopSignal()
+	}
+	if err = s.controller.Mempool.HandleTransactionAndVerifyRetained(bz, oldBz); err != nil {
+		removePendingEthTx(txHashString)
 		return nil, err
 	}
-	// track the pending transaction using the canonical ethereum tx hash
-	txHashString := strings.ToLower(ethTx.Hash().Hex())
-	registerPendingEthTx(txHashString, transaction)
+	removePendingEthTx(oldHash)
 	// return the transaction hash
 	return txHashString, nil
 }
@@ -634,6 +630,62 @@ func (s *Server) EthEstimateGas(args []any) (any, error) {
 	return hexutil.Uint64(req.Fee * 100), nil
 }
 
+// EthFeeHistory() returns a synthetic but internally consistent EIP-1559 fee history for wallet estimation flows.
+func (s *Server) EthFeeHistory(args []any) (any, error) {
+	blockCount, err := feeHistoryBlockCountFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	if blockCount == 0 {
+		return ethRPCFeeHistory{}, nil
+	}
+	rewardPercentiles, err := rewardPercentilesFromArgs(args, 2)
+	if err != nil {
+		return nil, err
+	}
+	newestBlock, err := s.blockHeightFromNumberArg(args, 1)
+	if err != nil {
+		return nil, err
+	}
+	if newestBlock > s.currentEthBlockNumber() {
+		return nil, ethInvalidParams("fee history request extends beyond the chain head")
+	}
+	if newestBlock < math.MaxUint64 && blockCount > newestBlock+1 {
+		blockCount = newestBlock + 1
+	}
+	baseFee := hexutil.Big(*big.NewInt(ethGasPrice))
+	baseFees := make([]hexutil.Big, blockCount+1)
+	gasUsedRatios := make([]float64, blockCount)
+	var rewards [][]hexutil.Big
+	if len(rewardPercentiles) != 0 {
+		rewards = make([][]hexutil.Big, blockCount)
+	}
+	for i := range baseFees {
+		baseFees[i] = baseFee
+	}
+	for i := range rewards {
+		rewards[i] = make([]hexutil.Big, len(rewardPercentiles))
+		for j := range rewards[i] {
+			rewards[i][j] = hexutil.Big(*big.NewInt(0))
+		}
+	}
+	oldestBlock := newestBlock
+	if blockCount > 1 {
+		window := blockCount - 1
+		if window > newestBlock {
+			oldestBlock = 0
+		} else {
+			oldestBlock = newestBlock - window
+		}
+	}
+	return ethRPCFeeHistory{
+		OldestBlock:   hexutil.Uint64(oldestBlock),
+		BaseFeePerGas: baseFees,
+		GasUsedRatio:  gasUsedRatios,
+		Reward:        rewards,
+	}, nil
+}
+
 // EthGetBlockByHash() returns a dummy-ish block (based on the actual Canopy block) that is EIP-1559 compatible
 func (s *Server) EthGetBlockByHash(args []any) (any, error) {
 	return s.withStore(func(st *store.Store) (any, error) {
@@ -684,11 +736,35 @@ func (s *Server) EthGetTransactionByHash(args []any) (any, error) {
 			return nil, err
 		}
 		if tx != nil {
-			clearPendingEthTx(hashString)
+			removePendingEthTx(hashString)
 			return s.txToEthTransaction(block, tx, false)
 		}
-		if pending := s.findPendingEthTx(hashString); pending != nil {
-			return s.pendingTxToEthTransaction(pending), nil
+		if pending, found := s.controller.GetPendingTxByHash(hashString); found {
+			return s.txToEthTransaction(nil, pending, true)
+		}
+		if value, ok := pseudoPendingTxsMap.Load(hashString); ok {
+			transaction := value.(*lib.Transaction)
+			bz, _ := lib.Marshal(transaction)
+			publicKey, keyErr := crypto.NewPublicKeyFromBytes(transaction.Signature.PublicKey)
+			consumed := false
+			if keyErr == nil {
+				_ = s.readOnlyState(0, func(state *fsm.StateMachine) lib.ErrorI {
+					account, _ := state.GetAccount(publicKey.Address())
+					consumed = account.Nonce > transaction.Nonce
+					return nil
+				})
+			}
+			if s.controller.IsFailedTx(crypto.HashString(bz)) || consumed {
+				removePendingEthTx(hashString)
+				return ethNullResult(), nil
+			}
+			ethTx, ok := ethTransactionFromCanopyTx(transaction)
+			if !ok {
+				return ethNullResult(), nil
+			}
+			from, _ := types.Sender(types.LatestSignerForChainID(ethTx.ChainId()), ethTx)
+			result, _ := marshalCanonicalEthTransaction(ethTx, from, nil, nil, true)
+			return result, nil
 		}
 		return ethNullResult(), nil
 	})
@@ -754,7 +830,7 @@ func (s *Server) EthGetTransactionReceipt(args []any) (any, error) {
 		if tx == nil {
 			return ethNullResult(), nil
 		}
-		clearPendingEthTx(hashString)
+		removePendingEthTx(hashString)
 		return s.txToEthReceipt(block, tx)
 	})
 }
@@ -911,9 +987,12 @@ func (s *Server) txToEthTransaction(b *lib.BlockResult, tx *lib.TxResult, pendin
 	gasTipCap := big.NewInt(0)
 	gas := uint64(tx.Transaction.Fee)
 	nonce := tx.Transaction.CreatedHeight
+	if tx.Transaction.Memo == fsm.RLPV2Indicator {
+		nonce = tx.Transaction.Nonce
+	}
 	input := []byte{}
 	value := fsm.UpscaleTo18Decimals(sendAmountFromTxResult(tx))
-	chainID := big.NewInt(int64(evmChainIDFromTx(tx.Transaction)))
+	chainID := new(big.Int).SetUint64(evmChainIDFromTx(tx.Transaction))
 	var to *common.Address
 	if len(tx.Recipient) != 0 {
 		recipient := common.BytesToAddress(tx.Recipient)
@@ -1152,24 +1231,70 @@ func (s *Server) newEthFilter(params newFilterParams) (id string, err error) {
 	return
 }
 
-// Canopy only saves valid transactions in blocks, so the RPC keeps a lightweight local pending cache for
-// canonical eth_sendRawTransaction / eth_getTransactionByHash behavior until the tx is mined or expires.
-var pseudoPendingTxsMap = sync.Map{}   // [ethHash] -> *ethPendingTx
-var pendingSenderNonceMap = sync.Map{} // [sender:nonce] -> ethHash
+// Canopy only saves valid transactions in blocks, so the RPC keeps a short-lived local pending cache for
+// canonical eth_sendRawTransaction / eth_getTransactionByHash behavior.
+var (
+	pseudoPendingTxsMap   = sync.Map{} // [ethHash] -> *lib.Transaction
+	pendingEthTxCacheSize atomic.Int64
+	pendingEthTxMu        sync.Mutex
+)
 
-const ethPendingTxTTL = 15 * time.Minute
+const (
+	ethPendingTxTTL        = 2 * time.Minute
+	ethPendingTxMaxEntries = int64(5_000)
+)
 
-// startEthPendingTxsExpireService() evicts locally tracked pending txs after a short wall-clock grace period.
-func (s *Server) startEthPendingTxsExpireService() {
-	for range time.Tick(time.Second) {
-		pseudoPendingTxsMap.Range(func(key, value any) bool {
-			pending := value.(*ethPendingTx)
-			if pendingTxExpired(pending) {
-				clearPendingEthTx(key.(string))
-			}
-			return true
-		})
+func cachePendingEthTx(hash string, tx *lib.Transaction) {
+	if _, loaded := pseudoPendingTxsMap.Load(hash); loaded {
+		return
 	}
+	if pendingEthTxCacheSize.Add(1) > ethPendingTxMaxEntries {
+		pendingEthTxCacheSize.Add(-1)
+		return
+	}
+	if _, loaded := pseudoPendingTxsMap.LoadOrStore(hash, tx); loaded {
+		pendingEthTxCacheSize.Add(-1)
+		return
+	}
+	time.AfterFunc(ethPendingTxTTL, func() {
+		if pseudoPendingTxsMap.CompareAndDelete(hash, tx) {
+			pendingEthTxCacheSize.Add(-1)
+		}
+	})
+}
+
+func removePendingEthTx(hash string) {
+	if _, loaded := pseudoPendingTxsMap.LoadAndDelete(hash); loaded {
+		pendingEthTxCacheSize.Add(-1)
+	}
+}
+
+func (s *Server) pendingEthReplacement(tx *lib.Transaction) (hash string, bz []byte, underpriced bool) {
+	var old *lib.Transaction
+	pseudoPendingTxsMap.Range(func(_, value any) bool {
+		pending := value.(*lib.Transaction)
+		if pending.Nonce == tx.Nonce && pending.Signature != nil && bytes.Equal(pending.Signature.PublicKey, tx.Signature.PublicKey) {
+			old, hash = pending, ethHashStringFromTransaction(pending)
+		}
+		return old == nil
+	})
+	if old == nil {
+		return
+	}
+	bz, _ = lib.Marshal(old)
+	s.controller.Mempool.L.Lock()
+	live := s.controller.Mempool.Contains(crypto.HashString(bz))
+	s.controller.Mempool.L.Unlock()
+	if !live {
+		removePendingEthTx(hash)
+		return "", nil, false
+	}
+	oldEth, _ := ethTransactionFromCanopyTx(old)
+	newEth, _ := ethTransactionFromCanopyTx(tx)
+	feeMin := new(big.Int).Div(new(big.Int).Mul(oldEth.GasFeeCap(), big.NewInt(110)), big.NewInt(100))
+	tipMin := new(big.Int).Div(new(big.Int).Mul(oldEth.GasTipCap(), big.NewInt(110)), big.NewInt(100))
+	underpriced = oldEth.GasFeeCapCmp(newEth) >= 0 || oldEth.GasTipCapCmp(newEth) >= 0 || newEth.GasFeeCapIntCmp(feeMin) < 0 || newEth.GasTipCapIntCmp(tipMin) < 0
+	return
 }
 
 // TYPES BELOW
@@ -1271,6 +1396,13 @@ type ethRPCLog struct {
 	Removed     bool           `json:"removed"`
 }
 
+type ethRPCFeeHistory struct {
+	OldestBlock   hexutil.Uint64  `json:"oldestBlock"`
+	BaseFeePerGas []hexutil.Big   `json:"baseFeePerGas,omitempty"`
+	GasUsedRatio  []float64       `json:"gasUsedRatio"`
+	Reward        [][]hexutil.Big `json:"reward,omitempty"`
+}
+
 // newFilterParams() is the params object for eth_newFilter()
 type newFilterParams struct {
 	StartBlock string    `json:"fromBlock"`
@@ -1304,11 +1436,6 @@ type ethSyncingResponse struct {
 }
 
 // HELPERS BELOW
-
-type ethPendingTx struct {
-	AcceptedAt time.Time
-	Tx         *lib.Transaction
-}
 
 func ethNullResult() json.RawMessage { return json.RawMessage("null") }
 
@@ -1406,6 +1533,11 @@ func normalizedHashFromArgs(args []any) (string, error) {
 
 // evmChainIDFromTx() returns the packed EVM chain id for a Canopy transaction.
 func evmChainIDFromTx(tx *lib.Transaction) uint64 {
+	if tx.Memo != fsm.RLPIndicator {
+		if chainID, ok := fsm.CanopyIdsToEVMChainIdV2(tx.ChainId, tx.NetworkId); ok {
+			return chainID
+		}
+	}
 	return fsm.CanopyIdsToEVMChainId(tx.ChainId, tx.NetworkId)
 }
 
@@ -1422,7 +1554,11 @@ func marshalCanonicalEthTransaction(ethTx *types.Transaction, from common.Addres
 	result["from"] = from.Hex()
 	// Ethereum RPC transaction objects report gasPrice for dynamic-fee txs too; MetaMask expects it during polling.
 	if result["gasPrice"] == nil {
-		result["gasPrice"] = (*hexutil.Big)(ethTx.GasPrice())
+		gasPrice, err := effectiveGasPriceFromEthTx(tx, ethTx, pending)
+		if err != nil {
+			return nil, err
+		}
+		result["gasPrice"] = (*hexutil.Big)(gasPrice)
 	}
 	if pending {
 		result["blockHash"] = nil
@@ -1438,7 +1574,7 @@ func marshalCanonicalEthTransaction(ethTx *types.Transaction, from common.Addres
 
 // ethTransactionFromCanopyTx() decodes the original signed Ethereum tx from an RLP-backed Canopy tx.
 func ethTransactionFromCanopyTx(tx *lib.Transaction) (*types.Transaction, bool) {
-	if tx == nil || tx.Memo != fsm.RLPIndicator || tx.Signature == nil || len(tx.Signature.Signature) == 0 {
+	if tx == nil || !fsm.IsRLPMemo(tx.Memo) || tx.Signature == nil || len(tx.Signature.Signature) == 0 {
 		return nil, false
 	}
 	var ethTx types.Transaction
@@ -1484,9 +1620,13 @@ func gasLimitFromTxResult(tx *lib.TxResult) uint64 {
 	return tx.Transaction.Fee
 }
 
-// effectiveGasPriceFromEthTx() returns the gas price Canopy actually charges for the Ethereum tx.
-func effectiveGasPriceFromEthTx(ethTx *types.Transaction) *big.Int {
-	return new(big.Int).Set(ethTx.GasPrice())
+// effectiveGasPriceFromEthTx() preserves signed caps for pending and legacy transactions,
+// while mined RLP.V2 transactions report the price Canopy actually charged.
+func effectiveGasPriceFromEthTx(tx *lib.TxResult, ethTx *types.Transaction, pending bool) (*big.Int, error) {
+	if pending || tx == nil || tx.Transaction == nil || tx.Transaction.Memo != fsm.RLPV2Indicator {
+		return ethTx.GasPrice(), nil
+	}
+	return fsm.EthereumEffectiveGasPrice(ethTx)
 }
 
 // cumulativeGasUsedForTx() sums gas usage through the target tx index within the block.
@@ -1501,142 +1641,6 @@ func cumulativeGasUsedForTx(block *lib.BlockResult, index uint64) uint64 {
 	return total
 }
 
-// senderFromTransaction() derives the sender address from the transaction signature payload.
-func senderFromTransaction(tx *lib.Transaction) string {
-	if tx == nil || tx.Signature == nil {
-		return ""
-	}
-	pubKey, err := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
-	if err == nil {
-		return pubKey.Address().String()
-	}
-	return ""
-}
-
-// pendingTxExpired() reports whether a locally tracked pending tx has exceeded the wallet-compatibility grace window.
-func pendingTxExpired(pending *ethPendingTx) bool {
-	return pending == nil || time.Since(pending.AcceptedAt) > ethPendingTxTTL
-}
-
-// pendingSenderNonceKey() keys pending entries by sender and nonce for replacement cleanup.
-func pendingSenderNonceKey(sender string, nonce uint64) string {
-	return fmt.Sprintf("%s:%d", strings.ToLower(sender), nonce)
-}
-
-// registerPendingEthTx() stores a locally accepted pending Ethereum tx for short-lived lookup compatibility.
-func registerPendingEthTx(hash string, tx *lib.Transaction) {
-	hash = strings.ToLower(hash)
-	if tx != nil {
-		if sender := senderFromTransaction(tx); sender != "" {
-			key := pendingSenderNonceKey(sender, tx.CreatedHeight)
-			if existing, loaded := pendingSenderNonceMap.Load(key); loaded {
-				oldHash := strings.ToLower(existing.(string))
-				if oldHash != hash {
-					pseudoPendingTxsMap.Delete(oldHash)
-				}
-			}
-			pendingSenderNonceMap.Store(key, hash)
-		}
-	}
-	pseudoPendingTxsMap.Store(hash, &ethPendingTx{AcceptedAt: time.Now(), Tx: tx})
-}
-
-// clearPendingEthTx() removes a pending tx from the local lookup maps.
-func clearPendingEthTx(hash string) {
-	hash = strings.ToLower(hash)
-	if pending, ok := pseudoPendingTxsMap.Load(hash); ok {
-		tx := pending.(*ethPendingTx).Tx
-		if tx != nil {
-			if sender := senderFromTransaction(tx); sender != "" {
-				pendingSenderNonceMap.Delete(pendingSenderNonceKey(sender, tx.CreatedHeight))
-			}
-		}
-	}
-	pseudoPendingTxsMap.Delete(hash)
-}
-
-// highestPendingNonceForAddress() returns the highest still-live pending nonce for the sender.
-func (s *Server) highestPendingNonceForAddress(st *store.Store, address string) (highest uint64, ok bool, err error) {
-	address = strings.ToLower(address)
-	pseudoPendingTxsMap.Range(func(key, value any) bool {
-		hash := strings.ToLower(key.(string))
-		pending := value.(*ethPendingTx)
-		if pendingTxExpired(pending) {
-			clearPendingEthTx(hash)
-			return true
-		}
-		if tx, _, lookupErr := s.findIndexedTxByHash(st, hash); lookupErr != nil {
-			err = lookupErr
-			return false
-		} else if tx != nil {
-			clearPendingEthTx(hash)
-			return true
-		}
-		if pending.Tx == nil || strings.ToLower(senderFromTransaction(pending.Tx)) != address {
-			return true
-		}
-		nonce := pending.Tx.CreatedHeight
-		if !ok || nonce > highest {
-			highest, ok = nonce, true
-		}
-		return true
-	})
-	if err != nil {
-		return 0, false, err
-	}
-	s.controller.Mempool.L.Lock()
-	defer s.controller.Mempool.L.Unlock()
-	for _, txBz := range s.controller.Mempool.GetTransactions(math.MaxUint64) {
-		tx := new(lib.Transaction)
-		if err := lib.Unmarshal(txBz, tx); err != nil {
-			continue
-		}
-		if strings.ToLower(senderFromTransaction(tx)) != address {
-			continue
-		}
-		nonce := tx.CreatedHeight
-		if !ok || nonce > highest {
-			highest, ok = nonce, true
-		}
-	}
-	return
-}
-
-// findPendingEthTx() resolves a pending tx by hash from the live mempool, with a short local grace fallback after eviction.
-func (s *Server) findPendingEthTx(hash string) *ethPendingTx {
-	hash = strings.ToLower(hash)
-	s.controller.Mempool.L.Lock()
-	defer s.controller.Mempool.L.Unlock()
-	for _, txBz := range s.controller.Mempool.GetTransactions(math.MaxUint64) {
-		tx := new(lib.Transaction)
-		if err := lib.Unmarshal(txBz, tx); err != nil {
-			continue
-		}
-		if ethHashStringFromTransaction(tx) != hash {
-			continue
-		}
-		return &ethPendingTx{AcceptedAt: time.Now(), Tx: tx}
-	}
-	if pending, ok := pseudoPendingTxsMap.Load(hash); ok {
-		cached := pending.(*ethPendingTx)
-		if !pendingTxExpired(cached) {
-			return cached
-		}
-		clearPendingEthTx(hash)
-	}
-	return nil
-}
-
-// pendingTxToEthTransaction() serializes a pending tx using the Ethereum transaction object shape.
-func (s *Server) pendingTxToEthTransaction(pending *ethPendingTx) any {
-	ethTx, ok := ethTransactionFromCanopyTx(pending.Tx)
-	if !ok {
-		return ethNullResult()
-	}
-	result, _ := marshalCanonicalEthTransaction(ethTx, common.HexToAddress("0x"+senderFromTransaction(pending.Tx)), nil, nil, true)
-	return result
-}
-
 // currentEthBlockNumber() returns the Ethereum-facing latest block number.
 func (s *Server) currentEthBlockNumber() uint64 {
 	height := s.controller.ChainHeight()
@@ -1644,42 +1648,6 @@ func (s *Server) currentEthBlockNumber() uint64 {
 		return 0
 	}
 	return height - 1
-}
-
-// minimumAcceptedEthereumNonce() returns the lowest nonce/createdHeight currently accepted by Canopy.
-func (s *Server) minimumAcceptedEthereumNonce() uint64 {
-	height := s.currentEthBlockNumber()
-	if height <= fsm.BlockAcceptanceRange {
-		return 0
-	}
-	return height - fsm.BlockAcceptanceRange
-}
-
-// maximumAcceptedEthereumNonce() returns the highest nonce/createdHeight currently accepted by Canopy.
-func (s *Server) maximumAcceptedEthereumNonce() uint64 {
-	height := s.currentEthBlockNumber()
-	if height > math.MaxUint64-fsm.BlockAcceptanceRange {
-		return math.MaxUint64
-	}
-	return height + fsm.BlockAcceptanceRange
-}
-
-// ethereumNonceFloor() returns the stable nonce floor used for Ethereum-compatible RPC responses.
-func (s *Server) ethereumNonceFloor(height uint64) uint64 {
-	return height - (height % fsm.BlockAcceptanceRange)
-}
-
-// latestMinedNonceForAddress() returns the next confirmed nonce for an address when it has mined Ethereum-backed tx history.
-func (s *Server) latestMinedNonceForAddress(st *store.Store, address crypto.AddressI) (uint64, bool, error) {
-	nonce, ok, err := st.GetLatestMinedEthereumNonce(address)
-	if err != nil || !ok {
-		return 0, ok, err
-	}
-	nextNonce := nonce + 1
-	if floorNonce := s.ethereumNonceFloor(s.currentEthBlockNumber()); nextNonce < floorNonce {
-		nextNonce = floorNonce
-	}
-	return nextNonce, true, nil
 }
 
 // blockHeightFromNumberArg() resolves block-number method arguments to indexed Canopy block heights.
@@ -1739,7 +1707,10 @@ func (s *Server) txToEthReceipt(block *lib.BlockResult, tx *lib.TxResult) (ethRP
 		to = &recipient
 	}
 	if ethTx, ok := ethTransactionFromCanopyTx(tx.Transaction); ok {
-		gasPrice = effectiveGasPriceFromEthTx(ethTx)
+		gasPrice, err = effectiveGasPriceFromEthTx(tx, ethTx, false)
+		if err != nil {
+			return ethRPCReceipt{}, err
+		}
 		txType = uint64(ethTx.Type())
 		if recipient := ethTx.To(); recipient != nil {
 			recipientCopy := *recipient
@@ -1944,6 +1915,21 @@ func intFromArgs(args []any, position int) (int64, error) {
 	return n, nil
 }
 
+func feeHistoryBlockCountFromArgs(args []any) (uint64, error) {
+	str, err := strFromArgs(args, 0)
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.ParseUint(str, 0, 64)
+	if err != nil {
+		return 0, ethInvalidParams(err.Error())
+	}
+	if n > ethFeeHistoryMaxBlockCount {
+		return 0, ethInvalidParams(fmt.Sprintf("block count exceeds maximum of %d", ethFeeHistoryMaxBlockCount))
+	}
+	return n, nil
+}
+
 // strFromArgs() extracts a string from the first argument
 func strFromArgs(args []any, position int) (string, error) {
 	if len(args) <= position {
@@ -1954,6 +1940,34 @@ func strFromArgs(args []any, position int) (string, error) {
 		return "", ethInvalidParams("invalid argument format")
 	}
 	return str, nil
+}
+
+func rewardPercentilesFromArgs(args []any, position int) ([]float64, error) {
+	if len(args) <= position || args[position] == nil {
+		return nil, nil
+	}
+	raw, ok := args[position].([]any)
+	if !ok {
+		return nil, ethInvalidParams("invalid reward percentile format")
+	}
+	if len(raw) > ethFeeHistoryMaxRewardPercentiles {
+		return nil, ethInvalidParams(fmt.Sprintf("reward percentile count exceeds maximum of %d", ethFeeHistoryMaxRewardPercentiles))
+	}
+	result := make([]float64, 0, len(raw))
+	for i, item := range raw {
+		value, ok := item.(float64)
+		if !ok {
+			return nil, ethInvalidParams("invalid reward percentile value")
+		}
+		if value < 0 || value > 100 {
+			return nil, ethInvalidParams(fmt.Sprintf("invalid reward percentile: %f", value))
+		}
+		if i > 0 && value <= result[i-1] {
+			return nil, ethInvalidParams(fmt.Sprintf("reward percentiles must be strictly increasing: #%d:%f >= #%d:%f", i-1, result[i-1], i, value))
+		}
+		result = append(result, value)
+	}
+	return result, nil
 }
 
 // boolFromArgs() extracts a bool from the second argument

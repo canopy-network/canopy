@@ -76,6 +76,39 @@ func TestAddTransactionFeeOrdering(t *testing.T) {
 	}
 }
 
+func TestCertificateResultsMayExceedIndividualMaxTxSize(t *testing.T) {
+	sig := &Signature{PublicKey: newTestPublicKeyBytes(t), Signature: newTestPublicKeyBytes(t)}
+	msg, err := NewAny(sig)
+	require.NoError(t, err)
+	tx, err := Marshal(&Transaction{MessageType: "certificateResults", Msg: msg, Signature: sig,
+		CreatedHeight: 1, Time: uint64(time.Now().UnixMicro()), NetworkId: 1, ChainId: 1})
+	require.NoError(t, err)
+	mempool := NewMempool(MempoolConfig{MaxTotalBytes: math.MaxUint64, MaxTransactionCount: 10,
+		IndividualMaxTxSize: 1, DropPercentage: 10})
+
+	_, err = mempool.AddTransactions(tx)
+	require.NoError(t, err)
+	require.Equal(t, 1, mempool.TxCount())
+}
+
+func TestRejectedBatchDoesNotChangeMempoolBytes(t *testing.T) {
+	sig := &Signature{PublicKey: newTestPublicKeyBytes(t), Signature: newTestPublicKeyBytes(t)}
+	msg, err := NewAny(sig)
+	require.NoError(t, err)
+	valid, err := Marshal(&Transaction{MessageType: testMessageName, Msg: msg, Signature: sig,
+		CreatedHeight: 1, Time: uint64(time.Now().UnixMicro()), Fee: 1, NetworkId: 1, ChainId: 1})
+	require.NoError(t, err)
+	mempool := NewMempool(DefaultMempoolConfig())
+
+	_, err = mempool.AddTransactions(valid, []byte("invalid"))
+	require.Error(t, err)
+	require.Zero(t, mempool.TxCount())
+	require.Zero(t, mempool.TxsBytes())
+	_, err = mempool.AddTransactions(valid, valid)
+	require.NoError(t, err)
+	require.Equal(t, len(valid), mempool.TxsBytes())
+}
+
 func TestAddTransaction(t *testing.T) {
 	// pre-define a test message
 	sig := &Signature{

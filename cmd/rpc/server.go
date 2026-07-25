@@ -33,7 +33,7 @@ const (
 
 	// uses golang's semver naming convention
 	// https://pkg.go.dev/golang.org/x/mod/semver
-	SoftwareVersion = "v0.1.19+beta"
+	SoftwareVersion = "v0.1.20+beta"
 	ContentType     = "Content-MessageType"
 	ApplicationJSON = "application/json; charset=utf-8"
 
@@ -88,7 +88,7 @@ func (s *Server) Start() {
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
 	go s.rcManager.Start()
-	go s.startEthRPCService()
+	go s.startEthFilterExpireService()
 
 	// Start heap profiler if enabled (warning: causes GC pauses which may affect RPC latency)
 	if s.config.HeapProfilingEnabled {

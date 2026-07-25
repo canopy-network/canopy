@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\raccount.proto\x12\x05types\"*\n\x07\x41\x63\x63ount\x12\x0f\n\x07\x61\x64\x64ress\x18\x01 \x01(\x0c\x12\x0e\n\x06\x61mount\x18\x02 \x01(\x04\"\"\n\x04Pool\x12\n\n\x02id\x18\x01 \x01(\x04\x12\x0e\n\x06\x61mount\x18\x02 \x01(\x04\x42.Z,github.com/canopy-network/go-plugin/contractb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\raccount.proto\x12\x05types\"9\n\x07\x41\x63\x63ount\x12\x0f\n\x07\x61\x64\x64ress\x18\x01 \x01(\x0c\x12\x0e\n\x06\x61mount\x18\x02 \x01(\x04\x12\r\n\x05nonce\x18\x07 \x01(\x04\"\"\n\x04Pool\x12\n\n\x02id\x18\x01 \x01(\x04\x12\x0e\n\x06\x61mount\x18\x02 \x01(\x04\x42.Z,github.com/canopy-network/go-plugin/contractb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -23,7 +23,7 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['DESCRIPTOR']._options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z,github.com/canopy-network/go-plugin/contract'
   _globals['_ACCOUNT']._serialized_start=24
-  _globals['_ACCOUNT']._serialized_end=66
-  _globals['_POOL']._serialized_start=68
-  _globals['_POOL']._serialized_end=102
+  _globals['_ACCOUNT']._serialized_end=81
+  _globals['_POOL']._serialized_start=83
+  _globals['_POOL']._serialized_end=117
 # @@protoc_insertion_point(module_scope)

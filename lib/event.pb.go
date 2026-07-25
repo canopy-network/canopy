@@ -502,7 +502,9 @@ type EventDexLiquidityWithdrawal struct {
 	// order_id: the unique identifier of the order
 	OrderId []byte `protobuf:"bytes,3,opt,name=order_id,json=orderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	// pointsBurned: the amount of points burned
-	PointsBurned  uint64 `protobuf:"varint,4,opt,name=points_burned,json=pointsBurned,proto3" json:"pointsBurned"` // @gotags: json:"pointsBurned"
+	PointsBurned uint64 `protobuf:"varint,4,opt,name=points_burned,json=pointsBurned,proto3" json:"pointsBurned"` // @gotags: json:"pointsBurned"
+	// percent: the percentage of the provider's points withdrawn
+	Percent       uint64 `protobuf:"varint,5,opt,name=percent,proto3" json:"percent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -561,6 +563,13 @@ func (x *EventDexLiquidityWithdrawal) GetOrderId() []byte {
 func (x *EventDexLiquidityWithdrawal) GetPointsBurned() uint64 {
 	if x != nil {
 		return x.PointsBurned
+	}
+	return 0
+}
+
+func (x *EventDexLiquidityWithdrawal) GetPercent() uint64 {
+	if x != nil {
+		return x.Percent
 	}
 	return 0
 }
@@ -1055,12 +1064,13 @@ const file_event_proto_rawDesc = "" +
 	"\x06amount\x18\x01 \x01(\x04R\x06amount\x12!\n" +
 	"\flocal_origin\x18\x02 \x01(\bR\vlocalOrigin\x12\x19\n" +
 	"\border_id\x18\x03 \x01(\fR\aorderId\x12\x16\n" +
-	"\x06points\x18\x04 \x01(\x04R\x06points\"\xa5\x01\n" +
+	"\x06points\x18\x04 \x01(\x04R\x06points\"\xbf\x01\n" +
 	"\x1bEventDexLiquidityWithdrawal\x12!\n" +
 	"\flocal_amount\x18\x01 \x01(\x04R\vlocalAmount\x12#\n" +
 	"\rremote_amount\x18\x02 \x01(\x04R\fremoteAmount\x12\x19\n" +
 	"\border_id\x18\x03 \x01(\fR\aorderId\x12#\n" +
-	"\rpoints_burned\x18\x04 \x01(\x04R\fpointsBurned\"\xac\x01\n" +
+	"\rpoints_burned\x18\x04 \x01(\x04R\fpointsBurned\x12\x18\n" +
+	"\apercent\x18\x05 \x01(\x04R\apercent\"\xac\x01\n" +
 	"\fEventDexSwap\x12\x1f\n" +
 	"\vsold_amount\x18\x01 \x01(\x04R\n" +
 	"soldAmount\x12#\n" +

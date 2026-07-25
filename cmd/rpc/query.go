@@ -37,10 +37,14 @@ func (s *Server) Transaction(w http.ResponseWriter, r *http.Request, _ httproute
 // Transactions handles multiple transactions in a single request
 func (s *Server) Transactions(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// create a slice to hold the incoming transactions
-	var txs []lib.TransactionI
+	var transactions []*lib.Transaction
 	// unmarshal the HTTP request body into the transactions slice
-	if ok := unmarshal(w, r, &txs); !ok {
+	if ok := unmarshal(w, r, &transactions); !ok {
 		return
+	}
+	txs := make([]lib.TransactionI, len(transactions))
+	for i := range transactions {
+		txs[i] = transactions[i]
 	}
 	// submit transactions to RPC server
 	s.submitTxs(w, txs)
@@ -750,6 +754,7 @@ func spendableAccountView(sm *fsm.StateMachine, account *fsm.Account) *AccountVi
 	return &AccountView{
 		Address:            account.Address,
 		Amount:             spendable,
+		Nonce:              account.Nonce,
 		TotalAmount:        total,
 		VestedAmount:       vested,
 		LockedAmount:       locked,

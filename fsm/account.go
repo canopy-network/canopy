@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"math/bits"
 	"strings"
 	"time"
 
@@ -111,8 +112,10 @@ func (s *StateMachine) AccountVestedAmount(account *Account) uint64 {
 	elapsed := s.Height() - account.VestingStartHeight
 	// calculate the duration of the vesting
 	duration := account.VestingEndHeight - account.VestingStartHeight
-	// calculate the amount vested
-	return account.VestingAmount * elapsed / duration
+	// calculate the amount vested using a 128-bit intermediate to avoid overflow
+	high, low := bits.Mul64(account.VestingAmount, elapsed)
+	vested, _ := bits.Div64(high, low, duration)
+	return vested
 }
 
 // AccountLockedAmount() returns the still-locked portion of the account's vesting tranche
@@ -159,8 +162,8 @@ func (s *StateMachine) SetAccount(account *Account) lib.ErrorI {
 	s.cache.accounts[lib.MemHash(account.Address)] = account
 	// convert bytes to the address object
 	address := crypto.NewAddressFromBytes(account.Address)
-	// if the amount is 0, delete the account from state to prevent unnecessary bloat
-	if account.Amount == 0 {
+	// preserve zero-balance accounts when they carry nonce state.
+	if account.Amount == 0 && account.Nonce == 0 {
 		return s.Delete(KeyForAccount(address))
 	}
 	// convert the account into bytes
@@ -949,6 +952,7 @@ type account struct {
 	VestingStartHeight uint64       `json:"vestingStartHeight,omitempty"`
 	VestingCliffHeight uint64       `json:"vestingCliffHeight,omitempty"`
 	VestingEndHeight   uint64       `json:"vestingEndHeight,omitempty"`
+	Nonce              uint64       `json:"nonce,omitempty"`
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the Account object
@@ -960,6 +964,7 @@ func (x *Account) MarshalJSON() ([]byte, error) {
 		VestingStartHeight: x.VestingStartHeight,
 		VestingCliffHeight: x.VestingCliffHeight,
 		VestingEndHeight:   x.VestingEndHeight,
+		Nonce:              x.Nonce,
 	})
 }
 
@@ -975,6 +980,7 @@ func (x *Account) UnmarshalJSON(bz []byte) (err error) {
 	x.VestingStartHeight = a.VestingStartHeight
 	x.VestingCliffHeight = a.VestingCliffHeight
 	x.VestingEndHeight = a.VestingEndHeight
+	x.Nonce = a.Nonce
 	return
 }
 

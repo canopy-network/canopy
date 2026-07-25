@@ -29,7 +29,6 @@ var (
 	eventHeightPrefix  = []byte{11} // store key prefix for events by block height
 	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
 	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
-	ethNoncePrefix     = []byte{14} // store key prefix for latest mined Ethereum nonce by sender
 	// create indexer cache
 	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
@@ -285,10 +284,6 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 			return err
 		}
 	}
-	if err = t.indexLatestEthereumNonce(result); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -307,7 +302,7 @@ func indexedTxHashes(result *lib.TxResult) ([][]byte, lib.ErrorI) {
 
 // ethTxHash() returns the canonical Ethereum tx hash for an RLP-backed transaction.
 func ethTxHash(tx *lib.Transaction) []byte {
-	if tx == nil || tx.Memo != "RLP" || tx.Signature == nil || len(tx.Signature.Signature) == 0 {
+	if tx == nil || !lib.IsRLPMemo(tx.Memo) || tx.Signature == nil || len(tx.Signature.Signature) == 0 {
 		return nil
 	}
 	var ethTx types.Transaction
@@ -342,31 +337,14 @@ func (t *Indexer) GetTxsByRecipient(address crypto.AddressI, newestToOldest bool
 	return t.getTxs(t.txRecipientKey(address.Bytes(), nil), newestToOldest, p)
 }
 
-// GetLatestMinedEthereumNonce() returns the highest mined Ethereum nonce recorded for the sender.
-func (t *Indexer) GetLatestMinedEthereumNonce(address crypto.AddressI) (nonce uint64, ok bool, err lib.ErrorI) {
-	bz, err := t.db.Get(t.ethNonceKey(address.Bytes()))
-	if err != nil {
-		return 0, false, err
-	}
-	if len(bz) == 0 {
-		return 0, false, nil
-	}
-	return t.decodeBigEndian(bz), true, nil
-}
-
 // DeleteTxsForHeight() deletes the transaction object for a specific height
 func (t *Indexer) DeleteTxsForHeight(height uint64) lib.ErrorI {
 	txs, err := t.GetTxsByHeightNonPaginated(height, false)
 	if err != nil {
 		return err
 	}
-	affectedSenders := make(map[string]crypto.AddressI)
 	for _, tx := range txs {
 		heightAndIndexKey := t.txHeightAndIndexKey(tx.GetHeight(), tx.GetIndex())
-		if tx != nil && tx.Transaction != nil && len(tx.Sender) != 0 && ethTxHash(tx.Transaction) != nil {
-			addr := crypto.NewAddress(tx.Sender)
-			affectedSenders[addr.String()] = addr
-		}
 		hashes, e := indexedTxHashes(tx)
 		if e != nil {
 			return e
@@ -389,11 +367,6 @@ func (t *Indexer) DeleteTxsForHeight(height uint64) lib.ErrorI {
 	}
 	if err = t.deleteAll(t.txHeightKey(height)); err != nil {
 		return err
-	}
-	for _, sender := range affectedSenders {
-		if err = t.reindexLatestEthereumNonce(sender); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -845,41 +818,6 @@ func (t *Indexer) indexTxByRecipient(recipient, heightAndIndexKey []byte, bz []b
 	return t.db.Set(t.txRecipientKey(recipient, heightAndIndexKey), bz)
 }
 
-// indexLatestEthereumNonce() persists the highest mined Ethereum nonce seen for an RLP-backed sender.
-func (t *Indexer) indexLatestEthereumNonce(result *lib.TxResult) lib.ErrorI {
-	if result == nil || result.Transaction == nil || len(result.Sender) == 0 || ethTxHash(result.Transaction) == nil {
-		return nil
-	}
-	current, ok, err := t.GetLatestMinedEthereumNonce(crypto.NewAddress(result.Sender))
-	if err != nil {
-		return err
-	}
-	if ok && current >= result.Transaction.CreatedHeight {
-		return nil
-	}
-	return t.db.Set(t.ethNonceKey(result.Sender), t.encodeBigEndian(result.Transaction.CreatedHeight))
-}
-
-// reindexLatestEthereumNonce() recomputes the latest mined Ethereum nonce for a sender after index deletions.
-func (t *Indexer) reindexLatestEthereumNonce(address crypto.AddressI) lib.ErrorI {
-	if !t.config.IndexByAccount {
-		return t.db.Delete(t.ethNonceKey(address.Bytes()))
-	}
-	it, err := t.db.RevIterator(t.txSenderKey(address.Bytes(), nil))
-	if err != nil {
-		return err
-	}
-	defer it.Close()
-	for ; it.Valid(); it.Next() {
-		tx, e := t.getTx(it.Value())
-		if e != nil || tx == nil || tx.Transaction == nil || ethTxHash(tx.Transaction) == nil {
-			continue
-		}
-		return t.db.Set(t.ethNonceKey(address.Bytes()), t.encodeBigEndian(tx.Transaction.CreatedHeight))
-	}
-	return t.db.Delete(t.ethNonceKey(address.Bytes()))
-}
-
 func (t *Indexer) indexQCByHeight(height uint64, bz []byte) lib.ErrorI {
 	return t.db.Set(t.qcHeightKey(height), bz)
 }
@@ -927,11 +865,6 @@ func (t *Indexer) txSenderKey(address, heightAndIndexKey []byte) []byte {
 
 func (t *Indexer) txRecipientKey(address, heightAndIndexKey []byte) []byte {
 	return t.key(txRecipientPrefix, address, heightAndIndexKey)
-}
-
-// ethNonceKey() stores the latest mined Ethereum nonce for a sender address.
-func (t *Indexer) ethNonceKey(address []byte) []byte {
-	return t.key(ethNoncePrefix, address, nil)
 }
 
 func (t *Indexer) blockHashKey(hash []byte) []byte {

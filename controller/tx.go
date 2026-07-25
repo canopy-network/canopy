@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -15,6 +16,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -214,8 +216,18 @@ func NewMempool(fsm *fsm.StateMachine, address crypto.AddressI, config lib.Mempo
 	return m, err
 }
 
-// HandleTransactions() attempts to add a transaction to the mempool by validating, adding, and evicting overfull or newly invalid txs
+// HandleTransactions() attempts to add transactions to the mempool, allowing normal fee-based eviction.
 func (m *Mempool) HandleTransactions(tx ...[]byte) (err lib.ErrorI) {
+	return m.handleTransactions(false, nil, tx...)
+}
+
+// HandleTransactionAndVerifyRetained() adds one transaction and reports if fee-based eviction removed it.
+// This is used by synchronous submission APIs and must not be used to classify peer transactions as invalid.
+func (m *Mempool) HandleTransactionAndVerifyRetained(tx, replace []byte) lib.ErrorI {
+	return m.handleTransactions(true, replace, tx)
+}
+
+func (m *Mempool) handleTransactions(verifyRetained bool, replace []byte, tx ...[]byte) (err lib.ErrorI) {
 	// lock the mempool
 	m.L.Lock()
 	defer m.L.Unlock()
@@ -228,6 +240,12 @@ func (m *Mempool) HandleTransactions(tx ...[]byte) (err lib.ErrorI) {
 	// invalidate the cached proposal version when the mempool changed
 	if recheck {
 		m.dirtyVersion.Add(1)
+	}
+	if verifyRetained && !m.Contains(crypto.HashString(tx[0])) {
+		return lib.NewError(lib.CodeInvalidArgument, lib.ConsensusModule, "transaction evicted from mempool")
+	}
+	if len(replace) != 0 {
+		m.DeleteTransaction(replace)
 	}
 	// exit
 	return
@@ -364,12 +382,12 @@ func (m *Mempool) CheckMempool() (err lib.ErrorI) {
 
 // GetPendingPage() returns a page of unconfirmed mempool transactions
 func (c *Controller) GetPendingPage(p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
-	// try to acquire the lock without blocking — if block processing holds it, return empty
+	// try to acquire the mempool lock without blocking - if block processing holds it, return empty
 	// rather than queuing (100+/sec callers queueing cause TCP write timeouts)
-	if !c.TryLock() {
+	if c == nil || c.Mempool == nil || c.Mempool.L == nil || !c.Mempool.L.TryLock() {
 		return lib.NewPage(p, lib.PendingResultsPageName), nil
 	}
-	defer c.Unlock()
+	defer c.Mempool.L.Unlock()
 	// create a new page and transaction results list to populate
 	page, txResults := lib.NewPage(p, lib.PendingResultsPageName), make(lib.TxResults, 0)
 	// define a callback to execute when loading the page
@@ -394,14 +412,11 @@ func (c *Controller) GetPendingPage(p lib.PageParams) (page *lib.Page, err lib.E
 
 // GetPendingTxByHash() returns an unconfirmed mempool transaction by hash.
 func (c *Controller) GetPendingTxByHash(hash string) (*lib.TxResult, bool) {
-	// try to acquire the lock without blocking — return not-found if block processing holds it
-	if !c.TryLock() {
+	// try to acquire the mempool lock without blocking - return not-found if block processing holds it
+	if c == nil || c.Mempool == nil || c.Mempool.L == nil || !c.Mempool.L.TryLock() {
 		return nil, false
 	}
-	defer c.Unlock()
-	if c.Mempool == nil {
-		return nil, false
-	}
+	defer c.Mempool.L.Unlock()
 	normalizedHash := normalizeTxHash(hash)
 	for _, tx := range c.Mempool.cachedResults {
 		if tx == nil {
@@ -410,8 +425,39 @@ func (c *Controller) GetPendingTxByHash(hash string) (*lib.TxResult, bool) {
 		if normalizeTxHash(tx.TxHash) == normalizedHash {
 			return tx, true
 		}
+		if tx.Transaction != nil && fsm.IsRLPMemo(tx.Transaction.Memo) && tx.Transaction.Signature != nil {
+			var ethTx ethTypes.Transaction
+			if ethTx.UnmarshalBinary(tx.Transaction.Signature.Signature) == nil && normalizeTxHash(ethTx.Hash().Hex()) == normalizedHash {
+				return tx, true
+			}
+		}
 	}
 	return nil, false
+}
+
+// IsFailedTx reports whether stateful mempool validation rejected a transaction.
+func (c *Controller) IsFailedTx(hash string) bool {
+	if c == nil || c.Mempool == nil || c.Mempool.cachedFailedTxs == nil {
+		return false
+	}
+	_, found := c.Mempool.cachedFailedTxs.Get(normalizeTxHash(hash))
+	return found
+}
+
+// GetPendingNonce recommends the next nonce after the latest validated mempool snapshot.
+func (c *Controller) GetPendingNonce(address crypto.AddressI, confirmed uint64) uint64 {
+	if c == nil || c.Mempool == nil || c.Mempool.L == nil || !c.Mempool.L.TryLock() {
+		return confirmed
+	}
+	defer c.Mempool.L.Unlock()
+	for _, result := range c.Mempool.cachedResults {
+		if result == nil || result.Transaction == nil || result.Transaction.Memo != fsm.RLPV2Indicator ||
+			!bytes.Equal(result.Sender, address.Bytes()) || result.Transaction.Nonce < confirmed || result.Transaction.Nonce == math.MaxUint64 {
+			continue
+		}
+		confirmed = result.Transaction.Nonce + 1
+	}
+	return confirmed
 }
 
 func normalizeTxHash(hash string) string {

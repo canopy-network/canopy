@@ -39,7 +39,7 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 	if result.plugin && s.Plugin != nil {
 		// route to plugin
 		pluginDeliverStartTime := time.Now()
-		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: result.tx})
+		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: result.tx, Height: s.Height()})
 		// handle error
 		if e != nil {
 			return nil, nil, e
@@ -80,6 +80,16 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 		}
 		if s.Metrics != nil {
 			s.Metrics.ApplyTransactionStageTime.WithLabelValues("handle_message", messageType).Observe(time.Since(handleMessageStartTime).Seconds())
+		}
+	}
+	if result.tx.Memo == RLPV2Indicator {
+		account, e := s.GetAccount(result.sender)
+		if e != nil {
+			return nil, nil, e
+		}
+		account.Nonce = result.tx.Nonce + 1
+		if err = s.SetAccount(account); err != nil {
+			return nil, nil, err
 		}
 	}
 	// return the tx result
@@ -124,11 +134,14 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	if s.Metrics != nil {
 		s.Metrics.CheckTxReplayTime.Observe(time.Since(replayStartTime).Seconds())
 	}
+	if tx.Memo == RLPIndicator && s.IsFeatureEnabled(legacyRLPDisabledProtocolVersion) {
+		return nil, ErrInvalidProtocolVersion()
+	}
 	// if the transaction is meant for the plugin
 	messageStartTime := time.Now()
 	if s.Plugin != nil && s.Plugin.SupportsTransaction(tx.MessageType) {
 		// execute check tx on the plugin
-		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: tx})
+		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: tx, Height: s.Height()})
 		if e != nil {
 			return nil, e
 		}
@@ -168,6 +181,17 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	if s.Metrics != nil {
 		s.Metrics.CheckTxSignatureTime.Observe(time.Since(signatureStartTime).Seconds())
 	}
+	if tx.Memo == RLPV2Indicator {
+		account, e := s.GetAccount(sender)
+		if e != nil {
+			return nil, e
+		}
+		// The account nonce is a floor, not a requirement for consecutive submission.
+		// A successful gap transaction advances the floor past every skipped nonce.
+		if tx.Nonce < account.Nonce || tx.Nonce == math.MaxUint64 {
+			return nil, ErrInvalidTxNonce()
+		}
+	}
 	// populate special message fields (if applicable)
 	s.PopulateSpecialMessageFields(tx, sender, msg)
 	// return the result
@@ -205,8 +229,13 @@ func (s *StateMachine) CheckSignature(tx *lib.Transaction, authorizedSigners [][
 	if e != nil {
 		return nil, ErrInvalidPublicKey(e)
 	}
-	// special case: check for a special RLP transaction
-	if _, hasEthPubKey := publicKey.(*crypto.ETHSECP256K1PublicKey); hasEthPubKey && tx.Memo == RLPIndicator {
+	// Legacy "RLP" was historically an ordinary memo for non-Ethereum keys.
+	// RLP.V2 is reserved and always requires an Ethereum key.
+	_, hasEthPubKey := publicKey.(*crypto.ETHSECP256K1PublicKey)
+	if tx.Memo == RLPV2Indicator || (tx.Memo == RLPIndicator && hasEthPubKey) {
+		if !hasEthPubKey {
+			return nil, ErrInvalidSignature()
+		}
 		if err = s.VerifyRLPBytes(tx); err != nil {
 			return nil, err
 		}
@@ -283,6 +312,26 @@ func (s *StateMachine) CheckReplay(tx *lib.Transaction, txHash string) lib.Error
 		if txResult != nil && txResult.TxHash == txHash {
 			return lib.ErrDuplicateTx(txHash)
 		}
+		if IsRLPMemo(tx.Memo) && tx.Signature != nil && len(tx.Signature.Signature) != 0 {
+			publicKey, _ := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+			if _, ok := publicKey.(*crypto.ETHSECP256K1PublicKey); ok {
+				ethHash, e := ethereumTxHashFromRawBytes(tx.Signature.Signature)
+				if e != nil {
+					return e
+				}
+				txResult, err = store.GetTxByHash(ethHash)
+				if err != nil {
+					return err
+				}
+				if txResult != nil && txResult.TxHash != "" {
+					return lib.ErrDuplicateTx("0x" + lib.BytesToString(ethHash))
+				}
+			}
+		}
+	}
+	// RLP.V2 uses the account nonce for replay protection and a canonical CreatedHeight sentinel.
+	if tx.Memo == RLPV2Indicator {
+		return nil
 	}
 	// this gives the protocol a theoretically safe tx indexer prune height
 	maxHeight, minHeight := s.Height()+BlockAcceptanceRange, uint64(0)

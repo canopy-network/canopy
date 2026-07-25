@@ -43,7 +43,9 @@ type Transaction struct {
 	// network_id: The identity of the network the transaction is intended for
 	NetworkId uint64 `protobuf:"varint,8,opt,name=network_id,json=networkId,proto3" json:"networkID"` // @gotags: json:"networkID"
 	// chain_id: The identity of the committee the transaction is intended for
-	ChainId       uint64 `protobuf:"varint,9,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	ChainId uint64 `protobuf:"varint,9,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	// nonce: The sender's protocol replay-protection nonce
+	Nonce         uint64 `protobuf:"varint,10,opt,name=nonce,proto3" json:"nonce,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -137,6 +139,13 @@ func (x *Transaction) GetNetworkId() uint64 {
 func (x *Transaction) GetChainId() uint64 {
 	if x != nil {
 		return x.ChainId
+	}
+	return 0
+}
+
+func (x *Transaction) GetNonce() uint64 {
+	if x != nil {
+		return x.Nonce
 	}
 	return 0
 }
@@ -312,7 +321,7 @@ var File_tx_proto protoreflect.FileDescriptor
 
 const file_tx_proto_rawDesc = "" +
 	"\n" +
-	"\btx.proto\x12\x05types\x1a\x19google/protobuf/any.proto\"\xa3\x02\n" +
+	"\btx.proto\x12\x05types\x1a\x19google/protobuf/any.proto\"\xb9\x02\n" +
 	"\vTransaction\x12!\n" +
 	"\fmessage_type\x18\x01 \x01(\tR\vmessageType\x12&\n" +
 	"\x03msg\x18\x02 \x01(\v2\x14.google.protobuf.AnyR\x03msg\x12.\n" +
@@ -323,7 +332,9 @@ const file_tx_proto_rawDesc = "" +
 	"\x04memo\x18\a \x01(\tR\x04memo\x12\x1d\n" +
 	"\n" +
 	"network_id\x18\b \x01(\x04R\tnetworkId\x12\x19\n" +
-	"\bchain_id\x18\t \x01(\x04R\achainId\"g\n" +
+	"\bchain_id\x18\t \x01(\x04R\achainId\x12\x14\n" +
+	"\x05nonce\x18\n" +
+	" \x01(\x04R\x05nonce\"g\n" +
 	"\vMessageSend\x12!\n" +
 	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
 	"\n" +

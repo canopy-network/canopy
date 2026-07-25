@@ -244,7 +244,7 @@ const (
 	CodeInvalidQCCommitteeHeight  ErrorCode = 72
 	CodeZeroPointHolder           ErrorCode = 73
 	CodeOrderNotFound             ErrorCode = 74
-
+	CodeInvalidTxNonce            ErrorCode = 75
 	CodeMinimumOrderSize          ErrorCode = 76
 	CodeOrderLocked               ErrorCode = 77
 	CodeInvalidLockOrder          ErrorCode = 78
@@ -282,6 +282,7 @@ const (
 	CodeNoPluginQueryProvider     ErrorCode = 111
 	CodeNilPluginQueryRead        ErrorCode = 112
 	CodeNoCommittedState          ErrorCode = 113
+	CodeTooManyLiquidityProviders ErrorCode = 114
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -867,6 +868,10 @@ func ErrTooManyDexOrders() ErrorI {
 
 func ErrTooManyDexReceipts() ErrorI {
 	return NewError(CodeTooManyDexReceiptsError, StateMachineModule, "too many dex receipts")
+}
+
+func ErrTooManyLiquidityProviders() ErrorI {
+	return NewError(CodeTooManyLiquidityProviders, StateMachineModule, "too many liquidity providers")
 }
 
 func ErrNonNilPoolPoints() ErrorI {
