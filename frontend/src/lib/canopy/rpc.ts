@@ -360,8 +360,8 @@ export async function adminGetKey(
     const key = data?.result ?? data;
 
     return {
-      publicKey: key?.publicKey || key?.public_key || "",
-      privateKey: key?.privateKey || key?.private_key || "",
+      publicKey: key?.PublicKey || key?.publicKey || key?.public_key || "",
+      privateKey: key?.PrivateKey || key?.privateKey || key?.private_key || "",
     };
   } catch {
     return null;

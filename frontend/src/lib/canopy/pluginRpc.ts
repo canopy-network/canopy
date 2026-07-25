@@ -121,7 +121,7 @@ export async function getLenderPosition(
 ): Promise<LenderPosition | null> {
   try {
     const res = await pluginGet(
-      `/v1/query/lenderposition?marketId=${encodeURIComponent(marketId)}&address=${encodeURIComponent(addressHex)}`
+      `/v1/query/lenderposition?marketId=${encodeURIComponent(marketId)}&address=${encodeURIComponent(addressHex.startsWith("0x") ? addressHex.slice(2) : addressHex)}`
     );
     if (!res.ok) return null;
     const j = await res.json();
@@ -143,7 +143,7 @@ export async function getBorrowerPosition(
 ): Promise<(BorrowerPosition & { currentDebt: bigint }) | null> {
   try {
     const res = await pluginGet(
-      `/v1/query/borrowerposition?marketId=${encodeURIComponent(marketId)}&address=${encodeURIComponent(addressHex)}`
+      `/v1/query/borrowerposition?marketId=${encodeURIComponent(marketId)}&address=${encodeURIComponent(addressHex.startsWith("0x") ? addressHex.slice(2) : addressHex)}`
     );
     if (!res.ok) return null;
     const j = await res.json();
@@ -153,7 +153,7 @@ export async function getBorrowerPosition(
       address: b64ToBytes(j.address),
       collateralQuantity: toBigInt(j.collateralQuantity),
       debtPrincipal: toBigInt(j.debtPrincipal),
-      borrowIndexAtOpen: toBigInt(j.borrowIndexAtOpen),
+      borrowIndexAtOpen: (() => { const _b = b64ToBytes(j.borrowIndexAtOpen); let _v = 0n; for (const _x of _b) _v = (_v << 8n) | BigInt(_x); return _v; })(),
       currentDebt: toBigInt(j.currentDebt),
     };
   } catch {
