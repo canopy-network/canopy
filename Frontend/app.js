@@ -1334,70 +1334,7 @@ const AUTHORIZED_PROTOCOL  = 'c1764f10ad672558afe1a3b666185fd141ae1ea8';
 
 
 
-window.renderDisputeCountdown = async function(mid) {
-  const row = document.getElementById('det-dispute-row');
-  const el  = document.getElementById('det-dispute-val');
-  if (!row || !el || !mid) return;
-  row.style.display = 'none';
-  try {
-    const resp = await fetch(getPluginRPC() + '/v1/query/dispute-context?market=' + encodeURIComponent(mid));
-    if (!resp.ok) throw new Error('dispute-context query returned ' + resp.status);
-    const d = await resp.json();
-    const hasProposal = !!d.proposal;
-    if (!hasProposal) return;
 
-    const dw = d.dispute_window || {};
-    if (dw.open) {
-      const blocksLeft = Math.max(0, dw.deadline_block - dw.current_height);
-      const msLeft = blocksLeft * 5000;
-      const deadline = new Date(Date.now() + msLeft);
-      const dateStr = deadline.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
-      const timeStr = deadline.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
-      const hoursLeft = (msLeft / 3600000).toFixed(1);
-      el.innerHTML = '<span style="color:var(--green)">' + hoursLeft + 'h left</span> — closes ' + dateStr + ' ' + timeStr + ' (blk #' + dw.deadline_block + ')';
-    } else {
-      const reason = d.should_dispute_reason || 'window closed';
-      el.innerHTML = '<span style="color:var(--text3)">Closed</span> — ' + reason;
-    }
-    row.style.display = '';
-  } catch(e) {
-    console.warn('dispute countdown failed', e);
-  }
-};
-
-window.renderHoldersSidebar = function(mid, side) {
-  side = side || 'yes';
-  const el = document.getElementById('det-holders-list');
-  if (!el) return;
-  try {
-    const txs = JSON.parse(localStorage.getItem('praxis_tx_cache') || '[]');
-    const holders = {};
-    txs.filter(tx => {
-      if (tx.messageType !== 'submit_prediction') return false;
-      const msg = (tx.transaction && tx.transaction.msg) || {};
-      const rawMid = msg.marketId || msg.market_id || '';
-      let txMid = rawMid;
-      try { txMid = b2h(Uint8Array.from(atob(rawMid), c=>c.charCodeAt(0))); } catch {}
-      return txMid === mid;
-    }).forEach(tx => {
-      const msg = (tx.transaction && tx.transaction.msg) || {};
-      const outcome = msg.outcome === true || msg.outcome === 'true' || msg.outcome === 1;
-      if ((side==='yes') !== outcome) return;
-      const addr = tx.sender || '?';
-      const shares = Number(BigInt(msg.shares || msg.amount || 0)) / 1e6;
-      holders[addr] = (holders[addr] || 0) + shares;
-    });
-    const sorted = Object.entries(holders).sort((a,b) => b[1]-a[1]).slice(0,10);
-    if (!sorted.length) { el.innerHTML = '<div class="det-holders-empty">No holders yet</div>'; return; }
-    el.innerHTML = sorted.map(([addr,amt],i) => `
-      <div class="det-holder-row">
-        <span class="det-holder-rank">#${i+1}</span>
-        <div class="det-holder-avatar">${addr.slice(0,2).toUpperCase()}</div>
-        <span class="det-holder-addr">${addr.slice(0,8)}…${addr.slice(-4)}</span>
-        <span class="det-holder-amt ${side}-side">${amt.toFixed(2)} PRX</span>
-      </div>`).join('');
-  } catch(e) { el.innerHTML = '<div class="det-holders-empty">No holders yet</div>'; }
-};
 
 // Live ticker
 window.updateTicker = function() {
