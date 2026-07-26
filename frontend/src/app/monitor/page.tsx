@@ -147,7 +147,7 @@ export default function MonitorPage() {
   return (
     <div className="space-y-8">
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-white">
+        <h1 className="display-title">
           Reserve & risk monitor
         </h1>
         <p className="text-sm text-zinc-500">
@@ -157,7 +157,7 @@ export default function MonitorPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold tracking-tight text-white">
+        <h2 className="section-h">
           4‑layer bad‑debt waterfall
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -193,19 +193,19 @@ export default function MonitorPage() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+        <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Total R_fund</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
             {formatAmount(totalRf, 9)}
           </p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+        <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Total TVL (supplied)</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
             {formatAmount(totalTvl, 9)}
           </p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+        <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">R_fund / TVL coverage</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
             {coverageRatio.toFixed(1)}%
@@ -214,7 +214,7 @@ export default function MonitorPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold tracking-tight text-white">
+        <h2 className="section-h">
           Per‑market risk flags & reserves
         </h2>
         {isLoading ? (
@@ -224,7 +224,7 @@ export default function MonitorPage() {
             No markets on chain yet.
           </p>
         ) : (
-          <div className="no-scrollbar overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+          <div className="no-scrollbar overflow-x-auto rounded-2xl glass p-5 backdrop-blur">
             <table className="w-full min-w-[56rem] text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-500">

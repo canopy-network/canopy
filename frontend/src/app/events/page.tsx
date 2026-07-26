@@ -126,7 +126,7 @@ export default function EventsPage() {
   return (
     <div className="space-y-6">
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-white">
+        <h1 className="display-title">
           Events & activity log
         </h1>
         <p className="text-sm text-zinc-500">
@@ -173,7 +173,7 @@ export default function EventsPage() {
         </span>
       </div>
 
-      <div className="no-scrollbar overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+      <div className="no-scrollbar overflow-x-auto rounded-2xl glass p-5 backdrop-blur">
         {!enabled ? (
           <p className="px-2 py-8 text-center text-sm text-zinc-500">
             Enter an address (or connect a wallet) to view its activity.

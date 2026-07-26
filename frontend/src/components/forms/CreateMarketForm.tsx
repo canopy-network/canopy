@@ -146,7 +146,7 @@ export function CreateMarketForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur p-5"
+      className="space-y-4 rounded-2xl glass backdrop-blur p-5"
     >
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-zinc-200">
@@ -220,7 +220,7 @@ export function CreateMarketForm() {
           onChange={(e) => setAuthorizedSubmitters(e.target.value)}
           rows={3}
           placeholder="0x..., 0x..., 0x..."
-          className="w-full rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-indigo-500/60"
+          className="w-full rounded-xl glass backdrop-blur px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-indigo-500/60"
         />
       </Field>
 

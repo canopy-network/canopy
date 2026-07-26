@@ -19,7 +19,7 @@ export function TxSubmissionTracker() {
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur p-4 text-xs">
+    <div className="rounded-xl glass backdrop-blur p-4 text-xs">
       <div className="flex items-center justify-between">
         <p className="font-semibold text-zinc-200">
           {PHASE_LABEL[phase]}

@@ -23,7 +23,7 @@ export default function TxPage() {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur p-5">
+      <div className="rounded-2xl glass backdrop-blur p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-zinc-200">
             {PHASE_LABEL[phase]}
@@ -65,7 +65,7 @@ export default function TxPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur px-4 py-3 text-xs text-zinc-500">
+      <div className="rounded-xl glass backdrop-blur px-4 py-3 text-xs text-zinc-500">
         This panel tracks the latest transaction submitted from this browser
         session. It does not store historical transactions.
       </div>

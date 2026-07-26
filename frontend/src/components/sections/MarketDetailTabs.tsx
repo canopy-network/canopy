@@ -107,7 +107,7 @@ export function MarketDetailTabs({
   ];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+    <div className="rounded-2xl glass p-5 backdrop-blur">
       <div className="no-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto px-1">
         {TABS.map((t) => (
           <button

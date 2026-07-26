@@ -209,7 +209,7 @@ export default function LiquidationPage() {
   return (
     <div className="space-y-8">
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-white">
+        <h1 className="display-title">
           Liquidation dashboard
         </h1>
         <p className="max-w-2xl text-sm text-zinc-500">
@@ -222,7 +222,7 @@ export default function LiquidationPage() {
       </section>
 
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+        <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Liquidatable positions</p>
           <p className="mt-2 text-3xl font-semibold tabular-nums text-white">
             {liquidatableCount}
@@ -231,21 +231,21 @@ export default function LiquidationPage() {
             {unpricedCount > 0 ? `${unpricedCount} unpriced (HF n/a)` : "all assessable"}
           </p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+        <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Monitored positions</p>
           <p className="mt-2 text-3xl font-semibold tabular-nums text-white">
             {list.length}
           </p>
           <p className="mt-1 text-xs text-zinc-500">{pricedCount} with oracle price</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+        <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Total debt value</p>
           <p className="mt-2 text-3xl font-semibold tabular-nums text-white">
             {fmtUsd(totalDebtUsd)}
           </p>
           <p className="mt-1 text-xs text-zinc-500">priced positions only</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+        <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Total collateral value</p>
           <p className="mt-2 text-3xl font-semibold tabular-nums text-white">
             {fmtUsd(totalCollUsd)}
@@ -255,7 +255,7 @@ export default function LiquidationPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold tracking-tight text-white">
+        <h2 className="section-h">
           Borrower positions
         </h2>
         {isLoading ? (
@@ -265,7 +265,7 @@ export default function LiquidationPage() {
             No borrower positions on chain.
           </p>
         ) : (
-          <div className="no-scrollbar overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+          <div className="no-scrollbar overflow-x-auto rounded-2xl glass p-5 backdrop-blur">
             <table className="w-full min-w-[58rem] text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-500">

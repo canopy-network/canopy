@@ -70,7 +70,7 @@ function utilBand(u: number | null): { bar: string; text: string } {
 
 function Monogram({ symbol }: { symbol: string }) {
   return (
-    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500/80 to-emerald-400/80 text-xs font-bold text-[#05070d] shadow-lg shadow-indigo-500/10">
+    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl brand-glyph text-xs font-bold text-[#05070d] shadow-lg shadow-indigo-500/10">
       {symbol.slice(0, 4).toUpperCase()}
     </div>
   );
@@ -94,7 +94,7 @@ function StatCard({
         ? "text-rose-400"
         : "text-zinc-500";
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+    <div className="rounded-2xl glass p-5 backdrop-blur">
       <p className="text-xs text-zinc-500">{label}</p>
       <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-white">
         {value}
@@ -141,7 +141,7 @@ function MarketCard({
   return (
     <Link
       href={`/markets/${encodeURIComponent(m.marketId)}`}
-      className="group flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur transition hover:border-white/20 hover:bg-white/[0.05]"
+      className="group flex flex-col glass glass-hover rounded-2xl p-5 backdrop-blur"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -208,7 +208,7 @@ function MarketCard({
           <span className="text-zinc-500">Utilization</span>
           <span className={`tabular-nums ${band.text}`}>{fmtPct(util)}</span>
         </div>
-        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+        <div className="mt-1.5 util-track">
           <div
             className={`h-full rounded-full transition-all ${band.bar}`}
             style={{ width: `${util !== null ? Math.min(100, util) : 0}%` }}
@@ -323,16 +323,11 @@ export default function HomePage() {
       <section className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">
-              Protocol overview
-            </h1>
-            <p className="mt-1 text-sm text-zinc-500">
-              Isolated ARBOR lending markets, read live from the plugin RPC.
-            </p>
+            <h1 className="display-title">Protocol overview</h1>
           </div>
           <Link
             href="/admin"
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-violet-400"
+            className="inline-flex items-center gap-2 rounded-full btn-brand px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-violet-400"
           >
             + Create market
           </Link>
@@ -395,7 +390,7 @@ export default function HomePage() {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight text-white">
+          <h2 className="section-h">
             All markets
           </h2>
           <span className="text-xs tabular-nums text-zinc-600">
@@ -438,7 +433,7 @@ export default function HomePage() {
         {isLoading && <LoadingSkeleton rows={4} />}
 
         {!isLoading && empty && (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-10 text-center backdrop-blur">
+          <div className="rounded-2xl glass p-10 text-center backdrop-blur">
             <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-emerald-400 text-lg font-extrabold text-[#05070d]">
               A
             </div>

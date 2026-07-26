@@ -63,7 +63,7 @@ export function WalletConnect() {
 
   if (isConnected) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur px-4 py-2">
+      <div className="flex items-center gap-3 rounded-xl glass backdrop-blur px-4 py-2">
         <span className="text-xs text-zinc-400">Wallet</span>
         <span className="font-mono text-xs text-zinc-200">
           {formatAddress(address || "")}
@@ -82,14 +82,14 @@ export function WalletConnect() {
   return (
     <form
       onSubmit={handleConnect}
-      className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur p-4"
+      className="space-y-3 rounded-xl glass backdrop-blur p-4"
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <input
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
           placeholder="Wallet address or nickname"
-          className="w-full rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/20"
+          className="w-full rounded-xl glass backdrop-blur px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/20"
         />
 
         <input
@@ -97,7 +97,7 @@ export function WalletConnect() {
           onChange={(e) => setPassword(e.target.value)}
           type="password"
           placeholder="Keystore password (optional)"
-          className="w-full rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/20"
+          className="w-full rounded-xl glass backdrop-blur px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/20"
         />
       </div>
 
@@ -106,7 +106,7 @@ export function WalletConnect() {
       <button
         type="submit"
         disabled={busy}
-        className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+        className="inline-flex w-full items-center justify-center rounded-xl btn-brand px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
       >
         {busy ? "Connecting..." : "Connect via Admin RPC"}
       </button>

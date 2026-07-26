@@ -83,7 +83,7 @@ function StatusChip() {
   }, []);
 
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs backdrop-blur">
+    <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-xs backdrop-blur">
       <span className="relative flex h-2 w-2">
         {status.online && (
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
@@ -129,7 +129,7 @@ function WalletChip() {
 
   if (wallet.isConnected) {
     return (
-      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs backdrop-blur">
+      <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-xs backdrop-blur">
         <span className="grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-indigo-400 to-emerald-400 text-[9px] font-bold text-[#05070d]">
           ◆
         </span>
@@ -145,7 +145,7 @@ function WalletChip() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-violet-400"
+        className="inline-flex items-center gap-2 rounded-full btn-brand px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-violet-400"
       >
         Connect wallet
       </button>
@@ -176,9 +176,7 @@ export function Header() {
       <div className="mx-auto max-w-6xl px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-400 text-sm font-extrabold text-[#05070d] shadow-lg shadow-indigo-500/20">
-              A
-            </div>
+            <img src="/logo-mark.svg" alt="ARBOR" className="h-9 w-auto shrink-0" />
 
             <div className="leading-tight">
               <p className="text-sm font-bold tracking-tight text-white">

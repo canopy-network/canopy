@@ -88,7 +88,7 @@ export function SubmitButton({
     <button
       {...rest}
       disabled={rest.disabled || busy}
-      className={`inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none ${rest.className ?? ""}`}
+      className={`inline-flex w-full items-center justify-center gap-2 rounded-xl btn-brand px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none ${rest.className ?? ""}`}
     >
       {busy && (
         <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">

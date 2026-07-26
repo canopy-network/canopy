@@ -95,7 +95,7 @@ export default function MarketPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur p-5">
+      <div className="rounded-2xl glass backdrop-blur p-5">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold text-zinc-100">
@@ -153,7 +153,7 @@ export default function MarketPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur p-5">
+      <div className="rounded-2xl glass backdrop-blur p-5">
         <h2 className="text-sm font-semibold text-zinc-200">
           Your position
         </h2>

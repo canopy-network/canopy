@@ -146,7 +146,7 @@ export default function OraclePage() {
       {selectedMarket && (
         <>
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+            <div className="rounded-2xl glass p-5 backdrop-blur">
               <h2 className="text-sm font-semibold text-zinc-200">
                 {selectedMarket.collateralAssetId} price
               </h2>
@@ -171,7 +171,7 @@ export default function OraclePage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+            <div className="rounded-2xl glass p-5 backdrop-blur">
               <h2 className="text-sm font-semibold text-zinc-200">
                 {selectedMarket.debtAssetId} price
               </h2>
@@ -196,7 +196,7 @@ export default function OraclePage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+            <div className="rounded-2xl glass p-5 backdrop-blur">
               <h2 className="text-sm font-semibold text-zinc-200">
                 {selectedMarket.collateralAssetId} freshness monitor
               </h2>
@@ -204,7 +204,7 @@ export default function OraclePage() {
                 <PriceFreshnessTable assetId={selectedMarket.collateralAssetId} />
               </div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+            <div className="rounded-2xl glass p-5 backdrop-blur">
               <h2 className="text-sm font-semibold text-zinc-200">
                 {selectedMarket.debtAssetId} freshness monitor
               </h2>
@@ -214,7 +214,7 @@ export default function OraclePage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+          <div className="rounded-2xl glass p-5 backdrop-blur">
             <h2 className="text-sm font-semibold text-zinc-200">
               Circuit breaker
             </h2>

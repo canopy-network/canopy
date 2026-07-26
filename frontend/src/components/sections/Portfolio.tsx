@@ -12,7 +12,7 @@ import { TIER_PARAMS } from "@/lib/arbor/constants";
 
 function Monogram({ symbol }: { symbol: string }) {
   return (
-    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-indigo-500/80 to-emerald-400/80 text-[10px] font-bold text-[#05070d]">
+    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg brand-glyph text-[10px] font-bold text-[#05070d]">
       {symbol.slice(0, 4).toUpperCase()}
     </div>
   );
@@ -185,20 +185,16 @@ function PanelShell({
   count,
   connected,
   hasMarkets,
-  hasAny,
-  emptyCopy,
   children,
 }: {
   title: string;
   count: number;
   connected: boolean;
   hasMarkets: boolean;
-  hasAny: boolean;
-  emptyCopy: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+    <div className="rounded-2xl glass p-5 backdrop-blur">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
         {connected && (
@@ -215,8 +211,6 @@ function PanelShell({
         <p className="mt-4 text-sm text-zinc-500">
           No markets exist yet to hold positions in.
         </p>
-      ) : !hasAny ? (
-        <p className="mt-4 text-sm text-zinc-500">{emptyCopy}</p>
       ) : (
         <div className="no-scrollbar mt-3 overflow-x-auto">{children}</div>
       )}
@@ -257,7 +251,7 @@ export function Portfolio() {
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight text-white">
+        <h2 className="section-h">
           Your portfolio
         </h2>
         {connected && (
@@ -285,8 +279,6 @@ export function Portfolio() {
           count={lendCount}
           connected={connected}
           hasMarkets={hasMarkets}
-          hasAny={lendCount > 0}
-          emptyCopy="No open lending positions. Supply assets in a market to see them here."
         >
           <table className="w-full min-w-[24rem] text-sm">
             <thead>
@@ -305,7 +297,12 @@ export function Portfolio() {
                   onPresent={markLend}
                 />
               ))}
-            </tbody>
+              {lendCount === 0 && (
+                <tr>
+                  <td colSpan={3} className="py-8 text-center text-sm text-zinc-500">No open lending positions. Supply assets in a market to see them here.</td>
+                </tr>
+              )}
+              </tbody>
           </table>
         </PanelShell>
 
@@ -314,8 +311,6 @@ export function Portfolio() {
           count={borrCount}
           connected={connected}
           hasMarkets={hasMarkets}
-          hasAny={borrCount > 0}
-          emptyCopy="No open borrowing positions. Deposit collateral and borrow to see them here."
         >
           <table className="w-full min-w-[30rem] text-sm">
             <thead>
@@ -337,7 +332,12 @@ export function Portfolio() {
                   onHf={markHf}
                 />
               ))}
-            </tbody>
+              {borrCount === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-sm text-zinc-500">No open borrowing positions. Deposit collateral and borrow to see them here.</td>
+                </tr>
+              )}
+              </tbody>
           </table>
         </PanelShell>
       </div>

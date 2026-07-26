@@ -172,7 +172,7 @@ export default function GovernancePage() {
   return (
     <div className="space-y-8">
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-white">
+        <h1 className="display-title">
           Governance parameters
         </h1>
         <p className="max-w-2xl text-sm text-zinc-500">
@@ -185,10 +185,10 @@ export default function GovernancePage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold tracking-tight text-white">
+        <h2 className="section-h">
           Parameters
         </h2>
-        <div className="no-scrollbar overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+        <div className="no-scrollbar overflow-x-auto rounded-2xl glass p-5 backdrop-blur">
           <table className="w-full min-w-[52rem] text-sm">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-500">
@@ -231,10 +231,10 @@ export default function GovernancePage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight text-white">
+          <h2 className="section-h">
             Asset tiers
           </h2>
-          <div className="no-scrollbar overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+          <div className="no-scrollbar overflow-x-auto rounded-2xl glass p-5 backdrop-blur">
             <table className="w-full min-w-[26rem] text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-500">
@@ -274,10 +274,10 @@ export default function GovernancePage() {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight text-white">
+          <h2 className="section-h">
             Liquidation close-factor curve
           </h2>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur">
+          <div className="rounded-2xl glass p-5 backdrop-blur">
             <div className="space-y-2">
               {closeFactorTiers.map((c) => (
                 <div

@@ -110,7 +110,7 @@ export function WithdrawForm({ marketId }: { marketId: string }) {
   return (
     <form
       onSubmit={onSubmit}
-      className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur p-5"
+      className="space-y-4 rounded-2xl glass backdrop-blur p-5"
     >
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-zinc-200">
