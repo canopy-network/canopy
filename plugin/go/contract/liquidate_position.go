@@ -146,7 +146,10 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 	if !biFound {
 		return &PluginDeliverResponse{Error: ErrMarketIndexNotInitialized(msg.MarketId)}
 	}
-	currentDebt := ScaledDebt(pos, bIndexNow)
+	currentDebt, sdErr := ScaledDebt(pos, bIndexNow)
+	if sdErr != nil {
+		return &PluginDeliverResponse{Error: sdErr}
+	}
 	if currentDebt == 0 {
 		return &PluginDeliverResponse{Error: ErrPositionNotLiquidatable(msg.MarketId, "n/a (zero debt)")}
 	}

@@ -280,3 +280,13 @@ func ErrMarketNotPaused(marketID string) *PluginError {
 func ErrSelfLiquidation() *PluginError {
 	return NewError(238, ArborModule, "liquidator and borrower_address must not be the same address -- self-liquidation is not permitted; use repay to close your own position instead")
 }
+
+// ErrScaledDebtOverflow guards ScaledDebt()'s numerator big.Int -> uint64
+// cast (AYIS Section 6, ARCM Section 2.2's mandatory scaled-debt rule).
+// Previously disclosed as an unguarded, deliberate carve-out in
+// scaled_debt.go's own doc comment (no amplification path analogous to
+// MintShares()/RedeemShares()/SumLenderBalancesInMarket(), per AYIS
+// v1.11 Section 10.6) -- closed here per Arbor Handoff Part 2, item 2.
+func ErrScaledDebtOverflow(marketID string, debtPrincipal uint64, scaledDebt string) *PluginError {
+	return NewError(241, ArborModule, fmt.Sprintf("market %q: scaled debt value %s for debtPrincipal %d exceeds uint64 range, AYIS Section 6", marketID, scaledDebt, debtPrincipal))
+}

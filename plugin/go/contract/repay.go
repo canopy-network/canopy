@@ -96,7 +96,10 @@ func (c *Contract) DeliverMessageRepay(msg *MessageRepay, fee uint64) *PluginDel
 		return &PluginDeliverResponse{Error: ErrMarketIndexNotInitialized(msg.MarketId)}
 	}
 
-	currentDebt := ScaledDebt(pos, bIndexNow)
+	currentDebt, sdErr := ScaledDebt(pos, bIndexNow)
+	if sdErr != nil {
+		return &PluginDeliverResponse{Error: sdErr}
+	}
 
 	// [CUSTODY FIX, replaces unbacked refund mint] No FSM-level escrow of
 	// msg.RepayAmount exists (confirmed: DeliverTx is a bare type-switch,

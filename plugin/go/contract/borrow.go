@@ -132,7 +132,10 @@ func (c *Contract) DeliverMessageBorrow(msg *MessageBorrow, fee uint64) *PluginD
 	}
 
 	// Step 2 -- NEVER read pos.DebtPrincipal directly as "current debt."
-	currentDebt := ScaledDebt(pos, bIndexNow)
+	currentDebt, sdErr := ScaledDebt(pos, bIndexNow)
+	if sdErr != nil {
+		return &PluginDeliverResponse{Error: sdErr}
+	}
 
 	if msg.BorrowAmount > (^uint64(0) - currentDebt) {
 		return &PluginDeliverResponse{Error: ErrTotalBorrowedOverflow(msg.MarketId, currentDebt, msg.BorrowAmount)}

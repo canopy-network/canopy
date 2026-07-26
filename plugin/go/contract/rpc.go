@@ -273,8 +273,14 @@ func (p *Plugin) handleQueryBorrowerPosition(w http.ResponseWriter, r *http.Requ
 	}
 	if len(bIndexRaw) > 0 {
 		bIndexNow := DecodeUint128(bIndexRaw)
-		currentDebt := ScaledDebt(position, bIndexNow)
-		responseMap["currentDebt"] = strconv.FormatUint(currentDebt, 10)
+		// [FIXED] ScaledDebt() can now return an error (ErrScaledDebtOverflow).
+		// Read-only query context, no transaction to revert -- same
+		// graceful-degradation spirit as the missing-bIndexRaw case this
+		// block already handles: omit currentDebt rather than fail the
+		// whole request.
+		if currentDebt, sdErr := ScaledDebt(position, bIndexNow); sdErr == nil {
+			responseMap["currentDebt"] = strconv.FormatUint(currentDebt, 10)
+		}
 	}
 
 	finalJSON, err := json.Marshal(responseMap)
@@ -571,84 +577,91 @@ func (p *Plugin) handleQueryPrices(w http.ResponseWriter, r *http.Request) {
 // currentDebt decimal-string field; positions whose market has no B_index fall
 // back to debt_principal so the row is still useful.
 func (p *Plugin) handleQueryAllBorrowerPositions(w http.ResponseWriter, r *http.Request) {
-posQueryId := rand.Uint64()
-resp, pErr := p.QueryState(0, &PluginStateReadRequest{
-Ranges: []*PluginRangeRead{
-{QueryId: posQueryId, Prefix: JoinLenPrefix(PrefixBorrowerPositions)},
-},
-})
-if pErr != nil {
-http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
-return
-}
-if resp.Error != nil {
-http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
-return
-}
+	posQueryId := rand.Uint64()
+	resp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Ranges: []*PluginRangeRead{
+			{QueryId: posQueryId, Prefix: JoinLenPrefix(PrefixBorrowerPositions)},
+		},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
 
-var positions []*BorrowerPosition
-bIndexQid := map[string]uint64{}
-for _, result := range resp.Results {
-if result.QueryId != posQueryId {
-continue
-}
-for _, entry := range result.Entries {
-if len(entry.Value) == 0 {
-continue
-}
-bp := &BorrowerPosition{}
-if err := proto.Unmarshal(entry.Value, bp); err != nil {
-continue
-}
-positions = append(positions, bp)
-if _, seen := bIndexQid[bp.MarketId]; !seen {
-bIndexQid[bp.MarketId] = rand.Uint64()
-}
-}
-}
+	var positions []*BorrowerPosition
+	bIndexQid := map[string]uint64{}
+	for _, result := range resp.Results {
+		if result.QueryId != posQueryId {
+			continue
+		}
+		for _, entry := range result.Entries {
+			if len(entry.Value) == 0 {
+				continue
+			}
+			bp := &BorrowerPosition{}
+			if err := proto.Unmarshal(entry.Value, bp); err != nil {
+				continue
+			}
+			positions = append(positions, bp)
+			if _, seen := bIndexQid[bp.MarketId]; !seen {
+				bIndexQid[bp.MarketId] = rand.Uint64()
+			}
+		}
+	}
 
-// Batch-read each distinct market's B_index so we can scale debt server-side.
-keyReads := make([]*PluginKeyRead, 0, len(bIndexQid))
-for mid, qid := range bIndexQid {
-keyReads = append(keyReads, &PluginKeyRead{QueryId: qid, Key: KeyForBorrowIndex(mid)})
-}
-bIndexRaw := map[string][]byte{}
-if len(keyReads) > 0 {
-if r2, e2 := p.QueryState(0, &PluginStateReadRequest{Keys: keyReads}); e2 == nil && r2.Error == nil {
-qidToMid := map[uint64]string{}
-for mid, qid := range bIndexQid {
-qidToMid[qid] = mid
-}
-for _, result := range r2.Results {
-if mid, ok := qidToMid[result.QueryId]; ok && len(result.Entries) > 0 && len(result.Entries[0].Value) > 0 {
-bIndexRaw[mid] = result.Entries[0].Value
-}
-}
-}
-}
+	// Batch-read each distinct market's B_index so we can scale debt server-side.
+	keyReads := make([]*PluginKeyRead, 0, len(bIndexQid))
+	for mid, qid := range bIndexQid {
+		keyReads = append(keyReads, &PluginKeyRead{QueryId: qid, Key: KeyForBorrowIndex(mid)})
+	}
+	bIndexRaw := map[string][]byte{}
+	if len(keyReads) > 0 {
+		if r2, e2 := p.QueryState(0, &PluginStateReadRequest{Keys: keyReads}); e2 == nil && r2.Error == nil {
+			qidToMid := map[uint64]string{}
+			for mid, qid := range bIndexQid {
+				qidToMid[qid] = mid
+			}
+			for _, result := range r2.Results {
+				if mid, ok := qidToMid[result.QueryId]; ok && len(result.Entries) > 0 && len(result.Entries[0].Value) > 0 {
+					bIndexRaw[mid] = result.Entries[0].Value
+				}
+			}
+		}
+	}
 
-out := make([]json.RawMessage, 0, len(positions))
-for _, bp := range positions {
-pj, err := protojson.Marshal(bp)
-if err != nil {
-continue
-}
-var m map[string]interface{}
-if err := json.Unmarshal(pj, &m); err != nil {
-continue
-}
-if raw, ok := bIndexRaw[bp.MarketId]; ok {
-m["currentDebt"] = strconv.FormatUint(ScaledDebt(bp, DecodeUint128(raw)), 10)
-} else {
-m["currentDebt"] = strconv.FormatUint(bp.DebtPrincipal, 10)
-}
-fb, err := json.Marshal(m)
-if err != nil {
-continue
-}
-out = append(out, fb)
-}
+	out := make([]json.RawMessage, 0, len(positions))
+	for _, bp := range positions {
+		pj, err := protojson.Marshal(bp)
+		if err != nil {
+			continue
+		}
+		var m map[string]interface{}
+		if err := json.Unmarshal(pj, &m); err != nil {
+			continue
+		}
+		// [FIXED] ScaledDebt() can now return an error (ErrScaledDebtOverflow).
+		// Same fallback shape as the existing !ok branch below: fall back to
+		// raw debtPrincipal rather than fail this one entry in the batch.
+		if raw, ok := bIndexRaw[bp.MarketId]; ok {
+			if currentDebt, sdErr := ScaledDebt(bp, DecodeUint128(raw)); sdErr == nil {
+				m["currentDebt"] = strconv.FormatUint(currentDebt, 10)
+			} else {
+				m["currentDebt"] = strconv.FormatUint(bp.DebtPrincipal, 10)
+			}
+		} else {
+			m["currentDebt"] = strconv.FormatUint(bp.DebtPrincipal, 10)
+		}
+		fb, err := json.Marshal(m)
+		if err != nil {
+			continue
+		}
+		out = append(out, fb)
+	}
 
-w.Header().Set("Content-Type", "application/json")
-json.NewEncoder(w).Encode(out)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }

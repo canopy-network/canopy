@@ -11,35 +11,39 @@ import "math/big"
 // last write, not the current scaled amount (ARCM Section 2.2's mandatory
 // rule).
 //
-// No big.Int -> uint64 overflow guard is applied at the final cast here,
-// unlike AYIS's MintShares()/RedeemShares()/SumLenderBalancesInMarket().
-// This deliberately follows AYIS v1.11 Section 10.6's own explicit
-// carve-out: ScaledDebt()'s cast has no 1/loss_factor-style amplification
-// path and is bounded by realistic debt-principal magnitudes, and is
-// explicitly NOT listed as an at-risk boundary requiring the BitLen() guard.
-// If a future review identifies a comparable amplification path on the
-// borrower side, the same guard would need to be added here.
-func ScaledDebt(pos *BorrowerPosition, bIndexNow *big.Int) uint64 {
-if pos.DebtPrincipal == 0 {
-return 0
-}
-borrowIndexAtOpen := DecodeUint128(pos.BorrowIndexAtOpen)
+// [FIXED] Guarded -- see ErrScaledDebtOverflow. The v1.11-era disclosed
+// carve-out reasoning (no amplification path analogous to
+// MintShares()/RedeemShares()/SumLenderBalancesInMarket()) was a design
+// assumption, not a proven bound; closed per Arbor Handoff Part 2, item 2,
+// matching the identical BitLen() > 64 guard pattern already used in
+// deposit.go, withdraw.go, and liquidate_position.go.
+func ScaledDebt(pos *BorrowerPosition, bIndexNow *big.Int) (uint64, *PluginError) {
+	if pos.DebtPrincipal == 0 {
+		return 0, nil
+	}
+	borrowIndexAtOpen := DecodeUint128(pos.BorrowIndexAtOpen)
 
-// Defensive-only guard: a zero borrow_index_at_open should never occur
-// in practice -- borrow.go always writes this field from a live,
-// just-read B_index at the moment a position is opened or consolidated.
-// This only protects ScaledDebt() itself from a division-by-zero if a
-// position record were ever corrupted or malformed; it is not an
-// expected code path.
-if borrowIndexAtOpen.Sign() == 0 {
-borrowIndexAtOpen = big.NewInt(1)
-}
+	// Defensive-only guard: a zero borrow_index_at_open should never occur
+	// in practice -- borrow.go always writes this field from a live,
+	// just-read B_index at the moment a position is opened or consolidated.
+	// This only protects ScaledDebt() itself from a division-by-zero if a
+	// position record were ever corrupted or malformed; it is not an
+	// expected code path.
+	if borrowIndexAtOpen.Sign() == 0 {
+		borrowIndexAtOpen = big.NewInt(1)
+	}
 
-numerator := new(big.Int).Mul(new(big.Int).SetUint64(pos.DebtPrincipal), bIndexNow)
-// Ceiling division: (numerator + divisor - 1) / divisor
-numerator.Add(numerator, borrowIndexAtOpen)
-numerator.Sub(numerator, big.NewInt(1))
-numerator.Div(numerator, borrowIndexAtOpen)
+	numerator := new(big.Int).Mul(new(big.Int).SetUint64(pos.DebtPrincipal), bIndexNow)
+	// Ceiling division: (numerator + divisor - 1) / divisor
+	numerator.Add(numerator, borrowIndexAtOpen)
+	numerator.Sub(numerator, big.NewInt(1))
+	numerator.Div(numerator, borrowIndexAtOpen)
 
-return numerator.Uint64()
+	// [NEW] Cast-safety guard -- same pattern as deposit.go's sharesBig
+	// guard, withdraw.go's tokensBig guard, and liquidate_position.go's
+	// collateralSeized/badDebtNative guards.
+	if numerator.BitLen() > 64 {
+		return 0, ErrScaledDebtOverflow(pos.MarketId, pos.DebtPrincipal, numerator.String())
+	}
+	return numerator.Uint64(), nil
 }

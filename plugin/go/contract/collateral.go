@@ -288,7 +288,10 @@ func (c *Contract) DeliverMessageWithdrawCollateral(msg *MessageWithdrawCollater
 		return &PluginDeliverResponse{Error: ErrMarketIndexNotInitialized(msg.MarketId)}
 	}
 
-	currentDebt := ScaledDebt(pos, bIndexNow)
+	currentDebt, sdErr := ScaledDebt(pos, bIndexNow)
+	if sdErr != nil {
+		return &PluginDeliverResponse{Error: sdErr}
+	}
 	newCollateralQty := pos.CollateralQuantity - msg.Quantity
 
 	// Only enforce the health-factor check when there is actual debt open
