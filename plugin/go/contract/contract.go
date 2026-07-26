@@ -256,10 +256,52 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
-	// handle the message
+	// [FIX, session finding] This switch previously had only the
+	// MessageSend case -- every Arbor-specific message type fell to
+	// default and was rejected with ErrInvalidMessageCast(). Root cause:
+	// commit ae03baff ("Merge branch 'main' into main") merged in
+	// upstream Canopy's generic send-only plugin template over this
+	// file, silently discarding the Arbor-specific routing (and
+	// ContractConfig's SupportedTransactions/TransactionTypeUrls
+	// registration, restored below) with no merge conflict. CheckTx's
+	// own switch (above) was unaffected and continued routing all 14
+	// types correctly, which is why transactions were admitted to the
+	// mempool -- but DeliverTx rejected every one of them at the point
+	// business logic would actually run. Restored to mirror CheckTx's
+	// case list and order exactly, using the DeliverMessage* handlers
+	// that already exist and are already used by every custody-atomicity
+	// fix this session made.
 	switch x := msg.(type) {
 	case *MessageSend:
 		return c.DeliverMessageSend(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageCreateMarket:
+		return c.DeliverMessageCreateMarket(x, request.Tx.Fee)
+	case *MessageDeposit:
+		return c.DeliverMessageDeposit(x, request.Tx.Fee)
+	case *MessageWithdraw:
+		return c.DeliverMessageWithdraw(x, request.Tx.Fee)
+	case *MessageUpdatePrice:
+		return c.DeliverMessageUpdatePrice(x, request.Tx.Fee)
+	case *MessageDepositCollateral:
+		return c.DeliverMessageDepositCollateral(x, request.Tx.Fee)
+	case *MessageSetAssetTier:
+		return c.DeliverMessageSetAssetTier(x, request.Tx.Fee)
+	case *MessageBorrow:
+		return c.DeliverMessageBorrow(x, request.Tx.Fee)
+	case *MessageRepay:
+		return c.DeliverMessageRepay(x, request.Tx.Fee)
+	case *MessageWithdrawCollateral:
+		return c.DeliverMessageWithdrawCollateral(x, request.Tx.Fee)
+	case *MessageLiquidatePosition:
+		return c.DeliverMessageLiquidatePosition(x, request.Tx.Fee)
+	case *MessagePauseMarket:
+		return c.DeliverMessagePauseMarket(x, request.Tx.Fee)
+	case *MessageResumeMarket:
+		return c.DeliverMessageResumeMarket(x, request.Tx.Fee)
+	case *MessageDeprecateMarket:
+		return c.DeliverMessageDeprecateMarket(x, request.Tx.Fee)
+	case *MessageUpdateMarketParams:
+		return c.DeliverMessageUpdateMarketParams(x, request.Tx.Fee)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}
