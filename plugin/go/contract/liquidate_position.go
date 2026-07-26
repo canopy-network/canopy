@@ -224,11 +224,17 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 		badDebtNativeNum.Sub(badDebtNativeNum, big.NewInt(1))
 		badDebtNative := new(big.Int).Div(badDebtNativeNum, badDebtNativeDen)
 
-		// [DISCLOSED] No BitLen/IsUint64 guard on badDebtNative before the
-		// .Uint64() call below -- matches this function's pre-existing risk
-		// posture (the prior badDebtValue.Uint64() call this replaces had no
-		// such guard either). Not a new gap introduced by this change.
-		covered, l2Err := Layer2DrawDown(c, msg.MarketId, badDebtNative.Uint64())
+		// [FIX, session finding] Was previously disclosed as unguarded
+		// rather than fixed. An extreme oracle-submitted debtPrice/
+		// collateralPrice ratio can push badDebtNative past 64 bits; a
+		// silent wraparound here would understate the true bad-debt figure
+		// passed to both Layer2DrawDown (R_fund debit) and ApplyLossFactor
+		// (lender haircut) below, corrupting both by the same wrong amount.
+		if badDebtNative.BitLen() > 64 {
+			return &PluginDeliverResponse{Error: ErrBadDebtNativeOverflow(msg.MarketId, badDebtCollateral.String(), badDebtNative.String())}
+		}
+		badDebtNativeU64 := badDebtNative.Uint64()
+		covered, l2Err := Layer2DrawDown(c, msg.MarketId, badDebtNativeU64)
 		if l2Err != nil {
 			return &PluginDeliverResponse{Error: l2Err}
 		}
@@ -259,7 +265,10 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 			// overwrote with its stale copy -- losing the Status write while
 			// loss_factor correctly persisted to 0. See market_insolvency.go and
 			// apply_loss_factor.go for the full fix.
-			layer4Event, alErr := ApplyLossFactor(c, market, msg.MarketId, badDebtNative.Uint64())
+			// [FIX, session finding] Reuses badDebtNativeU64, guarded above at
+			// its first use -- was previously a second, separate unguarded
+			// .Uint64() call on the same big.Int.
+			layer4Event, alErr := ApplyLossFactor(c, market, msg.MarketId, badDebtNativeU64)
 			if alErr != nil {
 				return &PluginDeliverResponse{Error: alErr}
 			}
@@ -273,6 +282,18 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 		// available collateral; the reserve fund makes the protocol whole
 		// for the rest.
 		collateralSeized = new(big.Int).SetUint64(pos.CollateralQuantity)
+	}
+	// [FIX, session finding] Previously an unguarded cast. On the
+	// bad-debt path above, collateralSeized was just reassigned to
+	// pos.CollateralQuantity (already uint64-derived, safe by
+	// construction); this guard is a no-op there. On the non-bad-debt
+	// path, collateralSeized is a fresh big.Int computed from oracle
+	// prices (Step 4) with no prior bound -- an extreme
+	// debtPrice/collateralPrice ratio could push it past 64 bits,
+	// silently wrapping the amount credited to the liquidator and
+	// debited from the collateral pool below.
+	if collateralSeized.BitLen() > 64 {
+		return &PluginDeliverResponse{Error: ErrCollateralSeizedOverflow(msg.MarketId, msg.RepayAmount, collateralSeized.String())}
 	}
 	collateralSeizedU64 := collateralSeized.Uint64()
 

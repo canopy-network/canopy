@@ -132,6 +132,24 @@ func ErrTokenOverflow(marketID string, shares uint64, tokens string) *PluginErro
 	return NewError(207, ArborModule, fmt.Sprintf("market %q: token value %s for shares %d exceeds uint64 range, AYIS Section 4.4 J2", marketID, tokens, shares))
 }
 
+// ErrCollateralSeizedOverflow guards liquidate_position.go's
+// collateralSeized big.Int -> uint64 cast (ARCM Section 8). Reachable if
+// an oracle-submitted debtPrice/collateralPrice ratio is extreme enough
+// to push ceil(RepayAmount * debtPrice * LIFBps / (collateralPrice *
+// 10000)) past 64 bits -- session finding, previously unguarded.
+func ErrCollateralSeizedOverflow(marketID string, repayAmount uint64, collateralSeized string) *PluginError {
+	return NewError(239, ArborModule, fmt.Sprintf("market %q: collateralSeized value %s for repayAmount %d exceeds uint64 range, ARCM Section 8", marketID, collateralSeized, repayAmount))
+}
+
+// ErrBadDebtNativeOverflow guards liquidate_position.go's badDebtNative
+// big.Int -> uint64 cast (ARCM Section 9.2, Layer 2 bad-debt path).
+// Reachable under the same extreme oracle-price-ratio condition as
+// ErrCollateralSeizedOverflow above -- session finding, previously
+// disclosed as unguarded rather than fixed.
+func ErrBadDebtNativeOverflow(marketID string, badDebtCollateral string, badDebtNative string) *PluginError {
+	return NewError(240, ArborModule, fmt.Sprintf("market %q: badDebtNative value %s for badDebtCollateral %s exceeds uint64 range, ARCM Section 9.2", marketID, badDebtNative, badDebtCollateral))
+}
+
 func ErrTotalSuppliedOverflow(marketID string, current uint64, amount uint64) *PluginError {
 	return NewError(208, ArborModule, fmt.Sprintf("market %q: adding amount %d to total_supplied %d would overflow uint64, ARCM Section 19.2.1b M2", marketID, amount, current))
 }
