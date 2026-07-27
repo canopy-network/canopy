@@ -159,7 +159,7 @@ function WalletChip() {
             className="fixed inset-0 z-40 cursor-default"
           />
 
-          <div className="absolute right-0 top-full z-50 mt-2 w-[min(92vw,22rem)] rounded-2xl border border-white/10 bg-[#0b0f1a]/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <div className="absolute right-0 top-full z-50 mt-2 w-[min(92vw,22rem)] rounded-2xl border border-white/10 arbor-popover p-4 shadow-2xl shadow-black/50 backdrop-blur-xl">
             <WalletConnect />
           </div>
         </>
@@ -174,7 +174,7 @@ export function Header() {
   useEffect(() => { setMenuOpen(false); }, [pathname]);
 
   return (
-    <header className="sticky top-0 z-40 relative border-b border-white/5 bg-[#070a12]/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 relative border-b border-white/5 arbor-surface">
       <div className="mx-auto max-w-6xl px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -223,7 +223,7 @@ export function Header() {
     {menuOpen && (
         <>
           <button type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)} className="fixed inset-0 z-30 cursor-default md:hidden" />
-          <div className="absolute left-0 right-0 top-full z-40 border-b border-white/10 bg-[#070a12]/95 px-4 py-3 backdrop-blur-xl md:hidden">
+          <div className="absolute left-0 right-0 top-full z-40 border-b border-white/10 arbor-surface-solid px-4 py-3 backdrop-blur-xl md:hidden">
             <nav className="grid gap-1">
               {NAV.map((item) => {
                 const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);

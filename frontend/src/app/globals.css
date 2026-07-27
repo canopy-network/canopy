@@ -177,3 +177,7 @@ body{ font-family: var(--font-body, "Manrope", system-ui, -apple-system, "Segoe 
 .reveal-armed .reveal[data-rd="1"]{ transition-delay:.08s; }
 .reveal-armed .reveal[data-rd="2"]{ transition-delay:.16s; }
 @media (prefers-reduced-motion: reduce){ .reveal-armed .reveal{ opacity:1 !important; transform:none !important; transition:none !important; } }
+/* arbor-surfaces-v1 — CDN-proof dark surfaces (Play CDN drops opacity on arbitrary hex) */
+.arbor-surface{background:rgba(7,10,18,.82);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);}
+.arbor-surface-solid{background:#070a12;}
+.arbor-popover{background:rgba(11,15,26,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
