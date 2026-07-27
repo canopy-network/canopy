@@ -183,3 +183,5 @@ body{ font-family: var(--font-body, "Manrope", system-ui, -apple-system, "Segoe 
 .arbor-popover{background:rgba(11,15,26,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
 /* arbor-scrim-v1 — dims the page behind the open mobile drawer (hand CSS, CDN-proof) */
 .arbor-scrim{background:rgba(2,4,8,.62);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);}
+/* arbor-mark-v1 — ambient brand glow behind the transparent header tree */
+.arbor-mark{filter:drop-shadow(0 1px 0 rgba(255,255,255,.22)) drop-shadow(0 0 9px rgba(47,214,192,.40)) drop-shadow(0 0 16px rgba(124,108,242,.30));}

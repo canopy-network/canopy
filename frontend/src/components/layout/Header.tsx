@@ -178,7 +178,7 @@ export function Header() {
       <div className="mx-auto max-w-6xl px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <img src="/logo-mark.svg" alt="ARBOR" className="h-9 w-auto shrink-0" />
+            <img src="/logo-tree.svg" alt="ARBOR" className="arbor-mark h-9 w-auto shrink-0" />
 
             <div className="leading-tight">
               <p className="text-sm font-bold tracking-tight text-white">

@@ -12,8 +12,8 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
   title: "ARBOR — Smart Lending Protocol",
   description: "Isolated ARBOR lending markets on Canopy — supply, borrow, and liquidate against live on-chain oracle prices, with real health factors and the protocol bad-debt waterfall.",
-  openGraph: { title: "ARBOR — Smart Lending Protocol", description: "Isolated ARBOR lending markets on Canopy — live oracle prices, real health factors, on-chain risk monitor.", images: ["/logo-mark.svg"] },
-  icons: { icon: "/logo-mark.svg", apple: "/logo-mark.svg" },
+  openGraph: { title: "ARBOR — Smart Lending Protocol", description: "Isolated ARBOR lending markets on Canopy — live oracle prices, real health factors, on-chain risk monitor.", images: ["/logo-seal.svg"] },
+  icons: { icon: "/logo-seal.svg", apple: "/logo-seal.svg" },
 };
 
 export default function RootLayout({
