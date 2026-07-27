@@ -5,14 +5,15 @@ import "fmt"
 // State key prefixes reserved for Arbor within Canopy's {16}-{28} custom range,
 // plus {29}+ for Arbor-internal extensions beyond the ARCM/AYIS-audited layout
 // (currently: {29} asset tier registry -- see KeyForAssetTier below; {40}
-// protocol treasury (T_fund) -- see KeyForTreasury below). {30}-{39} remains
+// Arbor protocol treasury -- see KeyForTreasuryArbor below; {41} NASM/NUSD
+// protocol treasury -- see KeyForTreasuryNASM below). {30}-{39} remains
 // reserved for future NASM/NUSD coordination, deferred until core lending is
 // complete. {40} was chosen with deliberate headroom above that reservation,
 // not immediately adjacent to it, so NASM can claim additional prefixes in
 // {30}-{39} without colliding with Treasury as a next-available neighbor.
 // This {30}-{39} reservation was explicitly confirmed (not merely inherited
 // from an earlier, unverified comment) during Treasury's addition at {40} --
-// see PrefixTreasury below. A future session should treat {30}-{39} as a
+// see PrefixTreasuryArbor/PrefixTreasuryNASM below. A future session should treat {30}-{39} as a
 // real, intentional boundary that was checked against ARCM/AYIS and found to
 // predate implementation, not as a stale placeholder open for renegotiation.
 // Canopy-reserved {1}-{15} are untouched. See ARCM v3.11.1 Section 19.1 / AYIS
@@ -55,12 +56,35 @@ var (
 	// interest_rate.go's governance-parameter-store gap.
 	PrefixAssetTier = []byte{29}
 
-	// PrefixTreasury: protocol treasury (T_fund), a single global uint128
-	// balance -- NOT market-keyed, unlike every other accessor in this
-	// codebase. Placed at {40}, well clear of the {30}-{39} NASM/NUSD
-	// reservation (see header comment), rather than at the next free
-	// integer immediately adjacent to that wall.
-	PrefixTreasury = []byte{40}
+	// [REVERSED] PrefixTreasury was originally a SINGLE fund shared across
+	// Arbor lending AND NASM/NUSD (see git history for the superseded
+	// comment). That decision was reopened and reversed the same session
+	// it was made: a shared pool means a NUSD-side bad-debt event can
+	// silently drain the Layer 3 protection Arbor lenders were counting
+	// on, and vice versa -- a hidden coupling between two products users
+	// would reasonably expect to be risk-independent. Reversed to TWO
+	// separate, isolated treasuries, one per protocol, deliberately
+	// distinct functions rather than one parameterized accessor -- a
+	// caller cannot accidentally read/write the wrong pool at the type
+	// level, matching the safety-over-brevity priority this reversal
+	// itself was made under.
+	//
+	// PrefixTreasuryArbor: Arbor lending's own protocol treasury (T_fund),
+	// a global (not market-keyed) uint128 balance -- ARCM Section 9.2
+	// Layer 3. Kept at {40} (its original key) to minimize churn, since
+	// it was already live and referenced elsewhere before this reversal.
+	PrefixTreasuryArbor = []byte{40}
+
+	// PrefixTreasuryNASM: NASM/NUSD's own protocol treasury, isolated from
+	// PrefixTreasuryArbor above -- a global uint128 balance, same shape,
+	// separate key. NASM's own waterfall (not yet built) will read/write
+	// this key, never PrefixTreasuryArbor. Placed at {41}, immediately
+	// adjacent to {40} -- both are Arbor-repo-owned keys (this codebase
+	// implements NASM's plugin too), so adjacency here carries none of
+	// the collision risk the {30}-{39} NASM-coordination wall exists to
+	// prevent; that wall is about a DIFFERENT, external NASM concern
+	// (coordination with NUSD's own future key range), not this key.
+	PrefixTreasuryNASM = []byte{41}
 )
 
 // MaxMarketIDLen bounds market_id length. JoinLenPrefix encodes each segment's
@@ -148,14 +172,23 @@ func KeyForBackstopQueue() []byte {
 	return JoinLenPrefix(PrefixBackstopQueue)
 }
 
-// KeyForTreasury is NOT keyed by marketID, unlike every other key builder
-// in this file -- the protocol treasury is a single global balance, not a
-// per-market one (see PrefixTreasury's comment above for why {40} was
-// chosen). This mirrors KeyForGovernanceParams/KeyForBackstopQueue's
-// existing no-argument shape; it is a deliberate precedent break from the
-// marketID-keyed norm, not an oversight.
-func KeyForTreasury() []byte {
-	return JoinLenPrefix(PrefixTreasury)
+// [REVERSED] KeyForTreasury (single shared key) is replaced by two
+// distinct functions below, matching PrefixTreasuryArbor/PrefixTreasuryNASM's
+// own split -- see that comment for the full reversal reasoning.
+//
+// KeyForTreasuryArbor is NOT keyed by marketID, unlike every other key
+// builder in this file -- Arbor's protocol treasury is a single global
+// balance, not a per-market one. Mirrors KeyForGovernanceParams/
+// KeyForBackstopQueue's existing no-argument shape.
+func KeyForTreasuryArbor() []byte {
+	return JoinLenPrefix(PrefixTreasuryArbor)
+}
+
+// KeyForTreasuryNASM is the NASM/NUSD-owned analog of
+// KeyForTreasuryArbor above -- same no-argument, global-balance shape,
+// separate underlying key ({41}), fully isolated from Arbor's own {40}.
+func KeyForTreasuryNASM() []byte {
+	return JoinLenPrefix(PrefixTreasuryNASM)
 }
 
 func KeyForLenderPosition(marketID string, addr []byte) []byte {

@@ -64,6 +64,48 @@ message EventTotalBorrowedDustClamp {
 }
 
 // ─────────────────────────────────────────────
+// Layer 2 (reserve fund draw-down) events (ARCM §9.2 Layer 2)
+// ─────────────────────────────────────────────
+
+// EventReserveFundDrawDown fires when Layer2DrawDown fully covers a
+// bad-debt shortfall from a market's own R_fund (covered=true only --
+// binary gate, bad_debt_layer2.go; no event fires on covered=false,
+// consistent with Layer3DrawDown's identical binary-gate contract).
+// [RETROACTIVE FIX] Layer2DrawDown has existed and been live since before
+// this event was added -- this closes a real observability gap: R_fund
+// draw-downs were previously silent on-chain, unlike every other state
+// mutation in this file's Layer 4/dust-clamp/migration sections, all of
+// which already emit a named event. This is purely additive; it does not
+// change Layer2DrawDown's contract, return values, or binary-gate logic.
+message EventReserveFundDrawDown {
+  string market_id = 1;
+  uint64 bad_debt = 2;              // amount drawn -- == the full shortfall, since binary gate
+  string remaining_reserve_fund = 3; // decimal string, uint128-scale -- R_fund balance after this draw
+}
+
+// ─────────────────────────────────────────────
+// Layer 3 (protocol treasury draw-down) events (ARCM §9.2 Layer 3)
+// ─────────────────────────────────────────────
+
+// EventTreasuryDrawDown fires when Layer3DrawDownArbor or Layer3DrawDownNASM
+// fully covers a bad-debt shortfall from its respective T_fund pool
+// (covered=true only -- binary gate, bad_debt_layer3.go; no event fires on
+// covered=false, matching Layer2DrawDown's own silent-on-miss precedent).
+//
+// [REVERSED] T_fund was originally a single pool shared by Arbor and
+// NASM/NUSD; this event originally had no pool field since there was only
+// one pool. Reversed to two isolated pools (see PrefixTreasuryArbor/
+// PrefixTreasuryNASM in state_keys.go) -- the pool field below was added
+// so an off-chain observer can tell which pool fired, since bad_debt and
+// remaining_treasury alone are now ambiguous between the two.
+message EventTreasuryDrawDown {
+  string market_id = 1;            // the market whose liquidation triggered this draw
+  uint64 bad_debt = 2;              // amount drawn -- == the full shortfall, since binary gate
+  string remaining_treasury = 3;    // decimal string, uint128-scale -- T_fund balance after this draw
+  string pool = 4;                  // "arbor" | "nasm" -- which isolated T_fund pool this draw came from
+}
+
+// ─────────────────────────────────────────────
 // Layer 4 (bad-debt socialization) events (ARCM §9.2b, §9.2, AYIS §5.4.3)
 // ─────────────────────────────────────────────
 

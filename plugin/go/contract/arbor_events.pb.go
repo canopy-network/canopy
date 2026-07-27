@@ -346,6 +346,155 @@ func (x *EventTotalBorrowedDustClamp) GetPreClampValue() uint64 {
 	return 0
 }
 
+// EventReserveFundDrawDown fires when Layer2DrawDown fully covers a
+// bad-debt shortfall from a market's own R_fund (covered=true only --
+// binary gate, bad_debt_layer2.go; no event fires on covered=false,
+// consistent with Layer3DrawDown's identical binary-gate contract).
+// [RETROACTIVE FIX] Layer2DrawDown has existed and been live since before
+// this event was added -- this closes a real observability gap: R_fund
+// draw-downs were previously silent on-chain, unlike every other state
+// mutation in this file's Layer 4/dust-clamp/migration sections, all of
+// which already emit a named event. This is purely additive; it does not
+// change Layer2DrawDown's contract, return values, or binary-gate logic.
+type EventReserveFundDrawDown struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	MarketId             string                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	BadDebt              uint64                 `protobuf:"varint,2,opt,name=bad_debt,json=badDebt,proto3" json:"bad_debt,omitempty"`                                         // amount drawn -- == the full shortfall, since binary gate
+	RemainingReserveFund string                 `protobuf:"bytes,3,opt,name=remaining_reserve_fund,json=remainingReserveFund,proto3" json:"remaining_reserve_fund,omitempty"` // decimal string, uint128-scale -- R_fund balance after this draw
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *EventReserveFundDrawDown) Reset() {
+	*x = EventReserveFundDrawDown{}
+	mi := &file_arbor_events_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventReserveFundDrawDown) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventReserveFundDrawDown) ProtoMessage() {}
+
+func (x *EventReserveFundDrawDown) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_events_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventReserveFundDrawDown.ProtoReflect.Descriptor instead.
+func (*EventReserveFundDrawDown) Descriptor() ([]byte, []int) {
+	return file_arbor_events_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *EventReserveFundDrawDown) GetMarketId() string {
+	if x != nil {
+		return x.MarketId
+	}
+	return ""
+}
+
+func (x *EventReserveFundDrawDown) GetBadDebt() uint64 {
+	if x != nil {
+		return x.BadDebt
+	}
+	return 0
+}
+
+func (x *EventReserveFundDrawDown) GetRemainingReserveFund() string {
+	if x != nil {
+		return x.RemainingReserveFund
+	}
+	return ""
+}
+
+// EventTreasuryDrawDown fires when Layer3DrawDownArbor or Layer3DrawDownNASM
+// fully covers a bad-debt shortfall from its respective T_fund pool
+// (covered=true only -- binary gate, bad_debt_layer3.go; no event fires on
+// covered=false, matching Layer2DrawDown's own silent-on-miss precedent).
+//
+// [REVERSED] T_fund was originally a single pool shared by Arbor and
+// NASM/NUSD; this event originally had no pool field since there was only
+// one pool. Reversed to two isolated pools (see PrefixTreasuryArbor/
+// PrefixTreasuryNASM in state_keys.go) -- the pool field below was added
+// so an off-chain observer can tell which pool fired, since bad_debt and
+// remaining_treasury alone are now ambiguous between the two.
+type EventTreasuryDrawDown struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	MarketId          string                 `protobuf:"bytes,1,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`                            // the market whose liquidation triggered this draw
+	BadDebt           uint64                 `protobuf:"varint,2,opt,name=bad_debt,json=badDebt,proto3" json:"bad_debt,omitempty"`                              // amount drawn -- == the full shortfall, since binary gate
+	RemainingTreasury string                 `protobuf:"bytes,3,opt,name=remaining_treasury,json=remainingTreasury,proto3" json:"remaining_treasury,omitempty"` // decimal string, uint128-scale -- T_fund balance after this draw
+	Pool              string                 `protobuf:"bytes,4,opt,name=pool,proto3" json:"pool,omitempty"`                                                    // "arbor" | "nasm" -- which isolated T_fund pool this draw came from
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *EventTreasuryDrawDown) Reset() {
+	*x = EventTreasuryDrawDown{}
+	mi := &file_arbor_events_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventTreasuryDrawDown) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventTreasuryDrawDown) ProtoMessage() {}
+
+func (x *EventTreasuryDrawDown) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_events_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventTreasuryDrawDown.ProtoReflect.Descriptor instead.
+func (*EventTreasuryDrawDown) Descriptor() ([]byte, []int) {
+	return file_arbor_events_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *EventTreasuryDrawDown) GetMarketId() string {
+	if x != nil {
+		return x.MarketId
+	}
+	return ""
+}
+
+func (x *EventTreasuryDrawDown) GetBadDebt() uint64 {
+	if x != nil {
+		return x.BadDebt
+	}
+	return 0
+}
+
+func (x *EventTreasuryDrawDown) GetRemainingTreasury() string {
+	if x != nil {
+		return x.RemainingTreasury
+	}
+	return ""
+}
+
+func (x *EventTreasuryDrawDown) GetPool() string {
+	if x != nil {
+		return x.Pool
+	}
+	return ""
+}
+
 // EventLayer4PendingCountWarning fires when the soft backlog threshold is crossed
 type EventLayer4PendingCountWarning struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
@@ -358,7 +507,7 @@ type EventLayer4PendingCountWarning struct {
 
 func (x *EventLayer4PendingCountWarning) Reset() {
 	*x = EventLayer4PendingCountWarning{}
-	mi := &file_arbor_events_proto_msgTypes[5]
+	mi := &file_arbor_events_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -370,7 +519,7 @@ func (x *EventLayer4PendingCountWarning) String() string {
 func (*EventLayer4PendingCountWarning) ProtoMessage() {}
 
 func (x *EventLayer4PendingCountWarning) ProtoReflect() protoreflect.Message {
-	mi := &file_arbor_events_proto_msgTypes[5]
+	mi := &file_arbor_events_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -383,7 +532,7 @@ func (x *EventLayer4PendingCountWarning) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventLayer4PendingCountWarning.ProtoReflect.Descriptor instead.
 func (*EventLayer4PendingCountWarning) Descriptor() ([]byte, []int) {
-	return file_arbor_events_proto_rawDescGZIP(), []int{5}
+	return file_arbor_events_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *EventLayer4PendingCountWarning) GetMarketId() string {
@@ -419,7 +568,7 @@ type EventLayer4PendingBadDebtTotalSaturated struct {
 
 func (x *EventLayer4PendingBadDebtTotalSaturated) Reset() {
 	*x = EventLayer4PendingBadDebtTotalSaturated{}
-	mi := &file_arbor_events_proto_msgTypes[6]
+	mi := &file_arbor_events_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -431,7 +580,7 @@ func (x *EventLayer4PendingBadDebtTotalSaturated) String() string {
 func (*EventLayer4PendingBadDebtTotalSaturated) ProtoMessage() {}
 
 func (x *EventLayer4PendingBadDebtTotalSaturated) ProtoReflect() protoreflect.Message {
-	mi := &file_arbor_events_proto_msgTypes[6]
+	mi := &file_arbor_events_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -444,7 +593,7 @@ func (x *EventLayer4PendingBadDebtTotalSaturated) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use EventLayer4PendingBadDebtTotalSaturated.ProtoReflect.Descriptor instead.
 func (*EventLayer4PendingBadDebtTotalSaturated) Descriptor() ([]byte, []int) {
-	return file_arbor_events_proto_rawDescGZIP(), []int{6}
+	return file_arbor_events_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *EventLayer4PendingBadDebtTotalSaturated) GetMarketId() string {
@@ -472,7 +621,7 @@ type EventLayer4PendingCountUnderflow struct {
 
 func (x *EventLayer4PendingCountUnderflow) Reset() {
 	*x = EventLayer4PendingCountUnderflow{}
-	mi := &file_arbor_events_proto_msgTypes[7]
+	mi := &file_arbor_events_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -484,7 +633,7 @@ func (x *EventLayer4PendingCountUnderflow) String() string {
 func (*EventLayer4PendingCountUnderflow) ProtoMessage() {}
 
 func (x *EventLayer4PendingCountUnderflow) ProtoReflect() protoreflect.Message {
-	mi := &file_arbor_events_proto_msgTypes[7]
+	mi := &file_arbor_events_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -497,7 +646,7 @@ func (x *EventLayer4PendingCountUnderflow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventLayer4PendingCountUnderflow.ProtoReflect.Descriptor instead.
 func (*EventLayer4PendingCountUnderflow) Descriptor() ([]byte, []int) {
-	return file_arbor_events_proto_rawDescGZIP(), []int{7}
+	return file_arbor_events_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *EventLayer4PendingCountUnderflow) GetMarketId() string {
@@ -519,7 +668,7 @@ type EventDepositWithdrawBlockedDuringPendingLoss struct {
 
 func (x *EventDepositWithdrawBlockedDuringPendingLoss) Reset() {
 	*x = EventDepositWithdrawBlockedDuringPendingLoss{}
-	mi := &file_arbor_events_proto_msgTypes[8]
+	mi := &file_arbor_events_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -531,7 +680,7 @@ func (x *EventDepositWithdrawBlockedDuringPendingLoss) String() string {
 func (*EventDepositWithdrawBlockedDuringPendingLoss) ProtoMessage() {}
 
 func (x *EventDepositWithdrawBlockedDuringPendingLoss) ProtoReflect() protoreflect.Message {
-	mi := &file_arbor_events_proto_msgTypes[8]
+	mi := &file_arbor_events_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -544,7 +693,7 @@ func (x *EventDepositWithdrawBlockedDuringPendingLoss) ProtoReflect() protorefle
 
 // Deprecated: Use EventDepositWithdrawBlockedDuringPendingLoss.ProtoReflect.Descriptor instead.
 func (*EventDepositWithdrawBlockedDuringPendingLoss) Descriptor() ([]byte, []int) {
-	return file_arbor_events_proto_rawDescGZIP(), []int{8}
+	return file_arbor_events_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *EventDepositWithdrawBlockedDuringPendingLoss) GetMarketId() string {
@@ -574,7 +723,7 @@ type EventLossFactorExhausted struct {
 
 func (x *EventLossFactorExhausted) Reset() {
 	*x = EventLossFactorExhausted{}
-	mi := &file_arbor_events_proto_msgTypes[9]
+	mi := &file_arbor_events_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -586,7 +735,7 @@ func (x *EventLossFactorExhausted) String() string {
 func (*EventLossFactorExhausted) ProtoMessage() {}
 
 func (x *EventLossFactorExhausted) ProtoReflect() protoreflect.Message {
-	mi := &file_arbor_events_proto_msgTypes[9]
+	mi := &file_arbor_events_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -599,7 +748,7 @@ func (x *EventLossFactorExhausted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventLossFactorExhausted.ProtoReflect.Descriptor instead.
 func (*EventLossFactorExhausted) Descriptor() ([]byte, []int) {
-	return file_arbor_events_proto_rawDescGZIP(), []int{9}
+	return file_arbor_events_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *EventLossFactorExhausted) GetMarketId() string {
@@ -635,7 +784,7 @@ type EventBadDebtSocialization struct {
 
 func (x *EventBadDebtSocialization) Reset() {
 	*x = EventBadDebtSocialization{}
-	mi := &file_arbor_events_proto_msgTypes[10]
+	mi := &file_arbor_events_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -647,7 +796,7 @@ func (x *EventBadDebtSocialization) String() string {
 func (*EventBadDebtSocialization) ProtoMessage() {}
 
 func (x *EventBadDebtSocialization) ProtoReflect() protoreflect.Message {
-	mi := &file_arbor_events_proto_msgTypes[10]
+	mi := &file_arbor_events_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -660,7 +809,7 @@ func (x *EventBadDebtSocialization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventBadDebtSocialization.ProtoReflect.Descriptor instead.
 func (*EventBadDebtSocialization) Descriptor() ([]byte, []int) {
-	return file_arbor_events_proto_rawDescGZIP(), []int{10}
+	return file_arbor_events_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *EventBadDebtSocialization) GetMarketId() string {
@@ -696,7 +845,7 @@ type EventLossFactorAppliedToAlreadyInsolventMarket struct {
 
 func (x *EventLossFactorAppliedToAlreadyInsolventMarket) Reset() {
 	*x = EventLossFactorAppliedToAlreadyInsolventMarket{}
-	mi := &file_arbor_events_proto_msgTypes[11]
+	mi := &file_arbor_events_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -708,7 +857,7 @@ func (x *EventLossFactorAppliedToAlreadyInsolventMarket) String() string {
 func (*EventLossFactorAppliedToAlreadyInsolventMarket) ProtoMessage() {}
 
 func (x *EventLossFactorAppliedToAlreadyInsolventMarket) ProtoReflect() protoreflect.Message {
-	mi := &file_arbor_events_proto_msgTypes[11]
+	mi := &file_arbor_events_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -721,7 +870,7 @@ func (x *EventLossFactorAppliedToAlreadyInsolventMarket) ProtoReflect() protoref
 
 // Deprecated: Use EventLossFactorAppliedToAlreadyInsolventMarket.ProtoReflect.Descriptor instead.
 func (*EventLossFactorAppliedToAlreadyInsolventMarket) Descriptor() ([]byte, []int) {
-	return file_arbor_events_proto_rawDescGZIP(), []int{11}
+	return file_arbor_events_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *EventLossFactorAppliedToAlreadyInsolventMarket) GetMarketId() string {
@@ -749,7 +898,7 @@ type EventReserveFundEncodingMigrationCompleted struct {
 
 func (x *EventReserveFundEncodingMigrationCompleted) Reset() {
 	*x = EventReserveFundEncodingMigrationCompleted{}
-	mi := &file_arbor_events_proto_msgTypes[12]
+	mi := &file_arbor_events_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -761,7 +910,7 @@ func (x *EventReserveFundEncodingMigrationCompleted) String() string {
 func (*EventReserveFundEncodingMigrationCompleted) ProtoMessage() {}
 
 func (x *EventReserveFundEncodingMigrationCompleted) ProtoReflect() protoreflect.Message {
-	mi := &file_arbor_events_proto_msgTypes[12]
+	mi := &file_arbor_events_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -774,7 +923,7 @@ func (x *EventReserveFundEncodingMigrationCompleted) ProtoReflect() protoreflect
 
 // Deprecated: Use EventReserveFundEncodingMigrationCompleted.ProtoReflect.Descriptor instead.
 func (*EventReserveFundEncodingMigrationCompleted) Descriptor() ([]byte, []int) {
-	return file_arbor_events_proto_rawDescGZIP(), []int{12}
+	return file_arbor_events_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *EventReserveFundEncodingMigrationCompleted) GetCompletedAtHeight() uint64 {
@@ -809,7 +958,16 @@ const file_arbor_events_proto_rawDesc = "" +
 	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x12'\n" +
 	"\x0fdecrease_amount\x18\x03 \x01(\x04R\x0edecreaseAmount\x12&\n" +
-	"\x0fpre_clamp_value\x18\x04 \x01(\x04R\rpreClampValue\"\x97\x01\n" +
+	"\x0fpre_clamp_value\x18\x04 \x01(\x04R\rpreClampValue\"\x88\x01\n" +
+	"\x18EventReserveFundDrawDown\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12\x19\n" +
+	"\bbad_debt\x18\x02 \x01(\x04R\abadDebt\x124\n" +
+	"\x16remaining_reserve_fund\x18\x03 \x01(\tR\x14remainingReserveFund\"\x92\x01\n" +
+	"\x15EventTreasuryDrawDown\x12\x1b\n" +
+	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12\x19\n" +
+	"\bbad_debt\x18\x02 \x01(\x04R\abadDebt\x12-\n" +
+	"\x12remaining_treasury\x18\x03 \x01(\tR\x11remainingTreasury\x12\x12\n" +
+	"\x04pool\x18\x04 \x01(\tR\x04pool\"\x97\x01\n" +
 	"\x1eEventLayer4PendingCountWarning\x12\x1b\n" +
 	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12#\n" +
 	"\rpending_count\x18\x02 \x01(\rR\fpendingCount\x123\n" +
@@ -848,21 +1006,23 @@ func file_arbor_events_proto_rawDescGZIP() []byte {
 	return file_arbor_events_proto_rawDescData
 }
 
-var file_arbor_events_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_arbor_events_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_arbor_events_proto_goTypes = []any{
 	(*EventIndexEncodingOverflowHalted)(nil),               // 0: types.EventIndexEncodingOverflowHalted
 	(*EventInsolventMarketValueRecovered)(nil),             // 1: types.EventInsolventMarketValueRecovered
 	(*EventTotalSuppliedDustClamp)(nil),                    // 2: types.EventTotalSuppliedDustClamp
 	(*EventTotalSharesOutstandingDustClamp)(nil),           // 3: types.EventTotalSharesOutstandingDustClamp
 	(*EventTotalBorrowedDustClamp)(nil),                    // 4: types.EventTotalBorrowedDustClamp
-	(*EventLayer4PendingCountWarning)(nil),                 // 5: types.EventLayer4PendingCountWarning
-	(*EventLayer4PendingBadDebtTotalSaturated)(nil),        // 6: types.EventLayer4PendingBadDebtTotalSaturated
-	(*EventLayer4PendingCountUnderflow)(nil),               // 7: types.EventLayer4PendingCountUnderflow
-	(*EventDepositWithdrawBlockedDuringPendingLoss)(nil),   // 8: types.EventDepositWithdrawBlockedDuringPendingLoss
-	(*EventLossFactorExhausted)(nil),                       // 9: types.EventLossFactorExhausted
-	(*EventBadDebtSocialization)(nil),                      // 10: types.EventBadDebtSocialization
-	(*EventLossFactorAppliedToAlreadyInsolventMarket)(nil), // 11: types.EventLossFactorAppliedToAlreadyInsolventMarket
-	(*EventReserveFundEncodingMigrationCompleted)(nil),     // 12: types.EventReserveFundEncodingMigrationCompleted
+	(*EventReserveFundDrawDown)(nil),                       // 5: types.EventReserveFundDrawDown
+	(*EventTreasuryDrawDown)(nil),                          // 6: types.EventTreasuryDrawDown
+	(*EventLayer4PendingCountWarning)(nil),                 // 7: types.EventLayer4PendingCountWarning
+	(*EventLayer4PendingBadDebtTotalSaturated)(nil),        // 8: types.EventLayer4PendingBadDebtTotalSaturated
+	(*EventLayer4PendingCountUnderflow)(nil),               // 9: types.EventLayer4PendingCountUnderflow
+	(*EventDepositWithdrawBlockedDuringPendingLoss)(nil),   // 10: types.EventDepositWithdrawBlockedDuringPendingLoss
+	(*EventLossFactorExhausted)(nil),                       // 11: types.EventLossFactorExhausted
+	(*EventBadDebtSocialization)(nil),                      // 12: types.EventBadDebtSocialization
+	(*EventLossFactorAppliedToAlreadyInsolventMarket)(nil), // 13: types.EventLossFactorAppliedToAlreadyInsolventMarket
+	(*EventReserveFundEncodingMigrationCompleted)(nil),     // 14: types.EventReserveFundEncodingMigrationCompleted
 }
 var file_arbor_events_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -883,7 +1043,7 @@ func file_arbor_events_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_events_proto_rawDesc), len(file_arbor_events_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
