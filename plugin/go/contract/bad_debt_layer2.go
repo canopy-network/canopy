@@ -8,23 +8,38 @@ import "math/big"
 // DESIGN DECISION, all-or-nothing gate (not a partial drain + residual
 // pass-through): ARCM Section 9.2's own Layer 2 row states the mechanism
 // literally as "if bad_debt <= R_fund[market]: R_fund -= bad_debt" -- this
-// is a binary gate, not a partial-cover-then-continue step. Layer 3
-// (protocol treasury) and Layer 4 (lender socialization via loss_factor)
-// are NOT built in this codebase as of this file's creation (confirmed:
-// no treasury key/accessor exists; SumLenderBalancesInMarket,
-// ApplyLossFactor, EnqueueLossFactorApplication, ProcessLossFactorQueue do
-// not exist yet -- see interest_accrual.go's own TODO(C4) comment for the
-// same gap in a different context). A partial drain here would leave
-// R_fund silently weakened against a FUTURE bad-debt event while THIS
-// event's shortfall has nowhere real to go and nothing tracking it -- the
-// exact "looks done but silently isn't" failure mode this codebase's own
-// established discipline (see liquidate_position.go's ErrLiquidationBadDebt
-// disclosure) exists to avoid. Full-cover-or-noop is therefore the correct
-// choice given the current state of this codebase, not merely the
-// literal-spec-reading choice -- when Layer 3/4 are eventually built, this
-// function's contract (covered bool, R_fund only mutated on full cover)
-// can remain unchanged; only the caller's handling of covered == false
-// needs to gain a Layer 3 hand-off instead of a hard reject.
+// is a binary gate, not a partial-cover-then-continue step.
+//
+// [STALE COMMENT CORRECTED] This block previously claimed Layer 4
+// (SumLenderBalancesInMarket, ApplyLossFactor, EnqueueLossFactorApplication,
+// ProcessLossFactorQueue) "do not exist yet" and that "no treasury
+// key/accessor exists." As of this correction, verified directly against
+// the real files:
+//   - Layer 4 (SumLenderBalancesInMarket, ApplyLossFactor,
+//     EnqueueLossFactorApplication, PeekLossFactorQueue,
+//     DequeueLossFactorApplication): EXIST and ARE wired in --
+//     liquidate_position.go calls ApplyLossFactor on a Layer 2 miss.
+//     ProcessLossFactorQueue (BeginBlock drain) is still unbuilt.
+//   - Treasury (T_fund): key/accessors NOW EXIST (PrefixTreasury,
+//     KeyForTreasury, GetTreasury, SetTreasuryTry, SetTreasury in
+//     state_keys.go / state_accessors.go), added after this file's
+//     creation. Layer 3 itself -- an actual draw-down function analogous
+//     to this file's own Layer2DrawDown, and a caller wiring it into the
+//     waterfall between Layer 2 and Layer 4 -- is STILL NOT BUILT. Having
+//     accessors is not the same as having Layer 3; do not assume Layer 3
+//     is wired just because T_fund can now be read and written.
+//
+// A partial drain here would leave R_fund silently weakened against a
+// FUTURE bad-debt event while THIS event's shortfall has nowhere real to
+// go and nothing tracking it -- the exact "looks done but silently isn't"
+// failure mode this codebase's own established discipline (see
+// liquidate_position.go's ErrLiquidationBadDebt disclosure) exists to
+// avoid. Full-cover-or-noop is therefore the correct choice given the
+// current state of this codebase, not merely the literal-spec-reading
+// choice -- when Layer 3 is eventually built, this function's contract
+// (covered bool, R_fund only mutated on full cover) can remain unchanged;
+// only the caller's handling of covered == false needs to gain a Layer 3
+// hand-off instead of falling straight through to Layer 4.
 //
 // UNIT CONTRACT: badDebtNative MUST already be converted to the market's
 // debt-asset native units (same unit R_fund itself is stored in -- see

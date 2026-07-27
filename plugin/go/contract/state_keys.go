@@ -4,9 +4,17 @@ import "fmt"
 
 // State key prefixes reserved for Arbor within Canopy's {16}-{28} custom range,
 // plus {29}+ for Arbor-internal extensions beyond the ARCM/AYIS-audited layout
-// (currently: {29} asset tier registry -- see KeyForAssetTier below). {30}+
-// remains reserved for future NASM/NUSD coordination, deferred until core
-// lending is complete.
+// (currently: {29} asset tier registry -- see KeyForAssetTier below; {40}
+// protocol treasury (T_fund) -- see KeyForTreasury below). {30}-{39} remains
+// reserved for future NASM/NUSD coordination, deferred until core lending is
+// complete. {40} was chosen with deliberate headroom above that reservation,
+// not immediately adjacent to it, so NASM can claim additional prefixes in
+// {30}-{39} without colliding with Treasury as a next-available neighbor.
+// This {30}-{39} reservation was explicitly confirmed (not merely inherited
+// from an earlier, unverified comment) during Treasury's addition at {40} --
+// see PrefixTreasury below. A future session should treat {30}-{39} as a
+// real, intentional boundary that was checked against ARCM/AYIS and found to
+// predate implementation, not as a stale placeholder open for renegotiation.
 // Canopy-reserved {1}-{15} are untouched. See ARCM v3.11.1 Section 19.1 / AYIS
 // v1.11 Section 9 for the canonical, audited layout this file implements.
 
@@ -46,6 +54,13 @@ var (
 	// gated), not yet implemented -- same disclosed-deferral pattern as
 	// interest_rate.go's governance-parameter-store gap.
 	PrefixAssetTier = []byte{29}
+
+	// PrefixTreasury: protocol treasury (T_fund), a single global uint128
+	// balance -- NOT market-keyed, unlike every other accessor in this
+	// codebase. Placed at {40}, well clear of the {30}-{39} NASM/NUSD
+	// reservation (see header comment), rather than at the next free
+	// integer immediately adjacent to that wall.
+	PrefixTreasury = []byte{40}
 )
 
 // MaxMarketIDLen bounds market_id length. JoinLenPrefix encodes each segment's
@@ -131,6 +146,16 @@ func KeyForGovernanceParams() []byte {
 
 func KeyForBackstopQueue() []byte {
 	return JoinLenPrefix(PrefixBackstopQueue)
+}
+
+// KeyForTreasury is NOT keyed by marketID, unlike every other key builder
+// in this file -- the protocol treasury is a single global balance, not a
+// per-market one (see PrefixTreasury's comment above for why {40} was
+// chosen). This mirrors KeyForGovernanceParams/KeyForBackstopQueue's
+// existing no-argument shape; it is a deliberate precedent break from the
+// marketID-keyed norm, not an oversight.
+func KeyForTreasury() []byte {
+	return JoinLenPrefix(PrefixTreasury)
 }
 
 func KeyForLenderPosition(marketID string, addr []byte) []byte {

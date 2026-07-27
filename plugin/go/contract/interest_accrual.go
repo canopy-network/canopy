@@ -10,39 +10,55 @@ import "math/big"
 // Ordering Contract: "AccrueInterest() MUST be the first call in
 // BeginBlock, before... loss-factor-application queue processing").
 //
-// KNOWN GAP, DELIBERATE, NOT AN OVERSIGHT: this implementation does NOT yet
-// include C4's WillExhaustThisBlock lookahead (ARCM v3.11.1 Section 9.3b
-// Rule 3 / AYIS v1.11.1 Section 7 Step 8 revised). C4 requires
-// SumLenderBalancesInMarket() and a read against the {28}
-// loss-factor-application queue, NEITHER OF WHICH EXISTS YET in this
-// codebase as of this file's creation -- Layer 4 / lender-socialization
-// logic (ApplyLossFactor, EnqueueLossFactorApplication,
-// ProcessLossFactorQueue, SumLenderBalancesInMarket) has not been built.
-// Wiring in a stub here that doesn't do the real comparison would be worse
-// than omitting it: it would look tested when it is not. Step 8 below
-// therefore branches ONLY on market.status == Insolvent (the pre-C4,
-// v3.11/v1.11 behavior), NOT market.status == Insolvent ||
-// WillExhaustThisBlock(...). This means the specific one-block
-// misallocation window C4 closes (a market's queued, same-block Layer-4
-// exhaustion having its interest incorrectly split rather than routed to
-// R_fund) is NOT yet closed by this function. TODO(C4): once
-// SumLenderBalancesInMarket and the {28} queue peek exist, add
-// WillExhaustThisBlock and revise Step 8's condition per AYIS v1.11.1.
+// [STALE COMMENT CORRECTED] The block below previously claimed
+// SumLenderBalancesInMarket, ApplyLossFactor, EnqueueLossFactorApplication,
+// and ProcessLossFactorQueue "has not been built" and that
+// "repay/liquidate_position themselves are not implemented." This file
+// (interest_accrual.go) was last substantively edited before those were
+// written. As of this correction, verified directly against the real
+// files, not re-assumed:
+//   - SumLenderBalancesInMarket: EXISTS (lender_balances.go).
+//   - ApplyLossFactor: EXISTS (apply_loss_factor.go) and IS wired in --
+//     liquidate_position.go calls it on a Layer 2 miss.
+//   - EnqueueLossFactorApplication / PeekLossFactorQueue /
+//     DequeueLossFactorApplication: EXIST (loss_factor_queue.go).
+//     PeekLossFactorQueue's own doc comment already names
+//     WillExhaustThisBlock() as an intended future caller.
+//   - repay.go / liquidate_position.go: EXIST, both implemented.
+//   - ProcessLossFactorQueue (the BeginBlock drain caller): CONFIRMED NOT
+//     YET BUILT, per apply_loss_factor.go's own current, accurate comment.
+//     This one claim from the original block above was still true.
 //
-// R_FUND SCOPE, as of the session that added Step 10's real implementation:
-// this function now correctly credits reserve_cut to R_fund ({18}) for the
-// non-Insolvent (Step 8/9/10) path, via SetReserveFundTry -- the
-// BeginBlock-context leg ARCM Section 9.3 calls the "interest" source.
-// This closes a real bug: reserve_cut was previously computed, subtracted
-// from supplierInterest, and then silently discarded every block. What
-// remains OUT of scope, deliberately: the Insolvent branch's own R_fund
-// routing (ARCM Section 9.3, full interest_earned -> R_fund for an already-
-// Insolvent market) is still a TODO in that branch below, and the two
-// DeliverTx-context R_fund legs (repay principal, liquidation proceeds) do
-// not exist at all yet, since repay/liquidate_position themselves are not
-// implemented. Those legs require EncodeUint128's reverting wrapper, NOT
-// SetReserveFundTry -- do not reuse this function for them without
-// re-deriving which encoding response applies (Principle 14).
+// KNOWN GAP, STILL REAL, RE-VERIFIED: this implementation does NOT yet
+// include C4's WillExhaustThisBlock lookahead (ARCM v3.11.1 Section 9.3b
+// Rule 3 / AYIS v1.11.1 Section 7 Step 8 revised). Unlike the original
+// comment's claim, this is NOT blocked on missing dependencies anymore --
+// SumLenderBalancesInMarket and PeekLossFactorQueue (the {28} read) both
+// exist now. WillExhaustThisBlock() itself has simply not been written,
+// and Step 8 below has not been revised to call it. Step 8 currently
+// branches ONLY on market.status == Insolvent (the pre-C4, v3.11/v1.11
+// behavior), NOT market.status == Insolvent || WillExhaustThisBlock(...).
+// This means the specific one-block misallocation window C4 closes (a
+// market's queued, same-block Layer-4 exhaustion having its interest
+// incorrectly split rather than routed to R_fund) is NOT yet closed by
+// this function. TODO(C4): write WillExhaustThisBlock (PeekLossFactorQueue
+// + SumLenderBalancesInMarket, both now available) and revise Step 8's
+// condition per AYIS v1.11.1 -- the dependency gap that previously
+// justified deferring this is gone; only the lookahead function and the
+// Step 8 edit remain.
+//
+// R_FUND SCOPE: this function correctly credits reserve_cut to R_fund
+// ({18}) for the non-Insolvent (Step 8/9/10) path, via SetReserveFundTry --
+// the BeginBlock-context leg ARCM Section 9.3 calls the "interest" source.
+// The Insolvent branch's own R_fund routing (ARCM Section 9.3, full
+// interest_earned -> R_fund for an already-Insolvent market) is
+// implemented below (see the Insolvent branch). The two DeliverTx-context
+// R_fund legs (repay principal, liquidation proceeds) live in repay.go and
+// liquidate_position.go respectively, now that both exist -- NOT in this
+// file. Those legs use EncodeUint128's reverting wrapper, NOT
+// SetReserveFundTry -- do not reuse this function's BeginBlock-context
+// helpers for them without re-deriving which encoding response applies
+// (Principle 14).
 
 const maxDeltaTLinear = 1000 // AYIS Section 13, immutable
 

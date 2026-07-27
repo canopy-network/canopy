@@ -245,20 +245,103 @@ func SetReserveFundTry(c *Contract, marketID string, rFund *big.Int) (ok bool, p
 // value here reverts the whole transaction via EncodeUint128's own
 // PluginError return, per Principle 14's context-dependent response rule.
 func SetReserveFund(c *Contract, marketID string, rFund *big.Int) *PluginError {
-encoded, encErr := EncodeUint128(rFund)
-if encErr != nil {
-return encErr
+	encoded, encErr := EncodeUint128(rFund)
+	if encErr != nil {
+		return encErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForReserveFund(marketID), Value: encoded},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
 }
-writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
-Sets: []*PluginSetOp{
-{Key: KeyForReserveFund(marketID), Value: encoded},
-},
-})
-if err != nil {
-return err
+
+// GetTreasury reads and decodes T_fund ({40}) -- the protocol treasury.
+// Unlike every accessor above, this is NOT market-keyed: T_fund is a single
+// global uint128 balance, matching PrefixTreasury/KeyForTreasury's own
+// documented deviation from the marketID-keyed norm (state_keys.go).
+// found=false with a nil error means the key does not exist -- expected
+// before T_fund's first write (no create_market-equivalent initializes a
+// global value), unlike GetReserveFund's per-market unreachable-in-practice
+// guard style.
+func GetTreasury(c *Contract) (tFund *big.Int, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForTreasury()},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	return DecodeUint128(raw), true, nil
 }
-if writeResp.Error != nil {
-return writeResp.Error
+
+// SetTreasuryTry writes T_fund using TryEncodeUint128 -- the
+// BeginBlock-context-safe path, mirroring SetReserveFundTry's contract
+// exactly (ARCM Section 9.3-style reasoning, applied here to a global
+// rather than per-market accumulator). Returns ok=false (no error) if the
+// value would not fit in 128 bits; the caller MUST respond with a
+// protocol-level freeze signal appropriate to a global accumulator,
+// never by treating ok=false as a PluginError to propagate as a revert --
+// there is no transaction to revert in BeginBlock context (Principle 14).
+func SetTreasuryTry(c *Contract, tFund *big.Int) (ok bool, pErr *PluginError) {
+	encoded, encOk := TryEncodeUint128(tFund)
+	if !encOk {
+		return false, nil
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForTreasury(), Value: encoded},
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+	if writeResp.Error != nil {
+		return false, writeResp.Error
+	}
+	return true, nil
 }
-return nil
+
+// SetTreasury writes T_fund using the reverting EncodeUint128 wrapper --
+// the DeliverTx-context-safe path, mirroring SetReserveFund's contract
+// exactly. A DeliverTx caller has a real transaction to revert, so an
+// out-of-range value here reverts the whole transaction via
+// EncodeUint128's own PluginError return, per Principle 14's
+// context-dependent response rule. No current caller exists yet --
+// treasury-writing transaction types are not yet implemented -- so this
+// function is added now for the same reason SetReserveFund's DeliverTx
+// path was: the write-side contract should exist alongside the read-side
+// one, not be deferred until a caller happens to need it.
+func SetTreasury(c *Contract, tFund *big.Int) *PluginError {
+	encoded, encErr := EncodeUint128(tFund)
+	if encErr != nil {
+		return encErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForTreasury(), Value: encoded},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
 }
