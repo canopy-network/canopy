@@ -222,7 +222,7 @@ export function Header() {
       </div>
     {menuOpen && (
         <>
-          <button type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)} className="fixed inset-0 z-30 cursor-default md:hidden" />
+          <button type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)} className="arbor-scrim fixed inset-0 z-30 cursor-default md:hidden" />
           <div className="absolute left-0 right-0 top-full z-40 border-b border-white/10 arbor-surface-solid px-4 py-3 backdrop-blur-xl md:hidden">
             <nav className="grid gap-1">
               {NAV.map((item) => {

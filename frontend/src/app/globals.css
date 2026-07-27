@@ -181,3 +181,5 @@ body{ font-family: var(--font-body, "Manrope", system-ui, -apple-system, "Segoe 
 .arbor-surface{background:rgba(7,10,18,.82);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);}
 .arbor-surface-solid{background:#070a12;}
 .arbor-popover{background:rgba(11,15,26,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
+/* arbor-scrim-v1 — dims the page behind the open mobile drawer (hand CSS, CDN-proof) */
+.arbor-scrim{background:rgba(2,4,8,.62);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);}
