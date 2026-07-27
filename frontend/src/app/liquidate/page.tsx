@@ -254,6 +254,12 @@ export default function LiquidationPage() {
         </div>
       </section>
 
+            {liquidatableCount === 0 && pricedCount > 0 && (
+        <p className="all-healthy-note rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200/90">
+          All {pricedCount} priced positions are healthy - none are currently below the liquidation threshold (HF &lt;= 1.0).
+        </p>
+      )}
+
       <section className="space-y-4">
         <h2 className="section-h">
           Borrower positions

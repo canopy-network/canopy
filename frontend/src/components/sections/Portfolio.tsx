@@ -247,9 +247,10 @@ export function Portfolio() {
   const borrCount = Object.values(borr).filter(Boolean).length;
 
   const atRisk = Object.entries(hfs).filter(([, v]) => v != null && v < 1.2);
+  const anyHf = Object.values(hfs).some((v) => v != null);
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 reveal" data-rd="1">
       <div className="flex items-center justify-between">
         <h2 className="section-h">
           Your portfolio
@@ -341,6 +342,12 @@ export function Portfolio() {
           </table>
         </PanelShell>
       </div>
+
+            {connected && borrCount > 0 && !anyHf && (
+        <p className="oracle-stale-hint rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200/90">
+          Oracle prices are stale or missing - health factors read "-" until a fresh price is posted on the Oracle page.
+        </p>
+      )}
 
       {!connected && (
         <p className="text-center text-xs text-zinc-600">

@@ -3,10 +3,17 @@ import "./globals.css";
 import { Providers } from "@/components/layout/Providers";
 import { Header } from "@/components/layout/Header";
 import { TxSubmissionTracker } from "@/components/widgets/TxSubmissionTracker";
+import { Space_Grotesk, Manrope } from "next/font/google";
+/* arbor-fonts */
+const arborDisplay = Space_Grotesk({ subsets: ["latin"], variable: "--font-display", display: "swap" });
+const arborBody = Manrope({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "ARBOR | Canopy",
-  description: "ARBOR lending protocol frontend for Canopy",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
+  title: "ARBOR — Smart Lending Protocol",
+  description: "Isolated ARBOR lending markets on Canopy — supply, borrow, and liquidate against live on-chain oracle prices, with real health factors and the protocol bad-debt waterfall.",
+  openGraph: { title: "ARBOR — Smart Lending Protocol", description: "Isolated ARBOR lending markets on Canopy — live oracle prices, real health factors, on-chain risk monitor.", images: ["/logo-mark.svg"] },
+  icons: { icon: "/logo-mark.svg", apple: "/logo-mark.svg" },
 };
 
 export default function RootLayout({
@@ -20,7 +27,7 @@ export default function RootLayout({
         <script src="https://cdn.tailwindcss.com"></script>
       </head>
       <body
-        className="min-h-screen bg-[#05070d] text-zinc-100 antialiased"
+        className={`${arborDisplay.variable} ${arborBody.variable} min-h-screen bg-[#05070d] text-zinc-100 antialiased`}
         suppressHydrationWarning
       >
         <Providers>

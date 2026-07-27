@@ -320,7 +320,7 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-5">
+      <section className="space-y-5 reveal" data-rd="0">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="display-title">Protocol overview</h1>
@@ -388,7 +388,7 @@ export default function HomePage() {
 
       <Portfolio />
 
-      <section className="space-y-4">
+      <section className="space-y-4 reveal" data-rd="2">
         <div className="flex items-center justify-between">
           <h2 className="section-h">
             All markets

@@ -166,3 +166,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 .util-track > div{ transition:width .7s cubic-bezier(.2,.7,.2,1); }
 
+
+/* arbor-type-v1 — distinctive display + readable body via next/font vars */
+body{ font-family: var(--font-body, "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif); }
+.display-title, h1, h2, .section-h{ font-family: var(--font-display, "Space Grotesk", "Sora", ui-sans-serif, system-ui, sans-serif); }
+
+/* arbor-reveal-v1 — scroll entrances; visible unless armed by RevealObserver */
+.reveal-armed .reveal{ opacity:0; transform:translateY(16px); transition:opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+.reveal-armed .reveal.is-in{ opacity:1; transform:none; }
+.reveal-armed .reveal[data-rd="1"]{ transition-delay:.08s; }
+.reveal-armed .reveal[data-rd="2"]{ transition-delay:.16s; }
+@media (prefers-reduced-motion: reduce){ .reveal-armed .reveal{ opacity:1 !important; transform:none !important; transition:none !important; } }
