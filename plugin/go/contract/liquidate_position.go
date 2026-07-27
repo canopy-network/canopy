@@ -237,46 +237,70 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 			return &PluginDeliverResponse{Error: ErrBadDebtNativeOverflow(msg.MarketId, badDebtCollateral.String(), badDebtNative.String())}
 		}
 		badDebtNativeU64 := badDebtNative.Uint64()
-		covered, l2Err := Layer2DrawDown(c, msg.MarketId, badDebtNativeU64)
+		covered, newRFund, l2Err := Layer2DrawDown(c, msg.MarketId, badDebtNativeU64)
 		if l2Err != nil {
 			return &PluginDeliverResponse{Error: l2Err}
 		}
-		if !covered {
-			// [DISCLOSED, session finding] Layer 3 (Arbor protocol treasury)
-			// does NOT exist in this codebase -- no state key, no accessor,
-			// nothing. It is a standalone, unbuilt piece shared by ARCM's own
-			// waterfall and (per NASM Section 11.2) NASM's NUSD waterfall,
-			// deferred until Arbor's core lending protocol is complete. This
-			// is NOT a NASM prerequisite issue -- NASM's own Layer 3 row
-			// assumes Arbor treasury already exists ("Arbor protocol treasury
-			// covers remaining shortfall"); it does not define or build it.
-			//
-			// Given that, this liquidation intentionally skips straight from
-			// Layer 2 (just missed, above) to Layer 4 (lender socialization
-			// via ApplyLossFactor) rather than hard-rejecting as before. This
-			// is a deliberate interim design choice, not a silent omission:
-			// bad debt Layer 3 might have partially absorbed instead lands
-			// fully on lenders via loss_factor. Open item, tracked separately
-			// from this comment: "Layer 3 (Arbor protocol treasury): standalone,
-			// unbuilt, blocks full four-layer waterfall fidelity."
-			// [FIXED] Now passes the already-in-memory market struct (read once
-			// near the top of this function) instead of letting ApplyLossFactor
-			// fetch its own separate copy. This closes the two-copy race that
-			// caused a confirmed on-chain bug: SetMarketInsolvent() used to save
-			// its own copy of market mid-call, which this function's own
-			// end-of-function SaveMarket(market) at line ~337 then silently
-			// overwrote with its stale copy -- losing the Status write while
-			// loss_factor correctly persisted to 0. See market_insolvency.go and
-			// apply_loss_factor.go for the full fix.
-			// [FIX, session finding] Reuses badDebtNativeU64, guarded above at
-			// its first use -- was previously a second, separate unguarded
-			// .Uint64() call on the same big.Int.
-			layer4Event, alErr := ApplyLossFactor(c, market, msg.MarketId, badDebtNativeU64)
-			if alErr != nil {
-				return &PluginDeliverResponse{Error: alErr}
+		if covered {
+			l2Payload := &EventReserveFundDrawDown{
+				MarketId:             msg.MarketId,
+				BadDebt:              badDebtNativeU64,
+				RemainingReserveFund: newRFund.String(),
 			}
-			if layer4Event != nil {
-				events = append(events, layer4Event)
+			l2AnyMsg, l2AErr := anypb.New(l2Payload)
+			if l2AErr != nil {
+				return &PluginDeliverResponse{Error: ErrMarshal(l2AErr)}
+			}
+			events = append(events, &Event{
+				EventType: "reserve_fund_draw_down",
+				Msg:       &Event_Custom{Custom: &EventCustom{Msg: l2AnyMsg}},
+			})
+		} else {
+			// [WIRED, this session] Layer 3 (Arbor protocol treasury) now exists
+			// (bad_debt_layer3.go: Layer3DrawDownArbor/Layer3DrawDownNASM,
+			// isolated per-pool state keys {40}/{41}) and is attempted here
+			// before falling through to Layer 4. Only Arbor's own pool is tried
+			// -- NASM's pool is a fully separate concern with no caller here or
+			// anywhere else yet (NASM's own waterfall is not yet built).
+			covered3, newTFund, l3Err := Layer3DrawDownArbor(c, msg.MarketId, badDebtNativeU64)
+			if l3Err != nil {
+				return &PluginDeliverResponse{Error: l3Err}
+			}
+			if covered3 {
+				l3Payload := &EventTreasuryDrawDown{
+					MarketId:          msg.MarketId,
+					BadDebt:           badDebtNativeU64,
+					RemainingTreasury: newTFund.String(),
+					Pool:              "arbor",
+				}
+				l3AnyMsg, l3AErr := anypb.New(l3Payload)
+				if l3AErr != nil {
+					return &PluginDeliverResponse{Error: ErrMarshal(l3AErr)}
+				}
+				events = append(events, &Event{
+					EventType: "treasury_draw_down",
+					Msg:       &Event_Custom{Custom: &EventCustom{Msg: l3AnyMsg}},
+				})
+			} else {
+				// [FIXED] Now passes the already-in-memory market struct (read once
+				// near the top of this function) instead of letting ApplyLossFactor
+				// fetch its own separate copy. This closes the two-copy race that
+				// caused a confirmed on-chain bug: SetMarketInsolvent() used to save
+				// its own copy of market mid-call, which this function's own
+				// end-of-function SaveMarket(market) at line ~337 then silently
+				// overwrote with its stale copy -- losing the Status write while
+				// loss_factor correctly persisted to 0. See market_insolvency.go and
+				// apply_loss_factor.go for the full fix.
+				// [FIX, session finding] Reuses badDebtNativeU64, guarded above at
+				// its first use -- was previously a second, separate unguarded
+				// .Uint64() call on the same big.Int.
+				layer4Event, alErr := ApplyLossFactor(c, market, msg.MarketId, badDebtNativeU64)
+				if alErr != nil {
+					return &PluginDeliverResponse{Error: alErr}
+				}
+				if layer4Event != nil {
+					events = append(events, layer4Event)
+				}
 			}
 		}
 

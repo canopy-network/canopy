@@ -37,6 +37,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/pool", p.handleQueryPool)
 	mux.HandleFunc("/v1/query/reservefund", p.handleQueryReserveFund)
 	mux.HandleFunc("/v1/query/lossfactor", p.handleQueryLossFactor)
+	mux.HandleFunc("/v1/query/treasury", p.handleQueryTreasury)
 	mux.HandleFunc("/v1/query/all-markets", p.handleQueryAllMarkets)
 	mux.HandleFunc("/v1/query/all-borrower-positions", p.handleQueryAllBorrowerPositions)
 	mux.HandleFunc("/v1/query/prices", p.handleQueryPrices)
@@ -468,6 +469,61 @@ func (p *Plugin) handleQueryLossFactor(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"marketId": marketId, "lossFactor": lossFactor.String()})
+}
+
+// handleQueryTreasury serves GET /v1/query/treasury?pool=arbor|nasm
+// Returns the requested protocol treasury's current global balance
+// (PrefixTreasuryArbor {40} or PrefixTreasuryNASM {41}), decoded via
+// DecodeUint128. Unlike handleQueryReserveFund/handleQueryLossFactor, this
+// route takes NO marketId param -- T_fund is a single global balance per
+// pool, not market-keyed (see bad_debt_layer3.go's own doc comment on this;
+// KeyForTreasuryArbor/KeyForTreasuryNASM take no marketID argument either).
+// Added same session as Layer 3's wiring into liquidate_position.go
+// (Layer3DrawDownArbor) -- prior to this route, T_fund had accessors but no
+// query surface at all, the only balance in the four-layer waterfall
+// without one (R_fund: /v1/query/reservefund; loss_factor:
+// /v1/query/lossfactor; T_fund: none, until now). Mirrors both existing
+// handlers' zero-value convention: a pool with balance == 0 (e.g. never
+// funded yet -- treasury_cut funding mechanism is not yet built per this
+// session's own handoff) returns {"amount":"0"}, not a 404, since a
+// legitimately-empty treasury is not an error state.
+func (p *Plugin) handleQueryTreasury(w http.ResponseWriter, r *http.Request) {
+	pool := r.URL.Query().Get("pool")
+	if pool != "arbor" && pool != "nasm" {
+		http.Error(w, `{"error":"missing or invalid pool query param -- must be \"arbor\" or \"nasm\""}`, http.StatusBadRequest)
+		return
+	}
+
+	var key []byte
+	if pool == "arbor" {
+		key = KeyForTreasuryArbor()
+	} else {
+		key = KeyForTreasuryNASM()
+	}
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"pool": pool, "amount": "0", "note": "treasury has zero balance or does not yet exist"})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	tFund := DecodeUint128(raw)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"pool": pool, "amount": tFund.String()})
 }
 
 // handleQueryAllMarkets serves GET /v1/query/all-markets

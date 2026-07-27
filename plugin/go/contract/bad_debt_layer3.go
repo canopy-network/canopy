@@ -74,10 +74,10 @@ import "math/big"
 // happens next (as of this file's creation: liquidate_position.go falls
 // through to ApplyLossFactor/Layer 4 on covered=false, exactly as it
 // already does on a Layer 2 miss).
-func Layer3DrawDownArbor(c *Contract, marketID string, badDebtNative uint64) (covered bool, pErr *PluginError) {
+func Layer3DrawDownArbor(c *Contract, marketID string, badDebtNative uint64) (covered bool, newBalance *big.Int, pErr *PluginError) {
 	tFund, found, err := GetTreasuryArbor(c)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if !found {
 		tFund = big.NewInt(0)
@@ -87,24 +87,24 @@ func Layer3DrawDownArbor(c *Contract, marketID string, badDebtNative uint64) (co
 	if tFund.Cmp(badDebtBig) < 0 {
 		// Arbor's T_fund insufficient to fully cover -- all-or-nothing gate
 		// (see doc comment above). Pool is NOT mutated; no write attempted.
-		return false, nil
+		return false, nil, nil
 	}
 
 	newTFund := new(big.Int).Sub(tFund, badDebtBig)
 	if wErr := SetTreasuryArbor(c, newTFund); wErr != nil {
-		return false, wErr
+		return false, nil, wErr
 	}
-	return true, nil
+	return true, newTFund, nil
 }
 
 // Layer3DrawDownNASM is the NASM/NUSD-owned analog of Layer3DrawDownArbor
 // above -- identical contract, draws from the separate, isolated NASM pool
 // ({41}) instead of Arbor's own ({40}). No current caller exists yet --
 // NASM's own bad-debt waterfall is not yet built.
-func Layer3DrawDownNASM(c *Contract, marketID string, badDebtNative uint64) (covered bool, pErr *PluginError) {
+func Layer3DrawDownNASM(c *Contract, marketID string, badDebtNative uint64) (covered bool, newBalance *big.Int, pErr *PluginError) {
 	tFund, found, err := GetTreasuryNASM(c)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if !found {
 		tFund = big.NewInt(0)
@@ -114,12 +114,12 @@ func Layer3DrawDownNASM(c *Contract, marketID string, badDebtNative uint64) (cov
 	if tFund.Cmp(badDebtBig) < 0 {
 		// NASM's T_fund insufficient to fully cover -- all-or-nothing gate
 		// (see doc comment above). Pool is NOT mutated; no write attempted.
-		return false, nil
+		return false, nil, nil
 	}
 
 	newTFund := new(big.Int).Sub(tFund, badDebtBig)
 	if wErr := SetTreasuryNASM(c, newTFund); wErr != nil {
-		return false, wErr
+		return false, nil, wErr
 	}
-	return true, nil
+	return true, newTFund, nil
 }

@@ -73,10 +73,10 @@ import "math/big"
 // PluginError, since it is the caller's decision what to do next (as of
 // this file's creation: liquidate_position.go treats it as a hard reject,
 // matching Layer 1's existing ErrLiquidationBadDebt behavior).
-func Layer2DrawDown(c *Contract, marketID string, badDebtNative uint64) (covered bool, pErr *PluginError) {
+func Layer2DrawDown(c *Contract, marketID string, badDebtNative uint64) (covered bool, newBalance *big.Int, pErr *PluginError) {
 	rFund, found, err := GetReserveFund(c, marketID)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if !found {
 		rFund = big.NewInt(0)
@@ -86,12 +86,12 @@ func Layer2DrawDown(c *Contract, marketID string, badDebtNative uint64) (covered
 	if rFund.Cmp(badDebtBig) < 0 {
 		// R_fund insufficient to fully cover -- all-or-nothing gate (see
 		// doc comment above). R_fund is NOT mutated; no write is attempted.
-		return false, nil
+		return false, nil, nil
 	}
 
 	newRFund := new(big.Int).Sub(rFund, badDebtBig)
 	if wErr := SetReserveFund(c, marketID, newRFund); wErr != nil {
-		return false, wErr
+		return false, nil, wErr
 	}
-	return true, nil
+	return true, newRFund, nil
 }
