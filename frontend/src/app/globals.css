@@ -185,3 +185,8 @@ body{ font-family: var(--font-body, "Manrope", system-ui, -apple-system, "Segoe 
 .arbor-scrim{background:rgba(2,4,8,.62);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);}
 /* arbor-mark-v1 — ambient brand glow behind the transparent header tree */
 .arbor-mark{filter:drop-shadow(0 1px 0 rgba(255,255,255,.22)) drop-shadow(0 0 9px rgba(47,214,192,.40)) drop-shadow(0 0 16px rgba(124,108,242,.30));}
+/* arbor-roles-v1 — on-chain role badges; brand color = role meaning */
+.role-badge{display:inline-flex;align-items:center;gap:.3rem;border-radius:999px;padding:.15rem .55rem;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;border:1px solid;white-space:nowrap;}
+.role-authority{color:#F2B84B;border-color:rgba(242,184,75,.35);background:rgba(242,184,75,.10);}
+.role-oracle{color:#2FD6C0;border-color:rgba(47,214,192,.35);background:rgba(47,214,192,.10);}
+.role-public{color:#9AA4B2;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.05);}

@@ -5,13 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useWalletStore } from "@/lib/stores/walletStore";
 import { WalletConnect } from "./WalletConnect";
+import { useRoles, type Roles } from "@/lib/hooks/useRoles";
 
 const NAV = [
   { href: "/", label: "Markets" },
   { href: "/oracle", label: "Oracle" },
   { href: "/liquidate", label: "Liquidation" }, { href: "/monitor", label: "Monitor" },
   { href: "/events", label: "Events" },
-  { href: "/governance", label: "Governance" }, { href: "/admin", label: "Admin" },
+  { href: "/governance", label: "Governance" }, { href: "/admin", label: "Authority" },
   { href: "/tx", label: "Transactions" },
 ];
 
@@ -168,10 +169,33 @@ function WalletChip() {
   );
 }
 
+function RoleBadge({ roles }: { roles: Roles }) {
+  if (!roles.connected) return null;
+  if (roles.isProtocolAuthority) {
+    return (
+      <span className="role-badge role-authority" title="Protocol authority (governance)">
+        <span aria-hidden="true">◆</span>Authority
+      </span>
+    );
+  }
+  if (roles.oracleFor.length > 0) {
+    return (
+      <span className="role-badge role-oracle" title={"Authorized oracle submitter for " + roles.oracleFor.length + " market(s)"}>
+        Oracle · {roles.oracleFor.length}
+      </span>
+    );
+  }
+  return (
+    <span className="role-badge role-public" title="Public viewer">Public</span>
+  );
+}
+
 export function Header() {
   const pathname = usePathname() ?? "";
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => { setMenuOpen(false); }, [pathname]);
+  const roles = useRoles();
+  const nav = NAV.filter((i) => i.href !== "/admin" || roles.isProtocolAuthority);
 
   return (
     <header className="sticky top-0 z-40 relative border-b border-white/5 arbor-surface">
@@ -190,14 +214,14 @@ export function Header() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2"><WalletChip /><button type="button" aria-label="Toggle menu" onClick={() => setMenuOpen((v) => !v)} className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-zinc-200 transition hover:bg-white/5 md:hidden">{menuOpen ? "✕" : "☰"}</button></div>
+          <div className="flex items-center gap-2"><RoleBadge roles={roles} /><WalletChip /><button type="button" aria-label="Toggle menu" onClick={() => setMenuOpen((v) => !v)} className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-zinc-200 transition hover:bg-white/5 md:hidden">{menuOpen ? "✕" : "☰"}</button></div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusChip />
 
           <nav className="no-scrollbar -mx-1 hidden flex-1 items-center gap-1 overflow-x-auto px-1 md:flex">
-            {NAV.map((item) => {
+            {nav.map((item) => {
               const active =
                 item.href === "/"
                   ? pathname === "/"
@@ -225,7 +249,7 @@ export function Header() {
           <button type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)} className="arbor-scrim fixed inset-0 z-30 cursor-default md:hidden" />
           <div className="absolute left-0 right-0 top-full z-40 border-b border-white/10 arbor-surface-solid px-4 py-3 backdrop-blur-xl md:hidden">
             <nav className="grid gap-1">
-              {NAV.map((item) => {
+              {nav.map((item) => {
                 const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
                 return (
                   <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} className={`rounded-lg border px-3 py-2 text-sm transition ${active ? "border-white/10 bg-white/10 text-white" : "border-transparent text-zinc-300 hover:bg-white/5"}`}>{item.label}</Link>
