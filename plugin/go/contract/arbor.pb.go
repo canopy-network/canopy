@@ -914,6 +914,80 @@ func (x *MessageSetAssetTier) GetAuthority() []byte {
 	return nil
 }
 
+// MessageSetTreasuryCut sets the GLOBAL treasury_cut_bps governance parameter
+// (see bad_debt_layer3.go's own doc comment on PrefixTreasuryArbor/
+// PrefixTreasuryNASM being global, not per-market -- this parameter mirrors
+// that scope). Unlike reserve_factor_bps (per-market, set via create_market/
+// update_market_params), treasury_cut_bps applies uniformly to every
+// market's interest accrual (AYIS Section 7 Step 10, extended): a single
+// governance-set rate feeds Arbor's own protocol treasury ({40}) from every
+// market's interest_earned, rather than each market creator choosing (and
+// potentially free-riding by setting to 0) their own contribution to a
+// shared, protocol-wide backstop. Bounds: 25-150 bps (0.25%-1.5%),
+// deliberately narrower than reserve_factor_bps's 200-3000 -- Layer 3 (this
+// treasury) is a secondary, lower-probability-of-use backstop behind Layer
+// 2's per-market reserve, not a primary defense, so it should not tax lender
+// yield as heavily. Floor raised from an initially-considered 10 bps: Layer
+// 3 only fires after a market's OWN R_fund is already exhausted by a single
+// shortfall, implying a real bad-debt event large enough to matter; too low
+// a floor risks the treasury accumulating too slowly to ever meaningfully
+// help, the same "looks wired but silently doesn't matter" failure mode
+// this codebase's own discipline elsewhere exists to avoid. No market_id
+// field -- this is a single global value, analogous to
+// KeyForTreasuryArbor/KeyForTreasuryNASM's own no-argument, global-balance
+// shape (state_keys.go).
+type MessageSetTreasuryCut struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Authority      []byte                 `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	TreasuryCutBps uint64                 `protobuf:"varint,2,opt,name=treasury_cut_bps,json=treasuryCutBps,proto3" json:"treasury_cut_bps,omitempty"` // 25-150 bps, checked at DeliverTx
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MessageSetTreasuryCut) Reset() {
+	*x = MessageSetTreasuryCut{}
+	mi := &file_arbor_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageSetTreasuryCut) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageSetTreasuryCut) ProtoMessage() {}
+
+func (x *MessageSetTreasuryCut) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageSetTreasuryCut.ProtoReflect.Descriptor instead.
+func (*MessageSetTreasuryCut) Descriptor() ([]byte, []int) {
+	return file_arbor_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *MessageSetTreasuryCut) GetAuthority() []byte {
+	if x != nil {
+		return x.Authority
+	}
+	return nil
+}
+
+func (x *MessageSetTreasuryCut) GetTreasuryCutBps() uint64 {
+	if x != nil {
+		return x.TreasuryCutBps
+	}
+	return 0
+}
+
 var File_arbor_proto protoreflect.FileDescriptor
 
 const file_arbor_proto_rawDesc = "" +
@@ -981,7 +1055,10 @@ const file_arbor_proto_rawDesc = "" +
 	"\x13MessageSetAssetTier\x12\x19\n" +
 	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x12\n" +
 	"\x04tier\x18\x02 \x01(\rR\x04tier\x12\x1c\n" +
-	"\tauthority\x18\x03 \x01(\fR\tauthorityB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"\tauthority\x18\x03 \x01(\fR\tauthority\"_\n" +
+	"\x15MessageSetTreasuryCut\x12\x1c\n" +
+	"\tauthority\x18\x01 \x01(\fR\tauthority\x12(\n" +
+	"\x10treasury_cut_bps\x18\x02 \x01(\x04R\x0etreasuryCutBpsB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_proto_rawDescOnce sync.Once
@@ -995,7 +1072,7 @@ func file_arbor_proto_rawDescGZIP() []byte {
 	return file_arbor_proto_rawDescData
 }
 
-var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_arbor_proto_goTypes = []any{
 	(*MessageCreateMarket)(nil),       // 0: types.MessageCreateMarket
 	(*MessageUpdateMarketParams)(nil), // 1: types.MessageUpdateMarketParams
@@ -1011,6 +1088,7 @@ var file_arbor_proto_goTypes = []any{
 	(*MessageRepay)(nil),              // 11: types.MessageRepay
 	(*MessageLiquidatePosition)(nil),  // 12: types.MessageLiquidatePosition
 	(*MessageSetAssetTier)(nil),       // 13: types.MessageSetAssetTier
+	(*MessageSetTreasuryCut)(nil),     // 14: types.MessageSetTreasuryCut
 }
 var file_arbor_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1031,7 +1109,7 @@ func file_arbor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_proto_rawDesc), len(file_arbor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

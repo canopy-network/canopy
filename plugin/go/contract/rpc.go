@@ -38,6 +38,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/reservefund", p.handleQueryReserveFund)
 	mux.HandleFunc("/v1/query/lossfactor", p.handleQueryLossFactor)
 	mux.HandleFunc("/v1/query/treasury", p.handleQueryTreasury)
+	mux.HandleFunc("/v1/query/governanceparams", p.handleQueryGovernanceParams)
 	mux.HandleFunc("/v1/query/all-markets", p.handleQueryAllMarkets)
 	mux.HandleFunc("/v1/query/all-borrower-positions", p.handleQueryAllBorrowerPositions)
 	mux.HandleFunc("/v1/query/prices", p.handleQueryPrices)
@@ -524,6 +525,57 @@ func (p *Plugin) handleQueryTreasury(w http.ResponseWriter, r *http.Request) {
 	tFund := DecodeUint128(raw)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"pool": pool, "amount": tFund.String()})
+}
+
+// handleQueryGovernanceParams serves GET /v1/query/governanceparams
+// Returns the single global {22} GovernanceParams record (currently just
+// treasury_cut_bps -- see arbor_state.proto's own doc comment on this
+// record's one-struct-per-key, read-modify-write convention for future
+// governance parameters). Takes NO query params -- like
+// handleQueryTreasury, this is a single global value, not market-keyed.
+// Mirrors handleQueryTreasury's zero-value convention: before governance
+// has ever called set_treasury_cut, the {22} key does not exist yet, and
+// this returns a zero-value GovernanceParams, not a 404 -- an
+// unconfigured governance parameter is not an error state, exactly as an
+// empty treasury is not (see that handler's own comment). NOTE: unlike
+// handleQueryTreasury's hand-built map (which always includes "amount":
+// "0" explicitly), this handler uses protojson.Marshal with default
+// options, matching every other protojson.Marshal call in this file --
+// proto3's default field-omission means a zero treasury_cut_bps renders
+// as {} (the field is simply absent), not {"treasuryCutBps":"0"}. Verified
+// live: GET returns {} when unset, confirmed against this file's own
+// established protojson convention (no EmitUnpopulated anywhere in this
+// file) rather than assumed.
+func (p *Plugin) handleQueryGovernanceParams(w http.ResponseWriter, r *http.Request) {
+	queryId := rand.Uint64()
+	resp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: KeyForGovernanceParams()}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	params := &GovernanceParams{}
+	if len(resp.Results) > 0 && len(resp.Results[0].Entries) > 0 && len(resp.Results[0].Entries[0].Value) > 0 {
+		raw := resp.Results[0].Entries[0].Value
+		if err := proto.Unmarshal(raw, params); err != nil {
+			http.Error(w, `{"error":"unmarshal error: `+err.Error()+`"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	b, err := protojson.Marshal(params)
+	if err != nil {
+		http.Error(w, `{"error":"marshal error: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
 }
 
 // handleQueryAllMarkets serves GET /v1/query/all-markets

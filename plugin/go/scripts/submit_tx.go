@@ -85,12 +85,12 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			}
 		}
 		msg := &contract.MessageCreateMarket{
-			MarketId:          str(fields["marketId"]),
-			CollateralAssetId: str(fields["collateralAssetId"]),
-			DebtAssetId:       str(fields["debtAssetId"]),
-			AssetTier:         uint32(assetTier),
-			ReserveFactorBps:  uint64(reserveFactorBps),
-			Creator:           creator,
+			MarketId:             str(fields["marketId"]),
+			CollateralAssetId:    str(fields["collateralAssetId"]),
+			DebtAssetId:          str(fields["debtAssetId"]),
+			AssetTier:            uint32(assetTier),
+			ReserveFactorBps:     uint64(reserveFactorBps),
+			Creator:              creator,
 			AuthorizedSubmitters: submitters,
 		}
 		return "type.googleapis.com/types.MessageCreateMarket", msg, nil
@@ -252,6 +252,17 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			Quantity: uint64(quantity),
 		}
 		return "type.googleapis.com/types.MessageWithdrawCollateral", msg, nil
+	case "set_treasury_cut":
+		authority, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode authority: %w", err)
+		}
+		treasuryCutBps, _ := fields["treasuryCutBps"].(float64)
+		msg := &contract.MessageSetTreasuryCut{
+			Authority:      authority,
+			TreasuryCutBps: uint64(treasuryCutBps),
+		}
+		return "type.googleapis.com/types.MessageSetTreasuryCut", msg, nil
 	default:
 		return "", nil, fmt.Errorf("unknown or not-yet-wired msgType: %s", msgType)
 	}

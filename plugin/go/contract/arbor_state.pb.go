@@ -525,6 +525,71 @@ func (x *LossFactorQueueEntry) GetEnqueuedBlock() uint64 {
 	return 0
 }
 
+// GovernanceParams is the {22} record: a single global struct holding
+// protocol-wide governance-set values that are NOT scoped to any individual
+// market (unlike reserve_factor_bps, which lives on Market itself and is
+// set per-market via update_market_params). PrefixGovernanceParams was
+// reserved at ARCM v3.11.1 Section 19.1 with no field schema ever defined
+// or implemented; treasury_cut_bps (added this session) is the first real
+// use of this prefix. Stored as ONE encoded struct under KeyForGovernanceParams
+// (matching Market's single-struct-per-key convention, not one state key
+// per field), so that future global governance parameters are added as new
+// fields on this same message rather than each minting its own top-level
+// state-key prefix. A DeliverTx handler adding a new parameter must
+// read-modify-write the whole struct via GetGovernanceParams/
+// SaveGovernanceParams, exactly as market parameter updates read-modify-write
+// the whole Market struct.
+type GovernanceParams struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// treasury_cut_bps: global bps of interest_earned routed to Arbor's own
+	// protocol treasury ({40}, PrefixTreasuryArbor) on every market's accrual
+	// (AYIS Section 7 Step 10, extended -- see MessageSetTreasuryCut in
+	// arbor.proto for the full rationale and bounds). Zero-value default
+	// (before governance ever calls set_treasury_cut) is 0, matching
+	// PrefixTreasuryArbor/PrefixReserveFund's own zero-init-safe convention --
+	// Layer 3 simply accumulates nothing until this is explicitly set.
+	TreasuryCutBps uint64 `protobuf:"varint,1,opt,name=treasury_cut_bps,json=treasuryCutBps,proto3" json:"treasury_cut_bps,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GovernanceParams) Reset() {
+	*x = GovernanceParams{}
+	mi := &file_arbor_state_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GovernanceParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GovernanceParams) ProtoMessage() {}
+
+func (x *GovernanceParams) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GovernanceParams.ProtoReflect.Descriptor instead.
+func (*GovernanceParams) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GovernanceParams) GetTreasuryCutBps() uint64 {
+	if x != nil {
+		return x.TreasuryCutBps
+	}
+	return 0
+}
+
 var File_arbor_state_proto protoreflect.FileDescriptor
 
 const file_arbor_state_proto_rawDesc = "" +
@@ -567,7 +632,9 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\x14LossFactorQueueEntry\x12\x1b\n" +
 	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12\x19\n" +
 	"\bbad_debt\x18\x02 \x01(\x04R\abadDebt\x12%\n" +
-	"\x0eenqueued_block\x18\x03 \x01(\x04R\renqueuedBlock*E\n" +
+	"\x0eenqueued_block\x18\x03 \x01(\x04R\renqueuedBlock\"<\n" +
+	"\x10GovernanceParams\x12(\n" +
+	"\x10treasury_cut_bps\x18\x01 \x01(\x04R\x0etreasuryCutBps*E\n" +
 	"\fMarketStatus\x12\n" +
 	"\n" +
 	"\x06ACTIVE\x10\x00\x12\n" +
@@ -590,7 +657,7 @@ func file_arbor_state_proto_rawDescGZIP() []byte {
 }
 
 var file_arbor_state_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_arbor_state_proto_goTypes = []any{
 	(MarketStatus)(0),            // 0: types.MarketStatus
 	(*Market)(nil),               // 1: types.Market
@@ -598,6 +665,7 @@ var file_arbor_state_proto_goTypes = []any{
 	(*PriceRecord)(nil),          // 3: types.PriceRecord
 	(*LenderPosition)(nil),       // 4: types.LenderPosition
 	(*LossFactorQueueEntry)(nil), // 5: types.LossFactorQueueEntry
+	(*GovernanceParams)(nil),     // 6: types.GovernanceParams
 }
 var file_arbor_state_proto_depIdxs = []int32{
 	0, // 0: types.Market.status:type_name -> types.MarketStatus
@@ -619,7 +687,7 @@ func file_arbor_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_state_proto_rawDesc), len(file_arbor_state_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

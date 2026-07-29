@@ -267,6 +267,63 @@ func SetReserveFund(c *Contract, marketID string, rFund *big.Int) *PluginError {
 // distinct functions below -- see PrefixTreasuryArbor/PrefixTreasuryNASM's
 // comment in state_keys.go for the full reversal reasoning.
 //
+// GetGovernanceParams reads and unmarshals the {22} GovernanceParams
+// record -- a single global struct, matching Market's convention: one
+// record, read-modify-write per change, not one state key per field. Unlike
+// GetMarket, found=false with a nil error is the EXPECTED steady state
+// before any governance parameter has ever been set (no create_market-
+// equivalent initializes this record) -- callers must treat a zero-value
+// GovernanceParams{} as the correct default in that case, mirroring
+// GetTreasuryArbor's own found=false-is-normal contract, not GetMarket's
+// found=false-is-an-error contract.
+func GetGovernanceParams(c *Contract) (params *GovernanceParams, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForGovernanceParams()},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	p := &GovernanceParams{}
+	if uErr := Unmarshal(raw, p); uErr != nil {
+		return nil, false, uErr
+	}
+	return p, true, nil
+}
+
+// SaveGovernanceParams marshals and writes the {22} GovernanceParams
+// record. Caller owns read-modify-write: call GetGovernanceParams first
+// (treating found=false as a zero-value GovernanceParams{} starting point,
+// per GetGovernanceParams's own doc comment), mutate the field(s) being
+// changed, then call this -- matching SaveMarket's single-responsibility
+// write-site pattern exactly.
+func SaveGovernanceParams(c *Contract, params *GovernanceParams) *PluginError {
+	paramsBytes, mErr := Marshal(params)
+	if mErr != nil {
+		return mErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForGovernanceParams(), Value: paramsBytes},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
+}
+
 // GetTreasuryArbor reads and decodes Arbor's own T_fund ({40}) -- the
 // protocol treasury. Unlike every accessor above, this is NOT market-keyed:
 // T_fund is a single global uint128 balance. found=false with a nil error

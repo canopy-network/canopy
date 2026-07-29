@@ -95,3 +95,28 @@ message LossFactorQueueEntry {
                               // MAX_LOSS_FACTOR_APPLICATIONS_PER_BLOCK
                               // bounds work per block, not by age)
 }
+
+// GovernanceParams is the {22} record: a single global struct holding
+// protocol-wide governance-set values that are NOT scoped to any individual
+// market (unlike reserve_factor_bps, which lives on Market itself and is
+// set per-market via update_market_params). PrefixGovernanceParams was
+// reserved at ARCM v3.11.1 Section 19.1 with no field schema ever defined
+// or implemented; treasury_cut_bps (added this session) is the first real
+// use of this prefix. Stored as ONE encoded struct under KeyForGovernanceParams
+// (matching Market's single-struct-per-key convention, not one state key
+// per field), so that future global governance parameters are added as new
+// fields on this same message rather than each minting its own top-level
+// state-key prefix. A DeliverTx handler adding a new parameter must
+// read-modify-write the whole struct via GetGovernanceParams/
+// SaveGovernanceParams, exactly as market parameter updates read-modify-write
+// the whole Market struct.
+message GovernanceParams {
+  // treasury_cut_bps: global bps of interest_earned routed to Arbor's own
+  // protocol treasury ({40}, PrefixTreasuryArbor) on every market's accrual
+  // (AYIS Section 7 Step 10, extended -- see MessageSetTreasuryCut in
+  // arbor.proto for the full rationale and bounds). Zero-value default
+  // (before governance ever calls set_treasury_cut) is 0, matching
+  // PrefixTreasuryArbor/PrefixReserveFund's own zero-init-safe convention --
+  // Layer 3 simply accumulates nothing until this is explicitly set.
+  uint64 treasury_cut_bps = 1;
+}

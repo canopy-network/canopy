@@ -153,3 +153,30 @@ message MessageSetAssetTier {
   uint32 tier = 2;                 // 0-3 only; checked at DeliverTx
   bytes  authority = 3;
 }
+
+// MessageSetTreasuryCut sets the GLOBAL treasury_cut_bps governance parameter
+// (see bad_debt_layer3.go's own doc comment on PrefixTreasuryArbor/
+// PrefixTreasuryNASM being global, not per-market -- this parameter mirrors
+// that scope). Unlike reserve_factor_bps (per-market, set via create_market/
+// update_market_params), treasury_cut_bps applies uniformly to every
+// market's interest accrual (AYIS Section 7 Step 10, extended): a single
+// governance-set rate feeds Arbor's own protocol treasury ({40}) from every
+// market's interest_earned, rather than each market creator choosing (and
+// potentially free-riding by setting to 0) their own contribution to a
+// shared, protocol-wide backstop. Bounds: 25-150 bps (0.25%-1.5%),
+// deliberately narrower than reserve_factor_bps's 200-3000 -- Layer 3 (this
+// treasury) is a secondary, lower-probability-of-use backstop behind Layer
+// 2's per-market reserve, not a primary defense, so it should not tax lender
+// yield as heavily. Floor raised from an initially-considered 10 bps: Layer
+// 3 only fires after a market's OWN R_fund is already exhausted by a single
+// shortfall, implying a real bad-debt event large enough to matter; too low
+// a floor risks the treasury accumulating too slowly to ever meaningfully
+// help, the same "looks wired but silently doesn't matter" failure mode
+// this codebase's own discipline elsewhere exists to avoid. No market_id
+// field -- this is a single global value, analogous to
+// KeyForTreasuryArbor/KeyForTreasuryNASM's own no-argument, global-balance
+// shape (state_keys.go).
+message MessageSetTreasuryCut {
+  bytes  authority = 1;
+  uint64 treasury_cut_bps = 2; // 25-150 bps, checked at DeliverTx
+}

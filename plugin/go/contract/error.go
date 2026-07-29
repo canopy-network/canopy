@@ -96,6 +96,10 @@ func ErrReserveFactorOutOfBounds() *PluginError {
 	return NewError(198, ArborModule, "reserve_factor_bps must be 200-3000 (AYIS Section 13)")
 }
 
+func ErrTreasuryCutOutOfBounds() *PluginError {
+	return NewError(242, ArborModule, "treasury_cut_bps must be 25-150")
+}
+
 func ErrUnauthorized() *PluginError {
 	return NewError(199, ArborModule, "signer is not authorized for this action")
 }

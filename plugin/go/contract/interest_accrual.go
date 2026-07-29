@@ -272,7 +272,16 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		return nil
 	}
 
-	// Non-Insolvent path: split interest into reserve_cut / supplier_interest.
+	// Non-Insolvent path: split interest into reserve_cut / treasury_cut /
+	// supplier_interest. treasury_cut is a GLOBAL governance-set rate
+	// (GovernanceParams.TreasuryCutBps, {22} -- see MessageSetTreasuryCut's
+	// doc comment in arbor.proto for full rationale), unlike reserve_cut's
+	// per-market ReserveFactorBps. Read once per accrual call; if
+	// governance has never called set_treasury_cut, GetGovernanceParams
+	// returns found=false and params is nil, which this treats as
+	// TreasuryCutBps=0 -- Layer 3 simply accumulates nothing until
+	// explicitly configured, matching R_fund's own zero-init-safe
+	// convention (no error, no freeze, just a zero cut).
 	reserveFactorRay := new(big.Int).SetUint64(market.ReserveFactorBps)
 	reserveFactorRay.Mul(reserveFactorRay, RAY)
 	reserveFactorRay.Div(reserveFactorRay, big.NewInt(10000))
@@ -280,7 +289,22 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 	reserveCut := new(big.Int).Mul(interestEarned, reserveFactorRay)
 	reserveCut.Div(reserveCut, RAY)
 
+	govParams, _, govErr := GetGovernanceParams(c)
+	if govErr != nil {
+		return govErr
+	}
+	var treasuryCutBps uint64
+	if govParams != nil {
+		treasuryCutBps = govParams.TreasuryCutBps
+	}
+	treasuryCutRay := new(big.Int).SetUint64(treasuryCutBps)
+	treasuryCutRay.Mul(treasuryCutRay, RAY)
+	treasuryCutRay.Div(treasuryCutRay, big.NewInt(10000))
+	treasuryCut := new(big.Int).Mul(interestEarned, treasuryCutRay)
+	treasuryCut.Div(treasuryCut, RAY)
+
 	supplierInterest := new(big.Int).Sub(interestEarned, reserveCut)
+	supplierInterest.Sub(supplierInterest, treasuryCut)
 
 	// --- Step 10 (moved earlier, before S_rate write) [ARCM Section 9.3/12.3] ---
 	// reserveCut was previously computed and discarded here -- a real
@@ -312,6 +336,43 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// market only, matching B_index/S_rate's own overflow response.
 		// Neither B_index nor S_rate has been written yet at this point in
 		// the function, so nothing partially commits (Principle 8).
+		market.IndexOverflowHalted = true
+		if sErr := SaveMarket(c, marketID, market); sErr != nil {
+			return sErr
+		}
+		return nil
+	}
+
+	// --- Step 10 (treasury_cut leg) --- treasuryCut flushed to the GLOBAL
+	// Arbor treasury ({40}) via SetTreasuryArborTry, the BeginBlock-safe
+	// path -- same overflow-freeze contract as reserveCut's flush directly
+	// above. When treasuryCutBps is 0 (governance never configured it),
+	// treasuryCut is already 0, so this Add/write is a real no-op in
+	// effect, not a special-cased skip branch.
+	tFund, _, tFundErr := GetTreasuryArbor(c)
+	if tFundErr != nil {
+		return tFundErr
+	}
+	if tFund == nil {
+		tFund = big.NewInt(0)
+	}
+	newTFund := new(big.Int).Add(tFund, treasuryCut)
+	tOk, tWriteErr := SetTreasuryArborTry(c, newTFund)
+	if tWriteErr != nil {
+		return tWriteErr
+	}
+	if !tOk {
+		// Global treasury ({40}) would not fit in 128 bits. This is a GLOBAL
+		// accumulator, not per-market -- freezing only this one market would
+		// not stop every other market's accrual from continuing to grow the
+		// same overflowing value. No dedicated protocol-wide freeze signal
+		// exists yet for a global accumulator overflow (tracked as a real
+		// follow-up, not silently ignored); reusing this market's own
+		// IndexOverflowHalted here is a known, flagged gap, not a correct
+		// fix -- it only prevents this market's own future accrual calls
+		// from re-adding to an already-overflowed global value, matching
+		// SetTreasuryArborTry's own doc comment that a protocol-level
+		// response is required, not a mechanism this halt alone provides.
 		market.IndexOverflowHalted = true
 		if sErr := SaveMarket(c, marketID, market); sErr != nil {
 			return sErr
