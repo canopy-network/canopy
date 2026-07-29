@@ -180,3 +180,16 @@ message MessageSetTreasuryCut {
   bytes  authority = 1;
   uint64 treasury_cut_bps = 2; // 25-150 bps, checked at DeliverTx
 }
+
+// MessageDebugEnqueueLossFactor -- TEMPORARY, DEBUG-ONLY, NOT FOR MAINNET.
+// Directly calls EnqueueLossFactorApplication so ProcessLossFactorQueue's
+// BeginBlock drain path can be exercised end-to-end against a real {28}
+// entry, since the real caller (the Layer 4 protocol-owned backstop path)
+// does not exist yet. This message and all its wiring (contract.go dispatch,
+// the handler file) are intended to be reverted as a single commit once the
+// live-fire test is complete -- do not build on top of this.
+message MessageDebugEnqueueLossFactor {
+  bytes  authority = 1;
+  string market_id = 2;
+  uint64 bad_debt = 3;
+}

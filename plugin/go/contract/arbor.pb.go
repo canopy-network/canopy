@@ -988,6 +988,73 @@ func (x *MessageSetTreasuryCut) GetTreasuryCutBps() uint64 {
 	return 0
 }
 
+// MessageDebugEnqueueLossFactor -- TEMPORARY, DEBUG-ONLY, NOT FOR MAINNET.
+// Directly calls EnqueueLossFactorApplication so ProcessLossFactorQueue's
+// BeginBlock drain path can be exercised end-to-end against a real {28}
+// entry, since the real caller (the Layer 4 protocol-owned backstop path)
+// does not exist yet. This message and all its wiring (contract.go dispatch,
+// the handler file) are intended to be reverted as a single commit once the
+// live-fire test is complete -- do not build on top of this.
+type MessageDebugEnqueueLossFactor struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Authority     []byte                 `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	MarketId      string                 `protobuf:"bytes,2,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	BadDebt       uint64                 `protobuf:"varint,3,opt,name=bad_debt,json=badDebt,proto3" json:"bad_debt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageDebugEnqueueLossFactor) Reset() {
+	*x = MessageDebugEnqueueLossFactor{}
+	mi := &file_arbor_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageDebugEnqueueLossFactor) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageDebugEnqueueLossFactor) ProtoMessage() {}
+
+func (x *MessageDebugEnqueueLossFactor) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageDebugEnqueueLossFactor.ProtoReflect.Descriptor instead.
+func (*MessageDebugEnqueueLossFactor) Descriptor() ([]byte, []int) {
+	return file_arbor_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *MessageDebugEnqueueLossFactor) GetAuthority() []byte {
+	if x != nil {
+		return x.Authority
+	}
+	return nil
+}
+
+func (x *MessageDebugEnqueueLossFactor) GetMarketId() string {
+	if x != nil {
+		return x.MarketId
+	}
+	return ""
+}
+
+func (x *MessageDebugEnqueueLossFactor) GetBadDebt() uint64 {
+	if x != nil {
+		return x.BadDebt
+	}
+	return 0
+}
+
 var File_arbor_proto protoreflect.FileDescriptor
 
 const file_arbor_proto_rawDesc = "" +
@@ -1058,7 +1125,11 @@ const file_arbor_proto_rawDesc = "" +
 	"\tauthority\x18\x03 \x01(\fR\tauthority\"_\n" +
 	"\x15MessageSetTreasuryCut\x12\x1c\n" +
 	"\tauthority\x18\x01 \x01(\fR\tauthority\x12(\n" +
-	"\x10treasury_cut_bps\x18\x02 \x01(\x04R\x0etreasuryCutBpsB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"\x10treasury_cut_bps\x18\x02 \x01(\x04R\x0etreasuryCutBps\"u\n" +
+	"\x1dMessageDebugEnqueueLossFactor\x12\x1c\n" +
+	"\tauthority\x18\x01 \x01(\fR\tauthority\x12\x1b\n" +
+	"\tmarket_id\x18\x02 \x01(\tR\bmarketId\x12\x19\n" +
+	"\bbad_debt\x18\x03 \x01(\x04R\abadDebtB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_proto_rawDescOnce sync.Once
@@ -1072,23 +1143,24 @@ func file_arbor_proto_rawDescGZIP() []byte {
 	return file_arbor_proto_rawDescData
 }
 
-var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_arbor_proto_goTypes = []any{
-	(*MessageCreateMarket)(nil),       // 0: types.MessageCreateMarket
-	(*MessageUpdateMarketParams)(nil), // 1: types.MessageUpdateMarketParams
-	(*MessagePauseMarket)(nil),        // 2: types.MessagePauseMarket
-	(*MessageResumeMarket)(nil),       // 3: types.MessageResumeMarket
-	(*MessageDeprecateMarket)(nil),    // 4: types.MessageDeprecateMarket
-	(*MessageUpdatePrice)(nil),        // 5: types.MessageUpdatePrice
-	(*MessageDepositCollateral)(nil),  // 6: types.MessageDepositCollateral
-	(*MessageWithdrawCollateral)(nil), // 7: types.MessageWithdrawCollateral
-	(*MessageDeposit)(nil),            // 8: types.MessageDeposit
-	(*MessageWithdraw)(nil),           // 9: types.MessageWithdraw
-	(*MessageBorrow)(nil),             // 10: types.MessageBorrow
-	(*MessageRepay)(nil),              // 11: types.MessageRepay
-	(*MessageLiquidatePosition)(nil),  // 12: types.MessageLiquidatePosition
-	(*MessageSetAssetTier)(nil),       // 13: types.MessageSetAssetTier
-	(*MessageSetTreasuryCut)(nil),     // 14: types.MessageSetTreasuryCut
+	(*MessageCreateMarket)(nil),           // 0: types.MessageCreateMarket
+	(*MessageUpdateMarketParams)(nil),     // 1: types.MessageUpdateMarketParams
+	(*MessagePauseMarket)(nil),            // 2: types.MessagePauseMarket
+	(*MessageResumeMarket)(nil),           // 3: types.MessageResumeMarket
+	(*MessageDeprecateMarket)(nil),        // 4: types.MessageDeprecateMarket
+	(*MessageUpdatePrice)(nil),            // 5: types.MessageUpdatePrice
+	(*MessageDepositCollateral)(nil),      // 6: types.MessageDepositCollateral
+	(*MessageWithdrawCollateral)(nil),     // 7: types.MessageWithdrawCollateral
+	(*MessageDeposit)(nil),                // 8: types.MessageDeposit
+	(*MessageWithdraw)(nil),               // 9: types.MessageWithdraw
+	(*MessageBorrow)(nil),                 // 10: types.MessageBorrow
+	(*MessageRepay)(nil),                  // 11: types.MessageRepay
+	(*MessageLiquidatePosition)(nil),      // 12: types.MessageLiquidatePosition
+	(*MessageSetAssetTier)(nil),           // 13: types.MessageSetAssetTier
+	(*MessageSetTreasuryCut)(nil),         // 14: types.MessageSetTreasuryCut
+	(*MessageDebugEnqueueLossFactor)(nil), // 15: types.MessageDebugEnqueueLossFactor
 }
 var file_arbor_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1109,7 +1181,7 @@ func file_arbor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_proto_rawDesc), len(file_arbor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
