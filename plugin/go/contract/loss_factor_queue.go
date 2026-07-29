@@ -88,3 +88,57 @@ func DequeueLossFactorApplication(c *Contract, marketID string) *PluginError {
 	}
 	return nil
 }
+
+// ProcessLossFactorQueue implements AYIS Section 12.3's BeginBlock queue-drain
+// step for one market: checks for a pending {28} LossFactorQueueEntry and, if
+// present, applies it via ApplyLossFactor and dequeues it. Per the Accrual
+// Ordering Contract, this MUST be called after AccrueInterest has already run
+// for this market in the same block (see contract.go's BeginBlock).
+//
+// Re-fetches the market fresh via GetMarket rather than trusting a loop-local
+// *Market the caller may already hold from before AccrueInterest ran --
+// AccrueInterest does its own internal GetMarket/SaveMarket round-trip and does
+// not mutate any caller-held struct, so a market read before AccrueInterest ran
+// may be stale (e.g. Status, LastAccrualBlock) by the time this function runs.
+// ApplyLossFactor's own idempotency check (AYIS Section 5.4.3, K3) depends on
+// market.Status being current, so working from a stale copy here could cause
+// it to make the wrong branching decision.
+//
+// Returns (nil, nil) when no entry is pending -- not an error, the expected
+// steady state for most markets most blocks. Follows the same single-read,
+// single-write discipline as liquidate_position.go's own ApplyLossFactor call
+// site: one GetMarket, mutate in-memory via ApplyLossFactor, one SaveMarket.
+func ProcessLossFactorQueue(c *Contract, marketID string) (event *Event, pErr *PluginError) {
+	entry, found, pkErr := PeekLossFactorQueue(c, marketID)
+	if pkErr != nil {
+		return nil, pkErr
+	}
+	if !found {
+		return nil, nil
+	}
+
+	market, mFound, gErr := GetMarket(c, marketID)
+	if gErr != nil {
+		return nil, gErr
+	}
+	if !mFound {
+		// Unreachable in practice: a queue entry can only be enqueued for a
+		// market that exists. Guarded explicitly per this codebase's standard.
+		return nil, ErrMarketNotFound(marketID)
+	}
+
+	appliedEvent, aErr := ApplyLossFactor(c, market, marketID, entry.BadDebt)
+	if aErr != nil {
+		return nil, aErr
+	}
+
+	if sErr := SaveMarket(c, marketID, market); sErr != nil {
+		return nil, sErr
+	}
+
+	if dErr := DequeueLossFactorApplication(c, marketID); dErr != nil {
+		return nil, dErr
+	}
+
+	return appliedEvent, nil
+}

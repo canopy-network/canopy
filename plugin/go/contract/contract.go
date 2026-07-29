@@ -171,6 +171,8 @@ func (c *Contract) BeginBlock(request *PluginBeginRequest) *PluginBeginResponse 
 		}
 	}
 
+	var events []*Event
+
 	for _, entry := range marketEntries {
 		market := &Market{}
 		if uErr := Unmarshal(entry.Value, market); uErr != nil {
@@ -181,9 +183,19 @@ func (c *Contract) BeginBlock(request *PluginBeginRequest) *PluginBeginResponse 
 			log.Printf("BeginBlock: AccrueInterest failed for market %s: %v", market.MarketId, aErr)
 			continue
 		}
+		// Accrual Ordering Contract (AYIS Section 12.3): loss-factor-application
+		// queue processing runs after AccrueInterest, same market, same block.
+		lfEvent, lfErr := ProcessLossFactorQueue(c, market.MarketId)
+		if lfErr != nil {
+			log.Printf("BeginBlock: ProcessLossFactorQueue failed for market %s: %v", market.MarketId, lfErr)
+			continue
+		}
+		if lfEvent != nil {
+			events = append(events, lfEvent)
+		}
 	}
 
-	return &PluginBeginResponse{}
+	return &PluginBeginResponse{Events: events}
 }
 
 // CheckTx() is code that is executed to statelessly validate a transaction
