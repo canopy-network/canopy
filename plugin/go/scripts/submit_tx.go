@@ -263,18 +263,6 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			TreasuryCutBps: uint64(treasuryCutBps),
 		}
 		return "type.googleapis.com/types.MessageSetTreasuryCut", msg, nil
-	case "debug_enqueue_loss_factor":
-		authority, err := hex.DecodeString(signerAddrHex)
-		if err != nil {
-			return "", nil, fmt.Errorf("decode authority: %w", err)
-		}
-		badDebt, _ := fields["badDebt"].(float64)
-		msg := &contract.MessageDebugEnqueueLossFactor{
-			Authority: authority,
-			MarketId:  str(fields["marketId"]),
-			BadDebt:   uint64(badDebt),
-		}
-		return "type.googleapis.com/types.MessageDebugEnqueueLossFactor", msg, nil
 	default:
 		return "", nil, fmt.Errorf("unknown or not-yet-wired msgType: %s", msgType)
 	}
