@@ -20,10 +20,10 @@ import "math"
 // codebase's other cast guards (AYIS J2's BitLen() checks, uint128.go's
 // EncodeUint128) already treat as non-negotiable.
 func SafeInt64FromUint64(u uint64) (result int64, ok bool) {
-if u > math.MaxInt64 {
-return 0, false
-}
-return int64(u), true
+	if u > math.MaxInt64 {
+		return 0, false
+	}
+	return int64(u), true
 }
 
 // applyDebtDelta is the SINGLE mandatory write path for every
@@ -48,30 +48,30 @@ return int64(u), true
 // callers that don't care about the clamp (borrow.go's increase branch
 // never clamps) is unchanged -- they can simply discard it with _.
 func applyDebtDelta(market *Market, marketID string, delta int64) (clampedFrom uint64, pErr *PluginError) {
-if delta > 0 {
-increase := uint64(delta)
-if increase > (^uint64(0) - market.TotalBorrowed) {
-return 0, ErrTotalBorrowedOverflowCentralized(marketID, market.TotalBorrowed, increase)
-}
-market.TotalBorrowed += increase
-} else if delta < 0 {
-// delta is negative and within int64 range by construction (it was
-// only ever produced by a successful SafeInt64FromUint64 call
-// followed by a caller-side negation) -- uint64(-delta) is safe:
-// -delta is positive and representable, since delta != math.MinInt64
-// (a value that only int64(0) is negated INTO, per SafeInt64FromUint64
-// never returning an already-negative result to negate in the first
-// place).
-decrease := uint64(-delta)
-if decrease >= market.TotalBorrowed {
-// [NEW] Capture the pre-clamp value BEFORE zeroing it, same
-// discipline as H4's fix for total_supplied/total_shares_outstanding.
-clampedFrom = market.TotalBorrowed
-market.TotalBorrowed = 0
-} else {
-market.TotalBorrowed -= decrease
-}
-}
-// delta == 0: no-op, matches ARCM's own pseudocode (no else branch for zero).
-return clampedFrom, nil
+	if delta > 0 {
+		increase := uint64(delta)
+		if increase > (^uint64(0) - market.TotalBorrowed) {
+			return 0, ErrTotalBorrowedOverflowCentralized(marketID, market.TotalBorrowed, increase)
+		}
+		market.TotalBorrowed += increase
+	} else if delta < 0 {
+		// delta is negative and within int64 range by construction (it was
+		// only ever produced by a successful SafeInt64FromUint64 call
+		// followed by a caller-side negation) -- uint64(-delta) is safe:
+		// -delta is positive and representable, since delta != math.MinInt64
+		// (a value that only int64(0) is negated INTO, per SafeInt64FromUint64
+		// never returning an already-negative result to negate in the first
+		// place).
+		decrease := uint64(-delta)
+		if decrease >= market.TotalBorrowed {
+			// [NEW] Capture the pre-clamp value BEFORE zeroing it, same
+			// discipline as H4's fix for total_supplied/total_shares_outstanding.
+			clampedFrom = market.TotalBorrowed
+			market.TotalBorrowed = 0
+		} else {
+			market.TotalBorrowed -= decrease
+		}
+	}
+	// delta == 0: no-op, matches ARCM's own pseudocode (no else branch for zero).
+	return clampedFrom, nil
 }

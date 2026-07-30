@@ -213,11 +213,57 @@ func AccrueInterest(c *Contract, marketID string) (event *Event, pErr *PluginErr
 	}
 
 	// --- Step 7: interest_earned ---
-	// interest_earned = total_borrowed * per_block_rate * delta_t / RAY
-	interestEarned := new(big.Int).SetUint64(totalBorrowed)
-	interestEarned.Mul(interestEarned, perBlockRate)
-	interestEarned.Mul(interestEarned, new(big.Int).SetUint64(deltaT))
-	interestEarned.Div(interestEarned, RAY)
+	// [DUST FIX] interest_earned = (total_borrowed * per_block_rate * delta_t
+	// + interest_remainder_ray) / RAY, with the new remainder = that same
+	// numerator mod RAY carried into market.InterestRemainderRay for next
+	// accrual. Previously interest_earned = total_borrowed * per_block_rate *
+	// delta_t / RAY with no remainder tracking at all -- a real accounting
+	// bug, not test-scale noise: any accrual whose numerator doesn't clear one
+	// full RAY unit had that fractional interest silently discarded, forever,
+	// every single time. Confirmed live: a devnet market at ~100% APR with
+	// total_borrowed=294000 computed interest_earned ~= 0.186 per block,
+	// flooring to exactly 0 on every accrual call. This carry makes the
+	// computation exact -- no value is ever lost, it either becomes part of
+	// this block's interest_earned or carries forward as remainder.
+	//
+	// market.InterestRemainderRay is mutated on the in-memory market struct
+	// here, not written via its own dedicated SetXTry call -- every code path
+	// below that reaches this point already calls SaveMarket(c, marketID,
+	// market) at least once before returning (the Insolvent branch, the
+	// overflow-freeze branches, and Step 11's final save), so the remainder
+	// persists correctly via whichever of those saves this particular call
+	// happens to hit, with no new write call sites needed.
+	var prevRemainder *big.Int
+	if len(market.InterestRemainderRay) == 0 {
+		prevRemainder = big.NewInt(0)
+	} else {
+		prevRemainder = DecodeUint128(market.InterestRemainderRay)
+	}
+	numerator := new(big.Int).SetUint64(totalBorrowed)
+	numerator.Mul(numerator, perBlockRate)
+	numerator.Mul(numerator, new(big.Int).SetUint64(deltaT))
+	numerator.Add(numerator, prevRemainder)
+
+	interestEarned := new(big.Int).Div(numerator, RAY)
+	newRemainder := new(big.Int).Mod(numerator, RAY)
+
+	// [AYIS v1.10 Section 9, M1 discipline] BeginBlock-context write: use
+	// TryEncodeUint128, not the reverting EncodeUint128 wrapper -- matching
+	// every other accumulator write in this function. newRemainder is always
+	// < RAY by construction (the remainder of a division by RAY can never
+	// reach RAY itself), so !ok is structurally unreachable here, but this
+	// function still checks and handles it via the market-freeze convention
+	// rather than assuming the invariant and skipping the check, consistent
+	// with every other TryEncodeUint128 call site in this file.
+	remainderEncoded, rOk := TryEncodeUint128(newRemainder)
+	if !rOk {
+		market.IndexOverflowHalted = true
+		if sErr := SaveMarket(c, marketID, market); sErr != nil {
+			return nil, sErr
+		}
+		return nil, nil
+	}
+	market.InterestRemainderRay = remainderEncoded
 
 	// --- Step 8: branch on market.status ---
 	// [C4 FIX] Per ARCM v3.11.1 Section 9.3b Rule 3 / AYIS v1.11.1 Section 7

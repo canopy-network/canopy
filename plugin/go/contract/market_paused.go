@@ -30,8 +30,8 @@ package contract
 // market is understood" action. Revisit if a future ARCM version defines
 // pause's admission set explicitly.
 func checkMarketNotPaused(market *Market, marketID string) *PluginError {
-if market.Status == MarketStatus_PAUSED {
-return ErrMarketPaused(marketID)
-}
-return nil
+	if market.Status == MarketStatus_PAUSED {
+		return ErrMarketPaused(marketID)
+	}
+	return nil
 }

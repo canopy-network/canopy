@@ -1,9 +1,9 @@
 package contract
 
 import (
-"bytes"
-"encoding/hex"
-"fmt"
+	"bytes"
+	"encoding/hex"
+	"fmt"
 )
 
 // marketParamsAuthority reuses the identical placeholder authority as
@@ -14,15 +14,15 @@ import (
 var marketParamsAuthority []byte
 
 func init() {
-const marketParamsAuthorityHex = "7961113f844bcf86dfd79570f23a8e3a59b10751"
-addr, err := hex.DecodeString(marketParamsAuthorityHex)
-if err != nil {
-panic(fmt.Sprintf("update_market_params: invalid hardcoded authority address: %v", err))
-}
-if len(addr) != 20 {
-panic(fmt.Sprintf("update_market_params: hardcoded authority address must be 20 bytes, got %d", len(addr)))
-}
-marketParamsAuthority = addr
+	const marketParamsAuthorityHex = "7961113f844bcf86dfd79570f23a8e3a59b10751"
+	addr, err := hex.DecodeString(marketParamsAuthorityHex)
+	if err != nil {
+		panic(fmt.Sprintf("update_market_params: invalid hardcoded authority address: %v", err))
+	}
+	if len(addr) != 20 {
+		panic(fmt.Sprintf("update_market_params: hardcoded authority address must be 20 bytes, got %d", len(addr)))
+	}
+	marketParamsAuthority = addr
 }
 
 // CheckMessageUpdateMarketParams statelessly validates an
@@ -31,16 +31,16 @@ marketParamsAuthority = addr
 // enforces (AYIS Section 13) -- not a separately maintained copy of the
 // same constants, to avoid the two ever silently drifting apart.
 func (c *Contract) CheckMessageUpdateMarketParams(msg *MessageUpdateMarketParams) *PluginCheckResponse {
-if err := ValidateMarketID(msg.MarketId); err != nil {
-return &PluginCheckResponse{Error: ErrInvalidMarketID(err)}
-}
-if len(msg.Authority) != 20 {
-return &PluginCheckResponse{Error: ErrInvalidAddress()}
-}
-if msg.ReserveFactorBps < 200 || msg.ReserveFactorBps > 3000 {
-return &PluginCheckResponse{Error: ErrReserveFactorOutOfBounds()}
-}
-return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.Authority}}
+	if err := ValidateMarketID(msg.MarketId); err != nil {
+		return &PluginCheckResponse{Error: ErrInvalidMarketID(err)}
+	}
+	if len(msg.Authority) != 20 {
+		return &PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.ReserveFactorBps < 200 || msg.ReserveFactorBps > 3000 {
+		return &PluginCheckResponse{Error: ErrReserveFactorOutOfBounds()}
+	}
+	return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.Authority}}
 }
 
 // DeliverMessageUpdateMarketParams applies a validated parameter update.
@@ -59,31 +59,31 @@ return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.Authority}}
 // neither section states; DEPRECATED markets are simply not expected to
 // receive this transaction in normal operation.
 func (c *Contract) DeliverMessageUpdateMarketParams(msg *MessageUpdateMarketParams, fee uint64) *PluginDeliverResponse {
-if err := ValidateMarketID(msg.MarketId); err != nil {
-return &PluginDeliverResponse{Error: ErrInvalidMarketID(err)}
-}
-if len(msg.Authority) != 20 {
-return &PluginDeliverResponse{Error: ErrInvalidAddress()}
-}
-if msg.ReserveFactorBps < 200 || msg.ReserveFactorBps > 3000 {
-return &PluginDeliverResponse{Error: ErrReserveFactorOutOfBounds()}
-}
-if !bytes.Equal(msg.Authority, marketParamsAuthority) {
-return &PluginDeliverResponse{Error: ErrUnauthorized()}
-}
+	if err := ValidateMarketID(msg.MarketId); err != nil {
+		return &PluginDeliverResponse{Error: ErrInvalidMarketID(err)}
+	}
+	if len(msg.Authority) != 20 {
+		return &PluginDeliverResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.ReserveFactorBps < 200 || msg.ReserveFactorBps > 3000 {
+		return &PluginDeliverResponse{Error: ErrReserveFactorOutOfBounds()}
+	}
+	if !bytes.Equal(msg.Authority, marketParamsAuthority) {
+		return &PluginDeliverResponse{Error: ErrUnauthorized()}
+	}
 
-market, found, err := GetMarket(c, msg.MarketId)
-if err != nil {
-return &PluginDeliverResponse{Error: err}
-}
-if !found {
-return &PluginDeliverResponse{Error: ErrMarketNotFound(msg.MarketId)}
-}
+	market, found, err := GetMarket(c, msg.MarketId)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if !found {
+		return &PluginDeliverResponse{Error: ErrMarketNotFound(msg.MarketId)}
+	}
 
-market.ReserveFactorBps = msg.ReserveFactorBps
-if sErr := SaveMarket(c, msg.MarketId, market); sErr != nil {
-return &PluginDeliverResponse{Error: sErr}
-}
-_ = fee
-return &PluginDeliverResponse{}
+	market.ReserveFactorBps = msg.ReserveFactorBps
+	if sErr := SaveMarket(c, msg.MarketId, market); sErr != nil {
+		return &PluginDeliverResponse{Error: sErr}
+	}
+	_ = fee
+	return &PluginDeliverResponse{}
 }

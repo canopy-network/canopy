@@ -93,8 +93,20 @@ type Market struct {
 	TotalSupplied             uint64                 `protobuf:"varint,12,opt,name=total_supplied,json=totalSupplied,proto3" json:"total_supplied,omitempty"`                                          // ARCM Section 19.2.1b
 	LastAccrualBlock          uint64                 `protobuf:"varint,13,opt,name=last_accrual_block,json=lastAccrualBlock,proto3" json:"last_accrual_block,omitempty"`                               // AYIS Section 7 Step 11
 	AuthorizedSubmitters      [][]byte               `protobuf:"bytes,14,rep,name=authorized_submitters,json=authorizedSubmitters,proto3" json:"authorized_submitters,omitempty"`                      // ARCM Section 10 permissioned
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	// interest_remainder_ray is a RAY-scaled (1e18) fractional carry, uint128
+	// raw bytes via EncodeUint128/DecodeUint128 (matching layer4_pending_bad_debt_total's
+	// own encoding convention). AYIS Section 7 Step 7's interest_earned
+	// computation floor-divides by RAY; without this field, any block where
+	// total_borrowed * per_block_rate * delta_t doesn't clear one full RAY unit
+	// has that fractional interest silently discarded rather than carried
+	// forward -- a real, disclosed accounting-loss bug (found while live-testing
+	// treasury_cut on a small devnet market), not merely a test-scale artifact.
+	// Always < RAY in magnitude after every accrual by construction (the
+	// remainder of a division by RAY can never reach RAY itself), so encoding
+	// it can never overflow 128 bits.
+	InterestRemainderRay []byte `protobuf:"bytes,15,opt,name=interest_remainder_ray,json=interestRemainderRay,proto3" json:"interest_remainder_ray,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *Market) Reset() {
@@ -221,6 +233,13 @@ func (x *Market) GetLastAccrualBlock() uint64 {
 func (x *Market) GetAuthorizedSubmitters() [][]byte {
 	if x != nil {
 		return x.AuthorizedSubmitters
+	}
+	return nil
+}
+
+func (x *Market) GetInterestRemainderRay() []byte {
+	if x != nil {
+		return x.InterestRemainderRay
 	}
 	return nil
 }
@@ -594,7 +613,7 @@ var File_arbor_state_proto protoreflect.FileDescriptor
 
 const file_arbor_state_proto_rawDesc = "" +
 	"\n" +
-	"\x11arbor_state.proto\x12\x05types\"\xe6\x04\n" +
+	"\x11arbor_state.proto\x12\x05types\"\x9c\x05\n" +
 	"\x06Market\x12\x1b\n" +
 	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12.\n" +
 	"\x13collateral_asset_id\x18\x02 \x01(\tR\x11collateralAssetId\x12\"\n" +
@@ -611,7 +630,8 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\x0etotal_borrowed\x18\v \x01(\x04R\rtotalBorrowed\x12%\n" +
 	"\x0etotal_supplied\x18\f \x01(\x04R\rtotalSupplied\x12,\n" +
 	"\x12last_accrual_block\x18\r \x01(\x04R\x10lastAccrualBlock\x123\n" +
-	"\x15authorized_submitters\x18\x0e \x03(\fR\x14authorizedSubmitters\"\xd2\x01\n" +
+	"\x15authorized_submitters\x18\x0e \x03(\fR\x14authorizedSubmitters\x124\n" +
+	"\x16interest_remainder_ray\x18\x0f \x01(\fR\x14interestRemainderRay\"\xd2\x01\n" +
 	"\x10BorrowerPosition\x12\x1b\n" +
 	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\fR\aaddress\x12/\n" +

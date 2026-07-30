@@ -41,6 +41,19 @@ message Market {
                                               // create_market, immutable --
                                               // no governance add/remove path
                                               // exists yet.
+
+  // interest_remainder_ray is a RAY-scaled (1e18) fractional carry, uint128
+  // raw bytes via EncodeUint128/DecodeUint128 (matching layer4_pending_bad_debt_total's
+  // own encoding convention). AYIS Section 7 Step 7's interest_earned
+  // computation floor-divides by RAY; without this field, any block where
+  // total_borrowed * per_block_rate * delta_t doesn't clear one full RAY unit
+  // has that fractional interest silently discarded rather than carried
+  // forward -- a real, disclosed accounting-loss bug (found while live-testing
+  // treasury_cut on a small devnet market), not merely a test-scale artifact.
+  // Always < RAY in magnitude after every accrual by construction (the
+  // remainder of a division by RAY can never reach RAY itself), so encoding
+  // it can never overflow 128 bits.
+  bytes interest_remainder_ray = 15;
 }
 
 // BorrowerPosition is the {17} record (ARCM Section 6, AYIS Section 6).

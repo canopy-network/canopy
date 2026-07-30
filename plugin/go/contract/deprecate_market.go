@@ -1,9 +1,9 @@
 package contract
 
 import (
-"bytes"
-"encoding/hex"
-"fmt"
+	"bytes"
+	"encoding/hex"
+	"fmt"
 )
 
 // checkMarketNotDeprecated is the shared admission guard for
@@ -23,10 +23,10 @@ import (
 // additional collateral backing a position in a market winding down) is
 // blocked. Existing positions must always have a way out.
 func checkMarketNotDeprecated(market *Market, marketID string) *PluginError {
-if market.Status == MarketStatus_DEPRECATED {
-return ErrMarketDeprecated(marketID)
-}
-return nil
+	if market.Status == MarketStatus_DEPRECATED {
+		return ErrMarketDeprecated(marketID)
+	}
+	return nil
 }
 
 // marketDeprecateAuthority reuses the identical placeholder authority as
@@ -36,26 +36,26 @@ return nil
 var marketDeprecateAuthority []byte
 
 func init() {
-const marketDeprecateAuthorityHex = "7961113f844bcf86dfd79570f23a8e3a59b10751"
-addr, err := hex.DecodeString(marketDeprecateAuthorityHex)
-if err != nil {
-panic(fmt.Sprintf("deprecate_market: invalid hardcoded authority address: %v", err))
-}
-if len(addr) != 20 {
-panic(fmt.Sprintf("deprecate_market: hardcoded authority address must be 20 bytes, got %d", len(addr)))
-}
-marketDeprecateAuthority = addr
+	const marketDeprecateAuthorityHex = "7961113f844bcf86dfd79570f23a8e3a59b10751"
+	addr, err := hex.DecodeString(marketDeprecateAuthorityHex)
+	if err != nil {
+		panic(fmt.Sprintf("deprecate_market: invalid hardcoded authority address: %v", err))
+	}
+	if len(addr) != 20 {
+		panic(fmt.Sprintf("deprecate_market: hardcoded authority address must be 20 bytes, got %d", len(addr)))
+	}
+	marketDeprecateAuthority = addr
 }
 
 // CheckMessageDeprecateMarket statelessly validates a 'deprecate_market' message.
 func (c *Contract) CheckMessageDeprecateMarket(msg *MessageDeprecateMarket) *PluginCheckResponse {
-if err := ValidateMarketID(msg.MarketId); err != nil {
-return &PluginCheckResponse{Error: ErrInvalidMarketID(err)}
-}
-if len(msg.Authority) != 20 {
-return &PluginCheckResponse{Error: ErrInvalidAddress()}
-}
-return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.Authority}}
+	if err := ValidateMarketID(msg.MarketId); err != nil {
+		return &PluginCheckResponse{Error: ErrInvalidMarketID(err)}
+	}
+	if len(msg.Authority) != 20 {
+		return &PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.Authority}}
 }
 
 // DeliverMessageDeprecateMarket applies a validated, PERMANENT retirement.
@@ -69,28 +69,28 @@ return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.Authority}}
 // one -- reversibility here would silently contradict the status's own
 // name and the spec's own wording.
 func (c *Contract) DeliverMessageDeprecateMarket(msg *MessageDeprecateMarket, fee uint64) *PluginDeliverResponse {
-if err := ValidateMarketID(msg.MarketId); err != nil {
-return &PluginDeliverResponse{Error: ErrInvalidMarketID(err)}
-}
-if len(msg.Authority) != 20 {
-return &PluginDeliverResponse{Error: ErrInvalidAddress()}
-}
-if !bytes.Equal(msg.Authority, marketDeprecateAuthority) {
-return &PluginDeliverResponse{Error: ErrUnauthorized()}
-}
+	if err := ValidateMarketID(msg.MarketId); err != nil {
+		return &PluginDeliverResponse{Error: ErrInvalidMarketID(err)}
+	}
+	if len(msg.Authority) != 20 {
+		return &PluginDeliverResponse{Error: ErrInvalidAddress()}
+	}
+	if !bytes.Equal(msg.Authority, marketDeprecateAuthority) {
+		return &PluginDeliverResponse{Error: ErrUnauthorized()}
+	}
 
-market, found, err := GetMarket(c, msg.MarketId)
-if err != nil {
-return &PluginDeliverResponse{Error: err}
-}
-if !found {
-return &PluginDeliverResponse{Error: ErrMarketNotFound(msg.MarketId)}
-}
+	market, found, err := GetMarket(c, msg.MarketId)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if !found {
+		return &PluginDeliverResponse{Error: ErrMarketNotFound(msg.MarketId)}
+	}
 
-market.Status = MarketStatus_DEPRECATED
-if sErr := SaveMarket(c, msg.MarketId, market); sErr != nil {
-return &PluginDeliverResponse{Error: sErr}
-}
-_ = fee
-return &PluginDeliverResponse{}
+	market.Status = MarketStatus_DEPRECATED
+	if sErr := SaveMarket(c, msg.MarketId, market); sErr != nil {
+		return &PluginDeliverResponse{Error: sErr}
+	}
+	_ = fee
+	return &PluginDeliverResponse{}
 }

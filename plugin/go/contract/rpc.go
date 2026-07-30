@@ -42,6 +42,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/all-markets", p.handleQueryAllMarkets)
 	mux.HandleFunc("/v1/query/all-borrower-positions", p.handleQueryAllBorrowerPositions)
 	mux.HandleFunc("/v1/query/prices", p.handleQueryPrices)
+	mux.HandleFunc("/v1/query/interestremainder", p.handleQueryInterestRemainder)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -772,4 +773,63 @@ func (p *Plugin) handleQueryAllBorrowerPositions(w http.ResponseWriter, r *http.
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(out)
+}
+
+// handleQueryInterestRemainder serves GET /v1/query/interestremainder?marketId=<id>
+// Returns the market's current interest_remainder_ray (Market.InterestRemainderRay,
+// uint128, RAY-scaled) as a decimal string. Added alongside the interest
+// sub-unit rounding-loss fix in interest_accrual.go's Step 7 -- prior to that
+// fix, no such field existed at all, so there was nothing to query. A market
+// that has never accrued, or has always cleared a full RAY unit exactly on
+// every accrual (rare in practice), returns "0", not an error -- an empty or
+// zero remainder is the normal steady state, not a fault condition.
+func (p *Plugin) handleQueryInterestRemainder(w http.ResponseWriter, r *http.Request) {
+	marketId := r.URL.Query().Get("marketId")
+	if marketId == "" {
+		http.Error(w, `{"error":"missing marketId query param"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateMarketID(marketId); err != nil {
+		http.Error(w, `{"error":"invalid marketId: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForMarket(marketId)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "market not found", "marketId": marketId})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	market := &Market{}
+	if err := proto.Unmarshal(raw, market); err != nil {
+		http.Error(w, `{"error":"failed to decode market record: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var remainder string
+	if len(market.InterestRemainderRay) == 0 {
+		remainder = "0"
+	} else {
+		remainder = DecodeUint128(market.InterestRemainderRay).String()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"marketId": marketId, "interestRemainderRay": remainder})
 }
