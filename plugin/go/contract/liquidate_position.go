@@ -95,8 +95,12 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 		return &PluginDeliverResponse{Error: pErr}
 	}
 
-	if aErr := AccrueInterest(c, msg.MarketId); aErr != nil {
+	aiEvent, aErr := AccrueInterest(c, msg.MarketId)
+	if aErr != nil {
 		return &PluginDeliverResponse{Error: aErr}
+	}
+	if aiEvent != nil {
+		events = append(events, aiEvent)
 	}
 
 	posKey := KeyForBorrowerPosition(msg.MarketId, msg.BorrowerAddress)

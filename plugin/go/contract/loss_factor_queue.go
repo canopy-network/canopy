@@ -142,3 +142,39 @@ func ProcessLossFactorQueue(c *Contract, marketID string) (event *Event, pErr *P
 
 	return appliedEvent, nil
 }
+
+// WillExhaustThisBlock implements ARCM v3.11.1 Section 9.3b Rule 3 (C4): a
+// narrow, read-only lookahead used only by AYIS Section 7 Step 8's revised
+// branch condition (AccrueInterest, interest_accrual.go). Checks whether
+// THIS market has a queued, not-yet-processed {28} loss-factor-application
+// entry whose bad_debt will exhaust it (loss_factor -> 0, market transitions
+// to Insolvent) when ProcessLossFactorQueue drains it later this same block.
+//
+// Performs the identical comparison ApplyLossFactor (Section 5.4.3) will
+// independently make later in the same block, against the same
+// total_supplied_equiv value, computed the same way (SumLenderBalancesInMarket).
+// Deliberately not deduplicated into a single shared call with ApplyLossFactor:
+// the two run at different, fixed points in BeginBlock's step sequence
+// (AccrueInterest first, ProcessLossFactorQueue's drain later, per the Accrual
+// Ordering Contract), and nothing mutates the {28} queue or a market's
+// total_shares_outstanding/loss_factor between them within the same block --
+// no user transaction executes between BeginBlock steps -- so this lookahead's
+// read is guaranteed consistent with the drain that follows it later in the
+// identical block.
+//
+// A pure read-ahead: does not mutate state, does not call ApplyLossFactor or
+// DequeueLossFactorApplication itself.
+func WillExhaustThisBlock(c *Contract, marketID string) (bool, *PluginError) {
+	entry, pending, pErr := PeekLossFactorQueue(c, marketID)
+	if pErr != nil {
+		return false, pErr
+	}
+	if !pending {
+		return false, nil
+	}
+	totalSuppliedEquiv, sErr := SumLenderBalancesInMarket(c, marketID)
+	if sErr != nil {
+		return false, sErr
+	}
+	return entry.BadDebt >= totalSuppliedEquiv, nil
+}

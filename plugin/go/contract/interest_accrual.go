@@ -1,6 +1,10 @@
 package contract
 
-import "math/big"
+import (
+	"math/big"
+
+	"google.golang.org/protobuf/types/known/anypb"
+)
 
 // interest_accrual.go implements AYIS Section 7's BeginBlock interest
 // accrual sequence for a single market. AccrueInterest is called once per
@@ -72,7 +76,7 @@ const maxDeltaTLinear = 1000 // AYIS Section 13, immutable
 // Section 3.2/4.6 as a market freeze, not a transaction revert -- freezing
 // is the SAME response regardless of calling context for this specific
 // failure mode, unlike R_fund's routing split in ARCM Section 9.3).
-func AccrueInterest(c *Contract, marketID string) *PluginError {
+func AccrueInterest(c *Contract, marketID string) (event *Event, pErr *PluginError) {
 	currentBlock := c.plugin.CurrentHeight()
 
 	// Batched read: Market, BorrowIndex ({25}), SupplyIndex ({26}),
@@ -98,10 +102,10 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if readResp.Error != nil {
-		return readResp.Error
+		return nil, readResp.Error
 	}
 
 	marketBytes := entryValue(readResp, qMarket)
@@ -112,11 +116,11 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// Guarded explicitly rather than assumed, per this project's
 		// standard (Section 10.6-style discipline extended to existence
 		// checks, not only cast boundaries).
-		return ErrMarketNotFound(marketID)
+		return nil, ErrMarketNotFound(marketID)
 	}
 	market := &Market{}
 	if uErr := Unmarshal(marketBytes, market); uErr != nil {
-		return uErr
+		return nil, uErr
 	}
 
 	// --- Step 0 [AYIS v1.10 Section 7, N1] ---
@@ -127,24 +131,24 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 	// recompute an ever-larger result at ever-growing cost, forever, for
 	// this one market -- the Principle 11 violation N1 exists to close.
 	if market.IndexOverflowHalted {
-		return nil
+		return nil, nil
 	}
 
 	borrowIndexBytes := entryValue(readResp, qBorrowIndex)
 	if len(borrowIndexBytes) == 0 {
-		return ErrMarketNotFound(marketID)
+		return nil, ErrMarketNotFound(marketID)
 	}
 	bIndex := DecodeUint128(borrowIndexBytes)
 
 	supplyIndexBytes := entryValue(readResp, qSupplyIndex)
 	if len(supplyIndexBytes) == 0 {
-		return ErrMarketNotFound(marketID)
+		return nil, ErrMarketNotFound(marketID)
 	}
 	sRate, totalSharesOutstanding := DecodeSupplyIndexRecord(supplyIndexBytes)
 
 	lossFactorBytes := entryValue(readResp, qLossFactor)
 	if len(lossFactorBytes) == 0 {
-		return ErrMarketNotFound(marketID)
+		return nil, ErrMarketNotFound(marketID)
 	}
 	// lossFactor is read for completeness with AYIS Section 7's full read
 	// set, but Step 8 below branches on market.Status, not on lossFactor
@@ -159,7 +163,7 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// Already accrued this block (e.g. a second DeliverTx-context call
 		// in the same block after BeginBlock already ran). No-op, not an
 		// error -- matches AYIS Section 7.2's double-accrual handling.
-		return nil
+		return nil, nil
 	}
 
 	// --- Step 2/3: utilization ---
@@ -172,9 +176,9 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// for a market that is legitimately empty, not frozen.
 		market.LastAccrualBlock = currentBlock
 		if sErr := SaveMarket(c, marketID, market); sErr != nil {
-			return sErr
+			return nil, sErr
 		}
-		return nil
+		return nil, nil
 	}
 	utilizationBps := ComputeUtilizationBps(totalBorrowed, totalSupplied)
 
@@ -203,9 +207,9 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// BeginBlock processing is unaffected (Principle 2/14).
 		market.IndexOverflowHalted = true
 		if sErr := SaveMarket(c, marketID, market); sErr != nil {
-			return sErr
+			return nil, sErr
 		}
-		return nil
+		return nil, nil
 	}
 
 	// --- Step 7: interest_earned ---
@@ -216,11 +220,22 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 	interestEarned.Div(interestEarned, RAY)
 
 	// --- Step 8: branch on market.status ---
-	// C4 GAP: this condition is market.Status == Insolvent only, NOT
-	// market.Status == Insolvent || WillExhaustThisBlock(...). See the
-	// file-level comment above -- WillExhaustThisBlock's dependencies
-	// (SumLenderBalancesInMarket, {28} queue peek) do not exist yet.
-	if market.Status == MarketStatus_INSOLVENT {
+	// [C4 FIX] Per ARCM v3.11.1 Section 9.3b Rule 3 / AYIS v1.11.1 Section 7
+	// Step 8 revised: this condition now also checks WillExhaustThisBlock,
+	// closing the one-block misallocation window where a market with a
+	// queued, same-block Layer-4 exhaustion would otherwise have this
+	// block's interest incorrectly split into reserve_cut/treasury_cut/
+	// supplier_interest instead of routed whole to R_fund, because
+	// market.Status hasn't been flipped to Insolvent yet -- ApplyLossFactor
+	// (the thing that flips it) doesn't run until ProcessLossFactorQueue's
+	// drain step, later in this same BeginBlock. WillExhaustThisBlock
+	// performs the identical exhaustion comparison ApplyLossFactor will
+	// independently make moments later, so this branch and that drain agree.
+	willExhaust, weErr := WillExhaustThisBlock(c, marketID)
+	if weErr != nil {
+		return nil, weErr
+	}
+	if market.Status == MarketStatus_INSOLVENT || willExhaust {
 		// [AYIS Section 7, Step 8, J1/K1] Full interest_earned routes to
 		// R_fund for an Insolvent market -- fixed: previously computed and
 		// discarded, an accounting leak identical in shape to the
@@ -230,18 +245,18 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// this block (Principle 8 atomicity, same discipline as Step 10).
 		rFund, rFundFound, rErr := GetReserveFund(c, marketID)
 		if rErr != nil {
-			return rErr
+			return nil, rErr
 		}
 		if !rFundFound {
 			// Unreachable in practice: create_market always initializes {18} to
 			// zero (Section 4.5's zero-init contract). Guarded explicitly rather
 			// than assumed, per this project's established standard.
-			return ErrMarketNotFound(marketID)
+			return nil, ErrMarketNotFound(marketID)
 		}
 		newRFundInsolvent := new(big.Int).Add(rFund, interestEarned)
 		rOkInsolvent, rWriteErrInsolvent := SetReserveFundTry(c, marketID, newRFundInsolvent)
 		if rWriteErrInsolvent != nil {
-			return rWriteErrInsolvent
+			return nil, rWriteErrInsolvent
 		}
 		if !rOkInsolvent {
 			// [ARCM Section 9.3a] R_fund would not fit in 128 bits. Freeze this
@@ -250,9 +265,9 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 			// partially commits (Principle 8).
 			market.IndexOverflowHalted = true
 			if sErr := SaveMarket(c, marketID, market); sErr != nil {
-				return sErr
+				return nil, sErr
 			}
-			return nil
+			return nil, nil
 		}
 
 		// B_index still advances normally for an Insolvent market
@@ -260,16 +275,38 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// AYIS Section 6) -- only the S_rate split is skipped.
 		bOk, wErr := SetBorrowIndexTry(c, marketID, newBIndex)
 		if wErr != nil {
-			return wErr
+			return nil, wErr
 		}
 		if !bOk {
-			return ErrUint128EncodingOverflow(newBIndex.String())
+			return nil, ErrUint128EncodingOverflow(newBIndex.String())
 		}
 		market.LastAccrualBlock = currentBlock
 		if sErr := SaveMarket(c, marketID, market); sErr != nil {
-			return sErr
+			return nil, sErr
 		}
-		return nil
+		// [C4 FIX] Emit EventInsolventMarketValueRecovered per ARCM v3.11.1
+		// Section 9.3b Rule 3 / AYIS v1.11.1 Section 7 Step 8's revised
+		// pseudocode -- this event was never emitted here before this fix,
+		// despite the event type already existing and being registered in
+		// contract.go's EventTypeUrls. Guards RecoveredAmount's uint64 cast
+		// the same way liquidate_position.go guards collateralSeized, since
+		// interestEarned is an unbounded big.Int by construction.
+		if interestEarned.BitLen() > 64 {
+			return nil, ErrUint128EncodingOverflow(interestEarned.String())
+		}
+		payload := &EventInsolventMarketValueRecovered{
+			MarketId:        marketID,
+			RecoveredAmount: interestEarned.Uint64(),
+			Source:          "interest",
+		}
+		anyMsg, aErr := anypb.New(payload)
+		if aErr != nil {
+			return nil, ErrMarshal(aErr)
+		}
+		return &Event{
+			EventType: "insolvent_market_value_recovered",
+			Msg:       &Event_Custom{Custom: &EventCustom{Msg: anyMsg}},
+		}, nil
 	}
 
 	// Non-Insolvent path: split interest into reserve_cut / treasury_cut /
@@ -291,7 +328,7 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 
 	govParams, _, govErr := GetGovernanceParams(c)
 	if govErr != nil {
-		return govErr
+		return nil, govErr
 	}
 	var treasuryCutBps uint64
 	if govParams != nil {
@@ -318,18 +355,18 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 	// the same failure mode at a third accumulator (Principle 14).
 	rFund, rFundFound, rErr := GetReserveFund(c, marketID)
 	if rErr != nil {
-		return rErr
+		return nil, rErr
 	}
 	if !rFundFound {
 		// Unreachable in practice: create_market always initializes {18} to
 		// zero (Section 4.5's zero-init contract). Guarded explicitly rather
 		// than assumed, per this project's established standard.
-		return ErrMarketNotFound(marketID)
+		return nil, ErrMarketNotFound(marketID)
 	}
 	newRFund := new(big.Int).Add(rFund, reserveCut)
 	rOk, rWriteErr := SetReserveFundTry(c, marketID, newRFund)
 	if rWriteErr != nil {
-		return rWriteErr
+		return nil, rWriteErr
 	}
 	if !rOk {
 		// [ARCM Section 9.3a] R_fund would not fit in 128 bits. Freeze this
@@ -338,9 +375,9 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// the function, so nothing partially commits (Principle 8).
 		market.IndexOverflowHalted = true
 		if sErr := SaveMarket(c, marketID, market); sErr != nil {
-			return sErr
+			return nil, sErr
 		}
-		return nil
+		return nil, nil
 	}
 
 	// --- Step 10 (treasury_cut leg) --- treasuryCut flushed to the GLOBAL
@@ -351,7 +388,7 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 	// effect, not a special-cased skip branch.
 	tFund, _, tFundErr := GetTreasuryArbor(c)
 	if tFundErr != nil {
-		return tFundErr
+		return nil, tFundErr
 	}
 	if tFund == nil {
 		tFund = big.NewInt(0)
@@ -359,7 +396,7 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 	newTFund := new(big.Int).Add(tFund, treasuryCut)
 	tOk, tWriteErr := SetTreasuryArborTry(c, newTFund)
 	if tWriteErr != nil {
-		return tWriteErr
+		return nil, tWriteErr
 	}
 	if !tOk {
 		// Global treasury ({40}) would not fit in 128 bits. This is a GLOBAL
@@ -375,9 +412,9 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// response is required, not a mechanism this halt alone provides.
 		market.IndexOverflowHalted = true
 		if sErr := SaveMarket(c, marketID, market); sErr != nil {
-			return sErr
+			return nil, sErr
 		}
-		return nil
+		return nil, nil
 	}
 
 	// --- Step 9: S_rate update ---
@@ -396,18 +433,18 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		// atomicity (Principle 8).
 		market.IndexOverflowHalted = true
 		if sErr := SaveMarket(c, marketID, market); sErr != nil {
-			return sErr
+			return nil, sErr
 		}
-		return nil
+		return nil, nil
 	}
 
 	// Both B_index and S_rate are valid to commit -- write both now.
 	bOk, wErr := SetBorrowIndexTry(c, marketID, newBIndex)
 	if wErr != nil {
-		return wErr
+		return nil, wErr
 	}
 	if !bOk {
-		return ErrUint128EncodingOverflow(newBIndex.String())
+		return nil, ErrUint128EncodingOverflow(newBIndex.String())
 	}
 	writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
 		Sets: []*PluginSetOp{
@@ -415,16 +452,16 @@ func AccrueInterest(c *Contract, marketID string) *PluginError {
 		},
 	})
 	if wErr != nil {
-		return wErr
+		return nil, wErr
 	}
 	if writeResp.Error != nil {
-		return writeResp.Error
+		return nil, writeResp.Error
 	}
 
 	// --- Step 11: advance last_accrual_block ---
 	market.LastAccrualBlock = currentBlock
 	if sErr := SaveMarket(c, marketID, market); sErr != nil {
-		return sErr
+		return nil, sErr
 	}
-	return nil
+	return nil, nil
 }

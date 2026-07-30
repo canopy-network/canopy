@@ -276,8 +276,13 @@ func (c *Contract) DeliverMessageWithdrawCollateral(msg *MessageWithdrawCollater
 	}
 
 	// AccrueInterest MUST run before any debt read (AYIS Section 12.3).
-	if aErr := AccrueInterest(c, msg.MarketId); aErr != nil {
+	var events []*Event
+	aiEvent, aErr := AccrueInterest(c, msg.MarketId)
+	if aErr != nil {
 		return &PluginDeliverResponse{Error: aErr}
+	}
+	if aiEvent != nil {
+		events = append(events, aiEvent)
 	}
 
 	bIndexNow, biFound, biErr := GetBorrowIndex(c, msg.MarketId)
@@ -425,5 +430,5 @@ func (c *Contract) DeliverMessageWithdrawCollateral(msg *MessageWithdrawCollater
 	if writeResp.Error != nil {
 		return &PluginDeliverResponse{Error: writeResp.Error}
 	}
-	return &PluginDeliverResponse{}
+	return &PluginDeliverResponse{Events: events}
 }

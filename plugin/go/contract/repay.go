@@ -46,8 +46,13 @@ func (c *Contract) DeliverMessageRepay(msg *MessageRepay, fee uint64) *PluginDel
 		return &PluginDeliverResponse{Error: pErr}
 	}
 
-	if aErr := AccrueInterest(c, msg.MarketId); aErr != nil {
+	var events []*Event
+	aiEvent, aErr := AccrueInterest(c, msg.MarketId)
+	if aErr != nil {
 		return &PluginDeliverResponse{Error: aErr}
+	}
+	if aiEvent != nil {
+		events = append(events, aiEvent)
 	}
 
 	posKey := KeyForBorrowerPosition(msg.MarketId, msg.Address)
@@ -183,7 +188,6 @@ func (c *Contract) DeliverMessageRepay(msg *MessageRepay, fee uint64) *PluginDel
 	// delta < 0 branch implements -- this is not new underflow logic, only
 	// its relocation into the one function every total_borrowed mutation
 	// (borrow, repay, liquidation) is meant to share.
-	var events []*Event
 	if actualRepaid > 0 {
 		repaidDelta, safeOk := SafeInt64FromUint64(actualRepaid)
 		if !safeOk {

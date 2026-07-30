@@ -77,8 +77,13 @@ func (c *Contract) DeliverMessageBorrow(msg *MessageBorrow, fee uint64) *PluginD
 	// Step 1 -- MUST run before any debt read (AYIS Section 12.3). Safe to
 	// call redundantly if BeginBlock already accrued this market this
 	// block -- AccrueInterest's own double-accrual guard makes it a no-op.
-	if aErr := AccrueInterest(c, msg.MarketId); aErr != nil {
+	var events []*Event
+	aiEvent, aErr := AccrueInterest(c, msg.MarketId)
+	if aErr != nil {
 		return &PluginDeliverResponse{Error: aErr}
+	}
+	if aiEvent != nil {
+		events = append(events, aiEvent)
 	}
 
 	// A borrower must have an open collateral position (via
@@ -286,5 +291,5 @@ func (c *Contract) DeliverMessageBorrow(msg *MessageBorrow, fee uint64) *PluginD
 	if writeResp.Error != nil {
 		return &PluginDeliverResponse{Error: writeResp.Error}
 	}
-	return &PluginDeliverResponse{}
+	return &PluginDeliverResponse{Events: events}
 }

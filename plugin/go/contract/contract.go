@@ -179,9 +179,13 @@ func (c *Contract) BeginBlock(request *PluginBeginRequest) *PluginBeginResponse 
 			log.Printf("BeginBlock: failed to decode market at key %x: %v", entry.Key, uErr)
 			continue
 		}
-		if aErr := AccrueInterest(c, market.MarketId); aErr != nil {
+		aiEvent, aErr := AccrueInterest(c, market.MarketId)
+		if aErr != nil {
 			log.Printf("BeginBlock: AccrueInterest failed for market %s: %v", market.MarketId, aErr)
 			continue
+		}
+		if aiEvent != nil {
+			events = append(events, aiEvent)
 		}
 		// Accrual Ordering Contract (AYIS Section 12.3): loss-factor-application
 		// queue processing runs after AccrueInterest, same market, same block.
