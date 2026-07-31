@@ -19,7 +19,7 @@ Pseudo-Contracts
 
 Selectors
 - Send: `0xa9059cbb`
-- Subisdy: `0x16d68b09`
+- Subsidy: `0x16d68b09`
 - Stake: `0x2d1e0c02`
 - EditStake: `0x8c71a515`
 - Unstake: `0x3c3653e2`
@@ -275,7 +275,6 @@ However, for non standard - Canopy specific events under the `stCNPY` and `swCNP
 
 Canopy's RPC wrapper fully supports the following getter methods for blocks and transactions:
 - [x] eth_getBlockByHash
-- [x] eth_getBlockByNumber
 - [x] eth_getBlockByNumber
 - [x] eth_getTransactionByHash
 - [x] eth_getTransactionByBlockHashAndIndex
