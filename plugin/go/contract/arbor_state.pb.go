@@ -609,6 +609,273 @@ func (x *GovernanceParams) GetTreasuryCutBps() uint64 {
 	return 0
 }
 
+// NasmVault is the {30} record: a single NUSD-backing collateral position.
+// Keyed by vault_id (a caller-supplied string, validated via
+// ValidateVaultID) -- NOT by owner address, unlike BorrowerPosition's
+// (market_id, address) composite key. This is deliberate: NASM Spec
+// Section 5.2 requires vault ownership to be "a transferable claim, not a
+// bound identity" (the arbitrage loop's second leg is buying a vault
+// position outright on the secondary market). owner is therefore a mutable
+// field on the record itself, not baked into the key.
+type NasmVault struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	VaultId           string                 `protobuf:"bytes,1,opt,name=vault_id,json=vaultId,proto3" json:"vault_id,omitempty"`
+	Owner             []byte                 `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`                                                    // current vault owner; mutable, unlike BorrowerPosition.address
+	CollateralAssetId string                 `protobuf:"bytes,3,opt,name=collateral_asset_id,json=collateralAssetId,proto3" json:"collateral_asset_id,omitempty"` // must be NASM Tier N-0 or N-1, checked against a NASM-specific
+	// tier table, NOT ARCM's Market.asset_tier / PrefixAssetTier
+	CollateralQuantity uint64 `protobuf:"varint,4,opt,name=collateral_quantity,json=collateralQuantity,proto3" json:"collateral_quantity,omitempty"` // matches BorrowerPosition.collateral_quantity's uint64 convention
+	NusdPrincipal      uint64 `protobuf:"varint,5,opt,name=nusd_principal,json=nusdPrincipal,proto3" json:"nusd_principal,omitempty"`                // raw minted principal, BEFORE stability fee scaling --
+	// callers MUST read debt via ScaledNusdDebt(), never this field
+	// directly (NASM Spec Section 6.3)
+	SfIndexAtOpen []byte `protobuf:"bytes,6,opt,name=sf_index_at_open,json=sfIndexAtOpen,proto3" json:"sf_index_at_open,omitempty"` // uint128 RAY-scaled SF_index(t) snapshot, EncodeUint128 raw bytes --
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NasmVault) Reset() {
+	*x = NasmVault{}
+	mi := &file_arbor_state_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NasmVault) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NasmVault) ProtoMessage() {}
+
+func (x *NasmVault) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NasmVault.ProtoReflect.Descriptor instead.
+func (*NasmVault) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *NasmVault) GetVaultId() string {
+	if x != nil {
+		return x.VaultId
+	}
+	return ""
+}
+
+func (x *NasmVault) GetOwner() []byte {
+	if x != nil {
+		return x.Owner
+	}
+	return nil
+}
+
+func (x *NasmVault) GetCollateralAssetId() string {
+	if x != nil {
+		return x.CollateralAssetId
+	}
+	return ""
+}
+
+func (x *NasmVault) GetCollateralQuantity() uint64 {
+	if x != nil {
+		return x.CollateralQuantity
+	}
+	return 0
+}
+
+func (x *NasmVault) GetNusdPrincipal() uint64 {
+	if x != nil {
+		return x.NusdPrincipal
+	}
+	return 0
+}
+
+func (x *NasmVault) GetSfIndexAtOpen() []byte {
+	if x != nil {
+		return x.SfIndexAtOpen
+	}
+	return nil
+}
+
+// NusdSupply is the {31} record: the single global NUSD circulating supply
+// counter. No-argument key (KeyForNusdSupply), matching GovernanceParams'
+// single-global-struct convention -- one record, read-modify-write per
+// change, not one state key per field.
+type NusdSupply struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TotalSupply   uint64                 `protobuf:"varint,1,opt,name=total_supply,json=totalSupply,proto3" json:"total_supply,omitempty"` // 1e6 precision (NASM Spec Section 2.3), plain uint64 --
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NusdSupply) Reset() {
+	*x = NusdSupply{}
+	mi := &file_arbor_state_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NusdSupply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NusdSupply) ProtoMessage() {}
+
+func (x *NusdSupply) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NusdSupply.ProtoReflect.Descriptor instead.
+func (*NusdSupply) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *NusdSupply) GetTotalSupply() uint64 {
+	if x != nil {
+		return x.TotalSupply
+	}
+	return 0
+}
+
+// StabilityFeeIndex is the {32} record: the single global, RAY-scaled
+// cumulative stability fee index, reusing AYIS's B_index/S_rate accrual
+// pattern exactly (NASM Spec Section 6.2). NOT per-market/per-asset --
+// one pooled fee across all NASM vaults, unlike AYIS's PrefixBorrowIndex/
+// PrefixSupplyIndex which are keyed per lending market.
+type StabilityFeeIndex struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SfIndex       []byte                 `protobuf:"bytes,1,opt,name=sf_index,json=sfIndex,proto3" json:"sf_index,omitempty"` // uint128, RAY-scaled, EncodeUint128 raw bytes -- same shape as
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StabilityFeeIndex) Reset() {
+	*x = StabilityFeeIndex{}
+	mi := &file_arbor_state_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StabilityFeeIndex) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StabilityFeeIndex) ProtoMessage() {}
+
+func (x *StabilityFeeIndex) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StabilityFeeIndex.ProtoReflect.Descriptor instead.
+func (*StabilityFeeIndex) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *StabilityFeeIndex) GetSfIndex() []byte {
+	if x != nil {
+		return x.SfIndex
+	}
+	return nil
+}
+
+// RwaYieldVaultPosition is the {34} record: a single depositor's RWA Yield
+// Vault share position (NASM Spec Section 8.2). Explicitly NOT NUSD and
+// NOT 1:1 redeemable on demand -- a separate risk product, isolated from
+// NUSD's own backing and redemption guarantee. Keyed by depositor address
+// alone (KeyForRwaYieldVaultPosition), matching LenderPosition's precedent,
+// since RYV positions are not transferable the way NasmVault is.
+type RwaYieldVaultPosition struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Depositor []byte                 `protobuf:"bytes,1,opt,name=depositor,proto3" json:"depositor,omitempty"`
+	AssetType uint32                 `protobuf:"varint,2,opt,name=asset_type,json=assetType,proto3" json:"asset_type,omitempty"` // 0 = RWA_FRACTION, 1 = NUSD (NASM Spec Section 8.2's
+	// deposit_yield_vault asset_type parameter)
+	Shares        uint64 `protobuf:"varint,3,opt,name=shares,proto3" json:"shares,omitempty"`                                 // RYV share count, matching LenderPosition.shares' uint64 convention
+	DepositBlock  uint64 `protobuf:"varint,4,opt,name=deposit_block,json=depositBlock,proto3" json:"deposit_block,omitempty"` // matches LenderPosition.deposit_block's observability convention
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RwaYieldVaultPosition) Reset() {
+	*x = RwaYieldVaultPosition{}
+	mi := &file_arbor_state_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RwaYieldVaultPosition) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RwaYieldVaultPosition) ProtoMessage() {}
+
+func (x *RwaYieldVaultPosition) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RwaYieldVaultPosition.ProtoReflect.Descriptor instead.
+func (*RwaYieldVaultPosition) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RwaYieldVaultPosition) GetDepositor() []byte {
+	if x != nil {
+		return x.Depositor
+	}
+	return nil
+}
+
+func (x *RwaYieldVaultPosition) GetAssetType() uint32 {
+	if x != nil {
+		return x.AssetType
+	}
+	return 0
+}
+
+func (x *RwaYieldVaultPosition) GetShares() uint64 {
+	if x != nil {
+		return x.Shares
+	}
+	return 0
+}
+
+func (x *RwaYieldVaultPosition) GetDepositBlock() uint64 {
+	if x != nil {
+		return x.DepositBlock
+	}
+	return 0
+}
+
 var File_arbor_state_proto protoreflect.FileDescriptor
 
 const file_arbor_state_proto_rawDesc = "" +
@@ -654,7 +921,25 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\bbad_debt\x18\x02 \x01(\x04R\abadDebt\x12%\n" +
 	"\x0eenqueued_block\x18\x03 \x01(\x04R\renqueuedBlock\"<\n" +
 	"\x10GovernanceParams\x12(\n" +
-	"\x10treasury_cut_bps\x18\x01 \x01(\x04R\x0etreasuryCutBps*E\n" +
+	"\x10treasury_cut_bps\x18\x01 \x01(\x04R\x0etreasuryCutBps\"\xed\x01\n" +
+	"\tNasmVault\x12\x19\n" +
+	"\bvault_id\x18\x01 \x01(\tR\avaultId\x12\x14\n" +
+	"\x05owner\x18\x02 \x01(\fR\x05owner\x12.\n" +
+	"\x13collateral_asset_id\x18\x03 \x01(\tR\x11collateralAssetId\x12/\n" +
+	"\x13collateral_quantity\x18\x04 \x01(\x04R\x12collateralQuantity\x12%\n" +
+	"\x0enusd_principal\x18\x05 \x01(\x04R\rnusdPrincipal\x12'\n" +
+	"\x10sf_index_at_open\x18\x06 \x01(\fR\rsfIndexAtOpen\"/\n" +
+	"\n" +
+	"NusdSupply\x12!\n" +
+	"\ftotal_supply\x18\x01 \x01(\x04R\vtotalSupply\".\n" +
+	"\x11StabilityFeeIndex\x12\x19\n" +
+	"\bsf_index\x18\x01 \x01(\fR\asfIndex\"\x91\x01\n" +
+	"\x15RwaYieldVaultPosition\x12\x1c\n" +
+	"\tdepositor\x18\x01 \x01(\fR\tdepositor\x12\x1d\n" +
+	"\n" +
+	"asset_type\x18\x02 \x01(\rR\tassetType\x12\x16\n" +
+	"\x06shares\x18\x03 \x01(\x04R\x06shares\x12#\n" +
+	"\rdeposit_block\x18\x04 \x01(\x04R\fdepositBlock*E\n" +
 	"\fMarketStatus\x12\n" +
 	"\n" +
 	"\x06ACTIVE\x10\x00\x12\n" +
@@ -677,15 +962,19 @@ func file_arbor_state_proto_rawDescGZIP() []byte {
 }
 
 var file_arbor_state_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_arbor_state_proto_goTypes = []any{
-	(MarketStatus)(0),            // 0: types.MarketStatus
-	(*Market)(nil),               // 1: types.Market
-	(*BorrowerPosition)(nil),     // 2: types.BorrowerPosition
-	(*PriceRecord)(nil),          // 3: types.PriceRecord
-	(*LenderPosition)(nil),       // 4: types.LenderPosition
-	(*LossFactorQueueEntry)(nil), // 5: types.LossFactorQueueEntry
-	(*GovernanceParams)(nil),     // 6: types.GovernanceParams
+	(MarketStatus)(0),             // 0: types.MarketStatus
+	(*Market)(nil),                // 1: types.Market
+	(*BorrowerPosition)(nil),      // 2: types.BorrowerPosition
+	(*PriceRecord)(nil),           // 3: types.PriceRecord
+	(*LenderPosition)(nil),        // 4: types.LenderPosition
+	(*LossFactorQueueEntry)(nil),  // 5: types.LossFactorQueueEntry
+	(*GovernanceParams)(nil),      // 6: types.GovernanceParams
+	(*NasmVault)(nil),             // 7: types.NasmVault
+	(*NusdSupply)(nil),            // 8: types.NusdSupply
+	(*StabilityFeeIndex)(nil),     // 9: types.StabilityFeeIndex
+	(*RwaYieldVaultPosition)(nil), // 10: types.RwaYieldVaultPosition
 }
 var file_arbor_state_proto_depIdxs = []int32{
 	0, // 0: types.Market.status:type_name -> types.MarketStatus
@@ -707,7 +996,7 @@ func file_arbor_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_state_proto_rawDesc), len(file_arbor_state_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

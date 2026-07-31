@@ -470,3 +470,245 @@ func SetTreasuryNASM(c *Contract, tFund *big.Int) *PluginError {
 	}
 	return nil
 }
+
+// ─────────────────────────────────────────────
+// NASM (NUSD / Arbor Stability Module) accessors -- {30} NasmVault, {31}
+// NusdSupply, {32} StabilityFeeIndex, {34} RwaYieldVaultPosition. See
+// arbor_state.proto's NASM message block and state_keys.go's NASM prefix
+// block for full design rationale.
+// ─────────────────────────────────────────────
+
+// GetNasmVault reads and unmarshals a {30} NasmVault record by vault_id.
+// found=false with a nil error means no vault exists at that vault_id --
+// the expected state both before mint_nusd first creates one, and after
+// burn_nusd deletes it on full closure (NASM Spec Section 4.2 Step 10).
+// Matches GetMarket's found-is-meaningful contract exactly, not
+// GetGovernanceParams/GetTreasuryNASM's found-false-is-normal-singleton
+// contract -- a NasmVault is a real, individually-created-and-destroyed
+// record, not a global default-zero value.
+func GetNasmVault(c *Contract, vaultID string) (vault *NasmVault, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForNasmVault(vaultID)},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	v := &NasmVault{}
+	if uErr := Unmarshal(raw, v); uErr != nil {
+		return nil, false, uErr
+	}
+	return v, true, nil
+}
+
+// SaveNasmVault marshals and writes a {30} NasmVault record. Caller owns
+// read-modify-write: call GetNasmVault first, mutate, then call this --
+// matching SaveMarket's single-responsibility write-site pattern.
+func SaveNasmVault(c *Contract, vault *NasmVault) *PluginError {
+	vaultBytes, mErr := Marshal(vault)
+	if mErr != nil {
+		return mErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForNasmVault(vault.VaultId), Value: vaultBytes},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
+}
+
+// DeleteNasmVault removes a {30} NasmVault record entirely -- called on
+// full closure (NASM Spec Section 4.2 Step 10: "If new_debt == 0: release
+// all remaining collateral and delete the vault record"). A dedicated
+// delete function, not a zero-value SaveNasmVault call, since an absent
+// key and an explicit zero-value record must not be conflated at read
+// sites downstream (same principle as create_market.go's zero-init
+// comment for Layer4PendingBadDebtTotal).
+func DeleteNasmVault(c *Contract, vaultID string) *PluginError {
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Deletes: []*PluginDeleteOp{
+			{Key: KeyForNasmVault(vaultID)},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
+}
+
+// GetNusdSupply reads and unmarshals the {31} NusdSupply record -- a
+// single global struct, matching GovernanceParams' convention. found=false
+// with a nil error is the expected steady state before mint_nusd's first
+// call ever writes it; callers MUST treat a zero-value NusdSupply{} (i.e.
+// total_supply=0) as correct in that case, mirroring
+// GetGovernanceParams/GetTreasuryNASM's found=false-is-normal contract.
+func GetNusdSupply(c *Contract) (supply *NusdSupply, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForNusdSupply()},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	s := &NusdSupply{}
+	if uErr := Unmarshal(raw, s); uErr != nil {
+		return nil, false, uErr
+	}
+	return s, true, nil
+}
+
+// SaveNusdSupply marshals and writes the {31} NusdSupply record. Caller
+// owns read-modify-write, matching SaveGovernanceParams' pattern exactly.
+func SaveNusdSupply(c *Contract, supply *NusdSupply) *PluginError {
+	supplyBytes, mErr := Marshal(supply)
+	if mErr != nil {
+		return mErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForNusdSupply(), Value: supplyBytes},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
+}
+
+// GetStabilityFeeIndex reads and decodes the {32} StabilityFeeIndex record
+// -- a single global RAY-scaled uint128 value, reusing AYIS's B_index/
+// S_rate accrual pattern (NASM Spec Section 6.2). found=false with a nil
+// error means the index has never been initialized -- callers at genesis
+// MUST treat this as RAY (1e18), matching AYIS's SupplyIndexRecord
+// initialization convention (create_market.go's s_rate=RAY precedent),
+// NOT as zero -- an uninitialized multiplicative index must default to the
+// identity value, not the zero value.
+func GetStabilityFeeIndex(c *Contract) (sfIndex *big.Int, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForStabilityFeeIndex()},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	sf := &StabilityFeeIndex{}
+	if uErr := Unmarshal(raw, sf); uErr != nil {
+		return nil, false, uErr
+	}
+	return DecodeUint128(sf.SfIndex), true, nil
+}
+
+// SetStabilityFeeIndexTry writes the {32} StabilityFeeIndex using
+// TryEncodeUint128 -- the BeginBlock-context-safe path (NASM Spec Section
+// 6.5: SF_index accrual runs in BeginBlock, alongside AYIS.AccrueInterest).
+// Mirrors SetTreasuryArborTry's contract exactly: returns ok=false (no
+// error) on overflow; the caller MUST respond with a protocol-level freeze
+// signal, never treat ok=false as a PluginError to propagate as a revert --
+// there is no transaction to revert in BeginBlock context (Principle 14).
+func SetStabilityFeeIndexTry(c *Contract, sfIndex *big.Int) (ok bool, pErr *PluginError) {
+	encoded, encOk := TryEncodeUint128(sfIndex)
+	if !encOk {
+		return false, nil
+	}
+	sfBytes, mErr := Marshal(&StabilityFeeIndex{SfIndex: encoded})
+	if mErr != nil {
+		return false, mErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForStabilityFeeIndex(), Value: sfBytes},
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+	if writeResp.Error != nil {
+		return false, writeResp.Error
+	}
+	return true, nil
+}
+
+// GetRwaYieldVaultPosition reads and unmarshals a {34} RwaYieldVaultPosition
+// record by depositor address. found=false with a nil error means the
+// depositor has no RYV position yet -- expected before their first
+// deposit_yield_vault call. Matches GetLenderPosition's presumed
+// per-address-keyed contract (address-keyed, not global).
+func GetRwaYieldVaultPosition(c *Contract, addr []byte) (position *RwaYieldVaultPosition, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForRwaYieldVaultPosition(addr)},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	p := &RwaYieldVaultPosition{}
+	if uErr := Unmarshal(raw, p); uErr != nil {
+		return nil, false, uErr
+	}
+	return p, true, nil
+}
+
+// SaveRwaYieldVaultPosition marshals and writes a {34} RwaYieldVaultPosition
+// record. Caller owns read-modify-write.
+func SaveRwaYieldVaultPosition(c *Contract, position *RwaYieldVaultPosition) *PluginError {
+	posBytes, mErr := Marshal(position)
+	if mErr != nil {
+		return mErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForRwaYieldVaultPosition(position.Depositor), Value: posBytes},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
+}

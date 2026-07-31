@@ -133,3 +133,67 @@ message GovernanceParams {
   // Layer 3 simply accumulates nothing until this is explicitly set.
   uint64 treasury_cut_bps = 1;
 }
+
+// ─────────────────────────────────────────────
+// NASM (NUSD / Arbor Stability Module) messages -- see NASM Consolidated
+// Specification for full design rationale. State keys {30}, {31}, {32},
+// {34} (state_keys.go); {33} is deliberately unused, R_nusd lives at {41}
+// (PrefixTreasuryNASM), already implemented ahead of this NASM work as
+// part of the earlier Treasury-split reversal.
+// ─────────────────────────────────────────────
+
+// NasmVault is the {30} record: a single NUSD-backing collateral position.
+// Keyed by vault_id (a caller-supplied string, validated via
+// ValidateVaultID) -- NOT by owner address, unlike BorrowerPosition's
+// (market_id, address) composite key. This is deliberate: NASM Spec
+// Section 5.2 requires vault ownership to be "a transferable claim, not a
+// bound identity" (the arbitrage loop's second leg is buying a vault
+// position outright on the secondary market). owner is therefore a mutable
+// field on the record itself, not baked into the key.
+message NasmVault {
+  string vault_id = 1;
+  bytes  owner = 2;                  // current vault owner; mutable, unlike BorrowerPosition.address
+  string collateral_asset_id = 3;    // must be NASM Tier N-0 or N-1, checked against a NASM-specific
+                                      // tier table, NOT ARCM's Market.asset_tier / PrefixAssetTier
+  uint64 collateral_quantity = 4;    // matches BorrowerPosition.collateral_quantity's uint64 convention
+  uint64 nusd_principal = 5;         // raw minted principal, BEFORE stability fee scaling --
+                                      // callers MUST read debt via ScaledNusdDebt(), never this field
+                                      // directly (NASM Spec Section 6.3)
+  bytes  sf_index_at_open = 6;       // uint128 RAY-scaled SF_index(t) snapshot, EncodeUint128 raw bytes --
+                                      // same shape as BorrowerPosition.borrow_index_at_open
+}
+
+// NusdSupply is the {31} record: the single global NUSD circulating supply
+// counter. No-argument key (KeyForNusdSupply), matching GovernanceParams'
+// single-global-struct convention -- one record, read-modify-write per
+// change, not one state key per field.
+message NusdSupply {
+  uint64 total_supply = 1;  // 1e6 precision (NASM Spec Section 2.3), plain uint64 --
+                             // matches BorrowerPosition/LenderPosition's amount-field convention,
+                             // not the RAY-scaled bytes convention (this is a token amount, not an index)
+}
+
+// StabilityFeeIndex is the {32} record: the single global, RAY-scaled
+// cumulative stability fee index, reusing AYIS's B_index/S_rate accrual
+// pattern exactly (NASM Spec Section 6.2). NOT per-market/per-asset --
+// one pooled fee across all NASM vaults, unlike AYIS's PrefixBorrowIndex/
+// PrefixSupplyIndex which are keyed per lending market.
+message StabilityFeeIndex {
+  bytes sf_index = 1;  // uint128, RAY-scaled, EncodeUint128 raw bytes -- same shape as
+                        // Market's B_index/loss_factor. Genesis value is RAY (1e18),
+                        // matching AYIS's SupplyIndexRecord initialization convention.
+}
+
+// RwaYieldVaultPosition is the {34} record: a single depositor's RWA Yield
+// Vault share position (NASM Spec Section 8.2). Explicitly NOT NUSD and
+// NOT 1:1 redeemable on demand -- a separate risk product, isolated from
+// NUSD's own backing and redemption guarantee. Keyed by depositor address
+// alone (KeyForRwaYieldVaultPosition), matching LenderPosition's precedent,
+// since RYV positions are not transferable the way NasmVault is.
+message RwaYieldVaultPosition {
+  bytes  depositor = 1;
+  uint32 asset_type = 2;      // 0 = RWA_FRACTION, 1 = NUSD (NASM Spec Section 8.2's
+                               // deposit_yield_vault asset_type parameter)
+  uint64 shares = 3;          // RYV share count, matching LenderPosition.shares' uint64 convention
+  uint64 deposit_block = 4;   // matches LenderPosition.deposit_block's observability convention
+}
