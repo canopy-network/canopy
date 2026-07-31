@@ -245,3 +245,109 @@ func ValidateAssetID(assetID string) error {
 	}
 	return nil
 }
+
+// ─────────────────────────────────────────────
+// NASM (NUSD / Arbor Stability Module) prefixes -- claims {30}, {31}, {32},
+// {34} from the {30}-{39} wall reserved above. {33} is deliberately SKIPPED,
+// not renumbered: R_nusd (NASM Consolidated Spec Section 12's "{33} NUSD
+// Reserve Fund") was already built earlier, under a different number and
+// name, as part of the Treasury-split reversal -- see PrefixTreasuryNASM at
+// {41} above, with GetTreasuryNASM/SetTreasuryNASMTry/SetTreasuryNASM in
+// state_accessors.go. Compacting {34}->{33} to fill the gap was considered
+// and rejected: once anything writes to a state key on mainnet, that number
+// is permanent, and a silent renumbering away from the spec doc's own
+// Section 12 table would leave a mismatch future readers have no way to
+// discover except by re-deriving this exact reasoning. A documented gap
+// costs nothing and stays traceable; a compacted range does not.
+var (
+	// PrefixNasmVaults: NUSD-backing collateral vaults (NASM Spec Section
+	// 4, 12). Keyed by vault_id, a caller-supplied string identifier --
+	// NOT by owner address, unlike BorrowerPosition/LenderPosition's
+	// (market_id, address) composite keys. This is a deliberate departure
+	// from that pattern: NASM Spec Section 5.2 requires vault ownership to
+	// be "a transferable claim, not a bound identity" (the arbitrage loop's
+	// second leg is buying a vault position outright on the secondary
+	// market). Keying by owner address would make transfer impossible
+	// without a close-and-reopen, which is circular -- the buyer would
+	// need to already own the collateral being transferred. vault_id
+	// therefore follows market_id's precedent (a stable, caller-supplied
+	// string handle, validated but not derived from any address) rather
+	// than BorrowerPosition's. The NasmVault record itself carries a
+	// mutable owner field; the key does not encode ownership.
+	PrefixNasmVaults = []byte{30}
+
+	// PrefixNusdSupply: global NUSD total_supply ledger (NASM Spec Section
+	// 12). No-argument key, matching KeyForGovernanceParams/
+	// KeyForBackstopQueue/KeyForTreasuryArbor's existing no-argument shape
+	// for singleton, non-market-keyed values.
+	PrefixNusdSupply = []byte{31}
+
+	// PrefixStabilityFeeIndex: SF_index(t), a single global uint128 (RAY)
+	// value (NASM Spec Section 6.2, 12) -- NOT per-market, unlike AYIS's
+	// PrefixBorrowIndex/PrefixSupplyIndex. NASM has one pooled stability
+	// fee across all vaults, not one per collateral asset or market.
+	PrefixStabilityFeeIndex = []byte{32}
+
+	// {33} intentionally not defined here. See block comment above --
+	// R_nusd lives at PrefixTreasuryNASM ({41}), not here.
+
+	// PrefixRwaYieldVault: RWA Yield Vault share records, keyed by
+	// depositor_address (NASM Spec Section 8, 12). Explicitly separate
+	// from NUSD and from NasmVaults above -- RYV shares are not NUSD, not
+	// 1:1 redeemable on demand, and this product's failure or success
+	// must never touch NUSD's own backing or peg mechanics (Section 8.1's
+	// structural-mismatch rationale for excluding RWA from NUSD backing
+	// in the first place).
+	PrefixRwaYieldVault = []byte{34}
+)
+
+func KeyForNasmVault(vaultID string) []byte {
+	return JoinLenPrefix(PrefixNasmVaults, []byte(vaultID))
+}
+
+func KeyForNusdSupply() []byte {
+	return JoinLenPrefix(PrefixNusdSupply)
+}
+
+func KeyForStabilityFeeIndex() []byte {
+	return JoinLenPrefix(PrefixStabilityFeeIndex)
+}
+
+// KeyForRwaYieldVaultPosition is keyed by depositor address alone -- RYV
+// positions are NOT transferable claims the way NasmVaults are (Section 8.2
+// describes ordinary deposit/withdraw against the depositor's own position,
+// with no secondary-market transfer mechanic in the spec), so this correctly
+// follows LenderPosition's address-keyed precedent rather than NasmVault's
+// vault_id precedent above.
+func KeyForRwaYieldVaultPosition(addr []byte) []byte {
+	return JoinLenPrefix(PrefixRwaYieldVault, addr)
+}
+
+// MaxVaultIDLen bounds vault_id length. Same collision rationale as
+// MaxMarketIDLen/MaxAssetIDLen: an unbounded string segment inside
+// JoinLenPrefix risks collision between two vault_ids whose lengths differ
+// by a multiple of 256. Matches MaxMarketIDLen's value -- vault_id and
+// market_id are both caller-supplied identifiers of the same practical
+// shape, no reason for a different ceiling.
+const MaxVaultIDLen = 64
+
+// ErrVaultIDTooLong is returned when a vault_id exceeds MaxVaultIDLen.
+type ErrVaultIDTooLong struct{ Len int }
+
+func (e ErrVaultIDTooLong) Error() string {
+	return fmt.Sprintf("vault_id length %d exceeds maximum of %d bytes", e.Len, MaxVaultIDLen)
+}
+
+// ValidateVaultID enforces MaxVaultIDLen and non-emptiness. MUST be called
+// at CheckMessageMintNusd's stateless admission check, before vault_id is
+// ever written to state or used in KeyForNasmVault. Mirrors ValidateMarketID
+// exactly.
+func ValidateVaultID(vaultID string) error {
+	if len(vaultID) == 0 {
+		return fmt.Errorf("vault_id must not be empty")
+	}
+	if len(vaultID) > MaxVaultIDLen {
+		return ErrVaultIDTooLong{Len: len(vaultID)}
+	}
+	return nil
+}
