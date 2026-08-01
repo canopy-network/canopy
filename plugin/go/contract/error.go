@@ -294,3 +294,51 @@ func ErrSelfLiquidation() *PluginError {
 func ErrScaledDebtOverflow(marketID string, debtPrincipal uint64, scaledDebt string) *PluginError {
 	return NewError(241, ArborModule, fmt.Sprintf("market %q: scaled debt value %s for debtPrincipal %d exceeds uint64 range, AYIS Section 6", marketID, scaledDebt, debtPrincipal))
 }
+
+// ErrVaultAlreadyExists guards mint_nusd's vault_id collision check --
+// NASM vaults, like Markets (ErrMarketAlreadyExists), must never be
+// silently overwritten by a second create with the same identifier, which
+// would corrupt an existing vault's real collateral_quantity/nusd_principal
+// with a fresh vault's initial values.
+func ErrVaultAlreadyExists(vaultID string) *PluginError {
+	return NewError(243, ArborModule, fmt.Sprintf("NASM vault %q already exists", vaultID))
+}
+
+// ErrNasmTierIneligible guards mint_nusd's collateral eligibility check
+// (NASM Consolidated Spec Section 3.1). Returned when ResolveNasmTier
+// reports found=false -- covering three distinct upstream cases (no {29}
+// registry entry, ARCM Tier 2/3, or an asset that structurally never
+// appears in {29} as Tier 0/1, e.g. RWA fractions), all correctly meaning
+// "not eligible to back NUSD minting." See nasm_tier.go's own doc comment
+// on ResolveNasmTier for the full three-case breakdown.
+func ErrNasmTierIneligible(assetID string) *PluginError {
+	return NewError(244, ArborModule, fmt.Sprintf("asset %q is not eligible NASM collateral (must be ARCM Tier 0 or Tier 1, NASM Spec Section 3.1)", assetID))
+}
+
+// ErrNasmHealthFactorTooLow guards mint_nusd's post-mint HF_n check (NASM
+// Consolidated Spec Section 4.1 Step 4, Section 2.2's HF_n formula). A
+// vault must have HF_n > 1.0 immediately after minting -- mirrors ARCM's
+// ErrExceedsMaxLTV in spirit (both reject a request that would leave a
+// position under-collateralized relative to its liquidation threshold),
+// but NASM's own error since the underlying formula, tier table, and
+// liquidation threshold (LTV_n_liq, not ARCM's LTVLiqBps) are NASM-owned.
+func ErrNasmHealthFactorTooLow(vaultID string, requestedNusd uint64, maxNusdAtHF1 string) *PluginError {
+	return NewError(245, ArborModule, fmt.Sprintf("NASM vault %q: requested nusd_amount %d would leave HF_n <= 1.0; max mintable at HF_n > 1.0 is approximately %s NUSD", vaultID, requestedNusd, maxNusdAtHF1))
+}
+
+// ErrInvalidVaultID wraps a ValidateVaultID failure, matching
+// ErrInvalidMarketID/ErrInvalidAssetID's own wrap-and-forward pattern
+// exactly.
+func ErrInvalidVaultID(err error) *PluginError {
+	return NewError(246, ArborModule, fmt.Sprintf("invalid vault_id: %s", err.Error()))
+}
+
+// ErrNasmPriceUnavailable is mint_nusd's own oracle-unavailable error --
+// deliberately NOT a reuse of ErrPriceUnavailable, whose message hardcodes
+// "market %q", which would be actively misleading for a NASM vault_id (a
+// vault is not a market). Same underlying condition (ARCM Section 10's
+// permissioned price cache has no resolvable entry for this asset), NASM's
+// own wording.
+func ErrNasmPriceUnavailable(vaultID, assetID string) *PluginError {
+	return NewError(247, ArborModule, fmt.Sprintf("NASM vault %q: no resolvable oracle price for asset %q (ARCM Section 10, quorum/freshness not met)", vaultID, assetID))
+}
