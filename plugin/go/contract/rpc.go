@@ -43,6 +43,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/all-borrower-positions", p.handleQueryAllBorrowerPositions)
 	mux.HandleFunc("/v1/query/prices", p.handleQueryPrices)
 	mux.HandleFunc("/v1/query/interestremainder", p.handleQueryInterestRemainder)
+	mux.HandleFunc("/v1/query/nasmtier", p.handleQueryNasmTier)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -832,4 +833,88 @@ func (p *Plugin) handleQueryInterestRemainder(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"marketId": marketId, "interestRemainderRay": remainder})
+}
+
+// handleQueryNasmTier serves GET /v1/query/nasmtier?assetId=<id>
+// Returns whether an asset is eligible to back NUSD minting, and at which
+// NASM tier, mirroring nasm_tier.go's ResolveNasmTier logic -- the bridge
+// from ARCM's {29} tier registry into NASM's own tighter LTV table (NASM
+// Consolidated Spec Section 3.1). Deliberately does NOT call
+// ResolveNasmTier/GetAssetTier directly: both go through
+// c.plugin.StateRead, which QueryState's own doc comment states is tied to
+// an in-flight tx/block lifecycle and requires real FSM request context --
+// wrong primitive for a detached HTTP handler. Every other handler in this
+// file reads state via p.QueryState instead (detached, no Contract
+// required, safe from an RPC context per QueryState's own doc comment), so
+// this handler replicates GetAssetTier/ResolveNasmTier's small amount of
+// logic directly against QueryState rather than constructing a synthetic
+// Contract to force the wrong read path to work.
+//
+// Added to make NASM tier eligibility independently verifiable against
+// live devnet state before mint_nusd (which WILL correctly call
+// ResolveNasmTier internally, from real transaction context) exists.
+//
+// found=false is NOT an error condition -- it correctly means "not
+// eligible" (no {29} entry, or ARCM Tier 2/3). Reported as 200 OK with
+// eligible=false, not a 404, mirroring handleQueryPool/handleQueryTreasury's
+// zero-value-is-not-an-error convention.
+func (p *Plugin) handleQueryNasmTier(w http.ResponseWriter, r *http.Request) {
+	assetId := r.URL.Query().Get("assetId")
+	if assetId == "" {
+		http.Error(w, `{"error":"missing assetId query param"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateAssetID(assetId); err != nil {
+		http.Error(w, `{"error":"invalid assetId: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForAssetTier(assetId)
+	queryId := rand.Uint64()
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"assetId":  assetId,
+			"eligible": false,
+			"note":     "asset has no {29} registry entry -- not eligible to back NUSD minting",
+		})
+		return
+	}
+
+	arcmTier := DecodeAssetTierRecord(resp.Results[0].Entries[0].Value)
+	nasmParams, tpFound := nasmTierParamsTable[arcmTier]
+	if !tpFound {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"assetId":  assetId,
+			"eligible": false,
+			"note":     "asset is registered at ARCM Tier 2/3 -- not eligible to back NUSD minting (NASM Spec Section 3.1)",
+		})
+		return
+	}
+
+	tierLabel := "N-1"
+	if arcmTier == 0 {
+		tierLabel = "N-0"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"assetId":   assetId,
+		"eligible":  true,
+		"nasmTier":  tierLabel,
+		"ltvMaxBps": strconv.FormatUint(nasmParams.LTVMaxBps, 10),
+		"ltvLiqBps": strconv.FormatUint(nasmParams.LTVLiqBps, 10),
+	})
 }
