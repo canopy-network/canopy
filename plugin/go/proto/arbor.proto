@@ -180,3 +180,44 @@ message MessageSetTreasuryCut {
   bytes  authority = 1;
   uint64 treasury_cut_bps = 2; // 25-150 bps, checked at DeliverTx
 }
+
+// ─────────────────────────────────────────────
+// NASM (NUSD / Arbor Stability Module) transactions -- NASM Consolidated
+// Specification Section 4, 13.
+// ─────────────────────────────────────────────
+
+// MessageMintNusd opens a new NASM vault: locks eligible collateral
+// (NASM Spec Section 3.1's N-0/N-1 tiers only, resolved via
+// nasm_tier.go's ResolveNasmTier against ARCM's existing {29} registry --
+// see that file's doc comment for why NASM does not maintain a separate
+// registry) and mints newly-issued NUSD against it in one atomic
+// transaction (NASM Spec Section 4.1).
+//
+// vault_id is caller-supplied, NOT derived (matches market_id's own
+// precedent -- see ValidateVaultID/KeyForNasmVault in state_keys.go).
+// This is a deliberate departure from BorrowerPosition's owner-address-
+// keyed pattern: NASM Spec Section 5.2 requires vault ownership to be a
+// transferable claim, which an address-derived key would foreclose. The
+// caller chooses vault_id and it never changes for that vault's lifetime,
+// even if ownership later transfers.
+//
+// KNOWN GAP, DISCLOSED: the per-tier mint concentration cap (NASM Spec
+// Section 3.3, Max_tier_share_bps) is NOT enforced by this message as of
+// this version. That check requires a running total-backing-value
+// accumulator per tier, which does not exist in state yet (a range-scan
+// over all {30} vaults at every mint was considered and rejected --
+// unbounded per-transaction cost, the same anti-pattern
+// KeyForPriceRecord's own market_id field was added to avoid; see
+// update_price.go's doc comment). The accumulator will be added once
+// burn_nusd exists, so it can be correctly kept in sync on both mint and
+// burn from the start rather than shipping an increment-only value that
+// silently drifts. Matches this codebase's established disclosure
+// convention for known-deferred checks (see deposit.go's MIN_DEPOSIT
+// comment, create_market.go's hardcoded MinReporters comment).
+message MessageMintNusd {
+  string vault_id = 1;
+  bytes  owner = 2;
+  string collateral_asset_id = 3;
+  uint64 collateral_quantity = 4;
+  uint64 nusd_amount_requested = 5;
+}

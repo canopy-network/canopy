@@ -988,6 +988,110 @@ func (x *MessageSetTreasuryCut) GetTreasuryCutBps() uint64 {
 	return 0
 }
 
+// MessageMintNusd opens a new NASM vault: locks eligible collateral
+// (NASM Spec Section 3.1's N-0/N-1 tiers only, resolved via
+// nasm_tier.go's ResolveNasmTier against ARCM's existing {29} registry --
+// see that file's doc comment for why NASM does not maintain a separate
+// registry) and mints newly-issued NUSD against it in one atomic
+// transaction (NASM Spec Section 4.1).
+//
+// vault_id is caller-supplied, NOT derived (matches market_id's own
+// precedent -- see ValidateVaultID/KeyForNasmVault in state_keys.go).
+// This is a deliberate departure from BorrowerPosition's owner-address-
+// keyed pattern: NASM Spec Section 5.2 requires vault ownership to be a
+// transferable claim, which an address-derived key would foreclose. The
+// caller chooses vault_id and it never changes for that vault's lifetime,
+// even if ownership later transfers.
+//
+// KNOWN GAP, DISCLOSED: the per-tier mint concentration cap (NASM Spec
+// Section 3.3, Max_tier_share_bps) is NOT enforced by this message as of
+// this version. That check requires a running total-backing-value
+// accumulator per tier, which does not exist in state yet (a range-scan
+// over all {30} vaults at every mint was considered and rejected --
+// unbounded per-transaction cost, the same anti-pattern
+// KeyForPriceRecord's own market_id field was added to avoid; see
+// update_price.go's doc comment). The accumulator will be added once
+// burn_nusd exists, so it can be correctly kept in sync on both mint and
+// burn from the start rather than shipping an increment-only value that
+// silently drifts. Matches this codebase's established disclosure
+// convention for known-deferred checks (see deposit.go's MIN_DEPOSIT
+// comment, create_market.go's hardcoded MinReporters comment).
+type MessageMintNusd struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	VaultId             string                 `protobuf:"bytes,1,opt,name=vault_id,json=vaultId,proto3" json:"vault_id,omitempty"`
+	Owner               []byte                 `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
+	CollateralAssetId   string                 `protobuf:"bytes,3,opt,name=collateral_asset_id,json=collateralAssetId,proto3" json:"collateral_asset_id,omitempty"`
+	CollateralQuantity  uint64                 `protobuf:"varint,4,opt,name=collateral_quantity,json=collateralQuantity,proto3" json:"collateral_quantity,omitempty"`
+	NusdAmountRequested uint64                 `protobuf:"varint,5,opt,name=nusd_amount_requested,json=nusdAmountRequested,proto3" json:"nusd_amount_requested,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *MessageMintNusd) Reset() {
+	*x = MessageMintNusd{}
+	mi := &file_arbor_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageMintNusd) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageMintNusd) ProtoMessage() {}
+
+func (x *MessageMintNusd) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageMintNusd.ProtoReflect.Descriptor instead.
+func (*MessageMintNusd) Descriptor() ([]byte, []int) {
+	return file_arbor_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *MessageMintNusd) GetVaultId() string {
+	if x != nil {
+		return x.VaultId
+	}
+	return ""
+}
+
+func (x *MessageMintNusd) GetOwner() []byte {
+	if x != nil {
+		return x.Owner
+	}
+	return nil
+}
+
+func (x *MessageMintNusd) GetCollateralAssetId() string {
+	if x != nil {
+		return x.CollateralAssetId
+	}
+	return ""
+}
+
+func (x *MessageMintNusd) GetCollateralQuantity() uint64 {
+	if x != nil {
+		return x.CollateralQuantity
+	}
+	return 0
+}
+
+func (x *MessageMintNusd) GetNusdAmountRequested() uint64 {
+	if x != nil {
+		return x.NusdAmountRequested
+	}
+	return 0
+}
+
 var File_arbor_proto protoreflect.FileDescriptor
 
 const file_arbor_proto_rawDesc = "" +
@@ -1058,7 +1162,13 @@ const file_arbor_proto_rawDesc = "" +
 	"\tauthority\x18\x03 \x01(\fR\tauthority\"_\n" +
 	"\x15MessageSetTreasuryCut\x12\x1c\n" +
 	"\tauthority\x18\x01 \x01(\fR\tauthority\x12(\n" +
-	"\x10treasury_cut_bps\x18\x02 \x01(\x04R\x0etreasuryCutBpsB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"\x10treasury_cut_bps\x18\x02 \x01(\x04R\x0etreasuryCutBps\"\xd7\x01\n" +
+	"\x0fMessageMintNusd\x12\x19\n" +
+	"\bvault_id\x18\x01 \x01(\tR\avaultId\x12\x14\n" +
+	"\x05owner\x18\x02 \x01(\fR\x05owner\x12.\n" +
+	"\x13collateral_asset_id\x18\x03 \x01(\tR\x11collateralAssetId\x12/\n" +
+	"\x13collateral_quantity\x18\x04 \x01(\x04R\x12collateralQuantity\x122\n" +
+	"\x15nusd_amount_requested\x18\x05 \x01(\x04R\x13nusdAmountRequestedB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_proto_rawDescOnce sync.Once
@@ -1072,7 +1182,7 @@ func file_arbor_proto_rawDescGZIP() []byte {
 	return file_arbor_proto_rawDescData
 }
 
-var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_arbor_proto_goTypes = []any{
 	(*MessageCreateMarket)(nil),       // 0: types.MessageCreateMarket
 	(*MessageUpdateMarketParams)(nil), // 1: types.MessageUpdateMarketParams
@@ -1089,6 +1199,7 @@ var file_arbor_proto_goTypes = []any{
 	(*MessageLiquidatePosition)(nil),  // 12: types.MessageLiquidatePosition
 	(*MessageSetAssetTier)(nil),       // 13: types.MessageSetAssetTier
 	(*MessageSetTreasuryCut)(nil),     // 14: types.MessageSetTreasuryCut
+	(*MessageMintNusd)(nil),           // 15: types.MessageMintNusd
 }
 var file_arbor_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1109,7 +1220,7 @@ func file_arbor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_proto_rawDesc), len(file_arbor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
