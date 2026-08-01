@@ -876,6 +876,86 @@ func (x *RwaYieldVaultPosition) GetDepositBlock() uint64 {
 	return 0
 }
 
+// NusdBalance is the {35} record: a holder's independent NUSD balance,
+// separate from Account.Amount (account.proto) -- Account.Amount is
+// Canopy's single, undifferentiated native-currency balance per address
+// (confirmed via KeyForAccount(addr) -- keyed by address alone, no asset
+// dimension whatsoever). Every existing Arbor market's collateral_asset_id/
+// debt_asset_id ("USDC", "ETH", etc.) is a pricing/tier LABEL only, never a
+// separately-custodied on-chain balance -- all existing custody flows
+// (deposit, borrow, withdraw, repay) move the SAME native-currency balance
+// through Account.Amount/Pool.Amount regardless of which asset label a
+// market names.
+//
+// NUSD cannot follow that pattern. It is the first asset Arbor itself
+// issues, not a price-tracked pass-through -- crediting NusdAmountRequested
+// into Account.Amount would be indistinguishable from inflating native
+// currency supply under a different name, not real stablecoin issuance.
+// NASM Consolidated Spec Section 10.2 additionally requires NUSD to be
+// "fully permissionless" to hold and transfer independent of any vault
+// action -- a requirement Account.Amount's single-denomination shape
+// cannot satisfy at all. A dedicated, address-keyed ledger is therefore a
+// structural requirement, not a convenience.
+//
+// KNOWN GAP, DISCLOSED: this message and its accessors provide balance
+// storage and mint-time crediting only. A transfer_nusd (or equivalent
+// send-style) message allowing arbitrary peer-to-peer NUSD movement,
+// independent of mint_nusd/burn_nusd, does NOT exist yet -- Section 10.2's
+// "universal, permissionless transfer" mandate is only partially met until
+// that follow-up is built. A minted NUSD balance is real and correctly
+// issued under this message, but not yet spendable to another address.
+type NusdBalance struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Address       []byte                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	Amount        uint64                 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NusdBalance) Reset() {
+	*x = NusdBalance{}
+	mi := &file_arbor_state_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NusdBalance) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NusdBalance) ProtoMessage() {}
+
+func (x *NusdBalance) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NusdBalance.ProtoReflect.Descriptor instead.
+func (*NusdBalance) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *NusdBalance) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *NusdBalance) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
 var File_arbor_state_proto protoreflect.FileDescriptor
 
 const file_arbor_state_proto_rawDesc = "" +
@@ -939,7 +1019,10 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\n" +
 	"asset_type\x18\x02 \x01(\rR\tassetType\x12\x16\n" +
 	"\x06shares\x18\x03 \x01(\x04R\x06shares\x12#\n" +
-	"\rdeposit_block\x18\x04 \x01(\x04R\fdepositBlock*E\n" +
+	"\rdeposit_block\x18\x04 \x01(\x04R\fdepositBlock\"?\n" +
+	"\vNusdBalance\x12\x18\n" +
+	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount*E\n" +
 	"\fMarketStatus\x12\n" +
 	"\n" +
 	"\x06ACTIVE\x10\x00\x12\n" +
@@ -962,7 +1045,7 @@ func file_arbor_state_proto_rawDescGZIP() []byte {
 }
 
 var file_arbor_state_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_arbor_state_proto_goTypes = []any{
 	(MarketStatus)(0),             // 0: types.MarketStatus
 	(*Market)(nil),                // 1: types.Market
@@ -975,6 +1058,7 @@ var file_arbor_state_proto_goTypes = []any{
 	(*NusdSupply)(nil),            // 8: types.NusdSupply
 	(*StabilityFeeIndex)(nil),     // 9: types.StabilityFeeIndex
 	(*RwaYieldVaultPosition)(nil), // 10: types.RwaYieldVaultPosition
+	(*NusdBalance)(nil),           // 11: types.NusdBalance
 }
 var file_arbor_state_proto_depIdxs = []int32{
 	0, // 0: types.Market.status:type_name -> types.MarketStatus
@@ -996,7 +1080,7 @@ func file_arbor_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_state_proto_rawDesc), len(file_arbor_state_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

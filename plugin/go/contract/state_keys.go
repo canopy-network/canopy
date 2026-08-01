@@ -351,3 +351,19 @@ func ValidateVaultID(vaultID string) error {
 	}
 	return nil
 }
+
+// PrefixNusdBalance: a holder's independent NUSD balance ({35}), keyed by
+// address alone -- see NusdBalance's own doc comment in arbor_state.proto
+// for the full rationale on why this is structurally required and cannot
+// reuse Account.Amount. Claims {35} from the {30}-{39} NASM-coordination
+// wall -- the next fresh number after {30},{31},{32},{34} ({33} remains
+// permanently skipped, see the block comment above). Address-keyed,
+// matching LenderPosition/KeyForRwaYieldVaultPosition's precedent, not
+// vault_id-keyed like NasmVault -- a holder's NUSD balance is independent
+// of any specific vault, exactly as a bank account balance is independent
+// of any specific loan.
+var PrefixNusdBalance = []byte{35}
+
+func KeyForNusdBalance(addr []byte) []byte {
+	return JoinLenPrefix(PrefixNusdBalance, addr)
+}

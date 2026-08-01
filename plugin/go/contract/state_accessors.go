@@ -712,3 +712,81 @@ func SaveRwaYieldVaultPosition(c *Contract, position *RwaYieldVaultPosition) *Pl
 	}
 	return nil
 }
+
+// GetNusdBalance reads and unmarshals a {35} NusdBalance record by address.
+// found=false with a nil error means the holder has no NUSD balance yet --
+// the expected state before their first mint_nusd call (or before ever
+// receiving a transfer, once transfer_nusd exists -- see NusdBalance's own
+// doc comment on that disclosed gap). Matches LenderPosition's
+// found-is-meaningful, address-keyed contract.
+func GetNusdBalance(c *Contract, addr []byte) (balance *NusdBalance, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForNusdBalance(addr)},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	b := &NusdBalance{}
+	if uErr := Unmarshal(raw, b); uErr != nil {
+		return nil, false, uErr
+	}
+	return b, true, nil
+}
+
+// SaveNusdBalance marshals and writes a {35} NusdBalance record. Caller
+// owns read-modify-write, matching SaveNasmVault/SaveLenderPosition's
+// single-responsibility write-site pattern.
+func SaveNusdBalance(c *Contract, balance *NusdBalance) *PluginError {
+	balBytes, mErr := Marshal(balance)
+	if mErr != nil {
+		return mErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForNusdBalance(balance.Address), Value: balBytes},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
+}
+
+// creditNusdBalance adds amount to balance.Amount. Checked-add, mirrors
+// custody_arith.go's creditAccountAmount exactly, but operating on
+// NusdBalance.Amount instead of Account.Amount -- see NusdBalance's own
+// doc comment for why these must be two structurally independent balances,
+// never the same field. Pure function, no state I/O -- caller (mint_nusd)
+// owns the surrounding GetNusdBalance/SaveNusdBalance read-modify-write,
+// matching creditAccountAmount's own division of responsibility.
+func creditNusdBalance(addr []byte, balance *NusdBalance, amount uint64) *PluginError {
+	if amount > (^uint64(0) - balance.Amount) {
+		return ErrAccountBalanceOverflow(addr, balance.Amount, amount)
+	}
+	balance.Amount += amount
+	return nil
+}
+
+// debitNusdBalance subtracts amount from balance.Amount. Compare-before-
+// subtract, mirrors custody_arith.go's debitAccountAmount exactly. Returns
+// ErrInsufficientFunds() on shortfall -- will be the primary guard
+// burn_nusd uses to confirm a caller holds enough NUSD before burning it.
+func debitNusdBalance(balance *NusdBalance, amount uint64) *PluginError {
+	if balance.Amount < amount {
+		return ErrInsufficientFunds()
+	}
+	balance.Amount -= amount
+	return nil
+}

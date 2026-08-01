@@ -197,3 +197,36 @@ message RwaYieldVaultPosition {
   uint64 shares = 3;          // RYV share count, matching LenderPosition.shares' uint64 convention
   uint64 deposit_block = 4;   // matches LenderPosition.deposit_block's observability convention
 }
+
+// NusdBalance is the {35} record: a holder's independent NUSD balance,
+// separate from Account.Amount (account.proto) -- Account.Amount is
+// Canopy's single, undifferentiated native-currency balance per address
+// (confirmed via KeyForAccount(addr) -- keyed by address alone, no asset
+// dimension whatsoever). Every existing Arbor market's collateral_asset_id/
+// debt_asset_id ("USDC", "ETH", etc.) is a pricing/tier LABEL only, never a
+// separately-custodied on-chain balance -- all existing custody flows
+// (deposit, borrow, withdraw, repay) move the SAME native-currency balance
+// through Account.Amount/Pool.Amount regardless of which asset label a
+// market names.
+//
+// NUSD cannot follow that pattern. It is the first asset Arbor itself
+// issues, not a price-tracked pass-through -- crediting NusdAmountRequested
+// into Account.Amount would be indistinguishable from inflating native
+// currency supply under a different name, not real stablecoin issuance.
+// NASM Consolidated Spec Section 10.2 additionally requires NUSD to be
+// "fully permissionless" to hold and transfer independent of any vault
+// action -- a requirement Account.Amount's single-denomination shape
+// cannot satisfy at all. A dedicated, address-keyed ledger is therefore a
+// structural requirement, not a convenience.
+//
+// KNOWN GAP, DISCLOSED: this message and its accessors provide balance
+// storage and mint-time crediting only. A transfer_nusd (or equivalent
+// send-style) message allowing arbitrary peer-to-peer NUSD movement,
+// independent of mint_nusd/burn_nusd, does NOT exist yet -- Section 10.2's
+// "universal, permissionless transfer" mandate is only partially met until
+// that follow-up is built. A minted NUSD balance is real and correctly
+// issued under this message, but not yet spendable to another address.
+message NusdBalance {
+  bytes  address = 1;
+  uint64 amount = 2;
+}
