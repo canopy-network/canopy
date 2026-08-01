@@ -47,6 +47,23 @@ const (
 	// PoolPurposeSupply even when CollateralAssetId == DebtAssetId for a
 	// given market, per the finding above.
 	PoolPurposeCollateral PoolPurpose = "collateral"
+	// PoolPurposeNasmVault backs NASM's mint_nusd/burn_nusd collateral
+	// custody (NASM Consolidated Spec Section 4). Deliberately a THIRD,
+	// independent PoolPurpose value, not a reuse of PoolPurposeCollateral --
+	// KeyForMarketPoolId's derivation is SHA-256("<purpose>:<id>") with no
+	// type distinction between the id argument being a market_id or a
+	// vault_id; it is just a string. Reusing PoolPurposeCollateral for NASM
+	// vaults would mean an ARCM market and a NASM vault sharing the same
+	// literal id string collide onto the IDENTICAL pool id -- not a
+	// probabilistic hash risk, a guaranteed collision by construction,
+	// since the purpose prefix would be identical too. This would silently
+	// commingle ARCM lending collateral with NASM NUSD-backing collateral,
+	// the exact cross-product contamination the Treasury split
+	// (PrefixTreasuryArbor/PrefixTreasuryNASM in state_keys.go) was built
+	// to prevent on the accounting side. A distinct purpose string forces
+	// a distinct hash input regardless of id-string overlap, preserving
+	// this file's own structural-partition-by-construction guarantee.
+	PoolPurposeNasmVault PoolPurpose = "nasm-vault"
 )
 
 // KeyForMarketPoolId derives the Pool.Id used as one of a given market's
@@ -65,6 +82,12 @@ const (
 // Top 63 bits of the digest; the reserved bit is cleared from the hash
 // output before being forced on, so it never contributes entropy that could
 // make two different (purpose, market_id) pairs collide pre-mask.
+//
+// NOTE: this same function is reused for NASM's vault_id-keyed pool ids
+// (PoolPurposeNasmVault) -- the "market_id" parameter name is Arbor
+// lending's original naming, but the function itself is purpose-agnostic
+// over its second argument; it is the purpose string prefix that keeps
+// the two id namespaces from colliding, not the parameter's name.
 func KeyForMarketPoolId(marketId string, purpose PoolPurpose) uint64 {
 	digest := sha256.Sum256([]byte(string(purpose) + ":" + marketId))
 	raw := binary.BigEndian.Uint64(digest[:8])
