@@ -790,3 +790,68 @@ func debitNusdBalance(balance *NusdBalance, amount uint64) *PluginError {
 	balance.Amount -= amount
 	return nil
 }
+
+// GetStabilityFeeIndexRecord reads and unmarshals the full {32}
+// StabilityFeeIndex record (sf_index AND last_accrual_block), for callers
+// that need both fields -- AccrueStabilityFee's own use, distinct from
+// GetStabilityFeeIndex above, which returns only the decoded sf_index
+// value for simpler callers (mint_nusd/burn_nusd) that don't need
+// last_accrual_block. found=false means the index has never been
+// initialized -- callers MUST treat this as sf_index=RAY (the
+// multiplicative identity, matching GetStabilityFeeIndex's own doc
+// comment) and last_accrual_block=the current block (first accrual ever,
+// zero elapsed blocks, matching Market's own first-accrual convention).
+func GetStabilityFeeIndexRecord(c *Contract) (record *StabilityFeeIndex, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForStabilityFeeIndex()},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	sf := &StabilityFeeIndex{}
+	if uErr := Unmarshal(raw, sf); uErr != nil {
+		return nil, false, uErr
+	}
+	return sf, true, nil
+}
+
+// SetStabilityFeeIndexRecordTry writes the full {32} StabilityFeeIndex
+// record (sf_index AND last_accrual_block) using TryEncodeUint128 for
+// sf_index -- the BeginBlock-context-safe path (NASM Spec Section 6.5:
+// SF_index accrual runs in BeginBlock). Mirrors SetStabilityFeeIndexTry's
+// contract exactly: returns ok=false (no error) on sf_index overflow; the
+// caller (AccrueStabilityFee) MUST respond by leaving the index at its
+// last successfully-committed value rather than treating ok=false as a
+// PluginError to propagate -- there is no transaction to revert in
+// BeginBlock context (Principle 14).
+func SetStabilityFeeIndexRecordTry(c *Contract, sfIndex *big.Int, lastAccrualBlock uint64) (ok bool, pErr *PluginError) {
+	encoded, encOk := TryEncodeUint128(sfIndex)
+	if !encOk {
+		return false, nil
+	}
+	sfBytes, mErr := Marshal(&StabilityFeeIndex{SfIndex: encoded, LastAccrualBlock: lastAccrualBlock})
+	if mErr != nil {
+		return false, mErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForStabilityFeeIndex(), Value: sfBytes},
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+	if writeResp.Error != nil {
+		return false, writeResp.Error
+	}
+	return true, nil
+}

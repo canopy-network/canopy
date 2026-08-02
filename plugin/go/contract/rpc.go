@@ -48,6 +48,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/nasmvault", p.handleQueryNasmVault)
 	mux.HandleFunc("/v1/query/nusdbalance", p.handleQueryNusdBalance)
 	mux.HandleFunc("/v1/query/nusdsupply", p.handleQueryNusdSupply)
+	mux.HandleFunc("/v1/query/stabilityfeeindex", p.handleQueryStabilityFeeIndex)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -1137,4 +1138,73 @@ func (p *Plugin) handleQueryNusdSupply(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
+}
+
+// handleQueryStabilityFeeIndex serves GET /v1/query/stabilityfeeindex
+// Returns the single global {32} StabilityFeeIndex record (sf_index,
+// last_accrual_block). Added to make AccrueStabilityFee's real per-block
+// effect independently observable on-chain, the same reasoning as
+// handleQueryLossFactor's own doc comment on ApplyLossFactor's
+// observability. Takes NO query params -- global value, not keyed.
+// Mirrors handleQueryGovernanceParams' zero-value convention: before the
+// first BeginBlock ever runs AccrueStabilityFee (genesis), {32} does not
+// exist yet and this returns a zero-value record ({} per proto3 default
+// field-omission), not a 404 -- an unaccrued index is not an error state.
+// Note sf_index is returned RAW (base64 bytes, via protojson's default
+// bytes encoding) rather than DecodeUint128'd to a decimal string, unlike
+// handleQueryLossFactor -- kept simple/raw here since this route's primary
+// purpose is confirming last_accrual_block is advancing; a decimal-string
+// variant can be added later if a caller specifically needs sf_index's
+// numeric value without decoding the base64 client-side.
+func (p *Plugin) handleQueryStabilityFeeIndex(w http.ResponseWriter, r *http.Request) {
+	queryId := rand.Uint64()
+	resp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: KeyForStabilityFeeIndex()}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	record := &StabilityFeeIndex{}
+	if len(resp.Results) > 0 && len(resp.Results[0].Entries) > 0 && len(resp.Results[0].Entries[0].Value) > 0 {
+		raw := resp.Results[0].Entries[0].Value
+		if err := proto.Unmarshal(raw, record); err != nil {
+			http.Error(w, `{"error":"unmarshal error: `+err.Error()+`"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Additive field: sf_index decoded to a decimal string alongside the
+	// raw protojson output, matching handleQueryBorrowerPosition's own
+	// additive-field pattern (currentDebt appended to the raw record) --
+	// convenient for a human reading this endpoint directly without
+	// decoding base64 themselves.
+	b, err := protojson.Marshal(record)
+	if err != nil {
+		http.Error(w, `{"error":"marshal error: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	var responseMap map[string]interface{}
+	if err := json.Unmarshal(b, &responseMap); err != nil {
+		http.Error(w, `{"error":"failed to build response json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if len(record.SfIndex) > 0 {
+		responseMap["sfIndexDecimal"] = DecodeUint128(record.SfIndex).String()
+	} else {
+		responseMap["sfIndexDecimal"] = RAY.String()
+	}
+	finalJSON, err := json.Marshal(responseMap)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode final response json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(finalJSON)
 }

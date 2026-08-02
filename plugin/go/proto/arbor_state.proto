@@ -179,9 +179,14 @@ message NusdSupply {
 // one pooled fee across all NASM vaults, unlike AYIS's PrefixBorrowIndex/
 // PrefixSupplyIndex which are keyed per lending market.
 message StabilityFeeIndex {
-  bytes sf_index = 1;  // uint128, RAY-scaled, EncodeUint128 raw bytes -- same shape as
-                        // Market's B_index/loss_factor. Genesis value is RAY (1e18),
-                        // matching AYIS's SupplyIndexRecord initialization convention.
+  bytes  sf_index = 1;          // uint128, RAY-scaled, EncodeUint128 raw bytes -- same shape as
+                                 // Market's B_index/loss_factor. Genesis value is RAY (1e18),
+                                 // matching AYIS's SupplyIndexRecord initialization convention.
+  uint64 last_accrual_block = 2; // mirrors Market.LastAccrualBlock's role (AYIS Section 7 Step 11) --
+                                  // used to compute delta_t for AccrueStabilityFee's own compounding
+                                  // step (NASM Spec Section 6.2). Global, not per-market: this is the
+                                  // single pooled fee's own last-accrual point, not tied to any one
+                                  // market's accrual cadence.
 }
 
 // RwaYieldVaultPosition is the {34} record: a single depositor's RWA Yield

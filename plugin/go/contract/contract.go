@@ -201,6 +201,18 @@ func (c *Contract) BeginBlock(request *PluginBeginRequest) *PluginBeginResponse 
 		}
 	}
 
+	// NASM Spec Section 6.5's recommended BeginBlock order: NASM stability
+	// fee accrual runs once, globally, AFTER the per-market AYIS accrual
+	// loop above completes (step 2, following step 1's AYIS.AccrueInterest
+	// for all ARCM lending markets). A state-layer failure here is logged,
+	// not propagated as a block-halting error -- matches this loop's own
+	// established tolerance for per-market AccrueInterest/
+	// ProcessLossFactorQueue failures (logged and continue, not aborted),
+	// since a single accrual failure should not stop block production.
+	if sfErr := AccrueStabilityFee(c); sfErr != nil {
+		log.Printf("BeginBlock: AccrueStabilityFee failed: %v", sfErr)
+	}
+
 	return &PluginBeginResponse{Events: events}
 }
 

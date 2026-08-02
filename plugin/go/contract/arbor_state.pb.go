@@ -758,10 +758,13 @@ func (x *NusdSupply) GetTotalSupply() uint64 {
 // one pooled fee across all NASM vaults, unlike AYIS's PrefixBorrowIndex/
 // PrefixSupplyIndex which are keyed per lending market.
 type StabilityFeeIndex struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SfIndex       []byte                 `protobuf:"bytes,1,opt,name=sf_index,json=sfIndex,proto3" json:"sf_index,omitempty"` // uint128, RAY-scaled, EncodeUint128 raw bytes -- same shape as
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	SfIndex []byte                 `protobuf:"bytes,1,opt,name=sf_index,json=sfIndex,proto3" json:"sf_index,omitempty"` // uint128, RAY-scaled, EncodeUint128 raw bytes -- same shape as
+	// Market's B_index/loss_factor. Genesis value is RAY (1e18),
+	// matching AYIS's SupplyIndexRecord initialization convention.
+	LastAccrualBlock uint64 `protobuf:"varint,2,opt,name=last_accrual_block,json=lastAccrualBlock,proto3" json:"last_accrual_block,omitempty"` // mirrors Market.LastAccrualBlock's role (AYIS Section 7 Step 11) --
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *StabilityFeeIndex) Reset() {
@@ -799,6 +802,13 @@ func (x *StabilityFeeIndex) GetSfIndex() []byte {
 		return x.SfIndex
 	}
 	return nil
+}
+
+func (x *StabilityFeeIndex) GetLastAccrualBlock() uint64 {
+	if x != nil {
+		return x.LastAccrualBlock
+	}
+	return 0
 }
 
 // RwaYieldVaultPosition is the {34} record: a single depositor's RWA Yield
@@ -1011,9 +1021,10 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\x10sf_index_at_open\x18\x06 \x01(\fR\rsfIndexAtOpen\"/\n" +
 	"\n" +
 	"NusdSupply\x12!\n" +
-	"\ftotal_supply\x18\x01 \x01(\x04R\vtotalSupply\".\n" +
+	"\ftotal_supply\x18\x01 \x01(\x04R\vtotalSupply\"\\\n" +
 	"\x11StabilityFeeIndex\x12\x19\n" +
-	"\bsf_index\x18\x01 \x01(\fR\asfIndex\"\x91\x01\n" +
+	"\bsf_index\x18\x01 \x01(\fR\asfIndex\x12,\n" +
+	"\x12last_accrual_block\x18\x02 \x01(\x04R\x10lastAccrualBlock\"\x91\x01\n" +
 	"\x15RwaYieldVaultPosition\x12\x1c\n" +
 	"\tdepositor\x18\x01 \x01(\fR\tdepositor\x12\x1d\n" +
 	"\n" +
