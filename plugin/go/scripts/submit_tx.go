@@ -278,6 +278,18 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			NusdAmountRequested: uint64(nusdAmountRequested),
 		}
 		return "type.googleapis.com/types.MessageMintNusd", msg, nil
+	case "burn_nusd":
+		sender, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode sender: %w", err)
+		}
+		nusdAmount, _ := fields["nusdAmount"].(float64)
+		msg := &contract.MessageBurnNusd{
+			VaultId:    str(fields["vaultId"]),
+			Sender:     sender,
+			NusdAmount: uint64(nusdAmount),
+		}
+		return "type.googleapis.com/types.MessageBurnNusd", msg, nil
 	default:
 		return "", nil, fmt.Errorf("unknown or not-yet-wired msgType: %s", msgType)
 	}
