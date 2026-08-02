@@ -1092,6 +1092,83 @@ func (x *MessageMintNusd) GetNusdAmountRequested() uint64 {
 	return 0
 }
 
+// MessageBurnNusd is the sole mechanism by which NUSD is removed from
+// circulation and collateral released (NASM Consolidated Spec Section
+// 4.2) -- owner-scoped only, no aggregate-pool redemption, no third-party
+// vault seizure. sender MUST be the vault's current owner (checked at
+// DeliverTx via NasmVault.Owner) -- there is no code path by which NUSD
+// burned by holder A can release collateral from a vault owned by holder
+// B (Section 4.2's own closing guarantee, Invariant N-I8).
+//
+// nusd_amount may exceed the vault's actual current debt (ScaledNusdDebt)
+// -- DeliverTx computes compare-before-subtract (Section 4.2 Step 6) and
+// only actually burns/debits up to current_debt, never more, regardless
+// of what nusd_amount requests. This is NOT the same refund risk ARCM's
+// repay.go's ErrRepayExceedsDebt was fixed to avoid (that fix closed a
+// path where an escrow-less refund would have minted unbacked value);
+// here, burn_nusd only ever debits NusdBalance for the true amount owed,
+// never more than the sender already holds and never creating any new
+// value -- structurally safer than a refund-by-minting design.
+type MessageBurnNusd struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VaultId       string                 `protobuf:"bytes,1,opt,name=vault_id,json=vaultId,proto3" json:"vault_id,omitempty"`
+	Sender        []byte                 `protobuf:"bytes,2,opt,name=sender,proto3" json:"sender,omitempty"`
+	NusdAmount    uint64                 `protobuf:"varint,3,opt,name=nusd_amount,json=nusdAmount,proto3" json:"nusd_amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageBurnNusd) Reset() {
+	*x = MessageBurnNusd{}
+	mi := &file_arbor_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageBurnNusd) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageBurnNusd) ProtoMessage() {}
+
+func (x *MessageBurnNusd) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageBurnNusd.ProtoReflect.Descriptor instead.
+func (*MessageBurnNusd) Descriptor() ([]byte, []int) {
+	return file_arbor_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *MessageBurnNusd) GetVaultId() string {
+	if x != nil {
+		return x.VaultId
+	}
+	return ""
+}
+
+func (x *MessageBurnNusd) GetSender() []byte {
+	if x != nil {
+		return x.Sender
+	}
+	return nil
+}
+
+func (x *MessageBurnNusd) GetNusdAmount() uint64 {
+	if x != nil {
+		return x.NusdAmount
+	}
+	return 0
+}
+
 var File_arbor_proto protoreflect.FileDescriptor
 
 const file_arbor_proto_rawDesc = "" +
@@ -1168,7 +1245,12 @@ const file_arbor_proto_rawDesc = "" +
 	"\x05owner\x18\x02 \x01(\fR\x05owner\x12.\n" +
 	"\x13collateral_asset_id\x18\x03 \x01(\tR\x11collateralAssetId\x12/\n" +
 	"\x13collateral_quantity\x18\x04 \x01(\x04R\x12collateralQuantity\x122\n" +
-	"\x15nusd_amount_requested\x18\x05 \x01(\x04R\x13nusdAmountRequestedB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"\x15nusd_amount_requested\x18\x05 \x01(\x04R\x13nusdAmountRequested\"e\n" +
+	"\x0fMessageBurnNusd\x12\x19\n" +
+	"\bvault_id\x18\x01 \x01(\tR\avaultId\x12\x16\n" +
+	"\x06sender\x18\x02 \x01(\fR\x06sender\x12\x1f\n" +
+	"\vnusd_amount\x18\x03 \x01(\x04R\n" +
+	"nusdAmountB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_proto_rawDescOnce sync.Once
@@ -1182,7 +1264,7 @@ func file_arbor_proto_rawDescGZIP() []byte {
 	return file_arbor_proto_rawDescData
 }
 
-var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_arbor_proto_goTypes = []any{
 	(*MessageCreateMarket)(nil),       // 0: types.MessageCreateMarket
 	(*MessageUpdateMarketParams)(nil), // 1: types.MessageUpdateMarketParams
@@ -1200,6 +1282,7 @@ var file_arbor_proto_goTypes = []any{
 	(*MessageSetAssetTier)(nil),       // 13: types.MessageSetAssetTier
 	(*MessageSetTreasuryCut)(nil),     // 14: types.MessageSetTreasuryCut
 	(*MessageMintNusd)(nil),           // 15: types.MessageMintNusd
+	(*MessageBurnNusd)(nil),           // 16: types.MessageBurnNusd
 }
 var file_arbor_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1220,7 +1303,7 @@ func file_arbor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_proto_rawDesc), len(file_arbor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

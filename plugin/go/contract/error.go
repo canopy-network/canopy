@@ -342,3 +342,40 @@ func ErrInvalidVaultID(err error) *PluginError {
 func ErrNasmPriceUnavailable(vaultID, assetID string) *PluginError {
 	return NewError(247, ArborModule, fmt.Sprintf("NASM vault %q: no resolvable oracle price for asset %q (ARCM Section 10, quorum/freshness not met)", vaultID, assetID))
 }
+
+// ErrScaledNusdDebtOverflow guards ScaledNusdDebt()'s numerator big.Int ->
+// uint64 cast, mirroring ErrScaledDebtOverflow's own guard for ARCM's
+// ScaledDebt() exactly (same cast-safety discipline, NASM's own vault_id
+// context instead of market_id).
+func ErrScaledNusdDebtOverflow(vaultID string, nusdPrincipal uint64, scaledDebt string) *PluginError {
+	return NewError(248, ArborModule, fmt.Sprintf("NASM vault %q: scaled NUSD debt value %s for nusd_principal %d exceeds uint64 range, NASM Consolidated Spec Section 6.2", vaultID, scaledDebt, nusdPrincipal))
+}
+
+// ErrNasmVaultNotFound guards burn_nusd's vault existence check --
+// distinct from ErrVaultAlreadyExists (mint_nusd's collision guard), the
+// opposite condition.
+func ErrNasmVaultNotFound(vaultID string) *PluginError {
+	return NewError(249, ArborModule, fmt.Sprintf("NASM vault %q not found", vaultID))
+}
+
+// ErrNotVaultOwner guards burn_nusd's owner-scoped-only check (NASM
+// Consolidated Spec Section 4.2: "Verify sender is the vault_id owner" --
+// Section 5's entire peg-defense rationale depends on burn_nusd never
+// being callable by anyone other than the vault's current owner; there is
+// no aggregate-pool or third-party-redemption path in this design at all).
+func ErrNotVaultOwner(vaultID string) *PluginError {
+	return NewError(250, ArborModule, fmt.Sprintf("NASM vault %q: sender is not the vault owner -- burn_nusd is owner-scoped only, NASM Spec Section 4.2", vaultID))
+}
+
+// ErrNusdInsufficientBalance guards burn_nusd's balance check (NASM
+// Consolidated Spec Section 4.2 Step 2: "Verify sender holds >=
+// nusd_amount NUSD"). Deliberately its own error rather than reusing the
+// generic ErrInsufficientFunds() -- that error carries no NUSD-specific
+// context (vault_id, requested amount, actual balance), and this
+// project's own convention is to prefer a context-rich error at the
+// specific call site where one is easy to provide (see
+// ErrNasmPriceUnavailable's own doc comment on the identical reasoning
+// for not reusing ErrPriceUnavailable).
+func ErrNusdInsufficientBalance(vaultID string, requested, available uint64) *PluginError {
+	return NewError(251, ArborModule, fmt.Sprintf("NASM vault %q: requested burn amount %d exceeds sender's NUSD balance %d", vaultID, requested, available))
+}

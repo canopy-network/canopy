@@ -38,6 +38,7 @@ var ContractConfig = &PluginConfig{
 		"set_asset_tier",
 		"set_treasury_cut",
 		"mint_nusd",
+		"burn_nusd",
 	},
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
@@ -57,6 +58,7 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.MessageSetAssetTier",
 		"type.googleapis.com/types.MessageSetTreasuryCut",
 		"type.googleapis.com/types.MessageMintNusd",
+		"type.googleapis.com/types.MessageBurnNusd",
 	},
 	EventTypeUrls: []string{
 		"type.googleapis.com/types.EventIndexEncodingOverflowHalted",
@@ -280,6 +282,8 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 		return c.CheckMessageSetTreasuryCut(x)
 	case *MessageMintNusd:
 		return c.CheckMessageMintNusd(x)
+	case *MessageBurnNusd:
+		return c.CheckMessageBurnNusd(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -342,6 +346,8 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 		return c.DeliverMessageSetTreasuryCut(x, request.Tx.Fee)
 	case *MessageMintNusd:
 		return c.DeliverMessageMintNusd(x, request.Tx.Fee)
+	case *MessageBurnNusd:
+		return c.DeliverMessageBurnNusd(x, request.Tx.Fee)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

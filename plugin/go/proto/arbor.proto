@@ -221,3 +221,26 @@ message MessageMintNusd {
   uint64 collateral_quantity = 4;
   uint64 nusd_amount_requested = 5;
 }
+
+// MessageBurnNusd is the sole mechanism by which NUSD is removed from
+// circulation and collateral released (NASM Consolidated Spec Section
+// 4.2) -- owner-scoped only, no aggregate-pool redemption, no third-party
+// vault seizure. sender MUST be the vault's current owner (checked at
+// DeliverTx via NasmVault.Owner) -- there is no code path by which NUSD
+// burned by holder A can release collateral from a vault owned by holder
+// B (Section 4.2's own closing guarantee, Invariant N-I8).
+//
+// nusd_amount may exceed the vault's actual current debt (ScaledNusdDebt)
+// -- DeliverTx computes compare-before-subtract (Section 4.2 Step 6) and
+// only actually burns/debits up to current_debt, never more, regardless
+// of what nusd_amount requests. This is NOT the same refund risk ARCM's
+// repay.go's ErrRepayExceedsDebt was fixed to avoid (that fix closed a
+// path where an escrow-less refund would have minted unbacked value);
+// here, burn_nusd only ever debits NusdBalance for the true amount owed,
+// never more than the sender already holds and never creating any new
+// value -- structurally safer than a refund-by-minting design.
+message MessageBurnNusd {
+  string vault_id = 1;
+  bytes  sender = 2;
+  uint64 nusd_amount = 3;
+}
