@@ -263,6 +263,21 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			TreasuryCutBps: uint64(treasuryCutBps),
 		}
 		return "type.googleapis.com/types.MessageSetTreasuryCut", msg, nil
+	case "mint_nusd":
+		owner, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode owner: %w", err)
+		}
+		collateralQuantity, _ := fields["collateralQuantity"].(float64)
+		nusdAmountRequested, _ := fields["nusdAmountRequested"].(float64)
+		msg := &contract.MessageMintNusd{
+			VaultId:             str(fields["vaultId"]),
+			Owner:               owner,
+			CollateralAssetId:   str(fields["collateralAssetId"]),
+			CollateralQuantity:  uint64(collateralQuantity),
+			NusdAmountRequested: uint64(nusdAmountRequested),
+		}
+		return "type.googleapis.com/types.MessageMintNusd", msg, nil
 	default:
 		return "", nil, fmt.Errorf("unknown or not-yet-wired msgType: %s", msgType)
 	}

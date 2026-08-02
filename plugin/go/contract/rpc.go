@@ -44,6 +44,10 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/prices", p.handleQueryPrices)
 	mux.HandleFunc("/v1/query/interestremainder", p.handleQueryInterestRemainder)
 	mux.HandleFunc("/v1/query/nasmtier", p.handleQueryNasmTier)
+	mux.HandleFunc("/v1/query/nasmvaultpool", p.handleQueryNasmVaultPool)
+	mux.HandleFunc("/v1/query/nasmvault", p.handleQueryNasmVault)
+	mux.HandleFunc("/v1/query/nusdbalance", p.handleQueryNusdBalance)
+	mux.HandleFunc("/v1/query/nusdsupply", p.handleQueryNusdSupply)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -917,4 +921,220 @@ func (p *Plugin) handleQueryNasmTier(w http.ResponseWriter, r *http.Request) {
 		"ltvMaxBps": strconv.FormatUint(nasmParams.LTVMaxBps, 10),
 		"ltvLiqBps": strconv.FormatUint(nasmParams.LTVLiqBps, 10),
 	})
+}
+
+// handleQueryNasmVaultPool serves GET /v1/query/nasmvaultpool?vaultId=<id>
+// Returns the decoded Pool record for a NASM vault's collateral escrow
+// pool (PoolPurposeNasmVault, pool_id.go). Deliberately a separate route
+// from handleQueryPool rather than an added "purpose" case there --
+// handleQueryPool is conceptually market-scoped throughout (its marketId
+// param, its error messages, its own doc comment), and a NASM vault_id is
+// not a market_id even though both happen to pass the same length/
+// emptiness validation. Mirrors handleQueryPool's own zero-value
+// convention: a vault whose pool hasn't been funded yet (or doesn't exist)
+// returns {"amount":"0"}, not a 404 -- matches every other pool/reserve
+// query's established not-found-is-not-an-error convention in this file.
+func (p *Plugin) handleQueryNasmVaultPool(w http.ResponseWriter, r *http.Request) {
+	vaultId := r.URL.Query().Get("vaultId")
+	if vaultId == "" {
+		http.Error(w, `{"error":"missing vaultId query param"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateVaultID(vaultId); err != nil {
+		http.Error(w, `{"error":"invalid vaultId: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	poolId := KeyForMarketPoolId(vaultId, PoolPurposeNasmVault)
+	key := KeyForFeePool(poolId)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"vaultId": vaultId, "id": strconv.FormatUint(poolId, 10), "amount": "0", "note": "pool has zero balance or does not yet exist"})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	pool := &Pool{}
+	if err := proto.Unmarshal(raw, pool); err != nil {
+		http.Error(w, `{"error":"failed to decode pool record: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	poolJSON, err := protojson.Marshal(pool)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode pool json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(poolJSON)
+}
+
+// handleQueryNasmVault serves GET /v1/query/nasmvault?vaultId=<id>
+// Returns the decoded NasmVault record ({30}) for the given vault_id.
+// Mirrors handleQueryMarkets' single-key query shape exactly.
+func (p *Plugin) handleQueryNasmVault(w http.ResponseWriter, r *http.Request) {
+	vaultId := r.URL.Query().Get("vaultId")
+	if vaultId == "" {
+		http.Error(w, `{"error":"missing vaultId query param"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateVaultID(vaultId); err != nil {
+		http.Error(w, `{"error":"invalid vaultId: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForNasmVault(vaultId)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "vault not found", "vaultId": vaultId})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	vault := &NasmVault{}
+	if err := proto.Unmarshal(raw, vault); err != nil {
+		http.Error(w, `{"error":"failed to decode vault record: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	vaultJSON, err := protojson.Marshal(vault)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode vault json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(vaultJSON)
+}
+
+// handleQueryNusdBalance serves GET /v1/query/nusdbalance?address=<hex>
+// Returns the decoded NusdBalance record ({35}) for the given address.
+// Mirrors handleQueryLenderPosition's address-keyed query shape, minus the
+// composite marketId component (NusdBalance is address-keyed alone). A
+// holder with no balance yet returns {"amount":"0"}, not a 404, matching
+// this file's zero-value-is-not-an-error convention -- an address that
+// has simply never minted or received NUSD is not an error state.
+func (p *Plugin) handleQueryNusdBalance(w http.ResponseWriter, r *http.Request) {
+	addressHex := r.URL.Query().Get("address")
+	if addressHex == "" {
+		http.Error(w, `{"error":"missing address query param"}`, http.StatusBadRequest)
+		return
+	}
+	address, err := hex.DecodeString(addressHex)
+	if err != nil {
+		http.Error(w, `{"error":"invalid address hex: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	if len(address) != 20 {
+		http.Error(w, `{"error":"address must decode to 20 bytes"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForNusdBalance(address)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"address": addressHex, "amount": "0", "note": "no NUSD balance yet"})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	balance := &NusdBalance{}
+	if err := proto.Unmarshal(raw, balance); err != nil {
+		http.Error(w, `{"error":"failed to decode NUSD balance record: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	balanceJSON, err := protojson.Marshal(balance)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode NUSD balance json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(balanceJSON)
+}
+
+// handleQueryNusdSupply serves GET /v1/query/nusdsupply
+// Returns the single global {31} NusdSupply record (total_supply, 1e6
+// precision). Takes NO query params -- like handleQueryGovernanceParams/
+// handleQueryTreasury, this is a single global value, not keyed by
+// address or vault_id. Mirrors handleQueryGovernanceParams' zero-value
+// convention: before any mint_nusd has ever run, the {31} key does not
+// exist yet, and this returns a zero-value NusdSupply (renders as {} per
+// proto3 default field-omission, no EmitUnpopulated), not a 404 -- an
+// unminted NUSD supply is not an error state.
+func (p *Plugin) handleQueryNusdSupply(w http.ResponseWriter, r *http.Request) {
+	queryId := rand.Uint64()
+	resp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: KeyForNusdSupply()}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	supply := &NusdSupply{}
+	if len(resp.Results) > 0 && len(resp.Results[0].Entries) > 0 && len(resp.Results[0].Entries[0].Value) > 0 {
+		raw := resp.Results[0].Entries[0].Value
+		if err := proto.Unmarshal(raw, supply); err != nil {
+			http.Error(w, `{"error":"unmarshal error: `+err.Error()+`"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	b, err := protojson.Marshal(supply)
+	if err != nil {
+		http.Error(w, `{"error":"marshal error: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
 }
