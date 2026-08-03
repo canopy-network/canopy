@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/cockroachdb/pebble/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -81,6 +83,13 @@ type IndexerMetrics struct {
 	IndexerBlobCacheHits    prometheus.Counter   // how many indexer-blobs requests were served from cache?
 	IndexerBlobCacheMisses  prometheus.Counter   // how many indexer-blobs requests required a cold store read?
 	IndexerBlobCacheSize    prometheus.Gauge     // how many entries are currently in the indexer-blobs cache?
+	// IndexerBlobPreviousReuseHits/Misses track a distinct reuse path from IndexerBlobCacheHits/Misses:
+	// on a cache miss for `height`, the "previous" (height-1) blob is either reused from the prior
+	// request's already-cached `current` (hit) or requires its own fresh cold read (miss). This is
+	// invisible to IndexerBlobCacheHits/Misses, which only tracks the outer per-height delta cache -
+	// a forward-only reader never repeats a height, so that counter alone can't show this reuse.
+	IndexerBlobPreviousReuseHits   prometheus.Counter // how many "previous" blobs were reused from the prior request's cached current?
+	IndexerBlobPreviousReuseMisses prometheus.Counter // how many "previous" blobs required their own fresh cold read?
 	// IndexerBlobStepTime breaks the cold read down by step (time_machine, block_fetch,
 	// accounts_iterate, ... -- see fsm/indexer.go), most of which are direct pebbledb
 	// reads/iterations at a historical version. Lets a slow cold read be attributed to
@@ -220,6 +229,20 @@ type StoreMetrics struct {
 	DBBackupTime         prometheus.Histogram // how long does the db backup take?
 	DBLSSCompactionTime  prometheus.Histogram // how long does the db LSS compaction take?
 	DBHSSCompactionTime  prometheus.Histogram // how long does the db HSS compaction take?
+	// pebble's own internal LSM-tree state - unlike DBLSSCompactionTime/DBHSSCompactionTime
+	// (which only track canopy's own periodic MaybeCompact() job), these reflect pebble's
+	// automatic background compaction, which runs independently and is otherwise invisible
+	PebbleReadAmp             prometheus.Gauge     // pebble's current read amplification
+	PebbleDiskUsageBytes      prometheus.Gauge     // total on-disk size of all sstables
+	PebbleCompactionCount     prometheus.Gauge     // total pebble-initiated compactions since process start
+	PebbleCompactionDebtBytes prometheus.Gauge     // estimated bytes still needing compaction to reach a stable LSM state
+	PebbleFlushCount          prometheus.Gauge     // total memtable flushes since process start
+	PebbleMemtableSizeBytes   prometheus.Gauge     // bytes held in memtables (incl. large flushable batches)
+	PebbleBlockCacheSizeBytes prometheus.Gauge     // bytes held in the block cache
+	PebbleBlockCacheHits      prometheus.Gauge     // cumulative block cache hits
+	PebbleBlockCacheMisses    prometheus.Gauge     // cumulative block cache misses
+	PebbleLevelTableCount     *prometheus.GaugeVec // sstable count, labeled by LSM level
+	PebbleLevelSizeBytes      *prometheus.GaugeVec // sstable bytes, labeled by LSM level
 }
 
 // MempoolMetrics represents the telemetry of the memory pool of pending transactions
@@ -676,6 +699,50 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_store_hss_compaction_time",
 				Help: "Execution time of HSS database compaction",
 			}),
+			PebbleReadAmp: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_read_amplification",
+				Help: "Pebble's current read amplification",
+			}),
+			PebbleDiskUsageBytes: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_disk_usage_bytes",
+				Help: "Total on-disk size of all sstables",
+			}),
+			PebbleCompactionCount: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_compaction_count",
+				Help: "Total pebble-initiated compactions since process start",
+			}),
+			PebbleCompactionDebtBytes: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_compaction_debt_bytes",
+				Help: "Estimated bytes still needing compaction to reach a stable LSM state",
+			}),
+			PebbleFlushCount: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_flush_count",
+				Help: "Total memtable flushes since process start",
+			}),
+			PebbleMemtableSizeBytes: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_memtable_size_bytes",
+				Help: "Bytes held in memtables, including large flushable batches",
+			}),
+			PebbleBlockCacheSizeBytes: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_block_cache_size_bytes",
+				Help: "Bytes held in the block cache",
+			}),
+			PebbleBlockCacheHits: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_block_cache_hits",
+				Help: "Cumulative block cache hits",
+			}),
+			PebbleBlockCacheMisses: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_block_cache_misses",
+				Help: "Cumulative block cache misses",
+			}),
+			PebbleLevelTableCount: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_level_table_count",
+				Help: "Sstable count, labeled by LSM level",
+			}, []string{"level"}),
+			PebbleLevelSizeBytes: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_level_size_bytes",
+				Help: "Sstable bytes, labeled by LSM level",
+			}, []string{"level"}),
 		},
 		// MEMPOOL
 		MempoolMetrics: MempoolMetrics{
@@ -717,6 +784,14 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			IndexerBlobCacheSize: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_indexer_blob_cache_size",
 				Help: "Current number of entries in the indexer-blobs cache",
+			}),
+			IndexerBlobPreviousReuseHits: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_indexer_blob_previous_reuse_hits_total",
+				Help: "Total indexer-blobs requests whose 'previous' blob was reused from the prior request's cached current",
+			}),
+			IndexerBlobPreviousReuseMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_indexer_blob_previous_reuse_misses_total",
+				Help: "Total indexer-blobs requests whose 'previous' blob required its own fresh cold read",
 			}),
 			IndexerBlobStepTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_indexer_blob_step_time",
@@ -937,6 +1012,31 @@ func (m *Metrics) UpdateStoreMetrics(size, entries int64, startTime time.Time, s
 	}
 }
 
+// UpdatePebbleMetrics() refreshes the pebble LSM-tree gauges from a live db.Metrics() snapshot.
+// Unlike UpdateStoreJobMetrics() (which only observes canopy's own periodic MaybeCompact() job),
+// this reflects pebble's automatic background compaction, which runs independently and would
+// otherwise be invisible to telemetry.
+func (m *Metrics) UpdatePebbleMetrics(pm *pebble.Metrics) {
+	// exit if empty
+	if m == nil || pm == nil {
+		return
+	}
+	m.PebbleReadAmp.Set(float64(pm.ReadAmp()))
+	m.PebbleDiskUsageBytes.Set(float64(pm.DiskSpaceUsage()))
+	m.PebbleCompactionCount.Set(float64(pm.Compact.Count))
+	m.PebbleCompactionDebtBytes.Set(float64(pm.Compact.EstimatedDebt))
+	m.PebbleFlushCount.Set(float64(pm.Flush.Count))
+	m.PebbleMemtableSizeBytes.Set(float64(pm.MemTable.Size))
+	m.PebbleBlockCacheSizeBytes.Set(float64(pm.BlockCache.Size))
+	m.PebbleBlockCacheHits.Set(float64(pm.BlockCache.Hits))
+	m.PebbleBlockCacheMisses.Set(float64(pm.BlockCache.Misses))
+	for i, lvl := range pm.Levels {
+		level := strconv.Itoa(i)
+		m.PebbleLevelTableCount.WithLabelValues(level).Set(float64(lvl.TablesCount))
+		m.PebbleLevelSizeBytes.WithLabelValues(level).Set(float64(lvl.TablesSize))
+	}
+}
+
 // UpdateStoreJobMetrics() updates the store jobs telemery
 func (m *Metrics) UpdateStoreJobMetrics(LSScompactionTime, HSSCompactionTime, backupTime time.Duration) {
 	// exit if empty
@@ -975,6 +1075,26 @@ func (m *Metrics) RecordIndexerBlobCacheMiss(startTime time.Time) {
 	}
 	m.IndexerBlobCacheMisses.Inc()
 	m.IndexerBlobColdReadTime.Observe(time.Since(startTime).Seconds())
+}
+
+// RecordIndexerBlobPreviousReuseHit() records a "previous" blob reused from the prior request's
+// cached current, avoiding its own fresh cold read.
+func (m *Metrics) RecordIndexerBlobPreviousReuseHit() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.IndexerBlobPreviousReuseHits.Inc()
+}
+
+// RecordIndexerBlobPreviousReuseMiss() records a "previous" blob that required its own fresh
+// cold read because it wasn't already cached as a prior request's current.
+func (m *Metrics) RecordIndexerBlobPreviousReuseMiss() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.IndexerBlobPreviousReuseMisses.Inc()
 }
 
 // UpdateIndexerBlobCacheSize() updates the current entry count of the indexer-blobs cache.
