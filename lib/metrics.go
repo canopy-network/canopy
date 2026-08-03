@@ -72,6 +72,20 @@ type Metrics struct {
 	FSMMetrics     // fsm telemetry
 	StoreMetrics   // persistence telemetry
 	MempoolMetrics // tx memory pool telemetry
+	IndexerMetrics // indexer-blobs rpc endpoint telemetry
+}
+
+// IndexerMetrics represents telemetry for the /v1/query/indexer-blobs RPC endpoint and its cache.
+type IndexerMetrics struct {
+	IndexerBlobColdReadTime prometheus.Histogram // how long does an indexer-blobs cache-miss (cold store read) take?
+	IndexerBlobCacheHits    prometheus.Counter   // how many indexer-blobs requests were served from cache?
+	IndexerBlobCacheMisses  prometheus.Counter   // how many indexer-blobs requests required a cold store read?
+	IndexerBlobCacheSize    prometheus.Gauge     // how many entries are currently in the indexer-blobs cache?
+	// IndexerBlobStepTime breaks the cold read down by step (time_machine, block_fetch,
+	// accounts_iterate, ... -- see fsm/indexer.go), most of which are direct pebbledb
+	// reads/iterations at a historical version. Lets a slow cold read be attributed to
+	// the specific store call responsible instead of only seeing the total.
+	IndexerBlobStepTime *prometheus.HistogramVec
 }
 
 // NodeMetrics represents general telemetry for the node's health
@@ -686,6 +700,29 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Help: "Execution time of NewCertificateResults during CheckMempool proposal building",
 			}),
 		},
+		// INDEXER
+		IndexerMetrics: IndexerMetrics{
+			IndexerBlobColdReadTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_indexer_blob_cold_read_time",
+				Help: "The time it takes to serve an indexer-blobs request that misses the cache (cold store read)",
+			}),
+			IndexerBlobCacheHits: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_indexer_blob_cache_hits_total",
+				Help: "Total indexer-blobs requests served from the in-memory cache",
+			}),
+			IndexerBlobCacheMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_indexer_blob_cache_misses_total",
+				Help: "Total indexer-blobs requests that required a cold store read",
+			}),
+			IndexerBlobCacheSize: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_indexer_blob_cache_size",
+				Help: "Current number of entries in the indexer-blobs cache",
+			}),
+			IndexerBlobStepTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_indexer_blob_step_time",
+				Help: "The time each step of an indexer-blobs cold read takes, by step name",
+			}, []string{"step"}),
+		},
 	}
 }
 
@@ -918,6 +955,44 @@ func (m *Metrics) UpdateStoreJobMetrics(LSScompactionTime, HSSCompactionTime, ba
 		// update the backup time metric
 		m.DBBackupTime.Observe(backupTime.Seconds())
 	}
+}
+
+// RecordIndexerBlobCacheHit() records an indexer-blobs request served from cache.
+func (m *Metrics) RecordIndexerBlobCacheHit() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.IndexerBlobCacheHits.Inc()
+}
+
+// RecordIndexerBlobCacheMiss() records an indexer-blobs request that required a cold store read
+// and how long that read took.
+func (m *Metrics) RecordIndexerBlobCacheMiss(startTime time.Time) {
+	// exit if empty
+	if m == nil || startTime.IsZero() {
+		return
+	}
+	m.IndexerBlobCacheMisses.Inc()
+	m.IndexerBlobColdReadTime.Observe(time.Since(startTime).Seconds())
+}
+
+// UpdateIndexerBlobCacheSize() updates the current entry count of the indexer-blobs cache.
+func (m *Metrics) UpdateIndexerBlobCacheSize(size int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.IndexerBlobCacheSize.Set(float64(size))
+}
+
+// ObserveIndexerBlobStep() records how long a single step of an indexer-blobs cold read took.
+func (m *Metrics) ObserveIndexerBlobStep(step string, startTime time.Time) {
+	// exit if empty
+	if m == nil || startTime.IsZero() {
+		return
+	}
+	m.IndexerBlobStepTime.WithLabelValues(step).Observe(time.Since(startTime).Seconds())
 }
 
 // UpdateStoreRootTime() updates the time it took to compute an uncached store root.

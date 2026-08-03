@@ -453,6 +453,13 @@ func newIndexerBlobCache(maxEntries int) *indexerBlobCache {
 	}
 }
 
+// Len returns the current number of entries in the cache.
+func (c *indexerBlobCache) Len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.entries)
+}
+
 func (c *indexerBlobCache) get(height uint64) (*indexerBlobCacheEntry, bool) {
 	c.mu.RLock()
 	entry, ok := c.entries[height]
