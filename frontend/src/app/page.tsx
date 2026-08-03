@@ -70,7 +70,7 @@ function utilBand(u: number | null): { bar: string; text: string } {
 
 function Monogram({ symbol }: { symbol: string }) {
   return (
-    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl brand-glyph text-xs font-bold text-[#05070d] shadow-lg shadow-indigo-500/10">
+    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl brand-glyph text-xs font-bold text-[#05070d]">
       {symbol.slice(0, 4).toUpperCase()}
     </div>
   );
@@ -323,11 +323,12 @@ export default function HomePage() {
       <section className="space-y-5 reveal" data-rd="0">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
+            <p className="eyebrow">Arbor · Smart Lending Protocol</p>
             <h1 className="display-title">Protocol overview</h1>
           </div>
           <Link
             href="/admin"
-            className="inline-flex items-center gap-2 rounded-full btn-brand px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-violet-400"
+            className="inline-flex items-center gap-2 rounded-full btn-brand px-4 py-2 text-xs font-semibold text-white transition"
           >
             + Create market
           </Link>
@@ -434,7 +435,7 @@ export default function HomePage() {
 
         {!isLoading && empty && (
           <div className="rounded-2xl glass p-10 text-center backdrop-blur">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-emerald-400 text-lg font-extrabold text-[#05070d]">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl brand-glyph text-lg font-extrabold text-[#05070d]">
               A
             </div>
             <p className="mt-4 text-base font-semibold text-white">

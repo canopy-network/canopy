@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/widgets/StatusPill";
 import { TIER_PARAMS } from "@/lib/arbor/constants";
+import { getInterestRemainder } from "@/lib/canopy/pluginRpc";
 import type { Market } from "@/lib/arbor/types";
 
 // Rate model constants — exact mirror of contract/interest_rate.go (ARCM §14).
@@ -100,6 +101,15 @@ export function MarketDetailTabs({
   const borrowApy = borrowRateBps(utilBps) / 100;
   const supplyApy = supplyRateBps(utilBps, reserveFactor) / 100;
 
+  const [interestRemainder, setInterestRemainder] = useState<bigint>(0n);
+  useEffect(() => {
+    let alive = true;
+    getInterestRemainder(market.marketId).then((r) => {
+      if (alive) setInterestRemainder(r.interestRemainderRay);
+    });
+    return () => { alive = false; };
+  }, [market.marketId]);
+
   const TABS = [
     { key: "admission" as const, label: "Admission gates" },
     { key: "rate" as const, label: "Rate model" },
@@ -154,10 +164,15 @@ export function MarketDetailTabs({
 
         {tab === "rate" && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Stat label="Utilization" value={`${(utilBps / 100).toFixed(2)}%`} />
               <Stat label="Borrow APR" value={`${borrowApy.toFixed(2)}%`} tone="text-rose-300" />
               <Stat label="Supply APR" value={`${supplyApy.toFixed(4)}%`} tone="text-emerald-300" />
+              <Stat
+                label="Interest remainder"
+                value={(Number(interestRemainder) / 1e18).toFixed(9)}
+                tone="text-zinc-400"
+              />
             </div>
             <RateCurve utilBps={utilBps} />
             <p className="text-[11px] text-zinc-600">

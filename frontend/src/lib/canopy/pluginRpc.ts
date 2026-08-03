@@ -411,3 +411,20 @@ export async function getNusdBalance(addressHex: string): Promise<{ amount: bigi
   } catch { return { amount: 0n }; }
 }
 
+export async function getNasmVault(vaultId: string): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await pluginGet("/v1/query/nasmvault?vaultId=" + encodeURIComponent(vaultId));
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+export async function getNasmVaultPool(vaultId: string): Promise<{ amount: bigint } | null> {
+  try {
+    const res = await pluginGet("/v1/query/nasmvaultpool?vaultId=" + encodeURIComponent(vaultId));
+    if (!res.ok) return null;
+    const j = await res.json();
+    return { amount: toBigInt(j?.amount) };
+  } catch { return null; }
+}
+
