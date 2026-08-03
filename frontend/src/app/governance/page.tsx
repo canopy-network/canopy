@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useMarkets } from "@/lib/hooks/useMarkets";
 import { TIER_PARAMS } from "@/lib/arbor/constants";
+import { getGovernanceParams } from "@/lib/canopy/pluginRpc";
+import { useEffect, useState } from "react";
 
 type Tone = "emerald" | "amber" | "zinc";
 const toneCls: Record<Tone, string> = {
@@ -34,6 +36,13 @@ interface ParamRow {
 export default function GovernancePage() {
   const { data: markets } = useMarkets();
   const list = markets ?? [];
+
+  const [gov, setGov] = useState<{ treasuryCutBps: bigint } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getGovernanceParams().then((g) => { if (alive) setGov(g); });
+    return () => { alive = false; };
+  }, []);
 
   const reserveFactors = list.map((e) => ({
     id: e.market.marketId,
@@ -135,6 +144,14 @@ export default function GovernancePage() {
       action: "—",
     },
     {
+      name: "TREASURY_CUT",
+      value: gov ? Number(gov.treasuryCutBps) + " bps" : "…",
+      bounds: "25–150 bps (checked at DeliverTx)",
+      tone: "emerald",
+      status: "Enforced (live {22})",
+      action: "set_treasury_cut",
+    },
+    {
       name: "CIRCUIT_BREAKER_DEVIATION",
       value: "Not implemented",
       bounds: "ARCM Rule 4 deferred",
@@ -177,9 +194,9 @@ export default function GovernancePage() {
         </h1>
         <p className="max-w-2xl text-sm text-zinc-500">
           Protocol parameters and their on-chain status. The governance parameter
-          store ({"{22}"}) is not yet on-chain; the values below are the hardcoded
+          store ({"{22}"}) now holds treasury_cut_bps on-chain (live row below); the remaining values are still the hardcoded; the values below are the hardcoded
           launch defaults enforced directly in the contract code, with bounds where
-          the code enforces them. Only RESERVE_FACTOR has a live on-chain governance
+          the code enforces them. RESERVE_FACTOR (per-market) and TREASURY_CUT (global) have live on-chain governance
           action today.
         </p>
       </section>

@@ -317,3 +317,97 @@ export async function getAllBorrowerPositions(): Promise<BorrowerPositionSummary
     return [];
   }
 }
+
+// ===== Phase-1 readers: surfaces the upgraded chain now exposes =====
+
+// getTreasury reads a protocol treasury balance (Layer 3 bad-debt protection).
+// pool: "arbor" ({40}, protects Arbor lenders) | "nasm" ({41}, NASM/NUSD side).
+// The two pools are deliberately isolated; returns uint128 as bigint (0 if
+// unfunded / not-yet-created, per the handler's zero-balance response).
+export async function getTreasury(pool: "arbor" | "nasm"): Promise<{ pool: string; amount: bigint; note?: string }> {
+  try {
+    const res = await pluginGet(`/v1/query/treasury?pool=${pool}`);
+    if (!res.ok) return { pool, amount: 0n };
+    const j = await res.json();
+    return { pool, amount: toBigInt(j?.amount), note: j?.note };
+  } catch {
+    return { pool, amount: 0n };
+  }
+}
+
+// getGovernanceParams reads the on-chain governance store ({22}). Currently it
+// holds only treasury_cut_bps (bps of each market's interest routed to Arbor's
+// treasury on accrual). protojson omits zero-value fields, so default to 0.
+export async function getGovernanceParams(): Promise<{ treasuryCutBps: bigint }> {
+  try {
+    const res = await pluginGet("/v1/query/governanceparams");
+    if (!res.ok) return { treasuryCutBps: 0n };
+    const j = await res.json();
+    return { treasuryCutBps: toBigInt(j?.treasuryCutBps) };
+  } catch {
+    return { treasuryCutBps: 0n };
+  }
+}
+
+// getInterestRemainder reads a market's accumulated sub-unit interest rounding
+// remainder (RAY-scaled uint128), surfaced after the rounding-loss fix. Key name
+// is read defensively across the handler's possible encodings.
+export async function getInterestRemainder(marketId: string): Promise<{ marketId: string; interestRemainderRay: bigint }> {
+  try {
+    const res = await pluginGet(`/v1/query/interestremainder?marketId=${encodeURIComponent(marketId)}`);
+    if (!res.ok) return { marketId, interestRemainderRay: 0n };
+    const j = await res.json();
+    const v = j?.interestRemainderRay ?? j?.interestRemainder ?? j?.remainder ?? "0";
+    return { marketId, interestRemainderRay: toBigInt(v) };
+  } catch {
+    return { marketId, interestRemainderRay: 0n };
+  }
+}
+
+// ===== Phase-2 readers: NASM / NUSD =====
+
+export async function getNusdSupply(): Promise<{ totalSupply: bigint }> {
+  try {
+    const res = await pluginGet("/v1/query/nusdsupply");
+    if (!res.ok) return { totalSupply: 0n };
+    const j = await res.json();
+    return { totalSupply: toBigInt(j?.totalSupply) };
+  } catch { return { totalSupply: 0n }; }
+}
+
+export async function getStabilityFeeIndex(): Promise<{ sfIndexDecimal: bigint; lastAccrualBlock: number }> {
+  try {
+    const res = await pluginGet("/v1/query/stabilityfeeindex");
+    if (!res.ok) return { sfIndexDecimal: 1000000000000000000n, lastAccrualBlock: 0 };
+    const j = await res.json();
+    return {
+      sfIndexDecimal: toBigInt(j?.sfIndexDecimal ?? "1000000000000000000"),
+      lastAccrualBlock: Number(j?.lastAccrualBlock ?? 0),
+    };
+  } catch { return { sfIndexDecimal: 1000000000000000000n, lastAccrualBlock: 0 }; }
+}
+
+export async function getNasmTier(assetId: string): Promise<{ assetId: string; eligible: boolean; nasmTier: string; ltvMaxBps: bigint; ltvLiqBps: bigint }> {
+  try {
+    const res = await pluginGet("/v1/query/nasmtier?assetId=" + encodeURIComponent(assetId));
+    if (!res.ok) return { assetId, eligible: false, nasmTier: "", ltvMaxBps: 0n, ltvLiqBps: 0n };
+    const j = await res.json();
+    return {
+      assetId,
+      eligible: !!j?.eligible,
+      nasmTier: String(j?.nasmTier ?? ""),
+      ltvMaxBps: toBigInt(j?.ltvMaxBps),
+      ltvLiqBps: toBigInt(j?.ltvLiqBps),
+    };
+  } catch { return { assetId, eligible: false, nasmTier: "", ltvMaxBps: 0n, ltvLiqBps: 0n }; }
+}
+
+export async function getNusdBalance(addressHex: string): Promise<{ amount: bigint }> {
+  try {
+    const res = await pluginGet("/v1/query/nusdbalance?address=" + encodeURIComponent(addressHex));
+    if (!res.ok) return { amount: 0n };
+    const j = await res.json();
+    return { amount: toBigInt(j?.amount) };
+  } catch { return { amount: 0n }; }
+}
+

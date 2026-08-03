@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useMarkets, type MarketWithIndices } from "@/lib/hooks/useMarkets";
 import { useMarketPools } from "@/lib/hooks/useMarketPools";
 import { formatAmount } from "@/lib/arbor/format";
+import { getTreasury } from "@/lib/canopy/pluginRpc";
 import { RAY } from "@/lib/arbor/constants";
 
 function Flag({ bad }: { bad: boolean }) {
@@ -131,6 +132,12 @@ export default function MonitorPage() {
   );
 
   const totalRf = list.reduce((a, e) => a + e.reserveFund, 0n);
+  const [treasuryArbor, setTreasuryArbor] = useState<bigint>(0n);
+  useEffect(() => {
+    let alive = true;
+    getTreasury("arbor").then((t) => { if (alive) setTreasuryArbor(t.amount); });
+    return () => { alive = false; };
+  }, []);
   const totalTvl = list.reduce((a, e) => a + e.market.totalSupplied, 0n);
   const totalCollateral = Object.values(collateralByMarket).reduce(
     (a, b) => a + b,
@@ -177,10 +184,10 @@ export default function MonitorPage() {
           />
           <LayerCard
             layer="Layer 3"
-            title="Backstop liquidation"
-            desc="Not exposed by the plugin RPC"
-            value="—"
-            tone="zinc"
+            title="Protocol treasury (T_fund)"
+            desc="Arbor treasury draw-down — isolated from NASM"
+            value={formatAmount(treasuryArbor, 9)}
+            tone={treasuryArbor > 0n ? "indigo" : "zinc"}
           />
           <LayerCard
             layer="Layer 4"

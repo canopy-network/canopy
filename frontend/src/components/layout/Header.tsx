@@ -9,6 +9,7 @@ import { useRoles, type Roles } from "@/lib/hooks/useRoles";
 
 const NAV = [
   { href: "/", label: "Markets" },
+  { href: "/nusd", label: "NUSD" },
   { href: "/oracle", label: "Oracle" },
   { href: "/liquidate", label: "Liquidation" }, { href: "/monitor", label: "Monitor" },
   { href: "/events", label: "Events" },
