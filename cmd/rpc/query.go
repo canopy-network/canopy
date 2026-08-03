@@ -665,8 +665,10 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
 	if height > 2 {
 		if cachedPrev, ok := s.indexerBlobCache.getCurrent(height - 1); ok {
+			s.controller.Metrics.RecordIndexerBlobPreviousReuseHit()
 			previous = cachedPrev
 		} else {
+			s.controller.Metrics.RecordIndexerBlobPreviousReuseMiss()
 			prev, prevErr := s.controller.FSM.IndexerBlob(height - 1)
 			if prevErr != nil {
 				return nil, nil, prevErr

@@ -299,6 +299,10 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	s.MaybeCompact()
 	// backup if enabled
 	s.MaybeBackup()
+	// refresh pebble's own LSM-tree telemetry - cheap (in-memory counters only), so safe on
+	// every commit, and deliberately not gated on s.syncing like MaybeCompact() since LSM
+	// shape visibility matters most exactly when the node is catching up
+	s.metrics.UpdatePebbleMetrics(s.db.Metrics())
 	// return the root
 	return
 }
