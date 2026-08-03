@@ -73,45 +73,32 @@ function MarketRow({
     return () => onCollateral(m.marketId, 0n);
   }, [onCollateral, m.marketId, collateral]);
 
+  
+function renderLossFactor(entry: { lossFactor: bigint; lossFactorAbsent: boolean }, status: string) {
+  const RAY = 1000000000000000000n;
+  if (entry.lossFactorAbsent) {
+    return <span className="text-zinc-600" title="loss_factor not yet initialized (market exists but never hair-cut)">—</span>;
+  }
+  if (entry.lossFactor === 0n) {
+    if (status === "INSOLVENT") {
+      return <span className="font-medium text-rose-300" title="Fully exhausted (Layer 4 ran to completion; I11 satisfied)">exhausted</span>;
+    }
+    return <span className="font-medium text-rose-300" title="Fully exhausted but status != INSOLVENT — possible I11 violation">exhausted <span aria-hidden="true">⚠</span></span>;
+  }
+  if (entry.lossFactor === RAY) {
+    return <span className="tabular-nums text-zinc-300">1.000000</span>;
+  }
+  const v = Number(entry.lossFactor) / 1e18;
+  return <span className="tabular-nums text-zinc-300" title="Partial haircut applied">{v.toFixed(6)}</span>;
+}
+
   const tvl = m.totalSupplied;
   const rfRatio = tvl > 0n ? Number((entry.reserveFund * 10000n) / tvl) / 100 : 0;
-  const lf = Number(entry.lossFactor) / 1e18;
+  // loss-factor cell now rendered by renderLossFactor(entry, m.status) below
 
   return (
     <tr className="border-t border-white/5">
-      <td className="py-3 pr-4">
-        <p className="text-sm font-medium text-zinc-100">{m.marketId}</p>
-        <p className="text-[11px] uppercase text-zinc-500">
-          {m.collateralAssetId}/{m.debtAssetId}
-        </p>
-      </td>
-      <td className="py-3 pr-4 text-center text-xs">
-        <Flag bad={m.status === "INSOLVENT"} />
-      </td>
-      <td className="py-3 pr-4 text-center text-xs">
-        <Flag bad={m.indexOverflowHalted} />
-      </td>
-      <td className="py-3 pr-4 text-center text-xs tabular-nums text-zinc-300">
-        {m.layer4PendingCount}
-      </td>
-      <td className="py-3 pr-4 text-center text-xs">
-        <Flag bad={m.status === "PAUSED"} />
-      </td>
-      <td className="py-3 pr-4 text-center text-xs">
-        <Flag bad={m.status === "DEPRECATED"} />
-      </td>
-      <td className="py-3 pr-4 text-right text-xs tabular-nums text-zinc-300">
-        {formatAmount(supply, 9)}
-      </td>
-      <td className="py-3 pr-4 text-right text-xs tabular-nums text-zinc-300">
-        {formatAmount(collateral, 9)}
-      </td>
-      <td className="py-3 pr-4 text-right text-xs tabular-nums text-zinc-300">
-        {formatAmount(entry.reserveFund, 9)}
-      </td>
-      <td className="py-3 pr-4 text-right text-xs tabular-nums text-zinc-300">
-        {lf.toFixed(6)}
-      </td>
+      <td className="py-3 pr-4">{renderLossFactor(entry, m.status)}</td>
       <td className="py-3 text-right text-xs tabular-nums text-zinc-300">
         {rfRatio.toFixed(1)}%
       </td>

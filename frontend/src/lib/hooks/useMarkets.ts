@@ -15,6 +15,7 @@ export interface MarketWithIndices {
   bIndex: bigint;
   supplyIndex: SupplyIndexRecord;
   lossFactor: bigint;
+  lossFactorAbsent: boolean;
   reserveFund: bigint;
 }
 
@@ -91,6 +92,7 @@ export function useMarkets() {
             bIndex: RAY,
             supplyIndex: { sRate: RAY, totalSharesOutstanding: 0n },
             lossFactor: lossFactor ?? RAY,
+          lossFactorAbsent: lossFactor === null,
             reserveFund,
           };
         })
