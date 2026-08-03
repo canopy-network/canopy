@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
@@ -620,6 +621,7 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 	}
 
 	if entry, ok := s.indexerBlobCache.get(height); ok && entry != nil && entry.deltaBlobs != nil && entry.deltaBytes != nil {
+		s.controller.Metrics.RecordIndexerBlobCacheHit()
 		return entry.deltaBlobs, entry.deltaBytes, nil
 	}
 
@@ -644,6 +646,15 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 		return journalDelta, deltaBytes, nil
 	}
 
+	// Cache miss and no journal available for this height: current/previous blobs
+	// must be built from the store, which for a height far behind the tip means a
+	// cold historical read. This is unbounded and not covered by the RPC
+	// write-deadline (the deadline keeps ticking while this call blocks, so a slow
+	// read here surfaces later as a "write tcp ...: i/o timeout" on the eventual
+	// w.Write, not here) -- log and record how long it actually took so a cold-path
+	// stall is visible after the fact both in logs and in canopy_indexer_blob_cold_read_time.
+	coldStart := time.Now()
+	defer s.controller.Metrics.RecordIndexerBlobCacheMiss(coldStart)
 	current, err := s.controller.FSM.IndexerBlob(height)
 	if err != nil {
 		return nil, nil, err
@@ -664,6 +675,13 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 		}
 	}
 
+	if elapsed := time.Since(coldStart); elapsed > time.Duration(s.config.TimeoutS)*time.Second {
+		s.logger.Warnf("indexer-blobs cold read for height %d took %s, exceeding the %ds RPC write deadline -- "+
+			"caller's write will fail with i/o timeout even though this read eventually succeeded", height, elapsed, s.config.TimeoutS)
+	} else {
+		s.logger.Debugf("indexer-blobs cold read for height %d took %s", height, elapsed)
+	}
+
 	blobs := &fsm.IndexerBlobs{
 		Current:  current,
 		Previous: previous,
@@ -682,6 +700,7 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 		deltaBlobs: blobDelta,
 		deltaBytes: deltaBytes,
 	})
+	s.controller.Metrics.UpdateIndexerBlobCacheSize(s.indexerBlobCache.Len())
 
 	return blobDelta, deltaBytes, nil
 }
