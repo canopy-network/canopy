@@ -144,6 +144,38 @@ func TestDeltaIndexerBlobs_KeepsBlockNonSigners(t *testing.T) {
 	require.Equal(t, previousNonSigners, delta.Previous.BlockNonSigners)
 }
 
+func TestMergeChangedBlobKeys_MatchesMapBasedDiff(t *testing.T) {
+	// sorted ascending by key, as accountEntries/validatorEntries produce from a Pebble scan
+	current := []blobEntry{
+		{key: "a", bz: []byte("a1")}, // changed
+		{key: "b", bz: []byte("b1")}, // unchanged
+		{key: "d", bz: []byte("d1")}, // added
+	}
+	previous := []blobEntry{
+		{key: "a", bz: []byte("a0")},
+		{key: "b", bz: []byte("b1")},
+		{key: "c", bz: []byte("c1")}, // removed
+	}
+
+	currentMap := map[string][]byte{"a": []byte("a1"), "b": []byte("b1"), "d": []byte("d1")}
+	previousMap := map[string][]byte{"a": []byte("a0"), "b": []byte("b1"), "c": []byte("c1")}
+
+	gotCurrentChanged, gotPreviousChanged := mergeChangedBlobKeys(current, previous)
+	wantCurrentChanged, wantPreviousChanged := changedBlobKeys(currentMap, previousMap)
+
+	require.Equal(t, wantCurrentChanged, gotCurrentChanged)
+	require.Equal(t, wantPreviousChanged, gotPreviousChanged)
+	require.Equal(t, map[string]struct{}{"a": {}, "d": {}}, gotCurrentChanged)
+	require.Equal(t, map[string]struct{}{"a": {}, "c": {}}, gotPreviousChanged)
+}
+
+func TestMergeChangedBlobKeys_EmptyPrevious(t *testing.T) {
+	current := []blobEntry{{key: "a", bz: []byte("a1")}, {key: "b", bz: []byte("b1")}}
+	gotCurrentChanged, gotPreviousChanged := mergeChangedBlobKeys(current, nil)
+	require.Equal(t, map[string]struct{}{"a": {}, "b": {}}, gotCurrentChanged)
+	require.Empty(t, gotPreviousChanged)
+}
+
 func mustMarshalProto(t *testing.T, message any) []byte {
 	t.Helper()
 	bz, err := lib.Marshal(message)
