@@ -306,7 +306,7 @@ func (m *Mempool) CheckMempool() (err lib.ErrorI) {
 	}
 	// apply the block to the mempool FSM to get the result and validate the transactions
 	applyBlockStartTime := time.Now()
-	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)
+	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true, nil, false)
 	applyBlockDuration := time.Since(applyBlockStartTime)
 	if m.metrics != nil {
 		m.metrics.ProposalApplyBlockTime.Observe(applyBlockDuration.Seconds())

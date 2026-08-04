@@ -139,7 +139,11 @@ func (s *StateMachine) Initialize(store lib.StoreI) (genesis bool, err lib.Error
 // NOTES:
 // - this function may be used to validate 'additional' transactions outside the normal block size as if they were to be included
 // - a list of failed transactions are returned
-func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversize bool) (header *lib.BlockHeader, r *lib.ApplyBlockResults, err lib.ErrorI) {
+// collector, if non-nil, captures every account touched during this call (see
+// AccountChangeCollector) — used for both live capture and on-demand replay.
+// skipRoot, if true, skips store.Root() (the SMT/Merkle computation) — for throwaway
+// replay calls whose caller never inspects header.StateRoot or commits the result.
+func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversize bool, collector *AccountChangeCollector, skipRoot bool) (header *lib.BlockHeader, r *lib.ApplyBlockResults, err lib.ErrorI) {
 	// catch in case there's a panic
 	defer func() {
 		if r := recover(); r != nil {
@@ -156,6 +160,9 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 	if !ok {
 		return nil, nil, ErrWrongStoreType()
 	}
+	// attach the account-change collector for the duration of this call only
+	s.accountCollector = collector
+	defer func() { s.accountCollector = nil }()
 	// automated execution at the 'beginning of a block'
 	beginBlockStartTime := time.Now()
 	events, err := s.BeginBlock()
@@ -203,20 +210,26 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 		return nil, nil, err
 	}
 	// calculate the merkle root of the state database to enable consensus on the result of the state after applying the block
-	rootWasCached := false
-	if cacheAwareStore, ok := store.(rootCacheStateStore); ok {
-		rootWasCached = cacheAwareStore.IsRootCached()
-	}
-	rootStartTime := time.Time{}
-	if !rootWasCached {
-		rootStartTime = time.Now()
-	}
-	stateRoot, err := store.Root()
-	if err != nil {
-		return nil, nil, err
-	}
-	if !rootStartTime.IsZero() {
-		s.Metrics.UpdateFSMApplyBlockRootTime(rootStartTime)
+	// skipRoot=true is only ever passed by a throwaway replay call (see Task 6) whose
+	// caller never commits and never inspects header.StateRoot/header.Hash for consensus
+	// purposes — skipping this is what removes the dominant cost of a replay-only call.
+	var stateRoot []byte
+	if !skipRoot {
+		rootWasCached := false
+		if cacheAwareStore, ok := store.(rootCacheStateStore); ok {
+			rootWasCached = cacheAwareStore.IsRootCached()
+		}
+		rootStartTime := time.Time{}
+		if !rootWasCached {
+			rootStartTime = time.Now()
+		}
+		stateRoot, err = store.Root()
+		if err != nil {
+			return nil, nil, err
+		}
+		if !rootStartTime.IsZero() {
+			s.Metrics.UpdateFSMApplyBlockRootTime(rootStartTime)
+		}
 	}
 	// load the last block from the indexer
 	lastBlock, err := s.LoadBlock(s.height - 1)
