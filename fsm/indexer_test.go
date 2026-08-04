@@ -393,6 +393,137 @@ func newTestAccountDeltaChain(t *testing.T) (*StateMachine, uint64) {
 	return sm, sm.height
 }
 
+// TestAccountDelta_PoolAndValidatorWritesDoNotLeakIntoAccountCollector proves that when a
+// REAL applied block writes POOL and VALIDATOR entries alongside ACCOUNT entries, the
+// AccountChangeCollector captures only the account addresses.
+// TestStateMachine_SetDoesNotHookNonAccountKeys (fsm/state_test.go) already proves prefix
+// isolation at the Set() call level with a single hand-written write; this test's distinct
+// value is the integration level -- pool and validator writes here happen as a side effect of
+// the real BeginBlock/EndBlock committee-reward machinery (ApplyBlock), not a direct Set call.
+func TestAccountDelta_PoolAndValidatorWritesDoNotLeakIntoAccountCollector(t *testing.T) {
+	sm, targetHeight, validatorAddress := newTestPoolAndValidatorTouchingChain(t)
+	ctx := context.Background()
+
+	blockHeight := targetHeight - 1
+	blockResult, err := sm.store.(lib.StoreI).GetBlockByHeight(blockHeight)
+	require.NoError(t, err)
+	require.NotNil(t, blockResult)
+	block, err := blockResult.ToBlock()
+	require.NoError(t, err)
+	replaySM, err := sm.TimeMachine(blockHeight)
+	require.NoError(t, err)
+	defer replaySM.Discard()
+
+	// snapshot pre-state DAO pool balance and validator #3's stake from the SAME snapshot the
+	// replay below runs against, before ApplyBlock mutates it
+	prePool, err := replaySM.GetPool(lib.DAOPoolID)
+	require.NoError(t, err)
+	preValidator, err := replaySM.GetValidator(crypto.NewAddressFromBytes(validatorAddress))
+	require.NoError(t, err)
+
+	collector := NewAccountChangeCollector(replaySM.Get)
+	_, applyResult, err := replaySM.ApplyBlock(ctx, block, false, collector, true)
+	require.NoError(t, err)
+	require.Empty(t, applyResult.Failed)
+
+	// verify -- don't assume -- that the block genuinely wrote both a pool and a validator
+	// entry. The DAO pool is minted into every block unconditionally (FundCommitteeRewardPools,
+	// never debited back down), so a strict increase proves a real SetPool call happened, not
+	// just a Set(sameValue) no-op. Validator #3 was made compounding by the fixture below, so
+	// its committee reward in this block updates StakedAmount via UpdateValidatorStake ->
+	// SetValidator instead of the default non-compounding AccountAdd-to-output path -- a strict
+	// increase proves that write happened too. If the fixture regressed to stop touching either,
+	// this would fail instead of silently asserting nothing.
+	postPool, err := replaySM.GetPool(lib.DAOPoolID)
+	require.NoError(t, err)
+	require.Greater(t, postPool.Amount, prePool.Amount,
+		"fixture must actually mint into the DAO pool during the measured block")
+	postValidator, err := replaySM.GetValidator(crypto.NewAddressFromBytes(validatorAddress))
+	require.NoError(t, err)
+	require.Greater(t, postValidator.StakedAmount, preValidator.StakedAmount,
+		"fixture must actually write validator #3's stake (compounding reward) in the measured block")
+
+	added, changed, removed := collector.Results()
+	all := append(append(append([]*AccountChangeEntry{}, added...), changed...), removed...)
+	require.NotEmpty(t, all, "fixture must also touch at least one account, or this test can't distinguish account entries from a leak")
+
+	for _, e := range all {
+		// weak alone (a validator address is also crypto.AddressSize bytes), but catches a
+		// pool-prefix leak: pool keys carry no address-shaped payload at all, so a
+		// bytes.HasPrefix(k, PoolPrefix()) regression would produce garbage-length
+		// "addresses" here rather than passing silently
+		require.Len(t, e.Address, crypto.AddressSize, "captured entries must be account-sized addresses")
+
+		// catches a validator-prefix leak specifically, which the length check above cannot:
+		// validator #3's address is proven (above) to have been written in this very block, so
+		// if the hook regressed to also match bytes.HasPrefix(k, ValidatorPrefix()), that
+		// address would show up here -- assert it never does
+		require.NotEqual(t, validatorAddress, e.Address, "validator address must not leak into the account collector")
+
+		// positive check: every captured address must round-trip to the real KeyForAccount
+		// entry, proving it genuinely is an account key rather than merely address-shaped bytes
+		// living under some other prefix
+		key := KeyForAccount(crypto.NewAddressFromBytes(e.Address))
+		bz, gErr := replaySM.Get(key)
+		require.NoError(t, gErr)
+		if e.FinalValue != nil {
+			require.Equal(t, e.FinalValue, bz, "captured added/changed entry must match the live KeyForAccount value")
+		} else {
+			require.Empty(t, bz, "captured removed entry must correspond to an actually-deleted account key")
+		}
+	}
+}
+
+// newTestPoolAndValidatorTouchingChain builds a REAL committed chain (same base pattern as
+// newTestAccountDeltaChain: newTestApplyBlockFixture, then ApplyBlock+IndexQC+IndexBlock+Commit
+// per block via testApplyAndCommitBlock) whose measured block (the last one applied) writes an
+// ACCOUNT (a send tx), a POOL (the automatic committee-reward mint that runs unconditionally
+// every block in BeginBlock, see FundCommitteeRewardPools) and a VALIDATOR (a *compounding*
+// committee-reward payout, which routes through UpdateValidatorStake -> SetValidator instead of
+// the default non-compounding AccountAdd-to-output path -- see DistributeCommitteeReward).
+//
+// Validator #3 is the certificate's reward recipient (see testAccountDeltaQC) and is
+// non-compounding by default in newTestApplyBlockFixture, so it is flipped to Compound=true
+// here directly via SetValidator. That flip happens BEFORE block 4 is applied/committed so it
+// lands in the state@4 snapshot that block 5's replay (TimeMachine(4) + ApplyBlock) reads --
+// flipping it after block 4's commit would either land the write in block 4 itself or be lost
+// (an uncommitted edit merged into block 5's own commit isn't visible to a version-4 snapshot).
+func newTestPoolAndValidatorTouchingChain(t *testing.T) (sm *StateMachine, targetHeight uint64, validatorAddress []byte) {
+	t.Helper()
+	fixture, _ := newTestApplyBlockFixture(t)
+	sm = &fixture
+	st := sm.store.(lib.StoreI)
+	sm.Config.P2PConfig.NetworkID = uint64(sm.NetworkID)
+	_, e := st.Commit()
+	require.NoError(t, e)
+	require.Equal(t, sm.height, st.Version())
+
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 0}))
+	require.NoError(t, sm.AccountAdd(newTestAddress(t), 10_000_000))
+	// block 3: no transactions -- exists so block 4's BeginBlock has a real committed
+	// predecessor block and certificate to load
+	testApplyAndCommitBlock(t, sm, nil)
+
+	validator3, err := sm.GetValidator(newTestAddress(t, 3))
+	require.NoError(t, err)
+	require.False(t, validator3.Compound, "fixture assumption: validator #3 starts non-compounding")
+	validator3.Compound = true
+	require.NoError(t, sm.SetValidator(validator3))
+
+	// block 4: no new transactions of its own -- indexes the certificate (paying validator #3)
+	// that block 5's BeginBlock consumes
+	testApplyAndCommitBlock(t, sm, nil)
+
+	// block 5: the measured block. A send tx touches accounts; BeginBlock's automatic DAO pool
+	// mint and validator #3's now-compounding committee reward (from block 4's certificate)
+	// touch a pool and a validator in the same pass.
+	testApplyAndCommitBlock(t, sm, [][]byte{
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 7), 1_000),
+	})
+
+	return sm, sm.height, newTestAddressBytes(t, 3)
+}
+
 // testApplyAndCommitBlock applies a block at sm.height with the given transactions, indexes
 // the resulting BlockResult and a signed certificate for that height, commits the store, and
 // advances the state machine -- the same order controller.CommitCertificate uses (apply,
