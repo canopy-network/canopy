@@ -128,6 +128,7 @@ type RPCConfig struct {
 	AdminRPCUrl                string `json:"adminRPCUrl"`                // the url where the admin rpc server is hosted
 	TimeoutS                   int    `json:"timeoutS"`                   // the rpc request timeout in seconds
 	IndexerBlobCacheEntries    int    `json:"indexerBlobCacheEntries"`    // number of cached indexer blobs to keep in memory
+	ServeIndexerBlobsLive      bool   `json:"serveIndexerBlobsLive"`      // capture account changes during live block commit for the indexer-blobs tip cache, instead of only on-demand replay
 	MaxRCSubscribers           int    `json:"maxRCSubscribers"`           // max total root-chain subscribers
 	MaxRCSubscribersPerChain   int    `json:"maxRCSubscribersPerChain"`   // max root-chain subscribers per chain id
 	RCSubscriberReadLimitBytes int64  `json:"rcSubscriberReadLimitBytes"` // max bytes allowed in a single ws message from a subscriber
@@ -154,6 +155,7 @@ func DefaultRPCConfig() RPCConfig {
 		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
 		TimeoutS:                   30,                         // the rpc timeout is 30 seconds
 		IndexerBlobCacheEntries:    64,                         // cache the most recent indexer blobs
+		ServeIndexerBlobsLive:      true,                       // capture account changes live by default
 		MaxRCSubscribers:           512,                        // limit total root-chain subscribers
 		MaxRCSubscribersPerChain:   128,                        // limit subscribers per chain id
 		RCSubscriberReadLimitBytes: int64(64 * units.Kilobyte), // cap inbound ws message sizes

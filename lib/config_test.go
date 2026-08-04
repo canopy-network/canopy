@@ -28,6 +28,11 @@ func TestDefaultConfig(t *testing.T) {
 	require.Empty(t, diff, "config mismatch: %s", diff)
 }
 
+func TestDefaultRPCConfig_ServeIndexerBlobsLiveDefaultsTrue(t *testing.T) {
+	cfg := DefaultRPCConfig()
+	require.True(t, cfg.ServeIndexerBlobsLive)
+}
+
 func TestFileConfig(t *testing.T) {
 	filePath := "./test_config"
 	// define a variable to test upon
