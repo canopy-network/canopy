@@ -221,8 +221,9 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 		}
 		c.FSM.SetRootDexCache(rootDexBatch)
 	}
-	// play the block against the state machine to generate a block result
-	blockResult, err = c.ApplyAndValidateBlock(block, false)
+	// play the block against the state machine to generate a block result; this is proposal
+	// validation, not a live commit, so no account-change collector is attached here
+	blockResult, err = c.ApplyAndValidateBlock(block, false, nil)
 	if err != nil {
 		// exit with error
 		return
@@ -268,8 +269,11 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		if qc.Results != nil && qc.Results.RootDexBatch != nil {
 			c.FSM.SetRootDexCache(qc.Results.RootDexBatch)
 		}
-		// apply the block against the state machine
-		blockResult, err = c.ApplyAndValidateBlock(block, true)
+		// apply the block against the state machine, attaching a live account-change
+		// collector when this node is configured to serve indexer blobs and isn't syncing
+		// (see Task 5 for accountCollectorForLiveCommit and Task 6 for tip-cache populate)
+		liveCollector := c.accountCollectorForLiveCommit(syncing)
+		blockResult, err = c.ApplyAndValidateBlock(block, true, liveCollector)
 		if err != nil {
 			// exit with error
 			return
@@ -383,8 +387,11 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		if qc.Results != nil && qc.Results.RootDexBatch != nil {
 			c.FSM.SetRootDexCache(qc.Results.RootDexBatch)
 		}
-		// apply the block against the state machine
-		if blockResult, err = c.ApplyAndValidateBlock(block, true); err != nil {
+		// apply the block against the state machine, attaching a live account-change
+		// collector when this node is configured to serve indexer blobs and isn't syncing
+		// (see Task 5 for accountCollectorForLiveCommit and Task 6 for tip-cache populate)
+		liveCollector := c.accountCollectorForLiveCommit(syncing)
+		if blockResult, err = c.ApplyAndValidateBlock(block, true, liveCollector); err != nil {
 			// exit with error
 			return
 		}
@@ -507,10 +514,19 @@ func (c *Controller) commitToStore(storeI lib.StoreI, qc *lib.QuorumCertificate,
 	return err
 }
 
+// TEMPORARY stub for Task 4 only — replaced by Task 5's real implementation, which will
+// gate collector attachment on the ServeIndexerBlobsLive config flag and the syncing state.
+// Until Task 5 lands, this always returns nil, so no collector is attached anywhere live yet.
+func (c *Controller) accountCollectorForLiveCommit(syncing bool) *fsm.AccountChangeCollector {
+	return nil
+}
+
 // INTERNAL HELPERS BELOW
 
-// ApplyAndValidateBlock() plays the block against the state machine which returns a result that is compared against the candidate block header
-func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool) (b *lib.BlockResult, err lib.ErrorI) {
+// ApplyAndValidateBlock() plays the block against the state machine which returns a result
+// that is compared against the candidate block header. collector, if non-nil, is passed
+// through to ApplyBlock to capture touched accounts for the live indexer-blob tip cache.
+func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool, collector *fsm.AccountChangeCollector) (b *lib.BlockResult, err lib.ErrorI) {
 	// define convenience variables for the block header, hash, and height
 	candidate, candidateHash, candidateHeight := block.BlockHeader, lib.BytesToString(block.BlockHeader.Hash), block.BlockHeader.Height
 	// check the last qc in the candidate and set it in the ephemeral indexer to prepare for block application
@@ -521,7 +537,7 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool) (b *li
 	// log the start of 'apply block'
 	c.log.Debugf("Applying block %s for height %d", candidateHash[:20], candidateHeight)
 	// apply the block against the state machine
-	compare, results, err := c.FSM.ApplyBlock(context.Background(), block, false)
+	compare, results, err := c.FSM.ApplyBlock(context.Background(), block, false, collector, false)
 	if err != nil {
 		// exit with error
 		return
