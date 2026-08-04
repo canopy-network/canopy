@@ -635,7 +635,7 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	// after the fact both in logs and in canopy_indexer_blob_cold_read_time.
 	coldStart := time.Now()
 	defer s.controller.Metrics.RecordIndexerBlobCacheMiss(coldStart)
-	current, err := s.controller.FSM.IndexerBlob(ctx, height)
+	current, err := s.controller.FSM.IndexerBlob(ctx, height, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -649,7 +649,7 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 			previous = cachedPrev
 		} else {
 			s.controller.Metrics.RecordIndexerBlobPreviousReuseMiss()
-			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1)
+			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1, false)
 			if prevErr != nil {
 				return nil, nil, prevErr
 			}

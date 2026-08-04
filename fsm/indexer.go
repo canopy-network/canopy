@@ -19,20 +19,23 @@ func (s *StateMachine) IndexerBlobs(ctx context.Context, height uint64) (b *Inde
 	// IndexerBlob(height) is only valid for height >= 2 (it pairs state@height with block height-1).
 	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
 	if height > 2 {
-		b.Previous, err = s.IndexerBlob(ctx, height-1)
+		b.Previous, err = s.IndexerBlob(ctx, height-1, false)
 		if err != nil {
 			return nil, err
 		}
 	}
-	b.Current, err = s.IndexerBlob(ctx, height)
+	b.Current, err = s.IndexerBlob(ctx, height, false)
 	if err != nil {
 		return nil, err
 	}
 	return
 }
 
-// IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
-func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *IndexerBlob, err lib.ErrorI) {
+// IndexerBlob() retrieves the protobuf blobs for a blockchain indexer.
+// skipAccounts, if true, leaves Accounts nil instead of doing the full accounts scan below -
+// used when the caller (IndexerBlobsCached) is going to source the account delta separately
+// via Controller.GetAccountDelta.
+func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64, skipAccounts bool) (b *IndexerBlob, err lib.ErrorI) {
 	if height == 0 || height > s.height {
 		height = s.height
 	}
@@ -70,12 +73,15 @@ func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *Index
 		return nil, lib.ErrWrongBlockHeight(block.BlockHeader.Height, blockHeight)
 	}
 	// use sm for consistent snapshot reads at the requested height
-	// retrieve the accounts
-	stepStart = time.Now()
-	accounts, err := sm.IterateAndAppend(ctx, AccountPrefix())
-	s.Metrics.ObserveIndexerBlobStep("accounts_iterate", stepStart)
-	if err != nil {
-		return nil, err
+	// retrieve the accounts, unless the caller is sourcing them separately (see skipAccounts doc)
+	var accounts [][]byte
+	if !skipAccounts {
+		stepStart = time.Now()
+		accounts, err = sm.IterateAndAppend(ctx, AccountPrefix())
+		s.Metrics.ObserveIndexerBlobStep("accounts_iterate", stepStart)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// retrieve pools
 	stepStart = time.Now()

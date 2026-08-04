@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/canopy-network/canopy/lib"
@@ -194,6 +195,31 @@ func requireEntriesAsSet(t *testing.T, got [][]byte, expected ...[]byte) {
 		expSet[string(entry)]++
 	}
 	require.Equal(t, expSet, gotSet)
+}
+
+// TestIndexerBlob_SkipAccountsLeavesAccountsNil and TestIndexerBlob_NoSkipStillScansAccounts
+// use newTestApplyBlockFixture (fsm/state_test.go) - the real helper used elsewhere in this
+// package to build a StateMachine with a committed block (height 2, indexed via IndexBlock)
+// and a funded account (via AccountAdd), then sm.height set to 3 and the store committed.
+// That leaves the state machine ready for IndexerBlob(ctx, 3, ...) without needing to
+// actually call ApplyBlock: the fixture's committed state at height 3 already pairs with
+// the indexed block at height 2 (blockHeight = height - 1), and its funded account guarantees
+// the accounts scan (when not skipped) has at least one real entry to assert on.
+func TestIndexerBlob_SkipAccountsLeavesAccountsNil(t *testing.T) {
+	sm, _ := newTestApplyBlockFixture(t)
+	blob, err := sm.IndexerBlob(context.Background(), 3, true)
+	require.NoError(t, err)
+	require.Nil(t, blob.Accounts)
+}
+
+func TestIndexerBlob_NoSkipStillScansAccounts(t *testing.T) {
+	sm, _ := newTestApplyBlockFixture(t)
+	blob, err := sm.IndexerBlob(context.Background(), 3, false)
+	require.NoError(t, err)
+	// the fixture funds an account via AccountAdd before committing, so the full scan
+	// (skipAccounts=false) must find and return it - a meaningful assertion rather than
+	// a vacuous non-nil check on the blob itself.
+	require.NotEmpty(t, blob.Accounts, "full scan with skipAccounts=false must still populate Accounts")
 }
 
 // TestDeltaIndexerBlobs_ZeroValuePoolAndAccount is a regression for the
