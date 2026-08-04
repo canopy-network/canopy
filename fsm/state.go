@@ -672,7 +672,9 @@ func (s *StateMachine) Iterator(key []byte) (lib.IteratorI, lib.ErrorI) {
 }
 
 // IteratorAndAppend() aggregates an array of raw bytes from an iterator
-func (s *StateMachine) IterateAndAppend(prefix []byte) (result [][]byte, err lib.ErrorI) {
+// ctx is checked every iteration so an abandoned caller (e.g. a disconnected RPC client)
+// stops this scan promptly instead of running it to completion.
+func (s *StateMachine) IterateAndAppend(ctx context.Context, prefix []byte) (result [][]byte, err lib.ErrorI) {
 	// iterate through the account prefix
 	it, err := s.Iterator(prefix)
 	if err != nil {
@@ -681,6 +683,9 @@ func (s *StateMachine) IterateAndAppend(prefix []byte) (result [][]byte, err lib
 	defer it.Close()
 	// for each item of the iterator
 	for ; it.Valid(); it.Next() {
+		if cErr := ctx.Err(); cErr != nil {
+			return nil, lib.ErrCancelled(cErr)
+		}
 		result = append(result, it.Value())
 	}
 	// return the result

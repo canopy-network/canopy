@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -38,7 +39,7 @@ func TestIndexerBlobs_IgnoresLegacyDeltaField(t *testing.T) {
 func TestIndexerBlobsCached_CachesDeltaResponsesOnly(t *testing.T) {
 	server := newTestIndexerBlobServer(t)
 
-	got, bz, err := server.IndexerBlobsCached(3)
+	got, bz, err := server.IndexerBlobsCached(context.Background(), 3)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.NotEmpty(t, bz)
@@ -55,7 +56,7 @@ func TestIndexerBlobsCached_CachesDeltaResponsesOnly(t *testing.T) {
 	require.Same(t, got, entry.deltaBlobs)
 	require.Equal(t, bz, entry.deltaBytes)
 
-	gotAgain, bzAgain, err := server.IndexerBlobsCached(3)
+	gotAgain, bzAgain, err := server.IndexerBlobsCached(context.Background(), 3)
 	require.NoError(t, err)
 	require.Same(t, entry.deltaBlobs, gotAgain)
 	require.Equal(t, entry.deltaBytes, bzAgain)
@@ -64,7 +65,7 @@ func TestIndexerBlobsCached_CachesDeltaResponsesOnly(t *testing.T) {
 func TestIndexerBlobsCached_RetainsOnlyLatestFullSnapshot(t *testing.T) {
 	server := newTestIndexerBlobServerWithHeights(t, 4)
 
-	got3, _, err := server.IndexerBlobsCached(3)
+	got3, _, err := server.IndexerBlobsCached(context.Background(), 3)
 	require.NoError(t, err)
 	require.NotNil(t, got3)
 
@@ -73,7 +74,7 @@ func TestIndexerBlobsCached_RetainsOnlyLatestFullSnapshot(t *testing.T) {
 	require.NotNil(t, entry3)
 	require.NotNil(t, entry3.current)
 
-	got4, _, err := server.IndexerBlobsCached(4)
+	got4, _, err := server.IndexerBlobsCached(context.Background(), 4)
 	require.NoError(t, err)
 	require.NotNil(t, got4)
 	require.NotNil(t, got4.Previous)
@@ -305,4 +306,20 @@ func setUnexportedField(t *testing.T, target any, name string, value any) {
 	field := reflect.ValueOf(target).Elem().FieldByName(name)
 	require.True(t, field.IsValid(), name)
 	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(value))
+}
+
+func TestIndexerBlobsCached_CancelledContextReturnsErrCancelled(t *testing.T) {
+	server := newTestIndexerBlobServer(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	got, bz, err := server.IndexerBlobsCached(ctx, 3)
+	require.NotNil(t, err)
+	require.Equal(t, lib.CodeCancelled, err.Code())
+	require.Nil(t, got)
+	require.Nil(t, bz)
+
+	_, ok := server.indexerBlobCache.get(3)
+	require.False(t, ok, "a cancelled scan must not populate the cache")
 }
