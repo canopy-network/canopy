@@ -661,7 +661,7 @@ func (s *Store) MaybeCompact() {
 		go func() {
 			now := time.Now()
 			// trigger compaction of store keys
-			if err := s.Compact(version, latestStatePrefix); err != nil {
+			if err := s.Compact(version, latestStatePrefix, liveCompactionTimeout); err != nil {
 				s.log.Errorf("LSS key compaction failed: %s", err)
 				return
 			}
@@ -671,7 +671,7 @@ func (s *Store) MaybeCompact() {
 				return
 			}
 			now = time.Now()
-			if err := s.Compact(version, historicStatePrefix); err != nil {
+			if err := s.Compact(version, historicStatePrefix, liveCompactionTimeout); err != nil {
 				s.log.Errorf("HSS key compaction failed: %s", err)
 			}
 			s.metrics.UpdateStoreJobMetrics(0, time.Since(now), 0)
@@ -761,8 +761,23 @@ func (s *Store) MaybeBackup() {
 	}()
 }
 
+// liveCompactionTimeout bounds a single MaybeCompact() prefix pass (LSS/HSS, running
+// live alongside sync/consensus) so a stuck compaction can't hold the single-flight
+// s.compaction lock indefinitely and starve subsequent periodic compactions.
+// TODO: per-prefix budget was chosen arbitrarily, update once multiple tests are run
+const liveCompactionTimeout = 3 * time.Minute
+
+// postSyncCompactionTimeout bounds CompactAll()'s one-time post-sync pass, which
+// includes the indexer prefix (every block/tx/QC in chain history - never compacted
+// during normal operation). At 774k+ blocks that prefix alone exceeds
+// liveCompactionTimeout, so CompactAll always failed outright on [i/] with
+// "context deadline exceeded" (observed on localnet-2, store grown to 259GB/2409
+// SSTs). CompactAll runs off a background goroutine after sync finishes and blocks
+// nothing else, so a much larger bound is safe here.
+const postSyncCompactionTimeout = 30 * time.Minute
+
 // Compact runs Pebble range compaction over the prefix range
-func (s *Store) Compact(version uint64, prefix []byte) lib.ErrorI {
+func (s *Store) Compact(version uint64, prefix []byte, timeout time.Duration) lib.ErrorI {
 	// compactions are not allowed to run concurrently to not intertwine with the keys
 	if !s.compaction.CompareAndSwap(false, true) {
 		s.log.Debugf("key compaction skipped [%d] [%s]: already in progress", version, prefix)
@@ -771,8 +786,7 @@ func (s *Store) Compact(version uint64, prefix []byte) lib.ErrorI {
 	defer s.compaction.Store(false)
 	now := time.Now()
 	s.log.Debugf("key compaction [%s] started at height %d", prefix, version)
-	// TODO: per-prefix budget was chosen arbitrarily, update once multiple tests are run
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	// compact prefix range
 	if err := s.db.Compact(ctx, prefix, prefixEnd(prefix), true); err != nil {
@@ -788,7 +802,7 @@ func (s *Store) Compact(version uint64, prefix []byte) lib.ErrorI {
 func (s *Store) CompactAll(version uint64) lib.ErrorI {
 	prefixes := [][]byte{latestStatePrefix, historicStatePrefix, stateCommitmentPrefix, indexerPrefix}
 	for _, prefix := range prefixes {
-		if err := s.Compact(version, prefix); err != nil {
+		if err := s.Compact(version, prefix, postSyncCompactionTimeout); err != nil {
 			return err
 		}
 	}
