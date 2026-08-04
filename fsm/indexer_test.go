@@ -3,7 +3,6 @@ package fsm
 import (
 	"bytes"
 	"context"
-	"slices"
 	"testing"
 	"time"
 
@@ -182,12 +181,13 @@ func TestMergeChangedBlobKeys_EmptyPrevious(t *testing.T) {
 
 // TestAccountDelta_MatchesOldFullScanAndDiff is the differential regression test for the
 // account-delta fast path: it runs the OLD path (full AccountPrefix scan of both heights,
-// diffed by DeltaIndexerBlobs) and the NEW path (single-block ApplyBlock replay with an
-// AccountChangeCollector, assembled the way cmd/rpc's overrideAccountDelta assembles it)
-// against the SAME committed chain, and requires byte-for-byte, order-for-order equality of
-// both delta sides. Neither side's expectation is hand-seeded — both are computed from the
-// chain, so a divergence in classification, in value selection (FinalValue vs PrevValue),
-// in the reward/slash force-include, or in ordering fails the test.
+// diffed by DeltaIndexerBlobs) and the NEW path (single-block ReplayBlock with an
+// AccountChangeCollector, assembled by AssembleAccountDeltaSides — the REAL code cmd/rpc's
+// overrideAccountDelta serves through) against the SAME committed chain, and requires
+// byte-for-byte, order-for-order equality of both delta sides. Neither side's expectation
+// is hand-seeded — both are computed from the chain, so a divergence in classification, in
+// value selection (FinalValue vs PrevValue), in the reward/slash force-include, or in
+// ordering fails the test.
 //
 // LIMITATION (deliberate, documented): this chain runs on the ROOT chain (Config.ChainId ==
 // lib.CanopyChainId), so it does NOT exercise the nested-chain root-DEX-batch path. On a
@@ -224,16 +224,17 @@ func TestAccountDelta_MatchesOldFullScanAndDiff(t *testing.T) {
 	defer replaySM.Discard()
 	require.Equal(t, blockHeight, replaySM.Height())
 	collector := NewAccountChangeCollector(replaySM.Get)
-	_, applyResult, err := replaySM.ApplyBlock(ctx, block, false, collector, true)
+	_, applyResult, err := replaySM.ReplayBlock(ctx, block, collector)
 	require.NoError(t, err)
 	require.Empty(t, applyResult.Failed)
-	added, changed, removed := collector.Results()
+	delta := collector.Results()
+	require.NotNil(t, delta)
 
 	// sanity-check the fixture actually produced the scenarios it claims to, so a chain that
 	// silently stopped exercising them can't turn this into a vacuous empty-vs-empty compare
-	require.NotEmpty(t, added, "fixture must produce at least one brand-new account")
-	require.NotEmpty(t, changed, "fixture must produce at least one changed account")
-	require.NotEmpty(t, removed, "fixture must produce at least one removed (zeroed) account")
+	require.NotEmpty(t, delta.Added, "fixture must produce at least one brand-new account")
+	require.NotEmpty(t, delta.Changed, "fixture must produce at least one changed account")
+	require.NotEmpty(t, delta.Removed, "fixture must produce at least one removed (zeroed) account")
 
 	// ...and that the force-include path has real work to do: the block must emit a
 	// reward event naming an address the collector never saw written, so both assemblies
@@ -242,87 +243,94 @@ func TestAccountDelta_MatchesOldFullScanAndDiff(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, forced, "fixture must emit a reward/slash event")
 	touched := make(map[string]struct{})
-	for _, e := range append(append(append([]*AccountChangeEntry{}, added...), changed...), removed...) {
-		touched[string(e.Address)] = struct{}{}
+	for _, entries := range [][]*AccountChangeEntry{delta.Added, delta.Changed, delta.Removed} {
+		for _, e := range entries {
+			touched[string(e.Address)] = struct{}{}
+		}
 	}
 	for address := range forced {
 		require.NotContains(t, touched, address,
 			"the forced address must be untouched by the block, or the read-back never runs")
 	}
 
-	newCurrent := testAccountSide(added, changed, true)
-	require.NoError(t, testForceIncludeAccounts(sm, newCurrent, oldCurrent.Block, targetHeight))
-	newPrevious := testAccountSide(changed, removed, false)
-	require.NoError(t, testForceIncludeAccounts(sm, newPrevious, oldCurrent.Block, targetHeight-1))
+	// assemble both sides through the REAL production code cmd/rpc serves through
+	newCurrent, newPrevious, err := sm.AssembleAccountDeltaSides(delta, oldCurrent.Block, targetHeight)
+	require.NoError(t, err)
 
 	// exact ordered equality: both paths are ascending-by-address (the old side comes from an
 	// ascending Pebble prefix scan, the new one from sortedAccountEntries), so ElementsMatch
 	// would silently tolerate an ordering regression that changes the cached response bytes.
-	require.Equal(t, oldDelta.Current.Accounts, testSortedAccountEntries(newCurrent))
-	require.Equal(t, oldDelta.Previous.Accounts, testSortedAccountEntries(newPrevious))
+	require.Equal(t, oldDelta.Current.Accounts, newCurrent)
+	require.Equal(t, oldDelta.Previous.Accounts, newPrevious)
 }
 
-// testAccountSide / testForceIncludeAccounts / testSortedAccountEntries mirror
-// accountSide(), forceIncludeAccounts() and sortedAccountEntries() in cmd/rpc/query.go. They
-// are duplicated rather than imported because fsm cannot import cmd/rpc (import cycle); keep
-// them in step with that file or this test stops proving what the RPC layer actually serves.
-func testAccountSide(a, b []*AccountChangeEntry, useFinal bool) map[string][]byte {
-	side := make(map[string][]byte, len(a)+len(b))
-	collect := func(entries []*AccountChangeEntry) {
-		for _, e := range entries {
-			if e == nil {
-				continue
-			}
-			value := e.FinalValue
-			if !useFinal {
-				value = e.PrevValue
-			}
-			if value == nil {
-				continue
-			}
-			side[string(e.Address)] = append([]byte(nil), value...)
-		}
-	}
-	collect(a)
-	collect(b)
-	return side
+// accountSide must never mutate or alias the slices it is handed: GetAccountDelta can return
+// the tip-cache entry's slices (see controller/account_delta_cache.go), and the assembled
+// result is stored in the RPC blob cache and served to every later caller
+func TestAccountSide_DoesNotMutateOrAliasInputs(t *testing.T) {
+	added := []*AccountChangeEntry{{Address: []byte("a"), FinalValue: []byte("af")}}
+	changed := []*AccountChangeEntry{{Address: []byte("b"), PrevValue: []byte("bp"), FinalValue: []byte("bf")}}
+	// spare capacity: an append-in-place would write through into the shared backing array
+	removed := make([]*AccountChangeEntry, 1, 4)
+	removed[0] = &AccountChangeEntry{Address: []byte("c"), PrevValue: []byte("cp")}
+
+	require.Equal(t, [][]byte{[]byte("af"), []byte("bf")}, sortedAccountEntries(accountSide(added, changed, true)))
+	require.Equal(t, [][]byte{[]byte("bp"), []byte("cp")}, sortedAccountEntries(accountSide(changed, removed, false)))
+
+	require.Len(t, added, 1)
+	require.Len(t, changed, 1)
+	require.Len(t, removed, 1)
+	require.Equal(t, []byte("af"), added[0].FinalValue)
+	require.Equal(t, []byte("bp"), changed[0].PrevValue)
+	require.Equal(t, []byte("bf"), changed[0].FinalValue)
+	require.Equal(t, []byte("cp"), removed[0].PrevValue)
+	require.Equal(t, 4, cap(removed), "the input slice's backing array must be untouched")
+
+	// the emitted bytes must be copies -- mutating them must not reach back into the entries
+	out := sortedAccountEntries(accountSide(added, nil, true))
+	require.Len(t, out, 1)
+	out[0][0] = 'X'
+	require.Equal(t, []byte("af"), added[0].FinalValue, "the result must not alias the entry's bytes")
 }
 
-func testForceIncludeAccounts(sm *StateMachine, side map[string][]byte, currentBlockBz []byte, version uint64) lib.ErrorI {
-	forced, err := RewardSlashAccountKeys(currentBlockBz)
-	if err != nil {
-		return err
+// AccountChangeCollector.Results() ranges a Go map, so the entries arrive in random order;
+// the wire format must still be ascending by address, because the assembled bytes are cached
+// and served to every later caller and an unstable order would make the same height return
+// different bytes across calls and across nodes
+func TestAccountSide_SortsByAddressAscending(t *testing.T) {
+	entries := []*AccountChangeEntry{
+		{Address: []byte{0x03}, FinalValue: []byte("c")},
+		{Address: []byte{0x01}, FinalValue: []byte("a")},
+		{Address: []byte{0x02}, FinalValue: []byte("b")},
 	}
-	missing := make(map[string]struct{}, len(forced))
-	for address := range forced {
-		if _, ok := side[address]; !ok {
-			missing[address] = struct{}{}
-		}
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-	entries, err := sm.AccountEntriesAtVersion(version, missing)
-	if err != nil {
-		return err
-	}
-	for address, bz := range entries {
-		side[address] = bz
-	}
-	return nil
+	require.Equal(t,
+		[][]byte{[]byte("a"), []byte("b"), []byte("c")},
+		sortedAccountEntries(accountSide(entries, nil, true)),
+	)
 }
 
-func testSortedAccountEntries(side map[string][]byte) [][]byte {
-	addresses := make([]string, 0, len(side))
-	for address := range side {
-		addresses = append(addresses, address)
+// the input may be a shared cached blob, so stripping accounts must NEVER mutate it —
+// a copy is returned when there is something to strip, and the copy shares everything else
+func TestIndexerBlobWithoutAccounts(t *testing.T) {
+	require.Nil(t, IndexerBlobWithoutAccounts(nil))
+
+	// a blob already without accounts is returned as-is (no pointless copy)
+	noAccounts := &IndexerBlob{Pools: [][]byte{[]byte("p")}}
+	require.Same(t, noAccounts, IndexerBlobWithoutAccounts(noAccounts))
+
+	// a blob with accounts yields a copy with them stripped, original untouched
+	withAccounts := &IndexerBlob{
+		Accounts: [][]byte{[]byte("acc")},
+		Pools:    [][]byte{[]byte("p")},
+		Block:    []byte("blk"),
 	}
-	slices.Sort(addresses)
-	out := make([][]byte, 0, len(addresses))
-	for _, address := range addresses {
-		out = append(out, side[address])
-	}
-	return out
+	stripped := IndexerBlobWithoutAccounts(withAccounts)
+	require.NotSame(t, withAccounts, stripped)
+	require.Nil(t, stripped.Accounts)
+	require.Equal(t, [][]byte{[]byte("acc")}, withAccounts.Accounts, "the shared cached blob must never be mutated")
+	// the copy shares the other payloads (structural copy, not a deep clone)
+	require.Equal(t, withAccounts.Pools, stripped.Pools)
+	require.Equal(t, withAccounts.Block, stripped.Block)
 }
 
 // newTestAccountDeltaChain builds a REAL committed chain by running ApplyBlock + Commit for
@@ -422,7 +430,7 @@ func TestAccountDelta_PoolAndValidatorWritesDoNotLeakIntoAccountCollector(t *tes
 	require.NoError(t, err)
 
 	collector := NewAccountChangeCollector(replaySM.Get)
-	_, applyResult, err := replaySM.ApplyBlock(ctx, block, false, collector, true)
+	_, applyResult, err := replaySM.ReplayBlock(ctx, block, collector)
 	require.NoError(t, err)
 	require.Empty(t, applyResult.Failed)
 
@@ -443,8 +451,9 @@ func TestAccountDelta_PoolAndValidatorWritesDoNotLeakIntoAccountCollector(t *tes
 	require.Greater(t, postValidator.StakedAmount, preValidator.StakedAmount,
 		"fixture must actually write validator #3's stake (compounding reward) in the measured block")
 
-	added, changed, removed := collector.Results()
-	all := append(append(append([]*AccountChangeEntry{}, added...), changed...), removed...)
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	all := append(append(append([]*AccountChangeEntry{}, delta.Added...), delta.Changed...), delta.Removed...)
 	require.NotEmpty(t, all, "fixture must also touch at least one account, or this test can't distinguish account entries from a leak")
 
 	for _, e := range all {

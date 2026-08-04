@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -565,6 +566,133 @@ func (s *StateMachine) AccountEntriesAtVersion(version uint64, addresses map[str
 		out[address] = append([]byte(nil), bz...)
 	}
 	return out, nil
+}
+
+// AssembleAccountDeltaSides converts a collector-sourced AccountDelta into the two
+// wire-ready account sides an indexer-blob delta carries, reproducing the two behaviours
+// the old full-scan diff provided for free:
+//
+//   - the reward/slash force-include (see RewardSlashAccountKeys) -- the collector only
+//     sees accounts that were WRITTEN, and a reward or slash usually moves stake instead,
+//     so the named account must be read back and added explicitly.
+//   - ascending-by-address ordering. The old sides came straight out of an ascending
+//     Pebble prefix scan; AccountChangeCollector.Results() ranges a Go map, so its order
+//     is random per call. The assembled bytes are cached and served to every subsequent
+//     caller, so an unsorted side would make the same height return different bytes
+//     across calls and across nodes.
+//
+// currentBlockBz is the current side's marshalled BlockResult (the force-include set is
+// derived from the CURRENT block's events for both sides, matching DeltaIndexerBlobs).
+// currentVersion is the state version the current side represents; the previous side
+// represents currentVersion-1. The two are NOT interchangeable -- swapping them would
+// silently serve inverted balances.
+func (s *StateMachine) AssembleAccountDeltaSides(delta *AccountDelta, currentBlockBz []byte, currentVersion uint64) (currentSide, previousSide [][]byte, err lib.ErrorI) {
+	if delta == nil {
+		delta = new(AccountDelta)
+	}
+	forced, err := RewardSlashAccountKeys(currentBlockBz)
+	if err != nil {
+		return nil, nil, err
+	}
+	// current side: added+changed as their FINAL values (state@currentVersion)
+	current := accountSide(delta.Added, delta.Changed, true)
+	if err = s.forceIncludeAccounts(current, forced, currentVersion); err != nil {
+		return nil, nil, err
+	}
+	// previous side: changed+removed as their PREVIOUS values (state@currentVersion-1)
+	previous := accountSide(delta.Changed, delta.Removed, false)
+	if err = s.forceIncludeAccounts(previous, forced, currentVersion-1); err != nil {
+		return nil, nil, err
+	}
+	return sortedAccountEntries(current), sortedAccountEntries(previous), nil
+}
+
+// forceIncludeAccounts() reads back any forced address missing from a side and adds it, at
+// the state version that side represents. An address already on the side keeps the
+// collector's value -- it changed on its own merits and the read would be redundant.
+// Addresses with no account at that version are skipped, matching forceIncludeKeys' rule
+// that a forced key is only included on a side where the account actually exists.
+func (s *StateMachine) forceIncludeAccounts(side map[string][]byte, forced map[string]struct{}, version uint64) lib.ErrorI {
+	missing := make(map[string]struct{}, len(forced))
+	for address := range forced {
+		if _, ok := side[address]; !ok {
+			missing[address] = struct{}{}
+		}
+	}
+	// avoid the TimeMachine snapshot entirely on the common "nothing to force-include" path
+	if len(missing) == 0 {
+		return nil
+	}
+	entries, err := s.AccountEntriesAtVersion(version, missing)
+	if err != nil {
+		return err
+	}
+	for address, bz := range entries {
+		side[address] = bz
+	}
+	return nil
+}
+
+// accountSide() collects one delta side's accounts, keyed by address so a force-included
+// entry cannot duplicate an address the collector already reported. useFinal selects
+// FinalValue (for the current side) vs PrevValue (for the previous side) -- matching
+// DeltaIndexerBlobs's convention where an added account has no previous-side entry and a
+// removed account has no current-side entry.
+//
+// READ-ONLY, and non-aliasing: a and b may be the live, shared tip-cache entry's slices
+// (see controller/account_delta_cache.go). Nothing here mutates, sorts, or appends to
+// them, and each value is COPIED rather than referenced -- the result is stored in the
+// RPC blob cache and handed to every subsequent caller, so sharing the collector's
+// backing arrays across that boundary would let any mutation in the RPC layer corrupt
+// the tip cache for all readers.
+func accountSide(a, b []*AccountChangeEntry, useFinal bool) map[string][]byte {
+	side := make(map[string][]byte, len(a)+len(b))
+	collect := func(entries []*AccountChangeEntry) {
+		for _, e := range entries {
+			if e == nil {
+				continue
+			}
+			value := e.FinalValue
+			if !useFinal {
+				value = e.PrevValue
+			}
+			if value == nil {
+				continue
+			}
+			side[string(e.Address)] = append([]byte(nil), value...)
+		}
+	}
+	collect(a)
+	collect(b)
+	return side
+}
+
+// sortedAccountEntries() flattens an address-keyed account set into the ascending-by-address
+// [][]byte wire shape IndexerBlob.Accounts uses. Addresses are fixed-width, so ordering by
+// raw address bytes matches the KeyForAccount storage order the old prefix scan produced.
+func sortedAccountEntries(side map[string][]byte) [][]byte {
+	addresses := make([]string, 0, len(side))
+	for address := range side {
+		addresses = append(addresses, address)
+	}
+	slices.Sort(addresses)
+	out := make([][]byte, 0, len(addresses))
+	for _, address := range addresses {
+		out = append(out, side[address])
+	}
+	return out
+}
+
+// IndexerBlobWithoutAccounts returns blob with its Accounts nil'd, via a structural copy
+// when needed -- the input may be a shared cached blob that must never be mutated (see
+// cloneIndexerBlob's sharing semantics). A blob already without accounts is returned as-is.
+func IndexerBlobWithoutAccounts(blob *IndexerBlob) *IndexerBlob {
+	if blob == nil || blob.Accounts == nil {
+		return blob
+	}
+	out := cloneIndexerBlob(blob)
+	out.Accounts = nil
+	return out
 }
 
 // rewardSlashAccountKeys() finds reward/slash event addresses in the current block.

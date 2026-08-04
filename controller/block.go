@@ -550,8 +550,18 @@ func (c *Controller) cacheAccountDelta(height uint64, collector *fsm.AccountChan
 	if collector == nil || c.accountDeltaCache == nil {
 		return
 	}
-	added, changed, removed := collector.Results()
-	c.accountDeltaCache.put(height, &accountDeltaEntry{added: added, changed: changed, removed: removed})
+	// a poisoned collector was disabled mid-block and its set is incomplete (see
+	// fsm.AccountChangeCollector); caching it would serve a silently wrong delta for this
+	// height forever — skip it and let requests fall back to on-demand replay instead
+	if err := collector.Err(); err != nil {
+		c.log.Errorf("account-change collector failed at height %d, not caching its delta (requests fall back to replay): %s", height, err.Error())
+		return
+	}
+	// Results() is nil only for a poisoned collector, which the Err() check above already
+	// rejected — but never cache a nil delta, it would be served as an authoritative hit
+	if delta := collector.Results(); delta != nil {
+		c.accountDeltaCache.put(height, delta)
+	}
 }
 
 // INTERNAL HELPERS BELOW

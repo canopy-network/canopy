@@ -10,10 +10,10 @@ import (
 
 func TestAccountDeltaCache_PutAndGet(t *testing.T) {
 	c := newAccountDeltaCache(4)
-	entry := &accountDeltaEntry{
-		added:   []*fsm.AccountChangeEntry{{Address: []byte("a")}},
-		changed: nil,
-		removed: nil,
+	entry := &fsm.AccountDelta{
+		Added:   []*fsm.AccountChangeEntry{{Address: []byte("a")}},
+		Changed: nil,
+		Removed: nil,
 	}
 	c.put(10, entry)
 	got, ok := c.get(10)
@@ -29,9 +29,9 @@ func TestAccountDeltaCache_MissReturnsFalse(t *testing.T) {
 
 func TestAccountDeltaCache_EvictsOldestBeyondCapacity(t *testing.T) {
 	c := newAccountDeltaCache(2)
-	c.put(1, &accountDeltaEntry{})
-	c.put(2, &accountDeltaEntry{})
-	c.put(3, &accountDeltaEntry{})
+	c.put(1, &fsm.AccountDelta{})
+	c.put(2, &fsm.AccountDelta{})
+	c.put(3, &fsm.AccountDelta{})
 	_, ok := c.get(1)
 	require.False(t, ok, "height 1 should have been evicted")
 	_, ok = c.get(2)
@@ -44,10 +44,10 @@ func TestAccountDeltaCache_EvictsOldestBeyondCapacity(t *testing.T) {
 // FIFO slot, otherwise a re-commit of the same height would evict a live neighbor
 func TestAccountDeltaCache_OverwriteExistingHeightDoesNotEvict(t *testing.T) {
 	c := newAccountDeltaCache(2)
-	first := &accountDeltaEntry{added: []*fsm.AccountChangeEntry{{Address: []byte("a")}}}
-	second := &accountDeltaEntry{added: []*fsm.AccountChangeEntry{{Address: []byte("b")}}}
+	first := &fsm.AccountDelta{Added: []*fsm.AccountChangeEntry{{Address: []byte("a")}}}
+	second := &fsm.AccountDelta{Added: []*fsm.AccountChangeEntry{{Address: []byte("b")}}}
 	c.put(1, first)
-	c.put(2, &accountDeltaEntry{})
+	c.put(2, &fsm.AccountDelta{})
 	c.put(1, second)
 	got, ok := c.get(1)
 	require.True(t, ok)
@@ -68,7 +68,7 @@ func TestAccountDeltaCache_ConcurrentPutGet(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
 				// heights far exceed capacity, forcing eviction throughout the run
-				c.put(uint64(w*iterations+i), &accountDeltaEntry{added: []*fsm.AccountChangeEntry{{Address: []byte("a")}}})
+				c.put(uint64(w*iterations+i), &fsm.AccountDelta{Added: []*fsm.AccountChangeEntry{{Address: []byte("a")}}})
 			}
 		}(w)
 	}
@@ -78,7 +78,7 @@ func TestAccountDeltaCache_ConcurrentPutGet(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
 				if entry, ok := c.get(uint64(i)); ok {
-					_ = entry.added // read the entry to catch any write-through corruption
+					_ = entry.Added // read the entry to catch any write-through corruption
 				}
 			}
 		}()
@@ -94,7 +94,7 @@ func TestAccountDeltaCache_ConcurrentPutGet(t *testing.T) {
 func TestAccountDeltaCache_NonPositiveCapacityUsesDefault(t *testing.T) {
 	c := newAccountDeltaCache(0)
 	require.Equal(t, defaultAccountDeltaCacheEntries, c.maxEntries)
-	c.put(1, &accountDeltaEntry{})
+	c.put(1, &fsm.AccountDelta{})
 	_, ok := c.get(1)
 	require.True(t, ok)
 }

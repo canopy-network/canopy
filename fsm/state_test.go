@@ -408,7 +408,9 @@ func TestApplyBlock_CollectorCapturesTouchedAccounts(t *testing.T) {
 	_, result, err := sm.ApplyBlock(context.Background(), block, false, collector, false)
 	require.NoError(t, err)
 	require.Empty(t, result.Failed)
-	added, changed, removed := collector.Results()
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	added, changed, removed := delta.Added, delta.Changed, delta.Removed
 	require.NotEmpty(t, append(append(added, changed...), removed...), "collector should have captured at least one touched account")
 }
 
@@ -1094,11 +1096,55 @@ func TestStateMachine_SetHooksAccountCollector(t *testing.T) {
 	sm.accountCollector = collector
 	address := newTestAddress(t)
 	require.NoError(t, sm.Set(KeyForAccount(address), []byte("v1")))
-	added, changed, removed := collector.Results()
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	added, changed, removed := delta.Added, delta.Changed, delta.Removed
 	require.Len(t, added, 1)
 	require.Empty(t, changed)
 	require.Empty(t, removed)
 	require.Equal(t, address.Bytes(), added[0].Address)
+}
+
+func TestStateMachine_DeleteHooksAccountCollector(t *testing.T) {
+	sm := newTestStateMachine(t)
+	address := newTestAddress(t)
+	// write the key directly, before the collector is attached, so it establishes a real
+	// pre-block baseline rather than being captured as part of this call
+	require.NoError(t, sm.Set(KeyForAccount(address), []byte("v1")))
+	collector := NewAccountChangeCollector(sm.Get)
+	sm.accountCollector = collector
+	require.NoError(t, sm.Delete(KeyForAccount(address)))
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	added, changed, removed := delta.Added, delta.Changed, delta.Removed
+	require.Empty(t, added)
+	require.Empty(t, changed)
+	require.Len(t, removed, 1)
+	require.Equal(t, address.Bytes(), removed[0].Address)
+	require.Equal(t, []byte("v1"), removed[0].PrevValue)
+	require.Nil(t, removed[0].FinalValue)
+}
+
+func TestStateMachine_DeleteDoesNotHookNonAccountKeys(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NoError(t, sm.Set(KeyForPool(1), []byte("v1")))
+	collector := NewAccountChangeCollector(sm.Get)
+	sm.accountCollector = collector
+	require.NoError(t, sm.Delete(KeyForPool(1)))
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	added, changed, removed := delta.Added, delta.Changed, delta.Removed
+	require.Empty(t, added)
+	require.Empty(t, changed)
+	require.Empty(t, removed)
+}
+
+func TestStateMachine_DeleteNilCollectorIsNoOp(t *testing.T) {
+	sm := newTestStateMachine(t)
+	address := newTestAddress(t)
+	require.NoError(t, sm.Set(KeyForAccount(address), []byte("v1")))
+	require.Nil(t, sm.accountCollector)
+	require.NoError(t, sm.Delete(KeyForAccount(address))) // must not panic
 }
 
 func TestStateMachine_SetDoesNotHookNonAccountKeys(t *testing.T) {
@@ -1106,7 +1152,9 @@ func TestStateMachine_SetDoesNotHookNonAccountKeys(t *testing.T) {
 	collector := NewAccountChangeCollector(sm.Get)
 	sm.accountCollector = collector
 	require.NoError(t, sm.Set(KeyForPool(1), []byte("v1")))
-	added, changed, removed := collector.Results()
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	added, changed, removed := delta.Added, delta.Changed, delta.Removed
 	require.Empty(t, added)
 	require.Empty(t, changed)
 	require.Empty(t, removed)

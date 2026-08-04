@@ -13,7 +13,7 @@ import (
 const minAccountDeltaHeight = 2
 
 // GetAccountDelta returns the accounts added/changed/removed between state version
-// height-1 and state version height.
+// height-1 and state version height, as one fsm.AccountDelta.
 //
 // HEIGHT CONVENTION (deliberately matches fsm.IndexerBlob, NOT the plan's snippet):
 // `height` is a STATE VERSION — the same value cmd/rpc's IndexerBlobsCached passes to
@@ -28,53 +28,75 @@ const minAccountDeltaHeight = 2
 // The tip cache is keyed by BLOCK height (commitToStore passes block.BlockHeader.Height),
 // so the lookup uses height-1 as well.
 //
-// It serves from the live tip cache when available; otherwise it replays ApplyBlock with
-// skipRoot=true against the snapshot, discarding all writes without ever committing.
-func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (added, changed, removed []*fsm.AccountChangeEntry, err lib.ErrorI) {
+// It serves from the live tip cache when available; otherwise it replays the block via
+// fsm.ReplayBlock against the snapshot, discarding all writes without ever committing.
+func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (delta *fsm.AccountDelta, err lib.ErrorI) {
 	// no committed block pairs with state version 0 or 1
 	if height < minAccountDeltaHeight {
-		return nil, nil, nil, lib.ErrWrongBlockHeight(height, minAccountDeltaHeight)
+		return nil, lib.ErrWrongBlockHeight(height, minAccountDeltaHeight)
 	}
 	// the block whose application produced state version `height`
 	blockHeight := height - 1
 	// the cache is nil for a Controller not built by New() (test literals)
 	if c.accountDeltaCache != nil {
-		// READ-ONLY: entry is the live shared cached object (see account_delta_cache.go);
-		// return its slices as-is and never mutate, append to, or transform them here
+		// the cached entry is the live shared object (see account_delta_cache.go): Clone()
+		// copies the slice headers so no caller can append-through into the shared tip
+		// cache; the entry values stay shared -- they are immutable by contract
 		if entry, ok := c.accountDeltaCache.get(blockHeight); ok {
-			return entry.added, entry.changed, entry.removed, nil
+			return entry.Clone(), nil
 		}
 	}
 	// capture the live FSM once: commitToStore reassigns c.FSM, and re-reading it would let a
-	// concurrent commit slip a different object between the TimeMachine call and the
-	// `replayFSM != liveFSM` comparison below — inverting the Discard guard and potentially
+	// concurrent commit slip a different object between the TimeMachine calls and the
+	// `!= liveFSM` comparisons below — inverting the Discard guards and potentially
 	// discarding the (former) live FSM's store transaction
 	liveFSM := c.FSM
-	// the block itself is read from the LIVE store: the TimeMachine snapshot is taken at
-	// version blockHeight, which by definition does not yet contain block blockHeight
-	store, ok := liveFSM.Store().(lib.StoreI)
+	// NEVER read the block or QC through the live store: every commit closes and swaps the
+	// live store's readers un-mutexed (store.Reset()), so an RPC goroutine reading its Txn
+	// races the commit path. Read through a TimeMachine snapshot instead — the same pattern
+	// fsm.IndexerBlob uses ("Use the snapshot store (not the live store)"). The snapshot is
+	// taken at state version `height`: block blockHeight's own commit writes the block and
+	// its QC at exactly that version, so it is the earliest snapshot containing both (the
+	// replay snapshot below, at version blockHeight, by definition contains neither)
+	readFSM, err := liveFSM.TimeMachine(height)
+	if err != nil {
+		return nil, err
+	}
+	// TimeMachine returns the receiver itself when it cannot build a historical view;
+	// discarding that would blow away the LIVE state machine's transaction
+	if readFSM != liveFSM {
+		defer readFSM.Discard()
+	}
+	// TimeMachine silently clamps a height above the tip, which would otherwise read a
+	// different height's block — and, when the receiver itself came back, fall through to
+	// the live store this snapshot exists to avoid
+	if readFSM.Height() != height {
+		return nil, lib.ErrWrongBlockHeight(readFSM.Height(), height)
+	}
+	// the snapshot store serves both the block fetch here and the QC fetch below
+	store, ok := readFSM.Store().(lib.StoreI)
 	if !ok {
-		return nil, nil, nil, fsm.ErrWrongStoreType()
+		return nil, fsm.ErrWrongStoreType()
 	}
 	blockResult, err := store.GetBlockByHeight(blockHeight)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if blockResult == nil || blockResult.BlockHeader == nil {
-		return nil, nil, nil, lib.ErrNilBlockHeader()
+		return nil, lib.ErrNilBlockHeader()
 	}
 	if blockResult.BlockHeader.Height != blockHeight {
-		return nil, nil, nil, lib.ErrWrongBlockHeight(blockResult.BlockHeader.Height, blockHeight)
+		return nil, lib.ErrWrongBlockHeight(blockResult.BlockHeader.Height, blockHeight)
 	}
 	// GetBlockByHeight returns a *lib.BlockResult; ApplyBlock needs a *lib.Block
 	block, err := blockResult.ToBlock()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	// snapshot the pre-block state
 	replayFSM, err := liveFSM.TimeMachine(blockHeight)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	// TimeMachine returns the receiver itself when it cannot build a historical view;
 	// discarding that would blow away the LIVE state machine's transaction
@@ -84,7 +106,7 @@ func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (added,
 	// TimeMachine silently clamps a height above the tip, which would otherwise replay
 	// the block against the wrong pre-state and return a plausible-looking wrong delta
 	if replayFSM.Height() != blockHeight {
-		return nil, nil, nil, lib.ErrWrongBlockHeight(replayFSM.Height(), blockHeight)
+		return nil, lib.ErrWrongBlockHeight(replayFSM.Height(), blockHeight)
 	}
 	// restore the root DEX cache exactly as the committing path does (controller/block.go:274
 	// and :397, `if qc.Results != nil && qc.Results.RootDexBatch != nil { SetRootDexCache(...) }`).
@@ -100,27 +122,24 @@ func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (added,
 	// BeginBlock returns before any certificate handling when s.Height() <= 1
 	// (fsm/automatic.go:29-31), so the cache cannot matter for block 1 and no QC is loaded.
 	//
-	// LOAD-BEARING INVARIANT: this reads store.GetQCByHeight(blockHeight) directly, bypassing
-	// ApplyAndValidateBlock and therefore CheckAndSetLastCertificate -- which exists precisely
-	// to normalize the indexed QC for height-1 because "multiple valid versions can exist"
-	// (controller/block.go:701, :715-716). That's correct here for a non-obvious reason:
-	// committing block blockHeight+1 calls CheckAndSetLastCertificate(candidate) with
-	// candidate.Height == blockHeight+1, which IndexQC's candidate.LastQuorumCertificate --
-	// i.e. block blockHeight+1's OWN embedded copy of the QC for blockHeight -- overwriting
-	// whatever was indexed for blockHeight before. So the QC this function reads for blockHeight
-	// is already normalized as long as block blockHeight+1 has been committed, which is
-	// guaranteed here: GetAccountDelta only replays blocks old enough to be committed already
-	// (the live tip cache, checked above, serves anything more recent). And
-	// LoadCertificateHashesOnly nullifies only .Block, leaving .Results (and .Results.RootDexBatch)
-	// intact -- EqualPayloads compares ResultsHash, not the full Results struct, so the
-	// normalization check never forces Results to nil. That's why the RootDexBatch restore below
-	// reads the right batch. If block headers ever stopped carrying Results, this would silently
-	// go back to being incomplete for nested-chain deltas -- the exact bug this restore was added
-	// to fix.
+	// LOAD-BEARING INVARIANT: this reads store.GetQCByHeight(blockHeight) from the
+	// version-`height` snapshot, which sees the certificate exactly as block blockHeight's own
+	// commit indexed it (controller/block.go:288,410) -- the same qc object whose
+	// Results.RootDexBatch the live commit path fed to SetRootDexCache
+	// (controller/block.go:274,397). The later CheckAndSetLastCertificate normalization
+	// overwrite for blockHeight ("multiple valid versions can exist", controller/block.go:740)
+	// is written by block blockHeight+1's commit at version height+1, which this snapshot
+	// cannot see -- so the pre-normalization certificate is read deliberately, and no
+	// normalization reasoning is needed: whichever valid QC version a peer committed with,
+	// its Results are bound by ResultsHash, so the RootDexBatch matches what that commit
+	// applied. IndexQC drops only .Block when storing (store/indexer.go), leaving .Results
+	// (and .Results.RootDexBatch) intact. If commits ever stopped indexing the certificate
+	// they applied with, this would silently go back to being incomplete for nested-chain
+	// deltas -- the exact bug this restore was added to fix.
 	if blockHeight > 1 {
 		qc, qcErr := store.GetQCByHeight(blockHeight)
 		if qcErr != nil {
-			return nil, nil, nil, qcErr
+			return nil, qcErr
 		}
 		// every committed block indexes its certificate in the same commit
 		// (controller/block.go:288,410), and a real certificate always has a Header. A missing
@@ -128,7 +147,7 @@ func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (added,
 		// not be loaded — in which case whether a RootDexBatch existed is unknowable and the
 		// delta may be silently incomplete. Fail loudly instead.
 		if qc == nil || qc.Header == nil {
-			return nil, nil, nil, lib.ErrEmptyQuorumCertificate()
+			return nil, lib.ErrEmptyQuorumCertificate()
 		}
 		// a nil Results or nil RootDexBatch is NORMAL (root chain, and any block whose
 		// certificate carries no root batch). The live path leaves the cache nil there too —
@@ -140,12 +159,18 @@ func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (added,
 	}
 	// the collector's baseline lookup must read the snapshot, not the live state
 	collector := fsm.NewAccountChangeCollector(replayFSM.Get)
-	// skipRoot=true: this result is never committed and its StateRoot is never inspected.
-	// Writes land in the snapshot store's in-memory txn and die with the Discard above —
-	// nothing on this path calls Commit().
-	_, applyResult, err := replayFSM.ApplyBlock(ctx, block, false, collector, true)
+	// ReplayBlock applies with skipRoot=true: this result is never committed and its
+	// StateRoot is never inspected. Writes land in the snapshot store's in-memory txn and
+	// die with the Discard above — nothing on this path calls Commit().
+	_, applyResult, err := replayFSM.ReplayBlock(ctx, block, collector)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
+	}
+	// the collector self-poisons on an internal failure instead of aborting the write path
+	// (see fsm.AccountChangeCollector) — a poisoned replay collector means the delta is
+	// incomplete, so fail loudly rather than serve a silently wrong account set
+	if cErr := collector.Err(); cErr != nil {
+		return nil, cErr
 	}
 	// consensus rejects any block containing failed transactions (ApplyAndValidateBlock
 	// returns ErrFailedTransactions before the block can be committed), so a committed
@@ -153,8 +178,7 @@ func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (added,
 	// the original application, which makes the delta wrong — fail loudly rather than
 	// return a silently incomplete account set.
 	if len(applyResult.Failed) != 0 {
-		return nil, nil, nil, lib.ErrFailedTransactions()
+		return nil, lib.ErrFailedTransactions()
 	}
-	added, changed, removed = collector.Results()
-	return added, changed, removed, nil
+	return collector.Results(), nil
 }

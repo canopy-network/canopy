@@ -271,6 +271,14 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 	return
 }
 
+// ReplayBlock() re-applies an already-committed block against a throwaway snapshot to
+// capture its account delta: a convenience wrapper for ApplyBlock's replay-only argument
+// combo (allowOversize=false, skipRoot=true — the result is never committed and its
+// StateRoot is never inspected, so the SMT/Merkle computation is skipped).
+func (s *StateMachine) ReplayBlock(ctx context.Context, b *lib.Block, collector *AccountChangeCollector) (*lib.BlockHeader, *lib.ApplyBlockResults, lib.ErrorI) {
+	return s.ApplyBlock(ctx, b, false, collector, true)
+}
+
 // ApplyTransactions()
 // 1. Batch validate signatures for every transaction provided
 // 2. Processes all transactions provided against the state machine
@@ -676,10 +684,11 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 
 // Set() upserts a key-value pair under a key
 func (s *StateMachine) Set(k, v []byte) (err lib.ErrorI) {
-	if s.accountCollector != nil && bytes.HasPrefix(k, AccountPrefix()) {
-		if err = s.accountCollector.RecordSet(k, v); err != nil {
-			return err
-		}
+	if s.accountCollector != nil && bytes.HasPrefix(k, accountKeyPrefix) {
+		// record BEFORE the write so the baseline read happens before this write shadows
+		// it; the collector is self-poisoning (see AccountChangeCollector), so an internal
+		// collection failure can never abort the consensus store write below
+		s.accountCollector.RecordSet(k, v)
 	}
 	return s.Store().Set(k, v)
 }
@@ -690,10 +699,11 @@ func (s *StateMachine) Get(key []byte) (bz []byte, err lib.ErrorI) { return s.St
 
 // Delete() deletes a key-value pair under a key
 func (s *StateMachine) Delete(key []byte) lib.ErrorI {
-	if s.accountCollector != nil && bytes.HasPrefix(key, AccountPrefix()) {
-		if err := s.accountCollector.RecordDelete(key); err != nil {
-			return err
-		}
+	if s.accountCollector != nil && bytes.HasPrefix(key, accountKeyPrefix) {
+		// record BEFORE the delete so the baseline read happens before this delete shadows
+		// it; the collector is self-poisoning (see AccountChangeCollector), so an internal
+		// collection failure can never abort the consensus store write below
+		s.accountCollector.RecordDelete(key)
 	}
 	return s.Store().Delete(key)
 }

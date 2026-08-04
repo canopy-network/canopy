@@ -181,50 +181,11 @@ func TestIndexerBlobsCached_AddedAccountsOmittedFromPreviousSide(t *testing.T) {
 	require.Empty(t, got.Previous.Accounts)
 }
 
-// accountSide must never mutate or alias the slices it is handed: GetAccountDelta can return
-// the live, shared tip-cache entry (see controller/account_delta_cache.go), and its result is
-// stored in the RPC blob cache and served to every later caller
-func TestAccountSide_DoesNotMutateOrAliasInputs(t *testing.T) {
-	added := []*fsm.AccountChangeEntry{{Address: []byte("a"), FinalValue: []byte("af")}}
-	changed := []*fsm.AccountChangeEntry{{Address: []byte("b"), PrevValue: []byte("bp"), FinalValue: []byte("bf")}}
-	// spare capacity: an append-in-place would write through into the shared backing array
-	removed := make([]*fsm.AccountChangeEntry, 1, 4)
-	removed[0] = &fsm.AccountChangeEntry{Address: []byte("c"), PrevValue: []byte("cp")}
-
-	require.Equal(t, [][]byte{[]byte("af"), []byte("bf")}, sortedAccountEntries(accountSide(added, changed, true)))
-	require.Equal(t, [][]byte{[]byte("bp"), []byte("cp")}, sortedAccountEntries(accountSide(changed, removed, false)))
-
-	require.Len(t, added, 1)
-	require.Len(t, changed, 1)
-	require.Len(t, removed, 1)
-	require.Equal(t, []byte("af"), added[0].FinalValue)
-	require.Equal(t, []byte("bp"), changed[0].PrevValue)
-	require.Equal(t, []byte("bf"), changed[0].FinalValue)
-	require.Equal(t, []byte("cp"), removed[0].PrevValue)
-	require.Equal(t, 4, cap(removed), "the input slice's backing array must be untouched")
-
-	// the emitted bytes must be copies -- mutating them must not reach back into the entries
-	out := sortedAccountEntries(accountSide(added, nil, true))
-	require.Len(t, out, 1)
-	out[0][0] = 'X'
-	require.Equal(t, []byte("af"), added[0].FinalValue, "the result must not alias the entry's bytes")
-}
-
-// AccountChangeCollector.Results() ranges a Go map, so the entries arrive in random order;
-// the wire format must still be ascending by address, because deltaBytes is cached and served
-// to every later caller and an unstable order would make the same height return different
-// bytes across calls and across nodes
-func TestAccountSide_SortsByAddressAscending(t *testing.T) {
-	entries := []*fsm.AccountChangeEntry{
-		{Address: []byte{0x03}, FinalValue: []byte("c")},
-		{Address: []byte{0x01}, FinalValue: []byte("a")},
-		{Address: []byte{0x02}, FinalValue: []byte("b")},
-	}
-	require.Equal(t,
-		[][]byte{[]byte("a"), []byte("b"), []byte("c")},
-		sortedAccountEntries(accountSide(entries, nil, true)),
-	)
-}
+// NOTE: the account-side assembly helpers (accountSide, sortedAccountEntries, the
+// force-include read-back) live in fsm next to DeltaIndexerBlobs and are tested there
+// (fsm/indexer_test.go: TestAccountSide_DoesNotMutateOrAliasInputs,
+// TestAccountSide_SortsByAddressAscending, TestAccountDelta_MatchesOldFullScanAndDiff);
+// this package only orchestrates fsm.AssembleAccountDeltaSides onto the response blobs.
 
 // I-2. At height 2 there is no previous blob, and DeltaIndexerBlobs' documented behaviour is
 // to keep Current's FULL account set -- with nothing to diff against, every account counts as
@@ -345,11 +306,11 @@ func newTestIndexerBlobServerWithRewardSlashEvents(t *testing.T) (_ *Server, add
 
 	ctrl := &controller.Controller{FSM: sm}
 	// what a live collector would have produced for block 3: B only
-	ctrl.SeedAccountDeltaCache(3, nil, []*fsm.AccountChangeEntry{{
+	ctrl.SeedAccountDeltaCache(3, &fsm.AccountDelta{Changed: []*fsm.AccountChangeEntry{{
 		Address:    addrB.Bytes(),
 		PrevValue:  mustMarshalAccount(t, addrB.Bytes(), 50),
 		FinalValue: mustMarshalAccount(t, addrB.Bytes(), 75),
-	}}, nil)
+	}}})
 
 	return &Server{
 		controller:       ctrl,
@@ -531,12 +492,12 @@ func newTestIndexerBlobServerWithHeights(t *testing.T, height uint64) *Server {
 	//
 	// block 2 (state 2 -> 3): B is created; A is rewritten with an identical value, which a
 	// collector classifies as unchanged and therefore omits.
-	ctrl.SeedAccountDeltaCache(2, []*fsm.AccountChangeEntry{
+	ctrl.SeedAccountDeltaCache(2, &fsm.AccountDelta{Added: []*fsm.AccountChangeEntry{
 		{Address: addrB.Bytes(), FinalValue: mustMarshalAccount(t, addrB.Bytes(), 50)},
-	}, nil, nil)
+	}})
 	if height >= 4 {
 		// block 3 (state 3 -> 4): both A and B change value
-		ctrl.SeedAccountDeltaCache(3, nil, []*fsm.AccountChangeEntry{
+		ctrl.SeedAccountDeltaCache(3, &fsm.AccountDelta{Changed: []*fsm.AccountChangeEntry{
 			{
 				Address:    addrA.Bytes(),
 				PrevValue:  mustMarshalAccount(t, addrA.Bytes(), 100),
@@ -547,7 +508,7 @@ func newTestIndexerBlobServerWithHeights(t *testing.T, height uint64) *Server {
 				PrevValue:  mustMarshalAccount(t, addrB.Bytes(), 50),
 				FinalValue: mustMarshalAccount(t, addrB.Bytes(), 75),
 			},
-		}, nil)
+		}})
 	}
 
 	return &Server{
