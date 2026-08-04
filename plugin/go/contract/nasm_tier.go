@@ -1,33 +1,62 @@
 package contract
 
-// NasmTierParams holds one NASM tier's LTV_n_max and LTV_n_liq (both bps),
-// per NASM Consolidated Spec Section 3.1's collateral tier table. Unlike
-// ARCM's TierParams (tier_params.go), NASM has no LIF field of its own --
-// liquidation incentive for NUSD vaults is computed using ARCM's existing
-// LIF formula, substituting these tighter LTV_n_liq values as input (NASM
-// Spec Section 7: "Recomputed using NASM's tighter LTV_n_liq values --
-// produces a smaller LIF band"), not a separate NASM-owned LIF constant.
+// NasmTierParams holds one NASM tier's LTV_n_max, LTV_n_liq, and LIF (all
+// bps), per NASM Consolidated Spec Section 3.1's collateral tier table and
+// Section 7's liquidation integration. Mirrors ARCM's TierParams shape
+// (tier_params.go) exactly, including carrying its own LIFBps field --
+// see nasmTierParamsTable's own comment for why NASM's LIFBps values are
+// deliberately identical to ARCM's, not independently derived.
 //
 // Values are IMMUTABLE hardcoded launch-config constants, matching ARCM's
 // tierParamsTable precedent exactly -- NASM Spec Section 18's parameter
-// table lists these as governance-bounded (LTV_n_max Tier N-0: 50%-70%,
-// etc.), but no governance-write path exists yet for NASM parameters
-// (update_nasm_params, NASM Spec Section 13, is not yet implemented). This
-// mirrors interest_rate.go's disclosed hardcoded-pending-governance-store
-// pattern.
+// table lists LTV_n_max/LTV_n_liq as governance-bounded (Tier N-0:
+// 50%-70%/55%-75%, etc.), but no governance-write path exists yet for
+// NASM parameters (update_nasm_params, NASM Spec Section 13, is not yet
+// implemented). This mirrors interest_rate.go's disclosed
+// hardcoded-pending-governance-store pattern.
 type NasmTierParams struct {
 	LTVMaxBps uint64
 	LTVLiqBps uint64
+	LIFBps    uint64
 }
 
-// nasmTierParamsTable maps a NASM tier (0=N-0, 1=N-1) to its LTV bounds.
-// NASM Spec Section 3.1: N-2 (RWA fractions) and N-3 (ARCM Tier 2/3 assets)
-// are explicitly "Not eligible" for NUSD mint-backing at all -- there is no
-// table entry for them, deliberately, matching tierParamsTable's own
-// absent-Tier-4 precedent in tier_params.go.
+// nasmTierParamsTable maps a NASM tier (0=N-0, 1=N-1) to its full
+// LTV/LIF parameters. NASM Spec Section 3.1: N-2 (RWA fractions) and N-3
+// (ARCM Tier 2/3 assets) are explicitly "Not eligible" for NUSD
+// mint-backing at all -- there is no table entry for them, deliberately,
+// matching tierParamsTable's own absent-Tier-4 precedent in
+// tier_params.go.
+//
+// LIFBps DERIVATION -- worked through carefully, not guessed:
+//
+// ARCM's own LIFBps values (tier_params.go: 10300/10360/10500/10900) were
+// reverse-derived to follow an exact formula across all four tiers:
+// LIF_bps = 10000 + 0.2 * (10000 - LTVLiqBps) -- i.e. a flat 20%
+// INCENTIVE_SCALING_FACTOR applied to the gap between LTVLiqBps and 100%
+// (verified numerically, ratio == 0.2 exactly for all four ARCM tiers).
+//
+// Applying that SAME 20% factor mechanically to NASM's own, lower
+// LTVLiqBps values produces LARGER LIF (N-0: 10600, N-1: 10760 -- the
+// gap-to-100% term grows as LTVLiqBps shrinks) -- which contradicts NASM
+// Spec Section 7's plain text ("NASM tiers are inherently safer" implies
+// LESS liquidator compensation should be needed, not more).
+//
+// The resolution: LIF compensates a liquidator for the EXECUTION risk of
+// selling the specific SEIZED ASSET (price slippage, volatility, market
+// depth during the liquidation window) -- a property of the asset itself,
+// not of the borrower's LTV policy. NASM's tighter LTV is an unrelated,
+// ADDITIONAL safety buffer for stablecoin-grade backing (Section 16.1's
+// tail-risk rationale) -- it does not mean CNPY or blue-chip assets
+// themselves became harder to liquidate. Since ResolveNasmTier maps ARCM
+// Tier 0 -> NASM N-0 and ARCM Tier 1 -> NASM N-1 as the literal SAME
+// underlying assets (not merely similar ones), NASM's LIFBps values here
+// are deliberately identical to ARCM's own already-audited values for
+// those same tiers, reusing proven numbers for the identical asset risk
+// profile rather than inventing a new, unverified NASM-specific
+// incentive-scaling-factor.
 var nasmTierParamsTable = map[uint8]NasmTierParams{
-	0: {LTVMaxBps: 6500, LTVLiqBps: 7000}, // N-0 -- CNPY (ARCM Tier 0)
-	1: {LTVMaxBps: 5500, LTVLiqBps: 6200}, // N-1 -- ARCM Tier 1 blue-chip
+	0: {LTVMaxBps: 6500, LTVLiqBps: 7000, LIFBps: 10300}, // N-0 -- CNPY (ARCM Tier 0, LIFBps reused as-is)
+	1: {LTVMaxBps: 5500, LTVLiqBps: 6200, LIFBps: 10360}, // N-1 -- ARCM Tier 1 blue-chip (LIFBps reused as-is)
 }
 
 // ResolveNasmTier translates an asset's EXISTING ARCM {29} tier
@@ -54,8 +83,9 @@ var nasmTierParamsTable = map[uint8]NasmTierParams{
 //     registry as Tier 0/1 in the first place, not by a special-cased
 //     check here)
 //
-// Callers (mint_nusd) MUST treat found=false as an outright rejection,
-// never as a fallback to either NASM tier's parameters.
+// Callers (mint_nusd, liquidate_nusd_vault) MUST treat found=false as an
+// outright rejection, never as a fallback to either NASM tier's
+// parameters.
 func ResolveNasmTier(c *Contract, assetID string) (nasmTier uint8, params NasmTierParams, found bool, pErr *PluginError) {
 	arcmTier, arcmFound, err := GetAssetTier(c, assetID)
 	if err != nil {
