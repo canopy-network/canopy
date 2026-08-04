@@ -42,14 +42,19 @@ func (c *Contract) CheckMessageLiquidatePosition(msg *MessageLiquidatePosition) 
 // Step 6 -- Atomic state update: reduce debt, reduce collateral, move funds
 // Step 7 -- market.total_borrowed write-back via applyDebtDelta (Principle 9)
 //
-// NOT YET IMPLEMENTED (disclosed, not silent): Layer 2-4 of the bad-debt
-// waterfall (reserve fund draw-down, treasury, lender socialization via
-// loss_factor) per ARCM Section 9.2. A liquidation that would leave bad
-// debt is currently rejected outright via ErrLiquidationBadDebt rather than
-// silently under-seizing collateral or leaving the protocol with an
-// unaccounted shortfall. This is a scope limit, not a bug: implementing
-// Layers 2-4 requires R_fund draw-down, ApplyLossFactor, and the {28}
-// queue, none of which this handler touches.
+// [CORRECTED, stale comment found and fixed] The comment previously here
+// claimed Layer 2-4 of the bad-debt waterfall were "NOT YET IMPLEMENTED"
+// and that an uncovered shortfall "hard-rejects via ErrLiquidationBadDebt."
+// Neither is accurate as of this revision: Layer2DrawDown (R_fund),
+// Layer3DrawDownArbor (protocol treasury, bad_debt_layer3.go), and
+// ApplyLossFactor (Layer 4, lender socialization via loss_factor) are all
+// live and called below, in that fallthrough order, on a liquidation whose
+// collateral_seized exceeds the position's own collateral. ErrLiquidationBadDebt
+// does not exist anywhere in this file. This stale doc comment was caught
+// while researching this function as the template for NASM's own
+// liquidate_nusd_vault (NASM Consolidated Spec Section 7) -- worth noting
+// that a clean build and passing tests do not catch doc-comment drift like
+// this; only reading the real code against the comment does.
 func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition, fee uint64) *PluginDeliverResponse {
 	if err := ValidateMarketID(msg.MarketId); err != nil {
 		return &PluginDeliverResponse{Error: ErrInvalidMarketID(err)}
