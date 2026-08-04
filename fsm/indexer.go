@@ -380,6 +380,9 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	previous := nilSafeBlob(out.Previous)
 
 	// accounts: changed+added in current, changed+removed in previous
+	// currentAccounts/previousAccounts come from a Pebble prefix scan over AccountPrefix(),
+	// so both are already ascending by address bytes - accountEntryKey extracts that same
+	// address as the raw key, so entry order matches key order and the merge walk is safe.
 	currentAccounts, currentAccountMap, err := accountEntries(out.Current.Accounts)
 	if err != nil {
 		return nil, err
@@ -388,7 +391,7 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
-	currentAccountKeys, previousAccountKeys := changedBlobKeys(currentAccountMap, previousAccountMap)
+	currentAccountKeys, previousAccountKeys := mergeChangedBlobKeys(currentAccounts, previousAccounts)
 	forcedAccountKeys, err := rewardSlashAccountKeys(out.Current.Block)
 	if err != nil {
 		return nil, err
@@ -400,6 +403,10 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	}
 
 	// pools: changed+added in current, changed+removed in previous
+	// NOT converted to the sorted merge walk: poolEntryKey extracts Pool.Id's raw varint
+	// wire bytes, but the Pebble storage key (KeyForPool) encodes Id big-endian - the two
+	// orderings diverge at varint length boundaries (e.g. id 16383 vs 16384), so entry order
+	// here does not reliably match key order. Map-based diff stays correct regardless of order.
 	currentPools, currentPoolMap, err := poolEntries(out.Current.Pools)
 	if err != nil {
 		return nil, err
@@ -415,6 +422,8 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	}
 
 	// validators: changed+added in current, changed+removed in previous
+	// Same order guarantee as accounts: validatorEntries' key is the unmarshalled
+	// validator.Address, matching KeyForValidator's raw address bytes.
 	currentValidators, currentValidatorMap, currentOutputIndex, err := validatorEntries(out.Current.Validators)
 	if err != nil {
 		return nil, err
@@ -423,7 +432,7 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
-	currentValidatorKeys, previousValidatorKeys := changedBlobKeys(currentValidatorMap, previousValidatorMap)
+	currentValidatorKeys, previousValidatorKeys := mergeChangedBlobKeys(currentValidators, previousValidators)
 	forcedValidatorKeys, err := validatorForceKeys(out.Current.Block, currentOutputIndex, previousOutputIndex)
 	if err != nil {
 		return nil, err
@@ -505,6 +514,41 @@ func accountEntryKey(entry []byte) (string, error) {
 
 func poolEntryKey(entry []byte) (string, error) {
 	return entryKeyOrZero(entry) // Pool.id
+}
+
+// mergeChangedBlobKeys() is changedBlobKeys' sorted-input equivalent: current and previous
+// must each be ascending by key (true for a Pebble prefix-scan result - see call sites).
+// A two-pointer merge walk finds the same added/changed/removed keys as the map-based
+// version without hashing every key into a map[string][]byte first.
+func mergeChangedBlobKeys(current, previous []blobEntry) (map[string]struct{}, map[string]struct{}) {
+	currentChanged := make(map[string]struct{})
+	previousChanged := make(map[string]struct{})
+	i, j := 0, 0
+	for i < len(current) && j < len(previous) {
+		c, p := current[i], previous[j]
+		switch {
+		case c.key < p.key:
+			currentChanged[c.key] = struct{}{}
+			i++
+		case c.key > p.key:
+			previousChanged[p.key] = struct{}{}
+			j++
+		default:
+			if !bytes.Equal(c.bz, p.bz) {
+				currentChanged[c.key] = struct{}{}
+				previousChanged[p.key] = struct{}{}
+			}
+			i++
+			j++
+		}
+	}
+	for ; i < len(current); i++ {
+		currentChanged[current[i].key] = struct{}{}
+	}
+	for ; j < len(previous); j++ {
+		previousChanged[previous[j].key] = struct{}{}
+	}
+	return currentChanged, previousChanged
 }
 
 func changedBlobKeys(current, previous map[string][]byte) (map[string]struct{}, map[string]struct{}) {
