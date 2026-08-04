@@ -42,9 +42,10 @@ type Controller struct {
 	RCManager   lib.RCManagerI                     // the data manager for the 'root chain'
 	Plugin      *lib.Plugin                        // extensible plugin for FSM
 	checkpoints map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
-	isSyncing   *atomic.Bool                       // is the chain currently being downloaded from peers
-	log         lib.LoggerI                        // object for logging
-	*sync.Mutex                                    // mutex for thread safety
+
+	isSyncing   *atomic.Bool // is the chain currently being downloaded from peers
+	log         lib.LoggerI  // object for logging
+	*sync.Mutex              // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application

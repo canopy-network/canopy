@@ -2,9 +2,12 @@ package fsm
 
 import (
 	"bytes"
+	"context"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -176,6 +179,498 @@ func TestMergeChangedBlobKeys_EmptyPrevious(t *testing.T) {
 	require.Empty(t, gotPreviousChanged)
 }
 
+// TestAccountDelta_MatchesOldFullScanAndDiff is the differential regression test for the
+// account-delta fast path: it runs the old path (full scan of both heights, diffed by
+// DeltaIndexerBlobs) and the new path (single-block replay with a collector, assembled by
+// AssembleAccountDeltaSides) against the same committed chain, requiring byte-for-byte,
+// order-for-order equality of both sides. Neither expectation is hand-seeded.
+//
+// Limitation: this chain runs on the root chain, so it does not exercise the nested-chain
+// root-DEX-batch restore (that lives in controller.GetAccountDelta and cannot be reached
+// from an fsm-package test) — the equivalence proven here covers root-chain blocks only.
+func TestAccountDelta_MatchesOldFullScanAndDiff(t *testing.T) {
+	sm, targetHeight := newTestAccountDeltaChain(t)
+	ctx := context.Background()
+
+	// OLD PATH: full account scan at both heights, diffed by DeltaIndexerBlobs
+	oldCurrent, err := sm.IndexerBlob(ctx, targetHeight, false)
+	require.NoError(t, err)
+	oldPrevious, err := sm.IndexerBlob(ctx, targetHeight-1, false)
+	require.NoError(t, err)
+	oldDelta, err := DeltaIndexerBlobs(&IndexerBlobs{Current: oldCurrent, Previous: oldPrevious})
+	require.NoError(t, err)
+
+	// NEW PATH: replay the single block whose application moved state from targetHeight-1 to
+	// targetHeight, capturing touched accounts. Mirrors controller.GetAccountDelta's replay
+	// branch (block read from the live store, pre-state from TimeMachine(blockHeight),
+	// collector baselined on the snapshot, skipRoot=true, never committed).
+	blockHeight := targetHeight - 1
+	blockResult, err := sm.store.(lib.StoreI).GetBlockByHeight(blockHeight)
+	require.NoError(t, err)
+	require.NotNil(t, blockResult)
+	block, err := blockResult.ToBlock()
+	require.NoError(t, err)
+	replaySM, err := sm.TimeMachine(blockHeight)
+	require.NoError(t, err)
+	require.NotSame(t, sm, replaySM, "TimeMachine must produce a real snapshot, not the live FSM")
+	defer replaySM.Discard()
+	require.Equal(t, blockHeight, replaySM.Height())
+	collector := NewAccountChangeCollector(replaySM.Get)
+	_, applyResult, err := replaySM.ReplayBlock(ctx, block, collector)
+	require.NoError(t, err)
+	require.Empty(t, applyResult.Failed)
+	delta := collector.Results()
+	require.NotNil(t, delta)
+
+	// sanity-check the fixture actually produced the scenarios it claims to, so a chain that
+	// silently stopped exercising them can't turn this into a vacuous empty-vs-empty compare
+	require.NotEmpty(t, delta.Added, "fixture must produce at least one brand-new account")
+	require.NotEmpty(t, delta.Changed, "fixture must produce at least one changed account")
+	require.NotEmpty(t, delta.Removed, "fixture must produce at least one removed (zeroed) account")
+
+	// ...and that the force-include path has real work to do: the block must emit a
+	// reward event naming an address the collector never saw written, so both assemblies
+	// have to read that account back rather than derive it from the replay
+	forced, err := RewardSlashAccountKeys(oldCurrent.Block)
+	require.NoError(t, err)
+	require.NotEmpty(t, forced, "fixture must emit a reward/slash event")
+	touched := make(map[string]struct{})
+	for _, entries := range [][]*AccountChangeEntry{delta.Added, delta.Changed, delta.Removed} {
+		for _, e := range entries {
+			touched[string(e.Address)] = struct{}{}
+		}
+	}
+	for address := range forced {
+		require.NotContains(t, touched, address,
+			"the forced address must be untouched by the block, or the read-back never runs")
+	}
+
+	// assemble both sides through the REAL production code cmd/rpc serves through
+	newCurrent, newPrevious, err := sm.AssembleAccountDeltaSides(delta, oldCurrent.Block, targetHeight)
+	require.NoError(t, err)
+
+	// exact ordered equality: both paths are ascending-by-address (the old side comes from an
+	// ascending Pebble prefix scan, the new one from sortedAccountEntries), so ElementsMatch
+	// would silently tolerate an ordering regression that changes the cached response bytes.
+	require.Equal(t, oldDelta.Current.Accounts, newCurrent)
+	require.Equal(t, oldDelta.Previous.Accounts, newPrevious)
+}
+
+// TestAccountDelta_EmptyBlockOnlyMovesRewardAccounts extends the differential test to an
+// EMPTY block: block 6 carries no transactions, so its only account movement comes from the
+// automatic reward machinery (QC5 pays validator #3, which is non-compounding, so the tokens
+// land on its OUTPUT account -- key group 0). The fast path must classify exactly that
+// movement and still match the old full-scan-and-diff byte for byte.
+func TestAccountDelta_EmptyBlockOnlyMovesRewardAccounts(t *testing.T) {
+	sm, _ := newTestAccountDeltaChain(t)
+	// block 6: empty
+	testApplyAndCommitBlock(t, sm, nil)
+	targetHeight := sm.height
+	ctx := context.Background()
+
+	// OLD PATH: full account scan at both heights, diffed by DeltaIndexerBlobs
+	oldCurrent, err := sm.IndexerBlob(ctx, targetHeight, false)
+	require.NoError(t, err)
+	oldPrevious, err := sm.IndexerBlob(ctx, targetHeight-1, false)
+	require.NoError(t, err)
+	oldDelta, err := DeltaIndexerBlobs(&IndexerBlobs{Current: oldCurrent, Previous: oldPrevious})
+	require.NoError(t, err)
+
+	// NEW PATH: replay the empty block with a collector (same recipe as the main test)
+	blockHeight := targetHeight - 1
+	blockResult, err := sm.store.(lib.StoreI).GetBlockByHeight(blockHeight)
+	require.NoError(t, err)
+	require.NotNil(t, blockResult)
+	block, err := blockResult.ToBlock()
+	require.NoError(t, err)
+	replaySM, err := sm.TimeMachine(blockHeight)
+	require.NoError(t, err)
+	defer replaySM.Discard()
+	collector := NewAccountChangeCollector(replaySM.Get)
+	_, applyResult, err := replaySM.ReplayBlock(ctx, block, collector)
+	require.NoError(t, err)
+	require.Empty(t, applyResult.Failed)
+	delta := collector.Results()
+	require.NotNil(t, delta)
+
+	// an empty block adds and removes nothing; the only movement is the reward payout to
+	// validator #3's output account (key group 0)
+	require.Empty(t, delta.Added)
+	require.Empty(t, delta.Removed)
+	require.NotEmpty(t, delta.Changed, "the reward payout must move at least one account")
+	for _, e := range delta.Changed {
+		require.Equal(t, newTestAddressBytes(t), e.Address,
+			"an empty block may only move the reward output account")
+	}
+
+	// assemble through the REAL production code and require byte-for-byte equality
+	newCurrent, newPrevious, err := sm.AssembleAccountDeltaSides(delta, oldCurrent.Block, targetHeight)
+	require.NoError(t, err)
+	require.Equal(t, oldDelta.Current.Accounts, newCurrent)
+	require.Equal(t, oldDelta.Previous.Accounts, newPrevious)
+}
+
+// AccountEntriesAtVersion must silently skip a forced address with no account at that
+// version -- matching forceIncludeKeys' rule that a forced key is only included on a side
+// where the account actually exists
+func TestAccountEntriesAtVersion_SkipsMissingAccounts(t *testing.T) {
+	sm, _ := newTestApplyBlockFixture(t)
+	st := sm.store.(lib.StoreI)
+	funded := newTestAddressBytes(t) // AccountAdd(newTestAddress(t), 2) in the fixture
+	missing := bytes.Repeat([]byte{0xEE}, crypto.AddressSize)
+	entries, err := sm.AccountEntriesAtVersion(st.Version(), map[string]struct{}{
+		string(funded):  {},
+		string(missing): {},
+	})
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	require.NotContains(t, entries, string(missing), "an address with no account must be skipped, not emitted empty")
+	require.Equal(t, mustMarshalProto(t, &Account{Address: funded, Amount: 2}), entries[string(funded)])
+}
+
+// accountSide must never mutate or alias the slices it is handed: GetAccountDelta can return
+// the tip-cache entry's slices (see controller/account_delta_cache.go), and the assembled
+// result is stored in the RPC blob cache and served to every later caller
+func TestAccountSide_DoesNotMutateOrAliasInputs(t *testing.T) {
+	added := []*AccountChangeEntry{{Address: []byte("a"), FinalValue: []byte("af")}}
+	changed := []*AccountChangeEntry{{Address: []byte("b"), PrevValue: []byte("bp"), FinalValue: []byte("bf")}}
+	// spare capacity: an append-in-place would write through into the shared backing array
+	removed := make([]*AccountChangeEntry, 1, 4)
+	removed[0] = &AccountChangeEntry{Address: []byte("c"), PrevValue: []byte("cp")}
+
+	require.Equal(t, [][]byte{[]byte("af"), []byte("bf")}, sortedAccountEntries(accountSide(added, changed, true)))
+	require.Equal(t, [][]byte{[]byte("bp"), []byte("cp")}, sortedAccountEntries(accountSide(changed, removed, false)))
+
+	require.Len(t, added, 1)
+	require.Len(t, changed, 1)
+	require.Len(t, removed, 1)
+	require.Equal(t, []byte("af"), added[0].FinalValue)
+	require.Equal(t, []byte("bp"), changed[0].PrevValue)
+	require.Equal(t, []byte("bf"), changed[0].FinalValue)
+	require.Equal(t, []byte("cp"), removed[0].PrevValue)
+	require.Equal(t, 4, cap(removed), "the input slice's backing array must be untouched")
+
+	// the emitted bytes must be copies -- mutating them must not reach back into the entries
+	out := sortedAccountEntries(accountSide(added, nil, true))
+	require.Len(t, out, 1)
+	out[0][0] = 'X'
+	require.Equal(t, []byte("af"), added[0].FinalValue, "the result must not alias the entry's bytes")
+}
+
+// AccountChangeCollector.Results() ranges a Go map, so the entries arrive in random order;
+// the wire format must still be ascending by address, because the assembled bytes are cached
+// and served to every later caller and an unstable order would make the same height return
+// different bytes across calls and across nodes
+func TestAccountSide_SortsByAddressAscending(t *testing.T) {
+	entries := []*AccountChangeEntry{
+		{Address: []byte{0x03}, FinalValue: []byte("c")},
+		{Address: []byte{0x01}, FinalValue: []byte("a")},
+		{Address: []byte{0x02}, FinalValue: []byte("b")},
+	}
+	require.Equal(t,
+		[][]byte{[]byte("a"), []byte("b"), []byte("c")},
+		sortedAccountEntries(accountSide(entries, nil, true)),
+	)
+}
+
+// the input may be a shared cached blob, so stripping accounts must NEVER mutate it —
+// a copy is returned when there is something to strip, and the copy shares everything else
+func TestIndexerBlobWithoutAccounts(t *testing.T) {
+	require.Nil(t, IndexerBlobWithoutAccounts(nil))
+
+	// a blob already without accounts is returned as-is (no pointless copy)
+	noAccounts := &IndexerBlob{Pools: [][]byte{[]byte("p")}}
+	require.Same(t, noAccounts, IndexerBlobWithoutAccounts(noAccounts))
+
+	// a blob with accounts yields a copy with them stripped, original untouched
+	withAccounts := &IndexerBlob{
+		Accounts: [][]byte{[]byte("acc")},
+		Pools:    [][]byte{[]byte("p")},
+		Block:    []byte("blk"),
+	}
+	stripped := IndexerBlobWithoutAccounts(withAccounts)
+	require.NotSame(t, withAccounts, stripped)
+	require.Nil(t, stripped.Accounts)
+	require.Equal(t, [][]byte{[]byte("acc")}, withAccounts.Accounts, "the shared cached blob must never be mutated")
+	// the copy shares the other payloads (structural copy, not a deep clone)
+	require.Equal(t, withAccounts.Pools, stripped.Pools)
+	require.Equal(t, withAccounts.Block, stripped.Block)
+}
+
+// newTestAccountDeltaChain builds a real committed chain (ApplyBlock + Commit per block,
+// starting from newTestApplyBlockFixture) and returns the state machine plus the target
+// state version to diff. newTestApplyBlockFixture leaves sm.height=3 but store version 2,
+// so the helper commits once to align them before driving blocks 3, 4 and 5.
+//
+// Block 5 — the one the returned target height (6) diffs — exercises:
+//   - a brand-new account (added)
+//   - a balance change to an existing account (changed), sender and recipient
+//   - a net-unchanged account: a zero-fee self-send (must be dropped from both sides)
+//   - an account zeroed out, which deletes the key (removed)
+//   - a reward event naming an address the block never writes (non-compounding validator,
+//     tokens land on its output account) — the force-include must read it back on both sides
+func newTestAccountDeltaChain(t *testing.T) (*StateMachine, uint64) {
+	t.Helper()
+	fixture, _ := newTestApplyBlockFixture(t)
+	sm := &fixture
+	st := sm.store.(lib.StoreI)
+	// newTestApplyBlockFixture hand-sets sm.NetworkID rather than deriving it from Config, but
+	// TimeMachine builds its snapshot FSM through newStateMachine, which sets
+	// NetworkID = Config.P2PConfig.NetworkID. Left as-is, every transaction in the replayed
+	// block would fail the replay's network-id check -- a fixture artifact, not a production
+	// one (a live node derives both from the same config). Align them here -- on the config
+	// side, since a network id of 0 is rejected outright as "nil network id".
+	sm.Config.P2PConfig.NetworkID = uint64(sm.NetworkID)
+	// align the store version with sm.height (see the height convention note above)
+	_, e := st.Commit()
+	require.NoError(t, e)
+	require.Equal(t, sm.height, st.Version())
+
+	// send fee of zero, so the net-unchanged self-send below really is net-unchanged
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 0}))
+	// funder pays for everything downstream
+	require.NoError(t, sm.AccountAdd(newTestAddress(t), 10_000_000))
+	// block 3: no transactions -- it exists so block 4's BeginBlock has a real committed
+	// predecessor block and certificate to load
+	testApplyAndCommitBlock(t, sm, nil)
+
+	// block 4: fund the accounts block 5 will change / zero / self-send
+	testApplyAndCommitBlock(t, sm, [][]byte{
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 4), 5_000), // net-unchanged self-sender
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 5), 3_000), // zeroed out in block 5
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 6), 2_000), // changed in block 5
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 3), 4_000), // reward-event recipient; untouched by block 5
+	})
+
+	// block 5: the measured block
+	brandNew := crypto.NewAddressFromBytes(bytes.Repeat([]byte{0xAB}, crypto.AddressSize))
+	testApplyAndCommitBlock(t, sm, [][]byte{
+		testSendTxBytes(t, sm, 0, brandNew, 1_500),             // brandNew added; kg0 changed
+		testSendTxBytes(t, sm, 6, newTestAddress(t, 7), 1_000), // kg6 changed; kg7 added (never funded)
+		testSendTxBytes(t, sm, 4, newTestAddress(t, 4), 5_000), // kg4 self-send: touched, net-unchanged
+		testSendTxBytes(t, sm, 5, newTestAddress(t, 6), 3_000), // kg5 sends its whole balance -> removed
+	})
+
+	// sm.height is now 6 and the store holds versions up to 6 with blocks 2..5 indexed, so
+	// both IndexerBlob(6) (state@6 + block 5) and IndexerBlob(5) (state@5 + block 4) resolve
+	return sm, sm.height
+}
+
+// TestAccountDelta_PoolAndValidatorWritesDoNotLeakIntoAccountCollector proves that when a
+// REAL applied block writes POOL and VALIDATOR entries alongside ACCOUNT entries, the
+// AccountChangeCollector captures only the account addresses.
+// TestStateMachine_SetDoesNotHookNonAccountKeys (fsm/state_test.go) already proves prefix
+// isolation at the Set() call level with a single hand-written write; this test's distinct
+// value is the integration level -- pool and validator writes here happen as a side effect of
+// the real BeginBlock/EndBlock committee-reward machinery (ApplyBlock), not a direct Set call.
+func TestAccountDelta_PoolAndValidatorWritesDoNotLeakIntoAccountCollector(t *testing.T) {
+	sm, targetHeight, validatorAddress := newTestPoolAndValidatorTouchingChain(t)
+	ctx := context.Background()
+
+	blockHeight := targetHeight - 1
+	blockResult, err := sm.store.(lib.StoreI).GetBlockByHeight(blockHeight)
+	require.NoError(t, err)
+	require.NotNil(t, blockResult)
+	block, err := blockResult.ToBlock()
+	require.NoError(t, err)
+	replaySM, err := sm.TimeMachine(blockHeight)
+	require.NoError(t, err)
+	defer replaySM.Discard()
+
+	// snapshot pre-state DAO pool balance and validator #3's stake from the SAME snapshot the
+	// replay below runs against, before ApplyBlock mutates it
+	prePool, err := replaySM.GetPool(lib.DAOPoolID)
+	require.NoError(t, err)
+	preValidator, err := replaySM.GetValidator(crypto.NewAddressFromBytes(validatorAddress))
+	require.NoError(t, err)
+
+	collector := NewAccountChangeCollector(replaySM.Get)
+	_, applyResult, err := replaySM.ReplayBlock(ctx, block, collector)
+	require.NoError(t, err)
+	require.Empty(t, applyResult.Failed)
+
+	// verify -- don't assume -- that the block genuinely wrote both a pool and a validator
+	// entry. The DAO pool is minted into every block unconditionally (FundCommitteeRewardPools,
+	// never debited back down), so a strict increase proves a real SetPool call happened, not
+	// just a Set(sameValue) no-op. Validator #3 was made compounding by the fixture below, so
+	// its committee reward in this block updates StakedAmount via UpdateValidatorStake ->
+	// SetValidator instead of the default non-compounding AccountAdd-to-output path -- a strict
+	// increase proves that write happened too. If the fixture regressed to stop touching either,
+	// this would fail instead of silently asserting nothing.
+	postPool, err := replaySM.GetPool(lib.DAOPoolID)
+	require.NoError(t, err)
+	require.Greater(t, postPool.Amount, prePool.Amount,
+		"fixture must actually mint into the DAO pool during the measured block")
+	postValidator, err := replaySM.GetValidator(crypto.NewAddressFromBytes(validatorAddress))
+	require.NoError(t, err)
+	require.Greater(t, postValidator.StakedAmount, preValidator.StakedAmount,
+		"fixture must actually write validator #3's stake (compounding reward) in the measured block")
+
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	all := append(append(append([]*AccountChangeEntry{}, delta.Added...), delta.Changed...), delta.Removed...)
+	require.NotEmpty(t, all, "fixture must also touch at least one account, or this test can't distinguish account entries from a leak")
+
+	for _, e := range all {
+		// weak alone (a validator address is also crypto.AddressSize bytes), but catches a
+		// pool-prefix leak: pool keys carry no address-shaped payload at all, so a
+		// bytes.HasPrefix(k, PoolPrefix()) regression would produce garbage-length
+		// "addresses" here rather than passing silently
+		require.Len(t, e.Address, crypto.AddressSize, "captured entries must be account-sized addresses")
+
+		// catches a validator-prefix leak specifically, which the length check above cannot:
+		// validator #3's address is proven (above) to have been written in this very block, so
+		// if the hook regressed to also match bytes.HasPrefix(k, ValidatorPrefix()), that
+		// address would show up here -- assert it never does
+		require.NotEqual(t, validatorAddress, e.Address, "validator address must not leak into the account collector")
+
+		// positive check: every captured address must round-trip to the real KeyForAccount
+		// entry, proving it genuinely is an account key rather than merely address-shaped bytes
+		// living under some other prefix
+		key := KeyForAccount(crypto.NewAddressFromBytes(e.Address))
+		bz, gErr := replaySM.Get(key)
+		require.NoError(t, gErr)
+		if e.FinalValue != nil {
+			require.Equal(t, e.FinalValue, bz, "captured added/changed entry must match the live KeyForAccount value")
+		} else {
+			require.Empty(t, bz, "captured removed entry must correspond to an actually-deleted account key")
+		}
+	}
+}
+
+// newTestPoolAndValidatorTouchingChain builds a real committed chain (same base pattern as
+// newTestAccountDeltaChain) whose measured block writes an account (a send tx), a pool
+// (the automatic committee-reward mint every block) and a validator (a compounding
+// committee-reward payout, which routes through SetValidator instead of an account write).
+//
+// Validator #3, the certificate's reward recipient, is flipped to Compound=true before
+// block 4 is applied so the flip lands in the state@4 snapshot that block 5's replay reads.
+func newTestPoolAndValidatorTouchingChain(t *testing.T) (sm *StateMachine, targetHeight uint64, validatorAddress []byte) {
+	t.Helper()
+	fixture, _ := newTestApplyBlockFixture(t)
+	sm = &fixture
+	st := sm.store.(lib.StoreI)
+	sm.Config.P2PConfig.NetworkID = uint64(sm.NetworkID)
+	_, e := st.Commit()
+	require.NoError(t, e)
+	require.Equal(t, sm.height, st.Version())
+
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 0}))
+	require.NoError(t, sm.AccountAdd(newTestAddress(t), 10_000_000))
+	// block 3: no transactions -- exists so block 4's BeginBlock has a real committed
+	// predecessor block and certificate to load
+	testApplyAndCommitBlock(t, sm, nil)
+
+	validator3, err := sm.GetValidator(newTestAddress(t, 3))
+	require.NoError(t, err)
+	require.False(t, validator3.Compound, "fixture assumption: validator #3 starts non-compounding")
+	validator3.Compound = true
+	require.NoError(t, sm.SetValidator(validator3))
+
+	// block 4: no new transactions of its own -- indexes the certificate (paying validator #3)
+	// that block 5's BeginBlock consumes
+	testApplyAndCommitBlock(t, sm, nil)
+
+	// block 5: the measured block. A send tx touches accounts; BeginBlock's automatic DAO pool
+	// mint and validator #3's now-compounding committee reward (from block 4's certificate)
+	// touch a pool and a validator in the same pass.
+	testApplyAndCommitBlock(t, sm, [][]byte{
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 7), 1_000),
+	})
+
+	return sm, sm.height, newTestAddressBytes(t, 3)
+}
+
+// testApplyAndCommitBlock applies a block at sm.height with the given transactions, indexes
+// the resulting BlockResult and a signed certificate for that height, commits the store, and
+// advances the state machine -- the same order controller.CommitCertificate uses (apply,
+// IndexQC, IndexBlock, Commit, re-init FSM at the new version).
+func testApplyAndCommitBlock(t *testing.T, sm *StateMachine, txs [][]byte) {
+	t.Helper()
+	st := sm.store.(lib.StoreI)
+	height := sm.height
+	block := &lib.Block{
+		BlockHeader: &lib.BlockHeader{
+			Height:          height,
+			Time:            uint64(time.Date(2024, 02, 01, 0, 0, 0, 0, time.UTC).UnixMicro()) + height*1_000_000,
+			ProposerAddress: newTestAddressBytes(t),
+		},
+		Transactions: txs,
+	}
+	header, result, err := sm.ApplyBlock(context.Background(), block, false, nil, false)
+	require.NoError(t, err)
+	for _, f := range result.Failed {
+		t.Logf("FAILED TX at height %d: %s", height, f.Error.Error())
+	}
+	require.Empty(t, result.Failed, "block at height %d had failed transactions", height)
+	require.NoError(t, st.IndexQC(testAccountDeltaQC(t, sm, height)))
+	require.NoError(t, st.IndexBlock(&lib.BlockResult{
+		BlockHeader:  header,
+		Transactions: result.Results,
+		Events:       result.Events,
+	}))
+	_, e := st.Commit()
+	require.NoError(t, e)
+	sm.height++
+	sm.Reset()
+	require.Equal(t, sm.height, st.Version())
+}
+
+// testAccountDeltaQC builds a certificate for `height` signed by 3 of the fixture's 4
+// validators -- mirroring the QC newTestApplyBlockFixture indexes for height 2, but with the
+// chain ids it omits (see below). BeginBlock loads the previous height's certificate, so
+// every applied block needs one indexed for its own height.
+func testAccountDeltaQC(t *testing.T, sm *StateMachine, height uint64) *lib.QuorumCertificate {
+	t.Helper()
+	qc := &lib.QuorumCertificate{
+		// ChainId is what keys the committee data HandleCertificateResults updates and
+		// DistributeCommitteeRewards later pays out from -- without it the rewards land on
+		// committee 0, whose pool is never subsidized, and no reward event is ever emitted
+		Header: &lib.View{Height: height, ChainId: lib.CanopyChainId},
+		// PaymentPercents.ChainId must be set: CommitteeData.Combine drops every stub whose
+		// ChainId doesn't match, so an unset one silently yields no reward and no event.
+		// The recipient is validator #3, which takes part in no transaction below and is
+		// non-compounding -- so the reward is written to the validator's OUTPUT account (key
+		// group 0) while the reward EVENT names validator #3. That is exactly the
+		// force-include case: an address the collector never sees written, which both delta
+		// sides must nonetheless carry.
+		Results: &lib.CertificateResult{RewardRecipients: &lib.RewardRecipients{
+			PaymentPercents: []*lib.PaymentPercents{{
+				Address: newTestAddressBytes(t, 3),
+				Percent: 100,
+				ChainId: lib.CanopyChainId,
+			}},
+		}},
+	}
+	committee, err := sm.GetCommitteeMembers(lib.CanopyChainId)
+	require.NoError(t, err)
+	mk := committee.MultiKey.Copy()
+	for i := 0; i < 3; i++ {
+		privateKey := newTestKeyGroup(t, i).PrivateKey
+		for j, pubKey := range mk.PublicKeys() {
+			if privateKey.PublicKey().Equals(pubKey) {
+				require.NoError(t, mk.AddSigner(privateKey.Sign(qc.SignBytes()), j))
+			}
+		}
+	}
+	aggSig, e := mk.AggregateSignatures()
+	require.NoError(t, e)
+	qc.Signature = &lib.AggregateSignature{Signature: aggSig, Bitmap: mk.Bitmap()}
+	return qc
+}
+
+// testSendTxBytes builds a signed send transaction from test key group `fromKeyGroup`, valid
+// at the state machine's current height, with a zero fee (see newTestAccountDeltaChain).
+func testSendTxBytes(t *testing.T, sm *StateMachine, fromKeyGroup int, to crypto.AddressI, amount uint64) []byte {
+	t.Helper()
+	kg := newTestKeyGroup(t, fromKeyGroup)
+	tx, err := NewSendTransaction(kg.PrivateKey, to, amount, uint64(sm.NetworkID), sm.Config.ChainId, 0, sm.height, "")
+	require.NoError(t, err)
+	bz, err := lib.Marshal(tx)
+	require.NoError(t, err)
+	return bz
+}
+
 func mustMarshalProto(t *testing.T, message any) []byte {
 	t.Helper()
 	bz, err := lib.Marshal(message)
@@ -194,6 +689,31 @@ func requireEntriesAsSet(t *testing.T, got [][]byte, expected ...[]byte) {
 		expSet[string(entry)]++
 	}
 	require.Equal(t, expSet, gotSet)
+}
+
+// TestIndexerBlob_SkipAccountsLeavesAccountsNil and TestIndexerBlob_NoSkipStillScansAccounts
+// use newTestApplyBlockFixture (fsm/state_test.go) - the real helper used elsewhere in this
+// package to build a StateMachine with a committed block (height 2, indexed via IndexBlock)
+// and a funded account (via AccountAdd), then sm.height set to 3 and the store committed.
+// That leaves the state machine ready for IndexerBlob(ctx, 3, ...) without needing to
+// actually call ApplyBlock: the fixture's committed state at height 3 already pairs with
+// the indexed block at height 2 (blockHeight = height - 1), and its funded account guarantees
+// the accounts scan (when not skipped) has at least one real entry to assert on.
+func TestIndexerBlob_SkipAccountsLeavesAccountsNil(t *testing.T) {
+	sm, _ := newTestApplyBlockFixture(t)
+	blob, err := sm.IndexerBlob(context.Background(), 3, true)
+	require.NoError(t, err)
+	require.Nil(t, blob.Accounts)
+}
+
+func TestIndexerBlob_NoSkipStillScansAccounts(t *testing.T) {
+	sm, _ := newTestApplyBlockFixture(t)
+	blob, err := sm.IndexerBlob(context.Background(), 3, false)
+	require.NoError(t, err)
+	// the fixture funds an account via AccountAdd before committing, so the full scan
+	// (skipAccounts=false) must find and return it - a meaningful assertion rather than
+	// a vacuous non-nil check on the blob itself.
+	require.NotEmpty(t, blob.Accounts, "full scan with skipAccounts=false must still populate Accounts")
 }
 
 // TestDeltaIndexerBlobs_ZeroValuePoolAndAccount is a regression for the

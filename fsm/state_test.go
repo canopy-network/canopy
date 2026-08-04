@@ -269,7 +269,7 @@ func TestApplyBlock(t *testing.T) {
 				sm.ProtocolVersion = 1
 			}
 			// execute the function call
-			header, result, e := sm.ApplyBlock(context.Background(), test.block, false)
+			header, result, e := sm.ApplyBlock(context.Background(), test.block, false, nil, false)
 			// validate the expected error
 			require.Equal(t, test.error != "", e != nil || len(result.Failed) != 0, e)
 			if result != nil && len(result.Failed) != 0 {
@@ -285,6 +285,150 @@ func TestApplyBlock(t *testing.T) {
 			require.EqualExportedValues(t, test.expectedResults, result.Results[0])
 		})
 	}
+}
+
+// newTestApplyBlockFixture builds a state machine and a block ready for a successful
+// ApplyBlock() call containing one send-transaction that touches an account. It mirrors
+// the "successful apply block" case setup in TestApplyBlock above.
+func newTestApplyBlockFixture(t *testing.T) (StateMachine, *lib.Block) {
+	var timestamp = uint64(time.Date(2024, 02, 01, 0, 0, 0, 0, time.UTC).UnixMicro())
+	// define a key group to use in testing
+	kg := newTestKeyGroup(t)
+	// predefine a send-transaction to insert into the block
+	sendTx, err := NewSendTransaction(kg.PrivateKey, newTestAddress(t), 1, 1, 1, 1, 1, "")
+	require.NoError(t, err)
+	txn := sendTx.(*lib.Transaction)
+	// set the timestamp to a fixed time for validity checking
+	txn.Time = timestamp
+	// re-sign the tx
+	require.NoError(t, txn.Sign(kg.PrivateKey))
+	// convert the object to bytes
+	sendTxBytes, err := lib.Marshal(sendTx)
+	require.NoError(t, err)
+	block := &lib.Block{
+		BlockHeader: &lib.BlockHeader{
+			Height:          2,
+			NumTxs:          1,
+			Time:            timestamp,
+			TotalTxs:        1,
+			LastBlockHash:   crypto.Hash([]byte("block_hash")),
+			ProposerAddress: newTestAddressBytes(t),
+		},
+		Transactions: [][]byte{sendTxBytes},
+	}
+	// create a state machine instance with default parameters
+	sm := newTestStateMachine(t)
+	// preset the 'last block' in state
+	require.NoError(t, sm.store.(lib.StoreI).IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 2,
+			Hash:   block.BlockHeader.LastBlockHash,
+			Time:   timestamp,
+		},
+	}))
+	// set the minimum fee to 1 for send transactions
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 1}))
+	// preset the account with funds
+	require.NoError(t, sm.AccountAdd(newTestAddress(t), 2))
+	qc := &lib.QuorumCertificate{
+		Header: &lib.View{Height: 2},
+		Results: &lib.CertificateResult{RewardRecipients: &lib.RewardRecipients{
+			PaymentPercents: []*lib.PaymentPercents{{
+				Address: newTestAddressBytes(t),
+				Percent: 100,
+			}},
+		}},
+	}
+	// track the supply
+	supply := &Supply{}
+	// for 4 validators
+	for i := 0; i < 4; i++ {
+		// set the validator
+		require.NoError(t, sm.SetValidators([]*Validator{{
+			Address:      newTestAddressBytes(t, i),
+			PublicKey:    newTestPublicKeyBytes(t, i),
+			StakedAmount: 100,
+			Committees:   []uint64{lib.CanopyChainId},
+			Output:       newTestAddressBytes(t),
+		}}, supply))
+		// set the committee member
+		require.NoError(t, sm.SetCommitteeMember(newTestAddress(t, i), lib.CanopyChainId, 100))
+	}
+	// set the supply in state
+	require.NoError(t, sm.SetSupply(supply))
+	// create an aggregate signature
+	// get the committee members
+	committee, er := sm.GetCommitteeMembers(lib.CanopyChainId)
+	require.NoError(t, er)
+	// create a copy of the multikey
+	mk := committee.MultiKey.Copy()
+	// only sign with 3/4 to test the non-signer reduction
+	for i := 0; i < 3; i++ {
+		privateKey := newTestKeyGroup(t, i).PrivateKey
+		// search for the proper index for the signer
+		for j, pubKey := range mk.PublicKeys() {
+			// if found, add the signer
+			if privateKey.PublicKey().Equals(pubKey) {
+				// sign the qc
+				require.NoError(t, mk.AddSigner(privateKey.Sign(qc.SignBytes()), j))
+			}
+		}
+	}
+	// aggregate the signature
+	aggSig, e := mk.AggregateSignatures()
+	require.NoError(t, e)
+	// attach the signature to the message
+	qc.Signature = &lib.AggregateSignature{
+		Signature: aggSig,
+		Bitmap:    mk.Bitmap(),
+	}
+	require.NoError(t, sm.store.(lib.StoreI).IndexQC(qc))
+	// setup for a 'last validator set' for apply block
+	sm.height = 3
+	// commit here to have a 'last validator set' for apply block
+	_, err = sm.store.(lib.StoreI).Commit()
+	require.NoError(t, err)
+	// set the protocol version to not trigger an error
+	sm.ProtocolVersion = 1
+	return sm, block
+}
+
+func TestApplyBlock_SkipRootLeavesStateRootNil(t *testing.T) {
+	sm, block := newTestApplyBlockFixture(t)
+	header, result, err := sm.ApplyBlock(context.Background(), block, false, nil, true)
+	require.NoError(t, err)
+	require.Empty(t, result.Failed)
+	require.Nil(t, header.StateRoot)
+	require.NotNil(t, header.Hash) // header must still hash successfully with an empty state root
+}
+
+func TestApplyBlock_CollectorCapturesTouchedAccounts(t *testing.T) {
+	sm, block := newTestApplyBlockFixture(t)
+	collector := NewAccountChangeCollector(sm.Get)
+	_, result, err := sm.ApplyBlock(context.Background(), block, false, collector, false)
+	require.NoError(t, err)
+	require.Empty(t, result.Failed)
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	// the fixture block's single transaction is key group 0's self-send of 1 with a fee of
+	// 1: sender and recipient are the SAME account, so exactly one account changes (only
+	// the fee leaves it, 2 -> 1) and nothing is added or removed. The fixture QC carries no
+	// chain id, so no committee reward reaches any account (see testAccountDeltaQC's note).
+	require.Empty(t, delta.Added)
+	require.Empty(t, delta.Removed)
+	require.Len(t, delta.Changed, 1)
+	entry := delta.Changed[0]
+	require.Equal(t, newTestAddressBytes(t), entry.Address)
+	require.Equal(t, mustMarshalProto(t, &Account{Address: newTestAddressBytes(t), Amount: 2}), entry.PrevValue)
+	require.Equal(t, mustMarshalProto(t, &Account{Address: newTestAddressBytes(t), Amount: 1}), entry.FinalValue)
+}
+
+func TestApplyBlock_NilCollectorSkipRootFalseIsUnchanged(t *testing.T) {
+	sm, block := newTestApplyBlockFixture(t)
+	header, result, err := sm.ApplyBlock(context.Background(), block, false, nil, false)
+	require.NoError(t, err)
+	require.Empty(t, result.Failed)
+	require.NotNil(t, header.StateRoot) // unchanged default behavior
 }
 
 func TestApplyTransactions_DoesNotReturnCheckErrors(t *testing.T) {
@@ -953,4 +1097,81 @@ func TestIterateAndAppend_NotCancelledCompletesNormally(t *testing.T) {
 	result, err := sm.IterateAndAppend(context.Background(), AccountPrefix())
 	require.Nil(t, err)
 	require.Len(t, result, 2)
+}
+
+func TestStateMachine_SetHooksAccountCollector(t *testing.T) {
+	sm := newTestStateMachine(t)
+	collector := NewAccountChangeCollector(sm.Get)
+	sm.accountCollector = collector
+	address := newTestAddress(t)
+	require.NoError(t, sm.Set(KeyForAccount(address), []byte("v1")))
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	added, changed, removed := delta.Added, delta.Changed, delta.Removed
+	require.Len(t, added, 1)
+	require.Empty(t, changed)
+	require.Empty(t, removed)
+	require.Equal(t, address.Bytes(), added[0].Address)
+}
+
+func TestStateMachine_DeleteHooksAccountCollector(t *testing.T) {
+	sm := newTestStateMachine(t)
+	address := newTestAddress(t)
+	// write the key directly, before the collector is attached, so it establishes a real
+	// pre-block baseline rather than being captured as part of this call
+	require.NoError(t, sm.Set(KeyForAccount(address), []byte("v1")))
+	collector := NewAccountChangeCollector(sm.Get)
+	sm.accountCollector = collector
+	require.NoError(t, sm.Delete(KeyForAccount(address)))
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	added, changed, removed := delta.Added, delta.Changed, delta.Removed
+	require.Empty(t, added)
+	require.Empty(t, changed)
+	require.Len(t, removed, 1)
+	require.Equal(t, address.Bytes(), removed[0].Address)
+	require.Equal(t, []byte("v1"), removed[0].PrevValue)
+	require.Nil(t, removed[0].FinalValue)
+}
+
+func TestStateMachine_DeleteDoesNotHookNonAccountKeys(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NoError(t, sm.Set(KeyForPool(1), []byte("v1")))
+	collector := NewAccountChangeCollector(sm.Get)
+	sm.accountCollector = collector
+	require.NoError(t, sm.Delete(KeyForPool(1)))
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	added, changed, removed := delta.Added, delta.Changed, delta.Removed
+	require.Empty(t, added)
+	require.Empty(t, changed)
+	require.Empty(t, removed)
+}
+
+func TestStateMachine_DeleteNilCollectorIsNoOp(t *testing.T) {
+	sm := newTestStateMachine(t)
+	address := newTestAddress(t)
+	require.NoError(t, sm.Set(KeyForAccount(address), []byte("v1")))
+	require.Nil(t, sm.accountCollector)
+	require.NoError(t, sm.Delete(KeyForAccount(address))) // must not panic
+}
+
+func TestStateMachine_SetDoesNotHookNonAccountKeys(t *testing.T) {
+	sm := newTestStateMachine(t)
+	collector := NewAccountChangeCollector(sm.Get)
+	sm.accountCollector = collector
+	require.NoError(t, sm.Set(KeyForPool(1), []byte("v1")))
+	delta := collector.Results()
+	require.NotNil(t, delta)
+	added, changed, removed := delta.Added, delta.Changed, delta.Removed
+	require.Empty(t, added)
+	require.Empty(t, changed)
+	require.Empty(t, removed)
+}
+
+func TestStateMachine_SetNilCollectorIsNoOp(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.Nil(t, sm.accountCollector)
+	address := newTestAddress(t)
+	require.NoError(t, sm.Set(KeyForAccount(address), []byte("v1"))) // must not panic
 }

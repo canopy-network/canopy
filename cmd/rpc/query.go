@@ -626,16 +626,16 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 		return entry.deltaBlobs, entry.deltaBytes, nil
 	}
 
-	// Cache miss: current/previous blobs must be built from the store, which
-	// for a height far behind the tip means a cold historical read. This is
-	// unbounded and not covered by the RPC write-deadline (the deadline keeps
-	// ticking while this call blocks, so a slow read here surfaces later as a
-	// "write tcp ...: i/o timeout" on the eventual w.Write, not here) -- log
-	// and record how long it actually took so a cold-path stall is visible
-	// after the fact both in logs and in canopy_indexer_blob_cold_read_time.
+	// Cache miss: a cold historical read, unbounded and not covered by the RPC
+	// write-deadline (a slow read surfaces later as an i/o timeout on the eventual
+	// w.Write) -- log and record how long it took so a stall is visible after the fact
 	coldStart := time.Now()
 	defer s.controller.Metrics.RecordIndexerBlobCacheMiss(coldStart)
-	current, err := s.controller.FSM.IndexerBlob(ctx, height)
+	// at height 2 there is no previous blob to diff against and DeltaIndexerBlobs keeps
+	// Current's full account set; preserve that byte-for-byte by falling back to the
+	// full scan for that one height (once in a chain's life, the cost is irrelevant)
+	useAccountDelta := height > 2
+	current, err := s.controller.FSM.IndexerBlob(ctx, height, useAccountDelta)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -646,10 +646,17 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	if height > 2 {
 		if cachedPrev, ok := s.indexerBlobCache.getCurrent(height - 1); ok {
 			s.controller.Metrics.RecordIndexerBlobPreviousReuseHit()
+			// the height-2 cached snapshot carries the full account set (see above);
+			// diffing it against current's nil Accounts would burn a throwaway full-scan
+			// diff. Hand DeltaIndexerBlobs a shallow copy with Accounts nil'd instead —
+			// the cached blob is shared with every other reader and must never be mutated
+			if useAccountDelta {
+				cachedPrev = fsm.IndexerBlobWithoutAccounts(cachedPrev)
+			}
 			previous = cachedPrev
 		} else {
 			s.controller.Metrics.RecordIndexerBlobPreviousReuseMiss()
-			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1)
+			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1, useAccountDelta)
 			if prevErr != nil {
 				return nil, nil, prevErr
 			}
@@ -660,11 +667,32 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		s.controller.Metrics.RecordIndexerBlobCancelled()
 		s.logger.Debugf("indexer-blobs cold read for height %d cancelled after %s: %s", height, time.Since(coldStart), ctxErr)
+		// without this a cancelled request would go on to do the account-delta work
+		// and cache a response nobody is waiting for
+		return nil, nil, lib.ErrCancelled(ctxErr)
 	} else if elapsed := time.Since(coldStart); elapsed > time.Duration(s.config.TimeoutS)*time.Second {
 		s.logger.Warnf("indexer-blobs cold read for height %d took %s, exceeding the %ds RPC write deadline -- "+
 			"caller's write will fail with i/o timeout even though this read eventually succeeded", height, elapsed, s.config.TimeoutS)
 	} else {
 		s.logger.Debugf("indexer-blobs cold read for height %d took %s", height, elapsed)
+	}
+
+	// both blobs above were built with skipAccounts=true, so DeltaIndexerBlobs will compute
+	// an empty account delta. Source the real one by replaying the single block that
+	// produced this height. height is already clamped to the tip above, which
+	// GetAccountDelta depends on -- it errors rather than clamps
+	var accountDelta *fsm.AccountDelta
+	if useAccountDelta {
+		accountDeltaStart := time.Now()
+		var deltaErr lib.ErrorI
+		accountDelta, deltaErr = s.controller.GetAccountDelta(ctx, height)
+		s.controller.Metrics.ObserveIndexerBlobStep("account_delta_get", accountDeltaStart)
+		if deltaErr != nil {
+			// this fails the entire indexer response, not just accounts; log node-side
+			// so it's diagnosable without the indexer client's HTTP 400 body
+			s.logger.Warnf("account-delta replay failed for height %d: %s", height, deltaErr.Error())
+			return nil, nil, deltaErr
+		}
 	}
 
 	blobs := &fsm.IndexerBlobs{
@@ -676,6 +704,13 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	s.controller.Metrics.ObserveIndexerBlobStep("delta_compute", deltaComputeStart)
 	if err != nil {
 		return nil, nil, err
+	}
+	// override the (empty) account delta DeltaIndexerBlobs computed from the skipped
+	// account scans with the fast path's classified result
+	if useAccountDelta && blobDelta != nil {
+		if err = s.overrideAccountDelta(blobDelta, height, accountDelta); err != nil {
+			return nil, nil, err
+		}
 	}
 	deltaMarshalStart := time.Now()
 	deltaBytes, err := lib.Marshal(blobDelta)
@@ -692,6 +727,32 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	s.controller.Metrics.UpdateIndexerBlobCacheSize(s.indexerBlobCache.Len())
 
 	return blobDelta, deltaBytes, nil
+}
+
+// overrideAccountDelta() replaces the empty account sides DeltaIndexerBlobs produced from
+// the skipped account scans with the collector-sourced fast-path result, assembled by
+// fsm.AssembleAccountDeltaSides.
+func (s *Server) overrideAccountDelta(blobDelta *fsm.IndexerBlobs, height uint64, delta *fsm.AccountDelta) lib.ErrorI {
+	if blobDelta.Current == nil && blobDelta.Previous == nil {
+		return nil
+	}
+	// the forced set is derived from the CURRENT block's events for both sides,
+	// matching DeltaIndexerBlobs; with no current blob there is nothing to force
+	var currentBlockBz []byte
+	if blobDelta.Current != nil {
+		currentBlockBz = blobDelta.Current.Block
+	}
+	currentSide, previousSide, err := s.controller.FSM.AssembleAccountDeltaSides(delta, currentBlockBz, height)
+	if err != nil {
+		return err
+	}
+	if blobDelta.Current != nil {
+		blobDelta.Current.Accounts = currentSide
+	}
+	if blobDelta.Previous != nil {
+		blobDelta.Previous.Accounts = previousSide
+	}
+	return nil
 }
 
 // orderParams is a helper function to abstract common workflows around a callback requiring a state machine and order request

@@ -504,12 +504,17 @@ func (c *Controller) commitToStore(storeI lib.StoreI, qc *lib.QuorumCertificate,
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), height)
 	// set up the finite state machine for the next height
 	c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
-	return err
+	if err != nil {
+		// exit with error
+		return err
+	}
+	return nil
 }
 
 // INTERNAL HELPERS BELOW
 
-// ApplyAndValidateBlock() plays the block against the state machine which returns a result that is compared against the candidate block header
+// ApplyAndValidateBlock() plays the block against the state machine which returns a result
+// that is compared against the candidate block header.
 func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool) (b *lib.BlockResult, err lib.ErrorI) {
 	// define convenience variables for the block header, hash, and height
 	candidate, candidateHash, candidateHeight := block.BlockHeader, lib.BytesToString(block.BlockHeader.Hash), block.BlockHeader.Height
@@ -521,7 +526,7 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool) (b *li
 	// log the start of 'apply block'
 	c.log.Debugf("Applying block %s for height %d", candidateHash[:20], candidateHeight)
 	// apply the block against the state machine
-	compare, results, err := c.FSM.ApplyBlock(context.Background(), block, false)
+	compare, results, err := c.FSM.ApplyBlock(context.Background(), block, false, nil, false)
 	if err != nil {
 		// exit with error
 		return

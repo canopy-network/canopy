@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -38,6 +39,7 @@ type StateMachine struct {
 	cache              *cache                                  // the state machine cache
 	LastValidatorSet   map[uint64]map[uint64]*lib.ValidatorSet // reference to the last validator set saved in the controller
 	Plugin             *lib.Plugin                             // extensible plugin for the FSM
+	accountCollector   *AccountChangeCollector                 // set only during an ApplyBlock call that wants account-touch capture
 }
 
 type rootCacheStateStore interface {
@@ -137,7 +139,12 @@ func (s *StateMachine) Initialize(store lib.StoreI) (genesis bool, err lib.Error
 // NOTES:
 // - this function may be used to validate 'additional' transactions outside the normal block size as if they were to be included
 // - a list of failed transactions are returned
-func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversize bool) (header *lib.BlockHeader, r *lib.ApplyBlockResults, err lib.ErrorI) {
+// collector, if non-nil, captures every account touched during this call (see
+// AccountChangeCollector) — only ever passed by ReplayBlock's on-demand replay, never by a
+// real block commit.
+// skipRoot, if true, skips store.Root() (the SMT/Merkle computation) — for throwaway
+// replay calls whose caller never inspects header.StateRoot or commits the result.
+func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversize bool, collector *AccountChangeCollector, skipRoot bool) (header *lib.BlockHeader, r *lib.ApplyBlockResults, err lib.ErrorI) {
 	// catch in case there's a panic
 	defer func() {
 		if r := recover(); r != nil {
@@ -154,6 +161,9 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 	if !ok {
 		return nil, nil, ErrWrongStoreType()
 	}
+	// attach the account-change collector for the duration of this call only
+	s.accountCollector = collector
+	defer func() { s.accountCollector = nil }()
 	// automated execution at the 'beginning of a block'
 	beginBlockStartTime := time.Now()
 	events, err := s.BeginBlock()
@@ -201,20 +211,26 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 		return nil, nil, err
 	}
 	// calculate the merkle root of the state database to enable consensus on the result of the state after applying the block
-	rootWasCached := false
-	if cacheAwareStore, ok := store.(rootCacheStateStore); ok {
-		rootWasCached = cacheAwareStore.IsRootCached()
-	}
-	rootStartTime := time.Time{}
-	if !rootWasCached {
-		rootStartTime = time.Now()
-	}
-	stateRoot, err := store.Root()
-	if err != nil {
-		return nil, nil, err
-	}
-	if !rootStartTime.IsZero() {
-		s.Metrics.UpdateFSMApplyBlockRootTime(rootStartTime)
+	// skipRoot=true is only ever passed by a throwaway replay call (see Task 6) whose
+	// caller never commits and never inspects header.StateRoot/header.Hash for consensus
+	// purposes — skipping this is what removes the dominant cost of a replay-only call.
+	var stateRoot []byte
+	if !skipRoot {
+		rootWasCached := false
+		if cacheAwareStore, ok := store.(rootCacheStateStore); ok {
+			rootWasCached = cacheAwareStore.IsRootCached()
+		}
+		rootStartTime := time.Time{}
+		if !rootWasCached {
+			rootStartTime = time.Now()
+		}
+		stateRoot, err = store.Root()
+		if err != nil {
+			return nil, nil, err
+		}
+		if !rootStartTime.IsZero() {
+			s.Metrics.UpdateFSMApplyBlockRootTime(rootStartTime)
+		}
 	}
 	// load the last block from the indexer
 	lastBlock, err := s.LoadBlock(s.height - 1)
@@ -250,6 +266,14 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 	}
 	// exit
 	return
+}
+
+// ReplayBlock() re-applies an already-committed block against a throwaway snapshot to
+// capture its account delta: a convenience wrapper for ApplyBlock's replay-only argument
+// combo (allowOversize=false, skipRoot=true — the result is never committed and its
+// StateRoot is never inspected, so the SMT/Merkle computation is skipped).
+func (s *StateMachine) ReplayBlock(ctx context.Context, b *lib.Block, collector *AccountChangeCollector) (*lib.BlockHeader, *lib.ApplyBlockResults, lib.ErrorI) {
+	return s.ApplyBlock(ctx, b, false, collector, true)
 }
 
 // ApplyTransactions()
@@ -656,14 +680,36 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 }
 
 // Set() upserts a key-value pair under a key
-func (s *StateMachine) Set(k, v []byte) (err lib.ErrorI) { return s.Store().Set(k, v) }
+func (s *StateMachine) Set(k, v []byte) (err lib.ErrorI) {
+	if s.accountCollector != nil && bytes.HasPrefix(k, accountKeyPrefix) {
+		// record BEFORE the write so the baseline read happens before this write shadows
+		// it; a collector is only ever attached during a throwaway replay (never a real
+		// commit, see ApplyBlock), so it's safe to propagate a failure here like any
+		// other error
+		if err = s.accountCollector.RecordSet(k, v); err != nil {
+			return err
+		}
+	}
+	return s.Store().Set(k, v)
+}
 
 // Get() retrieves a key-value pair under a key
 // NOTE: returns (nil, nil) if no value is found for that key
 func (s *StateMachine) Get(key []byte) (bz []byte, err lib.ErrorI) { return s.Store().Get(key) }
 
 // Delete() deletes a key-value pair under a key
-func (s *StateMachine) Delete(key []byte) lib.ErrorI { return s.Store().Delete(key) }
+func (s *StateMachine) Delete(key []byte) lib.ErrorI {
+	if s.accountCollector != nil && bytes.HasPrefix(key, accountKeyPrefix) {
+		// record BEFORE the delete so the baseline read happens before this delete shadows
+		// it; a collector is only ever attached during a throwaway replay (never a real
+		// commit, see ApplyBlock), so it's safe to propagate a failure here like any
+		// other error
+		if err := s.accountCollector.RecordDelete(key); err != nil {
+			return err
+		}
+	}
+	return s.Store().Delete(key)
+}
 
 // Iterator() creates and returns an iterator for the state machine's underlying store
 // starting at the specified key and iterating lexicographically

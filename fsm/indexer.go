@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -13,26 +14,33 @@ import (
 
 // INDEXER.GO IS ONLY USED FOR CANOPY INDEXING RPC - NOT A CRITICAL PIECE OF THE STATE MACHINE
 
-// IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
+// IndexerBlobs() retrieves the protobuf blobs for a blockchain indexer.
+//
+// Deprecated: this does a full account prefix scan of both Current and Previous state.
+// Use the RPC IndexerBlobsCached fast path instead, which sources the account delta
+// from Controller.GetAccountDelta rather than scanning.
 func (s *StateMachine) IndexerBlobs(ctx context.Context, height uint64) (b *IndexerBlobs, err lib.ErrorI) {
 	b = &IndexerBlobs{}
 	// IndexerBlob(height) is only valid for height >= 2 (it pairs state@height with block height-1).
 	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
 	if height > 2 {
-		b.Previous, err = s.IndexerBlob(ctx, height-1)
+		b.Previous, err = s.IndexerBlob(ctx, height-1, false)
 		if err != nil {
 			return nil, err
 		}
 	}
-	b.Current, err = s.IndexerBlob(ctx, height)
+	b.Current, err = s.IndexerBlob(ctx, height, false)
 	if err != nil {
 		return nil, err
 	}
 	return
 }
 
-// IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
-func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *IndexerBlob, err lib.ErrorI) {
+// IndexerBlob() retrieves the protobuf blobs for a blockchain indexer.
+// skipAccounts, if true, leaves Accounts nil instead of doing the full accounts scan below -
+// used when the caller (IndexerBlobsCached) is going to source the account delta separately
+// via Controller.GetAccountDelta.
+func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64, skipAccounts bool) (b *IndexerBlob, err lib.ErrorI) {
 	if height == 0 || height > s.height {
 		height = s.height
 	}
@@ -70,12 +78,15 @@ func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *Index
 		return nil, lib.ErrWrongBlockHeight(block.BlockHeader.Height, blockHeight)
 	}
 	// use sm for consistent snapshot reads at the requested height
-	// retrieve the accounts
-	stepStart = time.Now()
-	accounts, err := sm.IterateAndAppend(ctx, AccountPrefix())
-	s.Metrics.ObserveIndexerBlobStep("accounts_iterate", stepStart)
-	if err != nil {
-		return nil, err
+	// retrieve the accounts, unless the caller is sourcing them separately (see skipAccounts doc)
+	var accounts [][]byte
+	if !skipAccounts {
+		stepStart = time.Now()
+		accounts, err = sm.IterateAndAppend(ctx, AccountPrefix())
+		s.Metrics.ObserveIndexerBlobStep("accounts_iterate", stepStart)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// retrieve pools
 	stepStart = time.Now()
@@ -505,6 +516,153 @@ func forceIncludeKeys(
 			previousInclude[key] = struct{}{}
 		}
 	}
+}
+
+// RewardSlashAccountKeys() exposes the reward/slash force-include address set that
+// DeltaIndexerBlobs derives from the current block. Collector-sourced callers need it
+// because a reward or slash frequently moves stake rather than writing the named account,
+// so the account never appears in the collector's results — yet the full-scan path always
+// emitted it on both sides. Returned keys are raw address bytes as map-string keys.
+func RewardSlashAccountKeys(blockBz []byte) (map[string]struct{}, lib.ErrorI) {
+	return rewardSlashAccountKeys(blockBz)
+}
+
+// AccountEntriesAtVersion() reads the raw stored account bytes for the given addresses at a
+// state version, skipping any address with no account there. The returned slices are
+// copies: the snapshot is discarded before returning, so handing back store-owned
+// buffers would be a use-after-free hazard.
+func (s *StateMachine) AccountEntriesAtVersion(version uint64, addresses map[string]struct{}) (map[string][]byte, lib.ErrorI) {
+	out := make(map[string][]byte, len(addresses))
+	if len(addresses) == 0 {
+		return out, nil
+	}
+	sm, err := s.TimeMachine(version)
+	if err != nil {
+		return nil, err
+	}
+	// TimeMachine returns the receiver itself when it cannot build a historical view;
+	// discarding that would blow away the live state machine's transaction
+	if sm != s {
+		defer sm.Discard()
+	}
+	for address := range addresses {
+		bz, e := sm.Get(KeyForAccount(crypto.NewAddressFromBytes([]byte(address))))
+		if e != nil {
+			return nil, e
+		}
+		if len(bz) == 0 {
+			continue
+		}
+		out[address] = append([]byte(nil), bz...)
+	}
+	return out, nil
+}
+
+// AssembleAccountDeltaSides converts a collector-sourced AccountDelta into the two
+// wire-ready account sides an indexer-blob delta carries, reproducing the reward/slash
+// force-include (see RewardSlashAccountKeys) and the ascending-by-address ordering the
+// full-scan diff provided for free — the sides are cached and served to every caller, so
+// unsorted map order would make the same height return different bytes across nodes.
+// currentBlockBz is the current side's marshalled BlockResult; currentVersion is the
+// state version the current side represents (the previous side is currentVersion-1).
+func (s *StateMachine) AssembleAccountDeltaSides(delta *AccountDelta, currentBlockBz []byte, currentVersion uint64) (currentSide, previousSide [][]byte, err lib.ErrorI) {
+	if delta == nil {
+		delta = new(AccountDelta)
+	}
+	forced, err := RewardSlashAccountKeys(currentBlockBz)
+	if err != nil {
+		return nil, nil, err
+	}
+	// current side: added+changed as their FINAL values (state@currentVersion)
+	current := accountSide(delta.Added, delta.Changed, true)
+	if err = s.forceIncludeAccounts(current, forced, currentVersion); err != nil {
+		return nil, nil, err
+	}
+	// previous side: changed+removed as their PREVIOUS values (state@currentVersion-1)
+	previous := accountSide(delta.Changed, delta.Removed, false)
+	if err = s.forceIncludeAccounts(previous, forced, currentVersion-1); err != nil {
+		return nil, nil, err
+	}
+	return sortedAccountEntries(current), sortedAccountEntries(previous), nil
+}
+
+// forceIncludeAccounts() reads back any forced address missing from a side and adds it, at
+// the state version that side represents. Addresses with no account at that version are
+// skipped, matching forceIncludeKeys' rule.
+func (s *StateMachine) forceIncludeAccounts(side map[string][]byte, forced map[string]struct{}, version uint64) lib.ErrorI {
+	missing := make(map[string]struct{}, len(forced))
+	for address := range forced {
+		if _, ok := side[address]; !ok {
+			missing[address] = struct{}{}
+		}
+	}
+	// avoid the TimeMachine snapshot entirely on the common "nothing to force-include" path
+	if len(missing) == 0 {
+		return nil
+	}
+	entries, err := s.AccountEntriesAtVersion(version, missing)
+	if err != nil {
+		return err
+	}
+	for address, bz := range entries {
+		side[address] = bz
+	}
+	return nil
+}
+
+// accountSide() collects one delta side's accounts, keyed by address so a force-included
+// entry cannot duplicate an address the collector already reported. useFinal selects
+// FinalValue (current side) vs PrevValue (previous side). Values are copied, never
+// aliased: the result lands in the shared RPC blob cache, so referencing the caller's
+// backing arrays would let a mutation there corrupt the cache for all readers.
+func accountSide(a, b []*AccountChangeEntry, useFinal bool) map[string][]byte {
+	side := make(map[string][]byte, len(a)+len(b))
+	collect := func(entries []*AccountChangeEntry) {
+		for _, e := range entries {
+			if e == nil {
+				continue
+			}
+			value := e.FinalValue
+			if !useFinal {
+				value = e.PrevValue
+			}
+			if value == nil {
+				continue
+			}
+			side[string(e.Address)] = append([]byte(nil), value...)
+		}
+	}
+	collect(a)
+	collect(b)
+	return side
+}
+
+// sortedAccountEntries() flattens an address-keyed account set into the ascending-by-address
+// [][]byte wire shape IndexerBlob.Accounts uses. Addresses are fixed-width, so ordering by
+// raw address bytes matches the KeyForAccount storage order the old prefix scan produced.
+func sortedAccountEntries(side map[string][]byte) [][]byte {
+	addresses := make([]string, 0, len(side))
+	for address := range side {
+		addresses = append(addresses, address)
+	}
+	slices.Sort(addresses)
+	out := make([][]byte, 0, len(addresses))
+	for _, address := range addresses {
+		out = append(out, side[address])
+	}
+	return out
+}
+
+// IndexerBlobWithoutAccounts returns blob with its Accounts nil'd, via a structural copy
+// when needed -- the input may be a shared cached blob that must never be mutated (see
+// cloneIndexerBlob's sharing semantics). A blob already without accounts is returned as-is.
+func IndexerBlobWithoutAccounts(blob *IndexerBlob) *IndexerBlob {
+	if blob == nil || blob.Accounts == nil {
+		return blob
+	}
+	out := cloneIndexerBlob(blob)
+	out.Accounts = nil
+	return out
 }
 
 // rewardSlashAccountKeys() finds reward/slash event addresses in the current block.
