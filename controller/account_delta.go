@@ -45,9 +45,14 @@ func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (added,
 			return entry.added, entry.changed, entry.removed, nil
 		}
 	}
+	// capture the live FSM once: commitToStore reassigns c.FSM, and re-reading it would let a
+	// concurrent commit slip a different object between the TimeMachine call and the
+	// `replayFSM != liveFSM` comparison below — inverting the Discard guard and potentially
+	// discarding the (former) live FSM's store transaction
+	liveFSM := c.FSM
 	// the block itself is read from the LIVE store: the TimeMachine snapshot is taken at
 	// version blockHeight, which by definition does not yet contain block blockHeight
-	store, ok := c.FSM.Store().(lib.StoreI)
+	store, ok := liveFSM.Store().(lib.StoreI)
 	if !ok {
 		return nil, nil, nil, fsm.ErrWrongStoreType()
 	}
@@ -67,19 +72,53 @@ func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (added,
 		return nil, nil, nil, err
 	}
 	// snapshot the pre-block state
-	replayFSM, err := c.FSM.TimeMachine(blockHeight)
+	replayFSM, err := liveFSM.TimeMachine(blockHeight)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	// TimeMachine returns the receiver itself when it cannot build a historical view;
 	// discarding that would blow away the LIVE state machine's transaction
-	if replayFSM != c.FSM {
+	if replayFSM != liveFSM {
 		defer replayFSM.Discard()
 	}
 	// TimeMachine silently clamps a height above the tip, which would otherwise replay
 	// the block against the wrong pre-state and return a plausible-looking wrong delta
 	if replayFSM.Height() != blockHeight {
 		return nil, nil, nil, lib.ErrWrongBlockHeight(replayFSM.Height(), blockHeight)
+	}
+	// restore the root DEX cache exactly as the committing path does (controller/block.go:274
+	// and :397, `if qc.Results != nil && qc.Results.RootDexBatch != nil { SetRootDexCache(...) }`).
+	// Without this, on a NESTED chain HandleDexBatch's `remoteBatch = s.cache.rootDexBatch`
+	// (fsm/dex.go:75-80) reads the fresh snapshot's nil cache and the function silently returns
+	// at fsm/dex.go:87 — no error, no failed tx, and with skipRoot=true no state-root mismatch —
+	// so every account the DEX batch would have moved is missing from the delta.
+	//
+	// :222's `c.getDexRootBatch(rcBuildHeight)` is deliberately NOT mirrored: that is
+	// ValidateProposal's pre-consensus path, which reaches out to the root chain. This function
+	// replays the COMMIT path, which uses the batch embedded in the certificate.
+	//
+	// BeginBlock returns before any certificate handling when s.Height() <= 1
+	// (fsm/automatic.go:29-31), so the cache cannot matter for block 1 and no QC is loaded.
+	if blockHeight > 1 {
+		qc, qcErr := store.GetQCByHeight(blockHeight)
+		if qcErr != nil {
+			return nil, nil, nil, qcErr
+		}
+		// every committed block indexes its certificate in the same commit
+		// (controller/block.go:288,410), and a real certificate always has a Header. A missing
+		// key unmarshals into an empty, non-nil QC, so a nil Header means the certificate could
+		// not be loaded — in which case whether a RootDexBatch existed is unknowable and the
+		// delta may be silently incomplete. Fail loudly instead.
+		if qc == nil || qc.Header == nil {
+			return nil, nil, nil, lib.ErrEmptyQuorumCertificate()
+		}
+		// a nil Results or nil RootDexBatch is NORMAL (root chain, and any block whose
+		// certificate carries no root batch). The live path leaves the cache nil there too —
+		// c.FSM.Reset() clears cache.rootDexBatch — so a fresh snapshot already matches and
+		// erroring here would be a false positive.
+		if qc.Results != nil && qc.Results.RootDexBatch != nil {
+			replayFSM.SetRootDexCache(qc.Results.RootDexBatch)
+		}
 	}
 	// the collector's baseline lookup must read the snapshot, not the live state
 	collector := fsm.NewAccountChangeCollector(replayFSM.Get)
