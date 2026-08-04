@@ -99,6 +99,24 @@ func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (added,
 	//
 	// BeginBlock returns before any certificate handling when s.Height() <= 1
 	// (fsm/automatic.go:29-31), so the cache cannot matter for block 1 and no QC is loaded.
+	//
+	// LOAD-BEARING INVARIANT: this reads store.GetQCByHeight(blockHeight) directly, bypassing
+	// ApplyAndValidateBlock and therefore CheckAndSetLastCertificate -- which exists precisely
+	// to normalize the indexed QC for height-1 because "multiple valid versions can exist"
+	// (controller/block.go:701, :715-716). That's correct here for a non-obvious reason:
+	// committing block blockHeight+1 calls CheckAndSetLastCertificate(candidate) with
+	// candidate.Height == blockHeight+1, which IndexQC's candidate.LastQuorumCertificate --
+	// i.e. block blockHeight+1's OWN embedded copy of the QC for blockHeight -- overwriting
+	// whatever was indexed for blockHeight before. So the QC this function reads for blockHeight
+	// is already normalized as long as block blockHeight+1 has been committed, which is
+	// guaranteed here: GetAccountDelta only replays blocks old enough to be committed already
+	// (the live tip cache, checked above, serves anything more recent). And
+	// LoadCertificateHashesOnly nullifies only .Block, leaving .Results (and .Results.RootDexBatch)
+	// intact -- EqualPayloads compares ResultsHash, not the full Results struct, so the
+	// normalization check never forces Results to nil. That's why the RootDexBatch restore below
+	// reads the right batch. If block headers ever stopped carrying Results, this would silently
+	// go back to being incomplete for nested-chain deltas -- the exact bug this restore was added
+	// to fix.
 	if blockHeight > 1 {
 		qc, qcErr := store.GetQCByHeight(blockHeight)
 		if qcErr != nil {

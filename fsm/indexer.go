@@ -13,7 +13,13 @@ import (
 
 // INDEXER.GO IS ONLY USED FOR CANOPY INDEXING RPC - NOT A CRITICAL PIECE OF THE STATE MACHINE
 
-// IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
+// IndexerBlobs() retrieves the protobuf blobs for a blockchain indexer.
+//
+// Deprecated: this always does a full ~1.35M-account prefix scan of both Current and
+// Previous state (twice), which is the exact regression the account-delta fast path was
+// added to remove. Callers should use the RPC IndexerBlobsCached fast path
+// (cmd/rpc/query.go) instead, which sources the account delta from
+// Controller.GetAccountDelta rather than scanning.
 func (s *StateMachine) IndexerBlobs(ctx context.Context, height uint64) (b *IndexerBlobs, err lib.ErrorI) {
 	b = &IndexerBlobs{}
 	// IndexerBlob(height) is only valid for height >= 2 (it pairs state@height with block height-1).

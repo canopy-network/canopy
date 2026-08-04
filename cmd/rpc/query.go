@@ -642,7 +642,12 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	// TestDeltaIndexerBlobs_NoPreviousKeepsCurrent). Preserve that byte-for-byte by falling
 	// back to the full scan for that one height. It happens once in a chain's life, or on an
 	// explicit height=2 request, so the scan cost is irrelevant.
-	useAccountDelta := height > 2
+	// gated on ServeIndexerBlobsLive as well as the height floor: this is the only
+	// production switch back to the old full-scan behavior if the fast path
+	// misbehaves -- a GetAccountDelta failure now fails the whole indexer response
+	// (pools, validators, txs -- not just accounts), so an operator needs a config-only
+	// way back without a redeploy.
+	useAccountDelta := height > 2 && s.config.ServeIndexerBlobsLive
 	current, err := s.controller.FSM.IndexerBlob(ctx, height, useAccountDelta)
 	if err != nil {
 		return nil, nil, err
@@ -657,7 +662,7 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 			previous = cachedPrev
 		} else {
 			s.controller.Metrics.RecordIndexerBlobPreviousReuseMiss()
-			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1, true)
+			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1, useAccountDelta)
 			if prevErr != nil {
 				return nil, nil, prevErr
 			}

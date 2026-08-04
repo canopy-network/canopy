@@ -109,3 +109,20 @@ func TestAccountChangeCollector_GetPrevError(t *testing.T) {
 	err := c.RecordSet(key, []byte("v1"))
 	require.Error(t, err)
 }
+
+// TestAccountChangeCollector_TooShortKeyErrorsWithoutPanic guards entryFor's slice bound:
+// a key that carries AccountPrefix() but is too short to also contain the address segment's
+// length-prefix byte must return an error, not panic. This runs on the consensus write path
+// (StateMachine.Set/Delete return this error before performing the store write), so a panic
+// here would abort ApplyBlock mid block commit instead of just failing indexing.
+func TestAccountChangeCollector_TooShortKeyErrorsWithoutPanic(t *testing.T) {
+	getPrev := func(key []byte) ([]byte, lib.ErrorI) { return nil, nil }
+	c := NewAccountChangeCollector(getPrev)
+	// exactly AccountPrefix() with nothing appended -- too short to contain the address
+	// segment's own 1-byte length prefix, let alone an address.
+	key := append([]byte(nil), AccountPrefix()...)
+	require.NotPanics(t, func() {
+		_, err := c.entryFor(key)
+		require.Error(t, err)
+	})
+}

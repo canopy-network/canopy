@@ -68,6 +68,14 @@ func (c *AccountChangeCollector) entryFor(key []byte) (*AccountChangeEntry, lib.
 	// key is AccountPrefix() followed by a length-prefixed address segment
 	// (KeyForAccount uses lib.JoinLenPrefix(accountPrefix, addr.Bytes())), so skip
 	// AccountPrefix() plus the address segment's own 1-byte length prefix.
+	//
+	// This runs on the consensus write path (StateMachine.Set/Delete return this error
+	// BEFORE performing the store write, see fsm/state.go), so a malformed key here must
+	// produce an error, not a slice-bounds panic -- panicking would abort ApplyBlock mid
+	// block commit and take the node down instead of just failing indexing.
+	if len(key) < len(AccountPrefix())+1 {
+		return nil, ErrInvalidKey(key)
+	}
 	address := append([]byte(nil), key[len(AccountPrefix())+1:]...)
 	entry := &AccountChangeEntry{Address: address, PrevValue: prevValue}
 	c.entries[addrKey] = entry

@@ -129,6 +129,42 @@ func TestIndexerBlobsCached_UsesAccountDeltaFastPath(t *testing.T) {
 	require.Empty(t, entry.current.Accounts)
 }
 
+// with ServeIndexerBlobsLive disabled, IndexerBlobsCached must fall all the way back to the
+// old full-scan-and-diff behavior: both blobs get skipAccounts=false (full account scan),
+// GetAccountDelta is never called, and overrideAccountDelta is skipped -- DeltaIndexerBlobs's
+// own diff of the two fully-scanned snapshots is what serves the account delta. This is the
+// operator's config-only kill switch back to the pre-fast-path behavior.
+func TestIndexerBlobsCached_FlagDisabledUsesFullScanPath(t *testing.T) {
+	server := newTestIndexerBlobServerWithHeights(t, 4)
+	server.config.ServeIndexerBlobsLive = false
+	addrA := crypto.NewAddress(bytes.Repeat([]byte{0x11}, crypto.AddressSize))
+	addrB := crypto.NewAddress(bytes.Repeat([]byte{0x22}, crypto.AddressSize))
+
+	got, _, err := server.IndexerBlobsCached(context.Background(), 4)
+	require.NoError(t, err)
+	require.NotNil(t, got.Current)
+	require.NotNil(t, got.Previous)
+
+	// same accounts, same values as the fast path produces for this fixture -- proving the
+	// full-scan-and-diff path reaches the identical result, not that it merely runs without
+	// erroring
+	require.Equal(t, [][]byte{
+		mustMarshalAccount(t, addrA.Bytes(), 125),
+		mustMarshalAccount(t, addrB.Bytes(), 75),
+	}, got.Current.Accounts)
+	require.Equal(t, [][]byte{
+		mustMarshalAccount(t, addrA.Bytes(), 100),
+		mustMarshalAccount(t, addrB.Bytes(), 50),
+	}, got.Previous.Accounts)
+
+	// proof this came from the full scan, not the fast path: the cached full snapshot DOES
+	// carry accounts now (the opposite of TestIndexerBlobsCached_UsesAccountDeltaFastPath's
+	// assertion), because skipAccounts was false for both IndexerBlob calls
+	entry, ok := server.indexerBlobCache.get(4)
+	require.True(t, ok)
+	require.NotEmpty(t, entry.current.Accounts)
+}
+
 // an added account has no previous-side entry and a removed account has no current-side
 // entry, matching DeltaIndexerBlobs's existing convention
 func TestIndexerBlobsCached_AddedAccountsOmittedFromPreviousSide(t *testing.T) {
@@ -518,6 +554,9 @@ func newTestIndexerBlobServerWithHeights(t *testing.T, height uint64) *Server {
 		controller:       ctrl,
 		indexerBlobCache: newIndexerBlobCache(8),
 		logger:           log,
+		// matches lib.DefaultRPCConfig()'s default: the account-delta fast path is on
+		// unless an operator explicitly turns it off.
+		config: lib.Config{RPCConfig: lib.RPCConfig{ServeIndexerBlobsLive: true}},
 	}
 }
 

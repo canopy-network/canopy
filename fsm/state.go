@@ -160,9 +160,13 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 	if !ok {
 		return nil, nil, ErrWrongStoreType()
 	}
-	// attach the account-change collector for the duration of this call only
+	// attach the account-change collector for the duration of this call only, restoring
+	// whatever was attached before rather than unconditionally clearing it -- a nested or
+	// reentrant ApplyBlock call on the same StateMachine (unreachable today) would otherwise
+	// clobber an outer caller's collector when this inner call returns.
+	prevCollector := s.accountCollector
 	s.accountCollector = collector
-	defer func() { s.accountCollector = nil }()
+	defer func() { s.accountCollector = prevCollector }()
 	// automated execution at the 'beginning of a block'
 	beginBlockStartTime := time.Now()
 	events, err := s.BeginBlock()
