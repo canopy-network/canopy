@@ -13,6 +13,11 @@ const defaultAccountDeltaCacheEntries = 16
 
 // accountDeltaEntry is one height's classified account changes, produced either by
 // the live AccountChangeCollector attached during commit, or by an on-demand replay.
+//
+// Once put() into the cache, an entry and everything it points at is IMMUTABLE and
+// shared by every reader — the cache's mutex protects the map, not the entry contents.
+// Callers must never mutate a retrieved entry, its slices, or the *fsm.AccountChangeEntry
+// values inside them. Build a fresh entry instead.
 type accountDeltaEntry struct {
 	added, changed, removed []*fsm.AccountChangeEntry
 }
@@ -41,7 +46,13 @@ func newAccountDeltaCache(maxEntries int) *accountDeltaCache {
 	}
 }
 
-// get() returns the cached delta for a height, if present
+// get() returns the cached delta for a height, if present.
+//
+// READ-ONLY: the returned entry is the live cached object, not a copy, and is shared with
+// every other reader. Do not mutate it, do not append to added/changed/removed (an append
+// to a full slice reallocates but an append to a slice with spare capacity would write
+// through into the cached data), and do not modify the *fsm.AccountChangeEntry values it
+// points at. Copy first if a caller needs to transform the results.
 func (c *accountDeltaCache) get(height uint64) (*accountDeltaEntry, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

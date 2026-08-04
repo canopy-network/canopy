@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/canopy-network/canopy/fsm"
@@ -53,6 +54,40 @@ func TestAccountDeltaCache_OverwriteExistingHeightDoesNotEvict(t *testing.T) {
 	require.Equal(t, second, got, "height 1 should hold the overwritten entry")
 	_, ok = c.get(2)
 	require.True(t, ok, "height 2 must not be evicted by an in-place overwrite")
+}
+
+// commit-path writers and RPC-handler readers hit the cache concurrently, so put/get must
+// stay safe and internally consistent while eviction is churning the map and the order slice
+func TestAccountDeltaCache_ConcurrentPutGet(t *testing.T) {
+	const capacity, writers, readers, iterations = 4, 8, 8, 200
+	c := newAccountDeltaCache(capacity)
+	wg := sync.WaitGroup{}
+	for w := 0; w < writers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				// heights far exceed capacity, forcing eviction throughout the run
+				c.put(uint64(w*iterations+i), &accountDeltaEntry{added: []*fsm.AccountChangeEntry{{Address: []byte("a")}}})
+			}
+		}(w)
+	}
+	for r := 0; r < readers; r++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				if entry, ok := c.get(uint64(i)); ok {
+					_ = entry.added // read the entry to catch any write-through corruption
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	require.LessOrEqual(t, len(c.entries), capacity, "eviction must keep the map bounded")
+	require.Equal(t, len(c.order), len(c.entries), "order slice and map must stay in sync")
 }
 
 // a non-positive capacity must fall back to the default rather than evicting every put
