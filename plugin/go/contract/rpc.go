@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"log"
@@ -46,6 +47,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/nasmtier", p.handleQueryNasmTier)
 	mux.HandleFunc("/v1/query/nasmvaultpool", p.handleQueryNasmVaultPool)
 	mux.HandleFunc("/v1/query/nasmvault", p.handleQueryNasmVault)
+	mux.HandleFunc("/v1/query/all-nasm-vaults", p.handleQueryAllNasmVaults)
 	mux.HandleFunc("/v1/query/nusdbalance", p.handleQueryNusdBalance)
 	mux.HandleFunc("/v1/query/nusdsupply", p.handleQueryNusdSupply)
 	mux.HandleFunc("/v1/query/stabilityfeeindex", p.handleQueryStabilityFeeIndex)
@@ -1207,4 +1209,75 @@ func (p *Plugin) handleQueryStabilityFeeIndex(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(finalJSON)
+}
+
+// handleQueryAllNasmVaults serves GET /v1/query/all-nasm-vaults[?owner=<hex>]
+// Returns every NasmVault by range-iterating the {30} vault prefix -- mirrors
+// handleQueryAllMarkets's range-scan pattern. Emits a bare JSON array of
+// protojson NasmVault objects. Closes the vault-enumeration gap that blocked any
+// real mint/burn UI (a user can't burn against a vault they can't see).
+//
+// [EXTENDED] Originally shipped without server-side owner filtering (client-side
+// only). Added an optional owner query param here -- 20-byte hex address,
+// server-side filtered -- fully additive: every existing no-param call behaves
+// identically to before (returns everything, same as always); only requests that
+// now include ?owner= get the filtered behavior. No dedicated owner index exists
+// (or is planned) -- this still range-scans the full {30} prefix and filters in
+// this handler, matching handleQueryAllBorrowerPositions' own "scan everything,
+// filter/derive server-side" precedent rather than introducing a second index
+// mint_nusd/burn_nusd would need to additionally maintain.
+func (p *Plugin) handleQueryAllNasmVaults(w http.ResponseWriter, r *http.Request) {
+	var ownerFilter []byte
+	if ownerHex := r.URL.Query().Get("owner"); ownerHex != "" {
+		decoded, err := hex.DecodeString(ownerHex)
+		if err != nil {
+			http.Error(w, `{"error":"invalid owner hex: `+err.Error()+`"}`, http.StatusBadRequest)
+			return
+		}
+		if len(decoded) != 20 {
+			http.Error(w, `{"error":"owner must decode to 20 bytes"}`, http.StatusBadRequest)
+			return
+		}
+		ownerFilter = decoded
+	}
+
+	queryId := rand.Uint64()
+	resp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Ranges: []*PluginRangeRead{
+			{QueryId: queryId, Prefix: JoinLenPrefix(PrefixNasmVaults)},
+		},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	out := make([]json.RawMessage, 0)
+	for _, result := range resp.Results {
+		if result.QueryId != queryId {
+			continue
+		}
+		for _, entry := range result.Entries {
+			if len(entry.Value) == 0 {
+				continue
+			}
+			v := &NasmVault{}
+			if err := proto.Unmarshal(entry.Value, v); err != nil {
+				continue
+			}
+			if ownerFilter != nil && !bytes.Equal(v.Owner, ownerFilter) {
+				continue
+			}
+			b, err := protojson.Marshal(v)
+			if err != nil {
+				continue
+			}
+			out = append(out, b)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }
