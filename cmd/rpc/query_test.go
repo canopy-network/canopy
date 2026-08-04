@@ -145,17 +145,18 @@ func TestIndexerBlobsCached_AddedAccountsOmittedFromPreviousSide(t *testing.T) {
 	require.Empty(t, got.Previous.Accounts)
 }
 
-// accountBytes must never mutate the slices it is handed: GetAccountDelta can return the
-// live, shared tip-cache entry (see controller/account_delta_cache.go)
-func TestAccountBytes_DoesNotMutateInputs(t *testing.T) {
+// accountSide must never mutate or alias the slices it is handed: GetAccountDelta can return
+// the live, shared tip-cache entry (see controller/account_delta_cache.go), and its result is
+// stored in the RPC blob cache and served to every later caller
+func TestAccountSide_DoesNotMutateOrAliasInputs(t *testing.T) {
 	added := []*fsm.AccountChangeEntry{{Address: []byte("a"), FinalValue: []byte("af")}}
 	changed := []*fsm.AccountChangeEntry{{Address: []byte("b"), PrevValue: []byte("bp"), FinalValue: []byte("bf")}}
 	// spare capacity: an append-in-place would write through into the shared backing array
 	removed := make([]*fsm.AccountChangeEntry, 1, 4)
 	removed[0] = &fsm.AccountChangeEntry{Address: []byte("c"), PrevValue: []byte("cp")}
 
-	require.Equal(t, [][]byte{[]byte("af"), []byte("bf")}, accountBytes(added, changed, true))
-	require.Equal(t, [][]byte{[]byte("bp"), []byte("cp")}, accountBytes(changed, removed, false))
+	require.Equal(t, [][]byte{[]byte("af"), []byte("bf")}, sortedAccountEntries(accountSide(added, changed, true)))
+	require.Equal(t, [][]byte{[]byte("bp"), []byte("cp")}, sortedAccountEntries(accountSide(changed, removed, false)))
 
 	require.Len(t, added, 1)
 	require.Len(t, changed, 1)
@@ -165,6 +166,160 @@ func TestAccountBytes_DoesNotMutateInputs(t *testing.T) {
 	require.Equal(t, []byte("bf"), changed[0].FinalValue)
 	require.Equal(t, []byte("cp"), removed[0].PrevValue)
 	require.Equal(t, 4, cap(removed), "the input slice's backing array must be untouched")
+
+	// the emitted bytes must be copies -- mutating them must not reach back into the entries
+	out := sortedAccountEntries(accountSide(added, nil, true))
+	require.Len(t, out, 1)
+	out[0][0] = 'X'
+	require.Equal(t, []byte("af"), added[0].FinalValue, "the result must not alias the entry's bytes")
+}
+
+// AccountChangeCollector.Results() ranges a Go map, so the entries arrive in random order;
+// the wire format must still be ascending by address, because deltaBytes is cached and served
+// to every later caller and an unstable order would make the same height return different
+// bytes across calls and across nodes
+func TestAccountSide_SortsByAddressAscending(t *testing.T) {
+	entries := []*fsm.AccountChangeEntry{
+		{Address: []byte{0x03}, FinalValue: []byte("c")},
+		{Address: []byte{0x01}, FinalValue: []byte("a")},
+		{Address: []byte{0x02}, FinalValue: []byte("b")},
+	}
+	require.Equal(t,
+		[][]byte{[]byte("a"), []byte("b"), []byte("c")},
+		sortedAccountEntries(accountSide(entries, nil, true)),
+	)
+}
+
+// I-2. At height 2 there is no previous blob, and DeltaIndexerBlobs' documented behaviour is
+// to keep Current's FULL account set -- with nothing to diff against, every account counts as
+// added (pinned by fsm's TestDeltaIndexerBlobs_NoPreviousKeepsCurrent). The fast path cannot
+// reproduce that, since a collector only reports what block 1 wrote, so this one height falls
+// back to the full scan to keep the response byte-identical. It happens once in a chain's
+// life, so the scan cost is irrelevant.
+func TestIndexerBlobsCached_HeightTwoKeepsFullAccountSet(t *testing.T) {
+	server := newTestIndexerBlobServer(t)
+	addrA := crypto.NewAddress(bytes.Repeat([]byte{0x11}, crypto.AddressSize))
+
+	got, _, err := server.IndexerBlobsCached(context.Background(), 2)
+	require.NoError(t, err)
+	require.NotNil(t, got.Current)
+	require.Nil(t, got.Previous)
+
+	// state@2 holds only addrA, and it is present in full despite no account delta existing
+	require.Equal(t, [][]byte{mustMarshalAccount(t, addrA.Bytes(), 100)}, got.Current.Accounts)
+
+	// and the cached snapshot for this height carries the full set too, unlike height >= 3
+	entry, ok := server.indexerBlobCache.get(2)
+	require.True(t, ok)
+	require.Len(t, entry.current.Accounts, 1)
+}
+
+// C-1 regression. A reward or slash event names an account that very often is NOT written by
+// the block: a COMPOUNDING validator's reward is routed to UpdateValidatorStake
+// (fsm/committee.go:223) with no AccountPrefix write at all, and a slash moves stake only
+// (fsm/byzantine.go:359,386). The old full-scan path force-included those accounts on BOTH
+// sides with identical bytes because its maps held every account in state
+// (fsm/indexer.go:325-329, pinned by fsm's TestDeltaIndexerBlobs_ForceIncludeRewardSlashAccounts).
+// The collector only ever sees WRITTEN accounts, so without an explicit read-back the fast
+// path would silently emit a strictly smaller Accounts set on nearly every block that pays or
+// slashes a validator.
+//
+// A test whose reward actually credits an account would NOT catch this -- the account would be
+// written, so the collector would report it anyway. This fixture is built so the named
+// accounts are never written.
+func TestIndexerBlobsCached_ForceIncludesUnwrittenRewardSlashAccounts(t *testing.T) {
+	server, addrA, addrB, addrC := newTestIndexerBlobServerWithRewardSlashEvents(t)
+
+	got, _, err := server.IndexerBlobsCached(context.Background(), 4)
+	require.NoError(t, err)
+	require.NotNil(t, got.Current)
+	require.NotNil(t, got.Previous)
+
+	// A (compounding reward) and C (slash) were never written by block 3, so the collector
+	// never saw them -- only B actually changed. All three must still be present.
+	require.Equal(t, [][]byte{
+		mustMarshalAccount(t, addrA.Bytes(), 100),
+		mustMarshalAccount(t, addrB.Bytes(), 75),
+		mustMarshalAccount(t, addrC.Bytes(), 100),
+	}, got.Current.Accounts)
+	require.Equal(t, [][]byte{
+		mustMarshalAccount(t, addrA.Bytes(), 100),
+		mustMarshalAccount(t, addrB.Bytes(), 50),
+		mustMarshalAccount(t, addrC.Bytes(), 100),
+	}, got.Previous.Accounts)
+
+	// the force-include rule emits an unchanged account on both sides with IDENTICAL bytes
+	require.Equal(t, got.Current.Accounts[0], got.Previous.Accounts[0], "A: reward, unwritten")
+	require.Equal(t, got.Current.Accounts[2], got.Previous.Accounts[2], "C: slash, unwritten")
+	// ...while an account that genuinely changed keeps its own per-side value
+	require.NotEqual(t, got.Current.Accounts[1], got.Previous.Accounts[1], "B: genuinely changed")
+}
+
+// newTestIndexerBlobServerWithRewardSlashEvents builds a 4-height fixture where block 3 emits
+// a reward event for addrA and a slash event for addrC, but writes NEITHER account -- exactly
+// the compounding-reward / stake-slash shape. Only addrB's account changes (50 -> 75).
+func newTestIndexerBlobServerWithRewardSlashEvents(t *testing.T) (_ *Server, addrA, addrB, addrC crypto.AddressI) {
+	t.Helper()
+
+	log := lib.NewDefaultLogger()
+	db, err := store.NewStoreInMemory(log)
+	require.NoError(t, err)
+
+	sm := newTestRPCStateMachine(t, db, log)
+	addrA = crypto.NewAddress(bytes.Repeat([]byte{0x11}, crypto.AddressSize))
+	addrB = crypto.NewAddress(bytes.Repeat([]byte{0x22}, crypto.AddressSize))
+	addrC = crypto.NewAddress(bytes.Repeat([]byte{0x33}, crypto.AddressSize))
+	now := uint64(time.Now().UnixMicro())
+
+	require.NoError(t, sm.SetParams(fsm.DefaultParams()))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 2)
+
+	// block 1 and block 2 establish A, B and C in state
+	require.NoError(t, sm.SetAccount(&fsm.Account{Address: addrA.Bytes(), Amount: 100}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: 1, Hash: crypto.Hash([]byte("rs-block-1")), Time: now},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	require.NoError(t, sm.SetAccount(&fsm.Account{Address: addrB.Bytes(), Amount: 50}))
+	require.NoError(t, sm.SetAccount(&fsm.Account{Address: addrC.Bytes(), Amount: 100}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: 2, Hash: crypto.Hash([]byte("rs-block-2")), Time: now + 1},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 3)
+
+	// block 3: B's balance moves; A is rewarded and C is slashed, but both rewards land on
+	// STAKE, so neither account is written
+	require.NoError(t, sm.SetAccount(&fsm.Account{Address: addrB.Bytes(), Amount: 75}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: 3, Hash: crypto.Hash([]byte("rs-block-3")), Time: now + 2},
+		Events: []*lib.Event{
+			{EventType: string(lib.EventTypeReward), Address: addrA.Bytes()},
+			{EventType: string(lib.EventTypeSlash), Address: addrC.Bytes()},
+		},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 4)
+
+	ctrl := &controller.Controller{FSM: sm}
+	// what a live collector would have produced for block 3: B only
+	ctrl.SeedAccountDeltaCache(3, nil, []*fsm.AccountChangeEntry{{
+		Address:    addrB.Bytes(),
+		PrevValue:  mustMarshalAccount(t, addrB.Bytes(), 50),
+		FinalValue: mustMarshalAccount(t, addrB.Bytes(), 75),
+	}}, nil)
+
+	return &Server{
+		controller:       ctrl,
+		indexerBlobCache: newIndexerBlobCache(8),
+		logger:           log,
+	}, addrA, addrB, addrC
 }
 
 func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {

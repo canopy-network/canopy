@@ -635,7 +635,15 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	// after the fact both in logs and in canopy_indexer_blob_cold_read_time.
 	coldStart := time.Now()
 	defer s.controller.Metrics.RecordIndexerBlobCacheMiss(coldStart)
-	current, err := s.controller.FSM.IndexerBlob(ctx, height, true)
+	// the fast path needs a "previous" state version to diff against, which only exists for
+	// height >= 3 (see the comment on the previous-blob block below). At height 2 there is no
+	// previous blob, and DeltaIndexerBlobs' documented behaviour is to keep Current's FULL
+	// account set (everything counts as added -- pinned by fsm's
+	// TestDeltaIndexerBlobs_NoPreviousKeepsCurrent). Preserve that byte-for-byte by falling
+	// back to the full scan for that one height. It happens once in a chain's life, or on an
+	// explicit height=2 request, so the scan cost is irrelevant.
+	useAccountDelta := height > 2
+	current, err := s.controller.FSM.IndexerBlob(ctx, height, useAccountDelta)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -683,11 +691,15 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	// errors rather than clamps for an above-tip height. Its height >= 2 floor is likewise
 	// already guaranteed: IndexerBlob rejects height <= 1, so any height reaching here has
 	// already been proven >= 2.
-	accountDeltaStart := time.Now()
-	added, changed, removed, deltaErr := s.controller.GetAccountDelta(ctx, height)
-	s.controller.Metrics.ObserveIndexerBlobStep("account_delta_get", accountDeltaStart)
-	if deltaErr != nil {
-		return nil, nil, deltaErr
+	var added, changed, removed []*fsm.AccountChangeEntry
+	if useAccountDelta {
+		accountDeltaStart := time.Now()
+		var deltaErr lib.ErrorI
+		added, changed, removed, deltaErr = s.controller.GetAccountDelta(ctx, height)
+		s.controller.Metrics.ObserveIndexerBlobStep("account_delta_get", accountDeltaStart)
+		if deltaErr != nil {
+			return nil, nil, deltaErr
+		}
 	}
 
 	blobs := &fsm.IndexerBlobs{
@@ -702,12 +714,9 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	}
 	// override the (empty) account delta DeltaIndexerBlobs computed from the skipped
 	// account scans with the fast path's classified result
-	if blobDelta != nil {
-		if blobDelta.Current != nil {
-			blobDelta.Current.Accounts = accountBytes(added, changed, true)
-		}
-		if blobDelta.Previous != nil {
-			blobDelta.Previous.Accounts = accountBytes(changed, removed, false)
+	if useAccountDelta && blobDelta != nil {
+		if err = s.overrideAccountDelta(blobDelta, height, added, changed, removed); err != nil {
+			return nil, nil, err
 		}
 	}
 	deltaMarshalStart := time.Now()
@@ -727,18 +736,91 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	return blobDelta, deltaBytes, nil
 }
 
-// accountBytes() builds the [][]byte wire shape IndexerBlob.Accounts already uses, from
-// AccountChangeCollector entries. useFinal selects FinalValue (for the current side) vs
-// PrevValue (for the previous side) -- matching DeltaIndexerBlobs's existing convention
-// where an added account has no previous-side entry and a removed account has no
-// current-side entry.
+// overrideAccountDelta() replaces the empty account sides DeltaIndexerBlobs produced from the
+// skipped account scans with the collector-sourced fast-path result, reproducing the two
+// behaviours the full-scan diff provided for free:
 //
-// READ-ONLY: a and b may be the live, shared tip-cache entry's slices (see
-// controller/account_delta_cache.go). This only reads them and their entries, appending
-// the already-marshalled byte slices into a freshly allocated result.
-func accountBytes(a, b []*fsm.AccountChangeEntry, useFinal bool) [][]byte {
-	out := make([][]byte, 0, len(a)+len(b))
-	appendFrom := func(entries []*fsm.AccountChangeEntry) {
+//   - the reward/slash force-include (see fsm.RewardSlashAccountKeys) -- the collector only
+//     sees accounts that were WRITTEN, and a reward or slash usually moves stake instead, so
+//     the named account must be read back and added explicitly.
+//   - ascending-by-address ordering. The old sides came straight out of an ascending Pebble
+//     prefix scan; AccountChangeCollector.Results() ranges a Go map, so its order is random
+//     per call. Since deltaBytes is cached and served to every subsequent caller, an unsorted
+//     side would make the same height return different bytes across calls and across nodes.
+//
+// The two state versions are NOT interchangeable: the current side is state@height (what
+// IndexerBlob(height) snapshots) and the previous side is state@height-1 (what
+// IndexerBlob(height-1) snapshots). Swapping them would silently serve inverted balances.
+func (s *Server) overrideAccountDelta(blobDelta *fsm.IndexerBlobs, height uint64, added, changed, removed []*fsm.AccountChangeEntry) lib.ErrorI {
+	if blobDelta.Current == nil && blobDelta.Previous == nil {
+		return nil
+	}
+	// DeltaIndexerBlobs derives the forced set from the CURRENT block's events for both
+	// sides, so both sides use this same key set
+	var forced map[string]struct{}
+	if blobDelta.Current != nil {
+		var err lib.ErrorI
+		if forced, err = fsm.RewardSlashAccountKeys(blobDelta.Current.Block); err != nil {
+			return err
+		}
+	}
+	if blobDelta.Current != nil {
+		side := accountSide(added, changed, true)
+		if err := s.forceIncludeAccounts(side, forced, height); err != nil {
+			return err
+		}
+		blobDelta.Current.Accounts = sortedAccountEntries(side)
+	}
+	if blobDelta.Previous != nil {
+		side := accountSide(changed, removed, false)
+		if err := s.forceIncludeAccounts(side, forced, height-1); err != nil {
+			return err
+		}
+		blobDelta.Previous.Accounts = sortedAccountEntries(side)
+	}
+	return nil
+}
+
+// forceIncludeAccounts() reads back any forced address missing from a side and adds it, at
+// the state version that side represents. An address already on the side keeps the
+// collector's value -- it changed on its own merits and the read would be redundant.
+// Addresses with no account at that version are skipped, matching forceIncludeKeys' rule
+// that a forced key is only included on a side where the account actually exists.
+func (s *Server) forceIncludeAccounts(side map[string][]byte, forced map[string]struct{}, version uint64) lib.ErrorI {
+	missing := make(map[string]struct{}, len(forced))
+	for address := range forced {
+		if _, ok := side[address]; !ok {
+			missing[address] = struct{}{}
+		}
+	}
+	// avoid the TimeMachine snapshot entirely on the common "nothing to force-include" path
+	if len(missing) == 0 {
+		return nil
+	}
+	entries, err := s.controller.FSM.AccountEntriesAtVersion(version, missing)
+	if err != nil {
+		return err
+	}
+	for address, bz := range entries {
+		side[address] = bz
+	}
+	return nil
+}
+
+// accountSide() collects one delta side's accounts, keyed by address so a force-included
+// entry cannot duplicate an address the collector already reported. useFinal selects
+// FinalValue (for the current side) vs PrevValue (for the previous side) -- matching
+// DeltaIndexerBlobs's convention where an added account has no previous-side entry and a
+// removed account has no current-side entry.
+//
+// READ-ONLY, and non-aliasing: a and b may be the live, shared tip-cache entry's slices (see
+// controller/account_delta_cache.go). Nothing here mutates, sorts, or appends to them, and
+// each value is COPIED rather than referenced -- the result is stored in the RPC blob cache
+// and handed to every subsequent caller, so sharing the controller's backing arrays across
+// that boundary would let any mutation in the RPC layer corrupt the tip cache for all readers.
+func accountSide(a, b []*fsm.AccountChangeEntry, useFinal bool) map[string][]byte {
+	side := make(map[string][]byte, len(a)+len(b))
+	collect := func(entries []*fsm.AccountChangeEntry) {
 		for _, e := range entries {
 			if e == nil {
 				continue
@@ -747,13 +829,30 @@ func accountBytes(a, b []*fsm.AccountChangeEntry, useFinal bool) [][]byte {
 			if !useFinal {
 				value = e.PrevValue
 			}
-			if value != nil {
-				out = append(out, value)
+			if value == nil {
+				continue
 			}
+			side[string(e.Address)] = append([]byte(nil), value...)
 		}
 	}
-	appendFrom(a)
-	appendFrom(b)
+	collect(a)
+	collect(b)
+	return side
+}
+
+// sortedAccountEntries() flattens an address-keyed account set into the ascending-by-address
+// [][]byte wire shape IndexerBlob.Accounts uses. Addresses are fixed-width, so ordering by
+// raw address bytes matches the KeyForAccount storage order the old prefix scan produced.
+func sortedAccountEntries(side map[string][]byte) [][]byte {
+	addresses := make([]string, 0, len(side))
+	for address := range side {
+		addresses = append(addresses, address)
+	}
+	slices.Sort(addresses)
+	out := make([][]byte, 0, len(addresses))
+	for _, address := range addresses {
+		out = append(out, side[address])
+	}
 	return out
 }
 

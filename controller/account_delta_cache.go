@@ -65,10 +65,14 @@ func (c *accountDeltaCache) get(height uint64) (*accountDeltaEntry, bool) {
 // cmd/rpc indexer-blob tests in particular — can exercise GetAccountDelta's cache-hit path
 // without standing up a full validator set and certificate chain for the replay path.
 //
-// It lazily creates the cache, so a Controller literal (not built by New()) works too.
+// TEST-ONLY. It has no production caller and must not acquire one. It lazily assigns
+// c.accountDeltaCache, and that pointer field is read UNSYNCHRONIZED by GetAccountDelta from
+// every RPC goroutine (the cache's RWMutex protects the map, not the field). It is therefore
+// only safe to call during setup, before the Controller begins serving — never concurrently
+// with GetAccountDelta.
 //
 // The seeded slices become part of the shared, immutable cache entry: the caller must not
-// mutate them afterwards (see this file's package doc comments on read-only entries).
+// mutate them afterwards (see this file's doc comments on read-only entries).
 func (c *Controller) SeedAccountDeltaCache(blockHeight uint64, added, changed, removed []*fsm.AccountChangeEntry) {
 	if c.accountDeltaCache == nil {
 		c.accountDeltaCache = newAccountDeltaCache(0)

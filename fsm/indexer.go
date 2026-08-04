@@ -513,6 +513,54 @@ func forceIncludeKeys(
 	}
 }
 
+// RewardSlashAccountKeys() exposes the reward/slash force-include address set that
+// DeltaIndexerBlobs derives from the current block (see rewardSlashAccountKeys and
+// forceIncludeKeys). Callers that source the account delta from an AccountChangeCollector
+// instead of from two full account scans need this set to reproduce the force-include rule
+// themselves: a reward or slash frequently moves STAKE rather than an account balance
+// (a compounding validator's reward is routed to UpdateValidatorStake, a non-compounding
+// validator's reward credits validator.Output rather than the operator address the event
+// names, and a slash only touches stake), so the named account is often never written and
+// therefore never appears in the collector's results -- yet the old full-scan path always
+// emitted it on both sides. Returned keys are raw address bytes as map-string keys.
+func RewardSlashAccountKeys(blockBz []byte) (map[string]struct{}, lib.ErrorI) {
+	return rewardSlashAccountKeys(blockBz)
+}
+
+// AccountEntriesAtVersion() reads the raw stored account bytes for the given addresses at a
+// state version, skipping any address with no account there. This is the O(len(addresses))
+// counterpart to the full AccountPrefix() scan -- it exists so a caller can force-include a
+// handful of reward/slash-named accounts without reintroducing an all-accounts iteration.
+//
+// The returned byte slices are copies: the snapshot this reads through is discarded before
+// returning, so handing back store-owned buffers would be a use-after-free hazard.
+func (s *StateMachine) AccountEntriesAtVersion(version uint64, addresses map[string]struct{}) (map[string][]byte, lib.ErrorI) {
+	out := make(map[string][]byte, len(addresses))
+	if len(addresses) == 0 {
+		return out, nil
+	}
+	sm, err := s.TimeMachine(version)
+	if err != nil {
+		return nil, err
+	}
+	// TimeMachine returns the receiver itself when it cannot build a historical view;
+	// discarding that would blow away the live state machine's transaction
+	if sm != s {
+		defer sm.Discard()
+	}
+	for address := range addresses {
+		bz, e := sm.Get(KeyForAccount(crypto.NewAddressFromBytes([]byte(address))))
+		if e != nil {
+			return nil, e
+		}
+		if len(bz) == 0 {
+			continue
+		}
+		out[address] = append([]byte(nil), bz...)
+	}
+	return out, nil
+}
+
 // rewardSlashAccountKeys() finds reward/slash event addresses in the current block.
 func rewardSlashAccountKeys(blockBz []byte) (map[string]struct{}, lib.ErrorI) {
 	keys := make(map[string]struct{})
