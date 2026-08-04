@@ -350,6 +350,7 @@ const (
 	CodeHttpStatus        ErrorCode   = 7
 	CodeReadBody          ErrorCode   = 8
 	CodeStringToCommittee ErrorCode   = 9
+	CodeCancelled         ErrorCode   = 10
 )
 
 // error implementations below for the `types` package
@@ -808,6 +809,10 @@ func ErrNewStore(err error) ErrorI {
 
 func ErrTimeMachine(err error) ErrorI {
 	return NewError(CodeTimeMachine, RPCModule, fmt.Sprintf("fsm.TimeMachine() failed with err: %s", err.Error()))
+}
+
+func ErrCancelled(err error) ErrorI {
+	return NewError(CodeCancelled, RPCModule, fmt.Sprintf("request cancelled: %s", err.Error()))
 }
 
 func ErrPostRequest(err error) ErrorI {

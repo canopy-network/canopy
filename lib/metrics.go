@@ -90,6 +90,7 @@ type IndexerMetrics struct {
 	// a forward-only reader never repeats a height, so that counter alone can't show this reuse.
 	IndexerBlobPreviousReuseHits   prometheus.Counter // how many "previous" blobs were reused from the prior request's cached current?
 	IndexerBlobPreviousReuseMisses prometheus.Counter // how many "previous" blobs required their own fresh cold read?
+	IndexerBlobCancelled           prometheus.Counter // how many indexer-blobs cold reads were aborted early because the client disconnected?
 	// IndexerBlobStepTime breaks the cold read down by step (time_machine, block_fetch,
 	// accounts_iterate, ... -- see fsm/indexer.go), most of which are direct pebbledb
 	// reads/iterations at a historical version. Lets a slow cold read be attributed to
@@ -781,6 +782,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_indexer_blob_cache_misses_total",
 				Help: "Total indexer-blobs requests that required a cold store read",
 			}),
+			IndexerBlobCancelled: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_indexer_blob_cancelled_total",
+				Help: "Total indexer-blobs cold reads aborted early because the client disconnected",
+			}),
 			IndexerBlobCacheSize: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_indexer_blob_cache_size",
 				Help: "Current number of entries in the indexer-blobs cache",
@@ -1095,6 +1100,16 @@ func (m *Metrics) RecordIndexerBlobPreviousReuseMiss() {
 		return
 	}
 	m.IndexerBlobPreviousReuseMisses.Inc()
+}
+
+// RecordIndexerBlobCancelled() records an indexer-blobs cold read that was aborted early
+// because the requesting client disconnected.
+func (m *Metrics) RecordIndexerBlobCancelled() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.IndexerBlobCancelled.Inc()
 }
 
 // UpdateIndexerBlobCacheSize() updates the current entry count of the indexer-blobs cache.

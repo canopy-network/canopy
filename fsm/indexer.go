@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"time"
 
@@ -13,17 +14,17 @@ import (
 // INDEXER.GO IS ONLY USED FOR CANOPY INDEXING RPC - NOT A CRITICAL PIECE OF THE STATE MACHINE
 
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
-func (s *StateMachine) IndexerBlobs(height uint64) (b *IndexerBlobs, err lib.ErrorI) {
+func (s *StateMachine) IndexerBlobs(ctx context.Context, height uint64) (b *IndexerBlobs, err lib.ErrorI) {
 	b = &IndexerBlobs{}
 	// IndexerBlob(height) is only valid for height >= 2 (it pairs state@height with block height-1).
 	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
 	if height > 2 {
-		b.Previous, err = s.IndexerBlob(height - 1)
+		b.Previous, err = s.IndexerBlob(ctx, height-1)
 		if err != nil {
 			return nil, err
 		}
 	}
-	b.Current, err = s.IndexerBlob(height)
+	b.Current, err = s.IndexerBlob(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -31,14 +32,14 @@ func (s *StateMachine) IndexerBlobs(height uint64) (b *IndexerBlobs, err lib.Err
 }
 
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
-func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.ErrorI) {
-	return s.indexerBlob(height, nil, false, false)
+func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *IndexerBlob, err lib.ErrorI) {
+	return s.indexerBlob(ctx, height, nil, false, false)
 }
 
 // IndexerBlobsFromStateChanges builds an account-sparse delta using the state
 // keys journaled for height. available=false means the height predates the
 // journal and callers must use the legacy full-snapshot comparison.
-func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
+func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
 	if height == 0 || height > s.height {
 		height = s.height
 	}
@@ -59,7 +60,7 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBl
 	}
 
 	b = &IndexerBlobs{}
-	b.Current, err = s.indexerBlob(height, accountKeys, true, true)
+	b.Current, err = s.indexerBlob(ctx, height, accountKeys, true, true)
 	if err != nil {
 		return nil, true, err
 	}
@@ -72,7 +73,7 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBl
 	}
 	accountKeys = append(accountKeys, eventAccountKeys...)
 	if height > 2 {
-		b.Previous, err = s.indexerBlob(height-1, accountKeys, true, false)
+		b.Previous, err = s.indexerBlob(ctx, height-1, accountKeys, true, false)
 		if err != nil {
 			return nil, true, err
 		}
@@ -81,7 +82,7 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBl
 	return b, true, err
 }
 
-func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiveAccounts, includeBlockEventAccounts bool) (b *IndexerBlob, err lib.ErrorI) {
+func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKeys [][]byte, selectiveAccounts, includeBlockEventAccounts bool) (b *IndexerBlob, err lib.ErrorI) {
 	if height == 0 || height > s.height {
 		height = s.height
 	}
@@ -124,7 +125,7 @@ func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiv
 	stepStart = time.Now()
 	var accounts [][]byte
 	if !selectiveAccounts {
-		accounts, err = sm.IterateAndAppend(AccountPrefix())
+		accounts, err = sm.IterateAndAppend(ctx, AccountPrefix())
 	} else {
 		if includeBlockEventAccounts {
 			blockBz, marshalErr := lib.Marshal(block)
@@ -145,14 +146,14 @@ func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiv
 	}
 	// retrieve pools
 	stepStart = time.Now()
-	pools, err := sm.IterateAndAppend(PoolPrefix())
+	pools, err := sm.IterateAndAppend(ctx, PoolPrefix())
 	s.Metrics.ObserveIndexerBlobStep("pools_iterate", stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve validators
 	stepStart = time.Now()
-	validators, err := sm.IterateAndAppend(ValidatorPrefix())
+	validators, err := sm.IterateAndAppend(ctx, ValidatorPrefix())
 	s.Metrics.ObserveIndexerBlobStep("validators_iterate", stepStart)
 	if err != nil {
 		return nil, err
@@ -166,7 +167,7 @@ func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiv
 	}
 	// retrieve nonSigners
 	stepStart = time.Now()
-	nonSigners, err := sm.IterateAndAppend(NonSignerPrefix())
+	nonSigners, err := sm.IterateAndAppend(ctx, NonSignerPrefix())
 	s.Metrics.ObserveIndexerBlobStep("non_signers_iterate", stepStart)
 	if err != nil {
 		return nil, err
@@ -201,14 +202,14 @@ func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiv
 	}
 	// retrieve dex batches
 	stepStart = time.Now()
-	dexBatches, err := sm.IterateAndAppend(lib.JoinLenPrefix(dexPrefix, lockedBatchSegment))
+	dexBatches, err := sm.IterateAndAppend(ctx, lib.JoinLenPrefix(dexPrefix, lockedBatchSegment))
 	s.Metrics.ObserveIndexerBlobStep("dex_batches_iterate", stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve next dex batches
 	stepStart = time.Now()
-	nextDexBatches, err := sm.IterateAndAppend(lib.JoinLenPrefix(dexPrefix, nextBatchSement))
+	nextDexBatches, err := sm.IterateAndAppend(ctx, lib.JoinLenPrefix(dexPrefix, nextBatchSement))
 	s.Metrics.ObserveIndexerBlobStep("next_dex_batches_iterate", stepStart)
 	if err != nil {
 		return nil, err

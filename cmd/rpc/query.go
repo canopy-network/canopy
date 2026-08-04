@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -596,7 +597,7 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 	if ok := unmarshal(w, r, req); !ok {
 		return
 	}
-	_, bz, err := s.IndexerBlobsCached(req.Height)
+	_, bz, err := s.IndexerBlobsCached(r.Context(), req.Height)
 	if err != nil {
 		status := http.StatusBadRequest
 		if err.Code() == lib.CodeMarshal {
@@ -614,7 +615,7 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 }
 
 // IndexerBlobsCached() is a helper function for the indexer blobs implementation
-func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
+func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
 	currentHeight := s.controller.FSM.Height()
 	if height == 0 || height > currentHeight {
 		height = currentHeight
@@ -629,7 +630,7 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 	// makes account delta construction proportional to block activity instead
 	// of total account count. Heights committed before the journal was enabled
 	// transparently use the full-snapshot fallback below.
-	journalDelta, available, journalErr := s.controller.FSM.IndexerBlobsFromStateChanges(height)
+	journalDelta, available, journalErr := s.controller.FSM.IndexerBlobsFromStateChanges(ctx, height)
 	if journalErr != nil {
 		return nil, nil, journalErr
 	}
@@ -655,7 +656,7 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 	// stall is visible after the fact both in logs and in canopy_indexer_blob_cold_read_time.
 	coldStart := time.Now()
 	defer s.controller.Metrics.RecordIndexerBlobCacheMiss(coldStart)
-	current, err := s.controller.FSM.IndexerBlob(height)
+	current, err := s.controller.FSM.IndexerBlob(ctx, height)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -669,7 +670,7 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 			previous = cachedPrev
 		} else {
 			s.controller.Metrics.RecordIndexerBlobPreviousReuseMiss()
-			prev, prevErr := s.controller.FSM.IndexerBlob(height - 1)
+			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1)
 			if prevErr != nil {
 				return nil, nil, prevErr
 			}
@@ -677,7 +678,10 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 		}
 	}
 
-	if elapsed := time.Since(coldStart); elapsed > time.Duration(s.config.TimeoutS)*time.Second {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		s.controller.Metrics.RecordIndexerBlobCancelled()
+		s.logger.Debugf("indexer-blobs cold read for height %d cancelled after %s: %s", height, time.Since(coldStart), ctxErr)
+	} else if elapsed := time.Since(coldStart); elapsed > time.Duration(s.config.TimeoutS)*time.Second {
 		s.logger.Warnf("indexer-blobs cold read for height %d took %s, exceeding the %ds RPC write deadline -- "+
 			"caller's write will fail with i/o timeout even though this read eventually succeeded", height, elapsed, s.config.TimeoutS)
 	} else {
