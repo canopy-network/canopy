@@ -21,8 +21,6 @@
   "rpcURL": "http://localhost:30002",
   "adminRPCUrl": "http://localhost:30003",
   "timeoutS": 3,
-  "indexerBlobCacheEntries": 64,
-  "serveIndexerBlobsLive": true,
   "dataDirPath": "/root/.canopy",
   "dbName": "canopy",
   "inMemory": false,
