@@ -3,9 +3,12 @@ package fsm
 import (
 	"bytes"
 	"context"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -175,6 +178,309 @@ func TestMergeChangedBlobKeys_EmptyPrevious(t *testing.T) {
 	gotCurrentChanged, gotPreviousChanged := mergeChangedBlobKeys(current, nil)
 	require.Equal(t, map[string]struct{}{"a": {}, "b": {}}, gotCurrentChanged)
 	require.Empty(t, gotPreviousChanged)
+}
+
+// TestAccountDelta_MatchesOldFullScanAndDiff is the differential regression test for the
+// account-delta fast path: it runs the OLD path (full AccountPrefix scan of both heights,
+// diffed by DeltaIndexerBlobs) and the NEW path (single-block ApplyBlock replay with an
+// AccountChangeCollector, assembled the way cmd/rpc's overrideAccountDelta assembles it)
+// against the SAME committed chain, and requires byte-for-byte, order-for-order equality of
+// both delta sides. Neither side's expectation is hand-seeded — both are computed from the
+// chain, so a divergence in classification, in value selection (FinalValue vs PrevValue),
+// in the reward/slash force-include, or in ordering fails the test.
+//
+// LIMITATION (deliberate, documented): this chain runs on the ROOT chain (Config.ChainId ==
+// lib.CanopyChainId), so it does NOT exercise the nested-chain root-DEX-batch path. On a
+// nested chain, fsm/dex.go's HandleDexBatch early-returns when s.cache.rootDexBatch is nil,
+// which a fresh TimeMachine snapshot always is; controller.GetAccountDelta compensates by
+// calling SetRootDexCache from the committed certificate before replaying. That restoration
+// lives in the controller package and cannot be reached from an fsm-package test, so the
+// equivalence proven here covers root-chain blocks only.
+func TestAccountDelta_MatchesOldFullScanAndDiff(t *testing.T) {
+	sm, targetHeight := newTestAccountDeltaChain(t)
+	ctx := context.Background()
+
+	// OLD PATH: full account scan at both heights, diffed by DeltaIndexerBlobs
+	oldCurrent, err := sm.IndexerBlob(ctx, targetHeight, false)
+	require.NoError(t, err)
+	oldPrevious, err := sm.IndexerBlob(ctx, targetHeight-1, false)
+	require.NoError(t, err)
+	oldDelta, err := DeltaIndexerBlobs(&IndexerBlobs{Current: oldCurrent, Previous: oldPrevious})
+	require.NoError(t, err)
+
+	// NEW PATH: replay the single block whose application moved state from targetHeight-1 to
+	// targetHeight, capturing touched accounts. Mirrors controller.GetAccountDelta's replay
+	// branch (block read from the live store, pre-state from TimeMachine(blockHeight),
+	// collector baselined on the snapshot, skipRoot=true, never committed).
+	blockHeight := targetHeight - 1
+	blockResult, err := sm.store.(lib.StoreI).GetBlockByHeight(blockHeight)
+	require.NoError(t, err)
+	require.NotNil(t, blockResult)
+	block, err := blockResult.ToBlock()
+	require.NoError(t, err)
+	replaySM, err := sm.TimeMachine(blockHeight)
+	require.NoError(t, err)
+	require.NotSame(t, sm, replaySM, "TimeMachine must produce a real snapshot, not the live FSM")
+	defer replaySM.Discard()
+	require.Equal(t, blockHeight, replaySM.Height())
+	collector := NewAccountChangeCollector(replaySM.Get)
+	_, applyResult, err := replaySM.ApplyBlock(ctx, block, false, collector, true)
+	require.NoError(t, err)
+	require.Empty(t, applyResult.Failed)
+	added, changed, removed := collector.Results()
+
+	// sanity-check the fixture actually produced the scenarios it claims to, so a chain that
+	// silently stopped exercising them can't turn this into a vacuous empty-vs-empty compare
+	require.NotEmpty(t, added, "fixture must produce at least one brand-new account")
+	require.NotEmpty(t, changed, "fixture must produce at least one changed account")
+	require.NotEmpty(t, removed, "fixture must produce at least one removed (zeroed) account")
+
+	// ...and that the force-include path has real work to do: the block must emit a
+	// reward event naming an address the collector never saw written, so both assemblies
+	// have to read that account back rather than derive it from the replay
+	forced, err := RewardSlashAccountKeys(oldCurrent.Block)
+	require.NoError(t, err)
+	require.NotEmpty(t, forced, "fixture must emit a reward/slash event")
+	touched := make(map[string]struct{})
+	for _, e := range append(append(append([]*AccountChangeEntry{}, added...), changed...), removed...) {
+		touched[string(e.Address)] = struct{}{}
+	}
+	for address := range forced {
+		require.NotContains(t, touched, address,
+			"the forced address must be untouched by the block, or the read-back never runs")
+	}
+
+	newCurrent := testAccountSide(added, changed, true)
+	require.NoError(t, testForceIncludeAccounts(sm, newCurrent, oldCurrent.Block, targetHeight))
+	newPrevious := testAccountSide(changed, removed, false)
+	require.NoError(t, testForceIncludeAccounts(sm, newPrevious, oldCurrent.Block, targetHeight-1))
+
+	// exact ordered equality: both paths are ascending-by-address (the old side comes from an
+	// ascending Pebble prefix scan, the new one from sortedAccountEntries), so ElementsMatch
+	// would silently tolerate an ordering regression that changes the cached response bytes.
+	require.Equal(t, oldDelta.Current.Accounts, testSortedAccountEntries(newCurrent))
+	require.Equal(t, oldDelta.Previous.Accounts, testSortedAccountEntries(newPrevious))
+}
+
+// testAccountSide / testForceIncludeAccounts / testSortedAccountEntries mirror
+// accountSide(), forceIncludeAccounts() and sortedAccountEntries() in cmd/rpc/query.go. They
+// are duplicated rather than imported because fsm cannot import cmd/rpc (import cycle); keep
+// them in step with that file or this test stops proving what the RPC layer actually serves.
+func testAccountSide(a, b []*AccountChangeEntry, useFinal bool) map[string][]byte {
+	side := make(map[string][]byte, len(a)+len(b))
+	collect := func(entries []*AccountChangeEntry) {
+		for _, e := range entries {
+			if e == nil {
+				continue
+			}
+			value := e.FinalValue
+			if !useFinal {
+				value = e.PrevValue
+			}
+			if value == nil {
+				continue
+			}
+			side[string(e.Address)] = append([]byte(nil), value...)
+		}
+	}
+	collect(a)
+	collect(b)
+	return side
+}
+
+func testForceIncludeAccounts(sm *StateMachine, side map[string][]byte, currentBlockBz []byte, version uint64) lib.ErrorI {
+	forced, err := RewardSlashAccountKeys(currentBlockBz)
+	if err != nil {
+		return err
+	}
+	missing := make(map[string]struct{}, len(forced))
+	for address := range forced {
+		if _, ok := side[address]; !ok {
+			missing[address] = struct{}{}
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	entries, err := sm.AccountEntriesAtVersion(version, missing)
+	if err != nil {
+		return err
+	}
+	for address, bz := range entries {
+		side[address] = bz
+	}
+	return nil
+}
+
+func testSortedAccountEntries(side map[string][]byte) [][]byte {
+	addresses := make([]string, 0, len(side))
+	for address := range side {
+		addresses = append(addresses, address)
+	}
+	slices.Sort(addresses)
+	out := make([][]byte, 0, len(addresses))
+	for _, address := range addresses {
+		out = append(out, side[address])
+	}
+	return out
+}
+
+// newTestAccountDeltaChain builds a REAL committed chain by running ApplyBlock + Commit for
+// each block, starting from newTestApplyBlockFixture (fsm/state_test.go), and returns the
+// state machine plus the target state version to diff.
+//
+// Height convention: state version V means blocks 0..V-1 are applied, so the delta between
+// state@V-1 and state@V is produced by block V-1, and IndexerBlob(V) pairs state@V with
+// block V-1. newTestApplyBlockFixture leaves sm.height=3 but store version 2 (it commits
+// hand-written state rather than applying a block), so the helper commits once more to align
+// them before driving real blocks.
+//
+// The chain applies blocks 3, 4 and 5. Block 5 -- the one the returned target height (6)
+// diffs -- is the interesting one; it exercises:
+//   - a brand-new account: first receipt at an address that has never held funds (added)
+//   - a balance change to an existing account (changed), for both a sender and a recipient
+//   - an account touched but net-unchanged: a zero-fee self-send, which writes the account
+//     twice and lands on its original bytes (must be dropped from BOTH sides)
+//   - an account zeroed out: it sends its entire balance, so SetAccount's Amount==0 &&
+//     Nonce==0 branch deletes the key (removed)
+//   - a reward event naming an address that block 5 never writes (the certificate pays
+//     validator #3, which is non-compounding, so the tokens land on its OUTPUT account
+//     instead) — the reward/slash force-include has to read that account back on both sides
+func newTestAccountDeltaChain(t *testing.T) (*StateMachine, uint64) {
+	t.Helper()
+	fixture, _ := newTestApplyBlockFixture(t)
+	sm := &fixture
+	st := sm.store.(lib.StoreI)
+	// newTestApplyBlockFixture hand-sets sm.NetworkID rather than deriving it from Config, but
+	// TimeMachine builds its snapshot FSM through newStateMachine, which sets
+	// NetworkID = Config.P2PConfig.NetworkID. Left as-is, every transaction in the replayed
+	// block would fail the replay's network-id check -- a fixture artifact, not a production
+	// one (a live node derives both from the same config). Align them here -- on the config
+	// side, since a network id of 0 is rejected outright as "nil network id".
+	sm.Config.P2PConfig.NetworkID = uint64(sm.NetworkID)
+	// align the store version with sm.height (see the height convention note above)
+	_, e := st.Commit()
+	require.NoError(t, e)
+	require.Equal(t, sm.height, st.Version())
+
+	// send fee of zero, so the net-unchanged self-send below really is net-unchanged
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 0}))
+	// funder pays for everything downstream
+	require.NoError(t, sm.AccountAdd(newTestAddress(t), 10_000_000))
+	// block 3: no transactions -- it exists so block 4's BeginBlock has a real committed
+	// predecessor block and certificate to load
+	testApplyAndCommitBlock(t, sm, nil)
+
+	// block 4: fund the accounts block 5 will change / zero / self-send
+	testApplyAndCommitBlock(t, sm, [][]byte{
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 4), 5_000), // net-unchanged self-sender
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 5), 3_000), // zeroed out in block 5
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 6), 2_000), // changed in block 5
+		testSendTxBytes(t, sm, 0, newTestAddress(t, 3), 4_000), // reward-event recipient; untouched by block 5
+	})
+
+	// block 5: the measured block
+	brandNew := crypto.NewAddressFromBytes(bytes.Repeat([]byte{0xAB}, crypto.AddressSize))
+	testApplyAndCommitBlock(t, sm, [][]byte{
+		testSendTxBytes(t, sm, 0, brandNew, 1_500),             // brandNew added; kg0 changed
+		testSendTxBytes(t, sm, 6, newTestAddress(t, 7), 1_000), // kg6 changed; kg7 added (never funded)
+		testSendTxBytes(t, sm, 4, newTestAddress(t, 4), 5_000), // kg4 self-send: touched, net-unchanged
+		testSendTxBytes(t, sm, 5, newTestAddress(t, 6), 3_000), // kg5 sends its whole balance -> removed
+	})
+
+	// sm.height is now 6 and the store holds versions up to 6 with blocks 2..5 indexed, so
+	// both IndexerBlob(6) (state@6 + block 5) and IndexerBlob(5) (state@5 + block 4) resolve
+	return sm, sm.height
+}
+
+// testApplyAndCommitBlock applies a block at sm.height with the given transactions, indexes
+// the resulting BlockResult and a signed certificate for that height, commits the store, and
+// advances the state machine -- the same order controller.CommitCertificate uses (apply,
+// IndexQC, IndexBlock, Commit, re-init FSM at the new version).
+func testApplyAndCommitBlock(t *testing.T, sm *StateMachine, txs [][]byte) {
+	t.Helper()
+	st := sm.store.(lib.StoreI)
+	height := sm.height
+	block := &lib.Block{
+		BlockHeader: &lib.BlockHeader{
+			Height:          height,
+			Time:            uint64(time.Date(2024, 02, 01, 0, 0, 0, 0, time.UTC).UnixMicro()) + height*1_000_000,
+			ProposerAddress: newTestAddressBytes(t),
+		},
+		Transactions: txs,
+	}
+	header, result, err := sm.ApplyBlock(context.Background(), block, false, nil, false)
+	require.NoError(t, err)
+	for _, f := range result.Failed {
+		t.Logf("FAILED TX at height %d: %s", height, f.Error.Error())
+	}
+	require.Empty(t, result.Failed, "block at height %d had failed transactions", height)
+	require.NoError(t, st.IndexQC(testAccountDeltaQC(t, sm, height)))
+	require.NoError(t, st.IndexBlock(&lib.BlockResult{
+		BlockHeader:  header,
+		Transactions: result.Results,
+		Events:       result.Events,
+	}))
+	_, e := st.Commit()
+	require.NoError(t, e)
+	sm.height++
+	sm.Reset()
+	require.Equal(t, sm.height, st.Version())
+}
+
+// testAccountDeltaQC builds a certificate for `height` signed by 3 of the fixture's 4
+// validators -- mirroring the QC newTestApplyBlockFixture indexes for height 2, but with the
+// chain ids it omits (see below). BeginBlock loads the previous height's certificate, so
+// every applied block needs one indexed for its own height.
+func testAccountDeltaQC(t *testing.T, sm *StateMachine, height uint64) *lib.QuorumCertificate {
+	t.Helper()
+	qc := &lib.QuorumCertificate{
+		// ChainId is what keys the committee data HandleCertificateResults updates and
+		// DistributeCommitteeRewards later pays out from -- without it the rewards land on
+		// committee 0, whose pool is never subsidized, and no reward event is ever emitted
+		Header: &lib.View{Height: height, ChainId: lib.CanopyChainId},
+		// PaymentPercents.ChainId must be set: CommitteeData.Combine drops every stub whose
+		// ChainId doesn't match, so an unset one silently yields no reward and no event.
+		// The recipient is validator #3, which takes part in no transaction below and is
+		// non-compounding -- so the reward is written to the validator's OUTPUT account (key
+		// group 0) while the reward EVENT names validator #3. That is exactly the
+		// force-include case: an address the collector never sees written, which both delta
+		// sides must nonetheless carry.
+		Results: &lib.CertificateResult{RewardRecipients: &lib.RewardRecipients{
+			PaymentPercents: []*lib.PaymentPercents{{
+				Address: newTestAddressBytes(t, 3),
+				Percent: 100,
+				ChainId: lib.CanopyChainId,
+			}},
+		}},
+	}
+	committee, err := sm.GetCommitteeMembers(lib.CanopyChainId)
+	require.NoError(t, err)
+	mk := committee.MultiKey.Copy()
+	for i := 0; i < 3; i++ {
+		privateKey := newTestKeyGroup(t, i).PrivateKey
+		for j, pubKey := range mk.PublicKeys() {
+			if privateKey.PublicKey().Equals(pubKey) {
+				require.NoError(t, mk.AddSigner(privateKey.Sign(qc.SignBytes()), j))
+			}
+		}
+	}
+	aggSig, e := mk.AggregateSignatures()
+	require.NoError(t, e)
+	qc.Signature = &lib.AggregateSignature{Signature: aggSig, Bitmap: mk.Bitmap()}
+	return qc
+}
+
+// testSendTxBytes builds a signed send transaction from test key group `fromKeyGroup`, valid
+// at the state machine's current height, with a zero fee (see newTestAccountDeltaChain).
+func testSendTxBytes(t *testing.T, sm *StateMachine, fromKeyGroup int, to crypto.AddressI, amount uint64) []byte {
+	t.Helper()
+	kg := newTestKeyGroup(t, fromKeyGroup)
+	tx, err := NewSendTransaction(kg.PrivateKey, to, amount, uint64(sm.NetworkID), sm.Config.ChainId, 0, sm.height, "")
+	require.NoError(t, err)
+	bz, err := lib.Marshal(tx)
+	require.NoError(t, err)
+	return bz
 }
 
 func mustMarshalProto(t *testing.T, message any) []byte {
