@@ -65,7 +65,10 @@ func (c *AccountChangeCollector) entryFor(key []byte) (*AccountChangeEntry, lib.
 	if err != nil {
 		return nil, err
 	}
-	address := append([]byte(nil), key[len(AccountPrefix()):]...)
+	// key is AccountPrefix() followed by a length-prefixed address segment
+	// (KeyForAccount uses lib.JoinLenPrefix(accountPrefix, addr.Bytes())), so skip
+	// AccountPrefix() plus the address segment's own 1-byte length prefix.
+	address := append([]byte(nil), key[len(AccountPrefix())+1:]...)
 	entry := &AccountChangeEntry{Address: address, PrevValue: prevValue}
 	c.entries[addrKey] = entry
 	return entry, nil

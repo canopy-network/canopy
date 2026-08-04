@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -38,6 +39,7 @@ type StateMachine struct {
 	cache              *cache                                  // the state machine cache
 	LastValidatorSet   map[uint64]map[uint64]*lib.ValidatorSet // reference to the last validator set saved in the controller
 	Plugin             *lib.Plugin                             // extensible plugin for the FSM
+	accountCollector   *AccountChangeCollector                 // set only during an ApplyBlock call that wants account-touch capture
 }
 
 type rootCacheStateStore interface {
@@ -656,14 +658,28 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 }
 
 // Set() upserts a key-value pair under a key
-func (s *StateMachine) Set(k, v []byte) (err lib.ErrorI) { return s.Store().Set(k, v) }
+func (s *StateMachine) Set(k, v []byte) (err lib.ErrorI) {
+	if s.accountCollector != nil && bytes.HasPrefix(k, AccountPrefix()) {
+		if err = s.accountCollector.RecordSet(k, v); err != nil {
+			return err
+		}
+	}
+	return s.Store().Set(k, v)
+}
 
 // Get() retrieves a key-value pair under a key
 // NOTE: returns (nil, nil) if no value is found for that key
 func (s *StateMachine) Get(key []byte) (bz []byte, err lib.ErrorI) { return s.Store().Get(key) }
 
 // Delete() deletes a key-value pair under a key
-func (s *StateMachine) Delete(key []byte) lib.ErrorI { return s.Store().Delete(key) }
+func (s *StateMachine) Delete(key []byte) lib.ErrorI {
+	if s.accountCollector != nil && bytes.HasPrefix(key, AccountPrefix()) {
+		if err := s.accountCollector.RecordDelete(key); err != nil {
+			return err
+		}
+	}
+	return s.Store().Delete(key)
+}
 
 // Iterator() creates and returns an iterator for the state machine's underlying store
 // starting at the specified key and iterating lexicographically

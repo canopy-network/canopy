@@ -954,3 +954,34 @@ func TestIterateAndAppend_NotCancelledCompletesNormally(t *testing.T) {
 	require.Nil(t, err)
 	require.Len(t, result, 2)
 }
+
+func TestStateMachine_SetHooksAccountCollector(t *testing.T) {
+	sm := newTestStateMachine(t)
+	collector := NewAccountChangeCollector(sm.Get)
+	sm.accountCollector = collector
+	address := newTestAddress(t)
+	require.NoError(t, sm.Set(KeyForAccount(address), []byte("v1")))
+	added, changed, removed := collector.Results()
+	require.Len(t, added, 1)
+	require.Empty(t, changed)
+	require.Empty(t, removed)
+	require.Equal(t, address.Bytes(), added[0].Address)
+}
+
+func TestStateMachine_SetDoesNotHookNonAccountKeys(t *testing.T) {
+	sm := newTestStateMachine(t)
+	collector := NewAccountChangeCollector(sm.Get)
+	sm.accountCollector = collector
+	require.NoError(t, sm.Set(KeyForPool(1), []byte("v1")))
+	added, changed, removed := collector.Results()
+	require.Empty(t, added)
+	require.Empty(t, changed)
+	require.Empty(t, removed)
+}
+
+func TestStateMachine_SetNilCollectorIsNoOp(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.Nil(t, sm.accountCollector)
+	address := newTestAddress(t)
+	require.NoError(t, sm.Set(KeyForAccount(address), []byte("v1"))) // must not panic
+}

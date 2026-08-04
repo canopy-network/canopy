@@ -12,13 +12,14 @@ import (
 func TestAccountChangeCollector_NewAccountIsAdded(t *testing.T) {
 	getPrev := func(key []byte) ([]byte, lib.ErrorI) { return nil, nil } // didn't exist before
 	c := NewAccountChangeCollector(getPrev)
-	key := append(append([]byte{}, AccountPrefix()...), []byte("addr1")...)
+	address := newTestAddress(t)
+	key := KeyForAccount(address)
 	require.NoError(t, c.RecordSet(key, []byte("v1")))
 	added, changed, removed := c.Results()
 	require.Len(t, added, 1)
 	require.Empty(t, changed)
 	require.Empty(t, removed)
-	require.Equal(t, []byte("addr1"), added[0].Address)
+	require.Equal(t, address.Bytes(), added[0].Address)
 	require.Equal(t, []byte("v1"), added[0].FinalValue)
 	require.Nil(t, added[0].PrevValue)
 }
@@ -26,7 +27,8 @@ func TestAccountChangeCollector_NewAccountIsAdded(t *testing.T) {
 func TestAccountChangeCollector_ExistingAccountIsChanged(t *testing.T) {
 	getPrev := func(key []byte) ([]byte, lib.ErrorI) { return []byte("old"), nil }
 	c := NewAccountChangeCollector(getPrev)
-	key := append(append([]byte{}, AccountPrefix()...), []byte("addr1")...)
+	address := newTestAddress(t)
+	key := KeyForAccount(address)
 	require.NoError(t, c.RecordSet(key, []byte("new")))
 	added, changed, removed := c.Results()
 	require.Empty(t, added)
@@ -39,7 +41,8 @@ func TestAccountChangeCollector_ExistingAccountIsChanged(t *testing.T) {
 func TestAccountChangeCollector_SetSameValueIsNotChanged(t *testing.T) {
 	getPrev := func(key []byte) ([]byte, lib.ErrorI) { return []byte("same"), nil }
 	c := NewAccountChangeCollector(getPrev)
-	key := append(append([]byte{}, AccountPrefix()...), []byte("addr1")...)
+	address := newTestAddress(t)
+	key := KeyForAccount(address)
 	require.NoError(t, c.RecordSet(key, []byte("same")))
 	added, changed, removed := c.Results()
 	require.Empty(t, added)
@@ -50,7 +53,8 @@ func TestAccountChangeCollector_SetSameValueIsNotChanged(t *testing.T) {
 func TestAccountChangeCollector_DeleteExistingAccountIsRemoved(t *testing.T) {
 	getPrev := func(key []byte) ([]byte, lib.ErrorI) { return []byte("old"), nil }
 	c := NewAccountChangeCollector(getPrev)
-	key := append(append([]byte{}, AccountPrefix()...), []byte("addr1")...)
+	address := newTestAddress(t)
+	key := KeyForAccount(address)
 	require.NoError(t, c.RecordDelete(key))
 	added, changed, removed := c.Results()
 	require.Empty(t, added)
@@ -65,7 +69,8 @@ func TestAccountChangeCollector_SetThenDeleteSameBlockIsNetNoOp(t *testing.T) {
 	// account that was created and zeroed out within the same block).
 	getPrev := func(key []byte) ([]byte, lib.ErrorI) { return nil, nil }
 	c := NewAccountChangeCollector(getPrev)
-	key := append(append([]byte{}, AccountPrefix()...), []byte("addr1")...)
+	address := newTestAddress(t)
+	key := KeyForAccount(address)
 	require.NoError(t, c.RecordSet(key, []byte("v1")))
 	require.NoError(t, c.RecordDelete(key))
 	added, changed, removed := c.Results()
@@ -83,7 +88,8 @@ func TestAccountChangeCollector_MultipleTouchesUseHeight1Baseline(t *testing.T) 
 		return []byte("baseline"), nil
 	}
 	c := NewAccountChangeCollector(getPrev)
-	key := append(append([]byte{}, AccountPrefix()...), []byte("addr1")...)
+	address := newTestAddress(t)
+	key := KeyForAccount(address)
 	require.NoError(t, c.RecordSet(key, []byte("intermediate")))
 	require.NoError(t, c.RecordSet(key, []byte("final")))
 	require.Equal(t, 1, getPrevCalls, "baseline should only be fetched once, on first touch")
@@ -98,7 +104,8 @@ func TestAccountChangeCollector_MultipleTouchesUseHeight1Baseline(t *testing.T) 
 func TestAccountChangeCollector_GetPrevError(t *testing.T) {
 	getPrev := func(key []byte) ([]byte, lib.ErrorI) { return nil, lib.ErrUnmarshal(errors.New("test")) }
 	c := NewAccountChangeCollector(getPrev)
-	key := append(append([]byte{}, AccountPrefix()...), []byte("addr1")...)
+	address := newTestAddress(t)
+	key := KeyForAccount(address)
 	err := c.RecordSet(key, []byte("v1"))
 	require.Error(t, err)
 }
