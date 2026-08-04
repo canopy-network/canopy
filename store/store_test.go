@@ -404,6 +404,28 @@ func validateIterators(t *testing.T, prefix string, expectedKeys []string, itera
 	}
 }
 
+// TestCompactionTimeoutsDistinct guards against collapsing the live (MaybeCompact, runs
+// inline with sync/consensus) and post-sync (CompactAll, one-time background pass that
+// must cover the indexer prefix - see store.go's postSyncCompactionTimeout doc comment)
+// compaction budgets back into a single shared constant.
+func TestCompactionTimeoutsDistinct(t *testing.T) {
+	require.Greater(t, postSyncCompactionTimeout, liveCompactionTimeout)
+}
+
+// TestCompactAllSucceedsOnAllPrefixes is a smoke test for CompactAll() wiring a timeout
+// through to Compact() for every store prefix, including indexerPrefix (never touched by
+// the live MaybeCompact() path).
+func TestCompactAllSucceedsOnAllPrefixes(t *testing.T) {
+	dbDir := t.TempDir()
+	st, e := NewStore(lib.DefaultConfig(), dbDir, nil, lib.NewDefaultLogger())
+	require.NoError(t, e)
+	s := st.(*Store)
+	require.NoError(t, s.Set(lib.JoinLenPrefix(latestStatePrefix, []byte("k")), []byte("v")))
+	_, err := s.Commit()
+	require.NoError(t, err)
+	require.NoError(t, s.CompactAll(s.Version()))
+}
+
 // bulkSetPrefixedKV sets multiple single segment length prefixed key-value pairs in the store
 func bulkSetPrefixedKV(t *testing.T, store lib.WStoreI, prefix string, keyValue ...string) {
 	for _, kv := range keyValue {
