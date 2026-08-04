@@ -261,6 +261,10 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	storeI := c.FSM.Store().(lib.StoreI)
 	// reset the store once this code finishes; if code execution gets to `store.Commit()` - this will effectively be a noop
 	defer c.FSM.Reset()
+	// the live account-change collector, assigned only on the path below where it actually
+	// runs; it stays nil for a 'pre-calculated' block result so no empty tip-cache entry is
+	// written for a height whose accounts were never classified
+	var liveCollector *fsm.AccountChangeCollector
 	// if the block result isn't 'pre-calculated'
 	if blockResult == nil {
 		// reset the FSM to ensure stale proposal validations don't come into play
@@ -271,8 +275,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		}
 		// apply the block against the state machine, attaching a live account-change
 		// collector when this node is configured to serve indexer blobs and isn't syncing
-		// (see Task 5 for accountCollectorForLiveCommit and Task 6 for tip-cache populate)
-		liveCollector := c.accountCollectorForLiveCommit(syncing)
+		liveCollector = c.accountCollectorForLiveCommit(syncing)
 		blockResult, err = c.ApplyAndValidateBlock(block, true, liveCollector)
 		if err != nil {
 			// exit with error
@@ -319,6 +322,8 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// exit with error
 		return err
 	}
+	// the commit succeeded; cache this height's account delta if a collector ran for it
+	c.cacheAccountDelta(block.BlockHeader.Height, liveCollector)
 	if !syncing {
 		// refresh the mempool FSM from the newly committed height before rebuilding
 		c.Mempool.FSM.Discard()
@@ -379,6 +384,10 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	storeI := c.FSM.Store().(lib.StoreI)
 	// reset the store once this code finishes; if code execution gets to `store.Commit()` - this will effectively be a noop
 	defer c.FSM.Reset()
+	// the live account-change collector, assigned only on the path below where it actually
+	// runs; it stays nil for a 'pre-calculated' block result so no empty tip-cache entry is
+	// written for a height whose accounts were never classified
+	var liveCollector *fsm.AccountChangeCollector
 	// if the block result isn't 'pre-calculated'
 	if blockResult == nil {
 		// reset the FSM to ensure stale proposal validations don't come into play
@@ -389,8 +398,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		}
 		// apply the block against the state machine, attaching a live account-change
 		// collector when this node is configured to serve indexer blobs and isn't syncing
-		// (see Task 5 for accountCollectorForLiveCommit and Task 6 for tip-cache populate)
-		liveCollector := c.accountCollectorForLiveCommit(syncing)
+		liveCollector = c.accountCollectorForLiveCommit(syncing)
 		if blockResult, err = c.ApplyAndValidateBlock(block, true, liveCollector); err != nil {
 			// exit with error
 			return
@@ -414,7 +422,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	c.FSM.ParsePollTransactions(blockResult)
 	// sync path: no mempool maintenance and no parallelism, only commit inline
 	if syncing {
-		return c.commitToStore(storeI, qc, block.BlockHeader.Height)
+		return c.commitToStore(storeI, qc, block.BlockHeader.Height, nil) // never live during sync
 	}
 	// live path: commit and mempool refresh run in parallel
 	// create an ephemeral store copy for the mempool
@@ -434,7 +442,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	eg := errgroup.Group{}
 	eg.Go(func() error {
 		// atomically commit and set up the FSM for the next height
-		if err = c.commitToStore(storeI, qc, block.BlockHeader.Height); err != nil {
+		if err = c.commitToStore(storeI, qc, block.BlockHeader.Height, liveCollector); err != nil {
 			// exit with error
 			return err
 		}
@@ -498,8 +506,10 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	return
 }
 
-// commitToStore() atomically writes the ephemeral batch to disk and sets up the FSM for the next height
-func (c *Controller) commitToStore(storeI lib.StoreI, qc *lib.QuorumCertificate, height uint64) (err lib.ErrorI) {
+// commitToStore() atomically writes the ephemeral batch to disk and sets up the FSM for the next
+// height; collector, when non-nil, is the live account-change collector that ran for this height
+// and whose results are cached only once the commit has fully succeeded
+func (c *Controller) commitToStore(storeI lib.StoreI, qc *lib.QuorumCertificate, height uint64, collector *fsm.AccountChangeCollector) (err lib.ErrorI) {
 	// log the start of the commit
 	c.log.Debug("Committing to store")
 	// atomically write all from the ephemeral database batch to the actual database
@@ -511,14 +521,37 @@ func (c *Controller) commitToStore(storeI lib.StoreI, qc *lib.QuorumCertificate,
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), height)
 	// set up the finite state machine for the next height
 	c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
-	return err
+	if err != nil {
+		// exit with error
+		return err
+	}
+	// the commit succeeded; cache this height's account delta if a collector ran for it
+	c.cacheAccountDelta(height, collector)
+	return nil
 }
 
-// TEMPORARY stub for Task 4 only — replaced by Task 5's real implementation, which will
-// gate collector attachment on the ServeIndexerBlobsLive config flag and the syncing state.
-// Until Task 5 lands, this always returns nil, so no collector is attached anywhere live yet.
+// accountCollectorForLiveCommit returns a fresh AccountChangeCollector for the live
+// commit path only — never during sync/replay, where nothing is polling yet and
+// eagerly classifying every replayed block would be pure waste.
 func (c *Controller) accountCollectorForLiveCommit(syncing bool) *fsm.AccountChangeCollector {
-	return nil
+	if syncing || !c.Config.RPCConfig.ServeIndexerBlobsLive {
+		return nil
+	}
+	return fsm.NewAccountChangeCollector(c.FSM.Get)
+}
+
+// cacheAccountDelta() stores a successfully-committed height's classified account changes
+// in the tip cache. collector is nil on every path where no collector actually ran (a
+// pre-calculated block result, a syncing commit, or the config flag disabled) — those must
+// fall through to on-demand replay rather than caching an empty, authoritative-looking entry.
+func (c *Controller) cacheAccountDelta(height uint64, collector *fsm.AccountChangeCollector) {
+	// the cache is nil for a Controller not built by New() (test literals); never let a
+	// caching miss take down a commit
+	if collector == nil || c.accountDeltaCache == nil {
+		return
+	}
+	added, changed, removed := collector.Results()
+	c.accountDeltaCache.put(height, &accountDeltaEntry{added: added, changed: changed, removed: removed})
 }
 
 // INTERNAL HELPERS BELOW

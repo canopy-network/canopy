@@ -42,9 +42,12 @@ type Controller struct {
 	RCManager   lib.RCManagerI                     // the data manager for the 'root chain'
 	Plugin      *lib.Plugin                        // extensible plugin for FSM
 	checkpoints map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
-	isSyncing   *atomic.Bool                       // is the chain currently being downloaded from peers
-	log         lib.LoggerI                        // object for logging
-	*sync.Mutex                                    // mutex for thread safety
+
+	accountDeltaCache *accountDeltaCache // FIFO tip cache of recent heights' account deltas for the indexer
+
+	isSyncing   *atomic.Bool // is the chain currently being downloaded from peers
+	log         lib.LoggerI  // object for logging
+	*sync.Mutex              // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
@@ -75,9 +78,11 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		Mempool:    mempool,
 		Consensus:  nil,
 		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
-		isSyncing:  &atomic.Bool{},
-		log:        l,
-		Mutex:      &sync.Mutex{},
+		// 0 → default capacity
+		accountDeltaCache: newAccountDeltaCache(0),
+		isSyncing:         &atomic.Bool{},
+		log:               l,
+		Mutex:             &sync.Mutex{},
 	}
 	// load checkpoints from file (if provided)
 	controller.loadCheckpointsFile()
