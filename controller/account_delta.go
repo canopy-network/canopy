@@ -43,9 +43,15 @@ func (c *Controller) GetAccountDelta(ctx context.Context, height uint64) (delta 
 		// copies the slice headers so no caller can append-through into the shared tip
 		// cache; the entry values stay shared -- they are immutable by contract
 		if entry, ok := c.accountDeltaCache.get(blockHeight); ok {
+			c.Metrics.RecordAccountDeltaTipCacheHit()
 			return entry.Clone(), nil
 		}
 	}
+	// everything below is the replay fall-through: after a restart the cache is cold, and
+	// anything older than the tip window replays the full block on every request -- the
+	// paired hit/miss counters are what make that visible (Metrics methods are nil-safe)
+	c.Metrics.RecordAccountDeltaTipCacheMiss()
+	c.log.Debugf("account delta for block %d not in tip cache, replaying", blockHeight)
 	// capture the live FSM once: commitToStore reassigns c.FSM, and re-reading it would let a
 	// concurrent commit slip a different object between the TimeMachine calls and the
 	// `!= liveFSM` comparisons below — inverting the Discard guards and potentially

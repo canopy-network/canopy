@@ -264,6 +264,78 @@ func TestAccountDelta_MatchesOldFullScanAndDiff(t *testing.T) {
 	require.Equal(t, oldDelta.Previous.Accounts, newPrevious)
 }
 
+// TestAccountDelta_EmptyBlockOnlyMovesRewardAccounts extends the differential test to an
+// EMPTY block: block 6 carries no transactions, so its only account movement comes from the
+// automatic reward machinery (QC5 pays validator #3, which is non-compounding, so the tokens
+// land on its OUTPUT account -- key group 0). The fast path must classify exactly that
+// movement and still match the old full-scan-and-diff byte for byte.
+func TestAccountDelta_EmptyBlockOnlyMovesRewardAccounts(t *testing.T) {
+	sm, _ := newTestAccountDeltaChain(t)
+	// block 6: empty
+	testApplyAndCommitBlock(t, sm, nil)
+	targetHeight := sm.height
+	ctx := context.Background()
+
+	// OLD PATH: full account scan at both heights, diffed by DeltaIndexerBlobs
+	oldCurrent, err := sm.IndexerBlob(ctx, targetHeight, false)
+	require.NoError(t, err)
+	oldPrevious, err := sm.IndexerBlob(ctx, targetHeight-1, false)
+	require.NoError(t, err)
+	oldDelta, err := DeltaIndexerBlobs(&IndexerBlobs{Current: oldCurrent, Previous: oldPrevious})
+	require.NoError(t, err)
+
+	// NEW PATH: replay the empty block with a collector (same recipe as the main test)
+	blockHeight := targetHeight - 1
+	blockResult, err := sm.store.(lib.StoreI).GetBlockByHeight(blockHeight)
+	require.NoError(t, err)
+	require.NotNil(t, blockResult)
+	block, err := blockResult.ToBlock()
+	require.NoError(t, err)
+	replaySM, err := sm.TimeMachine(blockHeight)
+	require.NoError(t, err)
+	defer replaySM.Discard()
+	collector := NewAccountChangeCollector(replaySM.Get)
+	_, applyResult, err := replaySM.ReplayBlock(ctx, block, collector)
+	require.NoError(t, err)
+	require.Empty(t, applyResult.Failed)
+	delta := collector.Results()
+	require.NotNil(t, delta)
+
+	// an empty block adds and removes nothing; the only movement is the reward payout to
+	// validator #3's output account (key group 0)
+	require.Empty(t, delta.Added)
+	require.Empty(t, delta.Removed)
+	require.NotEmpty(t, delta.Changed, "the reward payout must move at least one account")
+	for _, e := range delta.Changed {
+		require.Equal(t, newTestAddressBytes(t), e.Address,
+			"an empty block may only move the reward output account")
+	}
+
+	// assemble through the REAL production code and require byte-for-byte equality
+	newCurrent, newPrevious, err := sm.AssembleAccountDeltaSides(delta, oldCurrent.Block, targetHeight)
+	require.NoError(t, err)
+	require.Equal(t, oldDelta.Current.Accounts, newCurrent)
+	require.Equal(t, oldDelta.Previous.Accounts, newPrevious)
+}
+
+// AccountEntriesAtVersion must silently skip a forced address with no account at that
+// version -- matching forceIncludeKeys' rule that a forced key is only included on a side
+// where the account actually exists
+func TestAccountEntriesAtVersion_SkipsMissingAccounts(t *testing.T) {
+	sm, _ := newTestApplyBlockFixture(t)
+	st := sm.store.(lib.StoreI)
+	funded := newTestAddressBytes(t) // AccountAdd(newTestAddress(t), 2) in the fixture
+	missing := bytes.Repeat([]byte{0xEE}, crypto.AddressSize)
+	entries, err := sm.AccountEntriesAtVersion(st.Version(), map[string]struct{}{
+		string(funded):  {},
+		string(missing): {},
+	})
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	require.NotContains(t, entries, string(missing), "an address with no account must be skipped, not emitted empty")
+	require.Equal(t, mustMarshalProto(t, &Account{Address: funded, Amount: 2}), entries[string(funded)])
+}
+
 // accountSide must never mutate or alias the slices it is handed: GetAccountDelta can return
 // the tip-cache entry's slices (see controller/account_delta_cache.go), and the assembled
 // result is stored in the RPC blob cache and served to every later caller

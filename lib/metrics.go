@@ -91,6 +91,14 @@ type IndexerMetrics struct {
 	IndexerBlobPreviousReuseHits   prometheus.Counter // how many "previous" blobs were reused from the prior request's cached current?
 	IndexerBlobPreviousReuseMisses prometheus.Counter // how many "previous" blobs required their own fresh cold read?
 	IndexerBlobCancelled           prometheus.Counter // how many indexer-blobs cold reads were aborted early because the client disconnected?
+	// AccountDeltaTipCacheHits/Misses track GetAccountDelta's tip cache, which is populated by
+	// the live commit path: a hit serves the account delta collected during that block's own
+	// commit, a miss falls through to a full single-block replay (O(block) work per request).
+	// After a restart the cache is cold and every request below the tip window replays -- these
+	// counters are what make that visible, since the replay is otherwise only an indirect
+	// IndexerBlobStepTime{step="account_delta_get"} increase.
+	AccountDeltaTipCacheHits   prometheus.Counter // how many account-delta requests were served from the live tip cache?
+	AccountDeltaTipCacheMisses prometheus.Counter // how many account-delta requests fell through to a single-block replay?
 	// IndexerBlobStepTime breaks the cold read down by step (time_machine, block_fetch,
 	// accounts_iterate, ... -- see fsm/indexer.go), most of which are direct pebbledb
 	// reads/iterations at a historical version. Lets a slow cold read be attributed to
@@ -798,6 +806,14 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_indexer_blob_previous_reuse_misses_total",
 				Help: "Total indexer-blobs requests whose 'previous' blob required its own fresh cold read",
 			}),
+			AccountDeltaTipCacheHits: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_account_delta_tip_cache_hits_total",
+				Help: "Total account-delta requests served from the live-commit tip cache",
+			}),
+			AccountDeltaTipCacheMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_account_delta_tip_cache_misses_total",
+				Help: "Total account-delta requests that fell through to a single-block replay",
+			}),
 			IndexerBlobStepTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_indexer_blob_step_time",
 				Help: "The time each step of an indexer-blobs cold read takes, by step name",
@@ -1100,6 +1116,26 @@ func (m *Metrics) RecordIndexerBlobPreviousReuseMiss() {
 		return
 	}
 	m.IndexerBlobPreviousReuseMisses.Inc()
+}
+
+// RecordAccountDeltaTipCacheHit() records an account-delta request served from the
+// live-commit tip cache.
+func (m *Metrics) RecordAccountDeltaTipCacheHit() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.AccountDeltaTipCacheHits.Inc()
+}
+
+// RecordAccountDeltaTipCacheMiss() records an account-delta request that fell through
+// to a single-block replay because the height wasn't in the tip cache.
+func (m *Metrics) RecordAccountDeltaTipCacheMiss() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.AccountDeltaTipCacheMisses.Inc()
 }
 
 // RecordIndexerBlobCancelled() records an indexer-blobs cold read that was aborted early

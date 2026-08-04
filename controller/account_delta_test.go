@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/canopy-network/canopy/fsm"
@@ -16,7 +17,7 @@ func TestGetAccountDelta_TipCacheHit(t *testing.T) {
 	c := &Controller{accountDeltaCache: newAccountDeltaCache(0)}
 	c.accountDeltaCache.put(5, &fsm.AccountDelta{Added: []*fsm.AccountChangeEntry{{Address: []byte("a")}}})
 	delta, err := c.GetAccountDelta(context.Background(), 6)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, delta)
 	require.Len(t, delta.Added, 1)
 	require.Equal(t, []byte("a"), delta.Added[0].Address)
@@ -35,7 +36,7 @@ func TestGetAccountDelta_TipCacheHitDoesNotTouchFSM(t *testing.T) {
 	})
 	require.Nil(t, c.FSM)
 	delta, err := c.GetAccountDelta(context.Background(), 10)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, delta)
 	require.Empty(t, delta.Added)
 	require.Len(t, delta.Changed, 1)
@@ -49,13 +50,13 @@ func TestGetAccountDelta_TipCacheHitCopiesSliceHeaders(t *testing.T) {
 	c := &Controller{accountDeltaCache: newAccountDeltaCache(0)}
 	c.accountDeltaCache.put(5, &fsm.AccountDelta{Added: []*fsm.AccountChangeEntry{{Address: []byte("a")}}})
 	first, err := c.GetAccountDelta(context.Background(), 6)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// abuse the returned delta the way a careless future caller might
 	first.Added = append(first.Added, &fsm.AccountChangeEntry{Address: []byte("rogue")})
 	first.Changed = append(first.Changed, &fsm.AccountChangeEntry{Address: []byte("rogue")})
 	// a second lookup must be unaffected by the first caller's appends
 	second, err := c.GetAccountDelta(context.Background(), 6)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Len(t, second.Added, 1)
 	require.Equal(t, []byte("a"), second.Added[0].Address)
 	require.Empty(t, second.Changed)
@@ -67,9 +68,11 @@ func TestGetAccountDelta_RejectsHeightsBelowTwo(t *testing.T) {
 	c := &Controller{accountDeltaCache: newAccountDeltaCache(0)}
 	require.Nil(t, c.FSM)
 	for _, height := range []uint64{0, 1} {
-		delta, err := c.GetAccountDelta(context.Background(), height)
-		require.NotNil(t, err)
-		require.Equal(t, lib.CodeWrongBlockHeight, err.Code())
-		require.Nil(t, delta)
+		t.Run(fmt.Sprintf("height %d", height), func(t *testing.T) {
+			delta, err := c.GetAccountDelta(context.Background(), height)
+			require.NotNil(t, err)
+			require.Equal(t, lib.CodeWrongBlockHeight, err.Code())
+			require.Nil(t, delta)
+		})
 	}
 }

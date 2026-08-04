@@ -410,8 +410,17 @@ func TestApplyBlock_CollectorCapturesTouchedAccounts(t *testing.T) {
 	require.Empty(t, result.Failed)
 	delta := collector.Results()
 	require.NotNil(t, delta)
-	added, changed, removed := delta.Added, delta.Changed, delta.Removed
-	require.NotEmpty(t, append(append(added, changed...), removed...), "collector should have captured at least one touched account")
+	// the fixture block's single transaction is key group 0's self-send of 1 with a fee of
+	// 1: sender and recipient are the SAME account, so exactly one account changes (only
+	// the fee leaves it, 2 -> 1) and nothing is added or removed. The fixture QC carries no
+	// chain id, so no committee reward reaches any account (see testAccountDeltaQC's note).
+	require.Empty(t, delta.Added)
+	require.Empty(t, delta.Removed)
+	require.Len(t, delta.Changed, 1)
+	entry := delta.Changed[0]
+	require.Equal(t, newTestAddressBytes(t), entry.Address)
+	require.Equal(t, mustMarshalProto(t, &Account{Address: newTestAddressBytes(t), Amount: 2}), entry.PrevValue)
+	require.Equal(t, mustMarshalProto(t, &Account{Address: newTestAddressBytes(t), Amount: 1}), entry.FinalValue)
 }
 
 func TestApplyBlock_NilCollectorSkipRootFalseIsUnchanged(t *testing.T) {
