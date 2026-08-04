@@ -635,7 +635,7 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	// after the fact both in logs and in canopy_indexer_blob_cold_read_time.
 	coldStart := time.Now()
 	defer s.controller.Metrics.RecordIndexerBlobCacheMiss(coldStart)
-	current, err := s.controller.FSM.IndexerBlob(ctx, height, false)
+	current, err := s.controller.FSM.IndexerBlob(ctx, height, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -649,7 +649,7 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 			previous = cachedPrev
 		} else {
 			s.controller.Metrics.RecordIndexerBlobPreviousReuseMiss()
-			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1, false)
+			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1, true)
 			if prevErr != nil {
 				return nil, nil, prevErr
 			}
@@ -660,11 +660,34 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		s.controller.Metrics.RecordIndexerBlobCancelled()
 		s.logger.Debugf("indexer-blobs cold read for height %d cancelled after %s: %s", height, time.Since(coldStart), ctxErr)
+		// bail out explicitly rather than falling through. This used to happen implicitly:
+		// the account prefix scan was the ctx-honoring call that surfaced ErrCancelled to
+		// the caller and kept a cancelled request from populating the cache. That scan is
+		// gone now (skipAccounts below), so the check has to do the returning itself --
+		// otherwise a cancelled request would go on to do the account-delta work and cache
+		// a response nobody is waiting for.
+		return nil, nil, lib.ErrCancelled(ctxErr)
 	} else if elapsed := time.Since(coldStart); elapsed > time.Duration(s.config.TimeoutS)*time.Second {
 		s.logger.Warnf("indexer-blobs cold read for height %d took %s, exceeding the %ds RPC write deadline -- "+
 			"caller's write will fail with i/o timeout even though this read eventually succeeded", height, elapsed, s.config.TimeoutS)
 	} else {
 		s.logger.Debugf("indexer-blobs cold read for height %d took %s", height, elapsed)
+	}
+
+	// both blobs above were built with skipAccounts=true, so DeltaIndexerBlobs will compute
+	// an empty account delta. Source the real one from the collector-backed fast path
+	// instead (live tip cache, or an on-demand single-block replay) rather than from a full
+	// ~1.35M-account prefix scan of both heights.
+	//
+	// height is already clamped to the tip above, which GetAccountDelta depends on -- it
+	// errors rather than clamps for an above-tip height. Its height >= 2 floor is likewise
+	// already guaranteed: IndexerBlob rejects height <= 1, so any height reaching here has
+	// already been proven >= 2.
+	accountDeltaStart := time.Now()
+	added, changed, removed, deltaErr := s.controller.GetAccountDelta(ctx, height)
+	s.controller.Metrics.ObserveIndexerBlobStep("account_delta_get", accountDeltaStart)
+	if deltaErr != nil {
+		return nil, nil, deltaErr
 	}
 
 	blobs := &fsm.IndexerBlobs{
@@ -676,6 +699,16 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	s.controller.Metrics.ObserveIndexerBlobStep("delta_compute", deltaComputeStart)
 	if err != nil {
 		return nil, nil, err
+	}
+	// override the (empty) account delta DeltaIndexerBlobs computed from the skipped
+	// account scans with the fast path's classified result
+	if blobDelta != nil {
+		if blobDelta.Current != nil {
+			blobDelta.Current.Accounts = accountBytes(added, changed, true)
+		}
+		if blobDelta.Previous != nil {
+			blobDelta.Previous.Accounts = accountBytes(changed, removed, false)
+		}
 	}
 	deltaMarshalStart := time.Now()
 	deltaBytes, err := lib.Marshal(blobDelta)
@@ -692,6 +725,36 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	s.controller.Metrics.UpdateIndexerBlobCacheSize(s.indexerBlobCache.Len())
 
 	return blobDelta, deltaBytes, nil
+}
+
+// accountBytes() builds the [][]byte wire shape IndexerBlob.Accounts already uses, from
+// AccountChangeCollector entries. useFinal selects FinalValue (for the current side) vs
+// PrevValue (for the previous side) -- matching DeltaIndexerBlobs's existing convention
+// where an added account has no previous-side entry and a removed account has no
+// current-side entry.
+//
+// READ-ONLY: a and b may be the live, shared tip-cache entry's slices (see
+// controller/account_delta_cache.go). This only reads them and their entries, appending
+// the already-marshalled byte slices into a freshly allocated result.
+func accountBytes(a, b []*fsm.AccountChangeEntry, useFinal bool) [][]byte {
+	out := make([][]byte, 0, len(a)+len(b))
+	appendFrom := func(entries []*fsm.AccountChangeEntry) {
+		for _, e := range entries {
+			if e == nil {
+				continue
+			}
+			value := e.FinalValue
+			if !useFinal {
+				value = e.PrevValue
+			}
+			if value != nil {
+				out = append(out, value)
+			}
+		}
+	}
+	appendFrom(a)
+	appendFrom(b)
+	return out
 }
 
 // orderParams is a helper function to abstract common workflows around a callback requiring a state machine and order request

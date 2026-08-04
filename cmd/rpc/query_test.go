@@ -52,7 +52,10 @@ func TestIndexerBlobsCached_CachesDeltaResponsesOnly(t *testing.T) {
 	require.NotNil(t, entry.current)
 	require.NotNil(t, entry.deltaBlobs)
 	require.NotEmpty(t, entry.deltaBytes)
-	require.Len(t, entry.current.Accounts, 2)
+	// the cached full snapshot no longer carries accounts at all: IndexerBlob is now called
+	// with skipAccounts=true, which is the whole point of the fast path -- the ~1.35M-account
+	// scan that used to fill this field is exactly what was eliminated
+	require.Empty(t, entry.current.Accounts)
 	require.Same(t, got, entry.deltaBlobs)
 	require.Equal(t, bz, entry.deltaBytes)
 
@@ -92,6 +95,76 @@ func TestIndexerBlobsCached_RetainsOnlyLatestFullSnapshot(t *testing.T) {
 	require.NotNil(t, entry4.current)
 	require.NotNil(t, entry4.deltaBlobs)
 	require.NotEmpty(t, entry4.deltaBytes)
+}
+
+// the account delta on the response must come from Controller.GetAccountDelta, not from
+// diffing two full account scans: added+changed land on Current as their FINAL values, and
+// changed+removed land on Previous as their PREVIOUS values.
+func TestIndexerBlobsCached_UsesAccountDeltaFastPath(t *testing.T) {
+	server := newTestIndexerBlobServerWithHeights(t, 4)
+	addrA := crypto.NewAddress(bytes.Repeat([]byte{0x11}, crypto.AddressSize))
+	addrB := crypto.NewAddress(bytes.Repeat([]byte{0x22}, crypto.AddressSize))
+
+	// state version 4 is produced by block 3, whose seeded delta is "A and B both changed"
+	got, _, err := server.IndexerBlobsCached(context.Background(), 4)
+	require.NoError(t, err)
+	require.NotNil(t, got.Current)
+	require.NotNil(t, got.Previous)
+
+	// current side: the post-block values
+	require.Equal(t, [][]byte{
+		mustMarshalAccount(t, addrA.Bytes(), 125),
+		mustMarshalAccount(t, addrB.Bytes(), 75),
+	}, got.Current.Accounts)
+	// previous side: the pre-block values for the same two accounts
+	require.Equal(t, [][]byte{
+		mustMarshalAccount(t, addrA.Bytes(), 100),
+		mustMarshalAccount(t, addrB.Bytes(), 50),
+	}, got.Previous.Accounts)
+
+	// proof this did not come from the old full-scan diff: neither underlying snapshot blob
+	// carries accounts anymore, so a diff of them could only have produced an empty result
+	entry, ok := server.indexerBlobCache.get(4)
+	require.True(t, ok)
+	require.Empty(t, entry.current.Accounts)
+}
+
+// an added account has no previous-side entry and a removed account has no current-side
+// entry, matching DeltaIndexerBlobs's existing convention
+func TestIndexerBlobsCached_AddedAccountsOmittedFromPreviousSide(t *testing.T) {
+	server := newTestIndexerBlobServer(t)
+	addrB := crypto.NewAddress(bytes.Repeat([]byte{0x22}, crypto.AddressSize))
+
+	// state version 3 is produced by block 2, whose seeded delta is "B added, nothing else"
+	got, _, err := server.IndexerBlobsCached(context.Background(), 3)
+	require.NoError(t, err)
+	require.NotNil(t, got.Current)
+	require.NotNil(t, got.Previous)
+
+	require.Equal(t, [][]byte{mustMarshalAccount(t, addrB.Bytes(), 50)}, got.Current.Accounts)
+	require.Empty(t, got.Previous.Accounts)
+}
+
+// accountBytes must never mutate the slices it is handed: GetAccountDelta can return the
+// live, shared tip-cache entry (see controller/account_delta_cache.go)
+func TestAccountBytes_DoesNotMutateInputs(t *testing.T) {
+	added := []*fsm.AccountChangeEntry{{Address: []byte("a"), FinalValue: []byte("af")}}
+	changed := []*fsm.AccountChangeEntry{{Address: []byte("b"), PrevValue: []byte("bp"), FinalValue: []byte("bf")}}
+	// spare capacity: an append-in-place would write through into the shared backing array
+	removed := make([]*fsm.AccountChangeEntry, 1, 4)
+	removed[0] = &fsm.AccountChangeEntry{Address: []byte("c"), PrevValue: []byte("cp")}
+
+	require.Equal(t, [][]byte{[]byte("af"), []byte("bf")}, accountBytes(added, changed, true))
+	require.Equal(t, [][]byte{[]byte("bp"), []byte("cp")}, accountBytes(changed, removed, false))
+
+	require.Len(t, added, 1)
+	require.Len(t, changed, 1)
+	require.Len(t, removed, 1)
+	require.Equal(t, []byte("af"), added[0].FinalValue)
+	require.Equal(t, []byte("bp"), changed[0].PrevValue)
+	require.Equal(t, []byte("bf"), changed[0].FinalValue)
+	require.Equal(t, []byte("cp"), removed[0].PrevValue)
+	require.Equal(t, 4, cap(removed), "the input slice's backing array must be untouched")
 }
 
 func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {
@@ -253,11 +326,51 @@ func newTestIndexerBlobServerWithHeights(t *testing.T, height uint64) *Server {
 		setFSMHeight(t, sm, 4)
 	}
 
+	ctrl := &controller.Controller{FSM: sm}
+
+	// IndexerBlobsCached now sources account deltas from Controller.GetAccountDelta rather
+	// than from a full account scan of both heights. GetAccountDelta's replay fallback is not
+	// reachable from this fixture -- these blocks are bare headers with no certificate and the
+	// state has no validator set, so an ApplyBlock replay fails with "no validators in the
+	// set". Seed the tip cache instead with exactly the deltas a live AccountChangeCollector
+	// would have produced for the state transitions the fixture performs above, so the tests
+	// exercise the real GetAccountDelta cache-hit path (including its block-height keying).
+	//
+	// cache key is BLOCK height; state version N is produced by block N-1.
+	//
+	// block 2 (state 2 -> 3): B is created; A is rewritten with an identical value, which a
+	// collector classifies as unchanged and therefore omits.
+	ctrl.SeedAccountDeltaCache(2, []*fsm.AccountChangeEntry{
+		{Address: addrB.Bytes(), FinalValue: mustMarshalAccount(t, addrB.Bytes(), 50)},
+	}, nil, nil)
+	if height >= 4 {
+		// block 3 (state 3 -> 4): both A and B change value
+		ctrl.SeedAccountDeltaCache(3, nil, []*fsm.AccountChangeEntry{
+			{
+				Address:    addrA.Bytes(),
+				PrevValue:  mustMarshalAccount(t, addrA.Bytes(), 100),
+				FinalValue: mustMarshalAccount(t, addrA.Bytes(), 125),
+			},
+			{
+				Address:    addrB.Bytes(),
+				PrevValue:  mustMarshalAccount(t, addrB.Bytes(), 50),
+				FinalValue: mustMarshalAccount(t, addrB.Bytes(), 75),
+			},
+		}, nil)
+	}
+
 	return &Server{
-		controller:       &controller.Controller{FSM: sm},
+		controller:       ctrl,
 		indexerBlobCache: newIndexerBlobCache(8),
 		logger:           log,
 	}
+}
+
+func mustMarshalAccount(t *testing.T, address []byte, amount uint64) []byte {
+	t.Helper()
+	bz, err := lib.Marshal(&fsm.Account{Address: address, Amount: amount})
+	require.NoError(t, err)
+	return bz
 }
 
 func newTestRPCStateMachine(t *testing.T, db lib.StoreI, log lib.LoggerI) *fsm.StateMachine {

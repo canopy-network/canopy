@@ -60,6 +60,22 @@ func (c *accountDeltaCache) get(height uint64) (*accountDeltaEntry, bool) {
 	return entry, ok
 }
 
+// SeedAccountDeltaCache() installs a block height's classified account changes into the tip
+// cache directly, bypassing a live commit. It exists so callers outside this package — the
+// cmd/rpc indexer-blob tests in particular — can exercise GetAccountDelta's cache-hit path
+// without standing up a full validator set and certificate chain for the replay path.
+//
+// It lazily creates the cache, so a Controller literal (not built by New()) works too.
+//
+// The seeded slices become part of the shared, immutable cache entry: the caller must not
+// mutate them afterwards (see this file's package doc comments on read-only entries).
+func (c *Controller) SeedAccountDeltaCache(blockHeight uint64, added, changed, removed []*fsm.AccountChangeEntry) {
+	if c.accountDeltaCache == nil {
+		c.accountDeltaCache = newAccountDeltaCache(0)
+	}
+	c.accountDeltaCache.put(blockHeight, &accountDeltaEntry{added: added, changed: changed, removed: removed})
+}
+
 // put() stores a height's delta, evicting the oldest height once at capacity
 func (c *accountDeltaCache) put(height uint64, entry *accountDeltaEntry) {
 	c.mu.Lock()
