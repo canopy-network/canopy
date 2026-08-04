@@ -428,3 +428,15 @@ export async function getNasmVaultPool(vaultId: string): Promise<{ amount: bigin
   } catch { return null; }
 }
 
+export async function getAllNasmVaults(owner?: string): Promise<Array<Record<string, unknown>>> {
+  try {
+    const url = owner
+      ? "/v1/query/all-nasm-vaults?owner=" + encodeURIComponent(owner.replace(/^0x/, ""))
+      : "/v1/query/all-nasm-vaults";
+    const res = await pluginGet(url);
+    if (!res.ok) return [];
+    const j = await res.json();
+    return Array.isArray(j) ? j : [];
+  } catch { return []; }
+}
+

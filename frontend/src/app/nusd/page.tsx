@@ -9,8 +9,8 @@ import {
   getNasmTier,
   getNusdBalance,
   getTreasury,
-  getNasmVault,
   getNasmVaultPool,
+  getAllNasmVaults,
 } from "@/lib/canopy/pluginRpc";
 import { formatAmount } from "@/lib/arbor/format";
 
@@ -22,54 +22,45 @@ function fmtBps(bps: bigint): string {
 
 
 function NasmVaults() {
-  const [vaultId, setVaultId] = useState("");
-  const [tracked, setTracked] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem("arbor-tracked-vaults") ?? "[]") as string[]; } catch { return []; }
-  });
-  const [vaults, setVaults] = useState<Record<string, { v: Record<string, unknown>; pool: bigint }>>({});
-  const [err, setErr] = useState<string | null>(null);
+  const wallet = useWalletStore();
+  const [rows, setRows] = useState<Array<{ v: Record<string, unknown>; pool: bigint }>>([]);
+  const [loading, setLoading] = useState(false);
 
-  const load = async (id: string) => {
-    if (!id) return;
-    const [v, pool] = await Promise.all([getNasmVault(id), getNasmVaultPool(id)]);
-    if (!v) { setErr("vault not found: " + id); return; }
-    setErr(null);
-    setVaults((p) => ({ ...p, [id]: { v, pool: pool?.amount ?? 0n } }));
-    setTracked((t) => {
-      const n = t.includes(id) ? t : [...t, id];
-      try { localStorage.setItem("arbor-tracked-vaults", JSON.stringify(n)); } catch {}
-      return n;
+  useEffect(() => {
+    if (!wallet.address) { setRows([]); return; }
+    let alive = true;
+    setLoading(true);
+    getAllNasmVaults(wallet.address).then(async (list) => {
+      const withPool = await Promise.all(
+        list.map(async (v) => {
+          const p = await getNasmVaultPool(String(v.vaultId ?? ""));
+          return { v, pool: p?.amount ?? 0n };
+        })
+      );
+      if (alive) { setRows(withPool); setLoading(false); }
     });
-  };
+    return () => { alive = false; };
+  }, [wallet.address]);
 
-  useEffect(() => { tracked.forEach((id) => load(id)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const ids = Object.keys(vaults);
   return (
     <section className="space-y-4">
-      <h2 className="section-h">Vaults</h2>
+      <h2 className="section-h">Your Vaults</h2>
       <p className="text-xs text-zinc-500">
-        There is no on-chain route to enumerate vaults yet, so load one by id (or any vault you
-        mint is tracked here). Collateral and minted NUSD principal are read live from
-        /v1/query/nasmvault; escrowed collateral from /v1/query/nasmvaultpool.
+        Vaults owned by the connected wallet, enumerated live via
+        /v1/query/all-nasm-vaults?owner=… Collateral and minted NUSD principal come
+        from each NasmVault record; escrowed collateral from nasmvaultpool.
       </p>
-      <div className="flex gap-2">
-        <input
-          value={vaultId}
-          onChange={(e) => setVaultId(e.target.value)}
-          placeholder="vault id"
-          className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-amber-400/50"
-        />
-        <button
-          type="button"
-          onClick={() => load(vaultId.trim())}
-          className="shrink-0 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-400/20"
-        >
-          Load vault
-        </button>
-      </div>
-      {err && <p className="text-xs text-rose-300">{err}</p>}
-      {ids.length > 0 && (
+      {!wallet.address ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-400">
+          Connect a wallet to view your vaults.
+        </div>
+      ) : loading ? (
+        <p className="text-sm text-zinc-400">Loading vaults…</p>
+      ) : rows.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-400">
+          No NUSD vaults found for this address.
+        </div>
+      ) : (
         <div className="glass rounded-2xl p-5 backdrop-blur no-scrollbar overflow-x-auto">
           <table className="w-full min-w-[36rem] text-sm">
             <thead>
@@ -77,25 +68,20 @@ function NasmVaults() {
                 <th className="pb-2 pr-4 font-medium">Vault</th>
                 <th className="pb-2 pr-4 font-medium">Collateral</th>
                 <th className="pb-2 pr-4 font-medium">Escrowed</th>
-                <th className="pb-2 pr-4 font-medium">NUSD principal</th>
-                <th className="pb-2 font-medium">Owner</th>
+                <th className="pb-2 font-medium">NUSD principal</th>
               </tr>
             </thead>
             <tbody>
-              {ids.map((id) => {
-                const { v, pool } = vaults[id];
-                return (
-                  <tr key={id} className="border-t border-white/5">
-                    <td className="py-2.5 pr-4 font-mono text-xs text-zinc-200">{id}</td>
-                    <td className="py-2.5 pr-4 tabular-nums text-zinc-300">
-                      {formatAmount(BigInt(String(v.collateralQuantity ?? "0")), 9)} {String(v.collateralAssetId ?? "")}
-                    </td>
-                    <td className="py-2.5 pr-4 tabular-nums text-zinc-300">{formatAmount(pool, 9)}</td>
-                    <td className="py-2.5 pr-4 tabular-nums text-amber-200">{formatAmount(BigInt(String(v.nusdPrincipal ?? "0")), 6)}</td>
-                    <td className="py-2.5 font-mono text-xs text-zinc-500">{String(v.owner ?? "").slice(0, 10)}…</td>
-                  </tr>
-                );
-              })}
+              {rows.map(({ v, pool }) => (
+                <tr key={String(v.vaultId)} className="border-t border-white/5">
+                  <td className="py-2.5 pr-4 font-mono text-xs text-zinc-200">{String(v.vaultId)}</td>
+                  <td className="py-2.5 pr-4 tabular-nums text-zinc-300">
+                    {formatAmount(BigInt(String(v.collateralQuantity ?? "0")), 9)} {String(v.collateralAssetId ?? "")}
+                  </td>
+                  <td className="py-2.5 pr-4 tabular-nums text-zinc-300">{formatAmount(pool, 9)}</td>
+                  <td className="py-2.5 tabular-nums text-amber-200">{formatAmount(BigInt(String(v.nusdPrincipal ?? "0")), 6)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
