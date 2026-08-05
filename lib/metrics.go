@@ -72,7 +72,7 @@ type Metrics struct {
 	pebbleStallStart time.Time  // set on WriteStallBegin, cleared on WriteStallEnd
 
 	pebbleDiskSlowMu      sync.Mutex // guards pebbleDiskSlowMaxSecs against concurrent onSlowDisk callbacks
-	pebbleDiskSlowMaxSecs float64    // highest single disk-op duration observed, mirrors PebbleDiskSlowMaxDurationS
+	pebbleDiskSlowMaxSecs float64    // highest single disk-op duration observed, mirrors PebbleDiskSlowMaxDurationSecs
 
 	NodeMetrics    // general telemetry about the node
 	BlockMetrics   // block telemetry
@@ -240,8 +240,8 @@ type StoreMetrics struct {
 	// direct disk-health signal - canopy has no equivalent of CockroachDB's fsync-stall detector
 	// (which treats a stalled write as fatal); this starts with visibility only (log + count),
 	// see store/store.go's diskSlowThreshold comment for why it's not wired to anything fatal yet
-	PebbleDiskSlowCount        prometheus.Counter // cumulative count of individual disk write ops slower than diskSlowThreshold
-	PebbleDiskSlowMaxDurationS prometheus.Gauge   // duration (seconds) of the single slowest disk op observed since process start
+	PebbleDiskSlowCount           prometheus.Counter // cumulative count of individual disk write ops slower than diskSlowThreshold
+	PebbleDiskSlowMaxDurationSecs prometheus.Gauge   // duration (seconds) of the single slowest disk op observed since process start
 }
 
 // MempoolMetrics represents the telemetry of the memory pool of pending transactions
@@ -754,7 +754,7 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_store_pebble_disk_slow_count",
 				Help: "Cumulative count of individual disk write ops slower than the configured disk-slow threshold",
 			}),
-			PebbleDiskSlowMaxDurationS: promauto.NewGauge(prometheus.GaugeOpts{
+			PebbleDiskSlowMaxDurationSecs: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_store_pebble_disk_slow_max_duration_seconds",
 				Help: "Duration (seconds) of the single slowest disk op observed since process start",
 			}),
@@ -1078,7 +1078,7 @@ func (m *Metrics) RecordPebbleDiskSlow(info vfs.DiskSlowInfo) {
 	defer m.pebbleDiskSlowMu.Unlock()
 	if seconds > m.pebbleDiskSlowMaxSecs {
 		m.pebbleDiskSlowMaxSecs = seconds
-		m.PebbleDiskSlowMaxDurationS.Set(seconds)
+		m.PebbleDiskSlowMaxDurationSecs.Set(seconds)
 	}
 }
 
