@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/cockroachdb/pebble/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -63,6 +66,9 @@ type Metrics struct {
 	nodeAddress     []byte        // the node's address
 	log             LoggerI       // the logger
 	startupBlockSet bool          // flag to ensure startup block is only set once
+
+	pebbleStallMu    sync.Mutex // guards pebbleStallStart against concurrent WriteStallBegin/End
+	pebbleStallStart time.Time  // set on WriteStallBegin, cleared on WriteStallEnd
 
 	NodeMetrics    // general telemetry about the node
 	BlockMetrics   // block telemetry
@@ -206,6 +212,27 @@ type StoreMetrics struct {
 	DBBackupTime         prometheus.Histogram // how long does the db backup take?
 	DBLSSCompactionTime  prometheus.Histogram // how long does the db LSS compaction take?
 	DBHSSCompactionTime  prometheus.Histogram // how long does the db HSS compaction take?
+	// pebble's own internal LSM-tree state - unlike DBLSSCompactionTime/DBHSSCompactionTime
+	// (which only track canopy's own periodic MaybeCompact() job), these reflect pebble's
+	// automatic background compaction, which runs independently and is otherwise invisible
+	PebbleReadAmp             prometheus.Gauge     // pebble's current read amplification
+	PebbleDiskUsageBytes      prometheus.Gauge     // total on-disk size of all sstables
+	PebbleCompactionCount     prometheus.Gauge     // total pebble-initiated compactions since process start
+	PebbleCompactionDebtBytes prometheus.Gauge     // estimated bytes still needing compaction to reach a stable LSM state
+	PebbleFlushCount          prometheus.Gauge     // total memtable flushes since process start
+	PebbleMemtableSizeBytes   prometheus.Gauge     // bytes held in memtables (incl. large flushable batches)
+	PebbleBlockCacheSizeBytes prometheus.Gauge     // bytes held in the block cache
+	PebbleBlockCacheHits      prometheus.Gauge     // cumulative block cache hits
+	PebbleBlockCacheMisses    prometheus.Gauge     // cumulative block cache misses
+	PebbleLevelTableCount     *prometheus.GaugeVec // sstable count, labeled by LSM level
+	PebbleLevelSizeBytes      *prometheus.GaugeVec // sstable bytes, labeled by LSM level
+	// direct evidence of L0StopWritesThreshold/L0CompactionThreshold backpressure actually
+	// firing - see store/store.go NewStore() thresholds. Absent these, L0 table count is only
+	// an indirect proxy. pebble.Metrics doesn't expose stall count/duration directly (v2 moved
+	// this to EventListener.WriteStallBegin/End callbacks) - RecordPebbleWriteStallBegin/End
+	// below accumulate into these from that listener, wired in store/store.go NewStore().
+	PebbleWriteStallCount        prometheus.Counter // cumulative number of writes pebble has stalled for LSM backpressure
+	PebbleWriteStallDurationSecs prometheus.Counter // cumulative time (seconds) writes have spent stalled for LSM backpressure
 }
 
 // MempoolMetrics represents the telemetry of the memory pool of pending transactions
@@ -662,6 +689,58 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_store_hss_compaction_time",
 				Help: "Execution time of HSS database compaction",
 			}),
+			PebbleReadAmp: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_read_amplification",
+				Help: "Pebble's current read amplification",
+			}),
+			PebbleDiskUsageBytes: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_disk_usage_bytes",
+				Help: "Total on-disk size of all sstables",
+			}),
+			PebbleCompactionCount: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_compaction_count",
+				Help: "Total pebble-initiated compactions since process start",
+			}),
+			PebbleCompactionDebtBytes: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_compaction_debt_bytes",
+				Help: "Estimated bytes still needing compaction to reach a stable LSM state",
+			}),
+			PebbleFlushCount: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_flush_count",
+				Help: "Total memtable flushes since process start",
+			}),
+			PebbleMemtableSizeBytes: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_memtable_size_bytes",
+				Help: "Bytes held in memtables, including large flushable batches",
+			}),
+			PebbleBlockCacheSizeBytes: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_block_cache_size_bytes",
+				Help: "Bytes held in the block cache",
+			}),
+			PebbleBlockCacheHits: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_block_cache_hits",
+				Help: "Cumulative block cache hits",
+			}),
+			PebbleBlockCacheMisses: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_block_cache_misses",
+				Help: "Cumulative block cache misses",
+			}),
+			PebbleLevelTableCount: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_level_table_count",
+				Help: "Sstable count, labeled by LSM level",
+			}, []string{"level"}),
+			PebbleLevelSizeBytes: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_level_size_bytes",
+				Help: "Sstable bytes, labeled by LSM level",
+			}, []string{"level"}),
+			PebbleWriteStallCount: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_store_pebble_write_stall_count",
+				Help: "Cumulative number of writes pebble has stalled for LSM backpressure (e.g. L0StopWritesThreshold)",
+			}),
+			PebbleWriteStallDurationSecs: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_store_pebble_write_stall_duration_seconds",
+				Help: "Cumulative time (seconds) writes have spent stalled for LSM backpressure",
+			}),
 		},
 		// MEMPOOL
 		MempoolMetrics: MempoolMetrics{
@@ -898,6 +977,70 @@ func (m *Metrics) UpdateStoreMetrics(size, entries int64, startTime time.Time, s
 		// update the processing time in seconds
 		m.DBCommitTime.Observe(time.Since(startFlushTime).Seconds())
 	}
+}
+
+// UpdatePebbleMetrics() refreshes the pebble LSM-tree gauges from a live db.Metrics() snapshot.
+// Unlike UpdateStoreJobMetrics() (which only observes canopy's own periodic MaybeCompact() job),
+// this reflects pebble's automatic background compaction, which runs independently and would
+// otherwise be invisible to telemetry.
+func (m *Metrics) UpdatePebbleMetrics(pm *pebble.Metrics) {
+	// exit if empty
+	if m == nil || pm == nil {
+		return
+	}
+	m.PebbleReadAmp.Set(float64(pm.ReadAmp()))
+	m.PebbleDiskUsageBytes.Set(float64(pm.DiskSpaceUsage()))
+	m.PebbleCompactionCount.Set(float64(pm.Compact.Count))
+	m.PebbleCompactionDebtBytes.Set(float64(pm.Compact.EstimatedDebt))
+	m.PebbleFlushCount.Set(float64(pm.Flush.Count))
+	m.PebbleMemtableSizeBytes.Set(float64(pm.MemTable.Size))
+	m.PebbleBlockCacheSizeBytes.Set(float64(pm.BlockCache.Size))
+	m.PebbleBlockCacheHits.Set(float64(pm.BlockCache.Hits))
+	m.PebbleBlockCacheMisses.Set(float64(pm.BlockCache.Misses))
+	for i, lvl := range pm.Levels {
+		level := strconv.Itoa(i)
+		m.PebbleLevelTableCount.WithLabelValues(level).Set(float64(lvl.TablesCount))
+		m.PebbleLevelSizeBytes.WithLabelValues(level).Set(float64(lvl.TablesSize))
+	}
+}
+
+// RecordPebbleWriteStallBegin() records the start of a pebble write stall - direct evidence of
+// L0StopWritesThreshold/L0CompactionThreshold backpressure actually firing (store/store.go
+// NewStore()), unlike the L0 table count/debt gauges above which are only an indirect proxy.
+// Wired into pebble.Options.EventListener.WriteStallBegin; `reason` (e.g. "L0 too many files",
+// "memtable count limit reached") is pebble's own free-form description and is not currently
+// recorded as a label to avoid unbounded cardinality if pebble's reason strings ever vary by
+// value (e.g. embedding a byte count).
+func (m *Metrics) RecordPebbleWriteStallBegin(reason string) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.log.Debugf("Pebble write stall began: %s", reason)
+	m.PebbleWriteStallCount.Inc()
+	m.pebbleStallMu.Lock()
+	defer m.pebbleStallMu.Unlock()
+	m.pebbleStallStart = time.Now()
+}
+
+// RecordPebbleWriteStallEnd() records the end of a pebble write stall, adding its duration to
+// the cumulative PebbleWriteStallDurationSecs counter. Wired into
+// pebble.Options.EventListener.WriteStallEnd.
+func (m *Metrics) RecordPebbleWriteStallEnd() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.pebbleStallMu.Lock()
+	start := m.pebbleStallStart
+	m.pebbleStallStart = time.Time{}
+	m.pebbleStallMu.Unlock()
+	// guard against an End with no matching Begin (shouldn't happen per pebble's contract, but
+	// a zero start would otherwise add a huge bogus duration via time.Since)
+	if start.IsZero() {
+		return
+	}
+	m.PebbleWriteStallDurationSecs.Add(time.Since(start).Seconds())
 }
 
 // UpdateStoreJobMetrics() updates the store jobs telemery

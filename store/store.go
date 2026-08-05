@@ -135,6 +135,17 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		WALMinSyncInterval: func() time.Duration {
 			return time.Millisecond * 2
 		},
+		// surfaces L0StopWritesThreshold/L0CompactionThreshold backpressure actually firing -
+		// see lib.Metrics.RecordPebbleWriteStallBegin/End for why this can't come from
+		// db.Metrics() alone on this pebble version
+		EventListener: &pebble.EventListener{
+			WriteStallBegin: func(info pebble.WriteStallBeginInfo) {
+				metrics.RecordPebbleWriteStallBegin(info.Reason)
+			},
+			WriteStallEnd: func() {
+				metrics.RecordPebbleWriteStallEnd()
+			},
+		},
 	})
 	if err != nil {
 		return nil, ErrOpenDB(err)
@@ -288,6 +299,10 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	s.MaybeCompact()
 	// backup if enabled
 	s.MaybeBackup()
+	// refresh pebble's own LSM-tree telemetry - cheap (in-memory counters only), so safe on
+	// every commit, and deliberately not gated on s.syncing like MaybeCompact() since LSM
+	// shape visibility matters most exactly when the node is catching up
+	s.metrics.UpdatePebbleMetrics(s.db.Metrics())
 	// return the root
 	return
 }
