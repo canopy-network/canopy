@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { useArborTx } from "@/lib/hooks/useArborTx";
-import { addressBytesFromHex } from "@/lib/arbor/wallet";
+import { addressBytesFromHex } from "@/lib/wallet";
 import {
   Field,
   TextInput,

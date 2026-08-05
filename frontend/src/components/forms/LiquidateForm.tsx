@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMarket } from "@/lib/hooks/useMarket";
 import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
 import { useAssetPrice } from "@/lib/hooks/useAssetPrice";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { useArborTx } from "@/lib/hooks/useArborTx";
 import { marketAdmissionFromMarket } from "@/lib/hooks/useMarketAdmission";
 import { getBlockedReason } from "@/lib/arbor/admission";
@@ -16,7 +16,7 @@ import {
   isLiquidatable,
 } from "@/lib/arbor/math";
 import { TIER_PARAMS } from "@/lib/arbor/constants";
-import { addressBytesFromHex } from "@/lib/arbor/wallet";
+import { addressBytesFromHex } from "@/lib/wallet";
 import { hexToBytes } from "@/lib/canopy/decode";
 import { EmptyState } from "@/components/widgets/EmptyState";
 import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";

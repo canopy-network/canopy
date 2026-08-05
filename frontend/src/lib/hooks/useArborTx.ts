@@ -1,9 +1,9 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { useTxStore } from "@/lib/stores/txStore";
-import { signAndSubmitArborTx } from "@/lib/canopy/submitArborTx";
+import { signAndSubmitArborTx } from "@/lib/tx";
 import type { ArborTxType } from "@/lib/arbor/constants";
 
 export function useArborTx() {

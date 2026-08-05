@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useMarket } from "@/lib/hooks/useMarket";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { useLenderPosition } from "@/lib/hooks/useLenderPosition";
 import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
 import { useAssetPrice } from "@/lib/hooks/useAssetPrice";

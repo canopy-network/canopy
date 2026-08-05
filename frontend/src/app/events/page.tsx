@@ -9,7 +9,7 @@ import {
   type TxRecord,
 } from "@/lib/canopy/rpc";
 import { WaterfallPanel } from "@/components/sections/WaterfallPanel";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { formatAmount } from "@/lib/arbor/format";
 
 type Tab = "activity" | "failed" | "consensus";

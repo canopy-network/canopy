@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { WalletConnect } from "./WalletConnect";
 import { useRoles, type Roles } from "@/lib/hooks/useRoles";
 

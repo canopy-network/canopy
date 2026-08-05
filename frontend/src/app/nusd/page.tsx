@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMarkets } from "@/lib/hooks/useMarkets";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import {
   getNusdSupply,
   getStabilityFeeIndex,

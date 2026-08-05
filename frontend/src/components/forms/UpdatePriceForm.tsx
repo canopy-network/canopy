@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { useMarket } from "@/lib/hooks/useMarket";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { useArborTx } from "@/lib/hooks/useArborTx";
 import { parseAmount } from "@/lib/arbor/format";
 import { PRICE_DECIMALS } from "@/lib/arbor/constants";
-import { addressBytesFromHex } from "@/lib/arbor/wallet";
+import { addressBytesFromHex } from "@/lib/wallet";
 import { bytesToHex } from "@/lib/canopy/decode";
 import { EmptyState } from "@/components/widgets/EmptyState";
 import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";

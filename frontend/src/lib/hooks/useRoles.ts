@@ -1,7 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { useMarkets } from "./useMarkets";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { bytesToHex } from "@/lib/canopy/decode";
 
 // Devnet protocol authority: the single hardcoded address the plugin gates

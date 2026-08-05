@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { useArborTx } from "@/lib/hooks/useArborTx";
 import { MIN_REPORTERS } from "@/lib/arbor/constants";
-import { addressBytesFromHex } from "@/lib/arbor/wallet";
+import { addressBytesFromHex } from "@/lib/wallet";
 import { hexToBytes } from "@/lib/canopy/decode";
 import {
   Field,

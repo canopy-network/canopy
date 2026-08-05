@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { useMarket } from "@/lib/hooks/useMarket";
 import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
-import { useWalletStore } from "@/lib/stores/walletStore";
+import { useWalletStore } from "@/lib/wallet";
 import { useArborTx } from "@/lib/hooks/useArborTx";
 import { marketAdmissionFromMarket } from "@/lib/hooks/useMarketAdmission";
 import { getBlockedReason } from "@/lib/arbor/admission";
 import { parseAmount, formatAmount } from "@/lib/arbor/format";
 import { scaledDebt } from "@/lib/arbor/math";
-import { addressBytesFromHex } from "@/lib/arbor/wallet";
+import { addressBytesFromHex } from "@/lib/wallet";
 import { EmptyState } from "@/components/widgets/EmptyState";
 import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";
 import { AdmissionGateBanner } from "@/components/widgets/AdmissionGateBanner";
