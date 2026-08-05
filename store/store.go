@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -82,6 +83,9 @@ type Store struct {
 	compaction atomic.Bool   // atomic boolean for compaction status
 	backup     atomic.Bool   // atomic boolean for backup status
 	isTxn      bool          // flag indicating if the store is in transaction mode
+	// stops the background goroutine vfs.WithDiskHealthChecks() spawns to monitor for slow
+	// disk ops; nil for the in-memory store and any Store built directly via NewStoreWithDB()
+	diskHealthCloser io.Closer
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -92,10 +96,23 @@ func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, li
 	return NewStore(config, filepath.Join(config.DataDirPath, config.DBName), metrics, l)
 }
 
+// diskSlowThreshold is how long a single disk write op must take before it's reported as slow via
+// vfs.WithDiskHealthChecks() below. Deliberately conservative (log + count only, not fatal) - unlike
+// CockroachDB's ~20s stall detector, which kills the process outright, canopy has no precedent for a
+// fatal disk-health path yet, so start with visibility and revisit once real data exists.
+const diskSlowThreshold = 2 * time.Second
+
 // NewStore() creates a new instance of a disk DB˙
 func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 	cache := pebble.NewCache(256 << 20) // 256 MB cache
 	defer cache.Unref()
+	// wraps the OS filesystem so slow write-oriented ops (fsync, write, etc.) are reported
+	// instead of hanging silently - Options.FS is otherwise left unset (bare vfs.Default),
+	// which does no such monitoring
+	healthCheckedFS, diskHealthCloser := vfs.WithDiskHealthChecks(vfs.Default, diskSlowThreshold, nil,
+		func(info vfs.DiskSlowInfo) {
+			metrics.RecordPebbleDiskSlow(info)
+		})
 	lvl := pebble.LevelOptions{
 		BlockSize:      64 << 10, // 64 KB data blocks
 		IndexBlockSize: 32 << 10, // 32 KB index blocks
@@ -108,6 +125,7 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		},
 	}
 	db, err := pebble.Open(path, &pebble.Options{
+		FS:                    healthCheckedFS,             // OS filesystem wrapped with slow-disk-op detection
 		MemTableSize:          64 << 20,                    // larger memtable to reduce flushes
 		L0CompactionThreshold: 6,                           // keep L0 small to avoid read amplification
 		L0StopWritesThreshold: 12,                          // stop writes when L0 reaches this size
@@ -148,9 +166,16 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		},
 	})
 	if err != nil {
+		_ = diskHealthCloser.Close() // pebble.Open failed - stop the monitoring goroutine, nothing will own it otherwise
 		return nil, ErrOpenDB(err)
 	}
-	return NewStoreWithDB(config, db, metrics, log)
+	s, storeErr := NewStoreWithDB(config, db, metrics, log)
+	if storeErr != nil {
+		_ = diskHealthCloser.Close()
+		return nil, storeErr
+	}
+	s.diskHealthCloser = diskHealthCloser
+	return s, nil
 }
 
 // NewStoreInMemory() creates a new instance of a mem DB
@@ -602,6 +627,11 @@ func (s *Store) Close() lib.ErrorI {
 	}
 	if err := s.db.Close(); err != nil {
 		return ErrCloseDB(err)
+	}
+	if s.diskHealthCloser != nil {
+		if err := s.diskHealthCloser.Close(); err != nil {
+			return ErrCloseDB(fmt.Errorf("disk health checker close error: %v", err))
+		}
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/vfs"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -69,6 +70,9 @@ type Metrics struct {
 
 	pebbleStallMu    sync.Mutex // guards pebbleStallStart against concurrent WriteStallBegin/End
 	pebbleStallStart time.Time  // set on WriteStallBegin, cleared on WriteStallEnd
+
+	pebbleDiskSlowMu      sync.Mutex // guards pebbleDiskSlowMaxSecs against concurrent onSlowDisk callbacks
+	pebbleDiskSlowMaxSecs float64    // highest single disk-op duration observed, mirrors PebbleDiskSlowMaxDurationS
 
 	NodeMetrics    // general telemetry about the node
 	BlockMetrics   // block telemetry
@@ -233,6 +237,11 @@ type StoreMetrics struct {
 	// below accumulate into these from that listener, wired in store/store.go NewStore().
 	PebbleWriteStallCount        prometheus.Counter // cumulative number of writes pebble has stalled for LSM backpressure
 	PebbleWriteStallDurationSecs prometheus.Counter // cumulative time (seconds) writes have spent stalled for LSM backpressure
+	// direct disk-health signal - canopy has no equivalent of CockroachDB's fsync-stall detector
+	// (which treats a stalled write as fatal); this starts with visibility only (log + count),
+	// see store/store.go's diskSlowThreshold comment for why it's not wired to anything fatal yet
+	PebbleDiskSlowCount        prometheus.Counter // cumulative count of individual disk write ops slower than diskSlowThreshold
+	PebbleDiskSlowMaxDurationS prometheus.Gauge   // duration (seconds) of the single slowest disk op observed since process start
 }
 
 // MempoolMetrics represents the telemetry of the memory pool of pending transactions
@@ -741,6 +750,14 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_store_pebble_write_stall_duration_seconds",
 				Help: "Cumulative time (seconds) writes have spent stalled for LSM backpressure",
 			}),
+			PebbleDiskSlowCount: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_store_pebble_disk_slow_count",
+				Help: "Cumulative count of individual disk write ops slower than the configured disk-slow threshold",
+			}),
+			PebbleDiskSlowMaxDurationS: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_store_pebble_disk_slow_max_duration_seconds",
+				Help: "Duration (seconds) of the single slowest disk op observed since process start",
+			}),
 		},
 		// MEMPOOL
 		MempoolMetrics: MempoolMetrics{
@@ -1041,6 +1058,28 @@ func (m *Metrics) RecordPebbleWriteStallEnd() {
 		return
 	}
 	m.PebbleWriteStallDurationSecs.Add(time.Since(start).Seconds())
+}
+
+// RecordPebbleDiskSlow() records a single disk write op that exceeded store.go's
+// diskSlowThreshold - visibility-only for now (log + count), not wired to anything fatal. See
+// store.go's diskSlowThreshold comment for why: unlike CockroachDB's ~20s stall detector (which
+// kills the process), canopy has no precedent for a fatal disk-health path yet. Wired into
+// vfs.WithDiskHealthChecks()'s onSlowDisk callback in store/store.go NewStore().
+func (m *Metrics) RecordPebbleDiskSlow(info vfs.DiskSlowInfo) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.log.Warnf("Pebble disk op slow: op=%s path=%s writeSize=%d duration=%s",
+		info.OpType, info.Path, info.WriteSize, info.Duration)
+	m.PebbleDiskSlowCount.Inc()
+	seconds := info.Duration.Seconds()
+	m.pebbleDiskSlowMu.Lock()
+	defer m.pebbleDiskSlowMu.Unlock()
+	if seconds > m.pebbleDiskSlowMaxSecs {
+		m.pebbleDiskSlowMaxSecs = seconds
+		m.PebbleDiskSlowMaxDurationS.Set(seconds)
+	}
 }
 
 // UpdateStoreJobMetrics() updates the store jobs telemery
