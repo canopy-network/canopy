@@ -540,3 +540,35 @@ export async function queryFailedTxsPaged(
   }
 }
 
+
+export interface WaterfallEvent {
+  eventType: string;
+  marketId?: string;
+  badDebt?: string;
+  remainingReserveFund?: string;
+  remainingTreasury?: string;
+  pool?: string;
+  newLossFactor?: string;
+  totalSuppliedEquiv?: string;
+  pendingCount?: number;
+  recoveredAmount?: string;
+  source?: string;
+  height?: number;
+}
+
+export async function queryWaterfallEvents(
+  pageNumber = 1,
+  perPage = 50
+): Promise<{ events: WaterfallEvent[]; available: boolean }> {
+  try {
+    const res = await rpcFetch("/v1/query/waterfall-events", {
+      method: "POST",
+      body: JSON.stringify({ pageNumber, perPage }),
+    });
+    if (!res.ok) return { events: [], available: false };
+    const j = await res.json();
+    return { events: Array.isArray(j?.events) ? j.events : [], available: true };
+  } catch {
+    return { events: [], available: false };
+  }
+}

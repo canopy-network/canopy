@@ -8,6 +8,7 @@ import {
   queryEventsByAddress,
   type TxRecord,
 } from "@/lib/canopy/rpc";
+import { WaterfallPanel } from "@/components/sections/WaterfallPanel";
 import { useWalletStore } from "@/lib/stores/walletStore";
 import { formatAmount } from "@/lib/arbor/format";
 
@@ -295,6 +296,7 @@ export default function EventsPage() {
         8‑decimal USD. Consensus events read /v1/query/events-by-address (core
         index — empty on this node).
       </p>
+      <WaterfallPanel />
     </div>
   );
 }
