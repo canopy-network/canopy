@@ -1,6 +1,9 @@
 package contract
 
-import "fmt"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
 // State key prefixes reserved for Arbor within Canopy's {16}-{28} custom range,
 // plus {29}+ for Arbor-internal extensions beyond the ARCM/AYIS-audited layout
@@ -366,4 +369,41 @@ var PrefixNusdBalance = []byte{35}
 
 func KeyForNusdBalance(addr []byte) []byte {
 	return JoinLenPrefix(PrefixNusdBalance, addr)
+}
+
+// PrefixWaterfallLog: durable, queryable rolling log of every Layer 2/3/4
+// bad-debt waterfall step (ARCM Section 9.2), added to close the exact gap
+// the Arbor frontend's Events panel flags directly: waterfall events are
+// emitted on-chain (via the existing per-layer Event/anypb payloads in
+// arbor_events.proto) but, prior to this prefix, had no persisted, queryable
+// history of their own -- see apply_loss_factor.go's "EVENT EMISSION,
+// RETURNED NOT EMITTED" doc comment for why the existing Event mechanism
+// alone cannot serve this. Claims {42}, the next free number in the
+// Arbor-internal-extensions range (beyond ARCM/AYIS's audited {16}-{28}
+// layout) -- {40} and {41} are Arbor's and NASM's own treasuries
+// respectively (PrefixTreasuryArbor/PrefixTreasuryNASM above); {42} does
+// not encroach on either, nor on the {30}-{39} NASM-coordination wall.
+//
+// Keyed (block_height, seq), both big-endian-encoded via formatUint64 so
+// byte-lexicographic key ordering matches numeric chronological ordering --
+// this is what lets /v1/query/waterfall-events serve "most recent N events"
+// as a single Reverse=true, Limit=N range scan (see handleQueryAllMarkets's
+// existing PluginRangeRead precedent in rpc.go) with no separate index
+// needed. seq disambiguates multiple waterfall steps landing in the same
+// block (a single liquidate_position call can emit a Layer 2 miss followed
+// by a Layer 3 hit, or a Layer 2 miss, Layer 3 miss, and Layer 4 application,
+// all in one DeliverTx -- see liquidate_position.go's fallthrough chain).
+var PrefixWaterfallLog = []byte{42}
+
+// KeyForWaterfallEvent builds the composite (height, seq) key described
+// above. seq is caller-assigned per waterfall step within a single
+// DeliverTx call (0, 1, 2, ...) -- AppendWaterfallEvent (waterfall_log.go)
+// does not assign it itself, since a single liquidation may need to write
+// more than one entry and the caller already tracks how many waterfall
+// steps it has emitted in the current call via len(events) or an explicit
+// counter.
+func KeyForWaterfallEvent(blockHeight uint64, seq uint32) []byte {
+	seqBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(seqBytes, seq)
+	return JoinLenPrefix(PrefixWaterfallLog, formatUint64(blockHeight), seqBytes)
 }

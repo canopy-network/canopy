@@ -51,6 +51,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/nusdbalance", p.handleQueryNusdBalance)
 	mux.HandleFunc("/v1/query/nusdsupply", p.handleQueryNusdSupply)
 	mux.HandleFunc("/v1/query/stabilityfeeindex", p.handleQueryStabilityFeeIndex)
+	mux.HandleFunc("/v1/query/waterfall-events", p.handleQueryWaterfallEvents)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -1272,6 +1273,88 @@ func (p *Plugin) handleQueryAllNasmVaults(w http.ResponseWriter, r *http.Request
 				continue
 			}
 			b, err := protojson.Marshal(v)
+			if err != nil {
+				continue
+			}
+			out = append(out, b)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
+}
+
+// handleQueryWaterfallEvents serves GET /v1/query/waterfall-events?limit=<n>&marketId=<id>
+// Returns the most recent bad-debt waterfall events (Layer 2/3/4, ARCM
+// Section 9.2) from the {42} durable log (waterfall_log.go), most-recent-
+// first. Closes the exact gap the Arbor frontend's own Events panel flags
+// directly: "Discrete bad-debt waterfall events are emitted on-chain but
+// this node exposes no query route for them yet... Awaiting
+// /v1/query/waterfall-events (plugin-persisted rolling log, range-scanned
+// like all-markets)."
+//
+// limit: optional, defaults to 50, capped at 500 -- matches this codebase's
+// general defensive-default convention (no existing route lets an
+// unbounded range scan run, see handleQueryPrices's own scoped-prefix
+// precedent). Applied via PluginRangeRead.Limit combined with
+// Reverse: true, so the underlying range scan itself only ever walks the
+// N most recent entries, not the full log then truncates client-side.
+//
+// marketId: optional. Because {42}'s key is (block_height, seq), NOT
+// market_id (see state_keys.go's KeyForWaterfallEvent doc comment on why --
+// chronological range-scan ordering was the design priority), a
+// marketId filter cannot be pushed into the range scan's own prefix the
+// way handleQueryPrices's assetId filter can. Filtering happens here,
+// after decode, over the already-limit-bounded result set -- accepted
+// as a real, disclosed limitation rather than silently pretending this
+// route supports efficient per-market history the way /v1/query/reservefund
+// or /v1/query/lossfactor do.
+func (p *Plugin) handleQueryWaterfallEvents(w http.ResponseWriter, r *http.Request) {
+	limit := uint64(50)
+	if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
+		parsed, err := strconv.ParseUint(limitParam, 10, 64)
+		if err != nil {
+			http.Error(w, `{"error":"invalid limit query param"}`, http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+	if limit == 0 || limit > 500 {
+		limit = 500
+	}
+	marketIdFilter := r.URL.Query().Get("marketId")
+
+	queryId := rand.Uint64()
+	resp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Ranges: []*PluginRangeRead{
+			{QueryId: queryId, Prefix: JoinLenPrefix(PrefixWaterfallLog), Limit: limit, Reverse: true},
+		},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	out := make([]json.RawMessage, 0)
+	for _, result := range resp.Results {
+		if result.QueryId != queryId {
+			continue
+		}
+		for _, entry := range result.Entries {
+			if len(entry.Value) == 0 {
+				continue
+			}
+			evt := &WaterfallEvent{}
+			if err := proto.Unmarshal(entry.Value, evt); err != nil {
+				continue
+			}
+			if marketIdFilter != "" && evt.MarketId != marketIdFilter {
+				continue
+			}
+			b, err := protojson.Marshal(evt)
 			if err != nil {
 				continue
 			}

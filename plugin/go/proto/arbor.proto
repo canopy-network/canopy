@@ -244,3 +244,29 @@ message MessageBurnNusd {
   bytes  sender = 2;
   uint64 nusd_amount = 3;
 }
+
+// MessageLiquidateNasmVault liquidates an undercollateralized NASM vault
+// (HF_n <= 1.0), per NASM Consolidated Spec Section 7: reuses ARCM's own
+// ComputeHealthFactorScaled and CloseFactorBpsForHF functions directly
+// (unchanged formulas, NASM's own tier params as input), substituting
+// ScaledNusdDebt for ARCM's ScaledDebt as the debt input, and NASM's own
+// tighter LTV_n_liq/LIF values (nasm_tier.go's nasmTierParamsTable) in
+// place of ARCM's lending tier table.
+//
+// repay_amount is denominated in NUSD (1e6 precision), debited from the
+// LIQUIDATOR's own NusdBalance (NOT Account.Amount -- mirrors burn_nusd's
+// custody split exactly) -- liquidating a NASM vault burns NUSD out of
+// circulation, the same as any other debt reduction.
+//
+// PHASE 1 SCOPE LIMIT, DISCLOSED: a liquidation whose required collateral
+// seizure would exceed the vault's own locked collateral (a bad-debt
+// scenario) is hard-rejected via ErrNasmLiquidationBadDebt rather than
+// partially seizing collateral and leaving an unaccounted shortfall.
+// NASM's own bad-debt waterfall (R_nusd draw-down, Arbor treasury
+// fallback, Section 11.2) is not yet wired into this transaction. See
+// ErrNasmLiquidationBadDebt's own doc comment for the full reasoning.
+message MessageLiquidateNasmVault {
+  string vault_id = 1;
+  bytes  liquidator = 2;
+  uint64 repay_amount = 3;
+}

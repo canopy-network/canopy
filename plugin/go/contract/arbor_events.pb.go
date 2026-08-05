@@ -933,6 +933,207 @@ func (x *EventReserveFundEncodingMigrationCompleted) GetCompletedAtHeight() uint
 	return 0
 }
 
+// WaterfallEvent is a flat, purpose-built record of one bad-debt waterfall
+// step (Layer 2 reserve-fund draw, Layer 3 treasury draw, or Layer 4 lender
+// socialization), persisted to the {42} rolling log independently of the
+// DeliverTx Event already emitted for that same step (EventReserveFundDrawDown,
+// EventTreasuryDrawDown, EventBadDebtSocialization, EventLossFactorExhausted,
+// EventLossFactorAppliedToAlreadyInsolventMarket -- see those messages above).
+// Deliberately NOT a wrapper around those existing Event/anypb payloads: this
+// codebase's DeliverTx Event mechanism has no query surface of its own (Events
+// are returned in PluginDeliverResponse and consumed by Canopy core, not
+// re-readable from plugin state afterward) -- see apply_loss_factor.go's own
+// "EVENT EMISSION, RETURNED NOT EMITTED" doc comment for the identical gap
+// this message closes. A flat record avoids re-parsing four different anypb
+// payload types on every range-scan read.
+type WaterfallEvent struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	BlockHeight uint64                 `protobuf:"varint,1,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
+	MarketId    string                 `protobuf:"bytes,2,opt,name=market_id,json=marketId,proto3" json:"market_id,omitempty"`
+	Layer       string                 `protobuf:"bytes,3,opt,name=layer,proto3" json:"layer,omitempty"`                          // "layer2" | "layer3" | "layer4"
+	EventType   string                 `protobuf:"bytes,4,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"` // "reserve_fund_draw_down" | "treasury_draw_down" |
+	// "bad_debt_socialization" | "loss_factor_exhausted" |
+	// "loss_factor_applied_to_already_insolvent_market"
+	BadDebt          uint64 `protobuf:"varint,5,opt,name=bad_debt,json=badDebt,proto3" json:"bad_debt,omitempty"`
+	RemainingBalance string `protobuf:"bytes,6,opt,name=remaining_balance,json=remainingBalance,proto3" json:"remaining_balance,omitempty"` // decimal string -- meaning depends on layer:
+	// layer2: R_fund remaining; layer3: T_fund remaining;
+	// layer4: new_loss_factor. Empty for the K3
+	// idempotency-guard event_type (no balance changed).
+	Pool          string `protobuf:"bytes,7,opt,name=pool,proto3" json:"pool,omitempty"` // "arbor" | "nasm" -- layer3 only, empty otherwise
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WaterfallEvent) Reset() {
+	*x = WaterfallEvent{}
+	mi := &file_arbor_events_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WaterfallEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WaterfallEvent) ProtoMessage() {}
+
+func (x *WaterfallEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_events_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WaterfallEvent.ProtoReflect.Descriptor instead.
+func (*WaterfallEvent) Descriptor() ([]byte, []int) {
+	return file_arbor_events_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *WaterfallEvent) GetBlockHeight() uint64 {
+	if x != nil {
+		return x.BlockHeight
+	}
+	return 0
+}
+
+func (x *WaterfallEvent) GetMarketId() string {
+	if x != nil {
+		return x.MarketId
+	}
+	return ""
+}
+
+func (x *WaterfallEvent) GetLayer() string {
+	if x != nil {
+		return x.Layer
+	}
+	return ""
+}
+
+func (x *WaterfallEvent) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *WaterfallEvent) GetBadDebt() uint64 {
+	if x != nil {
+		return x.BadDebt
+	}
+	return 0
+}
+
+func (x *WaterfallEvent) GetRemainingBalance() string {
+	if x != nil {
+		return x.RemainingBalance
+	}
+	return ""
+}
+
+func (x *WaterfallEvent) GetPool() string {
+	if x != nil {
+		return x.Pool
+	}
+	return ""
+}
+
+// EventNasmVaultLiquidated fires on every successful liquidate_nasm_vault
+// call -- a normal, fully-covered liquidation (collateral_seized <=
+// vault.collateral_quantity). Distinct from ARCM's EventBadDebtSocialization
+// (which means a Layer 4 lender-haircut application, a different mechanism
+// entirely) -- NASM liquidation has no waterfall step of its own yet
+// (Phase 1 scope limit, see ErrNasmLiquidationBadDebt), so this event
+// reports the liquidation itself, not a waterfall outcome.
+type EventNasmVaultLiquidated struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	VaultId            string                 `protobuf:"bytes,1,opt,name=vault_id,json=vaultId,proto3" json:"vault_id,omitempty"`
+	Liquidator         []byte                 `protobuf:"bytes,2,opt,name=liquidator,proto3" json:"liquidator,omitempty"`
+	RepayAmount        uint64                 `protobuf:"varint,3,opt,name=repay_amount,json=repayAmount,proto3" json:"repay_amount,omitempty"`
+	CollateralSeized   uint64                 `protobuf:"varint,4,opt,name=collateral_seized,json=collateralSeized,proto3" json:"collateral_seized,omitempty"`
+	RemainingVaultDebt uint64                 `protobuf:"varint,5,opt,name=remaining_vault_debt,json=remainingVaultDebt,proto3" json:"remaining_vault_debt,omitempty"` // 0 if the vault was fully closed
+	VaultClosed        bool                   `protobuf:"varint,6,opt,name=vault_closed,json=vaultClosed,proto3" json:"vault_closed,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *EventNasmVaultLiquidated) Reset() {
+	*x = EventNasmVaultLiquidated{}
+	mi := &file_arbor_events_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventNasmVaultLiquidated) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventNasmVaultLiquidated) ProtoMessage() {}
+
+func (x *EventNasmVaultLiquidated) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_events_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventNasmVaultLiquidated.ProtoReflect.Descriptor instead.
+func (*EventNasmVaultLiquidated) Descriptor() ([]byte, []int) {
+	return file_arbor_events_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *EventNasmVaultLiquidated) GetVaultId() string {
+	if x != nil {
+		return x.VaultId
+	}
+	return ""
+}
+
+func (x *EventNasmVaultLiquidated) GetLiquidator() []byte {
+	if x != nil {
+		return x.Liquidator
+	}
+	return nil
+}
+
+func (x *EventNasmVaultLiquidated) GetRepayAmount() uint64 {
+	if x != nil {
+		return x.RepayAmount
+	}
+	return 0
+}
+
+func (x *EventNasmVaultLiquidated) GetCollateralSeized() uint64 {
+	if x != nil {
+		return x.CollateralSeized
+	}
+	return 0
+}
+
+func (x *EventNasmVaultLiquidated) GetRemainingVaultDebt() uint64 {
+	if x != nil {
+		return x.RemainingVaultDebt
+	}
+	return 0
+}
+
+func (x *EventNasmVaultLiquidated) GetVaultClosed() bool {
+	if x != nil {
+		return x.VaultClosed
+	}
+	return false
+}
+
 var File_arbor_events_proto protoreflect.FileDescriptor
 
 const file_arbor_events_proto_rawDesc = "" +
@@ -992,7 +1193,25 @@ const file_arbor_events_proto_rawDesc = "" +
 	"\tmarket_id\x18\x01 \x01(\tR\bmarketId\x12\x19\n" +
 	"\bbad_debt\x18\x02 \x01(\x04R\abadDebt\"\\\n" +
 	"*EventReserveFundEncodingMigrationCompleted\x12.\n" +
-	"\x13completed_at_height\x18\x01 \x01(\x04R\x11completedAtHeightB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"\x13completed_at_height\x18\x01 \x01(\x04R\x11completedAtHeight\"\xe1\x01\n" +
+	"\x0eWaterfallEvent\x12!\n" +
+	"\fblock_height\x18\x01 \x01(\x04R\vblockHeight\x12\x1b\n" +
+	"\tmarket_id\x18\x02 \x01(\tR\bmarketId\x12\x14\n" +
+	"\x05layer\x18\x03 \x01(\tR\x05layer\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x04 \x01(\tR\teventType\x12\x19\n" +
+	"\bbad_debt\x18\x05 \x01(\x04R\abadDebt\x12+\n" +
+	"\x11remaining_balance\x18\x06 \x01(\tR\x10remainingBalance\x12\x12\n" +
+	"\x04pool\x18\a \x01(\tR\x04pool\"\xfa\x01\n" +
+	"\x18EventNasmVaultLiquidated\x12\x19\n" +
+	"\bvault_id\x18\x01 \x01(\tR\avaultId\x12\x1e\n" +
+	"\n" +
+	"liquidator\x18\x02 \x01(\fR\n" +
+	"liquidator\x12!\n" +
+	"\frepay_amount\x18\x03 \x01(\x04R\vrepayAmount\x12+\n" +
+	"\x11collateral_seized\x18\x04 \x01(\x04R\x10collateralSeized\x120\n" +
+	"\x14remaining_vault_debt\x18\x05 \x01(\x04R\x12remainingVaultDebt\x12!\n" +
+	"\fvault_closed\x18\x06 \x01(\bR\vvaultClosedB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_events_proto_rawDescOnce sync.Once
@@ -1006,7 +1225,7 @@ func file_arbor_events_proto_rawDescGZIP() []byte {
 	return file_arbor_events_proto_rawDescData
 }
 
-var file_arbor_events_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_arbor_events_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_arbor_events_proto_goTypes = []any{
 	(*EventIndexEncodingOverflowHalted)(nil),               // 0: types.EventIndexEncodingOverflowHalted
 	(*EventInsolventMarketValueRecovered)(nil),             // 1: types.EventInsolventMarketValueRecovered
@@ -1023,6 +1242,8 @@ var file_arbor_events_proto_goTypes = []any{
 	(*EventBadDebtSocialization)(nil),                      // 12: types.EventBadDebtSocialization
 	(*EventLossFactorAppliedToAlreadyInsolventMarket)(nil), // 13: types.EventLossFactorAppliedToAlreadyInsolventMarket
 	(*EventReserveFundEncodingMigrationCompleted)(nil),     // 14: types.EventReserveFundEncodingMigrationCompleted
+	(*WaterfallEvent)(nil),                                 // 15: types.WaterfallEvent
+	(*EventNasmVaultLiquidated)(nil),                       // 16: types.EventNasmVaultLiquidated
 }
 var file_arbor_events_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1043,7 +1264,7 @@ func file_arbor_events_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_events_proto_rawDesc), len(file_arbor_events_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

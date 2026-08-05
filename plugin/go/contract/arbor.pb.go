@@ -1169,6 +1169,86 @@ func (x *MessageBurnNusd) GetNusdAmount() uint64 {
 	return 0
 }
 
+// MessageLiquidateNasmVault liquidates an undercollateralized NASM vault
+// (HF_n <= 1.0), per NASM Consolidated Spec Section 7: reuses ARCM's own
+// ComputeHealthFactorScaled and CloseFactorBpsForHF functions directly
+// (unchanged formulas, NASM's own tier params as input), substituting
+// ScaledNusdDebt for ARCM's ScaledDebt as the debt input, and NASM's own
+// tighter LTV_n_liq/LIF values (nasm_tier.go's nasmTierParamsTable) in
+// place of ARCM's lending tier table.
+//
+// repay_amount is denominated in NUSD (1e6 precision), debited from the
+// LIQUIDATOR's own NusdBalance (NOT Account.Amount -- mirrors burn_nusd's
+// custody split exactly) -- liquidating a NASM vault burns NUSD out of
+// circulation, the same as any other debt reduction.
+//
+// PHASE 1 SCOPE LIMIT, DISCLOSED: a liquidation whose required collateral
+// seizure would exceed the vault's own locked collateral (a bad-debt
+// scenario) is hard-rejected via ErrNasmLiquidationBadDebt rather than
+// partially seizing collateral and leaving an unaccounted shortfall.
+// NASM's own bad-debt waterfall (R_nusd draw-down, Arbor treasury
+// fallback, Section 11.2) is not yet wired into this transaction. See
+// ErrNasmLiquidationBadDebt's own doc comment for the full reasoning.
+type MessageLiquidateNasmVault struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VaultId       string                 `protobuf:"bytes,1,opt,name=vault_id,json=vaultId,proto3" json:"vault_id,omitempty"`
+	Liquidator    []byte                 `protobuf:"bytes,2,opt,name=liquidator,proto3" json:"liquidator,omitempty"`
+	RepayAmount   uint64                 `protobuf:"varint,3,opt,name=repay_amount,json=repayAmount,proto3" json:"repay_amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageLiquidateNasmVault) Reset() {
+	*x = MessageLiquidateNasmVault{}
+	mi := &file_arbor_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageLiquidateNasmVault) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageLiquidateNasmVault) ProtoMessage() {}
+
+func (x *MessageLiquidateNasmVault) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageLiquidateNasmVault.ProtoReflect.Descriptor instead.
+func (*MessageLiquidateNasmVault) Descriptor() ([]byte, []int) {
+	return file_arbor_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *MessageLiquidateNasmVault) GetVaultId() string {
+	if x != nil {
+		return x.VaultId
+	}
+	return ""
+}
+
+func (x *MessageLiquidateNasmVault) GetLiquidator() []byte {
+	if x != nil {
+		return x.Liquidator
+	}
+	return nil
+}
+
+func (x *MessageLiquidateNasmVault) GetRepayAmount() uint64 {
+	if x != nil {
+		return x.RepayAmount
+	}
+	return 0
+}
+
 var File_arbor_proto protoreflect.FileDescriptor
 
 const file_arbor_proto_rawDesc = "" +
@@ -1250,7 +1330,13 @@ const file_arbor_proto_rawDesc = "" +
 	"\bvault_id\x18\x01 \x01(\tR\avaultId\x12\x16\n" +
 	"\x06sender\x18\x02 \x01(\fR\x06sender\x12\x1f\n" +
 	"\vnusd_amount\x18\x03 \x01(\x04R\n" +
-	"nusdAmountB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"nusdAmount\"y\n" +
+	"\x19MessageLiquidateNasmVault\x12\x19\n" +
+	"\bvault_id\x18\x01 \x01(\tR\avaultId\x12\x1e\n" +
+	"\n" +
+	"liquidator\x18\x02 \x01(\fR\n" +
+	"liquidator\x12!\n" +
+	"\frepay_amount\x18\x03 \x01(\x04R\vrepayAmountB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_proto_rawDescOnce sync.Once
@@ -1264,7 +1350,7 @@ func file_arbor_proto_rawDescGZIP() []byte {
 	return file_arbor_proto_rawDescData
 }
 
-var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_arbor_proto_goTypes = []any{
 	(*MessageCreateMarket)(nil),       // 0: types.MessageCreateMarket
 	(*MessageUpdateMarketParams)(nil), // 1: types.MessageUpdateMarketParams
@@ -1283,6 +1369,7 @@ var file_arbor_proto_goTypes = []any{
 	(*MessageSetTreasuryCut)(nil),     // 14: types.MessageSetTreasuryCut
 	(*MessageMintNusd)(nil),           // 15: types.MessageMintNusd
 	(*MessageBurnNusd)(nil),           // 16: types.MessageBurnNusd
+	(*MessageLiquidateNasmVault)(nil), // 17: types.MessageLiquidateNasmVault
 }
 var file_arbor_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1303,7 +1390,7 @@ func file_arbor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_proto_rawDesc), len(file_arbor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

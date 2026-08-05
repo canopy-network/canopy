@@ -96,6 +96,7 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 	// place an event could originate. Now declared here so both the new
 	// Layer 4 path and the existing Step 7 dust-clamp path share one slice.
 	var events []*Event
+	var waterfallSets []*PluginSetOp
 	if pErr := checkMarketNotPaused(market, msg.MarketId); pErr != nil {
 		return &PluginDeliverResponse{Error: pErr}
 	}
@@ -264,6 +265,18 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 				EventType: "reserve_fund_draw_down",
 				Msg:       &Event_Custom{Custom: &EventCustom{Msg: l2AnyMsg}},
 			})
+			wfSetOp, wfErr := BuildWaterfallEventSetOp(c.plugin.CurrentHeight(), 0, &WaterfallEvent{
+				BlockHeight:      c.plugin.CurrentHeight(),
+				MarketId:         msg.MarketId,
+				Layer:            "layer2",
+				EventType:        "reserve_fund_draw_down",
+				BadDebt:          badDebtNativeU64,
+				RemainingBalance: newRFund.String(),
+			})
+			if wfErr != nil {
+				return &PluginDeliverResponse{Error: wfErr}
+			}
+			waterfallSets = append(waterfallSets, wfSetOp)
 		} else {
 			// [WIRED, this session] Layer 3 (Arbor protocol treasury) now exists
 			// (bad_debt_layer3.go: Layer3DrawDownArbor/Layer3DrawDownNASM,
@@ -290,6 +303,19 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 					EventType: "treasury_draw_down",
 					Msg:       &Event_Custom{Custom: &EventCustom{Msg: l3AnyMsg}},
 				})
+				wfSetOp, wfErr := BuildWaterfallEventSetOp(c.plugin.CurrentHeight(), 1, &WaterfallEvent{
+					BlockHeight:      c.plugin.CurrentHeight(),
+					MarketId:         msg.MarketId,
+					Layer:            "layer3",
+					EventType:        "treasury_draw_down",
+					BadDebt:          badDebtNativeU64,
+					RemainingBalance: newTFund.String(),
+					Pool:             "arbor",
+				})
+				if wfErr != nil {
+					return &PluginDeliverResponse{Error: wfErr}
+				}
+				waterfallSets = append(waterfallSets, wfSetOp)
 			} else {
 				// [FIXED] Now passes the already-in-memory market struct (read once
 				// near the top of this function) instead of letting ApplyLossFactor
@@ -309,6 +335,40 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 				}
 				if layer4Event != nil {
 					events = append(events, layer4Event)
+
+					// Unwrap layer4Event's anypb payload to extract the
+					// balance-after-this-step figure for the waterfall log.
+					// ApplyLossFactor (apply_loss_factor.go) can return one of
+					// three distinct event shapes depending on which branch it
+					// took; only EventBadDebtSocialization carries a
+					// NewLossFactor field -- EventLossFactorExhausted's
+					// analogous concept is definitionally zero (exhaustion means
+					// loss_factor -> 0, not a value worth re-deriving from a
+					// separate field), and
+					// EventLossFactorAppliedToAlreadyInsolventMarket's K3
+					// idempotency-guard path changes no balance at all. Using
+					// FromAny (plugin.go) rather than guessing at the payload
+					// shape.
+					var l4RemainingBalance string
+					if custom, ok := layer4Event.Msg.(*Event_Custom); ok && custom.Custom != nil {
+						if decoded, fErr := FromAny(custom.Custom.Msg); fErr == nil {
+							if bds, ok := decoded.(*EventBadDebtSocialization); ok {
+								l4RemainingBalance = bds.NewLossFactor
+							}
+						}
+					}
+					wfSetOp, wfErr := BuildWaterfallEventSetOp(c.plugin.CurrentHeight(), 2, &WaterfallEvent{
+						BlockHeight:      c.plugin.CurrentHeight(),
+						MarketId:         msg.MarketId,
+						Layer:            "layer4",
+						EventType:        layer4Event.EventType,
+						BadDebt:          badDebtNativeU64,
+						RemainingBalance: l4RemainingBalance,
+					})
+					if wfErr != nil {
+						return &PluginDeliverResponse{Error: wfErr}
+					}
+					waterfallSets = append(waterfallSets, wfSetOp)
 				}
 			}
 		}
@@ -451,6 +511,7 @@ func (c *Contract) DeliverMessageLiquidatePosition(msg *MessageLiquidatePosition
 		{Key: debtPoolKey, Value: debtPoolOut},
 		{Key: collateralPoolKey, Value: collateralPoolOut},
 	}
+	sets = append(sets, waterfallSets...)
 
 	var deletes []*PluginDeleteOp
 	if newDebt == 0 && newCollateral == 0 {

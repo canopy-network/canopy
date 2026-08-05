@@ -39,6 +39,7 @@ var ContractConfig = &PluginConfig{
 		"set_treasury_cut",
 		"mint_nusd",
 		"burn_nusd",
+		"liquidate_nasm_vault",
 	},
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
@@ -59,6 +60,7 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.MessageSetTreasuryCut",
 		"type.googleapis.com/types.MessageMintNusd",
 		"type.googleapis.com/types.MessageBurnNusd",
+		"type.googleapis.com/types.MessageLiquidateNasmVault",
 	},
 	EventTypeUrls: []string{
 		"type.googleapis.com/types.EventIndexEncodingOverflowHalted",
@@ -74,6 +76,7 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.EventBadDebtSocialization",
 		"type.googleapis.com/types.EventLossFactorAppliedToAlreadyInsolventMarket",
 		"type.googleapis.com/types.EventReserveFundEncodingMigrationCompleted",
+		"type.googleapis.com/types.EventNasmVaultLiquidated",
 	},
 	// CustomStatePrefixes registers Arbor's reserved state-key range {16}-{28}
 	// with Canopy at handshake. Canopy panics if any of these collide with the
@@ -284,6 +287,8 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 		return c.CheckMessageMintNusd(x)
 	case *MessageBurnNusd:
 		return c.CheckMessageBurnNusd(x)
+	case *MessageLiquidateNasmVault:
+		return c.CheckMessageLiquidateNasmVault(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -348,6 +353,8 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 		return c.DeliverMessageMintNusd(x, request.Tx.Fee)
 	case *MessageBurnNusd:
 		return c.DeliverMessageBurnNusd(x, request.Tx.Fee)
+	case *MessageLiquidateNasmVault:
+		return c.DeliverMessageLiquidateNasmVault(x, request.Tx.Fee)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

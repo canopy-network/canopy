@@ -167,3 +167,55 @@ message EventLossFactorAppliedToAlreadyInsolventMarket {
 message EventReserveFundEncodingMigrationCompleted {
   uint64 completed_at_height = 1;
 }
+
+// ─────────────────────────────────────────────
+// Waterfall event log (ARCM §9.2, Layers 2-4) — durable, queryable history
+// ─────────────────────────────────────────────
+
+// WaterfallEvent is a flat, purpose-built record of one bad-debt waterfall
+// step (Layer 2 reserve-fund draw, Layer 3 treasury draw, or Layer 4 lender
+// socialization), persisted to the {42} rolling log independently of the
+// DeliverTx Event already emitted for that same step (EventReserveFundDrawDown,
+// EventTreasuryDrawDown, EventBadDebtSocialization, EventLossFactorExhausted,
+// EventLossFactorAppliedToAlreadyInsolventMarket -- see those messages above).
+// Deliberately NOT a wrapper around those existing Event/anypb payloads: this
+// codebase's DeliverTx Event mechanism has no query surface of its own (Events
+// are returned in PluginDeliverResponse and consumed by Canopy core, not
+// re-readable from plugin state afterward) -- see apply_loss_factor.go's own
+// "EVENT EMISSION, RETURNED NOT EMITTED" doc comment for the identical gap
+// this message closes. A flat record avoids re-parsing four different anypb
+// payload types on every range-scan read.
+message WaterfallEvent {
+  uint64 block_height = 1;
+  string market_id = 2;
+  string layer = 3;               // "layer2" | "layer3" | "layer4"
+  string event_type = 4;          // "reserve_fund_draw_down" | "treasury_draw_down" |
+                                   // "bad_debt_socialization" | "loss_factor_exhausted" |
+                                   // "loss_factor_applied_to_already_insolvent_market"
+  uint64 bad_debt = 5;
+  string remaining_balance = 6;   // decimal string -- meaning depends on layer:
+                                   // layer2: R_fund remaining; layer3: T_fund remaining;
+                                   // layer4: new_loss_factor. Empty for the K3
+                                   // idempotency-guard event_type (no balance changed).
+  string pool = 7;                // "arbor" | "nasm" -- layer3 only, empty otherwise
+}
+
+// ─────────────────────────────────────────────
+// NASM vault liquidation (NASM Consolidated Spec Section 7)
+// ─────────────────────────────────────────────
+
+// EventNasmVaultLiquidated fires on every successful liquidate_nasm_vault
+// call -- a normal, fully-covered liquidation (collateral_seized <=
+// vault.collateral_quantity). Distinct from ARCM's EventBadDebtSocialization
+// (which means a Layer 4 lender-haircut application, a different mechanism
+// entirely) -- NASM liquidation has no waterfall step of its own yet
+// (Phase 1 scope limit, see ErrNasmLiquidationBadDebt), so this event
+// reports the liquidation itself, not a waterfall outcome.
+message EventNasmVaultLiquidated {
+  string vault_id = 1;
+  bytes liquidator = 2;
+  uint64 repay_amount = 3;
+  uint64 collateral_seized = 4;
+  uint64 remaining_vault_debt = 5;   // 0 if the vault was fully closed
+  bool vault_closed = 6;
+}

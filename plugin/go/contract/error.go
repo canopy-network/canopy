@@ -379,3 +379,49 @@ func ErrNotVaultOwner(vaultID string) *PluginError {
 func ErrNusdInsufficientBalance(vaultID string, requested, available uint64) *PluginError {
 	return NewError(251, ArborModule, fmt.Sprintf("NASM vault %q: requested burn amount %d exceeds sender's NUSD balance %d", vaultID, requested, available))
 }
+
+// ErrSelfLiquidationNasm mirrors ErrSelfLiquidation's exact reasoning
+// (liquidate_position.go), applied to NASM vaults: without this guard, a
+// vault owner could liquidate their own underwater vault and collect the
+// LIF bonus (NASM Spec Section 7's reused LIF mechanism) risk-free -- a
+// bonus that exists to compensate an INDEPENDENT liquidator for
+// monitoring/execution risk a self-liquidating owner never bears. A vault
+// owner who wants to close their own underwater position without a bonus
+// already has burn_nusd for that.
+func ErrSelfLiquidationNasm(vaultID string) *PluginError {
+	return NewError(252, ArborModule, fmt.Sprintf("NASM vault %q: liquidator and vault owner must not be the same address -- self-liquidation is not permitted; use burn_nusd to close your own position instead", vaultID))
+}
+
+// ErrNasmVaultNotLiquidatable mirrors ErrPositionNotLiquidatable
+// (liquidate_position.go), NASM's own vault_id context instead of
+// market_id, and NASM's own HF_n formula/threshold (identical numeric
+// scale and boundary as ARCM's HF, per NASM Spec Section 2.2's structural
+// reuse of ARCM's HF formula).
+func ErrNasmVaultNotLiquidatable(vaultID string, hfScaled string) *PluginError {
+	return NewError(253, ArborModule, fmt.Sprintf("NASM vault %q: health factor %s (scaled) is above the liquidation threshold (<=1000000), NASM Spec Section 2.2", vaultID, hfScaled))
+}
+
+// ErrRepayExceedsCloseFactorNasm mirrors ErrRepayExceedsCloseFactor
+// (liquidate_position.go) exactly -- NASM Spec Section 7: "Dynamic Close
+// Factor -- Unchanged -- same 3-tier HF-based CF schedule applies to
+// NUSD vaults," so the underlying cap logic is identical, just NASM's
+// own vault_id context.
+func ErrRepayExceedsCloseFactorNasm(vaultID string, requested, maxAllowed uint64) *PluginError {
+	return NewError(254, ArborModule, fmt.Sprintf("NASM vault %q: repay amount %d exceeds close-factor-capped maximum %d, NASM Spec Section 7", vaultID, requested, maxAllowed))
+}
+
+// ErrNasmLiquidationBadDebt guards liquidate_nusd_vault's Phase 1 scope
+// limit: a liquidation whose collateral_seized would exceed the vault's
+// own locked collateral_quantity (a bad-debt scenario) is hard-rejected
+// rather than partially seizing and leaving an unaccounted shortfall.
+// DISCLOSED, NOT SILENT -- mirrors the exact scope-limiting pattern
+// liquidate_position.go's own (now-corrected) history shows ARCM took
+// before Layer 2-4 existed: NASM's own bad-debt waterfall (R_nusd draw-
+// down at {41}, Arbor treasury fallback per NASM Spec Section 11.2) is
+// not yet wired into any liquidation path. Given NASM's substantially
+// wider safety margins (65-70%/55-62% LTV vs ARCM's 80-85%/75-82%), this
+// scenario is expected to be rare in practice, but is a real, reachable
+// code path, not a theoretical one -- must not be silently mishandled.
+func ErrNasmLiquidationBadDebt(vaultID string, collateralSeized, collateralAvailable uint64) *PluginError {
+	return NewError(255, ArborModule, fmt.Sprintf("NASM vault %q: liquidation would require seizing %d collateral but only %d is locked (bad debt) -- NASM's own bad-debt waterfall is not yet wired into liquidation, rejected rather than partially seized, NASM Spec Section 11.2", vaultID, collateralSeized, collateralAvailable))
+}
