@@ -340,10 +340,10 @@ func (h logHandler) Handle(resp http.ResponseWriter, req *http.Request, p httpro
 	h.h(resp, req, p)
 }
 
-//go:embed all:web/explorer/dist
+// go:embed all:web/explorer/dist
 var explorerFS embed.FS
 
-//go:embed all:web/wallet/out
+// go:embed all:web/wallet/out
 var walletFS embed.FS
 
 // runStaticFileServer creates a web server serving static files with SPA fallback
