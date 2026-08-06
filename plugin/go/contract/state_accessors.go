@@ -833,12 +833,25 @@ func GetStabilityFeeIndexRecord(c *Contract) (record *StabilityFeeIndex, found b
 // last successfully-committed value rather than treating ok=false as a
 // PluginError to propagate -- there is no transaction to revert in
 // BeginBlock context (Principle 14).
-func SetStabilityFeeIndexRecordTry(c *Contract, sfIndex *big.Int, lastAccrualBlock uint64) (ok bool, pErr *PluginError) {
+// SetStabilityFeeIndexRecordTry now also persists remainderRay (uint128,
+// RAY-scaled) alongside sf_index/last_accrual_block -- added when
+// AccrueStabilityFee was wired to actually credit {41} from NusdSupply's
+// aggregate debt (NASM Spec Section 6.4), mirroring
+// Market.InterestRemainderRay's identical dust-carry fix.
+func SetStabilityFeeIndexRecordTry(c *Contract, sfIndex *big.Int, lastAccrualBlock uint64, remainderRay *big.Int) (ok bool, pErr *PluginError) {
 	encoded, encOk := TryEncodeUint128(sfIndex)
 	if !encOk {
 		return false, nil
 	}
-	sfBytes, mErr := Marshal(&StabilityFeeIndex{SfIndex: encoded, LastAccrualBlock: lastAccrualBlock})
+	remainderEncoded, remOk := TryEncodeUint128(remainderRay)
+	if !remOk {
+		// Structurally unreachable -- a remainder (numerator mod RAY) can
+		// never itself reach or exceed RAY, so it can never fail to fit in
+		// 128 bits. Checked anyway, matching interest_accrual.go's identical
+		// remainder-encode check rather than assuming the invariant.
+		return false, nil
+	}
+	sfBytes, mErr := Marshal(&StabilityFeeIndex{SfIndex: encoded, LastAccrualBlock: lastAccrualBlock, RemainderRay: remainderEncoded})
 	if mErr != nil {
 		return false, mErr
 	}

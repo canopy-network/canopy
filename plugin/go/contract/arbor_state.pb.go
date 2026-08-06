@@ -763,8 +763,13 @@ type StabilityFeeIndex struct {
 	// Market's B_index/loss_factor. Genesis value is RAY (1e18),
 	// matching AYIS's SupplyIndexRecord initialization convention.
 	LastAccrualBlock uint64 `protobuf:"varint,2,opt,name=last_accrual_block,json=lastAccrualBlock,proto3" json:"last_accrual_block,omitempty"` // mirrors Market.LastAccrualBlock's role (AYIS Section 7 Step 11) --
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// used to compute delta_t for AccrueStabilityFee's own compounding
+	// step (NASM Spec Section 6.2). Global, not per-market: this is the
+	// single pooled fee's own last-accrual point, not tied to any one
+	// market's accrual cadence.
+	RemainderRay  []byte `protobuf:"bytes,3,opt,name=remainder_ray,json=remainderRay,proto3" json:"remainder_ray,omitempty"` // uint128, RAY-scaled, EncodeUint128 raw bytes. Carries the
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StabilityFeeIndex) Reset() {
@@ -809,6 +814,13 @@ func (x *StabilityFeeIndex) GetLastAccrualBlock() uint64 {
 		return x.LastAccrualBlock
 	}
 	return 0
+}
+
+func (x *StabilityFeeIndex) GetRemainderRay() []byte {
+	if x != nil {
+		return x.RemainderRay
+	}
+	return nil
 }
 
 // RwaYieldVaultPosition is the {34} record: a single depositor's RWA Yield
@@ -1021,10 +1033,11 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\x10sf_index_at_open\x18\x06 \x01(\fR\rsfIndexAtOpen\"/\n" +
 	"\n" +
 	"NusdSupply\x12!\n" +
-	"\ftotal_supply\x18\x01 \x01(\x04R\vtotalSupply\"\\\n" +
+	"\ftotal_supply\x18\x01 \x01(\x04R\vtotalSupply\"\x81\x01\n" +
 	"\x11StabilityFeeIndex\x12\x19\n" +
 	"\bsf_index\x18\x01 \x01(\fR\asfIndex\x12,\n" +
-	"\x12last_accrual_block\x18\x02 \x01(\x04R\x10lastAccrualBlock\"\x91\x01\n" +
+	"\x12last_accrual_block\x18\x02 \x01(\x04R\x10lastAccrualBlock\x12#\n" +
+	"\rremainder_ray\x18\x03 \x01(\fR\fremainderRay\"\x91\x01\n" +
 	"\x15RwaYieldVaultPosition\x12\x1c\n" +
 	"\tdepositor\x18\x01 \x01(\fR\tdepositor\x12\x1d\n" +
 	"\n" +

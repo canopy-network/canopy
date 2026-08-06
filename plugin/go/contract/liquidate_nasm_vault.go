@@ -68,6 +68,7 @@ func (c *Contract) CheckMessageLiquidateNasmVault(msg *MessageLiquidateNasmVault
 // to log, only a hard rejection on the uncovered path. It emits
 // EventNasmVaultLiquidated instead, reporting the liquidation itself.
 func (c *Contract) DeliverMessageLiquidateNasmVault(msg *MessageLiquidateNasmVault, fee uint64) *PluginDeliverResponse {
+	var nasmWaterfallSets []*PluginSetOp
 	if err := ValidateVaultID(msg.VaultId); err != nil {
 		return &PluginDeliverResponse{Error: ErrInvalidVaultID(err)}
 	}
@@ -216,11 +217,71 @@ func (c *Contract) DeliverMessageLiquidateNasmVault(msg *MessageLiquidateNasmVau
 	}
 	collateralSeizedU64 := collateralSeized.Uint64()
 
-	// Step 7 -- PHASE 1 SCOPE LIMIT, DISCLOSED (see ErrNasmLiquidationBadDebt's
-	// own doc comment, error.go, and this function's own doc comment above).
-	// A bad-debt scenario hard-rejects rather than partially seizing.
+	// Step 7 -- bad-debt path. PHASE 1 SCOPE LIMIT lifted: Layer3DrawDownNASM
+	// (bad_debt_layer3.go) already existed, reading/writing R_nusd at {41}
+	// via GetTreasuryNASM/SetTreasuryNASM -- this function's own prior doc
+	// comment claiming "no R_nusd accessor exists anywhere in this codebase"
+	// predates cross-referencing bad_debt_layer3.go and was incorrect as of
+	// commit 80d68889; corrected here rather than carried forward.
+	//
+	// Mirrors liquidate_position.go's own Layer 2/3 badDebtNative derivation
+	// exactly: raw prices, deliberately WITHOUT LIFBps (LIF is the
+	// liquidator's incentive markup already applied in Step 6's seizure
+	// math; R_nusd makes the protocol whole for actual value lost, not the
+	// incentivized amount). Ceiling-rounded, protocol-favouring.
 	if collateralSeizedU64 > vault.CollateralQuantity {
-		return &PluginDeliverResponse{Error: ErrNasmLiquidationBadDebt(msg.VaultId, collateralSeizedU64, vault.CollateralQuantity)}
+		badDebtCollateral := new(big.Int).Sub(
+			new(big.Int).SetUint64(collateralSeizedU64),
+			new(big.Int).SetUint64(vault.CollateralQuantity),
+		)
+		badDebtNativeNum := new(big.Int).Mul(badDebtCollateral, new(big.Int).SetUint64(collateralPrice))
+		badDebtNativeDen := new(big.Int).SetUint64(NusdOraclePriceScaled)
+		badDebtNativeNum.Add(badDebtNativeNum, badDebtNativeDen)
+		badDebtNativeNum.Sub(badDebtNativeNum, big.NewInt(1))
+		badDebtNative := new(big.Int).Div(badDebtNativeNum, badDebtNativeDen)
+
+		// Same 64-bit overflow guard as liquidate_position.go's own
+		// badDebtNative check, applied before use in Layer3DrawDownNASM.
+		if badDebtNative.BitLen() > 64 {
+			return &PluginDeliverResponse{Error: ErrBadDebtNativeOverflow(msg.VaultId, badDebtCollateral.String(), badDebtNative.String())}
+		}
+		badDebtNativeU64 := badDebtNative.Uint64()
+
+		covered, newTFund, l3Err := Layer3DrawDownNASM(c, msg.VaultId, badDebtNativeU64)
+		if l3Err != nil {
+			return &PluginDeliverResponse{Error: l3Err}
+		}
+		if !covered {
+			// R_nusd insufficient to fully cover -- all-or-nothing gate, same
+			// contract as Layer3DrawDownArbor/Layer2DrawDown. No partial
+			// seizure; original hard-reject remains the correct fallback
+			// (NASM Spec Section 11.2 -- Layer 4 not yet built for NASM).
+			return &PluginDeliverResponse{Error: ErrNasmLiquidationBadDebt(msg.VaultId, collateralSeizedU64, vault.CollateralQuantity)}
+		}
+
+		// Covered. Log a WaterfallEvent ({42}) for this NASM Layer 3
+		// draw-down -- same durable-log pattern this session added for
+		// ARCM's own waterfall. seq=0: NASM has only one waterfall layer
+		// wired so far (unlike ARCM's 0/1/2 for Layer2/3/4), so no
+		// collision risk within a single liquidation.
+		wfSetOp, wfErr := BuildWaterfallEventSetOp(c.plugin.CurrentHeight(), 0, &WaterfallEvent{
+			BlockHeight:      c.plugin.CurrentHeight(),
+			MarketId:         msg.VaultId,
+			Layer:            "layer3_nasm",
+			EventType:        "nasm_treasury_draw_down",
+			BadDebt:          badDebtNativeU64,
+			RemainingBalance: newTFund.String(),
+		})
+		if wfErr != nil {
+			return &PluginDeliverResponse{Error: wfErr}
+		}
+		nasmWaterfallSets = append(nasmWaterfallSets, wfSetOp)
+
+		// Layer 3 fully covered the shortfall's value. Cap seizure at what
+		// the vault actually has -- the liquidator receives all available
+		// collateral; R_nusd makes the protocol whole for the rest. Mirrors
+		// liquidate_position.go's identical post-waterfall reassignment.
+		collateralSeizedU64 = vault.CollateralQuantity
 	}
 
 	// Step 8 -- custody. Liquidator's NusdBalance is debited by
@@ -367,6 +428,7 @@ func (c *Contract) DeliverMessageLiquidateNasmVault(msg *MessageLiquidateNasmVau
 
 	// Step 10 -- single atomic StateWrite, matching burn_nusd.go's own
 	// discipline.
+	sets = append(sets, nasmWaterfallSets...)
 	writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets, Deletes: deletes})
 	if wErr != nil {
 		return &PluginDeliverResponse{Error: wErr}

@@ -187,6 +187,15 @@ message StabilityFeeIndex {
                                   // step (NASM Spec Section 6.2). Global, not per-market: this is the
                                   // single pooled fee's own last-accrual point, not tied to any one
                                   // market's accrual cadence.
+  bytes  remainder_ray = 3;      // uint128, RAY-scaled, EncodeUint128 raw bytes. Carries the
+                                  // sub-RAY-unit remainder from feeEarned's division by RAY forward
+                                  // to the next accrual call, mirroring Market.InterestRemainderRay's
+                                  // exact fix (interest_accrual.go Step 7, ARCM/AYIS dust-loss fix)
+                                  // for the identical failure class: without this, any accrual whose
+                                  // numerator doesn't clear one full RAY unit has that fractional fee
+                                  // silently and permanently discarded on every single call. Added
+                                  // when AccrueStabilityFee was wired to actually credit {41} (NASM
+                                  // Spec Section 6.4) instead of only compounding sf_index.
 }
 
 // RwaYieldVaultPosition is the {34} record: a single depositor's RWA Yield

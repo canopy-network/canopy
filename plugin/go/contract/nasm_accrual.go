@@ -1,5 +1,7 @@
 package contract
 
+import "math/big"
+
 // stabilityFeeBaseBps is NASM's launch-default annual stability fee rate
 // (NASM Consolidated Spec Section 6.2, Section 18: "launch default: 150
 // bps / 1.5% APR"). Hardcoded pending NASM's own governance parameter
@@ -64,7 +66,7 @@ func AccrueStabilityFee(c *Contract) (pErr *PluginError) {
 	// record immediately and returns, establishing found=true for every
 	// subsequent call, instead of falling through to the delta_t guard.
 	if !found {
-		ok, tErr := SetStabilityFeeIndexRecordTry(c, RAY, currentBlock)
+		ok, tErr := SetStabilityFeeIndexRecordTry(c, RAY, currentBlock, big.NewInt(0))
 		if tErr != nil {
 			return tErr
 		}
@@ -80,6 +82,13 @@ func AccrueStabilityFee(c *Contract) (pErr *PluginError) {
 
 	sfIndex := DecodeUint128(record.SfIndex)
 	lastAccrualBlock := record.LastAccrualBlock
+
+	var prevRemainder *big.Int
+	if len(record.RemainderRay) == 0 {
+		prevRemainder = big.NewInt(0)
+	} else {
+		prevRemainder = DecodeUint128(record.RemainderRay)
+	}
 
 	// Step 0, mirrors AccrueInterest's own N1 guard: if this function
 	// somehow runs twice in the same block (defensive; BeginBlock calls
@@ -104,7 +113,63 @@ func AccrueStabilityFee(c *Contract) (pErr *PluginError) {
 	// formula here is deliberate, not an oversight).
 	newSfIndex := CompoundExact(sfIndex, perBlockRate, deltaT)
 
-	ok, tErr := SetStabilityFeeIndexRecordTry(c, newSfIndex, currentBlock)
+	// [NEW] NASM Spec Section 6.4: "100% of accrued stability fee routes
+	// to R_nusd." Previously AccrueStabilityFee only compounded sf_index
+	// (the per-vault scaling factor) and never materialized any actual
+	// fee revenue into a real balance. Fixed by mirroring
+	// interest_accrual.go's own Step 7 exactly: feeEarned = (aggregate_debt
+	// * per_block_rate * delta_t + prev_remainder) / RAY, with the sub-RAY
+	// remainder carried forward so no fractional fee is ever silently lost.
+	//
+	// aggregate_debt uses NusdSupply.TotalSupply ({31}), NOT a new,
+	// separate accumulator -- confirmed via full-codebase grep that this
+	// field is mutated ONLY by mint_nusd.go (+= NusdAmountRequested),
+	// burn_nusd.go (-= burnedAmount), and liquidate_nasm_vault.go
+	// (-= RepayAmount), i.e. it already moves in exact lockstep with
+	// aggregate outstanding raw vault principal. Reusing TotalSupply
+	// avoids the drift risk a second, parallel accumulator would carry.
+	//
+	// Deliberately uses raw TotalSupply (not SF-scaled), same as AYIS's
+	// own totalBorrowed in interest_accrual.go's Step 7.
+	supply, _, sErr := GetNusdSupply(c)
+	if sErr != nil {
+		return sErr
+	}
+	var totalSupply uint64
+	if supply != nil {
+		totalSupply = supply.TotalSupply
+	}
+
+	numerator := new(big.Int).SetUint64(totalSupply)
+	numerator.Mul(numerator, perBlockRate)
+	numerator.Mul(numerator, new(big.Int).SetUint64(deltaT))
+	numerator.Add(numerator, prevRemainder)
+
+	feeEarned := new(big.Int).Div(numerator, RAY)
+	newRemainder := new(big.Int).Mod(numerator, RAY)
+
+	// Credit {41} (R_nusd/PrefixTreasuryNASM) with feeEarned, via the
+	// BeginBlock-context-safe Try path -- same convention
+	// interest_accrual.go's own treasury_cut leg uses for {40}.
+	if feeEarned.Sign() > 0 {
+		tFund, _, tfErr := GetTreasuryNASM(c)
+		if tfErr != nil {
+			return tfErr
+		}
+		if tFund == nil {
+			tFund = big.NewInt(0)
+		}
+		newTFund := new(big.Int).Add(tFund, feeEarned)
+		_, tfWriteErr := SetTreasuryNASMTry(c, newTFund)
+		if tfWriteErr != nil {
+			return tfWriteErr
+		}
+		// ok=false (128-bit overflow) case not specially handled here,
+		// matching this function's existing disclosed-gap convention
+		// (Principle 14: BeginBlock context).
+	}
+
+	ok, tErr := SetStabilityFeeIndexRecordTry(c, newSfIndex, currentBlock, newRemainder)
 	if tErr != nil {
 		return tErr
 	}
