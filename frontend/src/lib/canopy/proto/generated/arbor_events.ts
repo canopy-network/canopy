@@ -73,6 +73,50 @@ decreaseAmount: bigint,
 preClampValue: bigint,
 }
 
+/**
+ * EventReserveFundDrawDown fires when Layer2DrawDown fully covers a
+ * bad-debt shortfall from a market's own R_fund (covered=true only --
+ * binary gate, bad_debt_layer2.go; no event fires on covered=false,
+ * consistent with Layer3DrawDown's identical binary-gate contract).
+ * [RETROACTIVE FIX] Layer2DrawDown has existed and been live since before
+ * this event was added -- this closes a real observability gap: R_fund
+ * draw-downs were previously silent on-chain, unlike every other state
+ * mutation in this file's Layer 4/dust-clamp/migration sections, all of
+ * which already emit a named event. This is purely additive; it does not
+ * change Layer2DrawDown's contract, return values, or binary-gate logic.
+ */
+export interface EventReserveFundDrawDown {
+marketId: string,
+/** amount drawn -- == the full shortfall, since binary gate */
+badDebt: bigint,
+/** decimal string, uint128-scale -- R_fund balance after this draw */
+remainingReserveFund: string,
+}
+
+/**
+ * EventTreasuryDrawDown fires when Layer3DrawDownArbor or Layer3DrawDownNASM
+ * fully covers a bad-debt shortfall from its respective T_fund pool
+ * (covered=true only -- binary gate, bad_debt_layer3.go; no event fires on
+ * covered=false, matching Layer2DrawDown's own silent-on-miss precedent).
+ * 
+ * [REVERSED] T_fund was originally a single pool shared by Arbor and
+ * NASM/NUSD; this event originally had no pool field since there was only
+ * one pool. Reversed to two isolated pools (see PrefixTreasuryArbor/
+ * PrefixTreasuryNASM in state_keys.go) -- the pool field below was added
+ * so an off-chain observer can tell which pool fired, since bad_debt and
+ * remaining_treasury alone are now ambiguous between the two.
+ */
+export interface EventTreasuryDrawDown {
+/** the market whose liquidation triggered this draw */
+marketId: string,
+/** amount drawn -- == the full shortfall, since binary gate */
+badDebt: bigint,
+/** decimal string, uint128-scale -- T_fund balance after this draw */
+remainingTreasury: string,
+/** "arbor" | "nasm" -- which isolated T_fund pool this draw came from */
+pool: string,
+}
+
 /** EventLayer4PendingCountWarning fires when the soft backlog threshold is crossed */
 export interface EventLayer4PendingCountWarning {
 marketId: string,
@@ -140,6 +184,62 @@ badDebt: bigint,
  */
 export interface EventReserveFundEncodingMigrationCompleted {
 completedAtHeight: bigint,
+}
+
+/**
+ * WaterfallEvent is a flat, purpose-built record of one bad-debt waterfall
+ * step (Layer 2 reserve-fund draw, Layer 3 treasury draw, or Layer 4 lender
+ * socialization), persisted to the {42} rolling log independently of the
+ * DeliverTx Event already emitted for that same step (EventReserveFundDrawDown,
+ * EventTreasuryDrawDown, EventBadDebtSocialization, EventLossFactorExhausted,
+ * EventLossFactorAppliedToAlreadyInsolventMarket -- see those messages above).
+ * Deliberately NOT a wrapper around those existing Event/anypb payloads: this
+ * codebase's DeliverTx Event mechanism has no query surface of its own (Events
+ * are returned in PluginDeliverResponse and consumed by Canopy core, not
+ * re-readable from plugin state afterward) -- see apply_loss_factor.go's own
+ * "EVENT EMISSION, RETURNED NOT EMITTED" doc comment for the identical gap
+ * this message closes. A flat record avoids re-parsing four different anypb
+ * payload types on every range-scan read.
+ */
+export interface WaterfallEvent {
+blockHeight: bigint,
+marketId: string,
+/** "layer2" | "layer3" | "layer4" */
+layer: string,
+/** "reserve_fund_draw_down" | "treasury_draw_down" | */
+eventType: string,
+/**
+ * "bad_debt_socialization" | "loss_factor_exhausted" |
+ * "loss_factor_applied_to_already_insolvent_market"
+ */
+badDebt: bigint,
+/** decimal string -- meaning depends on layer: */
+remainingBalance: string,
+/**
+ * layer2: R_fund remaining; layer3: T_fund remaining;
+ * layer4: new_loss_factor. Empty for the K3
+ * idempotency-guard event_type (no balance changed).
+ */
+pool: string,
+}
+
+/**
+ * EventNasmVaultLiquidated fires on every successful liquidate_nasm_vault
+ * call -- a normal, fully-covered liquidation (collateral_seized <=
+ * vault.collateral_quantity). Distinct from ARCM's EventBadDebtSocialization
+ * (which means a Layer 4 lender-haircut application, a different mechanism
+ * entirely) -- NASM liquidation has no waterfall step of its own yet
+ * (Phase 1 scope limit, see ErrNasmLiquidationBadDebt), so this event
+ * reports the liquidation itself, not a waterfall outcome.
+ */
+export interface EventNasmVaultLiquidated {
+vaultId: string,
+liquidator: Uint8Array,
+repayAmount: bigint,
+collateralSeized: bigint,
+/** 0 if the vault was fully closed */
+remainingVaultDebt: bigint,
+vaultClosed: boolean,
 }
 
 function createBaseEventIndexEncodingOverflowHalted(): EventIndexEncodingOverflowHalted {
@@ -695,6 +795,235 @@ message.decreaseAmount = (object.decreaseAmount !== undefined && object.decrease
 message.preClampValue = (object.preClampValue !== undefined && object.preClampValue !== null)
           ? BigInt(object.preClampValue)
           : 0n;
+return message;
+}
+            };
+
+function createBaseEventReserveFundDrawDown(): EventReserveFundDrawDown {
+      return { marketId: "",badDebt: 0n,remainingReserveFund: "" };
+    }
+
+export const EventReserveFundDrawDown: MessageFns<EventReserveFundDrawDown> = {
+              encode(
+      message: EventReserveFundDrawDown,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.marketId !== "") {
+          writer.uint32(10).string(message.marketId);
+        }
+if ( message.badDebt !== 0n) {
+          if (BigInt.asUintN(64, message.badDebt) !== message.badDebt) {
+          throw new globalThis.Error('value provided for field message.badDebt of type uint64 too large');
+        }
+        writer.uint32(16).uint64(message.badDebt);
+        }
+if ( message.remainingReserveFund !== "") {
+          writer.uint32(26).string(message.remainingReserveFund);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): EventReserveFundDrawDown {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseEventReserveFundDrawDown();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.marketId = reader.string();
+continue; }
+case 2: {
+if (tag !== 16) {
+        break;
+      }
+    
+        message.badDebt = reader.uint64() as bigint;
+continue; }
+case 3: {
+if (tag !== 26) {
+        break;
+      }
+    
+        message.remainingReserveFund = reader.string();
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): EventReserveFundDrawDown {
+      return {
+marketId: isSet(object.marketId) ? globalThis.String(object.marketId)
+         : isSet(object.market_id) ? globalThis.String(object.market_id)
+          : "",
+badDebt: isSet(object.badDebt) ? BigInt(object.badDebt)
+         : isSet(object.bad_debt) ? BigInt(object.bad_debt)
+          : 0n,
+remainingReserveFund: isSet(object.remainingReserveFund) ? globalThis.String(object.remainingReserveFund)
+         : isSet(object.remaining_reserve_fund) ? globalThis.String(object.remaining_reserve_fund)
+          : "",
+};
+},
+
+toJSON(message: EventReserveFundDrawDown): unknown {
+      const obj: any = {};
+if ( message.marketId !== "") {
+          obj.marketId = message.marketId;
+        }
+if ( message.badDebt !== 0n) {
+          obj.badDebt = message.badDebt.toString();
+        }
+if ( message.remainingReserveFund !== "") {
+          obj.remainingReserveFund = message.remainingReserveFund;
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<EventReserveFundDrawDown>, I>>(base?: I): EventReserveFundDrawDown {
+        return EventReserveFundDrawDown.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<EventReserveFundDrawDown>, I>>(object: I): EventReserveFundDrawDown {
+const message = createBaseEventReserveFundDrawDown();
+message.marketId = object.marketId ?? "";
+message.badDebt = (object.badDebt !== undefined && object.badDebt !== null)
+          ? BigInt(object.badDebt)
+          : 0n;
+message.remainingReserveFund = object.remainingReserveFund ?? "";
+return message;
+}
+            };
+
+function createBaseEventTreasuryDrawDown(): EventTreasuryDrawDown {
+      return { marketId: "",badDebt: 0n,remainingTreasury: "",pool: "" };
+    }
+
+export const EventTreasuryDrawDown: MessageFns<EventTreasuryDrawDown> = {
+              encode(
+      message: EventTreasuryDrawDown,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.marketId !== "") {
+          writer.uint32(10).string(message.marketId);
+        }
+if ( message.badDebt !== 0n) {
+          if (BigInt.asUintN(64, message.badDebt) !== message.badDebt) {
+          throw new globalThis.Error('value provided for field message.badDebt of type uint64 too large');
+        }
+        writer.uint32(16).uint64(message.badDebt);
+        }
+if ( message.remainingTreasury !== "") {
+          writer.uint32(26).string(message.remainingTreasury);
+        }
+if ( message.pool !== "") {
+          writer.uint32(34).string(message.pool);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): EventTreasuryDrawDown {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseEventTreasuryDrawDown();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.marketId = reader.string();
+continue; }
+case 2: {
+if (tag !== 16) {
+        break;
+      }
+    
+        message.badDebt = reader.uint64() as bigint;
+continue; }
+case 3: {
+if (tag !== 26) {
+        break;
+      }
+    
+        message.remainingTreasury = reader.string();
+continue; }
+case 4: {
+if (tag !== 34) {
+        break;
+      }
+    
+        message.pool = reader.string();
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): EventTreasuryDrawDown {
+      return {
+marketId: isSet(object.marketId) ? globalThis.String(object.marketId)
+         : isSet(object.market_id) ? globalThis.String(object.market_id)
+          : "",
+badDebt: isSet(object.badDebt) ? BigInt(object.badDebt)
+         : isSet(object.bad_debt) ? BigInt(object.bad_debt)
+          : 0n,
+remainingTreasury: isSet(object.remainingTreasury) ? globalThis.String(object.remainingTreasury)
+         : isSet(object.remaining_treasury) ? globalThis.String(object.remaining_treasury)
+          : "",
+pool: isSet(object.pool) ? globalThis.String(object.pool)
+        
+          : "",
+};
+},
+
+toJSON(message: EventTreasuryDrawDown): unknown {
+      const obj: any = {};
+if ( message.marketId !== "") {
+          obj.marketId = message.marketId;
+        }
+if ( message.badDebt !== 0n) {
+          obj.badDebt = message.badDebt.toString();
+        }
+if ( message.remainingTreasury !== "") {
+          obj.remainingTreasury = message.remainingTreasury;
+        }
+if ( message.pool !== "") {
+          obj.pool = message.pool;
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<EventTreasuryDrawDown>, I>>(base?: I): EventTreasuryDrawDown {
+        return EventTreasuryDrawDown.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<EventTreasuryDrawDown>, I>>(object: I): EventTreasuryDrawDown {
+const message = createBaseEventTreasuryDrawDown();
+message.marketId = object.marketId ?? "";
+message.badDebt = (object.badDebt !== undefined && object.badDebt !== null)
+          ? BigInt(object.badDebt)
+          : 0n;
+message.remainingTreasury = object.remainingTreasury ?? "";
+message.pool = object.pool ?? "";
 return message;
 }
             };
@@ -1418,11 +1747,374 @@ return message;
 }
             };
 
+function createBaseWaterfallEvent(): WaterfallEvent {
+      return { blockHeight: 0n,marketId: "",layer: "",eventType: "",badDebt: 0n,remainingBalance: "",pool: "" };
+    }
+
+export const WaterfallEvent: MessageFns<WaterfallEvent> = {
+              encode(
+      message: WaterfallEvent,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.blockHeight !== 0n) {
+          if (BigInt.asUintN(64, message.blockHeight) !== message.blockHeight) {
+          throw new globalThis.Error('value provided for field message.blockHeight of type uint64 too large');
+        }
+        writer.uint32(8).uint64(message.blockHeight);
+        }
+if ( message.marketId !== "") {
+          writer.uint32(18).string(message.marketId);
+        }
+if ( message.layer !== "") {
+          writer.uint32(26).string(message.layer);
+        }
+if ( message.eventType !== "") {
+          writer.uint32(34).string(message.eventType);
+        }
+if ( message.badDebt !== 0n) {
+          if (BigInt.asUintN(64, message.badDebt) !== message.badDebt) {
+          throw new globalThis.Error('value provided for field message.badDebt of type uint64 too large');
+        }
+        writer.uint32(40).uint64(message.badDebt);
+        }
+if ( message.remainingBalance !== "") {
+          writer.uint32(50).string(message.remainingBalance);
+        }
+if ( message.pool !== "") {
+          writer.uint32(58).string(message.pool);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): WaterfallEvent {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseWaterfallEvent();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 8) {
+        break;
+      }
+    
+        message.blockHeight = reader.uint64() as bigint;
+continue; }
+case 2: {
+if (tag !== 18) {
+        break;
+      }
+    
+        message.marketId = reader.string();
+continue; }
+case 3: {
+if (tag !== 26) {
+        break;
+      }
+    
+        message.layer = reader.string();
+continue; }
+case 4: {
+if (tag !== 34) {
+        break;
+      }
+    
+        message.eventType = reader.string();
+continue; }
+case 5: {
+if (tag !== 40) {
+        break;
+      }
+    
+        message.badDebt = reader.uint64() as bigint;
+continue; }
+case 6: {
+if (tag !== 50) {
+        break;
+      }
+    
+        message.remainingBalance = reader.string();
+continue; }
+case 7: {
+if (tag !== 58) {
+        break;
+      }
+    
+        message.pool = reader.string();
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): WaterfallEvent {
+      return {
+blockHeight: isSet(object.blockHeight) ? BigInt(object.blockHeight)
+         : isSet(object.block_height) ? BigInt(object.block_height)
+          : 0n,
+marketId: isSet(object.marketId) ? globalThis.String(object.marketId)
+         : isSet(object.market_id) ? globalThis.String(object.market_id)
+          : "",
+layer: isSet(object.layer) ? globalThis.String(object.layer)
+        
+          : "",
+eventType: isSet(object.eventType) ? globalThis.String(object.eventType)
+         : isSet(object.event_type) ? globalThis.String(object.event_type)
+          : "",
+badDebt: isSet(object.badDebt) ? BigInt(object.badDebt)
+         : isSet(object.bad_debt) ? BigInt(object.bad_debt)
+          : 0n,
+remainingBalance: isSet(object.remainingBalance) ? globalThis.String(object.remainingBalance)
+         : isSet(object.remaining_balance) ? globalThis.String(object.remaining_balance)
+          : "",
+pool: isSet(object.pool) ? globalThis.String(object.pool)
+        
+          : "",
+};
+},
+
+toJSON(message: WaterfallEvent): unknown {
+      const obj: any = {};
+if ( message.blockHeight !== 0n) {
+          obj.blockHeight = message.blockHeight.toString();
+        }
+if ( message.marketId !== "") {
+          obj.marketId = message.marketId;
+        }
+if ( message.layer !== "") {
+          obj.layer = message.layer;
+        }
+if ( message.eventType !== "") {
+          obj.eventType = message.eventType;
+        }
+if ( message.badDebt !== 0n) {
+          obj.badDebt = message.badDebt.toString();
+        }
+if ( message.remainingBalance !== "") {
+          obj.remainingBalance = message.remainingBalance;
+        }
+if ( message.pool !== "") {
+          obj.pool = message.pool;
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<WaterfallEvent>, I>>(base?: I): WaterfallEvent {
+        return WaterfallEvent.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<WaterfallEvent>, I>>(object: I): WaterfallEvent {
+const message = createBaseWaterfallEvent();
+message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
+          ? BigInt(object.blockHeight)
+          : 0n;
+message.marketId = object.marketId ?? "";
+message.layer = object.layer ?? "";
+message.eventType = object.eventType ?? "";
+message.badDebt = (object.badDebt !== undefined && object.badDebt !== null)
+          ? BigInt(object.badDebt)
+          : 0n;
+message.remainingBalance = object.remainingBalance ?? "";
+message.pool = object.pool ?? "";
+return message;
+}
+            };
+
+function createBaseEventNasmVaultLiquidated(): EventNasmVaultLiquidated {
+      return { vaultId: "",liquidator: new Uint8Array(0),repayAmount: 0n,collateralSeized: 0n,remainingVaultDebt: 0n,vaultClosed: false };
+    }
+
+export const EventNasmVaultLiquidated: MessageFns<EventNasmVaultLiquidated> = {
+              encode(
+      message: EventNasmVaultLiquidated,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.vaultId !== "") {
+          writer.uint32(10).string(message.vaultId);
+        }
+if ( message.liquidator.length !== 0) {
+          writer.uint32(18).bytes(message.liquidator);
+        }
+if ( message.repayAmount !== 0n) {
+          if (BigInt.asUintN(64, message.repayAmount) !== message.repayAmount) {
+          throw new globalThis.Error('value provided for field message.repayAmount of type uint64 too large');
+        }
+        writer.uint32(24).uint64(message.repayAmount);
+        }
+if ( message.collateralSeized !== 0n) {
+          if (BigInt.asUintN(64, message.collateralSeized) !== message.collateralSeized) {
+          throw new globalThis.Error('value provided for field message.collateralSeized of type uint64 too large');
+        }
+        writer.uint32(32).uint64(message.collateralSeized);
+        }
+if ( message.remainingVaultDebt !== 0n) {
+          if (BigInt.asUintN(64, message.remainingVaultDebt) !== message.remainingVaultDebt) {
+          throw new globalThis.Error('value provided for field message.remainingVaultDebt of type uint64 too large');
+        }
+        writer.uint32(40).uint64(message.remainingVaultDebt);
+        }
+if ( message.vaultClosed !== false) {
+          writer.uint32(48).bool(message.vaultClosed);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): EventNasmVaultLiquidated {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseEventNasmVaultLiquidated();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.vaultId = reader.string();
+continue; }
+case 2: {
+if (tag !== 18) {
+        break;
+      }
+    
+        message.liquidator = reader.bytes();
+continue; }
+case 3: {
+if (tag !== 24) {
+        break;
+      }
+    
+        message.repayAmount = reader.uint64() as bigint;
+continue; }
+case 4: {
+if (tag !== 32) {
+        break;
+      }
+    
+        message.collateralSeized = reader.uint64() as bigint;
+continue; }
+case 5: {
+if (tag !== 40) {
+        break;
+      }
+    
+        message.remainingVaultDebt = reader.uint64() as bigint;
+continue; }
+case 6: {
+if (tag !== 48) {
+        break;
+      }
+    
+        message.vaultClosed = reader.bool();
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): EventNasmVaultLiquidated {
+      return {
+vaultId: isSet(object.vaultId) ? globalThis.String(object.vaultId)
+         : isSet(object.vault_id) ? globalThis.String(object.vault_id)
+          : "",
+liquidator: isSet(object.liquidator) ? bytesFromBase64(object.liquidator)
+        
+          : new Uint8Array(0),
+repayAmount: isSet(object.repayAmount) ? BigInt(object.repayAmount)
+         : isSet(object.repay_amount) ? BigInt(object.repay_amount)
+          : 0n,
+collateralSeized: isSet(object.collateralSeized) ? BigInt(object.collateralSeized)
+         : isSet(object.collateral_seized) ? BigInt(object.collateral_seized)
+          : 0n,
+remainingVaultDebt: isSet(object.remainingVaultDebt) ? BigInt(object.remainingVaultDebt)
+         : isSet(object.remaining_vault_debt) ? BigInt(object.remaining_vault_debt)
+          : 0n,
+vaultClosed: isSet(object.vaultClosed) ? globalThis.Boolean(object.vaultClosed)
+         : isSet(object.vault_closed) ? globalThis.Boolean(object.vault_closed)
+          : false,
+};
+},
+
+toJSON(message: EventNasmVaultLiquidated): unknown {
+      const obj: any = {};
+if ( message.vaultId !== "") {
+          obj.vaultId = message.vaultId;
+        }
+if ( message.liquidator.length !== 0) {
+          obj.liquidator = base64FromBytes(message.liquidator);
+        }
+if ( message.repayAmount !== 0n) {
+          obj.repayAmount = message.repayAmount.toString();
+        }
+if ( message.collateralSeized !== 0n) {
+          obj.collateralSeized = message.collateralSeized.toString();
+        }
+if ( message.remainingVaultDebt !== 0n) {
+          obj.remainingVaultDebt = message.remainingVaultDebt.toString();
+        }
+if ( message.vaultClosed !== false) {
+          obj.vaultClosed = message.vaultClosed;
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<EventNasmVaultLiquidated>, I>>(base?: I): EventNasmVaultLiquidated {
+        return EventNasmVaultLiquidated.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<EventNasmVaultLiquidated>, I>>(object: I): EventNasmVaultLiquidated {
+const message = createBaseEventNasmVaultLiquidated();
+message.vaultId = object.vaultId ?? "";
+message.liquidator = object.liquidator ?? new Uint8Array(0);
+message.repayAmount = (object.repayAmount !== undefined && object.repayAmount !== null)
+          ? BigInt(object.repayAmount)
+          : 0n;
+message.collateralSeized = (object.collateralSeized !== undefined && object.collateralSeized !== null)
+          ? BigInt(object.collateralSeized)
+          : 0n;
+message.remainingVaultDebt = (object.remainingVaultDebt !== undefined && object.remainingVaultDebt !== null)
+          ? BigInt(object.remainingVaultDebt)
+          : 0n;
+message.vaultClosed = object.vaultClosed ?? false;
+return message;
+}
+            };
 
 
 
+function bytesFromBase64(b64: string): Uint8Array {
+        
+      const bin = globalThis.atob(b64);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; ++i) {
+          arr[i] = bin.charCodeAt(i);
+      }
+      return arr;
+    
+      }
 
-
+function base64FromBytes(arr: Uint8Array): string {
+        
+      const bin: string[] = [];
+      arr.forEach((byte) => {
+        bin.push(globalThis.String.fromCharCode(byte));
+      });
+      return globalThis.btoa(bin.join(''));
+    
+      }
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | bigint | undefined;
 

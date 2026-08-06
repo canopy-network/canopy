@@ -33,6 +33,8 @@ memo: string,
 networkId: bigint,
 /** chain_id: The identity of the committee the transaction is intended for */
 chainId: bigint,
+/** nonce: The sender's protocol replay-protection nonce */
+nonce: bigint,
 }
 
 /**
@@ -66,7 +68,7 @@ signature: Uint8Array,
 }
 
 function createBaseTransaction(): Transaction {
-      return { messageType: "",msg: undefined,signature: undefined,createdHeight: 0n,time: 0n,fee: 0n,memo: "",networkId: 0n,chainId: 0n };
+      return { messageType: "",msg: undefined,signature: undefined,createdHeight: 0n,time: 0n,fee: 0n,memo: "",networkId: 0n,chainId: 0n,nonce: 0n };
     }
 
 export const Transaction: MessageFns<Transaction> = {
@@ -115,6 +117,12 @@ if ( message.chainId !== 0n) {
           throw new globalThis.Error('value provided for field message.chainId of type uint64 too large');
         }
         writer.uint32(72).uint64(message.chainId);
+        }
+if ( message.nonce !== 0n) {
+          if (BigInt.asUintN(64, message.nonce) !== message.nonce) {
+          throw new globalThis.Error('value provided for field message.nonce of type uint64 too large');
+        }
+        writer.uint32(80).uint64(message.nonce);
         }
 return writer;
 },
@@ -192,6 +200,13 @@ if (tag !== 72) {
     
         message.chainId = reader.uint64() as bigint;
 continue; }
+case 10: {
+if (tag !== 80) {
+        break;
+      }
+    
+        message.nonce = reader.uint64() as bigint;
+continue; }
 }
 if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -230,6 +245,9 @@ networkId: isSet(object.networkId) ? BigInt(object.networkId)
 chainId: isSet(object.chainId) ? BigInt(object.chainId)
          : isSet(object.chain_id) ? BigInt(object.chain_id)
           : 0n,
+nonce: isSet(object.nonce) ? BigInt(object.nonce)
+        
+          : 0n,
 };
 },
 
@@ -262,6 +280,9 @@ if ( message.networkId !== 0n) {
 if ( message.chainId !== 0n) {
           obj.chainId = message.chainId.toString();
         }
+if ( message.nonce !== 0n) {
+          obj.nonce = message.nonce.toString();
+        }
 return obj;
 },
 
@@ -292,6 +313,9 @@ message.networkId = (object.networkId !== undefined && object.networkId !== null
           : 0n;
 message.chainId = (object.chainId !== undefined && object.chainId !== null)
           ? BigInt(object.chainId)
+          : 0n;
+message.nonce = (object.nonce !== undefined && object.nonce !== null)
+          ? BigInt(object.nonce)
           : 0n;
 return message;
 }

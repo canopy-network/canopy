@@ -18,6 +18,7 @@ PAUSED = 1,
 INSOLVENT = 2,
 /** DEPRECATED - permanently retired (ARCM Section 19.2) */
 DEPRECATED = 3,
+UNRECOGNIZED = -1,
 }
 
 export function marketStatusFromJSON(object: any): MarketStatus {
@@ -34,8 +35,10 @@ case 2:
 case 3:
       case "DEPRECATED":
         return MarketStatus.DEPRECATED;
-default:
-        throw new globalThis.Error("Unrecognized enum value " + object + " for enum MarketStatus");
+case -1:
+        case "UNRECOGNIZED":
+        default:
+          return MarketStatus.UNRECOGNIZED;
 }
 }
 
@@ -45,8 +48,9 @@ case MarketStatus.ACTIVE: return "ACTIVE";
 case MarketStatus.PAUSED: return "PAUSED";
 case MarketStatus.INSOLVENT: return "INSOLVENT";
 case MarketStatus.DEPRECATED: return "DEPRECATED";
+case MarketStatus.UNRECOGNIZED:
 default:
-        throw new globalThis.Error("Unrecognized enum value " + object + " for enum MarketStatus");
+          return "UNRECOGNIZED";
 }
 }
 
@@ -79,6 +83,20 @@ totalSupplied: bigint,
 lastAccrualBlock: bigint,
 /** ARCM Section 10 permissioned */
 authorizedSubmitters: Uint8Array[],
+/**
+ * interest_remainder_ray is a RAY-scaled (1e18) fractional carry, uint128
+ * raw bytes via EncodeUint128/DecodeUint128 (matching layer4_pending_bad_debt_total's
+ * own encoding convention). AYIS Section 7 Step 7's interest_earned
+ * computation floor-divides by RAY; without this field, any block where
+ * total_borrowed * per_block_rate * delta_t doesn't clear one full RAY unit
+ * has that fractional interest silently discarded rather than carried
+ * forward -- a real, disclosed accounting-loss bug (found while live-testing
+ * treasury_cut on a small devnet market), not merely a test-scale artifact.
+ * Always < RAY in magnitude after every accrual by construction (the
+ * remainder of a division by RAY can never reach RAY itself), so encoding
+ * it can never overflow 128 bits.
+ */
+interestRemainderRay: Uint8Array,
 }
 
 /** BorrowerPosition is the {17} record (ARCM Section 6, AYIS Section 6). */
@@ -137,8 +155,152 @@ badDebt: bigint,
 enqueuedBlock: bigint,
 }
 
+/**
+ * GovernanceParams is the {22} record: a single global struct holding
+ * protocol-wide governance-set values that are NOT scoped to any individual
+ * market (unlike reserve_factor_bps, which lives on Market itself and is
+ * set per-market via update_market_params). PrefixGovernanceParams was
+ * reserved at ARCM v3.11.1 Section 19.1 with no field schema ever defined
+ * or implemented; treasury_cut_bps (added this session) is the first real
+ * use of this prefix. Stored as ONE encoded struct under KeyForGovernanceParams
+ * (matching Market's single-struct-per-key convention, not one state key
+ * per field), so that future global governance parameters are added as new
+ * fields on this same message rather than each minting its own top-level
+ * state-key prefix. A DeliverTx handler adding a new parameter must
+ * read-modify-write the whole struct via GetGovernanceParams/
+ * SaveGovernanceParams, exactly as market parameter updates read-modify-write
+ * the whole Market struct.
+ */
+export interface GovernanceParams {
+/**
+ * treasury_cut_bps: global bps of interest_earned routed to Arbor's own
+ * protocol treasury ({40}, PrefixTreasuryArbor) on every market's accrual
+ * (AYIS Section 7 Step 10, extended -- see MessageSetTreasuryCut in
+ * arbor.proto for the full rationale and bounds). Zero-value default
+ * (before governance ever calls set_treasury_cut) is 0, matching
+ * PrefixTreasuryArbor/PrefixReserveFund's own zero-init-safe convention --
+ * Layer 3 simply accumulates nothing until this is explicitly set.
+ */
+treasuryCutBps: bigint,
+}
+
+/**
+ * NasmVault is the {30} record: a single NUSD-backing collateral position.
+ * Keyed by vault_id (a caller-supplied string, validated via
+ * ValidateVaultID) -- NOT by owner address, unlike BorrowerPosition's
+ * (market_id, address) composite key. This is deliberate: NASM Spec
+ * Section 5.2 requires vault ownership to be "a transferable claim, not a
+ * bound identity" (the arbitrage loop's second leg is buying a vault
+ * position outright on the secondary market). owner is therefore a mutable
+ * field on the record itself, not baked into the key.
+ */
+export interface NasmVault {
+vaultId: string,
+/** current vault owner; mutable, unlike BorrowerPosition.address */
+owner: Uint8Array,
+/** must be NASM Tier N-0 or N-1, checked against a NASM-specific */
+collateralAssetId: string,
+/** tier table, NOT ARCM's Market.asset_tier / PrefixAssetTier */
+collateralQuantity: bigint,
+/** raw minted principal, BEFORE stability fee scaling -- */
+nusdPrincipal: bigint,
+/**
+ * callers MUST read debt via ScaledNusdDebt(), never this field
+ * directly (NASM Spec Section 6.3)
+ */
+sfIndexAtOpen: Uint8Array,
+}
+
+/**
+ * NusdSupply is the {31} record: the single global NUSD circulating supply
+ * counter. No-argument key (KeyForNusdSupply), matching GovernanceParams'
+ * single-global-struct convention -- one record, read-modify-write per
+ * change, not one state key per field.
+ */
+export interface NusdSupply {
+/** 1e6 precision (NASM Spec Section 2.3), plain uint64 -- */
+totalSupply: bigint,
+}
+
+/**
+ * StabilityFeeIndex is the {32} record: the single global, RAY-scaled
+ * cumulative stability fee index, reusing AYIS's B_index/S_rate accrual
+ * pattern exactly (NASM Spec Section 6.2). NOT per-market/per-asset --
+ * one pooled fee across all NASM vaults, unlike AYIS's PrefixBorrowIndex/
+ * PrefixSupplyIndex which are keyed per lending market.
+ */
+export interface StabilityFeeIndex {
+/** uint128, RAY-scaled, EncodeUint128 raw bytes -- same shape as */
+sfIndex: Uint8Array,
+/**
+ * Market's B_index/loss_factor. Genesis value is RAY (1e18),
+ * matching AYIS's SupplyIndexRecord initialization convention.
+ */
+lastAccrualBlock: bigint,
+/**
+ * used to compute delta_t for AccrueStabilityFee's own compounding
+ * step (NASM Spec Section 6.2). Global, not per-market: this is the
+ * single pooled fee's own last-accrual point, not tied to any one
+ * market's accrual cadence.
+ */
+remainderRay: Uint8Array,
+}
+
+/**
+ * RwaYieldVaultPosition is the {34} record: a single depositor's RWA Yield
+ * Vault share position (NASM Spec Section 8.2). Explicitly NOT NUSD and
+ * NOT 1:1 redeemable on demand -- a separate risk product, isolated from
+ * NUSD's own backing and redemption guarantee. Keyed by depositor address
+ * alone (KeyForRwaYieldVaultPosition), matching LenderPosition's precedent,
+ * since RYV positions are not transferable the way NasmVault is.
+ */
+export interface RwaYieldVaultPosition {
+depositor: Uint8Array,
+/** 0 = RWA_FRACTION, 1 = NUSD (NASM Spec Section 8.2's */
+assetType: number,
+/** deposit_yield_vault asset_type parameter) */
+shares: bigint,
+/** matches LenderPosition.deposit_block's observability convention */
+depositBlock: bigint,
+}
+
+/**
+ * NusdBalance is the {35} record: a holder's independent NUSD balance,
+ * separate from Account.Amount (account.proto) -- Account.Amount is
+ * Canopy's single, undifferentiated native-currency balance per address
+ * (confirmed via KeyForAccount(addr) -- keyed by address alone, no asset
+ * dimension whatsoever). Every existing Arbor market's collateral_asset_id/
+ * debt_asset_id ("USDC", "ETH", etc.) is a pricing/tier LABEL only, never a
+ * separately-custodied on-chain balance -- all existing custody flows
+ * (deposit, borrow, withdraw, repay) move the SAME native-currency balance
+ * through Account.Amount/Pool.Amount regardless of which asset label a
+ * market names.
+ * 
+ * NUSD cannot follow that pattern. It is the first asset Arbor itself
+ * issues, not a price-tracked pass-through -- crediting NusdAmountRequested
+ * into Account.Amount would be indistinguishable from inflating native
+ * currency supply under a different name, not real stablecoin issuance.
+ * NASM Consolidated Spec Section 10.2 additionally requires NUSD to be
+ * "fully permissionless" to hold and transfer independent of any vault
+ * action -- a requirement Account.Amount's single-denomination shape
+ * cannot satisfy at all. A dedicated, address-keyed ledger is therefore a
+ * structural requirement, not a convenience.
+ * 
+ * KNOWN GAP, DISCLOSED: this message and its accessors provide balance
+ * storage and mint-time crediting only. A transfer_nusd (or equivalent
+ * send-style) message allowing arbitrary peer-to-peer NUSD movement,
+ * independent of mint_nusd/burn_nusd, does NOT exist yet -- Section 10.2's
+ * "universal, permissionless transfer" mandate is only partially met until
+ * that follow-up is built. A minted NUSD balance is real and correctly
+ * issued under this message, but not yet spendable to another address.
+ */
+export interface NusdBalance {
+address: Uint8Array,
+amount: bigint,
+}
+
 function createBaseMarket(): Market {
-      return { marketId: "",collateralAssetId: "",debtAssetId: "",assetTier: 0,reserveFactorBps: 0n,creator: new Uint8Array(0),status: 0,indexOverflowHalted: false,layer4PendingCount: 0,layer4PendingBadDebtTotal: new Uint8Array(0),totalBorrowed: 0n,totalSupplied: 0n,lastAccrualBlock: 0n,authorizedSubmitters: [] };
+      return { marketId: "",collateralAssetId: "",debtAssetId: "",assetTier: 0,reserveFactorBps: 0n,creator: new Uint8Array(0),status: 0,indexOverflowHalted: false,layer4PendingCount: 0,layer4PendingBadDebtTotal: new Uint8Array(0),totalBorrowed: 0n,totalSupplied: 0n,lastAccrualBlock: 0n,authorizedSubmitters: [],interestRemainderRay: new Uint8Array(0) };
     }
 
 export const Market: MessageFns<Market> = {
@@ -200,6 +362,9 @@ if ( message.lastAccrualBlock !== 0n) {
 for (const v of message.authorizedSubmitters) {
             writer.uint32(114).bytes(v!);
           }
+if ( message.interestRemainderRay.length !== 0) {
+          writer.uint32(122).bytes(message.interestRemainderRay);
+        }
 return writer;
 },
 
@@ -312,6 +477,13 @@ if (tag !== 114) {
               
               message.authorizedSubmitters.push(reader.bytes());
 continue; }
+case 15: {
+if (tag !== 122) {
+        break;
+      }
+    
+        message.interestRemainderRay = reader.bytes();
+continue; }
 }
 if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -363,6 +535,9 @@ lastAccrualBlock: isSet(object.lastAccrualBlock) ? BigInt(object.lastAccrualBloc
          : isSet(object.last_accrual_block) ? BigInt(object.last_accrual_block)
           : 0n,
 authorizedSubmitters: globalThis.Array.isArray(object?.authorizedSubmitters) ? object.authorizedSubmitters.map((e: any) => bytesFromBase64(e))  : globalThis.Array.isArray(object?.authorized_submitters) ? object.authorized_submitters.map((e: any) => bytesFromBase64(e)) : [],
+interestRemainderRay: isSet(object.interestRemainderRay) ? bytesFromBase64(object.interestRemainderRay)
+         : isSet(object.interest_remainder_ray) ? bytesFromBase64(object.interest_remainder_ray)
+          : new Uint8Array(0),
 };
 },
 
@@ -410,6 +585,9 @@ if ( message.lastAccrualBlock !== 0n) {
 if (message.authorizedSubmitters?.length) {
           obj.authorizedSubmitters = message.authorizedSubmitters.map(e => base64FromBytes(e));
         }
+if ( message.interestRemainderRay.length !== 0) {
+          obj.interestRemainderRay = base64FromBytes(message.interestRemainderRay);
+        }
 return obj;
 },
 
@@ -440,6 +618,7 @@ message.lastAccrualBlock = (object.lastAccrualBlock !== undefined && object.last
           ? BigInt(object.lastAccrualBlock)
           : 0n;
 message.authorizedSubmitters = object.authorizedSubmitters?.map((e) => e) || [];
+message.interestRemainderRay = object.interestRemainderRay ?? new Uint8Array(0);
 return message;
 }
             };
@@ -968,6 +1147,635 @@ message.badDebt = (object.badDebt !== undefined && object.badDebt !== null)
           : 0n;
 message.enqueuedBlock = (object.enqueuedBlock !== undefined && object.enqueuedBlock !== null)
           ? BigInt(object.enqueuedBlock)
+          : 0n;
+return message;
+}
+            };
+
+function createBaseGovernanceParams(): GovernanceParams {
+      return { treasuryCutBps: 0n };
+    }
+
+export const GovernanceParams: MessageFns<GovernanceParams> = {
+              encode(
+      message: GovernanceParams,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.treasuryCutBps !== 0n) {
+          if (BigInt.asUintN(64, message.treasuryCutBps) !== message.treasuryCutBps) {
+          throw new globalThis.Error('value provided for field message.treasuryCutBps of type uint64 too large');
+        }
+        writer.uint32(8).uint64(message.treasuryCutBps);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): GovernanceParams {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseGovernanceParams();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 8) {
+        break;
+      }
+    
+        message.treasuryCutBps = reader.uint64() as bigint;
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): GovernanceParams {
+      return {
+treasuryCutBps: isSet(object.treasuryCutBps) ? BigInt(object.treasuryCutBps)
+         : isSet(object.treasury_cut_bps) ? BigInt(object.treasury_cut_bps)
+          : 0n,
+};
+},
+
+toJSON(message: GovernanceParams): unknown {
+      const obj: any = {};
+if ( message.treasuryCutBps !== 0n) {
+          obj.treasuryCutBps = message.treasuryCutBps.toString();
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<GovernanceParams>, I>>(base?: I): GovernanceParams {
+        return GovernanceParams.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<GovernanceParams>, I>>(object: I): GovernanceParams {
+const message = createBaseGovernanceParams();
+message.treasuryCutBps = (object.treasuryCutBps !== undefined && object.treasuryCutBps !== null)
+          ? BigInt(object.treasuryCutBps)
+          : 0n;
+return message;
+}
+            };
+
+function createBaseNasmVault(): NasmVault {
+      return { vaultId: "",owner: new Uint8Array(0),collateralAssetId: "",collateralQuantity: 0n,nusdPrincipal: 0n,sfIndexAtOpen: new Uint8Array(0) };
+    }
+
+export const NasmVault: MessageFns<NasmVault> = {
+              encode(
+      message: NasmVault,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.vaultId !== "") {
+          writer.uint32(10).string(message.vaultId);
+        }
+if ( message.owner.length !== 0) {
+          writer.uint32(18).bytes(message.owner);
+        }
+if ( message.collateralAssetId !== "") {
+          writer.uint32(26).string(message.collateralAssetId);
+        }
+if ( message.collateralQuantity !== 0n) {
+          if (BigInt.asUintN(64, message.collateralQuantity) !== message.collateralQuantity) {
+          throw new globalThis.Error('value provided for field message.collateralQuantity of type uint64 too large');
+        }
+        writer.uint32(32).uint64(message.collateralQuantity);
+        }
+if ( message.nusdPrincipal !== 0n) {
+          if (BigInt.asUintN(64, message.nusdPrincipal) !== message.nusdPrincipal) {
+          throw new globalThis.Error('value provided for field message.nusdPrincipal of type uint64 too large');
+        }
+        writer.uint32(40).uint64(message.nusdPrincipal);
+        }
+if ( message.sfIndexAtOpen.length !== 0) {
+          writer.uint32(50).bytes(message.sfIndexAtOpen);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): NasmVault {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseNasmVault();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.vaultId = reader.string();
+continue; }
+case 2: {
+if (tag !== 18) {
+        break;
+      }
+    
+        message.owner = reader.bytes();
+continue; }
+case 3: {
+if (tag !== 26) {
+        break;
+      }
+    
+        message.collateralAssetId = reader.string();
+continue; }
+case 4: {
+if (tag !== 32) {
+        break;
+      }
+    
+        message.collateralQuantity = reader.uint64() as bigint;
+continue; }
+case 5: {
+if (tag !== 40) {
+        break;
+      }
+    
+        message.nusdPrincipal = reader.uint64() as bigint;
+continue; }
+case 6: {
+if (tag !== 50) {
+        break;
+      }
+    
+        message.sfIndexAtOpen = reader.bytes();
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): NasmVault {
+      return {
+vaultId: isSet(object.vaultId) ? globalThis.String(object.vaultId)
+         : isSet(object.vault_id) ? globalThis.String(object.vault_id)
+          : "",
+owner: isSet(object.owner) ? bytesFromBase64(object.owner)
+        
+          : new Uint8Array(0),
+collateralAssetId: isSet(object.collateralAssetId) ? globalThis.String(object.collateralAssetId)
+         : isSet(object.collateral_asset_id) ? globalThis.String(object.collateral_asset_id)
+          : "",
+collateralQuantity: isSet(object.collateralQuantity) ? BigInt(object.collateralQuantity)
+         : isSet(object.collateral_quantity) ? BigInt(object.collateral_quantity)
+          : 0n,
+nusdPrincipal: isSet(object.nusdPrincipal) ? BigInt(object.nusdPrincipal)
+         : isSet(object.nusd_principal) ? BigInt(object.nusd_principal)
+          : 0n,
+sfIndexAtOpen: isSet(object.sfIndexAtOpen) ? bytesFromBase64(object.sfIndexAtOpen)
+         : isSet(object.sf_index_at_open) ? bytesFromBase64(object.sf_index_at_open)
+          : new Uint8Array(0),
+};
+},
+
+toJSON(message: NasmVault): unknown {
+      const obj: any = {};
+if ( message.vaultId !== "") {
+          obj.vaultId = message.vaultId;
+        }
+if ( message.owner.length !== 0) {
+          obj.owner = base64FromBytes(message.owner);
+        }
+if ( message.collateralAssetId !== "") {
+          obj.collateralAssetId = message.collateralAssetId;
+        }
+if ( message.collateralQuantity !== 0n) {
+          obj.collateralQuantity = message.collateralQuantity.toString();
+        }
+if ( message.nusdPrincipal !== 0n) {
+          obj.nusdPrincipal = message.nusdPrincipal.toString();
+        }
+if ( message.sfIndexAtOpen.length !== 0) {
+          obj.sfIndexAtOpen = base64FromBytes(message.sfIndexAtOpen);
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<NasmVault>, I>>(base?: I): NasmVault {
+        return NasmVault.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<NasmVault>, I>>(object: I): NasmVault {
+const message = createBaseNasmVault();
+message.vaultId = object.vaultId ?? "";
+message.owner = object.owner ?? new Uint8Array(0);
+message.collateralAssetId = object.collateralAssetId ?? "";
+message.collateralQuantity = (object.collateralQuantity !== undefined && object.collateralQuantity !== null)
+          ? BigInt(object.collateralQuantity)
+          : 0n;
+message.nusdPrincipal = (object.nusdPrincipal !== undefined && object.nusdPrincipal !== null)
+          ? BigInt(object.nusdPrincipal)
+          : 0n;
+message.sfIndexAtOpen = object.sfIndexAtOpen ?? new Uint8Array(0);
+return message;
+}
+            };
+
+function createBaseNusdSupply(): NusdSupply {
+      return { totalSupply: 0n };
+    }
+
+export const NusdSupply: MessageFns<NusdSupply> = {
+              encode(
+      message: NusdSupply,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.totalSupply !== 0n) {
+          if (BigInt.asUintN(64, message.totalSupply) !== message.totalSupply) {
+          throw new globalThis.Error('value provided for field message.totalSupply of type uint64 too large');
+        }
+        writer.uint32(8).uint64(message.totalSupply);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): NusdSupply {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseNusdSupply();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 8) {
+        break;
+      }
+    
+        message.totalSupply = reader.uint64() as bigint;
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): NusdSupply {
+      return {
+totalSupply: isSet(object.totalSupply) ? BigInt(object.totalSupply)
+         : isSet(object.total_supply) ? BigInt(object.total_supply)
+          : 0n,
+};
+},
+
+toJSON(message: NusdSupply): unknown {
+      const obj: any = {};
+if ( message.totalSupply !== 0n) {
+          obj.totalSupply = message.totalSupply.toString();
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<NusdSupply>, I>>(base?: I): NusdSupply {
+        return NusdSupply.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<NusdSupply>, I>>(object: I): NusdSupply {
+const message = createBaseNusdSupply();
+message.totalSupply = (object.totalSupply !== undefined && object.totalSupply !== null)
+          ? BigInt(object.totalSupply)
+          : 0n;
+return message;
+}
+            };
+
+function createBaseStabilityFeeIndex(): StabilityFeeIndex {
+      return { sfIndex: new Uint8Array(0),lastAccrualBlock: 0n,remainderRay: new Uint8Array(0) };
+    }
+
+export const StabilityFeeIndex: MessageFns<StabilityFeeIndex> = {
+              encode(
+      message: StabilityFeeIndex,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.sfIndex.length !== 0) {
+          writer.uint32(10).bytes(message.sfIndex);
+        }
+if ( message.lastAccrualBlock !== 0n) {
+          if (BigInt.asUintN(64, message.lastAccrualBlock) !== message.lastAccrualBlock) {
+          throw new globalThis.Error('value provided for field message.lastAccrualBlock of type uint64 too large');
+        }
+        writer.uint32(16).uint64(message.lastAccrualBlock);
+        }
+if ( message.remainderRay.length !== 0) {
+          writer.uint32(26).bytes(message.remainderRay);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): StabilityFeeIndex {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseStabilityFeeIndex();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.sfIndex = reader.bytes();
+continue; }
+case 2: {
+if (tag !== 16) {
+        break;
+      }
+    
+        message.lastAccrualBlock = reader.uint64() as bigint;
+continue; }
+case 3: {
+if (tag !== 26) {
+        break;
+      }
+    
+        message.remainderRay = reader.bytes();
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): StabilityFeeIndex {
+      return {
+sfIndex: isSet(object.sfIndex) ? bytesFromBase64(object.sfIndex)
+         : isSet(object.sf_index) ? bytesFromBase64(object.sf_index)
+          : new Uint8Array(0),
+lastAccrualBlock: isSet(object.lastAccrualBlock) ? BigInt(object.lastAccrualBlock)
+         : isSet(object.last_accrual_block) ? BigInt(object.last_accrual_block)
+          : 0n,
+remainderRay: isSet(object.remainderRay) ? bytesFromBase64(object.remainderRay)
+         : isSet(object.remainder_ray) ? bytesFromBase64(object.remainder_ray)
+          : new Uint8Array(0),
+};
+},
+
+toJSON(message: StabilityFeeIndex): unknown {
+      const obj: any = {};
+if ( message.sfIndex.length !== 0) {
+          obj.sfIndex = base64FromBytes(message.sfIndex);
+        }
+if ( message.lastAccrualBlock !== 0n) {
+          obj.lastAccrualBlock = message.lastAccrualBlock.toString();
+        }
+if ( message.remainderRay.length !== 0) {
+          obj.remainderRay = base64FromBytes(message.remainderRay);
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<StabilityFeeIndex>, I>>(base?: I): StabilityFeeIndex {
+        return StabilityFeeIndex.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<StabilityFeeIndex>, I>>(object: I): StabilityFeeIndex {
+const message = createBaseStabilityFeeIndex();
+message.sfIndex = object.sfIndex ?? new Uint8Array(0);
+message.lastAccrualBlock = (object.lastAccrualBlock !== undefined && object.lastAccrualBlock !== null)
+          ? BigInt(object.lastAccrualBlock)
+          : 0n;
+message.remainderRay = object.remainderRay ?? new Uint8Array(0);
+return message;
+}
+            };
+
+function createBaseRwaYieldVaultPosition(): RwaYieldVaultPosition {
+      return { depositor: new Uint8Array(0),assetType: 0,shares: 0n,depositBlock: 0n };
+    }
+
+export const RwaYieldVaultPosition: MessageFns<RwaYieldVaultPosition> = {
+              encode(
+      message: RwaYieldVaultPosition,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.depositor.length !== 0) {
+          writer.uint32(10).bytes(message.depositor);
+        }
+if ( message.assetType !== 0) {
+          writer.uint32(16).uint32(message.assetType);
+        }
+if ( message.shares !== 0n) {
+          if (BigInt.asUintN(64, message.shares) !== message.shares) {
+          throw new globalThis.Error('value provided for field message.shares of type uint64 too large');
+        }
+        writer.uint32(24).uint64(message.shares);
+        }
+if ( message.depositBlock !== 0n) {
+          if (BigInt.asUintN(64, message.depositBlock) !== message.depositBlock) {
+          throw new globalThis.Error('value provided for field message.depositBlock of type uint64 too large');
+        }
+        writer.uint32(32).uint64(message.depositBlock);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): RwaYieldVaultPosition {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseRwaYieldVaultPosition();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.depositor = reader.bytes();
+continue; }
+case 2: {
+if (tag !== 16) {
+        break;
+      }
+    
+        message.assetType = reader.uint32();
+continue; }
+case 3: {
+if (tag !== 24) {
+        break;
+      }
+    
+        message.shares = reader.uint64() as bigint;
+continue; }
+case 4: {
+if (tag !== 32) {
+        break;
+      }
+    
+        message.depositBlock = reader.uint64() as bigint;
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): RwaYieldVaultPosition {
+      return {
+depositor: isSet(object.depositor) ? bytesFromBase64(object.depositor)
+        
+          : new Uint8Array(0),
+assetType: isSet(object.assetType) ? globalThis.Number(object.assetType)
+         : isSet(object.asset_type) ? globalThis.Number(object.asset_type)
+          : 0,
+shares: isSet(object.shares) ? BigInt(object.shares)
+        
+          : 0n,
+depositBlock: isSet(object.depositBlock) ? BigInt(object.depositBlock)
+         : isSet(object.deposit_block) ? BigInt(object.deposit_block)
+          : 0n,
+};
+},
+
+toJSON(message: RwaYieldVaultPosition): unknown {
+      const obj: any = {};
+if ( message.depositor.length !== 0) {
+          obj.depositor = base64FromBytes(message.depositor);
+        }
+if ( message.assetType !== 0) {
+          obj.assetType = Math.round(message.assetType);
+        }
+if ( message.shares !== 0n) {
+          obj.shares = message.shares.toString();
+        }
+if ( message.depositBlock !== 0n) {
+          obj.depositBlock = message.depositBlock.toString();
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<RwaYieldVaultPosition>, I>>(base?: I): RwaYieldVaultPosition {
+        return RwaYieldVaultPosition.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<RwaYieldVaultPosition>, I>>(object: I): RwaYieldVaultPosition {
+const message = createBaseRwaYieldVaultPosition();
+message.depositor = object.depositor ?? new Uint8Array(0);
+message.assetType = object.assetType ?? 0;
+message.shares = (object.shares !== undefined && object.shares !== null)
+          ? BigInt(object.shares)
+          : 0n;
+message.depositBlock = (object.depositBlock !== undefined && object.depositBlock !== null)
+          ? BigInt(object.depositBlock)
+          : 0n;
+return message;
+}
+            };
+
+function createBaseNusdBalance(): NusdBalance {
+      return { address: new Uint8Array(0),amount: 0n };
+    }
+
+export const NusdBalance: MessageFns<NusdBalance> = {
+              encode(
+      message: NusdBalance,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.address.length !== 0) {
+          writer.uint32(10).bytes(message.address);
+        }
+if ( message.amount !== 0n) {
+          if (BigInt.asUintN(64, message.amount) !== message.amount) {
+          throw new globalThis.Error('value provided for field message.amount of type uint64 too large');
+        }
+        writer.uint32(16).uint64(message.amount);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): NusdBalance {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseNusdBalance();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.address = reader.bytes();
+continue; }
+case 2: {
+if (tag !== 16) {
+        break;
+      }
+    
+        message.amount = reader.uint64() as bigint;
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): NusdBalance {
+      return {
+address: isSet(object.address) ? bytesFromBase64(object.address)
+        
+          : new Uint8Array(0),
+amount: isSet(object.amount) ? BigInt(object.amount)
+        
+          : 0n,
+};
+},
+
+toJSON(message: NusdBalance): unknown {
+      const obj: any = {};
+if ( message.address.length !== 0) {
+          obj.address = base64FromBytes(message.address);
+        }
+if ( message.amount !== 0n) {
+          obj.amount = message.amount.toString();
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<NusdBalance>, I>>(base?: I): NusdBalance {
+        return NusdBalance.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<NusdBalance>, I>>(object: I): NusdBalance {
+const message = createBaseNusdBalance();
+message.address = object.address ?? new Uint8Array(0);
+message.amount = (object.amount !== undefined && object.amount !== null)
+          ? BigInt(object.amount)
           : 0n;
 return message;
 }

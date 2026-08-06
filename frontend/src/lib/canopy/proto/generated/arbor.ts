@@ -130,6 +130,127 @@ tier: number,
 authority: Uint8Array,
 }
 
+/**
+ * MessageSetTreasuryCut sets the GLOBAL treasury_cut_bps governance parameter
+ * (see bad_debt_layer3.go's own doc comment on PrefixTreasuryArbor/
+ * PrefixTreasuryNASM being global, not per-market -- this parameter mirrors
+ * that scope). Unlike reserve_factor_bps (per-market, set via create_market/
+ * update_market_params), treasury_cut_bps applies uniformly to every
+ * market's interest accrual (AYIS Section 7 Step 10, extended): a single
+ * governance-set rate feeds Arbor's own protocol treasury ({40}) from every
+ * market's interest_earned, rather than each market creator choosing (and
+ * potentially free-riding by setting to 0) their own contribution to a
+ * shared, protocol-wide backstop. Bounds: 25-150 bps (0.25%-1.5%),
+ * deliberately narrower than reserve_factor_bps's 200-3000 -- Layer 3 (this
+ * treasury) is a secondary, lower-probability-of-use backstop behind Layer
+ * 2's per-market reserve, not a primary defense, so it should not tax lender
+ * yield as heavily. Floor raised from an initially-considered 10 bps: Layer
+ * 3 only fires after a market's OWN R_fund is already exhausted by a single
+ * shortfall, implying a real bad-debt event large enough to matter; too low
+ * a floor risks the treasury accumulating too slowly to ever meaningfully
+ * help, the same "looks wired but silently doesn't matter" failure mode
+ * this codebase's own discipline elsewhere exists to avoid. No market_id
+ * field -- this is a single global value, analogous to
+ * KeyForTreasuryArbor/KeyForTreasuryNASM's own no-argument, global-balance
+ * shape (state_keys.go).
+ */
+export interface MessageSetTreasuryCut {
+authority: Uint8Array,
+/** 25-150 bps, checked at DeliverTx */
+treasuryCutBps: bigint,
+}
+
+/**
+ * MessageMintNusd opens a new NASM vault: locks eligible collateral
+ * (NASM Spec Section 3.1's N-0/N-1 tiers only, resolved via
+ * nasm_tier.go's ResolveNasmTier against ARCM's existing {29} registry --
+ * see that file's doc comment for why NASM does not maintain a separate
+ * registry) and mints newly-issued NUSD against it in one atomic
+ * transaction (NASM Spec Section 4.1).
+ * 
+ * vault_id is caller-supplied, NOT derived (matches market_id's own
+ * precedent -- see ValidateVaultID/KeyForNasmVault in state_keys.go).
+ * This is a deliberate departure from BorrowerPosition's owner-address-
+ * keyed pattern: NASM Spec Section 5.2 requires vault ownership to be a
+ * transferable claim, which an address-derived key would foreclose. The
+ * caller chooses vault_id and it never changes for that vault's lifetime,
+ * even if ownership later transfers.
+ * 
+ * KNOWN GAP, DISCLOSED: the per-tier mint concentration cap (NASM Spec
+ * Section 3.3, Max_tier_share_bps) is NOT enforced by this message as of
+ * this version. That check requires a running total-backing-value
+ * accumulator per tier, which does not exist in state yet (a range-scan
+ * over all {30} vaults at every mint was considered and rejected --
+ * unbounded per-transaction cost, the same anti-pattern
+ * KeyForPriceRecord's own market_id field was added to avoid; see
+ * update_price.go's doc comment). The accumulator will be added once
+ * burn_nusd exists, so it can be correctly kept in sync on both mint and
+ * burn from the start rather than shipping an increment-only value that
+ * silently drifts. Matches this codebase's established disclosure
+ * convention for known-deferred checks (see deposit.go's MIN_DEPOSIT
+ * comment, create_market.go's hardcoded MinReporters comment).
+ */
+export interface MessageMintNusd {
+vaultId: string,
+owner: Uint8Array,
+collateralAssetId: string,
+collateralQuantity: bigint,
+nusdAmountRequested: bigint,
+}
+
+/**
+ * MessageBurnNusd is the sole mechanism by which NUSD is removed from
+ * circulation and collateral released (NASM Consolidated Spec Section
+ * 4.2) -- owner-scoped only, no aggregate-pool redemption, no third-party
+ * vault seizure. sender MUST be the vault's current owner (checked at
+ * DeliverTx via NasmVault.Owner) -- there is no code path by which NUSD
+ * burned by holder A can release collateral from a vault owned by holder
+ * B (Section 4.2's own closing guarantee, Invariant N-I8).
+ * 
+ * nusd_amount may exceed the vault's actual current debt (ScaledNusdDebt)
+ * -- DeliverTx computes compare-before-subtract (Section 4.2 Step 6) and
+ * only actually burns/debits up to current_debt, never more, regardless
+ * of what nusd_amount requests. This is NOT the same refund risk ARCM's
+ * repay.go's ErrRepayExceedsDebt was fixed to avoid (that fix closed a
+ * path where an escrow-less refund would have minted unbacked value);
+ * here, burn_nusd only ever debits NusdBalance for the true amount owed,
+ * never more than the sender already holds and never creating any new
+ * value -- structurally safer than a refund-by-minting design.
+ */
+export interface MessageBurnNusd {
+vaultId: string,
+sender: Uint8Array,
+nusdAmount: bigint,
+}
+
+/**
+ * MessageLiquidateNasmVault liquidates an undercollateralized NASM vault
+ * (HF_n <= 1.0), per NASM Consolidated Spec Section 7: reuses ARCM's own
+ * ComputeHealthFactorScaled and CloseFactorBpsForHF functions directly
+ * (unchanged formulas, NASM's own tier params as input), substituting
+ * ScaledNusdDebt for ARCM's ScaledDebt as the debt input, and NASM's own
+ * tighter LTV_n_liq/LIF values (nasm_tier.go's nasmTierParamsTable) in
+ * place of ARCM's lending tier table.
+ * 
+ * repay_amount is denominated in NUSD (1e6 precision), debited from the
+ * LIQUIDATOR's own NusdBalance (NOT Account.Amount -- mirrors burn_nusd's
+ * custody split exactly) -- liquidating a NASM vault burns NUSD out of
+ * circulation, the same as any other debt reduction.
+ * 
+ * PHASE 1 SCOPE LIMIT, DISCLOSED: a liquidation whose required collateral
+ * seizure would exceed the vault's own locked collateral (a bad-debt
+ * scenario) is hard-rejected via ErrNasmLiquidationBadDebt rather than
+ * partially seizing collateral and leaving an unaccounted shortfall.
+ * NASM's own bad-debt waterfall (R_nusd draw-down, Arbor treasury
+ * fallback, Section 11.2) is not yet wired into this transaction. See
+ * ErrNasmLiquidationBadDebt's own doc comment for the full reasoning.
+ */
+export interface MessageLiquidateNasmVault {
+vaultId: string,
+liquidator: Uint8Array,
+repayAmount: bigint,
+}
+
 function createBaseMessageCreateMarket(): MessageCreateMarket {
       return { marketId: "",collateralAssetId: "",debtAssetId: "",assetTier: 0,reserveFactorBps: 0n,creator: new Uint8Array(0),authorizedSubmitters: [] };
     }
@@ -1657,6 +1778,452 @@ const message = createBaseMessageSetAssetTier();
 message.assetId = object.assetId ?? "";
 message.tier = object.tier ?? 0;
 message.authority = object.authority ?? new Uint8Array(0);
+return message;
+}
+            };
+
+function createBaseMessageSetTreasuryCut(): MessageSetTreasuryCut {
+      return { authority: new Uint8Array(0),treasuryCutBps: 0n };
+    }
+
+export const MessageSetTreasuryCut: MessageFns<MessageSetTreasuryCut> = {
+              encode(
+      message: MessageSetTreasuryCut,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.authority.length !== 0) {
+          writer.uint32(10).bytes(message.authority);
+        }
+if ( message.treasuryCutBps !== 0n) {
+          if (BigInt.asUintN(64, message.treasuryCutBps) !== message.treasuryCutBps) {
+          throw new globalThis.Error('value provided for field message.treasuryCutBps of type uint64 too large');
+        }
+        writer.uint32(16).uint64(message.treasuryCutBps);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): MessageSetTreasuryCut {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseMessageSetTreasuryCut();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.authority = reader.bytes();
+continue; }
+case 2: {
+if (tag !== 16) {
+        break;
+      }
+    
+        message.treasuryCutBps = reader.uint64() as bigint;
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): MessageSetTreasuryCut {
+      return {
+authority: isSet(object.authority) ? bytesFromBase64(object.authority)
+        
+          : new Uint8Array(0),
+treasuryCutBps: isSet(object.treasuryCutBps) ? BigInt(object.treasuryCutBps)
+         : isSet(object.treasury_cut_bps) ? BigInt(object.treasury_cut_bps)
+          : 0n,
+};
+},
+
+toJSON(message: MessageSetTreasuryCut): unknown {
+      const obj: any = {};
+if ( message.authority.length !== 0) {
+          obj.authority = base64FromBytes(message.authority);
+        }
+if ( message.treasuryCutBps !== 0n) {
+          obj.treasuryCutBps = message.treasuryCutBps.toString();
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<MessageSetTreasuryCut>, I>>(base?: I): MessageSetTreasuryCut {
+        return MessageSetTreasuryCut.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<MessageSetTreasuryCut>, I>>(object: I): MessageSetTreasuryCut {
+const message = createBaseMessageSetTreasuryCut();
+message.authority = object.authority ?? new Uint8Array(0);
+message.treasuryCutBps = (object.treasuryCutBps !== undefined && object.treasuryCutBps !== null)
+          ? BigInt(object.treasuryCutBps)
+          : 0n;
+return message;
+}
+            };
+
+function createBaseMessageMintNusd(): MessageMintNusd {
+      return { vaultId: "",owner: new Uint8Array(0),collateralAssetId: "",collateralQuantity: 0n,nusdAmountRequested: 0n };
+    }
+
+export const MessageMintNusd: MessageFns<MessageMintNusd> = {
+              encode(
+      message: MessageMintNusd,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.vaultId !== "") {
+          writer.uint32(10).string(message.vaultId);
+        }
+if ( message.owner.length !== 0) {
+          writer.uint32(18).bytes(message.owner);
+        }
+if ( message.collateralAssetId !== "") {
+          writer.uint32(26).string(message.collateralAssetId);
+        }
+if ( message.collateralQuantity !== 0n) {
+          if (BigInt.asUintN(64, message.collateralQuantity) !== message.collateralQuantity) {
+          throw new globalThis.Error('value provided for field message.collateralQuantity of type uint64 too large');
+        }
+        writer.uint32(32).uint64(message.collateralQuantity);
+        }
+if ( message.nusdAmountRequested !== 0n) {
+          if (BigInt.asUintN(64, message.nusdAmountRequested) !== message.nusdAmountRequested) {
+          throw new globalThis.Error('value provided for field message.nusdAmountRequested of type uint64 too large');
+        }
+        writer.uint32(40).uint64(message.nusdAmountRequested);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): MessageMintNusd {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseMessageMintNusd();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.vaultId = reader.string();
+continue; }
+case 2: {
+if (tag !== 18) {
+        break;
+      }
+    
+        message.owner = reader.bytes();
+continue; }
+case 3: {
+if (tag !== 26) {
+        break;
+      }
+    
+        message.collateralAssetId = reader.string();
+continue; }
+case 4: {
+if (tag !== 32) {
+        break;
+      }
+    
+        message.collateralQuantity = reader.uint64() as bigint;
+continue; }
+case 5: {
+if (tag !== 40) {
+        break;
+      }
+    
+        message.nusdAmountRequested = reader.uint64() as bigint;
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): MessageMintNusd {
+      return {
+vaultId: isSet(object.vaultId) ? globalThis.String(object.vaultId)
+         : isSet(object.vault_id) ? globalThis.String(object.vault_id)
+          : "",
+owner: isSet(object.owner) ? bytesFromBase64(object.owner)
+        
+          : new Uint8Array(0),
+collateralAssetId: isSet(object.collateralAssetId) ? globalThis.String(object.collateralAssetId)
+         : isSet(object.collateral_asset_id) ? globalThis.String(object.collateral_asset_id)
+          : "",
+collateralQuantity: isSet(object.collateralQuantity) ? BigInt(object.collateralQuantity)
+         : isSet(object.collateral_quantity) ? BigInt(object.collateral_quantity)
+          : 0n,
+nusdAmountRequested: isSet(object.nusdAmountRequested) ? BigInt(object.nusdAmountRequested)
+         : isSet(object.nusd_amount_requested) ? BigInt(object.nusd_amount_requested)
+          : 0n,
+};
+},
+
+toJSON(message: MessageMintNusd): unknown {
+      const obj: any = {};
+if ( message.vaultId !== "") {
+          obj.vaultId = message.vaultId;
+        }
+if ( message.owner.length !== 0) {
+          obj.owner = base64FromBytes(message.owner);
+        }
+if ( message.collateralAssetId !== "") {
+          obj.collateralAssetId = message.collateralAssetId;
+        }
+if ( message.collateralQuantity !== 0n) {
+          obj.collateralQuantity = message.collateralQuantity.toString();
+        }
+if ( message.nusdAmountRequested !== 0n) {
+          obj.nusdAmountRequested = message.nusdAmountRequested.toString();
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<MessageMintNusd>, I>>(base?: I): MessageMintNusd {
+        return MessageMintNusd.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<MessageMintNusd>, I>>(object: I): MessageMintNusd {
+const message = createBaseMessageMintNusd();
+message.vaultId = object.vaultId ?? "";
+message.owner = object.owner ?? new Uint8Array(0);
+message.collateralAssetId = object.collateralAssetId ?? "";
+message.collateralQuantity = (object.collateralQuantity !== undefined && object.collateralQuantity !== null)
+          ? BigInt(object.collateralQuantity)
+          : 0n;
+message.nusdAmountRequested = (object.nusdAmountRequested !== undefined && object.nusdAmountRequested !== null)
+          ? BigInt(object.nusdAmountRequested)
+          : 0n;
+return message;
+}
+            };
+
+function createBaseMessageBurnNusd(): MessageBurnNusd {
+      return { vaultId: "",sender: new Uint8Array(0),nusdAmount: 0n };
+    }
+
+export const MessageBurnNusd: MessageFns<MessageBurnNusd> = {
+              encode(
+      message: MessageBurnNusd,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.vaultId !== "") {
+          writer.uint32(10).string(message.vaultId);
+        }
+if ( message.sender.length !== 0) {
+          writer.uint32(18).bytes(message.sender);
+        }
+if ( message.nusdAmount !== 0n) {
+          if (BigInt.asUintN(64, message.nusdAmount) !== message.nusdAmount) {
+          throw new globalThis.Error('value provided for field message.nusdAmount of type uint64 too large');
+        }
+        writer.uint32(24).uint64(message.nusdAmount);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): MessageBurnNusd {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseMessageBurnNusd();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.vaultId = reader.string();
+continue; }
+case 2: {
+if (tag !== 18) {
+        break;
+      }
+    
+        message.sender = reader.bytes();
+continue; }
+case 3: {
+if (tag !== 24) {
+        break;
+      }
+    
+        message.nusdAmount = reader.uint64() as bigint;
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): MessageBurnNusd {
+      return {
+vaultId: isSet(object.vaultId) ? globalThis.String(object.vaultId)
+         : isSet(object.vault_id) ? globalThis.String(object.vault_id)
+          : "",
+sender: isSet(object.sender) ? bytesFromBase64(object.sender)
+        
+          : new Uint8Array(0),
+nusdAmount: isSet(object.nusdAmount) ? BigInt(object.nusdAmount)
+         : isSet(object.nusd_amount) ? BigInt(object.nusd_amount)
+          : 0n,
+};
+},
+
+toJSON(message: MessageBurnNusd): unknown {
+      const obj: any = {};
+if ( message.vaultId !== "") {
+          obj.vaultId = message.vaultId;
+        }
+if ( message.sender.length !== 0) {
+          obj.sender = base64FromBytes(message.sender);
+        }
+if ( message.nusdAmount !== 0n) {
+          obj.nusdAmount = message.nusdAmount.toString();
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<MessageBurnNusd>, I>>(base?: I): MessageBurnNusd {
+        return MessageBurnNusd.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<MessageBurnNusd>, I>>(object: I): MessageBurnNusd {
+const message = createBaseMessageBurnNusd();
+message.vaultId = object.vaultId ?? "";
+message.sender = object.sender ?? new Uint8Array(0);
+message.nusdAmount = (object.nusdAmount !== undefined && object.nusdAmount !== null)
+          ? BigInt(object.nusdAmount)
+          : 0n;
+return message;
+}
+            };
+
+function createBaseMessageLiquidateNasmVault(): MessageLiquidateNasmVault {
+      return { vaultId: "",liquidator: new Uint8Array(0),repayAmount: 0n };
+    }
+
+export const MessageLiquidateNasmVault: MessageFns<MessageLiquidateNasmVault> = {
+              encode(
+      message: MessageLiquidateNasmVault,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+if ( message.vaultId !== "") {
+          writer.uint32(10).string(message.vaultId);
+        }
+if ( message.liquidator.length !== 0) {
+          writer.uint32(18).bytes(message.liquidator);
+        }
+if ( message.repayAmount !== 0n) {
+          if (BigInt.asUintN(64, message.repayAmount) !== message.repayAmount) {
+          throw new globalThis.Error('value provided for field message.repayAmount of type uint64 too large');
+        }
+        writer.uint32(24).uint64(message.repayAmount);
+        }
+return writer;
+},
+
+decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): MessageLiquidateNasmVault {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+const message = createBaseMessageLiquidateNasmVault();
+while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+case 1: {
+if (tag !== 10) {
+        break;
+      }
+    
+        message.vaultId = reader.string();
+continue; }
+case 2: {
+if (tag !== 18) {
+        break;
+      }
+    
+        message.liquidator = reader.bytes();
+continue; }
+case 3: {
+if (tag !== 24) {
+        break;
+      }
+    
+        message.repayAmount = reader.uint64() as bigint;
+continue; }
+}
+if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+reader.skip(tag & 7);
+}
+return message;
+},
+
+fromJSON(object: any): MessageLiquidateNasmVault {
+      return {
+vaultId: isSet(object.vaultId) ? globalThis.String(object.vaultId)
+         : isSet(object.vault_id) ? globalThis.String(object.vault_id)
+          : "",
+liquidator: isSet(object.liquidator) ? bytesFromBase64(object.liquidator)
+        
+          : new Uint8Array(0),
+repayAmount: isSet(object.repayAmount) ? BigInt(object.repayAmount)
+         : isSet(object.repay_amount) ? BigInt(object.repay_amount)
+          : 0n,
+};
+},
+
+toJSON(message: MessageLiquidateNasmVault): unknown {
+      const obj: any = {};
+if ( message.vaultId !== "") {
+          obj.vaultId = message.vaultId;
+        }
+if ( message.liquidator.length !== 0) {
+          obj.liquidator = base64FromBytes(message.liquidator);
+        }
+if ( message.repayAmount !== 0n) {
+          obj.repayAmount = message.repayAmount.toString();
+        }
+return obj;
+},
+
+create<I extends Exact<DeepPartial<MessageLiquidateNasmVault>, I>>(base?: I): MessageLiquidateNasmVault {
+        return MessageLiquidateNasmVault.fromPartial(base ?? ({} as any));
+      },
+fromPartial<I extends Exact<DeepPartial<MessageLiquidateNasmVault>, I>>(object: I): MessageLiquidateNasmVault {
+const message = createBaseMessageLiquidateNasmVault();
+message.vaultId = object.vaultId ?? "";
+message.liquidator = object.liquidator ?? new Uint8Array(0);
+message.repayAmount = (object.repayAmount !== undefined && object.repayAmount !== null)
+          ? BigInt(object.repayAmount)
+          : 0n;
 return message;
 }
             };

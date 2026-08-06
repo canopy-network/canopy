@@ -11,14 +11,15 @@ const WATERFALL_META: Record<string, { label: string; layer: string; tone: strin
   EventLossFactorExhausted: { label: "Loss factor exhausted", layer: "Layer 4", tone: "text-rose-300" },
   EventLossFactorAppliedToAlreadyInsolventMarket: { label: "Loss applied (already insolvent)", layer: "Layer 4", tone: "text-rose-300" },
   EventLayer4PendingCountWarning: { label: "Layer-4 backlog warning", layer: "Layer 4", tone: "text-rose-300" },
-  EventInsolventMarketValueRecovered: { label: "Insolvent value recovered", layer: "R_fund", tone: "text-emerald-300" },
+  EventNasmVaultLiquidated: { label: "NASM vault liquidated", layer: "NASM", tone: "text-sky-300" },
+    EventInsolventMarketValueRecovered: { label: "Insolvent value recovered", layer: "R_fund", tone: "text-emerald-300" },
 };
 
 export function WaterfallPanel() {
   const [data, setData] = useState<{ events: WaterfallEvent[]; available: boolean } | null>(null);
   useEffect(() => {
     let alive = true;
-    queryWaterfallEvents(1, 50).then((d) => { if (alive) setData(d); });
+    queryWaterfallEvents(50).then((d) => { if (alive) setData(d); });
     return () => { alive = false; };
   }, []);
 

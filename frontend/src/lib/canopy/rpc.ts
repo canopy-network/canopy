@@ -557,17 +557,19 @@ export interface WaterfallEvent {
 }
 
 export async function queryWaterfallEvents(
-  pageNumber = 1,
-  perPage = 50
+  limit: number = 50,
+  marketId?: string
 ): Promise<{ events: WaterfallEvent[]; available: boolean }> {
   try {
-    const res = await rpcFetch("/v1/query/waterfall-events", {
-      method: "POST",
-      body: JSON.stringify({ pageNumber, perPage }),
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+    if (marketId) params.set("marketId", marketId);
+    const res = await rpcFetch(`/v1/query/waterfall-events?${params.toString()}`, {
+      method: "GET",
     });
     if (!res.ok) return { events: [], available: false };
     const j = await res.json();
-    return { events: Array.isArray(j?.events) ? j.events : [], available: true };
+    return { events: Array.isArray(j) ? j : [], available: true };
   } catch {
     return { events: [], available: false };
   }

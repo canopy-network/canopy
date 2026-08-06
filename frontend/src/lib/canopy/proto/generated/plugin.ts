@@ -111,9 +111,10 @@ events: Event[],
 error: PluginError | undefined,
 }
 
-/** PluginCheckRequest carries a transaction to be checked */
+/** PluginCheckRequest carries a transaction and its execution height to be checked */
 export interface PluginCheckRequest {
 tx: Transaction | undefined,
+height: bigint,
 }
 
 /** PluginCheckResponse acknowledges transaction check */
@@ -126,9 +127,10 @@ recipient: Uint8Array,
 error: PluginError | undefined,
 }
 
-/** PluginDeliverRequest carries a transaction to be processed */
+/** PluginDeliverRequest carries a transaction and its execution height to be processed */
 export interface PluginDeliverRequest {
 tx: Transaction | undefined,
+height: bigint,
 }
 
 /** PluginDeliverResponse acknowledges transaction delivery */
@@ -1314,7 +1316,7 @@ return message;
             };
 
 function createBasePluginCheckRequest(): PluginCheckRequest {
-      return { tx: undefined };
+      return { tx: undefined,height: 0n };
     }
 
 export const PluginCheckRequest: MessageFns<PluginCheckRequest> = {
@@ -1324,6 +1326,12 @@ export const PluginCheckRequest: MessageFns<PluginCheckRequest> = {
     ): BinaryWriter {
 if (message.tx !== undefined ) {
           Transaction.encode(message.tx, writer.uint32(10).fork()).join();
+        }
+if ( message.height !== 0n) {
+          if (BigInt.asUintN(64, message.height) !== message.height) {
+          throw new globalThis.Error('value provided for field message.height of type uint64 too large');
+        }
+        writer.uint32(16).uint64(message.height);
         }
 return writer;
 },
@@ -1345,6 +1353,13 @@ if (tag !== 10) {
     
         message.tx = Transaction.decode(reader, reader.uint32());
 continue; }
+case 2: {
+if (tag !== 16) {
+        break;
+      }
+    
+        message.height = reader.uint64() as bigint;
+continue; }
 }
 if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1359,6 +1374,9 @@ fromJSON(object: any): PluginCheckRequest {
 tx: isSet(object.tx) ? Transaction.fromJSON(object.tx)
         
           : undefined,
+height: isSet(object.height) ? BigInt(object.height)
+        
+          : 0n,
 };
 },
 
@@ -1366,6 +1384,9 @@ toJSON(message: PluginCheckRequest): unknown {
       const obj: any = {};
 if (message.tx !== undefined ) {
           obj.tx = Transaction.toJSON(message.tx);
+        }
+if ( message.height !== 0n) {
+          obj.height = message.height.toString();
         }
 return obj;
 },
@@ -1378,6 +1399,9 @@ const message = createBasePluginCheckRequest();
 message.tx = (object.tx !== undefined && object.tx !== null)
           ? Transaction.fromPartial(object.tx)
           : undefined;
+message.height = (object.height !== undefined && object.height !== null)
+          ? BigInt(object.height)
+          : 0n;
 return message;
 }
             };
@@ -1485,7 +1509,7 @@ return message;
             };
 
 function createBasePluginDeliverRequest(): PluginDeliverRequest {
-      return { tx: undefined };
+      return { tx: undefined,height: 0n };
     }
 
 export const PluginDeliverRequest: MessageFns<PluginDeliverRequest> = {
@@ -1495,6 +1519,12 @@ export const PluginDeliverRequest: MessageFns<PluginDeliverRequest> = {
     ): BinaryWriter {
 if (message.tx !== undefined ) {
           Transaction.encode(message.tx, writer.uint32(10).fork()).join();
+        }
+if ( message.height !== 0n) {
+          if (BigInt.asUintN(64, message.height) !== message.height) {
+          throw new globalThis.Error('value provided for field message.height of type uint64 too large');
+        }
+        writer.uint32(16).uint64(message.height);
         }
 return writer;
 },
@@ -1516,6 +1546,13 @@ if (tag !== 10) {
     
         message.tx = Transaction.decode(reader, reader.uint32());
 continue; }
+case 2: {
+if (tag !== 16) {
+        break;
+      }
+    
+        message.height = reader.uint64() as bigint;
+continue; }
 }
 if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1530,6 +1567,9 @@ fromJSON(object: any): PluginDeliverRequest {
 tx: isSet(object.tx) ? Transaction.fromJSON(object.tx)
         
           : undefined,
+height: isSet(object.height) ? BigInt(object.height)
+        
+          : 0n,
 };
 },
 
@@ -1537,6 +1577,9 @@ toJSON(message: PluginDeliverRequest): unknown {
       const obj: any = {};
 if (message.tx !== undefined ) {
           obj.tx = Transaction.toJSON(message.tx);
+        }
+if ( message.height !== 0n) {
+          obj.height = message.height.toString();
         }
 return obj;
 },
@@ -1549,6 +1592,9 @@ const message = createBasePluginDeliverRequest();
 message.tx = (object.tx !== undefined && object.tx !== null)
           ? Transaction.fromPartial(object.tx)
           : undefined;
+message.height = (object.height !== undefined && object.height !== null)
+          ? BigInt(object.height)
+          : 0n;
 return message;
 }
             };

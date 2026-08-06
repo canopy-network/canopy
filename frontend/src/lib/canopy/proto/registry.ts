@@ -35,6 +35,9 @@ import {
   EventBadDebtSocialization,
   EventLossFactorAppliedToAlreadyInsolventMarket,
   EventReserveFundEncodingMigrationCompleted,
+  EventNasmVaultLiquidated,
+  EventReserveFundDrawDown,
+  EventTreasuryDrawDown,
 } from "./generated/arbor_events";
 
 export interface TxCodec {
@@ -90,6 +93,13 @@ export const EVENT_MESSAGE_CODECS: Record<string, EventCodec> = {
     EventBadDebtSocialization as unknown as EventCodec,
   [ARBOR_EVENT_TYPE_URLS.loss_factor_applied_to_already_insolvent_market]:
     EventLossFactorAppliedToAlreadyInsolventMarket as unknown as EventCodec,
+
+  [ARBOR_EVENT_TYPE_URLS.nasm_vault_liquidated]:
+    EventNasmVaultLiquidated as unknown as EventCodec,
+  [ARBOR_EVENT_TYPE_URLS.reserve_fund_draw_down]:
+    EventReserveFundDrawDown as unknown as EventCodec,
+  [ARBOR_EVENT_TYPE_URLS.treasury_draw_down]:
+    EventTreasuryDrawDown as unknown as EventCodec,
   [ARBOR_EVENT_TYPE_URLS.reserve_fund_encoding_migration_completed]:
     EventReserveFundEncodingMigrationCompleted as unknown as EventCodec,
 };

@@ -93,6 +93,12 @@ export const ARBOR_EVENT_TYPE_URLS = {
     "type.googleapis.com/types.EventLossFactorAppliedToAlreadyInsolventMarket",
   reserve_fund_encoding_migration_completed:
     "type.googleapis.com/types.EventReserveFundEncodingMigrationCompleted",
+  nasm_vault_liquidated:
+    "type.googleapis.com/types.EventNasmVaultLiquidated",
+  reserve_fund_draw_down:
+    "type.googleapis.com/types.EventReserveFundDrawDown",
+  treasury_draw_down:
+    "type.googleapis.com/types.EventTreasuryDrawDown",
 } as const;
 
 export type ArborEventType = keyof typeof ARBOR_EVENT_TYPE_URLS;

@@ -19,6 +19,8 @@ export interface Account {
 address: Uint8Array,
 /** amount: the balance of funds the account has */
 amount: bigint,
+/** nonce: the minimum accepted sequence number for nonce-protected transactions */
+nonce: bigint,
 }
 
 /**
@@ -34,7 +36,7 @@ amount: bigint,
 }
 
 function createBaseAccount(): Account {
-      return { address: new Uint8Array(0),amount: 0n };
+      return { address: new Uint8Array(0),amount: 0n,nonce: 0n };
     }
 
 export const Account: MessageFns<Account> = {
@@ -50,6 +52,12 @@ if ( message.amount !== 0n) {
           throw new globalThis.Error('value provided for field message.amount of type uint64 too large');
         }
         writer.uint32(16).uint64(message.amount);
+        }
+if ( message.nonce !== 0n) {
+          if (BigInt.asUintN(64, message.nonce) !== message.nonce) {
+          throw new globalThis.Error('value provided for field message.nonce of type uint64 too large');
+        }
+        writer.uint32(56).uint64(message.nonce);
         }
 return writer;
 },
@@ -78,6 +86,13 @@ if (tag !== 16) {
     
         message.amount = reader.uint64() as bigint;
 continue; }
+case 7: {
+if (tag !== 56) {
+        break;
+      }
+    
+        message.nonce = reader.uint64() as bigint;
+continue; }
 }
 if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -95,6 +110,9 @@ address: isSet(object.address) ? bytesFromBase64(object.address)
 amount: isSet(object.amount) ? BigInt(object.amount)
         
           : 0n,
+nonce: isSet(object.nonce) ? BigInt(object.nonce)
+        
+          : 0n,
 };
 },
 
@@ -105,6 +123,9 @@ if ( message.address.length !== 0) {
         }
 if ( message.amount !== 0n) {
           obj.amount = message.amount.toString();
+        }
+if ( message.nonce !== 0n) {
+          obj.nonce = message.nonce.toString();
         }
 return obj;
 },
@@ -117,6 +138,9 @@ const message = createBaseAccount();
 message.address = object.address ?? new Uint8Array(0);
 message.amount = (object.amount !== undefined && object.amount !== null)
           ? BigInt(object.amount)
+          : 0n;
+message.nonce = (object.nonce !== undefined && object.nonce !== null)
+          ? BigInt(object.nonce)
           : 0n;
 return message;
 }
