@@ -114,7 +114,7 @@ func TestIndexerBlobsCached_JournalPathIncludesUnchangedRewardAccount(t *testing
 	require.NoError(t, err)
 	setFSMHeight(t, sm, 4)
 
-	got, _, err := server.IndexerBlobsCached(4)
+	got, _, err := server.IndexerBlobsCached(context.Background(), 4)
 	require.NoError(t, err)
 	require.Len(t, got.Current.Accounts, 1)
 	require.Len(t, got.Previous.Accounts, 1)
@@ -158,7 +158,7 @@ func TestIndexerBlobsCached_HeightTwoPreservesGenesisAccounts(t *testing.T) {
 		indexerBlobCache: newIndexerBlobCache(8),
 		logger:           log,
 	}
-	got, _, err := server.IndexerBlobsCached(2)
+	got, _, err := server.IndexerBlobsCached(context.Background(), 2)
 	require.NoError(t, err)
 	require.Nil(t, got.Previous)
 	require.Len(t, got.Current.Accounts, 2)

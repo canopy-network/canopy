@@ -40,6 +40,12 @@ func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *Index
 // keys journaled for height. available=false means the height predates the
 // journal and callers must use the legacy full-snapshot comparison.
 func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
+	// Honor an already-cancelled/disconnected caller before doing any store work --
+	// this path is fast, not free, and skips the per-iteration ctx checks that
+	// IterateAndAppend relies on in the legacy full-snapshot path below.
+	if cErr := ctx.Err(); cErr != nil {
+		return nil, false, lib.ErrCancelled(cErr)
+	}
 	if height == 0 || height > s.height {
 		height = s.height
 	}
