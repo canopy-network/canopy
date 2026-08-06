@@ -827,8 +827,8 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			}),
 			IndexerBlobStepTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_indexer_blob_step_time",
-				Help: "The time each step of an indexer-blobs cold read takes, by step name",
-			}, []string{"step"}),
+				Help: "The time each step of an indexer-blobs read takes, by step name and path (journal/legacy)",
+			}, []string{"step", "path"}),
 			IndexerBlobPathTotal: promauto.NewCounterVec(prometheus.CounterOpts{
 				Name: "canopy_indexer_blob_path_total",
 				Help: "Total indexer-blobs requests by which path served them: cache_hit, journal, or legacy",
@@ -1164,13 +1164,16 @@ func (m *Metrics) UpdateIndexerBlobCacheSize(size int) {
 	m.IndexerBlobCacheSize.Set(float64(size))
 }
 
-// ObserveIndexerBlobStep() records how long a single step of an indexer-blobs cold read took.
-func (m *Metrics) ObserveIndexerBlobStep(step string, startTime time.Time) {
+// ObserveIndexerBlobStep() records how long a single step of an indexer-blobs read
+// took, labeled by which path (journal/legacy) the call is part of -- without this
+// label, journal-sourced and legacy-sourced calls to the same step (e.g.
+// accounts_iterate) are indistinguishable in the aggregate.
+func (m *Metrics) ObserveIndexerBlobStep(step, path string, startTime time.Time) {
 	// exit if empty
 	if m == nil || startTime.IsZero() {
 		return
 	}
-	m.IndexerBlobStepTime.WithLabelValues(step).Observe(time.Since(startTime).Seconds())
+	m.IndexerBlobStepTime.WithLabelValues(step, path).Observe(time.Since(startTime).Seconds())
 }
 
 // RecordIndexerBlobPath() records which of the three IndexerBlobsCached outcomes

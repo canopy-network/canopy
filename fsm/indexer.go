@@ -84,11 +84,25 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height 
 			return nil, true, err
 		}
 	}
+	// Previously uninstrumented: query.go's delta_compute timer only ever wrapped the
+	// legacy branch's DeltaIndexerBlobs call, leaving the journal path's own delta
+	// cost invisible. Labeling this "journal" is what actually answers "how good is
+	// the journal path" instead of assuming it from the legacy-only number.
+	deltaComputeStart := time.Now()
 	b, err = DeltaIndexerBlobs(b)
+	s.Metrics.ObserveIndexerBlobStep("delta_compute", "journal", deltaComputeStart)
 	return b, true, err
 }
 
 func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKeys [][]byte, selectiveAccounts, includeBlockEventAccounts bool) (b *IndexerBlob, err lib.ErrorI) {
+	// path labels every ObserveIndexerBlobStep call below so journal-sourced and
+	// legacy-sourced calls to the same step (accounts_iterate above all) are no
+	// longer indistinguishable in the aggregate -- selectiveAccounts is exactly the
+	// journal/legacy branch signal already threaded through this function.
+	path := "legacy"
+	if selectiveAccounts {
+		path = "journal"
+	}
 	if height == 0 || height > s.height {
 		height = s.height
 	}
@@ -115,7 +129,7 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 	blockHeight := height - 1
 	stepStart := time.Now()
 	sm, err := s.TimeMachine(height)
-	s.Metrics.ObserveIndexerBlobStep("time_machine", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("time_machine", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +141,7 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 	// retrieve the block, transactions, and events
 	stepStart = time.Now()
 	block, err := st.GetBlockByHeight(blockHeight)
-	s.Metrics.ObserveIndexerBlobStep("block_fetch", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("block_fetch", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
@@ -158,112 +172,112 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 		}
 		accounts, err = sm.valuesForStateKeys(accountKeys, AccountPrefix())
 	}
-	s.Metrics.ObserveIndexerBlobStep("accounts_iterate", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("accounts_iterate", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve pools
 	stepStart = time.Now()
 	pools, err := sm.IterateAndAppend(ctx, PoolPrefix())
-	s.Metrics.ObserveIndexerBlobStep("pools_iterate", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("pools_iterate", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve validators
 	stepStart = time.Now()
 	validators, err := sm.IterateAndAppend(ctx, ValidatorPrefix())
-	s.Metrics.ObserveIndexerBlobStep("validators_iterate", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("validators_iterate", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve dex prices
 	stepStart = time.Now()
 	dexPrices, err := sm.GetDexPrices()
-	s.Metrics.ObserveIndexerBlobStep("dex_prices_get", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("dex_prices_get", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve nonSigners
 	stepStart = time.Now()
 	nonSigners, err := sm.IterateAndAppend(ctx, NonSignerPrefix())
-	s.Metrics.ObserveIndexerBlobStep("non_signers_iterate", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("non_signers_iterate", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve doubleSigners
 	stepStart = time.Now()
 	doubleSigners, err := st.GetDoubleSignersAsOf(blockHeight)
-	s.Metrics.ObserveIndexerBlobStep("double_signers_get", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("double_signers_get", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve per-block non-signers from the committed QC for this block
 	stepStart = time.Now()
 	blockNonSigners, err := sm.blockNonSignerAddresses(blockHeight)
-	s.Metrics.ObserveIndexerBlobStep("block_non_signers_get", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("block_non_signers_get", path, stepStart)
 	if err != nil {
 		blockNonSigners = nil
 	}
 	// retrieve orders
 	stepStart = time.Now()
 	orderBooks, err := sm.GetOrderBooks()
-	s.Metrics.ObserveIndexerBlobStep("order_books_get", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("order_books_get", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve params
 	stepStart = time.Now()
 	params, err := sm.GetParams()
-	s.Metrics.ObserveIndexerBlobStep("params_get", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("params_get", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve dex batches
 	stepStart = time.Now()
 	dexBatches, err := sm.IterateAndAppend(ctx, lib.JoinLenPrefix(dexPrefix, lockedBatchSegment))
-	s.Metrics.ObserveIndexerBlobStep("dex_batches_iterate", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("dex_batches_iterate", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve next dex batches
 	stepStart = time.Now()
 	nextDexBatches, err := sm.IterateAndAppend(ctx, lib.JoinLenPrefix(dexPrefix, nextBatchSement))
-	s.Metrics.ObserveIndexerBlobStep("next_dex_batches_iterate", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("next_dex_batches_iterate", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// get the CommitteesData bytes under 'committees data prefix'
 	stepStart = time.Now()
 	committeesData, err := sm.Get(CommitteesDataPrefix())
-	s.Metrics.ObserveIndexerBlobStep("committees_data_get", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("committees_data_get", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// get subsidized committees
 	stepStart = time.Now()
 	subsidizedCommittees, err := sm.GetSubsidizedCommittees()
-	s.Metrics.ObserveIndexerBlobStep("subsidized_committees_get", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("subsidized_committees_get", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// get retired committees
 	stepStart = time.Now()
 	retiredCommittees, err := sm.GetRetiredCommittees()
-	s.Metrics.ObserveIndexerBlobStep("retired_committees_get", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("retired_committees_get", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// get the supply tracker bytes from the state
 	stepStart = time.Now()
 	supply, err := sm.Get(SupplyPrefix())
-	s.Metrics.ObserveIndexerBlobStep("supply_get", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("supply_get", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// marshal block to bytes
 	stepStart = time.Now()
 	blockBz, err := lib.Marshal(block)
-	s.Metrics.ObserveIndexerBlobStep("block_marshal", stepStart)
+	s.Metrics.ObserveIndexerBlobStep("block_marshal", path, stepStart)
 	if err != nil {
 		return nil, err
 	}
