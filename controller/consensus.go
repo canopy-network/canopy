@@ -629,8 +629,8 @@ func (c *Controller) UpdateP2PMustConnect(v *lib.ConsensusValidators) {
 			return
 		}
 		c.log.Infof("Updating must connects with %d validators, gossip: %t", lenMustConnects, gossip)
-		// send the list to the p2p module
-		c.P2P.MustConnectsReceiver <- mustConnects
+		// send the list to the p2p module (non-blocking: never block while holding the controller mutex)
+		c.P2P.SendMustConnects(mustConnects)
 	} else {
 		c.log.Info("Self IS NOT a validator 👎")
 	}
@@ -757,8 +757,8 @@ func (c *Controller) finishSyncing() {
 	c.Mempool.L.Unlock()
 	// set the startup block metric (block height when first sync completed)
 	c.Metrics.SetStartupBlock(c.FSM.Height())
-	// signal a reset of bft for the chain
-	c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: c.LoadLastCommitTime(c.FSM.Height())}
+	// signal a reset of bft for the chain (non-blocking: never block while holding the controller mutex)
+	c.signalResetBFT(bft.ResetBFT{StartTime: c.LoadLastCommitTime(c.FSM.Height())})
 	// set syncing to false
 	c.isSyncing.Store(false)
 	// notify the store to resume compaction and trigger a full compaction of all prefixes

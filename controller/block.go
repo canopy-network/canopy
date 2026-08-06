@@ -78,8 +78,8 @@ func (c *Controller) ListenForBlock() {
 			if !c.Syncing().Load() {
 				// gossip the block to our peers
 				c.GossipBlock(qc, sender, blockMessage.Time)
-				// signal a reset to the bft module
-				c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: time.UnixMicro(int64(blockMessage.Time))}
+				// signal a reset to the bft module (non-blocking: never block while holding the controller mutex)
+				c.signalResetBFT(bft.ResetBFT{StartTime: time.UnixMicro(int64(blockMessage.Time))})
 			}
 			// reset 'syncDetector' because a new block was received properly
 			syncDetector.Reset()

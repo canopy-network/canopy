@@ -609,6 +609,29 @@ func (p *P2P) MaxPossibleOutbound() int {
 // Inbox() is a getter for the multiplexed stream with a specific topic
 func (p *P2P) Inbox(topic lib.Topic) chan *lib.MessageAndMetadata { return p.channels[topic] }
 
+// SendMustConnects() delivers the latest 'must connect' peer set without blocking. The controller
+// sends this while holding the controller mutex, so a blocking send on the tiny buffer could wedge
+// the node. Only the newest set matters, so on a full buffer the stale set is dropped and replaced
+// (keep-latest coalescing).
+func (p *P2P) SendMustConnects(mustConnects []*lib.PeerAddress) {
+	// fast path: enqueue if there is room
+	select {
+	case p.MustConnectsReceiver <- mustConnects:
+		return
+	default:
+	}
+	// buffer full: drop the stale queued set so the freshest one can take its place
+	select {
+	case <-p.MustConnectsReceiver:
+	default:
+	}
+	// enqueue the newest set (best-effort; a concurrent producer may have refilled the slot)
+	select {
+	case p.MustConnectsReceiver <- mustConnects:
+	default:
+	}
+}
+
 // ListenForMustConnects() is an internal listener that receives 'must connect peers' updates from the controller
 func (p *P2P) ListenForMustConnects() {
 	for mustConnect := range p.MustConnectsReceiver {

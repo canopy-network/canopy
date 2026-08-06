@@ -214,13 +214,25 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp}
+		c.signalResetBFT(bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp})
 	} else {
 		// signal to reset consensus
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp}
+		c.signalResetBFT(bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp})
 	}
 	// update the peer 'must connect'
 	c.UpdateP2PMustConnect(info.ValidatorSet)
+}
+
+// signalResetBFT() sends a BFT reset without blocking. Callers hold the controller mutex,
+// and the BFT loop needs that same mutex to drain ResetBFT, so a blocking send on a full
+// buffer would deadlock the node. Dropping a surplus reset is safe: pending resets already
+// advance the BFT to the latest state and the next block/root-chain update re-signals.
+func (c *Controller) signalResetBFT(msg bft.ResetBFT) {
+	select {
+	case c.Consensus.ResetBFT <- msg:
+	default:
+		c.log.Warnf("ResetBFT buffer full (cap=%d) — dropping reset signal to avoid blocking under the controller mutex", cap(c.Consensus.ResetBFT))
+	}
 }
 
 // LoadCommittee() gets the ValidatorSet that is authorized to come to Consensus agreement on the Proposal for a specific height/chainId
