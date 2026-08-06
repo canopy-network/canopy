@@ -616,6 +616,17 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 
 // IndexerBlobsCached() is a helper function for the indexer blobs implementation
 func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
+	// requestStart/path back ObserveIndexerBlobRequestTime, which times this call
+	// end-to-end for every outcome -- the number to compare against the client's
+	// observed RPC round-trip, since IndexerBlobColdReadTime and
+	// IndexerBlobJournalBuildTime each only cover one of the three branches below.
+	requestStart := time.Now()
+	path := "cache_hit"
+	defer func() {
+		s.controller.Metrics.RecordIndexerBlobPath(path)
+		s.controller.Metrics.ObserveIndexerBlobRequestTime(path, requestStart)
+	}()
+
 	currentHeight := s.controller.FSM.Height()
 	if height == 0 || height > currentHeight {
 		height = currentHeight
@@ -630,11 +641,14 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	// makes account delta construction proportional to block activity instead
 	// of total account count. Heights committed before the journal was enabled
 	// transparently use the full-snapshot fallback below.
+	path = "journal"
+	journalStart := time.Now()
 	journalDelta, available, journalErr := s.controller.FSM.IndexerBlobsFromStateChanges(ctx, height)
 	if journalErr != nil {
 		return nil, nil, journalErr
 	}
 	if available {
+		s.controller.Metrics.RecordIndexerBlobJournalBuildTime(journalStart)
 		deltaBytes, marshalErr := lib.Marshal(journalDelta)
 		if marshalErr != nil {
 			return nil, nil, marshalErr
@@ -646,6 +660,7 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 		})
 		return journalDelta, deltaBytes, nil
 	}
+	path = "legacy"
 
 	// Cache miss and no journal available for this height: current/previous blobs
 	// must be built from the store, which for a height far behind the tip means a

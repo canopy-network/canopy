@@ -92,6 +92,18 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 	if height == 0 || height > s.height {
 		height = s.height
 	}
+	// store.Store.NewReadOnly routes state reads through the LSS (Latest State Store)
+	// only when the requested height equals the store's current live version; every
+	// other height -- including tip-1, the "previous" side of a live headscan request
+	// -- goes through the HSS (Historic State Store) instead. This is the actual
+	// mechanism behind steps that show a fast/slow split despite having no journal at
+	// all (validators_iterate, block_non_signers_get): it isn't proximity-based cache
+	// warmth or "how old is this height," it's this one deterministic check.
+	tier := "hss"
+	if height == s.height {
+		tier = "lss"
+	}
+	s.Metrics.RecordIndexerBlobTier(tier)
 	// Height semantics:
 	// - `height` is the state version (pre-block-apply for block `height`).
 	// - The latest committed block corresponding to that state is `height-1`.

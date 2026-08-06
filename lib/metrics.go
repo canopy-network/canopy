@@ -96,6 +96,33 @@ type IndexerMetrics struct {
 	// reads/iterations at a historical version. Lets a slow cold read be attributed to
 	// the specific store call responsible instead of only seeing the total.
 	IndexerBlobStepTime *prometheus.HistogramVec
+	// IndexerBlobPathTotal counts which of the three IndexerBlobsCached outcomes served
+	// each request: "cache_hit" (outer per-height delta cache), "journal" (sparse
+	// state-change-keys delta), or "legacy" (full-snapshot compare-and-diff). Without
+	// this, telling journal-covered requests apart from legacy ones requires inferring
+	// it from IndexerBlobStepTime's bucket shape -- this makes it a direct count instead.
+	IndexerBlobPathTotal *prometheus.CounterVec
+	// IndexerBlobJournalBuildTime times a successful IndexerBlobsFromStateChanges call
+	// end-to-end (available=true only), the journal-path counterpart to
+	// IndexerBlobColdReadTime -- without it, the journal path has zero timing visibility
+	// of its own; its cost can only be inferred by subtracting an estimated legacy-path
+	// contribution out of IndexerBlobStepTime, which is what this replaces.
+	IndexerBlobJournalBuildTime prometheus.Histogram
+	// IndexerBlobRequestTime times the entire IndexerBlobsCached call, start to finish,
+	// for every outcome (cache_hit/journal/legacy alike, labeled by path). This is the
+	// number to compare directly against the client-observed RPC round-trip
+	// (indexer_block_phase_duration_seconds{phase="fetch"} on the canopy-indexer side) --
+	// IndexerBlobColdReadTime and IndexerBlobJournalBuildTime each only cover one branch,
+	// so neither alone can account for 100% of what the client sees.
+	IndexerBlobRequestTime *prometheus.HistogramVec
+	// IndexerBlobTierTotal counts which store tier served the state read inside each
+	// indexerBlob call: "lss" (Latest State Store -- only used when the requested height
+	// equals the store's current live version) or "hss" (Historic State Store -- every
+	// other height, including tip-1). This is the real mechanism behind the "fast vs slow"
+	// split observed on steps with no journal at all (validators_iterate,
+	// block_non_signers_get) -- see store.Store.NewReadOnly's `s.version == queryVersion`
+	// check -- not a proxy like request source or distance-from-tip.
+	IndexerBlobTierTotal *prometheus.CounterVec
 }
 
 // NodeMetrics represents general telemetry for the node's health
@@ -802,6 +829,22 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_indexer_blob_step_time",
 				Help: "The time each step of an indexer-blobs cold read takes, by step name",
 			}, []string{"step"}),
+			IndexerBlobPathTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_indexer_blob_path_total",
+				Help: "Total indexer-blobs requests by which path served them: cache_hit, journal, or legacy",
+			}, []string{"path"}),
+			IndexerBlobJournalBuildTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_indexer_blob_journal_build_time",
+				Help: "The time it takes to serve an indexer-blobs request via the state-change journal (available=true)",
+			}),
+			IndexerBlobRequestTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
+				Name: "canopy_indexer_blob_request_time",
+				Help: "The total time to serve an indexer-blobs request end-to-end, for every path (cache_hit/journal/legacy) -- compare directly against the client-observed RPC round-trip",
+			}, []string{"path"}),
+			IndexerBlobTierTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_indexer_blob_tier_total",
+				Help: "Total indexerBlob state reads by store tier: lss (requested height equals the live version) or hss (every other height)",
+			}, []string{"tier"}),
 		},
 	}
 }
@@ -1128,6 +1171,49 @@ func (m *Metrics) ObserveIndexerBlobStep(step string, startTime time.Time) {
 		return
 	}
 	m.IndexerBlobStepTime.WithLabelValues(step).Observe(time.Since(startTime).Seconds())
+}
+
+// RecordIndexerBlobPath() records which of the three IndexerBlobsCached outcomes
+// ("cache_hit", "journal", "legacy") served a request.
+func (m *Metrics) RecordIndexerBlobPath(path string) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.IndexerBlobPathTotal.WithLabelValues(path).Inc()
+}
+
+// RecordIndexerBlobJournalBuildTime() records how long a successful journal-path
+// (IndexerBlobsFromStateChanges, available=true) build took.
+func (m *Metrics) RecordIndexerBlobJournalBuildTime(startTime time.Time) {
+	// exit if empty
+	if m == nil || startTime.IsZero() {
+		return
+	}
+	m.IndexerBlobJournalBuildTime.Observe(time.Since(startTime).Seconds())
+}
+
+// ObserveIndexerBlobRequestTime() records the entire IndexerBlobsCached call's
+// duration, labeled by which path served it. Unlike IndexerBlobColdReadTime (legacy
+// path only) or IndexerBlobJournalBuildTime (journal path only), this covers every
+// outcome including a bare cache hit, so it is the number to compare directly
+// against the client-observed RPC round-trip.
+func (m *Metrics) ObserveIndexerBlobRequestTime(path string, startTime time.Time) {
+	// exit if empty
+	if m == nil || startTime.IsZero() {
+		return
+	}
+	m.IndexerBlobRequestTime.WithLabelValues(path).Observe(time.Since(startTime).Seconds())
+}
+
+// RecordIndexerBlobTier() records which store tier (lss/hss) served an indexerBlob
+// call's state read -- see store.Store.NewReadOnly's `s.version == queryVersion` check.
+func (m *Metrics) RecordIndexerBlobTier(tier string) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.IndexerBlobTierTotal.WithLabelValues(tier).Inc()
 }
 
 // UpdateStoreRootTime() updates the time it took to compute an uncached store root.
