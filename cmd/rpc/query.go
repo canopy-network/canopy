@@ -709,13 +709,13 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	}
 	deltaComputeStart := time.Now()
 	blobDelta, err := fsm.DeltaIndexerBlobs(blobs)
-	s.controller.Metrics.ObserveIndexerBlobStep("delta_compute", "legacy", deltaComputeStart)
+	s.controller.Metrics.ObserveIndexerBlobStep("delta_compute", "legacy", "n_a", deltaComputeStart)
 	if err != nil {
 		return nil, nil, err
 	}
 	deltaMarshalStart := time.Now()
 	deltaBytes, err := lib.Marshal(blobDelta)
-	s.controller.Metrics.ObserveIndexerBlobStep("delta_marshal", "legacy", deltaMarshalStart)
+	s.controller.Metrics.ObserveIndexerBlobStep("delta_marshal", "legacy", "n_a", deltaMarshalStart)
 	if err != nil {
 		return nil, nil, err
 	}
