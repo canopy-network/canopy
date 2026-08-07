@@ -341,3 +341,83 @@ func TestIndexerBlobsFromStateChanges_NonSignerAddressRoundTrips(t *testing.T) {
 	require.NoError(t, lib.Unmarshal(blobs.Current.NonSigners[0], ns))
 	require.Equal(t, address, ns.Address)
 }
+
+// TestResolveValidatorTotals_FallbackReadsHeightScopedSnapshotNotLiveHead is a regression for
+// indexerBlob's totals call site passing the outer StateMachine receiver (s, the live head)
+// into resolveValidatorTotals instead of sm (the TimeMachine snapshot for the requested
+// height, used for every other read in indexerBlob). When resolveValidatorTotals's fallback
+// full scan fires with no persisted baseline, that mismatch made it read the live head's
+// validator set instead of the requested height's - wrong for any height behind the head,
+// e.g. every "previous" blob build.
+func TestResolveValidatorTotals_FallbackReadsHeightScopedSnapshotNotLiveHead(t *testing.T) {
+	log := lib.NewDefaultLogger()
+	config := lib.DefaultConfig()
+	config.StoreConfig.StateChangeJournalEnabled = true
+	db, err := store.NewStoreInMemory(log, config)
+	require.NoError(t, err)
+	defer db.Close()
+
+	sm := StateMachine{
+		store:             db,
+		ProtocolVersion:   0,
+		NetworkID:         1,
+		height:            2,
+		slashTracker:      NewSlashTracker(),
+		proposeVoteConfig: AcceptAllProposals,
+		Config: lib.Config{
+			MainConfig:         lib.DefaultMainConfig(),
+			StateMachineConfig: lib.DefaultStateMachineConfig(),
+		},
+		events: new(lib.EventsTracker),
+		log:    log,
+		cache: &cache{
+			accounts: make(map[uint64]*Account),
+			pools:    make(map[uint64]*Pool),
+		},
+	}
+	now := uint64(time.Now().UnixMicro())
+	addrA := bytes.Repeat([]byte{0x61}, crypto.AddressSize)
+	addrB := bytes.Repeat([]byte{0x62}, crypto.AddressSize)
+
+	// version 1: genesis params, no block to pair with yet.
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	// version 2: pairs with block 1, no validators yet.
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: 1, Hash: crypto.Hash([]byte("block-1")), Time: now},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	// version 3: pairs with block 2, adds validator A - this is the height the test requests.
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	require.NoError(t, sm.SetValidator(&Validator{Address: addrA, StakedAmount: 100}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: 2, Hash: crypto.Hash([]byte("block-2")), Time: now + 1},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	// version 4: pairs with block 3, adds a second validator B - this becomes the live head,
+	// with a validator set that intentionally differs from version 3's.
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	require.NoError(t, sm.SetValidator(&Validator{Address: addrB, StakedAmount: 200}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: 3, Hash: crypto.Hash([]byte("block-3")), Time: now + 2},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	sm.height = 4
+
+	// Request height 3 (state has 1 validator: A) while the live head (sm.height=4) has 2
+	// (A+B). No baseline is persisted anywhere, so resolveValidatorTotals's fallback full
+	// scan fires. It must read the height-3 snapshot: if it read the live head instead (the
+	// s-vs-sm bug), TotalValidatorsActive would come back 2, not 1.
+	blobs, available, err := sm.IndexerBlobsFromStateChanges(context.Background(), 3)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.Equal(t, uint32(1), blobs.Current.TotalValidatorsActive)
+}

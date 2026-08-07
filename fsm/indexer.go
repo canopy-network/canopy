@@ -360,7 +360,11 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 			return nil, err
 		}
 	} else {
-		totals, totalsErr := s.resolveValidatorTotals(st, height, validators, nil)
+		// sm (not s) is the height-scoped snapshot every other read in this function uses -
+		// resolveValidatorTotals's fallback full scan must read from the same snapshot, or
+		// the first-ever fallback on a non-head height would see the live head's validator
+		// set instead of the validator set at height.
+		totals, totalsErr := sm.resolveValidatorTotals(st, height, validators, nil)
 		if totalsErr != nil {
 			return nil, totalsErr
 		}
