@@ -474,7 +474,7 @@ func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64) ([][]byte, li
 	if qc == nil || qc.Header == nil || qc.Signature == nil {
 		return nil, nil
 	}
-	committee, err := s.LoadCommittee(qc.Header.ChainId, qc.Header.RootHeight)
+	committee, err := s.cachedLoadCommittee(qc.Header.ChainId, qc.Header.RootHeight)
 	if err != nil {
 		return nil, err
 	}

@@ -65,6 +65,9 @@ type Indexer struct {
 	// this pointer, so uncommitted mempool totals would contaminate a real version's entry.
 	// See Store.Copy() in store.go.
 	totals *validatorTotalsCache
+	// committees memoizes fsm.StateMachine.LoadCommittee's result by (chainId, rootHeight),
+	// shared by pointer the same way totals is. Same Copy()/mempool-view invariant applies.
+	committees *committeeCache
 	// metrics may be nil (e.g. NewStoreInMemory in tests) - every call site below guards on it.
 	metrics *lib.Metrics
 }
@@ -89,6 +92,32 @@ func (c *validatorTotalsCache) get(version uint64) (*lib.ValidatorTotals, bool) 
 
 func (c *validatorTotalsCache) set(version uint64, totals *lib.ValidatorTotals) {
 	c.lru.Add(version, totals)
+}
+
+// committeeCache is a bounded LRU from (chainId, rootHeight) to LoadCommittee's result -
+// no incremental path (ValidatorSet.MultiKey is a BLS-aggregated point, too risky to hand-diff), so a miss always calls LoadCommittee in full.
+type committeeCache struct {
+	lru *lru.Cache[committeeCacheKey, *lib.ValidatorSet]
+	// sf dedupes concurrent GetOrComputeCommittee calls for the same key.
+	sf singleflight.Group
+}
+
+type committeeCacheKey struct {
+	chainId    uint64
+	rootHeight uint64
+}
+
+func newCommitteeCache() *committeeCache {
+	c, _ := lru.New[committeeCacheKey, *lib.ValidatorSet](256)
+	return &committeeCache{lru: c}
+}
+
+func (c *committeeCache) get(chainId, rootHeight uint64) (*lib.ValidatorSet, bool) {
+	return c.lru.Get(committeeCacheKey{chainId, rootHeight})
+}
+
+func (c *committeeCache) set(chainId, rootHeight uint64, vs *lib.ValidatorSet) {
+	c.lru.Add(committeeCacheKey{chainId, rootHeight}, vs)
 }
 
 // StateChangeKeys() returns state keys written while committing version, optionally
@@ -207,6 +236,40 @@ func (t *Indexer) GetOrComputeValidatorTotals(version uint64, compute func() (*l
 		return nil, ErrStoreGet(err) // defensive fallback; every error the closure returns is already a lib.ErrorI, so this branch should be unreachable in practice
 	}
 	return v.(*lib.ValidatorTotals), nil
+}
+
+// GetOrComputeCommittee returns (chainId, rootHeight)'s cached committee, computing via
+// compute exactly once even under concurrent callers, then caching the result.
+func (t *Indexer) GetOrComputeCommittee(chainId, rootHeight uint64, compute func() (*lib.ValidatorSet, lib.ErrorI)) (*lib.ValidatorSet, lib.ErrorI) {
+	if vs, ok := t.committees.get(chainId, rootHeight); ok {
+		t.metrics.RecordCommitteeCacheHit()
+		return vs, nil
+	}
+	t.metrics.RecordCommitteeCacheMiss()
+	key := strconv.FormatUint(chainId, 10) + ":" + strconv.FormatUint(rootHeight, 10)
+	v, err, shared := t.committees.sf.Do(key, func() (interface{}, error) {
+		// re-check: another goroutine may have populated this while we waited to be scheduled
+		if vs, ok := t.committees.get(chainId, rootHeight); ok {
+			return vs, nil
+		}
+		vs, computeErr := compute()
+		if computeErr != nil {
+			return nil, computeErr
+		}
+		t.committees.set(chainId, rootHeight, vs)
+		t.metrics.UpdateCommitteeCacheSize(t.committees.lru.Len())
+		return vs, nil
+	})
+	if shared {
+		t.metrics.RecordCommitteeSingleflightDedup()
+	}
+	if err != nil {
+		if errI, ok := err.(lib.ErrorI); ok {
+			return nil, errI
+		}
+		return nil, ErrStoreGet(err) // defensive fallback; every error the closure returns is already a lib.ErrorI, so this branch should be unreachable in practice
+	}
+	return v.(*lib.ValidatorSet), nil
 }
 
 // BLOCKS CODE BELOW

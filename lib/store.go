@@ -46,6 +46,8 @@ type RWIndexerI interface {
 	// GetOrComputeValidatorTotals reads/computes totals for version (see
 	// store.Indexer.GetOrComputeValidatorTotals) - combines read+write, so it's here, not on RIndexerI/WIndexerI individually.
 	GetOrComputeValidatorTotals(version uint64, compute func() (*ValidatorTotals, ErrorI)) (*ValidatorTotals, ErrorI)
+	// GetOrComputeCommittee memoizes LoadCommittee's result (see store.Indexer.GetOrComputeCommittee) - read-only callers only, never LoadCommittee itself.
+	GetOrComputeCommittee(chainId, rootHeight uint64, compute func() (*ValidatorSet, ErrorI)) (*ValidatorSet, ErrorI)
 }
 
 // WIndexerI defines the write interface for the indexing operations

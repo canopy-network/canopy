@@ -138,6 +138,12 @@ type IndexerMetrics struct {
 	// racing on the same missing cache entry.
 	ValidatorTotalsSingleflightDedup prometheus.Counter
 	ValidatorTotalsCacheSize         prometheus.Gauge
+	// CommitteeCacheHits/Misses cover GetOrComputeCommittee's memoization of LoadCommittee's
+	// result (see store.committeeCache's doc for why there's no incremental path here).
+	CommitteeCacheHits         prometheus.Counter
+	CommitteeCacheMisses       prometheus.Counter
+	CommitteeSingleflightDedup prometheus.Counter
+	CommitteeCacheSize         prometheus.Gauge
 }
 
 // NodeMetrics represents general telemetry for the node's health
@@ -880,6 +886,22 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_validator_totals_cache_size",
 				Help: "Current number of entries in the validator-totals cache",
 			}),
+			CommitteeCacheHits: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_committee_cache_hits_total",
+				Help: "Total GetOrComputeCommittee calls served from the committee cache without calling LoadCommittee",
+			}),
+			CommitteeCacheMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_committee_cache_misses_total",
+				Help: "Total GetOrComputeCommittee calls that required calling LoadCommittee in full",
+			}),
+			CommitteeSingleflightDedup: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_committee_singleflight_dedup_total",
+				Help: "Total committee-cache-miss calls (including the leader) whose compute was shared with at least one other concurrent caller for the same (chainId, rootHeight) -- singleflight.Do's 'shared' bit doesn't separate leader from follower, so this counts contended resolutions, not followers alone.",
+			}),
+			CommitteeCacheSize: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_committee_cache_size",
+				Help: "Current number of entries in the committee cache",
+			}),
 		},
 	}
 }
@@ -1304,6 +1326,43 @@ func (m *Metrics) UpdateValidatorTotalsCacheSize(size int) {
 		return
 	}
 	m.ValidatorTotalsCacheSize.Set(float64(size))
+}
+
+// RecordCommitteeCacheHit() records a GetOrComputeCommittee call served without calling LoadCommittee.
+func (m *Metrics) RecordCommitteeCacheHit() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.CommitteeCacheHits.Inc()
+}
+
+// RecordCommitteeCacheMiss() records a GetOrComputeCommittee call that required calling LoadCommittee.
+func (m *Metrics) RecordCommitteeCacheMiss() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.CommitteeCacheMisses.Inc()
+}
+
+// RecordCommitteeSingleflightDedup() records a committee-cache-miss call whose compute was
+// shared with at least one other concurrent caller for the same (chainId, rootHeight).
+func (m *Metrics) RecordCommitteeSingleflightDedup() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.CommitteeSingleflightDedup.Inc()
+}
+
+// UpdateCommitteeCacheSize() updates the current entry count of the committee cache.
+func (m *Metrics) UpdateCommitteeCacheSize(size int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.CommitteeCacheSize.Set(float64(size))
 }
 
 // UpdateStoreRootTime() updates the time it took to compute an uncached store root.
