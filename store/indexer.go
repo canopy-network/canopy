@@ -52,46 +52,58 @@ type Indexer struct {
 // restricted to a state-key prefix. The available result distinguishes a
 // journaled version with no matching changes from a pre-journal version
 func (t *Indexer) StateChangeKeys(version uint64, prefix []byte) (keys [][]byte, available bool, err lib.ErrorI) {
-	// retrieve the state change version prefix
 	versionPrefix := t.stateChangeVersionPrefix(version)
-	// retrieve the marker
 	marker, err := t.db.Get(versionPrefix)
 	if err != nil || len(marker) == 0 {
 		return nil, false, err
 	}
-	// retrieve the search prefix
-	searchPrefix := lib.Append(versionPrefix, prefix)
-	// iterate through that prefix
-	it, err := t.db.Iterator(searchPrefix)
+	// prefix here is e.g. AccountPrefix()/ValidatorPrefix()/NonSignerPrefix() - already the
+	// exact 2-byte [length][type] header used as the bucket row's key suffix.
+	blob, err := t.db.Get(lib.Append(versionPrefix, prefix))
 	if err != nil {
 		return nil, false, err
 	}
-	defer it.Close()
-	// for each key
-	for ; it.Valid(); it.Next() {
-		k := it.Key()
-		if len(k) <= len(versionPrefix) {
-			continue
-		}
-		// append to key list
-		keys = append(keys, bytes.Clone(k[len(versionPrefix):]))
+	if len(blob) == 0 {
+		return nil, true, nil // available, nothing of this type touched
+	}
+	for _, remainder := range lib.DecodeLengthPrefixed(blob) {
+		keys = append(keys, lib.Append(prefix, lib.JoinLenPrefix(remainder)))
 	}
 	return keys, true, nil
 }
 
-// indexStateChangeKeys() records the commit marker even when keys is empty so
-// readers can safely use an empty delta without falling back to a full scan
-func (t *Indexer) indexStateChangeKeys(version uint64, keys [][]byte) lib.ErrorI {
+// indexStateChanges records the commit marker even when ops is empty, then writes one
+// row per entity type actually touched this version - keyed by [stateChangePrefix][version][typeHeader],
+// valued with the concatenated, already length-prefixed remainders of every touched key of
+// that type. ops must already be in ascending key order (see Store.recordStateChangeKeys) -
+// DeltaIndexerBlobs' merge-walk in fsm/indexer.go depends on that order downstream.
+func (t *Indexer) indexStateChanges(version uint64, ops []valueOp) lib.ErrorI {
 	versionPrefix := t.stateChangeVersionPrefix(version)
 	if err := t.db.Set(versionPrefix, stateChangeMarker); err != nil {
 		return err
 	}
-	for _, k := range keys {
-		if err := t.db.Set(lib.Append(versionPrefix, k), stateChangeMarker); err != nil {
-			return err
+	var currentHeader []byte
+	var value []byte
+	flush := func() lib.ErrorI {
+		if currentHeader == nil {
+			return nil
 		}
+		return t.db.Set(lib.Append(versionPrefix, currentHeader), value)
 	}
-	return nil
+	for _, op := range ops {
+		if len(op.key) < 2 {
+			continue // malformed/non-entity key, skip
+		}
+		header := op.key[:2] // [length byte][type-prefix byte], e.g. AccountPrefix()/ValidatorPrefix()
+		if currentHeader == nil || !bytes.Equal(header, currentHeader) {
+			if err := flush(); err != nil {
+				return err
+			}
+			currentHeader, value = header, nil
+		}
+		value = append(value, op.key[2:]...) // remainder is already self-length-prefixed
+	}
+	return flush()
 }
 
 // stateChangeVersionPrefix() returns the stateChangePrefix + version (big endian)

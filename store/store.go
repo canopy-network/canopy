@@ -307,17 +307,19 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	return
 }
 
-// recordStateChangeKeys snapshots the pending state transaction before Flush
-// clears it. Values are already available from the versioned state store, so
-// the journal only needs keys
+// recordStateChangeKeys snapshots the pending state transaction before Flush clears it,
+// in ascending key order (required for indexStateChanges' per-type bucketing and for the
+// downstream merge-walk in DeltaIndexerBlobs). Values are already available from the
+// versioned state store, so the journal only needs keys.
 func (s *Store) recordStateChangeKeys(version uint64) lib.ErrorI {
 	s.ss.txn.l.Lock()
-	keys := make([][]byte, 0, len(s.ss.txn.ops))
-	for _, op := range s.ss.txn.ops {
-		keys = append(keys, bytes.Clone(op.key))
-	}
+	ops := make([]valueOp, 0, len(s.ss.txn.ops))
+	s.ss.txn.sorted.Ascend(func(item *CacheItem) bool {
+		ops = append(ops, s.ss.txn.ops[item.HashedKey])
+		return true
+	})
 	s.ss.txn.l.Unlock()
-	return s.Indexer.indexStateChangeKeys(version, keys)
+	return s.Indexer.indexStateChanges(version, ops)
 }
 
 // Rollback rewinds the store to a previous version (height).
