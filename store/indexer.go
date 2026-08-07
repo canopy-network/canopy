@@ -16,20 +16,21 @@ import (
 var _ lib.RWIndexerI = &Indexer{}
 
 var (
-	txHashPrefix       = []byte{1}  // store key prefix for transaction by hash
-	txHeightPrefix     = []byte{2}  // store key prefix for transactions by height
-	txSenderPrefix     = []byte{3}  // store key prefix for transactions from sender
-	txRecipientPrefix  = []byte{4}  // store key prefix for transaction by recipient
-	blockHashPrefix    = []byte{5}  // store key prefix for block by hash
-	blockHeightPrefix  = []byte{6}  // store key prefix for block by height
-	qcHeightPrefix     = []byte{7}  // store key prefix for quorum certificate by height
-	doubleSignerPrefix = []byte{8}  // store key prefix for double signers by height
-	checkPointPrefix   = []byte{9}  // store key prefix for checkpoints for committee chains
-	eventAddressPrefix = []byte{10} // store key prefix for events by address
-	eventHeightPrefix  = []byte{11} // store key prefix for events by block height
-	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
-	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
-	stateChangePrefix  = []byte{14} // state keys written at a particular committed version
+	txHashPrefix          = []byte{1}  // store key prefix for transaction by hash
+	txHeightPrefix        = []byte{2}  // store key prefix for transactions by height
+	txSenderPrefix        = []byte{3}  // store key prefix for transactions from sender
+	txRecipientPrefix     = []byte{4}  // store key prefix for transaction by recipient
+	blockHashPrefix       = []byte{5}  // store key prefix for block by hash
+	blockHeightPrefix     = []byte{6}  // store key prefix for block by height
+	qcHeightPrefix        = []byte{7}  // store key prefix for quorum certificate by height
+	doubleSignerPrefix    = []byte{8}  // store key prefix for double signers by height
+	checkPointPrefix      = []byte{9}  // store key prefix for checkpoints for committee chains
+	eventAddressPrefix    = []byte{10} // store key prefix for events by address
+	eventHeightPrefix     = []byte{11} // store key prefix for events by block height
+	eventChainIdPrefix    = []byte{12} // store key prefix for events by chainId
+	eventHashPrefix       = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
+	stateChangePrefix     = []byte{14} // state keys written at a particular committed version
+	validatorTotalsPrefix = []byte{15} // validator/delegate status totals at a committed version
 	// create indexer cache
 	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
@@ -96,6 +97,29 @@ func (t *Indexer) indexStateChangeKeys(version uint64, keys [][]byte) lib.ErrorI
 // stateChangeVersionPrefix() returns the stateChangePrefix + version (big endian)
 func (t *Indexer) stateChangeVersionPrefix(version uint64) []byte {
 	return t.key(stateChangePrefix, t.encodeBigEndian(version), nil)
+}
+
+// GetValidatorTotals returns the persisted validator/delegate status totals at version,
+// or available=false if nothing has been persisted for that version yet.
+func (t *Indexer) GetValidatorTotals(version uint64) (totals *lib.ValidatorTotals, available bool, err lib.ErrorI) {
+	bz, err := t.db.Get(t.key(validatorTotalsPrefix, t.encodeBigEndian(version), nil))
+	if err != nil || len(bz) == 0 {
+		return nil, false, err
+	}
+	totals = new(lib.ValidatorTotals)
+	if err = lib.Unmarshal(bz, totals); err != nil {
+		return nil, false, err
+	}
+	return totals, true, nil
+}
+
+// SetValidatorTotals persists validator/delegate status totals for version.
+func (t *Indexer) SetValidatorTotals(version uint64, totals *lib.ValidatorTotals) lib.ErrorI {
+	bz, err := lib.Marshal(totals)
+	if err != nil {
+		return err
+	}
+	return t.db.Set(t.key(validatorTotalsPrefix, t.encodeBigEndian(version), nil), bz)
 }
 
 // BLOCKS CODE BELOW

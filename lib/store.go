@@ -47,20 +47,22 @@ type RWIndexerI interface {
 
 // WIndexerI defines the write interface for the indexing operations
 type WIndexerI interface {
-	IndexQC(qc *QuorumCertificate) ErrorI                          // save a quorum certificate by height
-	IndexTx(result *TxResult) ErrorI                               // save a tx by hash, height.index, sender, and recipient
-	IndexBlock(b *BlockResult) ErrorI                              // save a block by hash and height
-	IndexDoubleSigner(address []byte, height uint64) ErrorI        // save a double signer for a height
-	IndexCheckpoint(chainId uint64, checkpoint *Checkpoint) ErrorI // save a checkpoint for a committee chain
-	DeleteTxsForHeight(height uint64) ErrorI                       // deletes all transactions for a height
-	DeleteBlockForHeight(height uint64) ErrorI                     // deletes a block and transaction data for a height
-	DeleteQCForHeight(height uint64) ErrorI                        // deletes a certificate for a height
-	DeleteCheckpointsForChain(uint64) ErrorI                       // deletes all checkpoints for a chain
+	IndexQC(qc *QuorumCertificate) ErrorI                              // save a quorum certificate by height
+	IndexTx(result *TxResult) ErrorI                                   // save a tx by hash, height.index, sender, and recipient
+	IndexBlock(b *BlockResult) ErrorI                                  // save a block by hash and height
+	IndexDoubleSigner(address []byte, height uint64) ErrorI            // save a double signer for a height
+	IndexCheckpoint(chainId uint64, checkpoint *Checkpoint) ErrorI     // save a checkpoint for a committee chain
+	SetValidatorTotals(version uint64, totals *ValidatorTotals) ErrorI // persist validator/delegate totals at a version
+	DeleteTxsForHeight(height uint64) ErrorI                           // deletes all transactions for a height
+	DeleteBlockForHeight(height uint64) ErrorI                         // deletes a block and transaction data for a height
+	DeleteQCForHeight(height uint64) ErrorI                            // deletes a certificate for a height
+	DeleteCheckpointsForChain(uint64) ErrorI                           // deletes all checkpoints for a chain
 }
 
 // RIndexerI defines the read interface for the indexing operations
 type RIndexerI interface {
 	StateChangeKeys(version uint64, prefix []byte) (keys [][]byte, available bool, err ErrorI)     // get state keys written at a committed version
+	GetValidatorTotals(version uint64) (totals *ValidatorTotals, available bool, err ErrorI)       // get persisted validator/delegate totals at a version
 	GetTxByHash(hash []byte) (*TxResult, ErrorI)                                                   // get the tx by the Transaction hash
 	GetTxsByHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)               // get Transactions for a height
 	GetTxsBySender(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)     // get Transactions for a sender
