@@ -470,6 +470,26 @@ func (s *StateMachine) LoadCommittee(chainId uint64, height uint64) (lib.Validat
 	return vs, err
 }
 
+// cachedLoadCommittee memoizes LoadCommittee's result, used only by blockNonSignerAddresses -
+// LoadCommittee's other, consensus-critical callers (bft message/evidence validation, validator-set transitions) always call it directly and never see this cache.
+func (s *StateMachine) cachedLoadCommittee(chainId, rootHeight uint64) (lib.ValidatorSet, lib.ErrorI) {
+	st, ok := s.store.(lib.StoreI)
+	if !ok {
+		return s.LoadCommittee(chainId, rootHeight)
+	}
+	vs, err := st.GetOrComputeCommittee(chainId, rootHeight, func() (*lib.ValidatorSet, lib.ErrorI) {
+		committee, loadErr := s.LoadCommittee(chainId, rootHeight)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		return &committee, nil
+	})
+	if err != nil {
+		return lib.ValidatorSet{}, err
+	}
+	return *vs, nil
+}
+
 // LoadCertificate() loads a quorum certificate (block, results + 2/3rd committee signatures)
 func (s *StateMachine) LoadCertificate(height uint64) (*lib.QuorumCertificate, lib.ErrorI) {
 	// ensure the 'load height' is not genesis
