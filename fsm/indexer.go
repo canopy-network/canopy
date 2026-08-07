@@ -348,11 +348,26 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 	if err != nil {
 		return nil, err
 	}
-	// calculate validator/delegator status totals from the full snapshot
-	totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking,
-		totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking, err := validatorTotals(validators)
-	if err != nil {
-		return nil, err
+	// calculate validator/delegator status totals: the legacy (full-snapshot) path computes
+	// them directly from the full validator set; the journal path resolves them from a
+	// persisted incremental baseline, falling back to a full scan only when no baseline exists.
+	var totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking uint32
+	var totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking uint32
+	if !selective {
+		totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking,
+			totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking, err = validatorTotals(validators)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		totals, totalsErr := s.resolveValidatorTotals(st, height, validators, nil)
+		if totalsErr != nil {
+			return nil, totalsErr
+		}
+		totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking =
+			totals.ValidatorsActive, totals.ValidatorsPaused, totals.ValidatorsUnstaking
+		totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking =
+			totals.DelegatesActive, totals.DelegatesPaused, totals.DelegatesUnstaking
 	}
 	// return the blob
 	return &IndexerBlob{
@@ -773,6 +788,148 @@ func validatorForceKeysByAddress(blockBz []byte) ([][]byte, lib.ErrorI) {
 		}
 	}
 	return keys, nil
+}
+
+// resolveValidatorTotals returns the validator/delegate status totals at height, computed
+// incrementally from the persisted baseline at height-1 plus the status transitions visible
+// in the current/previous validator entries already fetched for this blob. Falls back to a
+// full scan (same cost as the pre-journal path) only when no baseline exists yet - this
+// happens at most once per node, the first time a journal-path blob is requested after this
+// feature goes live; every height after that reads/writes the incremental baseline.
+func (s *StateMachine) resolveValidatorTotals(st lib.StoreI, height uint64, current, previous [][]byte) (*lib.ValidatorTotals, lib.ErrorI) {
+	baseline, available, err := st.GetValidatorTotals(height - 1)
+	if err != nil {
+		return nil, err
+	}
+	var totals *lib.ValidatorTotals
+	if !available {
+		full, fullErr := s.fullValidatorSnapshotForTotals()
+		if fullErr != nil {
+			return nil, fullErr
+		}
+		totals, err = totalsFromFullScan(full)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		totals, err = applyValidatorTransitions(baseline, current, previous)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := st.SetValidatorTotals(height, totals); err != nil {
+		return nil, err
+	}
+	return totals, nil
+}
+
+// fullValidatorSnapshotForTotals does the one-time full scan used only when no baseline
+// exists yet for height-1.
+func (s *StateMachine) fullValidatorSnapshotForTotals() ([][]byte, lib.ErrorI) {
+	return s.IterateAndAppend(context.Background(), ValidatorPrefix())
+}
+
+func totalsFromFullScan(validators [][]byte) (*lib.ValidatorTotals, lib.ErrorI) {
+	active, paused, unstaking, delActive, delPaused, delUnstaking, err := validatorTotals(validators)
+	if err != nil {
+		return nil, err
+	}
+	return &lib.ValidatorTotals{
+		ValidatorsActive: active, ValidatorsPaused: paused, ValidatorsUnstaking: unstaking,
+		DelegatesActive: delActive, DelegatesPaused: delPaused, DelegatesUnstaking: delUnstaking,
+	}, nil
+}
+
+// applyValidatorTransitions diffs the current/previous validator entries already fetched
+// for this blob against the persisted baseline. previous entries not present in current
+// represent deletions (e.g. EventFinishUnstaking) - decrement only, no increment.
+func applyValidatorTransitions(baseline *lib.ValidatorTotals, current, previous [][]byte) (*lib.ValidatorTotals, lib.ErrorI) {
+	totals := &lib.ValidatorTotals{
+		ValidatorsActive: baseline.ValidatorsActive, ValidatorsPaused: baseline.ValidatorsPaused,
+		ValidatorsUnstaking: baseline.ValidatorsUnstaking, DelegatesActive: baseline.DelegatesActive,
+		DelegatesPaused: baseline.DelegatesPaused, DelegatesUnstaking: baseline.DelegatesUnstaking,
+	}
+	prevByAddr, err := validatorStatusByAddress(previous)
+	if err != nil {
+		return nil, err
+	}
+	currByAddr, err := validatorStatusByAddress(current)
+	if err != nil {
+		return nil, err
+	}
+	for addr, curr := range currByAddr {
+		old, hadOld := prevByAddr[addr]
+		if hadOld {
+			decrementBucket(totals, old)
+		}
+		incrementBucket(totals, curr)
+	}
+	for addr, old := range prevByAddr {
+		if _, stillPresent := currByAddr[addr]; !stillPresent {
+			decrementBucket(totals, old) // deleted (e.g. finished unstaking) - decrement only
+		}
+	}
+	return totals, nil
+}
+
+type validatorStatus struct {
+	unstaking, paused, delegate bool
+}
+
+func validatorStatusByAddress(entries [][]byte) (map[string]validatorStatus, lib.ErrorI) {
+	out := make(map[string]validatorStatus, len(entries))
+	for _, entry := range entries {
+		v := new(Validator)
+		if err := lib.Unmarshal(entry, v); err != nil {
+			return nil, lib.ErrUnmarshal(err)
+		}
+		out[string(v.Address)] = validatorStatus{
+			unstaking: v.UnstakingHeight > 0,
+			paused:    v.UnstakingHeight == 0 && v.MaxPausedHeight > 0,
+			delegate:  v.Delegate,
+		}
+	}
+	return out, nil
+}
+
+func incrementBucket(t *lib.ValidatorTotals, s validatorStatus) {
+	switch {
+	case s.unstaking:
+		t.ValidatorsUnstaking++
+		if s.delegate {
+			t.DelegatesUnstaking++
+		}
+	case s.paused:
+		t.ValidatorsPaused++
+		if s.delegate {
+			t.DelegatesPaused++
+		}
+	default:
+		t.ValidatorsActive++
+		if s.delegate {
+			t.DelegatesActive++
+		}
+	}
+}
+
+func decrementBucket(t *lib.ValidatorTotals, s validatorStatus) {
+	switch {
+	case s.unstaking:
+		t.ValidatorsUnstaking--
+		if s.delegate {
+			t.DelegatesUnstaking--
+		}
+	case s.paused:
+		t.ValidatorsPaused--
+		if s.delegate {
+			t.DelegatesPaused--
+		}
+	default:
+		t.ValidatorsActive--
+		if s.delegate {
+			t.DelegatesActive--
+		}
+	}
 }
 
 func validatorTotals(validators [][]byte) (

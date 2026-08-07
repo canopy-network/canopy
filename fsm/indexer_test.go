@@ -180,6 +180,40 @@ func TestMergeChangedBlobKeys_EmptyPrevious(t *testing.T) {
 	require.Empty(t, gotPreviousChanged)
 }
 
+func TestResolveValidatorTotals_UsesPersistedBaselineWhenAvailable(t *testing.T) {
+	sm := newTestStateMachine(t)
+	st := sm.store.(lib.StoreI)
+
+	require.NoError(t, st.SetValidatorTotals(4, &lib.ValidatorTotals{ValidatorsActive: 7}))
+
+	// current/previous entries are irrelevant here since no validator changed - the fallback
+	// full scan must NOT run when height-1's baseline is available; if it did, it would see
+	// zero validators in this empty test store and totals would come back 0, not 7.
+	totals, err := sm.resolveValidatorTotals(st, 5, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint32(7), totals.ValidatorsActive)
+}
+
+func TestResolveValidatorTotals_FallsBackToFullScanWhenNoBaseline(t *testing.T) {
+	sm := newTestStateMachine(t)
+	st := sm.store.(lib.StoreI)
+	require.NoError(t, sm.SetParams(DefaultParams()))
+
+	v := mustMarshalProto(t, &Validator{Address: bytes.Repeat([]byte{0x51}, crypto.AddressSize)})
+	require.NoError(t, sm.SetValidator(&Validator{Address: bytes.Repeat([]byte{0x51}, crypto.AddressSize)}))
+	_, err := st.Commit()
+	require.NoError(t, err)
+
+	totals, err := sm.resolveValidatorTotals(st, 2, [][]byte{v}, nil)
+	require.NoError(t, err)
+	require.Equal(t, uint32(1), totals.ValidatorsActive)
+
+	cached, available, err := st.GetValidatorTotals(2)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.Equal(t, uint32(1), cached.ValidatorsActive)
+}
+
 func mustMarshalProto(t *testing.T, message any) []byte {
 	t.Helper()
 	bz, err := lib.Marshal(message)
