@@ -54,5 +54,3 @@ node_modules
 
 # Hardhat
 cache/solidity-files-cache.json
-# Worktrees (agentic workflows)
-.worktrees/

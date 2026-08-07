@@ -188,7 +188,7 @@ func TestResolveValidatorTotals_UsesPersistedBaselineWhenAvailable(t *testing.T)
 
 	// current/previous are irrelevant - the fallback full scan must not run when height-1's
 	// baseline is available, or it'd see zero validators in this empty store and return 0, not 7.
-	totals, err := sm.resolveValidatorTotals(st, 5, nil, nil)
+	totals, err := sm.resolveValidatorTotals(context.Background(), st, 5, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, uint32(7), totals.ValidatorsActive)
 }
@@ -203,7 +203,7 @@ func TestResolveValidatorTotals_FallsBackToFullScanWhenNoBaseline(t *testing.T) 
 	_, err := st.Commit()
 	require.NoError(t, err)
 
-	totals, err := sm.resolveValidatorTotals(st, 2, [][]byte{v}, nil)
+	totals, err := sm.resolveValidatorTotals(context.Background(), st, 2, [][]byte{v}, nil)
 	require.NoError(t, err)
 	require.Equal(t, uint32(1), totals.ValidatorsActive)
 
