@@ -29,8 +29,11 @@ var (
 	eventHeightPrefix     = []byte{11} // store key prefix for events by block height
 	eventChainIdPrefix    = []byte{12} // store key prefix for events by chainId
 	eventHashPrefix       = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
-	stateChangePrefix     = []byte{14} // state keys written at a particular committed version
-	validatorTotalsPrefix = []byte{15} // validator/delegate status totals at a committed version
+	stateChangePrefix = []byte{14} // state keys written at a particular committed version
+	// byte 15 (validatorTotalsPrefix) previously held validator/delegate status totals in
+	// the durable, versioned Txn store; that write path never actually persisted (see
+	// validatorTotalsCache above) and totals now live only in the in-memory cache, so the
+	// prefix byte is retired rather than reused.
 	// create indexer cache
 	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
@@ -46,6 +49,40 @@ var stateChangeMarker = []byte{1}
 type Indexer struct {
 	db     *Txn
 	config lib.Config
+	// totals is a same-process, in-memory cache of validator/delegate status totals by
+	// version, shared by pointer across every Store/Indexer view derived from the same
+	// underlying DB (see NewStoreWithDB/NewReadOnly/Copy/NewTxn in store.go). It is
+	// intentionally NOT written through db (the versioned Txn store): GetValidatorTotals/
+	// SetValidatorTotals are called from indexerBlob's height-scoped StateMachine.
+	// TimeMachine() snapshot, whose Txn writer is nil and whose ops are discarded, never
+	// committed - going through the Txn machinery here would silently no-op forever (writes
+	// would appear to succeed but vanish, and every read would report unavailable). Losing
+	// this cache (process restart, eviction) only costs a one-time full-scan rescan - see
+	// resolveValidatorTotals's fallback in fsm/indexer.go - never a correctness issue.
+	totals *validatorTotalsCache
+}
+
+// validatorTotalsCache is a bounded LRU from version to totals, the same pattern as
+// blockCache above except scoped per-underlying-DB (via the shared *Indexer.totals
+// pointer) rather than package-global, so independent Store instances (e.g. separate
+// tests, or an in-memory store swapped in for one) never see each other's entries.
+// Eviction only costs resolveValidatorTotals a one-time full-scan rescan for that height
+// (and, since a rescan re-seeds the baseline, does not propagate to later heights).
+type validatorTotalsCache struct {
+	lru *lru.Cache[uint64, *lib.ValidatorTotals]
+}
+
+func newValidatorTotalsCache() *validatorTotalsCache {
+	c, _ := lru.New[uint64, *lib.ValidatorTotals](256)
+	return &validatorTotalsCache{lru: c}
+}
+
+func (c *validatorTotalsCache) get(version uint64) (*lib.ValidatorTotals, bool) {
+	return c.lru.Get(version)
+}
+
+func (c *validatorTotalsCache) set(version uint64, totals *lib.ValidatorTotals) {
+	c.lru.Add(version, totals)
 }
 
 // StateChangeKeys() returns state keys written while committing version, optionally
@@ -111,27 +148,17 @@ func (t *Indexer) stateChangeVersionPrefix(version uint64) []byte {
 	return t.key(stateChangePrefix, t.encodeBigEndian(version), nil)
 }
 
-// GetValidatorTotals returns the persisted validator/delegate status totals at version,
-// or available=false if nothing has been persisted for that version yet.
+// GetValidatorTotals returns the cached validator/delegate status totals at version,
+// or available=false if nothing has been cached for that version yet.
 func (t *Indexer) GetValidatorTotals(version uint64) (totals *lib.ValidatorTotals, available bool, err lib.ErrorI) {
-	bz, err := t.db.Get(t.key(validatorTotalsPrefix, t.encodeBigEndian(version), nil))
-	if err != nil || len(bz) == 0 {
-		return nil, false, err
-	}
-	totals = new(lib.ValidatorTotals)
-	if err = lib.Unmarshal(bz, totals); err != nil {
-		return nil, false, err
-	}
-	return totals, true, nil
+	totals, available = t.totals.get(version)
+	return totals, available, nil
 }
 
-// SetValidatorTotals persists validator/delegate status totals for version.
+// SetValidatorTotals caches validator/delegate status totals for version.
 func (t *Indexer) SetValidatorTotals(version uint64, totals *lib.ValidatorTotals) lib.ErrorI {
-	bz, err := lib.Marshal(totals)
-	if err != nil {
-		return err
-	}
-	return t.db.Set(t.key(validatorTotalsPrefix, t.encodeBigEndian(version), nil), bz)
+	t.totals.set(version, totals)
+	return nil
 }
 
 // BLOCKS CODE BELOW

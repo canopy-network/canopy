@@ -364,7 +364,39 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 		// resolveValidatorTotals's fallback full scan must read from the same snapshot, or
 		// the first-ever fallback on a non-head height would see the live head's validator
 		// set instead of the validator set at height.
-		totals, totalsErr := sm.resolveValidatorTotals(st, height, validators, nil)
+		var totals *lib.ValidatorTotals
+		var totalsErr lib.ErrorI
+		if includeBlockEventAccounts {
+			// This call builds the OUTER (Current) blob -- the one whose totals must be
+			// resolved incrementally against the persisted baseline. `validators` was
+			// fetched above for exactly validatorKeys ∪ forced (the keys that may have
+			// changed status between height-1 and height); fetch the SAME key set's
+			// values as of height-1 so applyValidatorTransitions can see each touched
+			// validator's OLD bucket, not just its new one -- otherwise every touched
+			// validator (not only deletions) gets incremented into its new bucket
+			// without ever being decremented out of its old one.
+			forced, forceErr := validatorForceKeysByAddress(blockBz)
+			if forceErr != nil {
+				return nil, forceErr
+			}
+			touchedKeys := append(append([][]byte{}, validatorKeys...), forced...)
+			previousValidators, prevErr := s.previousValidatorEntries(height, touchedKeys)
+			if prevErr != nil {
+				return nil, prevErr
+			}
+			totals, totalsErr = sm.resolveValidatorTotals(st, height, validators, previousValidators)
+		} else {
+			// This call builds the companion (Previous) blob for some OUTER height H
+			// (this `height` local is H-1). Its `validatorKeys`/`validators` were fetched
+			// using H's touched keys (reused so DeltaIndexerBlobs can diff Current vs
+			// Previous value-by-value), not H-1's own touched keys, so they cannot be fed
+			// into a diff for H-1's totals without contaminating the result with
+			// validators that never actually changed status at H-1. The totals AT H-1
+			// were already correctly resolved (or will be, via the same fallback full
+			// scan) the last time H-1 was itself computed as an outer/Current height --
+			// just read that persisted value directly instead of re-deriving it.
+			totals, totalsErr = sm.totalsAtHeight(st, height)
+		}
 		if totalsErr != nil {
 			return nil, totalsErr
 		}
@@ -831,6 +863,53 @@ func (s *StateMachine) resolveValidatorTotals(st lib.StoreI, height uint64, curr
 // exists yet for height-1.
 func (s *StateMachine) fullValidatorSnapshotForTotals() ([][]byte, lib.ErrorI) {
 	return s.IterateAndAppend(context.Background(), ValidatorPrefix())
+}
+
+// previousValidatorEntries returns the validator entries for exactly the given keys as of
+// height-1, i.e. the status those same validators had immediately before whatever changed
+// them at height. Used to feed resolveValidatorTotals a `previous` set that lines up 1:1
+// with the `current` set already fetched for height, so applyValidatorTransitions can
+// decrement each touched validator's old bucket (not just increment its new one).
+func (s *StateMachine) previousValidatorEntries(height uint64, keys [][]byte) ([][]byte, lib.ErrorI) {
+	if height < 2 || len(keys) == 0 {
+		return nil, nil
+	}
+	prevSM, err := s.TimeMachine(height - 1)
+	if err != nil {
+		return nil, err
+	}
+	if prevSM != s {
+		defer prevSM.Discard()
+	}
+	return prevSM.valuesForStateKeys(keys, ValidatorPrefix())
+}
+
+// totalsAtHeight returns the validator/delegate totals already persisted for height,
+// falling back to a one-time full scan (same as resolveValidatorTotals's own fallback)
+// when no baseline has been recorded for height yet. Unlike resolveValidatorTotals, this
+// never diffs a `current`/`previous` pair - it is used only to read back a height's totals
+// for a companion (Previous) blob whose own fetched validator keys belong to some other
+// (outer/Current) height and would corrupt a diff for this one.
+func (s *StateMachine) totalsAtHeight(st lib.StoreI, height uint64) (*lib.ValidatorTotals, lib.ErrorI) {
+	totals, available, err := st.GetValidatorTotals(height)
+	if err != nil {
+		return nil, err
+	}
+	if available {
+		return totals, nil
+	}
+	full, err := s.fullValidatorSnapshotForTotals()
+	if err != nil {
+		return nil, err
+	}
+	totals, err = totalsFromFullScan(full)
+	if err != nil {
+		return nil, err
+	}
+	if err := st.SetValidatorTotals(height, totals); err != nil {
+		return nil, err
+	}
+	return totals, nil
 }
 
 func totalsFromFullScan(validators [][]byte) (*lib.ValidatorTotals, lib.ErrorI) {

@@ -127,6 +127,76 @@ func TestIndexerBlobsCached_JournalPathIncludesUnchangedRewardAccount(t *testing
 	require.Nil(t, entry.current)
 }
 
+// TestIndexerBlobsCached_JournalPathHandlesValidatorsAndNonSigners exercises a single block
+// that both edits a validator (reward, output unchanged) and finishes-unstaking (deletes)
+// another, plus a non-signer increment - proving the journal path's incremental validator
+// totals correctly decrement a touched validator's OLD bucket, not just increment its NEW
+// one. Replaces PR 502's TestIndexerBlobsCached_JournalPathUsesValidatorAndNonSignerKeys,
+// which seeded a fake address into the non-signer value and so never actually exercised a
+// deletion/bucket-transition, masking the totals bug this test targets.
+func TestIndexerBlobsCached_JournalPathHandlesValidatorsAndNonSigners(t *testing.T) {
+	server := newTestIndexerBlobServerWithHeights(t, 4)
+	sm := server.controller.FSM
+	db := sm.Store().(lib.StoreI)
+
+	editStakeValidator := crypto.NewAddress(bytes.Repeat([]byte{0x31}, crypto.AddressSize))
+	unstakingValidator := crypto.NewAddress(bytes.Repeat([]byte{0x32}, crypto.AddressSize))
+	nonSignerKeyGroup := newTestNonSignerKeyGroup(t)
+	rewardOutput := bytes.Repeat([]byte{0x34}, crypto.AddressSize)
+
+	require.NoError(t, sm.SetValidator(&fsm.Validator{Address: editStakeValidator.Bytes(), Output: rewardOutput}))
+	require.NoError(t, sm.SetValidator(&fsm.Validator{Address: unstakingValidator.Bytes(), UnstakingHeight: 4}))
+	require.NoError(t, sm.IncrementNonSigners(0, [][]byte{nonSignerKeyGroup.PublicKey.Bytes()}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{
+		Height: 4, Hash: crypto.Hash([]byte("block-4-seed")), Time: uint64(time.Now().UnixMicro()),
+	}}))
+	_, err := db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 5)
+
+	seeded, _, err := server.IndexerBlobsCached(context.Background(), 5)
+	require.NoError(t, err)
+	require.Len(t, seeded.Current.Validators, 2)
+	require.Len(t, seeded.Current.NonSigners, 1)
+	require.Equal(t, uint32(1), seeded.Current.TotalValidatorsActive)
+	require.Equal(t, uint32(1), seeded.Current.TotalValidatorsUnstaking)
+
+	// height 5: editStakeValidator gets a reward (output unchanged), unstakingValidator
+	// finishes unstaking (deleted)
+	require.NoError(t, sm.SetValidator(&fsm.Validator{Address: editStakeValidator.Bytes(), Output: rewardOutput, Committees: []uint64{1}}))
+	require.NoError(t, sm.DeleteValidator(&fsm.Validator{Address: unstakingValidator.Bytes(), UnstakingHeight: 4}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{
+		Height: 5, Hash: crypto.Hash([]byte("block-5-reward-and-unstake")), Time: uint64(time.Now().UnixMicro()),
+	}, Events: []*lib.Event{{EventType: string(lib.EventTypeReward), Address: editStakeValidator.Bytes()}}}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 6)
+
+	rewarded, _, err := server.IndexerBlobsCached(context.Background(), 6)
+	require.NoError(t, err)
+	require.Len(t, rewarded.Current.Validators, 1) // editStakeValidator only - it changed and was force-included
+	require.Len(t, rewarded.Previous.Validators, 2) // both present at height 5
+	require.Equal(t, uint32(1), rewarded.Current.TotalValidatorsActive)
+	require.Equal(t, uint32(0), rewarded.Current.TotalValidatorsUnstaking)
+
+	var got fsm.Validator
+	require.NoError(t, lib.Unmarshal(rewarded.Current.Validators[0], &got))
+	require.Equal(t, rewardOutput, got.Output)
+
+	require.True(t, rewarded.Current.NonSignersDelta)
+	require.Empty(t, rewarded.Current.NonSigners)
+}
+
+// newTestNonSignerKeyGroup builds a real BLS key group so IncrementNonSigners' PublicKeyI
+// unmarshal/Address() round-trip has something valid to work with - a synthetic address
+// alone can't be turned into a pubkey whose .Address() matches it.
+func newTestNonSignerKeyGroup(t *testing.T) *crypto.KeyGroup {
+	t.Helper()
+	pk, err := crypto.NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	return crypto.NewKeyGroup(pk)
+}
+
 func TestIndexerBlobsCached_HeightTwoPreservesGenesisAccounts(t *testing.T) {
 	log := lib.NewDefaultLogger()
 	db, err := store.NewStoreInMemory(log)
