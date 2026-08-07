@@ -440,3 +440,59 @@ export async function getAllNasmVaults(owner?: string): Promise<Array<Record<str
   } catch { return []; }
 }
 
+
+export interface WaterfallEvent {
+  eventType: string;
+  marketId?: string;
+  badDebt?: string;
+  remainingReserveFund?: string;
+  remainingTreasury?: string;
+  pool?: string;
+  newLossFactor?: string;
+  totalSuppliedEquiv?: string;
+  pendingCount?: number;
+  recoveredAmount?: string;
+  source?: string;
+  height?: number;
+  remainingBalance?: string;
+  layer?: string;
+}
+
+export async function queryWaterfallEvents(
+  limit: number = 50,
+  marketId?: string
+): Promise<{ events: WaterfallEvent[]; available: boolean }> {
+  try {
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+    if (marketId) params.set("marketId", marketId);
+    const res = await pluginGet(`/v1/query/waterfall-events?${params.toString()}`);
+    if (!res.ok) return { events: [], available: false };
+    const j = await res.json();
+    if (!Array.isArray(j)) return { events: [], available: true };
+    const typeMap: Record<string, string> = {
+      bad_debt_socialization: "EventBadDebtSocialization",
+      reserve_fund_draw_down: "EventReserveFundDrawDown",
+      treasury_draw_down: "EventTreasuryDrawDown",
+      loss_factor_exhausted: "EventLossFactorExhausted",
+      loss_factor_applied_to_already_insolvent_market: "EventLossFactorAppliedToAlreadyInsolventMarket",
+      layer4_pending_count_warning: "EventLayer4PendingCountWarning",
+      insolvent_market_value_recovered: "EventInsolventMarketValueRecovered",
+      nasm_vault_liquidated: "EventNasmVaultLiquidated",
+    };
+    const events: WaterfallEvent[] = j.map((raw: Record<string, unknown>) => ({
+      eventType: typeMap[String(raw.eventType ?? "")] ?? String(raw.eventType ?? ""),
+      marketId: raw.marketId as string | undefined,
+      badDebt: raw.badDebt as string | undefined,
+      remainingReserveFund: raw.remainingBalance as string | undefined,
+      newLossFactor: raw.newLossFactor as string | undefined,
+      height: Number(raw.blockHeight ?? 0),
+      layer: raw.layer as string | undefined,
+      remainingBalance: raw.remainingBalance as string | undefined,
+      pool: raw.pool as string | undefined,
+    }));
+    return { events, available: true };
+  } catch {
+    return { events: [], available: false };
+  }
+}

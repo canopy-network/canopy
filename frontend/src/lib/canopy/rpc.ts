@@ -541,36 +541,7 @@ export async function queryFailedTxsPaged(
 }
 
 
-export interface WaterfallEvent {
-  eventType: string;
-  marketId?: string;
-  badDebt?: string;
-  remainingReserveFund?: string;
-  remainingTreasury?: string;
-  pool?: string;
-  newLossFactor?: string;
-  totalSuppliedEquiv?: string;
-  pendingCount?: number;
-  recoveredAmount?: string;
-  source?: string;
-  height?: number;
-}
 
-export async function queryWaterfallEvents(
-  limit: number = 50,
-  marketId?: string
-): Promise<{ events: WaterfallEvent[]; available: boolean }> {
-  try {
-    const params = new URLSearchParams();
-    params.set("limit", String(limit));
-    if (marketId) params.set("marketId", marketId);
-    const res = await rpcFetch(`/v1/query/waterfall-events?${params.toString()}`, {
-      method: "GET",
-    });
-    if (!res.ok) return { events: [], available: false };
-    const j = await res.json();
-    return { events: Array.isArray(j) ? j : [], available: true };
-  } catch {
-    return { events: [], available: false };
-  }
-}
+
+export { queryWaterfallEvents } from "./pluginRpc";
+export type { WaterfallEvent } from "./pluginRpc";
