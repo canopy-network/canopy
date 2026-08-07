@@ -579,8 +579,8 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			}),
 			LoadCommitteeStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_fsm_load_committee_stage_time",
-				Help: "Execution time of LoadCommittee stages",
-			}, []string{"stage"}),
+				Help: "Execution time of LoadCommittee stages, by tier (lss=live tip, hss=every other height) - an lss call in its own slow tail signals resource contention with concurrent hss traffic",
+			}, []string{"stage", "tier"}),
 			GetValidatorSetStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_fsm_get_validator_set_stage_time",
 				Help: "Execution time of getValidatorSet stages",

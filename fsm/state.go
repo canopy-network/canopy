@@ -445,9 +445,15 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
 func (s *StateMachine) LoadCommittee(chainId uint64, height uint64) (lib.ValidatorSet, lib.ErrorI) {
 	startTime := time.Now()
+	// tier: lss = live tip (cheap), hss = everything else (full committee scan + BLS rebuild) -
+	// an lss call in its own slow tail signals resource contention with concurrent hss traffic.
+	tier := "hss"
+	if height == s.height {
+		tier = "lss"
+	}
 	observeStage := func(stage string, stageStartTime time.Time) {
 		if s.Metrics != nil {
-			s.Metrics.LoadCommitteeStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+			s.Metrics.LoadCommitteeStageTime.WithLabelValues(stage, tier).Observe(time.Since(stageStartTime).Seconds())
 		}
 	}
 	defer observeStage("total", startTime)
