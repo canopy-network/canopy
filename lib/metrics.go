@@ -123,19 +123,15 @@ type IndexerMetrics struct {
 	// block_non_signers_get) -- see store.Store.NewReadOnly's `s.version == queryVersion`
 	// check -- not a proxy like request source or distance-from-tip.
 	IndexerBlobTierTotal *prometheus.CounterVec
-	// ValidatorTotalsCacheHits/Misses cover store.Indexer.GetOrComputeValidatorTotals's own
-	// cache, not the outer IndexerBlobCacheHits/Misses delta cache -- a miss here means the
-	// version's totals had to be computed, either incrementally (baseline available) or via
-	// the full-scan fallback (ValidatorTotalsFullScanTotal, a subset of misses).
+	// ValidatorTotalsCacheHits/Misses cover GetOrComputeValidatorTotals's own cache, not the
+	// outer IndexerBlobCacheHits/Misses delta cache -- a miss means computing (incrementally or via ValidatorTotalsFullScanTotal's fallback).
 	ValidatorTotalsCacheHits   prometheus.Counter
 	ValidatorTotalsCacheMisses prometheus.Counter
-	// ValidatorTotalsFullScanTotal counts only the cold-baseline full-scan branch inside a
-	// miss (resolveValidatorTotals/totalsAtHeight finding no persisted height-1 baseline) --
-	// the ~200ms-at-current-scale cost this cache exists to avoid paying on every miss.
+	// ValidatorTotalsFullScanTotal counts the cold-baseline full-scan branch within a miss --
+	// the ~200ms-at-current-scale cost this cache exists to avoid paying every time.
 	ValidatorTotalsFullScanTotal prometheus.Counter
-	// ValidatorTotalsSingleflightDedup counts callers that joined an already-in-flight
-	// compute for the same version instead of running their own -- concurrent RPC requests
-	// racing on the same missing cache entry.
+	// ValidatorTotalsSingleflightDedup counts callers that joined an already-in-flight compute
+	// for the same version -- concurrent requests racing the same missing cache entry.
 	ValidatorTotalsSingleflightDedup prometheus.Counter
 	ValidatorTotalsCacheSize         prometheus.Gauge
 }

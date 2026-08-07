@@ -263,10 +263,8 @@ func TestDeltaIndexerBlobs_ZeroValuePoolAndAccount(t *testing.T) {
 	require.NotNil(t, delta)
 }
 
-// TestIndexerBlobsFromStateChanges_NonSignerAddressRoundTrips is a regression for two bugs
-// in the journal path: (1) NonSigner's wire encoding never carries Address, so it must be
-// reconstructed from the storage key or every delta comes back empty; (2) the totals
-// fallback used to read the live head's validators instead of the requested height's when no baseline existed.
+// TestIndexerBlobsFromStateChanges_NonSignerAddressRoundTrips is a regression for two bugs:
+// NonSigner's Address was never wire-carried (must come from the storage key), and totals fallback once read the live head instead of the requested height.
 func TestIndexerBlobsFromStateChanges_NonSignerAddressRoundTrips(t *testing.T) {
 	log := lib.NewDefaultLogger()
 	config := lib.DefaultConfig()

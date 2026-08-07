@@ -32,10 +32,8 @@ var (
 	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
 	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
 	stateChangePrefix  = []byte{14} // state keys written at a particular committed version
-	// byte 15 (validatorTotalsPrefix) previously held validator/delegate status totals in
-	// the durable, versioned Txn store; that write path never actually persisted (see
-	// validatorTotalsCache above) and totals now live only in the in-memory cache, so the
-	// prefix byte is retired rather than reused.
+	// byte 15 (validatorTotalsPrefix) previously held totals in the durable Txn store - that
+	// write path never persisted, so totals now live only in the in-memory cache; the byte is retired, not reused.
 	// create indexer cache
 	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
@@ -91,12 +89,8 @@ func (c *validatorTotalsCache) set(version uint64, totals *lib.ValidatorTotals) 
 	c.lru.Add(version, totals)
 }
 
-// StateChangeKeys() returns state keys written while committing version, optionally
-// restricted to a state-key prefix. The available result distinguishes a journaled version
-// with no matching changes from a pre-journal version. requireFullSchema must be true for
-// any prefix that the old, account-only journal schema never captured (i.e. everything
-// except accounts) - a stateChangeMarkerAccountsOnly version then reports unavailable for
-// that prefix instead of conflating "not tracked yet" with "tracked and genuinely empty."
+// StateChangeKeys returns state keys written at version, optionally by prefix - available
+// distinguishes "journaled, nothing of this type touched" from "not journaled" (see requireFullSchema on the interface doc).
 func (t *Indexer) StateChangeKeys(version uint64, prefix []byte, requireFullSchema bool) (keys [][]byte, available bool, err lib.ErrorI) {
 	versionPrefix := t.stateChangeVersionPrefix(version)
 	marker, err := t.db.Get(versionPrefix)

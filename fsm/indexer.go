@@ -64,9 +64,8 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height 
 	if err != nil || !available {
 		return nil, available, err
 	}
-	// validators/non-signers weren't captured by the old, account-only journal schema - a
-	// version journaled before that schema change must fall back to the legacy path rather
-	// than silently building a blob missing whatever it can't recover from block events alone.
+	// requireFullSchema=true: a version journaled under the old, account-only schema has no
+	// validator/non-signer data - fall back to legacy rather than build an incomplete blob.
 	validatorKeys, available, err := st.StateChangeKeys(height, ValidatorPrefix(), true)
 	if err != nil || !available {
 		return nil, available, err
@@ -835,11 +834,8 @@ type resolveValidatorTotalsParams struct {
 	current, previous [][]byte
 }
 
-// resolveValidatorTotals derives height's totals from the persisted baseline at height-1 plus
-// this blob's validator transitions, falling back to a full scan when no baseline exists (e.g.
-// after a restart or cache eviction). The incremental path exists because the full scan it
-// replaces cost ~200ms at current validator+delegate counts (~44,000 combined) - too slow to
-// pay on every blob build once this ran per RPC request instead of once per commit.
+// resolveValidatorTotals derives height's totals from the baseline at height-1 plus this
+// blob's transitions, falling back to a full scan (~200ms at ~44k validators+delegates) when no baseline exists.
 func (s *StateMachine) resolveValidatorTotals(ctx context.Context, p *resolveValidatorTotalsParams) (*lib.ValidatorTotals, lib.ErrorI) {
 	return p.st.GetOrComputeValidatorTotals(p.height, func() (*lib.ValidatorTotals, lib.ErrorI) {
 		baseline, available, err := p.st.GetValidatorTotals(p.height - 1)
