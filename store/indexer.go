@@ -41,11 +41,18 @@ var (
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
 )
 
-// The marker distinguishes two cases that otherwise look identical:
+// The marker distinguishes three cases that otherwise look identical:
 //
-//  1. The version was journaled, but no account keys changed.
-//  2. The version predates journaling, so no journal data exists.
-var stateChangeMarker = []byte{1}
+//  1. The version was journaled under the current schema (accounts, validators, and
+//     non-signers all captured), but a given type had no changes this version.
+//  2. The version was journaled under the pre-validators/non-signers schema (accounts
+//     only) - stateChangeMarkerAccountsOnly, never written again, but still on disk for
+//     every version committed before this schema change.
+//  3. The version predates journaling entirely, so no journal data exists at all.
+var (
+	stateChangeMarkerAccountsOnly = []byte{1}
+	stateChangeMarker             = []byte{2}
+)
 
 // Indexer: the part of the DB that stores transactions, blocks, and quorum certificates
 type Indexer struct {
@@ -83,13 +90,19 @@ func (c *validatorTotalsCache) set(version uint64, totals *lib.ValidatorTotals) 
 }
 
 // StateChangeKeys() returns state keys written while committing version, optionally
-// restricted to a state-key prefix. The available result distinguishes a
-// journaled version with no matching changes from a pre-journal version
-func (t *Indexer) StateChangeKeys(version uint64, prefix []byte) (keys [][]byte, available bool, err lib.ErrorI) {
+// restricted to a state-key prefix. The available result distinguishes a journaled version
+// with no matching changes from a pre-journal version. requireFullSchema must be true for
+// any prefix that the old, account-only journal schema never captured (i.e. everything
+// except accounts) - a stateChangeMarkerAccountsOnly version then reports unavailable for
+// that prefix instead of conflating "not tracked yet" with "tracked and genuinely empty."
+func (t *Indexer) StateChangeKeys(version uint64, prefix []byte, requireFullSchema bool) (keys [][]byte, available bool, err lib.ErrorI) {
 	versionPrefix := t.stateChangeVersionPrefix(version)
 	marker, err := t.db.Get(versionPrefix)
 	if err != nil || len(marker) == 0 {
 		return nil, false, err
+	}
+	if requireFullSchema && bytes.Equal(marker, stateChangeMarkerAccountsOnly) {
+		return nil, false, nil
 	}
 	// prefix here is e.g. AccountPrefix()/ValidatorPrefix()/NonSignerPrefix() - already the
 	// exact 2-byte [length][type] header used as the bucket row's key suffix.

@@ -60,17 +60,20 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height 
 	if !ok {
 		return nil, false, nil
 	}
-	accountKeys, available, err := st.StateChangeKeys(height, AccountPrefix())
+	accountKeys, available, err := st.StateChangeKeys(height, AccountPrefix(), false)
 	if err != nil || !available {
 		return nil, available, err
 	}
-	validatorKeys, _, err := st.StateChangeKeys(height, ValidatorPrefix())
-	if err != nil {
-		return nil, true, err
+	// validators/non-signers weren't captured by the old, account-only journal schema - a
+	// version journaled before that schema change must fall back to the legacy path rather
+	// than silently building a blob missing whatever it can't recover from block events alone.
+	validatorKeys, available, err := st.StateChangeKeys(height, ValidatorPrefix(), true)
+	if err != nil || !available {
+		return nil, available, err
 	}
-	nonSignerKeys, _, err := st.StateChangeKeys(height, NonSignerPrefix())
-	if err != nil {
-		return nil, true, err
+	nonSignerKeys, available, err := st.StateChangeKeys(height, NonSignerPrefix(), true)
+	if err != nil || !available {
+		return nil, available, err
 	}
 
 	b = &IndexerBlobs{}

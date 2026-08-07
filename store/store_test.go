@@ -40,7 +40,7 @@ func TestStateChangeKeys(t *testing.T) {
 	validatorX := lib.JoinLenPrefix([]byte{3}, []byte("validator-x"))
 	otherKey := lib.JoinLenPrefix([]byte{2}, []byte("other"))
 
-	_, available, err := st.StateChangeKeys(1, accountPrefix)
+	_, available, err := st.StateChangeKeys(1, accountPrefix, false)
 	require.NoError(t, err)
 	require.False(t, available)
 
@@ -50,12 +50,12 @@ func TestStateChangeKeys(t *testing.T) {
 	_, err = st.Commit()
 	require.NoError(t, err)
 
-	keys, available, err := st.StateChangeKeys(1, accountPrefix)
+	keys, available, err := st.StateChangeKeys(1, accountPrefix, false)
 	require.NoError(t, err)
 	require.True(t, available)
 	require.Equal(t, [][]byte{accountA}, keys)
 
-	valKeys, available, err := st.StateChangeKeys(1, validatorPrefix)
+	valKeys, available, err := st.StateChangeKeys(1, validatorPrefix, true)
 	require.NoError(t, err)
 	require.True(t, available)
 	require.Equal(t, [][]byte{validatorX}, valKeys)
@@ -65,20 +65,20 @@ func TestStateChangeKeys(t *testing.T) {
 	_, err = st.Commit()
 	require.NoError(t, err)
 
-	keys, available, err = st.StateChangeKeys(2, accountPrefix)
+	keys, available, err = st.StateChangeKeys(2, accountPrefix, false)
 	require.NoError(t, err)
 	require.True(t, available)
 	require.Equal(t, [][]byte{accountA, accountB}, keys)
 
 	// version 2 touched no validators - the bucket row simply doesn't exist
-	valKeys, available, err = st.StateChangeKeys(2, validatorPrefix)
+	valKeys, available, err = st.StateChangeKeys(2, validatorPrefix, true)
 	require.NoError(t, err)
 	require.True(t, available)
 	require.Empty(t, valKeys)
 
 	_, err = st.Commit()
 	require.NoError(t, err)
-	keys, available, err = st.StateChangeKeys(3, accountPrefix)
+	keys, available, err = st.StateChangeKeys(3, accountPrefix, false)
 	require.NoError(t, err)
 	require.True(t, available)
 	require.Empty(t, keys)
