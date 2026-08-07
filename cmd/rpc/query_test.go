@@ -174,7 +174,7 @@ func TestIndexerBlobsCached_JournalPathHandlesValidatorsAndNonSigners(t *testing
 
 	rewarded, _, err := server.IndexerBlobsCached(context.Background(), 6)
 	require.NoError(t, err)
-	require.Len(t, rewarded.Current.Validators, 1) // editStakeValidator only - it changed and was force-included
+	require.Len(t, rewarded.Current.Validators, 1)  // editStakeValidator only - it changed and was force-included
 	require.Len(t, rewarded.Previous.Validators, 2) // both present at height 5
 	require.Equal(t, uint32(1), rewarded.Current.TotalValidatorsActive)
 	require.Equal(t, uint32(0), rewarded.Current.TotalValidatorsUnstaking)

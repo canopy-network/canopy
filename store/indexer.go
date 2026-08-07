@@ -3,9 +3,11 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"strconv"
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -16,20 +18,20 @@ import (
 var _ lib.RWIndexerI = &Indexer{}
 
 var (
-	txHashPrefix          = []byte{1}  // store key prefix for transaction by hash
-	txHeightPrefix        = []byte{2}  // store key prefix for transactions by height
-	txSenderPrefix        = []byte{3}  // store key prefix for transactions from sender
-	txRecipientPrefix     = []byte{4}  // store key prefix for transaction by recipient
-	blockHashPrefix       = []byte{5}  // store key prefix for block by hash
-	blockHeightPrefix     = []byte{6}  // store key prefix for block by height
-	qcHeightPrefix        = []byte{7}  // store key prefix for quorum certificate by height
-	doubleSignerPrefix    = []byte{8}  // store key prefix for double signers by height
-	checkPointPrefix      = []byte{9}  // store key prefix for checkpoints for committee chains
-	eventAddressPrefix    = []byte{10} // store key prefix for events by address
-	eventHeightPrefix     = []byte{11} // store key prefix for events by block height
-	eventChainIdPrefix    = []byte{12} // store key prefix for events by chainId
-	eventHashPrefix       = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
-	stateChangePrefix = []byte{14} // state keys written at a particular committed version
+	txHashPrefix       = []byte{1}  // store key prefix for transaction by hash
+	txHeightPrefix     = []byte{2}  // store key prefix for transactions by height
+	txSenderPrefix     = []byte{3}  // store key prefix for transactions from sender
+	txRecipientPrefix  = []byte{4}  // store key prefix for transaction by recipient
+	blockHashPrefix    = []byte{5}  // store key prefix for block by hash
+	blockHeightPrefix  = []byte{6}  // store key prefix for block by height
+	qcHeightPrefix     = []byte{7}  // store key prefix for quorum certificate by height
+	doubleSignerPrefix = []byte{8}  // store key prefix for double signers by height
+	checkPointPrefix   = []byte{9}  // store key prefix for checkpoints for committee chains
+	eventAddressPrefix = []byte{10} // store key prefix for events by address
+	eventHeightPrefix  = []byte{11} // store key prefix for events by block height
+	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
+	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
+	stateChangePrefix  = []byte{14} // state keys written at a particular committed version
 	// byte 15 (validatorTotalsPrefix) previously held validator/delegate status totals in
 	// the durable, versioned Txn store; that write path never actually persisted (see
 	// validatorTotalsCache above) and totals now live only in the in-memory cache, so the
@@ -70,6 +72,15 @@ type Indexer struct {
 // (and, since a rescan re-seeds the baseline, does not propagate to later heights).
 type validatorTotalsCache struct {
 	lru *lru.Cache[uint64, *lib.ValidatorTotals]
+	// sf dedupes concurrent GetOrComputeValidatorTotals calls for the SAME version (e.g.
+	// overlapping RPC requests for the same/adjacent heights racing on a cold cache) so
+	// only one of them actually runs the (potentially expensive, O(validator count))
+	// compute closure; every other concurrent caller for that version blocks on and shares
+	// its result instead of redundantly recomputing. Unrelated versions are never
+	// serialized against each other - singleflight.Group keys its in-flight calls by the
+	// string passed to Do(), so a different version is a cache miss on THAT key and
+	// proceeds independently. Zero value is ready to use, no init needed.
+	sf singleflight.Group
 }
 
 func newValidatorTotalsCache() *validatorTotalsCache {
@@ -159,6 +170,42 @@ func (t *Indexer) GetValidatorTotals(version uint64) (totals *lib.ValidatorTotal
 func (t *Indexer) SetValidatorTotals(version uint64, totals *lib.ValidatorTotals) lib.ErrorI {
 	t.totals.set(version, totals)
 	return nil
+}
+
+// GetOrComputeValidatorTotals returns the cached totals for version if already present;
+// otherwise it invokes compute exactly once even if multiple goroutines request the same
+// version concurrently (e.g. overlapping RPC requests for adjacent heights), caches the
+// result, and returns it to every concurrent caller. This only dedupes computation for the
+// SAME version - unrelated versions proceed fully in parallel, never blocking each other.
+func (t *Indexer) GetOrComputeValidatorTotals(version uint64, compute func() (*lib.ValidatorTotals, lib.ErrorI)) (*lib.ValidatorTotals, lib.ErrorI) {
+	if totals, available, err := t.GetValidatorTotals(version); err != nil {
+		return nil, err
+	} else if available {
+		return totals, nil
+	}
+	v, err, _ := t.totals.sf.Do(strconv.FormatUint(version, 10), func() (interface{}, error) {
+		// re-check: another goroutine may have populated this while we waited to be scheduled
+		if totals, available, getErr := t.GetValidatorTotals(version); getErr != nil {
+			return nil, getErr
+		} else if available {
+			return totals, nil
+		}
+		totals, computeErr := compute()
+		if computeErr != nil {
+			return nil, computeErr
+		}
+		if setErr := t.SetValidatorTotals(version, totals); setErr != nil {
+			return nil, setErr
+		}
+		return totals, nil
+	})
+	if err != nil {
+		if errI, ok := err.(lib.ErrorI); ok {
+			return nil, errI
+		}
+		return nil, ErrStoreGet(err) // defensive fallback; every error the closure returns is already a lib.ErrorI, so this branch should be unreachable in practice
+	}
+	return v.(*lib.ValidatorTotals), nil
 }
 
 // BLOCKS CODE BELOW

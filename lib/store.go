@@ -43,6 +43,12 @@ type RWStoreI interface {
 type RWIndexerI interface {
 	WIndexerI
 	RIndexerI
+	// GetOrComputeValidatorTotals reads validator/delegate totals for version if cached,
+	// otherwise computes them via compute exactly once even under concurrent callers for
+	// the same version (see store.Indexer.GetOrComputeValidatorTotals for the dedup
+	// contract), caches, and returns the result. Combines a read and a write, so it
+	// belongs on the combined interface rather than RIndexerI/WIndexerI individually.
+	GetOrComputeValidatorTotals(version uint64, compute func() (*ValidatorTotals, ErrorI)) (*ValidatorTotals, ErrorI)
 }
 
 // WIndexerI defines the write interface for the indexing operations

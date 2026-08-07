@@ -833,30 +833,20 @@ func validatorForceKeysByAddress(blockBz []byte) ([][]byte, lib.ErrorI) {
 // happens at most once per node, the first time a journal-path blob is requested after this
 // feature goes live; every height after that reads/writes the incremental baseline.
 func (s *StateMachine) resolveValidatorTotals(st lib.StoreI, height uint64, current, previous [][]byte) (*lib.ValidatorTotals, lib.ErrorI) {
-	baseline, available, err := st.GetValidatorTotals(height - 1)
-	if err != nil {
-		return nil, err
-	}
-	var totals *lib.ValidatorTotals
-	if !available {
-		full, fullErr := s.fullValidatorSnapshotForTotals()
-		if fullErr != nil {
-			return nil, fullErr
-		}
-		totals, err = totalsFromFullScan(full)
+	return st.GetOrComputeValidatorTotals(height, func() (*lib.ValidatorTotals, lib.ErrorI) {
+		baseline, available, err := st.GetValidatorTotals(height - 1)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		totals, err = applyValidatorTransitions(baseline, current, previous)
-		if err != nil {
-			return nil, err
+		if !available {
+			full, fullErr := s.fullValidatorSnapshotForTotals()
+			if fullErr != nil {
+				return nil, fullErr
+			}
+			return totalsFromFullScan(full)
 		}
-	}
-	if err := st.SetValidatorTotals(height, totals); err != nil {
-		return nil, err
-	}
-	return totals, nil
+		return applyValidatorTransitions(baseline, current, previous)
+	})
 }
 
 // fullValidatorSnapshotForTotals does the one-time full scan used only when no baseline
@@ -891,25 +881,13 @@ func (s *StateMachine) previousValidatorEntries(height uint64, keys [][]byte) ([
 // for a companion (Previous) blob whose own fetched validator keys belong to some other
 // (outer/Current) height and would corrupt a diff for this one.
 func (s *StateMachine) totalsAtHeight(st lib.StoreI, height uint64) (*lib.ValidatorTotals, lib.ErrorI) {
-	totals, available, err := st.GetValidatorTotals(height)
-	if err != nil {
-		return nil, err
-	}
-	if available {
-		return totals, nil
-	}
-	full, err := s.fullValidatorSnapshotForTotals()
-	if err != nil {
-		return nil, err
-	}
-	totals, err = totalsFromFullScan(full)
-	if err != nil {
-		return nil, err
-	}
-	if err := st.SetValidatorTotals(height, totals); err != nil {
-		return nil, err
-	}
-	return totals, nil
+	return st.GetOrComputeValidatorTotals(height, func() (*lib.ValidatorTotals, lib.ErrorI) {
+		full, err := s.fullValidatorSnapshotForTotals()
+		if err != nil {
+			return nil, err
+		}
+		return totalsFromFullScan(full)
+	})
 }
 
 func totalsFromFullScan(validators [][]byte) (*lib.ValidatorTotals, lib.ErrorI) {
