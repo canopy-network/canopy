@@ -65,6 +65,8 @@ type Indexer struct {
 	// this pointer, so uncommitted mempool totals would contaminate a real version's entry.
 	// See Store.Copy() in store.go.
 	totals *validatorTotalsCache
+	// metrics may be nil (e.g. NewStoreInMemory in tests) - every call site below guards on it.
+	metrics *lib.Metrics
 }
 
 // validatorTotalsCache is a bounded LRU from version to totals, scoped per-underlying-DB
@@ -165,6 +167,7 @@ func (t *Indexer) GetValidatorTotals(version uint64) (totals *lib.ValidatorTotal
 // SetValidatorTotals caches validator/delegate status totals for version.
 func (t *Indexer) SetValidatorTotals(version uint64, totals *lib.ValidatorTotals) lib.ErrorI {
 	t.totals.set(version, totals)
+	t.metrics.UpdateValidatorTotalsCacheSize(t.totals.lru.Len())
 	return nil
 }
 
@@ -174,9 +177,11 @@ func (t *Indexer) GetOrComputeValidatorTotals(version uint64, compute func() (*l
 	if totals, available, err := t.GetValidatorTotals(version); err != nil {
 		return nil, err
 	} else if available {
+		t.metrics.RecordValidatorTotalsCacheHit()
 		return totals, nil
 	}
-	v, err, _ := t.totals.sf.Do(strconv.FormatUint(version, 10), func() (interface{}, error) {
+	t.metrics.RecordValidatorTotalsCacheMiss()
+	v, err, shared := t.totals.sf.Do(strconv.FormatUint(version, 10), func() (interface{}, error) {
 		// re-check: another goroutine may have populated this while we waited to be scheduled
 		if totals, available, getErr := t.GetValidatorTotals(version); getErr != nil {
 			return nil, getErr
@@ -192,6 +197,9 @@ func (t *Indexer) GetOrComputeValidatorTotals(version uint64, compute func() (*l
 		}
 		return totals, nil
 	})
+	if shared {
+		t.metrics.RecordValidatorTotalsSingleflightDedup()
+	}
 	if err != nil {
 		if errI, ok := err.(lib.ErrorI); ok {
 			return nil, errI

@@ -391,13 +391,17 @@ func (s *StateMachine) indexerBlob(ctx context.Context, p *indexerBlobParams) (b
 			if prevErr != nil {
 				return nil, prevErr
 			}
+			totalsStepStart := time.Now()
 			totals, totalsErr = sm.resolveValidatorTotals(ctx, &resolveValidatorTotalsParams{
 				st: st, height: p.height, current: validators, previous: previousValidators,
 			})
+			s.Metrics.ObserveIndexerBlobStep("validator_totals_resolve", path, tier, totalsStepStart)
 		} else {
 			// Previous blob reuses the Current call's validator keys (for DeltaIndexerBlobs' value diff) -
 			// wrong set for a totals diff, so read back the already-resolved totals instead.
+			totalsStepStart := time.Now()
 			totals, totalsErr = sm.totalsAtHeight(ctx, st, p.height)
+			s.Metrics.ObserveIndexerBlobStep("validator_totals_at_height", path, tier, totalsStepStart)
 		}
 		if totalsErr != nil {
 			return nil, totalsErr
@@ -843,6 +847,7 @@ func (s *StateMachine) resolveValidatorTotals(ctx context.Context, p *resolveVal
 			return nil, err
 		}
 		if !available {
+			s.Metrics.RecordValidatorTotalsFullScan()
 			full, fullErr := s.fullValidatorSnapshotForTotals(ctx)
 			if fullErr != nil {
 				return nil, fullErr
@@ -879,6 +884,9 @@ func (s *StateMachine) previousValidatorEntries(height uint64, keys [][]byte) ([
 // exist) - unlike resolveValidatorTotals it never diffs, since Previous's fetched validators belong to a different height.
 func (s *StateMachine) totalsAtHeight(ctx context.Context, st lib.StoreI, height uint64) (*lib.ValidatorTotals, lib.ErrorI) {
 	return st.GetOrComputeValidatorTotals(height, func() (*lib.ValidatorTotals, lib.ErrorI) {
+		// unlike resolveValidatorTotals, every compute here is a full scan - there's no
+		// current/previous to diff against, so a cache miss always pays this cost.
+		s.Metrics.RecordValidatorTotalsFullScan()
 		full, err := s.fullValidatorSnapshotForTotals(ctx)
 		if err != nil {
 			return nil, err

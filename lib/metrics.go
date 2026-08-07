@@ -123,6 +123,21 @@ type IndexerMetrics struct {
 	// block_non_signers_get) -- see store.Store.NewReadOnly's `s.version == queryVersion`
 	// check -- not a proxy like request source or distance-from-tip.
 	IndexerBlobTierTotal *prometheus.CounterVec
+	// ValidatorTotalsCacheHits/Misses cover store.Indexer.GetOrComputeValidatorTotals's own
+	// cache, not the outer IndexerBlobCacheHits/Misses delta cache -- a miss here means the
+	// version's totals had to be computed, either incrementally (baseline available) or via
+	// the full-scan fallback (ValidatorTotalsFullScanTotal, a subset of misses).
+	ValidatorTotalsCacheHits   prometheus.Counter
+	ValidatorTotalsCacheMisses prometheus.Counter
+	// ValidatorTotalsFullScanTotal counts only the cold-baseline full-scan branch inside a
+	// miss (resolveValidatorTotals/totalsAtHeight finding no persisted height-1 baseline) --
+	// the ~200ms-at-current-scale cost this cache exists to avoid paying on every miss.
+	ValidatorTotalsFullScanTotal prometheus.Counter
+	// ValidatorTotalsSingleflightDedup counts callers that joined an already-in-flight
+	// compute for the same version instead of running their own -- concurrent RPC requests
+	// racing on the same missing cache entry.
+	ValidatorTotalsSingleflightDedup prometheus.Counter
+	ValidatorTotalsCacheSize         prometheus.Gauge
 }
 
 // NodeMetrics represents general telemetry for the node's health
@@ -845,6 +860,26 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_indexer_blob_tier_total",
 				Help: "Total indexerBlob state reads by store tier: lss (requested height equals the live version) or hss (every other height)",
 			}, []string{"tier"}),
+			ValidatorTotalsCacheHits: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_validator_totals_cache_hits_total",
+				Help: "Total GetOrComputeValidatorTotals calls served from the validator-totals cache without computing",
+			}),
+			ValidatorTotalsCacheMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_validator_totals_cache_misses_total",
+				Help: "Total GetOrComputeValidatorTotals calls that required computing (incrementally or via full scan)",
+			}),
+			ValidatorTotalsFullScanTotal: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_validator_totals_full_scan_total",
+				Help: "Total validator-totals resolutions that fell back to a full validator/delegate scan because no height-1 baseline was cached",
+			}),
+			ValidatorTotalsSingleflightDedup: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_validator_totals_singleflight_dedup_total",
+				Help: "Total validator-totals cache-miss calls (including the leader) whose compute was shared with at least one other concurrent caller for the same version -- singleflight.Do's 'shared' bit doesn't separate leader from follower, so this counts contended resolutions, not followers alone. A nonzero rate confirms dedup is engaging.",
+			}),
+			ValidatorTotalsCacheSize: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_validator_totals_cache_size",
+				Help: "Current number of entries in the validator-totals cache",
+			}),
 		},
 	}
 }
@@ -1222,6 +1257,53 @@ func (m *Metrics) RecordIndexerBlobTier(tier string) {
 		return
 	}
 	m.IndexerBlobTierTotal.WithLabelValues(tier).Inc()
+}
+
+// RecordValidatorTotalsCacheHit() records a GetOrComputeValidatorTotals call served without computing.
+func (m *Metrics) RecordValidatorTotalsCacheHit() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.ValidatorTotalsCacheHits.Inc()
+}
+
+// RecordValidatorTotalsCacheMiss() records a GetOrComputeValidatorTotals call that required computing.
+func (m *Metrics) RecordValidatorTotalsCacheMiss() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.ValidatorTotalsCacheMisses.Inc()
+}
+
+// RecordValidatorTotalsFullScan() records a validator-totals resolution that fell back to a
+// full validator/delegate scan because no height-1 baseline was cached.
+func (m *Metrics) RecordValidatorTotalsFullScan() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.ValidatorTotalsFullScanTotal.Inc()
+}
+
+// RecordValidatorTotalsSingleflightDedup() records a validator-totals cache-miss call whose
+// compute was shared with at least one other concurrent caller for the same version.
+func (m *Metrics) RecordValidatorTotalsSingleflightDedup() {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.ValidatorTotalsSingleflightDedup.Inc()
+}
+
+// UpdateValidatorTotalsCacheSize() updates the current entry count of the validator-totals cache.
+func (m *Metrics) UpdateValidatorTotalsCacheSize(size int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.ValidatorTotalsCacheSize.Set(float64(size))
 }
 
 // UpdateStoreRootTime() updates the time it took to compute an uncached store root.
