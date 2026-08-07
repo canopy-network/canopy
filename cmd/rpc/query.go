@@ -2,12 +2,14 @@ package rpc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
@@ -595,7 +597,7 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 	if ok := unmarshal(w, r, req); !ok {
 		return
 	}
-	_, bz, err := s.IndexerBlobsCached(req.Height)
+	_, bz, err := s.IndexerBlobsCached(r.Context(), req.Height)
 	if err != nil {
 		status := http.StatusBadRequest
 		if err.Code() == lib.CodeMarshal {
@@ -613,13 +615,25 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 }
 
 // IndexerBlobsCached() is a helper function for the indexer blobs implementation
-func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
+func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
+	// requestStart/path back ObserveIndexerBlobRequestTime, which times this call
+	// end-to-end for every outcome -- the number to compare against the client's
+	// observed RPC round-trip, since IndexerBlobColdReadTime and
+	// IndexerBlobJournalBuildTime each only cover one of the three branches below.
+	requestStart := time.Now()
+	path := "cache_hit"
+	defer func() {
+		s.controller.Metrics.RecordIndexerBlobPath(path)
+		s.controller.Metrics.ObserveIndexerBlobRequestTime(path, requestStart)
+	}()
+
 	currentHeight := s.controller.FSM.Height()
 	if height == 0 || height > currentHeight {
 		height = currentHeight
 	}
 
 	if entry, ok := s.indexerBlobCache.get(height); ok && entry != nil && entry.deltaBlobs != nil && entry.deltaBytes != nil {
+		s.controller.Metrics.RecordIndexerBlobCacheHit()
 		return entry.deltaBlobs, entry.deltaBytes, nil
 	}
 
@@ -627,11 +641,14 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 	// makes account delta construction proportional to block activity instead
 	// of total account count. Heights committed before the journal was enabled
 	// transparently use the full-snapshot fallback below.
-	journalDelta, available, journalErr := s.controller.FSM.IndexerBlobsFromStateChanges(height)
+	path = "journal"
+	journalStart := time.Now()
+	journalDelta, available, journalErr := s.controller.FSM.IndexerBlobsFromStateChanges(ctx, height)
 	if journalErr != nil {
 		return nil, nil, journalErr
 	}
 	if available {
+		s.controller.Metrics.RecordIndexerBlobJournalBuildTime(journalStart)
 		deltaBytes, marshalErr := lib.Marshal(journalDelta)
 		if marshalErr != nil {
 			return nil, nil, marshalErr
@@ -643,8 +660,18 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 		})
 		return journalDelta, deltaBytes, nil
 	}
+	path = "legacy"
 
-	current, err := s.controller.FSM.IndexerBlob(height)
+	// Cache miss and no journal available for this height: current/previous blobs
+	// must be built from the store, which for a height far behind the tip means a
+	// cold historical read. This is unbounded and not covered by the RPC
+	// write-deadline (the deadline keeps ticking while this call blocks, so a slow
+	// read here surfaces later as a "write tcp ...: i/o timeout" on the eventual
+	// w.Write, not here) -- log and record how long it actually took so a cold-path
+	// stall is visible after the fact both in logs and in canopy_indexer_blob_cold_read_time.
+	coldStart := time.Now()
+	defer s.controller.Metrics.RecordIndexerBlobCacheMiss(coldStart)
+	current, err := s.controller.FSM.IndexerBlob(ctx, height)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -654,9 +681,11 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
 	if height > 2 {
 		if cachedPrev, ok := s.indexerBlobCache.getCurrent(height - 1); ok {
+			s.controller.Metrics.RecordIndexerBlobPreviousReuseHit()
 			previous = cachedPrev
 		} else {
-			prev, prevErr := s.controller.FSM.IndexerBlob(height - 1)
+			s.controller.Metrics.RecordIndexerBlobPreviousReuseMiss()
+			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1)
 			if prevErr != nil {
 				return nil, nil, prevErr
 			}
@@ -664,15 +693,29 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 		}
 	}
 
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		s.controller.Metrics.RecordIndexerBlobCancelled()
+		s.logger.Debugf("indexer-blobs cold read for height %d cancelled after %s: %s", height, time.Since(coldStart), ctxErr)
+	} else if elapsed := time.Since(coldStart); elapsed > time.Duration(s.config.TimeoutS)*time.Second {
+		s.logger.Warnf("indexer-blobs cold read for height %d took %s, exceeding the %ds RPC write deadline -- "+
+			"caller's write will fail with i/o timeout even though this read eventually succeeded", height, elapsed, s.config.TimeoutS)
+	} else {
+		s.logger.Debugf("indexer-blobs cold read for height %d took %s", height, elapsed)
+	}
+
 	blobs := &fsm.IndexerBlobs{
 		Current:  current,
 		Previous: previous,
 	}
+	deltaComputeStart := time.Now()
 	blobDelta, err := fsm.DeltaIndexerBlobs(blobs)
+	s.controller.Metrics.ObserveIndexerBlobStep("delta_compute", "legacy", "n_a", deltaComputeStart)
 	if err != nil {
 		return nil, nil, err
 	}
+	deltaMarshalStart := time.Now()
 	deltaBytes, err := lib.Marshal(blobDelta)
+	s.controller.Metrics.ObserveIndexerBlobStep("delta_marshal", "legacy", "n_a", deltaMarshalStart)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -682,6 +725,7 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 		deltaBlobs: blobDelta,
 		deltaBytes: deltaBytes,
 	})
+	s.controller.Metrics.UpdateIndexerBlobCacheSize(s.indexerBlobCache.Len())
 
 	return blobDelta, deltaBytes, nil
 }

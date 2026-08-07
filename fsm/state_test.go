@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -896,4 +897,60 @@ func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) 
 	val3, err := sm.GetValidator(crypto.NewAddressFromBytes(validators[3].Address))
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), val3.UnstakingHeight, "delegate 3 should NOT be unstaking")
+}
+
+// countingCancelContext reports itself cancelled only after Err() has been called
+// cancelAfter times, so a test can force cancellation after a specific loop
+// iteration instead of racing a real timer.
+type countingCancelContext struct {
+	context.Context
+	cancelAfter int32
+	calls       int32
+}
+
+func (c *countingCancelContext) Err() error {
+	if atomic.AddInt32(&c.calls, 1) > c.cancelAfter {
+		return context.Canceled
+	}
+	return nil
+}
+
+func TestIterateAndAppend_AlreadyCancelled(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t).Bytes(), Amount: 1}))
+	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t, 1).Bytes(), Amount: 2}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := sm.IterateAndAppend(ctx, AccountPrefix())
+	require.NotNil(t, err)
+	require.Equal(t, lib.CodeCancelled, err.Code())
+	require.Empty(t, result)
+}
+
+func TestIterateAndAppend_CancelledMidIterationStopsEarly(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t).Bytes(), Amount: 1}))
+	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t, 1).Bytes(), Amount: 2}))
+	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t, 2).Bytes(), Amount: 3}))
+
+	// cancelAfter: 1 means Err() returns nil on the first check (so the first
+	// item is yielded), then non-nil on every check after that.
+	ctx := &countingCancelContext{Context: context.Background(), cancelAfter: 1}
+
+	result, err := sm.IterateAndAppend(ctx, AccountPrefix())
+	require.NotNil(t, err)
+	require.Equal(t, lib.CodeCancelled, err.Code())
+	require.Less(t, len(result), 3, "should stop before visiting all 3 accounts")
+}
+
+func TestIterateAndAppend_NotCancelledCompletesNormally(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t).Bytes(), Amount: 1}))
+	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t, 1).Bytes(), Amount: 2}))
+
+	result, err := sm.IterateAndAppend(context.Background(), AccountPrefix())
+	require.Nil(t, err)
+	require.Len(t, result, 2)
 }

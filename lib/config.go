@@ -152,7 +152,7 @@ func DefaultRPCConfig() RPCConfig {
 		ProfilingPort:              "6060",                     // the pprof profiling server is served on localhost:6060
 		RPCUrl:                     "http://localhost:50002",   // use a local rpc by default
 		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
-		TimeoutS:                   3,                          // the rpc timeout is 3 seconds
+		TimeoutS:                   30,                         // the rpc timeout is 30 seconds
 		IndexerBlobCacheEntries:    64,                         // cache the most recent indexer blobs
 		MaxRCSubscribers:           512,                        // limit total root-chain subscribers
 		MaxRCSubscribersPerChain:   128,                        // limit subscribers per chain id

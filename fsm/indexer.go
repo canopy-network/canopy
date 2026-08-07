@@ -2,7 +2,9 @@ package fsm
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/codec"
@@ -12,17 +14,17 @@ import (
 // INDEXER.GO IS ONLY USED FOR CANOPY INDEXING RPC - NOT A CRITICAL PIECE OF THE STATE MACHINE
 
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
-func (s *StateMachine) IndexerBlobs(height uint64) (b *IndexerBlobs, err lib.ErrorI) {
+func (s *StateMachine) IndexerBlobs(ctx context.Context, height uint64) (b *IndexerBlobs, err lib.ErrorI) {
 	b = &IndexerBlobs{}
 	// IndexerBlob(height) is only valid for height >= 2 (it pairs state@height with block height-1).
 	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
 	if height > 2 {
-		b.Previous, err = s.IndexerBlob(height - 1)
+		b.Previous, err = s.IndexerBlob(ctx, height-1)
 		if err != nil {
 			return nil, err
 		}
 	}
-	b.Current, err = s.IndexerBlob(height)
+	b.Current, err = s.IndexerBlob(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -30,14 +32,20 @@ func (s *StateMachine) IndexerBlobs(height uint64) (b *IndexerBlobs, err lib.Err
 }
 
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
-func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.ErrorI) {
-	return s.indexerBlob(height, nil, false, false)
+func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *IndexerBlob, err lib.ErrorI) {
+	return s.indexerBlob(ctx, height, nil, false, false)
 }
 
 // IndexerBlobsFromStateChanges builds an account-sparse delta using the state
 // keys journaled for height. available=false means the height predates the
 // journal and callers must use the legacy full-snapshot comparison.
-func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
+func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
+	// Honor an already-cancelled/disconnected caller before doing any store work --
+	// this path is fast, not free, and skips the per-iteration ctx checks that
+	// IterateAndAppend relies on in the legacy full-snapshot path below.
+	if cErr := ctx.Err(); cErr != nil {
+		return nil, false, lib.ErrCancelled(cErr)
+	}
 	if height == 0 || height > s.height {
 		height = s.height
 	}
@@ -58,7 +66,7 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBl
 	}
 
 	b = &IndexerBlobs{}
-	b.Current, err = s.indexerBlob(height, accountKeys, true, true)
+	b.Current, err = s.indexerBlob(ctx, height, accountKeys, true, true)
 	if err != nil {
 		return nil, true, err
 	}
@@ -71,19 +79,45 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBl
 	}
 	accountKeys = append(accountKeys, eventAccountKeys...)
 	if height > 2 {
-		b.Previous, err = s.indexerBlob(height-1, accountKeys, true, false)
+		b.Previous, err = s.indexerBlob(ctx, height-1, accountKeys, true, false)
 		if err != nil {
 			return nil, true, err
 		}
 	}
+	// Previously uninstrumented: query.go's delta_compute timer only ever wrapped the
+	// legacy branch's DeltaIndexerBlobs call, leaving the journal path's own delta
+	// cost invisible. Labeling this "journal" is what actually answers "how good is
+	// the journal path" instead of assuming it from the legacy-only number.
+	deltaComputeStart := time.Now()
 	b, err = DeltaIndexerBlobs(b)
+	s.Metrics.ObserveIndexerBlobStep("delta_compute", "journal", "n_a", deltaComputeStart)
 	return b, true, err
 }
 
-func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiveAccounts, includeBlockEventAccounts bool) (b *IndexerBlob, err lib.ErrorI) {
+func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKeys [][]byte, selectiveAccounts, includeBlockEventAccounts bool) (b *IndexerBlob, err lib.ErrorI) {
+	// path labels every ObserveIndexerBlobStep call below so journal-sourced and
+	// legacy-sourced calls to the same step (accounts_iterate above all) are no
+	// longer indistinguishable in the aggregate -- selectiveAccounts is exactly the
+	// journal/legacy branch signal already threaded through this function.
+	path := "legacy"
+	if selectiveAccounts {
+		path = "journal"
+	}
 	if height == 0 || height > s.height {
 		height = s.height
 	}
+	// store.Store.NewReadOnly routes state reads through the LSS (Latest State Store)
+	// only when the requested height equals the store's current live version; every
+	// other height -- including tip-1, the "previous" side of a live headscan request
+	// -- goes through the HSS (Historic State Store) instead. This is the actual
+	// mechanism behind steps that show a fast/slow split despite having no journal at
+	// all (validators_iterate, block_non_signers_get): it isn't proximity-based cache
+	// warmth or "how old is this height," it's this one deterministic check.
+	tier := "hss"
+	if height == s.height {
+		tier = "lss"
+	}
+	s.Metrics.RecordIndexerBlobTier(tier)
 	// Height semantics:
 	// - `height` is the state version (pre-block-apply for block `height`).
 	// - The latest committed block corresponding to that state is `height-1`.
@@ -93,7 +127,9 @@ func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiv
 		return nil, lib.ErrWrongBlockHeight(0, 1)
 	}
 	blockHeight := height - 1
+	stepStart := time.Now()
 	sm, err := s.TimeMachine(height)
+	s.Metrics.ObserveIndexerBlobStep("time_machine", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +139,9 @@ func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiv
 	// Use the snapshot store (not the live store) for all height-based indexer reads.
 	st := sm.store.(lib.StoreI)
 	// retrieve the block, transactions, and events
+	stepStart = time.Now()
 	block, err := st.GetBlockByHeight(blockHeight)
+	s.Metrics.ObserveIndexerBlobStep("block_fetch", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
@@ -116,9 +154,10 @@ func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiv
 	// use sm for consistent snapshot reads at the requested height
 	// retrieve either the complete account snapshot (legacy path) or only the
 	// keys touched by the requested commit (journal path).
+	stepStart = time.Now()
 	var accounts [][]byte
 	if !selectiveAccounts {
-		accounts, err = sm.IterateAndAppend(AccountPrefix())
+		accounts, err = sm.IterateAndAppend(ctx, AccountPrefix())
 	} else {
 		if includeBlockEventAccounts {
 			blockBz, marshalErr := lib.Marshal(block)
@@ -133,81 +172,112 @@ func (s *StateMachine) indexerBlob(height uint64, accountKeys [][]byte, selectiv
 		}
 		accounts, err = sm.valuesForStateKeys(accountKeys, AccountPrefix())
 	}
+	s.Metrics.ObserveIndexerBlobStep("accounts_iterate", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve pools
-	pools, err := sm.IterateAndAppend(PoolPrefix())
+	stepStart = time.Now()
+	pools, err := sm.IterateAndAppend(ctx, PoolPrefix())
+	s.Metrics.ObserveIndexerBlobStep("pools_iterate", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve validators
-	validators, err := sm.IterateAndAppend(ValidatorPrefix())
+	stepStart = time.Now()
+	validators, err := sm.IterateAndAppend(ctx, ValidatorPrefix())
+	s.Metrics.ObserveIndexerBlobStep("validators_iterate", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve dex prices
+	stepStart = time.Now()
 	dexPrices, err := sm.GetDexPrices()
+	s.Metrics.ObserveIndexerBlobStep("dex_prices_get", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve nonSigners
-	nonSigners, err := sm.IterateAndAppend(NonSignerPrefix())
+	stepStart = time.Now()
+	nonSigners, err := sm.IterateAndAppend(ctx, NonSignerPrefix())
+	s.Metrics.ObserveIndexerBlobStep("non_signers_iterate", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve doubleSigners
+	stepStart = time.Now()
 	doubleSigners, err := st.GetDoubleSignersAsOf(blockHeight)
+	s.Metrics.ObserveIndexerBlobStep("double_signers_get", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve per-block non-signers from the committed QC for this block
+	stepStart = time.Now()
 	blockNonSigners, err := sm.blockNonSignerAddresses(blockHeight)
+	s.Metrics.ObserveIndexerBlobStep("block_non_signers_get", path, tier, stepStart)
 	if err != nil {
 		blockNonSigners = nil
 	}
 	// retrieve orders
+	stepStart = time.Now()
 	orderBooks, err := sm.GetOrderBooks()
+	s.Metrics.ObserveIndexerBlobStep("order_books_get", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve params
+	stepStart = time.Now()
 	params, err := sm.GetParams()
+	s.Metrics.ObserveIndexerBlobStep("params_get", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve dex batches
-	dexBatches, err := sm.IterateAndAppend(lib.JoinLenPrefix(dexPrefix, lockedBatchSegment))
+	stepStart = time.Now()
+	dexBatches, err := sm.IterateAndAppend(ctx, lib.JoinLenPrefix(dexPrefix, lockedBatchSegment))
+	s.Metrics.ObserveIndexerBlobStep("dex_batches_iterate", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// retrieve next dex batches
-	nextDexBatches, err := sm.IterateAndAppend(lib.JoinLenPrefix(dexPrefix, nextBatchSement))
+	stepStart = time.Now()
+	nextDexBatches, err := sm.IterateAndAppend(ctx, lib.JoinLenPrefix(dexPrefix, nextBatchSement))
+	s.Metrics.ObserveIndexerBlobStep("next_dex_batches_iterate", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// get the CommitteesData bytes under 'committees data prefix'
+	stepStart = time.Now()
 	committeesData, err := sm.Get(CommitteesDataPrefix())
+	s.Metrics.ObserveIndexerBlobStep("committees_data_get", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// get subsidized committees
+	stepStart = time.Now()
 	subsidizedCommittees, err := sm.GetSubsidizedCommittees()
+	s.Metrics.ObserveIndexerBlobStep("subsidized_committees_get", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// get retired committees
+	stepStart = time.Now()
 	retiredCommittees, err := sm.GetRetiredCommittees()
+	s.Metrics.ObserveIndexerBlobStep("retired_committees_get", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// get the supply tracker bytes from the state
+	stepStart = time.Now()
 	supply, err := sm.Get(SupplyPrefix())
+	s.Metrics.ObserveIndexerBlobStep("supply_get", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
 	// marshal block to bytes
+	stepStart = time.Now()
 	blockBz, err := lib.Marshal(block)
+	s.Metrics.ObserveIndexerBlobStep("block_marshal", path, tier, stepStart)
 	if err != nil {
 		return nil, err
 	}
@@ -342,6 +412,9 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	previous := nilSafeBlob(out.Previous)
 
 	// accounts: changed+added in current, changed+removed in previous
+	// currentAccounts/previousAccounts come from a Pebble prefix scan over AccountPrefix(),
+	// so both are already ascending by address bytes - accountEntryKey extracts that same
+	// address as the raw key, so entry order matches key order and the merge walk is safe.
 	currentAccounts, currentAccountMap, err := accountEntries(out.Current.Accounts)
 	if err != nil {
 		return nil, err
@@ -350,7 +423,7 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
-	currentAccountKeys, previousAccountKeys := changedBlobKeys(currentAccountMap, previousAccountMap)
+	currentAccountKeys, previousAccountKeys := mergeChangedBlobKeys(currentAccounts, previousAccounts)
 	forcedAccountKeys, err := rewardSlashAccountKeys(out.Current.Block)
 	if err != nil {
 		return nil, err
@@ -362,6 +435,10 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	}
 
 	// pools: changed+added in current, changed+removed in previous
+	// NOT converted to the sorted merge walk: poolEntryKey extracts Pool.Id's raw varint
+	// wire bytes, but the Pebble storage key (KeyForPool) encodes Id big-endian - the two
+	// orderings diverge at varint length boundaries (e.g. id 16383 vs 16384), so entry order
+	// here does not reliably match key order. Map-based diff stays correct regardless of order.
 	currentPools, currentPoolMap, err := poolEntries(out.Current.Pools)
 	if err != nil {
 		return nil, err
@@ -377,6 +454,8 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	}
 
 	// validators: changed+added in current, changed+removed in previous
+	// Same order guarantee as accounts: validatorEntries' key is the unmarshalled
+	// validator.Address, matching KeyForValidator's raw address bytes.
 	currentValidators, currentValidatorMap, currentOutputIndex, err := validatorEntries(out.Current.Validators)
 	if err != nil {
 		return nil, err
@@ -385,7 +464,7 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
-	currentValidatorKeys, previousValidatorKeys := changedBlobKeys(currentValidatorMap, previousValidatorMap)
+	currentValidatorKeys, previousValidatorKeys := mergeChangedBlobKeys(currentValidators, previousValidators)
 	forcedValidatorKeys, err := validatorForceKeys(out.Current.Block, currentOutputIndex, previousOutputIndex)
 	if err != nil {
 		return nil, err
@@ -467,6 +546,41 @@ func accountEntryKey(entry []byte) (string, error) {
 
 func poolEntryKey(entry []byte) (string, error) {
 	return entryKeyOrZero(entry) // Pool.id
+}
+
+// mergeChangedBlobKeys() is changedBlobKeys' sorted-input equivalent: current and previous
+// must each be ascending by key (true for a Pebble prefix-scan result - see call sites).
+// A two-pointer merge walk finds the same added/changed/removed keys as the map-based
+// version without hashing every key into a map[string][]byte first.
+func mergeChangedBlobKeys(current, previous []blobEntry) (map[string]struct{}, map[string]struct{}) {
+	currentChanged := make(map[string]struct{})
+	previousChanged := make(map[string]struct{})
+	i, j := 0, 0
+	for i < len(current) && j < len(previous) {
+		c, p := current[i], previous[j]
+		switch {
+		case c.key < p.key:
+			currentChanged[c.key] = struct{}{}
+			i++
+		case c.key > p.key:
+			previousChanged[p.key] = struct{}{}
+			j++
+		default:
+			if !bytes.Equal(c.bz, p.bz) {
+				currentChanged[c.key] = struct{}{}
+				previousChanged[p.key] = struct{}{}
+			}
+			i++
+			j++
+		}
+	}
+	for ; i < len(current); i++ {
+		currentChanged[current[i].key] = struct{}{}
+	}
+	for ; j < len(previous); j++ {
+		previousChanged[previous[j].key] = struct{}{}
+	}
+	return currentChanged, previousChanged
 }
 
 func changedBlobKeys(current, previous map[string][]byte) (map[string]struct{}, map[string]struct{}) {
