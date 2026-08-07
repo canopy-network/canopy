@@ -224,6 +224,21 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 // Copy() make a copy of the store with a new read/write transaction
 // this can be useful for having two simultaneous copies of the store
 // ex: Mempool state and FSM state
+//
+// INVARIANT: the returned Store shares its Indexer.totals (validator/delegate totals
+// cache) BY POINTER with s - deliberately, so cache entries survive across TimeMachine/
+// NewReadOnly views of the same underlying DB (see the totals field comment on Indexer).
+// This is only safe because nothing ever resolves validator totals against a Copy()'d
+// view - today that's exclusively the mempool's ephemeral store (controller/block.go, via
+// Copy()+IncreaseVersion()), and resolveValidatorTotals/totalsAtHeight/
+// GetOrComputeValidatorTotals are only ever reached from fsm/indexer.go's indexerBlob,
+// which is only called from RPC blob-serving code on the real FSM, never on a mempool
+// copy. If some future change ever computes/caches totals against a Copy()'d/mempool
+// view (e.g. a "pending state" preview RPC), it would write uncommitted, possibly-
+// divergent totals into this SHARED cache under a real version number, silently
+// corrupting the real FSM's later read for that same version - the failure mode this
+// cache was built to eliminate, not reintroduce. Do not resolve/cache validator totals
+// against a Copy()'d store without first giving it its own totals cache.
 func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 	// create a comparable writer and reader
 	writer := s.db.NewBatch()

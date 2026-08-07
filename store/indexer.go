@@ -61,6 +61,15 @@ type Indexer struct {
 	// would appear to succeed but vanish, and every read would report unavailable). Losing
 	// this cache (process restart, eviction) only costs a one-time full-scan rescan - see
 	// resolveValidatorTotals's fallback in fsm/indexer.go - never a correctness issue.
+	//
+	// INVARIANT: because this is shared BY POINTER (not re-created) across every derived
+	// view of the same DB - including Store.Copy(), used for the mempool's ephemeral store
+	// - callers must never resolve/cache validator totals against a Copy()'d/mempool view.
+	// Doing so would write uncommitted, possibly-divergent mempool-derived totals into this
+	// cache under a real version number, contaminating the real FSM's later read for that
+	// same version. See the longer note on Store.Copy() in store.go. Safe today only
+	// because totals resolution is reached exclusively via fsm/indexer.go's indexerBlob,
+	// called only from RPC blob-serving code on the real FSM, never on a mempool copy.
 	totals *validatorTotalsCache
 }
 
