@@ -2,9 +2,13 @@ package fsm
 
 import (
 	"bytes"
+	"context"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/canopy-network/canopy/store"
 	"github.com/stretchr/testify/require"
 )
 
@@ -224,4 +228,82 @@ func TestDeltaIndexerBlobs_ZeroValuePoolAndAccount(t *testing.T) {
 	delta, err := DeltaIndexerBlobs(&IndexerBlobs{Current: curr, Previous: prev})
 	require.NoError(t, err, "zero-value Pool.Id / Account.Address must not error")
 	require.NotNil(t, delta)
+}
+
+// TestIndexerBlobsFromStateChanges_NonSignerAddressRoundTrips is a regression for the
+// journal path returning raw NonSigner state values as-is: NonSigner's wire encoding
+// carries only Counter/ChainCounters (see KeyForNonSigner's write path in byzantine.go),
+// never the Address -- that field is reconstructed from the storage key on every other
+// read path. The selective (journal) fetch must do the same reconstruction, or every
+// non-signer delta the indexer serves comes back with an empty address.
+func TestIndexerBlobsFromStateChanges_NonSignerAddressRoundTrips(t *testing.T) {
+	log := lib.NewDefaultLogger()
+	config := lib.DefaultConfig()
+	config.StoreConfig.StateChangeJournalEnabled = true
+	db, err := store.NewStoreInMemory(log, config)
+	require.NoError(t, err)
+	defer db.Close()
+
+	sm := StateMachine{
+		store:             db,
+		ProtocolVersion:   0,
+		NetworkID:         1,
+		height:            2,
+		slashTracker:      NewSlashTracker(),
+		proposeVoteConfig: AcceptAllProposals,
+		Config: lib.Config{
+			MainConfig:         lib.DefaultMainConfig(),
+			StateMachineConfig: lib.DefaultStateMachineConfig(),
+		},
+		events: new(lib.EventsTracker),
+		log:    log,
+		cache: &cache{
+			accounts: make(map[uint64]*Account),
+			pools:    make(map[uint64]*Pool),
+		},
+	}
+	now := uint64(time.Now().UnixMicro())
+
+	// version 1: genesis params, no block to pair with yet.
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	// version 2: pairs with block 1.
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 1,
+			Hash:   crypto.Hash([]byte("block-1")),
+			Time:   now,
+		},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	// version 3: pairs with block 2, and journals the non-signer increment.
+	kg := newTestKeyGroup(t, 0)
+	address := kg.Address.Bytes()
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	require.NoError(t, sm.IncrementNonSigners(0, [][]byte{kg.PublicKey.Bytes()}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 2,
+			Hash:   crypto.Hash([]byte("block-2")),
+			Time:   now + 1,
+		},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	sm.height = 3
+
+	blobs, available, err := sm.IndexerBlobsFromStateChanges(context.Background(), 3)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.True(t, blobs.Current.NonSignersDelta)
+	require.Len(t, blobs.Current.NonSigners, 1)
+
+	ns := new(NonSigner)
+	require.NoError(t, lib.Unmarshal(blobs.Current.NonSigners[0], ns))
+	require.Equal(t, address, ns.Address)
 }

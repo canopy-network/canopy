@@ -33,7 +33,7 @@ func (s *StateMachine) IndexerBlobs(ctx context.Context, height uint64) (b *Inde
 
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
 func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *IndexerBlob, err lib.ErrorI) {
-	return s.indexerBlob(ctx, height, nil, false, false)
+	return s.indexerBlob(ctx, height, nil, nil, nil, false, false)
 }
 
 // IndexerBlobsFromStateChanges builds an account-sparse delta using the state
@@ -64,9 +64,17 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height 
 	if err != nil || !available {
 		return nil, available, err
 	}
+	validatorKeys, _, err := st.StateChangeKeys(height, ValidatorPrefix())
+	if err != nil {
+		return nil, true, err
+	}
+	nonSignerKeys, _, err := st.StateChangeKeys(height, NonSignerPrefix())
+	if err != nil {
+		return nil, true, err
+	}
 
 	b = &IndexerBlobs{}
-	b.Current, err = s.indexerBlob(ctx, height, accountKeys, true, true)
+	b.Current, err = s.indexerBlob(ctx, height, accountKeys, validatorKeys, nonSignerKeys, true, true)
 	if err != nil {
 		return nil, true, err
 	}
@@ -79,7 +87,7 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height 
 	}
 	accountKeys = append(accountKeys, eventAccountKeys...)
 	if height > 2 {
-		b.Previous, err = s.indexerBlob(ctx, height-1, accountKeys, true, false)
+		b.Previous, err = s.indexerBlob(ctx, height-1, accountKeys, validatorKeys, nonSignerKeys, true, false)
 		if err != nil {
 			return nil, true, err
 		}
@@ -94,13 +102,13 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height 
 	return b, true, err
 }
 
-func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKeys [][]byte, selectiveAccounts, includeBlockEventAccounts bool) (b *IndexerBlob, err lib.ErrorI) {
+func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKeys, validatorKeys, nonSignerKeys [][]byte, selective, includeBlockEventAccounts bool) (b *IndexerBlob, err lib.ErrorI) {
 	// path labels every ObserveIndexerBlobStep call below so journal-sourced and
 	// legacy-sourced calls to the same step (accounts_iterate above all) are no
-	// longer indistinguishable in the aggregate -- selectiveAccounts is exactly the
+	// longer indistinguishable in the aggregate -- selective is exactly the
 	// journal/legacy branch signal already threaded through this function.
 	path := "legacy"
-	if selectiveAccounts {
+	if selective {
 		path = "journal"
 	}
 	if height == 0 || height > s.height {
@@ -151,19 +159,21 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 	if block.BlockHeader.Height == 0 || block.BlockHeader.Height != blockHeight {
 		return nil, lib.ErrWrongBlockHeight(block.BlockHeader.Height, blockHeight)
 	}
+	// marshal block to bytes -- moved up from below so both the account event-key
+	// logic and the validator force-include logic can use it.
+	blockBz, err := lib.Marshal(block)
+	if err != nil {
+		return nil, err
+	}
 	// use sm for consistent snapshot reads at the requested height
 	// retrieve either the complete account snapshot (legacy path) or only the
 	// keys touched by the requested commit (journal path).
 	stepStart = time.Now()
 	var accounts [][]byte
-	if !selectiveAccounts {
+	if !selective {
 		accounts, err = sm.IterateAndAppend(ctx, AccountPrefix())
 	} else {
 		if includeBlockEventAccounts {
-			blockBz, marshalErr := lib.Marshal(block)
-			if marshalErr != nil {
-				return nil, marshalErr
-			}
 			eventAccountKeys, eventErr := rewardSlashAccountStateKeys(blockBz)
 			if eventErr != nil {
 				return nil, eventErr
@@ -185,7 +195,16 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 	}
 	// retrieve validators
 	stepStart = time.Now()
-	validators, err := sm.IterateAndAppend(ctx, ValidatorPrefix())
+	var validators [][]byte
+	if !selective {
+		validators, err = sm.IterateAndAppend(ctx, ValidatorPrefix())
+	} else {
+		forced, forceErr := validatorForceKeysByAddress(blockBz)
+		if forceErr != nil {
+			return nil, forceErr
+		}
+		validators, err = sm.valuesForStateKeys(append(validatorKeys, forced...), ValidatorPrefix())
+	}
 	s.Metrics.ObserveIndexerBlobStep("validators_iterate", path, tier, stepStart)
 	if err != nil {
 		return nil, err
@@ -199,7 +218,34 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 	}
 	// retrieve nonSigners
 	stepStart = time.Now()
-	nonSigners, err := sm.IterateAndAppend(ctx, NonSignerPrefix())
+	var nonSigners [][]byte
+	if !selective {
+		nonSigners, err = sm.IterateAndAppend(ctx, NonSignerPrefix())
+	} else {
+		for _, key := range nonSignerKeys {
+			addr, addrErr := AddressFromKey(key)
+			if addrErr != nil {
+				return nil, addrErr
+			}
+			bz, getErr := sm.Get(key)
+			if getErr != nil {
+				return nil, getErr
+			}
+			if bz == nil {
+				continue
+			}
+			ns := new(NonSigner)
+			if unmarshalErr := lib.Unmarshal(bz, ns); unmarshalErr != nil {
+				return nil, unmarshalErr
+			}
+			ns.Address = addr.Bytes()
+			nsBz, marshalErr := lib.Marshal(ns)
+			if marshalErr != nil {
+				return nil, marshalErr
+			}
+			nonSigners = append(nonSigners, nsBz)
+		}
+	}
 	s.Metrics.ObserveIndexerBlobStep("non_signers_iterate", path, tier, stepStart)
 	if err != nil {
 		return nil, err
@@ -274,13 +320,6 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 	if err != nil {
 		return nil, err
 	}
-	// marshal block to bytes
-	stepStart = time.Now()
-	blockBz, err := lib.Marshal(block)
-	s.Metrics.ObserveIndexerBlobStep("block_marshal", path, tier, stepStart)
-	if err != nil {
-		return nil, err
-	}
 	// marshal dex prices to bytes
 	var dexPricesBz [][]byte
 	for _, price := range dexPrices {
@@ -339,6 +378,7 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 		TotalDelegatesPaused:     totalDelegatesPaused,
 		TotalDelegatesUnstaking:  totalDelegatesUnstaking,
 		BlockNonSigners:          blockNonSigners,
+		NonSignersDelta:          selective,
 	}, nil
 }
 
@@ -700,6 +740,41 @@ func validatorForceKeys(blockBz []byte, currentOutputIndex, previousOutputIndex 
 	return keys, nil
 }
 
+// validatorForceKeysByAddress includes validators tied to lifecycle/reward events by
+// forcing the event's own address into the fetch set. This works because reward events
+// name the validator's own operator address directly (see committee.go's
+// DistributeCommitteeReward, which only emits EventReward for an address that is already
+// a valid GetValidator() key) - there is no need to resolve an output address separately;
+// the payout address is available on the force-included validator's own Output field.
+func validatorForceKeysByAddress(blockBz []byte) ([][]byte, lib.ErrorI) {
+	keys := make([][]byte, 0)
+	if len(blockBz) == 0 {
+		return keys, nil
+	}
+	block := new(lib.BlockResult)
+	if err := lib.Unmarshal(blockBz, block); err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{})
+	for _, event := range block.Events {
+		if event == nil || len(event.Address) == 0 {
+			continue
+		}
+		switch event.EventType {
+		case string(lib.EventTypeReward), string(lib.EventTypeSlash),
+			string(lib.EventTypeAutoPause), string(lib.EventTypeAutoBeginUnstaking),
+			string(lib.EventTypeFinishUnstaking):
+			addr := string(event.Address)
+			if _, ok := seen[addr]; ok {
+				continue
+			}
+			seen[addr] = struct{}{}
+			keys = append(keys, lib.JoinLenPrefix(validatorPrefix, event.Address))
+		}
+	}
+	return keys, nil
+}
+
 func validatorTotals(validators [][]byte) (
 	totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking uint32,
 	totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking uint32,
@@ -774,6 +849,7 @@ func cloneIndexerBlob(src *IndexerBlob) *IndexerBlob {
 		TotalDelegatesPaused:     src.TotalDelegatesPaused,
 		TotalDelegatesUnstaking:  src.TotalDelegatesUnstaking,
 		BlockNonSigners:          src.BlockNonSigners,
+		NonSignersDelta:          src.NonSignersDelta,
 	}
 }
 
