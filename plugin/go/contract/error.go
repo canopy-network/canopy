@@ -422,6 +422,18 @@ func ErrRepayExceedsCloseFactorNasm(vaultID string, requested, maxAllowed uint64
 // wider safety margins (65-70%/55-62% LTV vs ARCM's 80-85%/75-82%), this
 // scenario is expected to be rare in practice, but is a real, reachable
 // code path, not a theoretical one -- must not be silently mishandled.
+// ErrNasmLiquidationBadDebt is returned when a NASM vault liquidation's
+// required collateral seizure exceeds the vault's own locked collateral
+// AND Layer3DrawDownNASM (R_nusd draw-down, {41}) could not fully cover
+// the shortfall -- the all-or-nothing gate's covered=false outcome.
+// [MESSAGE FIXED] Previously said "NASM's own bad-debt waterfall is not
+// yet wired into liquidation" -- true when this error was first written,
+// no longer true as of Layer3DrawDownNASM's wiring into
+// liquidate_nasm_vault.go's Step 7. This is now the CORRECT, expected
+// response when R_nusd's own balance is insufficient to cover a
+// particular shortfall (Layer 4 system-wide socialization not yet built
+// for NASM, NASM Spec Section 11.2), not a statement that the waterfall
+// itself is missing.
 func ErrNasmLiquidationBadDebt(vaultID string, collateralSeized, collateralAvailable uint64) *PluginError {
-	return NewError(255, ArborModule, fmt.Sprintf("NASM vault %q: liquidation would require seizing %d collateral but only %d is locked (bad debt) -- NASM's own bad-debt waterfall is not yet wired into liquidation, rejected rather than partially seized, NASM Spec Section 11.2", vaultID, collateralSeized, collateralAvailable))
+	return NewError(255, ArborModule, fmt.Sprintf("NASM vault %q: liquidation would require seizing %d collateral but only %d is locked -- R_nusd (Layer 3) could not fully cover the shortfall, and NASM Layer 4 (system-wide socialization) is not yet built, NASM Spec Section 11.2", vaultID, collateralSeized, collateralAvailable))
 }

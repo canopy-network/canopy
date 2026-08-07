@@ -198,6 +198,18 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			RepayAmount:     uint64(repayAmount),
 		}
 		return "type.googleapis.com/types.MessageLiquidatePosition", msg, nil
+	case "liquidate_nasm_vault":
+		liquidator, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode liquidator address: %w", err)
+		}
+		repayAmount, _ := fields["repayAmount"].(float64)
+		msg := &contract.MessageLiquidateNasmVault{
+			VaultId:     str(fields["vaultId"]),
+			Liquidator:  liquidator,
+			RepayAmount: uint64(repayAmount),
+		}
+		return "type.googleapis.com/types.MessageLiquidateNasmVault", msg, nil
 	case "pause_market":
 		authority, err := hex.DecodeString(signerAddrHex)
 		if err != nil {
