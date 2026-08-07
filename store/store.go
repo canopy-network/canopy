@@ -225,20 +225,9 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 // this can be useful for having two simultaneous copies of the store
 // ex: Mempool state and FSM state
 //
-// INVARIANT: the returned Store shares its Indexer.totals (validator/delegate totals
-// cache) BY POINTER with s - deliberately, so cache entries survive across TimeMachine/
-// NewReadOnly views of the same underlying DB (see the totals field comment on Indexer).
-// This is only safe because nothing ever resolves validator totals against a Copy()'d
-// view - today that's exclusively the mempool's ephemeral store (controller/block.go, via
-// Copy()+IncreaseVersion()), and resolveValidatorTotals/totalsAtHeight/
-// GetOrComputeValidatorTotals are only ever reached from fsm/indexer.go's indexerBlob,
-// which is only called from RPC blob-serving code on the real FSM, never on a mempool
-// copy. If some future change ever computes/caches totals against a Copy()'d/mempool
-// view (e.g. a "pending state" preview RPC), it would write uncommitted, possibly-
-// divergent totals into this SHARED cache under a real version number, silently
-// corrupting the real FSM's later read for that same version - the failure mode this
-// cache was built to eliminate, not reintroduce. Do not resolve/cache validator totals
-// against a Copy()'d store without first giving it its own totals cache.
+// INVARIANT: shares Indexer.totals by pointer with s - never resolve/cache validator
+// totals against this store (or any Copy()'d view, e.g. the mempool's ephemeral store).
+// See the totals field comment on Indexer for why.
 func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 	// create a comparable writer and reader
 	writer := s.db.NewBatch()
@@ -322,10 +311,8 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	return
 }
 
-// recordStateChangeKeys snapshots the pending state transaction before Flush clears it,
-// in ascending key order (required for indexStateChanges' per-type bucketing and for the
-// downstream merge-walk in DeltaIndexerBlobs). Values are already available from the
-// versioned state store, so the journal only needs keys.
+// recordStateChangeKeys snapshots ops before Flush clears them, in ascending key order
+// (indexStateChanges' bucketing and DeltaIndexerBlobs' merge-walk both depend on it).
 func (s *Store) recordStateChangeKeys(version uint64) lib.ErrorI {
 	s.ss.txn.l.Lock()
 	ops := make([]valueOp, 0, len(s.ss.txn.ops))

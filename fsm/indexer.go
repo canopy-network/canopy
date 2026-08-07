@@ -348,9 +348,8 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 	if err != nil {
 		return nil, err
 	}
-	// calculate validator/delegator status totals: the legacy (full-snapshot) path computes
-	// them directly from the full validator set; the journal path resolves them from a
-	// persisted incremental baseline, falling back to a full scan only when no baseline exists.
+	// journal path resolves totals from a persisted incremental baseline (full scan fallback
+	// only if none exists); legacy path always computes them from the full validator set.
 	var totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking uint32
 	var totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking uint32
 	if !selective {
@@ -360,21 +359,13 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 			return nil, err
 		}
 	} else {
-		// sm (not s) is the height-scoped snapshot every other read in this function uses -
-		// resolveValidatorTotals's fallback full scan must read from the same snapshot, or
-		// the first-ever fallback on a non-head height would see the live head's validator
-		// set instead of the validator set at height.
+		// sm (not s) is this function's height-scoped snapshot - the fallback scan must use it
+		// too, or a non-head height's first fallback reads the live head's validators, not height's.
 		var totals *lib.ValidatorTotals
 		var totalsErr lib.ErrorI
 		if includeBlockEventAccounts {
-			// This call builds the OUTER (Current) blob -- the one whose totals must be
-			// resolved incrementally against the persisted baseline. `validators` was
-			// fetched above for exactly validatorKeys ∪ forced (the keys that may have
-			// changed status between height-1 and height); fetch the SAME key set's
-			// values as of height-1 so applyValidatorTransitions can see each touched
-			// validator's OLD bucket, not just its new one -- otherwise every touched
-			// validator (not only deletions) gets incremented into its new bucket
-			// without ever being decremented out of its old one.
+			// Current blob: fetch each touched validator's height-1 status too - without
+			// it, a validator that changes status gets counted in both categories instead of moving between them.
 			forced, forceErr := validatorForceKeysByAddress(blockBz)
 			if forceErr != nil {
 				return nil, forceErr
@@ -386,15 +377,8 @@ func (s *StateMachine) indexerBlob(ctx context.Context, height uint64, accountKe
 			}
 			totals, totalsErr = sm.resolveValidatorTotals(st, height, validators, previousValidators)
 		} else {
-			// This call builds the companion (Previous) blob for some OUTER height H
-			// (this `height` local is H-1). Its `validatorKeys`/`validators` were fetched
-			// using H's touched keys (reused so DeltaIndexerBlobs can diff Current vs
-			// Previous value-by-value), not H-1's own touched keys, so they cannot be fed
-			// into a diff for H-1's totals without contaminating the result with
-			// validators that never actually changed status at H-1. The totals AT H-1
-			// were already correctly resolved (or will be, via the same fallback full
-			// scan) the last time H-1 was itself computed as an outer/Current height --
-			// just read that persisted value directly instead of re-deriving it.
+			// Previous blob reuses the Current call's validator keys (for DeltaIndexerBlobs' value diff) -
+			// wrong set for a totals diff, so read back the already-resolved totals instead.
 			totals, totalsErr = sm.totalsAtHeight(st, height)
 		}
 		if totalsErr != nil {
@@ -791,12 +775,8 @@ func validatorForceKeys(blockBz []byte, currentOutputIndex, previousOutputIndex 
 	return keys, nil
 }
 
-// validatorForceKeysByAddress includes validators tied to lifecycle/reward events by
-// forcing the event's own address into the fetch set. This works because reward events
-// name the validator's own operator address directly (see committee.go's
-// DistributeCommitteeReward, which only emits EventReward for an address that is already
-// a valid GetValidator() key) - there is no need to resolve an output address separately;
-// the payout address is available on the force-included validator's own Output field.
+// validatorForceKeysByAddress force-includes validators from lifecycle/reward events by
+// their own address - reward events name the operator address directly (committee.go's DistributeCommitteeReward), so no output resolution is needed.
 func validatorForceKeysByAddress(blockBz []byte) ([][]byte, lib.ErrorI) {
 	keys := make([][]byte, 0)
 	if len(blockBz) == 0 {
@@ -826,12 +806,8 @@ func validatorForceKeysByAddress(blockBz []byte) ([][]byte, lib.ErrorI) {
 	return keys, nil
 }
 
-// resolveValidatorTotals returns the validator/delegate status totals at height, computed
-// incrementally from the persisted baseline at height-1 plus the status transitions visible
-// in the current/previous validator entries already fetched for this blob. Falls back to a
-// full scan (same cost as the pre-journal path) only when no baseline exists yet - this
-// happens at most once per node, the first time a journal-path blob is requested after this
-// feature goes live; every height after that reads/writes the incremental baseline.
+// resolveValidatorTotals derives height's totals from the persisted baseline at height-1
+// plus this blob's validator transitions, falling back to a full scan when no baseline exists (e.g. after a restart or cache eviction).
 func (s *StateMachine) resolveValidatorTotals(st lib.StoreI, height uint64, current, previous [][]byte) (*lib.ValidatorTotals, lib.ErrorI) {
 	return st.GetOrComputeValidatorTotals(height, func() (*lib.ValidatorTotals, lib.ErrorI) {
 		baseline, available, err := st.GetValidatorTotals(height - 1)
@@ -855,11 +831,8 @@ func (s *StateMachine) fullValidatorSnapshotForTotals() ([][]byte, lib.ErrorI) {
 	return s.IterateAndAppend(context.Background(), ValidatorPrefix())
 }
 
-// previousValidatorEntries returns the validator entries for exactly the given keys as of
-// height-1, i.e. the status those same validators had immediately before whatever changed
-// them at height. Used to feed resolveValidatorTotals a `previous` set that lines up 1:1
-// with the `current` set already fetched for height, so applyValidatorTransitions can
-// decrement each touched validator's old bucket (not just increment its new one).
+// previousValidatorEntries returns the given keys' values as of height-1, so
+// applyValidatorTransitions can see each validator's status before height's changes, not just after.
 func (s *StateMachine) previousValidatorEntries(height uint64, keys [][]byte) ([][]byte, lib.ErrorI) {
 	if height < 2 || len(keys) == 0 {
 		return nil, nil
@@ -874,12 +847,8 @@ func (s *StateMachine) previousValidatorEntries(height uint64, keys [][]byte) ([
 	return prevSM.valuesForStateKeys(keys, ValidatorPrefix())
 }
 
-// totalsAtHeight returns the validator/delegate totals already persisted for height,
-// falling back to a one-time full scan (same as resolveValidatorTotals's own fallback)
-// when no baseline has been recorded for height yet. Unlike resolveValidatorTotals, this
-// never diffs a `current`/`previous` pair - it is used only to read back a height's totals
-// for a companion (Previous) blob whose own fetched validator keys belong to some other
-// (outer/Current) height and would corrupt a diff for this one.
+// totalsAtHeight reads back height's already-persisted totals (full-scanning once if none
+// exist) - unlike resolveValidatorTotals it never diffs, since Previous's fetched validators belong to a different height.
 func (s *StateMachine) totalsAtHeight(st lib.StoreI, height uint64) (*lib.ValidatorTotals, lib.ErrorI) {
 	return st.GetOrComputeValidatorTotals(height, func() (*lib.ValidatorTotals, lib.ErrorI) {
 		full, err := s.fullValidatorSnapshotForTotals()
@@ -901,9 +870,8 @@ func totalsFromFullScan(validators [][]byte) (*lib.ValidatorTotals, lib.ErrorI) 
 	}, nil
 }
 
-// applyValidatorTransitions diffs the current/previous validator entries already fetched
-// for this blob against the persisted baseline. previous entries not present in current
-// represent deletions (e.g. EventFinishUnstaking) - decrement only, no increment.
+// applyValidatorTransitions diffs current/previous against the baseline; a previous entry
+// missing from current is a deletion (e.g. EventFinishUnstaking) - decrement only.
 func applyValidatorTransitions(baseline *lib.ValidatorTotals, current, previous [][]byte) (*lib.ValidatorTotals, lib.ErrorI) {
 	totals := &lib.ValidatorTotals{
 		ValidatorsActive: baseline.ValidatorsActive, ValidatorsPaused: baseline.ValidatorsPaused,

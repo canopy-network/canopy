@@ -51,44 +51,21 @@ var stateChangeMarker = []byte{1}
 type Indexer struct {
 	db     *Txn
 	config lib.Config
-	// totals is a same-process, in-memory cache of validator/delegate status totals by
-	// version, shared by pointer across every Store/Indexer view derived from the same
-	// underlying DB (see NewStoreWithDB/NewReadOnly/Copy/NewTxn in store.go). It is
-	// intentionally NOT written through db (the versioned Txn store): GetValidatorTotals/
-	// SetValidatorTotals are called from indexerBlob's height-scoped StateMachine.
-	// TimeMachine() snapshot, whose Txn writer is nil and whose ops are discarded, never
-	// committed - going through the Txn machinery here would silently no-op forever (writes
-	// would appear to succeed but vanish, and every read would report unavailable). Losing
-	// this cache (process restart, eviction) only costs a one-time full-scan rescan - see
-	// resolveValidatorTotals's fallback in fsm/indexer.go - never a correctness issue.
+	// totals is an in-memory cache of validator/delegate status totals by version, shared
+	// by pointer across every Store/Indexer view of the same underlying DB (see store.go).
 	//
-	// INVARIANT: because this is shared BY POINTER (not re-created) across every derived
-	// view of the same DB - including Store.Copy(), used for the mempool's ephemeral store
-	// - callers must never resolve/cache validator totals against a Copy()'d/mempool view.
-	// Doing so would write uncommitted, possibly-divergent mempool-derived totals into this
-	// cache under a real version number, contaminating the real FSM's later read for that
-	// same version. See the longer note on Store.Copy() in store.go. Safe today only
-	// because totals resolution is reached exclusively via fsm/indexer.go's indexerBlob,
-	// called only from RPC blob-serving code on the real FSM, never on a mempool copy.
+	// INVARIANT: never resolve/cache totals against a Copy()'d/mempool view - it shares
+	// this pointer, so uncommitted mempool totals would contaminate a real version's entry.
+	// See Store.Copy() in store.go.
 	totals *validatorTotalsCache
 }
 
-// validatorTotalsCache is a bounded LRU from version to totals, the same pattern as
-// blockCache above except scoped per-underlying-DB (via the shared *Indexer.totals
-// pointer) rather than package-global, so independent Store instances (e.g. separate
-// tests, or an in-memory store swapped in for one) never see each other's entries.
-// Eviction only costs resolveValidatorTotals a one-time full-scan rescan for that height
-// (and, since a rescan re-seeds the baseline, does not propagate to later heights).
+// validatorTotalsCache is a bounded LRU from version to totals, scoped per-underlying-DB
+// (not package-global, so independent Store instances/tests never see each other's entries).
 type validatorTotalsCache struct {
 	lru *lru.Cache[uint64, *lib.ValidatorTotals]
-	// sf dedupes concurrent GetOrComputeValidatorTotals calls for the SAME version (e.g.
-	// overlapping RPC requests for the same/adjacent heights racing on a cold cache) so
-	// only one of them actually runs the (potentially expensive, O(validator count))
-	// compute closure; every other concurrent caller for that version blocks on and shares
-	// its result instead of redundantly recomputing. Unrelated versions are never
-	// serialized against each other - singleflight.Group keys its in-flight calls by the
-	// string passed to Do(), so a different version is a cache miss on THAT key and
-	// proceeds independently. Zero value is ready to use, no init needed.
+	// sf dedupes concurrent GetOrComputeValidatorTotals calls per version - unrelated
+	// versions still run fully in parallel. Zero value is ready to use.
 	sf singleflight.Group
 }
 
@@ -129,11 +106,8 @@ func (t *Indexer) StateChangeKeys(version uint64, prefix []byte) (keys [][]byte,
 	return keys, true, nil
 }
 
-// indexStateChanges records the commit marker even when ops is empty, then writes one
-// row per entity type actually touched this version - keyed by [stateChangePrefix][version][typeHeader],
-// valued with the concatenated, already length-prefixed remainders of every touched key of
-// that type. ops must already be in ascending key order (see Store.recordStateChangeKeys) -
-// DeltaIndexerBlobs' merge-walk in fsm/indexer.go depends on that order downstream.
+// indexStateChanges writes one row per touched entity type this version. ops must already
+// be in ascending key order (see recordStateChangeKeys) - DeltaIndexerBlobs' merge-walk in fsm/indexer.go depends on it.
 func (t *Indexer) indexStateChanges(version uint64, ops []valueOp) lib.ErrorI {
 	versionPrefix := t.stateChangeVersionPrefix(version)
 	if err := t.db.Set(versionPrefix, stateChangeMarker); err != nil {
@@ -181,11 +155,8 @@ func (t *Indexer) SetValidatorTotals(version uint64, totals *lib.ValidatorTotals
 	return nil
 }
 
-// GetOrComputeValidatorTotals returns the cached totals for version if already present;
-// otherwise it invokes compute exactly once even if multiple goroutines request the same
-// version concurrently (e.g. overlapping RPC requests for adjacent heights), caches the
-// result, and returns it to every concurrent caller. This only dedupes computation for the
-// SAME version - unrelated versions proceed fully in parallel, never blocking each other.
+// GetOrComputeValidatorTotals returns version's cached totals, or computes via compute
+// exactly once even under concurrent callers for the same version, then caches the result.
 func (t *Indexer) GetOrComputeValidatorTotals(version uint64, compute func() (*lib.ValidatorTotals, lib.ErrorI)) (*lib.ValidatorTotals, lib.ErrorI) {
 	if totals, available, err := t.GetValidatorTotals(version); err != nil {
 		return nil, err

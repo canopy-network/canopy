@@ -10,10 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGetOrComputeValidatorTotals_DedupesConcurrentComputation proves that N goroutines
-// racing on the same uncached version share a single computation instead of each paying
-// their own full scan - the compute closure must run exactly once, and every goroutine
-// must still observe the correct, identically-cached result.
+// TestGetOrComputeValidatorTotals_DedupesConcurrentComputation proves N goroutines racing
+// on the same uncached version share one computation - the compute closure runs exactly once.
 func TestGetOrComputeValidatorTotals_DedupesConcurrentComputation(t *testing.T) {
 	store, _, cleanup := testStore(t)
 	defer cleanup()
@@ -55,9 +53,8 @@ func TestGetOrComputeValidatorTotals_DedupesConcurrentComputation(t *testing.T) 
 	require.Equal(t, want, cached)
 }
 
-// TestGetOrComputeValidatorTotals_UnrelatedVersionsRunInParallel proves that dedup is
-// scoped per-version, not a global lock around the whole cache: two different versions
-// computed concurrently must both make progress rather than one blocking on the other.
+// TestGetOrComputeValidatorTotals_UnrelatedVersionsRunInParallel proves dedup is scoped
+// per-version, not a global lock - two different versions computed concurrently both progress.
 func TestGetOrComputeValidatorTotals_UnrelatedVersionsRunInParallel(t *testing.T) {
 	store, _, cleanup := testStore(t)
 	defer cleanup()

@@ -127,13 +127,8 @@ func TestIndexerBlobsCached_JournalPathIncludesUnchangedRewardAccount(t *testing
 	require.Nil(t, entry.current)
 }
 
-// TestIndexerBlobsCached_JournalPathHandlesValidatorsAndNonSigners exercises a single block
-// that both edits a validator (reward, output unchanged) and finishes-unstaking (deletes)
-// another, plus a non-signer increment - proving the journal path's incremental validator
-// totals correctly decrement a touched validator's OLD bucket, not just increment its NEW
-// one. Replaces PR 502's TestIndexerBlobsCached_JournalPathUsesValidatorAndNonSignerKeys,
-// which seeded a fake address into the non-signer value and so never actually exercised a
-// deletion/bucket-transition, masking the totals bug this test targets.
+// TestIndexerBlobsCached_JournalPathHandlesValidatorsAndNonSigners replaces PR 502's
+// ...UsesValidatorAndNonSignerKeys test, which seeded a fake non-signer address and never exercised a real deletion, masking the totals bug this test targets.
 func TestIndexerBlobsCached_JournalPathHandlesValidatorsAndNonSigners(t *testing.T) {
 	server := newTestIndexerBlobServerWithHeights(t, 4)
 	sm := server.controller.FSM
@@ -187,9 +182,8 @@ func TestIndexerBlobsCached_JournalPathHandlesValidatorsAndNonSigners(t *testing
 	require.Empty(t, rewarded.Current.NonSigners)
 }
 
-// newTestNonSignerKeyGroup builds a real BLS key group so IncrementNonSigners' PublicKeyI
-// unmarshal/Address() round-trip has something valid to work with - a synthetic address
-// alone can't be turned into a pubkey whose .Address() matches it.
+// newTestNonSignerKeyGroup builds a real BLS key group - IncrementNonSigners needs a
+// pubkey whose .Address() actually matches, which a synthetic address can't provide.
 func newTestNonSignerKeyGroup(t *testing.T) *crypto.KeyGroup {
 	t.Helper()
 	pk, err := crypto.NewBLS12381PrivateKey()
