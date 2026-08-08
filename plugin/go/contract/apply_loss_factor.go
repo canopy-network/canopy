@@ -61,6 +61,30 @@ func ApplyLossFactor(c *Contract, market *Market, marketID string, badDebt uint6
 	// it only needs to decrement the Layer 4 pending counters and record
 	// that this particular queued/synchronous event was consumed.
 	if market.Status == MarketStatus_INSOLVENT {
+		// [FIX, session finding] TotalBorrowed write-back gap: this branch
+		// (like the other two below) previously never decremented
+		// market.TotalBorrowed by badDebt -- the caller's own Step 7
+		// (liquidate_position.go) only decrements by msg.RepayAmount (the
+		// COVERED portion actually repaid), never by the WRITTEN-OFF
+		// remainder. That remainder is exactly this function's own badDebt
+		// parameter. Left uncorrected, every bad-debt write-off permanently
+		// overstates market.TotalBorrowed, inflating ComputeUtilizationBps
+		// (interest_accrual.go) and therefore the borrow rate every
+		// remaining borrower pays, forever, compounding with each
+		// subsequent write-off. This branch specifically: even though the
+		// market is already Insolvent (loss_factor already at 0, no more
+		// lender-claim value to haircut), THIS liquidation's own bad_debt
+		// portion is just as real and just as uncounted as in the other two
+		// branches -- see liquidate_position.go's own comment confirming
+		// this K3 path "changes no balance at all" as of before this fix,
+		// which was the actual gap, not a correct-by-design no-op.
+		badDebtI64, safeOk := SafeInt64FromUint64(badDebt)
+		if !safeOk {
+			return nil, ErrInt64CastOverflow("applyLossFactor.badDebt", badDebt)
+		}
+		if _, dbErr := applyDebtDelta(market, marketID, -badDebtI64); dbErr != nil {
+			return nil, dbErr
+		}
 		if dErr := DecrementLayer4Pending(market, badDebt); dErr != nil {
 			return nil, dErr
 		}
@@ -107,6 +131,16 @@ func ApplyLossFactor(c *Contract, market *Market, marketID string, badDebt uint6
 			return nil, zErr
 		}
 		SetMarketInsolvent(market)
+		// [FIX, session finding] See K3 branch's own comment above for the
+		// full rationale -- same TotalBorrowed write-back, this branch's
+		// own badDebt portion.
+		badDebtI64, safeOk := SafeInt64FromUint64(badDebt)
+		if !safeOk {
+			return nil, ErrInt64CastOverflow("applyLossFactor.badDebt", badDebt)
+		}
+		if _, dbErr := applyDebtDelta(market, marketID, -badDebtI64); dbErr != nil {
+			return nil, dbErr
+		}
 		if dErr := DecrementLayer4Pending(market, badDebt); dErr != nil {
 			return nil, dErr
 		}
@@ -136,6 +170,16 @@ func ApplyLossFactor(c *Contract, market *Market, marketID string, badDebt uint6
 
 	if wErr := SetLossFactor(c, marketID, newLossFactor); wErr != nil {
 		return nil, wErr
+	}
+	// [FIX, session finding] See K3 branch's own comment above for the full
+	// rationale -- same TotalBorrowed write-back, this branch's own badDebt
+	// portion.
+	badDebtI64, safeOk := SafeInt64FromUint64(badDebt)
+	if !safeOk {
+		return nil, ErrInt64CastOverflow("applyLossFactor.badDebt", badDebt)
+	}
+	if _, dbErr := applyDebtDelta(market, marketID, -badDebtI64); dbErr != nil {
+		return nil, dbErr
 	}
 	if dErr := DecrementLayer4Pending(market, badDebt); dErr != nil {
 		return nil, dErr

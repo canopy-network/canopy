@@ -14,42 +14,30 @@ import (
 // Ordering Contract: "AccrueInterest() MUST be the first call in
 // BeginBlock, before... loss-factor-application queue processing").
 //
-// [STALE COMMENT CORRECTED] The block below previously claimed
-// SumLenderBalancesInMarket, ApplyLossFactor, EnqueueLossFactorApplication,
-// and ProcessLossFactorQueue "has not been built" and that
-// "repay/liquidate_position themselves are not implemented." This file
-// (interest_accrual.go) was last substantively edited before those were
-// written. As of this correction, verified directly against the real
-// files, not re-assumed:
-//   - SumLenderBalancesInMarket: EXISTS (lender_balances.go).
-//   - ApplyLossFactor: EXISTS (apply_loss_factor.go) and IS wired in --
-//     liquidate_position.go calls it on a Layer 2 miss.
-//   - EnqueueLossFactorApplication / PeekLossFactorQueue /
-//     DequeueLossFactorApplication: EXIST (loss_factor_queue.go).
-//     PeekLossFactorQueue's own doc comment already names
-//     WillExhaustThisBlock() as an intended future caller.
-//   - repay.go / liquidate_position.go: EXIST, both implemented.
-//   - ProcessLossFactorQueue (the BeginBlock drain caller): CONFIRMED NOT
-//     YET BUILT, per apply_loss_factor.go's own current, accurate comment.
-//     This one claim from the original block above was still true.
+// [STALE COMMENT CORRECTED, SECOND PASS] The previous correction pass
+// (still preserved in git history) verified SumLenderBalancesInMarket,
+// ApplyLossFactor, EnqueueLossFactorApplication/PeekLossFactorQueue/
+// DequeueLossFactorApplication, and repay.go/liquidate_position.go all
+// exist, but still carried two claims that have SINCE been superseded
+// by work done after that pass -- both re-verified directly against the
+// real files for this correction, not re-assumed:
 //
-// KNOWN GAP, STILL REAL, RE-VERIFIED: this implementation does NOT yet
-// include C4's WillExhaustThisBlock lookahead (ARCM v3.11.1 Section 9.3b
-// Rule 3 / AYIS v1.11.1 Section 7 Step 8 revised). Unlike the original
-// comment's claim, this is NOT blocked on missing dependencies anymore --
-// SumLenderBalancesInMarket and PeekLossFactorQueue (the {28} read) both
-// exist now. WillExhaustThisBlock() itself has simply not been written,
-// and Step 8 below has not been revised to call it. Step 8 currently
-// branches ONLY on market.status == Insolvent (the pre-C4, v3.11/v1.11
-// behavior), NOT market.status == Insolvent || WillExhaustThisBlock(...).
-// This means the specific one-block misallocation window C4 closes (a
-// market's queued, same-block Layer-4 exhaustion having its interest
-// incorrectly split rather than routed to R_fund) is NOT yet closed by
-// this function. TODO(C4): write WillExhaustThisBlock (PeekLossFactorQueue
-// + SumLenderBalancesInMarket, both now available) and revise Step 8's
-// condition per AYIS v1.11.1 -- the dependency gap that previously
-// justified deferring this is gone; only the lookahead function and the
-// Step 8 edit remain.
+//   - ProcessLossFactorQueue (the BeginBlock drain caller): the previous
+//     pass called this "CONFIRMED NOT YET BUILT." It is now wired --
+//     contract.go's BeginBlock calls it in the same per-market loop as
+//     AccrueInterest, immediately after, per the Accrual Ordering
+//     Contract ("loss-factor-application queue processing runs after
+//     AccrueInterest, same market, same block").
+//
+//   - WillExhaustThisBlock (C4, ARCM v3.11.1 Section 9.3b Rule 3): the
+//     previous pass left a TODO(C4) here, since the function had not
+//     been written yet. It now exists (loss_factor_queue.go) and Step 8
+//     below DOES call it -- market.status == Insolvent ||
+//     WillExhaustThisBlock(...), closing the one-block misallocation
+//     window this rule addresses.
+//
+// Both gaps are closed. No open TODO remains in this doc comment as of
+// this correction.
 //
 // R_FUND SCOPE: this function correctly credits reserve_cut to R_fund
 // ({18}) for the non-Insolvent (Step 8/9/10) path, via SetReserveFundTry --
