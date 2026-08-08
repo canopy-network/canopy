@@ -22,17 +22,17 @@ app.get("/questxp/:address", (req, res) => {
   res.json({ address, totalXp, entries });
 });
 
-/** GET /leaderboard/:weekId — weekly leaderboard, sorted descending. This is the route Adam queries directly instead of waiting for a spreadsheet. */
-app.get("/leaderboard/:weekId", (req, res) => {
-  const weekId = Number(req.params.weekId);
-  res.json({ weekId, leaderboard: getLeaderboard(weekId) });
-});
-
-/** GET /leaderboard/current — convenience route resolving the live week from Arbor's current height. */
+/** GET /leaderboard/current — convenience route resolving the live week from Arbor's current height. MUST be declared before /leaderboard/:weekId, or Express's wildcard match on :weekId swallows the literal string "current" first. */
 app.get("/leaderboard/current", async (_req, res) => {
   const height = await fetchCurrentHeight();
   const weekId = weekIdForHeight(height);
   res.json({ weekId, height, leaderboard: getLeaderboard(weekId) });
+});
+
+/** GET /leaderboard/:weekId — weekly leaderboard, sorted descending. This is the route Adam queries directly instead of waiting for a spreadsheet. */
+app.get("/leaderboard/:weekId", (req, res) => {
+  const weekId = Number(req.params.weekId);
+  res.json({ weekId, leaderboard: getLeaderboard(weekId) });
 });
 
 /**
