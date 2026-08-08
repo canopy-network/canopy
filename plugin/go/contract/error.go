@@ -437,3 +437,30 @@ func ErrRepayExceedsCloseFactorNasm(vaultID string, requested, maxAllowed uint64
 func ErrNasmLiquidationBadDebt(vaultID string, collateralSeized, collateralAvailable uint64) *PluginError {
 	return NewError(255, ArborModule, fmt.Sprintf("NASM vault %q: liquidation would require seizing %d collateral but only %d is locked -- R_nusd (Layer 3) could not fully cover the shortfall, and NASM Layer 4 (system-wide socialization) is not yet built, NASM Spec Section 11.2", vaultID, collateralSeized, collateralAvailable))
 }
+
+// ErrInvalidNasmTier guards applyTierBackingDelta/CheckTierConcentrationCap
+// (nasm_tier_backing.go) against a nasmTier value outside {0, 1} --
+// unreachable in practice given ResolveNasmTier's own contract (nasm_tier.go
+// only ever returns 0, 1, or found=false), guarded explicitly rather than
+// assumed, per this project's standard.
+func ErrInvalidNasmTier(nasmTier uint8) *PluginError {
+	return NewError(256, ArborModule, fmt.Sprintf("invalid NASM tier %d: must be 0 (N-0) or 1 (N-1)", nasmTier))
+}
+
+// ErrNasmTierBackingOverflow guards applyTierBackingDelta's increase branch
+// (nasm_tier_backing.go), mirroring ErrTotalBorrowedOverflowCentralized's
+// identical uint64-overflow guard shape for debt_delta.go's applyDebtDelta.
+func ErrNasmTierBackingOverflow(nasmTier uint8, current, increase uint64) *PluginError {
+	return NewError(257, ArborModule, fmt.Sprintf("NASM tier %d backing overflow: current=%d, increase=%d would exceed uint64 range", nasmTier, current, increase))
+}
+
+// ErrNasmTierConcentrationCapExceeded is returned when a mint_nusd would
+// push a single NASM tier's share of total NUSD supply above
+// MaxTierShareBps (NASM Spec Section 3.3). newTierTotal/newGrandTotal are
+// included as decimal strings (via big.Int.String()) rather than the raw
+// uint64/*big.Int values themselves, matching this codebase's established
+// convention for surfacing big.Int state in error messages (e.g.
+// ErrBadDebtNativeOverflow's identical .String() usage).
+func ErrNasmTierConcentrationCapExceeded(nasmTier uint8, newTierTotal, newGrandTotal string, maxTierShareBps uint64) *PluginError {
+	return NewError(258, ArborModule, fmt.Sprintf("NASM tier %d mint rejected: would bring tier backing to %s of %s total NUSD supply, exceeding the %d bps (%.1f%%) per-tier concentration cap, NASM Spec Section 3.3", nasmTier, newTierTotal, newGrandTotal, maxTierShareBps, float64(maxTierShareBps)/100))
+}

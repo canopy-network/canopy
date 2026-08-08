@@ -85,7 +85,7 @@ func (c *Contract) DeliverMessageMintNusd(msg *MessageMintNusd, fee uint64) *Plu
 	// all three ineligibility cases (no {29} entry, ARCM Tier 2/3, or an
 	// asset structurally absent from {29} as Tier 0/1) -- see
 	// ResolveNasmTier's own doc comment.
-	_, nasmParams, tierFound, tErr := ResolveNasmTier(c, msg.CollateralAssetId)
+	nasmTier, nasmParams, tierFound, tErr := ResolveNasmTier(c, msg.CollateralAssetId)
 	if tErr != nil {
 		return &PluginDeliverResponse{Error: tErr}
 	}
@@ -93,17 +93,17 @@ func (c *Contract) DeliverMessageMintNusd(msg *MessageMintNusd, fee uint64) *Plu
 		return &PluginDeliverResponse{Error: ErrNasmTierIneligible(msg.CollateralAssetId)}
 	}
 
-	// Step 2 -- [DISCLOSED GAP, matches MessageMintNusd's own proto doc
-	// comment] The per-tier mint concentration cap (NASM Spec Section 3.3,
-	// Max_tier_share_bps) is NOT enforced here. It requires a running
-	// total-backing-value accumulator per tier that does not exist in
-	// state yet -- a range-scan over all {30} vaults at every mint was
-	// considered and rejected as unbounded per-transaction cost (the same
-	// anti-pattern update_price.go's own market_id field was added to
-	// avoid). Deferred until burn_nusd exists, so the accumulator can be
-	// built correctly in sync on both mint AND burn from the start,
-	// rather than shipping an increment-only value that silently drifts
-	// away from the real outstanding total.
+	// Step 2 -- NASM Spec Section 3.3's per-tier mint concentration cap.
+	// [GAP CLOSED] Previously disclosed as unenforced pending burn_nusd's
+	// existence (see nasm_tier_backing.go's own doc comment for the full
+	// dependency history) -- burn_nusd now exists, closing that dependency.
+	// CheckTierConcentrationCap is read-only; the actual accumulator
+	// increase (applyTierBackingDelta) happens later, after every other
+	// mint guard has passed, matching this codebase's established
+	// verify-before-mutate ordering.
+	if ccErr := CheckTierConcentrationCap(c, nasmTier, msg.NusdAmountRequested); ccErr != nil {
+		return &PluginDeliverResponse{Error: ccErr}
+	}
 
 	// Oracle price read (ARCM Section 10's permissioned price cache,
 	// shared with lending markets per NASM Spec Section 7's "Oracle
@@ -268,8 +268,35 @@ func (c *Contract) DeliverMessageMintNusd(msg *MessageMintNusd, fee uint64) *Plu
 		CollateralQuantity: msg.CollateralQuantity,
 		NusdPrincipal:      msg.NusdAmountRequested,
 		SfIndexAtOpen:      sfIndexEncoded,
+		NasmTier:           uint32(nasmTier), // snapshotted at mint, see NasmVault.nasm_tier's own proto doc comment
 	}
 	vaultBytesOut, mErr := Marshal(vault)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
+
+	// [NEW] NASM Spec Section 3.3: apply the actual tier-backing accumulator
+	// increase, now that CheckTierConcentrationCap (Step 2, above) has
+	// already verified this mint would not breach the cap. Read standalone
+	// (not batched into custodyReadResp) -- matches GetGovernanceParams'
+	// own standalone-read precedent for a small, low-frequency, single
+	// global record, rather than adding a fifth query to a batch that
+	// exists for the higher-frequency custody fields above it.
+	tierBacking, tbFound, tbErr := GetNasmTierBacking(c)
+	if tbErr != nil {
+		return &PluginDeliverResponse{Error: tbErr}
+	}
+	if !tbFound {
+		tierBacking = &NasmTierBacking{}
+	}
+	mintAmountI64, tbOk := SafeInt64FromUint64(msg.NusdAmountRequested)
+	if !tbOk {
+		return &PluginDeliverResponse{Error: ErrNasmTierBackingOverflow(nasmTier, 0, msg.NusdAmountRequested)}
+	}
+	if _, tbdErr := applyTierBackingDelta(tierBacking, nasmTier, mintAmountI64); tbdErr != nil {
+		return &PluginDeliverResponse{Error: tbdErr}
+	}
+	tierBackingBytesOut, mErr := Marshal(tierBacking)
 	if mErr != nil {
 		return &PluginDeliverResponse{Error: mErr}
 	}
@@ -285,6 +312,7 @@ func (c *Contract) DeliverMessageMintNusd(msg *MessageMintNusd, fee uint64) *Plu
 			{Key: poolKey, Value: poolBytesOut},
 			{Key: nusdBalKey, Value: nusdBalBytesOut},
 			{Key: KeyForNusdSupply(), Value: supplyBytesOut},
+			{Key: KeyForNasmTierBacking(), Value: tierBackingBytesOut},
 		},
 	})
 	if wErr != nil {

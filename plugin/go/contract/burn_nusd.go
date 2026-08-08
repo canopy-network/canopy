@@ -262,6 +262,35 @@ func (c *Contract) DeliverMessageBurnNusd(msg *MessageBurnNusd, fee uint64) *Plu
 		return &PluginDeliverResponse{Error: mErr}
 	}
 
+	// [NEW] NASM Spec Section 3.3: decrement the tier-backing accumulator
+	// by burnedAmount (the same SF-scaled, already-computed figure
+	// NusdSupply.total_supply is decremented by, directly above) for the
+	// SAME tier this vault was minted into -- vault.NasmTier, snapshotted
+	// at mint_nusd time, NOT re-resolved live (see NasmVault.nasm_tier's
+	// own proto doc comment for why re-resolving would risk permanent
+	// accumulator drift on a post-mint asset reclassification).
+	tierBacking, tbFound, tbErr := GetNasmTierBacking(c)
+	if tbErr != nil {
+		return &PluginDeliverResponse{Error: tbErr}
+	}
+	if !tbFound {
+		// Unreachable in practice -- a vault cannot exist without a prior
+		// mint_nusd having already created this record -- guarded explicitly
+		// rather than assumed, per this project's standard.
+		tierBacking = &NasmTierBacking{}
+	}
+	burnAmountI64, tbOk := SafeInt64FromUint64(burnedAmount)
+	if !tbOk {
+		return &PluginDeliverResponse{Error: ErrNasmTierBackingOverflow(uint8(vault.NasmTier), 0, burnedAmount)}
+	}
+	if _, tbdErr := applyTierBackingDelta(tierBacking, uint8(vault.NasmTier), -burnAmountI64); tbdErr != nil {
+		return &PluginDeliverResponse{Error: tbdErr}
+	}
+	tierBackingBytesOut, mErr := Marshal(tierBacking)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
+
 	// Steps 9/10 -- re-snapshot sf_index_at_open, update nusd_principal
 	// and collateral_quantity, or delete the vault entirely on full
 	// closure.
@@ -269,6 +298,7 @@ func (c *Contract) DeliverMessageBurnNusd(msg *MessageBurnNusd, fee uint64) *Plu
 		{Key: nusdBalKey, Value: nusdBalBytesOut},
 		{Key: KeyForNusdSupply(), Value: supplyBytesOut},
 		{Key: acctKey, Value: acctBytesOut},
+		{Key: KeyForNasmTierBacking(), Value: tierBackingBytesOut},
 	}
 	var deletes []*PluginDeleteOp
 	if deletePool {

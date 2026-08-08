@@ -161,6 +161,22 @@ message NasmVault {
                                       // directly (NASM Spec Section 6.3)
   bytes  sf_index_at_open = 6;       // uint128 RAY-scaled SF_index(t) snapshot, EncodeUint128 raw bytes --
                                       // same shape as BorrowerPosition.borrow_index_at_open
+  uint32 nasm_tier = 7;              // the NASM tier (0=N-0, 1=N-1) this vault was minted into, per
+                                      // ResolveNasmTier's own return value at mint_nusd time. Snapshotted
+                                      // here, NOT re-resolved live at burn/liquidate time, deliberately --
+                                      // same reasoning as sf_index_at_open's own snapshot-not-live-read
+                                      // convention above: NASM Spec Section 3.3's per-tier concentration
+                                      // accumulator (NasmTierBacking, {36}) must decrement the SAME tier
+                                      // a vault's principal was originally counted against, even if the
+                                      // underlying asset is later reclassified at ARCM's {29} registry --
+                                      // re-resolving live would let a vault's principal permanently
+                                      // overstate one tier's accumulator forever if the asset is ever
+                                      // downgraded out of Tier 0/1 after mint, the exact silent-drift
+                                      // failure class this accumulator exists to prevent in the first
+                                      // place (see mint_nusd.go's own original disclosed-gap comment).
+                                      // Proto type is uint32 (not uint8 -- protobuf has no uint8 scalar);
+                                      // Go-side accessors treat this as uint8 throughout, matching
+                                      // ResolveNasmTier's own return type.
 }
 
 // NusdSupply is the {31} record: the single global NUSD circulating supply
@@ -171,6 +187,42 @@ message NusdSupply {
   uint64 total_supply = 1;  // 1e6 precision (NASM Spec Section 2.3), plain uint64 --
                              // matches BorrowerPosition/LenderPosition's amount-field convention,
                              // not the RAY-scaled bytes convention (this is a token amount, not an index)
+}
+
+// NasmTierBacking is the {36} record: NASM Spec Section 3.3's per-tier mint
+// concentration cap accumulator. Deliberately deferred at mint_nusd's own
+// original implementation ("requires a running total-backing-value
+// accumulator per tier that does not exist in state yet... deferred until
+// burn_nusd exists, so the accumulator can be built correctly in sync on
+// both mint AND burn from the start") -- burn_nusd now exists, closing that
+// dependency.
+//
+// Two explicit named fields, not a repeated/map structure -- matches this
+// codebase's established preference for explicit typed fields over generic
+// collections at small, fixed cardinality (see PrefixTreasuryArbor/
+// PrefixTreasuryNASM's identical two-named-field split over one
+// parameterized pool). NASM has exactly two eligible tiers (N-0, N-1;
+// N-2/N-3 are structurally ineligible, nasm_tier.go), so this will never
+// need a third field.
+//
+// Tracks raw nusd_principal minted per tier, NOT SF_index-scaled debt and
+// NOT collateral USD value -- mirrors NusdSupply.total_supply's own
+// convention exactly (same reasoning nasm_accrual.go's AccrueStabilityFee
+// doc comment gives for reusing TotalSupply as AYIS's totalBorrowed analog:
+// per-vault SF_index scaling is applied at each vault's own read time via
+// ScaledNusdDebt(), never stored as an absolute aggregate). Collateral USD
+// value was considered and rejected as the tracked unit -- it would require
+// a live price lookup at every mint_nusd cap check (this asset's price AND
+// every other vault's original collateral price, to revalue the whole
+// tier), turning a cheap accumulator comparison into an oracle-dependent,
+// potentially stale calculation; NUSD principal is the unit
+// Max_tier_share_bps's own spec text ("share of total NUSD supply") is
+// actually about.
+message NasmTierBacking {
+  uint64 tier_n0_backing = 1; // raw nusd_principal minted against Tier N-0 (CNPY) collateral, summed
+                               // across every open vault in that tier, 1e6 precision matching
+                               // NusdSupply.total_supply
+  uint64 tier_n1_backing = 2; // same as tier_n0_backing, for Tier N-1 (ARCM Tier 1 blue-chip)
 }
 
 // StabilityFeeIndex is the {32} record: the single global, RAY-scaled

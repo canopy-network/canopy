@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"math/big"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -52,6 +53,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/nusdsupply", p.handleQueryNusdSupply)
 	mux.HandleFunc("/v1/query/stabilityfeeindex", p.handleQueryStabilityFeeIndex)
 	mux.HandleFunc("/v1/query/waterfall-events", p.handleQueryWaterfallEvents)
+	mux.HandleFunc("/v1/query/nasmtierbacking", p.handleQueryNasmTierBacking)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -535,6 +537,72 @@ func (p *Plugin) handleQueryTreasury(w http.ResponseWriter, r *http.Request) {
 	tFund := DecodeUint128(raw)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"pool": pool, "amount": tFund.String()})
+}
+
+// handleQueryNasmTierBacking serves GET /v1/query/nasmtierbacking
+// Returns the single {36} NasmTierBacking record's per-tier totals
+// (NASM Spec Section 3.3's mint concentration cap accumulator), plus the
+// current total_supply and each tier's live share in bps, computed the
+// same way CheckTierConcentrationCap (nasm_tier_backing.go) computes it,
+// so this route is directly useful for verifying the cap's actual state
+// without re-deriving the math externally. Takes NO query params -- a
+// single global record, like handleQueryTreasury/handleQueryGovernanceParams.
+func (p *Plugin) handleQueryNasmTierBacking(w http.ResponseWriter, r *http.Request) {
+	backingQueryId := rand.Uint64()
+	supplyQueryId := rand.Uint64()
+	resp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: backingQueryId, Key: KeyForNasmTierBacking()},
+			{QueryId: supplyQueryId, Key: KeyForNusdSupply()},
+		},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// entryValue (deposit.go) is the existing, proven helper for pulling a
+	// specific query's result out of a batched read by QueryId -- reused
+	// directly here rather than re-deriving the same lookup, matching
+	// every DeliverTx handler's own established convention (mint_nusd.go,
+	// burn_nusd.go, liquidate_nasm_vault.go all use it identically).
+	backing := &NasmTierBacking{}
+	if raw := entryValue(resp, backingQueryId); len(raw) > 0 {
+		if err := proto.Unmarshal(raw, backing); err != nil {
+			http.Error(w, `{"error":"unmarshal error: `+err.Error()+`"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+	supply := &NusdSupply{}
+	if raw := entryValue(resp, supplyQueryId); len(raw) > 0 {
+		if err := proto.Unmarshal(raw, supply); err != nil {
+			http.Error(w, `{"error":"unmarshal error: `+err.Error()+`"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	var n0ShareBps, n1ShareBps string
+	if supply.TotalSupply > 0 {
+		n0ShareBps = new(big.Int).Div(new(big.Int).Mul(big.NewInt(int64(backing.TierN0Backing)), big.NewInt(10_000)), big.NewInt(int64(supply.TotalSupply))).String()
+		n1ShareBps = new(big.Int).Div(new(big.Int).Mul(big.NewInt(int64(backing.TierN1Backing)), big.NewInt(10_000)), big.NewInt(int64(supply.TotalSupply))).String()
+	} else {
+		n0ShareBps = "0"
+		n1ShareBps = "0"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"tierN0Backing":   strconv.FormatUint(backing.TierN0Backing, 10),
+		"tierN1Backing":   strconv.FormatUint(backing.TierN1Backing, 10),
+		"totalSupply":     strconv.FormatUint(supply.TotalSupply, 10),
+		"tierN0ShareBps":  n0ShareBps,
+		"tierN1ShareBps":  n1ShareBps,
+		"maxTierShareBps": strconv.FormatUint(MaxTierShareBps, 10),
+	})
 }
 
 // handleQueryGovernanceParams serves GET /v1/query/governanceparams

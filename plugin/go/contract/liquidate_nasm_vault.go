@@ -375,10 +375,37 @@ func (c *Contract) DeliverMessageLiquidateNasmVault(msg *MessageLiquidateNasmVau
 	newCollateral := vault.CollateralQuantity - collateralSeizedU64
 	vaultClosed := newDebt == 0
 
+	// [NEW] NASM Spec Section 3.3: decrement the tier-backing accumulator
+	// by msg.RepayAmount (the same figure NusdSupply.total_supply is
+	// decremented by, directly below), for the SAME tier this vault was
+	// minted into -- vault.NasmTier, mirroring burn_nusd.go's identical
+	// decrement exactly (see that file's own comment for the full
+	// rationale on why this reads the snapshotted tier, not a live
+	// re-resolution).
+	tierBacking, tbFound, tbErr := GetNasmTierBacking(c)
+	if tbErr != nil {
+		return &PluginDeliverResponse{Error: tbErr}
+	}
+	if !tbFound {
+		tierBacking = &NasmTierBacking{}
+	}
+	repayAmountI64, tbOk := SafeInt64FromUint64(msg.RepayAmount)
+	if !tbOk {
+		return &PluginDeliverResponse{Error: ErrNasmTierBackingOverflow(uint8(vault.NasmTier), 0, msg.RepayAmount)}
+	}
+	if _, tbdErr := applyTierBackingDelta(tierBacking, uint8(vault.NasmTier), -repayAmountI64); tbdErr != nil {
+		return &PluginDeliverResponse{Error: tbdErr}
+	}
+	tierBackingBytesOut, mErr := Marshal(tierBacking)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
+
 	sets := []*PluginSetOp{
 		{Key: liquidatorNusdBalKey, Value: liquidatorNusdBalBytesOut},
 		{Key: KeyForNusdSupply(), Value: supplyBytesOut},
 		{Key: liquidatorAcctKey, Value: liquidatorAcctBytesOut},
+		{Key: KeyForNasmTierBacking(), Value: tierBackingBytesOut},
 	}
 	var deletes []*PluginDeleteOp
 	if deletePool {

@@ -371,6 +371,21 @@ func KeyForNusdBalance(addr []byte) []byte {
 	return JoinLenPrefix(PrefixNusdBalance, addr)
 }
 
+// PrefixNasmTierBacking: NASM Spec Section 3.3's per-tier mint concentration
+// cap accumulator (see NasmTierBacking's own doc comment in
+// arbor_state.proto for the full design rationale). Claims {36} from the
+// {30}-{39} NASM-coordination wall -- the next fresh number after
+// {30},{31},{32},{34},{35} ({33} remains permanently skipped, see the block
+// comment above). No-argument key, matching KeyForNusdSupply/
+// KeyForStabilityFeeIndex's single-global-record convention -- there is
+// exactly one NasmTierBacking record for the whole chain, not one per tier
+// or per vault.
+var PrefixNasmTierBacking = []byte{36}
+
+func KeyForNasmTierBacking() []byte {
+	return JoinLenPrefix(PrefixNasmTierBacking)
+}
+
 // PrefixWaterfallLog: durable, queryable rolling log of every Layer 2/3/4
 // bad-debt waterfall step (ARCM Section 9.2), added to close the exact gap
 // the Arbor frontend's Events panel flags directly: waterfall events are
