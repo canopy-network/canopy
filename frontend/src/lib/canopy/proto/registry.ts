@@ -19,6 +19,9 @@ import {
   MessageRepay,
   MessageLiquidatePosition,
   MessageSetAssetTier,
+  MessageMintNusd,
+  MessageBurnNusd,
+  MessageLiquidateNasmVault,
 } from "./generated/arbor";
 
 import {
@@ -62,6 +65,9 @@ export const TX_MESSAGE_CODECS: Record<ArborTxType, TxCodec> = {
   repay: MessageRepay as unknown as TxCodec,
   liquidate_position: MessageLiquidatePosition as unknown as TxCodec,
   set_asset_tier: MessageSetAssetTier as unknown as TxCodec,
+  mint_nusd: MessageMintNusd as unknown as TxCodec,
+  burn_nusd: MessageBurnNusd as unknown as TxCodec,
+  liquidate_nasm_vault: MessageLiquidateNasmVault as unknown as TxCodec,
 };
 
 export interface EventCodec {

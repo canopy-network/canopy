@@ -13,6 +13,9 @@ import {
   getAllNasmVaults,
 } from "@/lib/canopy/pluginRpc";
 import { formatAmount } from "@/lib/arbor/format";
+import { MintNusdForm } from "@/components/forms/MintNusdForm";
+import { BurnNusdForm } from "@/components/forms/BurnNusdForm";
+import { LiquidateNasmVaultForm } from "@/components/forms/LiquidateNasmVaultForm";
 
 const RAY = 1000000000000000000n;
 
@@ -25,11 +28,12 @@ function NasmVaults() {
   const wallet = useWalletStore();
   const [rows, setRows] = useState<Array<{ v: Record<string, unknown>; pool: bigint }>>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refetch = () => setRefreshKey((k) => k + 1);
 
   useEffect(() => {
-    if (!wallet.address) { setRows([]); return; }
+    if (!wallet.address) return;
     let alive = true;
-    setLoading(true);
     getAllNasmVaults(wallet.address).then(async (list) => {
       const withPool = await Promise.all(
         list.map(async (v) => {
@@ -40,10 +44,17 @@ function NasmVaults() {
       if (alive) { setRows(withPool); setLoading(false); }
     });
     return () => { alive = false; };
-  }, [wallet.address]);
+  }, [wallet.address, refreshKey]);
 
   return (
     <section className="space-y-4">
+      <h2 className="section-h">Mint &amp; manage NUSD</h2>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <MintNusdForm onMinted={refetch} />
+        <BurnNusdForm onBurned={refetch} />
+        <LiquidateNasmVaultForm onLiquidated={refetch} />
+      </div>
+
       <h2 className="section-h">Your Vaults</h2>
       <p className="text-xs text-zinc-500">
         Vaults owned by the connected wallet, enumerated live via
@@ -110,7 +121,7 @@ export default function NusdPage() {
   }, []);
 
   useEffect(() => {
-    if (!wallet.address) { setBalance(null); return; }
+    if (!wallet.address) return;
     let alive = true;
     getNusdBalance(wallet.address).then((b) => { if (alive) setBalance(b.amount); });
     return () => { alive = false; };
@@ -190,7 +201,7 @@ export default function NusdPage() {
         <div className="glass rounded-2xl p-5 backdrop-blur transition hover:border-amber-400/30">
           <p className="text-xs text-zinc-500">NASM treasury {"{41}"}</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
-            {treasury != null ? formatAmount(treasury, 9) : "—"}
+            {treasury != null ? formatAmount(treasury, 6) : "—"}
           </p>
           <p className="mt-1 text-[11px] text-zinc-500">isolated from Arbor {"{40}"}</p>
         </div>

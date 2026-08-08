@@ -112,6 +112,13 @@ export async function submitTx(body: string): Promise<TxSubmitResponse> {
 
   const data = await res.json();
 
+  // A single-tx submission returns a bare JSON string (the hash itself),
+  // per cmd/rpc/server.go's submitTxs: write(w, hashes[0], ...). Only a
+  // multi-tx submission returns an array/object shape.
+  if (typeof data === "string") {
+    return { txHash: data, result: undefined };
+  }
+
   return {
     txHash:
       data?.txHash ||
@@ -119,6 +126,7 @@ export async function submitTx(body: string): Promise<TxSubmitResponse> {
       data?.hash ||
       data?.result?.txHash ||
       data?.result?.hash ||
+      (Array.isArray(data) && typeof data[0] === "string" ? data[0] : "") ||
       "",
     result:
       data?.result ||
@@ -208,7 +216,15 @@ export async function queryHeight(): Promise<number | null> {
 
 export async function queryTx(txHash: string): Promise<TxResponse | null> {
   try {
-    const res = await rpcFetch(`/v1/query/tx/${txHash}`);
+    // The Go route is POST /v1/query/tx-by-hash with a {"hash": ...} JSON
+    // body (cmd/rpc/routes.go: TxByHashRouteName), not a GET with the hash
+    // as a path segment -- a GET to /v1/query/tx/:hash 404s every time,
+    // which silently looked like "not included yet" and made
+    // waitForTxInclusion poll until timeout on every successful submission.
+    const res = await rpcFetch("/v1/query/tx-by-hash", {
+      method: "POST",
+      body: JSON.stringify({ hash: txHash }),
+    });
 
     if (!res.ok) {
       return null;
@@ -222,7 +238,7 @@ export async function queryTx(txHash: string): Promise<TxResponse | null> {
     }
 
     return {
-      hash: tx.hash || tx.txHash || txHash,
+      hash: tx.txHash || tx.hash || txHash,
       height: Number(tx.height ?? 0),
       sender: tx.sender,
       result: tx.result,
