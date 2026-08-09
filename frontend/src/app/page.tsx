@@ -106,7 +106,7 @@ function StatCard({
         </p>
         {coins && coins.length > 0 && (
           <span className="flex items-center -space-x-1.5">
-            {coins.map((s) => (
+            {coins.slice(0, 4).map((s) => (
               <AssetIcon
                 key={s}
                 symbol={s}
