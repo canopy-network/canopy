@@ -6,6 +6,7 @@ import { bytesToHex } from "@/lib/canopy/decode";
 import { CreateMarketForm } from "@/components/forms/CreateMarketForm";
 import { MarketLifecycleForm } from "@/components/forms/MarketLifecycleForm";
 import { SetAssetTierForm } from "@/components/forms/SetAssetTierForm";
+import { SetTreasuryCutForm } from "@/components/forms/SetTreasuryCutForm";
 
 function shortHex(hex: string): string {
   if (!hex) return "—";
@@ -102,11 +103,14 @@ export default function AuthorityPage() {
             <div className="glass rounded-2xl p-5 backdrop-blur">
               <SetAssetTierForm />
             </div>
+            <div className="glass rounded-2xl p-5 backdrop-blur">
+              <SetTreasuryCutForm />
+            </div>
           </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-400">
-            Locked. Pause / resume / deprecate / update market params / set asset tier
-            require the protocol authority, which this connected address is not.
+            Locked. Pause / resume / deprecate / update market params / set asset tier /
+            set treasury cut require the protocol authority, which this connected address is not.
           </div>
         )}
       </section>

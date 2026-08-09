@@ -16,6 +16,8 @@ import { formatAmount } from "@/lib/arbor/format";
 import { MintNusdForm } from "@/components/forms/MintNusdForm";
 import { BurnNusdForm } from "@/components/forms/BurnNusdForm";
 import { LiquidateNasmVaultForm } from "@/components/forms/LiquidateNasmVaultForm";
+import { AssetIcon } from "@/components/AssetIcon";
+import { useNasmTierBacking } from "@/lib/hooks/useNasmVault";
 
 const RAY = 1000000000000000000n;
 
@@ -87,7 +89,10 @@ function NasmVaults() {
                 <tr key={String(v.vaultId)} className="border-t border-white/5">
                   <td className="py-2.5 pr-4 font-mono text-xs text-zinc-200">{String(v.vaultId)}</td>
                   <td className="py-2.5 pr-4 tabular-nums text-zinc-300">
-                    {formatAmount(BigInt(String(v.collateralQuantity ?? "0")), 9)} {String(v.collateralAssetId ?? "")}
+                    <span className="inline-flex items-center gap-2">
+                      <AssetIcon symbol={String(v.collateralAssetId ?? "")} size={22} className="rounded-full" />
+                      {formatAmount(BigInt(String(v.collateralQuantity ?? "0")), 9)} {String(v.collateralAssetId ?? "")}
+                    </span>
                   </td>
                   <td className="py-2.5 pr-4 tabular-nums text-zinc-300">{formatAmount(pool, 9)}</td>
                   <td className="py-2.5 tabular-nums text-amber-200">{formatAmount(BigInt(String(v.nusdPrincipal ?? "0")), 6)}</td>
@@ -238,7 +243,12 @@ export default function NusdPage() {
                 const t = tiers[a];
                 return (
                   <tr key={a} className="border-t border-white/5">
-                    <td className="py-2.5 pr-4 font-medium text-zinc-200">{a}</td>
+                    <td className="py-2.5 pr-4 font-medium text-zinc-200">
+                      <span className="inline-flex items-center gap-2">
+                        <AssetIcon symbol={a} size={22} className="rounded-full" />
+                        {a}
+                      </span>
+                    </td>
                     <td className="py-2.5 pr-4 text-zinc-300">{t ? (t.eligible ? t.nasmTier : "—") : "…"}</td>
                     <td className="py-2.5 pr-4 tabular-nums text-zinc-300">{t && t.eligible ? fmtBps(t.ltvMaxBps) : "—"}</td>
                     <td className="py-2.5 pr-4 tabular-nums text-zinc-300">{t && t.eligible ? fmtBps(t.ltvLiqBps) : "—"}</td>
@@ -265,7 +275,64 @@ export default function NusdPage() {
           to enumerate all vaults yet. Total supply and per-address balances above are live.
         </p>
       </section>
+
+      <NasmTierConcentrationCap />
       <NasmVaults />
     </div>
+  );
+}
+
+// NASM Spec Section 3.3: no single NASM tier (N-0 or N-1) may back more
+// than maxTierShareBps of total NUSD supply. Shown proactively here so a
+// mint that would breach the cap can be avoided before submitting, rather
+// than only discovered via the on-chain rejection (error 258).
+function NasmTierConcentrationCap() {
+  const { data, isLoading } = useNasmTierBacking();
+
+  const maxBps = data?.maxTierShareBps ?? 7000n;
+
+  const rows = [
+    { label: "Tier N-0", backing: data?.tierN0Backing ?? 0n, shareBps: data?.tierN0ShareBps ?? 0n },
+    { label: "Tier N-1", backing: data?.tierN1Backing ?? 0n, shareBps: data?.tierN1ShareBps ?? 0n },
+  ];
+
+  return (
+    <section className="space-y-4">
+      <h2 className="section-h">NASM tier concentration cap</h2>
+      <p className="text-xs text-zinc-500">
+        No single NASM tier may back more than {fmtBps(maxBps)} of total NUSD supply (Spec
+        Section 3.3). A mint that would push a tier over this line is rejected on-chain.
+      </p>
+      <div className="glass rounded-2xl p-5 backdrop-blur space-y-4">
+        {rows.map((r) => {
+          const pct = Number(r.shareBps) / 100;
+          const capPct = Number(maxBps) / 100;
+          const overCap = Number(r.shareBps) >= Number(maxBps);
+          const nearCap = !overCap && Number(r.shareBps) >= Number(maxBps) * 0.9;
+          return (
+            <div key={r.label} className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-zinc-200">{r.label}</span>
+                <span className="tabular-nums text-zinc-400">
+                  {isLoading ? "…" : `${formatAmount(r.backing, 6)} NUSD · ${pct.toFixed(2)}% of ${capPct.toFixed(0)}% cap`}
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-white/5">
+                <div
+                  className={`h-full rounded-full ${overCap ? "bg-rose-500" : nearCap ? "bg-amber-400" : "bg-emerald-400"}`}
+                  style={{ width: `${Math.min(100, (pct / capPct) * 100)}%` }}
+                />
+              </div>
+              {overCap && (
+                <p className="text-[11px] text-rose-400">At or above cap — mints into this tier will be rejected.</p>
+              )}
+              {nearCap && (
+                <p className="text-[11px] text-amber-400">Approaching cap — headroom is limited.</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

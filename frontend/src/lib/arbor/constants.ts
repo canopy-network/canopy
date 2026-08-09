@@ -65,6 +65,8 @@ export const ARBOR_TX_TYPE_URLS = {
   mint_nusd: "type.googleapis.com/types.MessageMintNusd",
   burn_nusd: "type.googleapis.com/types.MessageBurnNusd",
   liquidate_nasm_vault: "type.googleapis.com/types.MessageLiquidateNasmVault",
+  send: "type.googleapis.com/types.MessageSend",
+  set_treasury_cut: "type.googleapis.com/types.MessageSetTreasuryCut",
 } as const;
 
 export type ArborTxType = keyof typeof ARBOR_TX_TYPE_URLS;

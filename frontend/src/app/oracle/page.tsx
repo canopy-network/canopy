@@ -1,3 +1,4 @@
+import { AssetIcon } from "@/components/AssetIcon";
 "use client";
 
 import { useState } from "react";
@@ -198,7 +199,7 @@ export default function OraclePage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl glass p-5 backdrop-blur">
               <h2 className="text-sm font-semibold text-zinc-200">
-                {selectedMarket.collateralAssetId} freshness monitor
+                <span className="inline-flex items-center gap-2"><AssetIcon symbol={selectedMarket.collateralAssetId} size={18} className="rounded-full" /> {selectedMarket.collateralAssetId} freshness monitor</span>
               </h2>
               <div className="mt-3">
                 <PriceFreshnessTable assetId={selectedMarket.collateralAssetId} />
@@ -206,7 +207,7 @@ export default function OraclePage() {
             </div>
             <div className="rounded-2xl glass p-5 backdrop-blur">
               <h2 className="text-sm font-semibold text-zinc-200">
-                {selectedMarket.debtAssetId} freshness monitor
+                <span className="inline-flex items-center gap-2"><AssetIcon symbol={selectedMarket.debtAssetId} size={18} className="rounded-full" /> {selectedMarket.debtAssetId} freshness monitor</span>
               </h2>
               <div className="mt-3">
                 <PriceFreshnessTable assetId={selectedMarket.debtAssetId} />

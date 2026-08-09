@@ -81,10 +81,12 @@ export default function EventsPage() {
 
   useEffect(() => {
     if (wallet.isConnected && wallet.address) setAddr(wallet.address);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.isConnected, wallet.address]);
 
   useEffect(() => {
     setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, addr]);
 
   const clean = addr.trim();

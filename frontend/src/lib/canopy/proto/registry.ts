@@ -22,7 +22,10 @@ import {
   MessageMintNusd,
   MessageBurnNusd,
   MessageLiquidateNasmVault,
+  MessageSetTreasuryCut,
 } from "./generated/arbor";
+
+import { MessageSend } from "./generated/tx";
 
 import {
   EventIndexEncodingOverflowHalted,
@@ -68,6 +71,8 @@ export const TX_MESSAGE_CODECS: Record<ArborTxType, TxCodec> = {
   mint_nusd: MessageMintNusd as unknown as TxCodec,
   burn_nusd: MessageBurnNusd as unknown as TxCodec,
   liquidate_nasm_vault: MessageLiquidateNasmVault as unknown as TxCodec,
+  send: MessageSend as unknown as TxCodec,
+  set_treasury_cut: MessageSetTreasuryCut as unknown as TxCodec,
 };
 
 export interface EventCodec {

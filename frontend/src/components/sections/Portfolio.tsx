@@ -9,13 +9,10 @@ import { useAssetPrice } from "@/lib/hooks/useAssetPrice";
 import { computeHealthFactorScaled } from "@/lib/arbor/math";
 import { formatAmount, formatHealthFactor } from "@/lib/arbor/format";
 import { TIER_PARAMS } from "@/lib/arbor/constants";
+import { AssetIcon } from "@/components/AssetIcon";
 
 function Monogram({ symbol }: { symbol: string }) {
-  return (
-    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg brand-glyph text-[10px] font-bold text-[#05070d]">
-      {symbol.slice(0, 4).toUpperCase()}
-    </div>
-  );
+  return <AssetIcon symbol={symbol} size={36} className="shrink-0 rounded-full shadow-md shadow-black/30" />;
 }
 
 function HfPill({ hf }: { hf: bigint | null }) {

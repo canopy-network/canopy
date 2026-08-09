@@ -1,3 +1,4 @@
+import { AssetIcon } from "@/components/AssetIcon";
 "use client";
 
 import { useParams } from "next/navigation";
@@ -102,7 +103,7 @@ export default function MarketPage() {
               {market.marketId}
             </h1>
             <p className="text-xs text-zinc-500">
-              {market.collateralAssetId} collateral / {market.debtAssetId} debt
+              <span className="inline-flex flex-wrap items-center gap-2"><AssetIcon symbol={market.collateralAssetId} size={20} className="rounded-full" /> {market.collateralAssetId} collateral / <AssetIcon symbol={market.debtAssetId} size={20} className="rounded-full" /> {market.debtAssetId} debt</span>
             </p>
           </div>
 

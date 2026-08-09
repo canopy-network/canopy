@@ -9,6 +9,7 @@ import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";
 import { formatAmount } from "@/lib/arbor/format";
 import type { MarketStatus } from "@/lib/arbor/types";
 import { Portfolio } from "@/components/sections/Portfolio";
+import { AssetIcon } from "@/components/AssetIcon";
 
 type Filter = "all" | MarketStatus;
 
@@ -69,11 +70,7 @@ function utilBand(u: number | null): { bar: string; text: string } {
 }
 
 function Monogram({ symbol }: { symbol: string }) {
-  return (
-    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl brand-glyph text-xs font-bold text-[#05070d]">
-      {symbol.slice(0, 4).toUpperCase()}
-    </div>
-  );
+  return <AssetIcon symbol={symbol} size={40} className="shrink-0 rounded-full shadow-md shadow-black/30" />;
 }
 
 function StatCard({
@@ -435,9 +432,7 @@ export default function HomePage() {
 
         {!isLoading && empty && (
           <div className="rounded-2xl glass p-10 text-center backdrop-blur">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl brand-glyph text-lg font-extrabold text-[#05070d]">
-              A
-            </div>
+            <div className="mx-auto"><AssetIcon symbol="arbor" size={48} className="rounded-full" /></div>
             <p className="mt-4 text-base font-semibold text-white">
               No markets yet
             </p>

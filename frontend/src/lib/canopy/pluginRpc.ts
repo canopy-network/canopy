@@ -349,6 +349,44 @@ export async function getGovernanceParams(): Promise<{ treasuryCutBps: bigint }>
   }
 }
 
+// getNasmTierBacking reads the {36} NasmTierBacking record via
+// /v1/query/nasmtierbacking (NASM Spec Section 3.3's per-tier mint
+// concentration cap accumulator). The route computes each tier's live
+// share-in-bps server-side rather than us re-deriving it, so this is a
+// direct passthrough with bigint parsing, matching getTreasury's shape.
+export async function getNasmTierBacking(): Promise<{
+  tierN0Backing: bigint;
+  tierN1Backing: bigint;
+  totalSupply: bigint;
+  tierN0ShareBps: bigint;
+  tierN1ShareBps: bigint;
+  maxTierShareBps: bigint;
+}> {
+  const zero = {
+    tierN0Backing: 0n,
+    tierN1Backing: 0n,
+    totalSupply: 0n,
+    tierN0ShareBps: 0n,
+    tierN1ShareBps: 0n,
+    maxTierShareBps: 7000n,
+  };
+  try {
+    const res = await pluginGet("/v1/query/nasmtierbacking");
+    if (!res.ok) return zero;
+    const j = await res.json();
+    return {
+      tierN0Backing: toBigInt(j?.tierN0Backing),
+      tierN1Backing: toBigInt(j?.tierN1Backing),
+      totalSupply: toBigInt(j?.totalSupply),
+      tierN0ShareBps: toBigInt(j?.tierN0ShareBps),
+      tierN1ShareBps: toBigInt(j?.tierN1ShareBps),
+      maxTierShareBps: toBigInt(j?.maxTierShareBps) || 7000n,
+    };
+  } catch {
+    return zero;
+  }
+}
+
 // getInterestRemainder reads a market's accumulated sub-unit interest rounding
 // remainder (RAY-scaled uint128), surfaced after the rounding-loss fix. Key name
 // is read defensively across the handler's possible encodings.

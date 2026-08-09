@@ -1,7 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getNasmVault, getNasmVaultPool, getAllNasmVaults } from "@/lib/canopy/pluginRpc";
+import {
+  getNasmVault,
+  getNasmVaultPool,
+  getAllNasmVaults,
+  getNasmTierBacking,
+} from "@/lib/canopy/pluginRpc";
 import { STATE_REFRESH_INTERVAL_MS } from "@/lib/arbor/constants";
 
 export function useNasmVault(vaultId: string | null) {
@@ -30,6 +35,17 @@ export function useNasmVaultsByOwner(ownerHex: string | null) {
       return getAllNasmVaults(ownerHex);
     },
     enabled: !!ownerHex,
+    refetchInterval: STATE_REFRESH_INTERVAL_MS,
+    staleTime: 20_000,
+  });
+}
+
+// NASM Spec Section 3.3's per-tier mint concentration cap accumulator.
+// No vaultId scoping -- {36} is a single global record.
+export function useNasmTierBacking() {
+  return useQuery({
+    queryKey: ["nasm-tier-backing"],
+    queryFn: getNasmTierBacking,
     refetchInterval: STATE_REFRESH_INTERVAL_MS,
     staleTime: 20_000,
   });
