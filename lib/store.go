@@ -47,7 +47,9 @@ type RWIndexerI interface {
 	// store.Indexer.GetOrComputeValidatorTotals) - combines read+write, so it's here, not on RIndexerI/WIndexerI individually.
 	GetOrComputeValidatorTotals(version uint64, compute func() (*ValidatorTotals, ErrorI)) (*ValidatorTotals, ErrorI)
 	// GetOrComputeCommittee memoizes LoadCommittee's result (see store.Indexer.GetOrComputeCommittee) - read-only callers only, never LoadCommittee itself.
-	GetOrComputeCommittee(chainId, rootHeight uint64, compute func() (*ValidatorSet, ErrorI)) (*ValidatorSet, ErrorI)
+	// tier: caller-supplied "lss"/"hss" classification (see fsm.StateMachine.LoadCommittee), recorded on the cache hit/miss/dedup metrics so
+	// headscan (always lss) and backfill (almost always hss) traffic can be told apart without either side identifying itself to the RPC layer.
+	GetOrComputeCommittee(chainId, rootHeight uint64, tier string, compute func() (*ValidatorSet, ErrorI)) (*ValidatorSet, ErrorI)
 }
 
 // WIndexerI defines the write interface for the indexing operations

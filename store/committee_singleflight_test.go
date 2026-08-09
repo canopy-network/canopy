@@ -25,11 +25,11 @@ func TestGetOrComputeCommittee_CacheHitAvoidsCompute(t *testing.T) {
 		return want, nil
 	}
 
-	got, err := store.GetOrComputeCommittee(chainId, rootHeight, compute)
+	got, err := store.GetOrComputeCommittee(chainId, rootHeight, "hss", compute)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 
-	got, err = store.GetOrComputeCommittee(chainId, rootHeight, compute)
+	got, err = store.GetOrComputeCommittee(chainId, rootHeight, "hss", compute)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 	require.EqualValues(t, 1, atomic.LoadInt32(&computeCalls), "second call for the same key should be served from cache")
@@ -56,7 +56,7 @@ func TestGetOrComputeCommittee_DedupesConcurrentComputation(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			<-start
-			results[idx], errs[idx] = store.GetOrComputeCommittee(chainId, rootHeight, func() (*lib.ValidatorSet, lib.ErrorI) {
+			results[idx], errs[idx] = store.GetOrComputeCommittee(chainId, rootHeight, "hss", func() (*lib.ValidatorSet, lib.ErrorI) {
 				atomic.AddInt32(&computeCalls, 1)
 				return want, nil
 			})
@@ -72,7 +72,7 @@ func TestGetOrComputeCommittee_DedupesConcurrentComputation(t *testing.T) {
 	}
 
 	// the result must now be durably cached, independent of singleflight
-	cached, err := store.GetOrComputeCommittee(chainId, rootHeight, func() (*lib.ValidatorSet, lib.ErrorI) {
+	cached, err := store.GetOrComputeCommittee(chainId, rootHeight, "hss", func() (*lib.ValidatorSet, lib.ErrorI) {
 		t.Fatal("compute should not run again once the result is cached")
 		return nil, nil
 	})
@@ -93,7 +93,7 @@ func TestGetOrComputeCommittee_UnrelatedKeysRunInParallel(t *testing.T) {
 	// (chainId=1, rootHeight=1)'s compute blocks until released
 	go func() {
 		defer wg.Done()
-		_, err := store.GetOrComputeCommittee(1, 1, func() (*lib.ValidatorSet, lib.ErrorI) {
+		_, err := store.GetOrComputeCommittee(1, 1, "hss", func() (*lib.ValidatorSet, lib.ErrorI) {
 			<-release
 			return &lib.ValidatorSet{TotalPower: 1, NumValidators: 1}, nil
 		})
@@ -104,7 +104,7 @@ func TestGetOrComputeCommittee_UnrelatedKeysRunInParallel(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer wg.Done()
-		_, err := store.GetOrComputeCommittee(2, 1, func() (*lib.ValidatorSet, lib.ErrorI) {
+		_, err := store.GetOrComputeCommittee(2, 1, "hss", func() (*lib.ValidatorSet, lib.ErrorI) {
 			return &lib.ValidatorSet{TotalPower: 2, NumValidators: 2}, nil
 		})
 		require.NoError(t, err)

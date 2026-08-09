@@ -445,15 +445,22 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 	return historicalFSM, nil
 }
 
+// committeeTier() classifies height relative to the current tip for LoadCommittee's metrics:
+// lss = live tip (cheap), hss = everything else (full committee scan + BLS rebuild) - an lss
+// call in its own slow tail signals resource contention with concurrent hss traffic. Headscan
+// (RPC callers polling the current head) only ever asks for the live tip, so its traffic is
+// always lss; backfill (walking historical heights) is almost always hss.
+func (s *StateMachine) committeeTier(height uint64) string {
+	if height == s.height {
+		return "lss"
+	}
+	return "hss"
+}
+
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
 func (s *StateMachine) LoadCommittee(chainId uint64, height uint64) (lib.ValidatorSet, lib.ErrorI) {
 	startTime := time.Now()
-	// tier: lss = live tip (cheap), hss = everything else (full committee scan + BLS rebuild) -
-	// an lss call in its own slow tail signals resource contention with concurrent hss traffic.
-	tier := "hss"
-	if height == s.height {
-		tier = "lss"
-	}
+	tier := s.committeeTier(height)
 	observeStage := func(stage string, stageStartTime time.Time) {
 		if s.Metrics != nil {
 			s.Metrics.LoadCommitteeStageTime.WithLabelValues(stage, tier).Observe(time.Since(stageStartTime).Seconds())
@@ -483,7 +490,7 @@ func (s *StateMachine) cachedLoadCommittee(chainId, rootHeight uint64) (lib.Vali
 	if !ok {
 		return s.LoadCommittee(chainId, rootHeight)
 	}
-	vs, err := st.GetOrComputeCommittee(chainId, rootHeight, func() (*lib.ValidatorSet, lib.ErrorI) {
+	vs, err := st.GetOrComputeCommittee(chainId, rootHeight, s.committeeTier(rootHeight), func() (*lib.ValidatorSet, lib.ErrorI) {
 		committee, loadErr := s.LoadCommittee(chainId, rootHeight)
 		if loadErr != nil {
 			return nil, loadErr

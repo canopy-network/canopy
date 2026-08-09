@@ -104,9 +104,12 @@ type IndexerMetrics struct {
 	ValidatorTotalsCacheSize         prometheus.Gauge
 	// CommitteeCacheHits/Misses cover GetOrComputeCommittee's memoization of LoadCommittee's
 	// result (see store.committeeCache's doc for why there's no incremental path here).
-	CommitteeCacheHits         prometheus.Counter
-	CommitteeCacheMisses       prometheus.Counter
-	CommitteeSingleflightDedup prometheus.Counter
+	// Labeled by tier ("lss"/"hss", see LoadCommittee) so headscan (always lss) and backfill
+	// (almost always hss) traffic can be told apart in the aggregate hit rate without either
+	// side identifying itself to the RPC layer - see cachedLoadCommittee.
+	CommitteeCacheHits         *prometheus.CounterVec
+	CommitteeCacheMisses       *prometheus.CounterVec
+	CommitteeSingleflightDedup *prometheus.CounterVec
 	CommitteeCacheSize         prometheus.Gauge
 }
 
@@ -826,18 +829,18 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_validator_totals_cache_size",
 				Help: "Current number of entries in the validator-totals cache",
 			}),
-			CommitteeCacheHits: promauto.NewCounter(prometheus.CounterOpts{
+			CommitteeCacheHits: promauto.NewCounterVec(prometheus.CounterOpts{
 				Name: "canopy_committee_cache_hits_total",
-				Help: "Total GetOrComputeCommittee calls served from the committee cache without calling LoadCommittee",
-			}),
-			CommitteeCacheMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Help: "Total GetOrComputeCommittee calls served from the committee cache without calling LoadCommittee, by tier (lss=live tip, hss=every other height) -- lss is dominated by headscan traffic, hss by backfill, so this splits an aggregate hit rate that otherwise conflates the two",
+			}, []string{"tier"}),
+			CommitteeCacheMisses: promauto.NewCounterVec(prometheus.CounterOpts{
 				Name: "canopy_committee_cache_misses_total",
-				Help: "Total GetOrComputeCommittee calls that required calling LoadCommittee in full",
-			}),
-			CommitteeSingleflightDedup: promauto.NewCounter(prometheus.CounterOpts{
+				Help: "Total GetOrComputeCommittee calls that required calling LoadCommittee in full, by tier (lss=live tip, hss=every other height) -- lss is dominated by headscan traffic, hss by backfill, so this splits an aggregate miss rate that otherwise conflates the two",
+			}, []string{"tier"}),
+			CommitteeSingleflightDedup: promauto.NewCounterVec(prometheus.CounterOpts{
 				Name: "canopy_committee_singleflight_dedup_total",
-				Help: "Total committee-cache-miss calls (including the leader) whose compute was shared with at least one other concurrent caller for the same (chainId, rootHeight) -- singleflight.Do's 'shared' bit doesn't separate leader from follower, so this counts contended resolutions, not followers alone.",
-			}),
+				Help: "Total committee-cache-miss calls (including the leader) whose compute was shared with at least one other concurrent caller for the same (chainId, rootHeight), by tier (lss=live tip, hss=every other height) -- singleflight.Do's 'shared' bit doesn't separate leader from follower, so this counts contended resolutions, not followers alone.",
+			}, []string{"tier"}),
 			CommitteeCacheSize: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_committee_cache_size",
 				Help: "Current number of entries in the committee cache",
@@ -1256,32 +1259,32 @@ func (m *Metrics) UpdateValidatorTotalsCacheSize(size int) {
 	m.ValidatorTotalsCacheSize.Set(float64(size))
 }
 
-// RecordCommitteeCacheHit() records a GetOrComputeCommittee call served without calling LoadCommittee.
-func (m *Metrics) RecordCommitteeCacheHit() {
+// RecordCommitteeCacheHit() records a GetOrComputeCommittee call served without calling LoadCommittee, labeled by tier.
+func (m *Metrics) RecordCommitteeCacheHit(tier string) {
 	// exit if empty
 	if m == nil {
 		return
 	}
-	m.CommitteeCacheHits.Inc()
+	m.CommitteeCacheHits.WithLabelValues(tier).Inc()
 }
 
-// RecordCommitteeCacheMiss() records a GetOrComputeCommittee call that required calling LoadCommittee.
-func (m *Metrics) RecordCommitteeCacheMiss() {
+// RecordCommitteeCacheMiss() records a GetOrComputeCommittee call that required calling LoadCommittee, labeled by tier.
+func (m *Metrics) RecordCommitteeCacheMiss(tier string) {
 	// exit if empty
 	if m == nil {
 		return
 	}
-	m.CommitteeCacheMisses.Inc()
+	m.CommitteeCacheMisses.WithLabelValues(tier).Inc()
 }
 
 // RecordCommitteeSingleflightDedup() records a committee-cache-miss call whose compute was
-// shared with at least one other concurrent caller for the same (chainId, rootHeight).
-func (m *Metrics) RecordCommitteeSingleflightDedup() {
+// shared with at least one other concurrent caller for the same (chainId, rootHeight), labeled by tier.
+func (m *Metrics) RecordCommitteeSingleflightDedup(tier string) {
 	// exit if empty
 	if m == nil {
 		return
 	}
-	m.CommitteeSingleflightDedup.Inc()
+	m.CommitteeSingleflightDedup.WithLabelValues(tier).Inc()
 }
 
 // UpdateCommitteeCacheSize() updates the current entry count of the committee cache.

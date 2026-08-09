@@ -228,12 +228,14 @@ func (t *Indexer) GetOrComputeValidatorTotals(version uint64, compute func() (*l
 
 // GetOrComputeCommittee returns (chainId, rootHeight)'s cached committee, computing via
 // compute exactly once even under concurrent callers, then caching the result.
-func (t *Indexer) GetOrComputeCommittee(chainId, rootHeight uint64, compute func() (*lib.ValidatorSet, lib.ErrorI)) (*lib.ValidatorSet, lib.ErrorI) {
+// tier is caller-classified ("lss"/"hss", see fsm.StateMachine.LoadCommittee) and only ever
+// labels the hit/miss/dedup metrics below - it plays no part in the cache key or lookup itself.
+func (t *Indexer) GetOrComputeCommittee(chainId, rootHeight uint64, tier string, compute func() (*lib.ValidatorSet, lib.ErrorI)) (*lib.ValidatorSet, lib.ErrorI) {
 	if vs, ok := t.committees.get(chainId, rootHeight); ok {
-		t.metrics.RecordCommitteeCacheHit()
+		t.metrics.RecordCommitteeCacheHit(tier)
 		return vs, nil
 	}
-	t.metrics.RecordCommitteeCacheMiss()
+	t.metrics.RecordCommitteeCacheMiss(tier)
 	key := strconv.FormatUint(chainId, 10) + ":" + strconv.FormatUint(rootHeight, 10)
 	v, err, shared := t.committees.sf.Do(key, func() (interface{}, error) {
 		// re-check: another goroutine may have populated this while we waited to be scheduled
@@ -249,7 +251,7 @@ func (t *Indexer) GetOrComputeCommittee(chainId, rootHeight uint64, compute func
 		return vs, nil
 	})
 	if shared {
-		t.metrics.RecordCommitteeSingleflightDedup()
+		t.metrics.RecordCommitteeSingleflightDedup(tier)
 	}
 	if err != nil {
 		if errI, ok := err.(lib.ErrorI); ok {
