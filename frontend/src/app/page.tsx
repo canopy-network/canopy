@@ -78,11 +78,15 @@ function StatCard({
   value,
   sub,
   subTone = "muted",
+  coins,
+  accent = false,
 }: {
   label: string;
   value: string;
   sub?: string;
   subTone?: "muted" | "up" | "down";
+  coins?: string[];
+  accent?: boolean;
 }) {
   const tone =
     subTone === "up"
@@ -91,9 +95,38 @@ function StatCard({
         ? "text-rose-400"
         : "text-zinc-500";
   return (
-    <div className="rounded-2xl glass p-5 backdrop-blur">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-white">
+    <div
+      className={`rounded-2xl glass p-5 backdrop-blur transition hover:border-white/20 ${
+        accent ? "ring-1 ring-amber-400/25" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+          {label}
+        </p>
+        {coins && coins.length > 0 && (
+          <span className="flex items-center -space-x-1.5">
+            {coins.map((s) => (
+              <AssetIcon
+                key={s}
+                symbol={s}
+                size={20}
+                className="rounded-full ring-2 ring-[#0a0f1c]"
+              />
+            ))}
+            {coins.length > 4 && (
+              <span className="grid h-5 w-7 place-items-center rounded-full bg-white/10 text-[9px] font-semibold text-zinc-300 ring-2 ring-[#0a0f1c]">
+                +{coins.length - 4}
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+      <p
+        className={`mt-2 text-3xl font-semibold tracking-tight tabular-nums ${
+          accent ? "text-amber-100" : "text-white"
+        }`}
+      >
         {value}
       </p>
       {sub && <p className={`mt-1 text-xs tabular-nums ${tone}`}>{sub}</p>}
@@ -319,9 +352,20 @@ export default function HomePage() {
     <div className="space-y-8">
       <section className="space-y-5 reveal" data-rd="0">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="eyebrow">Arbor · Smart Lending Protocol</p>
-            <h1 className="display-title">Protocol overview</h1>
+          <div className="flex items-center gap-4">
+            <AssetIcon
+              symbol="arbor"
+              size={56}
+              className="shrink-0 rounded-full shadow-lg shadow-black/40"
+            />
+            <div>
+              <p className="eyebrow">Arbor · Smart Lending Protocol</p>
+              <h1 className="display-title">Protocol overview</h1>
+              <p className="mt-1 max-w-xl text-sm text-zinc-500">
+                Isolated lending markets with a four-layer bad-debt waterfall —
+                R_fund, T_fund, socialized lenders, and the NASM reserve.
+              </p>
+            </div>
           </div>
           <Link
             href="/admin"
@@ -340,6 +384,8 @@ export default function HomePage() {
           />
           <StatCard
             label="Total value locked"
+            accent
+            coins={Array.from(new Set((markets ?? []).map((e) => e.market.collateralAssetId)))}
             value={
               pricedSupplied > 0
                 ? fmtUsd(pricedSupplied)
@@ -355,6 +401,7 @@ export default function HomePage() {
           />
           <StatCard
             label="Total borrowed"
+            coins={Array.from(new Set((markets ?? []).map((e) => e.market.debtAssetId)))}
             value={
               pricedBorrowed > 0
                 ? fmtUsd(pricedBorrowed)
