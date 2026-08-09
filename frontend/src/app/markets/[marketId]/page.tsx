@@ -206,12 +206,26 @@ export default function MarketPage() {
       <MarketDetailTabs market={market} reserveFund={reserveFund} lossFactor={lossFactor} />
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <h3 className="lg:col-span-2 flex items-center gap-2 pt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+          <AssetIcon symbol={market.debtAssetId} size={18} className="rounded-full" />
+          Lend {market.debtAssetId}
+        </h3>
         <DepositForm marketId={marketId} />
         <WithdrawForm marketId={marketId} />
+
+        <h3 className="lg:col-span-2 flex items-center gap-2 pt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+          <AssetIcon symbol={market.collateralAssetId} size={18} className="rounded-full" />
+          Borrow against {market.collateralAssetId}
+        </h3>
         <DepositCollateralForm marketId={marketId} />
         <WithdrawCollateralForm marketId={marketId} />
         <BorrowForm marketId={marketId} />
         <RepayForm marketId={marketId} />
+
+        <h3 className="lg:col-span-2 flex items-center gap-2 pt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+          <AssetIcon symbol="arbor" size={18} className="rounded-full" />
+          Risk &amp; oracle
+        </h3>
         <LiquidateForm marketId={marketId} />
         <UpdatePriceForm marketId={marketId} />
       </div>
