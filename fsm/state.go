@@ -485,12 +485,17 @@ func (s *StateMachine) LoadCommittee(chainId uint64, height uint64) (lib.Validat
 
 // cachedLoadCommittee memoizes LoadCommittee's result, used only by blockNonSignerAddresses -
 // LoadCommittee's other, consensus-critical callers (bft message/evidence validation, validator-set transitions) always call it directly and never see this cache.
-func (s *StateMachine) cachedLoadCommittee(chainId, rootHeight uint64) (lib.ValidatorSet, lib.ErrorI) {
+// tier is the caller's already-computed live-tip/historical classification (see indexerBlob) -
+// s here is already a TimeMachine'd snapshot pinned at the height being built, so committeeTier
+// can't be recomputed against s.height the way LoadCommittee does: s.height is that same pinned
+// height, not the live tip, so rootHeight would always land on the same side of the comparison
+// regardless of whether this call is actually about the live tip or deep history.
+func (s *StateMachine) cachedLoadCommittee(chainId, rootHeight uint64, tier string) (lib.ValidatorSet, lib.ErrorI) {
 	st, ok := s.store.(lib.StoreI)
 	if !ok {
 		return s.LoadCommittee(chainId, rootHeight)
 	}
-	vs, err := st.GetOrComputeCommittee(chainId, rootHeight, s.committeeTier(rootHeight), func() (*lib.ValidatorSet, lib.ErrorI) {
+	vs, err := st.GetOrComputeCommittee(chainId, rootHeight, tier, func() (*lib.ValidatorSet, lib.ErrorI) {
 		committee, loadErr := s.LoadCommittee(chainId, rootHeight)
 		if loadErr != nil {
 			return nil, loadErr
