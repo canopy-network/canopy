@@ -1,5 +1,5 @@
-import { AssetIcon } from "@/components/AssetIcon";
 "use client";
+import { AssetIcon } from "@/components/AssetIcon";
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";

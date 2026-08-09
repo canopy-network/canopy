@@ -1,5 +1,5 @@
-import { AssetIcon } from "@/components/AssetIcon";
 "use client";
+import { AssetIcon } from "@/components/AssetIcon";
 
 import { useParams } from "next/navigation";
 import { useMarket } from "@/lib/hooks/useMarket";
