@@ -20,7 +20,12 @@ import { RepayForm } from "@/components/forms/RepayForm";
 import { LiquidateForm } from "@/components/forms/LiquidateForm";
 import { UpdatePriceForm } from "@/components/forms/UpdatePriceForm";
 import { MarketDetailTabs } from "@/components/sections/MarketDetailTabs";
-import { formatAmount, formatHealthFactor } from "@/lib/arbor/format";
+import { formatAmount, formatHealthFactor, formatRay } from "@/lib/arbor/format";
+
+const BINDEX_BASE = 1000000000000000000000n;
+function fmtIndex(v: bigint, base: bigint): string {
+  return (Number((v * 1000000n) / base) / 1000000).toFixed(6);
+}
 import { scaledDebt, computeHealthFactorScaled } from "@/lib/arbor/math";
 import { TIER_PARAMS } from "@/lib/arbor/constants";
 
@@ -182,17 +187,17 @@ export default function MarketPage() {
 
           <div>
             B index
-            <p className="text-zinc-300">{bIndex.toString()}</p>
+            <p className="text-zinc-300">{fmtIndex(bIndex, BINDEX_BASE)}×</p>
           </div>
 
           <div>
             S rate
-            <p className="text-zinc-300">{supplyIndex.sRate.toString()}</p>
+            <p className="text-zinc-300">{formatRay(supplyIndex.sRate)}</p>
           </div>
 
           <div>
             Loss factor
-            <p className="text-zinc-300">{lossFactor.toString()}</p>
+            <p className="text-zinc-300">{formatRay(lossFactor)}</p>
           </div>
 
           <div>
