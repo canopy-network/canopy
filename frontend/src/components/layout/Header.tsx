@@ -14,6 +14,7 @@ const NAV = [
   { href: "/oracle", label: "Oracle" },
   { href: "/liquidate", label: "Liquidation" }, { href: "/monitor", label: "Monitor" },
   { href: "/events", label: "Events" },
+  { href: "/quests", label: "Quests" },
   { href: "/governance", label: "Governance" }, { href: "/admin", label: "Authority" },
   { href: "/tx", label: "Transactions" },
 ];
