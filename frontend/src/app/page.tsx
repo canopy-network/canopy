@@ -8,7 +8,6 @@ import { StatusPill } from "@/components/widgets/StatusPill";
 import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";
 import { formatAmount } from "@/lib/arbor/format";
 import type { MarketStatus } from "@/lib/arbor/types";
-import { Portfolio } from "@/components/sections/Portfolio";
 import { AssetIcon } from "@/components/AssetIcon";
 
 type Filter = "all" | MarketStatus;
@@ -431,7 +430,6 @@ export default function HomePage() {
         </p>
       </section>
 
-      <Portfolio />
 
       <section className="space-y-4 reveal" data-rd="2">
         <div className="flex items-center justify-between">
