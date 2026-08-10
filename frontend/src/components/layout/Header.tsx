@@ -128,6 +128,7 @@ function WalletChip() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (wallet.isConnected) setOpen(false);
   }, [wallet.isConnected]);
 
