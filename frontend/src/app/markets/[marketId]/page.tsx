@@ -1,4 +1,5 @@
 "use client";
+import { useState, type ReactNode } from "react";
 import { AssetIcon } from "@/components/AssetIcon";
 
 import { useParams } from "next/navigation";
@@ -22,6 +23,53 @@ import { MarketDetailTabs } from "@/components/sections/MarketDetailTabs";
 import { formatAmount, formatHealthFactor } from "@/lib/arbor/format";
 import { scaledDebt, computeHealthFactorScaled } from "@/lib/arbor/math";
 import { TIER_PARAMS } from "@/lib/arbor/constants";
+
+
+function FormSection({
+  symbol,
+  title,
+  blurb,
+  defaultOpen = false,
+  children,
+}: {
+  symbol: string;
+  title: string;
+  blurb: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.02]">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-white/[0.03]"
+      >
+        <AssetIcon symbol={symbol} size={28} className="shrink-0 rounded-full" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-zinc-100">{title}</span>
+          <span className="block truncate text-[11px] text-zinc-500">{blurb}</span>
+        </span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="grid gap-4 border-t border-white/5 p-5 md:grid-cols-2">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
 
 export default function MarketPage() {
   const params = useParams();
@@ -205,29 +253,36 @@ export default function MarketPage() {
 
       <MarketDetailTabs market={market} reserveFund={reserveFund} lossFactor={lossFactor} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <h3 className="lg:col-span-2 flex items-center gap-2 pt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-          <AssetIcon symbol={market.debtAssetId} size={18} className="rounded-full" />
-          Lend {market.debtAssetId}
-        </h3>
-        <DepositForm marketId={marketId} />
-        <WithdrawForm marketId={marketId} />
+      <div className="space-y-4">
+        <FormSection
+          symbol={market.debtAssetId}
+          title={`Lend ${market.debtAssetId}`}
+          blurb="Supply-side: deposit to earn, withdraw to exit."
+          defaultOpen
+        >
+          <DepositForm marketId={marketId} />
+          <WithdrawForm marketId={marketId} />
+        </FormSection>
 
-        <h3 className="lg:col-span-2 flex items-center gap-2 pt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-          <AssetIcon symbol={market.collateralAssetId} size={18} className="rounded-full" />
-          Borrow against {market.collateralAssetId}
-        </h3>
-        <DepositCollateralForm marketId={marketId} />
-        <WithdrawCollateralForm marketId={marketId} />
-        <BorrowForm marketId={marketId} />
-        <RepayForm marketId={marketId} />
+        <FormSection
+          symbol={market.collateralAssetId}
+          title={`Borrow against ${market.collateralAssetId}`}
+          blurb="Borrower-side: post or pull collateral, draw or repay debt."
+        >
+          <DepositCollateralForm marketId={marketId} />
+          <WithdrawCollateralForm marketId={marketId} />
+          <BorrowForm marketId={marketId} />
+          <RepayForm marketId={marketId} />
+        </FormSection>
 
-        <h3 className="lg:col-span-2 flex items-center gap-2 pt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-          <AssetIcon symbol="arbor" size={18} className="rounded-full" />
-          Risk &amp; oracle
-        </h3>
-        <LiquidateForm marketId={marketId} />
-        <UpdatePriceForm marketId={marketId} />
+        <FormSection
+          symbol="arbor"
+          title="Risk & oracle"
+          blurb="Liquidations and permissioned price feeds."
+        >
+          <LiquidateForm marketId={marketId} />
+          <UpdatePriceForm marketId={marketId} />
+        </FormSection>
       </div>
     </div>
   );
