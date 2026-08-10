@@ -74,6 +74,62 @@ func (MarketStatus) EnumDescriptor() ([]byte, []int) {
 	return file_arbor_state_proto_rawDescGZIP(), []int{0}
 }
 
+// EmergencyModeTrigger distinguishes an automatic (staleness-based) trigger
+// from a manual risk-committee override -- ARCM Section 10's own text
+// describes Emergency Mode as triggerable by "stale oracle beyond
+// threshold, OR risk-committee override" (a superset condition), so the
+// two causes are represented explicitly rather than collapsed into a
+// single boolean, since a future reader/auditor needs to know WHY a given
+// asset is in Emergency Mode, not just THAT it is.
+type EmergencyModeTrigger int32
+
+const (
+	EmergencyModeTrigger_EMERGENCY_TRIGGER_NONE      EmergencyModeTrigger = 0 // not currently active
+	EmergencyModeTrigger_EMERGENCY_TRIGGER_STALENESS EmergencyModeTrigger = 1 // automatic: no fresh price within EMERGENCY_THRESHOLD blocks
+	EmergencyModeTrigger_EMERGENCY_TRIGGER_OVERRIDE  EmergencyModeTrigger = 2 // manual: risk-committee-authorized override transaction
+)
+
+// Enum value maps for EmergencyModeTrigger.
+var (
+	EmergencyModeTrigger_name = map[int32]string{
+		0: "EMERGENCY_TRIGGER_NONE",
+		1: "EMERGENCY_TRIGGER_STALENESS",
+		2: "EMERGENCY_TRIGGER_OVERRIDE",
+	}
+	EmergencyModeTrigger_value = map[string]int32{
+		"EMERGENCY_TRIGGER_NONE":      0,
+		"EMERGENCY_TRIGGER_STALENESS": 1,
+		"EMERGENCY_TRIGGER_OVERRIDE":  2,
+	}
+)
+
+func (x EmergencyModeTrigger) Enum() *EmergencyModeTrigger {
+	p := new(EmergencyModeTrigger)
+	*p = x
+	return p
+}
+
+func (x EmergencyModeTrigger) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EmergencyModeTrigger) Descriptor() protoreflect.EnumDescriptor {
+	return file_arbor_state_proto_enumTypes[1].Descriptor()
+}
+
+func (EmergencyModeTrigger) Type() protoreflect.EnumType {
+	return &file_arbor_state_proto_enumTypes[1]
+}
+
+func (x EmergencyModeTrigger) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EmergencyModeTrigger.Descriptor instead.
+func (EmergencyModeTrigger) EnumDescriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{1}
+}
+
 // Market is the {16} record: core market metadata plus the flags and counters
 // ARCM's bad-debt waterfall and freeze mechanism operate on. See ARCM v3.11.1
 // Section 19.1 for the canonical field set this implements.
@@ -1070,6 +1126,180 @@ func (x *NusdBalance) GetAmount() uint64 {
 	return 0
 }
 
+// EmergencyModeFlag is the {21} record: per-asset (NOT per-market -- see
+// KeyForEmergencyMode's own doc comment in state_keys.go for why oracle
+// trustworthiness is a canonical property of the asset's price feed,
+// mirroring KeyForAssetTier/KeyForPriceRecord's identical asset-keyed
+// precedent, not a market-specific concern) emergency-mode state.
+//
+// Read by OracleUntrustworthy() (oracle_untrustworthy.go), gating
+// burn_nusd/liquidate_nasm_vault per NASM Consolidated Spec Section 9.2.
+type EmergencyModeFlag struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	AssetId        string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	Active         bool                   `protobuf:"varint,2,opt,name=active,proto3" json:"active,omitempty"`
+	Trigger        EmergencyModeTrigger   `protobuf:"varint,3,opt,name=trigger,proto3,enum=types.EmergencyModeTrigger" json:"trigger,omitempty"`
+	TriggeredBlock uint64                 `protobuf:"varint,4,opt,name=triggered_block,json=triggeredBlock,proto3" json:"triggered_block,omitempty"` // block height the flag was last set active; 0 if never triggered
+	TriggeredBy    []byte                 `protobuf:"bytes,5,opt,name=triggered_by,json=triggeredBy,proto3" json:"triggered_by,omitempty"`           // authority address for TRIGGER_OVERRIDE; empty for TRIGGER_STALENESS
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *EmergencyModeFlag) Reset() {
+	*x = EmergencyModeFlag{}
+	mi := &file_arbor_state_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmergencyModeFlag) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmergencyModeFlag) ProtoMessage() {}
+
+func (x *EmergencyModeFlag) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmergencyModeFlag.ProtoReflect.Descriptor instead.
+func (*EmergencyModeFlag) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *EmergencyModeFlag) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *EmergencyModeFlag) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+func (x *EmergencyModeFlag) GetTrigger() EmergencyModeTrigger {
+	if x != nil {
+		return x.Trigger
+	}
+	return EmergencyModeTrigger_EMERGENCY_TRIGGER_NONE
+}
+
+func (x *EmergencyModeFlag) GetTriggeredBlock() uint64 {
+	if x != nil {
+		return x.TriggeredBlock
+	}
+	return 0
+}
+
+func (x *EmergencyModeFlag) GetTriggeredBy() []byte {
+	if x != nil {
+		return x.TriggeredBy
+	}
+	return nil
+}
+
+// CircuitBreakerState is the {20} record: per-asset (same asset-keyed
+// rationale as EmergencyModeFlag above) circuit-breaker state.
+//
+// KNOWN GAP, DISCLOSED, NOT SILENT: the actual deviation-detection
+// algorithm this state is meant to represent (ARCM Section 10 Rule 4 /
+// MAX_PRICE_DEVIATION = 30%, immutable / TWAP_WINDOW) is NOT implemented.
+// The base ARCM/AYIS spec's own audit trail lists "TWAP rolling window"
+// as "OPEN (NF) / Deferred" -- this is not a case of an existing,
+// fully-specified formula this codebase simply hasn't wired up yet (unlike
+// every other gap closed this session); the upstream spec's own authors
+// had not finished designing the comparison algorithm as of the documents
+// this codebase was built against. Building a deviation-trigger algorithm
+// here would mean inventing spec-level policy unilaterally and presenting
+// it as ARCM-compliant, which this codebase's own established discipline
+// (verify before act, no assumptions) treats as unacceptable. This message
+// and its accessors (GetCircuitBreakerState/SetCircuitBreakerState) exist
+// so {20} has a real reader/writer -- closing price_resolve.go's own
+// disclosed "reserved key with no writer yet" gap at the STATE layer --
+// but `active` will only ever be set by a manual override transaction
+// (set_circuit_breaker, mirroring emergency mode's own override path)
+// until a real TWAP/deviation algorithm is designed and approved. No
+// automatic trigger exists for this flag as of this commit.
+type CircuitBreakerState struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	AssetId        string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	Active         bool                   `protobuf:"varint,2,opt,name=active,proto3" json:"active,omitempty"`
+	TriggeredBlock uint64                 `protobuf:"varint,3,opt,name=triggered_block,json=triggeredBlock,proto3" json:"triggered_block,omitempty"`
+	TriggeredBy    []byte                 `protobuf:"bytes,4,opt,name=triggered_by,json=triggeredBy,proto3" json:"triggered_by,omitempty"` // authority address; always populated -- see this message's own doc comment, no automatic trigger exists yet
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CircuitBreakerState) Reset() {
+	*x = CircuitBreakerState{}
+	mi := &file_arbor_state_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CircuitBreakerState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CircuitBreakerState) ProtoMessage() {}
+
+func (x *CircuitBreakerState) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CircuitBreakerState.ProtoReflect.Descriptor instead.
+func (*CircuitBreakerState) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *CircuitBreakerState) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *CircuitBreakerState) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+func (x *CircuitBreakerState) GetTriggeredBlock() uint64 {
+	if x != nil {
+		return x.TriggeredBlock
+	}
+	return 0
+}
+
+func (x *CircuitBreakerState) GetTriggeredBy() []byte {
+	if x != nil {
+		return x.TriggeredBy
+	}
+	return nil
+}
+
 var File_arbor_state_proto protoreflect.FileDescriptor
 
 const file_arbor_state_proto_rawDesc = "" +
@@ -1142,7 +1372,18 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\rdeposit_block\x18\x04 \x01(\x04R\fdepositBlock\"?\n" +
 	"\vNusdBalance\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x04R\x06amount*E\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\"\xc9\x01\n" +
+	"\x11EmergencyModeFlag\x12\x19\n" +
+	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x16\n" +
+	"\x06active\x18\x02 \x01(\bR\x06active\x125\n" +
+	"\atrigger\x18\x03 \x01(\x0e2\x1b.types.EmergencyModeTriggerR\atrigger\x12'\n" +
+	"\x0ftriggered_block\x18\x04 \x01(\x04R\x0etriggeredBlock\x12!\n" +
+	"\ftriggered_by\x18\x05 \x01(\fR\vtriggeredBy\"\x94\x01\n" +
+	"\x13CircuitBreakerState\x12\x19\n" +
+	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x16\n" +
+	"\x06active\x18\x02 \x01(\bR\x06active\x12'\n" +
+	"\x0ftriggered_block\x18\x03 \x01(\x04R\x0etriggeredBlock\x12!\n" +
+	"\ftriggered_by\x18\x04 \x01(\fR\vtriggeredBy*E\n" +
 	"\fMarketStatus\x12\n" +
 	"\n" +
 	"\x06ACTIVE\x10\x00\x12\n" +
@@ -1150,7 +1391,11 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\x06PAUSED\x10\x01\x12\r\n" +
 	"\tINSOLVENT\x10\x02\x12\x0e\n" +
 	"\n" +
-	"DEPRECATED\x10\x03B-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"DEPRECATED\x10\x03*s\n" +
+	"\x14EmergencyModeTrigger\x12\x1a\n" +
+	"\x16EMERGENCY_TRIGGER_NONE\x10\x00\x12\x1f\n" +
+	"\x1bEMERGENCY_TRIGGER_STALENESS\x10\x01\x12\x1e\n" +
+	"\x1aEMERGENCY_TRIGGER_OVERRIDE\x10\x02B-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_state_proto_rawDescOnce sync.Once
@@ -1164,30 +1409,34 @@ func file_arbor_state_proto_rawDescGZIP() []byte {
 	return file_arbor_state_proto_rawDescData
 }
 
-var file_arbor_state_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_arbor_state_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_arbor_state_proto_goTypes = []any{
 	(MarketStatus)(0),             // 0: types.MarketStatus
-	(*Market)(nil),                // 1: types.Market
-	(*BorrowerPosition)(nil),      // 2: types.BorrowerPosition
-	(*PriceRecord)(nil),           // 3: types.PriceRecord
-	(*LenderPosition)(nil),        // 4: types.LenderPosition
-	(*LossFactorQueueEntry)(nil),  // 5: types.LossFactorQueueEntry
-	(*GovernanceParams)(nil),      // 6: types.GovernanceParams
-	(*NasmVault)(nil),             // 7: types.NasmVault
-	(*NusdSupply)(nil),            // 8: types.NusdSupply
-	(*NasmTierBacking)(nil),       // 9: types.NasmTierBacking
-	(*StabilityFeeIndex)(nil),     // 10: types.StabilityFeeIndex
-	(*RwaYieldVaultPosition)(nil), // 11: types.RwaYieldVaultPosition
-	(*NusdBalance)(nil),           // 12: types.NusdBalance
+	(EmergencyModeTrigger)(0),     // 1: types.EmergencyModeTrigger
+	(*Market)(nil),                // 2: types.Market
+	(*BorrowerPosition)(nil),      // 3: types.BorrowerPosition
+	(*PriceRecord)(nil),           // 4: types.PriceRecord
+	(*LenderPosition)(nil),        // 5: types.LenderPosition
+	(*LossFactorQueueEntry)(nil),  // 6: types.LossFactorQueueEntry
+	(*GovernanceParams)(nil),      // 7: types.GovernanceParams
+	(*NasmVault)(nil),             // 8: types.NasmVault
+	(*NusdSupply)(nil),            // 9: types.NusdSupply
+	(*NasmTierBacking)(nil),       // 10: types.NasmTierBacking
+	(*StabilityFeeIndex)(nil),     // 11: types.StabilityFeeIndex
+	(*RwaYieldVaultPosition)(nil), // 12: types.RwaYieldVaultPosition
+	(*NusdBalance)(nil),           // 13: types.NusdBalance
+	(*EmergencyModeFlag)(nil),     // 14: types.EmergencyModeFlag
+	(*CircuitBreakerState)(nil),   // 15: types.CircuitBreakerState
 }
 var file_arbor_state_proto_depIdxs = []int32{
 	0, // 0: types.Market.status:type_name -> types.MarketStatus
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 1: types.EmergencyModeFlag.trigger:type_name -> types.EmergencyModeTrigger
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_arbor_state_proto_init() }
@@ -1200,8 +1449,8 @@ func file_arbor_state_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_state_proto_rawDesc), len(file_arbor_state_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   12,
+			NumEnums:      2,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

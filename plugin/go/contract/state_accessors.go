@@ -868,3 +868,113 @@ func SetStabilityFeeIndexRecordTry(c *Contract, sfIndex *big.Int, lastAccrualBlo
 	}
 	return true, nil
 }
+
+// ─────────────────────────────────────────────
+// Oracle safety state -- {20} CircuitBreakerState, {21} EmergencyModeFlag
+// (ARCM Section 10 Rules 2/4, NASM Consolidated Spec Section 9.2). Both
+// asset-keyed -- see KeyForCircuitBreaker/KeyForEmergencyMode's own doc
+// comments in state_keys.go for why.
+
+// GetEmergencyMode reads a single asset's {21} EmergencyModeFlag record.
+// found=false is the normal, expected steady state for any asset that has
+// never had Emergency Mode triggered -- matches GetNusdSupply/
+// GetTreasuryNASM's own found=false-is-normal contract, not GetMarket's
+// found=false-is-an-error contract. Callers MUST treat a zero-value
+// EmergencyModeFlag{} (Active=false, Trigger=EMERGENCY_TRIGGER_NONE) as
+// the correct default in that case.
+func GetEmergencyMode(c *Contract, assetID string) (flag *EmergencyModeFlag, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForEmergencyMode(assetID)},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	f := &EmergencyModeFlag{}
+	if uErr := Unmarshal(raw, f); uErr != nil {
+		return nil, false, uErr
+	}
+	return f, true, nil
+}
+
+// SetEmergencyMode writes a single asset's {21} EmergencyModeFlag record,
+// mirroring SetTreasuryNASM's own reverting-write shape exactly (this is
+// only ever called from DeliverTx-context admin transactions -- automatic
+// staleness detection, which will need a BeginBlock-context caller, is not
+// wired yet; see this function's own caller list once one exists).
+func SetEmergencyMode(c *Contract, flag *EmergencyModeFlag) *PluginError {
+	encoded, mErr := Marshal(flag)
+	if mErr != nil {
+		return mErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForEmergencyMode(flag.AssetId), Value: encoded},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
+}
+
+// GetCircuitBreakerState reads a single asset's {20} CircuitBreakerState
+// record. found=false is the normal, expected steady state for every asset
+// as of this commit -- see CircuitBreakerState's own doc comment
+// (arbor_state.proto) for why: no automatic deviation-trigger algorithm
+// exists yet, so this will only ever be found=true after a manual
+// set_circuit_breaker override.
+func GetCircuitBreakerState(c *Contract, assetID string) (state *CircuitBreakerState, found bool, pErr *PluginError) {
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: 0, Key: KeyForCircuitBreaker(assetID)},
+		},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if readResp.Error != nil {
+		return nil, false, readResp.Error
+	}
+	raw := entryValue(readResp, 0)
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	s := &CircuitBreakerState{}
+	if uErr := Unmarshal(raw, s); uErr != nil {
+		return nil, false, uErr
+	}
+	return s, true, nil
+}
+
+// SetCircuitBreakerState writes a single asset's {20} CircuitBreakerState
+// record, same reverting-write shape as SetEmergencyMode above.
+func SetCircuitBreakerState(c *Contract, state *CircuitBreakerState) *PluginError {
+	encoded, mErr := Marshal(state)
+	if mErr != nil {
+		return mErr
+	}
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForCircuitBreaker(state.AssetId), Value: encoded},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if writeResp.Error != nil {
+		return writeResp.Error
+	}
+	return nil
+}

@@ -182,6 +182,22 @@ func (c *Contract) DeliverMessageLiquidateNasmVault(msg *MessageLiquidateNasmVau
 		return &PluginDeliverResponse{Error: ErrNasmPriceUnavailable(msg.VaultId, vault.CollateralAssetId)}
 	}
 
+	// [NEW] NASM Spec Section 9.2. Different rationale than burn_nusd's own
+	// identical check (that file's own comment): liquidation isn't gated
+	// here as a punitive pause -- it's gated because HF_n and the seizure
+	// amount CANNOT be safely computed against a price this untrustworthy,
+	// regardless of whether liquidation itself would otherwise be
+	// desirable during an emergency (protecting the protocol from further
+	// bad debt). An untrustworthy price makes the underlying math itself
+	// unsound, not merely risky.
+	untrustworthy, ouErr := OracleUntrustworthy(c, vault.CollateralAssetId)
+	if ouErr != nil {
+		return &PluginDeliverResponse{Error: ouErr}
+	}
+	if untrustworthy {
+		return &PluginDeliverResponse{Error: ErrOracleUntrustworthy(msg.VaultId, vault.CollateralAssetId)}
+	}
+
 	// Step 4 -- HF_n, via ARCM's own ComputeHealthFactorScaled, UNCHANGED,
 	// per MessageLiquidateNasmVault's own proto doc comment. debt price is
 	// NusdOraclePriceScaled (fixed $1.00), not a lookup.

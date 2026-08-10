@@ -40,6 +40,8 @@ var ContractConfig = &PluginConfig{
 		"mint_nusd",
 		"burn_nusd",
 		"liquidate_nasm_vault",
+		"set_emergency_mode",
+		"set_circuit_breaker",
 	},
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
@@ -61,6 +63,8 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.MessageMintNusd",
 		"type.googleapis.com/types.MessageBurnNusd",
 		"type.googleapis.com/types.MessageLiquidateNasmVault",
+		"type.googleapis.com/types.MessageSetEmergencyMode",
+		"type.googleapis.com/types.MessageSetCircuitBreaker",
 	},
 	EventTypeUrls: []string{
 		"type.googleapis.com/types.EventIndexEncodingOverflowHalted",
@@ -289,6 +293,10 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 		return c.CheckMessageBurnNusd(x)
 	case *MessageLiquidateNasmVault:
 		return c.CheckMessageLiquidateNasmVault(x)
+	case *MessageSetEmergencyMode:
+		return c.CheckMessageSetEmergencyMode(x)
+	case *MessageSetCircuitBreaker:
+		return c.CheckMessageSetCircuitBreaker(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -309,8 +317,12 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 	// file, silently discarding the Arbor-specific routing (and
 	// ContractConfig's SupportedTransactions/TransactionTypeUrls
 	// registration, restored below) with no merge conflict. CheckTx's
-	// own switch (above) was unaffected and continued routing all 14
-	// types correctly, which is why transactions were admitted to the
+	// own switch (above) was unaffected and continued routing all
+	// Arbor-specific types correctly (14 at the time of this fix, 18 as
+	// of this session's own re-verification -- MintNusd/BurnNusd/
+	// LiquidateNasmVault/SetTreasuryCut were added after this comment
+	// was originally written; count corrected here rather than left
+	// stale), which is why transactions were admitted to the
 	// mempool -- but DeliverTx rejected every one of them at the point
 	// business logic would actually run. Restored to mirror CheckTx's
 	// case list and order exactly, using the DeliverMessage* handlers
@@ -355,6 +367,10 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 		return c.DeliverMessageBurnNusd(x, request.Tx.Fee)
 	case *MessageLiquidateNasmVault:
 		return c.DeliverMessageLiquidateNasmVault(x, request.Tx.Fee)
+	case *MessageSetEmergencyMode:
+		return c.DeliverMessageSetEmergencyMode(x, request.Tx.Fee)
+	case *MessageSetCircuitBreaker:
+		return c.DeliverMessageSetCircuitBreaker(x, request.Tx.Fee)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

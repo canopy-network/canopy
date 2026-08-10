@@ -464,3 +464,14 @@ func ErrNasmTierBackingOverflow(nasmTier uint8, current, increase uint64) *Plugi
 func ErrNasmTierConcentrationCapExceeded(nasmTier uint8, newTierTotal, newGrandTotal string, maxTierShareBps uint64) *PluginError {
 	return NewError(258, ArborModule, fmt.Sprintf("NASM tier %d mint rejected: would bring tier backing to %s of %s total NUSD supply, exceeding the %d bps (%.1f%%) per-tier concentration cap, NASM Spec Section 3.3", nasmTier, newTierTotal, newGrandTotal, maxTierShareBps, float64(maxTierShareBps)/100))
 }
+
+// ErrOracleUntrustworthy is returned when OracleUntrustworthy() (
+// oracle_untrustworthy.go) returns true for a given collateral asset,
+// gating burn_nusd or liquidate_nasm_vault per NASM Consolidated Spec
+// Section 9.2. vaultID and assetID are both included so the specific
+// vault AND the specific asset that triggered the gate are both visible
+// in the error without a caller needing to cross-reference the vault
+// record separately.
+func ErrOracleUntrustworthy(vaultID string, assetID string) *PluginError {
+	return NewError(259, ArborModule, fmt.Sprintf("NASM vault %q: oracle for collateral asset %q is untrustworthy (stale beyond %d blocks, circuit breaker active, or emergency mode active) -- NASM Spec Section 9.2", vaultID, assetID, EmergencyThresholdBlocks))
+}

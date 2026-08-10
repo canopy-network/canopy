@@ -54,6 +54,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/stabilityfeeindex", p.handleQueryStabilityFeeIndex)
 	mux.HandleFunc("/v1/query/waterfall-events", p.handleQueryWaterfallEvents)
 	mux.HandleFunc("/v1/query/nasmtierbacking", p.handleQueryNasmTierBacking)
+	mux.HandleFunc("/v1/query/emergencymode", p.handleQueryEmergencyMode)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -482,6 +483,65 @@ func (p *Plugin) handleQueryLossFactor(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"marketId": marketId, "lossFactor": lossFactor.String()})
+}
+
+// handleQueryEmergencyMode serves GET /v1/query/emergencymode?assetId=CNPY
+// Returns the requested asset's {21} EmergencyModeFlag record (Active,
+// Trigger, TriggeredBlock, TriggeredBy). Added because set_emergency_mode
+// (contract.go:296/370, oracle_admin.go) had a full write path -- handler,
+// dispatch, accessor -- but no query surface at all prior to this route,
+// making a submitted set_emergency_mode tx unverifiable except indirectly.
+// Mirrors handleQueryNusdBalance's proto-decode shape (raw QueryState ->
+// proto.Unmarshal -> protojson.Marshal) rather than GetEmergencyMode's own
+// *Contract-based accessor, since that accessor is scoped to DeliverTx
+// handler use, not RPC. Zero-value convention: an asset that has never
+// had emergency mode set returns a zero-value EmergencyModeFlag (Active
+// omitted/false, Trigger=EMERGENCY_TRIGGER_NONE per proto3 default
+// field-omission), not a 404 -- matching GetEmergencyMode's own
+// found=false-is-normal convention documented at state_accessors.go:883.
+func (p *Plugin) handleQueryEmergencyMode(w http.ResponseWriter, r *http.Request) {
+	assetId := r.URL.Query().Get("assetId")
+	if assetId == "" {
+		http.Error(w, `{"error":"missing assetId query param"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForEmergencyMode(assetId)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"assetId": assetId, "active": "false", "note": "emergency mode never set for this asset"})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	flag := &EmergencyModeFlag{}
+	if err := proto.Unmarshal(raw, flag); err != nil {
+		http.Error(w, `{"error":"failed to decode EmergencyModeFlag record: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	flagJSON, err := protojson.Marshal(flag)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode emergency mode json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(flagJSON)
 }
 
 // handleQueryTreasury serves GET /v1/query/treasury?pool=arbor|nasm

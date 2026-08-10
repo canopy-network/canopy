@@ -141,6 +141,22 @@ func (c *Contract) DeliverMessageBurnNusd(msg *MessageBurnNusd, fee uint64) *Plu
 		return &PluginDeliverResponse{Error: ErrNasmPriceUnavailable(msg.VaultId, vault.CollateralAssetId)}
 	}
 
+	// [NEW] NASM Spec Section 9.1/9.2: burn_nusd is asymmetrically
+	// ALLOWED during general Emergency Mode ("reducing debt / reclaiming
+	// own collateral is risk-reducing for the system"), UNLESS the oracle
+	// for THIS SPECIFIC collateral asset is untrustworthy -- the narrow
+	// per-asset gate, not a blanket pause. Checked here, after priceFound
+	// is already confirmed true (OracleUntrustworthy's own doc comment
+	// notes its empty-range safety-net branch is otherwise dead code for
+	// this exact call site).
+	untrustworthy, ouErr := OracleUntrustworthy(c, vault.CollateralAssetId)
+	if ouErr != nil {
+		return &PluginDeliverResponse{Error: ouErr}
+	}
+	if untrustworthy {
+		return &PluginDeliverResponse{Error: ErrOracleUntrustworthy(msg.VaultId, vault.CollateralAssetId)}
+	}
+
 	// Step 6 -- compare BEFORE subtracting (NASM Spec Section 4.2 Step 6's
 	// own explicit mandate, matching ARCM/AYIS's identical repay-path
 	// discipline). currentDebt and msg.NusdAmount are both unsigned.

@@ -130,6 +130,30 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			Authority: authority,
 		}
 		return "type.googleapis.com/types.MessageSetAssetTier", msg, nil
+	case "set_emergency_mode":
+		authority, err := hex.DecodeString(str(fields["authority"]))
+		if err != nil {
+			return "", nil, fmt.Errorf("decode authority: %w", err)
+		}
+		active, _ := fields["active"].(bool)
+		msg := &contract.MessageSetEmergencyMode{
+			AssetId:   str(fields["assetId"]),
+			Active:    active,
+			Authority: authority,
+		}
+		return "type.googleapis.com/types.MessageSetEmergencyMode", msg, nil
+	case "set_circuit_breaker":
+		authority, err := hex.DecodeString(str(fields["authority"]))
+		if err != nil {
+			return "", nil, fmt.Errorf("decode authority: %w", err)
+		}
+		active, _ := fields["active"].(bool)
+		msg := &contract.MessageSetCircuitBreaker{
+			AssetId:   str(fields["assetId"]),
+			Active:    active,
+			Authority: authority,
+		}
+		return "type.googleapis.com/types.MessageSetCircuitBreaker", msg, nil
 	case "update_price":
 		submitter, err := hex.DecodeString(signerAddrHex)
 		if err != nil {

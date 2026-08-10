@@ -152,8 +152,16 @@ func KeyForPriceRecord(assetID string, submitter []byte) []byte {
 	return JoinLenPrefix(PrefixPriceCache, []byte(assetID), submitter)
 }
 
-func KeyForCircuitBreaker(marketID string) []byte {
-	return JoinLenPrefix(PrefixCircuitBreaker, []byte(marketID))
+// KeyForCircuitBreaker is keyed by assetID alone -- oracle trustworthiness
+// is a canonical property of the asset's own price feed (mirrors
+// KeyForAssetTier's identical rationale immediately below), NOT per-market.
+// [FIX, session finding] Originally keyed by marketID, with zero real
+// callers ever built against that signature -- re-keyed here before any
+// caller was written, matching NASM Consolidated Spec Section 9.2's own
+// OracleUntrustworthy(asset_id) predicate exactly, rather than building a
+// predicate on top of an inconsistent, market-keyed foundation.
+func KeyForCircuitBreaker(assetID string) []byte {
+	return JoinLenPrefix(PrefixCircuitBreaker, []byte(assetID))
 }
 
 // KeyForAssetTier is keyed by assetID alone -- tier is a canonical property
@@ -163,8 +171,11 @@ func KeyForAssetTier(assetID string) []byte {
 	return JoinLenPrefix(PrefixAssetTier, []byte(assetID))
 }
 
-func KeyForEmergencyMode(marketID string) []byte {
-	return JoinLenPrefix(PrefixEmergencyMode, []byte(marketID))
+// KeyForEmergencyMode is keyed by assetID alone -- same rationale as
+// KeyForCircuitBreaker above. [FIX, session finding] Same re-keying, same
+// reason: originally marketID-keyed with zero real callers.
+func KeyForEmergencyMode(assetID string) []byte {
+	return JoinLenPrefix(PrefixEmergencyMode, []byte(assetID))
 }
 
 func KeyForGovernanceParams() []byte {

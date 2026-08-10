@@ -296,3 +296,61 @@ message NusdBalance {
   bytes  address = 1;
   uint64 amount = 2;
 }
+
+// EmergencyModeTrigger distinguishes an automatic (staleness-based) trigger
+// from a manual risk-committee override -- ARCM Section 10's own text
+// describes Emergency Mode as triggerable by "stale oracle beyond
+// threshold, OR risk-committee override" (a superset condition), so the
+// two causes are represented explicitly rather than collapsed into a
+// single boolean, since a future reader/auditor needs to know WHY a given
+// asset is in Emergency Mode, not just THAT it is.
+enum EmergencyModeTrigger {
+  EMERGENCY_TRIGGER_NONE = 0;       // not currently active
+  EMERGENCY_TRIGGER_STALENESS = 1;  // automatic: no fresh price within EMERGENCY_THRESHOLD blocks
+  EMERGENCY_TRIGGER_OVERRIDE = 2;   // manual: risk-committee-authorized override transaction
+}
+
+// EmergencyModeFlag is the {21} record: per-asset (NOT per-market -- see
+// KeyForEmergencyMode's own doc comment in state_keys.go for why oracle
+// trustworthiness is a canonical property of the asset's price feed,
+// mirroring KeyForAssetTier/KeyForPriceRecord's identical asset-keyed
+// precedent, not a market-specific concern) emergency-mode state.
+//
+// Read by OracleUntrustworthy() (oracle_untrustworthy.go), gating
+// burn_nusd/liquidate_nasm_vault per NASM Consolidated Spec Section 9.2.
+message EmergencyModeFlag {
+  string               asset_id        = 1;
+  bool                 active          = 2;
+  EmergencyModeTrigger trigger         = 3;
+  uint64               triggered_block = 4; // block height the flag was last set active; 0 if never triggered
+  bytes                triggered_by    = 5; // authority address for TRIGGER_OVERRIDE; empty for TRIGGER_STALENESS
+}
+
+// CircuitBreakerState is the {20} record: per-asset (same asset-keyed
+// rationale as EmergencyModeFlag above) circuit-breaker state.
+//
+// KNOWN GAP, DISCLOSED, NOT SILENT: the actual deviation-detection
+// algorithm this state is meant to represent (ARCM Section 10 Rule 4 /
+// MAX_PRICE_DEVIATION = 30%, immutable / TWAP_WINDOW) is NOT implemented.
+// The base ARCM/AYIS spec's own audit trail lists "TWAP rolling window"
+// as "OPEN (NF) / Deferred" -- this is not a case of an existing,
+// fully-specified formula this codebase simply hasn't wired up yet (unlike
+// every other gap closed this session); the upstream spec's own authors
+// had not finished designing the comparison algorithm as of the documents
+// this codebase was built against. Building a deviation-trigger algorithm
+// here would mean inventing spec-level policy unilaterally and presenting
+// it as ARCM-compliant, which this codebase's own established discipline
+// (verify before act, no assumptions) treats as unacceptable. This message
+// and its accessors (GetCircuitBreakerState/SetCircuitBreakerState) exist
+// so {20} has a real reader/writer -- closing price_resolve.go's own
+// disclosed "reserved key with no writer yet" gap at the STATE layer --
+// but `active` will only ever be set by a manual override transaction
+// (set_circuit_breaker, mirroring emergency mode's own override path)
+// until a real TWAP/deviation algorithm is designed and approved. No
+// automatic trigger exists for this flag as of this commit.
+message CircuitBreakerState {
+  string asset_id        = 1;
+  bool   active           = 2;
+  uint64 triggered_block  = 3;
+  bytes  triggered_by     = 4; // authority address; always populated -- see this message's own doc comment, no automatic trigger exists yet
+}

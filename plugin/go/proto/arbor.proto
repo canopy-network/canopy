@@ -258,15 +258,47 @@ message MessageBurnNusd {
 // custody split exactly) -- liquidating a NASM vault burns NUSD out of
 // circulation, the same as any other debt reduction.
 //
-// PHASE 1 SCOPE LIMIT, DISCLOSED: a liquidation whose required collateral
-// seizure would exceed the vault's own locked collateral (a bad-debt
-// scenario) is hard-rejected via ErrNasmLiquidationBadDebt rather than
-// partially seizing collateral and leaving an unaccounted shortfall.
-// NASM's own bad-debt waterfall (R_nusd draw-down, Arbor treasury
-// fallback, Section 11.2) is not yet wired into this transaction. See
-// ErrNasmLiquidationBadDebt's own doc comment for the full reasoning.
+// [FIX, session finding] The comment below previously described the
+// bad-debt path as unconditionally hard-rejecting -- true when originally
+// written, no longer true. Layer3DrawDownNASM (R_nusd draw-down, {41}) is
+// now wired into this transaction's own bad-debt branch: a shortfall is
+// first offered to R_nusd, and only hard-rejects (ErrNasmLiquidationBadDebt)
+// if R_nusd cannot fully cover it (NASM Layer 4 system-wide socialization
+// is still not built, so an uncovered shortfall still has no further
+// fallback -- see that error's own current doc comment, error.go, for the
+// precise, up-to-date scope).
 message MessageLiquidateNasmVault {
   string vault_id = 1;
   bytes  liquidator = 2;
   uint64 repay_amount = 3;
+}
+
+// MessageSetEmergencyMode sets or clears a single asset's {21}
+// EmergencyModeFlag record, per NASM Consolidated Spec Section 9.2's
+// "risk-committee override" trigger (EMERGENCY_TRIGGER_OVERRIDE). Mirrors
+// MessageSetAssetTier's own single-hardcoded-authority pattern exactly
+// (arbor.proto's own comment on that message: "standing in for the
+// risk-committee multisig ARCM Section 13 names as the intended actor").
+// Automatic staleness-based triggering (EMERGENCY_TRIGGER_STALENESS) is a
+// SEPARATE, not-yet-built path (would need a BeginBlock-context caller,
+// same class of gap this codebase's own ProcessLossFactorQueue closed for
+// a different subsystem) -- this message only ever sets
+// EMERGENCY_TRIGGER_OVERRIDE when active=true.
+message MessageSetEmergencyMode {
+  string asset_id  = 1;
+  bool   active     = 2;
+  bytes  authority  = 3;
+}
+
+// MessageSetCircuitBreaker sets or clears a single asset's {20}
+// CircuitBreakerState record. Same authority pattern as
+// MessageSetEmergencyMode above. See CircuitBreakerState's own doc comment
+// (arbor_state.proto) for why this is CURRENTLY THE ONLY way this flag can
+// ever become active -- no automatic deviation-detection algorithm exists
+// yet (upstream ARCM/AYIS spec's own TWAP mechanism is marked "OPEN (NF) /
+// Deferred" in its audit trail).
+message MessageSetCircuitBreaker {
+  string asset_id  = 1;
+  bool   active     = 2;
+  bytes  authority  = 3;
 }

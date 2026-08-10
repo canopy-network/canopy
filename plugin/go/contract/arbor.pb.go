@@ -1249,6 +1249,144 @@ func (x *MessageLiquidateNasmVault) GetRepayAmount() uint64 {
 	return 0
 }
 
+// MessageSetEmergencyMode sets or clears a single asset's {21}
+// EmergencyModeFlag record, per NASM Consolidated Spec Section 9.2's
+// "risk-committee override" trigger (EMERGENCY_TRIGGER_OVERRIDE). Mirrors
+// MessageSetAssetTier's own single-hardcoded-authority pattern exactly
+// (arbor.proto's own comment on that message: "standing in for the
+// risk-committee multisig ARCM Section 13 names as the intended actor").
+// Automatic staleness-based triggering (EMERGENCY_TRIGGER_STALENESS) is a
+// SEPARATE, not-yet-built path (would need a BeginBlock-context caller,
+// same class of gap this codebase's own ProcessLossFactorQueue closed for
+// a different subsystem) -- this message only ever sets
+// EMERGENCY_TRIGGER_OVERRIDE when active=true.
+type MessageSetEmergencyMode struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AssetId       string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	Active        bool                   `protobuf:"varint,2,opt,name=active,proto3" json:"active,omitempty"`
+	Authority     []byte                 `protobuf:"bytes,3,opt,name=authority,proto3" json:"authority,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageSetEmergencyMode) Reset() {
+	*x = MessageSetEmergencyMode{}
+	mi := &file_arbor_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageSetEmergencyMode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageSetEmergencyMode) ProtoMessage() {}
+
+func (x *MessageSetEmergencyMode) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageSetEmergencyMode.ProtoReflect.Descriptor instead.
+func (*MessageSetEmergencyMode) Descriptor() ([]byte, []int) {
+	return file_arbor_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *MessageSetEmergencyMode) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *MessageSetEmergencyMode) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+func (x *MessageSetEmergencyMode) GetAuthority() []byte {
+	if x != nil {
+		return x.Authority
+	}
+	return nil
+}
+
+// MessageSetCircuitBreaker sets or clears a single asset's {20}
+// CircuitBreakerState record. Same authority pattern as
+// MessageSetEmergencyMode above. See CircuitBreakerState's own doc comment
+// (arbor_state.proto) for why this is CURRENTLY THE ONLY way this flag can
+// ever become active -- no automatic deviation-detection algorithm exists
+// yet (upstream ARCM/AYIS spec's own TWAP mechanism is marked "OPEN (NF) /
+// Deferred" in its audit trail).
+type MessageSetCircuitBreaker struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AssetId       string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	Active        bool                   `protobuf:"varint,2,opt,name=active,proto3" json:"active,omitempty"`
+	Authority     []byte                 `protobuf:"bytes,3,opt,name=authority,proto3" json:"authority,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageSetCircuitBreaker) Reset() {
+	*x = MessageSetCircuitBreaker{}
+	mi := &file_arbor_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageSetCircuitBreaker) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageSetCircuitBreaker) ProtoMessage() {}
+
+func (x *MessageSetCircuitBreaker) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageSetCircuitBreaker.ProtoReflect.Descriptor instead.
+func (*MessageSetCircuitBreaker) Descriptor() ([]byte, []int) {
+	return file_arbor_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *MessageSetCircuitBreaker) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *MessageSetCircuitBreaker) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+func (x *MessageSetCircuitBreaker) GetAuthority() []byte {
+	if x != nil {
+		return x.Authority
+	}
+	return nil
+}
+
 var File_arbor_proto protoreflect.FileDescriptor
 
 const file_arbor_proto_rawDesc = "" +
@@ -1336,7 +1474,15 @@ const file_arbor_proto_rawDesc = "" +
 	"\n" +
 	"liquidator\x18\x02 \x01(\fR\n" +
 	"liquidator\x12!\n" +
-	"\frepay_amount\x18\x03 \x01(\x04R\vrepayAmountB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"\frepay_amount\x18\x03 \x01(\x04R\vrepayAmount\"j\n" +
+	"\x17MessageSetEmergencyMode\x12\x19\n" +
+	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x16\n" +
+	"\x06active\x18\x02 \x01(\bR\x06active\x12\x1c\n" +
+	"\tauthority\x18\x03 \x01(\fR\tauthority\"k\n" +
+	"\x18MessageSetCircuitBreaker\x12\x19\n" +
+	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x16\n" +
+	"\x06active\x18\x02 \x01(\bR\x06active\x12\x1c\n" +
+	"\tauthority\x18\x03 \x01(\fR\tauthorityB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_proto_rawDescOnce sync.Once
@@ -1350,7 +1496,7 @@ func file_arbor_proto_rawDescGZIP() []byte {
 	return file_arbor_proto_rawDescData
 }
 
-var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_arbor_proto_goTypes = []any{
 	(*MessageCreateMarket)(nil),       // 0: types.MessageCreateMarket
 	(*MessageUpdateMarketParams)(nil), // 1: types.MessageUpdateMarketParams
@@ -1370,6 +1516,8 @@ var file_arbor_proto_goTypes = []any{
 	(*MessageMintNusd)(nil),           // 15: types.MessageMintNusd
 	(*MessageBurnNusd)(nil),           // 16: types.MessageBurnNusd
 	(*MessageLiquidateNasmVault)(nil), // 17: types.MessageLiquidateNasmVault
+	(*MessageSetEmergencyMode)(nil),   // 18: types.MessageSetEmergencyMode
+	(*MessageSetCircuitBreaker)(nil),  // 19: types.MessageSetCircuitBreaker
 }
 var file_arbor_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1390,7 +1538,7 @@ func file_arbor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_proto_rawDesc), len(file_arbor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
