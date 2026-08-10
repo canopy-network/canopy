@@ -126,6 +126,67 @@ func TestIndexerBlobsCached_JournalPathIncludesUnchangedRewardAccount(t *testing
 	require.Nil(t, entry.current)
 }
 
+func TestIndexerBlobsCached_JournalPathUsesValidatorAndNonSignerKeys(t *testing.T) {
+	server := newTestIndexerBlobServerWithHeights(t, 4)
+	sm := server.controller.FSM
+	db := sm.Store().(lib.StoreI)
+	validatorAddress := crypto.NewAddress(bytes.Repeat([]byte{0x31}, crypto.AddressSize))
+	nonSignerAddress := crypto.NewAddress(bytes.Repeat([]byte{0x32}, crypto.AddressSize))
+	rewardAddress := bytes.Repeat([]byte{0x33}, crypto.AddressSize)
+
+	validatorBz, err := lib.Marshal(&fsm.Validator{Address: validatorAddress.Bytes(), Output: rewardAddress})
+	require.NoError(t, err)
+	nonSignerBz, err := lib.Marshal(&fsm.NonSigner{Address: nonSignerAddress.Bytes(), Counter: 1})
+	require.NoError(t, err)
+	require.NoError(t, sm.Set(fsm.KeyForValidator(validatorAddress), validatorBz))
+	require.NoError(t, sm.Set(fsm.KeyForNonSigner(nonSignerAddress.Bytes()), nonSignerBz))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{
+		Height: 4,
+		Hash:   crypto.Hash([]byte("block-4-journal-entities")),
+		Time:   uint64(time.Now().UnixMicro()),
+	}}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 5)
+
+	changed, _, err := server.IndexerBlobsCached(5)
+	require.NoError(t, err)
+	require.Len(t, changed.Current.Validators, 1)
+	require.Len(t, changed.Current.NonSigners, 1)
+	require.Equal(t, uint32(1), changed.Current.TotalValidatorsActive)
+
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{
+		Height: 5,
+		Hash:   crypto.Hash([]byte("block-5-validator-reward")),
+		Time:   uint64(time.Now().UnixMicro()),
+	}, Events: []*lib.Event{{EventType: string(lib.EventTypeReward), Address: rewardAddress}}}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 6)
+
+	rewarded, _, err := server.IndexerBlobsCached(6)
+	require.NoError(t, err)
+	require.Len(t, rewarded.Current.Validators, 1)
+	require.Len(t, rewarded.Previous.Validators, 1)
+	require.Empty(t, rewarded.Current.NonSigners)
+	require.Equal(t, uint32(1), rewarded.Current.TotalValidatorsActive)
+
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{
+		Height: 6,
+		Hash:   crypto.Hash([]byte("block-6-no-entity-changes")),
+		Time:   uint64(time.Now().UnixMicro()),
+	}}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 7)
+
+	unchanged, _, err := server.IndexerBlobsCached(7)
+	require.NoError(t, err)
+	require.Empty(t, unchanged.Current.Validators)
+	require.Empty(t, unchanged.Current.NonSigners)
+	require.Equal(t, uint32(1), unchanged.Current.TotalValidatorsActive)
+}
+
 func TestIndexerBlobsCached_HeightTwoPreservesGenesisAccounts(t *testing.T) {
 	log := lib.NewDefaultLogger()
 	db, err := store.NewStoreInMemory(log)

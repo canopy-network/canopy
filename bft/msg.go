@@ -13,7 +13,7 @@ func (b *BFT) HandleMessage(message proto.Message) lib.ErrorI {
 	// ensure is a valid `Consensus Message` type
 	switch msg := message.(type) {
 	case *Message:
-		// capture the paramters needed to validate the message
+		// capture the parameters needed to validate the message
 		params, err := b.GetValidateMessageParams(msg)
 		if err != nil {
 			return err

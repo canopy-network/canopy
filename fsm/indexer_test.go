@@ -115,6 +115,32 @@ func TestDeltaIndexerBlobs_ForceIncludeValidatorByRewardOutput(t *testing.T) {
 	requireEntriesAsSet(t, delta.Previous.Validators, valPrev)
 }
 
+func TestValidatorForceStateKeys_Events(t *testing.T) {
+	address := bytes.Repeat([]byte{12}, 20)
+	output := bytes.Repeat([]byte{13}, 20)
+	validator := mustMarshalProto(t, &Validator{Address: address, Output: output})
+
+	for _, event := range []struct {
+		typ     lib.EventType
+		address []byte
+	}{
+		{lib.EventTypeReward, address},
+		{lib.EventTypeReward, output},
+		{lib.EventTypeSlash, address},
+		{lib.EventTypeAutoPause, address},
+		{lib.EventTypeAutoBeginUnstaking, address},
+		{lib.EventTypeFinishUnstaking, address},
+	} {
+		block := mustMarshalProto(t, &lib.BlockResult{Events: []*lib.Event{{
+			EventType: string(event.typ),
+			Address:   event.address,
+		}}})
+		keys, err := validatorForceStateKeys(block, [][]byte{validator})
+		require.NoError(t, err)
+		require.Equal(t, [][]byte{lib.JoinLenPrefix(validatorPrefix, address)}, keys)
+	}
+}
+
 func TestDeltaIndexerBlobs_NoPreviousKeepsCurrent(t *testing.T) {
 	acc := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{10}, 20), Amount: 42})
 	pool := mustMarshalProto(t, &Pool{Id: 42, Amount: 42})
