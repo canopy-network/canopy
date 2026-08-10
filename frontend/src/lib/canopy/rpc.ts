@@ -139,14 +139,15 @@ export async function queryAccount(
   address: string
 ): Promise<AccountInfo | null> {
   try {
-    const res = await rpcFetch(`/v1/query/account/${address}`);
+    const res = await rpcFetch("/v1/query/account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address }),
+    });
 
-    if (!res.ok) {
-      return null;
-    }
+    if (!res.ok) return null;
 
-    const data = await res.json();
-    const account = data?.result ?? data;
+    const account = await res.json();
 
     return {
       address: account?.address || address,
