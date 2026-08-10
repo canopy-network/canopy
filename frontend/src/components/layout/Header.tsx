@@ -196,6 +196,7 @@ function RoleBadge({ roles }: { roles: Roles }) {
 export function Header() {
   const pathname = usePathname() ?? "";
   const [menuOpen, setMenuOpen] = useState(false);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMenuOpen(false); }, [pathname]);
   const roles = useRoles();
   const nav = NAV.filter((i) => i.href !== "/admin" || roles.isProtocolAuthority);
