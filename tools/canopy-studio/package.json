@@ -1,0 +1,31 @@
+{
+  "name": "canopy-appchain-studio",
+  "version": "1.0.0",
+  "description": "Interactive Recursive Appchain Launcher, Nested Chain Simulator & Security Mesh Studio for Canopy Network.",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "canopy-cli": "./bin/canopy-cli.js"
+  },
+  "scripts": {
+    "start": "node src/server/app.js",
+    "cli": "node bin/canopy-cli.js",
+    "test": "node tests/run-all.js"
+  },
+  "keywords": [
+    "canopy-network",
+    "appchains",
+    "nested-chains",
+    "recursive-blockchain",
+    "bft-consensus",
+    "validator-mesh"
+  ],
+  "author": "Canopy Network Community",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.5",
+    "express": "^4.21.2"
+  }
+}
