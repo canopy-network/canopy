@@ -10,6 +10,7 @@ import {
   cacheDerivedKey,
   getAlreadyConnectedEthAccount,
   loadCachedKey,
+  hasCachedKey,
 } from "@/lib/wallet/metamask";
 import { publicKeyFromPrivateHex } from "@/lib/wallet";
 import { formatAddress } from "@/lib/arbor/format";
@@ -42,6 +43,24 @@ export function WalletConnect() {
   const [error, setError] = useState<string | null>(null);
   const [dismissedUnlock, setDismissedUnlock] = useState(false);
   const showUnlock = !isConnected && hasStoredKeystore && !dismissedUnlock;
+
+  // Silent reconnect: MetaMask already connected + cached derived key ->
+  // restore the Arbor wallet on load without any popup.
+  useEffect(() => {
+    if (isConnected) return;
+    let alive = true;
+    (async () => {
+      const eth = await getAlreadyConnectedEthAccount();
+      if (!eth || !hasCachedKey(eth)) return;
+      const key = await loadCachedKey(eth);
+      if (!key || !alive) return;
+      await connectFromRawKey(key);
+    })().catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected]);
 
   // Generate tab
   const [genPassword, setGenPassword] = useState("");
@@ -169,9 +188,9 @@ export function WalletConnect() {
       const ethAddress = await requestEthAccount();
       setError(null);
       const sig = await signDeriveMessage(ethAddress);
-      const blsKey = await deriveBlsFromEthSignature(sig);
-      await connectFromRawKey(blsKey);
-      await cacheDerivedKey(ethAddress, blsKey);
+      const derived = await deriveBlsFromEthSignature(sig);
+      await connectFromRawKey(derived.privateKeyHex);
+      await cacheDerivedKey(ethAddress, derived.privateKeyHex);
       await maybeSaveKeystore();
     } catch (err) {
       setError(errMessage(err));

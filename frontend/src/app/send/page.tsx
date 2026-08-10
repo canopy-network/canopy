@@ -69,6 +69,8 @@ export default function SendPage() {
   const staked = accountData?.stakedAmount ?? null;
 
   useEffect(() => {
+    if (!addr) return;
+    let alive = true;
     getNusdBalance(addr).then((b) => {
       if (alive) setNusd(b.amount);
     });
