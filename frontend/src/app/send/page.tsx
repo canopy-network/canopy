@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { useWalletStore } from "@/lib/wallet";
 import { SendForm } from "@/components/forms/SendForm";
+import { useAccount } from "@/lib/hooks/useAccount";
 import { Portfolio } from "@/components/sections/Portfolio";
 import { AssetIcon } from "@/components/AssetIcon";
 import { formatAddress, formatAmount } from "@/lib/arbor/format";
-import { queryAccount } from "@/lib/canopy/rpc";
 import {
   getNusdBalance,
   getAllNasmVaults,
@@ -61,20 +61,14 @@ export default function SendPage() {
   const wallet = useWalletStore();
   const addr = wallet.address;
 
-  const [cnpy, setCnpy] = useState<bigint | null>(null);
-  const [staked, setStaked] = useState<bigint | null>(null);
   const [nusd, setNusd] = useState<bigint | null>(null);
   const [vaults, setVaults] = useState<VaultRow[]>([]);
 
+  const { data: accountData } = useAccount(addr);
+  const cnpy = accountData?.amount ?? null;
+  const staked = accountData?.stakedAmount ?? null;
+
   useEffect(() => {
-    if (!addr) return;
-    let alive = true;
-    queryAccount(addr).then((a) => {
-      if (alive && a) {
-        setCnpy(a.amount);
-        setStaked(a.stakedAmount);
-      }
-    });
     getNusdBalance(addr).then((b) => {
       if (alive) setNusd(b.amount);
     });

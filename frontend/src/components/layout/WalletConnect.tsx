@@ -3,6 +3,14 @@
 import { useState, useEffect, useRef } from "react";
 import { adminGetKey } from "@/lib/canopy/rpc";
 import { useWalletStore } from "@/lib/wallet";
+import {
+  requestEthAccount,
+  signDeriveMessage,
+  deriveBlsFromEthSignature,
+  cacheDerivedKey,
+  getAlreadyConnectedEthAccount,
+  loadCachedKey,
+} from "@/lib/wallet/metamask";
 import { publicKeyFromPrivateHex } from "@/lib/wallet";
 import { formatAddress } from "@/lib/arbor/format";
 
@@ -12,7 +20,7 @@ function errMessage(err: unknown): string {
   return String(err);
 }
 
-type ConnectTab = "generate" | "paste" | "import" | "admin";
+type ConnectTab = "generate" | "paste" | "import" | "admin" | "metamask";
 
 export function WalletConnect() {
   const {
@@ -148,6 +156,24 @@ export function WalletConnect() {
       setImportPassword("");
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err: unknown) {
+      setError(errMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleMetaMaskConnect() {
+    setError(null);
+    setBusy(true);
+    try {
+      const ethAddress = await requestEthAccount();
+      setError(null);
+      const sig = await signDeriveMessage(ethAddress);
+      const blsKey = await deriveBlsFromEthSignature(sig);
+      await connectFromRawKey(blsKey);
+      await cacheDerivedKey(ethAddress, blsKey);
+      await maybeSaveKeystore();
+    } catch (err) {
       setError(errMessage(err));
     } finally {
       setBusy(false);
@@ -309,6 +335,7 @@ export function WalletConnect() {
   }
 
   const tabs: { id: ConnectTab; label: string }[] = [
+    { id: "metamask", label: "MetaMask" },
     { id: "generate", label: "New wallet" },
     { id: "paste", label: "Paste key" },
     { id: "import", label: "Import file" },
@@ -411,6 +438,34 @@ export function WalletConnect() {
             {busy ? "Importing..." : "Import"}
           </button>
         </form>
+      )}
+
+      {tab === "metamask" && (
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-400">
+            Connect using MetaMask. Signs a derivation message to generate a
+            deterministic BLS key from your Ethereum account.
+          </p>
+          <div className="space-y-2 rounded-lg border border-white/5 bg-white/[0.02] p-3">
+            <label className="flex items-center gap-2 text-sm text-zinc-300">
+              <input type="checkbox" checked={rememberWallet} onChange={(e) => setRememberWallet(e.target.checked)} className="rounded border-white/20" />
+              Remember this wallet (encrypted local storage)
+            </label>
+            {rememberWallet && (
+              <input
+                value={keystorePassword}
+                onChange={(e) => setKeystorePassword(e.target.value)}
+                type="password"
+                placeholder="Keystore password (min 8 chars)"
+                className={inputClass}
+              />
+            )}
+          </div>
+          {error && <p className="text-xs text-rose-400">{error}</p>}
+          <button type="button" onClick={handleMetaMaskConnect} disabled={busy} className={`w-full ${primaryBtnClass}`}>
+            {busy ? "Connecting..." : "Connect with MetaMask"}
+          </button>
+        </div>
       )}
 
       {tab === "admin" && (
