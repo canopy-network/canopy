@@ -10,7 +10,7 @@
  * so bonus XP is tracked separately from automatic quest-completion XP
  * but still rolls into the same weekly leaderboard totals.
  */
-import { weekIdForHeight } from "./config.js";
+import { weekIdForHeight, dayIdForHeight } from "./config.js";
 import { fetchCurrentHeight } from "./arborClient.js";
 import { listPendingFeedback, getFeedbackById, reviewFeedback, creditXp } from "./db/store.js";
 
@@ -30,10 +30,12 @@ async function approve(feedbackIdStr: string, bonusXpStr: string) {
   const xp = Number(bonusXpStr);
   const height = await fetchCurrentHeight();
   const weekId = weekIdForHeight(height);
+  const dayId = dayIdForHeight(height);
 
   creditXp({
     address: fb.address,
     weekId,
+    dayId,
     questId: `feedback:${fb.questId}`,
     txHash: fb.txHash,
     xp,

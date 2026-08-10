@@ -25,6 +25,7 @@ export interface IdentityRecord {
 export interface QuestXpRecord {
   address: string;
   weekId: number;
+  dayId: number;
   questId: string;
   txHash: string;
   xp: number;
@@ -118,6 +119,29 @@ export function alreadyCredited(address: string, txHash: string, questId: string
   return store.questXp.some((r) => r.address === address && r.txHash === txHash && r.questId === questId);
 }
 
+/**
+ * Daily activity cap: true if `address` has already earned XP for `questId`
+ * on `dayId`, regardless of which txHash it came from. This is the anti-bot
+ * gate — doing the same quest action 50 times in a day earns XP once.
+ *
+ * Deliberately independent of `alreadyCredited` (which is a plain replay
+ * guard keyed on txHash). A single call site can hit either check for
+ * different reasons: `alreadyCredited` stops the same tx being processed
+ * twice (e.g. on indexer restart), `alreadyCreditedToday` stops many
+ * different txs earning XP for the same quest on the same day.
+ */
+export function alreadyCreditedToday(address: string, questId: string, dayId: number): boolean {
+  return store.questXp.some((r) => r.address === address && r.questId === questId && r.dayId === dayId);
+}
+
+/**
+ * Credits XP unconditionally except for the txHash replay guard. Callers
+ * that need the daily activity cap (the automatic on-chain sweep) must
+ * check `alreadyCreditedToday` themselves before calling this — see
+ * indexer.ts. The manual feedback-bonus path (reviewFeedback.ts) uses a
+ * synthetic `feedback:<questId>` namespace and is intentionally NOT
+ * subject to the daily cap, since a human reviewer already gates it.
+ */
 export function creditXp(record: QuestXpRecord) {
   if (alreadyCredited(record.address, record.txHash, record.questId)) return;
   store.questXp.push(record);

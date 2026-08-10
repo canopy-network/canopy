@@ -12,6 +12,7 @@ export const config = {
   arborRpcUrl: process.env.ARBOR_RPC_URL ?? "http://localhost:50002", // matches frontend's NEXT_PUBLIC_CANOPY_RPC_URL default
   blockSeconds: 20, // Arbor's block time
   weekBlocks: Math.floor((7 * 24 * 60 * 60) / 20), // 604800 / 20 = 30240
+  dayBlocks: Math.floor((24 * 60 * 60) / 20), // 86400 / 20 = 4320
   pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 60_000), // how often the indexer sweeps linked wallets
   dbPath: process.env.DB_PATH ?? "./data/quests.json",
   discordToken: process.env.DISCORD_BOT_TOKEN ?? "",
@@ -49,4 +50,8 @@ export function questForMessageType(messageType: string): QuestDef | undefined {
 
 export function weekIdForHeight(height: number): number {
   return Math.floor(height / config.weekBlocks);
+}
+
+export function dayIdForHeight(height: number): number {
+  return Math.floor(height / config.dayBlocks);
 }

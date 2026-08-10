@@ -1,6 +1,14 @@
 import { fetchTxsBySender } from "./arborClient.js";
-import { config, questForMessageType, weekIdForHeight, QUESTS } from "./config.js";
-import { getAllIdentities, getCursor, setCursor, alreadyCredited, creditXp, type IdentityRecord } from "./db/store.js";
+import { config, questForMessageType, weekIdForHeight, dayIdForHeight, QUESTS } from "./config.js";
+import {
+  getAllIdentities,
+  getCursor,
+  setCursor,
+  alreadyCredited,
+  alreadyCreditedToday,
+  creditXp,
+  type IdentityRecord,
+} from "./db/store.js";
 
 /**
  * Quest completion XP is fully automatic here — a verified wallet's real,
@@ -28,9 +36,18 @@ async function sweepWallet(identity: IdentityRecord) {
     if (alreadyCredited(address, tx.txHash, quest.id)) continue;
 
     const weekId = weekIdForHeight(tx.height);
-    creditXp({ address, weekId, questId: quest.id, txHash: tx.txHash, xp: quest.xp, creditedAt: Date.now() });
+    const dayId = dayIdForHeight(tx.height);
+
+    if (alreadyCreditedToday(address, quest.id, dayId)) {
+      console.log(
+        `[xp] skipped ${address} for quest "${quest.id}" (tx ${tx.txHash}) — daily cap already met for day ${dayId}`
+      );
+      continue;
+    }
+
+    creditXp({ address, weekId, dayId, questId: quest.id, txHash: tx.txHash, xp: quest.xp, creditedAt: Date.now() });
     console.log(
-      `[xp] credited ${quest.xp} XP to ${address} for quest "${quest.id}" (tx ${tx.txHash}, week ${weekId})`
+      `[xp] credited ${quest.xp} XP to ${address} for quest "${quest.id}" (tx ${tx.txHash}, week ${weekId}, day ${dayId})`
     );
   }
 
