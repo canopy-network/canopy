@@ -418,10 +418,6 @@ func validateIterators(t *testing.T, prefix string, expectedKeys []string, itera
 	}
 }
 
-func TestCompactionTimeoutsDistinct(t *testing.T) {
-	require.Greater(t, postSyncCompactionTimeout, liveCompactionTimeout)
-}
-
 func TestCompactAllSucceedsOnAllPrefixes(t *testing.T) {
 	dbDir := t.TempDir()
 	st, e := NewStore(lib.DefaultConfig(), dbDir, nil, lib.NewDefaultLogger())

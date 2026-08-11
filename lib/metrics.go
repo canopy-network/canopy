@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -239,17 +238,10 @@ type StoreMetrics struct {
 	DBHSSCompactionTime  prometheus.Histogram // how long does the db HSS compaction take?
 	// pebble's own internal LSM-tree state - unlike DBLSSCompactionTime/DBHSSCompactionTime,
 	// these reflect pebble's automatic background compaction, otherwise invisible
-	PebbleReadAmp             prometheus.Gauge     // pebble's current read amplification
-	PebbleDiskUsageBytes      prometheus.Gauge     // total on-disk size of all sstables
-	PebbleCompactionCount     prometheus.Gauge     // total pebble-initiated compactions since process start
-	PebbleCompactionDebtBytes prometheus.Gauge     // estimated bytes still needing compaction to reach a stable LSM state
-	PebbleFlushCount          prometheus.Gauge     // total memtable flushes since process start
-	PebbleMemtableSizeBytes   prometheus.Gauge     // bytes held in memtables (incl. large flushable batches)
-	PebbleBlockCacheSizeBytes prometheus.Gauge     // bytes held in the block cache
-	PebbleBlockCacheHits      prometheus.Gauge     // cumulative block cache hits
-	PebbleBlockCacheMisses    prometheus.Gauge     // cumulative block cache misses
-	PebbleLevelTableCount     *prometheus.GaugeVec // sstable count, labeled by LSM level
-	PebbleLevelSizeBytes      *prometheus.GaugeVec // sstable bytes, labeled by LSM level
+	PebbleReadAmp             prometheus.Gauge // pebble's current read amplification
+	PebbleDiskUsageBytes      prometheus.Gauge // total on-disk size of all sstables
+	PebbleCompactionDebtBytes prometheus.Gauge // estimated bytes still needing compaction to reach a stable LSM state
+	PebbleFlushCount          prometheus.Gauge // total memtable flushes since process start
 }
 
 // MempoolMetrics represents the telemetry of the memory pool of pending transactions
@@ -718,10 +710,6 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_store_pebble_disk_usage_bytes",
 				Help: "Total on-disk size of all sstables",
 			}),
-			PebbleCompactionCount: promauto.NewGauge(prometheus.GaugeOpts{
-				Name: "canopy_store_pebble_compaction_count",
-				Help: "Total pebble-initiated compactions since process start",
-			}),
 			PebbleCompactionDebtBytes: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_store_pebble_compaction_debt_bytes",
 				Help: "Estimated bytes still needing compaction to reach a stable LSM state",
@@ -730,30 +718,6 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_store_pebble_flush_count",
 				Help: "Total memtable flushes since process start",
 			}),
-			PebbleMemtableSizeBytes: promauto.NewGauge(prometheus.GaugeOpts{
-				Name: "canopy_store_pebble_memtable_size_bytes",
-				Help: "Bytes held in memtables, including large flushable batches",
-			}),
-			PebbleBlockCacheSizeBytes: promauto.NewGauge(prometheus.GaugeOpts{
-				Name: "canopy_store_pebble_block_cache_size_bytes",
-				Help: "Bytes held in the block cache",
-			}),
-			PebbleBlockCacheHits: promauto.NewGauge(prometheus.GaugeOpts{
-				Name: "canopy_store_pebble_block_cache_hits",
-				Help: "Cumulative block cache hits",
-			}),
-			PebbleBlockCacheMisses: promauto.NewGauge(prometheus.GaugeOpts{
-				Name: "canopy_store_pebble_block_cache_misses",
-				Help: "Cumulative block cache misses",
-			}),
-			PebbleLevelTableCount: promauto.NewGaugeVec(prometheus.GaugeOpts{
-				Name: "canopy_store_pebble_level_table_count",
-				Help: "Sstable count, labeled by LSM level",
-			}, []string{"level"}),
-			PebbleLevelSizeBytes: promauto.NewGaugeVec(prometheus.GaugeOpts{
-				Name: "canopy_store_pebble_level_size_bytes",
-				Help: "Sstable bytes, labeled by LSM level",
-			}, []string{"level"}),
 		},
 		// MEMPOOL
 		MempoolMetrics: MempoolMetrics{
@@ -1080,18 +1044,8 @@ func (m *Metrics) UpdatePebbleMetrics(pm *pebble.Metrics) {
 	}
 	m.PebbleReadAmp.Set(float64(pm.ReadAmp()))
 	m.PebbleDiskUsageBytes.Set(float64(pm.DiskSpaceUsage()))
-	m.PebbleCompactionCount.Set(float64(pm.Compact.Count))
 	m.PebbleCompactionDebtBytes.Set(float64(pm.Compact.EstimatedDebt))
 	m.PebbleFlushCount.Set(float64(pm.Flush.Count))
-	m.PebbleMemtableSizeBytes.Set(float64(pm.MemTable.Size))
-	m.PebbleBlockCacheSizeBytes.Set(float64(pm.BlockCache.Size))
-	m.PebbleBlockCacheHits.Set(float64(pm.BlockCache.Hits))
-	m.PebbleBlockCacheMisses.Set(float64(pm.BlockCache.Misses))
-	for i, lvl := range pm.Levels {
-		level := strconv.Itoa(i)
-		m.PebbleLevelTableCount.WithLabelValues(level).Set(float64(lvl.TablesCount))
-		m.PebbleLevelSizeBytes.WithLabelValues(level).Set(float64(lvl.TablesSize))
-	}
 }
 
 // UpdateStoreJobMetrics() updates the store jobs telemery
