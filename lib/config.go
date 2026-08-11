@@ -119,21 +119,26 @@ func (m *MainConfig) GetLogLevel() int32 {
 // RPC CONFIG BELOW
 
 type RPCConfig struct {
-	WalletPort                 string `json:"walletPort"`                 // the port where the web wallet is hosted
-	ExplorerPort               string `json:"explorerPort"`               // the port where the block explorer is hosted
-	RPCPort                    string `json:"rpcPort"`                    // the port where the rpc server is hosted
-	AdminPort                  string `json:"adminPort"`                  // the port where the admin rpc server is hosted
-	ProfilingPort              string `json:"profilingPort"`              // the port where the pprof profiling server is hosted
-	RPCUrl                     string `json:"rpcURL"`                     // the url where the rpc server is hosted
-	AdminRPCUrl                string `json:"adminRPCUrl"`                // the url where the admin rpc server is hosted
-	TimeoutS                   int    `json:"timeoutS"`                   // the rpc request timeout in seconds
-	IndexerBlobCacheEntries    int    `json:"indexerBlobCacheEntries"`    // number of cached indexer blobs to keep in memory
-	MaxRCSubscribers           int    `json:"maxRCSubscribers"`           // max total root-chain subscribers
-	MaxRCSubscribersPerChain   int    `json:"maxRCSubscribersPerChain"`   // max root-chain subscribers per chain id
-	RCSubscriberReadLimitBytes int64  `json:"rcSubscriberReadLimitBytes"` // max bytes allowed in a single ws message from a subscriber
-	RCSubscriberWriteTimeoutMS int    `json:"rcSubscriberWriteTimeoutMS"` // ws write timeout for publishing root-chain info
-	RCSubscriberPongWaitS      int    `json:"rcSubscriberPongWaitS"`      // time to wait for pong responses
-	RCSubscriberPingPeriodS    int    `json:"rcSubscriberPingPeriodS"`    // how often to ping subscribers
+	WalletPort    string `json:"walletPort"`    // the port where the web wallet is hosted
+	ExplorerPort  string `json:"explorerPort"`  // the port where the block explorer is hosted
+	RPCPort       string `json:"rpcPort"`       // the port where the rpc server is hosted
+	AdminPort     string `json:"adminPort"`     // the port where the admin rpc server is hosted
+	ProfilingPort string `json:"profilingPort"` // the port where the pprof profiling server is hosted
+	RPCUrl        string `json:"rpcURL"`        // the url where the rpc server is hosted
+	AdminRPCUrl   string `json:"adminRPCUrl"`   // the url where the admin rpc server is hosted
+	TimeoutS      int    `json:"timeoutS"`      // the rpc request timeout in seconds
+	// IndexerBlobsTimeoutS extends the write deadline for the indexer-blobs endpoint alone
+	// (via http.ResponseController), since a cold historical read can legitimately take much
+	// longer than a typical RPC call - left at TimeoutS's general value, every other endpoint
+	// would also inherit however long this one needs.
+	IndexerBlobsTimeoutS       int   `json:"indexerBlobsTimeoutS"`       // write-deadline override (seconds) for the indexer-blobs endpoint only
+	IndexerBlobCacheEntries    int   `json:"indexerBlobCacheEntries"`    // number of cached indexer blobs to keep in memory
+	MaxRCSubscribers           int   `json:"maxRCSubscribers"`           // max total root-chain subscribers
+	MaxRCSubscribersPerChain   int   `json:"maxRCSubscribersPerChain"`   // max root-chain subscribers per chain id
+	RCSubscriberReadLimitBytes int64 `json:"rcSubscriberReadLimitBytes"` // max bytes allowed in a single ws message from a subscriber
+	RCSubscriberWriteTimeoutMS int   `json:"rcSubscriberWriteTimeoutMS"` // ws write timeout for publishing root-chain info
+	RCSubscriberPongWaitS      int   `json:"rcSubscriberPongWaitS"`      // time to wait for pong responses
+	RCSubscriberPingPeriodS    int   `json:"rcSubscriberPingPeriodS"`    // how often to ping subscribers
 }
 
 // RootChain defines a rpc url to a possible 'root chain' which is used if the governance parameter RootChainId == ChainId
@@ -152,7 +157,8 @@ func DefaultRPCConfig() RPCConfig {
 		ProfilingPort:              "6060",                     // the pprof profiling server is served on localhost:6060
 		RPCUrl:                     "http://localhost:50002",   // use a local rpc by default
 		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
-		TimeoutS:                   30,                         // the rpc timeout is 30 seconds
+		TimeoutS:                   3,                          // the rpc timeout is 3 seconds
+		IndexerBlobsTimeoutS:       30,                         // indexer-blobs cold reads get a longer write deadline; nothing else does
 		IndexerBlobCacheEntries:    64,                         // cache the most recent indexer blobs
 		MaxRCSubscribers:           512,                        // limit total root-chain subscribers
 		MaxRCSubscribersPerChain:   128,                        // limit subscribers per chain id
