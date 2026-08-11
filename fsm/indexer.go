@@ -268,7 +268,7 @@ func (s *StateMachine) indexerBlob(ctx context.Context, p *indexerBlobParams) (b
 	}
 	// retrieve per-block non-signers from the committed QC for this block
 	stepStart = time.Now()
-	blockNonSigners, err := sm.blockNonSignerAddresses(blockHeight)
+	blockNonSigners, err := sm.blockNonSignerAddresses(blockHeight, tier)
 	s.Metrics.ObserveIndexerBlobStep("block_non_signers_get", path, tier, stepStart)
 	if err != nil {
 		blockNonSigners = nil
@@ -452,7 +452,9 @@ func (s *StateMachine) valuesForStateKeys(keys [][]byte, prefix []byte) ([][]byt
 	return values, nil
 }
 
-func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64) ([][]byte, lib.ErrorI) {
+// blockNonSignerAddresses() returns the addresses that didn't sign blockHeight's QC. tier is
+// the caller's already-computed classification - s.height here is pinned, not the live tip.
+func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64, tier string) ([][]byte, lib.ErrorI) {
 	if blockHeight <= 1 {
 		return nil, nil
 	}
@@ -463,7 +465,7 @@ func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64) ([][]byte, li
 	if qc == nil || qc.Header == nil || qc.Signature == nil {
 		return nil, nil
 	}
-	committee, err := s.LoadCommittee(qc.Header.ChainId, qc.Header.RootHeight)
+	committee, err := s.cachedLoadCommittee(qc.Header.ChainId, qc.Header.RootHeight, tier)
 	if err != nil {
 		return nil, err
 	}
