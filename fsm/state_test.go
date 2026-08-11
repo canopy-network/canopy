@@ -929,20 +929,32 @@ func TestIterateAndAppend_AlreadyCancelled(t *testing.T) {
 	require.Empty(t, result)
 }
 
+// TestIterateAndAppend_CancelledMidIterationStopsEarly proves cancellation is still honored once
+// the iteration crosses a ctxCheckInterval boundary, not just on the very first item - a
+// countingCancelContext with cancelAfter=1 needs at least ctxCheckInterval+1 items to ever see
+// a second ctx.Err() call, since the check only fires every ctxCheckInterval'th item. Cancellation
+// discards whatever was accumulated so far (returns nil, not the partial result) by design - a
+// truncated snapshot would be worse than none - so this asserts on the call count, not len(result).
 func TestIterateAndAppend_CancelledMidIterationStopsEarly(t *testing.T) {
 	sm := newTestStateMachine(t)
-	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t).Bytes(), Amount: 1}))
-	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t, 1).Bytes(), Amount: 2}))
-	require.NoError(t, sm.SetAccount(&Account{Address: newTestAddress(t, 2).Bytes(), Amount: 3}))
+	const numAccounts = ctxCheckInterval + 6
+	for i := 0; i < numAccounts; i++ {
+		address := make([]byte, crypto.AddressSize)
+		address[crypto.AddressSize-4], address[crypto.AddressSize-3], address[crypto.AddressSize-2], address[crypto.AddressSize-1] =
+			byte(i>>24), byte(i>>16), byte(i>>8), byte(i)
+		require.NoError(t, sm.SetAccount(&Account{Address: address, Amount: 1}))
+	}
 
-	// cancelAfter: 1 means Err() returns nil on the first check (so the first
-	// item is yielded), then non-nil on every check after that.
+	// cancelAfter: 1 means Err() returns nil on the first check (i=0, so the first batch is
+	// yielded), then non-nil on the second check (i=ctxCheckInterval).
 	ctx := &countingCancelContext{Context: context.Background(), cancelAfter: 1}
 
 	result, err := sm.IterateAndAppend(ctx, AccountPrefix())
 	require.NotNil(t, err)
 	require.Equal(t, lib.CodeCancelled, err.Code())
-	require.Less(t, len(result), 3, "should stop before visiting all 3 accounts")
+	require.Nil(t, result, "cancellation should discard the partial scan, not leak it to the caller")
+	require.EqualValues(t, 2, atomic.LoadInt32(&ctx.calls),
+		"should have reached the second check (i=ctxCheckInterval), proving it batched past the first item instead of checking every one")
 }
 
 func TestIterateAndAppend_NotCancelledCompletesNormally(t *testing.T) {
