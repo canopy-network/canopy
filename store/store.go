@@ -299,10 +299,12 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	s.MaybeCompact()
 	// backup if enabled
 	s.MaybeBackup()
-	// refresh pebble's own LSM-tree telemetry - cheap (in-memory counters only), so safe on
-	// every commit, and deliberately not gated on s.syncing like MaybeCompact() since LSM
-	// shape visibility matters most exactly when the node is catching up
-	s.metrics.UpdatePebbleMetrics(s.db.Metrics())
+	// refresh pebble's own LSM-tree telemetry - gated on s.syncing like MaybeCompact(), since a
+	// sync burst commits at a much higher rate than steady state and this shouldn't compete with
+	// db.Apply() for the sync loop's throughput on every single one of those commits
+	if !s.syncing.Load() {
+		s.metrics.UpdatePebbleMetrics(s.db.Metrics())
+	}
 	// return the root
 	return
 }
