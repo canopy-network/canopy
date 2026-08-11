@@ -226,10 +226,8 @@ func (t *Indexer) GetOrComputeValidatorTotals(version uint64, compute func() (*l
 	return v.(*lib.ValidatorTotals), nil
 }
 
-// GetOrComputeCommittee returns (chainId, rootHeight)'s cached committee, computing via
-// compute exactly once even under concurrent callers, then caching the result.
-// tier is caller-classified ("lss"/"hss", see fsm.StateMachine.LoadCommittee) and only ever
-// labels the hit/miss/dedup metrics below - it plays no part in the cache key or lookup itself.
+// GetOrComputeCommittee returns (chainId, rootHeight)'s cached committee, computing via compute
+// exactly once even under concurrent callers; tier only labels the metrics below, not the cache key.
 func (t *Indexer) GetOrComputeCommittee(chainId, rootHeight uint64, tier string, compute func() (*lib.ValidatorSet, lib.ErrorI)) (*lib.ValidatorSet, lib.ErrorI) {
 	if vs, ok := t.committees.get(chainId, rootHeight); ok {
 		t.metrics.RecordCommitteeCacheHit(tier)
