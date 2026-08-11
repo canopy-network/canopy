@@ -42,8 +42,7 @@ func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *Index
 // keys journaled for height. available=false means the height predates the
 // journal and callers must use the legacy full-snapshot comparison.
 func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
-	// honor an already-cancelled/disconnected caller before doing any store work - this path
-	// skips the per-iteration ctx checks IterateAndAppend relies on in the legacy path below.
+	// Honor an already-cancelled/disconnected caller before doing any store work
 	if cErr := ctx.Err(); cErr != nil {
 		return nil, false, lib.ErrCancelled(cErr)
 	}
@@ -101,8 +100,7 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height 
 			return nil, true, err
 		}
 	}
-	// labeled "journal" so this path's own delta cost is visible, not folded into the
-	// legacy-only delta_compute number query.go's timer used to produce alone.
+	// Measure the time of indexing the delta differences
 	deltaComputeStart := time.Now()
 	b, err = DeltaIndexerBlobs(b)
 	s.Metrics.ObserveIndexerBlobStep("delta_compute", "journal", "n_a", deltaComputeStart)
@@ -117,8 +115,7 @@ type indexerBlobParams struct {
 }
 
 func (s *StateMachine) indexerBlob(ctx context.Context, p *indexerBlobParams) (b *IndexerBlob, err lib.ErrorI) {
-	// path labels every ObserveIndexerBlobStep call below so journal- and legacy-sourced
-	// calls to the same step are no longer indistinguishable in the aggregate.
+	// used for metrics
 	path := "legacy"
 	if p.selective {
 		path = "journal"
