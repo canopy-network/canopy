@@ -53,6 +53,47 @@ func TestDeltaIndexerBlobs_ChangedAddedRemoved(t *testing.T) {
 	require.True(t, delta.Previous.ValidatorsDelta)
 }
 
+// TestDeltaIndexerBlobs_UnsortedInputStillMergesCorrectly is a regression for
+// mergeChangedBlobKeys' two-pointer walk silently producing wrong results when fed unsorted
+// input - which the journal path (IndexerBlobsFromStateChanges) can do: Accounts/Validators
+// there come from valuesForStateKeys(keys, ...), which preserves input order rather than
+// sorting, and indexerBlob's selective branch appends event/forced keys onto the end of the
+// journaled key list, which can break whatever ordering the journaled keys alone had. Unlike
+// TestDeltaIndexerBlobs_ChangedAddedRemoved (whose entries are already ascending, matching the
+// legacy path's Pebble-scan order), this feeds every entity in reverse/shuffled order to prove
+// DeltaIndexerBlobs sorts before merging rather than trusting the caller's order.
+func TestDeltaIndexerBlobs_UnsortedInputStillMergesCorrectly(t *testing.T) {
+	prevAcc1 := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{1}, 20), Amount: 10})
+	prevAcc2 := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{2}, 20), Amount: 20})
+	currAcc2 := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{2}, 20), Amount: 21})
+	currAcc3 := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{3}, 20), Amount: 30})
+
+	prevVal1 := mustMarshalProto(t, &Validator{Address: bytes.Repeat([]byte{4}, 20), StakedAmount: 400})
+	prevVal2 := mustMarshalProto(t, &Validator{Address: bytes.Repeat([]byte{5}, 20), StakedAmount: 500})
+	currVal1 := mustMarshalProto(t, &Validator{Address: bytes.Repeat([]byte{4}, 20), StakedAmount: 400})
+	currVal3 := mustMarshalProto(t, &Validator{Address: bytes.Repeat([]byte{6}, 20), StakedAmount: 600})
+
+	prev := &IndexerBlob{
+		Block: mustMarshalProto(t, &lib.BlockResult{}),
+		// reverse order - descending by key, the opposite of what mergeChangedBlobKeys requires
+		Accounts:   [][]byte{prevAcc2, prevAcc1},
+		Validators: [][]byte{prevVal2, prevVal1},
+	}
+	curr := &IndexerBlob{
+		Block: mustMarshalProto(t, &lib.BlockResult{}),
+		// shuffled, not just reversed - the "added" entry lands in the middle rather than an end
+		Accounts:   [][]byte{currAcc3, currAcc2},
+		Validators: [][]byte{currVal3, currVal1},
+	}
+
+	delta, err := DeltaIndexerBlobs(&IndexerBlobs{Current: curr, Previous: prev})
+	require.NoError(t, err)
+	requireEntriesAsSet(t, delta.Current.Accounts, currAcc2, currAcc3)
+	requireEntriesAsSet(t, delta.Previous.Accounts, prevAcc1, prevAcc2)
+	requireEntriesAsSet(t, delta.Current.Validators, currVal3)
+	requireEntriesAsSet(t, delta.Previous.Validators, prevVal2)
+}
+
 func TestDeltaIndexerBlobs_UnchangedEntitiesBecomeEmpty(t *testing.T) {
 	acc := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{7}, 20), Amount: 1})
 	pool := mustMarshalProto(t, &Pool{Id: 7, Amount: 7})
