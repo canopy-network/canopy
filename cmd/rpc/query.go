@@ -597,6 +597,15 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 	if ok := unmarshal(w, r, req); !ok {
 		return
 	}
+	// Extend this connection's write deadline alone (via ResponseController, Go 1.20+) to
+	// IndexerBlobsTimeoutS - a cold historical read can legitimately run past the general
+	// RPC TimeoutS, and this endpoint is the only one that needs the longer allowance.
+	if s.config.IndexerBlobsTimeoutS > 0 {
+		deadline := time.Now().Add(time.Duration(s.config.IndexerBlobsTimeoutS) * time.Second)
+		if err := http.NewResponseController(w).SetWriteDeadline(deadline); err != nil {
+			s.logger.Warnf("indexer-blobs: failed to extend write deadline, falling back to the general RPC timeout: %s", err)
+		}
+	}
 	_, bz, err := s.IndexerBlobsCached(r.Context(), req.Height)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -615,14 +624,20 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 }
 
 // IndexerBlobsCached() is a helper function for the indexer blobs implementation
-func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
+func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (result *fsm.IndexerBlobs, resultBz []byte, err lib.ErrorI) {
 	// requestStart/path back ObserveIndexerBlobRequestTime, which times this call
 	// end-to-end for every outcome -- the number to compare against the client's
 	// observed RPC round-trip, since IndexerBlobColdReadTime and
 	// IndexerBlobJournalBuildTime each only cover one of the three branches below.
+	// A failed call is recorded separately (IndexerBlobErrorsTotal) rather than folded into
+	// IndexerBlobPathTotal/IndexerBlobRequestTime, which are meant to describe successful outcomes.
 	requestStart := time.Now()
 	path := "cache_hit"
 	defer func() {
+		if err != nil {
+			s.controller.Metrics.RecordIndexerBlobError(path)
+			return
+		}
 		s.controller.Metrics.RecordIndexerBlobPath(path)
 		s.controller.Metrics.ObserveIndexerBlobRequestTime(path, requestStart)
 	}()
@@ -670,9 +685,22 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 	// w.Write, not here) -- log and record how long it actually took so a cold-path
 	// stall is visible after the fact both in logs and in canopy_indexer_blob_cold_read_time.
 	coldStart := time.Now()
-	defer s.controller.Metrics.RecordIndexerBlobCacheMiss(coldStart)
+	// cancelled tracks whether this cold read was aborted by a disconnected client, from any of
+	// the three points below that can observe it -- either IndexerBlob call returning a
+	// lib.CodeCancelled error, or the ctx.Err() check after both succeed. The deferred close
+	// records cancellation instead of a cache miss in that case, so a client hangup doesn't get
+	// counted as (and its truncated duration doesn't pollute) a normal timed cold read.
+	cancelled := false
+	defer func() {
+		if cancelled {
+			s.controller.Metrics.RecordIndexerBlobCancelled()
+			return
+		}
+		s.controller.Metrics.RecordIndexerBlobCacheMiss(coldStart)
+	}()
 	current, err := s.controller.FSM.IndexerBlob(ctx, height)
 	if err != nil {
+		cancelled = err.Code() == lib.CodeCancelled
 		return nil, nil, err
 	}
 
@@ -687,18 +715,26 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (*fsm.In
 			s.controller.Metrics.RecordIndexerBlobPreviousReuseMiss()
 			prev, prevErr := s.controller.FSM.IndexerBlob(ctx, height-1)
 			if prevErr != nil {
+				cancelled = prevErr.Code() == lib.CodeCancelled
 				return nil, nil, prevErr
 			}
 			previous = prev
 		}
 	}
 
+	// writeDeadlineS is whichever deadline actually applies to this request's write - the
+	// IndexerBlobs handler extends it to IndexerBlobsTimeoutS when set (see there); fall back to
+	// the general TimeoutS so this warning still means something if that override is disabled.
+	writeDeadlineS := s.config.IndexerBlobsTimeoutS
+	if writeDeadlineS <= 0 {
+		writeDeadlineS = s.config.TimeoutS
+	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		s.controller.Metrics.RecordIndexerBlobCancelled()
+		cancelled = true
 		s.logger.Debugf("indexer-blobs cold read for height %d cancelled after %s: %s", height, time.Since(coldStart), ctxErr)
-	} else if elapsed := time.Since(coldStart); elapsed > time.Duration(s.config.TimeoutS)*time.Second {
-		s.logger.Warnf("indexer-blobs cold read for height %d took %s, exceeding the %ds RPC write deadline -- "+
-			"caller's write will fail with i/o timeout even though this read eventually succeeded", height, elapsed, s.config.TimeoutS)
+	} else if elapsed := time.Since(coldStart); elapsed > time.Duration(writeDeadlineS)*time.Second {
+		s.logger.Warnf("indexer-blobs cold read for height %d took %s, exceeding the %ds write deadline -- "+
+			"caller's write will fail with i/o timeout even though this read eventually succeeded", height, elapsed, writeDeadlineS)
 	} else {
 		s.logger.Debugf("indexer-blobs cold read for height %d took %s", height, elapsed)
 	}

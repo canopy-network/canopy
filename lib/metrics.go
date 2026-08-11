@@ -79,50 +79,19 @@ type Metrics struct {
 
 // IndexerMetrics represents telemetry for the /v1/query/indexer-blobs RPC endpoint and its cache.
 type IndexerMetrics struct {
-	IndexerBlobColdReadTime prometheus.Histogram // how long does an indexer-blobs cache-miss (cold store read) take?
-	IndexerBlobCacheHits    prometheus.Counter   // how many indexer-blobs requests were served from cache?
-	IndexerBlobCacheMisses  prometheus.Counter   // how many indexer-blobs requests required a cold store read?
-	IndexerBlobCacheSize    prometheus.Gauge     // how many entries are currently in the indexer-blobs cache?
-	// IndexerBlobPreviousReuseHits/Misses track a distinct reuse path from IndexerBlobCacheHits/Misses:
-	// on a cache miss for `height`, the "previous" (height-1) blob is either reused from the prior
-	// request's already-cached `current` (hit) or requires its own fresh cold read (miss). This is
-	// invisible to IndexerBlobCacheHits/Misses, which only tracks the outer per-height delta cache -
-	// a forward-only reader never repeats a height, so that counter alone can't show this reuse.
-	IndexerBlobPreviousReuseHits   prometheus.Counter // how many "previous" blobs were reused from the prior request's cached current?
-	IndexerBlobPreviousReuseMisses prometheus.Counter // how many "previous" blobs required their own fresh cold read?
-	IndexerBlobCancelled           prometheus.Counter // how many indexer-blobs cold reads were aborted early because the client disconnected?
-	// IndexerBlobStepTime breaks the cold read down by step (time_machine, block_fetch,
-	// accounts_iterate, ... -- see fsm/indexer.go), most of which are direct pebbledb
-	// reads/iterations at a historical version. Lets a slow cold read be attributed to
-	// the specific store call responsible instead of only seeing the total.
-	IndexerBlobStepTime *prometheus.HistogramVec
-	// IndexerBlobPathTotal counts which of the three IndexerBlobsCached outcomes served
-	// each request: "cache_hit" (outer per-height delta cache), "journal" (sparse
-	// state-change-keys delta), or "legacy" (full-snapshot compare-and-diff). Without
-	// this, telling journal-covered requests apart from legacy ones requires inferring
-	// it from IndexerBlobStepTime's bucket shape -- this makes it a direct count instead.
-	IndexerBlobPathTotal *prometheus.CounterVec
-	// IndexerBlobJournalBuildTime times a successful IndexerBlobsFromStateChanges call
-	// end-to-end (available=true only), the journal-path counterpart to
-	// IndexerBlobColdReadTime -- without it, the journal path has zero timing visibility
-	// of its own; its cost can only be inferred by subtracting an estimated legacy-path
-	// contribution out of IndexerBlobStepTime, which is what this replaces.
-	IndexerBlobJournalBuildTime prometheus.Histogram
-	// IndexerBlobRequestTime times the entire IndexerBlobsCached call, start to finish,
-	// for every outcome (cache_hit/journal/legacy alike, labeled by path). This is the
-	// number to compare directly against the client-observed RPC round-trip
-	// (indexer_block_phase_duration_seconds{phase="fetch"} on the canopy-indexer side) --
-	// IndexerBlobColdReadTime and IndexerBlobJournalBuildTime each only cover one branch,
-	// so neither alone can account for 100% of what the client sees.
-	IndexerBlobRequestTime *prometheus.HistogramVec
-	// IndexerBlobTierTotal counts which store tier served the state read inside each
-	// indexerBlob call: "lss" (Latest State Store -- only used when the requested height
-	// equals the store's current live version) or "hss" (Historic State Store -- every
-	// other height, including tip-1). This is the real mechanism behind the "fast vs slow"
-	// split observed on steps with no journal at all (validators_iterate,
-	// block_non_signers_get) -- see store.Store.NewReadOnly's `s.version == queryVersion`
-	// check -- not a proxy like request source or distance-from-tip.
-	IndexerBlobTierTotal *prometheus.CounterVec
+	IndexerBlobColdReadTime        prometheus.Histogram     // how long does an indexer-blobs cache-miss (cold store read) take?
+	IndexerBlobCacheHits           prometheus.Counter       // how many indexer-blobs requests were served from cache?
+	IndexerBlobCacheMisses         prometheus.Counter       // how many indexer-blobs requests required a cold store read?
+	IndexerBlobCacheSize           prometheus.Gauge         // how many entries are currently in the indexer-blobs cache?
+	IndexerBlobPreviousReuseHits   prometheus.Counter       // how many "previous" blobs were reused from the prior request's cached current?
+	IndexerBlobPreviousReuseMisses prometheus.Counter       // how many "previous" blobs required their own fresh cold read?
+	IndexerBlobCancelled           prometheus.Counter       // how many indexer-blobs cold reads were aborted early because the client disconnected?
+	IndexerBlobStepTime            *prometheus.HistogramVec // how long does each step of an indexer-blobs read take, by step/path/tier?
+	IndexerBlobPathTotal           *prometheus.CounterVec   // which of the three IndexerBlobsCached outcomes served each request: cache_hit, journal, or legacy?
+	IndexerBlobErrorsTotal         *prometheus.CounterVec   // how many IndexerBlobsCached calls errored out, by the path (cache_hit/journal/legacy) they were on when they failed?
+	IndexerBlobJournalBuildTime    prometheus.Histogram     // how long does a successful journal-path (state-change-keys) build take?
+	IndexerBlobRequestTime         *prometheus.HistogramVec // how long does an indexer-blobs request take end-to-end, by path?
+	IndexerBlobTierTotal           *prometheus.CounterVec   // which store tier served the state read: lss (live version) or hss (every other height)?
 }
 
 // NodeMetrics represents general telemetry for the node's health
@@ -281,6 +250,13 @@ type MempoolMetrics struct {
 	ProposalApplyBlockTime  prometheus.Histogram // how long does ApplyBlock() take during proposal building?
 	ProposalCertResultsTime prometheus.Histogram // how long does NewCertificateResults() take during proposal building?
 }
+
+// indexerBlobDurationBuckets covers the indexer-blobs duration histograms (cold read, journal
+// build, step time, request time): sub-10ms cache hits up through the 30s RPC timeout these
+// calls can legitimately run up against. prometheus.DefBuckets tops out at a 10s finite bucket,
+// which would silently pile every cold read slower than that into +Inf and lose the shape of
+// exactly the tail this PR's timeout increase (3s -> 30s) makes visible.
+var indexerBlobDurationBuckets = []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 15, 20, 30, 60}
 
 // NewMetricsServer() creates a new telemetry server
 func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVersion string, config MetricsConfig, logger LoggerI) *Metrics {
@@ -798,8 +774,9 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 		// INDEXER
 		IndexerMetrics: IndexerMetrics{
 			IndexerBlobColdReadTime: promauto.NewHistogram(prometheus.HistogramOpts{
-				Name: "canopy_indexer_blob_cold_read_time",
-				Help: "The time it takes to serve an indexer-blobs request that misses the cache (cold store read)",
+				Name:    "canopy_indexer_blob_cold_read_time",
+				Help:    "The time it takes to serve an indexer-blobs request that misses the cache (cold store read)",
+				Buckets: indexerBlobDurationBuckets,
 			}),
 			IndexerBlobCacheHits: promauto.NewCounter(prometheus.CounterOpts{
 				Name: "canopy_indexer_blob_cache_hits_total",
@@ -826,20 +803,27 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Help: "Total indexer-blobs requests whose 'previous' blob required its own fresh cold read",
 			}),
 			IndexerBlobStepTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
-				Name: "canopy_indexer_blob_step_time",
-				Help: "The time each step of an indexer-blobs read takes, by step name, path (journal/legacy), and store tier (lss/hss/n_a)",
+				Name:    "canopy_indexer_blob_step_time",
+				Help:    "The time each step of an indexer-blobs read takes, by step name, path (journal/legacy), and store tier (lss/hss/n_a)",
+				Buckets: indexerBlobDurationBuckets,
 			}, []string{"step", "path", "tier"}),
 			IndexerBlobPathTotal: promauto.NewCounterVec(prometheus.CounterOpts{
 				Name: "canopy_indexer_blob_path_total",
 				Help: "Total indexer-blobs requests by which path served them: cache_hit, journal, or legacy",
 			}, []string{"path"}),
+			IndexerBlobErrorsTotal: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_indexer_blob_errors_total",
+				Help: "Total IndexerBlobsCached calls that errored, by the path they were on when they failed",
+			}, []string{"path"}),
 			IndexerBlobJournalBuildTime: promauto.NewHistogram(prometheus.HistogramOpts{
-				Name: "canopy_indexer_blob_journal_build_time",
-				Help: "The time it takes to serve an indexer-blobs request via the state-change journal (available=true)",
+				Name:    "canopy_indexer_blob_journal_build_time",
+				Help:    "The time it takes to serve an indexer-blobs request via the state-change journal (available=true)",
+				Buckets: indexerBlobDurationBuckets,
 			}),
 			IndexerBlobRequestTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
-				Name: "canopy_indexer_blob_request_time",
-				Help: "The total time to serve an indexer-blobs request end-to-end, for every path (cache_hit/journal/legacy) -- compare directly against the client-observed RPC round-trip",
+				Name:    "canopy_indexer_blob_request_time",
+				Help:    "The total time to serve an indexer-blobs request end-to-end, for every path (cache_hit/journal/legacy) -- compare directly against the client-observed RPC round-trip",
+				Buckets: indexerBlobDurationBuckets,
 			}, []string{"path"}),
 			IndexerBlobTierTotal: promauto.NewCounterVec(prometheus.CounterOpts{
 				Name: "canopy_indexer_blob_tier_total",
@@ -1170,7 +1154,7 @@ func (m *Metrics) UpdateIndexerBlobCacheSize(size int) {
 // from HSS's independent of path/journal -- e.g. validators_iterate never has a
 // journal shortcut at all, so validators_iterate{tier="lss"} vs
 // validators_iterate{tier="hss"} is a clean tier-only comparison, unconfounded by
-// which path the call took. tier is "n/a" for steps that span two different
+// which path the call took. tier is "n_a" for steps that span two different
 // heights/tiers in one observation (query.go's delta_compute/delta_marshal, which
 // diff Current against Previous) since no single tier value describes them.
 func (m *Metrics) ObserveIndexerBlobStep(step, path, tier string, startTime time.Time) {
@@ -1189,6 +1173,18 @@ func (m *Metrics) RecordIndexerBlobPath(path string) {
 		return
 	}
 	m.IndexerBlobPathTotal.WithLabelValues(path).Inc()
+}
+
+// RecordIndexerBlobError() records an IndexerBlobsCached call that errored, labeled by the path
+// ("cache_hit", "journal", "legacy") it was on when it failed - kept separate from
+// IndexerBlobPathTotal/IndexerBlobRequestTime so a failed call doesn't get counted or timed as
+// a normal successful one under that path.
+func (m *Metrics) RecordIndexerBlobError(path string) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.IndexerBlobErrorsTotal.WithLabelValues(path).Inc()
 }
 
 // RecordIndexerBlobJournalBuildTime() records how long a successful journal-path
