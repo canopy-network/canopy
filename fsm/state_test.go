@@ -959,10 +959,8 @@ func TestIterateAndAppend_NotCancelledCompletesNormally(t *testing.T) {
 	require.Len(t, result, 2)
 }
 
-// TestCommitteeTier proves committeeTier's live-tip/historical split, which LoadCommittee uses
-// for its stage-time metric and cachedLoadCommittee forwards into the committee cache's
-// hit/miss/dedup metrics - lss is meant to isolate headscan (always live-tip) traffic from hss's
-// backfill (almost always historical), so this boundary has to land on the right height.
+// TestCommitteeTier proves committeeTier's live-tip/historical split lands on the right height,
+// since LoadCommittee's metric and the committee cache's hit/miss labels both depend on it.
 func TestCommitteeTier(t *testing.T) {
 	sm := newTestStateMachine(t)
 	require.Equal(t, uint64(2), sm.height, "test fixture assumption - update the cases below if this changes")

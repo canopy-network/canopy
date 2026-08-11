@@ -452,11 +452,8 @@ func (s *StateMachine) valuesForStateKeys(keys [][]byte, prefix []byte) ([][]byt
 	return values, nil
 }
 
-// blockNonSignerAddresses() returns the addresses that didn't sign blockHeight's QC. tier is the
-// caller's already-computed live-tip/historical classification (see indexerBlob) - s here is
-// already a TimeMachine'd snapshot pinned at the height being built, so s.height is that same
-// height, not the live tip; deriving tier from it (as committeeTier(rootHeight) would) can never
-// distinguish live-tip from historical, since both sides of that comparison move together.
+// blockNonSignerAddresses() returns the addresses that didn't sign blockHeight's QC. tier is
+// the caller's already-computed classification - s.height here is pinned, not the live tip.
 func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64, tier string) ([][]byte, lib.ErrorI) {
 	if blockHeight <= 1 {
 		return nil, nil

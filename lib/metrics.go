@@ -103,10 +103,7 @@ type IndexerMetrics struct {
 	ValidatorTotalsSingleflightDedup prometheus.Counter
 	ValidatorTotalsCacheSize         prometheus.Gauge
 	// CommitteeCacheHits/Misses cover GetOrComputeCommittee's memoization of LoadCommittee's
-	// result (see store.committeeCache's doc for why there's no incremental path here).
-	// Labeled by tier ("lss"/"hss", see LoadCommittee) so headscan (always lss) and backfill
-	// (almost always hss) traffic can be told apart in the aggregate hit rate without either
-	// side identifying itself to the RPC layer - see cachedLoadCommittee.
+	// result, labeled by tier so headscan (lss) and backfill (hss) traffic can be told apart.
 	CommitteeCacheHits         *prometheus.CounterVec
 	CommitteeCacheMisses       *prometheus.CounterVec
 	CommitteeSingleflightDedup *prometheus.CounterVec
