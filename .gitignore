@@ -54,3 +54,5 @@ node_modules
 
 # Hardhat
 cache/solidity-files-cache.json
+# local-only k3s deploy helper - never commit (see PR #505 review)
+scripts/deploy-node-image.sh
