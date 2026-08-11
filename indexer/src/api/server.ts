@@ -1,6 +1,7 @@
 import express from "express";
+import cors from "cors";
 import { verifyMessage } from "viem";
-import { config, weekIdForHeight } from "../config.js";
+import { config, weekIdForHeight, dayIdForHeight, QUESTS } from "../config.js";
 import { fetchCurrentHeight } from "../arborClient.js";
 import {
   getXpForAddress,
@@ -9,10 +10,52 @@ import {
   getIdentityByDiscordId,
   getIdentityByTwitterHandle,
   upsertIdentity,
+  getCompletedQuestIdsForDay,
 } from "../db/store.js";
 
 const app = express();
+
+/**
+ * Vercel-hosted frontend calls this API from the browser, which means
+ * cross-origin — without CORS headers, every request silently fails at
+ * the browser level (curl/server-to-server calls don't hit this, which
+ * is why local terminal testing never surfaced the gap). Comma-separated
+ * list so both a local dev frontend and the deployed Vercel domain work.
+ */
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000").split(",");
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
+
+/**
+ * GET /quests/today?address=0x... — the quest catalog (label, instructions,
+ * XP value) merged with whether each one is already completed for "today"
+ * (today = the current day bucket by block height, same dayId the daily
+ * cap itself uses — see config.ts's dayIdForHeight). The `completed` flag
+ * naturally flips back to false the moment dayId rolls over, since it's
+ * derived live from getCompletedQuestIdsForDay rather than stored as a
+ * persistent "done" flag — nothing to explicitly "reset".
+ *
+ * `address` is optional: with no wallet connected, every quest is
+ * returned with completed: false so the page can still show the catalog.
+ */
+app.get("/quests/today", async (req, res) => {
+  const rawAddress = typeof req.query.address === "string" ? req.query.address : undefined;
+  const address = rawAddress?.toLowerCase().replace(/^0x/, "");
+
+  const height = await fetchCurrentHeight();
+  const dayId = dayIdForHeight(height);
+  const completedIds = address ? new Set(getCompletedQuestIdsForDay(address, dayId)) : new Set<string>();
+
+  const quests = QUESTS.map((q) => ({
+    id: q.id,
+    label: q.label,
+    description: q.description,
+    xp: q.xp,
+    completed: completedIds.has(q.id),
+  }));
+
+  res.json({ dayId, height, quests });
+});
 
 /** GET /questxp/:address — total XP + per-quest breakdown for a wallet. */
 app.get("/questxp/:address", (req, res) => {

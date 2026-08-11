@@ -134,6 +134,15 @@ export function alreadyCreditedToday(address: string, questId: string, dayId: nu
   return store.questXp.some((r) => r.address === address && r.questId === questId && r.dayId === dayId);
 }
 
+/** All quest IDs `address` has already earned XP for on `dayId` — powers the "ticked" state in the Quests UI. */
+export function getCompletedQuestIdsForDay(address: string, dayId: number): string[] {
+  const ids = new Set<string>();
+  for (const r of store.questXp) {
+    if (r.address === address && r.dayId === dayId) ids.add(r.questId);
+  }
+  return [...ids];
+}
+
 /**
  * Credits XP unconditionally except for the txHash replay guard. Callers
  * that need the daily activity cap (the automatic on-chain sweep) must

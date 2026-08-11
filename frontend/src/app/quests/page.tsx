@@ -1,7 +1,7 @@
 "use client";
 
 import { useWalletStore } from "@/lib/stores/walletStore";
-import { useQuestXp, useLeaderboard } from "@/lib/quest/hooks";
+import { useQuestXp, useLeaderboard, useTodayQuests } from "@/lib/quest/hooks";
 
 function shortAddr(addr: string): string {
   return addr.length > 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
@@ -9,6 +9,7 @@ function shortAddr(addr: string): string {
 
 export default function QuestsPage() {
   const address = useWalletStore((s) => s.address);
+  const { data: today, isLoading: todayLoading } = useTodayQuests(address ?? undefined);
   const { data: myXp, isLoading: myXpLoading } = useQuestXp(address ?? undefined);
   const { data: leaderboard, isLoading: leaderboardLoading, isError } = useLeaderboard("current");
 
@@ -23,6 +24,48 @@ export default function QuestsPage() {
         to earn XP automatically. XP is read live from the quest indexer,
         a service separate from Arbor&apos;s core protocol.
       </p>
+
+      <div className="mb-8 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6">
+        <div className="mb-1 flex items-baseline justify-between">
+          <div className="text-sm text-neutral-400">Today&apos;s quests</div>
+          <div className="text-xs text-neutral-600">Resets daily</div>
+        </div>
+        {todayLoading ? (
+          <div className="text-neutral-500">Loading…</div>
+        ) : today ? (
+          <div className="mt-3 divide-y divide-neutral-800">
+            {today.quests.map((q) => (
+              <div key={q.id} className="flex items-start gap-3 py-3">
+                <div
+                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs ${
+                    q.completed
+                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-400"
+                      : "border-neutral-700 text-neutral-700"
+                  }`}
+                >
+                  {q.completed ? "✓" : ""}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className={`text-sm font-medium ${q.completed ? "text-neutral-500 line-through" : ""}`}>
+                      {q.label}
+                    </span>
+                    <span className="text-xs text-neutral-500">+{q.xp} XP</span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-neutral-500">{q.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-neutral-500">Couldn&apos;t reach the quest service.</div>
+        )}
+        {!address && (
+          <div className="mt-4 text-xs text-neutral-600">
+            Connect your wallet to track which quests you&apos;ve completed today.
+          </div>
+        )}
+      </div>
 
       <div className="mb-8 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6">
         <div className="mb-1 text-sm text-neutral-400">Your XP</div>

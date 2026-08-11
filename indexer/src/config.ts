@@ -30,6 +30,7 @@ export const config = {
 export interface QuestDef {
   id: string;
   label: string;
+  description: string; // shown to the user as instructions for how to complete it
   messageType: string;
   xp: number;
   // optional: require a minimum amount (in the message's native units) to count.
@@ -37,11 +38,41 @@ export interface QuestDef {
 }
 
 export const QUESTS: QuestDef[] = [
-  { id: "arbor-deposit-v1", label: "Supply to an Arbor market", messageType: "deposit", xp: 10 },
-  { id: "arbor-borrow-v1", label: "Borrow against collateral", messageType: "borrow", xp: 15 },
-  { id: "arbor-repay-v1", label: "Repay a borrow position", messageType: "repay", xp: 10 },
-  { id: "arbor-deposit-collateral-v1", label: "Deposit collateral", messageType: "deposit_collateral", xp: 5 },
-  { id: "arbor-withdraw-v1", label: "Withdraw supplied assets", messageType: "withdraw", xp: 5 },
+  {
+    id: "arbor-deposit-v1",
+    label: "Supply to a market",
+    description: "Go to any active market on the Markets page and supply an asset. Any amount counts.",
+    messageType: "deposit",
+    xp: 10,
+  },
+  {
+    id: "arbor-borrow-v1",
+    label: "Borrow against collateral",
+    description: "With collateral deposited, open a market and borrow against it. Watch your health factor as you go.",
+    messageType: "borrow",
+    xp: 15,
+  },
+  {
+    id: "arbor-repay-v1",
+    label: "Repay a borrow position",
+    description: "On a market where you have an open borrow, repay some or all of it from the Repay tab.",
+    messageType: "repay",
+    xp: 10,
+  },
+  {
+    id: "arbor-deposit-collateral-v1",
+    label: "Deposit collateral",
+    description: "Add collateral to a market you're borrowing from, or open a new position with collateral.",
+    messageType: "deposit_collateral",
+    xp: 5,
+  },
+  {
+    id: "arbor-withdraw-v1",
+    label: "Withdraw supplied assets",
+    description: "Withdraw some or all of an asset you've previously supplied to a market.",
+    messageType: "withdraw",
+    xp: 5,
+  },
 ];
 
 export function questForMessageType(messageType: string): QuestDef | undefined {

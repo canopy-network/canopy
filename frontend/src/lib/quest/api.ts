@@ -54,6 +54,25 @@ async function indexerFetch<T>(path: string, options?: RequestInit): Promise<T |
   }
 }
 
+export interface TodayQuest {
+  id: string;
+  label: string;
+  description: string;
+  xp: number;
+  completed: boolean;
+}
+
+export interface TodayQuestsResponse {
+  dayId: number;
+  height: number;
+  quests: TodayQuest[];
+}
+
+export async function fetchTodayQuests(address?: string): Promise<TodayQuestsResponse | null> {
+  const qs = address ? `?address=${address}` : "";
+  return indexerFetch<TodayQuestsResponse>(`/quests/today${qs}`);
+}
+
 export async function fetchQuestXp(address: string): Promise<QuestXpResponse | null> {
   return indexerFetch<QuestXpResponse>(`/questxp/${address}`);
 }
