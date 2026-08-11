@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -412,9 +414,14 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	previous := nilSafeBlob(out.Previous)
 
 	// accounts: changed+added in current, changed+removed in previous
-	// currentAccounts/previousAccounts come from a Pebble prefix scan over AccountPrefix(),
-	// so both are already ascending by address bytes - accountEntryKey extracts that same
-	// address as the raw key, so entry order matches key order and the merge walk is safe.
+	// On the legacy path, Accounts comes from a Pebble prefix scan over AccountPrefix() and is
+	// already ascending by address bytes. On the journal path (IndexerBlobsFromStateChanges),
+	// Accounts instead comes from valuesForStateKeys(accountKeys, ...), which preserves input
+	// order rather than sorting - and accountKeys itself gets eventAccountKeys appended at the
+	// end (see indexerBlob's selective branch), breaking any ordering the journaled keys alone
+	// might have had. mergeChangedBlobKeys' two-pointer walk requires ascending input on both
+	// sides, so sort explicitly here rather than trust the caller - a no-op cost on the
+	// already-sorted legacy path, a correctness fix on the journal path.
 	currentAccounts, currentAccountMap, err := accountEntries(out.Current.Accounts)
 	if err != nil {
 		return nil, err
@@ -423,6 +430,8 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
+	slices.SortFunc(currentAccounts, byBlobEntryKey)
+	slices.SortFunc(previousAccounts, byBlobEntryKey)
 	currentAccountKeys, previousAccountKeys := mergeChangedBlobKeys(currentAccounts, previousAccounts)
 	forcedAccountKeys, err := rewardSlashAccountKeys(out.Current.Block)
 	if err != nil {
@@ -454,8 +463,9 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	}
 
 	// validators: changed+added in current, changed+removed in previous
-	// Same order guarantee as accounts: validatorEntries' key is the unmarshalled
-	// validator.Address, matching KeyForValidator's raw address bytes.
+	// Same order caveat as accounts above: the journal path's selective branch feeds Validators
+	// via valuesForStateKeys(append(p.validatorKeys, forced...), ...), with forced keys appended
+	// at the end - sort explicitly rather than trust it matches KeyForValidator's raw-address order.
 	currentValidators, currentValidatorMap, currentOutputIndex, err := validatorEntries(out.Current.Validators)
 	if err != nil {
 		return nil, err
@@ -464,6 +474,8 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
+	slices.SortFunc(currentValidators, byBlobEntryKey)
+	slices.SortFunc(previousValidators, byBlobEntryKey)
 	currentValidatorKeys, previousValidatorKeys := mergeChangedBlobKeys(currentValidators, previousValidators)
 	forcedValidatorKeys, err := validatorForceKeys(out.Current.Block, currentOutputIndex, previousOutputIndex)
 	if err != nil {
@@ -548,8 +560,14 @@ func poolEntryKey(entry []byte) (string, error) {
 	return entryKeyOrZero(entry) // Pool.id
 }
 
+// byBlobEntryKey orders blobEntry by its key field - callers sort with this immediately before
+// mergeChangedBlobKeys rather than trust the input's existing order, see call sites.
+func byBlobEntryKey(a, b blobEntry) int {
+	return strings.Compare(a.key, b.key)
+}
+
 // mergeChangedBlobKeys() is changedBlobKeys' sorted-input equivalent: current and previous
-// must each be ascending by key (true for a Pebble prefix-scan result - see call sites).
+// must each be ascending by key (callers sort with byBlobEntryKey immediately beforehand).
 // A two-pointer merge walk finds the same added/changed/removed keys as the map-based
 // version without hashing every key into a map[string][]byte first.
 func mergeChangedBlobKeys(current, previous []blobEntry) (map[string]struct{}, map[string]struct{}) {
