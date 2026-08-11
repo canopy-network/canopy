@@ -184,7 +184,7 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 		db:         db,
 		writer:     writer,
 		ss:         NewTxn(lssStore, lssStore, latestStatePrefix, true, true, true, nextVersion),
-		Indexer:    &Indexer{NewTxn(hssStore, hssStore, indexerPrefix, false, false, false, nextVersion), config},
+		Indexer:    &Indexer{NewTxn(hssStore, hssStore, indexerPrefix, false, false, false, nextVersion), config, newValidatorTotalsCache(), metrics},
 		metrics:    metrics,
 		config:     config,
 		mu:         &sync.Mutex{},
@@ -213,7 +213,7 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 		db:         s.db,
 		ss:         stateReader,
 		sc:         NewDefaultSMT(NewTxn(hssReader, nil, stateCommitmentPrefix, false, false, true)),
-		Indexer:    &Indexer{NewTxn(hssReader, nil, indexerPrefix, false, false, false), s.config},
+		Indexer:    &Indexer{NewTxn(hssReader, nil, indexerPrefix, false, false, false), s.config, s.Indexer.totals, s.metrics},
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
@@ -224,6 +224,10 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 // Copy() make a copy of the store with a new read/write transaction
 // this can be useful for having two simultaneous copies of the store
 // ex: Mempool state and FSM state
+//
+// INVARIANT: shares Indexer.totals by pointer with s - never resolve/cache validator
+// totals against this store (or any Copy()'d view, e.g. the mempool's ephemeral store).
+// See the totals field comment on Indexer for why.
 func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 	// create a comparable writer and reader
 	writer := s.db.NewBatch()
@@ -236,7 +240,7 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		db:         s.db,
 		writer:     writer,
 		ss:         s.ss.Copy(lssReader, lssReader),
-		Indexer:    &Indexer{s.Indexer.db.Copy(reader, reader), s.config},
+		Indexer:    &Indexer{s.Indexer.db.Copy(reader, reader), s.config, s.Indexer.totals, s.metrics},
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
@@ -307,17 +311,17 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	return
 }
 
-// recordStateChangeKeys snapshots the pending state transaction before Flush
-// clears it. Values are already available from the versioned state store, so
-// the journal only needs keys
+// recordStateChangeKeys snapshots ops before Flush clears them, in ascending key order
+// (indexStateChanges' bucketing and DeltaIndexerBlobs' merge-walk both depend on it).
 func (s *Store) recordStateChangeKeys(version uint64) lib.ErrorI {
 	s.ss.txn.l.Lock()
-	keys := make([][]byte, 0, len(s.ss.txn.ops))
-	for _, op := range s.ss.txn.ops {
-		keys = append(keys, bytes.Clone(op.key))
-	}
+	ops := make([]valueOp, 0, len(s.ss.txn.ops))
+	s.ss.txn.sorted.Ascend(func(item *CacheItem) bool {
+		ops = append(ops, s.ss.txn.ops[item.HashedKey])
+		return true
+	})
 	s.ss.txn.l.Unlock()
-	return s.Indexer.indexStateChangeKeys(version, keys)
+	return s.Indexer.indexStateChanges(version, ops)
 }
 
 // Rollback rewinds the store to a previous version (height).
@@ -525,7 +529,7 @@ func (s *Store) NewTxn() lib.StoreI {
 		db:      s.db,
 		writer:  s.writer,
 		ss:      NewTxn(s.ss, s.ss, nil, false, true, true, nextVersion),
-		Indexer: &Indexer{NewTxn(s.Indexer.db, s.Indexer.db, nil, false, true, false, nextVersion), s.config},
+		Indexer: &Indexer{NewTxn(s.Indexer.db, s.Indexer.db, nil, false, true, false, nextVersion), s.config, s.Indexer.totals, s.metrics},
 		metrics: s.metrics,
 		mu:      s.mu,
 		isTxn:   true,

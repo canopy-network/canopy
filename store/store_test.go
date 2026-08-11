@@ -34,37 +34,51 @@ func TestStateChangeKeys(t *testing.T) {
 	st.config.StoreConfig.StateChangeJournalEnabled = true
 
 	accountPrefix := lib.JoinLenPrefix([]byte{1})
+	validatorPrefix := lib.JoinLenPrefix([]byte{3})
 	accountA := lib.JoinLenPrefix([]byte{1}, []byte("account-a"))
 	accountB := lib.JoinLenPrefix([]byte{1}, []byte("account-b"))
+	validatorX := lib.JoinLenPrefix([]byte{3}, []byte("validator-x"))
 	otherKey := lib.JoinLenPrefix([]byte{2}, []byte("other"))
 
-	_, available, err := st.StateChangeKeys(1, accountPrefix)
+	_, available, err := st.StateChangeKeys(1, accountPrefix, false)
 	require.NoError(t, err)
 	require.False(t, available)
 
 	require.NoError(t, st.Set(accountA, []byte("a1")))
+	require.NoError(t, st.Set(validatorX, []byte("v1")))
 	require.NoError(t, st.Set(otherKey, []byte("other")))
 	_, err = st.Commit()
 	require.NoError(t, err)
 
-	keys, available, err := st.StateChangeKeys(1, accountPrefix)
+	keys, available, err := st.StateChangeKeys(1, accountPrefix, false)
 	require.NoError(t, err)
 	require.True(t, available)
 	require.Equal(t, [][]byte{accountA}, keys)
+
+	valKeys, available, err := st.StateChangeKeys(1, validatorPrefix, true)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.Equal(t, [][]byte{validatorX}, valKeys)
 
 	require.NoError(t, st.Delete(accountA))
 	require.NoError(t, st.Set(accountB, []byte("b1")))
 	_, err = st.Commit()
 	require.NoError(t, err)
 
-	keys, available, err = st.StateChangeKeys(2, accountPrefix)
+	keys, available, err = st.StateChangeKeys(2, accountPrefix, false)
 	require.NoError(t, err)
 	require.True(t, available)
 	require.Equal(t, [][]byte{accountA, accountB}, keys)
 
+	// version 2 touched no validators - the bucket row simply doesn't exist
+	valKeys, available, err = st.StateChangeKeys(2, validatorPrefix, true)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.Empty(t, valKeys)
+
 	_, err = st.Commit()
 	require.NoError(t, err)
-	keys, available, err = st.StateChangeKeys(3, accountPrefix)
+	keys, available, err = st.StateChangeKeys(3, accountPrefix, false)
 	require.NoError(t, err)
 	require.True(t, available)
 	require.Empty(t, keys)

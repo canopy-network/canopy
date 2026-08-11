@@ -2,9 +2,13 @@ package fsm
 
 import (
 	"bytes"
+	"context"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/canopy-network/canopy/store"
 	"github.com/stretchr/testify/require"
 )
 
@@ -176,6 +180,39 @@ func TestMergeChangedBlobKeys_EmptyPrevious(t *testing.T) {
 	require.Empty(t, gotPreviousChanged)
 }
 
+func TestResolveValidatorTotals_UsesPersistedBaselineWhenAvailable(t *testing.T) {
+	sm := newTestStateMachine(t)
+	st := sm.store.(lib.StoreI)
+
+	require.NoError(t, st.SetValidatorTotals(4, &lib.ValidatorTotals{ValidatorsActive: 7}))
+
+	// current/previous are irrelevant - the fallback full scan must not run when height-1's
+	// baseline is available, or it'd see zero validators in this empty store and return 0, not 7.
+	totals, err := sm.resolveValidatorTotals(context.Background(), &resolveValidatorTotalsParams{st: st, height: 5})
+	require.NoError(t, err)
+	require.Equal(t, uint32(7), totals.ValidatorsActive)
+}
+
+func TestResolveValidatorTotals_FallsBackToFullScanWhenNoBaseline(t *testing.T) {
+	sm := newTestStateMachine(t)
+	st := sm.store.(lib.StoreI)
+	require.NoError(t, sm.SetParams(DefaultParams()))
+
+	v := mustMarshalProto(t, &Validator{Address: bytes.Repeat([]byte{0x51}, crypto.AddressSize)})
+	require.NoError(t, sm.SetValidator(&Validator{Address: bytes.Repeat([]byte{0x51}, crypto.AddressSize)}))
+	_, err := st.Commit()
+	require.NoError(t, err)
+
+	totals, err := sm.resolveValidatorTotals(context.Background(), &resolveValidatorTotalsParams{st: st, height: 2, current: [][]byte{v}})
+	require.NoError(t, err)
+	require.Equal(t, uint32(1), totals.ValidatorsActive)
+
+	cached, available, err := st.GetValidatorTotals(2)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.Equal(t, uint32(1), cached.ValidatorsActive)
+}
+
 func mustMarshalProto(t *testing.T, message any) []byte {
 	t.Helper()
 	bz, err := lib.Marshal(message)
@@ -224,4 +261,99 @@ func TestDeltaIndexerBlobs_ZeroValuePoolAndAccount(t *testing.T) {
 	delta, err := DeltaIndexerBlobs(&IndexerBlobs{Current: curr, Previous: prev})
 	require.NoError(t, err, "zero-value Pool.Id / Account.Address must not error")
 	require.NotNil(t, delta)
+}
+
+// TestIndexerBlobsFromStateChanges_NonSignerAddressRoundTrips is a regression for two bugs:
+// NonSigner's Address was never wire-carried (must come from the storage key), and totals fallback once read the live head instead of the requested height.
+func TestIndexerBlobsFromStateChanges_NonSignerAddressRoundTrips(t *testing.T) {
+	log := lib.NewDefaultLogger()
+	config := lib.DefaultConfig()
+	config.StoreConfig.StateChangeJournalEnabled = true
+	db, err := store.NewStoreInMemory(log, config)
+	require.NoError(t, err)
+	defer db.Close()
+
+	sm := StateMachine{
+		store:             db,
+		ProtocolVersion:   0,
+		NetworkID:         1,
+		height:            2,
+		slashTracker:      NewSlashTracker(),
+		proposeVoteConfig: AcceptAllProposals,
+		Config: lib.Config{
+			MainConfig:         lib.DefaultMainConfig(),
+			StateMachineConfig: lib.DefaultStateMachineConfig(),
+		},
+		events: new(lib.EventsTracker),
+		log:    log,
+		cache: &cache{
+			accounts: make(map[uint64]*Account),
+			pools:    make(map[uint64]*Pool),
+		},
+	}
+	now := uint64(time.Now().UnixMicro())
+
+	// version 1: genesis params, no block to pair with yet.
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	// version 2: pairs with block 1.
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 1,
+			Hash:   crypto.Hash([]byte("block-1")),
+			Time:   now,
+		},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	// version 3: pairs with block 2, journals the non-signer increment and adds validator A -
+	// this is the height the test requests.
+	kg := newTestKeyGroup(t, 0)
+	address := kg.Address.Bytes()
+	addrA := bytes.Repeat([]byte{0x61}, crypto.AddressSize)
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	require.NoError(t, sm.IncrementNonSigners(0, [][]byte{kg.PublicKey.Bytes()}))
+	require.NoError(t, sm.SetValidator(&Validator{Address: addrA, StakedAmount: 100}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 2,
+			Hash:   crypto.Hash([]byte("block-2")),
+			Time:   now + 1,
+		},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	// version 4: pairs with block 3, adds a second validator B - this becomes the live head,
+	// with a validator set that intentionally differs from version 3's.
+	addrB := bytes.Repeat([]byte{0x62}, crypto.AddressSize)
+	require.NoError(t, sm.SetParams(DefaultParams()))
+	require.NoError(t, sm.SetValidator(&Validator{Address: addrB, StakedAmount: 200}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 3,
+			Hash:   crypto.Hash([]byte("block-3")),
+			Time:   now + 2,
+		},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	sm.height = 4
+
+	// Request height 3 (1 validator: A) while the live head (4) has 2 (A+B) - the fallback
+	// full scan (no baseline persisted) must read height 3's snapshot, not the live head.
+	blobs, available, err := sm.IndexerBlobsFromStateChanges(context.Background(), 3)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.True(t, blobs.Current.NonSignersDelta)
+	require.Len(t, blobs.Current.NonSigners, 1)
+	require.Equal(t, uint32(1), blobs.Current.TotalValidatorsActive)
+
+	ns := new(NonSigner)
+	require.NoError(t, lib.Unmarshal(blobs.Current.NonSigners[0], ns))
+	require.Equal(t, address, ns.Address)
 }

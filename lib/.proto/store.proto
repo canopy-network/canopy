@@ -40,8 +40,20 @@ message Node {
   // Key: used for merkle proof generation and verification. It is the compact
   // representation of the node's key bit sequences
   bytes Key = 4;
-  // Bitmask: Used for Merkle proof generation and verification. Indicates 
-  // whether each hash requires the left or right sibling, where 0 
+  // Bitmask: Used for Merkle proof generation and verification. Indicates
+  // whether each hash requires the left or right sibling, where 0
   // represents a left sibling and 1 represents a right sibling
   int32 Bitmask = 5;
+}
+
+// ValidatorTotals is a storage-only record of validator/delegate status counts at a
+// specific version. It is not part of the IndexerBlob wire format - it's the journal's
+// cached baseline so indexerBlob() doesn't have to re-scan every validator on every request.
+message ValidatorTotals {
+  uint32 validators_active = 1;
+  uint32 validators_paused = 2;
+  uint32 validators_unstaking = 3;
+  uint32 delegates_active = 4;
+  uint32 delegates_paused = 5;
+  uint32 delegates_unstaking = 6;
 }

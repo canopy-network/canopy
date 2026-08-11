@@ -43,6 +43,9 @@ message IndexerBlob {
   uint32 total_delegates_paused = 21;
   uint32 total_delegates_unstaking = 22;
   repeated bytes block_non_signers = 23;
+  // non_signers_delta: true when non_signers is a sparse changed-set (journal path) rather
+  // than a full snapshot (legacy path) - mirrors validators_delta.
+  bool non_signers_delta = 24;
 }
 
 // IndexerBlobs groups the current and previous indexer blobs.

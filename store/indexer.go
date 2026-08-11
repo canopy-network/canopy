@@ -3,9 +3,11 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"strconv"
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -30,72 +32,175 @@ var (
 	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
 	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
 	stateChangePrefix  = []byte{14} // state keys written at a particular committed version
+	// byte 15 (validatorTotalsPrefix) previously held totals in the durable Txn store - that
+	// write path never persisted, so totals now live only in the in-memory cache; the byte is retired, not reused.
 	// create indexer cache
 	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
 )
 
-// The marker distinguishes two cases that otherwise look identical:
+// The marker distinguishes three cases that otherwise look identical:
 //
-//  1. The version was journaled, but no account keys changed.
-//  2. The version predates journaling, so no journal data exists.
-var stateChangeMarker = []byte{1}
+//  1. The version was journaled under the current schema (accounts, validators, and
+//     non-signers all captured), but a given type had no changes this version.
+//  2. The version was journaled under the pre-validators/non-signers schema (accounts
+//     only) - stateChangeMarkerAccountsOnly, never written again, but still on disk for
+//     every version committed before this schema change.
+//  3. The version predates journaling entirely, so no journal data exists at all.
+var (
+	stateChangeMarkerAccountsOnly = []byte{1}
+	stateChangeMarker             = []byte{2}
+)
 
 // Indexer: the part of the DB that stores transactions, blocks, and quorum certificates
 type Indexer struct {
 	db     *Txn
 	config lib.Config
+	// totals is an in-memory cache of validator/delegate status totals by version, shared
+	// by pointer across every Store/Indexer view of the same underlying DB (see store.go).
+	//
+	// INVARIANT: never resolve/cache totals against a Copy()'d/mempool view - it shares
+	// this pointer, so uncommitted mempool totals would contaminate a real version's entry.
+	// See Store.Copy() in store.go.
+	totals *validatorTotalsCache
+	// metrics may be nil (e.g. NewStoreInMemory in tests) - every call site below guards on it.
+	metrics *lib.Metrics
 }
 
-// StateChangeKeys() returns state keys written while committing version, optionally
-// restricted to a state-key prefix. The available result distinguishes a
-// journaled version with no matching changes from a pre-journal version
-func (t *Indexer) StateChangeKeys(version uint64, prefix []byte) (keys [][]byte, available bool, err lib.ErrorI) {
-	// retrieve the state change version prefix
+// validatorTotalsCache is a bounded LRU from version to totals, scoped per-underlying-DB
+// (not package-global, so independent Store instances/tests never see each other's entries).
+type validatorTotalsCache struct {
+	lru *lru.Cache[uint64, *lib.ValidatorTotals]
+	// sf dedupes concurrent GetOrComputeValidatorTotals calls per version - unrelated
+	// versions still run fully in parallel. Zero value is ready to use.
+	sf singleflight.Group
+}
+
+func newValidatorTotalsCache() *validatorTotalsCache {
+	c, _ := lru.New[uint64, *lib.ValidatorTotals](256)
+	return &validatorTotalsCache{lru: c}
+}
+
+func (c *validatorTotalsCache) get(version uint64) (*lib.ValidatorTotals, bool) {
+	return c.lru.Get(version)
+}
+
+func (c *validatorTotalsCache) set(version uint64, totals *lib.ValidatorTotals) {
+	c.lru.Add(version, totals)
+}
+
+// StateChangeKeys returns state keys written at version, optionally by prefix - available
+// distinguishes "journaled, nothing of this type touched" from "not journaled" (see requireFullSchema on the interface doc).
+func (t *Indexer) StateChangeKeys(version uint64, prefix []byte, requireFullSchema bool) (keys [][]byte, available bool, err lib.ErrorI) {
 	versionPrefix := t.stateChangeVersionPrefix(version)
-	// retrieve the marker
 	marker, err := t.db.Get(versionPrefix)
 	if err != nil || len(marker) == 0 {
 		return nil, false, err
 	}
-	// retrieve the search prefix
-	searchPrefix := lib.Append(versionPrefix, prefix)
-	// iterate through that prefix
-	it, err := t.db.Iterator(searchPrefix)
+	if requireFullSchema && bytes.Equal(marker, stateChangeMarkerAccountsOnly) {
+		return nil, false, nil
+	}
+	// prefix here is e.g. AccountPrefix()/ValidatorPrefix()/NonSignerPrefix() - already the
+	// exact 2-byte [length][type] header used as the bucket row's key suffix.
+	blob, err := t.db.Get(lib.Append(versionPrefix, prefix))
 	if err != nil {
 		return nil, false, err
 	}
-	defer it.Close()
-	// for each key
-	for ; it.Valid(); it.Next() {
-		k := it.Key()
-		if len(k) <= len(versionPrefix) {
-			continue
-		}
-		// append to key list
-		keys = append(keys, bytes.Clone(k[len(versionPrefix):]))
+	if len(blob) == 0 {
+		return nil, true, nil // available, nothing of this type touched
+	}
+	for _, remainder := range lib.DecodeLengthPrefixed(blob) {
+		keys = append(keys, lib.Append(prefix, lib.JoinLenPrefix(remainder)))
 	}
 	return keys, true, nil
 }
 
-// indexStateChangeKeys() records the commit marker even when keys is empty so
-// readers can safely use an empty delta without falling back to a full scan
-func (t *Indexer) indexStateChangeKeys(version uint64, keys [][]byte) lib.ErrorI {
+// indexStateChanges writes one row per touched entity type this version. ops must already
+// be in ascending key order (see recordStateChangeKeys) - DeltaIndexerBlobs' merge-walk in fsm/indexer.go depends on it.
+func (t *Indexer) indexStateChanges(version uint64, ops []valueOp) lib.ErrorI {
 	versionPrefix := t.stateChangeVersionPrefix(version)
 	if err := t.db.Set(versionPrefix, stateChangeMarker); err != nil {
 		return err
 	}
-	for _, k := range keys {
-		if err := t.db.Set(lib.Append(versionPrefix, k), stateChangeMarker); err != nil {
-			return err
+	var currentHeader []byte
+	var value []byte
+	flush := func() lib.ErrorI {
+		if currentHeader == nil {
+			return nil
 		}
+		return t.db.Set(lib.Append(versionPrefix, currentHeader), value)
 	}
-	return nil
+	for _, op := range ops {
+		if len(op.key) < 2 {
+			continue // malformed/non-entity key, skip
+		}
+		header := op.key[:2] // [length byte][type-prefix byte], e.g. AccountPrefix()/ValidatorPrefix()
+		if currentHeader == nil || !bytes.Equal(header, currentHeader) {
+			if err := flush(); err != nil {
+				return err
+			}
+			currentHeader, value = header, nil
+		}
+		value = append(value, op.key[2:]...) // remainder is already self-length-prefixed
+	}
+	return flush()
 }
 
 // stateChangeVersionPrefix() returns the stateChangePrefix + version (big endian)
 func (t *Indexer) stateChangeVersionPrefix(version uint64) []byte {
 	return t.key(stateChangePrefix, t.encodeBigEndian(version), nil)
+}
+
+// GetValidatorTotals returns the cached validator/delegate status totals at version,
+// or available=false if nothing has been cached for that version yet.
+func (t *Indexer) GetValidatorTotals(version uint64) (totals *lib.ValidatorTotals, available bool, err lib.ErrorI) {
+	totals, available = t.totals.get(version)
+	return totals, available, nil
+}
+
+// SetValidatorTotals caches validator/delegate status totals for version.
+func (t *Indexer) SetValidatorTotals(version uint64, totals *lib.ValidatorTotals) lib.ErrorI {
+	t.totals.set(version, totals)
+	t.metrics.UpdateValidatorTotalsCacheSize(t.totals.lru.Len())
+	return nil
+}
+
+// GetOrComputeValidatorTotals returns version's cached totals, or computes via compute
+// exactly once even under concurrent callers for the same version, then caches the result.
+func (t *Indexer) GetOrComputeValidatorTotals(version uint64, compute func() (*lib.ValidatorTotals, lib.ErrorI)) (*lib.ValidatorTotals, lib.ErrorI) {
+	if totals, available, err := t.GetValidatorTotals(version); err != nil {
+		return nil, err
+	} else if available {
+		t.metrics.RecordValidatorTotalsCacheHit()
+		return totals, nil
+	}
+	t.metrics.RecordValidatorTotalsCacheMiss()
+	v, err, shared := t.totals.sf.Do(strconv.FormatUint(version, 10), func() (interface{}, error) {
+		// re-check: another goroutine may have populated this while we waited to be scheduled
+		if totals, available, getErr := t.GetValidatorTotals(version); getErr != nil {
+			return nil, getErr
+		} else if available {
+			return totals, nil
+		}
+		totals, computeErr := compute()
+		if computeErr != nil {
+			return nil, computeErr
+		}
+		if setErr := t.SetValidatorTotals(version, totals); setErr != nil {
+			return nil, setErr
+		}
+		return totals, nil
+	})
+	if shared {
+		t.metrics.RecordValidatorTotalsSingleflightDedup()
+	}
+	if err != nil {
+		if errI, ok := err.(lib.ErrorI); ok {
+			return nil, errI
+		}
+		return nil, ErrStoreGet(err) // defensive fallback; every error the closure returns is already a lib.ErrorI, so this branch should be unreachable in practice
+	}
+	return v.(*lib.ValidatorTotals), nil
 }
 
 // BLOCKS CODE BELOW

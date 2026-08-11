@@ -81,6 +81,39 @@ func TestDeleteTxsForHeightRemovesEthereumHashAlias(t *testing.T) {
 	require.True(t, got == nil || got.TxHash == "")
 }
 
+func TestValidatorTotals(t *testing.T) {
+	st, _, cleanup := testStore(t)
+	defer cleanup()
+
+	_, available, err := st.GetValidatorTotals(1)
+	require.NoError(t, err)
+	require.False(t, available)
+
+	want := &lib.ValidatorTotals{
+		ValidatorsActive:    3,
+		ValidatorsPaused:    1,
+		ValidatorsUnstaking: 0,
+		DelegatesActive:     2,
+		DelegatesPaused:     0,
+		DelegatesUnstaking:  1,
+	}
+	require.NoError(t, st.SetValidatorTotals(1, want))
+
+	got, available, err := st.GetValidatorTotals(1)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.Equal(t, want.ValidatorsActive, got.ValidatorsActive)
+	require.Equal(t, want.ValidatorsPaused, got.ValidatorsPaused)
+	require.Equal(t, want.ValidatorsUnstaking, got.ValidatorsUnstaking)
+	require.Equal(t, want.DelegatesActive, got.DelegatesActive)
+	require.Equal(t, want.DelegatesPaused, got.DelegatesPaused)
+	require.Equal(t, want.DelegatesUnstaking, got.DelegatesUnstaking)
+
+	_, available, err = st.GetValidatorTotals(2)
+	require.NoError(t, err)
+	require.False(t, available)
+}
+
 const ethGasPriceTestValue = 10_000_000_000
 
 func ptrAddress(address common.Address) *common.Address { return &address }
