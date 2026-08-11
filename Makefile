@@ -112,12 +112,6 @@ docker/up-fast:
 docker/logs:
 	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_DIR) logs -f --tail=1000
 
-## docker/deploy-node: build the node image and import it directly onto a k3s node's
-## containerd (no registry), then patch the matching StatefulSet to roll it out.
-## See scripts/deploy-node-image.sh for configuration env vars (NODE, NAMESPACE, etc).
-docker/deploy-node:
-	./scripts/deploy-node-image.sh
-
 # ==================================================================================== #
 # PLUGINS
 # ==================================================================================== #
