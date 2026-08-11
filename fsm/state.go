@@ -16,6 +16,9 @@ import (
 const (
 	CurrentProtocolVersion         = 2
 	slowApplyTransactionsThreshold = 2 * time.Second
+	// ctxCheckInterval is how often IterateAndAppend re-checks ctx.Err() - must stay a power of
+	// 2, since the check uses i&(ctxCheckInterval-1)==0 instead of the slower i%ctxCheckInterval==0.
+	ctxCheckInterval = 1024
 )
 
 /* This is the 'main' file of the state machine store, with the structure definition and other high level operations */
@@ -681,12 +684,17 @@ func (s *StateMachine) IterateAndAppend(ctx context.Context, prefix []byte) (res
 		return nil, err
 	}
 	defer it.Close()
-	// for each item of the iterator
-	for ; it.Valid(); it.Next() {
-		if cErr := ctx.Err(); cErr != nil {
-			return nil, lib.ErrCancelled(cErr)
+	// for each item of the iterator - ctx.Err() takes an internal lock, so checking it on every
+	// single item (rather than every ctxCheckInterval'th) measurably slows a large iteration for
+	// no benefit: a cancellation a few hundred items late is still well within "responsive."
+	for i := 0; it.Valid(); it.Next() {
+		if i&(ctxCheckInterval-1) == 0 {
+			if cErr := ctx.Err(); cErr != nil {
+				return nil, lib.ErrCancelled(cErr)
+			}
 		}
 		result = append(result, it.Value())
+		i++
 	}
 	// return the result
 	return result, nil
