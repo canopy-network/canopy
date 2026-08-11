@@ -838,7 +838,7 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			}, []string{"path"}),
 			IndexerBlobTierTotal: promauto.NewCounterVec(prometheus.CounterOpts{
 				Name: "canopy_indexer_blob_tier_total",
-				Help: "Total indexerBlob state reads by store tier: lss (requested height equals the live version) or hss (every other height)",
+				Help: "Total indexerBlob() state reads by store tier: lss (requested height equals the live version) or hss (every other height). Counted per state read, not per IndexerBlobsCached request - a request that builds both current and previous increments this twice, so its rate isn't directly comparable to canopy_indexer_blob_path_total's (once per request)",
 			}, []string{"tier"}),
 			ValidatorTotalsCacheHits: promauto.NewCounter(prometheus.CounterOpts{
 				Name: "canopy_validator_totals_cache_hits_total",
