@@ -237,9 +237,8 @@ type StoreMetrics struct {
 	DBBackupTime         prometheus.Histogram // how long does the db backup take?
 	DBLSSCompactionTime  prometheus.Histogram // how long does the db LSS compaction take?
 	DBHSSCompactionTime  prometheus.Histogram // how long does the db HSS compaction take?
-	// pebble's own internal LSM-tree state - unlike DBLSSCompactionTime/DBHSSCompactionTime
-	// (which only track canopy's own periodic MaybeCompact() job), these reflect pebble's
-	// automatic background compaction, which runs independently and is otherwise invisible
+	// pebble's own internal LSM-tree state - unlike DBLSSCompactionTime/DBHSSCompactionTime,
+	// these reflect pebble's automatic background compaction, otherwise invisible
 	PebbleReadAmp             prometheus.Gauge     // pebble's current read amplification
 	PebbleDiskUsageBytes      prometheus.Gauge     // total on-disk size of all sstables
 	PebbleCompactionCount     prometheus.Gauge     // total pebble-initiated compactions since process start
@@ -262,11 +261,8 @@ type MempoolMetrics struct {
 	ProposalCertResultsTime prometheus.Histogram // how long does NewCertificateResults() take during proposal building?
 }
 
-// indexerBlobDurationBuckets covers the indexer-blobs duration histograms (cold read, journal
-// build, step time, request time): sub-10ms cache hits up through the 30s RPC timeout these
-// calls can legitimately run up against. prometheus.DefBuckets tops out at a 10s finite bucket,
-// which would silently pile every cold read slower than that into +Inf and lose the shape of
-// exactly the tail this PR's timeout increase (3s -> 30s) makes visible.
+// indexerBlobDurationBuckets covers sub-10ms cache hits up through the 30s cold-read timeout -
+// prometheus.DefBuckets tops out at 10s, which would pile every slow cold read into +Inf.
 var indexerBlobDurationBuckets = []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 15, 20, 30, 60}
 
 // NewMetricsServer() creates a new telemetry server
@@ -1075,10 +1071,8 @@ func (m *Metrics) UpdateStoreMetrics(size, entries int64, startTime time.Time, s
 	}
 }
 
-// UpdatePebbleMetrics() refreshes the pebble LSM-tree gauges from a live db.Metrics() snapshot.
-// Unlike UpdateStoreJobMetrics() (which only observes canopy's own periodic MaybeCompact() job),
-// this reflects pebble's automatic background compaction, which runs independently and would
-// otherwise be invisible to telemetry.
+// UpdatePebbleMetrics() refreshes the pebble LSM-tree gauges from a live db.Metrics() snapshot -
+// unlike UpdateStoreJobMetrics(), this reflects pebble's own automatic background compaction.
 func (m *Metrics) UpdatePebbleMetrics(pm *pebble.Metrics) {
 	// exit if empty
 	if m == nil || pm == nil {
@@ -1179,15 +1173,8 @@ func (m *Metrics) UpdateIndexerBlobCacheSize(size int) {
 	m.IndexerBlobCacheSize.Set(float64(size))
 }
 
-// ObserveIndexerBlobStep() records how long a single step of an indexer-blobs read
-// took, labeled by which path (journal/legacy) the call is part of and which store
-// tier (lss/hss) served it. The tier label is what actually isolates LSS's speed
-// from HSS's independent of path/journal -- e.g. validators_iterate never has a
-// journal shortcut at all, so validators_iterate{tier="lss"} vs
-// validators_iterate{tier="hss"} is a clean tier-only comparison, unconfounded by
-// which path the call took. tier is "n_a" for steps that span two different
-// heights/tiers in one observation (query.go's delta_compute/delta_marshal, which
-// diff Current against Previous) since no single tier value describes them.
+// ObserveIndexerBlobStep() records how long a step of an indexer-blobs read took, by path
+// (journal/legacy) and store tier (lss/hss); tier is "n_a" for steps spanning two heights.
 func (m *Metrics) ObserveIndexerBlobStep(step, path, tier string, startTime time.Time) {
 	// exit if empty
 	if m == nil || startTime.IsZero() {
@@ -1206,10 +1193,8 @@ func (m *Metrics) RecordIndexerBlobPath(path string) {
 	m.IndexerBlobPathTotal.WithLabelValues(path).Inc()
 }
 
-// RecordIndexerBlobError() records an IndexerBlobsCached call that errored, labeled by the path
-// ("cache_hit", "journal", "legacy") it was on when it failed - kept separate from
-// IndexerBlobPathTotal/IndexerBlobRequestTime so a failed call doesn't get counted or timed as
-// a normal successful one under that path.
+// RecordIndexerBlobError() records an IndexerBlobsCached call that errored, by the path it was
+// on when it failed - kept separate so a failure isn't counted/timed as a success.
 func (m *Metrics) RecordIndexerBlobError(path string) {
 	// exit if empty
 	if m == nil {
@@ -1228,11 +1213,8 @@ func (m *Metrics) RecordIndexerBlobJournalBuildTime(startTime time.Time) {
 	m.IndexerBlobJournalBuildTime.Observe(time.Since(startTime).Seconds())
 }
 
-// ObserveIndexerBlobRequestTime() records the entire IndexerBlobsCached call's
-// duration, labeled by which path served it. Unlike IndexerBlobColdReadTime (legacy
-// path only) or IndexerBlobJournalBuildTime (journal path only), this covers every
-// outcome including a bare cache hit, so it is the number to compare directly
-// against the client-observed RPC round-trip.
+// ObserveIndexerBlobRequestTime() records the entire IndexerBlobsCached call's duration, by
+// path - unlike the path-specific histograms, this covers every outcome including a cache hit.
 func (m *Metrics) ObserveIndexerBlobRequestTime(path string, startTime time.Time) {
 	// exit if empty
 	if m == nil || startTime.IsZero() {

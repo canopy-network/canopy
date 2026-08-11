@@ -39,14 +39,8 @@ var (
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
 )
 
-// The marker distinguishes three cases that otherwise look identical:
-//
-//  1. The version was journaled under the current schema (accounts, validators, and
-//     non-signers all captured), but a given type had no changes this version.
-//  2. The version was journaled under the pre-validators/non-signers schema (accounts
-//     only) - stateChangeMarkerAccountsOnly, never written again, but still on disk for
-//     every version committed before this schema change.
-//  3. The version predates journaling entirely, so no journal data exists at all.
+// The marker distinguishes journaled-current-schema (no changes this version), journaled
+// accounts-only-schema (stateChangeMarkerAccountsOnly, retired), and no journal data at all.
 var (
 	stateChangeMarkerAccountsOnly = []byte{1}
 	stateChangeMarker             = []byte{2}

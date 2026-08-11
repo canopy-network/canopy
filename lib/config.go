@@ -127,10 +127,8 @@ type RPCConfig struct {
 	RPCUrl        string `json:"rpcURL"`        // the url where the rpc server is hosted
 	AdminRPCUrl   string `json:"adminRPCUrl"`   // the url where the admin rpc server is hosted
 	TimeoutS      int    `json:"timeoutS"`      // the rpc request timeout in seconds
-	// IndexerBlobsTimeoutS extends the write deadline for the indexer-blobs endpoint alone
-	// (via http.ResponseController), since a cold historical read can legitimately take much
-	// longer than a typical RPC call - left at TimeoutS's general value, every other endpoint
-	// would also inherit however long this one needs.
+	// IndexerBlobsTimeoutS extends the write deadline for indexer-blobs alone - left at TimeoutS,
+	// every other endpoint would inherit it too.
 	IndexerBlobsTimeoutS       int   `json:"indexerBlobsTimeoutS"`       // write-deadline override (seconds) for the indexer-blobs endpoint only
 	IndexerBlobCacheEntries    int   `json:"indexerBlobCacheEntries"`    // number of cached indexer blobs to keep in memory
 	MaxRCSubscribers           int   `json:"maxRCSubscribers"`           // max total root-chain subscribers

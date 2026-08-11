@@ -42,9 +42,8 @@ func (s *StateMachine) IndexerBlob(ctx context.Context, height uint64) (b *Index
 // keys journaled for height. available=false means the height predates the
 // journal and callers must use the legacy full-snapshot comparison.
 func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
-	// Honor an already-cancelled/disconnected caller before doing any store work --
-	// this path is fast, not free, and skips the per-iteration ctx checks that
-	// IterateAndAppend relies on in the legacy full-snapshot path below.
+	// honor an already-cancelled/disconnected caller before doing any store work - this path
+	// skips the per-iteration ctx checks IterateAndAppend relies on in the legacy path below.
 	if cErr := ctx.Err(); cErr != nil {
 		return nil, false, lib.ErrCancelled(cErr)
 	}
@@ -102,10 +101,8 @@ func (s *StateMachine) IndexerBlobsFromStateChanges(ctx context.Context, height 
 			return nil, true, err
 		}
 	}
-	// Previously uninstrumented: query.go's delta_compute timer only ever wrapped the
-	// legacy branch's DeltaIndexerBlobs call, leaving the journal path's own delta
-	// cost invisible. Labeling this "journal" is what actually answers "how good is
-	// the journal path" instead of assuming it from the legacy-only number.
+	// labeled "journal" so this path's own delta cost is visible, not folded into the
+	// legacy-only delta_compute number query.go's timer used to produce alone.
 	deltaComputeStart := time.Now()
 	b, err = DeltaIndexerBlobs(b)
 	s.Metrics.ObserveIndexerBlobStep("delta_compute", "journal", "n_a", deltaComputeStart)
@@ -120,10 +117,8 @@ type indexerBlobParams struct {
 }
 
 func (s *StateMachine) indexerBlob(ctx context.Context, p *indexerBlobParams) (b *IndexerBlob, err lib.ErrorI) {
-	// path labels every ObserveIndexerBlobStep call below so journal-sourced and
-	// legacy-sourced calls to the same step (accounts_iterate above all) are no
-	// longer indistinguishable in the aggregate -- selective is exactly the
-	// journal/legacy branch signal already threaded through this function.
+	// path labels every ObserveIndexerBlobStep call below so journal- and legacy-sourced
+	// calls to the same step are no longer indistinguishable in the aggregate.
 	path := "legacy"
 	if p.selective {
 		path = "journal"
@@ -131,13 +126,8 @@ func (s *StateMachine) indexerBlob(ctx context.Context, p *indexerBlobParams) (b
 	if p.height == 0 || p.height > s.height {
 		p.height = s.height
 	}
-	// store.Store.NewReadOnly routes state reads through the LSS (Latest State Store)
-	// only when the requested height equals the store's current live version; every
-	// other height -- including tip-1, the "previous" side of a live headscan request
-	// -- goes through the HSS (Historic State Store) instead. This is the actual
-	// mechanism behind steps that show a fast/slow split despite having no journal at
-	// all (validators_iterate, block_non_signers_get): it isn't proximity-based cache
-	// warmth or "how old is this height," it's this one deterministic check.
+	// used for metrics to differentiate on which partition it is being worked on
+	// (lss: live version; hss: every other height, including tip-1)
 	tier := "hss"
 	if p.height == s.height {
 		tier = "lss"
@@ -511,14 +501,8 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	previous := nilSafeBlob(out.Previous)
 
 	// accounts: changed+added in current, changed+removed in previous
-	// On the legacy path, Accounts comes from a Pebble prefix scan over AccountPrefix() and is
-	// already ascending by address bytes. On the journal path (IndexerBlobsFromStateChanges),
-	// Accounts instead comes from valuesForStateKeys(accountKeys, ...), which preserves input
-	// order rather than sorting - and accountKeys itself gets eventAccountKeys appended at the
-	// end (see indexerBlob's selective branch), breaking any ordering the journaled keys alone
-	// might have had. mergeChangedBlobKeys' two-pointer walk requires ascending input on both
-	// sides, so sort explicitly here rather than trust the caller - a no-op cost on the
-	// already-sorted legacy path, a correctness fix on the journal path.
+	// Journal-path Accounts isn't reliably sorted (valuesForStateKeys preserves input order).
+	// Sort explicitly before the merge walk - a no-op on the already-sorted legacy path.
 	currentAccounts, currentAccountMap, err := accountEntries(out.Current.Accounts)
 	if err != nil {
 		return nil, err
@@ -541,10 +525,8 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	}
 
 	// pools: changed+added in current, changed+removed in previous
-	// NOT converted to the sorted merge walk: poolEntryKey extracts Pool.Id's raw varint
-	// wire bytes, but the Pebble storage key (KeyForPool) encodes Id big-endian - the two
-	// orderings diverge at varint length boundaries (e.g. id 16383 vs 16384), so entry order
-	// here does not reliably match key order. Map-based diff stays correct regardless of order.
+	// Entry order here does not reliably match key order (varint vs big-endian Id encoding).
+	// Map-based diff stays correct regardless of order.
 	currentPools, currentPoolMap, err := poolEntries(out.Current.Pools)
 	if err != nil {
 		return nil, err
@@ -560,9 +542,8 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	}
 
 	// validators: changed+added in current, changed+removed in previous
-	// Same order caveat as accounts above: the journal path's selective branch feeds Validators
-	// via valuesForStateKeys(append(p.validatorKeys, forced...), ...), with forced keys appended
-	// at the end - sort explicitly rather than trust it matches KeyForValidator's raw-address order.
+	// Same order caveat as accounts above - sort explicitly rather than trust the journal
+	// path's forced-key-appended input matches KeyForValidator's raw-address order.
 	currentValidators, currentValidatorMap, currentOutputIndex, err := validatorEntries(out.Current.Validators)
 	if err != nil {
 		return nil, err
@@ -663,10 +644,8 @@ func byBlobEntryKey(a, b blobEntry) int {
 	return strings.Compare(a.key, b.key)
 }
 
-// mergeChangedBlobKeys() is changedBlobKeys' sorted-input equivalent: current and previous
-// must each be ascending by key (callers sort with byBlobEntryKey immediately beforehand).
-// A two-pointer merge walk finds the same added/changed/removed keys as the map-based
-// version without hashing every key into a map[string][]byte first.
+// mergeChangedBlobKeys() is changedBlobKeys' sorted-input equivalent (callers sort with
+// byBlobEntryKey first) - a two-pointer walk finds the same keys without hashing each one.
 func mergeChangedBlobKeys(current, previous []blobEntry) (map[string]struct{}, map[string]struct{}) {
 	currentChanged := make(map[string]struct{})
 	previousChanged := make(map[string]struct{})

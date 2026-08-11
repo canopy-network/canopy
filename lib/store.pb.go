@@ -179,9 +179,8 @@ func (x *Node) GetBitmask() int32 {
 	return 0
 }
 
-// ValidatorTotals is a storage-only record of validator/delegate status counts at a
-// specific version. It is not part of the IndexerBlob wire format - it's the journal's
-// cached baseline so indexerBlob() doesn't have to re-scan every validator on every request.
+// ValidatorTotals is a storage-only record of validator/delegate status counts at a version -
+// the journal's cached baseline so indexerBlob() doesn't re-scan every validator per request.
 type ValidatorTotals struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	ValidatorsActive    uint32                 `protobuf:"varint,1,opt,name=validators_active,json=validatorsActive,proto3" json:"validators_active,omitempty"`

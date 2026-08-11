@@ -899,9 +899,7 @@ func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) 
 	require.Equal(t, uint64(0), val3.UnstakingHeight, "delegate 3 should NOT be unstaking")
 }
 
-// countingCancelContext reports itself cancelled only after Err() has been called
-// cancelAfter times, so a test can force cancellation after a specific loop
-// iteration instead of racing a real timer.
+// countingCancelContext cancels only after Err() has been called cancelAfter times.
 type countingCancelContext struct {
 	context.Context
 	cancelAfter int32
@@ -929,12 +927,6 @@ func TestIterateAndAppend_AlreadyCancelled(t *testing.T) {
 	require.Empty(t, result)
 }
 
-// TestIterateAndAppend_CancelledMidIterationStopsEarly proves cancellation is still honored once
-// the iteration crosses a ctxCheckInterval boundary, not just on the very first item - a
-// countingCancelContext with cancelAfter=1 needs at least ctxCheckInterval+1 items to ever see
-// a second ctx.Err() call, since the check only fires every ctxCheckInterval'th item. Cancellation
-// discards whatever was accumulated so far (returns nil, not the partial result) by design - a
-// truncated snapshot would be worse than none - so this asserts on the call count, not len(result).
 func TestIterateAndAppend_CancelledMidIterationStopsEarly(t *testing.T) {
 	sm := newTestStateMachine(t)
 	const numAccounts = ctxCheckInterval + 6

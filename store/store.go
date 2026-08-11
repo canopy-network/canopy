@@ -224,10 +224,8 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 // Copy() make a copy of the store with a new read/write transaction
 // this can be useful for having two simultaneous copies of the store
 // ex: Mempool state and FSM state
-//
-// INVARIANT: shares Indexer.totals by pointer with s - never resolve/cache validator
-// totals against this store (or any Copy()'d view, e.g. the mempool's ephemeral store).
-// See the totals field comment on Indexer for why.
+// INVARIANT: shares Indexer.totals by pointer with s - never resolve/cache totals against this
+// or any Copy()'d view (see the totals field comment on Indexer for why).
 func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 	// create a comparable writer and reader
 	writer := s.db.NewBatch()
@@ -791,19 +789,11 @@ func (s *Store) MaybeBackup() {
 	}()
 }
 
-// liveCompactionTimeout bounds a single MaybeCompact() prefix pass (LSS/HSS, running
-// live alongside sync/consensus) so a stuck compaction can't hold the single-flight
-// s.compaction lock indefinitely and starve subsequent periodic compactions.
 // TODO: per-prefix budget was chosen arbitrarily, update once multiple tests are run
 const liveCompactionTimeout = 3 * time.Minute
 
-// postSyncCompactionTimeout bounds CompactAll()'s one-time post-sync pass, which
-// includes the indexer prefix (every block/tx/QC in chain history - never compacted
-// during normal operation). At 774k+ blocks that prefix alone exceeds
-// liveCompactionTimeout, so CompactAll always failed outright on [i/] with
-// "context deadline exceeded" (observed on localnet-2, store grown to 259GB/2409
-// SSTs). CompactAll runs off a background goroutine after sync finishes and blocks
-// nothing else, so a much larger bound is safe here.
+// postSyncCompactionTimeout bounds CompactAll()'s one-time post-sync pass -
+// in larger chains, compaction needs to take more time to process the data.
 const postSyncCompactionTimeout = 30 * time.Minute
 
 // Compact runs Pebble range compaction over the prefix range
