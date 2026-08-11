@@ -180,6 +180,17 @@ func (s *StateMachine) indexerBlob(ctx context.Context, p *indexerBlobParams) (b
 	if err != nil {
 		return nil, err
 	}
+	// forcedValidatorKeys is computed once per call and reused below at both the validators
+	// retrieval and (for the Current blob) the previous-status lookup - validatorForceKeysByAddress
+	// does a full lib.Unmarshal of blockBz internally, so calling it twice per Current blob build
+	// doubled that cost for no reason; only the journal path (p.selective) needs it at all.
+	var forcedValidatorKeys [][]byte
+	if p.selective {
+		forcedValidatorKeys, err = validatorForceKeysByAddress(blockBz)
+		if err != nil {
+			return nil, err
+		}
+	}
 	// use sm for consistent snapshot reads at the requested height
 	// retrieve either the complete account snapshot (legacy path) or only the
 	// keys touched by the requested commit (journal path).
@@ -214,11 +225,7 @@ func (s *StateMachine) indexerBlob(ctx context.Context, p *indexerBlobParams) (b
 	if !p.selective {
 		validators, err = sm.IterateAndAppend(ctx, ValidatorPrefix())
 	} else {
-		forced, forceErr := validatorForceKeysByAddress(blockBz)
-		if forceErr != nil {
-			return nil, forceErr
-		}
-		validators, err = sm.valuesForStateKeys(append(p.validatorKeys, forced...), ValidatorPrefix())
+		validators, err = sm.valuesForStateKeys(append(p.validatorKeys, forcedValidatorKeys...), ValidatorPrefix())
 	}
 	s.Metrics.ObserveIndexerBlobStep("validators_iterate", path, tier, stepStart)
 	if err != nil {
@@ -381,11 +388,7 @@ func (s *StateMachine) indexerBlob(ctx context.Context, p *indexerBlobParams) (b
 		if p.includeBlockEventAccounts {
 			// Current blob: fetch each touched validator's height-1 status too - without
 			// it, a validator that changes status gets counted in both categories instead of moving between them.
-			forced, forceErr := validatorForceKeysByAddress(blockBz)
-			if forceErr != nil {
-				return nil, forceErr
-			}
-			touchedKeys := append(append([][]byte{}, p.validatorKeys...), forced...)
+			touchedKeys := append(append([][]byte{}, p.validatorKeys...), forcedValidatorKeys...)
 			previousValidators, prevErr := s.previousValidatorEntries(p.height, touchedKeys)
 			if prevErr != nil {
 				return nil, prevErr
