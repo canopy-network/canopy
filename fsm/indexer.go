@@ -180,10 +180,8 @@ func (s *StateMachine) indexerBlob(ctx context.Context, p *indexerBlobParams) (b
 	if err != nil {
 		return nil, err
 	}
-	// forcedValidatorKeys is computed once per call and reused below at both the validators
-	// retrieval and (for the Current blob) the previous-status lookup - validatorForceKeysByAddress
-	// does a full lib.Unmarshal of blockBz internally, so calling it twice per Current blob build
-	// doubled that cost for no reason; only the journal path (p.selective) needs it at all.
+	// computed once and reused below - validatorForceKeysByAddress unmarshals the whole block,
+	// so calling it twice per Current blob build doubled that cost for no reason.
 	var forcedValidatorKeys [][]byte
 	if p.selective {
 		forcedValidatorKeys, err = validatorForceKeysByAddress(blockBz)
