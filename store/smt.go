@@ -101,11 +101,22 @@ type SMT struct {
 	operations []*node
 	// unsorted_ops: a list of operations that aren't yet sorted
 	unsortedOps map[string]*node
+	// stats: counters captured for the most recent commit() call
+	stats SMTStats
 	// OpData: data for each operation
 	OpData
 	// define reserved keys
 	minKey *key
 	maxKey *key
+}
+
+// SMTStats captures the internal work performed during the most recent SMT commit.
+type SMTStats struct {
+	NodeReads       int
+	NodeCacheHits   int
+	NodeCacheMisses int
+	TraverseSteps   int
+	Rehashes        int
 }
 
 // node wraps protobuf Node with a key
@@ -175,6 +186,7 @@ func (s *SMT) Root() []byte { return bytes.Clone(s.root.Value) }
 // minimizing the amount of traversals, IOPS, and hash operations over the master tree
 // this is the sequential alternative to 'commit parallel'
 func (s *SMT) Commit(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
+	s.stats = SMTStats{}
 	s.operations = make([]*node, 0, len(unsortedOps))
 	// insert all unsorted operations into the slice
 	for _, operation := range unsortedOps {
@@ -409,6 +421,7 @@ func (s *SMT) traverse() (err lib.ErrorI) {
 		case RightChild: // move down to the right
 			currentKey = s.current.RightChildKey
 		}
+		s.stats.TraverseSteps++
 		// load current node from the store
 		s.current, err = s.getNode(currentKey)
 		if err != nil {
@@ -448,6 +461,7 @@ func (s *SMT) rehash() (err lib.ErrorI) {
 		if len(s.operations) != 0 && s.operations[0].Key.cmp(&key{key: parent.RightChildKey}) <= 0 {
 			return
 		}
+		s.stats.Rehashes++
 		// calculate its new value
 		if err = s.updateParentValue(parent); err != nil {
 			return
@@ -661,11 +675,14 @@ func (s *SMT) delNode(key []byte) lib.ErrorI {
 
 // getNode() retrieves a node object from the database
 func (s *SMT) getNode(key []byte) (n *node, err lib.ErrorI) {
+	s.stats.NodeReads++
 	// check cache
 	n, found := s.nodeCache[string(key)]
 	if found {
+		s.stats.NodeCacheHits++
 		return n, nil
 	}
+	s.stats.NodeCacheMisses++
 	// initialize a reference to a node object
 	n = newNode()
 	// get the bytes of the node from the kv store

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -92,20 +93,23 @@ func main() {
 			"This message appears because the program was started directly instead of using 'start'.")
 		return
 	}
+	autoUpdaterEnabled := configs.Coordinator.Canopy.AutoUpdate
+	binPath := configs.Coordinator.BinPath
 	// ensure the binary exists before proceeding
-	if !isExecutable(configs.Coordinator.BinPath) {
-		logger.Fatalf("canopy binary not found or not executable: %s", configs.Coordinator.BinPath)
+	if !isExecutable(binPath) {
+		logger.Fatalf("canopy binary not found or not executable: %s", binPath)
 	}
-	if configs.Coordinator.Canopy.AutoUpdate {
+	if autoUpdaterEnabled {
 		logger.Infof("auto-update enabled, starting coordinator on version %s", rpc.SoftwareVersion)
 	} else {
-		logger.Infof("auto-update disabled, starting binary: %s", configs.Coordinator.BinPath)
+		logger.Infof("auto-update disabled, starting binary: %s", binPath)
 	}
 	// handle external shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	// setup the dependencies
-	updater := NewReleaseManager(configs.Updater, rpc.SoftwareVersion, configs.Coordinator.Canopy.AutoUpdate)
+	updater := NewReleaseManager(configs.Updater,
+		getSoftwareVersion(autoUpdaterEnabled, binPath), autoUpdaterEnabled)
 	snapshot := NewSnapshotManager(configs.Snapshot)
 	// setup plugin updater and config if configured
 	var pluginUpdater *ReleaseManager
@@ -242,6 +246,17 @@ func isExecutable(path string) bool {
 	}
 	// check for any execute bit (owner, group, or other)
 	return info.Mode()&0111 != 0
+}
+
+func getSoftwareVersion(autoUpdate bool, binPath string) string {
+	if !autoUpdate {
+		return rpc.SoftwareVersion
+	}
+	out, err := exec.Command(binPath, "version").Output()
+	if err != nil {
+		panic(fmt.Sprintf("failed to get software version from binary: %v", err))
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // envOrDefault returns the value of the environment variable with the given key,

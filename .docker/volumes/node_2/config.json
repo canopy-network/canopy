@@ -6,10 +6,6 @@
     {
       "chainId": 1,
       "url": "http://node-1:50002"
-    },
-    {
-      "chainId": 2,
-      "url": "http://node-2:40002"
     }
   ],
   "runVDF": false,
@@ -24,6 +20,7 @@
   "dataDirPath": "/root/.canopy",
   "dbName": "canopy",
   "inMemory": false,
+  "stateChangeJournalEnabled": false,
   "networkID": 1,
   "listenAddress": "0.0.0.0:9001",
   "externalAddress": "node-2",

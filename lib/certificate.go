@@ -23,7 +23,10 @@ const (
 	MaxWithdrawsPerDexBatch = 5_000
 	MaxOrdersPerDexBatch    = 10_000
 	MaxReceipts             = MaxOrdersPerDexBatch
-	MaxLiquidityProviders   = 50_000
+	MaxLiquidityProviders   = 5_000
+	// MaxOrdersSettledPerBlock caps DEX orders settled per block so begin_block can't exceed the consensus
+	// round budget; orders beyond the cap are failed (receipt 0) and refunded to the seller on the origin chain
+	MaxOrdersSettledPerBlock = 250
 )
 
 // MaxBlockHeaderSize is a consensus breaking change because it affects how the state machine
@@ -260,7 +263,7 @@ func (x *QuorumCertificate) GetNonSigners(vs *ConsensusValidators) (nonSignerPub
 		// exit with empty qc error
 		return nil, 0, ErrEmptyQuorumCertificate()
 	}
-	// retrieve the non-signers from the signature using teh validator set
+	// retrieve the non-signers from the signature using the validator set
 	return x.Signature.GetNonSigners(vs)
 }
 
@@ -910,9 +913,9 @@ func (x *DexBatch) CheckBasic() (err ErrorI) {
 	if len(x.Receipts) > MaxReceipts {
 		return ErrTooManyDexReceipts()
 	}
-	// ensure there's not too many receipts
+	// ensure there's not too many liquidity providers
 	if len(x.PoolPoints) > MaxLiquidityProviders {
-		return ErrTooManyDexReceipts()
+		return ErrTooManyLiquidityProviders()
 	}
 	// ensure each pool point is valid
 	for _, point := range x.PoolPoints {

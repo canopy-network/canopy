@@ -22,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26"
 
       - name: Build binaries
         working-directory: plugin/go
@@ -44,7 +44,7 @@ jobs:
           name: "Go Plugin ${{ github.event.inputs.tag }}"
           body: |
             Go Plugin Release ${{ github.event.inputs.tag }}
-            
+
             ## Assets
             - `go-plugin-linux-amd64.tar.gz` - Linux x86_64
             - `go-plugin-linux-arm64.tar.gz` - Linux ARM64

@@ -35,7 +35,7 @@ func TestIndexerBlobs_IgnoresLegacyDeltaField(t *testing.T) {
 	require.NotNil(t, got.Previous)
 }
 
-func TestIndexerBlobsCached_CachesDeltaResponsesOnly(t *testing.T) {
+func TestIndexerBlobsCached_CachesJournalDeltaResponsesOnly(t *testing.T) {
 	server := newTestIndexerBlobServer(t)
 
 	got, bz, err := server.IndexerBlobsCached(3)
@@ -48,10 +48,9 @@ func TestIndexerBlobsCached_CachesDeltaResponsesOnly(t *testing.T) {
 	entry, ok := server.indexerBlobCache.get(3)
 	require.True(t, ok)
 	require.NotNil(t, entry)
-	require.NotNil(t, entry.current)
+	require.Nil(t, entry.current)
 	require.NotNil(t, entry.deltaBlobs)
 	require.NotEmpty(t, entry.deltaBytes)
-	require.Len(t, entry.current.Accounts, 2)
 	require.Same(t, got, entry.deltaBlobs)
 	require.Equal(t, bz, entry.deltaBytes)
 
@@ -61,7 +60,7 @@ func TestIndexerBlobsCached_CachesDeltaResponsesOnly(t *testing.T) {
 	require.Equal(t, entry.deltaBytes, bzAgain)
 }
 
-func TestIndexerBlobsCached_RetainsOnlyLatestFullSnapshot(t *testing.T) {
+func TestIndexerBlobsCached_JournalPathRetainsNoFullSnapshots(t *testing.T) {
 	server := newTestIndexerBlobServerWithHeights(t, 4)
 
 	got3, _, err := server.IndexerBlobsCached(3)
@@ -71,7 +70,7 @@ func TestIndexerBlobsCached_RetainsOnlyLatestFullSnapshot(t *testing.T) {
 	entry3, ok := server.indexerBlobCache.get(3)
 	require.True(t, ok)
 	require.NotNil(t, entry3)
-	require.NotNil(t, entry3.current)
+	require.Nil(t, entry3.current)
 
 	got4, _, err := server.IndexerBlobsCached(4)
 	require.NoError(t, err)
@@ -88,9 +87,150 @@ func TestIndexerBlobsCached_RetainsOnlyLatestFullSnapshot(t *testing.T) {
 	entry4, ok := server.indexerBlobCache.get(4)
 	require.True(t, ok)
 	require.NotNil(t, entry4)
-	require.NotNil(t, entry4.current)
+	require.Nil(t, entry4.current)
 	require.NotNil(t, entry4.deltaBlobs)
 	require.NotEmpty(t, entry4.deltaBytes)
+}
+
+func TestIndexerBlobsCached_JournalPathIncludesUnchangedRewardAccount(t *testing.T) {
+	server := newTestIndexerBlobServer(t)
+	sm := server.controller.FSM
+	db := sm.Store().(lib.StoreI)
+	rewardAddress := bytes.Repeat([]byte{0x11}, crypto.AddressSize)
+
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 3,
+			Hash:   crypto.Hash([]byte("block-3-reward")),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+		Events: []*lib.Event{{
+			EventType: string(lib.EventTypeReward),
+			Address:   rewardAddress,
+		}},
+	}))
+	_, err := db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 4)
+
+	got, _, err := server.IndexerBlobsCached(4)
+	require.NoError(t, err)
+	require.Len(t, got.Current.Accounts, 1)
+	require.Len(t, got.Previous.Accounts, 1)
+	rewardAccount := new(fsm.Account)
+	require.NoError(t, lib.Unmarshal(got.Current.Accounts[0], rewardAccount))
+	require.Equal(t, rewardAddress, rewardAccount.Address)
+
+	entry, ok := server.indexerBlobCache.get(4)
+	require.True(t, ok)
+	require.Nil(t, entry.current)
+}
+
+func TestIndexerBlobsCached_JournalPathUsesValidatorAndNonSignerKeys(t *testing.T) {
+	server := newTestIndexerBlobServerWithHeights(t, 4)
+	sm := server.controller.FSM
+	db := sm.Store().(lib.StoreI)
+	validatorAddress := crypto.NewAddress(bytes.Repeat([]byte{0x31}, crypto.AddressSize))
+	nonSignerAddress := crypto.NewAddress(bytes.Repeat([]byte{0x32}, crypto.AddressSize))
+	rewardAddress := bytes.Repeat([]byte{0x33}, crypto.AddressSize)
+
+	validatorBz, err := lib.Marshal(&fsm.Validator{Address: validatorAddress.Bytes(), Output: rewardAddress})
+	require.NoError(t, err)
+	nonSignerBz, err := lib.Marshal(&fsm.NonSigner{Address: nonSignerAddress.Bytes(), Counter: 1})
+	require.NoError(t, err)
+	require.NoError(t, sm.Set(fsm.KeyForValidator(validatorAddress), validatorBz))
+	require.NoError(t, sm.Set(fsm.KeyForNonSigner(nonSignerAddress.Bytes()), nonSignerBz))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{
+		Height: 4,
+		Hash:   crypto.Hash([]byte("block-4-journal-entities")),
+		Time:   uint64(time.Now().UnixMicro()),
+	}}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 5)
+
+	changed, _, err := server.IndexerBlobsCached(5)
+	require.NoError(t, err)
+	require.Len(t, changed.Current.Validators, 1)
+	require.Len(t, changed.Current.NonSigners, 1)
+	require.Equal(t, uint32(1), changed.Current.TotalValidatorsActive)
+
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{
+		Height: 5,
+		Hash:   crypto.Hash([]byte("block-5-validator-reward")),
+		Time:   uint64(time.Now().UnixMicro()),
+	}, Events: []*lib.Event{{EventType: string(lib.EventTypeReward), Address: rewardAddress}}}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 6)
+
+	rewarded, _, err := server.IndexerBlobsCached(6)
+	require.NoError(t, err)
+	require.Len(t, rewarded.Current.Validators, 1)
+	require.Len(t, rewarded.Previous.Validators, 1)
+	require.Empty(t, rewarded.Current.NonSigners)
+	require.Equal(t, uint32(1), rewarded.Current.TotalValidatorsActive)
+
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{
+		Height: 6,
+		Hash:   crypto.Hash([]byte("block-6-no-entity-changes")),
+		Time:   uint64(time.Now().UnixMicro()),
+	}}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 7)
+
+	unchanged, _, err := server.IndexerBlobsCached(7)
+	require.NoError(t, err)
+	require.Empty(t, unchanged.Current.Validators)
+	require.Empty(t, unchanged.Current.NonSigners)
+	require.Equal(t, uint32(1), unchanged.Current.TotalValidatorsActive)
+}
+
+func TestIndexerBlobsCached_HeightTwoPreservesGenesisAccounts(t *testing.T) {
+	log := lib.NewDefaultLogger()
+	db, err := store.NewStoreInMemory(log)
+	require.NoError(t, err)
+	defer db.Close()
+	sm := newTestRPCStateMachine(t, db, log)
+	genesisAddress := crypto.NewAddress(bytes.Repeat([]byte{0x61}, crypto.AddressSize))
+	blockOneAddress := crypto.NewAddress(bytes.Repeat([]byte{0x62}, crypto.AddressSize))
+
+	require.NoError(t, sm.SetParams(fsm.DefaultParams()))
+	require.NoError(t, sm.SetAccount(&fsm.Account{Address: genesisAddress.Bytes(), Amount: 100}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+
+	require.NoError(t, sm.SetAccount(&fsm.Account{Address: blockOneAddress.Bytes(), Amount: 50}))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 1,
+			Hash:   crypto.Hash([]byte("block-1-genesis-boundary")),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+	}))
+	_, err = db.Commit()
+	require.NoError(t, err)
+	setFSMHeight(t, sm, 2)
+
+	server := &Server{
+		controller:       &controller.Controller{FSM: sm},
+		indexerBlobCache: newIndexerBlobCache(8),
+		logger:           log,
+	}
+	got, _, err := server.IndexerBlobsCached(2)
+	require.NoError(t, err)
+	require.Nil(t, got.Previous)
+	require.Len(t, got.Current.Accounts, 2)
+
+	addresses := make(map[string]struct{}, len(got.Current.Accounts))
+	for _, raw := range got.Current.Accounts {
+		account := new(fsm.Account)
+		require.NoError(t, lib.Unmarshal(raw, account))
+		addresses[string(account.Address)] = struct{}{}
+	}
+	require.Contains(t, addresses, string(genesisAddress.Bytes()))
+	require.Contains(t, addresses, string(blockOneAddress.Bytes()))
 }
 
 func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {
@@ -101,6 +241,7 @@ func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {
 	require.NoError(t, sm.SetAccount(&fsm.Account{
 		Address:            address.Bytes(),
 		Amount:             150,
+		Nonce:              7,
 		VestingAmount:      100,
 		VestingStartHeight: 1,
 		VestingCliffHeight: 2,
@@ -122,8 +263,8 @@ func TestAccountQueryReturnsVestingBreakdown(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	require.Equal(t, address.Bytes(), []byte(got.Address))
 	require.Equal(t, uint64(110), got.Amount)
+	require.Equal(t, uint64(7), got.Nonce)
 	require.Equal(t, uint64(150), got.TotalAmount)
-	require.Equal(t, uint64(110), got.SpendableAmount)
 	require.Equal(t, uint64(60), got.VestedAmount)
 	require.Equal(t, uint64(40), got.LockedAmount)
 	require.Equal(t, uint64(100), got.VestingAmount)
@@ -138,10 +279,11 @@ func TestAccountsQueryReturnsVestingBreakdowns(t *testing.T) {
 	liquid := crypto.NewAddress(bytes.Repeat([]byte{0x44}, crypto.AddressSize))
 	vested := crypto.NewAddress(bytes.Repeat([]byte{0x55}, crypto.AddressSize))
 
-	require.NoError(t, sm.SetAccount(&fsm.Account{Address: liquid.Bytes(), Amount: 25}))
+	require.NoError(t, sm.SetAccount(&fsm.Account{Address: liquid.Bytes(), Amount: 25, Nonce: 3}))
 	require.NoError(t, sm.SetAccount(&fsm.Account{
 		Address:            vested.Bytes(),
 		Amount:             150,
+		Nonce:              8,
 		VestingAmount:      100,
 		VestingStartHeight: 1,
 		VestingCliffHeight: 2,
@@ -168,16 +310,16 @@ func TestAccountsQueryReturnsVestingBreakdowns(t *testing.T) {
 		amounts[crypto.NewAddressFromBytes(account.Address).String()] = account
 	}
 	require.Equal(t, uint64(25), amounts[liquid.String()].Amount)
+	require.Equal(t, uint64(3), amounts[liquid.String()].Nonce)
 	require.Equal(t, uint64(25), amounts[liquid.String()].TotalAmount)
-	require.Equal(t, uint64(25), amounts[liquid.String()].SpendableAmount)
 	require.Zero(t, amounts[liquid.String()].VestedAmount)
 	require.Zero(t, amounts[liquid.String()].LockedAmount)
 
 	vestedAccount, ok := amounts[vested.String()]
 	require.True(t, ok)
 	require.Equal(t, uint64(110), vestedAccount.Amount)
+	require.Equal(t, uint64(8), vestedAccount.Nonce)
 	require.Equal(t, uint64(150), vestedAccount.TotalAmount)
-	require.Equal(t, uint64(110), vestedAccount.SpendableAmount)
 	require.Equal(t, uint64(60), vestedAccount.VestedAmount)
 	require.Equal(t, uint64(40), vestedAccount.LockedAmount)
 	require.Equal(t, uint64(100), vestedAccount.VestingAmount)
@@ -195,7 +337,9 @@ func newTestIndexerBlobServerWithHeights(t *testing.T, height uint64) *Server {
 	t.Helper()
 
 	log := lib.NewDefaultLogger()
-	db, err := store.NewStoreInMemory(log)
+	config := lib.DefaultConfig()
+	config.StoreConfig.StateChangeJournalEnabled = true
+	db, err := store.NewStoreInMemory(log, config)
 	require.NoError(t, err)
 
 	sm := newTestRPCStateMachine(t, db, log)

@@ -124,7 +124,7 @@ func PrivateKeyToFile(key PrivateKeyI, filepath string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath, bz, 0777)
+	return os.WriteFile(filepath, bz, 0600)
 }
 
 // NewPrivateKeyFromString() creates a new PrivateKeyI interface from a hex string

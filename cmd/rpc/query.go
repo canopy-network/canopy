@@ -37,10 +37,14 @@ func (s *Server) Transaction(w http.ResponseWriter, r *http.Request, _ httproute
 // Transactions handles multiple transactions in a single request
 func (s *Server) Transactions(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// create a slice to hold the incoming transactions
-	var txs []lib.TransactionI
+	var transactions []*lib.Transaction
 	// unmarshal the HTTP request body into the transactions slice
-	if ok := unmarshal(w, r, &txs); !ok {
+	if ok := unmarshal(w, r, &transactions); !ok {
 		return
+	}
+	txs := make([]lib.TransactionI, len(transactions))
+	for i := range transactions {
+		txs[i] = transactions[i]
 	}
 	// submit transactions to RPC server
 	s.submitTxs(w, txs)
@@ -619,6 +623,27 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 		return entry.deltaBlobs, entry.deltaBytes, nil
 	}
 
+	// Newer store versions persist the state keys touched by each commit. This
+	// makes account delta construction proportional to block activity instead
+	// of total account count. Heights committed before the journal was enabled
+	// transparently use the full-snapshot fallback below.
+	journalDelta, available, journalErr := s.controller.FSM.IndexerBlobsFromStateChanges(height)
+	if journalErr != nil {
+		return nil, nil, journalErr
+	}
+	if available {
+		deltaBytes, marshalErr := lib.Marshal(journalDelta)
+		if marshalErr != nil {
+			return nil, nil, marshalErr
+		}
+		s.indexerBlobCache.put(height, &indexerBlobCacheEntry{
+			height:     height,
+			deltaBlobs: journalDelta,
+			deltaBytes: deltaBytes,
+		})
+		return journalDelta, deltaBytes, nil
+	}
+
 	current, err := s.controller.FSM.IndexerBlob(height)
 	if err != nil {
 		return nil, nil, err
@@ -750,8 +775,8 @@ func spendableAccountView(sm *fsm.StateMachine, account *fsm.Account) *AccountVi
 	return &AccountView{
 		Address:            account.Address,
 		Amount:             spendable,
+		Nonce:              account.Nonce,
 		TotalAmount:        total,
-		SpendableAmount:    spendable,
 		VestedAmount:       vested,
 		LockedAmount:       locked,
 		VestingAmount:      account.VestingAmount,

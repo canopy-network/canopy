@@ -13,7 +13,7 @@ func (b *BFT) HandleMessage(message proto.Message) lib.ErrorI {
 	// ensure is a valid `Consensus Message` type
 	switch msg := message.(type) {
 	case *Message:
-		// capture the paramters needed to validate the message
+		// capture the parameters needed to validate the message
 		params, err := b.GetValidateMessageParams(msg)
 		if err != nil {
 			return err
@@ -97,6 +97,23 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 	isPartialQC, err = x.Qc.Check(vals, b.LoadMaxBlockSize(), p.view, false)
 	if err != nil {
 		return
+	}
+	if x.HighQc != nil {
+		if err = x.HighQc.CheckBasic(); err != nil {
+			return false, err
+		}
+		highQCVals, highQCView := p.vals, p.view
+		if x.HighQc.Header.RootHeight != p.rootHeight {
+			b.Controller.Lock()
+			highQCVals, err = b.LoadCommittee(b.LoadRootChainId(x.HighQc.Header.Height), x.HighQc.Header.RootHeight)
+			b.Controller.Unlock()
+			if err != nil {
+				return false, err
+			}
+		}
+		if err = x.HighQc.CheckHighQC(lib.GlobalMaxBlockSize, highQCView, p.rootHeightUpdated, highQCVals); err != nil {
+			return false, err
+		}
 	}
 	// A QC from a different root height must not justify a proposer message for the local view.
 	// Still allow storing it as partial-QC evidence (see AddPartialQC) if it's not +2/3 majority.
@@ -229,7 +246,7 @@ func (x *Message) SignBytes() (signBytes []byte) {
 			ProposerKey: x.Qc.ProposerKey,
 		}).SignBytes()
 	case x.IsPacemakerMessage():
-		signBytes, _ = lib.Marshal(&Message{Header: x.Header})
+		signBytes, _ = lib.Marshal(&Message{Qc: &QC{Header: x.Qc.Header}})
 	}
 	return
 }
@@ -301,25 +318,27 @@ func (b *BFT) GetValidateMessageParams(msg *Message) (*validateMessageParams, li
 		blockHash, resultsHash = b.GetBlockHash(), b.Results.Hash()
 	}
 	return &validateMessageParams{
-		view:           b.View.Copy(),
-		vals:           b.ValidatorSet,
-		rootHeight:     b.RootHeight,
-		height:         b.Height,
-		cHeightUpdated: b.CommitteeData.LastChainHeightUpdated,
-		blockHash:      blockHash,
-		resultsHash:    resultsHash,
+		view:              b.View.Copy(),
+		vals:              b.ValidatorSet,
+		rootHeight:        b.RootHeight,
+		rootHeightUpdated: b.CommitteeData.LastRootHeightUpdated,
+		height:            b.Height,
+		cHeightUpdated:    b.CommitteeData.LastChainHeightUpdated,
+		blockHash:         blockHash,
+		resultsHash:       resultsHash,
 	}, nil
 }
 
 // validateMessageParams defines the parameters structure for validating consensus messages
 type validateMessageParams struct {
-	view           *lib.View // the current BFT view of this node
-	vals           ValSet    // the validator set corresponding with the message
-	rootHeight     uint64    // the height of the root chain
-	height         uint64    // the chain height
-	cHeightUpdated uint64    // the last 'chain' height the committee updated
-	blockHash      []byte    // the hash of the proposal.Block (if any)
-	resultsHash    []byte    // the hash of the proposal.Results (if any)
+	view              *lib.View // the current BFT view of this node
+	vals              ValSet    // the validator set corresponding with the message
+	rootHeight        uint64    // the height of the root chain
+	rootHeightUpdated uint64    // the last root height the committee updated
+	height            uint64    // the chain height
+	cHeightUpdated    uint64    // the last 'chain' height the committee updated
+	blockHash         []byte    // the hash of the proposal.Block (if any)
+	resultsHash       []byte    // the hash of the proposal.Results (if any)
 }
 
 // checkSignature() validates the signature of a SignByte implementation (object that can be converted to Sign Bytes)

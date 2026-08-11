@@ -28,6 +28,10 @@ func ErrInvalidVesting() lib.ErrorI {
 	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid vesting schedule")
 }
 
+func ErrInvalidTxNonce() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxNonce, lib.StateMachineModule, "invalid tx nonce")
+}
+
 func ErrIncompatibleVesting() lib.ErrorI {
 	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "recipient account has incompatible vesting schedule")
 }

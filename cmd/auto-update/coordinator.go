@@ -415,7 +415,7 @@ func (c *Coordinator) ApplyUpdate(ctx context.Context, release, pluginRelease *R
 		if err := c.supervisor.Stop(stopCtx); err != nil {
 			// program may have exited with a non zero exit code due to forced close
 			// this is to be expected so the update can still proceed
-			c.log.Warnf("failed to stop process for update: %w", err)
+			c.log.Warnf("failed to stop process for update: %s", err)
 		}
 		// kill any remaining plugin processes (only if plugin is configured)
 		if c.supervisor.pluginConfig != nil {

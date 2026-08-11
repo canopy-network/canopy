@@ -26,6 +26,7 @@ $root.types = (function() {
          * @interface IAccount
          * @property {Uint8Array|null} [address] Account address
          * @property {number|Long|null} [amount] Account amount
+         * @property {number|Long|null} [nonce] Account nonce
          */
 
         /**
@@ -60,6 +61,14 @@ $root.types = (function() {
         Account.prototype.amount = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
         /**
+         * Account nonce.
+         * @member {number|Long} nonce
+         * @memberof types.Account
+         * @instance
+         */
+        Account.prototype.nonce = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+        /**
          * Creates a new Account instance using the specified properties.
          * @function create
          * @memberof types.Account
@@ -87,6 +96,8 @@ $root.types = (function() {
                 writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.address);
             if (message.amount != null && Object.hasOwnProperty.call(message, "amount"))
                 writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.amount);
+            if (message.nonce != null && Object.hasOwnProperty.call(message, "nonce"))
+                writer.uint32(/* id 7, wireType 0 =*/56).uint64(message.nonce);
             return writer;
         };
 
@@ -131,6 +142,10 @@ $root.types = (function() {
                         message.amount = reader.uint64();
                         break;
                     }
+                case 7: {
+                        message.nonce = reader.uint64();
+                        break;
+                    }
                 default:
                     reader.skipType(tag & 7);
                     break;
@@ -172,6 +187,9 @@ $root.types = (function() {
             if (message.amount != null && message.hasOwnProperty("amount"))
                 if (!$util.isInteger(message.amount) && !(message.amount && $util.isInteger(message.amount.low) && $util.isInteger(message.amount.high)))
                     return "amount: integer|Long expected";
+            if (message.nonce != null && message.hasOwnProperty("nonce"))
+                if (!$util.isInteger(message.nonce) && !(message.nonce && $util.isInteger(message.nonce.low) && $util.isInteger(message.nonce.high)))
+                    return "nonce: integer|Long expected";
             return null;
         };
 
@@ -201,6 +219,15 @@ $root.types = (function() {
                     message.amount = object.amount;
                 else if (typeof object.amount === "object")
                     message.amount = new $util.LongBits(object.amount.low >>> 0, object.amount.high >>> 0).toNumber(true);
+            if (object.nonce != null)
+                if ($util.Long)
+                    (message.nonce = $util.Long.fromValue(object.nonce)).unsigned = true;
+                else if (typeof object.nonce === "string")
+                    message.nonce = parseInt(object.nonce, 10);
+                else if (typeof object.nonce === "number")
+                    message.nonce = object.nonce;
+                else if (typeof object.nonce === "object")
+                    message.nonce = new $util.LongBits(object.nonce.low >>> 0, object.nonce.high >>> 0).toNumber(true);
             return message;
         };
 
@@ -230,6 +257,11 @@ $root.types = (function() {
                     object.amount = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                 } else
                     object.amount = options.longs === String ? "0" : 0;
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, true);
+                    object.nonce = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.nonce = options.longs === String ? "0" : 0;
             }
             if (message.address != null && message.hasOwnProperty("address"))
                 object.address = options.bytes === String ? $util.base64.encode(message.address, 0, message.address.length) : options.bytes === Array ? Array.prototype.slice.call(message.address) : message.address;
@@ -238,6 +270,11 @@ $root.types = (function() {
                     object.amount = options.longs === String ? String(message.amount) : message.amount;
                 else
                     object.amount = options.longs === String ? $util.Long.prototype.toString.call(message.amount) : options.longs === Number ? new $util.LongBits(message.amount.low >>> 0, message.amount.high >>> 0).toNumber(true) : message.amount;
+            if (message.nonce != null && message.hasOwnProperty("nonce"))
+                if (typeof message.nonce === "number")
+                    object.nonce = options.longs === String ? String(message.nonce) : message.nonce;
+                else
+                    object.nonce = options.longs === String ? $util.Long.prototype.toString.call(message.nonce) : options.longs === Number ? new $util.LongBits(message.nonce.low >>> 0, message.nonce.high >>> 0).toNumber(true) : message.nonce;
             return object;
         };
 
@@ -3916,6 +3953,7 @@ $root.types = (function() {
          * @memberof types
          * @interface IPluginCheckRequest
          * @property {types.ITransaction|null} [tx] PluginCheckRequest tx
+         * @property {number|Long|null} [height] PluginCheckRequest height
          */
 
         /**
@@ -3940,6 +3978,14 @@ $root.types = (function() {
          * @instance
          */
         PluginCheckRequest.prototype.tx = null;
+
+        /**
+         * PluginCheckRequest height.
+         * @member {number|Long} height
+         * @memberof types.PluginCheckRequest
+         * @instance
+         */
+        PluginCheckRequest.prototype.height = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
         /**
          * Creates a new PluginCheckRequest instance using the specified properties.
@@ -3967,6 +4013,8 @@ $root.types = (function() {
                 writer = $Writer.create();
             if (message.tx != null && Object.hasOwnProperty.call(message, "tx"))
                 $root.types.Transaction.encode(message.tx, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.height != null && Object.hasOwnProperty.call(message, "height"))
+                writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.height);
             return writer;
         };
 
@@ -4005,6 +4053,10 @@ $root.types = (function() {
                 switch (tag >>> 3) {
                 case 1: {
                         message.tx = $root.types.Transaction.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 2: {
+                        message.height = reader.uint64();
                         break;
                     }
                 default:
@@ -4047,6 +4099,9 @@ $root.types = (function() {
                 if (error)
                     return "tx." + error;
             }
+            if (message.height != null && message.hasOwnProperty("height"))
+                if (!$util.isInteger(message.height) && !(message.height && $util.isInteger(message.height.low) && $util.isInteger(message.height.high)))
+                    return "height: integer|Long expected";
             return null;
         };
 
@@ -4067,6 +4122,15 @@ $root.types = (function() {
                     throw TypeError(".types.PluginCheckRequest.tx: object expected");
                 message.tx = $root.types.Transaction.fromObject(object.tx);
             }
+            if (object.height != null)
+                if ($util.Long)
+                    (message.height = $util.Long.fromValue(object.height)).unsigned = true;
+                else if (typeof object.height === "string")
+                    message.height = parseInt(object.height, 10);
+                else if (typeof object.height === "number")
+                    message.height = object.height;
+                else if (typeof object.height === "object")
+                    message.height = new $util.LongBits(object.height.low >>> 0, object.height.high >>> 0).toNumber(true);
             return message;
         };
 
@@ -4083,10 +4147,21 @@ $root.types = (function() {
             if (!options)
                 options = {};
             var object = {};
-            if (options.defaults)
+            if (options.defaults) {
                 object.tx = null;
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, true);
+                    object.height = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.height = options.longs === String ? "0" : 0;
+            }
             if (message.tx != null && message.hasOwnProperty("tx"))
                 object.tx = $root.types.Transaction.toObject(message.tx, options);
+            if (message.height != null && message.hasOwnProperty("height"))
+                if (typeof message.height === "number")
+                    object.height = options.longs === String ? String(message.height) : message.height;
+                else
+                    object.height = options.longs === String ? $util.Long.prototype.toString.call(message.height) : options.longs === Number ? new $util.LongBits(message.height.low >>> 0, message.height.high >>> 0).toNumber(true) : message.height;
             return object;
         };
 
@@ -4412,6 +4487,7 @@ $root.types = (function() {
          * @memberof types
          * @interface IPluginDeliverRequest
          * @property {types.ITransaction|null} [tx] PluginDeliverRequest tx
+         * @property {number|Long|null} [height] PluginDeliverRequest height
          */
 
         /**
@@ -4436,6 +4512,14 @@ $root.types = (function() {
          * @instance
          */
         PluginDeliverRequest.prototype.tx = null;
+
+        /**
+         * PluginDeliverRequest height.
+         * @member {number|Long} height
+         * @memberof types.PluginDeliverRequest
+         * @instance
+         */
+        PluginDeliverRequest.prototype.height = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
         /**
          * Creates a new PluginDeliverRequest instance using the specified properties.
@@ -4463,6 +4547,8 @@ $root.types = (function() {
                 writer = $Writer.create();
             if (message.tx != null && Object.hasOwnProperty.call(message, "tx"))
                 $root.types.Transaction.encode(message.tx, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.height != null && Object.hasOwnProperty.call(message, "height"))
+                writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.height);
             return writer;
         };
 
@@ -4501,6 +4587,10 @@ $root.types = (function() {
                 switch (tag >>> 3) {
                 case 1: {
                         message.tx = $root.types.Transaction.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 2: {
+                        message.height = reader.uint64();
                         break;
                     }
                 default:
@@ -4543,6 +4633,9 @@ $root.types = (function() {
                 if (error)
                     return "tx." + error;
             }
+            if (message.height != null && message.hasOwnProperty("height"))
+                if (!$util.isInteger(message.height) && !(message.height && $util.isInteger(message.height.low) && $util.isInteger(message.height.high)))
+                    return "height: integer|Long expected";
             return null;
         };
 
@@ -4563,6 +4656,15 @@ $root.types = (function() {
                     throw TypeError(".types.PluginDeliverRequest.tx: object expected");
                 message.tx = $root.types.Transaction.fromObject(object.tx);
             }
+            if (object.height != null)
+                if ($util.Long)
+                    (message.height = $util.Long.fromValue(object.height)).unsigned = true;
+                else if (typeof object.height === "string")
+                    message.height = parseInt(object.height, 10);
+                else if (typeof object.height === "number")
+                    message.height = object.height;
+                else if (typeof object.height === "object")
+                    message.height = new $util.LongBits(object.height.low >>> 0, object.height.high >>> 0).toNumber(true);
             return message;
         };
 
@@ -4579,10 +4681,21 @@ $root.types = (function() {
             if (!options)
                 options = {};
             var object = {};
-            if (options.defaults)
+            if (options.defaults) {
                 object.tx = null;
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, true);
+                    object.height = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.height = options.longs === String ? "0" : 0;
+            }
             if (message.tx != null && message.hasOwnProperty("tx"))
                 object.tx = $root.types.Transaction.toObject(message.tx, options);
+            if (message.height != null && message.hasOwnProperty("height"))
+                if (typeof message.height === "number")
+                    object.height = options.longs === String ? String(message.height) : message.height;
+                else
+                    object.height = options.longs === String ? $util.Long.prototype.toString.call(message.height) : options.longs === Number ? new $util.LongBits(message.height.low >>> 0, message.height.high >>> 0).toNumber(true) : message.height;
             return object;
         };
 
@@ -8688,6 +8801,7 @@ $root.types = (function() {
          * @property {string|null} [memo] Transaction memo
          * @property {number|Long|null} [networkId] Transaction networkId
          * @property {number|Long|null} [chainId] Transaction chainId
+         * @property {number|Long|null} [nonce] Transaction nonce
          */
 
         /**
@@ -8778,6 +8892,14 @@ $root.types = (function() {
         Transaction.prototype.chainId = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
         /**
+         * Transaction nonce.
+         * @member {number|Long} nonce
+         * @memberof types.Transaction
+         * @instance
+         */
+        Transaction.prototype.nonce = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+        /**
          * Creates a new Transaction instance using the specified properties.
          * @function create
          * @memberof types.Transaction
@@ -8819,6 +8941,8 @@ $root.types = (function() {
                 writer.uint32(/* id 8, wireType 0 =*/64).uint64(message.networkId);
             if (message.chainId != null && Object.hasOwnProperty.call(message, "chainId"))
                 writer.uint32(/* id 9, wireType 0 =*/72).uint64(message.chainId);
+            if (message.nonce != null && Object.hasOwnProperty.call(message, "nonce"))
+                writer.uint32(/* id 10, wireType 0 =*/80).uint64(message.nonce);
             return writer;
         };
 
@@ -8891,6 +9015,10 @@ $root.types = (function() {
                         message.chainId = reader.uint64();
                         break;
                     }
+                case 10: {
+                        message.nonce = reader.uint64();
+                        break;
+                    }
                 default:
                     reader.skipType(tag & 7);
                     break;
@@ -8957,6 +9085,9 @@ $root.types = (function() {
             if (message.chainId != null && message.hasOwnProperty("chainId"))
                 if (!$util.isInteger(message.chainId) && !(message.chainId && $util.isInteger(message.chainId.low) && $util.isInteger(message.chainId.high)))
                     return "chainId: integer|Long expected";
+            if (message.nonce != null && message.hasOwnProperty("nonce"))
+                if (!$util.isInteger(message.nonce) && !(message.nonce && $util.isInteger(message.nonce.low) && $util.isInteger(message.nonce.high)))
+                    return "nonce: integer|Long expected";
             return null;
         };
 
@@ -9031,6 +9162,15 @@ $root.types = (function() {
                     message.chainId = object.chainId;
                 else if (typeof object.chainId === "object")
                     message.chainId = new $util.LongBits(object.chainId.low >>> 0, object.chainId.high >>> 0).toNumber(true);
+            if (object.nonce != null)
+                if ($util.Long)
+                    (message.nonce = $util.Long.fromValue(object.nonce)).unsigned = true;
+                else if (typeof object.nonce === "string")
+                    message.nonce = parseInt(object.nonce, 10);
+                else if (typeof object.nonce === "number")
+                    message.nonce = object.nonce;
+                else if (typeof object.nonce === "object")
+                    message.nonce = new $util.LongBits(object.nonce.low >>> 0, object.nonce.high >>> 0).toNumber(true);
             return message;
         };
 
@@ -9077,6 +9217,11 @@ $root.types = (function() {
                     object.chainId = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                 } else
                     object.chainId = options.longs === String ? "0" : 0;
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, true);
+                    object.nonce = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.nonce = options.longs === String ? "0" : 0;
             }
             if (message.messageType != null && message.hasOwnProperty("messageType"))
                 object.messageType = message.messageType;
@@ -9111,6 +9256,11 @@ $root.types = (function() {
                     object.chainId = options.longs === String ? String(message.chainId) : message.chainId;
                 else
                     object.chainId = options.longs === String ? $util.Long.prototype.toString.call(message.chainId) : options.longs === Number ? new $util.LongBits(message.chainId.low >>> 0, message.chainId.high >>> 0).toNumber(true) : message.chainId;
+            if (message.nonce != null && message.hasOwnProperty("nonce"))
+                if (typeof message.nonce === "number")
+                    object.nonce = options.longs === String ? String(message.nonce) : message.nonce;
+                else
+                    object.nonce = options.longs === String ? $util.Long.prototype.toString.call(message.nonce) : options.longs === Number ? new $util.LongBits(message.nonce.low >>> 0, message.nonce.high >>> 0).toNumber(true) : message.nonce;
             return object;
         };
 

@@ -5,9 +5,13 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"math/big"
+	"slices"
 	"sort"
 	"strings"
 )
+
+// dexLPEvictionIDDomain separates replacement withdrawal IDs from other deterministic DEX IDs.
+const dexLPEvictionIDDomain = "dex-lp-eviction-v1"
 
 /* Dex.go implements logic to handle AMM style atomic exchanges between root & nested chains
    not to be confused with 1 way order book swaps implemented in swap.go */
@@ -335,8 +339,12 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, x, y *uin
 	if *x == 0 || *y == 0 {
 		return nil, ErrInvalidLiquidityPool()
 	}
-	// for each order
-	for _, order := range sorted {
+	// for each order (pseudorandomly ordered above so the settlement cap selects fairly)
+	for i, order := range sorted {
+		// per-block settlement cap: remaining orders keep a zero receipt and get refunded on the origin chain
+		if i >= lib.MaxOrdersSettledPerBlock {
+			break
+		}
 		// set up 'deltaX'
 		dX := order.AmountForSale
 		// 'deltaY' = (dX * y) / (x + dX)
@@ -394,15 +402,29 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, x, y *uin
 // HandleBatchWithdraw() handles local/remote liquidity withdraw requests.
 // local=true: x=local pool, y=counter mirror; local=false: x=counter mirror, y=local pool.
 func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId uint64, x, y *uint64, local bool) lib.ErrorI {
+	return s.handleBatchWithdraw(batch, counterChainId, x, y, local, nil, true)
+}
+
+func (s *StateMachine) handleBatchWithdraw(batch *lib.DexBatch, counterChainId uint64, x, y *uint64, local bool, p *Pool, persist bool) lib.ErrorI {
 	if len(batch.Withdrawals) == 0 {
 		return nil
 	}
 	// initialize vars
 	var totalPointsToRemove uint64
 	// get liquidity pool
-	p, err := s.GetPool(counterChainId + LiquidityPoolAddend)
-	if err != nil {
-		return err
+	var err lib.ErrorI
+	if p == nil {
+		p, err = s.GetPool(counterChainId + LiquidityPoolAddend)
+		if err != nil {
+			return err
+		}
+	}
+	// removes legacy zero-point “ghost” LPs
+	p.Points = slices.DeleteFunc(p.Points, func(point *lib.PoolPoints) bool { return point.Points == 0 })
+	// builds an O(1) address lookup containing pointers to the actual pool entries
+	pointsByAddress := make(map[string]*lib.PoolPoints, len(p.Points))
+	for _, point := range p.Points {
+		pointsByAddress[string(point.Address)] = point
 	}
 	// collect withdrawals
 	for _, w := range batch.Withdrawals {
@@ -410,13 +432,13 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 			s.log.Warnf("an error occurred retrieving the pool points for: %x, nil withdrawal", []byte{})
 			continue // defensive
 		}
-		initialPoints, e := p.GetPointsFor(w.Address)
-		if e != nil {
-			s.log.Errorf("an error occurred retrieving the pool points for: %x, %s", w.Address, e.Error())
+		holder := pointsByAddress[string(w.Address)]
+		if holder == nil {
+			s.log.Errorf("an error occurred retrieving the pool points for: %x", w.Address)
 			continue // defensive
 		}
 		// update the total points to remove
-		pointsToRemove := lib.SafeMulDiv(initialPoints, w.Percent, 100)
+		pointsToRemove := lib.SafeMulDiv(holder.Points, w.Percent, 100)
 		var overflow bool
 		totalPointsToRemove, overflow = lib.AddUint64(totalPointsToRemove, pointsToRemove)
 		if overflow {
@@ -424,6 +446,9 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 		}
 	}
 	if totalPointsToRemove == 0 || p.TotalPoolPoints == 0 {
+		if persist {
+			return s.SetPool(p)
+		}
 		return nil
 	}
 	// compute totals; actual paid amounts are tracked below to avoid burning rounding dust
@@ -442,21 +467,20 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 			s.log.Warnf("an error occurred retrieving the pool points for: %x, nil withdrawal", []byte{})
 			continue // defensive
 		}
-		initialPoints, e := p.GetPointsFor(w.Address)
-		if e != nil {
-			s.log.Warnf("an error occurred retrieving the pool points for: %x, %s", w.Address, e.Error())
+		holder := pointsByAddress[string(w.Address)]
+		if holder == nil {
+			s.log.Warnf("an error occurred retrieving the pool points for: %x", w.Address)
 			continue // defensive
 		}
 		// calculate points from percent
-		points := lib.SafeMulDiv(initialPoints, w.Percent, 100)
+		points := lib.SafeMulDiv(holder.Points, w.Percent, 100)
 		// calculate share
 		yShare := lib.SafeMulDiv(totalYWithdrawal, points, totalPointsToRemove)
 		// calculate virtual share
 		xShare := lib.SafeMulDiv(totalXWithdraw, points, totalPointsToRemove)
 		// remove points from pool
-		if err = p.RemovePoints(w.Address, points); err != nil {
-			return err
-		}
+		p.TotalPoolPoints -= points
+		holder.Points -= points
 		payout, counter := yShare, xShare
 		if local {
 			payout, counter = xShare, yShare
@@ -468,9 +492,15 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 			return err
 		}
 		// emit withdraw event
-		if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, payout, counter, points, counterChainId); err != nil {
+		if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, payout, counter, points, w.Percent, counterChainId); err != nil {
 			return err
 		}
+	}
+	// second call removes providers whose points became zero during the current withdrawal
+	p.Points = slices.DeleteFunc(p.Points, func(point *lib.PoolPoints) bool { return point.Points == 0 })
+	// unreachable while the permanent dead address retains its non-withdrawable points
+	if p.TotalPoolPoints == 0 {
+		return lib.ErrZeroLiquidityPool()
 	}
 	// update the remote and local pool size ledgers using actual paid amounts (avoid burning rounding dust)
 	*y -= paidY
@@ -482,36 +512,101 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 		p.Amount = *y
 	}
 	// set the pool in state
-	return s.SetPool(p)
+	if persist {
+		return s.SetPool(p)
+	}
+	return nil
 }
 
 // HandleBatchDeposit() handles local/remote liquidity deposits.
 // local=true: x=local pool (actual token movement), y=counter mirror. local=false: x=counter mirror, y=local pool.
 func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x, y *uint64, local bool) lib.ErrorI {
+	return s.handleBatchDeposit(batch, chainId, x, y, local, true, nil, true)
+}
+
+// handleBatchDeposit() is a helper function for handling the batch deposits
+func (s *StateMachine) handleBatchDeposit(batch *lib.DexBatch, chainId uint64, x, y *uint64, local, checkCap bool, p *Pool, persist bool) lib.ErrorI {
 	if len(batch.Deposits) == 0 {
 		return nil
 	}
 	// get the liquidity pool
-	p, err := s.GetPool(chainId + LiquidityPoolAddend)
-	if err != nil {
-		return err
+	var err lib.ErrorI
+	if p == nil {
+		p, err = s.GetPool(chainId + LiquidityPoolAddend)
+		if err != nil {
+			return err
+		}
 	}
-	// define variables
-	var totalDeposit, distributed uint64
+	// if capacity should be checked (recursive func artifact)
+	if checkCap {
+		if handled, e := s.handleCappedBatchDeposit(batch, p, chainId, x, y, local); handled {
+			return e
+		}
+	}
 	// x = the initial 'deposit' pool balance
 	// y = the 'counter' pool balance
 	// L = initial pool points
 	L := p.TotalPoolPoints
-	// sum all deposits
+	// sum all deposits for the invariant guard below
+	var rawTotalDeposit uint64
 	for _, deposit := range batch.Deposits {
+		var overflow bool
+		rawTotalDeposit, overflow = lib.AddUint64(rawTotalDeposit, deposit.Amount)
+		if overflow {
+			return ErrInvalidLiquidityPool()
+		}
+	}
+	// nothing to add or failed invariant check
+	if rawTotalDeposit == 0 || *x == 0 || *y == 0 {
+		return nil
+	}
+	// PASS 1: enforce the LP holder cap per-deposit. Remote batches skip the enqueue-time cap check, so
+	// an at-cap deposit from a brand-new LP is refunded/failed individually here instead of erroring the
+	// whole batch (which would brick the chain: the batch is re-served every block and can never rotate).
+	accepted := make([]bool, len(batch.Deposits))
+	seenNewHolders := make(map[string]struct{})
+	projectedHolders := len(p.Points)
+	var totalDeposit uint64
+	for i, deposit := range batch.Deposits {
+		// a zero-amount deposit can't create a holder, so it never counts against the cap
+		isNewHolder := false
+		if deposit.Amount > 0 {
+			if _, e := p.GetPointsFor(deposit.Address); e != nil && e.Code() == lib.CodePointHolderNotFound {
+				if _, seen := seenNewHolders[string(deposit.Address)]; !seen {
+					isNewHolder = true
+				}
+			}
+		}
+		// new LP at capacity: refund (local side) and skip its points
+		if isNewHolder && projectedHolders >= lib.MaxLiquidityProviders {
+			if local {
+				// return the escrowed funds to the depositor
+				if err = s.PoolSub(chainId+HoldingPoolAddend, deposit.Amount); err != nil {
+					return err
+				}
+				if err = s.AccountAdd(crypto.NewAddress(deposit.Address), deposit.Amount); err != nil {
+					return err
+				}
+			}
+			// emit a failed (zero-share) deposit event
+			if err = s.EventDexLiquidityDeposit(deposit.Address, deposit.OrderId, deposit.Amount, 0, chainId, local); err != nil {
+				return err
+			}
+			continue
+		}
+		if isNewHolder {
+			seenNewHolders[string(deposit.Address)] = struct{}{}
+			projectedHolders++
+		}
+		accepted[i] = true
 		var overflow bool
 		totalDeposit, overflow = lib.AddUint64(totalDeposit, deposit.Amount)
 		if overflow {
 			return ErrInvalidLiquidityPool()
 		}
 	}
-	// nothing to add or failed invariant check
-	if totalDeposit == 0 || *x == 0 || *y == 0 {
+	// all deposits refunded/skipped - pool object untouched, nothing to persist
+	if totalDeposit == 0 {
 		return nil
 	}
 	// if no liq points yet assigned - initialize to 'dead' address
@@ -523,35 +618,22 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 			return err
 		}
 	}
-	// using integer math and geometric mean of reserves:
-	// deltaPoolPoints = L * ( √((x + totalDeposit) * y) - √(x * y) ) / √(x * y) or simplified as:
-	// deltaPoolPoints = L * (newK - oldK) / oldK (in a 1 sided deposit scenario dY=0 thus this formula)
-	oldK := lib.SqrtProductUint64(*x, *y)
-	if oldK == 0 {
-		return ErrInvalidLiquidityPool()
+	// calculate points as if all accepted deposits are one deposit
+	totalDL, err := liquidityDepositPoints(L, *x, *y, totalDeposit)
+	if err != nil {
+		return err
 	}
-	xAfterTotalDeposit, overflow := lib.AddUint64(*x, totalDeposit)
-	if overflow {
-		return ErrInvalidLiquidityPool()
-	}
-	newK := lib.SqrtProductUint64(xAfterTotalDeposit, *y)
-	if newK < oldK {
-		return ErrInvalidLiquidityPool()
-	}
-	// totalDL is calculated as if all deposits is just 1 big deposit
-	totalDL := lib.SafeMulDiv(L, newK-oldK, oldK)
-	// distribute the points
-	for _, deposit := range batch.Deposits {
+	// PASS 2: distribute points for the accepted deposits
+	var distributed uint64
+	var overflow bool
+	for i, deposit := range batch.Deposits {
+		if !accepted[i] {
+			continue
+		}
 		// calculate pro-rate share for this particular deposit
 		share := lib.SafeMulDiv(totalDL, deposit.Amount, totalDeposit)
 		// update the distributed counter
 		distributed += share
-		// enforce LP holder cap at execution time too (remote batches bypass local enqueue checks)
-		if share > 0 {
-			if _, e := p.GetPointsFor(deposit.Address); e != nil && e.Code() == lib.CodePointHolderNotFound && len(p.Points) >= lib.MaxLiquidityProviders {
-				return ErrInvalidLiquidityPool()
-			}
-		}
 		// add points to pool
 		if err = p.AddPoints(deposit.Address, share); err != nil {
 			return err
@@ -581,7 +663,148 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 		return err
 	}
 	// update the pool
-	return s.SetPool(p)
+	if persist {
+		return s.SetPool(p)
+	}
+	return nil
+}
+
+// handleCappedBatchDeposit deterministically admits the best-funded newcomers.
+// MaxLiquidityProviders bounds serialized point entries, so the permanent dead address consumes one slot.
+func (s *StateMachine) handleCappedBatchDeposit(batch *lib.DexBatch, p *Pool, chainId uint64, x, y *uint64, local bool) (bool, lib.ErrorI) {
+	// initialize vars
+	var err lib.ErrorI
+	type candidate struct {
+		amount   uint64
+		deposits []*lib.DexLiquidityDeposit
+	}
+	// index current providers before classifying the batch
+	providers := make(map[string]bool, len(p.Points))
+	for _, point := range p.Points {
+		providers[string(point.Address)] = true
+	}
+	// determine incumbents vs newcomers
+	var incumbents []*lib.DexLiquidityDeposit
+	var newcomers []*candidate
+	byAddress := make(map[string]*candidate)
+	for _, deposit := range batch.Deposits {
+		address := string(deposit.Address)
+		// zero deposits cannot create a provider and follow the ordinary deposit path
+		if providers[address] || deposit.Amount == 0 {
+			incumbents = append(incumbents, deposit)
+		} else {
+			// aggregate split deposits so capacity and ranking operate per provider
+			newcomer := byAddress[address]
+			if newcomer == nil {
+				newcomer = new(candidate)
+				byAddress[address], newcomers = newcomer, append(newcomers, newcomer)
+			}
+			var overflow bool
+			newcomer.amount, overflow = lib.AddUint64(newcomer.amount, deposit.Amount)
+			if overflow {
+				return true, ErrInvalidLiquidityPool()
+			}
+			newcomer.deposits = append(newcomer.deposits, deposit)
+		}
+	}
+	// if provider count doesn't exceed max liquidity providers, exit
+	if len(p.Points)+len(newcomers) <= lib.MaxLiquidityProviders {
+		return false, nil
+	}
+	// otherwise; update all incumbent deposits first
+	if err := s.handleBatchDeposit(&lib.DexBatch{Deposits: incumbents}, chainId, x, y, local, false, p, false); err != nil {
+		return true, err
+	}
+	// sort the newcomers by total deposit amount then receiptHash + address
+	sort.SliceStable(newcomers, func(i, j int) bool {
+		if newcomers[i].amount != newcomers[j].amount {
+			return newcomers[i].amount > newcomers[j].amount
+		}
+		return bytes.Compare(liquidityProviderTieBreakHash(batch.ReceiptHash, newcomers[i].deposits[0].Address), liquidityProviderTieBreakHash(batch.ReceiptHash, newcomers[j].deposits[0].Address)) < 0
+	})
+	// create an apply deposit callback
+	apply := func(newcomer *candidate) lib.ErrorI {
+		return s.handleBatchDeposit(&lib.DexBatch{Deposits: newcomer.deposits}, chainId, x, y, local, false, p, false)
+	}
+	// for each newcomer
+	var lowest *lib.PoolPoints
+	for _, newcomer := range newcomers {
+		// if there's a free slot
+		if len(p.Points) < lib.MaxLiquidityProviders {
+			if err = apply(newcomer); err != nil {
+				return true, err
+			}
+			continue
+		}
+		// determine the lowest holder who may be force-evicted
+		if lowest == nil {
+			for _, point := range p.Points {
+				if !bytes.Equal(point.Address, deadAddr.Bytes()) && (lowest == nil || point.Points < lowest.Points) {
+					lowest = point
+				}
+			}
+		}
+		if lowest == nil {
+			return true, ErrInvalidLiquidityPool()
+		}
+		// determine the xOut and yOut for the lowest holder
+		xOut := lib.SafeMulDiv(*x, lowest.Points, p.TotalPoolPoints)
+		yOut := lib.SafeMulDiv(*y, lowest.Points, p.TotalPoolPoints)
+		// calculate the newcomer's share assuming the lowest LP has already been removed
+		totalShare, e := liquidityDepositPoints(p.TotalPoolPoints-lowest.GetPoints(), *x-xOut, *y-yOut, newcomer.amount)
+		if e != nil {
+			return true, e
+		}
+		var share uint64
+		for _, deposit := range newcomer.deposits {
+			share += lib.SafeMulDiv(totalShare, deposit.Amount, newcomer.amount)
+		}
+		// if the newcomer is less than the lowest points
+		if share <= lowest.Points {
+			// reject the newcomer - returning his amount in escrow (holding pool) back to his account
+			if local {
+				if err = s.PoolSub(chainId+HoldingPoolAddend, newcomer.amount); err != nil {
+					return true, err
+				}
+				if err = s.AccountAdd(crypto.NewAddress(newcomer.deposits[0].Address), newcomer.amount); err != nil {
+					return true, err
+				}
+			}
+			// continue to the next newcomer
+			continue
+		}
+		// auto withdraw the lowest
+		evictionId := crypto.ShortHash(lib.JoinLenPrefix([]byte(dexLPEvictionIDDomain), batch.ReceiptHash, lowest.Address, newcomer.deposits[0].Address))
+		if err = s.handleBatchWithdraw(&lib.DexBatch{Withdrawals: []*lib.DexLiquidityWithdraw{{
+			Address: lowest.Address, Percent: 100, OrderId: evictionId,
+		}}}, chainId, x, y, local, p, false); err != nil {
+			return true, err
+		}
+		// apply the newcomer's deposit
+		if err = apply(newcomer); err != nil {
+			return true, err
+		}
+		lowest = nil
+	}
+	return true, s.SetPool(p)
+}
+
+// liquidityProviderTieBreakHash() deterministically ranks equal-stake providers using the batch receipt hash.
+func liquidityProviderTieBreakHash(receiptHash, address []byte) []byte {
+	return crypto.Hash(append(bytes.Clone(receiptHash), address...))
+}
+
+// liquidityDepositPoints() calculates points minted by a one-sided deposit against the geometric-mean invariant.
+func liquidityDepositPoints(totalPoints, x, y, amount uint64) (uint64, lib.ErrorI) {
+	xAfter, overflow := lib.AddUint64(x, amount)
+	if overflow {
+		return 0, ErrInvalidLiquidityPool()
+	}
+	oldK, newK := lib.SqrtProductUint64(x, y), lib.SqrtProductUint64(xAfter, y)
+	if oldK == 0 || newK < oldK {
+		return 0, ErrInvalidLiquidityPool()
+	}
+	return lib.SafeMulDiv(totalPoints, newK-oldK, oldK), nil
 }
 
 // RotateDexBatches() sets 'next batch' as 'locked batch' and deletes reference for 'next batch'

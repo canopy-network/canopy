@@ -6,7 +6,7 @@ This tutorial walks you through implementing two custom transaction types for th
 
 ## Prerequisites
 
-- Go 1.24.0 or higher (required to build Canopy)
+- Go 1.26.0 or higher (required to build Canopy)
 - `protoc` compiler installed with `protoc-gen-go` plugin
 - The go-plugin base code from `plugin/go`
 

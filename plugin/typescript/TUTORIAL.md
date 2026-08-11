@@ -6,7 +6,7 @@ This tutorial walks you through implementing two custom transaction types for th
 
 ## Prerequisites
 
-- Go 1.24.0 or higher (required to build Canopy)
+- Go 1.26.0 or higher (required to build Canopy)
 - Node.js 18 or later
 - `protobufjs-cli` installed (`npm install -g protobufjs-cli`)
 - The TypeScript plugin base code from `plugin/typescript`

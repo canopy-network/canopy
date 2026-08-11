@@ -36,6 +36,8 @@ message Account {
   uint64 vesting_cliff_height = 5; // @gotags: json:"vestingCliffHeight,omitempty"
   // vesting_end_height: the block height when the vesting amount is fully unlocked
   uint64 vesting_end_height = 6; // @gotags: json:"vestingEndHeight,omitempty"
+  // nonce: the minimum accepted sequence number for nonce-protected transactions
+  uint64 nonce = 7;
 }
 
 // A pool is like an account without an owner, holding funds that are managed directly by the blockchain protocol

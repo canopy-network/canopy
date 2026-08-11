@@ -97,8 +97,9 @@ func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKe
 	if !peerPublicKey.VerifyBytes(challenge[:], peerSig.Signature) {
 		return nil, ErrFailedChallenge()
 	}
-	// swap peer metadata using the encrypted channel
-	peerMeta, err := peerMetaSwap(encryptedConn, meta.Sign(privateKey), handshakeTimeout)
+	// swap peer metadata using the encrypted channel; sign a copy to avoid mutating
+	// the shared meta, which would race with other concurrent handshake goroutines
+	peerMeta, err := peerMetaSwap(encryptedConn, meta.Copy().Sign(privateKey), handshakeTimeout)
 	if err != nil {
 		return nil, ErrFailedMetaSwap(err)
 	}

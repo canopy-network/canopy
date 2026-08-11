@@ -2225,6 +2225,28 @@ func TestHandleMessageCertificateResults(t *testing.T) {
 	}
 }
 
+func TestHandleMessageDexLiquidityDepositQueuesAtProviderCap(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainID := sm.Config.ChainId + 1
+	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders)
+	for i := range points {
+		address := make([]byte, crypto.AddressSize)
+		address[len(address)-2], address[len(address)-1] = byte(i>>8), byte(i)
+		points[i] = &lib.PoolPoints{Address: address, Points: 1}
+	}
+	require.NoError(t, sm.SetPool(&Pool{Id: chainID + LiquidityPoolAddend, Amount: 100, Points: points, TotalPoolPoints: lib.MaxLiquidityProviders}))
+	user := newTestAddress(t, 1)
+	require.NoError(t, sm.AccountAdd(user, 10))
+
+	require.NoError(t, sm.HandleMessageDexLiquidityDeposit(&MessageDexLiquidityDeposit{
+		ChainId: chainID, Address: user.Bytes(), Amount: 10,
+	}))
+	batch, err := sm.GetDexBatch(chainID, false)
+	require.NoError(t, err)
+	require.Len(t, batch.Deposits, 1)
+	require.Equal(t, uint64(10), batch.Deposits[0].Amount)
+}
+
 func TestMessageSubsidy(t *testing.T) {
 	tests := []struct {
 		name          string

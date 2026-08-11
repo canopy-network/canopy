@@ -1010,9 +1010,11 @@ func TestSafeNode(t *testing.T) {
 					HighQc: c2.bft.HighQC,
 				})
 			default:
-				msgProposal, hash := c.cont.NewTestBlock(), c.cont.NewTestBlock2()
+				msgProposal, hash, resultsHash := c.cont.NewTestBlock(), c.cont.NewTestBlockHash2(), []byte(nil)
 				if test.samePropInMsg {
-					hash = c.cont.NewTestBlockHash()
+					msgProposal = c.cont.NewTestBlock2()
+					hash = c.cont.NewTestBlockHash2()
+					resultsHash = c.bft.HighQC.Results.Hash()
 				}
 				err = c.bft.SafeNode(&Message{
 					Qc: &QC{
@@ -1020,8 +1022,9 @@ func TestSafeNode(t *testing.T) {
 						Block:   msgProposal,
 					},
 					HighQc: &QC{
-						Header:    c.bft.HighQC.Header,
-						BlockHash: hash,
+						Header:      c.bft.HighQC.Header,
+						BlockHash:   hash,
+						ResultsHash: resultsHash,
 					},
 				})
 			}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -28,15 +29,73 @@ var (
 	eventHeightPrefix  = []byte{11} // store key prefix for events by block height
 	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
 	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
+	stateChangePrefix  = []byte{14} // state keys written at a particular committed version
 	// create indexer cache
-	blockCache, _ = lru.New[uint64, *lib.BlockResult](4)
+	blockCache, _ = lru.New[uint64, *lib.BlockResult](64)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
 )
+
+// The marker distinguishes two cases that otherwise look identical:
+//
+//  1. The version was journaled, but no account keys changed.
+//  2. The version predates journaling, so no journal data exists.
+var stateChangeMarker = []byte{1}
 
 // Indexer: the part of the DB that stores transactions, blocks, and quorum certificates
 type Indexer struct {
 	db     *Txn
 	config lib.Config
+}
+
+// StateChangeKeys() returns state keys written while committing version, optionally
+// restricted to a state-key prefix. The available result distinguishes a
+// journaled version with no matching changes from a pre-journal version
+func (t *Indexer) StateChangeKeys(version uint64, prefix []byte) (keys [][]byte, available bool, err lib.ErrorI) {
+	// retrieve the state change version prefix
+	versionPrefix := t.stateChangeVersionPrefix(version)
+	// retrieve the marker
+	marker, err := t.db.Get(versionPrefix)
+	if err != nil || len(marker) == 0 {
+		return nil, false, err
+	}
+	// retrieve the search prefix
+	searchPrefix := lib.Append(versionPrefix, prefix)
+	// iterate through that prefix
+	it, err := t.db.Iterator(searchPrefix)
+	if err != nil {
+		return nil, false, err
+	}
+	defer it.Close()
+	// for each key
+	for ; it.Valid(); it.Next() {
+		k := it.Key()
+		if len(k) <= len(versionPrefix) {
+			continue
+		}
+		// append to key list
+		keys = append(keys, bytes.Clone(k[len(versionPrefix):]))
+	}
+	return keys, true, nil
+}
+
+// indexStateChangeKeys() records the commit marker even when keys is empty so
+// readers can safely use an empty delta without falling back to a full scan
+func (t *Indexer) indexStateChangeKeys(version uint64, keys [][]byte) lib.ErrorI {
+	versionPrefix := t.stateChangeVersionPrefix(version)
+	if err := t.db.Set(versionPrefix, stateChangeMarker); err != nil {
+		return err
+	}
+	for _, k := range keys {
+		if err := t.db.Set(lib.Append(versionPrefix, k), stateChangeMarker); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// stateChangeVersionPrefix() returns the stateChangePrefix + version (big endian)
+func (t *Indexer) stateChangeVersionPrefix(version uint64) []byte {
+	return t.key(stateChangePrefix, t.encodeBigEndian(version), nil)
 }
 
 // BLOCKS CODE BELOW
@@ -127,12 +186,18 @@ func (t *Indexer) GetBlockByHeight(height uint64) (*lib.BlockResult, lib.ErrorI)
 		return nil, err
 	}
 	// get block from hash key
-	return t.getBlock(hashKey, true)
+	block, err := t.getBlock(hashKey, true)
+	if err != nil {
+		return nil, err
+	}
+	// populate cache on read so historical blocks are warm after a restart
+	blockCache.Add(height, block)
+	return block, nil
 }
 
 // GetBlockHeaderByHeight() returns the block result without transactions
 func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.ErrorI) {
-	// check cache
+	// check cache (full block result may be cached from GetBlockByHeight or IndexBlock)
 	if got, found := blockCache.Get(height); found {
 		return got, nil
 	}
@@ -142,7 +207,13 @@ func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.E
 		return nil, err
 	}
 	// get block from hash key
-	return t.getBlock(hashKey, false)
+	block, err := t.getBlock(hashKey, false)
+	if err != nil {
+		return nil, err
+	}
+	// populate cache on read so historical blocks are warm after a restart
+	blockCache.Add(height, block)
+	return block, nil
 }
 
 // GetBlocks() returns a page of blocks based on the page parameters
@@ -241,14 +312,18 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 	if err != nil {
 		return err
 	}
-	// store the tx by hash key
-	hash, err := lib.StringToBytes(result.GetTxHash())
+	hashes, err := indexedTxHashes(result)
 	if err != nil {
 		return err
 	}
-	hashKey, err := t.indexTxByHash(hash, bz)
+	hashKey, err := t.indexTxByHash(hashes[0], bz)
 	if err != nil {
 		return err
+	}
+	for _, hash := range hashes[1:] {
+		if _, err = t.indexTxByHash(hash, bz); err != nil {
+			return err
+		}
 	}
 	// store the hash key by height.index
 	heightAndIndexKey := t.txHeightAndIndexKey(result.GetHeight(), result.GetIndex())
@@ -267,8 +342,32 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 			return err
 		}
 	}
-
 	return nil
+}
+
+// indexedTxHashes() returns the primary Canopy tx hash plus any persisted lookup aliases.
+func indexedTxHashes(result *lib.TxResult) ([][]byte, lib.ErrorI) {
+	hash, err := lib.StringToBytes(result.GetTxHash())
+	if err != nil {
+		return nil, err
+	}
+	hashes := [][]byte{hash}
+	if ethHash := ethTxHash(result.Transaction); len(ethHash) != 0 && !bytes.Equal(ethHash, hash) {
+		hashes = append(hashes, ethHash)
+	}
+	return hashes, nil
+}
+
+// ethTxHash() returns the canonical Ethereum tx hash for an RLP-backed transaction.
+func ethTxHash(tx *lib.Transaction) []byte {
+	if tx == nil || !lib.IsRLPMemo(tx.Memo) || tx.Signature == nil || len(tx.Signature.Signature) == 0 {
+		return nil
+	}
+	var ethTx types.Transaction
+	if err := ethTx.UnmarshalBinary(tx.Signature.Signature); err != nil {
+		return nil
+	}
+	return ethTx.Hash().Bytes()
 }
 
 // GetTxByHash() returns the tx by hash
@@ -298,7 +397,36 @@ func (t *Indexer) GetTxsByRecipient(address crypto.AddressI, newestToOldest bool
 
 // DeleteTxsForHeight() deletes the transaction object for a specific height
 func (t *Indexer) DeleteTxsForHeight(height uint64) lib.ErrorI {
-	return t.deleteAll(t.txHeightKey(height))
+	txs, err := t.GetTxsByHeightNonPaginated(height, false)
+	if err != nil {
+		return err
+	}
+	for _, tx := range txs {
+		heightAndIndexKey := t.txHeightAndIndexKey(tx.GetHeight(), tx.GetIndex())
+		hashes, e := indexedTxHashes(tx)
+		if e != nil {
+			return e
+		}
+		for _, hash := range hashes {
+			if e = t.db.Delete(t.txHashKey(hash)); e != nil {
+				return e
+			}
+		}
+		if t.config.IndexByAccount {
+			if e = t.db.Delete(t.txSenderKey(tx.GetSender(), heightAndIndexKey)); e != nil {
+				return e
+			}
+			if recipient := tx.GetRecipient(); recipient != nil {
+				if e = t.db.Delete(t.txRecipientKey(recipient, heightAndIndexKey)); e != nil {
+					return e
+				}
+			}
+		}
+	}
+	if err = t.deleteAll(t.txHeightKey(height)); err != nil {
+		return err
+	}
+	return nil
 }
 
 // DOUBLE SIGNER CODE BELOW

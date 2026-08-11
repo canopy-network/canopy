@@ -3,6 +3,8 @@ package lib
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 func TestDexBatch_Hash(t *testing.T) {
@@ -265,6 +267,21 @@ func TestDexBatch_CheckBasic_InvalidPoolPointAddress(t *testing.T) {
 	}
 	if err.Error() != ErrInvalidAddress().Error() {
 		t.Fatalf("expected %q, got %q", ErrInvalidAddress().Error(), err.Error())
+	}
+}
+
+func TestDexBatch_CheckBasic_RejectsOverLimitFallbackPoints(t *testing.T) {
+	points := make([]*PoolPoints, MaxLiquidityProviders+1)
+	for i := range points {
+		points[i] = &PoolPoints{Address: make([]byte, crypto.AddressSize), Points: 1}
+	}
+	batch := &DexBatch{PoolPoints: points}
+	if err := batch.CheckBasic(); err == nil || err.Code() != CodeTooManyLiquidityProviders {
+		t.Fatalf("expected too many liquidity providers error, got %v", err)
+	}
+	batch.LivenessFallback = true
+	if err := batch.CheckBasic(); err == nil || err.Code() != CodeTooManyLiquidityProviders {
+		t.Fatalf("expected fallback batch to reject excess provider count, got %v", err)
 	}
 }
 

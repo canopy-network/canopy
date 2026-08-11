@@ -7,6 +7,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"math"
 	"math/big"
 	"time"
 )
@@ -35,11 +36,44 @@ const CreateOrderSelector = "bc2e8e5f" // while the signature is createOrder(byt
 const EditOrderSelector = "74e78d6f"   // while the signature is editOrder(bytes), Canopy expects (selector + proto-bytes)
 const DeleteOrderSelector = "6c4650e7" // while the signature is deleteOrder(bytes), Canopy expects (selector + proto-bytes)
 
-// RLPIndicator is a human-readable indicator the tx is translated from RLP
-const RLPIndicator = "RLP"
+// RLPIndicator is the legacy indicator for RLP-backed transactions that map Ethereum nonce onto CreatedHeight.
+const RLPIndicator = lib.RLPIndicator
 
-// RLPToCanopyTransaction() converts an RLP encoded transaction into a Canopy transaction
+// RLPV2Indicator uses the dedicated tx nonce field and a canonical CreatedHeight sentinel.
+const RLPV2Indicator = lib.RLPV2Indicator
+
+// RLPV2CreatedHeight is a canonical sentinel. RLP.V2 replay protection is provided by the
+// account nonce, so its wrapper must not contain mutable, unsigned height metadata.
+const RLPV2CreatedHeight uint64 = 1
+
+// EthereumBaseFeePerGas is the fixed base fee advertised by Canopy's Ethereum RPC.
+const EthereumBaseFeePerGas int64 = 10_000_000_000
+
+// legacyRLPDisabledProtocolVersion disables new legacy RLP wrappers while retaining historical replay.
+const legacyRLPDisabledProtocolVersion = 2
+
+// IsRLPMemo reports whether the memo indicates an RLP-backed Ethereum transaction.
+func IsRLPMemo(memo string) bool { return lib.IsRLPMemo(memo) }
+
+func ethereumTxHashFromRawBytes(txBytes []byte) ([]byte, lib.ErrorI) {
+	var tx ethTypes.Transaction
+	if err := tx.UnmarshalBinary(txBytes); err != nil {
+		return nil, ErrInvalidRLPTx(err)
+	}
+	return tx.Hash().Bytes(), nil
+}
+
+// RLPToCanopyTransaction() converts a legacy-domain RLP transaction into a Canopy transaction.
 func RLPToCanopyTransaction(txBytes []byte) (transaction *lib.Transaction, e lib.ErrorI) {
+	return rlpToCanopyTransaction(txBytes, RLPIndicator)
+}
+
+// RLPToCanopyTransactionV2() converts an RLP encoded transaction into a nonce-backed Canopy transaction.
+func RLPToCanopyTransactionV2(txBytes []byte) (transaction *lib.Transaction, e lib.ErrorI) {
+	return rlpToCanopyTransaction(txBytes, RLPV2Indicator)
+}
+
+func rlpToCanopyTransaction(txBytes []byte, memo string) (transaction *lib.Transaction, e lib.ErrorI) {
 	// protect against spam
 	if len(txBytes) > int(2*units.KB) {
 		return nil, ErrInvalidRLPTx(fmt.Errorf("max transaction size"))
@@ -60,12 +94,27 @@ func RLPToCanopyTransaction(txBytes []byte) (transaction *lib.Transaction, e lib
 	if tx.ChainId() == nil || !tx.ChainId().IsUint64() {
 		return nil, ErrInvalidRLPTx(fmt.Errorf("chain id exceeds uint64"))
 	}
-	// extract chain id and network id from the evm chain id
-	chainId, networkId := EvmChainIdToCanopyIds(tx.ChainId().Uint64())
+	// The signed Ethereum chain ID separates legacy RLP from RLP.V2 even while
+	// both wrapper formats remain understood by this binary.
+	chainId, networkId, chainIDErr := evmChainIdToCanopyIdsForRLP(tx.ChainId().Uint64(), memo)
+	if chainIDErr != nil {
+		return nil, chainIDErr
+	}
+	gasPrice := tx.GasPrice()
+	if memo == RLPV2Indicator {
+		gasPrice, err = EthereumEffectiveGasPrice(&tx)
+		if err != nil {
+			return nil, ErrInvalidRLPTx(err)
+		}
+	}
 	// compute fee with unsigned gas to avoid signed narrowing skew
-	fee, ok := DownscaleTo6DecimalsChecked(new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), tx.GasPrice()))
+	fee, ok := DownscaleTo6DecimalsChecked(new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), gasPrice))
 	if !ok {
 		return nil, ErrInvalidRLPTx(fmt.Errorf("invalid fee amount"))
+	}
+	createdHeight := RLPV2CreatedHeight
+	if memo == RLPIndicator {
+		createdHeight = tx.Nonce()
 	}
 	// generate the transaction object
 	transaction = &lib.Transaction{
@@ -74,12 +123,15 @@ func RLPToCanopyTransaction(txBytes []byte) (transaction *lib.Transaction, e lib
 			PublicKey: publicKey.Bytes(),
 			Signature: txBytes, // store the raw transaction here
 		},
-		CreatedHeight: tx.Nonce(), // the rpc ensures a proper value that satisfies replay protection
+		CreatedHeight: createdHeight,
 		Time:          pseudoEthereumTimestamp(tx.Gas()),
 		Fee:           fee,
 		NetworkId:     networkId,
-		Memo:          RLPIndicator,
+		Memo:          memo,
 		ChainId:       chainId,
+	}
+	if memo == RLPV2Indicator {
+		transaction.Nonce = tx.Nonce()
 	}
 	// extract a message from the rlp transaction
 	msg, e := rlpToMessage(publicKey, transaction, tx)
@@ -91,6 +143,22 @@ func RLPToCanopyTransaction(txBytes []byte) (transaction *lib.Transaction, e lib
 	transaction.Msg, e = lib.NewAny(msg)
 	// exit
 	return
+}
+
+// EthereumEffectiveGasPrice returns the execution gas price for RLP.V2. Dynamic-fee
+// transactions pay min(fee cap, base fee + tip); legacy typed transactions retain gasPrice.
+func EthereumEffectiveGasPrice(tx *ethTypes.Transaction) (*big.Int, error) {
+	switch tx.Type() {
+	case ethTypes.DynamicFeeTxType, ethTypes.BlobTxType, ethTypes.SetCodeTxType:
+		baseFee := big.NewInt(EthereumBaseFeePerGas)
+		tip, err := tx.EffectiveGasTip(baseFee)
+		if err != nil {
+			return nil, err
+		}
+		return tip.Add(tip, baseFee), nil
+	default:
+		return tx.GasPrice(), nil
+	}
 }
 
 // rlpToMessage() converts an ethereum RLP transaction to a message
@@ -141,6 +209,9 @@ func rlpToMessage(publicKey crypto.PublicKeyI, transaction *lib.Transaction, tx 
 			e = ErrInvalidERC20Tx(fmt.Errorf("unsupported selector: 0x%s", selector))
 		}
 	default: // non-contract call (transfer() only)
+		if transaction.Memo == RLPV2Indicator && new(big.Int).Mod(tx.Value(), scaleFactor).Sign() != 0 {
+			return nil, ErrInvalidAmount()
+		}
 		amount, ok := DownscaleTo6DecimalsChecked(tx.Value())
 		if !ok || amount == 0 {
 			return nil, ErrInvalidAmount()
@@ -195,6 +266,9 @@ func ethDataToMsg(messageType string, transaction *lib.Transaction, msg lib.Mess
 func (s *StateMachine) VerifyRLPBytes(tx *lib.Transaction) lib.ErrorI {
 	// create a compare transaction from the signature field
 	compare, err := RLPToCanopyTransaction(tx.Signature.Signature)
+	if tx.Memo == RLPV2Indicator {
+		compare, err = RLPToCanopyTransactionV2(tx.Signature.Signature)
+	}
 	if err != nil {
 		return err
 	}
@@ -216,21 +290,58 @@ func (s *StateMachine) VerifyRLPBytes(tx *lib.Transaction) lib.ErrorI {
 	return nil
 }
 
-// ChainId translation design:
-// evmChainId is High 32 bits = networkId and Low 32 bits = chainId
-// - avoids conflicts with existing Ethereum chain IDs
-// - merges Canopy's dual network ID scheme into a single combined identifier
+// Ethereum chain ID layout:
+//   - high 32 bits: Canopy network ID
+//   - next 2 bits: signed RLP domain (0 = legacy, 1 = RLP.V2)
+//   - low 30 bits: Canopy chain ID
+//
+// RLP.V2 uses a different Ethereum signing domain without changing Canopy's
+// internal network or chain identifiers.
+const (
+	evmChainIDLowMask     = uint64(math.MaxUint32)
+	evmChainIDDomainShift = 30
+	evmChainIDDomainMask  = uint64(3) << evmChainIDDomainShift
+	evmChainIDChainMask   = uint64(1<<evmChainIDDomainShift) - 1
+	rlpV2EVMChainIDDomain = uint64(1)
+	rlpV2EVMChainIDMarker = rlpV2EVMChainIDDomain << evmChainIDDomainShift
+)
 
-// EvmChainIdToCanopyIds() converts an EVM chainId to a Canopy chain id
+// EvmChainIdToCanopyIds() decodes the legacy EVM chain ID layout.
 func EvmChainIdToCanopyIds(evmChainId uint64) (chainId, networkId uint64) {
 	networkId = evmChainId >> 32
-	chainId = evmChainId & 0xFFFFFFFF
+	chainId = evmChainId & evmChainIDLowMask
 	return
 }
 
-// CanopyIdsToEVMChainId() converts a chainId and networkId to an evm chain ID
+// CanopyIdsToEVMChainId() encodes the legacy EVM chain ID layout.
 func CanopyIdsToEVMChainId(chainId, networkId uint64) uint64 {
-	return (networkId << 32) | (chainId & 0xFFFFFFFF)
+	return (networkId << 32) | (chainId & evmChainIDLowMask)
+}
+
+// CanopyIdsToEVMChainIdV2 returns the domain-separated chain ID advertised by
+// this binary. The boolean is false rather than silently aliasing oversized IDs.
+func CanopyIdsToEVMChainIdV2(chainId, networkId uint64) (uint64, bool) {
+	if chainId == 0 || chainId > evmChainIDChainMask || networkId == 0 || networkId > math.MaxUint32 {
+		return 0, false
+	}
+	return (networkId << 32) | rlpV2EVMChainIDMarker | chainId, true
+}
+
+func evmChainIdToCanopyIdsForRLP(evmChainId uint64, memo string) (chainId, networkId uint64, err lib.ErrorI) {
+	low := evmChainId & evmChainIDLowMask
+	domain := (low & evmChainIDDomainMask) >> evmChainIDDomainShift
+	expectedDomain := uint64(0)
+	if memo == RLPV2Indicator {
+		expectedDomain = rlpV2EVMChainIDDomain
+	}
+	if domain != expectedDomain {
+		return 0, 0, ErrInvalidRLPTx(fmt.Errorf("ethereum chain id uses RLP domain %d, expected %d", domain, expectedDomain))
+	}
+	chainId, networkId = low&evmChainIDChainMask, evmChainId>>32
+	if chainId == 0 {
+		return 0, 0, ErrInvalidRLPTx(fmt.Errorf("invalid zero chain id"))
+	}
+	return chainId, networkId, nil
 }
 
 // scaleFactor allows conversion from 6 decimal places to 18 10^12
@@ -238,7 +349,7 @@ var scaleFactor = big.NewInt(1_000_000_000_000)
 
 // UpscaleTo18Decimals converts a 6-decimal unit (Canopy native) to 18-decimal (Ethereum RPC)
 func UpscaleTo18Decimals(amount uint64) *big.Int {
-	return new(big.Int).Mul(big.NewInt(int64(amount)), scaleFactor)
+	return new(big.Int).Mul(new(big.Int).SetUint64(amount), scaleFactor)
 }
 
 // DownscaleTo6Decimals converts from 18-decimal unit (Ethereum RPC) to 6-decimal (Canopy native)

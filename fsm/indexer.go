@@ -2,9 +2,11 @@ package fsm
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/codec"
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 // INDEXER.GO IS ONLY USED FOR CANOPY INDEXING RPC - NOT A CRITICAL PIECE OF THE STATE MACHINE
@@ -29,6 +31,55 @@ func (s *StateMachine) IndexerBlobs(height uint64) (b *IndexerBlobs, err lib.Err
 
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
 func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.ErrorI) {
+	return s.indexerBlob(height, nil, false, nil)
+}
+
+// IndexerBlobsFromStateChanges builds a state-sparse delta using the state
+// keys journaled for height. available=false means the height predates the
+// journal and callers must use the legacy full-snapshot comparison.
+func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
+	if height == 0 || height > s.height {
+		height = s.height
+	}
+	// At the genesis boundary there is no previous blob to compare against, so
+	// the indexer contract requires the complete current account snapshot. The
+	// height journal only contains changes made by block 1 and cannot represent
+	// genesis accounts that remained untouched.
+	if height == 2 {
+		return nil, false, nil
+	}
+	st, ok := s.store.(lib.StoreI)
+	if !ok {
+		return nil, false, nil
+	}
+	stateKeys, available, err := st.StateChangeKeys(height, AccountPrefix())
+	if err != nil || !available {
+		return nil, available, err
+	}
+	for _, prefix := range [][]byte{ValidatorPrefix(), NonSignerPrefix()} {
+		keys, _, keyErr := st.StateChangeKeys(height, prefix)
+		if keyErr != nil {
+			return nil, true, keyErr
+		}
+		stateKeys = append(stateKeys, keys...)
+	}
+
+	b = &IndexerBlobs{}
+	b.Current, err = s.indexerBlob(height, stateKeys, true, nil)
+	if err != nil {
+		return nil, true, err
+	}
+	if height > 2 {
+		b.Previous, err = s.indexerBlob(height-1, stateKeys, true, b.Current.Block)
+		if err != nil {
+			return nil, true, err
+		}
+	}
+	b, err = DeltaIndexerBlobs(b)
+	return b, true, err
+}
+
+func (s *StateMachine) indexerBlob(height uint64, stateKeys [][]byte, selectiveState bool, eventBlockBz []byte) (b *IndexerBlob, err lib.ErrorI) {
 	if height == 0 || height > s.height {
 		height = s.height
 	}
@@ -61,9 +112,26 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if block.BlockHeader.Height == 0 || block.BlockHeader.Height != blockHeight {
 		return nil, lib.ErrWrongBlockHeight(block.BlockHeader.Height, blockHeight)
 	}
+	blockBz, err := lib.Marshal(block)
+	if err != nil {
+		return nil, err
+	}
+	if selectiveState && len(eventBlockBz) == 0 {
+		eventBlockBz = blockBz
+	}
 	// use sm for consistent snapshot reads at the requested height
-	// retrieve the accounts
-	accounts, err := sm.IterateAndAppend(AccountPrefix())
+	// retrieve either complete snapshots (legacy path) or journaled state
+	// entries (journal path).
+	var accounts [][]byte
+	if !selectiveState {
+		accounts, err = sm.IterateAndAppend(AccountPrefix())
+	} else {
+		eventAccountKeys, eventErr := rewardSlashAccountStateKeys(eventBlockBz)
+		if eventErr != nil {
+			return nil, eventErr
+		}
+		accounts, err = sm.valuesForStateKeys(append(stateKeys, eventAccountKeys...), AccountPrefix())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -73,9 +141,20 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		return nil, err
 	}
 	// retrieve validators
-	validators, err := sm.IterateAndAppend(ValidatorPrefix())
+	allValidators, err := sm.IterateAndAppend(ValidatorPrefix())
 	if err != nil {
 		return nil, err
+	}
+	validators := allValidators
+	if selectiveState {
+		eventValidatorKeys, eventErr := validatorForceStateKeys(eventBlockBz, allValidators)
+		if eventErr != nil {
+			return nil, eventErr
+		}
+		validators, err = sm.valuesForStateKeys(append(stateKeys, eventValidatorKeys...), ValidatorPrefix())
+		if err != nil {
+			return nil, err
+		}
 	}
 	// retrieve dex prices
 	dexPrices, err := sm.GetDexPrices()
@@ -83,7 +162,12 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		return nil, err
 	}
 	// retrieve nonSigners
-	nonSigners, err := sm.IterateAndAppend(NonSignerPrefix())
+	var nonSigners [][]byte
+	if selectiveState {
+		nonSigners, err = sm.valuesForStateKeys(stateKeys, NonSignerPrefix())
+	} else {
+		nonSigners, err = sm.IterateAndAppend(NonSignerPrefix())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +175,11 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	doubleSigners, err := st.GetDoubleSignersAsOf(blockHeight)
 	if err != nil {
 		return nil, err
+	}
+	// retrieve per-block non-signers from the committed QC for this block
+	blockNonSigners, err := sm.blockNonSignerAddresses(blockHeight)
+	if err != nil {
+		blockNonSigners = nil
 	}
 	// retrieve orders
 	orderBooks, err := sm.GetOrderBooks()
@@ -132,11 +221,6 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if err != nil {
 		return nil, err
 	}
-	// marshal block to bytes
-	blockBz, err := lib.Marshal(block)
-	if err != nil {
-		return nil, err
-	}
 	// marshal dex prices to bytes
 	var dexPricesBz [][]byte
 	for _, price := range dexPrices {
@@ -167,7 +251,7 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	}
 	// calculate validator/delegator status totals from the full snapshot
 	totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking,
-		totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking, err := validatorTotals(validators)
+		totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking, err := validatorTotals(allValidators)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +278,65 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		TotalDelegatesActive:     totalDelegatesActive,
 		TotalDelegatesPaused:     totalDelegatesPaused,
 		TotalDelegatesUnstaking:  totalDelegatesUnstaking,
+		BlockNonSigners:          blockNonSigners,
 	}, nil
+}
+
+// valuesForStateKeys() returns the byte array for state keys
+func (s *StateMachine) valuesForStateKeys(keys [][]byte, prefix []byte) ([][]byte, lib.ErrorI) {
+	values := make([][]byte, 0, len(keys))
+	seen := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		if !bytes.HasPrefix(key, prefix) {
+			continue
+		}
+		keyString := string(key)
+		if _, ok := seen[keyString]; ok {
+			continue
+		}
+		seen[keyString] = struct{}{}
+		value, err := s.Get(key)
+		if err != nil {
+			return nil, err
+		}
+		if value != nil {
+			values = append(values, value)
+		}
+	}
+	return values, nil
+}
+
+func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64) ([][]byte, lib.ErrorI) {
+	if blockHeight <= 1 {
+		return nil, nil
+	}
+	qc, err := s.LoadCertificateHashesOnly(blockHeight)
+	if err != nil {
+		return nil, err
+	}
+	if qc == nil || qc.Header == nil || qc.Signature == nil {
+		return nil, nil
+	}
+	committee, err := s.LoadCommittee(qc.Header.ChainId, qc.Header.RootHeight)
+	if err != nil {
+		return nil, err
+	}
+	if committee.ValidatorSet == nil {
+		return nil, nil
+	}
+	nonSignerPubKeys, _, err := qc.GetNonSigners(committee.ValidatorSet)
+	if err != nil {
+		return nil, err
+	}
+	addresses := make([][]byte, 0, len(nonSignerPubKeys))
+	for _, pubKeyBytes := range nonSignerPubKeys {
+		pubKey, e := crypto.NewPublicKeyFromBytes(pubKeyBytes)
+		if e != nil {
+			return nil, lib.ErrPubKeyFromBytes(e)
+		}
+		addresses = append(addresses, pubKey.Address().Bytes())
+	}
+	return addresses, nil
 }
 
 // DeltaIndexerBlobs returns a clone of blobs where account, pool, and validator payloads
@@ -314,20 +456,27 @@ func entriesByKey(entries [][]byte, keyExtractor func([]byte) (string, error)) (
 	return out, entryMap, nil
 }
 
-func accountEntryKey(entry []byte) (string, error) {
-	field, err := codec.GetRawProtoField(entry, 1) // Account.address
+// entryKeyOrZero extracts field #1 as a map key. In proto3, absent scalar
+// fields represent the zero value on the wire (Pool{Id:0}, Account{Address:nil}),
+// so codec.ErrFieldNotFound is a legal zero-value signal, not a parse error.
+// Real proto-parse errors (invalid tags, buffer overruns) still surface.
+func entryKeyOrZero(entry []byte) (string, error) {
+	field, err := codec.GetRawProtoField(entry, 1)
 	if err != nil {
+		if errors.Is(err, codec.ErrFieldNotFound) {
+			return "", nil
+		}
 		return "", err
 	}
 	return string(field), nil
 }
 
+func accountEntryKey(entry []byte) (string, error) {
+	return entryKeyOrZero(entry) // Account.address
+}
+
 func poolEntryKey(entry []byte) (string, error) {
-	field, err := codec.GetRawProtoField(entry, 1) // Pool.id
-	if err != nil {
-		return "", err
-	}
-	return string(field), nil
+	return entryKeyOrZero(entry) // Pool.id
 }
 
 func changedBlobKeys(current, previous map[string][]byte) (map[string]struct{}, map[string]struct{}) {
@@ -394,6 +543,38 @@ func rewardSlashAccountKeys(blockBz []byte) (map[string]struct{}, lib.ErrorI) {
 		switch event.EventType {
 		case string(lib.EventTypeReward), string(lib.EventTypeSlash):
 			keys[string(event.Address)] = struct{}{}
+		}
+	}
+	return keys, nil
+}
+
+// rewardSlashAccountStateKeys() returns account storage keys referenced by reward/slash events
+// Sparse journal reads use them to include event accounts even when their state is unchanged
+func rewardSlashAccountStateKeys(blockBz []byte) ([][]byte, lib.ErrorI) {
+	addresses, err := rewardSlashAccountKeys(blockBz)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([][]byte, 0, len(addresses))
+	for address := range addresses {
+		keys = append(keys, lib.JoinLenPrefix(accountPrefix, []byte(address)))
+	}
+	return keys, nil
+}
+
+func validatorForceStateKeys(blockBz []byte, validators [][]byte) ([][]byte, lib.ErrorI) {
+	_, validatorMap, outputIndex, err := validatorEntries(validators)
+	if err != nil {
+		return nil, err
+	}
+	forced, err := validatorForceKeys(blockBz, outputIndex, nil)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([][]byte, 0, len(forced))
+	for address := range forced {
+		if _, ok := validatorMap[address]; ok {
+			keys = append(keys, lib.JoinLenPrefix(validatorPrefix, []byte(address)))
 		}
 	}
 	return keys, nil
@@ -506,6 +687,7 @@ func cloneIndexerBlob(src *IndexerBlob) *IndexerBlob {
 		TotalDelegatesActive:     src.TotalDelegatesActive,
 		TotalDelegatesPaused:     src.TotalDelegatesPaused,
 		TotalDelegatesUnstaking:  src.TotalDelegatesUnstaking,
+		BlockNonSigners:          src.BlockNonSigners,
 	}
 }
 

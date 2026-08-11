@@ -16,7 +16,7 @@ from . import event_pb2 as event__pb2
 from . import tx_pb2 as tx__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cplugin.proto\x12\x05types\x1a\x0b\x65vent.proto\x1a\x08tx.proto\"\xee\x03\n\x0b\x46SMToPlugin\x12\n\n\x02id\x18\x01 \x01(\x04\x12(\n\x06\x63onfig\x18\x02 \x01(\x0b\x32\x16.types.PluginFSMConfigH\x00\x12.\n\x07genesis\x18\x03 \x01(\x0b\x32\x1b.types.PluginGenesisRequestH\x00\x12*\n\x05\x62\x65gin\x18\x04 \x01(\x0b\x32\x19.types.PluginBeginRequestH\x00\x12*\n\x05\x63heck\x18\x05 \x01(\x0b\x32\x19.types.PluginCheckRequestH\x00\x12.\n\x07\x64\x65liver\x18\x06 \x01(\x0b\x32\x1b.types.PluginDeliverRequestH\x00\x12&\n\x03\x65nd\x18\x07 \x01(\x0b\x32\x17.types.PluginEndRequestH\x00\x12\x34\n\nstate_read\x18\x08 \x01(\x0b\x32\x1e.types.PluginStateReadResponseH\x00\x12\x36\n\x0bstate_write\x18\t \x01(\x0b\x32\x1f.types.PluginStateWriteResponseH\x00\x12+\n\x05query\x18\n \x01(\x0b\x32\x1a.types.PluginQueryResponseH\x00\x12#\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginErrorH\x00\x42\t\n\x07payload\"\xc8\x03\n\x0bPluginToFSM\x12\n\n\x02id\x18\x01 \x01(\x04\x12%\n\x06\x63onfig\x18\x02 \x01(\x0b\x32\x13.types.PluginConfigH\x00\x12/\n\x07genesis\x18\x03 \x01(\x0b\x32\x1c.types.PluginGenesisResponseH\x00\x12+\n\x05\x62\x65gin\x18\x04 \x01(\x0b\x32\x1a.types.PluginBeginResponseH\x00\x12+\n\x05\x63heck\x18\x05 \x01(\x0b\x32\x1a.types.PluginCheckResponseH\x00\x12/\n\x07\x64\x65liver\x18\x06 \x01(\x0b\x32\x1c.types.PluginDeliverResponseH\x00\x12\'\n\x03\x65nd\x18\x07 \x01(\x0b\x32\x18.types.PluginEndResponseH\x00\x12\x33\n\nstate_read\x18\x08 \x01(\x0b\x32\x1d.types.PluginStateReadRequestH\x00\x12\x35\n\x0bstate_write\x18\t \x01(\x0b\x32\x1e.types.PluginStateWriteRequestH\x00\x12*\n\x05query\x18\n \x01(\x0b\x32\x19.types.PluginQueryRequestH\x00\x42\t\n\x07payload\"\xd0\x01\n\x0cPluginConfig\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\n\n\x02id\x18\x02 \x01(\x04\x12\x0f\n\x07version\x18\x03 \x01(\x04\x12\x1e\n\x16supported_transactions\x18\x04 \x03(\t\x12\x1e\n\x16\x66ile_descriptor_protos\x18\x05 \x03(\x0c\x12\x1d\n\x15transaction_type_urls\x18\x06 \x03(\t\x12\x17\n\x0f\x65vent_type_urls\x18\x07 \x03(\t\x12\x1d\n\x15\x63ustom_state_prefixes\x18\x08 \x03(\x0c\"6\n\x0fPluginFSMConfig\x12#\n\x06\x63onfig\x18\x01 \x01(\x0b\x32\x13.types.PluginConfig\",\n\x14PluginGenesisRequest\x12\x14\n\x0cgenesis_json\x18\x01 \x01(\x0c\":\n\x15PluginGenesisResponse\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"$\n\x12PluginBeginRequest\x12\x0e\n\x06height\x18\x01 \x01(\x04\"V\n\x13PluginBeginResponse\x12\x1c\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x0c.types.Event\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"4\n\x12PluginCheckRequest\x12\x1e\n\x02tx\x18\x01 \x01(\x0b\x32\x12.types.Transaction\"g\n\x13PluginCheckResponse\x12\x1a\n\x12\x61uthorized_signers\x18\x01 \x03(\x0c\x12\x11\n\trecipient\x18\x02 \x01(\x0c\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"6\n\x14PluginDeliverRequest\x12\x1e\n\x02tx\x18\x01 \x01(\x0b\x32\x12.types.Transaction\"X\n\x15PluginDeliverResponse\x12\x1c\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x0c.types.Event\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"<\n\x10PluginEndRequest\x12\x0e\n\x06height\x18\x01 \x01(\x04\x12\x18\n\x10proposer_address\x18\x02 \x01(\x0c\"T\n\x11PluginEndResponse\x12\x1c\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x0c.types.Event\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"8\n\x0bPluginError\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x04\x12\x0e\n\x06module\x18\x02 \x01(\t\x12\x0b\n\x03msg\x18\x03 \x01(\t\"Q\n\x12PluginQueryRequest\x12\x0e\n\x06height\x18\x01 \x01(\x04\x12+\n\x04read\x18\x02 \x01(\x0b\x32\x1d.types.PluginStateReadRequest\"f\n\x13PluginQueryResponse\x12,\n\x04read\x18\x01 \x01(\x0b\x32\x1e.types.PluginStateReadResponse\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"d\n\x16PluginStateReadRequest\x12\"\n\x04keys\x18\x01 \x03(\x0b\x32\x14.types.PluginKeyRead\x12&\n\x06ranges\x18\x02 \x03(\x0b\x32\x16.types.PluginRangeRead\".\n\rPluginKeyRead\x12\x10\n\x08query_id\x18\x01 \x01(\x04\x12\x0b\n\x03key\x18\x02 \x01(\x0c\"S\n\x0fPluginRangeRead\x12\x10\n\x08query_id\x18\x01 \x01(\x04\x12\x0e\n\x06prefix\x18\x02 \x01(\x0c\x12\r\n\x05limit\x18\x03 \x01(\x04\x12\x0f\n\x07reverse\x18\x04 \x01(\x08\"f\n\x17PluginStateReadResponse\x12(\n\x07results\x18\x01 \x03(\x0b\x32\x17.types.PluginReadResult\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"N\n\x10PluginReadResult\x12\x10\n\x08query_id\x18\x01 \x01(\x04\x12(\n\x07\x65ntries\x18\x02 \x03(\x0b\x32\x17.types.PluginStateEntry\"c\n\x17PluginStateWriteRequest\x12 \n\x04sets\x18\x01 \x03(\x0b\x32\x12.types.PluginSetOp\x12&\n\x07\x64\x65letes\x18\x02 \x03(\x0b\x32\x15.types.PluginDeleteOp\"=\n\x18PluginStateWriteResponse\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\")\n\x0bPluginSetOp\x12\x0b\n\x03key\x18\x01 \x01(\x0c\x12\r\n\x05value\x18\x02 \x01(\x0c\"\x1d\n\x0ePluginDeleteOp\x12\x0b\n\x03key\x18\x01 \x01(\x0c\".\n\x10PluginStateEntry\x12\x0b\n\x03key\x18\x01 \x01(\x0c\x12\r\n\x05value\x18\x02 \x01(\x0c\x42.Z,github.com/canopy-network/go-plugin/contractb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cplugin.proto\x12\x05types\x1a\x0b\x65vent.proto\x1a\x08tx.proto\"\xee\x03\n\x0b\x46SMToPlugin\x12\n\n\x02id\x18\x01 \x01(\x04\x12(\n\x06\x63onfig\x18\x02 \x01(\x0b\x32\x16.types.PluginFSMConfigH\x00\x12.\n\x07genesis\x18\x03 \x01(\x0b\x32\x1b.types.PluginGenesisRequestH\x00\x12*\n\x05\x62\x65gin\x18\x04 \x01(\x0b\x32\x19.types.PluginBeginRequestH\x00\x12*\n\x05\x63heck\x18\x05 \x01(\x0b\x32\x19.types.PluginCheckRequestH\x00\x12.\n\x07\x64\x65liver\x18\x06 \x01(\x0b\x32\x1b.types.PluginDeliverRequestH\x00\x12&\n\x03\x65nd\x18\x07 \x01(\x0b\x32\x17.types.PluginEndRequestH\x00\x12\x34\n\nstate_read\x18\x08 \x01(\x0b\x32\x1e.types.PluginStateReadResponseH\x00\x12\x36\n\x0bstate_write\x18\t \x01(\x0b\x32\x1f.types.PluginStateWriteResponseH\x00\x12+\n\x05query\x18\n \x01(\x0b\x32\x1a.types.PluginQueryResponseH\x00\x12#\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginErrorH\x00\x42\t\n\x07payload\"\xc8\x03\n\x0bPluginToFSM\x12\n\n\x02id\x18\x01 \x01(\x04\x12%\n\x06\x63onfig\x18\x02 \x01(\x0b\x32\x13.types.PluginConfigH\x00\x12/\n\x07genesis\x18\x03 \x01(\x0b\x32\x1c.types.PluginGenesisResponseH\x00\x12+\n\x05\x62\x65gin\x18\x04 \x01(\x0b\x32\x1a.types.PluginBeginResponseH\x00\x12+\n\x05\x63heck\x18\x05 \x01(\x0b\x32\x1a.types.PluginCheckResponseH\x00\x12/\n\x07\x64\x65liver\x18\x06 \x01(\x0b\x32\x1c.types.PluginDeliverResponseH\x00\x12\'\n\x03\x65nd\x18\x07 \x01(\x0b\x32\x18.types.PluginEndResponseH\x00\x12\x33\n\nstate_read\x18\x08 \x01(\x0b\x32\x1d.types.PluginStateReadRequestH\x00\x12\x35\n\x0bstate_write\x18\t \x01(\x0b\x32\x1e.types.PluginStateWriteRequestH\x00\x12*\n\x05query\x18\n \x01(\x0b\x32\x19.types.PluginQueryRequestH\x00\x42\t\n\x07payload\"\xd0\x01\n\x0cPluginConfig\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\n\n\x02id\x18\x02 \x01(\x04\x12\x0f\n\x07version\x18\x03 \x01(\x04\x12\x1e\n\x16supported_transactions\x18\x04 \x03(\t\x12\x1e\n\x16\x66ile_descriptor_protos\x18\x05 \x03(\x0c\x12\x1d\n\x15transaction_type_urls\x18\x06 \x03(\t\x12\x17\n\x0f\x65vent_type_urls\x18\x07 \x03(\t\x12\x1d\n\x15\x63ustom_state_prefixes\x18\x08 \x03(\x0c\"6\n\x0fPluginFSMConfig\x12#\n\x06\x63onfig\x18\x01 \x01(\x0b\x32\x13.types.PluginConfig\",\n\x14PluginGenesisRequest\x12\x14\n\x0cgenesis_json\x18\x01 \x01(\x0c\":\n\x15PluginGenesisResponse\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"$\n\x12PluginBeginRequest\x12\x0e\n\x06height\x18\x01 \x01(\x04\"V\n\x13PluginBeginResponse\x12\x1c\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x0c.types.Event\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"D\n\x12PluginCheckRequest\x12\x1e\n\x02tx\x18\x01 \x01(\x0b\x32\x12.types.Transaction\x12\x0e\n\x06height\x18\x02 \x01(\x04\"g\n\x13PluginCheckResponse\x12\x1a\n\x12\x61uthorized_signers\x18\x01 \x03(\x0c\x12\x11\n\trecipient\x18\x02 \x01(\x0c\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"F\n\x14PluginDeliverRequest\x12\x1e\n\x02tx\x18\x01 \x01(\x0b\x32\x12.types.Transaction\x12\x0e\n\x06height\x18\x02 \x01(\x04\"X\n\x15PluginDeliverResponse\x12\x1c\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x0c.types.Event\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"<\n\x10PluginEndRequest\x12\x0e\n\x06height\x18\x01 \x01(\x04\x12\x18\n\x10proposer_address\x18\x02 \x01(\x0c\"T\n\x11PluginEndResponse\x12\x1c\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x0c.types.Event\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"8\n\x0bPluginError\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x04\x12\x0e\n\x06module\x18\x02 \x01(\t\x12\x0b\n\x03msg\x18\x03 \x01(\t\"Q\n\x12PluginQueryRequest\x12\x0e\n\x06height\x18\x01 \x01(\x04\x12+\n\x04read\x18\x02 \x01(\x0b\x32\x1d.types.PluginStateReadRequest\"f\n\x13PluginQueryResponse\x12,\n\x04read\x18\x01 \x01(\x0b\x32\x1e.types.PluginStateReadResponse\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"d\n\x16PluginStateReadRequest\x12\"\n\x04keys\x18\x01 \x03(\x0b\x32\x14.types.PluginKeyRead\x12&\n\x06ranges\x18\x02 \x03(\x0b\x32\x16.types.PluginRangeRead\".\n\rPluginKeyRead\x12\x10\n\x08query_id\x18\x01 \x01(\x04\x12\x0b\n\x03key\x18\x02 \x01(\x0c\"S\n\x0fPluginRangeRead\x12\x10\n\x08query_id\x18\x01 \x01(\x04\x12\x0e\n\x06prefix\x18\x02 \x01(\x0c\x12\r\n\x05limit\x18\x03 \x01(\x04\x12\x0f\n\x07reverse\x18\x04 \x01(\x08\"f\n\x17PluginStateReadResponse\x12(\n\x07results\x18\x01 \x03(\x0b\x32\x17.types.PluginReadResult\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\"N\n\x10PluginReadResult\x12\x10\n\x08query_id\x18\x01 \x01(\x04\x12(\n\x07\x65ntries\x18\x02 \x03(\x0b\x32\x17.types.PluginStateEntry\"c\n\x17PluginStateWriteRequest\x12 \n\x04sets\x18\x01 \x03(\x0b\x32\x12.types.PluginSetOp\x12&\n\x07\x64\x65letes\x18\x02 \x03(\x0b\x32\x15.types.PluginDeleteOp\"=\n\x18PluginStateWriteResponse\x12!\n\x05\x65rror\x18\x63 \x01(\x0b\x32\x12.types.PluginError\")\n\x0bPluginSetOp\x12\x0b\n\x03key\x18\x01 \x01(\x0c\x12\r\n\x05value\x18\x02 \x01(\x0c\"\x1d\n\x0ePluginDeleteOp\x12\x0b\n\x03key\x18\x01 \x01(\x0c\".\n\x10PluginStateEntry\x12\x0b\n\x03key\x18\x01 \x01(\x0c\x12\r\n\x05value\x18\x02 \x01(\x0c\x42.Z,github.com/canopy-network/go-plugin/contractb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -41,41 +41,41 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_PLUGINBEGINRESPONSE']._serialized_start=1413
   _globals['_PLUGINBEGINRESPONSE']._serialized_end=1499
   _globals['_PLUGINCHECKREQUEST']._serialized_start=1501
-  _globals['_PLUGINCHECKREQUEST']._serialized_end=1553
-  _globals['_PLUGINCHECKRESPONSE']._serialized_start=1555
-  _globals['_PLUGINCHECKRESPONSE']._serialized_end=1658
-  _globals['_PLUGINDELIVERREQUEST']._serialized_start=1660
-  _globals['_PLUGINDELIVERREQUEST']._serialized_end=1714
-  _globals['_PLUGINDELIVERRESPONSE']._serialized_start=1716
-  _globals['_PLUGINDELIVERRESPONSE']._serialized_end=1804
-  _globals['_PLUGINENDREQUEST']._serialized_start=1806
-  _globals['_PLUGINENDREQUEST']._serialized_end=1866
-  _globals['_PLUGINENDRESPONSE']._serialized_start=1868
-  _globals['_PLUGINENDRESPONSE']._serialized_end=1952
-  _globals['_PLUGINERROR']._serialized_start=1954
-  _globals['_PLUGINERROR']._serialized_end=2010
-  _globals['_PLUGINQUERYREQUEST']._serialized_start=2012
-  _globals['_PLUGINQUERYREQUEST']._serialized_end=2093
-  _globals['_PLUGINQUERYRESPONSE']._serialized_start=2095
-  _globals['_PLUGINQUERYRESPONSE']._serialized_end=2197
-  _globals['_PLUGINSTATEREADREQUEST']._serialized_start=2199
-  _globals['_PLUGINSTATEREADREQUEST']._serialized_end=2299
-  _globals['_PLUGINKEYREAD']._serialized_start=2301
-  _globals['_PLUGINKEYREAD']._serialized_end=2347
-  _globals['_PLUGINRANGEREAD']._serialized_start=2349
-  _globals['_PLUGINRANGEREAD']._serialized_end=2432
-  _globals['_PLUGINSTATEREADRESPONSE']._serialized_start=2434
-  _globals['_PLUGINSTATEREADRESPONSE']._serialized_end=2536
-  _globals['_PLUGINREADRESULT']._serialized_start=2538
-  _globals['_PLUGINREADRESULT']._serialized_end=2616
-  _globals['_PLUGINSTATEWRITEREQUEST']._serialized_start=2618
-  _globals['_PLUGINSTATEWRITEREQUEST']._serialized_end=2717
-  _globals['_PLUGINSTATEWRITERESPONSE']._serialized_start=2719
-  _globals['_PLUGINSTATEWRITERESPONSE']._serialized_end=2780
-  _globals['_PLUGINSETOP']._serialized_start=2782
-  _globals['_PLUGINSETOP']._serialized_end=2823
-  _globals['_PLUGINDELETEOP']._serialized_start=2825
-  _globals['_PLUGINDELETEOP']._serialized_end=2854
-  _globals['_PLUGINSTATEENTRY']._serialized_start=2856
-  _globals['_PLUGINSTATEENTRY']._serialized_end=2902
+  _globals['_PLUGINCHECKREQUEST']._serialized_end=1569
+  _globals['_PLUGINCHECKRESPONSE']._serialized_start=1571
+  _globals['_PLUGINCHECKRESPONSE']._serialized_end=1674
+  _globals['_PLUGINDELIVERREQUEST']._serialized_start=1676
+  _globals['_PLUGINDELIVERREQUEST']._serialized_end=1746
+  _globals['_PLUGINDELIVERRESPONSE']._serialized_start=1748
+  _globals['_PLUGINDELIVERRESPONSE']._serialized_end=1836
+  _globals['_PLUGINENDREQUEST']._serialized_start=1838
+  _globals['_PLUGINENDREQUEST']._serialized_end=1898
+  _globals['_PLUGINENDRESPONSE']._serialized_start=1900
+  _globals['_PLUGINENDRESPONSE']._serialized_end=1984
+  _globals['_PLUGINERROR']._serialized_start=1986
+  _globals['_PLUGINERROR']._serialized_end=2042
+  _globals['_PLUGINQUERYREQUEST']._serialized_start=2044
+  _globals['_PLUGINQUERYREQUEST']._serialized_end=2125
+  _globals['_PLUGINQUERYRESPONSE']._serialized_start=2127
+  _globals['_PLUGINQUERYRESPONSE']._serialized_end=2229
+  _globals['_PLUGINSTATEREADREQUEST']._serialized_start=2231
+  _globals['_PLUGINSTATEREADREQUEST']._serialized_end=2331
+  _globals['_PLUGINKEYREAD']._serialized_start=2333
+  _globals['_PLUGINKEYREAD']._serialized_end=2379
+  _globals['_PLUGINRANGEREAD']._serialized_start=2381
+  _globals['_PLUGINRANGEREAD']._serialized_end=2464
+  _globals['_PLUGINSTATEREADRESPONSE']._serialized_start=2466
+  _globals['_PLUGINSTATEREADRESPONSE']._serialized_end=2568
+  _globals['_PLUGINREADRESULT']._serialized_start=2570
+  _globals['_PLUGINREADRESULT']._serialized_end=2648
+  _globals['_PLUGINSTATEWRITEREQUEST']._serialized_start=2650
+  _globals['_PLUGINSTATEWRITEREQUEST']._serialized_end=2749
+  _globals['_PLUGINSTATEWRITERESPONSE']._serialized_start=2751
+  _globals['_PLUGINSTATEWRITERESPONSE']._serialized_end=2812
+  _globals['_PLUGINSETOP']._serialized_start=2814
+  _globals['_PLUGINSETOP']._serialized_end=2855
+  _globals['_PLUGINDELETEOP']._serialized_start=2857
+  _globals['_PLUGINDELETEOP']._serialized_end=2886
+  _globals['_PLUGINSTATEENTRY']._serialized_start=2888
+  _globals['_PLUGINSTATEENTRY']._serialized_end=2934
 # @@protoc_insertion_point(module_scope)

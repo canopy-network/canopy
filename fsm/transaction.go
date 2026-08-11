@@ -15,16 +15,31 @@ const BlockAcceptanceRange = 4320
 
 // ApplyTransaction() processes the transaction within the state machine, returning the corresponding TxResult.
 func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (*lib.TxResult, []*lib.Event, lib.ErrorI) {
+	applyTransactionStartTime := time.Now()
 	s.events.Refer(txHash)
 	// validate the transaction and get the check result
+	checkTxStartTime := time.Now()
 	result, err := s.CheckTx(transaction, txHash, batchVerifier)
 	if err != nil {
 		return nil, nil, err
 	}
+	messageType := result.tx.MessageType
+	if result.msg != nil {
+		messageType = result.msg.Name()
+	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyTransactionStageTime.WithLabelValues("check_tx", messageType).Observe(time.Since(checkTxStartTime).Seconds())
+	}
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("total", messageType).Observe(time.Since(applyTransactionStartTime).Seconds())
+		}
+	}()
 	// if the transaction is meant for the plugin
 	if result.plugin && s.Plugin != nil {
 		// route to plugin
-		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: result.tx})
+		pluginDeliverStartTime := time.Now()
+		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: result.tx, Height: s.Height()})
 		// handle error
 		if e != nil {
 			return nil, nil, e
@@ -35,6 +50,9 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 		}
 		if err = s.addPluginEvents(resp.Events); err != nil {
 			return nil, nil, err
+		}
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("plugin_deliver", messageType).Observe(time.Since(pluginDeliverStartTime).Seconds())
 		}
 	} else {
 		// faucet mode: ensure "send" txs from the faucet address never fail due to insufficient funds.
@@ -48,19 +66,33 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 			}
 		}
 		// deduct fees for the transaction
+		deductFeesStartTime := time.Now()
 		if err = s.AccountDeductFees(result.sender, result.tx.Fee); err != nil {
 			return nil, nil, err
 		}
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("deduct_fees", messageType).Observe(time.Since(deductFeesStartTime).Seconds())
+		}
 		// handle the message (payload)
+		handleMessageStartTime := time.Now()
 		if err = s.HandleMessage(result.msg); err != nil {
+			return nil, nil, err
+		}
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("handle_message", messageType).Observe(time.Since(handleMessageStartTime).Seconds())
+		}
+	}
+	if result.tx.Memo == RLPV2Indicator {
+		account, e := s.GetAccount(result.sender)
+		if e != nil {
+			return nil, nil, e
+		}
+		account.Nonce = result.tx.Nonce + 1
+		if err = s.SetAccount(account); err != nil {
 			return nil, nil, err
 		}
 	}
 	// return the tx result
-	messageType := result.tx.MessageType
-	if result.msg != nil {
-		messageType = result.msg.Name()
-	}
 	return &lib.TxResult{
 		Sender:      result.sender.Bytes(),
 		Recipient:   result.recipient,
@@ -83,6 +115,7 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	)
 	tx := new(lib.Transaction)
 	// populate the object ref with the bytes of the transaction
+	decodeStartTime := time.Now()
 	if err = lib.Unmarshal(transaction, tx); err != nil {
 		return
 	}
@@ -90,14 +123,25 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	if err = tx.CheckBasic(); err != nil {
 		return
 	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxDecodeTime.Observe(time.Since(decodeStartTime).Seconds())
+	}
 	// validate the timestamp (prune friendly - replay protection)
+	replayStartTime := time.Now()
 	if err = s.CheckReplay(tx, txHash); err != nil {
 		return
 	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxReplayTime.Observe(time.Since(replayStartTime).Seconds())
+	}
+	if tx.Memo == RLPIndicator && s.IsFeatureEnabled(legacyRLPDisabledProtocolVersion) {
+		return nil, ErrInvalidProtocolVersion()
+	}
 	// if the transaction is meant for the plugin
+	messageStartTime := time.Now()
 	if s.Plugin != nil && s.Plugin.SupportsTransaction(tx.MessageType) {
 		// execute check tx on the plugin
-		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: tx})
+		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: tx, Height: s.Height()})
 		if e != nil {
 			return nil, e
 		}
@@ -125,10 +169,28 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 		// set recipient
 		recipient = msg.Recipient()
 	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxMessageTime.Observe(time.Since(messageStartTime).Seconds())
+	}
 	// validate the signature of the transaction
+	signatureStartTime := time.Now()
 	sender, err := s.CheckSignature(tx, authorizedSigners, batchVerifier)
 	if err != nil {
 		return
+	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxSignatureTime.Observe(time.Since(signatureStartTime).Seconds())
+	}
+	if tx.Memo == RLPV2Indicator {
+		account, e := s.GetAccount(sender)
+		if e != nil {
+			return nil, e
+		}
+		// The account nonce is a floor, not a requirement for consecutive submission.
+		// A successful gap transaction advances the floor past every skipped nonce.
+		if tx.Nonce < account.Nonce || tx.Nonce == math.MaxUint64 {
+			return nil, ErrInvalidTxNonce()
+		}
 	}
 	// populate special message fields (if applicable)
 	s.PopulateSpecialMessageFields(tx, sender, msg)
@@ -167,8 +229,13 @@ func (s *StateMachine) CheckSignature(tx *lib.Transaction, authorizedSigners [][
 	if e != nil {
 		return nil, ErrInvalidPublicKey(e)
 	}
-	// special case: check for a special RLP transaction
-	if _, hasEthPubKey := publicKey.(*crypto.ETHSECP256K1PublicKey); hasEthPubKey && tx.Memo == RLPIndicator {
+	// Legacy "RLP" was historically an ordinary memo for non-Ethereum keys.
+	// RLP.V2 is reserved and always requires an Ethereum key.
+	_, hasEthPubKey := publicKey.(*crypto.ETHSECP256K1PublicKey)
+	if tx.Memo == RLPV2Indicator || (tx.Memo == RLPIndicator && hasEthPubKey) {
+		if !hasEthPubKey {
+			return nil, ErrInvalidSignature()
+		}
 		if err = s.VerifyRLPBytes(tx); err != nil {
 			return nil, err
 		}
@@ -233,14 +300,38 @@ func (s *StateMachine) CheckReplay(tx *lib.Transaction, txHash string) lib.Error
 		}
 		// ensure the tx doesn't already exist in the indexer
 		// same block replays are protected at a higher level
+		replayLookupStartTime := time.Now()
 		txResult, err := store.GetTxByHash(hashBz)
 		if err != nil {
 			return err
+		}
+		if s.Metrics != nil {
+			s.Metrics.CheckTxReplayLookupTime.Observe(time.Since(replayLookupStartTime).Seconds())
 		}
 		// if the tx transaction result isn't nil, and it has a hash
 		if txResult != nil && txResult.TxHash == txHash {
 			return lib.ErrDuplicateTx(txHash)
 		}
+		if IsRLPMemo(tx.Memo) && tx.Signature != nil && len(tx.Signature.Signature) != 0 {
+			publicKey, _ := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+			if _, ok := publicKey.(*crypto.ETHSECP256K1PublicKey); ok {
+				ethHash, e := ethereumTxHashFromRawBytes(tx.Signature.Signature)
+				if e != nil {
+					return e
+				}
+				txResult, err = store.GetTxByHash(ethHash)
+				if err != nil {
+					return err
+				}
+				if txResult != nil && txResult.TxHash != "" {
+					return lib.ErrDuplicateTx("0x" + lib.BytesToString(ethHash))
+				}
+			}
+		}
+	}
+	// RLP.V2 uses the account nonce for replay protection and a canonical CreatedHeight sentinel.
+	if tx.Memo == RLPV2Indicator {
+		return nil
 	}
 	// this gives the protocol a theoretically safe tx indexer prune height
 	maxHeight, minHeight := s.Height()+BlockAcceptanceRange, uint64(0)

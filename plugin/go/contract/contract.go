@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"log"
+	"math"
 	"math/rand"
 
 	"google.golang.org/protobuf/proto"
@@ -111,7 +112,7 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 	// handle the message
 	switch x := msg.(type) {
 	case *MessageSend:
-		return c.DeliverMessageSend(x, request.Tx.Fee)
+		return c.DeliverMessageSend(x, request.Tx.Fee, request.Tx.Memo)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -141,7 +142,7 @@ func (c *Contract) CheckMessageSend(msg *MessageSend) *PluginCheckResponse {
 }
 
 // DeliverMessageSend() handles a 'send' message
-func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliverResponse {
+func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64, memo string) *PluginDeliverResponse {
 	log.Printf("DeliverMessageSend called: from=%x to=%x amount=%d fee=%d", msg.FromAddress, msg.ToAddress, msg.Amount, fee)
 	var (
 		fromKey, toKey, feePoolKey         []byte
@@ -189,8 +190,6 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 			log.Printf("feePoolBytes len=%d", len(feePoolBytes))
 		}
 	}
-	// add fee to 'amount to deduct'
-	amountToDeduct := msg.Amount + fee
 	// convert the bytes to account structures
 	if err = Unmarshal(fromBytes, from); err != nil {
 		return &PluginDeliverResponse{Error: err}
@@ -201,6 +200,10 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 	if err = Unmarshal(feePoolBytes, feePool); err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
+	if msg.Amount > math.MaxUint64-fee {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	amountToDeduct := msg.Amount + fee
 	log.Printf("from.Amount=%d to.Amount=%d feePool.Amount=%d", from.Amount, to.Amount, feePool.Amount)
 	// if the account amount is less than the amount to subtract; return insufficient funds
 	if from.Amount < amountToDeduct {
@@ -208,8 +211,12 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 	}
 	// for self-transfer, use same account data
-	if bytes.Equal(fromKey, toKey) {
+	isSelfTransfer := bytes.Equal(fromKey, toKey)
+	if isSelfTransfer {
 		to = from
+	}
+	if feePool.Amount > math.MaxUint64-fee || (!isSelfTransfer && to.Amount > math.MaxUint64-msg.Amount) {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
 	}
 	// subtract from sender
 	from.Amount -= amountToDeduct
@@ -231,26 +238,17 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
-	// execute writes to the database
-	var resp *PluginStateWriteResponse
-	// if the from account is drained - delete the from account
-	if from.Amount == 0 {
-		resp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Sets: []*PluginSetOp{
-				{Key: feePoolKey, Value: feePoolBytes},
-				{Key: toKey, Value: toBytes},
-			},
-			Deletes: []*PluginDeleteOp{{Key: fromKey}},
-		})
+	// Retain drained accounts only when they carry nonce state or core will advance the nonce after RLP.V2 delivery.
+	request := &PluginStateWriteRequest{Sets: []*PluginSetOp{
+		{Key: feePoolKey, Value: feePoolBytes},
+		{Key: toKey, Value: toBytes},
+	}}
+	if from.Amount == 0 && from.Nonce == 0 && memo != "RLP.V2" {
+		request.Deletes = []*PluginDeleteOp{{Key: fromKey}}
 	} else {
-		resp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Sets: []*PluginSetOp{
-				{Key: feePoolKey, Value: feePoolBytes},
-				{Key: toKey, Value: toBytes},
-				{Key: fromKey, Value: fromBytes},
-			},
-		})
+		request.Sets = append(request.Sets, &PluginSetOp{Key: fromKey, Value: fromBytes})
 	}
+	resp, err := c.plugin.StateWrite(c, request)
 	if err != nil {
 		log.Printf("StateWrite internal error: %v", err)
 		return &PluginDeliverResponse{Error: err}

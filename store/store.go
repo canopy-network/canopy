@@ -23,6 +23,8 @@ const (
 )
 
 var (
+	logOnce sync.Once // helper to log the compression method used once
+
 	latestStatePrefix     = lib.JoinLenPrefix([]byte("s/")) // prefix designated for the LatestStateStore where the most recent blobs of state data are held
 	historicStatePrefix   = lib.JoinLenPrefix([]byte("h/")) // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
 	stateCommitmentPrefix = lib.JoinLenPrefix([]byte("c/")) // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
@@ -85,7 +87,7 @@ type Store struct {
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
 func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 	if config.StoreConfig.InMemory {
-		return NewStoreInMemory(l)
+		return NewStoreInMemory(l, config)
 	}
 	return NewStore(config, filepath.Join(config.DataDirPath, config.DBName), metrics, l)
 }
@@ -99,7 +101,9 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		IndexBlockSize: 32 << 10, // 32 KB index blocks
 		Compression: func() *sstable.CompressionProfile {
 			profile := getCompressionProfile(config.CompressionProfile)
-			log.Debugf("Using %s compression for sstables", profile.Name)
+			logOnce.Do(func() {
+				log.Debugf("Using %s compression for sstables", profile.Name)
+			})
 			return profile
 		},
 	}
@@ -139,7 +143,7 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 }
 
 // NewStoreInMemory() creates a new instance of a mem DB
-func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
+func NewStoreInMemory(log lib.LoggerI, configs ...lib.Config) (lib.StoreI, lib.ErrorI) {
 	db, err := pebble.Open("", &pebble.Options{
 		FS:                    vfs.NewMem(),                // memory file system
 		L0CompactionThreshold: 20,                          // Delay compaction during bulk writes
@@ -153,7 +157,11 @@ func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 	if err != nil {
 		return nil, ErrOpenDB(err)
 	}
-	return NewStoreWithDB(lib.DefaultConfig(), db, nil, log)
+	config := lib.DefaultConfig()
+	if len(configs) != 0 {
+		config = configs[0]
+	}
+	return NewStoreWithDB(config, db, nil, log)
 }
 
 // NewStoreWithDB() returns a Store object given a DB and a logger
@@ -250,29 +258,41 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
-	// update the version (height) number
-	s.version++
+	nextVersion := s.version + 1
 	// set the new CommitID (to the Transaction not the actual DB)
-	if err = s.setCommitID(s.version, root); err != nil {
+	if err = s.setCommitID(nextVersion, root); err != nil {
+		s.Reset()
 		return nil, err
 	}
 	// collect LSS tombstones before Flush() clears the txn operations
 	lssDeleteKeys := s.collectLssDeleteKeys()
+	// Persist the keys touched by this commit outside consensus state.
+	if s.config.StoreConfig.StateChangeJournalEnabled {
+		if err = s.recordStateChangeKeys(nextVersion); err != nil {
+			s.Reset()
+			return nil, err
+		}
+	}
 	// commit the in-memory txn to the pebbleDB batch
 	if e := s.Flush(); e != nil {
+		s.Reset()
 		return nil, e
 	}
 	if err = s.purgeLssTombstones(lssDeleteKeys); err != nil {
+		s.Reset()
 		return nil, err
 	}
 	// extract the internal metrics from the pebble batch
 	size, count := len(s.writer.Repr()), s.writer.Count()
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
 	if err := s.db.Apply(s.writer, pebble.NoSync); err != nil {
-		return nil, ErrCommitDB(err)
+		commitErr := ErrCommitDB(err)
+		s.Reset()
+		return nil, commitErr
 	}
 	// update the metrics once complete
 	s.metrics.UpdateStoreMetrics(int64(size), int64(count), time.Time{}, startTime)
+	s.version = nextVersion
 	// reset the writer for the next height
 	s.Reset()
 	// compact if necessary
@@ -281,6 +301,19 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	s.MaybeBackup()
 	// return the root
 	return
+}
+
+// recordStateChangeKeys snapshots the pending state transaction before Flush
+// clears it. Values are already available from the versioned state store, so
+// the journal only needs keys
+func (s *Store) recordStateChangeKeys(version uint64) lib.ErrorI {
+	s.ss.txn.l.Lock()
+	keys := make([][]byte, 0, len(s.ss.txn.ops))
+	for _, op := range s.ss.txn.ops {
+		keys = append(keys, bytes.Clone(op.key))
+	}
+	s.ss.txn.l.Unlock()
+	return s.Indexer.indexStateChangeKeys(version, keys)
 }
 
 // Rollback rewinds the store to a previous version (height).
@@ -499,11 +532,16 @@ func (s *Store) NewTxn() lib.StoreI {
 // to the database for direct operations and management.
 func (s *Store) DB() *pebble.DB { return s.db }
 
+// IsRootCached() reports whether the SMT root is already cached on this store instance.
+func (s *Store) IsRootCached() bool { return s.sc != nil }
+
 // Root() retrieves the root hash of the StateCommitStore, representing the current root of the
 // Sparse Merkle Tree. This hash is used for verifying the integrity and consistency of the state.
 func (s *Store) Root() (root []byte, err lib.ErrorI) {
 	// if smt not cached
 	if s.sc == nil {
+		startTime := time.Now()
+		defer s.metrics.UpdateStoreRootTime(startTime)
 		nextVersion := s.version + 1
 		// set up the state commit store
 		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
@@ -516,6 +554,14 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 		if err = s.sc.CommitParallel(s.ss.txn.ops); err != nil {
 			return nil, err
 		}
+		s.metrics.UpdateStoreRootStats(
+			len(s.ss.txn.ops),
+			s.sc.stats.NodeReads,
+			s.sc.stats.NodeCacheHits,
+			s.sc.stats.NodeCacheMisses,
+			s.sc.stats.TraverseSteps,
+			s.sc.stats.Rehashes,
+		)
 	}
 	// return the root
 	return s.sc.Root(), nil

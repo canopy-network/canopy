@@ -73,6 +73,7 @@ func TestInitialize(t *testing.T) {
 				log: log,
 				cache: &cache{
 					accounts: make(map[uint64]*Account),
+					pools:    make(map[uint64]*Pool),
 				},
 			}
 			// set the data dir path
@@ -415,6 +416,7 @@ func newTestStateMachine(t *testing.T) StateMachine {
 		log:    log,
 		cache: &cache{
 			accounts: make(map[uint64]*Account),
+			pools:    make(map[uint64]*Pool),
 		},
 	}
 	require.NoError(t, sm.SetParams(DefaultParams()))

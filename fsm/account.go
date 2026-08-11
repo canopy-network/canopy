@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"math/bits"
 	"strings"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -15,6 +17,12 @@ import (
 
 // GetAccount() returns an Account structure for a specific address
 func (s *StateMachine) GetAccount(address crypto.AddressI) (*Account, lib.ErrorI) {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("get_account").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// check cache
 	if acc, found := s.cache.accounts[lib.MemHash(address.Bytes())]; found {
 		return acc, nil
@@ -104,8 +112,10 @@ func (s *StateMachine) AccountVestedAmount(account *Account) uint64 {
 	elapsed := s.Height() - account.VestingStartHeight
 	// calculate the duration of the vesting
 	duration := account.VestingEndHeight - account.VestingStartHeight
-	// calculate the amount vested
-	return account.VestingAmount * elapsed / duration
+	// calculate the amount vested using a 128-bit intermediate to avoid overflow
+	high, low := bits.Mul64(account.VestingAmount, elapsed)
+	vested, _ := bits.Div64(high, low, duration)
+	return vested
 }
 
 // AccountLockedAmount() returns the still-locked portion of the account's vesting tranche
@@ -140,14 +150,20 @@ func (s *StateMachine) AccountSpendableAmount(account *Account) uint64 {
 
 // SetAccount() upserts an account into the state
 func (s *StateMachine) SetAccount(account *Account) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("set_account").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// state cleanup for fully vested accounts
 	s.clearAccountVestingIfFullyVested(account)
 	// add to cache
 	s.cache.accounts[lib.MemHash(account.Address)] = account
 	// convert bytes to the address object
 	address := crypto.NewAddressFromBytes(account.Address)
-	// if the amount is 0, delete the account from state to prevent unnecessary bloat
-	if account.Amount == 0 {
+	// preserve zero-balance accounts when they carry nonce state.
+	if account.Amount == 0 && account.Nonce == 0 {
 		return s.Delete(KeyForAccount(address))
 	}
 	// convert the account into bytes
@@ -192,6 +208,12 @@ func (s *StateMachine) AccountDeductFees(address crypto.AddressI, fee uint64) li
 
 // AccountAdd() adds tokens to an Account
 func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("account_add").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// ensure no unnecessary database updates
 	if amountToAdd == 0 {
 		return nil
@@ -259,6 +281,12 @@ func (s *StateMachine) AccountAddWithVesting(msg *MessageSend) lib.ErrorI {
 
 // AccountSub() removes tokens from an Account
 func (s *StateMachine) AccountSub(address crypto.AddressI, amountToSub uint64) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("account_sub").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// ensure no unnecessary database updates
 	if amountToSub == 0 {
 		return nil
@@ -347,8 +375,31 @@ func (s *StateMachine) clearAccountVestingIfFullyVested(account *Account) {
 	to simply prove that no-one owns the private key for that account
 */
 
+// clonePool returns an independent copy of the pool so callers can mutate without
+// affecting the cached entry (Pool.Points is a slice of pointers).
+func clonePool(p *Pool) *Pool {
+	out := &Pool{Id: p.Id, Amount: p.Amount, TotalPoolPoints: p.TotalPoolPoints}
+	if len(p.Points) > 0 {
+		out.Points = make([]*lib.PoolPoints, len(p.Points))
+		for i, pp := range p.Points {
+			out.Points[i] = &lib.PoolPoints{Address: pp.Address, Points: pp.Points}
+		}
+	}
+	return out
+}
+
 // GetPool() returns a Pool structure for a specific ID
 func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("get_pool").Observe(time.Since(startTime).Seconds())
+		}
+	}()
+	// check cache (return clone to prevent aliasing on the cached struct)
+	if pool, found := s.cache.pools[id]; found {
+		return clonePool(pool), nil
+	}
 	// get the pool bytes from the state using the Key a specific id
 	bz, err := s.Get(KeyForPool(id))
 	if err != nil {
@@ -361,6 +412,8 @@ func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
 	}
 	// set the pool id from the key
 	pool.Id = id
+	// populate cache with a clone so the returned pointer is not aliased
+	s.cache.pools[id] = clonePool(pool)
 	// return the pool
 	return pool, nil
 }
@@ -414,9 +467,21 @@ func (s *StateMachine) GetPoolBalance(id uint64) (uint64, lib.ErrorI) {
 
 // SetPool() upserts a Pool structure into the state
 func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("set_pool").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// if the pool has a 0 balance
 	if pool.Amount == 0 {
-		return s.Delete(KeyForPool(pool.Id))
+		if err = s.Delete(KeyForPool(pool.Id)); err != nil {
+			return
+		}
+		// cache a clone after successful delete (matches accounts cache: zero-amount is
+		// indistinguishable from a missing entry via unmarshalPool(nil))
+		s.cache.pools[pool.Id] = clonePool(pool)
+		return
 	}
 	// convert the pool to bytes
 	bz, err := s.marshalPool(pool)
@@ -427,6 +492,9 @@ func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
 	if err = s.Set(KeyForPool(pool.Id), bz); err != nil {
 		return
 	}
+	// cache a clone after successful write so external mutation of the passed-in pool
+	// cannot leak into the cache
+	s.cache.pools[pool.Id] = clonePool(pool)
 	return
 }
 
@@ -475,6 +543,12 @@ func (s *StateMachine) MintToAccount(address crypto.AddressI, amount uint64) lib
 
 // PoolAdd() adds tokens to the Pool structure
 func (s *StateMachine) PoolAdd(id uint64, amountToAdd uint64) lib.ErrorI {
+	startTime := time.Now()
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.StateOperationTime.WithLabelValues("pool_add").Observe(time.Since(startTime).Seconds())
+		}
+	}()
 	// get the pool from the
 	pool, err := s.GetPool(id)
 	if err != nil {
@@ -878,6 +952,7 @@ type account struct {
 	VestingStartHeight uint64       `json:"vestingStartHeight,omitempty"`
 	VestingCliffHeight uint64       `json:"vestingCliffHeight,omitempty"`
 	VestingEndHeight   uint64       `json:"vestingEndHeight,omitempty"`
+	Nonce              uint64       `json:"nonce,omitempty"`
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the Account object
@@ -889,6 +964,7 @@ func (x *Account) MarshalJSON() ([]byte, error) {
 		VestingStartHeight: x.VestingStartHeight,
 		VestingCliffHeight: x.VestingCliffHeight,
 		VestingEndHeight:   x.VestingEndHeight,
+		Nonce:              x.Nonce,
 	})
 }
 
@@ -904,6 +980,7 @@ func (x *Account) UnmarshalJSON(bz []byte) (err error) {
 	x.VestingStartHeight = a.VestingStartHeight
 	x.VestingCliffHeight = a.VestingCliffHeight
 	x.VestingEndHeight = a.VestingEndHeight
+	x.Nonce = a.Nonce
 	return
 }
 
