@@ -684,9 +684,8 @@ func (s *StateMachine) IterateAndAppend(ctx context.Context, prefix []byte) (res
 		return nil, err
 	}
 	defer it.Close()
-	// for each item of the iterator - ctx.Err() takes an internal lock, so checking it on every
-	// single item (rather than every ctxCheckInterval'th) measurably slows a large iteration for
-	// no benefit: a cancellation a few hundred items late is still well within "responsive."
+	// ctx.Err() takes an internal lock, so check it every ctxCheckInterval'th item, not every one -
+	// a cancellation a few hundred items late is still well within "responsive."
 	for i := 0; it.Valid(); it.Next() {
 		if i&(ctxCheckInterval-1) == 0 {
 			if cErr := ctx.Err(); cErr != nil {

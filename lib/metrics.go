@@ -251,11 +251,8 @@ type MempoolMetrics struct {
 	ProposalCertResultsTime prometheus.Histogram // how long does NewCertificateResults() take during proposal building?
 }
 
-// indexerBlobDurationBuckets covers the indexer-blobs duration histograms (cold read, journal
-// build, step time, request time): sub-10ms cache hits up through the 30s RPC timeout these
-// calls can legitimately run up against. prometheus.DefBuckets tops out at a 10s finite bucket,
-// which would silently pile every cold read slower than that into +Inf and lose the shape of
-// exactly the tail this PR's timeout increase (3s -> 30s) makes visible.
+// indexerBlobDurationBuckets covers sub-10ms cache hits up through the 30s cold-read timeout -
+// prometheus.DefBuckets tops out at 10s, which would pile every slow cold read into +Inf.
 var indexerBlobDurationBuckets = []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 15, 20, 30, 60}
 
 // NewMetricsServer() creates a new telemetry server
@@ -1175,10 +1172,8 @@ func (m *Metrics) RecordIndexerBlobPath(path string) {
 	m.IndexerBlobPathTotal.WithLabelValues(path).Inc()
 }
 
-// RecordIndexerBlobError() records an IndexerBlobsCached call that errored, labeled by the path
-// ("cache_hit", "journal", "legacy") it was on when it failed - kept separate from
-// IndexerBlobPathTotal/IndexerBlobRequestTime so a failed call doesn't get counted or timed as
-// a normal successful one under that path.
+// RecordIndexerBlobError() records an IndexerBlobsCached call that errored, by the path it was
+// on when it failed - kept separate so a failure isn't counted/timed as a success.
 func (m *Metrics) RecordIndexerBlobError(path string) {
 	// exit if empty
 	if m == nil {

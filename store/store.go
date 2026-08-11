@@ -299,9 +299,8 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	s.MaybeCompact()
 	// backup if enabled
 	s.MaybeBackup()
-	// refresh pebble's own LSM-tree telemetry - gated on s.syncing like MaybeCompact(), since a
-	// sync burst commits at a much higher rate than steady state and this shouldn't compete with
-	// db.Apply() for the sync loop's throughput on every single one of those commits
+	// refresh pebble's own LSM-tree telemetry - gated on s.syncing like MaybeCompact(), so it
+	// doesn't compete with db.Apply() for throughput during a high-rate sync burst.
 	if !s.syncing.Load() {
 		s.metrics.UpdatePebbleMetrics(s.db.Metrics())
 	}

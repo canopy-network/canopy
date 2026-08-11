@@ -929,12 +929,8 @@ func TestIterateAndAppend_AlreadyCancelled(t *testing.T) {
 	require.Empty(t, result)
 }
 
-// TestIterateAndAppend_CancelledMidIterationStopsEarly proves cancellation is still honored once
-// the iteration crosses a ctxCheckInterval boundary, not just on the very first item - a
-// countingCancelContext with cancelAfter=1 needs at least ctxCheckInterval+1 items to ever see
-// a second ctx.Err() call, since the check only fires every ctxCheckInterval'th item. Cancellation
-// discards whatever was accumulated so far (returns nil, not the partial result) by design - a
-// truncated snapshot would be worse than none - so this asserts on the call count, not len(result).
+// TestIterateAndAppend_CancelledMidIterationStopsEarly proves cancellation is honored once past
+// a ctxCheckInterval boundary; asserts on the call count since cancellation discards result.
 func TestIterateAndAppend_CancelledMidIterationStopsEarly(t *testing.T) {
 	sm := newTestStateMachine(t)
 	const numAccounts = ctxCheckInterval + 6

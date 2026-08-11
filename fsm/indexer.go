@@ -414,14 +414,8 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	previous := nilSafeBlob(out.Previous)
 
 	// accounts: changed+added in current, changed+removed in previous
-	// On the legacy path, Accounts comes from a Pebble prefix scan over AccountPrefix() and is
-	// already ascending by address bytes. On the journal path (IndexerBlobsFromStateChanges),
-	// Accounts instead comes from valuesForStateKeys(accountKeys, ...), which preserves input
-	// order rather than sorting - and accountKeys itself gets eventAccountKeys appended at the
-	// end (see indexerBlob's selective branch), breaking any ordering the journaled keys alone
-	// might have had. mergeChangedBlobKeys' two-pointer walk requires ascending input on both
-	// sides, so sort explicitly here rather than trust the caller - a no-op cost on the
-	// already-sorted legacy path, a correctness fix on the journal path.
+	// Sort before merging rather than trust the caller's order - the journal path's Accounts
+	// isn't reliably sorted (valuesForStateKeys preserves input order; see byBlobEntryKey).
 	currentAccounts, currentAccountMap, err := accountEntries(out.Current.Accounts)
 	if err != nil {
 		return nil, err
@@ -463,9 +457,7 @@ func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
 	}
 
 	// validators: changed+added in current, changed+removed in previous
-	// Same order caveat as accounts above: the journal path's selective branch feeds Validators
-	// via valuesForStateKeys(append(p.validatorKeys, forced...), ...), with forced keys appended
-	// at the end - sort explicitly rather than trust it matches KeyForValidator's raw-address order.
+	// Same order caveat as accounts above - sort before merging, don't trust the caller.
 	currentValidators, currentValidatorMap, currentOutputIndex, err := validatorEntries(out.Current.Validators)
 	if err != nil {
 		return nil, err
@@ -566,10 +558,8 @@ func byBlobEntryKey(a, b blobEntry) int {
 	return strings.Compare(a.key, b.key)
 }
 
-// mergeChangedBlobKeys() is changedBlobKeys' sorted-input equivalent: current and previous
+// mergeChangedBlobKeys() is changedBlobKeys' sorted-input equivalent - current and previous
 // must each be ascending by key (callers sort with byBlobEntryKey immediately beforehand).
-// A two-pointer merge walk finds the same added/changed/removed keys as the map-based
-// version without hashing every key into a map[string][]byte first.
 func mergeChangedBlobKeys(current, previous []blobEntry) (map[string]struct{}, map[string]struct{}) {
 	currentChanged := make(map[string]struct{})
 	previousChanged := make(map[string]struct{})

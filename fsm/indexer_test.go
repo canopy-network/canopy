@@ -49,15 +49,8 @@ func TestDeltaIndexerBlobs_ChangedAddedRemoved(t *testing.T) {
 	require.True(t, delta.Previous.ValidatorsDelta)
 }
 
-// TestDeltaIndexerBlobs_UnsortedInputStillMergesCorrectly is a regression for
-// mergeChangedBlobKeys' two-pointer walk silently producing wrong results when fed unsorted
-// input - which the journal path (IndexerBlobsFromStateChanges) can do: Accounts/Validators
-// there come from valuesForStateKeys(keys, ...), which preserves input order rather than
-// sorting, and indexerBlob's selective branch appends event/forced keys onto the end of the
-// journaled key list, which can break whatever ordering the journaled keys alone had. Unlike
-// TestDeltaIndexerBlobs_ChangedAddedRemoved (whose entries are already ascending, matching the
-// legacy path's Pebble-scan order), this feeds every entity in reverse/shuffled order to prove
-// DeltaIndexerBlobs sorts before merging rather than trusting the caller's order.
+// TestDeltaIndexerBlobs_UnsortedInputStillMergesCorrectly is a regression for the journal
+// path's unsorted input silently breaking mergeChangedBlobKeys' two-pointer walk.
 func TestDeltaIndexerBlobs_UnsortedInputStillMergesCorrectly(t *testing.T) {
 	prevAcc1 := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{1}, 20), Amount: 10})
 	prevAcc2 := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{2}, 20), Amount: 20})

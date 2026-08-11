@@ -597,9 +597,8 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 	if ok := unmarshal(w, r, req); !ok {
 		return
 	}
-	// Extend this connection's write deadline alone (via ResponseController, Go 1.20+) to
-	// IndexerBlobsTimeoutS - a cold historical read can legitimately run past the general
-	// RPC TimeoutS, and this endpoint is the only one that needs the longer allowance.
+	// Extend this connection's write deadline alone (Go 1.20+ ResponseController) - only this
+	// endpoint's cold reads legitimately need longer than the general RPC TimeoutS.
 	if s.config.IndexerBlobsTimeoutS > 0 {
 		deadline := time.Now().Add(time.Duration(s.config.IndexerBlobsTimeoutS) * time.Second)
 		if err := http.NewResponseController(w).SetWriteDeadline(deadline); err != nil {
@@ -625,12 +624,8 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 
 // IndexerBlobsCached() is a helper function for the indexer blobs implementation
 func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (result *fsm.IndexerBlobs, resultBz []byte, err lib.ErrorI) {
-	// requestStart/path back ObserveIndexerBlobRequestTime, which times this call
-	// end-to-end for every outcome -- the number to compare against the client's
-	// observed RPC round-trip, since IndexerBlobColdReadTime and
-	// IndexerBlobJournalBuildTime each only cover one of the three branches below.
-	// A failed call is recorded separately (IndexerBlobErrorsTotal) rather than folded into
-	// IndexerBlobPathTotal/IndexerBlobRequestTime, which are meant to describe successful outcomes.
+	// requestStart/path back ObserveIndexerBlobRequestTime, timing this call end-to-end.
+	// A failed call goes to IndexerBlobErrorsTotal instead, not the success-path metrics.
 	requestStart := time.Now()
 	path := "cache_hit"
 	defer func() {
@@ -677,19 +672,11 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (result 
 	}
 	path = "legacy"
 
-	// Cache miss and no journal available for this height: current/previous blobs
-	// must be built from the store, which for a height far behind the tip means a
-	// cold historical read. This is unbounded and not covered by the RPC
-	// write-deadline (the deadline keeps ticking while this call blocks, so a slow
-	// read here surfaces later as a "write tcp ...: i/o timeout" on the eventual
-	// w.Write, not here) -- log and record how long it actually took so a cold-path
-	// stall is visible after the fact both in logs and in canopy_indexer_blob_cold_read_time.
+	// Cache miss, no journal: build current/previous from the store, an unbounded cold read
+	// not covered by the RPC write-deadline - log and record how long it actually took.
 	coldStart := time.Now()
-	// cancelled tracks whether this cold read was aborted by a disconnected client, from any of
-	// the three points below that can observe it -- either IndexerBlob call returning a
-	// lib.CodeCancelled error, or the ctx.Err() check after both succeed. The deferred close
-	// records cancellation instead of a cache miss in that case, so a client hangup doesn't get
-	// counted as (and its truncated duration doesn't pollute) a normal timed cold read.
+	// cancelled tracks a client disconnect across all three points that can detect it, so the
+	// deferred close below records cancellation instead of polluting the cache-miss timing.
 	cancelled := false
 	defer func() {
 		if cancelled {
@@ -722,9 +709,8 @@ func (s *Server) IndexerBlobsCached(ctx context.Context, height uint64) (result 
 		}
 	}
 
-	// writeDeadlineS is whichever deadline actually applies to this request's write - the
-	// IndexerBlobs handler extends it to IndexerBlobsTimeoutS when set (see there); fall back to
-	// the general TimeoutS so this warning still means something if that override is disabled.
+	// writeDeadlineS is whichever deadline actually applies to this write (IndexerBlobsTimeoutS
+	// if the handler set it, else the general TimeoutS), for a warning that means what it says.
 	writeDeadlineS := s.config.IndexerBlobsTimeoutS
 	if writeDeadlineS <= 0 {
 		writeDeadlineS = s.config.TimeoutS
