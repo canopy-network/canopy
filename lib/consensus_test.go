@@ -410,6 +410,31 @@ func TestAggregateSignatureCheck(t *testing.T) {
 	}
 }
 
+// TestValidatorSetCopy proves Copy()'s ValidatorSet/MultiKey are independent of the original -
+// the guarantee a cached ValidatorSet (e.g. store.committeeCache) relies on to be handed out safely.
+func TestValidatorSetCopy(t *testing.T) {
+	original, err := NewValidatorSet(&ConsensusValidators{
+		ValidatorSet: []*ConsensusValidator{
+			{PublicKey: newTestPublicKeyBytes(t), VotingPower: 1},
+			{PublicKey: newTestPublicKeyBytes(t, 1), VotingPower: 1},
+		},
+	})
+	require.NoError(t, err)
+	originalAddr := original.ValidatorSet.ValidatorSet[0].PublicKey[0]
+
+	cp := original.Copy()
+	require.Equal(t, original.TotalPower, cp.TotalPower)
+	require.NotSame(t, original.ValidatorSet, cp.ValidatorSet)
+
+	// mutate the copy's validator list and multikey bitmap
+	cp.ValidatorSet.ValidatorSet[0].PublicKey[0]++
+	require.NoError(t, cp.MultiKey.SetBitmap([]byte{1}))
+
+	// the original must be untouched
+	require.Equal(t, originalAddr, original.ValidatorSet.ValidatorSet[0].PublicKey[0])
+	require.NotEqual(t, cp.MultiKey.Bytes(), original.MultiKey.Bytes())
+}
+
 func TestGetNonSigners(t *testing.T) {
 	// pre-create a message to sign
 	msg := &QuorumCertificate{BlockHash: []byte("message")}

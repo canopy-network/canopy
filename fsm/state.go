@@ -497,7 +497,9 @@ func (s *StateMachine) cachedLoadCommittee(chainId, rootHeight uint64, tier stri
 	if err != nil {
 		return lib.ValidatorSet{}, err
 	}
-	return *vs, nil
+	// Copy(), not *vs - vs is the cached pointer; a plain dereference would still share
+	// ValidatorSet/MultiKey with every other caller and the cache itself.
+	return vs.Copy(), nil
 }
 
 // LoadCertificate() loads a quorum certificate (block, results + 2/3rd committee signatures)

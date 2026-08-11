@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -9,6 +10,32 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/stretchr/testify/require"
 )
+
+// TestGetOrComputeCommittee_ErrorNotCached proves a failed compute is never cached - a second
+// call for the same key retries compute instead of replaying the error.
+func TestGetOrComputeCommittee_ErrorNotCached(t *testing.T) {
+	store, _, cleanup := testStore(t)
+	defer cleanup()
+
+	const chainId, rootHeight = uint64(1), uint64(200)
+	want := &lib.ValidatorSet{TotalPower: 700, NumValidators: 7}
+
+	var computeCalls int32
+	_, err := store.GetOrComputeCommittee(chainId, rootHeight, "hss", func() (*lib.ValidatorSet, lib.ErrorI) {
+		atomic.AddInt32(&computeCalls, 1)
+		return nil, lib.ErrUnmarshal(errors.New("compute failed"))
+	})
+	require.Error(t, err)
+	require.EqualValues(t, 1, atomic.LoadInt32(&computeCalls))
+
+	got, err := store.GetOrComputeCommittee(chainId, rootHeight, "hss", func() (*lib.ValidatorSet, lib.ErrorI) {
+		atomic.AddInt32(&computeCalls, 1)
+		return want, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+	require.EqualValues(t, 2, atomic.LoadInt32(&computeCalls), "second call should retry compute since the error was not cached")
+}
 
 // TestGetOrComputeCommittee_CacheHitAvoidsCompute proves a second call for the same
 // (chainId, rootHeight) is served from cache - compute (LoadCommittee's stand-in) never runs again.

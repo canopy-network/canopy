@@ -235,13 +235,14 @@ func (t *Indexer) GetOrComputeCommittee(chainId, rootHeight uint64, tier string,
 		t.metrics.RecordCommitteeCacheHit(tier)
 		return vs, nil
 	}
-	t.metrics.RecordCommitteeCacheMiss(tier)
 	key := strconv.FormatUint(chainId, 10) + ":" + strconv.FormatUint(rootHeight, 10)
 	v, err, shared := t.committees.sf.Do(key, func() (interface{}, error) {
-		// re-check: another goroutine may have populated this while we waited to be scheduled
+		// re-check: another goroutine may have populated this while we waited to be scheduled -
+		// only count a miss once we know this call is the one actually about to compute.
 		if vs, ok := t.committees.get(chainId, rootHeight); ok {
 			return vs, nil
 		}
+		t.metrics.RecordCommitteeCacheMiss(tier)
 		vs, computeErr := compute()
 		if computeErr != nil {
 			return nil, computeErr
