@@ -1,14 +1,34 @@
 package contract
 
-// DefaultStalenessThresholdBlocks is a TEMPORARY, disclosed placeholder for
-// ARCM Section 18.1's per-tier staleness threshold (50/30/20/10 blocks for
-// Tier 0-3). Proper per-tier thresholds require ResolvePrice to know the
-// asset's tier, which is straightforward to wire in later but deferred here
-// in favor of one conservative default -- same disclosed-placeholder
-// pattern as asset_tier.go's assetTierAuthority and deposit.go's MIN_DEPOSIT.
-// Tier 1's threshold (30 blocks) is used as the default: stricter than
-// Tier 2/3 would require, looser than Tier 0.
-const DefaultStalenessThresholdBlocks = 30
+// stalenessThresholdTable is ARCM Section 15's per-tier staleness
+// threshold (50/30/20/10 blocks for Tier 0-3). Unlike TierParams'
+// LTV/LIF fields, the Section 15 consolidated parameter table does NOT
+// tag per-tier staleness as IMMUTABLE the way it explicitly tags
+// MAX_PRICE_DEVIATION, GOVERNANCE_TIMELOCK_STD, and
+// NATIVE_ASSET_MAX_DECIMALS -- so this is deliberately kept as its own
+// table, separate from tierParamsTable, rather than folded into
+// TierParams' struct, to avoid implying an immutability guarantee the
+// spec does not make for this parameter.
+//
+// Formerly a single flat DefaultStalenessThresholdBlocks = 30 constant
+// (Tier 1's value, used for every asset regardless of tier) -- replaced
+// here now that ResolvePrice looks up the asset's real tier via
+// GetAssetTier/GetStalenessThreshold instead of using one default for
+// all assets.
+var stalenessThresholdTable = map[uint8]uint64{
+	0: 50, // Tier 0 -- CNPY
+	1: 30, // Tier 1 -- Blue-chip
+	2: 20, // Tier 2 -- Standard
+	3: 10, // Tier 3 -- Restricted
+}
+
+// GetStalenessThreshold looks up a tier's staleness threshold, in blocks.
+// found=false means the tier byte was not 0-3 -- mirrors GetTierParams'
+// own found=false contract exactly.
+func GetStalenessThreshold(tier uint8) (blocks uint64, found bool) {
+	b, ok := stalenessThresholdTable[tier]
+	return b, ok
+}
 
 // MinReporters is ARCM Section 10 Rule 2's oracle quorum floor.
 //
@@ -56,6 +76,26 @@ func ResolvePrice(c *Contract, assetID string) (price uint64, found bool, pErr *
 		}
 	}
 
+	// Per-tier staleness threshold (ARCM Section 15), replacing the old
+	// flat 30-block default. An asset with no tier registry entry, or a
+	// tier byte with no threshold entry (should not happen for 0-3, but
+	// checked explicitly rather than assumed), resolves as found=false --
+	// mirrors every other GetAssetTier caller's convention (borrow.go,
+	// collateral.go, liquidate_position.go all hard-reject on
+	// !tierFound) rather than silently falling back to a default
+	// threshold for an asset the tier registry does not recognize.
+	tier, tierFound, tErr := GetAssetTier(c, assetID)
+	if tErr != nil {
+		return 0, false, tErr
+	}
+	if !tierFound {
+		return 0, false, nil
+	}
+	stalenessThreshold, stFound := GetStalenessThreshold(tier)
+	if !stFound {
+		return 0, false, nil
+	}
+
 	currentHeight := c.plugin.CurrentHeight()
 	var freshPrices []uint64
 	for _, entry := range entries {
@@ -63,7 +103,7 @@ func ResolvePrice(c *Contract, assetID string) (price uint64, found bool, pErr *
 		if uErr := Unmarshal(entry.Value, rec); uErr != nil {
 			continue // one corrupted submitter record does not fail the whole resolution
 		}
-		if currentHeight >= rec.BlockHeight && currentHeight-rec.BlockHeight > DefaultStalenessThresholdBlocks {
+		if currentHeight >= rec.BlockHeight && currentHeight-rec.BlockHeight > stalenessThreshold {
 			continue // Rule 1: stale
 		}
 		if rec.Price == 0 {

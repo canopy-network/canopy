@@ -15,16 +15,18 @@ package contract
 // the circuit breaker.
 //
 // EMERGENCY_THRESHOLD (100 blocks, ARCM v3.10 parameter table) is
-// deliberately a DIFFERENT, LARGER threshold than
-// DefaultStalenessThresholdBlocks (30 blocks, price_resolve.go) -- the two
-// represent different severities. ResolvePrice's 30-block threshold governs
+// deliberately a DIFFERENT, LARGER threshold than any of ResolvePrice's
+// own per-tier staleness thresholds (50/30/20/10 blocks, Tier 0-3,
+// price_resolve.go's stalenessThresholdTable) -- the two represent
+// different severities. ResolvePrice's staleness threshold governs
 // whether a price is fresh enough to RESOLVE AT ALL (Rule 1); this
 // function's 100-block threshold governs whether staleness is severe enough
 // to constitute an EMERGENCY. A price can be too stale to resolve
 // (ResolvePrice returns found=false) well before it's stale enough to
-// trigger Emergency Mode -- the two thresholds are not meant to be the same
-// value, and this function does not read or derive from
-// DefaultStalenessThresholdBlocks.
+// trigger Emergency Mode -- the thresholds are not meant to be the same
+// value for any tier (100 exceeds even Tier 0's 50-block threshold, the
+// largest of the four), and this function does not read or derive from
+// price_resolve.go's staleness table.
 //
 // CIRCUIT BREAKER SCOPE, DISCLOSED: as of this commit, CircuitBreakerState
 // (arbor_state.proto) has no automatic trigger -- see that message's own
