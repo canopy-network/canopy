@@ -68,3 +68,16 @@ func creditPoolAmount(marketId string, pool *Pool, amount uint64) *PluginError {
 	pool.Amount += amount
 	return nil
 }
+
+// creditAssetBalanceAmount adds amount to bal.Amount ({37} AssetBalance).
+// Checked-add, identical shape to creditPoolAmount above. Used exclusively
+// by the devnet faucet (faucet.go) as of this addition -- deposit_collateral
+// and other handlers do not yet read/write against AssetBalance (KNOWN GAP,
+// see AssetBalance's own doc comment in arbor_state.proto).
+func creditAssetBalanceAmount(assetID string, addr []byte, bal *AssetBalance, amount uint64) *PluginError {
+	if amount > (^uint64(0) - bal.Amount) {
+		return ErrAssetBalanceOverflow(assetID, addr, bal.Amount, amount)
+	}
+	bal.Amount += amount
+	return nil
+}

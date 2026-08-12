@@ -393,6 +393,29 @@ func KeyForNusdBalance(addr []byte) []byte {
 // or per vault.
 var PrefixNasmTierBacking = []byte{36}
 
+// PrefixAssetBalance: the {37} record -- a generic, address+assetID-keyed
+// holding ledger for arbitrary market assets (btc, eth, usdc, CNPY, etc.),
+// added alongside the devnet faucet. Composite-keyed the same way as
+// LenderPosition (KeyForLenderPosition: marketID then addr) for
+// consistency -- here assetID plays marketID's role. KNOWN GAP, DISCLOSED:
+// deposit_collateral and other handlers do not yet read/debit against this
+// ledger; faucet-credited and queryable only as of this addition.
+var PrefixAssetBalance = []byte{37}
+
+func KeyForAssetBalance(assetID string, addr []byte) []byte {
+	return JoinLenPrefix(PrefixAssetBalance, []byte(assetID), addr)
+}
+
+// PrefixFaucetClaimRecord: the {38} record -- tracks the last block height
+// a given address claimed a given asset from the devnet faucet, enforcing
+// x_faucet_cooldown_blocks. Composite-keyed identically to AssetBalance
+// (assetID, addr) since the cooldown is per-address-per-asset, not global.
+var PrefixFaucetClaimRecord = []byte{38}
+
+func KeyForFaucetClaimRecord(assetID string, addr []byte) []byte {
+	return JoinLenPrefix(PrefixFaucetClaimRecord, []byte(assetID), addr)
+}
+
 func KeyForNasmTierBacking() []byte {
 	return JoinLenPrefix(PrefixNasmTierBacking)
 }

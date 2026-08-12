@@ -219,3 +219,25 @@ message EventNasmVaultLiquidated {
   uint64 remaining_vault_debt = 5;   // 0 if the vault was fully closed
   bool vault_closed = 6;
 }
+
+// ─────────────────────────────────────────────
+// Devnet faucet (testnet-only, see MessageClaimFaucet's own doc comment
+// in arbor.proto for the fee-exemption and cooldown design rationale)
+// ─────────────────────────────────────────────
+
+// FaucetClaimEvent is emitted once per asset per claim_faucet tx (up to 4
+// events per successful call, one for each of BTC/ETH/USDC/CNPY),
+// mirroring WaterfallEvent's flat-record convention above -- avoids
+// re-parsing a nested per-asset status list on every range-scan read.
+// Emitted whether the asset was actually credited or skipped for
+// cooldown, so a full claim history (including skips) is reconstructable
+// from the event log alone without needing to separately query
+// FaucetClaimRecord for what didn't happen.
+message FaucetClaimEvent {
+  uint64 block_height     = 1;
+  bytes  address           = 2;
+  string asset_id          = 3;
+  string status             = 4;  // "credited" | "skipped_cooldown"
+  uint64 amount             = 5;  // amount credited; 0 if skipped
+  uint64 blocks_remaining   = 6;  // cooldown blocks left; 0 if credited
+}

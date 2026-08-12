@@ -250,6 +250,13 @@ func ErrRepayExceedsDebt(marketID string, currentDebt uint64, repayAmount uint64
 	return NewError(231, ArborModule, fmt.Sprintf("market %q: repay amount %d exceeds current debt %d -- no escrow exists to refund an overpayment, resubmit with amount <= current debt", marketID, repayAmount, currentDebt))
 }
 
+// ErrAssetBalanceOverflow: devnet faucet credit path. Same checked-add
+// discipline as ErrMarketPoolOverflow above -- see creditAssetBalanceAmount
+// in custody_arith.go.
+func ErrAssetBalanceOverflow(assetID string, addr []byte, current uint64, amount uint64) *PluginError {
+	return NewError(477, ArborModule, fmt.Sprintf("asset %q, address %x: adding amount %d to balance %d would overflow uint64", assetID, addr, amount, current))
+}
+
 func ErrPositionNotLiquidatable(marketID string, hfScaled string) *PluginError {
 	return NewError(232, ArborModule, fmt.Sprintf("market %q: position health factor %s (scaled) is above the liquidation threshold (<=1000000), ARCM Section 5", marketID, hfScaled))
 }

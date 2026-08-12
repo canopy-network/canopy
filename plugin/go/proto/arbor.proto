@@ -302,3 +302,26 @@ message MessageSetCircuitBreaker {
   bool   active     = 2;
   bytes  authority  = 3;
 }
+
+// MessageClaimFaucet is a devnet-only, fee-exempt tx that credits the
+// signer's AssetBalance ({37}) for all 4 faucet-supported assets (BTC,
+// ETH, USDC, CNPY) in a single call, subject to each asset's own
+// independent FAUCET_COOLDOWN_BLOCKS (3600 blocks, ~20h at this chain's
+// 20s block time) tracked per-address-per-asset via FaucetClaimRecord
+// ({38}). Per-asset, not all-or-nothing: an asset still on cooldown is
+// silently skipped (see FaucetClaimEvent's status field), not rejected --
+// so claiming BTC does not block ETH/USDC/CNPY from being credited in the
+// same call if their own cooldowns have separately expired. Exempt from
+// CheckTx's SendFee floor (see CheckTx's own carve-out comment) so a
+// brand-new, zero-balance address can bootstrap test funds without
+// already holding gas -- THIS EXEMPTION IS TESTNET-ONLY, has no
+// x_devnet_faucet_enabled build gate yet (deliberately deferred, not an
+// oversight -- flag for removal before any mainnet fork). No fields
+// beyond the implicit signer requirement: address is required so
+// CheckMessageClaimFaucet can validate and return it as the sole
+// AuthorizedSigner, same pattern as every other Message* type in this
+// file (see MessageSetEmergencyMode/MessageSetCircuitBreaker above) --
+// there is no envelope-level signer extraction in this codebase.
+message MessageClaimFaucet {
+  bytes address = 1; // @gotags: json:"address"
+}

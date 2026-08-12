@@ -326,6 +326,15 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			NusdAmount: uint64(nusdAmount),
 		}
 		return "type.googleapis.com/types.MessageBurnNusd", msg, nil
+	case "claim_faucet":
+		addr, err := hex.DecodeString(signerAddrHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("decode address: %w", err)
+		}
+		msg := &contract.MessageClaimFaucet{
+			Address: addr,
+		}
+		return "type.googleapis.com/types.MessageClaimFaucet", msg, nil
 	default:
 		return "", nil, fmt.Errorf("unknown or not-yet-wired msgType: %s", msgType)
 	}

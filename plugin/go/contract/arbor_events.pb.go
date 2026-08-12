@@ -1134,6 +1134,98 @@ func (x *EventNasmVaultLiquidated) GetVaultClosed() bool {
 	return false
 }
 
+// FaucetClaimEvent is emitted once per asset per claim_faucet tx (up to 4
+// events per successful call, one for each of BTC/ETH/USDC/CNPY),
+// mirroring WaterfallEvent's flat-record convention above -- avoids
+// re-parsing a nested per-asset status list on every range-scan read.
+// Emitted whether the asset was actually credited or skipped for
+// cooldown, so a full claim history (including skips) is reconstructable
+// from the event log alone without needing to separately query
+// FaucetClaimRecord for what didn't happen.
+type FaucetClaimEvent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	BlockHeight     uint64                 `protobuf:"varint,1,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
+	Address         []byte                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	AssetId         string                 `protobuf:"bytes,3,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	Status          string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`                                           // "credited" | "skipped_cooldown"
+	Amount          uint64                 `protobuf:"varint,5,opt,name=amount,proto3" json:"amount,omitempty"`                                          // amount credited; 0 if skipped
+	BlocksRemaining uint64                 `protobuf:"varint,6,opt,name=blocks_remaining,json=blocksRemaining,proto3" json:"blocks_remaining,omitempty"` // cooldown blocks left; 0 if credited
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *FaucetClaimEvent) Reset() {
+	*x = FaucetClaimEvent{}
+	mi := &file_arbor_events_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FaucetClaimEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FaucetClaimEvent) ProtoMessage() {}
+
+func (x *FaucetClaimEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_events_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FaucetClaimEvent.ProtoReflect.Descriptor instead.
+func (*FaucetClaimEvent) Descriptor() ([]byte, []int) {
+	return file_arbor_events_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *FaucetClaimEvent) GetBlockHeight() uint64 {
+	if x != nil {
+		return x.BlockHeight
+	}
+	return 0
+}
+
+func (x *FaucetClaimEvent) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *FaucetClaimEvent) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *FaucetClaimEvent) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *FaucetClaimEvent) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *FaucetClaimEvent) GetBlocksRemaining() uint64 {
+	if x != nil {
+		return x.BlocksRemaining
+	}
+	return 0
+}
+
 var File_arbor_events_proto protoreflect.FileDescriptor
 
 const file_arbor_events_proto_rawDesc = "" +
@@ -1211,7 +1303,14 @@ const file_arbor_events_proto_rawDesc = "" +
 	"\frepay_amount\x18\x03 \x01(\x04R\vrepayAmount\x12+\n" +
 	"\x11collateral_seized\x18\x04 \x01(\x04R\x10collateralSeized\x120\n" +
 	"\x14remaining_vault_debt\x18\x05 \x01(\x04R\x12remainingVaultDebt\x12!\n" +
-	"\fvault_closed\x18\x06 \x01(\bR\vvaultClosedB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"\fvault_closed\x18\x06 \x01(\bR\vvaultClosed\"\xc5\x01\n" +
+	"\x10FaucetClaimEvent\x12!\n" +
+	"\fblock_height\x18\x01 \x01(\x04R\vblockHeight\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\fR\aaddress\x12\x19\n" +
+	"\basset_id\x18\x03 \x01(\tR\aassetId\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x16\n" +
+	"\x06amount\x18\x05 \x01(\x04R\x06amount\x12)\n" +
+	"\x10blocks_remaining\x18\x06 \x01(\x04R\x0fblocksRemainingB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_events_proto_rawDescOnce sync.Once
@@ -1225,7 +1324,7 @@ func file_arbor_events_proto_rawDescGZIP() []byte {
 	return file_arbor_events_proto_rawDescData
 }
 
-var file_arbor_events_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_arbor_events_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_arbor_events_proto_goTypes = []any{
 	(*EventIndexEncodingOverflowHalted)(nil),               // 0: types.EventIndexEncodingOverflowHalted
 	(*EventInsolventMarketValueRecovered)(nil),             // 1: types.EventInsolventMarketValueRecovered
@@ -1244,6 +1343,7 @@ var file_arbor_events_proto_goTypes = []any{
 	(*EventReserveFundEncodingMigrationCompleted)(nil),     // 14: types.EventReserveFundEncodingMigrationCompleted
 	(*WaterfallEvent)(nil),                                 // 15: types.WaterfallEvent
 	(*EventNasmVaultLiquidated)(nil),                       // 16: types.EventNasmVaultLiquidated
+	(*FaucetClaimEvent)(nil),                               // 17: types.FaucetClaimEvent
 }
 var file_arbor_events_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1264,7 +1364,7 @@ func file_arbor_events_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_events_proto_rawDesc), len(file_arbor_events_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

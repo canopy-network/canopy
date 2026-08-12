@@ -55,6 +55,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/waterfall-events", p.handleQueryWaterfallEvents)
 	mux.HandleFunc("/v1/query/nasmtierbacking", p.handleQueryNasmTierBacking)
 	mux.HandleFunc("/v1/query/emergencymode", p.handleQueryEmergencyMode)
+	mux.HandleFunc("/v1/query/assetbalance", p.handleQueryAssetBalance)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -542,6 +543,76 @@ func (p *Plugin) handleQueryEmergencyMode(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(flagJSON)
+}
+
+// handleQueryAssetBalance serves GET /v1/query/assetbalance?assetId=BTC&address=<hex>
+// Returns the requested address's {37} AssetBalance record for the given
+// asset. Added to verify devnet faucet credits (faucet.go) actually land
+// in state -- prior to this route, AssetBalance had a full write path
+// (claim_faucet -> DeliverMessageClaimFaucet -> creditAssetBalanceAmount)
+// but no query surface, making a credit unverifiable except indirectly via
+// FaucetClaimEvent's event log. Mirrors handleQueryEmergencyMode's exact
+// shape (raw QueryState -> proto.Unmarshal -> protojson.Marshal) since
+// AssetBalance, like EmergencyModeFlag, has no *Contract-based accessor
+// meant for RPC use -- composite-keyed via KeyForAssetBalance(assetID, addr)
+// the same way KeyForLenderPosition is (marketID/assetID first, addr
+// second). Zero-value convention: an address that has never been credited
+// for this asset returns a zero-value AssetBalance (amount omitted/0 per
+// proto3 default field-omission), not a 404 -- matching every other
+// found=false-is-normal convention in this file.
+func (p *Plugin) handleQueryAssetBalance(w http.ResponseWriter, r *http.Request) {
+	assetId := r.URL.Query().Get("assetId")
+	if assetId == "" {
+		http.Error(w, `{"error":"missing assetId query param"}`, http.StatusBadRequest)
+		return
+	}
+	addressHex := r.URL.Query().Get("address")
+	if addressHex == "" {
+		http.Error(w, `{"error":"missing address query param"}`, http.StatusBadRequest)
+		return
+	}
+	addr, hErr := hex.DecodeString(addressHex)
+	if hErr != nil {
+		http.Error(w, `{"error":"invalid address hex: `+hErr.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	key := KeyForAssetBalance(assetId, addr)
+	queryId := rand.Uint64()
+
+	resp, pErr := p.QueryState(0 /* latest committed */, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: queryId, Key: key}},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if resp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+resp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(resp.Results) == 0 || len(resp.Results[0].Entries) == 0 || len(resp.Results[0].Entries[0].Value) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"assetId": assetId, "address": addressHex, "amount": "0", "note": "never credited for this asset"})
+		return
+	}
+
+	raw := resp.Results[0].Entries[0].Value
+	bal := &AssetBalance{}
+	if err := proto.Unmarshal(raw, bal); err != nil {
+		http.Error(w, `{"error":"failed to decode AssetBalance record: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	balJSON, err := protojson.Marshal(bal)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode asset balance json: `+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(balJSON)
 }
 
 // handleQueryTreasury serves GET /v1/query/treasury?pool=arbor|nasm

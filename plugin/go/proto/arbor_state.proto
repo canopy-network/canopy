@@ -354,3 +354,42 @@ message CircuitBreakerState {
   uint64 triggered_block  = 3;
   bytes  triggered_by     = 4; // authority address; always populated -- see this message's own doc comment, no automatic trigger exists yet
 }
+
+// ─────────────────────────────────────────────
+// Faucet messages -- devnet-only testing tool. Dispenses BTC, ETH, USDC,
+// and CNPY (test token, distinct from ARB, the chain's own native gas/
+// staking token per chain.json) to a requesting address, gated by a 24h
+// per-address-per-asset cooldown. State keys {37} (AssetBalance), {38}
+// (FaucetClaimRecord).
+// ─────────────────────────────────────────────
+
+// AssetBalance is the {37} record: a generic, address+asset-keyed holding
+// ledger for arbitrary market assets (btc, eth, usdc, CNPY, etc.) that,
+// prior to this message, had no standalone wallet-style representation
+// anywhere in this codebase -- only Account.Amount (the single native ARB
+// balance) and NusdBalance (NUSD-specific) existed as address-keyed
+// holdings. deposit_collateral and other handlers do not yet read or debit
+// against this ledger (KNOWN GAP, DISCLOSED, tracked as a deliberate
+// follow-up, not an oversight) -- as of this message, AssetBalance is
+// faucet-credited and queryable, but not yet enforced as a spending
+// balance anywhere else in the system.
+message AssetBalance {
+  bytes  address  = 1;
+  string asset_id = 2;
+  uint64 amount   = 3;
+}
+
+// FaucetClaimRecord is the {38} record: tracks the last block height a
+// given address claimed a given asset from the faucet, enforcing the
+// x_faucet_cooldown_blocks window (24h equivalent, expressed in blocks per
+// this chain's own block time rather than wall-clock time, since
+// DeliverTx handlers have no reliable wall-clock source -- mirrors every
+// other staleness/cooldown check in this codebase, e.g.
+// stalenessThresholdTable, all of which are block-height-based).
+// Per-address-per-asset, not global -- an address may claim btc and eth
+// the same day, just not the same asset twice within the cooldown window.
+message FaucetClaimRecord {
+  bytes  address           = 1;
+  string asset_id          = 2;
+  uint64 last_claim_block  = 3;
+}

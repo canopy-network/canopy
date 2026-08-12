@@ -42,6 +42,7 @@ var ContractConfig = &PluginConfig{
 		"liquidate_nasm_vault",
 		"set_emergency_mode",
 		"set_circuit_breaker",
+		"claim_faucet",
 	},
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
@@ -65,6 +66,7 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.MessageLiquidateNasmVault",
 		"type.googleapis.com/types.MessageSetEmergencyMode",
 		"type.googleapis.com/types.MessageSetCircuitBreaker",
+		"type.googleapis.com/types.MessageClaimFaucet",
 	},
 	EventTypeUrls: []string{
 		"type.googleapis.com/types.EventIndexEncodingOverflowHalted",
@@ -81,6 +83,7 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.EventLossFactorAppliedToAlreadyInsolventMarket",
 		"type.googleapis.com/types.EventReserveFundEncodingMigrationCompleted",
 		"type.googleapis.com/types.EventNasmVaultLiquidated",
+		"type.googleapis.com/types.FaucetClaimEvent",
 	},
 	// CustomStatePrefixes registers Arbor's reserved state-key range {16}-{28}
 	// with Canopy at handshake. Canopy panics if any of these collide with the
@@ -227,31 +230,37 @@ func (c *Contract) BeginBlock(request *PluginBeginRequest) *PluginBeginResponse 
 
 // CheckTx() is code that is executed to statelessly validate a transaction
 func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
-	// validate fee
-	resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
-		Keys: []*PluginKeyRead{
-			{QueryId: rand.Uint64(), Key: KeyForFeeParams()},
-		}})
-	if err == nil {
-		err = resp.Error
-	}
-	// handle error
-	if err != nil {
-		return &PluginCheckResponse{Error: err}
-	}
-	// convert bytes into fee parameters
-	minFees := new(FeeParams)
-	if err = Unmarshal(resp.Results[0].Entries[0].Value, minFees); err != nil {
-		return &PluginCheckResponse{Error: err}
-	}
-	// check for the minimum fee
-	if request.Tx.Fee < minFees.SendFee {
-		return &PluginCheckResponse{Error: ErrTxFeeBelowStateLimit()}
-	}
-	// get the message
+	// get the message first -- fee validation below needs to know the
+	// message type, since MessageClaimFaucet is fee-exempt (testnet-only,
+	// see its doc comment in arbor.proto)
 	msg, err := FromAny(request.Tx.Msg)
 	if err != nil {
 		return &PluginCheckResponse{Error: err}
+	}
+	// [FAUCET FEE EXEMPTION, testnet-only] skip the SendFee floor for
+	// MessageClaimFaucet -- see arbor.proto's MessageClaimFaucet comment
+	if _, isFaucetClaim := msg.(*MessageClaimFaucet); !isFaucetClaim {
+		// validate fee
+		resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+			Keys: []*PluginKeyRead{
+				{QueryId: rand.Uint64(), Key: KeyForFeeParams()},
+			}})
+		if err == nil {
+			err = resp.Error
+		}
+		// handle error
+		if err != nil {
+			return &PluginCheckResponse{Error: err}
+		}
+		// convert bytes into fee parameters
+		minFees := new(FeeParams)
+		if err = Unmarshal(resp.Results[0].Entries[0].Value, minFees); err != nil {
+			return &PluginCheckResponse{Error: err}
+		}
+		// check for the minimum fee
+		if request.Tx.Fee < minFees.SendFee {
+			return &PluginCheckResponse{Error: ErrTxFeeBelowStateLimit()}
+		}
 	}
 	// handle the message
 	switch x := msg.(type) {
@@ -297,6 +306,8 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 		return c.CheckMessageSetEmergencyMode(x)
 	case *MessageSetCircuitBreaker:
 		return c.CheckMessageSetCircuitBreaker(x)
+	case *MessageClaimFaucet:
+		return c.CheckMessageClaimFaucet(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -371,6 +382,8 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 		return c.DeliverMessageSetEmergencyMode(x, request.Tx.Fee)
 	case *MessageSetCircuitBreaker:
 		return c.DeliverMessageSetCircuitBreaker(x, request.Tx.Fee)
+	case *MessageClaimFaucet:
+		return c.DeliverMessageClaimFaucet(x, request.Tx.Fee)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

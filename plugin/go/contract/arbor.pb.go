@@ -1182,13 +1182,15 @@ func (x *MessageBurnNusd) GetNusdAmount() uint64 {
 // custody split exactly) -- liquidating a NASM vault burns NUSD out of
 // circulation, the same as any other debt reduction.
 //
-// PHASE 1 SCOPE LIMIT, DISCLOSED: a liquidation whose required collateral
-// seizure would exceed the vault's own locked collateral (a bad-debt
-// scenario) is hard-rejected via ErrNasmLiquidationBadDebt rather than
-// partially seizing collateral and leaving an unaccounted shortfall.
-// NASM's own bad-debt waterfall (R_nusd draw-down, Arbor treasury
-// fallback, Section 11.2) is not yet wired into this transaction. See
-// ErrNasmLiquidationBadDebt's own doc comment for the full reasoning.
+// [FIX, session finding] The comment below previously described the
+// bad-debt path as unconditionally hard-rejecting -- true when originally
+// written, no longer true. Layer3DrawDownNASM (R_nusd draw-down, {41}) is
+// now wired into this transaction's own bad-debt branch: a shortfall is
+// first offered to R_nusd, and only hard-rejects (ErrNasmLiquidationBadDebt)
+// if R_nusd cannot fully cover it (NASM Layer 4 system-wide socialization
+// is still not built, so an uncovered shortfall still has no further
+// fallback -- see that error's own current doc comment, error.go, for the
+// precise, up-to-date scope).
 type MessageLiquidateNasmVault struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	VaultId       string                 `protobuf:"bytes,1,opt,name=vault_id,json=vaultId,proto3" json:"vault_id,omitempty"`
@@ -1387,6 +1389,69 @@ func (x *MessageSetCircuitBreaker) GetAuthority() []byte {
 	return nil
 }
 
+// MessageClaimFaucet is a devnet-only, fee-exempt tx that credits the
+// signer's AssetBalance ({37}) for all 4 faucet-supported assets (BTC,
+// ETH, USDC, CNPY) in a single call, subject to each asset's own
+// independent FAUCET_COOLDOWN_BLOCKS (3600 blocks, ~20h at this chain's
+// 20s block time) tracked per-address-per-asset via FaucetClaimRecord
+// ({38}). Per-asset, not all-or-nothing: an asset still on cooldown is
+// silently skipped (see FaucetClaimEvent's status field), not rejected --
+// so claiming BTC does not block ETH/USDC/CNPY from being credited in the
+// same call if their own cooldowns have separately expired. Exempt from
+// CheckTx's SendFee floor (see CheckTx's own carve-out comment) so a
+// brand-new, zero-balance address can bootstrap test funds without
+// already holding gas -- THIS EXEMPTION IS TESTNET-ONLY, has no
+// x_devnet_faucet_enabled build gate yet (deliberately deferred, not an
+// oversight -- flag for removal before any mainnet fork). No fields
+// beyond the implicit signer requirement: address is required so
+// CheckMessageClaimFaucet can validate and return it as the sole
+// AuthorizedSigner, same pattern as every other Message* type in this
+// file (see MessageSetEmergencyMode/MessageSetCircuitBreaker above) --
+// there is no envelope-level signer extraction in this codebase.
+type MessageClaimFaucet struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Address       []byte                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address"` // @gotags: json:"address"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageClaimFaucet) Reset() {
+	*x = MessageClaimFaucet{}
+	mi := &file_arbor_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageClaimFaucet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageClaimFaucet) ProtoMessage() {}
+
+func (x *MessageClaimFaucet) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageClaimFaucet.ProtoReflect.Descriptor instead.
+func (*MessageClaimFaucet) Descriptor() ([]byte, []int) {
+	return file_arbor_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *MessageClaimFaucet) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
 var File_arbor_proto protoreflect.FileDescriptor
 
 const file_arbor_proto_rawDesc = "" +
@@ -1482,7 +1547,9 @@ const file_arbor_proto_rawDesc = "" +
 	"\x18MessageSetCircuitBreaker\x12\x19\n" +
 	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x16\n" +
 	"\x06active\x18\x02 \x01(\bR\x06active\x12\x1c\n" +
-	"\tauthority\x18\x03 \x01(\fR\tauthorityB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
+	"\tauthority\x18\x03 \x01(\fR\tauthority\".\n" +
+	"\x12MessageClaimFaucet\x12\x18\n" +
+	"\aaddress\x18\x01 \x01(\fR\aaddressB-Z+github.com/ARBOR-L/ARBOR/plugin/go/contractb\x06proto3"
 
 var (
 	file_arbor_proto_rawDescOnce sync.Once
@@ -1496,7 +1563,7 @@ func file_arbor_proto_rawDescGZIP() []byte {
 	return file_arbor_proto_rawDescData
 }
 
-var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_arbor_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_arbor_proto_goTypes = []any{
 	(*MessageCreateMarket)(nil),       // 0: types.MessageCreateMarket
 	(*MessageUpdateMarketParams)(nil), // 1: types.MessageUpdateMarketParams
@@ -1518,6 +1585,7 @@ var file_arbor_proto_goTypes = []any{
 	(*MessageLiquidateNasmVault)(nil), // 17: types.MessageLiquidateNasmVault
 	(*MessageSetEmergencyMode)(nil),   // 18: types.MessageSetEmergencyMode
 	(*MessageSetCircuitBreaker)(nil),  // 19: types.MessageSetCircuitBreaker
+	(*MessageClaimFaucet)(nil),        // 20: types.MessageClaimFaucet
 }
 var file_arbor_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1538,7 +1606,7 @@ func file_arbor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_proto_rawDesc), len(file_arbor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

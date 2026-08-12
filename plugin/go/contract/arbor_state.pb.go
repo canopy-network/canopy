@@ -1300,6 +1300,145 @@ func (x *CircuitBreakerState) GetTriggeredBy() []byte {
 	return nil
 }
 
+// AssetBalance is the {37} record: a generic, address+asset-keyed holding
+// ledger for arbitrary market assets (btc, eth, usdc, CNPY, etc.) that,
+// prior to this message, had no standalone wallet-style representation
+// anywhere in this codebase -- only Account.Amount (the single native ARB
+// balance) and NusdBalance (NUSD-specific) existed as address-keyed
+// holdings. deposit_collateral and other handlers do not yet read or debit
+// against this ledger (KNOWN GAP, DISCLOSED, tracked as a deliberate
+// follow-up, not an oversight) -- as of this message, AssetBalance is
+// faucet-credited and queryable, but not yet enforced as a spending
+// balance anywhere else in the system.
+type AssetBalance struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Address       []byte                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	AssetId       string                 `protobuf:"bytes,2,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	Amount        uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AssetBalance) Reset() {
+	*x = AssetBalance{}
+	mi := &file_arbor_state_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AssetBalance) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AssetBalance) ProtoMessage() {}
+
+func (x *AssetBalance) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AssetBalance.ProtoReflect.Descriptor instead.
+func (*AssetBalance) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *AssetBalance) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *AssetBalance) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *AssetBalance) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// FaucetClaimRecord is the {38} record: tracks the last block height a
+// given address claimed a given asset from the faucet, enforcing the
+// x_faucet_cooldown_blocks window (24h equivalent, expressed in blocks per
+// this chain's own block time rather than wall-clock time, since
+// DeliverTx handlers have no reliable wall-clock source -- mirrors every
+// other staleness/cooldown check in this codebase, e.g.
+// stalenessThresholdTable, all of which are block-height-based).
+// Per-address-per-asset, not global -- an address may claim btc and eth
+// the same day, just not the same asset twice within the cooldown window.
+type FaucetClaimRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Address        []byte                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	AssetId        string                 `protobuf:"bytes,2,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	LastClaimBlock uint64                 `protobuf:"varint,3,opt,name=last_claim_block,json=lastClaimBlock,proto3" json:"last_claim_block,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *FaucetClaimRecord) Reset() {
+	*x = FaucetClaimRecord{}
+	mi := &file_arbor_state_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FaucetClaimRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FaucetClaimRecord) ProtoMessage() {}
+
+func (x *FaucetClaimRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_arbor_state_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FaucetClaimRecord.ProtoReflect.Descriptor instead.
+func (*FaucetClaimRecord) Descriptor() ([]byte, []int) {
+	return file_arbor_state_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *FaucetClaimRecord) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *FaucetClaimRecord) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *FaucetClaimRecord) GetLastClaimBlock() uint64 {
+	if x != nil {
+		return x.LastClaimBlock
+	}
+	return 0
+}
+
 var File_arbor_state_proto protoreflect.FileDescriptor
 
 const file_arbor_state_proto_rawDesc = "" +
@@ -1383,7 +1522,15 @@ const file_arbor_state_proto_rawDesc = "" +
 	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x16\n" +
 	"\x06active\x18\x02 \x01(\bR\x06active\x12'\n" +
 	"\x0ftriggered_block\x18\x03 \x01(\x04R\x0etriggeredBlock\x12!\n" +
-	"\ftriggered_by\x18\x04 \x01(\fR\vtriggeredBy*E\n" +
+	"\ftriggered_by\x18\x04 \x01(\fR\vtriggeredBy\"[\n" +
+	"\fAssetBalance\x12\x18\n" +
+	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x19\n" +
+	"\basset_id\x18\x02 \x01(\tR\aassetId\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\"r\n" +
+	"\x11FaucetClaimRecord\x12\x18\n" +
+	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x19\n" +
+	"\basset_id\x18\x02 \x01(\tR\aassetId\x12(\n" +
+	"\x10last_claim_block\x18\x03 \x01(\x04R\x0elastClaimBlock*E\n" +
 	"\fMarketStatus\x12\n" +
 	"\n" +
 	"\x06ACTIVE\x10\x00\x12\n" +
@@ -1410,7 +1557,7 @@ func file_arbor_state_proto_rawDescGZIP() []byte {
 }
 
 var file_arbor_state_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_arbor_state_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_arbor_state_proto_goTypes = []any{
 	(MarketStatus)(0),             // 0: types.MarketStatus
 	(EmergencyModeTrigger)(0),     // 1: types.EmergencyModeTrigger
@@ -1428,6 +1575,8 @@ var file_arbor_state_proto_goTypes = []any{
 	(*NusdBalance)(nil),           // 13: types.NusdBalance
 	(*EmergencyModeFlag)(nil),     // 14: types.EmergencyModeFlag
 	(*CircuitBreakerState)(nil),   // 15: types.CircuitBreakerState
+	(*AssetBalance)(nil),          // 16: types.AssetBalance
+	(*FaucetClaimRecord)(nil),     // 17: types.FaucetClaimRecord
 }
 var file_arbor_state_proto_depIdxs = []int32{
 	0, // 0: types.Market.status:type_name -> types.MarketStatus
@@ -1450,7 +1599,7 @@ func file_arbor_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arbor_state_proto_rawDesc), len(file_arbor_state_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
