@@ -339,6 +339,7 @@ type jsonTxResult struct {
 	Index       uint64       `json:"index,omitempty"`
 	Transaction *Transaction `json:"transaction,omitempty"`
 	TxHash      string       `json:"txHash,omitempty"`
+	Committed   *bool        `json:"committed,omitempty"`
 }
 
 // MarshalJSON() satisfies the json.Marshaller interface
@@ -351,6 +352,7 @@ func (x TxResult) MarshalJSON() ([]byte, error) {
 		Index:       x.Index,
 		Transaction: x.Transaction,
 		TxHash:      x.TxHash,
+		Committed:   x.Committed,
 	})
 }
 
@@ -372,6 +374,7 @@ func (x *TxResult) UnmarshalJSON(jsonBytes []byte) (err error) {
 		Index:       j.Index,
 		Transaction: j.Transaction,
 		TxHash:      j.TxHash,
+		Committed:   j.Committed,
 	}
 	// exit
 	return

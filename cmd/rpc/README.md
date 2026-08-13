@@ -2449,8 +2449,9 @@ $ curl -X POST localhost:50002/v1/query/txs-by-rec \
 - **sender**: `hex-string` - the address of the user sending the transaction
 - **recipient**: `hex-string` - the address of the user receiving the transaction
 - **messageType**: `string` - the name of the of the message like 'send' or 'stake'
-- **height**: `uint64` - the block height at which the transaction was included
-- **index**: `uint64` - the position of the transaction within the block
+- **committed**: `bool` - `true` when the transaction has been included in a block or `false` when it is still in the mempool
+- **height**: `uint64` - the committed block height, or the candidate block height when `committed` is `false`
+- **index**: `uint64` - the committed transaction position, or the candidate position when `committed` is `false`
 - **transaction**: `object` - original transaction object
   - **messageType**: `string` - type of the transaction like 'send' or 'stake'
   - **msg**: `object` - the actual transaction message payload, which is encapsulated in a generic message format.
@@ -2542,6 +2543,7 @@ $ curl -X POST localhost:50002/v1/query/tx-by-hash \
   "sender": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
   "recipient": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
   "messageType": "send",
+  "committed": true,
   "height": 17585,
   "transaction": {
     "type": "send",

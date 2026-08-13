@@ -706,6 +706,9 @@ func (s *Store) MaybeBackup() {
 	backupDir := s.config.StoreConfig.BackupDirectory
 	// ensure only complete backups exists on the actual backup directory
 	tempBackupDir := backupDir + "_temp"
+	// rotate: atomically move current backup to a previous slot so there is
+	// always at least one valid backup on disk during the swap
+	prevBackupDir := backupDir + "_prev"
 	// retrieve the current version
 	version := s.Version()
 	// verify that backups are enabled in the config
@@ -727,17 +730,29 @@ func (s *Store) MaybeBackup() {
 		var err error
 		start := time.Now()
 		defer func() {
-			s.backup.Store(false)
+			// ensure the temp backup files are always deleted
+			_ = os.RemoveAll(tempBackupDir)
 			if err == nil {
+				// the new backup is in the active slot so the previous one is no longer needed
+				_ = os.RemoveAll(prevBackupDir)
+				s.backup.Store(false)
 				return
 			}
+			// the backup failed, if the rotation already emptied the active slot then
+			// check whether the current backup exists
+			if _, statErr := os.Stat(backupDir); os.IsNotExist(statErr) {
+				// if not, try to restore the previous working backup
+				restoreErr := os.Rename(prevBackupDir, backupDir)
+				if restoreErr != nil && !os.IsNotExist(restoreErr) {
+					s.log.Errorf("failed to restore previous backup at height [%d]: %v", version, restoreErr)
+				}
+			} else {
+				// otherwise, remove dangling backup, continue with current working backup
+				_ = os.RemoveAll(prevBackupDir)
+			}
+			s.backup.Store(false)
 			s.log.Errorf("backup failed at height [%d]: %v", version, err)
 		}()
-		// delete current backup files as pebbleDB expects an empty directory
-		if err = os.RemoveAll(tempBackupDir); err != nil {
-			err = fmt.Errorf("remove temporary backup: %w", err)
-			return
-		}
 		// flush the memtable to SST before checkpointing so the backup does not
 		// depend on WAL replay for recovery (commits use NoSync so WAL records
 		// may not be durable on disk at checkpoint time)
@@ -757,9 +772,6 @@ func (s *Store) MaybeBackup() {
 			err = fmt.Errorf("write height file: %w", err)
 			return
 		}
-		// rotate: atomically move current backup to a previous slot so there is
-		// always at least one valid backup on disk during the swap
-		prevBackupDir := backupDir + "_prev"
 		if err = os.Rename(backupDir, prevBackupDir); err != nil && !os.IsNotExist(err) {
 			err = fmt.Errorf("rotate backup: %w", err)
 			return
@@ -768,10 +780,6 @@ func (s *Store) MaybeBackup() {
 		if err = os.Rename(tempBackupDir, backupDir); err != nil {
 			err = fmt.Errorf("finalize backup: %w", err)
 			return
-		}
-		// clean up the previous backup now that the new one is safely in place
-		if removeErr := os.RemoveAll(prevBackupDir); removeErr != nil {
-			s.log.Warnf("failed to remove previous backup: %v", removeErr)
 		}
 		backupDuration := time.Since(start)
 		// log results
