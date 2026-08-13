@@ -1,15 +1,44 @@
 name: Release Go Plugin
 
-# Manually dispatched (workflow_dispatch) to cut a tagged Go plugin release.
+# Cuts a tagged Go plugin release, either automatically on a merge to main that
+# touches plugin/go, or manually via workflow_dispatch with an explicit tag.
+#
+# The paths filter is deliberate: without it every docs- or docker-only merge
+# would publish a release whose binaries are byte-identical to the previous one
+# (plugin-go-v2026.217.0 was exactly that). Releases should track plugin
+# changes. Use workflow_dispatch to cut one regardless.
+#
+# The filter is safe to scope this narrowly because plugin/go is a fully
+# independent Go module: plugin/go/go.mod declares no `replace` and does not
+# require github.com/canopy-network/canopy, so `go list -deps .` resolves to
+# exactly three first-party packages, all under plugin/go. Changes to fsm/,
+# lib/, controller/, cmd/ or .docker/ cannot alter the built binary.
+#
+# This file is listed too, because it pins the Go version and build flags —
+# editing it does change the artifact despite living outside plugin/go. Same
+# reasoning as build-test.yaml including .github/workflows/**.
 on:
   workflow_dispatch:
     inputs:
       tag:
         description: "Tag for the plugin release (e.g. plugin-go-v1.0.0)"
         required: true
+  push:
+    branches:
+      - main
+    paths:
+      - "plugin/go/**"
+      - ".github/workflows/release-plugin-go.yml"
 
 permissions:
   contents: write
+
+# Serialize releases: two merges landing close together would otherwise race to
+# publish. Do not cancel in progress — a half-published release is worse than a
+# queued one.
+concurrency:
+  group: release-plugin-go
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -19,6 +48,26 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # `tag` is a workflow_dispatch input and is empty on push, so an
+      # automatic run has to derive its own. run_number keeps the tag unique:
+      # two merges on the same day would otherwise collide, and
+      # action-gh-release will not cleanly cut a second release on an existing
+      # tag. The input is read via env rather than inline ${{ }} so a crafted
+      # tag cannot inject shell.
+      - name: Resolve release tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_TAG" ]; then
+            resolved="$INPUT_TAG"
+          else
+            resolved="plugin-go-v$(date -u +%Y).$((10#$(date -u +%j))).${{ github.run_number }}"
+          fi
+          echo "value=$resolved" >> "$GITHUB_OUTPUT"
+          echo "Releasing as $resolved"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -41,10 +90,12 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: "Go Plugin ${{ github.event.inputs.tag }}"
+          tag_name: ${{ steps.tag.outputs.value }}
+          name: "Go Plugin ${{ steps.tag.outputs.value }}"
           body: |
-            Go Plugin Release ${{ github.event.inputs.tag }}
+            Go Plugin Release ${{ steps.tag.outputs.value }}
+
+            Commit: ${{ github.sha }}
 
             ## Assets
             - `go-plugin-linux-amd64.tar.gz` - Linux x86_64
