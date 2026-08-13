@@ -273,8 +273,16 @@ func TestProposalCreateOuterMessageMarshals(t *testing.T) {
 // reminding the developer to update paramsJSON.
 func TestParamsJSONShapeMatchesProto(t *testing.T) {
 	// Encode a fully-populated CanoliqParams via std json (it honors
-	// @gotags) and decode into paramsJSON. All scalar fields must
-	// round-trip; if a new field landed on the proto it shows up here.
+	// @gotags) and decode into paramsJSON. All fields must round-trip.
+	//
+	// Every field below must carry a NON-ZERO value. This test previously
+	// populated only the 22 fields paramsJSON already covered, which made it
+	// unable to fail for the bug it advertises: the nine it omitted were zero
+	// on both sides, so proto.Equal compared zero to zero and passed while
+	// param-changes silently wiped the governance matrix and the graduation
+	// thresholds. TestParamsJSONCoversEveryParamField (reflection over the
+	// proto type) is the structural guard; this one is the value check, and it
+	// only works if nothing here is left at its zero value.
 	src := &contract.CanoliqParams{
 		FeeBps: 1, UserRebateBps: 2, TreasuryBps: 3, ValidatorBps: 4, BuybackBps: 5,
 		DepositFee: 6, RedeemFee: 7, ClaimFee: 8, CplqTransferFee: 9,
@@ -282,6 +290,19 @@ func TestParamsJSONShapeMatchesProto(t *testing.T) {
 		VotingPeriodBlocks: 13, QuorumBps: 14, PassThresholdBps: 15,
 		TimelockBlocks: 16, CplqUnstakingBlocks: 17, ProposalFee: 18,
 		VoteFee: 19, StakeFee: 20, MultisigApproveFee: 21, MinStakeToPropose: 22,
+		TvlCapBps: 23, InsuranceTargetBps: 24,
+		GraduationMinTvlUcnpy: 25, GraduationMinValidators: 26,
+		GraduationMinTurnoutBps: 27, GraduationMinDailyTx: 28,
+		GraduationMinRunwayMonths: 29,
+		Governance: []*contract.GovernanceTier{{
+			Action:     contract.ActionType_ACTION_FEE_CHANGE,
+			QuorumBps:  30, ApprovalBps: 31,
+			TimelockBlocks: 32, VotingPeriodBlocks: 33,
+		}},
+		RestakingPolicy: []*contract.RestakingPolicyEntry{{
+			CommitteeId: 34, TargetWeightBps: 35,
+			MinStakeUcnpy: 36, MaxStakeUcnpy: 37,
+		}},
 	}
 	bz, err := json.Marshal(src)
 	if err != nil {

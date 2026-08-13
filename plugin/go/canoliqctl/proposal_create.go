@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -312,8 +313,18 @@ func loadParamsFromFile(path string) (*contract.CanoliqParams, error) {
 }
 
 // paramsJSON mirrors the on-disk shape used by genesis files. Field
-// names are camelCase to match @gotags. multisigSigners are hex strings
-// (with or without 0x), to match the genesis file convention.
+// names are camelCase to match @gotags. multisigSigners accept either hex
+// (the genesis file convention) or base64 (what `GET /v1/params` emits,
+// since encoding/json renders the proto's [][]byte that way).
+//
+// IMPORTANT: this struct must cover EVERY field of contract.CanoliqParams.
+// ProposalParamChange is a full-set replacement — dispatchPassed calls
+// SaveParams(p.Params) wholesale — so any field missing here is written as its
+// Go zero value when the proposal passes. ValidateParams does not catch that:
+// it never inspects tvlCapBps, the graduation thresholds, or
+// insuranceTargetBps, and it explicitly documents an empty governance tier
+// list as valid. A missing field is therefore a silent state corruption, not a
+// rejected proposal. TestParamsJSONCoversEveryParamField guards this.
 type paramsJSON struct {
 	FeeBps              uint64   `json:"feeBps"`
 	UserRebateBps       uint64   `json:"userRebateBps"`
@@ -338,19 +349,83 @@ type paramsJSON struct {
 	StakeFee            uint64   `json:"stakeFee"`
 	MultisigApproveFee  uint64   `json:"multisigApproveFee"`
 	MinStakeToPropose   uint64   `json:"minStakeToPropose"`
+
+	// Fields below were absent before and were therefore zeroed by every
+	// param-change this tool submitted.
+	TvlCapBps                 uint64               `json:"tvlCapBps"`
+	InsuranceTargetBps        uint64               `json:"insuranceTargetBps"`
+	GraduationMinTvlUcnpy     uint64               `json:"graduationMinTvlUcnpy"`
+	GraduationMinValidators   uint64               `json:"graduationMinValidators"`
+	GraduationMinTurnoutBps   uint64               `json:"graduationMinTurnoutBps"`
+	GraduationMinDailyTx      uint64               `json:"graduationMinDailyTx"`
+	GraduationMinRunwayMonths uint64               `json:"graduationMinRunwayMonths"`
+	Governance                []governanceTierJSON `json:"governance"`
+	RestakingPolicy           []restakingEntryJSON `json:"restakingPolicy"`
+}
+
+// governanceTierJSON is one row of the per-action governance matrix. Action is
+// the numeric ActionType, matching what encoding/json emits for the enum.
+type governanceTierJSON struct {
+	Action             int32  `json:"action"`
+	QuorumBps          uint64 `json:"quorumBps"`
+	ApprovalBps        uint64 `json:"approvalBps"`
+	TimelockBlocks     uint64 `json:"timelockBlocks"`
+	VotingPeriodBlocks uint64 `json:"votingPeriodBlocks"`
+}
+
+// restakingEntryJSON is one committee's restaking allocation (WP §7).
+type restakingEntryJSON struct {
+	CommitteeId     uint64 `json:"committeeId"`
+	TargetWeightBps uint64 `json:"targetWeightBps"`
+	MinStakeUcnpy   uint64 `json:"minStakeUcnpy"`
+	MaxStakeUcnpy   uint64 `json:"maxStakeUcnpy"`
+}
+
+// decodeSigner accepts a 20-byte address as hex (genesis convention, with or
+// without 0x) or base64 (what GET /v1/params emits). Hex is tried first; a
+// 20-byte address base64-encodes to 28 chars ending in '=', which hex always
+// rejects, so there is no ambiguity between the two forms.
+func decodeSigner(s string) ([]byte, error) {
+	if b, err := hex.DecodeString(strings.TrimPrefix(s, "0x")); err == nil && len(b) == 20 {
+		return b, nil
+	}
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return nil, fmt.Errorf("multisig signer %q: not valid hex or base64", s)
+	}
+	if len(b) != 20 {
+		return nil, fmt.Errorf("multisig signer %q must be 20 bytes, got %d", s, len(b))
+	}
+	return b, nil
 }
 
 func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 	signers := make([][]byte, 0, len(p.MultisigSigners))
 	for _, s := range p.MultisigSigners {
-		b, err := hex.DecodeString(strings.TrimPrefix(s, "0x"))
+		b, err := decodeSigner(s)
 		if err != nil {
-			return nil, fmt.Errorf("multisig signer %q: %w", s, err)
-		}
-		if len(b) != 20 {
-			return nil, fmt.Errorf("multisig signer %q must be 20 bytes", s)
+			return nil, err
 		}
 		signers = append(signers, b)
+	}
+	var tiers []*contract.GovernanceTier
+	for _, t := range p.Governance {
+		tiers = append(tiers, &contract.GovernanceTier{
+			Action:             contract.ActionType(t.Action),
+			QuorumBps:          t.QuorumBps,
+			ApprovalBps:        t.ApprovalBps,
+			TimelockBlocks:     t.TimelockBlocks,
+			VotingPeriodBlocks: t.VotingPeriodBlocks,
+		})
+	}
+	var restaking []*contract.RestakingPolicyEntry
+	for _, e := range p.RestakingPolicy {
+		restaking = append(restaking, &contract.RestakingPolicyEntry{
+			CommitteeId:     e.CommitteeId,
+			TargetWeightBps: e.TargetWeightBps,
+			MinStakeUcnpy:   e.MinStakeUcnpy,
+			MaxStakeUcnpy:   e.MaxStakeUcnpy,
+		})
 	}
 	return &contract.CanoliqParams{
 		FeeBps:              p.FeeBps,
@@ -376,6 +451,16 @@ func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 		StakeFee:            p.StakeFee,
 		MultisigApproveFee:  p.MultisigApproveFee,
 		MinStakeToPropose:   p.MinStakeToPropose,
+
+		TvlCapBps:                 p.TvlCapBps,
+		InsuranceTargetBps:        p.InsuranceTargetBps,
+		GraduationMinTvlUcnpy:     p.GraduationMinTvlUcnpy,
+		GraduationMinValidators:   p.GraduationMinValidators,
+		GraduationMinTurnoutBps:   p.GraduationMinTurnoutBps,
+		GraduationMinDailyTx:      p.GraduationMinDailyTx,
+		GraduationMinRunwayMonths: p.GraduationMinRunwayMonths,
+		Governance:                tiers,
+		RestakingPolicy:           restaking,
 	}, nil
 }
 
