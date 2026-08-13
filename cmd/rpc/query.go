@@ -432,11 +432,17 @@ func (s *Server) TransactionByHash(w http.ResponseWriter, r *http.Request, _ htt
 		return
 	}
 	if tx != nil && tx.GetTxHash() != "" {
-		write(w, tx, http.StatusOK)
+		response := *tx
+		committed := true
+		response.Committed = &committed
+		write(w, &response, http.StatusOK)
 		return
 	}
 	if pendingTx, found := s.controller.GetPendingTxByHash(req.Hash); found {
-		write(w, pendingTx, http.StatusOK)
+		response := *pendingTx
+		committed := false
+		response.Committed = &committed
+		write(w, &response, http.StatusOK)
 		return
 	}
 	write(w, map[string]string{"error": "transaction not found"}, http.StatusNotFound)
@@ -554,12 +560,23 @@ func (s *Server) TransactionsByRecipient(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-// FailedTxs returns a list of failed mempool transactions for the specified address
+// FailedTxs returns a list of failed mempool transactions for the specified address, or for all addresses if none is given
 func (s *Server) FailedTxs(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.addrIndexer(w, r, func(_ lib.StoreI, address crypto.AddressI, p lib.PageParams) (any, lib.ErrorI) {
-		return s.controller.GetFailedTxsPage(address.String(), p)
-	})
+	req := new(paginatedAddressRequest)
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	// an empty address string means 'all addresses' to the failed tx cache
+	address := ""
+	if req.Address != nil {
+		address = crypto.NewAddressFromBytes(req.Address).String()
+	}
+	p, err := s.controller.GetFailedTxsPage(address, req.PageParams)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	write(w, p, http.StatusOK)
 }
 
 // Proposals returns the proposals present

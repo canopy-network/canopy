@@ -8,6 +8,7 @@
 *.so
 *.dylib
 /main
+/signer
 .cache
 # Test binary, built with `go test -c`
 *.test
@@ -53,6 +54,7 @@ rag
 node_modules
 
 # Hardhat
-cache/solidity-files-cache.jsonnode.log
+cache/solidity-files-cache.json
 *.bak
 plugin/go/scripts/__pycache__/
+node.log

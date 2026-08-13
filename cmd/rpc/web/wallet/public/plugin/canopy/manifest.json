@@ -595,6 +595,18 @@
             }
           },
           {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this transaction",
+            "span": {
+              "base": 12
+            },
+            "step": "addresses"
+          },
+          {
             "type": "divider",
             "label": "Stake Amount",
             "variant": "gradient",
@@ -719,8 +731,8 @@
             "required": true,
             "placeholder": "e.g. 1,2,3",
             "help": "Enter committee IDs separated by commas. Maximum 15 committees per validator.",
-            "value": "{{ (params.selectCommittees || ds.validator?.committees || []).join ? (params.selectCommittees || ds.validator?.committees || []).join(',') : (params.selectCommittees || '') }}",
-            "autoPopulate": "once",
+            "value": "",
+            "autoPopulate": false,
             "validation": {
               "messages": {
                 "required": "Please enter at least one committee ID"
@@ -801,7 +813,7 @@
             },
             {
               "label": "Committees IDs",
-              "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}"
+              "value": "{{ (form.selectCommittees || '').toString().split(',').map(c => c.trim()).filter(c => c !== '').join(', ') }}"
             },
             {
               "label": "Net Address",
@@ -858,7 +870,7 @@
           "coerce": "string"
         },
         "memo": {
-          "value": "",
+          "value": "{{form.memo || ''}}",
           "coerce": "string"
         },
         "fee": {
@@ -1271,7 +1283,7 @@
           {
             "type": "section",
             "title": "Pause Duration Limit",
-            "description": "Maximum pause duration: 4,380 blocks (~24.3 hours). If not unpaused within this period, the validator will be automatically unstaked.",
+            "description": "{{ (() => { const b = Number(params.networkParams?.validator?.maxPauseBlocks ?? 0); const t = Number(chain.params?.avgBlockTimeSec ?? 0); const blocks = b ? numberToLocaleString(b) : 'the network maximum'; let dur = ''; if (b && t) { const secs = b * t; const days = secs / 86400; const hours = secs / 3600; const useDays = hours >= 48; const val = useDays ? Math.round(days * 10) / 10 : Math.round(hours * 10) / 10; const unit = useDays ? (val === 1 ? 'day' : 'days') : 'hours'; dur = ' (~' + val + ' ' + unit + ')'; } return 'Maximum pause duration: ' + blocks + ' blocks' + dur + '. If not unpaused within this period, the validator will be automatically unstaked.'; })() }}",
             "icon": "AlertTriangle",
             "variant": "warning",
             "span": {

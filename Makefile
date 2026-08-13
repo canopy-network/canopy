@@ -1,6 +1,7 @@
 # Variables
 GO_BIN_DIR := ~/go/bin
 CLI_DIR := ./cmd/main/...
+SIGNER_DIR := ./cmd/signer/...
 AUTO_UPDATE_DIR := ./cmd/auto-update/...
 WALLET_DIR := ./cmd/rpc/web/wallet
 EXPLORER_DIR := ./cmd/rpc/web/explorer
@@ -17,7 +18,7 @@ help:
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
 # Targets, this is a list of all available commands which can be executed using the make command.
-.PHONY: build/canopy build/canopy-full build/wallet build/explorer build/auto-update build/auto-update-local run/auto-update run/auto-update-build run/auto-update-test test/all dev/deps docker/up \
+.PHONY: build/canopy build/canopy-full build/signer build/wallet build/explorer build/auto-update build/auto-update-local run/auto-update run/auto-update-build run/auto-update-test test/all dev/deps docker/up \
 	docker/down docker/build docker/up-fast docker/down docker/logs \
 	build/plugin build/kotlin-plugin build/go-plugin build/all-plugins docker/plugin \
 	docker/run docker/run-kotlin docker/run-go docker/run-typescript docker/run-python docker/run-csharp \
@@ -33,6 +34,10 @@ build/canopy: build/wallet build/explorer
 
 ## build/canopy-full: build the canopy binary and its wallet and explorer altogether
 build/canopy-full: build/canopy
+
+## build/signer: build the offline native transaction signer into the GO_BIN_DIR
+build/signer:
+	go build -o $(GO_BIN_DIR)/signer $(SIGNER_DIR)
 
 ## build/wallet: build the canopy's wallet project
 build/wallet:

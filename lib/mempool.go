@@ -400,6 +400,7 @@ func (f *FailedTxCache) Get(txHash string) (failedTx *FailedTx, found bool) {
 }
 
 // GetFailedForAddress() returns all the failed transactions in the cache for a given address
+// if address is empty, all failed transactions in the cache are returned
 func (f *FailedTxCache) GetFailedForAddress(address string) (failedTxs []*FailedTx) {
 	// lock for thread safety
 	f.l.Lock()
@@ -407,8 +408,8 @@ func (f *FailedTxCache) GetFailedForAddress(address string) (failedTxs []*Failed
 	defer f.l.Unlock()
 	// for each failed transaction in the cache
 	for _, failed := range f.cache {
-		// if the address matches
-		if failed.Address == address {
+		// if no address was specified or the address matches
+		if address == "" || failed.Address == address {
 			// add to the list
 			failedTxs = append(failedTxs, failed)
 		}

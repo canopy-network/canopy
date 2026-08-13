@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -26,16 +27,18 @@ type Supervisor struct {
 	exit           chan error           // channel to notify listeners when process exits
 	unexpectedExit chan error           // channel to notify listeners when process exits unexpectedly
 	pluginConfig   *PluginReleaseConfig // optional plugin configuration
+	childArgs      []string             // global flags forwarded to the CLI child process
 	log            lib.LoggerI          // logger instance
 }
 
 // NewSupervisor creates a new ProcessSupervisor instance
-func NewSupervisor(logger lib.LoggerI, pluginConfig *PluginReleaseConfig) *Supervisor {
+func NewSupervisor(logger lib.LoggerI, pluginConfig *PluginReleaseConfig, childArgs []string) *Supervisor {
 	return &Supervisor{
 		log:            logger,
 		exit:           make(chan error, 1),
 		unexpectedExit: make(chan error, 1),
 		pluginConfig:   pluginConfig,
+		childArgs:      childArgs,
 	}
 }
 
@@ -48,9 +51,10 @@ func (s *Supervisor) Start(binPath string) error {
 	if s.running.Load() && s.cmd != nil {
 		return errors.New("process already running")
 	}
-	s.log.Infof("starting CLI process: %s", binPath)
-	// setup the process to start
-	s.cmd = exec.Command(binPath, "start")
+	// setup the process to start, forwarding the global flags to the child
+	args := append([]string{"start"}, s.childArgs...)
+	s.log.Infof("starting CLI process: %s %s", binPath, strings.Join(args, " "))
+	s.cmd = exec.Command(binPath, args...)
 	s.cmd.Stdout = os.Stdout
 	s.cmd.Stderr = os.Stderr
 	// make sure the process is in a new process group, this is important for

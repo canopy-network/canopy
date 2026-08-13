@@ -582,3 +582,18 @@ func TestFailedTxCache(t *testing.T) {
 		})
 	}
 }
+
+func TestFailedTxCacheGetFailedForAddressEmptyReturnsAll(t *testing.T) {
+	cache := NewFailedTxCache()
+	// add two failed transactions from different addresses
+	failedTx1 := &FailedTx{Hash: "hash1", Address: "address1"}
+	failedTx2 := &FailedTx{Hash: "hash2", Address: "address2"}
+	require.True(t, cache.Add(failedTx1))
+	require.True(t, cache.Add(failedTx2))
+
+	// filtering by a specific address only returns that address' failed tx
+	require.ElementsMatch(t, []*FailedTx{failedTx1}, cache.GetFailedForAddress("address1"))
+
+	// an empty address returns every failed tx in the cache, regardless of address
+	require.ElementsMatch(t, []*FailedTx{failedTx1, failedTx2}, cache.GetFailedForAddress(""))
+}

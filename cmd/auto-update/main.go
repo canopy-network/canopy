@@ -80,10 +80,15 @@ var (
 )
 
 func main() {
+	// parse global flags up front so they resolve the config and get forwarded
+	positionalArgs, err := cli.ParseGlobalFlags(os.Args[1:])
+	if err != nil {
+		lib.NewDefaultLogger().Fatalf("failed to parse flags: %v", err)
+	}
 	// get configs and logger
 	configs, logger := getConfigs()
 	// check if no start was called, this means it was just called as config
-	if len(os.Args) < 2 || os.Args[1] != "start" {
+	if len(positionalArgs) == 0 || positionalArgs[0] != "start" {
 		// TODO: This message is partly misleading due to the fact that the only place that it would
 		// make sense to have a setup complete message is on the context of the deployments repository.
 		// The actual behavior of this program should be to only start the CLI directly, not perform
@@ -121,10 +126,11 @@ func main() {
 			configs.PluginUpdater.RepoOwner,
 			configs.PluginUpdater.RepoName)
 	}
-	supervisor := NewSupervisor(logger, pluginConfig)
+	// forward the resolved global flags (data-dir, url overrides) to the child
+	supervisor := NewSupervisor(logger, pluginConfig, cli.GlobalFlagArgs())
 	coordinator := NewCoordinator(configs.Coordinator, updater, pluginUpdater, supervisor, snapshot, logger)
 	// start the update loop
-	err := coordinator.UpdateLoop(sigChan)
+	err = coordinator.UpdateLoop(sigChan)
 	if err != nil {
 		exitCode, exitCodeStr := 1, "unknown"
 		// try to extract the exit code from the error
@@ -155,7 +161,7 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		Level:      canopyConfig.GetLogLevel(),
 		Structured: canopyConfig.Structured,
 		JSON:       canopyConfig.JSON,
-	})
+	}, canopyConfig.DataDirPath)
 
 	binPath := envOrDefault("BIN_PATH", defaultBinPath)
 	githubToken := envOrDefault("CANOPY_GITHUB_API_TOKEN", "")
@@ -252,7 +258,9 @@ func getSoftwareVersion(autoUpdate bool, binPath string) string {
 	if !autoUpdate {
 		return rpc.SoftwareVersion
 	}
-	out, err := exec.Command(binPath, "version").Output()
+	// forward the global flags so 'version' targets the same data directory
+	versionArgs := append([]string{"version"}, cli.GlobalFlagArgs()...)
+	out, err := exec.Command(binPath, versionArgs...).Output()
 	if err != nil {
 		panic(fmt.Sprintf("failed to get software version from binary: %v", err))
 	}
