@@ -52,6 +52,7 @@ const (
 	codeStakeLocked
 	codeTVLCapExceeded
 	codeCanopyStakeUnavailable
+	codeUncappedOutsideDevProfile
 )
 
 // newError constructs a PluginError stamped with the canoLiq module.
@@ -267,4 +268,16 @@ func ErrTVLCapExceeded() *contract.PluginError {
 // risk; silently bypassing it would defeat the spec).
 func ErrCanopyStakeUnavailable() *contract.PluginError {
 	return newError(codeCanopyStakeUnavailable, "Canopy total stake unavailable; TVL cap cannot be enforced — deposit rejected")
+}
+
+// ErrUncappedOutsideDevProfile reports a genesis file that sets tvlCapBps = 0
+// under a profile that is not a development environment (isDevProfile:
+// localnet and devnet). WP §9.4 makes lifting the cap a DAO decision, so
+// testnet and mainnet may only reach an uncapped state through a passed
+// param-change proposal, never by shipping a pre-uncapped genesis file.
+func ErrUncappedOutsideDevProfile(profile string) *contract.PluginError {
+	if profile == "" {
+		profile = "<unset>"
+	}
+	return newError(codeUncappedOutsideDevProfile, "refusing to run genesis with tvlCapBps=0 under profile="+profile+": an uncapped genesis is allowed only on the localnet and devnet profiles; elsewhere lifting the TVL cap is a governance decision (WP §9.4), not a genesis setting")
 }

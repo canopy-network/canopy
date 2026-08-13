@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"github.com/canopy-network/go-plugin/canoliq"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -158,14 +159,36 @@ func TestParamsJSONRejectsBadHex(t *testing.T) {
 	}
 }
 
-func TestLoadParamsFromFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "params.json")
-	body := `{"feeBps":800,"userRebateBps":4000,"treasuryBps":3000,"validatorBps":1500,"buybackBps":1500,"depositFee":10000,"insuranceBps":1500,"treasuryThreshold":1000000000,"multisigSigners":[],"multisigThreshold":3,"votingPeriodBlocks":100800,"quorumBps":3300,"passThresholdBps":5001,"timelockBlocks":28800,"cplqUnstakingBlocks":100800,"proposalFee":10000,"voteFee":10000,"stakeFee":10000,"multisigApproveFee":10000,"minStakeToPropose":1000000}`
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+// writeParamsFile dumps params exactly as `GET /v1/params` would, optionally
+// applying edits, and returns the path. This is the workflow operators follow.
+func writeParamsFile(t *testing.T, params *contract.CanoliqParams, edit func(map[string]any)) string {
+	t.Helper()
+	bz, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(bz, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if edit != nil {
+		edit(raw)
+	}
+	out, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("re-marshal: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "params.json")
+	if err := os.WriteFile(path, out, 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	p, err := loadParamsFromFile(path)
+	return path
+}
+
+func TestLoadParamsFromFile(t *testing.T) {
+	src := canoliq.DefaultParams()
+	src.FeeBps = 800
+	p, err := loadParamsFromFile(writeParamsFile(t, src, nil))
 	if err != nil {
 		t.Fatalf("loadParamsFromFile: %v", err)
 	}
@@ -174,13 +197,82 @@ func TestLoadParamsFromFile(t *testing.T) {
 	}
 }
 
+// A param-change is a full-set replacement, so an incomplete file must be
+// rejected rather than zero-filled. This test previously asserted the opposite:
+// it fed a file missing 12 keys and expected it to load, which is exactly how
+// an operator would silently uncap the TVL ceiling or zero the multisig
+// threshold.
+func TestLoadParamsFromFileRejectsIncompleteFile(t *testing.T) {
+	path := writeParamsFile(t, canoliq.DefaultParams(), func(raw map[string]any) {
+		delete(raw, "tvlCapBps")
+		delete(raw, "governance")
+	})
+	_, err := loadParamsFromFile(path)
+	if err == nil {
+		t.Fatalf("expected an incomplete params file to be rejected")
+	}
+	for _, want := range []string{"tvlCapBps", "governance", "missing"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error should name %q, got: %v", want, err)
+		}
+	}
+}
+
+// Omitting multisigSigners AND multisigThreshold together is the sharpest case:
+// ValidateParams only sanity-checks the threshold when signers are present, so
+// a zero threshold would sail through and treasury.go's
+// `approvals < threshold` gate would pass with zero approvals.
+func TestLoadParamsFromFileRejectsMissingMultisigPair(t *testing.T) {
+	path := writeParamsFile(t, canoliq.DefaultParams(), func(raw map[string]any) {
+		delete(raw, "multisigSigners")
+		delete(raw, "multisigThreshold")
+	})
+	if _, err := loadParamsFromFile(path); err == nil {
+		t.Fatalf("expected rejection: a zero multisig threshold disables the treasury gate")
+	}
+}
+
+// A misspelled key would otherwise be dropped silently, leaving the real field
+// at zero — the same silent-zeroing failure by a different route.
+func TestLoadParamsFromFileRejectsUnknownKey(t *testing.T) {
+	path := writeParamsFile(t, canoliq.DefaultParams(), func(raw map[string]any) {
+		delete(raw, "tvlCapBps")
+		raw["tvlCap"] = 0 // typo
+	})
+	if _, err := loadParamsFromFile(path); err == nil {
+		t.Fatalf("expected a misspelled key to be rejected")
+	}
+}
+
+// Pre-validate locally: the plugin only runs ValidateParams at dispatchPassed,
+// so an invalid payload would otherwise burn a full voting period before
+// failing to apply.
+func TestLoadParamsFromFileRejectsInvalidParams(t *testing.T) {
+	path := writeParamsFile(t, canoliq.DefaultParams(), func(raw map[string]any) {
+		raw["feeBps"] = 9000 // outside the [500, 2000] band
+	})
+	err := loadParamsFromFile2(t, path)
+	if err == nil {
+		t.Fatalf("expected ValidateParams to reject feeBps=9000 before submission")
+	}
+	if !strings.Contains(err.Error(), "ValidateParams") {
+		t.Fatalf("error should mention ValidateParams, got: %v", err)
+	}
+}
+
+func loadParamsFromFile2(t *testing.T, path string) error {
+	t.Helper()
+	_, err := loadParamsFromFile(path)
+	return err
+}
+
 // TestProposalPayloadAnyRoundTrip asserts each payload kind survives
 // anypb.New + UnmarshalNew with the right concrete type. This is the
 // guarantee the FSM relies on — wrong TypeUrl → unknown payload error.
 func TestProposalPayloadAnyRoundTrip(t *testing.T) {
 	cases := []struct {
-		name       string
-		build      func() proto.Message
+		name        string
+		build       func() proto.Message
 		wantTypeURL string
 	}{
 		{
@@ -273,8 +365,16 @@ func TestProposalCreateOuterMessageMarshals(t *testing.T) {
 // reminding the developer to update paramsJSON.
 func TestParamsJSONShapeMatchesProto(t *testing.T) {
 	// Encode a fully-populated CanoliqParams via std json (it honors
-	// @gotags) and decode into paramsJSON. All scalar fields must
-	// round-trip; if a new field landed on the proto it shows up here.
+	// @gotags) and decode into paramsJSON. All fields must round-trip.
+	//
+	// Every field below must carry a NON-ZERO value. This test previously
+	// populated only the 22 fields paramsJSON already covered, which made it
+	// unable to fail for the bug it advertises: the nine it omitted were zero
+	// on both sides, so proto.Equal compared zero to zero and passed while
+	// param-changes silently wiped the governance matrix and the graduation
+	// thresholds. TestParamsJSONCoversEveryParamField (reflection over the
+	// proto type) is the structural guard; this one is the value check, and it
+	// only works if nothing here is left at its zero value.
 	src := &contract.CanoliqParams{
 		FeeBps: 1, UserRebateBps: 2, TreasuryBps: 3, ValidatorBps: 4, BuybackBps: 5,
 		DepositFee: 6, RedeemFee: 7, ClaimFee: 8, CplqTransferFee: 9,
@@ -282,6 +382,19 @@ func TestParamsJSONShapeMatchesProto(t *testing.T) {
 		VotingPeriodBlocks: 13, QuorumBps: 14, PassThresholdBps: 15,
 		TimelockBlocks: 16, CplqUnstakingBlocks: 17, ProposalFee: 18,
 		VoteFee: 19, StakeFee: 20, MultisigApproveFee: 21, MinStakeToPropose: 22,
+		TvlCapBps: 23, InsuranceTargetBps: 24,
+		GraduationMinTvlUcnpy: 25, GraduationMinValidators: 26,
+		GraduationMinTurnoutBps: 27, GraduationMinDailyTx: 28,
+		GraduationMinRunwayMonths: 29,
+		Governance: []*contract.GovernanceTier{{
+			Action:    contract.ActionType_ACTION_FEE_CHANGE,
+			QuorumBps: 30, ApprovalBps: 31,
+			TimelockBlocks: 32, VotingPeriodBlocks: 33,
+		}},
+		RestakingPolicy: []*contract.RestakingPolicyEntry{{
+			CommitteeId: 34, TargetWeightBps: 35,
+			MinStakeUcnpy: 36, MaxStakeUcnpy: 37,
+		}},
 	}
 	bz, err := json.Marshal(src)
 	if err != nil {

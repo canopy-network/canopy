@@ -162,11 +162,39 @@ const minNonLocalnetRedemptionBlocks = 1000
 
 // Profile constants. Empty string is normalized to ProfileLocalnet for
 // backwards compatibility.
+//
+// ProfileDevnet is a shared, long-lived development chain — hosted rather than
+// local, the kind of environment a team tests and audits against. It sits
+// between localnet and testnet on purpose: SafetyCheck treats it as
+// non-localnet (real bucket addresses and a plausible
+// RedemptionUnstakingBlocks are still enforced), but genesis may set
+// tvlCapBps = 0. See isDevProfile for why that matters.
 const (
 	ProfileLocalnet = "localnet"
+	ProfileDevnet   = "devnet"
 	ProfileTestnet  = "testnet"
 	ProfileMainnet  = "mainnet"
 )
+
+// isDevProfile reports whether a profile is a development environment allowed
+// to run an uncapped (tvlCapBps = 0) genesis.
+//
+// Long-lived committees need that escape hatch because the TVL cap is breached
+// there by reward accrual alone, with no deposits at all: ProcessRewards routes
+// netToUsers plus the user-rebate slice — 92.8% of each observed reward delta
+// at the default 12% fee — into total_pooled_cnpy, while the ceiling grows by
+// only tvl_cap_bps (33%) of the same delta. The pool therefore outruns its own
+// ceiling ~2.8x on any committee where canoLiq's validators dominate Canopy's
+// staked supply, and no genesis stake bump prevents it — the block subsidy is a
+// fixed mint, so a larger stake buys proportional runway and nothing more.
+//
+// Deliberately a whitelist: an unset, misspelled, or newly added profile is NOT
+// a dev profile, so it fails closed with the cap enforced rather than
+// inheriting an uncapped genesis by omission. Off these profiles, lifting the
+// cap stays a DAO decision (WP §9.4).
+func isDevProfile(profile string) bool {
+	return profile == ProfileLocalnet || profile == ProfileDevnet
+}
 
 // DefaultConfig returns reasonable defaults for localnet: chainId 2, the
 // standard plugin socket directory, the 5-block fast redemption window.
@@ -255,6 +283,18 @@ func (c Config) SafetyCheck() error {
 					c.Profile, b.Name, c.GenesisPath)
 			}
 		}
+	}
+	// Surface an uncapped genesis at startup. runGenesis enforces this too, but
+	// it runs from BeginBlock, so the failure there manifests as every block
+	// failing to apply with no startup diagnostic. Catching it here gives the
+	// operator the real reason before the node starts producing.
+	//
+	// localnet already returned above; devnet is filtered by isDevProfile.
+	// Genesis supplied via PluginGenesisRequest rather than GenesisPath is not
+	// visible here — runGenesis remains the authoritative check.
+	if !isDevProfile(c.Profile) && gf.Params != nil && gf.Params.TvlCapBps != nil && *gf.Params.TvlCapBps == 0 {
+		return fmt.Errorf("canoliq: refusing to start profile=%q with tvlCapBps=0 in %s (an uncapped genesis is allowed only on the localnet and devnet profiles; elsewhere lifting the TVL cap is a governance decision per WP §9.4)",
+			c.Profile, c.GenesisPath)
 	}
 	return nil
 }

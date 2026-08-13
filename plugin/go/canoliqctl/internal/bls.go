@@ -37,5 +37,5 @@ func (b *BLS12381PrivateKey) Sign(msg []byte) []byte {
 	return bz
 }
 
-func newBLSScheme() *bdn.Scheme   { return bdn.NewSchemeOnG2(newBLSSuite()) }
+func newBLSScheme() *bdn.Scheme  { return bdn.NewSchemeOnG2(newBLSSuite()) }
 func newBLSSuite() pairing.Suite { return bls12381.NewBLS12381Suite() }

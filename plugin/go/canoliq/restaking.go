@@ -35,13 +35,13 @@ import (
 // negative while observed stake still sits above min_stake_ucnpy, and
 // vice versa.
 type CommitteeAllocation struct {
-	CommitteeID  uint64 `json:"committeeId"`
-	StakeUcnpy   uint64 `json:"stakeUcnpy"`
-	WeightBps    uint64 `json:"weightBps"`              // observed / total observed exposure (bps)
-	TargetBps    uint64 `json:"targetBps,omitempty"`    // 0 when no policy entry
-	DriftBps     int64  `json:"driftBps,omitempty"`     // weightBps - targetBps
-	UnderMin     bool   `json:"underMin,omitempty"`     // observed < min_stake_ucnpy
-	OverMax      bool   `json:"overMax,omitempty"`      // observed > max_stake_ucnpy
+	CommitteeID uint64 `json:"committeeId"`
+	StakeUcnpy  uint64 `json:"stakeUcnpy"`
+	WeightBps   uint64 `json:"weightBps"`           // observed / total observed exposure (bps)
+	TargetBps   uint64 `json:"targetBps,omitempty"` // 0 when no policy entry
+	DriftBps    int64  `json:"driftBps,omitempty"`  // weightBps - targetBps
+	UnderMin    bool   `json:"underMin,omitempty"`  // observed < min_stake_ucnpy
+	OverMax     bool   `json:"overMax,omitempty"`   // observed > max_stake_ucnpy
 }
 
 // RestakingView is the /v1/restaking response: total observed exposure,
@@ -50,9 +50,9 @@ type CommitteeAllocation struct {
 // is in compliance (within-min, within-max, weight-bps drift below the
 // driftWarnBps threshold).
 type RestakingView struct {
-	TotalExposureUcnpy uint64                            `json:"totalExposureUcnpy"`
-	Policy             []*contract.RestakingPolicyEntry  `json:"policy"`
-	Allocations        []CommitteeAllocation             `json:"allocations"`
+	TotalExposureUcnpy uint64                           `json:"totalExposureUcnpy"`
+	Policy             []*contract.RestakingPolicyEntry `json:"policy"`
+	Allocations        []CommitteeAllocation            `json:"allocations"`
 	// PolicyCompliant is true when no allocation reports UnderMin / OverMax.
 	// (Weight-bps drift is informational only — observation-only mode can't
 	// correct it without active rebalancing.)
@@ -130,5 +130,3 @@ func buildRestakingView(policy []*contract.RestakingPolicyEntry, observed map[ui
 	}
 	return view
 }
-
-

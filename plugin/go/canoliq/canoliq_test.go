@@ -279,13 +279,14 @@ func TestClaimRedemptionMaturity(t *testing.T) {
 // split for a clean X=1000 reward delta. With v1.2 defaults the 30%
 // treasury slice is skimmed by insurance_bps=500 (5% of treasury → 0.15%
 // of fee) per Tokenomics v1.2 §8. Expected:
-//   fee  = 120
-//   net  = 880  (to user pool)
-//   user-rebate (40% of 120) = 48 (also to user pool) → 928 total to pool
-//   treasury (30%) = 36 → 35 after insurance skim (mulDiv(36,500,10000)=1)
-//   insurance pool                                   = 1
-//   validators (15%) = 18
-//   buyback  (15%)   = 18
+//
+//	fee  = 120
+//	net  = 880  (to user pool)
+//	user-rebate (40% of 120) = 48 (also to user pool) → 928 total to pool
+//	treasury (30%) = 36 → 35 after insurance skim (mulDiv(36,500,10000)=1)
+//	insurance pool                                   = 1
+//	validators (15%) = 18
+//	buyback  (15%)   = 18
 func TestRewardSplitWhitepaperExample(t *testing.T) {
 	c, s := newTestCanoliq()
 	// Genesis must be marked complete so the reward sweep runs.
@@ -399,10 +400,10 @@ func TestWhitepaperSection7Reconciliation(t *testing.T) {
 // TestVestingLinearUnlock verifies vesting math at three sample points.
 func TestVestingLinearUnlock(t *testing.T) {
 	s := &contract.VestingSchedule{
-		TotalAmount:  1_000_000,
-		CliffHeight:  100,
-		StartHeight:  100,
-		EndHeight:    200,
+		TotalAmount: 1_000_000,
+		CliffHeight: 100,
+		StartHeight: 100,
+		EndHeight:   200,
 	}
 	cases := []struct {
 		height uint64
@@ -428,7 +429,7 @@ func TestCPLQTransferRespectsLiquidBalance(t *testing.T) {
 	c, s := newTestCanoliq()
 	from := addr20(0x05)
 	to := addr20(0x06)
-	seedAccount(s, from, 10_000)             // CNPY for fee
+	seedAccount(s, from, 10_000) // CNPY for fee
 	s.set(KeyForCPLQBalance(from), EncodeUint64(500))
 
 	// Over-transfer fails.

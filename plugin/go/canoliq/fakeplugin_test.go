@@ -17,9 +17,9 @@ type fakeStore struct {
 
 func newFakeStore() *fakeStore { return &fakeStore{data: map[string][]byte{}} }
 
-func (s *fakeStore) get(key []byte) []byte    { return s.data[string(key)] }
-func (s *fakeStore) set(key, value []byte)    { s.data[string(key)] = value }
-func (s *fakeStore) del(key []byte)           { delete(s.data, string(key)) }
+func (s *fakeStore) get(key []byte) []byte { return s.data[string(key)] }
+func (s *fakeStore) set(key, value []byte) { s.data[string(key)] = value }
+func (s *fakeStore) del(key []byte)        { delete(s.data, string(key)) }
 
 func (s *fakeStore) read(req *contract.PluginStateReadRequest) *contract.PluginStateReadResponse {
 	results := make([]*contract.PluginReadResult, 0, len(req.Keys)+len(req.Ranges))

@@ -23,9 +23,9 @@ const CPLQTotalSupply uint64 = 100_000_000 * 1_000_000
 // proportional to per-validator stake. When absent or empty, the legacy
 // committee aggregator path stays in effect (Phase 1 baseline).
 type GenesisFile struct {
-	BlocksPerYear     uint64                       `json:"blocksPerYear"`
-	Buckets           []GenesisBucket              `json:"buckets"`
-	Params            *GenesisParamsJSON           `json:"params,omitempty"`
+	BlocksPerYear     uint64                          `json:"blocksPerYear"`
+	Buckets           []GenesisBucket                 `json:"buckets"`
+	Params            *GenesisParamsJSON              `json:"params,omitempty"`
 	ValidatorRegistry []GenesisValidatorRegistryEntry `json:"validatorRegistry,omitempty"`
 }
 
@@ -41,11 +41,11 @@ type GenesisValidatorRegistryEntry struct {
 
 // GenesisBucket describes one of the CPLQ allocation tranches.
 type GenesisBucket struct {
-	Name        string                 `json:"name"`
-	Bps         uint64                 `json:"bps"`
-	CliffMonths uint64                 `json:"cliffMonths"`
-	VestMonths  uint64                 `json:"vestMonths"`
-	Recipients  []GenesisAllocation    `json:"recipients"`
+	Name        string              `json:"name"`
+	Bps         uint64              `json:"bps"`
+	CliffMonths uint64              `json:"cliffMonths"`
+	VestMonths  uint64              `json:"vestMonths"`
+	Recipients  []GenesisAllocation `json:"recipients"`
 }
 
 // GenesisAllocation is a single (address, share) pair within a bucket.
@@ -82,6 +82,13 @@ type GenesisParamsJSON struct {
 	StakeFee            uint64   `json:"stakeFee"`
 	MultisigApproveFee  uint64   `json:"multisigApproveFee"`
 	MinStakeToPropose   uint64   `json:"minStakeToPropose"`
+	// TvlCapBps is a pointer, unlike every other field here, because 0 is a
+	// meaningful value for it: it means "uncapped" (WP §9.4). The `!= 0`
+	// convention the other fields use cannot express an explicit zero, so nil
+	// means "absent, keep the DefaultParams value" and a non-nil zero means
+	// genesis really does want the cap off. Permitted only on the development
+	// profiles — see isDevProfile.
+	TvlCapBps *uint64 `json:"tvlCapBps"`
 }
 
 // runGenesis is the body of Canoliq.Genesis. It is a no-op once the globals
@@ -108,6 +115,15 @@ func (c *Canoliq) runGenesis(req *contract.PluginGenesisRequest) *contract.Plugi
 		if err := ValidateParams(params); err != nil {
 			return err
 		}
+	}
+	// An uncapped genesis is a development-environment affordance. isDevProfile
+	// is a whitelist, so an unset or unrecognized profile fails closed with the
+	// cap enforced rather than inheriting an uncapped genesis by omission.
+	// testnet and mainnet may only become uncapped by DAO vote (WP §9.4), so
+	// refuse to boot rather than let a mis-pointed genesis file silently
+	// disable the ceiling.
+	if params.TvlCapBps == 0 && !isDevProfile(c.Config.Profile) {
+		return ErrUncappedOutsideDevProfile(c.Config.Profile)
 	}
 	if err := c.SaveParams(params); err != nil {
 		return err
@@ -248,12 +264,12 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 			cliff := b.CliffMonths * blocksPerMonth
 			end := cliff + b.VestMonths*blocksPerMonth
 			sched := &contract.VestingSchedule{
-				Address:      addrBytes,
-				ScheduleId:   scheduleID,
-				TotalAmount:  amount,
-				CliffHeight:  cliff,
-				StartHeight:  cliff,
-				EndHeight:    end,
+				Address:       addrBytes,
+				ScheduleId:    scheduleID,
+				TotalAmount:   amount,
+				CliffHeight:   cliff,
+				StartHeight:   cliff,
+				EndHeight:     end,
 				ClaimedAmount: 0,
 			}
 			bz, e := contract.Marshal(sched)
@@ -360,6 +376,11 @@ func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
 	}
 	if p.MinStakeToPropose != 0 {
 		d.MinStakeToPropose = p.MinStakeToPropose
+	}
+	// Pointer, not `!= 0` — see the field comment: an explicit 0 is the whole
+	// point of the knob, so only a nil pointer falls back to the default.
+	if p.TvlCapBps != nil {
+		d.TvlCapBps = *p.TvlCapBps
 	}
 	return d
 }
