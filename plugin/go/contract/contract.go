@@ -21,7 +21,6 @@ var ContractConfig = &PluginConfig{
 	Id:      1,
 	Version: 1,
 	SupportedTransactions: []string{
-		"send",
 		"create_market",
 		"update_market_params",
 		"pause_market",
