@@ -50,6 +50,75 @@ func protoFields(t *testing.T, msg any) []string {
 	return out
 }
 
+// fullyPopulatedParams builds a CanoliqParams with EVERY field set to a
+// distinct non-zero value, using reflection so it cannot drift as fields are
+// added. A hand-maintained literal is what let the original bug through: the
+// nine uncovered fields were zero on both sides of proto.Equal, so the
+// round-trip check could not fail for the bug it advertised.
+func fullyPopulatedParams(t *testing.T) *contract.CanoliqParams {
+	t.Helper()
+	p := &contract.CanoliqParams{}
+	rv := reflect.ValueOf(p).Elem()
+	rt := rv.Type()
+	n := uint64(0)
+	for i := 0; i < rt.NumField(); i++ {
+		name := rt.Field(i).Name
+		if strings.HasPrefix(name, "state") || name == "sizeCache" || name == "unknownFields" {
+			continue
+		}
+		f := rv.Field(i)
+		if f.Kind() == reflect.Uint64 {
+			n++
+			f.SetUint(n)
+		}
+	}
+	// Non-scalar fields reflection cannot fill meaningfully.
+	p.MultisigSigners = [][]byte{mustAddr("1b6454361f65ac5cc13c6b775692ba3d64cbcb84")}
+	p.MultisigThreshold = 1 // must be within [1, len(signers)]
+	p.Governance = []*contract.GovernanceTier{{
+		Action:    contract.ActionType_ACTION_FEE_CHANGE,
+		QuorumBps: 41, ApprovalBps: 42, TimelockBlocks: 43, VotingPeriodBlocks: 44,
+	}}
+	p.RestakingPolicy = []*contract.RestakingPolicyEntry{{
+		CommitteeId: 45, TargetWeightBps: 10_000, MinStakeUcnpy: 46, MaxStakeUcnpy: 47,
+	}}
+
+	// Guard the guard: assert nothing was left at zero, or this test silently
+	// stops covering whatever was missed.
+	for i := 0; i < rt.NumField(); i++ {
+		name := rt.Field(i).Name
+		if strings.HasPrefix(name, "state") || name == "sizeCache" || name == "unknownFields" {
+			continue
+		}
+		if rv.Field(i).IsZero() {
+			t.Fatalf("field %s left at zero — fullyPopulatedParams must set every field", name)
+		}
+	}
+	return p
+}
+
+// A field present in paramsJSON but never assigned in toContract would pass a
+// name-only check. Round-tripping a fully-populated message catches that too,
+// because the dropped field comes back zero against a non-zero source.
+func TestParamsRoundTripWithEveryFieldPopulated(t *testing.T) {
+	src := fullyPopulatedParams(t)
+	bz, err := json.Marshal(src)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var raw paramsJSON
+	if err := json.Unmarshal(bz, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	dst, err := raw.toContract()
+	if err != nil {
+		t.Fatalf("toContract: %v", err)
+	}
+	if !proto.Equal(src, dst) {
+		t.Fatalf("a field is declared in paramsJSON but not threaded through toContract:\n src=%+v\n dst=%+v", src, dst)
+	}
+}
+
 // If someone adds a field to CanoliqParams and forgets paramsJSON, this fails
 // — which is the whole point. It is cheaper than discovering it as a wiped
 // governance matrix on a live chain.

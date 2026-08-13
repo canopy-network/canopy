@@ -245,11 +245,11 @@ func (c *Canoliq) DeliverMessageCPLQStake(msg *contract.MessageCPLQStake, fee ui
 	newLockEnd := height + lockTierDurationBlocks(msg.LockTier)
 	if !stakePresent {
 		stake = &contract.CPLQStake{
-			Address:       msg.FromAddress,
-			Amount:        msg.Amount,
+			Address:        msg.FromAddress,
+			Amount:         msg.Amount,
 			StakedAtHeight: height,
-			LockTier:      msg.LockTier,
-			LockEndHeight: newLockEnd,
+			LockTier:       msg.LockTier,
+			LockEndHeight:  newLockEnd,
 		}
 		idx.Addresses = appendStakerIfMissing(idx.Addresses, msg.FromAddress)
 	} else {

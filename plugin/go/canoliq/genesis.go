@@ -23,9 +23,9 @@ const CPLQTotalSupply uint64 = 100_000_000 * 1_000_000
 // proportional to per-validator stake. When absent or empty, the legacy
 // committee aggregator path stays in effect (Phase 1 baseline).
 type GenesisFile struct {
-	BlocksPerYear     uint64                       `json:"blocksPerYear"`
-	Buckets           []GenesisBucket              `json:"buckets"`
-	Params            *GenesisParamsJSON           `json:"params,omitempty"`
+	BlocksPerYear     uint64                          `json:"blocksPerYear"`
+	Buckets           []GenesisBucket                 `json:"buckets"`
+	Params            *GenesisParamsJSON              `json:"params,omitempty"`
 	ValidatorRegistry []GenesisValidatorRegistryEntry `json:"validatorRegistry,omitempty"`
 }
 
@@ -41,11 +41,11 @@ type GenesisValidatorRegistryEntry struct {
 
 // GenesisBucket describes one of the CPLQ allocation tranches.
 type GenesisBucket struct {
-	Name        string                 `json:"name"`
-	Bps         uint64                 `json:"bps"`
-	CliffMonths uint64                 `json:"cliffMonths"`
-	VestMonths  uint64                 `json:"vestMonths"`
-	Recipients  []GenesisAllocation    `json:"recipients"`
+	Name        string              `json:"name"`
+	Bps         uint64              `json:"bps"`
+	CliffMonths uint64              `json:"cliffMonths"`
+	VestMonths  uint64              `json:"vestMonths"`
+	Recipients  []GenesisAllocation `json:"recipients"`
 }
 
 // GenesisAllocation is a single (address, share) pair within a bucket.
@@ -264,12 +264,12 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 			cliff := b.CliffMonths * blocksPerMonth
 			end := cliff + b.VestMonths*blocksPerMonth
 			sched := &contract.VestingSchedule{
-				Address:      addrBytes,
-				ScheduleId:   scheduleID,
-				TotalAmount:  amount,
-				CliffHeight:  cliff,
-				StartHeight:  cliff,
-				EndHeight:    end,
+				Address:       addrBytes,
+				ScheduleId:    scheduleID,
+				TotalAmount:   amount,
+				CliffHeight:   cliff,
+				StartHeight:   cliff,
+				EndHeight:     end,
 				ClaimedAmount: 0,
 			}
 			bz, e := contract.Marshal(sched)

@@ -1,6 +1,10 @@
 package canoliq
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/canopy-network/go-plugin/contract"
@@ -166,6 +170,52 @@ func TestDevnetProfileStillEnforcesSafetyCheck(t *testing.T) {
 	ok := Config{Profile: ProfileDevnet, ChainId: 404, RedemptionUnstakingBlocks: 30240}
 	if err := ok.SafetyCheck(); err != nil {
 		t.Fatalf("devnet with a valid redemption window: %v", err)
+	}
+}
+
+// runGenesis runs from BeginBlock, so its refusal surfaces as every block
+// failing to apply rather than as a startup error. SafetyCheck catches the same
+// condition before the node starts producing, which is the diagnostic an
+// operator actually sees.
+func TestSafetyCheckRejectsUncappedGenesisOffDevProfiles(t *testing.T) {
+	write := func(t *testing.T, capBps *uint64) string {
+		t.Helper()
+		gf := miniGenesis()
+		gf.Params = &GenesisParamsJSON{TvlCapBps: capBps}
+		bz, err := json.Marshal(gf)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		p := filepath.Join(t.TempDir(), "genesis.json")
+		if err := os.WriteFile(p, bz, 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		return p
+	}
+	zero := uint64(0)
+	capped := uint64(3300)
+
+	for _, profile := range []string{ProfileTestnet, ProfileMainnet} {
+		cfg := Config{Profile: profile, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &zero)}
+		err := cfg.SafetyCheck()
+		if err == nil {
+			t.Fatalf("profile=%q: SafetyCheck must reject an uncapped genesis at startup", profile)
+		}
+		if !strings.Contains(err.Error(), "tvlCapBps=0") {
+			t.Fatalf("profile=%q: error should name the offending field, got: %v", profile, err)
+		}
+	}
+	// devnet is allowed to be uncapped and must still start.
+	dev := Config{Profile: ProfileDevnet, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &zero)}
+	if err := dev.SafetyCheck(); err != nil {
+		t.Fatalf("devnet must be allowed an uncapped genesis: %v", err)
+	}
+	// A capped genesis starts everywhere.
+	for _, profile := range []string{ProfileTestnet, ProfileMainnet, ProfileDevnet} {
+		cfg := Config{Profile: profile, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &capped)}
+		if err := cfg.SafetyCheck(); err != nil {
+			t.Fatalf("profile=%q with a capped genesis: %v", profile, err)
+		}
 	}
 }
 

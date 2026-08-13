@@ -284,6 +284,18 @@ func (c Config) SafetyCheck() error {
 			}
 		}
 	}
+	// Surface an uncapped genesis at startup. runGenesis enforces this too, but
+	// it runs from BeginBlock, so the failure there manifests as every block
+	// failing to apply with no startup diagnostic. Catching it here gives the
+	// operator the real reason before the node starts producing.
+	//
+	// localnet already returned above; devnet is filtered by isDevProfile.
+	// Genesis supplied via PluginGenesisRequest rather than GenesisPath is not
+	// visible here — runGenesis remains the authoritative check.
+	if !isDevProfile(c.Profile) && gf.Params != nil && gf.Params.TvlCapBps != nil && *gf.Params.TvlCapBps == 0 {
+		return fmt.Errorf("canoliq: refusing to start profile=%q with tvlCapBps=0 in %s (an uncapped genesis is allowed only on the localnet and devnet profiles; elsewhere lifting the TVL cap is a governance decision per WP §9.4)",
+			c.Profile, c.GenesisPath)
+	}
 	return nil
 }
 

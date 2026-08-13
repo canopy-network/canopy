@@ -42,12 +42,12 @@ const alertSchemaVersion = 1
 
 // Defaults for the AlertConfig knobs (overridable via config JSON).
 const (
-	alertDefaultMinInterval         = 100   // blocks between re-fires of the same kind
-	alertDefaultWindowBlocks        = 100   // tumbling window for drain/drop checks
-	alertDefaultDrainBps            = 5_000 // 50%
-	alertDefaultConcentBps          = 6_600 // 66%
-	alertDefaultTVLDropBps          = 2_000 // 20%
-	alertDefaultStuckRedemptionCnt  = 10    // mature unclaimed redemptions
+	alertDefaultMinInterval        = 100   // blocks between re-fires of the same kind
+	alertDefaultWindowBlocks       = 100   // tumbling window for drain/drop checks
+	alertDefaultDrainBps           = 5_000 // 50%
+	alertDefaultConcentBps         = 6_600 // 66%
+	alertDefaultTVLDropBps         = 2_000 // 20%
+	alertDefaultStuckRedemptionCnt = 10    // mature unclaimed redemptions
 )
 
 // AlertEnvelope is the canonical alert payload. Slack / Discord adapters

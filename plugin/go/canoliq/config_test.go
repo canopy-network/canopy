@@ -299,4 +299,3 @@ func mustWrite(t *testing.T, path, body string) {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }
-

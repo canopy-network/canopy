@@ -62,24 +62,24 @@ const (
 // result channel; only one of view/views/redemption/vote/buyback is set
 // per query, matching kind. err is non-nil on plugin-internal failure.
 type lazyQuery struct {
-	kind        lazyKind
-	addr        []byte // for account / vesting / redemption
-	id          uint64 // for redemption / vote / buyback
-	voter       []byte // for vote
-	result      chan lazyResult
+	kind   lazyKind
+	addr   []byte // for account / vesting / redemption
+	id     uint64 // for redemption / vote / buyback
+	voter  []byte // for vote
+	result chan lazyResult
 }
 
 // lazyResult is the response payload union. Exactly one field matches
 // the originating lazyQuery.kind. found=false on a clean miss (404),
 // distinct from err which signals plugin failure (500).
 type lazyResult struct {
-	found     bool
-	err       error
-	view      *AccountView
-	views     []*VestingView
+	found      bool
+	err        error
+	view       *AccountView
+	views      []*VestingView
 	redemption *contract.Redemption
-	vote      *contract.Vote
-	buyback   *contract.BuybackOrder
+	vote       *contract.Vote
+	buyback    *contract.BuybackOrder
 }
 
 // AccountView is the composite per-address response. CNPY comes from

@@ -88,10 +88,15 @@ approval — it is a governance lever, not an operator setting.
 
 On a **running** chain that is the only way to change it: plugin genesis no-ops
 once `genesis_complete` is set, so a param-change proposal is what moves the cap
-without a state reset. Param-change lands on the `FEE_CHANGE` tier — 5% quorum,
-51% approval, a **7-day voting period** and a 48h timelock, so roughly nine days
-end to end. The emergency tier (8% / 67%, 24h voting, no timelock) carries an
-optional param diff that applies immediately on pass.
+without a state reset.
+
+Param-change lands on the `FEE_CHANGE` tier: 5% quorum, 51% approval, a **7-day
+voting period**. Note that a param-change is **not timelocked** — `dispatchPassed`
+calls `SaveParams` synchronously in the block the tally closes, and the tier's
+`TimelockBlocks` is read only by `queueTreasurySpend`. So the new params take
+effect the moment voting ends, with no abort window. Plan the review before the
+vote closes, not after. The emergency tier (8% / 67%, 24h voting) carries an
+optional param diff that likewise applies immediately on pass.
 
 At **genesis**, `tvlCapBps` can also be set in the `params` block of the plugin
 genesis file:
