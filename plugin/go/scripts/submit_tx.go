@@ -50,6 +50,15 @@ func main() {
 		fatalf("get height failed: %v", err)
 	}
 
+	if msgType == "send" {
+		hash, err := sendNativeSend(addr, fields, key, height)
+		if err != nil {
+			fatalf("native send failed: %v", err)
+		}
+		fmt.Println("submitted tx hash:", hash)
+		return
+	}
+
 	typeURL, msgProto, err := buildMessage(msgType, addr, fields)
 	if err != nil {
 		fatalf("build message failed: %v", err)
@@ -335,6 +344,7 @@ func buildMessage(msgType, signerAddrHex string, fields map[string]interface{}) 
 			Address: addr,
 		}
 		return "type.googleapis.com/types.MessageClaimFaucet", msg, nil
+
 	default:
 		return "", nil, fmt.Errorf("unknown or not-yet-wired msgType: %s", msgType)
 	}
@@ -464,4 +474,99 @@ func postRawJSON(url, jsonBody string) ([]byte, error) {
 func fatalf(format string, a ...interface{}) {
 	fmt.Fprintf(os.Stderr, "error: "+format+"\n", a...)
 	os.Exit(1)
+}
+
+// sendNativeSend submits a native Canopy "send" transaction using the raw
+// JSON body shape core's HTTP handler expects for this message type (fields
+// inlined under "msg", not the generic msgTypeUrl/msgBytes hex-proto
+// envelope used for plugin-registered message types). This is core-level
+// native send, independent of plugin routing -- confirmed by the fact that
+// removing "send" from ContractConfig did not break it. Mirrors Praxis's
+// plugin/go/tutorial/praxis_test.go submitSendTx (exercised by
+// TestValidatorSend), and confirmed working here directly: tx
+// fe55c36a..., height 47856.
+func sendNativeSend(signerAddrHex string, fields map[string]interface{}, key *keyGroup, height uint64) (string, error) {
+	fromAddr, err := hex.DecodeString(signerAddrHex)
+	if err != nil {
+		return "", fmt.Errorf("decode from address: %w", err)
+	}
+	toAddr, err := hex.DecodeString(str(fields["toAddress"]))
+	if err != nil {
+		return "", fmt.Errorf("decode toAddress: %w", err)
+	}
+	amount, _ := fields["amount"].(float64)
+
+	msg := &contract.MessageSend{
+		FromAddress: fromAddr,
+		ToAddress:   toAddr,
+		Amount:      uint64(amount),
+	}
+	msgBytes, err := proto.Marshal(msg)
+	if err != nil {
+		return "", fmt.Errorf("marshal message: %w", err)
+	}
+	typeURL := "type.googleapis.com/types.MessageSend"
+
+	txTime := uint64(time.Now().UnixMicro())
+	fullTx := &contract.Transaction{
+		MessageType:   "send",
+		Msg:           &anypb.Any{TypeUrl: typeURL, Value: msgBytes},
+		Signature:     nil,
+		CreatedHeight: height,
+		Time:          txTime,
+		Fee:           10000,
+		NetworkId:     networkID,
+		ChainId:       chainID,
+	}
+	signBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(fullTx)
+	if err != nil {
+		return "", fmt.Errorf("marshal sign bytes: %w", err)
+	}
+
+	privKey, err := crypto.StringToBLS12381PrivateKey(key.PrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("parse private key: %w", err)
+	}
+	signature := privKey.Sign(signBytes)
+	pubKeyBytes, err := hex.DecodeString(key.PublicKey)
+	if err != nil {
+		return "", fmt.Errorf("decode public key: %w", err)
+	}
+
+	body := fmt.Sprintf(`{
+  "type": "send",
+  "msg": {
+    "fromAddress": %q,
+    "toAddress": %q,
+    "amount": %d
+  },
+  "signature": {
+    "publicKey": %q,
+    "signature": %q
+  },
+  "time": %d,
+  "createdHeight": %d,
+  "fee": %d,
+  "memo": "",
+  "networkID": %d,
+  "chainID": %d
+}`,
+		hex.EncodeToString(fromAddr),
+		hex.EncodeToString(toAddr),
+		uint64(amount),
+		hex.EncodeToString(pubKeyBytes),
+		hex.EncodeToString(signature),
+		txTime, height, uint64(10000),
+		networkID, chainID,
+	)
+
+	respBody, err := postRawJSON(queryRPCURL+"/v1/tx", body)
+	if err != nil {
+		return "", fmt.Errorf("post tx: %w", err)
+	}
+	var txHash string
+	if err := json.Unmarshal(respBody, &txHash); err != nil {
+		return "", fmt.Errorf("parse tx response: %w, body=%s", err, string(respBody))
+	}
+	return txHash, nil
 }
