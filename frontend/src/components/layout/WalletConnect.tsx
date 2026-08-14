@@ -42,6 +42,7 @@ export function WalletConnect() {
     generateAndDownloadKeystore,
     connectFromRawKey,
     importFromKeystoreFile,
+    privateKeyHex,
   } = useWalletStore();
 
   const [tab, setTab] = useState<ConnectTab>("generate");
@@ -101,7 +102,6 @@ export function WalletConnect() {
   const [keystorePassword, setKeystorePassword] = useState("");
 
   async function maybeSaveKeystore() {
-    const { address, privateKeyHex } = wallet;
     if (rememberWallet && address && privateKeyHex) {
       // Device-cache (AES-GCM encrypted, auto-reconnect without prompt)
       await cachePrivateKey(address, privateKeyHex);

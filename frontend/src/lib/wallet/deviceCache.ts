@@ -1,6 +1,6 @@
 "use client";
 
-import { hexToBytes, bytesToHex } from "./signer";
+import { hexToBytes, bytesToHex } from "@/lib/canopy/decode";
 
 const CACHE_PREFIX = "arbor-device-cache:";
 const CACHE_PBKDF2_ITERATIONS = 100000;
