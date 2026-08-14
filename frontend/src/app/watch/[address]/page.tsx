@@ -126,10 +126,10 @@ function BorrowingRow({ entry, address }: { entry: MarketWithIndices; address: s
 }
 
 
-const WATCH_ASSETS: { id: string; icon: string; name: string; note: string; decimals: number }[] = [
-  { id: "BTC", icon: "bitcoin", name: "Bitcoin", note: "Collateral asset · 9-dec", decimals: 9 },
-  { id: "ETH", icon: "eth", name: "Ether", note: "Collateral asset · 9-dec", decimals: 9 },
-  { id: "USDC", icon: "usdc", name: "USD Coin", note: "Stablecoin · 6-dec", decimals: 6 },
+const WATCH_ASSETS: { id: string; icon: string; name: string; note: string }[] = [
+  { id: "BTC", icon: "bitcoin", name: "Bitcoin", note: "Collateral asset" },
+  { id: "ETH", icon: "eth", name: "Ether", note: "Collateral asset" },
+  { id: "USDC", icon: "usdc", name: "USD Coin", note: "Stablecoin" },
 ];
 
 function AssetRows({ address }: { address: string }) {
@@ -166,7 +166,7 @@ function AssetRows({ address }: { address: string }) {
               </div>
             </div>
             <p className="text-sm font-semibold tabular-nums text-white">
-              {formatAmount(amt, a.decimals)}
+              {amt.toString()}
             </p>
           </div>
         );
