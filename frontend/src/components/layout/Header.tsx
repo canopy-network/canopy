@@ -134,13 +134,56 @@ function WalletChip() {
 
   if (wallet.isConnected) {
     return (
-      <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-xs backdrop-blur">
-        <span className="grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-indigo-400 to-emerald-400 text-[9px] font-bold text-[#05070d]">
-          ◆
-        </span>
-        <span className="tabular-nums text-zinc-200">
-          {shortAddress(wallet.address ?? "")}
-        </span>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-xs backdrop-blur transition hover:bg-white/5"
+        >
+          <span className="grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-indigo-400 to-emerald-400 text-[9px] font-bold text-[#05070d]">
+            ◆
+          </span>
+          <span className="tabular-nums text-zinc-200">
+            {shortAddress(wallet.address ?? "")}
+          </span>
+        </button>
+
+        {open && (
+          <>
+            <button
+              type="button"
+              aria-label="Close wallet menu"
+              onClick={() => setOpen(false)}
+              className="fixed inset-0 z-40 cursor-default"
+            />
+
+            <div className="absolute right-0 top-full z-50 mt-2 w-[min(92vw,16rem)] rounded-xl border border-white/10 arbor-popover p-2 shadow-2xl shadow-black/50 backdrop-blur-xl">
+              <div className="px-3 py-2 text-xs text-zinc-400 font-mono break-all">
+                {wallet.address}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(wallet.address ?? "");
+                  setOpen(false);
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/5"
+              >
+                Copy address
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  wallet.disconnect();
+                  setOpen(false);
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition hover:bg-white/5"
+              >
+                Disconnect
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
   }

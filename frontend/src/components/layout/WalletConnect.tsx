@@ -12,6 +12,12 @@ import {
   loadCachedKey,
   hasCachedKey,
 } from "@/lib/wallet/metamask";
+import {
+  cachePrivateKey,
+  loadCachedPrivateKey,
+  hasCachedPrivateKey,
+  lastConnectedAddress,
+} from "@/lib/wallet/deviceCache";
 import { publicKeyFromPrivateHex } from "@/lib/wallet";
 import { formatAddress } from "@/lib/arbor/format";
 
@@ -44,17 +50,27 @@ export function WalletConnect() {
   const [dismissedUnlock, setDismissedUnlock] = useState(false);
   const showUnlock = !isConnected && hasStoredKeystore && !dismissedUnlock;
 
-  // Silent reconnect: MetaMask already connected + cached derived key ->
-  // restore the Arbor wallet on load without any popup.
+  // Silent reconnect on load: device-cache first (any connect method),
+  // then MetaMask silent (already connected + cached derived key).
   useEffect(() => {
     if (isConnected) return;
     let alive = true;
     (async () => {
+      // 1) Device-cache (AES-GCM encrypted, works for all connect methods)
+      const lastAddr = lastConnectedAddress();
+      if (lastAddr && hasCachedPrivateKey(lastAddr)) {
+        const key = await loadCachedPrivateKey(lastAddr);
+        if (key && alive) {
+          await connectFromRawKey(key);
+          return;
+        }
+      }
+      // 2) MetaMask silent (already connected + cached derived key)
       const eth = await getAlreadyConnectedEthAccount();
       if (!eth || !hasCachedKey(eth)) return;
-      const key = await loadCachedKey(eth);
-      if (!key || !alive) return;
-      await connectFromRawKey(key);
+      const mmKey = await loadCachedKey(eth);
+      if (!mmKey || !alive) return;
+      await connectFromRawKey(mmKey);
     })().catch(() => {});
     return () => {
       alive = false;
@@ -85,11 +101,17 @@ export function WalletConnect() {
   const [keystorePassword, setKeystorePassword] = useState("");
 
   async function maybeSaveKeystore() {
-    if (rememberWallet && keystorePassword) {
-      if (keystorePassword.length < 8) {
-        throw new Error("Keystore password must be at least 8 characters");
+    const { address, privateKeyHex } = wallet;
+    if (rememberWallet && address && privateKeyHex) {
+      // Device-cache (AES-GCM encrypted, auto-reconnect without prompt)
+      await cachePrivateKey(address, privateKeyHex);
+      // Password keystore (requires unlock prompt on revisit)
+      if (keystorePassword) {
+        if (keystorePassword.length < 8) {
+          throw new Error("Keystore password must be at least 8 characters");
+        }
+        await saveKeystore(keystorePassword);
       }
-      await saveKeystore(keystorePassword);
     }
     setKeystorePassword("");
     setRememberWallet(false);

@@ -10,6 +10,7 @@ import {
   decryptImportedKeystore,
 } from "@/lib/crypto";
 import { bytesToHex, generateKeypair, getPublicKey, deriveAddressFromPublicKey } from "./signer";
+import { clearCachedPrivateKey } from "./deviceCache";
 
 interface WalletStoreState extends SignerState, WalletActions {
   hasStoredKeystore: boolean;
@@ -42,6 +43,10 @@ export const useWalletStore = create<WalletStoreState>((set, get) => ({
   },
 
   disconnect: () => {
+    const { address } = get();
+    if (address) {
+      clearCachedPrivateKey(address);
+    }
     set({
       address: null,
       publicKeyHex: null,
