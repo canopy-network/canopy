@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -146,6 +147,15 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 		// wait for and then accept inbound tcp connection
 		c, err := p.listener.Accept()
 		if err != nil {
+			// Stop() closes the listener as part of a deliberate shutdown; every
+			// subsequent Accept() on a closed listener returns this same error
+			// forever, so without this check the loop logs an identical ERROR
+			// line every 5 seconds until the process actually exits, with no
+			// chance of recovering (the listener is gone for good). Exit the
+			// loop quietly instead.
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			<-time.After(5 * time.Second)
 			p.log.Errorf("Accept error: %v", err)
 			continue
