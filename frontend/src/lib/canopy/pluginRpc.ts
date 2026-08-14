@@ -534,3 +534,22 @@ export async function queryWaterfallEvents(
     return { events: [], available: false };
   }
 }
+
+
+export async function getAssetBalance(
+  assetId: string,
+  addressHex: string
+): Promise<{ amount: bigint } | null> {
+  try {
+    const res = await fetch(
+      `${PLUGIN_RPC_URL}/v1/query/assetbalance?assetId=${encodeURIComponent(assetId)}&address=${encodeURIComponent(addressHex)}`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || data.amount == null) return null;
+    return { amount: toBigInt(data.amount) };
+  } catch {
+    return null;
+  }
+}

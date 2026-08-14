@@ -8,6 +8,7 @@ import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
 import { useNasmVaultsByOwner } from "@/lib/hooks/useNasmVault";
 import { useAssetPrice } from "@/lib/hooks/useAssetPrice";
 import { useAccount } from "@/lib/hooks/useAccount";
+import { getAssetBalance } from "@/lib/canopy/pluginRpc";
 import { computeHealthFactorScaled } from "@/lib/arbor/math";
 import { formatAmount, formatHealthFactor, formatAddress } from "@/lib/arbor/format";
 import { TIER_PARAMS } from "@/lib/arbor/constants";
@@ -124,6 +125,56 @@ function BorrowingRow({ entry, address }: { entry: MarketWithIndices; address: s
   );
 }
 
+
+const WATCH_ASSETS: { id: string; icon: string; name: string; note: string; decimals: number }[] = [
+  { id: "BTC", icon: "bitcoin", name: "Bitcoin", note: "Collateral asset · 9-dec", decimals: 9 },
+  { id: "ETH", icon: "eth", name: "Ether", note: "Collateral asset · 9-dec", decimals: 9 },
+  { id: "USDC", icon: "usdc", name: "USD Coin", note: "Stablecoin · 6-dec", decimals: 6 },
+];
+
+function AssetRows({ address }: { address: string }) {
+  const [amounts, setAmounts] = useState<Record<string, bigint | null>>({});
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const entries = await Promise.all(
+        WATCH_ASSETS.map(async (a) => {
+          const r = await getAssetBalance(a.id, address);
+          return [a.id, r?.amount ?? null] as const;
+        })
+      );
+      if (!alive) return;
+      setAmounts(Object.fromEntries(entries));
+    })().catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [address]);
+
+  return (
+    <>
+      {WATCH_ASSETS.map((a) => {
+        const amt = amounts[a.id];
+        if (amt == null || amt <= 0n) return null;
+        return (
+          <div key={a.id} className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-3">
+              <Monogram symbol={a.icon} />
+            <div>
+                <p className="text-sm font-medium text-zinc-100">{a.name}</p>
+                <p className="text-[11px] text-zinc-500">{a.note}</p>
+              </div>
+            </div>
+            <p className="text-sm font-semibold tabular-nums text-white">
+              {formatAmount(amt, a.decimals)}
+            </p>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export default function WatchPage() {
   const params = useParams();
   const router = useRouter();
@@ -194,9 +245,9 @@ export default function WatchPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-3">
-              <Monogram symbol="CNPY" />
+              <Monogram symbol="ARBOR" />
               <div>
-                <p className="text-sm font-medium text-zinc-100">Canopy</p>
+                <p className="text-sm font-medium text-zinc-100">Arbor</p>
                 <p className="text-[11px] text-zinc-500">Native token</p>
               </div>
             </div>
@@ -211,6 +262,7 @@ export default function WatchPage() {
               )}
             </div>
           </div>
+          <AssetRows address={watchedAddress} />
         </div>
       </div>
 

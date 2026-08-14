@@ -131,9 +131,9 @@ export default function SendPage() {
           ) : (
             <div className="divide-y divide-white/5">
               <BalanceRow
-                symbol="CNPY"
-                name="CNPY"
-                note="Canopy native · 9-dec · pays fees"
+                symbol="ARBOR"
+                name="ARBOR"
+                note="Arbor native · 9-dec · pays fees"
                 amount={cnpy}
                 decimals={9}
                 staked={staked}

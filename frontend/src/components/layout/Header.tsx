@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useWalletStore } from "@/lib/wallet";
 import { WalletConnect } from "./WalletConnect";
 import { useRoles, type Roles } from "@/lib/hooks/useRoles";
@@ -125,6 +125,7 @@ function StatusChip() {
 
 function WalletChip() {
   const wallet = useWalletStore();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -170,6 +171,16 @@ function WalletChip() {
                 className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/5"
               >
                 Copy address
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(`/watch/${wallet.address ?? ""}`);
+                  setOpen(false);
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/5"
+              >
+                Watch this address
               </button>
               <button
                 type="button"
