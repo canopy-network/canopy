@@ -3,6 +3,8 @@ import { Any } from "./proto/generated/google/protobuf/any";
 import { TX_MESSAGE_CODECS, getTxTypeUrl } from "./proto/registry";
 import type { ArborTxType } from "@/lib/arbor/constants";
 
+const CHAIN_ID = BigInt(process.env.NEXT_PUBLIC_CHAIN_ID || "1");
+
 export interface BuildTxParams {
   txType: ArborTxType;
   msg: unknown;
@@ -34,7 +36,7 @@ export function buildArborTransaction(params: BuildTxParams): Transaction {
     fee: params.fee,
     memo: params.memo ?? "",
     networkId: params.networkId ?? 1n,
-    chainId: params.chainId ?? 1n,
+    chainId: params.chainId ?? CHAIN_ID,
   });
 }
 
