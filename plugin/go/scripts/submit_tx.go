@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -17,12 +18,35 @@ import (
 	"github.com/ARBOR-L/ARBOR/plugin/go/crypto"
 )
 
-const (
-	queryRPCURL = "http://localhost:50002"
-	adminRPCURL = "http://localhost:50003"
-	networkID   = uint64(1)
-	chainID     = uint64(1)
+var (
+	queryRPCURL string
+	adminRPCURL string
+	networkID   uint64
+	chainID     uint64
 )
+
+func init() {
+	queryRPCURL = os.Getenv("ARBOR_QUERY_RPC_URL")
+	if queryRPCURL == "" {
+		queryRPCURL = "http://localhost:50002"
+	}
+	adminRPCURL = os.Getenv("ARBOR_ADMIN_RPC_URL")
+	if adminRPCURL == "" {
+		adminRPCURL = "http://localhost:50003"
+	}
+	networkID = 1
+	if n := os.Getenv("ARBOR_NETWORK_ID"); n != "" {
+		if v, err := strconv.ParseUint(n, 10, 64); err == nil {
+			networkID = v
+		}
+	}
+	chainID = 1
+	if c := os.Getenv("ARBOR_CHAIN_ID"); c != "" {
+		if v, err := strconv.ParseUint(c, 10, 64); err == nil {
+			chainID = v
+		}
+	}
+}
 
 // Usage: go run ./scripts create_market <address> <password> '<json-fields>'
 func main() {
@@ -40,7 +64,7 @@ func main() {
 		fatalf("bad json fields: %v", err)
 	}
 
-	key, err := keystoreGetKey(adminRPCURL, addr, password)
+	key, err := keystoreGetKeyLocal(addr, password)
 	if err != nil {
 		fatalf("keystore get failed: %v", err)
 	}
