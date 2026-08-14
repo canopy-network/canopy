@@ -87,10 +87,11 @@ export async function fetchIdentity(address: string): Promise<IdentityResponse |
 
 export interface LinkIdentityInput {
   address: string;
+  publicKeyHex: string;
   discordId: string;
   twitterHandle: string;
   issuedAtHeight: number;
-  signature: string;
+  signatureHex: string;
 }
 
 export async function linkIdentity(input: LinkIdentityInput): Promise<{ ok: boolean; error?: string }> {

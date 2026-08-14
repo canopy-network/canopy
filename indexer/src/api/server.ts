@@ -1,8 +1,8 @@
 import express from "express";
 import cors from "cors";
-import { verifyMessage } from "viem";
 import { config, weekIdForHeight, dayIdForHeight, QUESTS } from "../config.js";
 import { fetchCurrentHeight } from "../arborClient.js";
+import { verifyBls12381, addressFromPublicKeyHex } from "../blsVerify.js";
 import {
   getXpForAddress,
   getLeaderboard,
@@ -81,13 +81,27 @@ app.get("/leaderboard/:weekId", (req, res) => {
 /**
  * POST /link — binds a wallet to a Discord ID + X handle.
  * Expects the OAuth steps to have already happened upstream (see README);
- * this endpoint only verifies the wallet signature and enforces uniqueness.
- * Nothing here touches Arbor's chain — this is a purely off-chain link.
+ * this endpoint verifies a real BLS12-381 signature (Arbor's actual wallet
+ * scheme, NOT Ethereum-style ECDSA) and enforces uniqueness. Nothing here
+ * touches Arbor's chain — this is a purely off-chain link.
+ *
+ * publicKeyHex is required (not just address + signature) because BLS
+ * verification needs the public key directly — unlike ECDSA, a BLS
+ * signature doesn't let you recover the signer's public key from just the
+ * signature and message. The address is re-derived from publicKeyHex
+ * server-side and checked against the claimed address, so a caller can't
+ * submit a public key that doesn't actually belong to that address.
  */
 app.post("/link", async (req, res) => {
-  const { address, discordId, twitterHandle, issuedAtHeight, signature } = req.body ?? {};
-  if (!address || !discordId || !twitterHandle || !issuedAtHeight || !signature) {
+  const { address, publicKeyHex, discordId, twitterHandle, issuedAtHeight, signatureHex } = req.body ?? {};
+  if (!address || !publicKeyHex || !discordId || !twitterHandle || !issuedAtHeight || !signatureHex) {
     return res.status(400).json({ error: "missing required fields" });
+  }
+
+  const normAddr = String(address).toLowerCase().replace(/^0x/, "");
+  const derivedAddr = addressFromPublicKeyHex(publicKeyHex);
+  if (derivedAddr !== normAddr) {
+    return res.status(400).json({ error: "publicKeyHex does not derive to the claimed address" });
   }
 
   const currentHeight = await fetchCurrentHeight();
@@ -96,17 +110,10 @@ app.post("/link", async (req, res) => {
   }
 
   const message = `Link Arbor identity\ndiscord:${discordId}\ntwitter:${twitterHandle}\nissuedAt:${issuedAtHeight}`;
-  const valid = await verifyMessage({
-    address: address as `0x${string}`,
-    message,
-    signature: signature as `0x${string}`,
-  }).catch(() => false);
-
+  const valid = verifyBls12381(message, signatureHex, publicKeyHex);
   if (!valid) {
     return res.status(400).json({ error: "signature verification failed" });
   }
-
-  const normAddr = String(address).toLowerCase().replace(/^0x/, "");
 
   const discordTaken = getIdentityByDiscordId(discordId);
   if (discordTaken && discordTaken.address !== normAddr) {
