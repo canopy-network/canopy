@@ -127,6 +127,7 @@ function BorrowingRow({ entry, address }: { entry: MarketWithIndices; address: s
 
 
 const WATCH_ASSETS: { id: string; icon: string; name: string; note: string }[] = [
+  { id: "CNPY", icon: "canopy", name: "Canopy", note: "Faucet balance (whole units)" },
   { id: "BTC", icon: "bitcoin", name: "Bitcoin", note: "Collateral asset" },
   { id: "ETH", icon: "eth", name: "Ether", note: "Collateral asset" },
   { id: "USDC", icon: "usdc", name: "USD Coin", note: "Stablecoin" },
