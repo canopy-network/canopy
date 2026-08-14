@@ -59,8 +59,8 @@ simplest to the most complex is described as follows:
     - Works as the primary translator between BadgerDB and the rest of Canopy
 
 2. **`Txn`**: The transaction manager
-    - Ensures that a group of operations happen together or not all (transactions)
-    - Enhances BadgerDB by implementing in-memory nested transactions, to allows to write or discard
+    - Ensures that a group of operations happen together or not at all (transactions)
+    - Enhances BadgerDB by implementing in-memory nested transactions, to allow writing or discarding
       groups of operations (like multiple read/writes) within a single BadgerDB transaction
     - Follows the [`RWStoreI`](../lib/store.go) interface to interact with the database
 
