@@ -133,9 +133,9 @@ export default function SendPage() {
               <BalanceRow
                 symbol="ARBOR"
                 name="ARBOR"
-                note="Arbor native · 9-dec · pays fees"
+                note="Arbor native · 6-dec · pays fees"
                 amount={cnpy}
-                decimals={9}
+                decimals={6}
                 staked={staked}
               />
               <BalanceRow

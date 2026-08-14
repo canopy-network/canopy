@@ -254,11 +254,11 @@ export default function WatchPage() {
             </div>
             <div className="text-right">
               <p className="text-sm font-semibold tabular-nums text-white">
-                {cnpy != null ? formatAmount(cnpy, 9) : "—"}
+                {cnpy != null ? formatAmount(cnpy, 6) : "—"}
               </p>
               {staked != null && staked > 0n && (
                 <p className="text-[11px] text-zinc-500">
-                  Staked: {formatAmount(staked, 9)}
+                  Staked: {formatAmount(staked, 6)}
                 </p>
               )}
             </div>
