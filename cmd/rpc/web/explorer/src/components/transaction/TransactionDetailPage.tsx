@@ -6,7 +6,7 @@ import { useTxByHash, useBlockByHeight, useLatestBlock } from '../../hooks/useAp
 import toast from 'react-hot-toast'
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
-import { toCNPY, extractAmountMicro } from '../../lib/utils'
+import { escapeHtml, toCNPY, extractAmountMicro } from '../../lib/utils'
 import TransactionTypeBadge from './TransactionTypeBadge'
 
 // Helper function to format fee - shows in CNPY (converted from micro denomination)
@@ -703,7 +703,7 @@ const TransactionDetailPage: React.FC = () => {
                             <div className="border border-white/10 rounded-lg p-4">
                                 <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
                                     <code className="text-gray-300">
-                                        {JSON.stringify(transaction, null, 2)
+                                        {escapeHtml(JSON.stringify(transaction, null, 2))
                                             .replace(/(".*?")\s*:/g, '<span class="text-blue-400">$1</span>:')
                                             .replace(/:\s*(".*?")/g, ': <span class="text-primary">$1</span>')
                                             .replace(/:\s*(\d+)/g, ': <span class="text-yellow-400">$1</span>')
