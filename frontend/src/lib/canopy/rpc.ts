@@ -595,3 +595,37 @@ export async function queryFailedTxsPaged(
 
 export { queryWaterfallEvents } from "./pluginRpc";
 export type { WaterfallEvent } from "./pluginRpc";
+
+
+export interface ExplorerTx {
+  hash: string;
+  height: number;
+  sender: string;
+  messageType: string;
+  msg: Record<string, unknown> | null;
+}
+
+export async function queryExplorerTxsBySender(
+  address: string
+): Promise<ExplorerTx[]> {
+  try {
+    const res = await rpcFetch("/v1/query/txs-by-sender", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, pageNumber: 1, perPage: 100 }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const list = data?.results ?? data?.txs ?? [];
+    if (!Array.isArray(list)) return [];
+    return list.map((tx: any) => ({
+      hash: String(tx.hash || tx.txHash || ""),
+      height: Number(tx.height ?? 0),
+      sender: String(tx.sender ?? ""),
+      messageType: String(tx.messageType || tx.transaction?.type || ""),
+      msg: (tx.transaction?.msg ?? tx.msg ?? null) as Record<string, unknown> | null,
+    }));
+  } catch {
+    return [];
+  }
+}

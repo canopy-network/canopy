@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useWalletStore } from "@/lib/wallet";
 import { useTxStore, type TxPhase } from "@/lib/stores/txStore";
-import { queryTxsBySender, queryFailedTxsByAddress } from "@/lib/canopy/rpc";
+import { queryExplorerTxsBySender, queryFailedTxsByAddress } from "@/lib/canopy/rpc";
 import { formatAddress } from "@/lib/arbor/format";
 
 const PHASE_LABEL: Record<TxPhase, string> = {
@@ -56,7 +56,7 @@ export function TxExplorer() {
       setLoading(true);
       try {
         const [successful, failed] = await Promise.all([
-          queryTxsBySender(addr),
+          queryExplorerTxsBySender(addr),
           queryFailedTxsByAddress(addr),
         ]);
 
@@ -66,10 +66,10 @@ export function TxExplorer() {
           ...successful.map((tx) => ({
             hash: tx.hash,
             height: tx.height,
-            messageType: (tx as any).messageType || (tx as any).type || "Unknown",
+            messageType: tx.messageType || "Unknown",
             status: "confirmed" as const,
             sender: tx.sender,
-            msg: (tx as any).transaction?.msg || (tx as any).msg,
+            msg: tx.msg ?? undefined,
           })),
           ...failed.map((tx) => ({
             hash: tx.hash,
