@@ -66,6 +66,7 @@ export const ARBOR_TX_TYPE_URLS = {
   burn_nusd: "type.googleapis.com/types.MessageBurnNusd",
   liquidate_nasm_vault: "type.googleapis.com/types.MessageLiquidateNasmVault",
   send: "type.googleapis.com/types.MessageSend",
+  claim_faucet: "type.googleapis.com/types.MessageClaimFaucet",
   set_treasury_cut: "type.googleapis.com/types.MessageSetTreasuryCut",
 } as const;
 

@@ -2310,3 +2310,46 @@ toJSON(message: T): unknown;
 create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;
 fromPartial<I extends Exact<DeepPartial<T>, I>>(object: I): T;
       }
+
+export interface MessageClaimFaucet {
+  address: Uint8Array;
+}
+
+export const MessageClaimFaucet: MessageFns<MessageClaimFaucet> = {
+  encode(message: MessageClaimFaucet, writer: Writer = Writer.create()): Writer {
+    if (message.address.length !== 0) {
+      writer.uint32(10).bytes(message.address);
+    }
+    return writer;
+  },
+
+  decode(input: Reader | Uint8Array, length?: number): MessageClaimFaucet {
+    const reader = input instanceof Reader ? input : new Reader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = { address: new Uint8Array() } as MessageClaimFaucet;
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          message.address = reader.bytes();
+          break;
+        default:
+          reader.skipType(tag & 7);
+          break;
+      }
+    }
+    return message;
+  },
+
+  fromPartial(object: DeepPartial<MessageClaimFaucet>): MessageClaimFaucet {
+    const message = { address: new Uint8Array() } as MessageClaimFaucet;
+    message.address = object.address ?? new Uint8Array();
+    return message;
+  },
+
+  toJSON(message: MessageClaimFaucet): unknown {
+    const obj: any = {};
+    message.address !== undefined && (obj.address = base64FromBytes(message.address));
+    return obj;
+  },
+};

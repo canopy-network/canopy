@@ -5,6 +5,7 @@ import { useWalletStore } from "@/lib/wallet";
 import { SendForm } from "@/components/forms/SendForm";
 import { useAccount } from "@/lib/hooks/useAccount";
 import { Portfolio } from "@/components/sections/Portfolio";
+import { FaucetCard } from "@/components/sections/FaucetCard";
 import { AssetIcon } from "@/components/AssetIcon";
 import { formatAddress, formatAmount } from "@/lib/arbor/format";
 import {
@@ -189,6 +190,7 @@ export default function SendPage() {
             </div>
           </div>
         )}
+        <FaucetCard />
         <Portfolio />
       </section>
     </div>

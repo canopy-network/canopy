@@ -23,6 +23,7 @@ import {
   MessageBurnNusd,
   MessageLiquidateNasmVault,
   MessageSetTreasuryCut,
+  MessageClaimFaucet,
 } from "./generated/arbor";
 
 import { MessageSend } from "./generated/tx";
@@ -73,6 +74,7 @@ export const TX_MESSAGE_CODECS: Record<ArborTxType, TxCodec> = {
   liquidate_nasm_vault: MessageLiquidateNasmVault as unknown as TxCodec,
   send: MessageSend as unknown as TxCodec,
   set_treasury_cut: MessageSetTreasuryCut as unknown as TxCodec,
+  claim_faucet: MessageClaimFaucet as unknown as TxCodec,
 };
 
 export interface EventCodec {
