@@ -108,7 +108,7 @@ export function TxExplorer() {
       <div>
         <h1 className="text-lg font-semibold text-zinc-100">Transactions</h1>
         <p className="text-xs text-zinc-500">
-          {wallet.isConnected
+          {wallet.isConnected && wallet.address
             ? `Activity for ${formatAddress(wallet.address)} — successful and failed transactions`
             : "Connect a wallet to see your transaction history"}
         </p>
