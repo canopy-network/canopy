@@ -304,6 +304,39 @@ export async function queryFailedTxs(): Promise<TxResponse[]> {
   }
 }
 
+export async function queryFailedTxsByAddress(address: string): Promise<TxResponse[]> {
+  try {
+    const res = await rpcFetch("/v1/query/failed-txs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address }),
+    });
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+    const list = data?.results ?? data?.txs ?? data?.result ?? [];
+
+    if (!Array.isArray(list)) {
+      return [];
+    }
+
+    return list.map((tx: any) => ({
+      hash: tx.hash || tx.txHash || "",
+      height: Number(tx.height ?? 0),
+      sender: tx.sender,
+      result: tx.result,
+      error: tx.error,
+      messageType: tx.messageType || tx.message_type || "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+
 export async function rangeScan(
   prefix: Uint8Array,
   limit: number = 100,
