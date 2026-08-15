@@ -80,6 +80,39 @@ func (c *Contract) DeliverMessageWithdraw(msg *MessageWithdraw, fee uint64) *Plu
 		return &PluginDeliverResponse{Error: pErr}
 	}
 
+	// [FAUCET ACCOUNTING FIX] Read the withdrawer's AssetBalance ({37}) for
+	// this market's debt_asset_id -- the faucet-credited ledger, distinct
+	// from Account.Amount (the CUSTODY FIX ledger credited further below).
+	// Inverse of deposit.go's identical debit: deposit.go's DeliverMessageDeposit
+	// now debits AssetBalance on the way in, so withdraw must credit it back
+	// on the way out, or AssetBalance would only ever decrease across a
+	// deposit+withdraw round trip even though the user's real Account.Amount
+	// nets back to its starting point. Keyed here (not in the first
+	// StateRead above) because DebtAssetId isn't known until market is
+	// decoded.
+	assetBalanceKey := KeyForAssetBalance(market.DebtAssetId, msg.Address)
+	const qAssetBalance = 0
+	abReadResp, abErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: qAssetBalance, Key: assetBalanceKey},
+		},
+	})
+	if abErr != nil {
+		return &PluginDeliverResponse{Error: abErr}
+	}
+	if abReadResp.Error != nil {
+		return &PluginDeliverResponse{Error: abReadResp.Error}
+	}
+	assetBalanceBytes := entryValue(abReadResp, qAssetBalance)
+	assetBalance := &AssetBalance{Address: msg.Address, AssetId: market.DebtAssetId}
+	if len(assetBalanceBytes) > 0 {
+		if uErr := Unmarshal(assetBalanceBytes, assetBalance); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+		assetBalance.Address = msg.Address
+		assetBalance.AssetId = market.DebtAssetId
+	}
+
 	// [ARCM Section 9.2b, C2-confirmed admission set] layer4_pending_count
 	// > 0 blocks BOTH deposit and withdraw. index_overflow_halted is
 	// DELIBERATELY NOT checked here -- ARCM Section 9.3a's admission set
@@ -190,6 +223,20 @@ func (c *Contract) DeliverMessageWithdraw(msg *MessageWithdraw, fee uint64) *Plu
 		return &PluginDeliverResponse{Error: mErr}
 	}
 
+	// [FAUCET ACCOUNTING FIX] Credit the withdrawer's AssetBalance ({37}) by
+	// actualWithdrawn -- same amount and same zero-is-a-no-op reasoning as
+	// the Account.Amount credit directly above. Inverse of deposit.go's
+	// debit: without this, AssetBalance would only ever decrease (deposit
+	// debits it, faucet claims are the only credit), permanently
+	// understating a user's real redeemable balance after any withdrawal.
+	if cErr := creditAssetBalanceAmount(market.DebtAssetId, msg.Address, assetBalance, actualWithdrawn); cErr != nil {
+		return &PluginDeliverResponse{Error: cErr}
+	}
+	assetBalanceBytesOut, mErr := Marshal(assetBalance)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
+	}
+
 	// [AYIS Section 4.4, H4-corrected] total_shares_outstanding decrement:
 	// compare-before-subtract, cannot overflow (a decrement, not an
 	// increment -- L1's checked-add guard does not apply here, same
@@ -270,6 +317,7 @@ func (c *Contract) DeliverMessageWithdraw(msg *MessageWithdraw, fee uint64) *Plu
 			{Key: marketKey, Value: marketBytesOut},
 			{Key: supplyIndexKey, Value: newSupplyIndexBytes},
 			{Key: acctKey, Value: acctBytesOut},
+			{Key: assetBalanceKey, Value: assetBalanceBytesOut},
 		},
 	}
 	// [FIX] poolKey's write is now conditional (delete at zero, set otherwise --

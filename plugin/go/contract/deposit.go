@@ -60,6 +60,10 @@ func (c *Contract) DeliverMessageDeposit(msg *MessageDeposit, fee uint64) *Plugi
 		qAccount
 		qPool
 	)
+	// [FAUCET ACCOUNTING FIX] market.DebtAssetId is read from the market
+	// bytes below (not known until after this first StateRead resolves),
+	// so the AssetBalance key for the faucet ledger is read separately,
+	// keyed once DebtAssetId is known. See the second StateRead below.
 	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 		Keys: []*PluginKeyRead{
 			{QueryId: qMarket, Key: marketKey},
@@ -91,6 +95,42 @@ func (c *Contract) DeliverMessageDeposit(msg *MessageDeposit, fee uint64) *Plugi
 	}
 	if pErr := checkMarketNotDeprecated(market, msg.MarketId); pErr != nil {
 		return &PluginDeliverResponse{Error: pErr}
+	}
+
+	// [FAUCET ACCOUNTING FIX] Read the depositor's AssetBalance ({37}) for
+	// this market's debt_asset_id -- the faucet-credited ledger that
+	// CheckMessageDeposit/faucet.go operate on, distinct from Account.Amount
+	// (the CUSTODY FIX ledger debited further below). Keyed here, not in
+	// the first StateRead above, because DebtAssetId isn't known until
+	// market is decoded.
+	assetBalanceKey := KeyForAssetBalance(market.DebtAssetId, msg.Address)
+	const qAssetBalance = 0
+	abReadResp, abErr := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: qAssetBalance, Key: assetBalanceKey},
+		},
+	})
+	if abErr != nil {
+		return &PluginDeliverResponse{Error: abErr}
+	}
+	if abReadResp.Error != nil {
+		return &PluginDeliverResponse{Error: abReadResp.Error}
+	}
+	assetBalanceBytes := entryValue(abReadResp, qAssetBalance)
+	assetBalance := &AssetBalance{Address: msg.Address, AssetId: market.DebtAssetId}
+	if len(assetBalanceBytes) > 0 {
+		if uErr := Unmarshal(assetBalanceBytes, assetBalance); uErr != nil {
+			return &PluginDeliverResponse{Error: uErr}
+		}
+		assetBalance.Address = msg.Address
+		assetBalance.AssetId = market.DebtAssetId
+	}
+	if dErr := debitAssetBalanceAmount(market.DebtAssetId, msg.Address, assetBalance, msg.Amount); dErr != nil {
+		return &PluginDeliverResponse{Error: dErr}
+	}
+	assetBalanceBytesOut, mErr := Marshal(assetBalance)
+	if mErr != nil {
+		return &PluginDeliverResponse{Error: mErr}
 	}
 
 	// Admission checks, in order: index_overflow_halted (ARCM Section 9.3a --
@@ -239,6 +279,7 @@ func (c *Contract) DeliverMessageDeposit(msg *MessageDeposit, fee uint64) *Plugi
 			{Key: lenderPosKey, Value: lenderPosBytesOut},
 			{Key: acctKey, Value: acctBytesOut},
 			{Key: poolKey, Value: poolBytesOut},
+			{Key: assetBalanceKey, Value: assetBalanceBytesOut},
 		},
 	})
 	if err != nil {

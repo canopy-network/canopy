@@ -70,14 +70,33 @@ func creditPoolAmount(marketId string, pool *Pool, amount uint64) *PluginError {
 }
 
 // creditAssetBalanceAmount adds amount to bal.Amount ({37} AssetBalance).
-// Checked-add, identical shape to creditPoolAmount above. Used exclusively
-// by the devnet faucet (faucet.go) as of this addition -- deposit_collateral
-// and other handlers do not yet read/write against AssetBalance (KNOWN GAP,
-// see AssetBalance's own doc comment in arbor_state.proto).
+// Checked-add, identical shape to creditPoolAmount above. Used by the
+// devnet faucet (faucet.go).
 func creditAssetBalanceAmount(assetID string, addr []byte, bal *AssetBalance, amount uint64) *PluginError {
 	if amount > (^uint64(0) - bal.Amount) {
 		return ErrAssetBalanceOverflow(assetID, addr, bal.Amount, amount)
 	}
 	bal.Amount += amount
+	return nil
+}
+
+// debitAssetBalanceAmount subtracts amount from bal.Amount ({37}
+// AssetBalance). Compare-before-subtract, same discipline as
+// debitAccountAmount above. Returns ErrInsufficientFunds() on shortfall.
+//
+// [FAUCET ACCOUNTING FIX] Added because deposit.go's DeliverMessageDeposit
+// minted lender shares and debited the depositor's real Account.Amount
+// (the CUSTODY FIX ledger) without ever touching AssetBalance (the
+// faucet-credited ledger CheckMessageDeposit and faucet.go operate on).
+// Those are two distinct ledgers -- the custody fix's Account.Amount debit
+// does NOT imply AssetBalance was ever decremented. Prior to this fix,
+// AssetBalance was write-only from the faucet's credit side, so repeated
+// deposits could mint unlimited shares against a fixed faucet balance that
+// never went down.
+func debitAssetBalanceAmount(assetID string, addr []byte, bal *AssetBalance, amount uint64) *PluginError {
+	if bal.Amount < amount {
+		return ErrInsufficientFunds()
+	}
+	bal.Amount -= amount
 	return nil
 }
