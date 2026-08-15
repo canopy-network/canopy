@@ -366,12 +366,6 @@ export default function HomePage() {
               </p>
             </div>
           </div>
-          <Link
-            href="/admin"
-            className="inline-flex items-center gap-2 rounded-full btn-brand px-4 py-2 text-xs font-semibold text-white transition"
-          >
-            + Create market
-          </Link>
         </div>
 
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
