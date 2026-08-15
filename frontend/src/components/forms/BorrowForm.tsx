@@ -107,12 +107,12 @@ export function BorrowForm({ marketId }: { marketId: string }) {
       "Oracle prices unavailable.";
   } else if (amount.trim()) {
     try {
-      const parsed = parseAmount(amount);
+      const parsed = parseAmount(amount, 0);
 
       if (parsed > MAX_UINT64) {
         parseError = "Borrow amount exceeds uint64 max.";
       } else if (parsed > remainingBorrow) {
-        parseError = `Borrow exceeds max borrowable amount: ${formatAmount(remainingBorrow, 9)}.`;
+        parseError = `Borrow exceeds max borrowable amount: ${formatAmount(remainingBorrow, 0)}.`;
       } else {
         const newDebt = currentDebt + parsed;
 
@@ -139,7 +139,7 @@ export function BorrowForm({ marketId }: { marketId: string }) {
     setLocalError(null);
 
     try {
-      const parsed = parseAmount(amount);
+      const parsed = parseAmount(amount, 0);
 
       if (parsed <= 0n) {
         throw new Error("Borrow amount must be greater than zero.");
@@ -151,7 +151,7 @@ export function BorrowForm({ marketId }: { marketId: string }) {
 
       if (parsed > remainingBorrow) {
         throw new Error(
-          `Borrow exceeds max borrowable amount: ${formatAmount(remainingBorrow, 9)}.`
+          `Borrow exceeds max borrowable amount: ${formatAmount(remainingBorrow, 0)}.`
         );
       }
 
@@ -193,13 +193,13 @@ export function BorrowForm({ marketId }: { marketId: string }) {
         <div>
           Current debt:{" "}
           <span className="text-zinc-300">
-            {formatAmount(currentDebt, 9)}
+            {formatAmount(currentDebt, 0)}
           </span>
         </div>
         <div>
           Max borrow:{" "}
           <span className="text-zinc-300">
-            {formatAmount(remainingBorrow, 9)}
+            {formatAmount(remainingBorrow, 0)}
           </span>
         </div>
       </div>

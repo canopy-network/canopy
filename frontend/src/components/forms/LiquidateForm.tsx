@@ -126,12 +126,12 @@ export function LiquidateForm({ marketId }: { marketId: string }) {
 
   if (repayAmount.trim() && !parseError) {
     try {
-      const parsed = parseAmount(repayAmount);
+      const parsed = parseAmount(repayAmount, 0);
 
       if (parsed > MAX_UINT64) {
         parseError = "Repay amount exceeds uint64 max.";
       } else if (parsed > maxRepay) {
-        parseError = `Repay exceeds close-factor cap: ${formatAmount(maxRepay, 9)}.`;
+        parseError = `Repay exceeds close-factor cap: ${formatAmount(maxRepay, 0)}.`;
       }
     } catch (err: any) {
       parseError = err?.message || String(err);
@@ -143,7 +143,7 @@ export function LiquidateForm({ marketId }: { marketId: string }) {
     setLocalError(null);
 
     try {
-      const parsed = parseAmount(repayAmount);
+      const parsed = parseAmount(repayAmount, 0);
 
       if (parsed <= 0n) {
         throw new Error("Repay amount must be greater than zero.");
@@ -155,7 +155,7 @@ export function LiquidateForm({ marketId }: { marketId: string }) {
 
       if (parsed > maxRepay) {
         throw new Error(
-          `Repay exceeds close-factor cap: ${formatAmount(maxRepay, 9)}.`
+          `Repay exceeds close-factor cap: ${formatAmount(maxRepay, 0)}.`
         );
       }
 
@@ -207,7 +207,7 @@ export function LiquidateForm({ marketId }: { marketId: string }) {
         <div>
           Target debt:{" "}
           <span className="text-zinc-300">
-            {formatAmount(targetDebt, 9)}
+            {formatAmount(targetDebt, 0)}
           </span>
         </div>
         <div>
@@ -221,7 +221,7 @@ export function LiquidateForm({ marketId }: { marketId: string }) {
         <div>
           Max repay:{" "}
           <span className="text-zinc-300">
-            {formatAmount(maxRepay, 9)}
+            {formatAmount(maxRepay, 0)}
           </span>
         </div>
       </div>

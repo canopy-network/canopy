@@ -32,7 +32,7 @@ export function MintNusdForm({ onMinted }: { onMinted?: () => void }) {
 
   if (collateralQuantity.trim()) {
     try {
-      parsedCollateral = parseAmount(collateralQuantity, 9);
+      parsedCollateral = parseAmount(collateralQuantity, 0);
       if (parsedCollateral > MAX_UINT64) parseError = "Collateral quantity exceeds uint64 max.";
     } catch (err: any) {
       parseError = err?.message || String(err);
@@ -55,7 +55,7 @@ export function MintNusdForm({ onMinted }: { onMinted?: () => void }) {
       if (!vaultId.trim()) throw new Error("Vault ID is required.");
       if (!collateralAssetId.trim()) throw new Error("Collateral asset ID is required.");
 
-      const collateral = parseAmount(collateralQuantity, 9);
+      const collateral = parseAmount(collateralQuantity, 0);
       const nusd = parseAmount(nusdAmount, 6);
 
       if (collateral <= 0n) throw new Error("Collateral quantity must be greater than zero.");
@@ -136,7 +136,7 @@ export function MintNusdForm({ onMinted }: { onMinted?: () => void }) {
 
       {parsedCollateral > 0n && parsedNusd > 0n && !parseError && (
         <p className="text-[11px] text-zinc-600">
-          Locking {formatAmount(parsedCollateral, 9)} {collateralAssetId || "?"} to mint{" "}
+          Locking {formatAmount(parsedCollateral, 0)} {collateralAssetId || "?"} to mint{" "}
           {formatAmount(parsedNusd, 6)} NUSD.
         </p>
       )}

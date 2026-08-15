@@ -107,7 +107,7 @@ export function LiquidateNasmVaultForm({ onLiquidated }: { onLiquidated?: () => 
           <div>
             Escrowed collateral:{" "}
             <span className="text-zinc-300">
-              {escrowedCollateral !== null ? formatAmount(escrowedCollateral, 9) : "loading…"}
+              {escrowedCollateral !== null ? formatAmount(escrowedCollateral, 0) : "loading…"}
             </span>
           </div>
         </div>

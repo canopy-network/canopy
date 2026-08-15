@@ -194,13 +194,13 @@ function MarketCard({
                 {fmtUsd(suppliedUsd)}
               </p>
               <p className="text-[10px] tabular-nums text-zinc-600">
-                {formatAmount(m.totalSupplied, 9)} {m.debtAssetId}
+                {formatAmount(m.totalSupplied, 0)} {m.debtAssetId}
               </p>
             </>
           ) : (
             <>
               <p className="mt-1 tabular-nums text-zinc-100">
-                {formatAmount(m.totalSupplied, 9)}
+                {formatAmount(m.totalSupplied, 0)}
               </p>
               <p className="text-[10px] uppercase text-zinc-600">
                 {m.debtAssetId}
@@ -216,13 +216,13 @@ function MarketCard({
                 {fmtUsd(borrowedUsd)}
               </p>
               <p className="text-[10px] tabular-nums text-zinc-600">
-                {formatAmount(m.totalBorrowed, 9)} {m.debtAssetId}
+                {formatAmount(m.totalBorrowed, 0)} {m.debtAssetId}
               </p>
             </>
           ) : (
             <>
               <p className="mt-1 tabular-nums text-zinc-100">
-                {formatAmount(m.totalBorrowed, 9)}
+                {formatAmount(m.totalBorrowed, 0)}
               </p>
               <p className="text-[10px] uppercase text-zinc-600">
                 {m.debtAssetId}
@@ -259,7 +259,7 @@ function MarketCard({
       <div className="mt-3 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-[10px] tabular-nums text-zinc-500">
         <div>
           R_fund
-          <p className="text-zinc-300">{formatAmount(entry.reserveFund, 9)}</p>
+          <p className="text-zinc-300">{formatAmount(entry.reserveFund, 0)}</p>
         </div>
         <div>
           Loss factor
@@ -382,11 +382,11 @@ export default function HomePage() {
             value={
               pricedSupplied > 0
                 ? fmtUsd(pricedSupplied)
-                : formatAmount(totalSupplied, 9)
+                : formatAmount(totalSupplied, 0)
             }
             sub={
               pricedSupplied > 0
-                ? `${formatAmount(totalSupplied, 9)} native${
+                ? `${formatAmount(totalSupplied, 0)} native${
                     unpricedActive > 0 ? ` · ${unpricedActive} unpriced` : ""
                   }`
                 : `native units${unitLabel}`
@@ -398,11 +398,11 @@ export default function HomePage() {
             value={
               pricedBorrowed > 0
                 ? fmtUsd(pricedBorrowed)
-                : formatAmount(totalBorrowed, 9)
+                : formatAmount(totalBorrowed, 0)
             }
             sub={
               pricedBorrowed > 0
-                ? `${formatAmount(totalBorrowed, 9)} native${
+                ? `${formatAmount(totalBorrowed, 0)} native${
                     unpricedActive > 0 ? ` · ${unpricedActive} unpriced` : ""
                   }`
                 : `native units${unitLabel}`

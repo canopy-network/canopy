@@ -89,7 +89,7 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
     parseError = "Asset tier parameters unavailable.";
   } else if (quantity.trim()) {
     try {
-      const parsed = parseAmount(quantity);
+      const parsed = parseAmount(quantity, 0);
 
       if (parsed > MAX_UINT64) {
         parseError = "Quantity exceeds uint64 max.";
@@ -126,7 +126,7 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
     setLocalError(null);
 
     try {
-      const parsed = parseAmount(quantity);
+      const parsed = parseAmount(quantity, 0);
 
       if (parsed <= 0n) {
         throw new Error("Quantity must be greater than zero.");
@@ -178,13 +178,13 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
         <div>
           Collateral:{" "}
           <span className="text-zinc-300">
-            {formatAmount(currentCollateral, 9)}
+            {formatAmount(currentCollateral, 0)}
           </span>
         </div>
         <div>
           Debt:{" "}
           <span className="text-zinc-300">
-            {formatAmount(currentDebt, 9)}
+            {formatAmount(currentDebt, 0)}
           </span>
         </div>
       </div>

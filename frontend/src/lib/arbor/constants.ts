@@ -4,7 +4,7 @@ export const HF_LIQUIDATABLE_SCALED = 1_000_000n;
 
 export const BLOCKS_PER_YEAR = 1_576_800n;
 
-export const NATIVE_DECIMALS = 9;
+export const NATIVE_DECIMALS = 6;
 export const PRICE_DECIMALS = 8;
 
 export const MAX_MARKET_ID_LEN = 64;

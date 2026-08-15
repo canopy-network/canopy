@@ -59,7 +59,7 @@ export function DepositCollateralForm({ marketId }: { marketId: string }) {
 
   if (quantity.trim()) {
     try {
-      const parsed = parseAmount(quantity);
+      const parsed = parseAmount(quantity, 0);
 
       if (parsed > MAX_UINT64) {
         parseError = "Quantity exceeds uint64 max.";
@@ -74,7 +74,7 @@ export function DepositCollateralForm({ marketId }: { marketId: string }) {
     setLocalError(null);
 
     try {
-      const parsed = parseAmount(quantity);
+      const parsed = parseAmount(quantity, 0);
 
       if (parsed <= 0n) {
         throw new Error("Quantity must be greater than zero.");
@@ -130,14 +130,14 @@ export function DepositCollateralForm({ marketId }: { marketId: string }) {
       <div className="text-xs text-zinc-500">
         Current collateral:{" "}
         <span className="text-zinc-300">
-          {formatAmount(currentCollateral, 9)}
+          {formatAmount(currentCollateral, 0)}
         </span>
       </div>
 
       <Field
         label="Quantity"
         error={parseError || undefined}
-        hint="Native units with 9-decimal convention."
+        hint="Whole units (faucet convention)."
       >
         <TextInput
           value={quantity}

@@ -56,7 +56,7 @@ export function DepositForm({ marketId }: { marketId: string }) {
 
   if (amount.trim()) {
     try {
-      const parsed = parseAmount(amount);
+      const parsed = parseAmount(amount, 0);
 
       if (parsed > MAX_UINT64) {
         parseError = "Amount exceeds uint64 max.";
@@ -77,7 +77,7 @@ export function DepositForm({ marketId }: { marketId: string }) {
     setLocalError(null);
 
     try {
-      const parsed = parseAmount(amount);
+      const parsed = parseAmount(amount, 0);
 
       if (parsed <= 0n) {
         throw new Error("Amount must be greater than zero.");
@@ -133,7 +133,7 @@ export function DepositForm({ marketId }: { marketId: string }) {
       <Field
         label="Amount"
         error={parseError || undefined}
-        hint={`Expected shares: ${formatAmount(expectedShares, 9)}`}
+        hint={`Expected shares: ${formatAmount(expectedShares, 0)}`}
       >
         <TextInput
           value={amount}

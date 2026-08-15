@@ -167,14 +167,14 @@ export default function MarketPage() {
           <div>
             Total supplied
             <p className="text-zinc-300">
-              {formatAmount(market.totalSupplied, 9)}
+              {formatAmount(market.totalSupplied, 0)}
             </p>
           </div>
 
           <div>
             Total borrowed
             <p className="text-zinc-300">
-              {formatAmount(market.totalBorrowed, 9)}
+              {formatAmount(market.totalBorrowed, 0)}
             </p>
           </div>
 
@@ -182,7 +182,7 @@ export default function MarketPage() {
 
           <div>
             Reserve fund
-            <p className="text-zinc-300">{formatAmount(reserveFund, 9)}</p>
+            <p className="text-zinc-300">{formatAmount(reserveFund, 0)}</p>
           </div>
 
           <div>
@@ -223,7 +223,7 @@ export default function MarketPage() {
             <div>
               Lender shares
               <p className="text-zinc-300">
-                {formatAmount(lenderPosition?.shares ?? 0n, 9)}
+                {formatAmount(lenderPosition?.shares ?? 0n, 0)}
               </p>
             </div>
 
@@ -240,7 +240,7 @@ export default function MarketPage() {
             <div>
               Debt
               <p className="text-zinc-300">
-                {formatAmount(currentDebt, 9)}
+                {formatAmount(currentDebt, 0)}
               </p>
             </div>
 

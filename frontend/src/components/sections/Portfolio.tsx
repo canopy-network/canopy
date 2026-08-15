@@ -65,7 +65,7 @@ function LendingRow({
   const shares = lp?.shares ?? 0n;
   const value =
     price?.available && price.price != null
-      ? (Number(shares) / 1e9) * (Number(price.price) / 1e8)
+      ? Number(shares) * (Number(price.price) / 1e8)
       : null;
 
   useEffect(() => {
@@ -79,7 +79,7 @@ function LendingRow({
     <tr className="border-t border-white/5">
       <MarketCell entry={entry} />
       <td className="py-3 pr-4 text-right tabular-nums text-zinc-100">
-        {formatAmount(shares, 9)}
+        {formatAmount(shares, 0)}
       </td>
       <td className="py-3 text-right tabular-nums text-zinc-300">
         {value != null ? `$${value.toFixed(6)}` : "—"}
@@ -156,13 +156,13 @@ function BorrowingRow({
     <tr className="border-t border-white/5">
       <MarketCell entry={entry} />
       <td className="py-3 pr-4 text-right">
-        <p className="tabular-nums text-zinc-100">{formatAmount(debt, 9)}</p>
+        <p className="tabular-nums text-zinc-100">{formatAmount(debt, 0)}</p>
         <p className="text-[10px] tabular-nums text-zinc-600">
           {debtUsd != null ? `$${debtUsd.toFixed(6)}` : m.debtAssetId}
         </p>
       </td>
       <td className="py-3 pr-4 text-right">
-        <p className="tabular-nums text-zinc-100">{formatAmount(coll, 9)}</p>
+        <p className="tabular-nums text-zinc-100">{formatAmount(coll, 0)}</p>
         <p className="text-[10px] tabular-nums text-zinc-600">
           {collUsd != null ? `$${collUsd.toFixed(6)}` : m.collateralAssetId}
         </p>

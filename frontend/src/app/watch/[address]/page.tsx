@@ -60,7 +60,7 @@ function LendingRow({ entry, address }: { entry: MarketWithIndices; address: str
   const shares = lp?.shares ?? 0n;
   const value =
     price?.available && price.price != null
-      ? (Number(shares) / 1e9) * (Number(price.price) / 1e8)
+      ? Number(shares) * (Number(price.price) / 1e8)
       : null;
 
   if (shares === 0n) return null;
@@ -70,7 +70,7 @@ function LendingRow({ entry, address }: { entry: MarketWithIndices; address: str
       <MarketCell entry={entry} />
       <td className="py-3 text-right">
         <p className="text-sm tabular-nums text-zinc-100">
-          {formatAmount(shares, 9)}
+          {formatAmount(shares, 0)}
         </p>
         <p className="text-[11px] text-zinc-500">
           {value != null ? `$${value.toFixed(2)}` : "—"}
@@ -108,13 +108,13 @@ function BorrowingRow({ entry, address }: { entry: MarketWithIndices; address: s
       <MarketCell entry={entry} />
       <td className="py-3 text-right">
         <p className="text-sm tabular-nums text-zinc-100">
-          {formatAmount(coll, 9)}
+          {formatAmount(coll, 0)}
         </p>
         <p className="text-[11px] text-zinc-500">{m.collateralAssetId}</p>
       </td>
       <td className="py-3 text-right">
         <p className="text-sm tabular-nums text-zinc-100">
-          {formatAmount(debt, 9)}
+          {formatAmount(debt, 0)}
         </p>
         <p className="text-[11px] text-zinc-500">{m.debtAssetId}</p>
       </td>
@@ -280,11 +280,11 @@ export default function WatchPage() {
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
                     <p className="text-zinc-500">Escrowed</p>
-                    <p className="text-zinc-100 tabular-nums">{formatAmount(vault.escrowed as bigint, 9)}</p>
+                    <p className="text-zinc-100 tabular-nums">{formatAmount(vault.escrowed as bigint, 0)}</p>
                   </div>
                   <div>
                     <p className="text-zinc-500">Principal</p>
-                    <p className="text-zinc-100 tabular-nums">{formatAmount(vault.principal as bigint, 9)}</p>
+                    <p className="text-zinc-100 tabular-nums">{formatAmount(vault.principal as bigint, 0)}</p>
                   </div>
                 </div>
               </div>

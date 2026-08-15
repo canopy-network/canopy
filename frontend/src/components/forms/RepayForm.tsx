@@ -61,7 +61,7 @@ export function RepayForm({ marketId }: { marketId: string }) {
 
   if (amount.trim()) {
     try {
-      const parsed = parseAmount(amount);
+      const parsed = parseAmount(amount, 0);
 
       if (parsed > MAX_UINT64) {
         parseError = "Repay amount exceeds uint64 max.";
@@ -78,7 +78,7 @@ export function RepayForm({ marketId }: { marketId: string }) {
     setLocalError(null);
 
     try {
-      const parsed = parseAmount(amount);
+      const parsed = parseAmount(amount, 0);
 
       if (parsed <= 0n) {
         throw new Error("Repay amount must be greater than zero.");
@@ -129,7 +129,7 @@ export function RepayForm({ marketId }: { marketId: string }) {
       <div className="text-xs text-zinc-500">
         Current debt:{" "}
         <span className="text-zinc-300">
-          {formatAmount(currentDebt, 9)}
+          {formatAmount(currentDebt, 0)}
         </span>
       </div>
 

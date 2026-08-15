@@ -56,7 +56,7 @@ export function WithdrawForm({ marketId }: { marketId: string }) {
 
   if (shares.trim()) {
     try {
-      const parsed = parseAmount(shares);
+      const parsed = parseAmount(shares, 0);
 
       if (parsed > MAX_UINT64) {
         parseError = "Shares exceed uint64 max.";
@@ -79,7 +79,7 @@ export function WithdrawForm({ marketId }: { marketId: string }) {
     setLocalError(null);
 
     try {
-      const parsed = parseAmount(shares);
+      const parsed = parseAmount(shares, 0);
 
       if (parsed <= 0n) {
         throw new Error("Shares must be greater than zero.");
@@ -130,7 +130,7 @@ export function WithdrawForm({ marketId }: { marketId: string }) {
       <Field
         label="Shares"
         error={parseError || undefined}
-        hint={`Available: ${formatAmount(availableShares, 9)} | Expected tokens: ${formatAmount(expectedTokens, 9)}`}
+        hint={`Available: ${formatAmount(availableShares, 0)} | Expected tokens: ${formatAmount(expectedTokens, 0)}`}
       >
         <TextInput
           value={shares}
