@@ -6,6 +6,7 @@ import { SendForm } from "@/components/forms/SendForm";
 import { useAccount } from "@/lib/hooks/useAccount";
 import { Portfolio } from "@/components/sections/Portfolio";
 import { FaucetCard } from "@/components/sections/FaucetCard";
+import { AssetRows } from "@/components/sections/AssetRows";
 import { AssetIcon } from "@/components/AssetIcon";
 import { formatAddress, formatAmount } from "@/lib/arbor/format";
 import {
@@ -146,6 +147,7 @@ export default function SendPage() {
                 amount={nusd}
                 decimals={6}
               />
+              <AssetRows address={wallet.address} />
             </div>
           )}
         </div>
