@@ -5,6 +5,7 @@ import { useMarket } from "@/lib/hooks/useMarket";
 import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
 import { useWalletStore } from "@/lib/wallet";
 import { useArborTx } from "@/lib/hooks/useArborTx";
+import { useAssetBalance } from "@/components/sections/AssetRows";
 import { marketAdmissionFromMarket } from "@/lib/hooks/useMarketAdmission";
 import { getBlockedReason } from "@/lib/arbor/admission";
 import { parseAmount, formatAmount } from "@/lib/arbor/format";
@@ -25,6 +26,10 @@ export function DepositCollateralForm({ marketId }: { marketId: string }) {
   const { data: marketData, isLoading } = useMarket(marketId);
   const wallet = useWalletStore();
   const { submit, phase } = useArborTx();
+  const walletBalance = useAssetBalance(
+    marketData?.market.collateralAssetId ?? null,
+    wallet.address
+  );
 
   const { data: position } = useBorrowerPosition(marketId, wallet.address);
 
@@ -111,6 +116,15 @@ export function DepositCollateralForm({ marketId }: { marketId: string }) {
         <ErrorText>
           Connect a wallet with a 20-byte hex address to post collateral.
         </ErrorText>
+      )}
+
+      {wallet.isConnected && walletBalance != null && (
+        <div className="text-xs text-zinc-500">
+          Wallet balance:{" "}
+          <span className="text-zinc-300">
+            {walletBalance.toString()} {market.collateralAssetId}
+          </span>
+        </div>
       )}
 
       <div className="text-xs text-zinc-500">

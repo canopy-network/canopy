@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMarket } from "@/lib/hooks/useMarket";
 import { useWalletStore } from "@/lib/wallet";
 import { useArborTx } from "@/lib/hooks/useArborTx";
+import { useAssetBalance } from "@/components/sections/AssetRows";
 import { marketAdmissionFromMarket } from "@/lib/hooks/useMarketAdmission";
 import { getBlockedReason } from "@/lib/arbor/admission";
 import { parseAmount, formatAmount } from "@/lib/arbor/format";
@@ -25,6 +26,10 @@ export function DepositForm({ marketId }: { marketId: string }) {
   const { data: marketData, isLoading } = useMarket(marketId);
   const wallet = useWalletStore();
   const { submit, phase } = useArborTx();
+  const walletBalance = useAssetBalance(
+    marketData?.market.debtAssetId ?? null,
+    wallet.address
+  );
 
   const [amount, setAmount] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -114,6 +119,15 @@ export function DepositForm({ marketId }: { marketId: string }) {
         <ErrorText>
           Connect a wallet with a 20-byte hex address to deposit.
         </ErrorText>
+      )}
+
+      {wallet.isConnected && walletBalance != null && (
+        <p className="text-[11px] text-zinc-500">
+          Wallet balance:{" "}
+          <span className="text-zinc-300">
+            {walletBalance.toString()} {market.debtAssetId}
+          </span>
+        </p>
       )}
 
       <Field

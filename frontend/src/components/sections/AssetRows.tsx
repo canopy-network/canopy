@@ -10,6 +10,30 @@ export const FAUCET_ASSETS: { id: string; icon: string; name: string; note: stri
   { id: "USDC", icon: "usdc", name: "USD Coin", note: "Stablecoin" },
 ];
 
+
+export function useAssetBalance(
+  assetId: string | null,
+  address: string | null
+): bigint | null {
+  const [amt, setAmt] = useState<bigint | null>(null);
+  useEffect(() => {
+    if (!assetId || !address) {
+      setAmt(null);
+      return;
+    }
+    let alive = true;
+    getAssetBalance(assetId, address)
+      .then((r) => {
+        if (alive) setAmt(r?.amount ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [assetId, address]);
+  return amt;
+}
+
 export function AssetRows({ address }: { address: string | null }) {
   const [amounts, setAmounts] = useState<Record<string, bigint | null>>({});
 
