@@ -6,6 +6,7 @@ ARG BUILD_PATH=cmd/cli
 ARG GO_BIN_DIR
 ARG BUILD_LOCAL=False
 ARG BIN_PATH=/bin/cli
+ARG TARGETARCH
 
 # downloads git and clones selected version
 RUN apk add --no-cache git ca-certificates alpine-sdk
@@ -32,12 +33,12 @@ RUN make build/wallet
 RUN make build/explorer
 
 # Builds auto-update CLI
-RUN CGO_ENABLED=0 GOOS=linux go build -a -o bin ./cmd/auto-update/.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o bin ./cmd/auto-update/.
 
 # Only build if the file at ${BIN_PATH} doesn't already exist
 RUN if [ ! -f "${BIN_PATH}" ]; then \
     echo "File ${BIN_PATH} not found. Building it..."; \
-    CGO_ENABLED=0 GOOS=linux go build -a -o "${BIN_PATH}" ./cmd/main/...; \
+    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o "${BIN_PATH}" ./cmd/main/...; \
   else \
     echo "File ${BIN_PATH} already exists. Skipping build."; \
   fi

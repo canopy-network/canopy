@@ -66,6 +66,9 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -75,18 +78,25 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push
+      - name: Prepare tags
+        id: prep
         run: |
           TAG=${{ github.event.inputs.tag }}
           DOCKER_TAG=${TAG//+/-}
-          docker build \
-            -t canopynetwork/canopy:${DOCKER_TAG} \
-            -t canopynetwork/canopy:latest \
-            --build-arg BRANCH=${TAG} \
-            --build-arg BUILD_PATH=cmd/cli \
-            ./.docker/auto-update/
-          docker push canopynetwork/canopy:${DOCKER_TAG}
-          docker push canopynetwork/canopy:latest
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./.docker/auto-update/
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            canopynetwork/canopy:${{ steps.prep.outputs.docker_tag }}
+            canopynetwork/canopy:latest
+          build-args: |
+            BRANCH=${{ github.event.inputs.tag }}
+            BUILD_PATH=cmd/cli
 
   docker-go:
     name: Docker - Go Plugin
@@ -99,6 +109,9 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -108,19 +121,26 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push
+      - name: Prepare tags
+        id: prep
         run: |
           TAG=${{ github.event.inputs.tag }}
           DOCKER_TAG=${TAG//+/-}
-          docker build \
-            -t canopynetwork/canopy:go-${DOCKER_TAG} \
-            -t canopynetwork/canopy:go-latest \
-            --build-arg BRANCH=${TAG} \
-            --build-arg BUILD_PATH=cmd/cli \
-            -f ./.docker/auto-update/Dockerfile.go \
-            ./.docker/auto-update/
-          docker push canopynetwork/canopy:go-${DOCKER_TAG}
-          docker push canopynetwork/canopy:go-latest
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./.docker/auto-update/
+          file: ./.docker/auto-update/Dockerfile.go
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            canopynetwork/canopy:go-${{ steps.prep.outputs.docker_tag }}
+            canopynetwork/canopy:go-latest
+          build-args: |
+            BRANCH=${{ github.event.inputs.tag }}
+            BUILD_PATH=cmd/cli
 
   docker-python:
     name: Docker - Python Plugin
@@ -133,6 +153,9 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -142,19 +165,26 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push
+      - name: Prepare tags
+        id: prep
         run: |
           TAG=${{ github.event.inputs.tag }}
           DOCKER_TAG=${TAG//+/-}
-          docker build \
-            -t canopynetwork/canopy:python-${DOCKER_TAG} \
-            -t canopynetwork/canopy:python-latest \
-            --build-arg BRANCH=${TAG} \
-            --build-arg BUILD_PATH=cmd/cli \
-            -f ./.docker/auto-update/Dockerfile.python \
-            ./.docker/auto-update/
-          docker push canopynetwork/canopy:python-${DOCKER_TAG}
-          docker push canopynetwork/canopy:python-latest
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./.docker/auto-update/
+          file: ./.docker/auto-update/Dockerfile.python
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            canopynetwork/canopy:python-${{ steps.prep.outputs.docker_tag }}
+            canopynetwork/canopy:python-latest
+          build-args: |
+            BRANCH=${{ github.event.inputs.tag }}
+            BUILD_PATH=cmd/cli
 
   docker-typescript:
     name: Docker - TypeScript Plugin
@@ -167,6 +197,9 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -176,19 +209,26 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push
+      - name: Prepare tags
+        id: prep
         run: |
           TAG=${{ github.event.inputs.tag }}
           DOCKER_TAG=${TAG//+/-}
-          docker build \
-            -t canopynetwork/canopy:typescript-${DOCKER_TAG} \
-            -t canopynetwork/canopy:typescript-latest \
-            --build-arg BRANCH=${TAG} \
-            --build-arg BUILD_PATH=cmd/cli \
-            -f ./.docker/auto-update/Dockerfile.typescript \
-            ./.docker/auto-update/
-          docker push canopynetwork/canopy:typescript-${DOCKER_TAG}
-          docker push canopynetwork/canopy:typescript-latest
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./.docker/auto-update/
+          file: ./.docker/auto-update/Dockerfile.typescript
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            canopynetwork/canopy:typescript-${{ steps.prep.outputs.docker_tag }}
+            canopynetwork/canopy:typescript-latest
+          build-args: |
+            BRANCH=${{ github.event.inputs.tag }}
+            BUILD_PATH=cmd/cli
 
   docker-kotlin:
     name: Docker - Kotlin Plugin
@@ -201,6 +241,9 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -210,19 +253,26 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push
+      - name: Prepare tags
+        id: prep
         run: |
           TAG=${{ github.event.inputs.tag }}
           DOCKER_TAG=${TAG//+/-}
-          docker build \
-            -t canopynetwork/canopy:kotlin-${DOCKER_TAG} \
-            -t canopynetwork/canopy:kotlin-latest \
-            --build-arg BRANCH=${TAG} \
-            --build-arg BUILD_PATH=cmd/cli \
-            -f ./.docker/auto-update/Dockerfile.kotlin \
-            ./.docker/auto-update/
-          docker push canopynetwork/canopy:kotlin-${DOCKER_TAG}
-          docker push canopynetwork/canopy:kotlin-latest
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./.docker/auto-update/
+          file: ./.docker/auto-update/Dockerfile.kotlin
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            canopynetwork/canopy:kotlin-${{ steps.prep.outputs.docker_tag }}
+            canopynetwork/canopy:kotlin-latest
+          build-args: |
+            BRANCH=${{ github.event.inputs.tag }}
+            BUILD_PATH=cmd/cli
 
   docker-csharp:
     name: Docker - C# Plugin
@@ -235,6 +285,9 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -244,16 +297,23 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push
+      - name: Prepare tags
+        id: prep
         run: |
           TAG=${{ github.event.inputs.tag }}
           DOCKER_TAG=${TAG//+/-}
-          docker build \
-            -t canopynetwork/canopy:csharp-${DOCKER_TAG} \
-            -t canopynetwork/canopy:csharp-latest \
-            --build-arg BRANCH=${TAG} \
-            --build-arg BUILD_PATH=cmd/cli \
-            -f ./.docker/auto-update/Dockerfile.csharp \
-            ./.docker/auto-update/
-          docker push canopynetwork/canopy:csharp-${DOCKER_TAG}
-          docker push canopynetwork/canopy:csharp-latest
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./.docker/auto-update/
+          file: ./.docker/auto-update/Dockerfile.csharp
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            canopynetwork/canopy:csharp-${{ steps.prep.outputs.docker_tag }}
+            canopynetwork/canopy:csharp-latest
+          build-args: |
+            BRANCH=${{ github.event.inputs.tag }}
+            BUILD_PATH=cmd/cli

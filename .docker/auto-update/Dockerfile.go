@@ -2,6 +2,7 @@ FROM node:24-alpine AS builder
 
 ARG BRANCH='latest'
 ARG BIN_PATH=/bin/cli
+ARG TARGETARCH
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates alpine-sdk
@@ -35,10 +36,10 @@ RUN make build/wallet
 RUN make build/explorer
 
 # Build auto-update coordinator
-RUN CGO_ENABLED=0 GOOS=linux go build -a -o bin ./cmd/auto-update/.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o bin ./cmd/auto-update/.
 
 # Build CLI
-RUN CGO_ENABLED=0 GOOS=linux go build -a -o "${BIN_PATH}" ./cmd/main/...
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o "${BIN_PATH}" ./cmd/main/...
 
 # =============================================================================
 # Final image for Go plugin
