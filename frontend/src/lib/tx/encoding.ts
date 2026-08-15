@@ -4,6 +4,8 @@ import { TX_MESSAGE_CODECS, getTxTypeUrl } from "@/lib/canopy/proto/registry";
 import { bytesToHex } from "@/lib/canopy/decode";
 import type { BuildTxParams } from "./types";
 
+const CHAIN_ID = BigInt(process.env.NEXT_PUBLIC_CHAIN_ID || "1");
+
 export function buildArborTransaction(params: BuildTxParams): Transaction {
   const typeUrl = getTxTypeUrl(params.txType);
   const codec = TX_MESSAGE_CODECS[params.txType];
@@ -25,7 +27,7 @@ export function buildArborTransaction(params: BuildTxParams): Transaction {
     fee: params.fee,
     memo: params.memo ?? "",
     networkId: params.networkId ?? 1n,
-    chainId: params.chainId ?? 1n,
+    chainId: params.chainId ?? CHAIN_ID,
   });
 }
 

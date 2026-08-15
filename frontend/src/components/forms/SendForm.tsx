@@ -84,12 +84,12 @@ export function SendForm() {
       className="space-y-4 rounded-2xl glass backdrop-blur p-5"
     >
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-zinc-200">Send CNPY</h3>
+        <h3 className="text-sm font-semibold text-zinc-200">Send ARBOR</h3>
         <span className="text-xs text-zinc-500">Wallet transfer</span>
       </div>
 
       {!wallet.isConnected && (
-        <ErrorText>Connect a wallet to send CNPY.</ErrorText>
+        <ErrorText>Connect a wallet to send ARBOR.</ErrorText>
       )}
 
       <Field label="Recipient address" hint="20-byte hex address (40 chars, no 0x needed).">
@@ -102,7 +102,7 @@ export function SendForm() {
       </Field>
 
       <Field
-        label="Amount (CNPY)"
+        label="Amount (ARBOR)"
         error={parseError || undefined}
       >
         <TextInput
@@ -128,7 +128,7 @@ export function SendForm() {
 
       {parsedAmount > 0n && !parseError && (
         <p className="text-[11px] text-zinc-600">
-          Sending {formatAmount(parsedAmount, 9)} CNPY.
+          Sending {formatAmount(parsedAmount, 6)} ARBOR.
         </p>
       )}
 
