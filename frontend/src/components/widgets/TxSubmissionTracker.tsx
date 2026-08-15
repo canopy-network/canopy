@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { useTxStore, type TxPhase } from "@/lib/stores/txStore";
 
 const PHASE_LABEL: Record<TxPhase, string> = {
@@ -13,6 +15,15 @@ const PHASE_LABEL: Record<TxPhase, string> = {
 
 export function TxSubmissionTracker() {
   const { phase, txHash, error, blockHeight, reset } = useTxStore();
+
+  // Auto-dismiss: confirmed after 8s, failed after 10s
+  useEffect(() => {
+    if (phase === "confirmed" || phase === "failed") {
+      const delay = phase === "confirmed" ? 8000 : 10000;
+      const timer = setTimeout(reset, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, reset]);
 
   if (phase === "idle") {
     return null;
