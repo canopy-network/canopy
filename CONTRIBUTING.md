@@ -19,7 +19,7 @@ We always appreciate a well-written, thorough bug report. :v:
 In short, since you are most likely a developer, **provide a ticket that you would like to
 receive**.
 
-- **Review the [documentation](TODO) before opening a new issue.
+- **Review the [documentation](https://canopy-network.gitbook.io/docs) before opening a new issue.**
 
 - **Do not open a duplicate issue.** Search through existing issues to see if your issue has
   previously been reported. If your issue exists, comment with any additional information you have.
@@ -62,7 +62,7 @@ discuss your intended approach for solving the problem in the comments for an ex
 
 - **Coordinate bigger changes.** For large and non-trivial changes, open an issue to discuss a
   strategy with the maintainers. Or better yet, contact us directly on our
-  [Discord](https://discord.gg/your-discord-link). Otherwise, you risk doing a lot of work for
+  [Discord](https://discord.gg/pNcSJj7Wdh). Otherwise, you risk doing a lot of work for
   nothing!
 
 - **Prioritize understanding over cleverness.** Write code clearly and concisely. Remember that
@@ -121,9 +121,8 @@ Key requirements:
   - Example: `// Transaction represents a single blockchain transaction.`
 
 - **Branch Strategy**: All pull requests should be:
-  - Based on the `development` branch
-  - Opened against the `development` branch
-  - Merged into `development` first before being promoted to `main`
+  - Based on the `main` branch
+  - Opened against the `main` branch
 
 - **EditorConfig Support**: We recommend using EditorConfig to maintain consistent coding styles.
   The project includes an `.editorconfig` file that defines common formatting rules.
