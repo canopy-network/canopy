@@ -271,8 +271,8 @@ export default function MarketPage() {
 
         <FormSection
           symbol={market.collateralAssetId}
-          title={`Borrow against ${market.collateralAssetId}`}
-          blurb="Borrower-side: post or pull collateral, draw or repay debt."
+          title={`Borrow ${market.debtAssetId}`}
+          blurb={`Borrower-side: post ${market.collateralAssetId} as collateral, draw or repay ${market.debtAssetId}.`}
         >
           <DepositCollateralForm marketId={marketId} />
           <WithdrawCollateralForm marketId={marketId} />
