@@ -146,9 +146,9 @@ function MarketCard({
     priceData?.available && priceData.price != null ? priceData.price : null;
 
   const suppliedUsd =
-    price !== null ? (Number(m.totalSupplied) / 1e9) * (Number(price) / 1e8) : null;
+    price !== null ? Number(m.totalSupplied) * (Number(price) / 1e8) : null;
   const borrowedUsd =
-    price !== null ? (Number(m.totalBorrowed) / 1e9) * (Number(price) / 1e8) : null;
+    price !== null ? Number(m.totalBorrowed) * (Number(price) / 1e8) : null;
 
   useEffect(() => {
     report(m.marketId, suppliedUsd ?? 0, borrowedUsd ?? 0, suppliedUsd !== null);
