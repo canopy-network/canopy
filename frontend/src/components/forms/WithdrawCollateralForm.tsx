@@ -85,6 +85,14 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
       )
     : 0n;
 
+
+
+  const pricesAvailable =
+    !!collateralPrice?.available &&
+    !!debtPrice?.available &&
+    collateralPrice.price !== null &&
+    debtPrice.price !== null;
+
   const minCollateralForDebt =
     currentDebt > 0n && pricesAvailable
       ? (currentDebt * (debtPrice.price as bigint) * tier.ltvLiqBps +
@@ -95,12 +103,6 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
     currentCollateral > minCollateralForDebt
       ? currentCollateral - minCollateralForDebt
       : 0n;
-
-  const pricesAvailable =
-    !!collateralPrice?.available &&
-    !!debtPrice?.available &&
-    collateralPrice.price !== null &&
-    debtPrice.price !== null;
 
   let previewHf = 0n;
   let parseError: string | null = null;
