@@ -10,6 +10,7 @@ import { getBlockedReason } from "@/lib/arbor/admission";
 import { parseAmount, formatAmount } from "@/lib/arbor/format";
 import { scaledDebt } from "@/lib/arbor/math";
 import { addressBytesFromHex } from "@/lib/wallet";
+import { LiveDot } from "@/components/ui/LiveDot";
 import { EmptyState } from "@/components/widgets/EmptyState";
 import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";
 import { AdmissionGateBanner } from "@/components/widgets/AdmissionGateBanner";
@@ -139,6 +140,21 @@ export function RepayForm({ marketId }: { marketId: string }) {
         <span className="text-zinc-300">
           {formatAmount(currentDebt, 0)}
         </span>
+        <LiveDot label="Live — interest accrues every block, so this ticks up without any action from you" />
+        <button
+          type="button"
+          onClick={() => {
+            setAmount(currentDebt.toString());
+            setLocalError(null);
+          }}
+          className="ml-2 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-white/10"
+        >
+          Max
+        </button>
+        <p className="mt-1 text-[10px] text-zinc-600">
+          Interest accrues between reading and execution — an exact repay can
+          leave 1–2 units of dust. Hit Max and repay again to close fully.
+        </p>
       </div>
 
       <Field
@@ -148,7 +164,7 @@ export function RepayForm({ marketId }: { marketId: string }) {
       >
         <TextInput
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => { setAmount(e.target.value); setLocalError(null); }}
           placeholder="0.0"
           inputMode="decimal"
           invalid={!!parseError}

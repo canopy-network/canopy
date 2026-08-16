@@ -18,6 +18,7 @@ import {
   HF_LIQUIDATABLE_SCALED,
 } from "@/lib/arbor/constants";
 import { addressBytesFromHex } from "@/lib/wallet";
+import { LiveDot } from "@/components/ui/LiveDot";
 import { EmptyState } from "@/components/widgets/EmptyState";
 import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";
 import { AdmissionGateBanner } from "@/components/widgets/AdmissionGateBanner";
@@ -84,6 +85,17 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
       )
     : 0n;
 
+  const minCollateralForDebt =
+    currentDebt > 0n && pricesAvailable
+      ? (currentDebt * (debtPrice.price as bigint) * tier.ltvLiqBps +
+          (collateralPrice.price as bigint) * 10000n - 1n) /
+        ((collateralPrice.price as bigint) * 10000n)
+      : 0n;
+  const withdrawableCollateral =
+    currentCollateral > minCollateralForDebt
+      ? currentCollateral - minCollateralForDebt
+      : 0n;
+
   const pricesAvailable =
     !!collateralPrice?.available &&
     !!debtPrice?.available &&
@@ -125,7 +137,10 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
         }
       }
     } catch (err: any) {
-      parseError = err?.message || String(err);
+      const msg = err?.message || String(err);
+      parseError = /decimal/i.test(msg)
+        ? `Whole units only — ${market.collateralAssetId} amounts on this chain are whole numbers (e.g. 1).`
+        : msg;
     }
   }
 
@@ -195,6 +210,13 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
             {formatAmount(currentDebt, 0)}
           </span>
         </div>
+        <div className="col-span-2">
+          Withdrawable now:{" "}
+          <span className="text-zinc-300">
+            {formatAmount(withdrawableCollateral, 0)} {market.collateralAssetId}
+          </span>
+          <LiveDot label="Live — depends on current debt and oracle prices; changes without any action from you" />
+        </div>
       </div>
 
       <Field
@@ -208,7 +230,7 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
       >
         <TextInput
           value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
+          onChange={(e) => { setQuantity(e.target.value); setLocalError(null); }}
           placeholder="0.0"
           inputMode="decimal"
           invalid={!!parseError}
