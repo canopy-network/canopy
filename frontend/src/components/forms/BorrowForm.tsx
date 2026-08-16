@@ -77,13 +77,7 @@ export function BorrowForm({ marketId }: { marketId: string }) {
 
   const collateralQty = position?.collateralQuantity ?? 0n;
 
-  const currentDebt = position
-    ? scaledDebt(
-        position.debtPrincipal,
-        bIndex,
-        position.borrowIndexAtOpen
-      )
-    : 0n;
+  const currentDebt = position?.currentDebt ?? 0n;
 
   const pricesAvailable =
     !!collateralPrice?.available &&

@@ -8,7 +8,6 @@ import { useArborTx } from "@/lib/hooks/useArborTx";
 import { marketAdmissionFromMarket } from "@/lib/hooks/useMarketAdmission";
 import { getBlockedReason } from "@/lib/arbor/admission";
 import { parseAmount, formatAmount } from "@/lib/arbor/format";
-import { scaledDebt } from "@/lib/arbor/math";
 import { addressBytesFromHex } from "@/lib/wallet";
 import { LiveDot } from "@/components/ui/LiveDot";
 import { EmptyState } from "@/components/widgets/EmptyState";
@@ -58,13 +57,7 @@ export function RepayForm({ marketId }: { marketId: string }) {
     phase === "submitting" ||
     phase === "waiting";
 
-  const currentDebt = position
-    ? scaledDebt(
-        position.debtPrincipal,
-        bIndex,
-        position.borrowIndexAtOpen
-      )
-    : 0n;
+  const currentDebt = position?.currentDebt ?? 0n;
 
   let parseError: string | null = null;
 

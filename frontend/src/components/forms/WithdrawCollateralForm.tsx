@@ -77,13 +77,7 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
 
   const currentCollateral = position?.collateralQuantity ?? 0n;
 
-  const currentDebt = position
-    ? scaledDebt(
-        position.debtPrincipal,
-        bIndex,
-        position.borrowIndexAtOpen
-      )
-    : 0n;
+  const currentDebt = position?.currentDebt ?? 0n;
 
 
 
