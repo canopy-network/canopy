@@ -34,6 +34,7 @@ const MAX_UINT64 = 18446744073709551615n;
 export function BorrowForm({ marketId }: { marketId: string }) {
   const { data: marketData, isLoading } = useMarket(marketId);
   const wallet = useWalletStore();
+  const { data: borrowerPosition } = useBorrowerPosition(marketId, wallet.address);
   const { submit, phase } = useArborTx();
 
   const { data: position } = useBorrowerPosition(marketId, wallet.address);
@@ -197,10 +198,17 @@ export function BorrowForm({ marketId }: { marketId: string }) {
           </span>
         </div>
         <div>
-          Max borrow:{" "}
-          <span className="text-zinc-300">
-            {formatAmount(remainingBorrow, 0)}
+          You can borrow up to{" "}
+          <span className="font-medium text-zinc-200">
+            {formatAmount(remainingBorrow, 0)} {market.debtAssetId}
           </span>
+          {borrowerPosition && borrowerPosition.collateralQuantity > 0n && (
+            <span className="text-zinc-500">
+              {" "}
+              ({tier ? `${(Number(tier.ltvMaxBps) / 100).toFixed(0)}% of your ${market.collateralAssetId} collateral's value` : 'based on your collateral'})
+            </span>
+          )}
+          {" "}before liquidation risk begins.
         </div>
       </div>
 

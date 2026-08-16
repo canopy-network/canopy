@@ -8,6 +8,8 @@ import { useWalletStore } from "@/lib/wallet";
 import { useLenderPosition } from "@/lib/hooks/useLenderPosition";
 import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
 import { useAssetPrice } from "@/lib/hooks/useAssetPrice";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { borrowRateBps, supplyRateBps } from "@/lib/arbor/math";
 import { EmptyState } from "@/components/widgets/EmptyState";
 import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";
 import { StatusPill } from "@/components/widgets/StatusPill";
@@ -232,7 +234,7 @@ export default function MarketPage() {
               <p className="text-zinc-300">
                 {formatAmount(
                   borrowerPosition?.collateralQuantity ?? 0n,
-                  9
+                  0
                 )}
               </p>
             </div>
@@ -245,12 +247,39 @@ export default function MarketPage() {
             </div>
 
             <div>
-              Health factor
-              <p className="text-zinc-300">
-                {pricesAvailable && borrowerPosition
-                  ? formatHealthFactor(hf)
-                  : "--"}
-              </p>
+              <Tooltip label="Safety margin before liquidation. >1.1 = safe, 1.0-1.1 = caution, <1.0 = at risk">Health factor</Tooltip>
+              {pricesAvailable && borrowerPosition ? (
+                <div className="mt-1">
+                  {hf === 0n ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                      No debt
+                    </span>
+                  ) : (
+                    <>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        hf >= 1_100_000n ? 'bg-emerald-500/20 text-emerald-400' :
+                        hf >= 1_000_000n ? 'bg-amber-500/20 text-amber-400' :
+                        'bg-red-500/20 text-red-400'
+                      }`}>
+                        {hf >= 1_100_000n ? 'Safe' : hf >= 1_000_000n ? 'Caution' : 'At risk'}
+                      </span>
+                      <div className="mt-1 h-1.5 w-full rounded-full bg-zinc-700 overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${
+                            hf >= 1_100_000n ? 'bg-emerald-500' :
+                            hf >= 1_000_000n ? 'bg-amber-500' :
+                            'bg-red-500'
+                          }`}
+                          style={{ width: `${Math.min(100, Number(hf * 100n / 2_000_000n))}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[10px] text-zinc-500">{formatHealthFactor(hf)}</p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <p className="text-zinc-300">--</p>
+              )}
             </div>
           </div>
         )}

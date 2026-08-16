@@ -65,7 +65,11 @@ function RateCurve({ utilBps }: { utilBps: number }) {
   const curU = Math.min(100, utilBps / 100);
   const curR = borrowRateBps(utilBps) / 100;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-md">
+    <div className="space-y-2">
+      <p className="text-xs text-zinc-400">
+        You're here: <span className="font-medium text-zinc-200">{curU.toFixed(0)}% utilized</span> → <span className="font-medium text-zinc-200">{curR.toFixed(2)}% borrow APR</span>
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-md">
       <line x1={px(80)} y1={PAD} x2={px(80)} y2={H - PAD} stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
       <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="rgba(255,255,255,0.15)" />
       <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="rgba(255,255,255,0.15)" />
@@ -78,6 +82,7 @@ function RateCurve({ utilBps }: { utilBps: number }) {
       <text x={6} y={py(0) + 3} fill="#71717a" fontSize={9}>0</text>
       <text x={2} y={py(100) + 3} fill="#71717a" fontSize={9}>110%</text>
     </svg>
+    </div>
   );
 }
 

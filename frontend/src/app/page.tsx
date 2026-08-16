@@ -178,7 +178,7 @@ function MarketCard({
           <div className="leading-tight">
             <p className="text-sm font-semibold text-white">{m.marketId}</p>
             <p className="text-[11px] text-zinc-500">
-              {TIER_LABEL[m.assetTier] ?? `Tier ${m.assetTier}`}
+              {m.collateralAssetId} / {m.debtAssetId}
             </p>
           </div>
         </div>
