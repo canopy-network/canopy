@@ -27,12 +27,14 @@ function LayerCard({
   title,
   desc,
   value,
+  sub,
   tone,
 }: {
   layer: string;
   title: string;
   desc: string;
   value: string;
+  sub?: string;
   tone: "emerald" | "indigo" | "zinc" | "rose";
 }) {
   const ring =
@@ -52,6 +54,7 @@ function LayerCard({
       <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
         {value}
       </p>
+      {sub && <p className="mt-1 text-[11px] text-zinc-500">{sub}</p>}
       <p className="mt-1 text-[11px] text-zinc-500">{desc}</p>
     </div>
   );
@@ -64,7 +67,7 @@ function MarketRow({
 }: {
   entry: MarketWithIndices;
   onCollateral: (id: string, v: bigint) => void;
-  onUsd: (id: string, suppliedUsd: number, rfUsd: number) => void;
+  onUsd: (id: string, suppliedUsd: number, rfUsd: number, collateralUsd: number) => void;
 }) {
   const m = entry.market;
   const { data: pools } = useMarketPools(m.marketId);
@@ -82,14 +85,21 @@ function MarketRow({
       ? Number(priceData.price) / 1e8
       : null;
 
+  const { data: collPriceData } = useAssetPrice(m.collateralAssetId);
+  const collUnitPrice =
+    collPriceData?.available && collPriceData.price != null
+      ? Number(collPriceData.price) / 1e8
+      : null;
+
   useEffect(() => {
     onUsd(
       m.marketId,
       unitPrice !== null ? Number(m.totalSupplied) * unitPrice : 0,
-      unitPrice !== null ? Number(entry.reserveFund) * unitPrice : 0
+      unitPrice !== null ? Number(entry.reserveFund) * unitPrice : 0,
+      collUnitPrice !== null ? Number(collateral) * collUnitPrice : 0
     );
-    return () => onUsd(m.marketId, 0, 0);
-  }, [onUsd, m.marketId, m.totalSupplied, entry.reserveFund, unitPrice]);
+    return () => onUsd(m.marketId, 0, 0, 0);
+  }, [onUsd, m.marketId, m.totalSupplied, entry.reserveFund, unitPrice, collateral, collUnitPrice]);
 
   
 function renderLossFactor(entry: { lossFactor: bigint; lossFactorAbsent: boolean }, status: string) {
@@ -151,15 +161,24 @@ export default function MonitorPage() {
   );
 
   const [usdByMarket, setUsdByMarket] = useState<
-    Record<string, { s: number; rf: number }>
+    Record<string, { s: number; rf: number; c: number }>
   >({});
   const onUsd = useCallback(
-    (id: string, s: number, rf: number) =>
-      setUsdByMarket((p) => ({ ...p, [id]: { s, rf } })),
+    (id: string, s: number, rf: number, coll: number) =>
+      setUsdByMarket((p) => ({ ...p, [id]: { s, rf, c: coll } })),
     []
   );
   const totalTvlUsd = Object.values(usdByMarket).reduce((a, v) => a + v.s, 0);
   const totalRfUsd = Object.values(usdByMarket).reduce((a, v) => a + v.rf, 0);
+  const totalCollateralUsd = Object.values(usdByMarket).reduce((a, v) => a + v.c, 0);
+  const collateralBreakdown = list
+    .map((e) => ({
+      v: collateralByMarket[e.market.marketId] ?? 0n,
+      a: e.market.collateralAssetId,
+    }))
+    .filter((x) => x.v > 0n)
+    .map((x) => `${formatAmount(x.v, 0)} ${x.a}`)
+    .join(" \u00b7 ");
 
   const totalRf = list.reduce((a, e) => a + e.reserveFund, 0n);
   const [treasuryArbor, setTreasuryArbor] = useState<bigint>(0n);
@@ -202,7 +221,8 @@ export default function MonitorPage() {
             layer="Layer 1"
             title="Borrower collateral"
             desc="First line of defense — seized in liquidation"
-            value={formatAmount(totalCollateral, 0)}
+            value={`$${totalCollateralUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+            sub={collateralBreakdown || `${formatAmount(totalCollateral, 0)} native`}
             tone="emerald"
           />
           <LayerCard
