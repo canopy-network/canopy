@@ -73,21 +73,24 @@ function PositionRow({
       )
     : null;
 
-  const liquidatable = hf != null && hf <= HF_LIQUIDATABLE_SCALED;
+  const noDebt = hf === 0n;
+  const liquidatable = hf != null && !noDebt && hf <= HF_LIQUIDATABLE_SCALED;
   const debtUsd = pricesOk
-    ? (Number(p.currentDebt) / 1e9) * (Number(debtPrice!.price) / 1e8)
+    ? Number(p.currentDebt) * (Number(debtPrice!.price) / 1e8)
     : null;
   const collUsd = pricesOk
-    ? (Number(p.collateralQuantity) / 1e9) * (Number(collPrice!.price) / 1e8)
+    ? Number(p.collateralQuantity) * (Number(collPrice!.price) / 1e8)
     : null;
   const hfActual = hf != null ? Number(hf) / 1e6 : null;
   const closeFactorBps =
-    hfActual == null ? null : hfActual > 0.95 ? 3000 : hfActual > 0.85 ? 6000 : 10000;
+    hfActual == null || noDebt ? null : hfActual > 0.95 ? 3000 : hfActual > 0.85 ? 6000 : 10000;
   const lif = tier ? Number(tier.lifBps) / 10000 : null;
   const distance =
     hfActual == null
       ? "No oracle"
-      : hfActual <= 1.0
+      : noDebt
+        ? "Safe"
+        : hfActual <= 1.0
         ? "Liquidatable"
         : hfActual <= 1.2
           ? "At risk"
@@ -127,13 +130,13 @@ function PositionRow({
       <td className="py-2.5 pr-4 text-right">
         <p className="tabular-nums text-zinc-200">{fmtUsd(debtUsd)}</p>
         <p className="text-[10px] tabular-nums text-zinc-600">
-          {formatAmount(p.currentDebt, 9)} {debtAsset ?? ""}
+          {formatAmount(p.currentDebt, 0)} {debtAsset ?? ""}
         </p>
       </td>
       <td className="py-2.5 pr-4 text-right">
         <p className="tabular-nums text-zinc-200">{fmtUsd(collUsd)}</p>
         <p className="text-[10px] tabular-nums text-zinc-600">
-          {formatAmount(p.collateralQuantity, 9)} {collAsset ?? ""}
+          {formatAmount(p.collateralQuantity, 0)} {collAsset ?? ""}
         </p>
       </td>
       <td className="py-2.5 pr-4 text-right tabular-nums text-zinc-200">
