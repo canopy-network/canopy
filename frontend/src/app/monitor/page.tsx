@@ -94,11 +94,25 @@ function renderLossFactor(entry: { lossFactor: bigint; lossFactorAbsent: boolean
 
   const tvl = m.totalSupplied;
   const rfRatio = tvl > 0n ? Number((entry.reserveFund * 10000n) / tvl) / 100 : 0;
-  // loss-factor cell now rendered by renderLossFactor(entry, m.status) below
 
   return (
     <tr className="border-t border-white/5">
-      <td className="py-3 pr-4">{renderLossFactor(entry, m.status)}</td>
+      <td className="py-3 pr-4 text-xs font-medium text-zinc-200">{m.marketId}</td>
+      <td className="py-3 text-center"><Flag bad={m.status === "INSOLVENT"} /></td>
+      <td className="py-3 text-center"><Flag bad={m.indexOverflowHalted} /></td>
+      <td className="py-3 text-center"><Flag bad={m.layer4PendingCount > 0} /></td>
+      <td className="py-3 text-center"><Flag bad={m.status === "PAUSED"} /></td>
+      <td className="py-3 text-center"><Flag bad={m.status === "DEPRECATED"} /></td>
+      <td className="py-3 pr-4 text-right text-xs tabular-nums text-zinc-300">
+        {formatAmount(supply, 0)}
+      </td>
+      <td className="py-3 pr-4 text-right text-xs tabular-nums text-zinc-300">
+        {formatAmount(collateral, 0)}
+      </td>
+      <td className="py-3 pr-4 text-right text-xs tabular-nums text-zinc-300">
+        {formatAmount(entry.reserveFund, 0)}
+      </td>
+      <td className="py-3 pr-4 text-right">{renderLossFactor(entry, m.status)}</td>
       <td className="py-3 text-right text-xs tabular-nums text-zinc-300">
         {rfRatio.toFixed(1)}%
       </td>
@@ -159,21 +173,21 @@ export default function MonitorPage() {
             layer="Layer 1"
             title="Borrower collateral"
             desc="First line of defense — seized in liquidation"
-            value={formatAmount(totalCollateral, 9)}
+            value={formatAmount(totalCollateral, 0)}
             tone="emerald"
           />
           <LayerCard
             layer="Layer 2"
             title="Reserve fund (R_fund)"
             desc="Protocol reserves cover shortfalls"
-            value={formatAmount(totalRf, 9)}
+            value={formatAmount(totalRf, 0)}
             tone="indigo"
           />
           <LayerCard
             layer="Layer 3"
             title="Protocol treasury (T_fund)"
             desc="Arbor treasury draw-down — isolated from NASM"
-            value={formatAmount(treasuryArbor, 9)}
+            value={formatAmount(treasuryArbor, 0)}
             tone={treasuryArbor > 0n ? "indigo" : "zinc"}
           />
           <LayerCard
@@ -190,13 +204,13 @@ export default function MonitorPage() {
         <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Total R_fund</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
-            {formatAmount(totalRf, 9)}
+            {formatAmount(totalRf, 0)}
           </p>
         </div>
         <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Total TVL (supplied)</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
-            {formatAmount(totalTvl, 9)}
+            {formatAmount(totalTvl, 0)}
           </p>
         </div>
         <div className="rounded-2xl glass p-5 backdrop-blur">
@@ -248,7 +262,7 @@ export default function MonitorPage() {
           </div>
         )}
         <p className="text-[11px] text-zinc-600">
-          Amounts in native 9‑decimal units. Supply/collateral pools from
+          Amounts in whole units. Supply/collateral pools from
           /v1/query/pool; R_fund from /v1/query/reservefund; loss factor from
           /v1/query/lossfactor (RAY = 1.0, no haircut).
         </p>
