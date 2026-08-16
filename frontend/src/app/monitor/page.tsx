@@ -6,6 +6,7 @@ import { useMarketPools } from "@/lib/hooks/useMarketPools";
 import { formatAmount } from "@/lib/arbor/format";
 import { getTreasury } from "@/lib/canopy/pluginRpc";
 import { RAY } from "@/lib/arbor/constants";
+import { useAssetPrice } from "@/lib/hooks/useAssetPrice";
 
 function Flag({ bad }: { bad: boolean }) {
   return bad ? (
@@ -59,9 +60,11 @@ function LayerCard({
 function MarketRow({
   entry,
   onCollateral,
+  onUsd,
 }: {
   entry: MarketWithIndices;
   onCollateral: (id: string, v: bigint) => void;
+  onUsd: (id: string, suppliedUsd: number, rfUsd: number) => void;
 }) {
   const m = entry.market;
   const { data: pools } = useMarketPools(m.marketId);
@@ -72,6 +75,21 @@ function MarketRow({
     onCollateral(m.marketId, collateral);
     return () => onCollateral(m.marketId, 0n);
   }, [onCollateral, m.marketId, collateral]);
+
+  const { data: priceData } = useAssetPrice(m.debtAssetId);
+  const unitPrice =
+    priceData?.available && priceData.price != null
+      ? Number(priceData.price) / 1e8
+      : null;
+
+  useEffect(() => {
+    onUsd(
+      m.marketId,
+      unitPrice !== null ? Number(m.totalSupplied) * unitPrice : 0,
+      unitPrice !== null ? Number(entry.reserveFund) * unitPrice : 0
+    );
+    return () => onUsd(m.marketId, 0, 0);
+  }, [onUsd, m.marketId, m.totalSupplied, entry.reserveFund, unitPrice]);
 
   
 function renderLossFactor(entry: { lossFactor: bigint; lossFactorAbsent: boolean }, status: string) {
@@ -131,6 +149,17 @@ export default function MonitorPage() {
     (id: string, v: bigint) => setCollateralByMarket((p) => ({ ...p, [id]: v })),
     []
   );
+
+  const [usdByMarket, setUsdByMarket] = useState<
+    Record<string, { s: number; rf: number }>
+  >({});
+  const onUsd = useCallback(
+    (id: string, s: number, rf: number) =>
+      setUsdByMarket((p) => ({ ...p, [id]: { s, rf } })),
+    []
+  );
+  const totalTvlUsd = Object.values(usdByMarket).reduce((a, v) => a + v.s, 0);
+  const totalRfUsd = Object.values(usdByMarket).reduce((a, v) => a + v.rf, 0);
 
   const totalRf = list.reduce((a, e) => a + e.reserveFund, 0n);
   const [treasuryArbor, setTreasuryArbor] = useState<bigint>(0n);
@@ -204,13 +233,19 @@ export default function MonitorPage() {
         <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Total R_fund</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
-            {formatAmount(totalRf, 0)}
+            ${totalRfUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            {formatAmount(totalRf, 0)} native
           </p>
         </div>
         <div className="rounded-2xl glass p-5 backdrop-blur">
           <p className="text-xs text-zinc-500">Total TVL (supplied)</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
-            {formatAmount(totalTvl, 0)}
+            ${totalTvlUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            {formatAmount(totalTvl, 0)} native
           </p>
         </div>
         <div className="rounded-2xl glass p-5 backdrop-blur">
@@ -255,6 +290,7 @@ export default function MonitorPage() {
                     key={entry.market.marketId}
                     entry={entry}
                     onCollateral={onCollateral}
+                    onUsd={onUsd}
                   />
                 ))}
               </tbody>
