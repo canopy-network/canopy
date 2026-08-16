@@ -51,6 +51,22 @@ export function WithdrawForm({ marketId }: { marketId: string }) {
 
   const availableShares = position?.shares ?? 0n;
 
+  // Liquidity-aware withdraw limit
+  const availableLiquidity =
+    market.totalSupplied > market.totalBorrowed
+      ? market.totalSupplied - market.totalBorrowed
+      : 0n;
+  const maxTokensForShares = expectedTokensRedeemed(
+    availableShares,
+    supplyIndex.sRate,
+    lossFactor
+  );
+  const withdrawableNow =
+    maxTokensForShares < availableLiquidity
+      ? maxTokensForShares
+      : availableLiquidity;
+  const liquidityLimited = withdrawableNow < maxTokensForShares;
+
   let expectedTokens = 0n;
   let parseError: string | null = null;
 
@@ -68,6 +84,9 @@ export function WithdrawForm({ marketId }: { marketId: string }) {
           supplyIndex.sRate,
           lossFactor
         );
+        if (expectedTokens > availableLiquidity) {
+          parseError = `Exceeds available market liquidity (${formatAmount(availableLiquidity, 0)} ${market.debtAssetId}).`;
+        }
       }
     } catch (err: any) {
       parseError = err?.message || String(err);
@@ -91,6 +110,17 @@ export function WithdrawForm({ marketId }: { marketId: string }) {
 
       if (parsed > availableShares) {
         throw new Error("Shares exceed available lender position.");
+      }
+
+      const requestedTokens = expectedTokensRedeemed(
+        parsed,
+        supplyIndex.sRate,
+        lossFactor
+      );
+      if (requestedTokens > availableLiquidity) {
+        throw new Error(
+          `Exceeds available market liquidity (${formatAmount(availableLiquidity, 0)} ${market.debtAssetId}).`
+        );
       }
 
       const address = addressBytesFromHex(wallet.address);
@@ -130,7 +160,7 @@ export function WithdrawForm({ marketId }: { marketId: string }) {
       <Field
         label="Shares"
         error={parseError || undefined}
-        hint={`Available: ${formatAmount(availableShares, 0)} | Expected tokens: ${formatAmount(expectedTokens, 0)}`}
+        hint={`Available: ${formatAmount(availableShares, 0)} shares | Withdrawable now: ${formatAmount(withdrawableNow, 0)} ${market.debtAssetId}${liquidityLimited ? ' (limited by market liquidity)' : ''}`}
       >
         <TextInput
           value={shares}
