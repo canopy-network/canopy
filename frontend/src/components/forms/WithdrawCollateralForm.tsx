@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMarket } from "@/lib/hooks/useMarket";
 import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
 import { useAssetPrice } from "@/lib/hooks/useAssetPrice";
@@ -35,7 +35,15 @@ export function WithdrawCollateralForm({ marketId }: { marketId: string }) {
   const wallet = useWalletStore();
   const { submit, phase } = useArborTx();
 
-  const { data: position } = useBorrowerPosition(marketId, wallet.address);
+  const { data: position, refetch: refetchPosition } = useBorrowerPosition(marketId, wallet.address);
+
+  useEffect(() => {
+    if (phase === "confirmed") {
+      refetchPosition();
+      const t = setTimeout(() => refetchPosition(), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [phase, refetchPosition]);
 
   const [quantity, setQuantity] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);

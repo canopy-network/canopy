@@ -3,6 +3,7 @@ import "./globals.css";
 import { Providers } from "@/components/layout/Providers";
 import { Header } from "@/components/layout/Header";
 import { TxSubmissionTracker } from "@/components/widgets/TxSubmissionTracker";
+import { FirstTimeExplainer } from "@/components/widgets/FirstTimeExplainer";
 import { Space_Grotesk, Manrope } from "next/font/google";
 /* arbor-fonts */
 const arborDisplay = Space_Grotesk({ subsets: ["latin"], variable: "--font-display", display: "swap" });
@@ -34,6 +35,7 @@ export default function RootLayout({
       >
         <Providers>
           <Header />
+          <FirstTimeExplainer />
 
           <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
 

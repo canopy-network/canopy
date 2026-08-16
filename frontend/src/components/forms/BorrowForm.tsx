@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMarket } from "@/lib/hooks/useMarket";
 import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
 import { useAssetPrice } from "@/lib/hooks/useAssetPrice";
@@ -34,8 +34,16 @@ const MAX_UINT64 = 18446744073709551615n;
 export function BorrowForm({ marketId }: { marketId: string }) {
   const { data: marketData, isLoading } = useMarket(marketId);
   const wallet = useWalletStore();
-  const { data: borrowerPosition } = useBorrowerPosition(marketId, wallet.address);
+  const { data: borrowerPosition, refetch: refetchPosition } = useBorrowerPosition(marketId, wallet.address);
   const { submit, phase } = useArborTx();
+
+  useEffect(() => {
+    if (phase === "confirmed") {
+      refetchPosition();
+      const t = setTimeout(() => refetchPosition(), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [phase, refetchPosition]);
 
   const { data: position } = useBorrowerPosition(marketId, wallet.address);
 

@@ -9,6 +9,7 @@ import { useLenderPosition } from "@/lib/hooks/useLenderPosition";
 import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
 import { useAssetPrice } from "@/lib/hooks/useAssetPrice";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { LiveDot } from "@/components/ui/LiveDot";
 import { EmptyState } from "@/components/widgets/EmptyState";
 import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";
 import { StatusPill } from "@/components/widgets/StatusPill";
@@ -280,7 +281,10 @@ export default function MarketPage() {
             </div>
 
             <div>
-              Debt
+              <Tooltip label="Principal + interest accrued since last action. Ticks every block.">
+                Debt
+                <LiveDot label="Accrues every block — changes without any action from you" />
+              </Tooltip>
               <p className="text-zinc-300">
                 {formatAmount(currentDebt, 0)}
               </p>
