@@ -9,7 +9,6 @@ import { useLenderPosition } from "@/lib/hooks/useLenderPosition";
 import { useBorrowerPosition } from "@/lib/hooks/useBorrowerPosition";
 import { useAssetPrice } from "@/lib/hooks/useAssetPrice";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { borrowRateBps, supplyRateBps } from "@/lib/arbor/math";
 import { EmptyState } from "@/components/widgets/EmptyState";
 import { LoadingSkeleton } from "@/components/widgets/LoadingSkeleton";
 import { StatusPill } from "@/components/widgets/StatusPill";
@@ -31,6 +30,28 @@ function fmtIndex(v: bigint, base: bigint): string {
 import { scaledDebt, computeHealthFactorScaled } from "@/lib/arbor/math";
 import { TIER_PARAMS } from "@/lib/arbor/constants";
 
+
+
+// Local number-based rate helpers (mirror MarketDetailTabs kinked two-slope model).
+const BPS_SCALE = 10000;
+const U_OPTIMAL_BPS = 8000;
+const BASE_RATE_BPS = 200;
+const SLOPE1_BPS = 800;
+const SLOPE2_BPS = 10000;
+
+function borrowRateBpsLocal(utilBps: number): number {
+  if (utilBps <= U_OPTIMAL_BPS) {
+    return BASE_RATE_BPS + (utilBps * SLOPE1_BPS) / U_OPTIMAL_BPS;
+  }
+  const excess = utilBps - U_OPTIMAL_BPS;
+  const remaining = BPS_SCALE - U_OPTIMAL_BPS;
+  return BASE_RATE_BPS + SLOPE1_BPS + (excess * SLOPE2_BPS) / remaining;
+}
+
+function supplyRateBpsLocal(utilBps: number, reserveFactorBps: number): number {
+  const br = borrowRateBpsLocal(utilBps);
+  return (br * utilBps * (BPS_SCALE - reserveFactorBps)) / (BPS_SCALE * BPS_SCALE);
+}
 
 function FormSection({
   symbol,
@@ -165,48 +186,67 @@ export default function MarketPage() {
           <StatusPill status={market.status} />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-zinc-500 md:grid-cols-4">
-          <div>
-            Total supplied
-            <p className="text-zinc-300">
-              {formatAmount(market.totalSupplied, 0)}
-            </p>
-          </div>
+        {(() => {
+          const utilBps = market.totalSupplied > 0n
+            ? Number((market.totalBorrowed * 10000n) / market.totalSupplied)
+            : 0;
+          const reserveFactor = Number(market.reserveFactorBps);
+          const borrowApr = (borrowRateBpsLocal(utilBps) / 100).toFixed(2);
+          const supplyApr = (supplyRateBpsLocal(utilBps, reserveFactor) / 100).toFixed(2);
+          return (
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                  <p className="text-xs font-medium text-emerald-400">What would I earn if I lend?</p>
+                  <p className="mt-2 text-2xl font-bold text-zinc-100">{supplyApr}% <span className="text-sm font-normal text-zinc-400">APR</span></p>
+                  <p className="mt-1 text-xs text-zinc-500">Current supply yield at {Math.round(utilBps / 100)}% utilization</p>
+                </div>
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                  <p className="text-xs font-medium text-amber-400">What would it cost me to borrow?</p>
+                  <p className="mt-2 text-2xl font-bold text-zinc-100">{borrowApr}% <span className="text-sm font-normal text-zinc-400">APR</span></p>
+                  <p className="mt-1 text-xs text-zinc-500">Current borrow cost at {Math.round(utilBps / 100)}% utilization</p>
+                </div>
+              </div>
 
-          <div>
-            Total borrowed
-            <p className="text-zinc-300">
-              {formatAmount(market.totalBorrowed, 0)}
-            </p>
-          </div>
+              <div className="grid grid-cols-2 gap-3 text-xs text-zinc-500 md:grid-cols-3">
+                <div>
+                  <Tooltip label="Total amount supplied by lenders to this market">Total supplied</Tooltip>
+                  <p className="text-zinc-300">{formatAmount(market.totalSupplied, 0)}</p>
+                </div>
+                <div>
+                  <Tooltip label="Total amount borrowed from this market">Total borrowed</Tooltip>
+                  <p className="text-zinc-300">{formatAmount(market.totalBorrowed, 0)}</p>
+                </div>
+                <div>
+                  <Tooltip label="Protocol buffer against bad debt, funded from interest">Reserve fund</Tooltip>
+                  <p className="text-zinc-300">{formatAmount(reserveFund, 0)}</p>
+                </div>
+              </div>
 
-          
-
-          <div>
-            Reserve fund
-            <p className="text-zinc-300">{formatAmount(reserveFund, 0)}</p>
-          </div>
-
-          <div>
-            B index
-            <p className="text-zinc-300">{fmtIndex(bIndex, BINDEX_BASE)}×</p>
-          </div>
-
-          <div>
-            S rate
-            <p className="text-zinc-300">{formatRay(supplyIndex.sRate)}</p>
-          </div>
-
-          <div>
-            Loss factor
-            <p className="text-zinc-300">{formatRay(lossFactor)}</p>
-          </div>
-
-          <div>
-            Layer4 pending
-            <p className="text-zinc-300">{market.layer4PendingCount}</p>
-          </div>
-        </div>
+              <details className="rounded-lg border border-zinc-700 bg-zinc-900/50">
+                <summary className="cursor-pointer px-4 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-200">Protocol internals</summary>
+                <div className="grid grid-cols-2 gap-3 px-4 pb-3 pt-1 text-xs text-zinc-500 md:grid-cols-4">
+                  <div>
+                    <Tooltip label="Share price for lenders. Starts at 1.0, grows as interest accrues">S rate</Tooltip>
+                    <p className="text-zinc-300">{formatRay(supplyIndex.sRate)}</p>
+                  </div>
+                  <div>
+                    <Tooltip label="Borrower debt multiplier. Tracks accrued interest over time">B index</Tooltip>
+                    <p className="text-zinc-300">{fmtIndex(bIndex, BINDEX_BASE)}×</p>
+                  </div>
+                  <div>
+                    <Tooltip label="Loss absorption factor. 1.0 = no losses, below 1.0 = lenders have been haircut">Loss factor</Tooltip>
+                    <p className="text-zinc-300">{formatRay(lossFactor)}</p>
+                  </div>
+                  <div>
+                    <Tooltip label="Count of pending liquidations in the bad-debt waterfall">Layer4 pending</Tooltip>
+                    <p className="text-zinc-300">{market.layer4PendingCount}</p>
+                  </div>
+                </div>
+              </details>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="rounded-2xl glass backdrop-blur p-5">
