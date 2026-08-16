@@ -419,7 +419,7 @@ export default function HomePage() {
         <p className="text-[11px] text-zinc-600">
           Dollar values use live oracle medians from /v1/query/prices and only
           sum markets whose debt asset is priced (the standard TVL convention);
-          native 9‑decimal totals are shown alongside. Health factor and per‑card
+          native whole-unit totals are shown alongside. Health factor and per‑card
           APR derive from the on‑chain rate model.
         </p>
       </section>
