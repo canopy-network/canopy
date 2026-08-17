@@ -40,19 +40,19 @@ function metrics(e: WaterfallEvent): { label: string; value: string; tone?: stri
         out.push({ label: "new loss factor", value: (Number(BigInt(e.remainingBalance)) / 1e18).toFixed(6), tone: "text-rose-300" });
       break;
     case "EventLossFactorExhausted":
-      if (e.remainingBalance != null) out.push({ label: "total supplied equiv", value: formatAmount(BigInt(e.remainingBalance), 9) });
+      if (e.remainingBalance != null) out.push({ label: "total supplied equiv", value: formatAmount(BigInt(e.remainingBalance), 0) });
       break;
     case "EventReserveFundDrawDown":
-      if (e.remainingBalance != null) out.push({ label: "R_fund after", value: formatAmount(BigInt(e.remainingBalance), 9) });
+      if (e.remainingBalance != null) out.push({ label: "R_fund after", value: formatAmount(BigInt(e.remainingBalance), 0) });
       break;
     case "EventTreasuryDrawDown":
-      if (e.remainingBalance != null) out.push({ label: `T_fund after${e.pool ? ` (${e.pool})` : ""}`, value: formatAmount(BigInt(e.remainingBalance), 9) });
+      if (e.remainingBalance != null) out.push({ label: `T_fund after${e.pool ? ` (${e.pool})` : ""}`, value: formatAmount(BigInt(e.remainingBalance), 0) });
       break;
     case "EventNasmVaultLiquidated":
-      if (e.remainingBalance != null) out.push({ label: "seized collateral", value: formatAmount(BigInt(e.remainingBalance), 9) });
+      if (e.remainingBalance != null) out.push({ label: "seized collateral", value: formatAmount(BigInt(e.remainingBalance), 0) });
       break;
     default:
-      if (e.remainingBalance != null) out.push({ label: "remaining", value: formatAmount(BigInt(e.remainingBalance), 9) });
+      if (e.remainingBalance != null) out.push({ label: "remaining", value: formatAmount(BigInt(e.remainingBalance), 0) });
   }
   return out;
 }
