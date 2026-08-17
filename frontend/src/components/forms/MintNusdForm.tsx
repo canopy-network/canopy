@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { getMaxMintableNusd } from "@/lib/canopy/pluginRpc";
 import { useWalletStore } from "@/lib/wallet";
 import { useArborTx } from "@/lib/hooks/useArborTx";
 import { addressBytesFromHex } from "@/lib/wallet";
@@ -45,6 +47,23 @@ export function MintNusdForm({ onMinted }: { onMinted?: () => void }) {
     } catch (err: any) {
       parseError = err?.message || String(err);
     }
+  }
+
+  const { data: maxMint } = useQuery({
+    queryKey: ["max-mintable-nusd", collateralAssetId.trim(), collateralQuantity.trim()],
+    queryFn: () => getMaxMintableNusd(collateralAssetId.trim(), parsedCollateral),
+    enabled: !!collateralAssetId.trim() && parsedCollateral > 0n,
+    staleTime: 15_000,
+  });
+
+  if (
+    !parseError &&
+    parsedNusd > 0n &&
+    maxMint?.eligible &&
+    maxMint.maxMintableNusd != null &&
+    parsedNusd > maxMint.maxMintableNusd
+  ) {
+    parseError = `Exceeds max mintable (${formatAmount(maxMint.maxMintableNusd, 6)} NUSD at current oracle price).`;
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -133,6 +152,23 @@ export function MintNusdForm({ onMinted }: { onMinted?: () => void }) {
           inputMode="decimal"
         />
       </Field>
+
+        {maxMint?.eligible && maxMint.maxMintableNusd != null && (
+          <p className="text-[11px] text-zinc-500">
+            You can mint up to{" "}
+            <span className="font-medium text-zinc-200">
+              {formatAmount(maxMint.maxMintableNusd, 6)} NUSD
+            </span>{" "}
+            against {formatAmount(parsedCollateral, 0)} {collateralAssetId} —
+            estimate at current oracle price, may shift slightly before your
+            mint lands.
+          </p>
+        )}
+        {maxMint && !maxMint.eligible && (
+          <p className="text-[11px] text-rose-300">
+            {maxMint.note || "This asset is not eligible for NUSD minting."}
+          </p>
+        )}
 
       {parsedCollateral > 0n && parsedNusd > 0n && !parseError && (
         <p className="text-[11px] text-zinc-600">

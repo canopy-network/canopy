@@ -173,13 +173,12 @@ export function MarketDetailTabs({
               <Stat label="Utilization" value={`${(utilBps / 100).toFixed(2)}%`} />
               <Stat label="Borrow APR" value={`${borrowApy.toFixed(2)}%`} tone="text-rose-300" />
               <Stat label="Supply APR" value={`${supplyApy.toFixed(4)}%`} tone="text-emerald-300" />
-              <Stat
-                label="Interest remainder"
-                value={(Number(interestRemainder) / 1e18).toFixed(9)}
-                tone="text-zinc-400"
-              />
             </div>
             <RateCurve utilBps={utilBps} />
+            <p className="mt-2 text-[10px] text-zinc-600">
+              Interest remainder (internal rounding carry):{" "}
+              {(Number(interestRemainder) / 1e18).toFixed(9)}
+            </p>
             <p className="text-[11px] text-zinc-600">
               Kinked two-slope model (ARCM §14, interest_rate.go): base{" "}
               {BASE_RATE_BPS / 100}%, slope1 {SLOPE1_BPS / 100}% up to{" "}

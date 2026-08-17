@@ -256,7 +256,11 @@ function MarketCard({
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-[10px] tabular-nums text-zinc-500">
+<details className="mt-3 border-t border-white/5 pt-2">
+        <summary className="cursor-pointer text-[10px] font-medium uppercase tracking-wide text-zinc-500 hover:text-zinc-300">
+          Protocol internals
+        </summary>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] tabular-nums text-zinc-500">
         <div>
           R_fund
           <p className="text-zinc-300">{formatAmount(entry.reserveFund, 0)}</p>
@@ -270,6 +274,7 @@ function MarketCard({
           <p className="text-zinc-300">{m.layer4PendingCount}</p>
         </div>
       </div>
+      </details>
 
       {price !== null ? (
         <p className="mt-3 text-[10px] text-zinc-600">

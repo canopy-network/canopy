@@ -213,11 +213,11 @@ export function BorrowForm({ marketId }: { marketId: string }) {
           {borrowerPosition && borrowerPosition.collateralQuantity > 0n && (
             <span className="text-zinc-500">
               {" "}
-              ({availableLiquidity < collateralCap
-                ? `limited by market liquidity (${formatAmount(availableLiquidity, 0)} ${market.debtAssetId} available)`
-                : tier
+              {`(${tier
                 ? `${(Number(tier.ltvMaxBps) / 100).toFixed(0)}% of your ${market.collateralAssetId} collateral's value`
-                : 'based on your collateral'})
+                : "based on your collateral"}${availableLiquidity < collateralCap
+                ? ` — limited by market liquidity (${formatAmount(availableLiquidity, 0)} ${market.debtAssetId} available)`
+                : ""})`}
             </span>
           )}
           {" "}before liquidation risk begins.

@@ -553,3 +553,32 @@ export async function getAssetBalance(
     return null;
   }
 }
+
+export async function getMaxMintableNusd(
+  collateralAssetId: string,
+  collateralQuantity: bigint
+): Promise<{
+  collateralAssetId: string;
+  nasmTier: number;
+  maxMintableNusd: bigint | null;
+  eligible: boolean;
+  note: string;
+} | null> {
+  try {
+    const res = await pluginGet(
+      `/v1/query/maxmintablenusd?collateralAssetId=${encodeURIComponent(collateralAssetId)}&collateralQuantity=${collateralQuantity.toString()}`
+    );
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (!j || j.error) return null;
+    return {
+      collateralAssetId: String(j.collateralAssetId ?? collateralAssetId),
+      nasmTier: Number(j.nasmTier ?? 0),
+      maxMintableNusd: j.maxMintableNusd != null ? toBigInt(j.maxMintableNusd) : null,
+      eligible: !!j.eligible,
+      note: String(j.note ?? ""),
+    };
+  } catch {
+    return null;
+  }
+}
