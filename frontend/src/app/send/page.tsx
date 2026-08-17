@@ -176,11 +176,11 @@ export default function SendPage() {
                       <td className="py-2.5 pr-4 tabular-nums text-zinc-300">
                         <span className="inline-flex items-center gap-2">
                           <AssetIcon symbol={v.asset} size={22} className="rounded-full" />
-                          {formatAmount(v.collateral, 9)} {v.asset}
+                          {formatAmount(v.collateral, 0)} {v.asset}
                         </span>
                       </td>
                       <td className="py-2.5 pr-4 tabular-nums text-zinc-300">
-                        {formatAmount(v.escrowed, 9)}
+                        {formatAmount(v.escrowed, 0)}
                       </td>
                       <td className="py-2.5 tabular-nums text-amber-200">
                         {formatAmount(v.principal, 6)}

@@ -91,10 +91,10 @@ function NasmVaults() {
                   <td className="py-2.5 pr-4 tabular-nums text-zinc-300">
                     <span className="inline-flex items-center gap-2">
                       <AssetIcon symbol={String(v.collateralAssetId ?? "")} size={22} className="rounded-full" />
-                      {formatAmount(BigInt(String(v.collateralQuantity ?? "0")), 9)} {String(v.collateralAssetId ?? "")}
+                      {formatAmount(BigInt(String(v.collateralQuantity ?? "0")), 0)} {String(v.collateralAssetId ?? "")}
                     </span>
                   </td>
-                  <td className="py-2.5 pr-4 tabular-nums text-zinc-300">{formatAmount(pool, 9)}</td>
+                  <td className="py-2.5 pr-4 tabular-nums text-zinc-300">{formatAmount(pool, 0)}</td>
                   <td className="py-2.5 tabular-nums text-amber-200">{formatAmount(BigInt(String(v.nusdPrincipal ?? "0")), 6)}</td>
                 </tr>
               ))}
