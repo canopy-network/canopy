@@ -624,24 +624,37 @@ func (p *Plugin) handleQueryAssetBalance(w http.ResponseWriter, r *http.Request)
 // enforces via ErrNasmHealthFactorTooLow, so the frontend can show a
 // live "max mintable" figure before a user submits a transaction, the
 // same way the lending markets already surface "max borrow" (see
-// mint_nusd.go's CalcMaxMintableNusd doc comment for the full math and
-// its deduplication rationale).
+// mint_nusd.go's CalcMaxMintableNusd doc comment for the full math).
 //
-// Constructs a minimal *Contract wrapping this Plugin purely to call the
-// shared CalcMaxMintableNusd/ResolveNasmTier/ResolvePrice functions
-// without duplicating their logic inline -- Contract's only field those
-// functions actually use is `plugin` itself (see contract.go's struct
-// definition), so this is a safe, correctly-wired read-only construction,
-// not a workaround. No other RPC handler in this file currently reuses
-// Contract-level functions this way (they instead each replicate small
-// amounts of logic directly against p.QueryState, per this file's
-// established precedent -- see handleQueryNasmTier's own doc comment on
-// why) -- this route is a deliberate first exception, made because
-// ResolvePrice's median-of-quorum-with-staleness-filtering logic is
-// substantial enough that duplicating it here would itself become a
-// second, driftable implementation of real economic logic, which is
-// exactly the failure mode this codebase's comments consistently warn
-// against elsewhere (e.g. applyTierBackingDelta's doc comment).
+// [FIX] An earlier version of this handler constructed a bare
+// &Contract{plugin: p} and called CalcMaxMintableNusd(c, ...) directly,
+// reusing ResolvePrice/ResolveNasmTier's Contract-based signatures rather
+// than duplicating their logic. That crashed the plugin process (502s
+// against the grad node) -- StateRead (which those functions call
+// internally via c.plugin.StateRead) routes through sendToPluginSync,
+// which uses c.fsmId as a live request-tracking key into p.pending/
+// p.requestContract (see plugin.go's sendToPluginAsync). A fabricated
+// Contract's fsmId is always the zero value, so every call through this
+// path reused request ID 0 -- colliding with any real in-flight
+// transaction using that same id, or leaving a channel that never
+// receives what waitForResponse expects. QueryState's own doc comment
+// states this precisely: it "is NOT tied to an in-flight tx/block
+// lifecycle and does not require a Contract context; it allocates its
+// own request id, making it safe to call from custom RPC handlers."
+//
+// Every other RPC handler in this file already follows that guidance --
+// handleQueryPrices (this file, resolves the exact same {19} PriceRecord
+// prefix) and handleQueryNasmTier (resolves the exact same {29} tier
+// registry) both call p.QueryState directly rather than any
+// Contract-based function. This handler now does the same: it inlines
+// ResolvePrice's median-of-fresh-quorum resolution and GetAssetTier's
+// single-key read against p.QueryState, reusing medianUint64 and
+// stalenessThresholdTable/nasmTierParamsTable directly (already
+// package-level, no duplication of THOSE) rather than reusing the
+// Contract-shaped functions that wrap them. mint_nusd.go's real
+// transaction path is unaffected -- it still calls CalcMaxMintableNusd
+// with a real, FSM-issued Contract, where c.fsmId is valid and StateRead
+// is the correct, safe call.
 func (p *Plugin) handleQueryMaxMintableNusd(w http.ResponseWriter, r *http.Request) {
 	assetId := r.URL.Query().Get("collateralAssetId")
 	if assetId == "" {
@@ -663,21 +676,109 @@ func (p *Plugin) handleQueryMaxMintableNusd(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	c := &Contract{plugin: p}
-	maxNusd, nasmTier, found, pErr := CalcMaxMintableNusd(c, assetId, collateralQuantity)
-	if pErr != nil {
-		http.Error(w, `{"error":"`+pErr.Error()+`"}`, http.StatusInternalServerError)
-		return
-	}
-	if !found {
+	notEligible := func() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"collateralAssetId": assetId,
 			"eligible":          false,
 			"note":              "asset is not NASM tier-eligible, or has no live oracle price",
 		})
+	}
+
+	// --- Step 1: resolve the asset's ARCM tier (mirrors GetAssetTier). ---
+	tierKeyResp, tErr := p.QueryState(0, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{{QueryId: 0, Key: KeyForAssetTier(assetId)}},
+	})
+	if tErr != nil {
+		http.Error(w, `{"error":"query state failed: `+tErr.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
+	if tierKeyResp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+tierKeyResp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	tierRaw := entryValue(tierKeyResp, 0)
+	if len(tierRaw) == 0 {
+		notEligible()
+		return
+	}
+	arcmTier := DecodeAssetTierRecord(tierRaw)
+
+	// arcmTier 0/1 map 1:1 to NASM N-0/N-1 -- mirrors ResolveNasmTier's own
+	// identical mapping and comment on why this is called out explicitly
+	// rather than passed through silently.
+	if arcmTier != 0 && arcmTier != 1 {
+		notEligible()
+		return
+	}
+	nasmParams, tpFound := nasmTierParamsTable[arcmTier]
+	if !tpFound {
+		notEligible()
+		return
+	}
+	nasmTier := arcmTier
+
+	// --- Step 2: resolve the asset's current oracle price (mirrors
+	// ResolvePrice's median-of-fresh-quorum logic). ---
+	stalenessThreshold, stFound := GetStalenessThreshold(arcmTier)
+	if !stFound {
+		notEligible()
+		return
+	}
+	priceQueryId := rand.Uint64()
+	priceResp, pErr := p.QueryState(0, &PluginStateReadRequest{
+		Ranges: []*PluginRangeRead{
+			{QueryId: priceQueryId, Prefix: JoinLenPrefix(PrefixPriceCache, []byte(assetId))},
+		},
+	})
+	if pErr != nil {
+		http.Error(w, `{"error":"query state failed: `+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if priceResp.Error != nil {
+		http.Error(w, `{"error":"state read error: `+priceResp.Error.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	currentHeight := p.CurrentHeight()
+	var freshPrices []uint64
+	for _, result := range priceResp.Results {
+		if result.QueryId != priceQueryId {
+			continue
+		}
+		for _, entry := range result.Entries {
+			rec := &PriceRecord{}
+			if uErr := proto.Unmarshal(entry.Value, rec); uErr != nil {
+				continue
+			}
+			if currentHeight >= rec.BlockHeight && currentHeight-rec.BlockHeight > stalenessThreshold {
+				continue
+			}
+			if rec.Price == 0 {
+				continue
+			}
+			freshPrices = append(freshPrices, rec.Price)
+		}
+	}
+	if len(freshPrices) < MinReporters {
+		notEligible()
+		return
+	}
+	collateralPrice := medianUint64(freshPrices)
+
+	// --- Step 3: the max-mintable calculation itself -- identical scaling
+	// to CalcMaxMintableNusd/DeliverMessageMintNusd's own comment: V_nc
+	// (x1e8 oracle scale) * LTV_n_liq_bps / (10000 * 100) to land on
+	// NUSD's 1e6 precision, floor rounding throughout. ---
+	numerator := new(big.Int).SetUint64(collateralQuantity)
+	numerator.Mul(numerator, new(big.Int).SetUint64(collateralPrice))
+	numerator.Mul(numerator, new(big.Int).SetUint64(nasmParams.LTVLiqBps))
+	denominator := big.NewInt(10000 * 100)
+	maxNusdBig := new(big.Int).Div(numerator, denominator)
+	if maxNusdBig.BitLen() > 64 {
+		http.Error(w, `{"error":"max mintable NUSD overflow for this collateral quantity"}`, http.StatusInternalServerError)
+		return
+	}
+	maxNusd := maxNusdBig.Uint64()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
