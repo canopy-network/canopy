@@ -152,7 +152,30 @@ func CheckTierConcentrationCap(c *Contract, nasmTier uint8, newMintBackingValue 
 	newGrandTotal := new(big.Int).SetUint64(existingTotalSupply)
 	newGrandTotal.Add(newGrandTotal, new(big.Int).SetUint64(newMintBackingValue))
 
-	if newGrandTotal.Sign() == 0 {
+	// [CONCENTRATION CAP FIX] Prior guard checked newGrandTotal.Sign() == 0
+	// -- i.e. "the grand total AFTER this mint is zero" -- which can only
+	// ever be true for a zero-amount mint (newMintBackingValue == 0), a
+	// case CheckMessageMintNusd already rejects earlier as ErrInvalidAmount
+	// before this function is ever reached. It therefore never actually
+	// fired for any real mint.
+	//
+	// The real gap: system's first-ever mint (existingTotalSupply == 0,
+	// newMintBackingValue > 0) is mathematically guaranteed to make
+	// newTierTotal == newGrandTotal (this mint is the only backing for its
+	// own tier AND the only supply that would exist), i.e. exactly 100% of
+	// a brand-new total -- which always exceeds MaxTierShareBps(70%)
+	// regardless of mint size, permanently blocking every first mint on
+	// any fresh deployment. NASM Spec Section 3.3's diversification intent
+	// is about balance across tiers as the backing portfolio grows -- it
+	// has nothing to bind against yet when no supply exists at all, so
+	// there is nothing to be disproportionate relative to.
+	//
+	// Scoped to SYSTEM-wide existingTotalSupply, not per-tier: a mint into
+	// an already-nonzero total (e.g. Tier N-1's first mint when Tier N-0
+	// already carries real backing) is a genuine concentration event and
+	// must still be checked normally below -- only the very first unit of
+	// NUSD supply, system-wide, is exempt, and only once.
+	if existingTotalSupply == 0 {
 		return nil
 	}
 
