@@ -56,6 +56,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/nasmtierbacking", p.handleQueryNasmTierBacking)
 	mux.HandleFunc("/v1/query/emergencymode", p.handleQueryEmergencyMode)
 	mux.HandleFunc("/v1/query/assetbalance", p.handleQueryAssetBalance)
+	mux.HandleFunc("/v1/query/maxmintablenusd", p.handleQueryMaxMintableNusd)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
@@ -613,6 +614,80 @@ func (p *Plugin) handleQueryAssetBalance(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(balJSON)
+}
+
+// handleQueryMaxMintableNusd serves GET
+// /v1/query/maxmintablenusd?collateralAssetId=BTC&collateralQuantity=1
+// Returns the maximum NUSD mintable at exactly HF_n == 1.0 for the given
+// collateral asset and quantity, at the current oracle price -- a
+// read-only preview of the exact ceiling DeliverMessageMintNusd itself
+// enforces via ErrNasmHealthFactorTooLow, so the frontend can show a
+// live "max mintable" figure before a user submits a transaction, the
+// same way the lending markets already surface "max borrow" (see
+// mint_nusd.go's CalcMaxMintableNusd doc comment for the full math and
+// its deduplication rationale).
+//
+// Constructs a minimal *Contract wrapping this Plugin purely to call the
+// shared CalcMaxMintableNusd/ResolveNasmTier/ResolvePrice functions
+// without duplicating their logic inline -- Contract's only field those
+// functions actually use is `plugin` itself (see contract.go's struct
+// definition), so this is a safe, correctly-wired read-only construction,
+// not a workaround. No other RPC handler in this file currently reuses
+// Contract-level functions this way (they instead each replicate small
+// amounts of logic directly against p.QueryState, per this file's
+// established precedent -- see handleQueryNasmTier's own doc comment on
+// why) -- this route is a deliberate first exception, made because
+// ResolvePrice's median-of-quorum-with-staleness-filtering logic is
+// substantial enough that duplicating it here would itself become a
+// second, driftable implementation of real economic logic, which is
+// exactly the failure mode this codebase's comments consistently warn
+// against elsewhere (e.g. applyTierBackingDelta's doc comment).
+func (p *Plugin) handleQueryMaxMintableNusd(w http.ResponseWriter, r *http.Request) {
+	assetId := r.URL.Query().Get("collateralAssetId")
+	if assetId == "" {
+		http.Error(w, `{"error":"missing collateralAssetId query param"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateAssetID(assetId); err != nil {
+		http.Error(w, `{"error":"invalid collateralAssetId: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	qtyStr := r.URL.Query().Get("collateralQuantity")
+	if qtyStr == "" {
+		http.Error(w, `{"error":"missing collateralQuantity query param"}`, http.StatusBadRequest)
+		return
+	}
+	collateralQuantity, qErr := strconv.ParseUint(qtyStr, 10, 64)
+	if qErr != nil {
+		http.Error(w, `{"error":"invalid collateralQuantity: `+qErr.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	c := &Contract{plugin: p}
+	maxNusd, nasmTier, found, pErr := CalcMaxMintableNusd(c, assetId, collateralQuantity)
+	if pErr != nil {
+		http.Error(w, `{"error":"`+pErr.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"collateralAssetId": assetId,
+			"eligible":          false,
+			"note":              "asset is not NASM tier-eligible, or has no live oracle price",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"collateralAssetId":  assetId,
+		"collateralQuantity": strconv.FormatUint(collateralQuantity, 10),
+		"nasmTier":           nasmTier,
+		"maxMintableNusd":    strconv.FormatUint(maxNusd, 10),
+		"eligible":           true,
+		"note":               "estimate at current oracle price -- may shift slightly by the time a mint transaction lands",
+	})
 }
 
 // handleQueryTreasury serves GET /v1/query/treasury?pool=arbor|nasm

@@ -1,6 +1,6 @@
 package contract
 
-import "math/big"
+import "strconv"
 
 // CheckMessageMintNusd statelessly validates a 'mint_nusd' message (NASM
 // Consolidated Spec Section 4.1). No state reads here -- vault_id
@@ -32,15 +32,15 @@ func (c *Contract) CheckMessageMintNusd(msg *MessageMintNusd) *PluginCheckRespon
 // Step 1 -- verify collateral_asset is NASM Tier N-0 or N-1 (ResolveNasmTier)
 // Step 2 -- [DISCLOSED GAP] tier concentration cap -- NOT enforced yet,
 //
-//	see this function's own comment below and MessageMintNusd's
-//	proto doc comment for why.
+// see this function's own comment below and MessageMintNusd's
+// proto doc comment for why.
 //
 // Step 3 -- compute HF_n post-mint using NASM tier LTV_n_liq
 // Step 4 -- reject if HF_n post-mint would be <= 1.0
 // Step 5 -- snapshot SF_index(t) at vault open
 // Step 6 -- mint nusd_amount_requested to sender; increase vault's
 //
-//	nusd_principal; increase NUSD total_supply
+// nusd_principal; increase NUSD total_supply
 //
 // Step 7 -- atomic: all steps succeed or the entire transaction reverts
 //
@@ -84,8 +84,12 @@ func (c *Contract) DeliverMessageMintNusd(msg *MessageMintNusd, fee uint64) *Plu
 	// Step 1 -- NASM Spec Section 3.1 tier eligibility. found=false covers
 	// all three ineligibility cases (no {29} entry, ARCM Tier 2/3, or an
 	// asset structurally absent from {29} as Tier 0/1) -- see
-	// ResolveNasmTier's own doc comment.
-	nasmTier, nasmParams, tierFound, tErr := ResolveNasmTier(c, msg.CollateralAssetId)
+	// ResolveNasmTier's own doc comment. nasmParams (LTV/LIF) is no longer
+	// consumed directly here -- CalcMaxMintableNusd (Step 3/4, below)
+	// re-resolves it internally as part of its own self-contained
+	// calculation, so only tier eligibility itself is checked at this
+	// call site.
+	nasmTier, _, tierFound, tErr := ResolveNasmTier(c, msg.CollateralAssetId)
 	if tErr != nil {
 		return &PluginDeliverResponse{Error: tErr}
 	}
@@ -105,43 +109,35 @@ func (c *Contract) DeliverMessageMintNusd(msg *MessageMintNusd, fee uint64) *Plu
 		return &PluginDeliverResponse{Error: ccErr}
 	}
 
-	// Oracle price read (ARCM Section 10's permissioned price cache,
-	// shared with lending markets per NASM Spec Section 7's "Oracle
-	// integration: Fully shared"). USD per unit, x1e8 (see PriceRecord's
-	// own field comment in arbor_state.proto).
-	collateralPrice, priceFound, pErr := ResolvePrice(c, msg.CollateralAssetId)
-	if pErr != nil {
-		return &PluginDeliverResponse{Error: pErr}
+	// Oracle price is resolved inside CalcMaxMintableNusd below (it does
+	// its own ResolvePrice call) -- no separate price read needed here
+	// anymore now that the HF_n math has moved into that shared function.
+	// ErrNasmPriceUnavailable is still raised correctly if the price is
+	// missing: CalcMaxMintableNusd returns found=false in that case,
+	// handled just below.
+
+	// Step 3/4 -- HF_n = (V_nc * LTV_n_liq) / D_nusd, NASM Spec Section 2.2.
+	// [DEDUPLICATED] This math now lives in nasm_tier.go's
+	// CalcMaxMintableNusd -- see that function's own doc comment for the
+	// full scaling derivation (V_nc's x1e8 oracle scale vs.
+	// nusd_amount_requested's x1e6 precision, floor rounding throughout).
+	// CalcMaxMintableNusd does its own internal price/tier resolution, so
+	// this call intentionally duplicates the ResolvePrice/ResolveNasmTier
+	// reads already done above rather than threading their results
+	// through as extra parameters -- keeps the shared function's
+	// signature simple and independently callable (exactly what the new
+	// RPC route needs) at the cost of one harmless extra state read on
+	// this call path.
+	maxNusdAtHF1, _, mmFound, mmErr := CalcMaxMintableNusd(c, msg.CollateralAssetId, msg.CollateralQuantity)
+	if mmErr != nil {
+		return &PluginDeliverResponse{Error: mmErr}
 	}
-	if !priceFound {
+	if !mmFound {
 		return &PluginDeliverResponse{Error: ErrNasmPriceUnavailable(msg.VaultId, msg.CollateralAssetId)}
 	}
 
-	// Step 3/4 -- HF_n = (V_nc * LTV_n_liq) / D_nusd, NASM Spec Section 2.2.
-	// V_nc (collateral USD value) comes out of collateral_qty * price
-	// scaled x1e8 (price's own scale; collateral_qty itself carries no
-	// decimals concept anywhere in this codebase -- confirmed, no
-	// per-asset decimals field exists). nusd_amount_requested is
-	// 1e6-precision NUSD (NASM Spec Section 2.3), representing USD 1:1 by
-	// protocol definition (NUSD's peg, Section 1.2) -- no oracle price
-	// lookup for NUSD itself, since it IS the USD reference. To compare
-	// V_nc's implicit x1e8 scale against nusd_amount_requested's x1e6
-	// scale, the extra x100 (1e8/1e6) is divided out in the same
-	// denominator as the LTV bps division, floor rounding throughout
-	// (protocol-favouring, NASM Spec Section 14.1: "Max NUSD mintable at
-	// given collateral -- Floor").
-	//
-	// HF_n > 1.0  <=>  V_nc_1e6 * LTV_n_liq_bps / 10000 > nusd_amount_requested
-	//
-	//	<=>  (collateral_qty * price * LTV_n_liq_bps) / (10000 * 100) > nusd_amount_requested
-	numerator := new(big.Int).SetUint64(msg.CollateralQuantity)
-	numerator.Mul(numerator, new(big.Int).SetUint64(collateralPrice))
-	numerator.Mul(numerator, new(big.Int).SetUint64(nasmParams.LTVLiqBps))
-	denominator := big.NewInt(10000 * 100)
-	maxNusdAtHF1 := new(big.Int).Div(numerator, denominator)
-
-	if maxNusdAtHF1.Cmp(new(big.Int).SetUint64(msg.NusdAmountRequested)) <= 0 {
-		return &PluginDeliverResponse{Error: ErrNasmHealthFactorTooLow(msg.VaultId, msg.NusdAmountRequested, maxNusdAtHF1.String())}
+	if maxNusdAtHF1 <= msg.NusdAmountRequested {
+		return &PluginDeliverResponse{Error: ErrNasmHealthFactorTooLow(msg.VaultId, msg.NusdAmountRequested, strconv.FormatUint(maxNusdAtHF1, 10))}
 	}
 
 	// Step 5 -- snapshot SF_index(t) at vault open (NASM Spec Section 6.3).

@@ -1,5 +1,7 @@
 package contract
 
+import "math/big"
+
 // NasmTierParams holds one NASM tier's LTV_n_max, LTV_n_liq, and LIF (all
 // bps), per NASM Consolidated Spec Section 3.1's collateral tier table and
 // Section 7's liquidation integration. Mirrors ARCM's TierParams shape
@@ -111,4 +113,69 @@ func ResolveNasmTier(c *Contract, assetID string) (nasmTier uint8, params NasmTi
 		return 0, NasmTierParams{}, false, nil
 	}
 	return arcmTier, nasmParams, true, nil
+}
+
+// CalcMaxMintableNusd computes the maximum NUSD mintable at exactly
+// HF_n == 1.0 (the liquidation boundary) for a given collateral asset and
+// quantity, at the current oracle price. This is the exact same formula
+// mint_nusd.go's DeliverMessageMintNusd already computes inline as
+// maxNusdAtHF1 to build ErrNasmHealthFactorTooLow's error message -- moved
+// here as its own named, reusable function rather than left duplicated,
+// matching this codebase's established discipline (see
+// applyTierBackingDelta's doc comment on why a single mandatory
+// implementation is preferred over parallel copies that can silently
+// drift). mint_nusd.go now calls this directly instead of inlining the
+// same big.Int arithmetic a second time.
+//
+// Read-only: no state writes, does not itself enforce anything -- callers
+// decide what to do with the returned ceiling (mint_nusd.go rejects a
+// request that meets or exceeds it; the read-only RPC route added
+// alongside this function surfaces it to the frontend as a live preview
+// so a request that would fail this check never gets submitted in the
+// first place).
+//
+// A previewed ceiling can still shift slightly by the time an actual mint
+// transaction lands, if the oracle price updates in between -- same
+// inherent lag as every other live, oracle-priced figure in this
+// codebase (interest accrual on debt is the closest precedent). Callers
+// surfacing this as a UI hint should treat it as an estimate, not a
+// guarantee.
+func CalcMaxMintableNusd(c *Contract, collateralAssetID string, collateralQuantity uint64) (maxNusd uint64, nasmTier uint8, found bool, pErr *PluginError) {
+	nasmTier, nasmParams, tierFound, tErr := ResolveNasmTier(c, collateralAssetID)
+	if tErr != nil {
+		return 0, 0, false, tErr
+	}
+	if !tierFound {
+		return 0, 0, false, nil
+	}
+
+	collateralPrice, priceFound, pErr := ResolvePrice(c, collateralAssetID)
+	if pErr != nil {
+		return 0, 0, false, pErr
+	}
+	if !priceFound {
+		return 0, 0, false, nil
+	}
+
+	// Identical scaling as mint_nusd.go's own inline comment explains in
+	// full: V_nc (collateral USD value, x1e8 from the oracle price) times
+	// LTV_n_liq_bps, divided by (10000 * 100) to land on NUSD's 1e6
+	// precision. Floor rounding throughout (protocol-favouring, NASM Spec
+	// Section 14.1).
+	numerator := new(big.Int).SetUint64(collateralQuantity)
+	numerator.Mul(numerator, new(big.Int).SetUint64(collateralPrice))
+	numerator.Mul(numerator, new(big.Int).SetUint64(nasmParams.LTVLiqBps))
+	denominator := big.NewInt(10000 * 100)
+	maxNusdBig := new(big.Int).Div(numerator, denominator)
+
+	// [CAST-SAFETY GUARD] Same discipline as every other big.Int-to-uint64
+	// conversion in this codebase (see deposit.go/withdraw.go's identical
+	// BitLen() > 64 guards) -- proves the result fits before using it.
+	// Practically unreachable at any realistic collateral quantity or
+	// price, but guarded explicitly rather than assumed.
+	if maxNusdBig.BitLen() > 64 {
+		return 0, nasmTier, true, ErrShareOverflow(collateralAssetID, collateralQuantity, maxNusdBig.String())
+	}
+
+	return maxNusdBig.Uint64(), nasmTier, true, nil
 }
