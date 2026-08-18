@@ -57,6 +57,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/emergencymode", p.handleQueryEmergencyMode)
 	mux.HandleFunc("/v1/query/assetbalance", p.handleQueryAssetBalance)
 	mux.HandleFunc("/v1/query/maxmintablenusd", p.handleQueryMaxMintableNusd)
+	mux.HandleFunc("/v1/query/vaultdebt", p.handleQueryVaultDebt)
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
