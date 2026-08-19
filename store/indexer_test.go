@@ -81,6 +81,38 @@ func TestDeleteTxsForHeightRemovesEthereumHashAlias(t *testing.T) {
 	require.True(t, got == nil || got.TxHash == "")
 }
 
+func TestDeleteAllClonesIteratorKeys(t *testing.T) {
+	store, _, cleanup := testStore(t)
+	defer cleanup()
+
+	const n = 64
+	for i := 0; i < n; i++ {
+		txRes, _, _, _, _ := newTestTxResult(t)
+		txRes.Height = testHeight
+		txRes.Index = uint64(i)
+		require.NoError(t, store.IndexTx(txRes))
+	}
+	other, _, _, _, _ := newTestTxResult(t)
+	other.Height = testHeight + 1
+	other.Index = 0
+	require.NoError(t, store.IndexTx(other))
+
+	_, err := store.Commit()
+	require.NoError(t, err)
+
+	require.NoError(t, store.DeleteTxsForHeight(testHeight))
+	_, err = store.Commit()
+	require.NoError(t, err)
+
+	got, err := store.GetTxsByHeightNonPaginated(testHeight, false)
+	require.NoError(t, err)
+	require.Len(t, got, 0)
+
+	remaining, err := store.GetTxsByHeightNonPaginated(testHeight+1, false)
+	require.NoError(t, err)
+	require.Len(t, remaining, 1)
+}
+
 const ethGasPriceTestValue = 10_000_000_000
 
 func ptrAddress(address common.Address) *common.Address { return &address }
