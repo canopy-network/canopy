@@ -550,3 +550,86 @@ func TestAddUint64(t *testing.T) {
 	require.Equal(t, uint64(0), sum)
 	require.True(t, overflow)
 }
+
+func TestLoadCounted(t *testing.T) {
+	tests := []struct {
+		name           string
+		totalCount     int
+		params         PageParams
+		expectedIdx    []int
+		expectedPages  int
+		expectedPerPag int
+	}{
+		{
+			name:           "first page of many",
+			totalCount:     25,
+			params:         PageParams{PageNumber: 1, PerPage: 10},
+			expectedIdx:    []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			expectedPages:  3,
+			expectedPerPag: 10,
+		},
+		{
+			name:           "middle page starts after the previous page",
+			totalCount:     25,
+			params:         PageParams{PageNumber: 2, PerPage: 10},
+			expectedIdx:    []int{10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
+			expectedPages:  3,
+			expectedPerPag: 10,
+		},
+		{
+			name:           "last page is partial",
+			totalCount:     25,
+			params:         PageParams{PageNumber: 3, PerPage: 10},
+			expectedIdx:    []int{20, 21, 22, 23, 24},
+			expectedPages:  3,
+			expectedPerPag: 10,
+		},
+		{
+			name:           "page beyond the total count is empty",
+			totalCount:     25,
+			params:         PageParams{PageNumber: 4, PerPage: 10},
+			expectedIdx:    nil,
+			expectedPages:  3,
+			expectedPerPag: 10,
+		},
+		{
+			name:           "empty result set",
+			totalCount:     0,
+			params:         PageParams{PageNumber: 1, PerPage: 10},
+			expectedIdx:    nil,
+			expectedPages:  0,
+			expectedPerPag: 10,
+		},
+		{
+			name:           "defaults are applied to the params",
+			totalCount:     3,
+			params:         PageParams{},
+			expectedIdx:    []int{0, 1, 2},
+			expectedPages:  1,
+			expectedPerPag: 10,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got []int
+			results := make(TxResults, 0)
+			page := NewPage(test.params, TxResultsPageName)
+			require.NoError(t, page.LoadCounted(test.totalCount, &results, func(index int) ErrorI {
+				got = append(got, index)
+				return nil
+			}))
+			require.Equal(t, test.expectedIdx, got)
+			require.Equal(t, len(test.expectedIdx), page.Count)
+			require.Equal(t, test.totalCount, page.TotalCount)
+			require.Equal(t, test.expectedPages, page.TotalPages)
+			require.Equal(t, test.expectedPerPag, page.PerPage)
+			require.Equal(t, &results, page.Results)
+		})
+	}
+}
+
+func TestLoadCountedCallbackError(t *testing.T) {
+	results := make(TxResults, 0)
+	page := NewPage(PageParams{PageNumber: 1, PerPage: 10}, TxResultsPageName)
+	require.Error(t, page.LoadCounted(25, &results, func(index int) ErrorI { return ErrInvalidArgument() }))
+}
