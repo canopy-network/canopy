@@ -178,7 +178,7 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 				return e
 			}
 			// set validator to unstaking if below minium
-			if _, e = s.SetValidatorUnstakingIfBelowMinimum(v, params.Validator); err != nil {
+			if _, e = s.SetValidatorUnstakingIfBelowMinimum(v, params.Validator); e != nil {
 				return e
 			}
 			return

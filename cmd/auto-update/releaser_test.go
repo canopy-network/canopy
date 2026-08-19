@@ -60,7 +60,7 @@ func TestGetLatestPluginReleaseFiltersByPluginStream(t *testing.T) {
 			AssetName:    "go-plugin-%s-%s.tar.gz",
 			ArchSpecific: true,
 		},
-	}, "v0.0.0", true)
+	}, "v0.0.0")
 
 	release, err := rm.GetLatestRelease()
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestShouldUpdateAcceptsPluginPrefixedSemver(t *testing.T) {
 	rm := NewReleaseManager(&ReleaseManagerConfig{
 		Type:      ReleaseTypePlugin,
 		PluginDir: "plugin/go",
-	}, "v2026.78.100", true)
+	}, "v2026.78.100")
 
 	release := &Release{Version: "plugin-go-v2026.79.200"}
 	err := rm.ShouldUpdate(release)

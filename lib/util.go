@@ -130,6 +130,30 @@ func (p *Page) Load(storePrefix []byte, reverse bool, results Pageable, db RStor
 	return
 }
 
+// LoadCounted() fills a page when the total number of items and the position of each item
+// are already known, invoking the callback only for the indices that belong to the requested
+// page. Unlike Load(), no iteration over the skipped items is needed to calculate the params
+func (p *Page) LoadCounted(totalCount int, results Pageable, callback func(index int) ErrorI) (err ErrorI) {
+	// set the page results so that even if it's a zero page, it will have a castable type
+	p.Results, p.TotalCount = results, totalCount
+	// skip to index makes the starting point appropriate based on the page params
+	pageStartIndex := p.skipToIndex()
+	// calculate total pages
+	p.TotalPages = int(math.Ceil(float64(p.TotalCount) / float64(p.PerPage)))
+	// for each index of the requested page that actually exists
+	for i := pageStartIndex; i < pageStartIndex+p.PerPage && i < totalCount; i++ {
+		// execute the callback; passing the index within the complete result set
+		if err = callback(i); err != nil {
+			// exit with error
+			return
+		}
+		// set the results and increment the count
+		p.Results, p.Count = results, p.Count+1
+	}
+	// exit
+	return
+}
+
 // LoadArray() fills a page from a slice
 func (p *Page) LoadArray(slice any, results Pageable, callback func(item any) ErrorI) (err ErrorI) {
 	// if the slice is not type of reflect

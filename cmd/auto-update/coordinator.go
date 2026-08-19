@@ -157,11 +157,12 @@ func (s *Supervisor) KillPlugin() {
 
 // CoordinatorConfig holds the configuration for the Coordinator
 type CoordinatorConfig struct {
-	Canopy       lib.Config    // Configuration for the canopy service
-	BinPath      string        // Path to the binary file
-	MaxDelayTime int           // Max time for delaying the update process (minutes)
-	CheckPeriod  time.Duration // Period for checking updates
-	GracePeriod  time.Duration // Grace period for tasks completion during shutdown
+	Canopy         lib.Config    // Configuration for the canopy service
+	BinPath        string        // Path to the binary file shipped with the build
+	UpdatedBinPath string        // Path to the downloaded binary on the data directory
+	MaxDelayTime   int           // Max time for delaying the update process (minutes)
+	CheckPeriod    time.Duration // Period for checking updates
+	GracePeriod    time.Duration // Grace period for tasks completion during shutdown
 }
 
 // Coordinator orchestrates the process of updating while managing CLI lifecycle
@@ -189,6 +190,11 @@ func NewCoordinator(config *CoordinatorConfig, updater, pluginUpdater *ReleaseMa
 		updateInProgress: atomic.Bool{},
 		log:              logger,
 	}
+}
+
+// binPath returns the preferred binary to run
+func (c *Coordinator) binPath() string {
+	return effectiveBinPath(c.config.UpdatedBinPath, c.config.BinPath)
 }
 
 // EnsurePluginReady checks if the plugin binary or tarball exists, and downloads if needed.
@@ -245,7 +251,7 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 		// continue anyway - CLI might work without plugin or plugin might exist
 	}
 	// start the process
-	if err := c.supervisor.Start(c.config.BinPath); err != nil {
+	if err := c.supervisor.Start(c.binPath()); err != nil {
 		return err
 	}
 	// create a cancellable context
@@ -280,7 +286,7 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 			return err
 		// periodic check for updates
 		case <-timer.C:
-			if !c.updater.Enabled {
+			if !c.config.Canopy.AutoUpdate {
 				continue
 			}
 			// wrap it on a goroutine so it doesn't block the main loop
@@ -451,7 +457,7 @@ func (c *Coordinator) ApplyUpdate(ctx context.Context, release, pluginRelease *R
 	}
 
 	// restart the process (pluginctl.sh will extract the new tarball on start)
-	if err := c.supervisor.Start(c.config.BinPath); err != nil {
+	if err := c.supervisor.Start(c.binPath()); err != nil {
 		return fmt.Errorf("failed to start updated process: %w", err)
 	}
 

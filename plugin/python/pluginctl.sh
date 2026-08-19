@@ -3,13 +3,24 @@
 # Usage: ./pluginctl.sh {start|stop|status|restart}
 # Configuration variables for paths and files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON_SCRIPT="$SCRIPT_DIR/main.py"
-VENV_DIR="$SCRIPT_DIR/.venv"
+# Persistent plugin home under the data dir (set by canopy, else default location).
+PLUGIN_HOME="${CANOPY_PLUGIN_HOME:-${CANOPY_DATA_DIR:-$HOME/.canopy}/plugin/$(basename "$SCRIPT_DIR")}"
+mkdir -p "$PLUGIN_HOME"
+# Prefer a downloaded update in the data dir, else the source baked in the image.
+if [ -f "$PLUGIN_HOME/main.py" ] || [ -f "$PLUGIN_HOME/python-plugin.tar.gz" ]; then
+    RUN_HOME="$PLUGIN_HOME"
+elif [ -f "$SCRIPT_DIR/main.py" ]; then
+    RUN_HOME="$SCRIPT_DIR"
+else
+    RUN_HOME="$PLUGIN_HOME"
+fi
+PYTHON_SCRIPT="$RUN_HOME/main.py"
+VENV_DIR="$RUN_HOME/.venv"
 PYTHON_CMD="$VENV_DIR/bin/python3"
 PID_FILE="/tmp/plugin/python-plugin.pid"
 LOG_FILE="/tmp/plugin/python-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
-TARBALL="$SCRIPT_DIR/python-plugin.tar.gz"
+TARBALL="$RUN_HOME/python-plugin.tar.gz"
 # Timeout in seconds for graceful shutdown
 STOP_TIMEOUT=10
 
@@ -24,7 +35,7 @@ extract_if_needed() {
     # Check for tarball
     if [ -f "$TARBALL" ]; then
         echo "Extracting $TARBALL..."
-        tar -xzf "$TARBALL" -C "$SCRIPT_DIR"
+        tar -xzf "$TARBALL" -C "$RUN_HOME"
         if [ $? -eq 0 ] && [ -f "$PYTHON_SCRIPT" ]; then
             echo "Extraction complete"
             # Return 2 to indicate extraction happened and deps need reinstall
@@ -59,7 +70,7 @@ install_dependencies() {
     fi
     
     # Install the package in editable mode
-    "$VENV_DIR/bin/pip" install -e "$SCRIPT_DIR"
+    "$VENV_DIR/bin/pip" install -e "$RUN_HOME"
     if [ $? -ne 0 ]; then
         echo "Warning: Editable install failed, trying direct dependency install..."
         # Fallback: install dependencies directly from pyproject.toml
