@@ -69,3 +69,27 @@ export async function fetchLeaderboard(weekId: "current" | number = "current"): 
   const qs = `?weekId=${weekId}`;
   return pluginFetch<LeaderboardResponse>(`/v1/query/questxp/leaderboard${qs}`);
 }
+
+export interface LinkIdentityInput {
+  address: string;
+  publicKeyHex: string;
+  discordId: string;
+  twitterHandle: string;
+  issuedAtHeight: number;
+  signatureHex: string;
+}
+
+export async function linkIdentity(input: LinkIdentityInput): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${PLUGIN_BASE_URL}/v1/link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data?.error ?? "link failed" };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "could not reach quest service" };
+  }
+}
