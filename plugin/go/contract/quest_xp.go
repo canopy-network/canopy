@@ -54,7 +54,7 @@ import (
 	"time"
 
 	bls12381 "github.com/drand/kyber-bls12381"
-	"github.com/drand/kyber/sign/bdn"
+	"github.com/drand/kyber/sign/bls"
 )
 
 // ---- config ----
@@ -233,7 +233,7 @@ func questXPVerifySignature(message, sigHex, pubKeyHex string) bool {
 	if err := point.UnmarshalBinary(pubBytes); err != nil {
 		return false
 	}
-	scheme := bdn.NewSchemeOnG2(suite)
+	scheme := bls.NewSchemeOnG2(suite)
 	return scheme.Verify(point, []byte(message), sigBytes) == nil
 }
 
