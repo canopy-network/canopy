@@ -9,20 +9,29 @@ function shortAddr(addr: string): string {
 
 export default function QuestsPage() {
   const address = useWalletStore((s) => s.address);
-  const { data: today, isLoading: todayLoading } = useTodayQuests(address ?? undefined);
+  const { data: today, isLoading: todayLoading } = useTodayQuests();
   const { data: myXp, isLoading: myXpLoading } = useQuestXp(address ?? undefined);
   const { data: leaderboard, isLoading: leaderboardLoading, isError } = useLeaderboard("current");
+
+  // Merge per-address completion status from XP entries into the catalog
+  const completedQuestIds = new Set(
+    myXp?.entries?.map((e) => e.questId) ?? []
+  );
+
+  const quests = today?.quests.map((q) => ({
+    ...q,
+    completed: completedQuestIds.has(q.id),
+  })) ?? [];
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-1 text-xs uppercase tracking-wide text-emerald-400">
         Arbor Community Quests
       </div>
-      <h1 className="mb-2 text-3xl font-semibold">Quests &amp; XP</h1>
+      <h1 className="mb-2 text-3xl font-semibold">Quests & XP</h1>
       <p className="mb-8 max-w-2xl text-sm text-neutral-400">
         Complete real actions on Arbor — supply, borrow, repay, and more —
-        to earn XP automatically. XP is read live from the quest indexer,
-        a service separate from Arbor&apos;s core protocol.
+        to earn XP automatically. XP is read live from the quest plugin.
       </p>
 
       <div className="mb-8 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6">
@@ -32,9 +41,9 @@ export default function QuestsPage() {
         </div>
         {todayLoading ? (
           <div className="text-neutral-500">Loading…</div>
-        ) : today ? (
+        ) : quests.length > 0 ? (
           <div className="mt-3 divide-y divide-neutral-800">
-            {today.quests.map((q) => (
+            {quests.map((q) => (
               <div key={q.id} className="flex items-start gap-3 py-3">
                 <div
                   className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs ${
@@ -76,23 +85,25 @@ export default function QuestsPage() {
         ) : myXp ? (
           <>
             <div className="text-3xl font-semibold">{myXp.totalXp} XP</div>
-            <div className="mt-4 space-y-1 text-sm text-neutral-400">
-              {myXp.entries.slice(0, 5).map((e) => (
-                <div key={`${e.txHash}-${e.questId}`} className="flex justify-between">
-                  <span>{e.questId}</span>
-                  <span>+{e.xp} XP</span>
-                </div>
-              ))}
-              {myXp.entries.length > 5 && (
-                <div className="pt-1 text-xs text-neutral-600">
-                  +{myXp.entries.length - 5} more
-                </div>
-              )}
-            </div>
+            {myXp.entries && myXp.entries.length > 0 && (
+              <div className="mt-4 space-y-1 text-sm text-neutral-400">
+                {myXp.entries.slice(0, 5).map((e) => (
+                  <div key={`${e.txHash}-${e.questId}`} className="flex justify-between">
+                    <span>{e.questId}</span>
+                    <span>+{e.xp} XP</span>
+                  </div>
+                ))}
+                {myXp.entries.length > 5 && (
+                  <div className="pt-1 text-xs text-neutral-600">
+                    +{myXp.entries.length - 5} more
+                  </div>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="text-neutral-500">
-            No XP yet — link your Discord/X account, then complete a quest action.
+            No XP yet — complete a quest action to earn your first XP.
           </div>
         )}
       </div>
@@ -118,14 +129,18 @@ export default function QuestsPage() {
               {leaderboard.leaderboard.map((entry, i) => (
                 <tr key={entry.address} className="border-t border-neutral-800">
                   <td className="py-2 text-neutral-500">{i + 1}</td>
-                  <td className="py-2 font-mono">{shortAddr(entry.address)}</td>
-                  <td className="py-2 text-right">{entry.xp}</td>
+                  <td className="py-2 font-mono text-xs">{shortAddr(entry.address)}</td>
+                  <td className="py-2 pr-0 text-right tabular-nums">{entry.xp} XP</td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
-          <div className="text-neutral-500">No activity yet this week.</div>
+          <div className="text-neutral-500">
+            {leaderboard && leaderboard.weekId === 0
+              ? "Leaderboard fills in as the week progresses — the chain is still in week 0."
+              : "No leaderboard entries yet."}
+          </div>
         )}
       </div>
     </div>

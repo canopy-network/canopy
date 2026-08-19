@@ -1,25 +1,27 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchQuestXp, fetchLeaderboard, fetchIdentity, fetchTodayQuests } from "./api";
+import { fetchQuestXp, fetchLeaderboard, fetchTodayQuests } from "./api";
 
 const QUEST_REFRESH_INTERVAL_MS = 30_000;
 
 /**
- * Works with or without a connected wallet — with no address, every quest
- * comes back completed: false so the catalog still renders. "Resets the
- * next day" needs no client-side logic: the indexer derives `completed`
- * live from today's dayId every time this refetches, so once the day
- * rolls over server-side, the next refetch just naturally comes back false.
+ * Fetches today's quest catalog from the plugin. Note: the `completed` field
+ * in the catalog is static (always false), not per-address. Per-address
+ * completion must be derived from the XP entries.
  */
-export function useTodayQuests(address: string | undefined) {
+export function useTodayQuests() {
   return useQuery({
-    queryKey: ["quests-today", address],
-    queryFn: () => fetchTodayQuests(address),
+    queryKey: ["quests-today"],
+    queryFn: () => fetchTodayQuests(),
     refetchInterval: QUEST_REFRESH_INTERVAL_MS,
   });
 }
 
+/**
+ * Fetches per-address XP total and completion history from the plugin.
+ * The `entries` array contains completed quest IDs for this address.
+ */
 export function useQuestXp(address: string | undefined) {
   return useQuery({
     queryKey: ["questxp", address],
@@ -29,18 +31,14 @@ export function useQuestXp(address: string | undefined) {
   });
 }
 
+/**
+ * Fetches the weekly leaderboard. Currently returns empty because the chain
+ * is still in week 0 (height ~28k, weeks roll at 30240 blocks).
+ */
 export function useLeaderboard(weekId: "current" | number = "current") {
   return useQuery({
     queryKey: ["leaderboard", weekId],
     queryFn: () => fetchLeaderboard(weekId),
     refetchInterval: QUEST_REFRESH_INTERVAL_MS,
-  });
-}
-
-export function useIdentity(address: string | undefined) {
-  return useQuery({
-    queryKey: ["identity", address],
-    queryFn: () => fetchIdentity(address as string),
-    enabled: !!address,
   });
 }

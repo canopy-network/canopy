@@ -1,15 +1,12 @@
 /**
- * Client for the standalone quest indexer service (see indexer/README.md).
- * This talks to a completely separate service over plain HTTPS — not
- * Arbor's chain RPC. Keeping this file isolated the same way
- * lib/canopy/rpc.ts is isolated: one place that knows the wire format,
- * everything else just calls typed functions.
+ * Client for the Quest XP plugin endpoints on the Arbor chain.
+ * These endpoints are served by the plugin itself, not a separate indexer service.
+ * Base URL: https://arbor.val-a.grad.dev.app.canopynetwork.org/plugin
  */
 
-const INDEXER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || "http://localhost:4000";
+const PLUGIN_BASE_URL = "https://arbor.val-a.grad.dev.app.canopynetwork.org/plugin";
 
 export interface QuestXpEntry {
-  address: string;
   weekId: number;
   questId: string;
   txHash: string;
@@ -20,7 +17,7 @@ export interface QuestXpEntry {
 export interface QuestXpResponse {
   address: string;
   totalXp: number;
-  entries: QuestXpEntry[];
+  entries: QuestXpEntry[] | null;
 }
 
 export interface LeaderboardEntry {
@@ -30,28 +27,7 @@ export interface LeaderboardEntry {
 
 export interface LeaderboardResponse {
   weekId: number;
-  height?: number;
   leaderboard: LeaderboardEntry[];
-}
-
-export interface IdentityResponse {
-  address: string;
-  discordId: string;
-  twitterHandle: string;
-  linkedAt: number;
-}
-
-async function indexerFetch<T>(path: string, options?: RequestInit): Promise<T | null> {
-  try {
-    const res = await fetch(`${INDEXER_URL}${path}`, {
-      ...options,
-      headers: { "Content-Type": "application/json", ...options?.headers },
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null; // indexer unreachable — callers should treat this the same as "no data yet", not throw
-  }
 }
 
 export interface TodayQuest {
@@ -59,7 +35,7 @@ export interface TodayQuest {
   label: string;
   description: string;
   xp: number;
-  completed: boolean;
+  completed: boolean; // catalog-static, not per-address
 }
 
 export interface TodayQuestsResponse {
@@ -68,43 +44,28 @@ export interface TodayQuestsResponse {
   quests: TodayQuest[];
 }
 
-export async function fetchTodayQuests(address?: string): Promise<TodayQuestsResponse | null> {
-  const qs = address ? `?address=${address}` : "";
-  return indexerFetch<TodayQuestsResponse>(`/quests/today${qs}`);
+async function pluginFetch<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(`${PLUGIN_BASE_URL}${path}`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null; // plugin unreachable — callers should treat this the same as "no data yet", not throw
+  }
+}
+
+export async function fetchTodayQuests(): Promise<TodayQuestsResponse | null> {
+  return pluginFetch<TodayQuestsResponse>("/v1/query/questxp/today");
 }
 
 export async function fetchQuestXp(address: string): Promise<QuestXpResponse | null> {
-  return indexerFetch<QuestXpResponse>(`/questxp/${address}`);
+  const qs = `?address=${encodeURIComponent(address)}`;
+  return pluginFetch<QuestXpResponse>(`/v1/query/questxp/address${qs}`);
 }
 
 export async function fetchLeaderboard(weekId: "current" | number = "current"): Promise<LeaderboardResponse | null> {
-  return indexerFetch<LeaderboardResponse>(`/leaderboard/${weekId}`);
-}
-
-export async function fetchIdentity(address: string): Promise<IdentityResponse | null> {
-  return indexerFetch<IdentityResponse>(`/identity/${address}`);
-}
-
-export interface LinkIdentityInput {
-  address: string;
-  publicKeyHex: string;
-  discordId: string;
-  twitterHandle: string;
-  issuedAtHeight: number;
-  signatureHex: string;
-}
-
-export async function linkIdentity(input: LinkIdentityInput): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const res = await fetch(`${INDEXER_URL}/link`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    const data = await res.json();
-    if (!res.ok) return { ok: false, error: data?.error ?? "link failed" };
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "could not reach quest service" };
-  }
+  const qs = `?weekId=${weekId}`;
+  return pluginFetch<LeaderboardResponse>(`/v1/query/questxp/leaderboard${qs}`);
 }
