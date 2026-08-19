@@ -58,6 +58,10 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/assetbalance", p.handleQueryAssetBalance)
 	mux.HandleFunc("/v1/query/maxmintablenusd", p.handleQueryMaxMintableNusd)
 	mux.HandleFunc("/v1/query/vaultdebt", p.handleQueryVaultDebt)
+	mux.HandleFunc("/v1/query/questxp/today", questXPCORSMiddleware(questXPHandleToday))
+	mux.HandleFunc("/v1/query/questxp/address", questXPCORSMiddleware(questXPHandleXPForAddress))
+	mux.HandleFunc("/v1/query/questxp/leaderboard", questXPCORSMiddleware(questXPHandleLeaderboard))
+	mux.HandleFunc("/v1/link", questXPCORSMiddleware(questXPHandleLink))
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)

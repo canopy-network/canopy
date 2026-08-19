@@ -53,8 +53,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drand/kyber/sign/bdn"
 	bls12381 "github.com/drand/kyber-bls12381"
+	"github.com/drand/kyber/sign/bdn"
 )
 
 // ---- config ----
@@ -65,13 +65,6 @@ const (
 	weekBlocks                = 7 * 24 * 60 * 60 / blockSeconds // 30240
 	linkSignatureWindowBlocks = 300                             // ~1hr at 20s/block
 )
-
-func questXPRPCAddress() string {
-	if v := os.Getenv("QUEST_XP_RPC_ADDRESS"); v != "" {
-		return v
-	}
-	return "0.0.0.0:50011"
-}
 
 func coreRPCURL() string {
 	if v := os.Getenv("QUEST_XP_CORE_RPC_URL"); v != "" {
@@ -569,23 +562,8 @@ func init() {
 }
 
 func startQuestXPService() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/query/questxp/today", questXPCORSMiddleware(questXPHandleToday))
-	mux.HandleFunc("/v1/query/questxp/address", questXPCORSMiddleware(questXPHandleXPForAddress))
-	mux.HandleFunc("/v1/query/questxp/leaderboard", questXPCORSMiddleware(questXPHandleLeaderboard))
-	mux.HandleFunc("/v1/link", questXPCORSMiddleware(questXPHandleLink))
-
-	addr := questXPRPCAddress()
-	fmt.Printf("[quest_xp] starting own HTTP server on %s (core RPC at %s)\n", addr, coreRPCURL())
-
-	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			fmt.Printf("[quest_xp] HTTP server error: %v\n", err)
-		}
-	}()
-
 	interval := time.Duration(pollIntervalSeconds()) * time.Second
-	fmt.Printf("[quest_xp] polling every %s\n", interval)
+	fmt.Printf("[quest_xp] polling every %s (routes served via rpc.go's existing plugin RPC server)\n", interval)
 	questXPSweepAll()
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
