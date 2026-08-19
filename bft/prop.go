@@ -74,7 +74,7 @@ func (b *BFT) GetProposal() *Message { return b.getProposal(b.Round, b.Phase) }
 // getProposal() retrieves a proposal from the leader at the Round.Phase
 func (b *BFT) getProposal(round uint64, phase Phase) *Message {
 	proposal, found := b.Proposals[round][phaseToString(phase-1)]
-	if !found {
+	if !found || len(proposal) == 0 {
 		return nil
 	}
 	return proposal[0]
