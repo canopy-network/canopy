@@ -6,6 +6,7 @@ import {
   getNasmVaultPool,
   getAllNasmVaults,
   getNasmTierBacking,
+  getVaultDebt,
 } from "@/lib/canopy/pluginRpc";
 import { STATE_REFRESH_INTERVAL_MS } from "@/lib/arbor/constants";
 
@@ -14,12 +15,21 @@ export function useNasmVault(vaultId: string | null) {
     queryKey: ["nasm-vault", vaultId],
     queryFn: async () => {
       if (!vaultId) return null;
-      const [vault, pool] = await Promise.all([
+      const [vault, pool, debt] = await Promise.all([
         getNasmVault(vaultId),
         getNasmVaultPool(vaultId),
+        getVaultDebt(vaultId),
       ]);
       if (!vault) return null;
-      return { vault, escrowedCollateral: pool?.amount ?? 0n };
+      // [FIX] currentDebt is the live, SF-scaled figure -- use this for
+      // display and for burn_nusd amounts. Fall back to the vault's raw
+      // nusdPrincipal only if the vaultdebt route is unreachable, since
+      // showing nothing is worse than a slightly stale number here.
+      return {
+        vault,
+        escrowedCollateral: pool?.amount ?? 0n,
+        currentDebt: debt?.currentDebt ?? null,
+      };
     },
     enabled: !!vaultId,
     refetchInterval: STATE_REFRESH_INTERVAL_MS,

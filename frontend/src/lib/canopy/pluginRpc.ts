@@ -554,6 +554,31 @@ export async function getAssetBalance(
   }
 }
 
+// [FIX] Returns the NASM vault's LIVE, stability-fee-scaled debt.
+// vault.nusdPrincipal (from getNasmVault) is the principal snapshotted
+// at last accrual, NOT current debt -- burn_nusd amounts computed from
+// it land short of on-chain currentDebt once the stability fee has
+// accrued further, so fullClosure comes back false and the vault/pool
+// stay open with residual dust debt. Always use this for burn_nusd
+// amounts and for any "current debt" display.
+export async function getVaultDebt(
+  vaultId: string
+): Promise<{ vaultId: string; nusdPrincipal: bigint; currentDebt: bigint } | null> {
+  try {
+    const res = await pluginGet("/v1/query/vaultdebt?vaultId=" + encodeURIComponent(vaultId));
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (!j || j.error) return null;
+    return {
+      vaultId: String(j.vaultId ?? vaultId),
+      nusdPrincipal: toBigInt(j.nusdPrincipal),
+      currentDebt: toBigInt(j.currentDebt),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getMaxMintableNusd(
   collateralAssetId: string,
   collateralQuantity: bigint

@@ -27,9 +27,13 @@ export function BurnNusdForm({ onBurned }: { onBurned?: () => void }) {
 
   const busy = phase === "signing" || phase === "submitting" || phase === "waiting";
 
-  const currentDebt = vaultData?.vault
-    ? BigInt(String((vaultData.vault as Record<string, unknown>).nusdPrincipal ?? "0"))
-    : null;
+  // [FIX] currentDebt now comes from useNasmVault's live, stability-fee-
+  // scaled figure (vaultdebt RPC), not vault.nusdPrincipal. The stale
+  // principal undercounts debt by whatever SF has accrued since last
+  // touch, so burns submitted against it landed short of on-chain
+  // currentDebt -- fullClosure came back false and the vault/pool were
+  // left open with residual dust instead of being deleted.
+  const currentDebt = vaultData?.currentDebt ?? null;
 
   let parseError: string | null = null;
   let parsedNusd = 0n;
@@ -94,13 +98,27 @@ export function BurnNusdForm({ onBurned }: { onBurned?: () => void }) {
       {vaultId.trim() && (
         <p className="text-[11px] text-zinc-600">
           Current debt: {currentDebt !== null ? formatAmount(currentDebt, 6) + " NUSD" : "loading…"}
+          {currentDebt !== null && (
+            <button
+              type="button"
+              onClick={() => setNusdAmount(formatAmount(currentDebt, 6))}
+              className="ml-2 text-emerald-400 hover:text-emerald-300 underline underline-offset-2"
+            >
+              Repay full amount
+            </button>
+          )}
         </p>
       )}
 
       <Field
         label="NUSD to burn"
         hint="Only debits up to the vault's actual current debt, never more."
-        error={parseError || undefined}
+        error={
+          parseError ||
+          (currentDebt !== null && parsedNusd > 0n && parsedNusd < currentDebt
+            ? "This amount is below the current debt — the vault will remain open with a residual balance."
+            : undefined)
+        }
       >
         <TextInput
           value={nusdAmount}
