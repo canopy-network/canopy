@@ -286,6 +286,28 @@ func TestApplyBlock(t *testing.T) {
 	}
 }
 
+type failNewReadOnlyStore struct {
+	lib.StoreI
+}
+
+func (s failNewReadOnlyStore) NewReadOnly(uint64) (lib.StoreI, lib.ErrorI) {
+	return nil, ErrWrongStoreType()
+}
+
+func TestApplyBlockReturnsLoadCommitteeError(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 1
+	sm.ProtocolVersion = 1
+	sm.store = failNewReadOnlyStore{StoreI: sm.store.(lib.StoreI)}
+	_, _, err := sm.ApplyBlock(context.Background(), &lib.Block{
+		BlockHeader: &lib.BlockHeader{
+			Time:            uint64(time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC).UnixMicro()),
+			ProposerAddress: newTestAddressBytes(t),
+		},
+	}, false)
+	require.ErrorContains(t, err, "wrong store type")
+}
+
 func TestApplyTransactions_DoesNotReturnCheckErrors(t *testing.T) {
 	sm := newTestStateMachine(t)
 	kg := newTestKeyGroup(t)
