@@ -35,7 +35,7 @@ export interface TodayQuest {
   label: string;
   description: string;
   xp: number;
-  completed: boolean; // catalog-static, not per-address
+  completed: boolean; // per-address when `address` is passed to fetchTodayQuests; always false otherwise
 }
 
 export interface TodayQuestsResponse {
@@ -56,8 +56,16 @@ async function pluginFetch<T>(path: string): Promise<T | null> {
   }
 }
 
-export async function fetchTodayQuests(): Promise<TodayQuestsResponse | null> {
-  return pluginFetch<TodayQuestsResponse>("/v1/query/questxp/today");
+/**
+ * The `today` route IS address-scoped when `address` is provided — the
+ * plugin's questXPHandleToday reads `?address=` and computes `completed`
+ * per-wallet from real credited XP. Omitting address returns the catalog
+ * with every quest reported as completed: false (useful for an anonymous
+ * "here's what quests exist" view, e.g. before a wallet is connected).
+ */
+export async function fetchTodayQuests(address?: string): Promise<TodayQuestsResponse | null> {
+  const qs = address ? `?address=${encodeURIComponent(address)}` : "";
+  return pluginFetch<TodayQuestsResponse>(`/v1/query/questxp/today${qs}`);
 }
 
 export async function fetchQuestXp(address: string): Promise<QuestXpResponse | null> {

@@ -9,7 +9,7 @@ function shortAddr(addr: string): string {
 
 export default function QuestsPage() {
   const address = useWalletStore((s) => s.address);
-  const { data: today, isLoading: todayLoading } = useTodayQuests();
+  const { data: today, isLoading: todayLoading } = useTodayQuests(address ?? undefined);
   const { data: myXp, isLoading: myXpLoading } = useQuestXp(address ?? undefined);
   const { data: leaderboard, isLoading: leaderboardLoading, isError } = useLeaderboard("current");
 

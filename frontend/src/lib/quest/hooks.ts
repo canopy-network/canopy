@@ -6,14 +6,16 @@ import { fetchQuestXp, fetchLeaderboard, fetchTodayQuests } from "./api";
 const QUEST_REFRESH_INTERVAL_MS = 30_000;
 
 /**
- * Fetches today's quest catalog from the plugin. Note: the `completed` field
- * in the catalog is static (always false), not per-address. Per-address
- * completion must be derived from the XP entries.
+ * Fetches today's quest catalog from the plugin. When `address` is given,
+ * `completed` reflects that wallet's real credited XP for today — the
+ * plugin computes this server-side (questXPHandleToday reads ?address=),
+ * so this is the direct source of truth for per-quest checkmarks, not
+ * something to re-derive from XP entries on the client.
  */
-export function useTodayQuests() {
+export function useTodayQuests(address: string | undefined) {
   return useQuery({
-    queryKey: ["quests-today"],
-    queryFn: () => fetchTodayQuests(),
+    queryKey: ["quests-today", address],
+    queryFn: () => fetchTodayQuests(address),
     refetchInterval: QUEST_REFRESH_INTERVAL_MS,
   });
 }
