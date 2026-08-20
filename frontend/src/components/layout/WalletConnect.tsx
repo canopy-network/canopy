@@ -45,7 +45,7 @@ export function WalletConnect() {
     privateKeyHex,
   } = useWalletStore();
 
-  const [tab, setTab] = useState<ConnectTab>("generate");
+  const [tab, setTab] = useState<ConnectTab>("metamask");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissedUnlock, setDismissedUnlock] = useState(false);
@@ -61,6 +61,10 @@ export function WalletConnect() {
       localStorage.setItem('arbor-advanced-wallet-mode', String(newValue));
     }
   };
+
+  useEffect(() => {
+    if (!advancedMode && tab !== "metamask") setTab("metamask");
+  }, [advancedMode, tab]);
 
   const showUnlock = !isConnected && hasStoredKeystore && !dismissedUnlock;
 
@@ -388,14 +392,16 @@ export function WalletConnect() {
     );
   }
 
+  const advancedTabs: { id: ConnectTab; label: string }[] = [
+    { id: "generate", label: "New wallet" },
+    { id: "paste", label: "Paste key" },
+    { id: "import", label: "Import file" },
+    { id: "admin", label: "Admin RPC" },
+  ];
+
   const tabs: { id: ConnectTab; label: string }[] = [
     { id: "metamask", label: "MetaMask" },
-    ...(advancedMode ? [
-      { id: "generate", label: "New wallet" },
-      { id: "paste", label: "Paste key" },
-      { id: "import", label: "Import file" },
-      { id: "admin", label: "Admin RPC" },
-    ] : []),
+    ...(advancedMode ? advancedTabs : []),
   ];
 
   return (
