@@ -71,7 +71,10 @@ export default function QuestsPage() {
         )}
         {!address && (
           <div className="mt-4 text-xs text-neutral-600">
-            Connect your wallet to track which quests you&apos;ve completed today.
+            <a href="/link" className="text-emerald-400 underline hover:text-emerald-300">
+              Connect your wallet and link Discord/X
+            </a>{" "}
+            to track which quests you&apos;ve completed today.
           </div>
         )}
       </div>
