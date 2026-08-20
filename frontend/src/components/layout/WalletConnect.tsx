@@ -49,6 +49,19 @@ export function WalletConnect() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissedUnlock, setDismissedUnlock] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('arbor-advanced-wallet-mode') === 'true';
+  });
+
+  const toggleAdvancedMode = () => {
+    const newValue = !advancedMode;
+    setAdvancedMode(newValue);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('arbor-advanced-wallet-mode', String(newValue));
+    }
+  };
+
   const showUnlock = !isConnected && hasStoredKeystore && !dismissedUnlock;
 
   // Silent reconnect on load: device-cache first (any connect method),
@@ -377,10 +390,12 @@ export function WalletConnect() {
 
   const tabs: { id: ConnectTab; label: string }[] = [
     { id: "metamask", label: "MetaMask" },
-    { id: "generate", label: "New wallet" },
-    { id: "paste", label: "Paste key" },
-    { id: "import", label: "Import file" },
-    { id: "admin", label: "Admin RPC" },
+    ...(advancedMode ? [
+      { id: "generate", label: "New wallet" },
+      { id: "paste", label: "Paste key" },
+      { id: "import", label: "Import file" },
+      { id: "admin", label: "Admin RPC" },
+    ] : []),
   ];
 
   return (
@@ -402,6 +417,26 @@ export function WalletConnect() {
           </button>
         ))}
       </div>
+
+      {!advancedMode && (
+        <button
+          type="button"
+          onClick={toggleAdvancedMode}
+          className="w-full text-xs text-zinc-500 hover:text-zinc-300 transition-colors py-2"
+        >
+          Advanced options →
+        </button>
+      )}
+
+      {advancedMode && (
+        <button
+          type="button"
+          onClick={toggleAdvancedMode}
+          className="w-full text-xs text-zinc-500 hover:text-zinc-300 transition-colors py-2"
+        >
+          ← Hide advanced options
+        </button>
+      )}
 
       {tab === "generate" && (
         <form onSubmit={handleGenerate} className="space-y-3">
