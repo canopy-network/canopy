@@ -1,27 +1,149 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWalletStore } from "@/lib/stores/walletStore";
+import { signBls12381, bytesToHex } from "@/lib/wallet/signer";
+import { queryHeight } from "@/lib/canopy/rpc";
+import { linkIdentity } from "@/lib/quest/api";
 import { useQuestXp, useLeaderboard, useTodayQuests } from "@/lib/quest/hooks";
 
 function shortAddr(addr: string): string {
   return addr.length > 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
 }
 
+interface SessionStatus {
+  discordId: string | null;
+  discordUsername: string | null;
+  twitterHandle: string | null;
+}
+
+function IdentityLinkCard() {
+  const { address, publicKeyHex, privateKeyHex, isConnected } = useWalletStore();
+  const queryClient = useQueryClient();
+  const [session, setSession] = useState<SessionStatus | null>(null);
+  const [linking, setLinking] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then(setSession)
+      .catch(() => setSession({ discordId: null, discordUsername: null, twitterHandle: null }));
+  }, []);
+
+  const discordDone = !!session?.discordId;
+  const twitterDone = !!session?.twitterHandle;
+  const readyToLink = isConnected && discordDone && twitterDone;
+
+  async function handleLink() {
+    if (!address || !publicKeyHex || !privateKeyHex || !session?.discordId || !session?.twitterHandle) return;
+    setLinking(true);
+    setResult(null);
+    try {
+      const height = await queryHeight();
+      if (!height) throw new Error("Could not reach Arbor node to fetch current height");
+
+      const message = `Link Arbor identity\ndiscord:${session.discordId}\ntwitter:${session.twitterHandle}\nissuedAt:${height}`;
+      const signature = signBls12381(new TextEncoder().encode(message), privateKeyHex);
+      const signatureHex = bytesToHex(signature);
+
+      const res = await linkIdentity({
+        address,
+        publicKeyHex,
+        discordId: session.discordId,
+        twitterHandle: session.twitterHandle,
+        issuedAtHeight: height,
+        signatureHex,
+      });
+
+      if (res.ok) {
+        setResult({ ok: true, message: "Linked! Your quest completions will now be tracked." });
+        queryClient.invalidateQueries({ queryKey: ["questxp"] });
+      } else {
+        setResult({ ok: false, message: res.error ?? "Linking failed." });
+      }
+    } catch (err) {
+      setResult({ ok: false, message: err instanceof Error ? err.message : "Something went wrong." });
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  return (
+    <div className="mb-8 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6">
+      <div className="mb-1 text-sm text-neutral-400">Link your identity</div>
+      <p className="mb-4 text-xs text-neutral-600">
+        Link Discord and X to your wallet so quest XP is attributed to you.
+        One-time signature — your key never leaves the browser.
+      </p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950/50 p-4">
+          <div>
+            <div className="text-sm font-medium">Wallet</div>
+            <div className="text-xs text-neutral-500">
+              {isConnected ? shortAddr(address ?? "") : "Not connected"}
+            </div>
+          </div>
+          {!isConnected && <span className="text-xs text-amber-400">Connect wallet first</span>}
+        </div>
+        <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950/50 p-4">
+          <div>
+            <div className="text-sm font-medium">Discord</div>
+            <div className="text-xs text-neutral-500">
+              {discordDone ? `Connected as ${session?.discordUsername}` : "Not connected"}
+            </div>
+          </div>
+          {!discordDone && (
+            <a
+              href="/api/auth/discord/start"
+              className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500"
+            >
+              Connect
+            </a>
+          )}
+        </div>
+        <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950/50 p-4">
+          <div>
+            <div className="text-sm font-medium">X (Twitter)</div>
+            <div className="text-xs text-neutral-500">
+              {twitterDone ? `Connected as ${session?.twitterHandle}` : "Not connected"}
+            </div>
+          </div>
+          {!twitterDone && (
+            <a
+              href="/api/auth/twitter/start"
+              className="rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-white"
+            >
+              Connect
+            </a>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={handleLink}
+        disabled={!readyToLink || linking}
+        className="mt-4 w-full rounded-lg bg-gradient-to-r from-teal-500 to-indigo-600 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {linking ? "Signing…" : "Sign & Link"}
+      </button>
+      {result && (
+        <div className={`mt-3 text-sm ${result.ok ? "text-emerald-400" : "text-red-400"}`}>
+          {result.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function QuestsPage() {
   const address = useWalletStore((s) => s.address);
-  const { data: today, isLoading: todayLoading } = useTodayQuests(address ?? undefined);
+  const { data: today, isLoading: todayLoading } = useTodayQuests();
   const { data: myXp, isLoading: myXpLoading } = useQuestXp(address ?? undefined);
   const { data: leaderboard, isLoading: leaderboardLoading, isError } = useLeaderboard("current");
 
-  // Merge per-address completion status from XP entries into the catalog
-  const completedQuestIds = new Set(
-    myXp?.entries?.map((e) => e.questId) ?? []
-  );
-
-  const quests = today?.quests.map((q) => ({
-    ...q,
-    completed: completedQuestIds.has(q.id),
-  })) ?? [];
+  const completedQuestIds = new Set(myXp?.entries?.map((e) => e.questId) ?? []);
+  const quests = today?.quests.map((q) => ({ ...q, completed: completedQuestIds.has(q.id) })) ?? [];
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -33,6 +155,8 @@ export default function QuestsPage() {
         Complete real actions on Arbor — supply, borrow, repay, and more —
         to earn XP automatically. XP is read live from the quest plugin.
       </p>
+
+      <IdentityLinkCard />
 
       <div className="mb-8 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6">
         <div className="mb-1 flex items-baseline justify-between">
@@ -71,10 +195,7 @@ export default function QuestsPage() {
         )}
         {!address && (
           <div className="mt-4 text-xs text-neutral-600">
-            <a href="/link" className="text-emerald-400 underline hover:text-emerald-300">
-              Connect your wallet and link Discord/X
-            </a>{" "}
-            to track which quests you&apos;ve completed today.
+            Connect your wallet to track which quests you&apos;ve completed today.
           </div>
         )}
       </div>

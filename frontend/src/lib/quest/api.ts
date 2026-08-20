@@ -1,10 +1,10 @@
 /**
- * Client for the Quest XP plugin endpoints on the Arbor chain.
- * These endpoints are served by the plugin itself, not a separate indexer service.
- * Base URL: https://arbor.val-a.grad.dev.app.canopynetwork.org/plugin
+ * Client for the Quest XP plugin endpoints, proxied same-origin through
+ * /api/quest/* so the browser never hits cross-origin CORS limits
+ * (the plugin only sends CORS headers on /v1/link).
  */
 
-const PLUGIN_BASE_URL = "https://arbor.val-a.grad.dev.app.canopynetwork.org/plugin";
+const QUEST_API = "/api/quest";
 
 export interface QuestXpEntry {
   weekId: number;
@@ -35,7 +35,7 @@ export interface TodayQuest {
   label: string;
   description: string;
   xp: number;
-  completed: boolean; // per-address when `address` is passed to fetchTodayQuests; always false otherwise
+  completed: boolean; // catalog-static, not per-address
 }
 
 export interface TodayQuestsResponse {
@@ -44,38 +44,26 @@ export interface TodayQuestsResponse {
   quests: TodayQuest[];
 }
 
-async function pluginFetch<T>(path: string): Promise<T | null> {
+async function questFetch<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${PLUGIN_BASE_URL}${path}`, {
-      headers: { "Content-Type": "application/json" },
-    });
+    const res = await fetch(`${QUEST_API}${path}`);
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
-    return null; // plugin unreachable — callers should treat this the same as "no data yet", not throw
+    return null; // unreachable — callers treat as "no data yet", not throw
   }
 }
 
-/**
- * The `today` route IS address-scoped when `address` is provided — the
- * plugin's questXPHandleToday reads `?address=` and computes `completed`
- * per-wallet from real credited XP. Omitting address returns the catalog
- * with every quest reported as completed: false (useful for an anonymous
- * "here's what quests exist" view, e.g. before a wallet is connected).
- */
-export async function fetchTodayQuests(address?: string): Promise<TodayQuestsResponse | null> {
-  const qs = address ? `?address=${encodeURIComponent(address)}` : "";
-  return pluginFetch<TodayQuestsResponse>(`/v1/query/questxp/today${qs}`);
+export async function fetchTodayQuests(): Promise<TodayQuestsResponse | null> {
+  return questFetch<TodayQuestsResponse>("/today");
 }
 
 export async function fetchQuestXp(address: string): Promise<QuestXpResponse | null> {
-  const qs = `?address=${encodeURIComponent(address)}`;
-  return pluginFetch<QuestXpResponse>(`/v1/query/questxp/address${qs}`);
+  return questFetch<QuestXpResponse>(`/address?address=${encodeURIComponent(address)}`);
 }
 
 export async function fetchLeaderboard(weekId: "current" | number = "current"): Promise<LeaderboardResponse | null> {
-  const qs = `?weekId=${weekId}`;
-  return pluginFetch<LeaderboardResponse>(`/v1/query/questxp/leaderboard${qs}`);
+  return questFetch<LeaderboardResponse>(`/leaderboard?weekId=${weekId}`);
 }
 
 export interface LinkIdentityInput {
@@ -89,7 +77,7 @@ export interface LinkIdentityInput {
 
 export async function linkIdentity(input: LinkIdentityInput): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch(`${PLUGIN_BASE_URL}/v1/link`, {
+    const res = await fetch(`${QUEST_API}/link`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
