@@ -297,11 +297,9 @@ func (s *Server) TransactionDAOTransfer(w http.ResponseWriter, r *http.Request, 
 func (s *Server) TransactionSubsidy(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
-		// Create a default chainid of 0
-		chainId := uint64(0)
-		// Convert comma separated string of committees to uint64
-		if c, err := stringToCommittees(ptr.Committees); err == nil {
-			chainId = c[0]
+		chainId, err := singleCommitteeID(ptr.Committees)
+		if err != nil {
+			return nil, err
 		}
 		// Retrieve the fee required for this type of transaction
 		if err := s.getFeeFromState(ptr, fsm.MessageSubsidyName); err != nil {
@@ -316,11 +314,9 @@ func (s *Server) TransactionSubsidy(w http.ResponseWriter, r *http.Request, _ ht
 func (s *Server) TransactionCreateOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
-		// Create a default chainid of 0
-		chainId := uint64(0)
-		// Convert comma separated string of committees to uint64
-		if c, err := stringToCommittees(ptr.Committees); err == nil {
-			chainId = c[0]
+		chainId, err := singleCommitteeID(ptr.Committees)
+		if err != nil {
+			return nil, err
 		}
 		// Retrieve the fee required for this type of transaction
 		if err := s.getFeeFromState(ptr, fsm.MessageCreateOrderName); err != nil {
@@ -335,11 +331,9 @@ func (s *Server) TransactionCreateOrder(w http.ResponseWriter, r *http.Request, 
 func (s *Server) TransactionEditOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
-		// Create a default chainid of 0
-		chainId := uint64(0)
-		// Convert comma separated string of committees to uint64
-		if c, err := stringToCommittees(ptr.Committees); err == nil {
-			chainId = c[0]
+		chainId, err := singleCommitteeID(ptr.Committees)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.getFeeFromState(ptr, fsm.MessageEditOrderName); err != nil {
 			return nil, err
@@ -353,11 +347,9 @@ func (s *Server) TransactionEditOrder(w http.ResponseWriter, r *http.Request, _ 
 func (s *Server) TransactionDeleteOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
-		// Create a default chainid of 0
-		chainId := uint64(0)
-		// Convert comma separated string of committees to uint64
-		if c, err := stringToCommittees(ptr.Committees); err == nil {
-			chainId = c[0]
+		chainId, err := singleCommitteeID(ptr.Committees)
+		if err != nil {
+			return nil, err
 		}
 		// Retrieve the fee required for this type of transaction
 		if err := s.getFeeFromState(ptr, fsm.MessageDeleteOrderName); err != nil {
@@ -372,11 +364,9 @@ func (s *Server) TransactionDeleteOrder(w http.ResponseWriter, r *http.Request, 
 func (s *Server) TransactionDexLimitOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
-		// Create a default chainid of 0
-		chainId := uint64(0)
-		// Convert comma separated string of committees to uint64
-		if c, err := stringToCommittees(ptr.Committees); err == nil {
-			chainId = c[0]
+		chainId, err := singleCommitteeID(ptr.Committees)
+		if err != nil {
+			return nil, err
 		}
 		// Retrieve the fee required for this type of transaction
 		if err := s.getFeeFromState(ptr, fsm.MessageDexLimitOrderName); err != nil {
@@ -391,11 +381,9 @@ func (s *Server) TransactionDexLimitOrder(w http.ResponseWriter, r *http.Request
 func (s *Server) TransactionDexLiquidityDeposit(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
-		// Create a default chainid of 0
-		chainId := uint64(0)
-		// Convert comma separated string of committees to uint64
-		if c, err := stringToCommittees(ptr.Committees); err == nil {
-			chainId = c[0]
+		chainId, err := singleCommitteeID(ptr.Committees)
+		if err != nil {
+			return nil, err
 		}
 		// Retrieve the fee required for this type of transaction
 		if err := s.getFeeFromState(ptr, fsm.MessageDexLiquidityDepositName); err != nil {
@@ -410,11 +398,9 @@ func (s *Server) TransactionDexLiquidityDeposit(w http.ResponseWriter, r *http.R
 func (s *Server) TransactionDexLiquidityWithdraw(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
-		// Create a default chainid of 0
-		chainId := uint64(0)
-		// Convert comma separated string of committees to uint64
-		if c, err := stringToCommittees(ptr.Committees); err == nil {
-			chainId = c[0]
+		chainId, err := singleCommitteeID(ptr.Committees)
+		if err != nil {
+			return nil, err
 		}
 		// Retrieve the fee required for this type of transaction
 		if err := s.getFeeFromState(ptr, fsm.MessageDexLiquidityWithdrawName); err != nil {
@@ -820,6 +806,22 @@ func stringToCommittees(s string) (committees []uint64, error error) {
 		committees = append(committees, ui)
 	}
 	return
+}
+
+// singleCommitteeID parses the one chain-scoped committee accepted by order,
+// subsidy, and DEX transaction endpoints.
+func singleCommitteeID(s string) (uint64, error) {
+	if strings.TrimSpace(s) == "" {
+		return 0, nil
+	}
+	committees, err := stringToCommittees(s)
+	if err != nil {
+		return 0, err
+	}
+	if len(committees) != 1 {
+		return 0, fmt.Errorf("expected exactly one committee, got %d", len(committees))
+	}
+	return committees[0], nil
 }
 
 // getAddressFromNickname retrieves the account address for the supplied nickname
