@@ -17,6 +17,13 @@ const nextConfig: NextConfig = {
       { source: "/arbor-rpc/:path*", destination: `${arborRpcDest}/:path*` },
     ];
   },
+  async redirects() {
+    return [
+      // Identity linking was consolidated onto /quests (was its own page at /link).
+      // Kept as a redirect, not removed outright, so old bookmarks/links don't 404.
+      { source: "/link", destination: "/quests", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

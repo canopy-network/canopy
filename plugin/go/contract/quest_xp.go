@@ -1,20 +1,39 @@
 package contract
 
 /*
-quest_xp.go — Community quest/XP tracking for Arbor, built as a fully
-standalone file with ZERO edits to any other file in this package.
+quest_xp.go — Community quest/XP tracking for Arbor. Self-contained
+except for one deliberate 4-line addition to rpc.go (route registration
+only, into the plugin's existing RPC mux — see below).
 
-WHY THIS EXISTS AS A SEPARATE FILE, NOT WIRED INTO DeliverTx:
-Go doesn't allow a second file to add a case to an existing switch
-statement or a route to an existing http.ServeMux from outside the file
-that owns it — there's no hook system for that. So rather than touch
-contract.go's DeliverTx switch or rpc.go's StartRPCServer, this file
-runs its own goroutine (started automatically via init(), which Go calls
-for every file in a package at process startup — no wiring needed
-anywhere else) and its own tiny HTTP server on a separate port. It polls
-Arbor's own core RPC for linked wallets' transaction history — the same
-approach the standalone TypeScript indexer used, just now living inside
-this process instead of a separate hosted service.
+CURRENT DESIGN (as of commit d7285d8c — do not revert to what's described
+below this line without reading the history first):
+- Routes are served through rpc.go's existing http.ServeMux, registered
+  there via questXPCORSMiddleware-wrapped handlers. An earlier version of
+  this file ran its own HTTP server on a separate port (:50011); that was
+  UNREACHABLE on the shared grad node because the reverse proxy only maps
+  three fixed prefixes (/rpc/, /adminrpc/, /plugin/) with no generic
+  "any port gets a path" mechanism. Do not reintroduce a standalone
+  server — new quest routes go through rpc.go's mux like the four here.
+- Sweeping still runs as its own background goroutine, started
+  automatically via init() (Go calls init() for every file in a package
+  at process startup — no wiring needed anywhere else). It polls Arbor's
+  own core RPC for linked wallets' transaction history, the same
+  approach the standalone TypeScript indexer used, just now living
+  inside this process instead of a separate hosted service.
+- Signature verification uses PLAIN BLS12-381 (drand/kyber/sign/bls),
+  NOT the BDN variant (drand/kyber/sign/bdn). This file originally used
+  BDN because plugin/go/crypto/bls.go (an existing wrapper elsewhere in
+  this repo) uses BDN and looked authoritative — but that wrapper is
+  never actually on the real transaction-verification path; Canopy core
+  verifies transactions independently using plain BLS. Using BDN here
+  made every single /v1/link call fail 100% of the time, silently, until
+  traced and fixed. If you touch signature verification in this file
+  again, do NOT reintroduce BDN. This is also why verification is
+  reimplemented directly against drand/kyber + drand/kyber-bls12381
+  below rather than importing plugin/go/crypto's wrapper package — that
+  package already imports this one (contract), so importing it back here
+  would be a circular import Go refuses to compile, and it uses the
+  wrong (BDN) scheme regardless.
 
 WHAT THIS DELIBERATELY DOES NOT DO:
 - Does NOT write to consensus state (no PluginSetOp, no StateWrite). XP
@@ -24,13 +43,8 @@ WHAT THIS DELIBERATELY DOES NOT DO:
   block, and a background poller's timing can't guarantee that. This
   is a deliberate, disclosed limitation: XP resets if this process
   restarts. Treat it as a read-side convenience feature, not a ledger.
-- Does NOT add a Go module dependency. It reuses this package's own
-  vendored BLS wrapper (crypto/bls.go, BytesToBLS12381PublicKey/.Verify),
-  the exact scheme real Arbor account keys use (BDN over BLS12-381 via
-  drand/kyber) — not a different library that might not be compatible.
 
 CONFIGURATION (env vars, all optional with sensible defaults):
-  QUEST_XP_RPC_ADDRESS        — this service's own HTTP listen address (default "0.0.0.0:50011")
   QUEST_XP_CORE_RPC_URL       — where Arbor's core query RPC is reachable from THIS process
                                  (default "http://localhost:50002" — verify this is correct for
                                  wherever this actually gets deployed; the externally-facing URL
@@ -118,6 +132,7 @@ type identityRecord struct {
 	Address       string `json:"address"`
 	DiscordID     string `json:"discordId"`
 	TwitterHandle string `json:"twitterHandle"`
+	EvmAddress    string `json:"evmAddress,omitempty"` // optional — see questXPHandleLink for validation
 	LinkedAt      int64  `json:"linkedAt"`
 }
 
@@ -481,9 +496,25 @@ type linkRequest struct {
 	PublicKeyHex   string `json:"publicKeyHex"`
 	DiscordID      string `json:"discordId"`
 	TwitterHandle  string `json:"twitterHandle"`
+	EvmAddress     string `json:"evmAddress"` // optional — see NOTE below on the mandatory/optional call
 	IssuedAtHeight int64  `json:"issuedAtHeight"`
 	SignatureHex   string `json:"signatureHex"`
 }
+
+// evmAddressRe matches a well-formed 0x-prefixed, 20-byte (40 hex char) EVM address.
+// Deliberately does NOT enforce EIP-55 checksum casing — the reward-export step (Snag)
+// almost certainly lowercases/normalizes anyway, and rejecting valid-but-uncapitalized
+// addresses from users who paste rather than connect would be user-hostile for no
+// real safety benefit.
+var evmAddressRe = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
+
+// NOTE — mandatory vs. optional (open product question per handoff, not yet decided
+// by Adam/Eric as of this commit): implemented here as OPTIONAL. Reasoning: Adam's
+// Discord message describes crediting rewards "on a discretionary basis" from a
+// curated list, not a fully automated 1:1 export — so a user without MetaMask losing
+// XP-earning entirely seemed like the wrong default. If EVM linking is later decided
+// to be mandatory, change the empty-string check below to require it alongside
+// Discord/Twitter, and update the frontend button's readyToLink condition accordingly.
 
 func questXPHandleLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -498,6 +529,14 @@ func questXPHandleLink(w http.ResponseWriter, r *http.Request) {
 	if req.Address == "" || req.PublicKeyHex == "" || req.DiscordID == "" || req.TwitterHandle == "" || req.SignatureHex == "" {
 		questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing required fields"})
 		return
+	}
+	normEvmAddr := ""
+	if req.EvmAddress != "" {
+		if !evmAddressRe.MatchString(req.EvmAddress) {
+			questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "evmAddress is not a well-formed 0x-prefixed 20-byte hex address"})
+			return
+		}
+		normEvmAddr = strings.ToLower(req.EvmAddress)
 	}
 
 	normAddr := strings.ToLower(strings.TrimPrefix(req.Address, "0x"))
@@ -517,7 +556,17 @@ func questXPHandleLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message := fmt.Sprintf("Link Arbor identity\ndiscord:%s\ntwitter:%s\nissuedAt:%d", req.DiscordID, req.TwitterHandle, req.IssuedAtHeight)
+	// evmAddress is folded into the signed message (not just the JSON body) so it's
+	// cryptographically bound to this wallet's signature, same as discord/twitter —
+	// otherwise a client could submit any evmAddress value with a signature that never
+	// actually attested to it. "none" is an explicit literal (not empty string) so a
+	// link-without-EVM request can't be replayed/edited into a link-with-EVM request
+	// against the same signature by just appending a field.
+	evmForMessage := "none"
+	if normEvmAddr != "" {
+		evmForMessage = normEvmAddr
+	}
+	message := fmt.Sprintf("Link Arbor identity\ndiscord:%s\ntwitter:%s\nevm:%s\nissuedAt:%d", req.DiscordID, req.TwitterHandle, evmForMessage, req.IssuedAtHeight)
 	if !questXPVerifySignature(message, req.SignatureHex, req.PublicKeyHex) {
 		questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "signature verification failed"})
 		return
@@ -534,7 +583,7 @@ func questXPHandleLink(w http.ResponseWriter, r *http.Request) {
 		questXPWriteJSON(w, http.StatusConflict, map[string]string{"error": "x account already linked to a different wallet"})
 		return
 	}
-	identitiesByAddr[normAddr] = identityRecord{Address: normAddr, DiscordID: req.DiscordID, TwitterHandle: req.TwitterHandle, LinkedAt: time.Now().UnixMilli()}
+	identitiesByAddr[normAddr] = identityRecord{Address: normAddr, DiscordID: req.DiscordID, TwitterHandle: req.TwitterHandle, EvmAddress: normEvmAddr, LinkedAt: time.Now().UnixMilli()}
 	identitiesByDisc[req.DiscordID] = normAddr
 	identitiesByTwit[req.TwitterHandle] = normAddr
 	storeMu.Unlock()

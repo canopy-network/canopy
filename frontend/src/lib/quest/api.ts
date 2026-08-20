@@ -71,6 +71,7 @@ export interface LinkIdentityInput {
   publicKeyHex: string;
   discordId: string;
   twitterHandle: string;
+  evmAddress?: string; // optional — omit entirely (not empty string) when the user has no MetaMask
   issuedAtHeight: number;
   signatureHex: string;
 }
