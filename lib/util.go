@@ -1063,11 +1063,15 @@ func IntSqrt(n uint64) uint64 {
 
 // ContainsByteSlice() checks to see if the byte slice is within the list
 func ContainsByteSlice(list [][]byte, target []byte) (found bool) {
+	// for each item in the list
 	for _, item := range list {
+		// if the item matches the target
 		if bytes.Equal(item, target) {
-			return
+			// found the target; signal true and exit
+			return true
 		}
 	}
+	// target not present in the list
 	return
 }
 
