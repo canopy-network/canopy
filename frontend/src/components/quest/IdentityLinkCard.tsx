@@ -153,7 +153,12 @@ export function IdentityLinkCard({ variant = "quests", onLinked }: IdentityLinkC
       // Message format must exactly match quest_xp.go's questXPHandleLink — including
       // the "none" literal for an absent EVM address, so the signature stays valid
       // whether or not MetaMask is connected.
-      const evmForMessage = evmAddress ?? "none";
+      // Mirror backend normalization (quest_xp.go questXPHandleLink):
+      // - empty/whitespace → "none"
+      // - non-empty → lowercase the whole 0x-prefixed string
+      const evmForMessage = (!evmAddress || !evmAddress.trim()) 
+        ? "none" 
+        : evmAddress.toLowerCase();
       const message = `Link Arbor identity\ndiscord:${session.discordId}\ntwitter:${session.twitterHandle}\nevm:${evmForMessage}\nissuedAt:${height}`;
       const signature = signBls12381(new TextEncoder().encode(message), privateKeyHex);
       const signatureHex = bytesToHex(signature);
@@ -163,7 +168,7 @@ export function IdentityLinkCard({ variant = "quests", onLinked }: IdentityLinkC
         publicKeyHex,
         discordId: session.discordId,
         twitterHandle: session.twitterHandle,
-        ...(evmAddress ? { evmAddress } : {}),
+        ...(evmForMessage !== "none" ? { evmAddress: evmForMessage } : {}),
         issuedAtHeight: height,
         signatureHex,
       });
