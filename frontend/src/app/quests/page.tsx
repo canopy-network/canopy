@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWalletStore } from "@/lib/wallet";
 import { IdentityLinkCard } from "@/components/quest/IdentityLinkCard";
@@ -30,7 +31,9 @@ export default function QuestsPage() {
         to earn XP automatically. XP is read live from the quest plugin.
       </p>
 
-      <IdentityLinkCard onLinked={() => queryClient.invalidateQueries({ queryKey: ["questxp"] })} />
+      <Suspense fallback={null}>
+        <IdentityLinkCard onLinked={() => queryClient.invalidateQueries({ queryKey: ["questxp"] })} />
+      </Suspense>
 
       <div className="mb-8 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6">
         <div className="mb-1 flex items-baseline justify-between">

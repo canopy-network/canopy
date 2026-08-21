@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const expectedState = req.cookies.get("discord_oauth_state")?.value;
 
   if (!code || !state || !expectedState || state !== expectedState) {
-    return NextResponse.redirect(`${appUrl}/link?error=discord_state_mismatch`);
+    return NextResponse.redirect(`${appUrl}/quests?error=discord_state_mismatch`);
   }
 
   const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(`${appUrl}/link?error=discord_token_exchange_failed`);
+    return NextResponse.redirect(`${appUrl}/quests?error=discord_token_exchange_failed`);
   }
 
   const { access_token } = await tokenRes.json();
@@ -41,12 +41,12 @@ export async function GET(req: NextRequest) {
   });
 
   if (!userRes.ok) {
-    return NextResponse.redirect(`${appUrl}/link?error=discord_user_fetch_failed`);
+    return NextResponse.redirect(`${appUrl}/quests?error=discord_user_fetch_failed`);
   }
 
   const discordUser = await userRes.json();
 
-  const res = NextResponse.redirect(`${appUrl}/link?linked=discord`);
+  const res = NextResponse.redirect(`${appUrl}/quests?linked=discord`);
   res.cookies.set("discord_id", discordUser.id, { httpOnly: true, maxAge: 3600, path: "/" });
   res.cookies.set("discord_username", discordUser.username ?? "", { httpOnly: true, maxAge: 3600, path: "/" });
   res.cookies.delete("discord_oauth_state");

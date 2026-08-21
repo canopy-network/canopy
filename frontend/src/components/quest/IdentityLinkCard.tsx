@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useWalletStore } from "@/lib/wallet";
 import { signBls12381, bytesToHex } from "@/lib/wallet/signer";
 import { queryHeight } from "@/lib/canopy/rpc";
@@ -10,6 +11,16 @@ import {
   getAlreadyConnectedEthAccount,
   lastConnectedEthAddress,
 } from "@/lib/wallet/metamask";
+
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  discord_state_mismatch: "Discord connection expired or was tampered with — please try again.",
+  discord_token_exchange_failed: "Discord rejected the connection. This usually means DISCORD_CLIENT_ID/DISCORD_CLIENT_SECRET are missing or wrong in the deployment config.",
+  discord_user_fetch_failed: "Connected to Discord but couldn't fetch your profile — try again.",
+  twitter_state_mismatch: "X connection expired or was tampered with — please try again.",
+  twitter_not_configured: "X login isn't configured on this deployment yet (TWITTER_CLIENT_ID is missing).",
+  twitter_token_exchange_failed: "X rejected the connection. This usually means TWITTER_CLIENT_ID/TWITTER_CLIENT_SECRET are missing or wrong in the deployment config, or the redirect URI isn't registered in the X Developer Portal.",
+  twitter_user_fetch_failed: "Connected to X but couldn't fetch your profile — try again.",
+};
 
 function shortAddr(addr: string): string {
   return addr.length > 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
@@ -29,11 +40,29 @@ interface IdentityLinkCardProps {
 
 export function IdentityLinkCard({ variant = "quests", onLinked }: IdentityLinkCardProps) {
   const { address, publicKeyHex, privateKeyHex, isConnected } = useWalletStore();
+  const searchParams = useSearchParams();
   const [session, setSession] = useState<SessionStatus | null>(null);
   const [evmAddress, setEvmAddress] = useState<string | null>(null);
   const [evmConnecting, setEvmConnecting] = useState(false);
   const [linking, setLinking] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Surfaces the ?error=/?linked= params the Discord/Twitter OAuth callback routes set.
+  // Nothing previously read these — an OAuth failure (bad client secret, unregistered
+  // redirect URI, etc.) redirected back here with an error code in the URL that was
+  // silently dropped, indistinguishable from the user never having clicked anything.
+  useEffect(() => {
+    const errorCode = searchParams.get("error");
+    const linked = searchParams.get("linked");
+    if (errorCode) {
+      setResult({ ok: false, message: OAUTH_ERROR_MESSAGES[errorCode] ?? `Connection failed (${errorCode}).` });
+    } else if (linked) {
+      setResult({ ok: true, message: `${linked === "discord" ? "Discord" : "X"} connected.` });
+    }
+    // Intentionally runs once on mount only — searchParams is stable for a given page load,
+    // and we don't want this re-firing on every unrelated re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/session")

@@ -14,6 +14,14 @@ function base64url(input: Buffer): string {
 
 export async function GET() {
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+
+  // Fail fast and visibly instead of redirecting to X with an empty client_id — that
+  // would land the user on a generic X error page with no indication the problem is
+  // on our deployment config, not their account.
+  if (!process.env.TWITTER_CLIENT_ID) {
+    return NextResponse.redirect(`${appUrl}/quests?error=twitter_not_configured`);
+  }
+
   const state = randomBytes(16).toString("hex");
   const codeVerifier = base64url(randomBytes(32));
   const codeChallenge = base64url(createHash("sha256").update(codeVerifier).digest());

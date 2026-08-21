@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const codeVerifier = req.cookies.get("twitter_code_verifier")?.value;
 
   if (!code || !state || !expectedState || state !== expectedState || !codeVerifier) {
-    return NextResponse.redirect(`${appUrl}/link?error=twitter_state_mismatch`);
+    return NextResponse.redirect(`${appUrl}/quests?error=twitter_state_mismatch`);
   }
 
   const basicAuth = Buffer.from(
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(`${appUrl}/link?error=twitter_token_exchange_failed`);
+    return NextResponse.redirect(`${appUrl}/quests?error=twitter_token_exchange_failed`);
   }
 
   const { access_token } = await tokenRes.json();
@@ -41,12 +41,12 @@ export async function GET(req: NextRequest) {
   });
 
   if (!userRes.ok) {
-    return NextResponse.redirect(`${appUrl}/link?error=twitter_user_fetch_failed`);
+    return NextResponse.redirect(`${appUrl}/quests?error=twitter_user_fetch_failed`);
   }
 
   const { data: twitterUser } = await userRes.json();
 
-  const res = NextResponse.redirect(`${appUrl}/link?linked=twitter`);
+  const res = NextResponse.redirect(`${appUrl}/quests?linked=twitter`);
   res.cookies.set("twitter_handle", `@${twitterUser.username}`, { httpOnly: true, maxAge: 3600, path: "/" });
   res.cookies.delete("twitter_oauth_state");
   res.cookies.delete("twitter_code_verifier");
