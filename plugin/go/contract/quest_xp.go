@@ -451,6 +451,33 @@ func questXPHandleToday(w http.ResponseWriter, r *http.Request) {
 	questXPWriteJSON(w, http.StatusOK, map[string]interface{}{"dayId": dayID, "height": height, "quests": quests})
 }
 
+// questXPHandleIdentity answers "is this address already linked, and to what" so the
+// frontend can restore state on page load / wallet reconnect instead of re-running the
+// OAuth+sign flow every time. Read-only, no signature required — this only returns what
+// was already committed via a signed /v1/link call; it doesn't grant anything new.
+func questXPHandleIdentity(w http.ResponseWriter, r *http.Request) {
+	address := strings.ToLower(strings.TrimPrefix(r.URL.Query().Get("address"), "0x"))
+	if address == "" {
+		questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing address query param"})
+		return
+	}
+	storeMu.RLock()
+	rec, linked := identitiesByAddr[address]
+	storeMu.RUnlock()
+	if !linked {
+		questXPWriteJSON(w, http.StatusOK, map[string]interface{}{"linked": false})
+		return
+	}
+	questXPWriteJSON(w, http.StatusOK, map[string]interface{}{
+		"linked":        true,
+		"address":       rec.Address,
+		"discordId":     rec.DiscordID,
+		"twitterHandle": rec.TwitterHandle,
+		"evmAddress":    rec.EvmAddress,
+		"linkedAt":      rec.LinkedAt,
+	})
+}
+
 func questXPHandleXPForAddress(w http.ResponseWriter, r *http.Request) {
 	address := strings.ToLower(strings.TrimPrefix(r.URL.Query().Get("address"), "0x"))
 	if address == "" {

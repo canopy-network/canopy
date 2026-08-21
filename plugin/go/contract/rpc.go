@@ -60,6 +60,7 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/vaultdebt", p.handleQueryVaultDebt)
 	mux.HandleFunc("/v1/query/questxp/today", questXPCORSMiddleware(questXPHandleToday))
 	mux.HandleFunc("/v1/query/questxp/address", questXPCORSMiddleware(questXPHandleXPForAddress))
+	mux.HandleFunc("/v1/query/questxp/identity", questXPCORSMiddleware(questXPHandleIdentity))
 	mux.HandleFunc("/v1/query/questxp/leaderboard", questXPCORSMiddleware(questXPHandleLeaderboard))
 	mux.HandleFunc("/v1/link", questXPCORSMiddleware(questXPHandleLink))
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)

@@ -66,6 +66,19 @@ export async function fetchLeaderboard(weekId: "current" | number = "current"): 
   return questFetch<LeaderboardResponse>(`/leaderboard?weekId=${weekId}`);
 }
 
+export interface IdentityResponse {
+  linked: boolean;
+  address?: string;
+  discordId?: string;
+  twitterHandle?: string;
+  evmAddress?: string;
+  linkedAt?: number;
+}
+
+export async function fetchIdentity(address: string): Promise<IdentityResponse | null> {
+  return questFetch<IdentityResponse>(`/identity?address=${encodeURIComponent(address)}`);
+}
+
 export interface LinkIdentityInput {
   address: string;
   publicKeyHex: string;
