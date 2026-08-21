@@ -772,7 +772,7 @@ func (c *Controller) UpdateTelemetry(qc *lib.QuorumCertificate, block *lib.Block
 		c.Metrics.UpdateValidator(address.String(), v.StakedAmount, v.UnstakingHeight != 0, v.MaxPausedHeight != 0, v.Delegate, v.Compound, isProducer, nonSigners, doubleSigners)
 	}
 	// update account metrics
-	if a, _ := c.FSM.GetAccount(address); a.Amount != 0 {
+	if a, _ := c.FSM.GetAccount(address); a != nil && a.Amount != 0 {
 		c.Metrics.UpdateAccount(address.String(), a.Amount)
 	}
 }
