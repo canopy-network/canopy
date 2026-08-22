@@ -462,8 +462,16 @@ func indexedTxHashes(result *lib.TxResult) ([][]byte, lib.ErrorI) {
 		return nil, err
 	}
 	hashes := [][]byte{hash}
-	if ethHash := ethTxHash(result.Transaction); len(ethHash) != 0 && !bytes.Equal(ethHash, hash) {
+	ethHash := ethTxHash(result.Transaction)
+	if len(ethHash) != 0 && !bytes.Equal(ethHash, hash) {
 		hashes = append(hashes, ethHash)
+	}
+	intentID, err := result.Transaction.GetMultisigIntentID()
+	if err != nil {
+		return nil, err
+	}
+	if len(intentID) != 0 && !bytes.Equal(intentID, hash) && !bytes.Equal(intentID, ethHash) {
+		hashes = append(hashes, intentID)
 	}
 	return hashes, nil
 }
