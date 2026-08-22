@@ -1,0 +1,176 @@
+diff -ruN a/frontend/src/app/quests/page.tsx b/frontend/src/app/quests/page.tsx
+--- a/frontend/src/app/quests/page.tsx	2026-08-22 21:52:36.451794656 +0000
++++ b/frontend/src/app/quests/page.tsx	2026-08-22 21:52:37.241348102 +0000
+@@ -65,12 +65,16 @@
+ export default function QuestsPage() {
+   const address = useWalletStore((s) => s.address);
+   const queryClient = useQueryClient();
+-  const { data: today, isLoading: todayLoading } = useTodayQuests();
++  const { data: today, isLoading: todayLoading } = useTodayQuests(address ?? undefined);
+   const { data: myXp, isLoading: myXpLoading } = useQuestXp(address ?? undefined);
+   const { data: leaderboard, isLoading: leaderboardLoading, isError } = useLeaderboard("current");
+ 
+-  const completedQuestIds = new Set(myXp?.entries?.map((e) => e.questId) ?? []);
+-  const quests = today?.quests.map((q) => ({ ...q, completed: completedQuestIds.has(q.id) })) ?? [];
++  // The backend's /v1/query/questxp/today already scopes "completed" to today's dayID
++  // when given an address — use that directly. Recomputing from myXp's full lifetime
++  // entries (as this used to do) ignores day boundaries entirely: once a quest type is
++  // ever completed once, it would show as done forever, which is why "resets daily"
++  // wasn't actually resetting.
++  const quests = today?.quests ?? [];
+   const completedCount = quests.filter((q) => q.completed).length;
+ 
+   return (
+diff -ruN a/frontend/src/lib/quest/api.ts b/frontend/src/lib/quest/api.ts
+--- a/frontend/src/lib/quest/api.ts	2026-08-22 21:52:36.456540022 +0000
++++ b/frontend/src/lib/quest/api.ts	2026-08-22 21:52:37.253965137 +0000
+@@ -35,7 +35,7 @@
+   label: string;
+   description: string;
+   xp: number;
+-  completed: boolean; // catalog-static, not per-address
++  completed: boolean; // per-address, scoped to today's dayId — accurate only when fetchTodayQuests was called with an address
+ }
+ 
+ export interface TodayQuestsResponse {
+@@ -54,8 +54,8 @@
+   }
+ }
+ 
+-export async function fetchTodayQuests(): Promise<TodayQuestsResponse | null> {
+-  return questFetch<TodayQuestsResponse>("/today");
++export async function fetchTodayQuests(address?: string): Promise<TodayQuestsResponse | null> {
++  return questFetch<TodayQuestsResponse>(address ? `/today?address=${encodeURIComponent(address)}` : "/today");
+ }
+ 
+ export async function fetchQuestXp(address: string): Promise<QuestXpResponse | null> {
+diff -ruN a/frontend/src/lib/quest/hooks.ts b/frontend/src/lib/quest/hooks.ts
+--- a/frontend/src/lib/quest/hooks.ts	2026-08-22 21:52:36.456559778 +0000
++++ b/frontend/src/lib/quest/hooks.ts	2026-08-22 21:52:37.254136614 +0000
+@@ -9,10 +9,10 @@
+  * Today's quest catalog. The `completed` field is catalog-static;
+  * per-address completion comes from useQuestXp entries, merged in the page.
+  */
+-export function useTodayQuests() {
++export function useTodayQuests(address?: string) {
+   return useQuery({
+-    queryKey: ["quests-today"],
+-    queryFn: () => fetchTodayQuests(),
++    queryKey: ["quests-today", address],
++    queryFn: () => fetchTodayQuests(address),
+     refetchInterval: QUEST_REFRESH_INTERVAL_MS,
+   });
+ }
+diff -ruN a/plugin/go/contract/quest_xp.go b/plugin/go/contract/quest_xp.go
+--- a/plugin/go/contract/quest_xp.go	2026-08-22 21:52:36.480130904 +0000
++++ b/plugin/go/contract/quest_xp.go	2026-08-22 21:53:03.104528847 +0000
+@@ -51,6 +51,10 @@
+                                  on a shared/proxied node is not necessarily the same as the
+                                  process's own local address)
+   QUEST_XP_POLL_INTERVAL_SECS — how often linked wallets are swept (default 60)
++  QUEST_ADMIN_TOKEN           — shared secret for the /v1/admin/questxp/* endpoints (manual
++                                 record cleanup). Unset by default, which means those routes
++                                 reject every request (fail closed) — set this before you need
++                                 to use them, there's no way to use them without it.
+ */
+ 
+ import (
+@@ -484,6 +488,86 @@
+ 	})
+ }
+ 
++// ---- admin: manual cleanup of individual xpRecords ----
++// Protected by a shared-secret header, not by anything cryptographic — this is a
++// destructive operation (removes real XP data) so it's intentionally NOT open like the
++// rest of this file's read endpoints. Fails closed: if QUEST_ADMIN_TOKEN isn't set in
++// the environment, every request here is rejected, rather than defaulting to open.
++//
++// Deliberately NOT a "clear all of today for this address" bulk operation: the daily
++// cap (questXPAlreadyCreditedToday) guarantees at most one record can ever exist per
++// (address, questId, dayId) — which means a stale backfilled record and a record from
++// something the user genuinely just did can land on the exact same dayId and be
++// indistinguishable by day alone. CreditedAt (wall-clock, not chain-derived) is the
++// only reliable way to tell them apart, so list first, confirm which ones are actually
++// stale by their CreditedAt clustering, then delete by exact (address, txHash, questId).
++
++func questXPAdminAuthorized(r *http.Request) bool {
++	token := os.Getenv("QUEST_ADMIN_TOKEN")
++	return token != "" && r.Header.Get("X-Admin-Token") == token
++}
++
++func questXPHandleAdminListRecords(w http.ResponseWriter, r *http.Request) {
++	if !questXPAdminAuthorized(r) {
++		questXPWriteJSON(w, http.StatusForbidden, map[string]string{"error": "missing or invalid X-Admin-Token"})
++		return
++	}
++	address := strings.ToLower(strings.TrimPrefix(r.URL.Query().Get("address"), "0x"))
++	if address == "" {
++		questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing address query param"})
++		return
++	}
++	storeMu.RLock()
++	var out []xpRecord
++	for _, rec := range xpRecords {
++		if rec.Address == address {
++			out = append(out, rec)
++		}
++	}
++	storeMu.RUnlock()
++	questXPWriteJSON(w, http.StatusOK, map[string]interface{}{"address": address, "count": len(out), "records": out})
++}
++
++type adminDeleteRecordRequest struct {
++	Address string `json:"address"`
++	TxHash  string `json:"txHash"`
++	QuestID string `json:"questId"`
++}
++
++func questXPHandleAdminDeleteRecord(w http.ResponseWriter, r *http.Request) {
++	if !questXPAdminAuthorized(r) {
++		questXPWriteJSON(w, http.StatusForbidden, map[string]string{"error": "missing or invalid X-Admin-Token"})
++		return
++	}
++	if r.Method != http.MethodPost {
++		questXPWriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
++		return
++	}
++	var req adminDeleteRecordRequest
++	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
++		questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
++		return
++	}
++	address := strings.ToLower(strings.TrimPrefix(req.Address, "0x"))
++	if address == "" || req.TxHash == "" || req.QuestID == "" {
++		questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "address, txHash, and questId are all required — this deletes by exact match only, never a bulk clear"})
++		return
++	}
++	storeMu.Lock()
++	defer storeMu.Unlock()
++	kept := xpRecords[:0]
++	removed := 0
++	for _, rec := range xpRecords {
++		if rec.Address == address && rec.TxHash == req.TxHash && rec.QuestID == req.QuestID {
++			removed++
++			continue
++		}
++		kept = append(kept, rec)
++	}
++	xpRecords = kept
++	questXPWriteJSON(w, http.StatusOK, map[string]interface{}{"removed": removed})
++}
++
+ func questXPHandleXPForAddress(w http.ResponseWriter, r *http.Request) {
+ 	address := strings.ToLower(strings.TrimPrefix(r.URL.Query().Get("address"), "0x"))
+ 	if address == "" {
+diff -ruN a/plugin/go/contract/rpc.go b/plugin/go/contract/rpc.go
+--- a/plugin/go/contract/rpc.go	2026-08-22 21:52:36.480272208 +0000
++++ b/plugin/go/contract/rpc.go	2026-08-22 21:53:03.104909074 +0000
+@@ -62,6 +62,8 @@
+ 	mux.HandleFunc("/v1/query/questxp/address", questXPCORSMiddleware(questXPHandleXPForAddress))
+ 	mux.HandleFunc("/v1/query/questxp/identity", questXPCORSMiddleware(questXPHandleIdentity))
+ 	mux.HandleFunc("/v1/query/questxp/leaderboard", questXPCORSMiddleware(questXPHandleLeaderboard))
++	mux.HandleFunc("/v1/admin/questxp/records", questXPHandleAdminListRecords)
++	mux.HandleFunc("/v1/admin/questxp/records/delete", questXPHandleAdminDeleteRecord)
+ 	mux.HandleFunc("/v1/link", questXPCORSMiddleware(questXPHandleLink))
+ 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
+ 	if err := http.ListenAndServe(addr, mux); err != nil {

@@ -51,6 +51,10 @@ CONFIGURATION (env vars, all optional with sensible defaults):
                                  on a shared/proxied node is not necessarily the same as the
                                  process's own local address)
   QUEST_XP_POLL_INTERVAL_SECS — how often linked wallets are swept (default 60)
+  QUEST_ADMIN_TOKEN           — shared secret for the /v1/admin/questxp/* endpoints (manual
+                                 record cleanup). Unset by default, which means those routes
+                                 reject every request (fail closed) — set this before you need
+                                 to use them, there's no way to use them without it.
 */
 
 import (
@@ -482,6 +486,86 @@ func questXPHandleIdentity(w http.ResponseWriter, r *http.Request) {
 		"evmAddress":    rec.EvmAddress,
 		"linkedAt":      rec.LinkedAt,
 	})
+}
+
+// ---- admin: manual cleanup of individual xpRecords ----
+// Protected by a shared-secret header, not by anything cryptographic — this is a
+// destructive operation (removes real XP data) so it's intentionally NOT open like the
+// rest of this file's read endpoints. Fails closed: if QUEST_ADMIN_TOKEN isn't set in
+// the environment, every request here is rejected, rather than defaulting to open.
+//
+// Deliberately NOT a "clear all of today for this address" bulk operation: the daily
+// cap (questXPAlreadyCreditedToday) guarantees at most one record can ever exist per
+// (address, questId, dayId) — which means a stale backfilled record and a record from
+// something the user genuinely just did can land on the exact same dayId and be
+// indistinguishable by day alone. CreditedAt (wall-clock, not chain-derived) is the
+// only reliable way to tell them apart, so list first, confirm which ones are actually
+// stale by their CreditedAt clustering, then delete by exact (address, txHash, questId).
+
+func questXPAdminAuthorized(r *http.Request) bool {
+	token := os.Getenv("QUEST_ADMIN_TOKEN")
+	return token != "" && r.Header.Get("X-Admin-Token") == token
+}
+
+func questXPHandleAdminListRecords(w http.ResponseWriter, r *http.Request) {
+	if !questXPAdminAuthorized(r) {
+		questXPWriteJSON(w, http.StatusForbidden, map[string]string{"error": "missing or invalid X-Admin-Token"})
+		return
+	}
+	address := strings.ToLower(strings.TrimPrefix(r.URL.Query().Get("address"), "0x"))
+	if address == "" {
+		questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing address query param"})
+		return
+	}
+	storeMu.RLock()
+	var out []xpRecord
+	for _, rec := range xpRecords {
+		if rec.Address == address {
+			out = append(out, rec)
+		}
+	}
+	storeMu.RUnlock()
+	questXPWriteJSON(w, http.StatusOK, map[string]interface{}{"address": address, "count": len(out), "records": out})
+}
+
+type adminDeleteRecordRequest struct {
+	Address string `json:"address"`
+	TxHash  string `json:"txHash"`
+	QuestID string `json:"questId"`
+}
+
+func questXPHandleAdminDeleteRecord(w http.ResponseWriter, r *http.Request) {
+	if !questXPAdminAuthorized(r) {
+		questXPWriteJSON(w, http.StatusForbidden, map[string]string{"error": "missing or invalid X-Admin-Token"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		questXPWriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
+		return
+	}
+	var req adminDeleteRecordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	address := strings.ToLower(strings.TrimPrefix(req.Address, "0x"))
+	if address == "" || req.TxHash == "" || req.QuestID == "" {
+		questXPWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "address, txHash, and questId are all required — this deletes by exact match only, never a bulk clear"})
+		return
+	}
+	storeMu.Lock()
+	defer storeMu.Unlock()
+	kept := xpRecords[:0]
+	removed := 0
+	for _, rec := range xpRecords {
+		if rec.Address == address && rec.TxHash == req.TxHash && rec.QuestID == req.QuestID {
+			removed++
+			continue
+		}
+		kept = append(kept, rec)
+	}
+	xpRecords = kept
+	questXPWriteJSON(w, http.StatusOK, map[string]interface{}{"removed": removed})
 }
 
 func questXPHandleXPForAddress(w http.ResponseWriter, r *http.Request) {

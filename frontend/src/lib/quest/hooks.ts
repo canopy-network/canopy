@@ -9,10 +9,10 @@ const QUEST_REFRESH_INTERVAL_MS = 30_000;
  * Today's quest catalog. The `completed` field is catalog-static;
  * per-address completion comes from useQuestXp entries, merged in the page.
  */
-export function useTodayQuests() {
+export function useTodayQuests(address?: string) {
   return useQuery({
-    queryKey: ["quests-today"],
-    queryFn: () => fetchTodayQuests(),
+    queryKey: ["quests-today", address],
+    queryFn: () => fetchTodayQuests(address),
     refetchInterval: QUEST_REFRESH_INTERVAL_MS,
   });
 }

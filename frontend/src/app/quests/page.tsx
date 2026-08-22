@@ -65,12 +65,16 @@ const card = "rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur";
 export default function QuestsPage() {
   const address = useWalletStore((s) => s.address);
   const queryClient = useQueryClient();
-  const { data: today, isLoading: todayLoading } = useTodayQuests();
+  const { data: today, isLoading: todayLoading } = useTodayQuests(address ?? undefined);
   const { data: myXp, isLoading: myXpLoading } = useQuestXp(address ?? undefined);
   const { data: leaderboard, isLoading: leaderboardLoading, isError } = useLeaderboard("current");
 
-  const completedQuestIds = new Set(myXp?.entries?.map((e) => e.questId) ?? []);
-  const quests = today?.quests.map((q) => ({ ...q, completed: completedQuestIds.has(q.id) })) ?? [];
+  // The backend's /v1/query/questxp/today already scopes "completed" to today's dayID
+  // when given an address — use that directly. Recomputing from myXp's full lifetime
+  // entries (as this used to do) ignores day boundaries entirely: once a quest type is
+  // ever completed once, it would show as done forever, which is why "resets daily"
+  // wasn't actually resetting.
+  const quests = today?.quests ?? [];
   const completedCount = quests.filter((q) => q.completed).length;
 
   return (

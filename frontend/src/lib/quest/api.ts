@@ -35,7 +35,7 @@ export interface TodayQuest {
   label: string;
   description: string;
   xp: number;
-  completed: boolean; // catalog-static, not per-address
+  completed: boolean; // per-address, scoped to today's dayId — accurate only when fetchTodayQuests was called with an address
 }
 
 export interface TodayQuestsResponse {
@@ -54,8 +54,8 @@ async function questFetch<T>(path: string): Promise<T | null> {
   }
 }
 
-export async function fetchTodayQuests(): Promise<TodayQuestsResponse | null> {
-  return questFetch<TodayQuestsResponse>("/today");
+export async function fetchTodayQuests(address?: string): Promise<TodayQuestsResponse | null> {
+  return questFetch<TodayQuestsResponse>(address ? `/today?address=${encodeURIComponent(address)}` : "/today");
 }
 
 export async function fetchQuestXp(address: string): Promise<QuestXpResponse | null> {
