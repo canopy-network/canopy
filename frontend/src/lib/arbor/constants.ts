@@ -26,7 +26,7 @@ export const TX_TIMEOUT_MS = Number(
 );
 
 export const STATE_REFRESH_INTERVAL_MS = Number(
-  process.env.NEXT_PUBLIC_STATE_REFRESH_INTERVAL_MS || 25000
+  process.env.NEXT_PUBLIC_STATE_REFRESH_INTERVAL_MS || 15000
 );
 
 export const TIER_PARAMS: Record<

@@ -176,7 +176,8 @@ export default function LiquidationPage() {
     queryKey: ["all-borrower-positions"],
     queryFn: getAllBorrowerPositions,
     refetchInterval: STATE_REFRESH_INTERVAL_MS,
-    staleTime: 20_000,
+    refetchIntervalInBackground: true,
+    staleTime: 5_000,
   });
   const { data: marketsData } = useMarkets();
 

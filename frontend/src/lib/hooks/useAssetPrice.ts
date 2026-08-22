@@ -84,6 +84,7 @@ export function useAssetPrice(assetId: string | null | undefined) {
     },
     enabled: !!assetId,
     refetchInterval: STATE_REFRESH_INTERVAL_MS,
-    staleTime: 20_000,
+    refetchIntervalInBackground: true,
+    staleTime: 5_000,
   });
 }
