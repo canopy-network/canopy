@@ -619,6 +619,18 @@ func questXPHandleLink(w http.ResponseWriter, r *http.Request) {
 	identitiesByAddr[normAddr] = identityRecord{Address: normAddr, DiscordID: req.DiscordID, TwitterHandle: req.TwitterHandle, EvmAddress: normEvmAddr, LinkedAt: time.Now().UnixMilli()}
 	identitiesByDisc[req.DiscordID] = normAddr
 	identitiesByTwit[req.TwitterHandle] = normAddr
+	// Seed the sweep cursor to the height at link time. Without this, cursorByAddr
+	// defaults to Go's zero-value (0) for a never-before-seen address, so the first
+	// sweep scans the address's ENTIRE on-chain history from block 0 — crediting any
+	// prior activity (from before the user ever linked identity) as XP, sometimes
+	// landing in "today"'s dayID purely by coincidence of recency, not because the
+	// user actually did anything today. Only activity from this point forward should
+	// ever earn XP — this was flagged as an open product question in earlier design
+	// discussion; this resolves it in favor of "linking starts the clock, it doesn't
+	// retroactively reward past activity."
+	if _, alreadySwept := cursorByAddr[normAddr]; !alreadySwept {
+		cursorByAddr[normAddr] = height
+	}
 	storeMu.Unlock()
 
 	questXPWriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "address": normAddr})
