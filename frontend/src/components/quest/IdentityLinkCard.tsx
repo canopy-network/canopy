@@ -327,11 +327,6 @@ export function IdentityLinkCard({ variant = "quests", onLinked }: IdentityLinkC
         </>
       )}
 
-      {result && (
-        <div className={`mt-3 text-sm ${result.ok ? "text-emerald-400" : "text-red-400"}`}>
-          {result.message}
-        </div>
-      )}
     </div>
   );
 }

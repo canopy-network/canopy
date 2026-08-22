@@ -6,6 +6,26 @@ import { useWalletStore } from "@/lib/wallet";
 import { IdentityLinkCard } from "@/components/quest/IdentityLinkCard";
 import { useQuestXp, useLeaderboard, useTodayQuests } from "@/lib/quest/hooks";
 
+
+function downloadLeaderboardCSV(leaderboard: any) {
+  const esc = (s: string) => /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const headers = ["rank", "address", "evm_address", "xp"];
+  const rows = leaderboard.leaderboard.map((e: any, i: number) => [
+    String(i + 1),
+    esc(e.address ?? ""),
+    esc(e.evmAddress ?? ""),
+    String(e.xp ?? 0),
+  ]);
+  const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `leaderboard-week-${leaderboard.weekId}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function shortAddr(addr: string): string {
   return addr.length > 10 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
 }
@@ -167,7 +187,7 @@ export default function QuestsPage() {
           </div>
 
           <div className={`${card} p-5`}>
-            <div className="mb-4 flex items-center gap-3">
+            <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/15">
                 <IconTrophy className="h-4 w-4 text-violet-400" />
               </div>
@@ -177,6 +197,15 @@ export default function QuestsPage() {
                   {leaderboard ? `Week ${leaderboard.weekId}` : "Current week"}
                 </p>
               </div>
+            
+                          <button
+              onClick={() => leaderboard && downloadLeaderboardCSV(leaderboard)}
+              disabled={!leaderboard?.leaderboard?.length}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Download this week's addresses, EVM addresses, and XP as CSV"
+            >
+              Export CSV
+            </button>
             </div>
 
             {isError ? (
