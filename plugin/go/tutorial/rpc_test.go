@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/canopy-network/go-plugin/tutorial/contract"
-	"github.com/canopy-network/go-plugin/tutorial/crypto"
+	"github.com/ARBOR-L/ARBOR/plugin/go/tutorial/contract"
+	"github.com/ARBOR-L/ARBOR/plugin/go/tutorial/crypto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
