@@ -206,7 +206,13 @@ func questXPLeaderboard(weekID int64) []map[string]interface{} {
 	}
 	out := make([]map[string]interface{}, 0, len(totals))
 	for addr, xp := range totals {
-		out = append(out, map[string]interface{}{"address": addr, "xp": xp})
+		entry := map[string]interface{}{"address": addr, "xp": xp}
+		// identitiesByAddr is keyed by the same normalized (lowercase, no 0x prefix)
+		// address form used everywhere else in this file — see questXPHandleLink.
+		if id, ok := identitiesByAddr[addr]; ok && id.EvmAddress != "" {
+			entry["evmAddress"] = id.EvmAddress
+		}
+		out = append(out, entry)
 	}
 	for i := 0; i < len(out); i++ {
 		for j := i + 1; j < len(out); j++ {
