@@ -277,7 +277,9 @@ func getSoftwareVersion(autoUpdate bool, binPath string) string {
 	if !autoUpdate {
 		return rpc.SoftwareVersion
 	}
-	out, err := exec.Command(binPath, "version").Output()
+	// forward only --data-dir so the check targets the initialized directory and
+	// avoids passing newer flags an older installed binary may not recognize
+	out, err := exec.Command(binPath, "version", "--data-dir", cli.DataDir).Output()
 	if err != nil {
 		panic(fmt.Sprintf("failed to get software version from binary: %v", err))
 	}

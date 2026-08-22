@@ -51,6 +51,11 @@ var rootCmd = &cobra.Command{
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number",
+	// version is self-contained: skip data-dir initialization so it never
+	// creates files or prompts for a password (e.g. when run non-interactively)
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(rpc.SoftwareVersion)
 	},
@@ -84,6 +89,25 @@ var (
 	rpcURLFlag, adminURLFlag, externalAddressFlag string
 )
 
+// globalFlag describes a persistent flag shared by the CLI and the auto-updater.
+type globalFlag struct {
+	name    string  // flag name, without the leading "--"
+	value   *string // bound package-level variable
+	def     string  // default value
+	usage   string  // help text
+	forward bool    // always forward to the child process, even when empty
+}
+
+// globalFlags is the single source of truth for the global persistent flags. It
+// is consumed by registerPersistentFlags (to define them) and by GlobalFlagArgs
+// (to forward them to a child canopy process).
+var globalFlags = []globalFlag{
+	{name: "data-dir", value: &DataDir, def: lib.DefaultDataDirPath(), usage: "custom data directory location", forward: true},
+	{name: "rpc-url", value: &rpcURLFlag, usage: "override the RPC URL from config"},
+	{name: "admin-url", value: &adminURLFlag, usage: "override the admin RPC URL from config"},
+	{name: "external-address", value: &externalAddressFlag, usage: "P2P external address"},
+}
+
 func init() {
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(versionCmd)
@@ -99,10 +123,9 @@ func init() {
 // registerPersistentFlags binds the global persistent flags onto the given flag
 // set, shared by the CLI and the standalone auto-updater.
 func registerPersistentFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-	fs.StringVar(&rpcURLFlag, "rpc-url", "", "override the RPC URL from config")
-	fs.StringVar(&adminURLFlag, "admin-url", "", "override the admin RPC URL from config")
-	fs.StringVar(&externalAddressFlag, "external-address", "", "P2P external address")
+	for _, f := range globalFlags {
+		fs.StringVar(f.value, f.name, f.def, f.usage)
+	}
 }
 
 // ParseGlobalFlags parses the global flags from args, populates the package-level
@@ -119,14 +142,13 @@ func ParseGlobalFlags(args []string) ([]string, error) {
 }
 
 // GlobalFlagArgs reconstructs the global flags as arguments to forward to a child
-// canopy process. Data-dir is always emitted; URL overrides only when set.
+// canopy process. Flags marked 'forward' are always emitted; the rest only when set.
 func GlobalFlagArgs() []string {
-	args := []string{"--data-dir", DataDir}
-	if rpcURLFlag != "" {
-		args = append(args, "--rpc-url", rpcURLFlag)
-	}
-	if adminURLFlag != "" {
-		args = append(args, "--admin-url", adminURLFlag)
+	var args []string
+	for _, f := range globalFlags {
+		if f.forward || *f.value != "" {
+			args = append(args, "--"+f.name, *f.value)
+		}
 	}
 	return args
 }
