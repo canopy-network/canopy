@@ -12,6 +12,9 @@ import {
   getAlreadyConnectedEthAccount,
   loadCachedKey,
   hasCachedKey,
+  getEthereumProvider,
+  rememberMmOrigin,
+  getMmOriginForAddress,
 } from "@/lib/wallet/metamask";
 import {
   cachePrivateKey,
@@ -50,6 +53,9 @@ export function WalletConnect() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissedUnlock, setDismissedUnlock] = useState(false);
+  // Tracks whether the *active* session came from MetaMask (vs. paste/
+  // import/admin) so accountsChanged only reacts to MetaMask sessions.
+  const [mmEthAddress, setMmEthAddress] = useState<string | null>(null);
   const isAuthority = isAuthorityAddress(address);
   const [advancedMode, setAdvancedMode] = useState(() => {
     if (isAuthority) return true;
@@ -85,6 +91,11 @@ export function WalletConnect() {
         const key = await loadCachedPrivateKey(lastAddr);
         if (key && alive) {
           await connectFromRawKey(key);
+          // If this address was originally derived from MetaMask, re-arm
+          // the accountsChanged listener even though we came in via the
+          // device-cache path, not the MetaMask-silent path below.
+          const origin = getMmOriginForAddress(lastAddr);
+          if (origin) setMmEthAddress(origin);
           return;
         }
       }
@@ -94,12 +105,55 @@ export function WalletConnect() {
       const mmKey = await loadCachedKey(eth);
       if (!mmKey || !alive) return;
       await connectFromRawKey(mmKey);
+      setMmEthAddress(eth);
     })().catch(() => {});
     return () => {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
+
+  // React to MetaMask account switches. Praxis's vanilla-JS version wires
+  // this at module scope with no cleanup and no session check -- fine for
+  // a single global page, wrong here: Arbor's tab can hold a paste/import/
+  // admin-connected key that has nothing to do with MetaMask, so this only
+  // acts when the *current* session was actually derived from MetaMask.
+  useEffect(() => {
+    const eth = getEthereumProvider();
+    if (!eth?.on) return;
+
+    const handleAccountsChanged = async (accounts: unknown) => {
+      if (!mmEthAddress) return; // active session isn't MetaMask-derived
+      const accs = accounts as string[];
+      if (!accs.length) {
+        setMmEthAddress(null);
+        disconnect();
+        return;
+      }
+      const newAddr = accs[0].toLowerCase();
+      if (newAddr === mmEthAddress) return;
+
+      setError(null);
+      setBusy(true);
+      try {
+        const sig = await signDeriveMessage(newAddr);
+        const derived = await deriveBlsFromEthSignature(sig);
+        await connectFromRawKey(derived.privateKeyHex);
+        await cacheDerivedKey(newAddr, derived.privateKeyHex);
+        setMmEthAddress(newAddr);
+      } catch (err) {
+        setError(errMessage(err));
+        setMmEthAddress(null);
+        disconnect();
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    eth.on("accountsChanged", handleAccountsChanged);
+    return () => eth.removeListener?.("accountsChanged", handleAccountsChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mmEthAddress]);
 
   // Generate tab
   const [genPassword, setGenPassword] = useState("");
@@ -235,6 +289,8 @@ export function WalletConnect() {
       const derived = await deriveBlsFromEthSignature(sig);
       await connectFromRawKey(derived.privateKeyHex);
       await cacheDerivedKey(ethAddress, derived.privateKeyHex);
+      rememberMmOrigin(ethAddress, derived.address);
+      setMmEthAddress(ethAddress);
       await maybeSaveKeystore();
     } catch (err) {
       setError(errMessage(err));
@@ -326,7 +382,7 @@ export function WalletConnect() {
             🔒
           </span>
         )}
-        <button type="button" onClick={() => { setDismissedUnlock(false); disconnect(); }} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200">
+        <button type="button" onClick={() => { setDismissedUnlock(false); setMmEthAddress(null); disconnect(); }} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200">
           Disconnect
         </button>
       </div>

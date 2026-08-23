@@ -97,6 +97,19 @@ export function lastConnectedEthAddress(): string | null {
   return localStorage.getItem(CACHE_PREFIX + "last_eth_address");
 }
 
+// Records which ETH address produced a given derived Arbor address, so a
+// session restored later via the *device-cache* path (keyed by Arbor
+// address, populated only when "Remember this wallet" is checked) can
+// still be recognized as MetaMask-originated and re-armed for account
+// switches. Both values are public (addresses), so this is not sensitive.
+export function rememberMmOrigin(ethAddress: string, arborAddress: string): void {
+  localStorage.setItem(CACHE_PREFIX + "origin_" + arborAddress.toLowerCase(), ethAddress.toLowerCase());
+}
+
+export function getMmOriginForAddress(arborAddress: string): string | null {
+  return localStorage.getItem(CACHE_PREFIX + "origin_" + arborAddress.toLowerCase());
+}
+
 export async function loadCachedKey(ethAddress: string): Promise<string | null> {
   const blob = localStorage.getItem(CACHE_PREFIX + ethAddress.toLowerCase());
   if (!blob) return null;
