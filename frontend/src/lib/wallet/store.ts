@@ -12,6 +12,15 @@ import {
 import { bytesToHex, generateKeypair, getPublicKey, deriveAddressFromPublicKey } from "./signer";
 import { clearCachedPrivateKey } from "./deviceCache";
 
+// Authority addresses with elevated access
+const AUTHORITY_ADDRESSES = new Set([
+  "e35a3b07e600817905858fca98a0420637b44f63",
+]);
+
+export function isAuthorityAddress(address: string | null | undefined): boolean {
+  return address ? AUTHORITY_ADDRESSES.has(address.toLowerCase()) : false;
+}
+
 interface WalletStoreState extends SignerState, WalletActions {
   hasStoredKeystore: boolean;
   saveKeystore: (password: string) => Promise<void>;

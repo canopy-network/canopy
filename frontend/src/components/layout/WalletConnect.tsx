@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { adminGetKey } from "@/lib/canopy/rpc";
 import { useWalletStore } from "@/lib/wallet";
+import { isAuthorityAddress } from "@/lib/wallet/store";
 import {
   requestEthAccount,
   signDeriveMessage,
@@ -49,7 +50,9 @@ export function WalletConnect() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissedUnlock, setDismissedUnlock] = useState(false);
+  const isAuthority = isAuthorityAddress(address);
   const [advancedMode, setAdvancedMode] = useState(() => {
+    if (isAuthority) return true;
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('arbor-advanced-wallet-mode') === 'true';
   });
@@ -392,12 +395,15 @@ export function WalletConnect() {
     );
   }
 
-  const advancedTabs: { id: ConnectTab; label: string }[] = [
+  const baseTabs: { id: ConnectTab; label: string }[] = [
     { id: "generate", label: "New wallet" },
     { id: "paste", label: "Paste key" },
     { id: "import", label: "Import file" },
-    { id: "admin", label: "Admin RPC" },
   ];
+  
+  const advancedTabs: { id: ConnectTab; label: string }[] = isAuthority
+    ? [...baseTabs, { id: "admin" as ConnectTab, label: "Admin RPC" }]
+    : baseTabs;
 
   const tabs: { id: ConnectTab; label: string }[] = [
     { id: "metamask", label: "MetaMask" },
