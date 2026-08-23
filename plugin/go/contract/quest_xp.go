@@ -55,6 +55,18 @@ CONFIGURATION (env vars, all optional with sensible defaults):
                                  record cleanup). Unset by default, which means those routes
                                  reject every request (fail closed) — set this before you need
                                  to use them, there's no way to use them without it.
+  QUEST_XP_STATE_FILE         — path to a JSON file this process reads on startup and writes
+                                 to after every mutation, so identities/XP survive a process
+                                 restart (default "./quest_xp_state.json", relative to wherever
+                                 the process's working directory is — set an absolute path in
+                                 production so a restart from a different cwd doesn't silently
+                                 start fresh). This does NOT change the deliberate limitation
+                                 above: state still isn't consensus/StateWrite-backed, still
+                                 isn't replicated across validators, and a multi-validator setup
+                                 would have each node keep its own independent file. It only
+                                 protects against the single-process-restart case (redeploys,
+                                 crashes, node reboots) that was previously an unqualified full
+                                 data loss.
 */
 
 import (
@@ -65,6 +77,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -159,6 +172,138 @@ var (
 	cursorByAddr     = map[string]int64{}
 )
 
+// ---- persistence ----
+//
+// Snapshot-on-write to a single JSON file. Not a WAL, not atomic-per-record —
+// every save writes the entire current state. That's fine at this data size
+// (identities + XP records for a quest program, not a general ledger) and it
+// keeps the format trivially inspectable/editable by hand if something needs
+// manual correction. Writes go to a temp file then get renamed into place, so
+// a crash mid-write can't leave a half-written, unparseable state file behind.
+
+type questXPSnapshot struct {
+	IdentitiesByAddr map[string]identityRecord `json:"identitiesByAddr"`
+	IdentitiesByDisc map[string]string         `json:"identitiesByDisc"`
+	IdentitiesByTwit map[string]string         `json:"identitiesByTwit"`
+	XPRecords        []xpRecord                `json:"xpRecords"`
+	CursorByAddr     map[string]int64          `json:"cursorByAddr"`
+	SavedAt          int64                     `json:"savedAt"`
+}
+
+func questXPStateFilePath() string {
+	if v := os.Getenv("QUEST_XP_STATE_FILE"); v != "" {
+		return v
+	}
+	return "./quest_xp_state.json"
+}
+
+// questXPSaveState snapshots current in-memory state to disk. Called after
+// every mutation (link, credit, admin delete) rather than on a timer, so a
+// crash between saves never loses more than the single mutation in flight.
+// Best-effort: a save failure is logged, not fatal — a stalled disk write
+// shouldn't take down quest tracking, and the in-memory state (source of
+// truth while the process is up) is untouched either way.
+func questXPSaveState() {
+	storeMu.RLock()
+	snap := questXPSnapshot{
+		IdentitiesByAddr: make(map[string]identityRecord, len(identitiesByAddr)),
+		IdentitiesByDisc: make(map[string]string, len(identitiesByDisc)),
+		IdentitiesByTwit: make(map[string]string, len(identitiesByTwit)),
+		XPRecords:        make([]xpRecord, len(xpRecords)),
+		CursorByAddr:     make(map[string]int64, len(cursorByAddr)),
+		SavedAt:          time.Now().UnixMilli(),
+	}
+	for k, v := range identitiesByAddr {
+		snap.IdentitiesByAddr[k] = v
+	}
+	for k, v := range identitiesByDisc {
+		snap.IdentitiesByDisc[k] = v
+	}
+	for k, v := range identitiesByTwit {
+		snap.IdentitiesByTwit[k] = v
+	}
+	copy(snap.XPRecords, xpRecords)
+	for k, v := range cursorByAddr {
+		snap.CursorByAddr[k] = v
+	}
+	storeMu.RUnlock()
+
+	path := questXPStateFilePath()
+	data, err := json.MarshalIndent(snap, "", "  ")
+	if err != nil {
+		fmt.Printf("[quest_xp] state save failed (marshal): %v\n", err)
+		return
+	}
+
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".quest_xp_state.*.tmp")
+	if err != nil {
+		fmt.Printf("[quest_xp] state save failed (tempfile in %s): %v\n", dir, err)
+		return
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		fmt.Printf("[quest_xp] state save failed (write): %v\n", err)
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		fmt.Printf("[quest_xp] state save failed (close): %v\n", err)
+		return
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		fmt.Printf("[quest_xp] state save failed (rename into %s): %v\n", path, err)
+		return
+	}
+}
+
+// questXPLoadState runs once at startup, before the sweep loop starts. A
+// missing file is the expected first-run case (nothing to load, not an
+// error). A present-but-corrupt file is treated cautiously: it's logged
+// loudly and left in place untouched (never overwritten by the loader) so a
+// human can inspect it, and the process starts with empty in-memory state
+// rather than guessing at partial recovery.
+func questXPLoadState() {
+	path := questXPStateFilePath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("[quest_xp] no state file at %s, starting fresh\n", path)
+			return
+		}
+		fmt.Printf("[quest_xp] state load failed (read %s): %v — starting with empty state\n", path, err)
+		return
+	}
+	var snap questXPSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		fmt.Printf("[quest_xp] state load failed (parse %s): %v — file left untouched, starting with empty state\n", path, err)
+		return
+	}
+
+	storeMu.Lock()
+	defer storeMu.Unlock()
+	if snap.IdentitiesByAddr != nil {
+		identitiesByAddr = snap.IdentitiesByAddr
+	}
+	if snap.IdentitiesByDisc != nil {
+		identitiesByDisc = snap.IdentitiesByDisc
+	}
+	if snap.IdentitiesByTwit != nil {
+		identitiesByTwit = snap.IdentitiesByTwit
+	}
+	if snap.XPRecords != nil {
+		xpRecords = snap.XPRecords
+	}
+	if snap.CursorByAddr != nil {
+		cursorByAddr = snap.CursorByAddr
+	}
+	fmt.Printf("[quest_xp] state loaded from %s (saved at %d): %d identities, %d xp records\n",
+		path, snap.SavedAt, len(identitiesByAddr), len(xpRecords))
+}
+
 func questXPAlreadyCredited(address, txHash, questID string) bool {
 	storeMu.RLock()
 	defer storeMu.RUnlock()
@@ -183,8 +328,9 @@ func questXPAlreadyCreditedToday(address, questID string, dayID int64) bool {
 
 func questXPCredit(rec xpRecord) {
 	storeMu.Lock()
-	defer storeMu.Unlock()
 	xpRecords = append(xpRecords, rec)
+	storeMu.Unlock()
+	questXPSaveState()
 }
 
 func questXPCompletedToday(address string, dayID int64) map[string]bool {
@@ -554,7 +700,6 @@ func questXPHandleAdminDeleteRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	storeMu.Lock()
-	defer storeMu.Unlock()
 	kept := xpRecords[:0]
 	removed := 0
 	for _, rec := range xpRecords {
@@ -565,6 +710,10 @@ func questXPHandleAdminDeleteRecord(w http.ResponseWriter, r *http.Request) {
 		kept = append(kept, rec)
 	}
 	xpRecords = kept
+	storeMu.Unlock()
+	if removed > 0 {
+		questXPSaveState()
+	}
 	questXPWriteJSON(w, http.StatusOK, map[string]interface{}{"removed": removed})
 }
 
@@ -716,6 +865,7 @@ func questXPHandleLink(w http.ResponseWriter, r *http.Request) {
 		cursorByAddr[normAddr] = height
 	}
 	storeMu.Unlock()
+	questXPSaveState()
 
 	questXPWriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "address": normAddr})
 }
@@ -736,6 +886,7 @@ func questXPCORSMiddleware(next http.HandlerFunc) http.HandlerFunc {
 // ---- startup ----
 
 func init() {
+	questXPLoadState()
 	go startQuestXPService()
 }
 
