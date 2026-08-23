@@ -88,15 +88,32 @@ export function WalletConnect() {
       // 1) Device-cache (AES-GCM encrypted, works for all connect methods)
       const lastAddr = lastConnectedAddress();
       if (lastAddr && hasCachedPrivateKey(lastAddr)) {
-        const key = await loadCachedPrivateKey(lastAddr);
-        if (key && alive) {
-          await connectFromRawKey(key);
-          // If this address was originally derived from MetaMask, re-arm
-          // the accountsChanged listener even though we came in via the
-          // device-cache path, not the MetaMask-silent path below.
-          const origin = getMmOriginForAddress(lastAddr);
-          if (origin) setMmEthAddress(origin);
-          return;
+        const origin = getMmOriginForAddress(lastAddr);
+        if (origin) {
+          // This cached session was derived from MetaMask. Don't trust it
+          // blindly -- MetaMask's active account may have changed since
+          // while this tab was closed, with no accountsChanged event to
+          // catch it. Verify before restoring.
+          const currentEth = await getAlreadyConnectedEthAccount();
+          if (currentEth === origin) {
+            const key = await loadCachedPrivateKey(lastAddr);
+            if (key && alive) {
+              await connectFromRawKey(key);
+              setMmEthAddress(origin);
+              return;
+            }
+          }
+          // Mismatch (or MetaMask now disconnected/locked): fall through
+          // to step 2, which derives fresh from whatever account MetaMask
+          // is actually on right now -- never silently, since that always
+          // requires a signature we don't have cached for a new account.
+        } else {
+          // Non-MetaMask session (paste/import/admin) -- restore as before.
+          const key = await loadCachedPrivateKey(lastAddr);
+          if (key && alive) {
+            await connectFromRawKey(key);
+            return;
+          }
         }
       }
       // 2) MetaMask silent (already connected + cached derived key)
