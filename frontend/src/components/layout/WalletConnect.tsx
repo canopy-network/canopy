@@ -65,9 +65,11 @@ export function WalletConnect() {
     }
   };
 
+  const effectiveAdvanced = advancedMode || isAuthority;
+
   useEffect(() => {
-    if (!advancedMode && tab !== "metamask") setTab("metamask");
-  }, [advancedMode, tab]);
+    if (!effectiveAdvanced && tab !== "metamask") setTab("metamask");
+  }, [effectiveAdvanced, tab]);
 
   const showUnlock = !isConnected && hasStoredKeystore && !dismissedUnlock;
 
@@ -334,6 +336,12 @@ export function WalletConnect() {
   if (showUnlock && hasStoredKeystore) {
     return (
       <div className="space-y-3 rounded-xl glass backdrop-blur p-4">
+      {isAuthority && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2">
+          <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">Admin</span>
+          <span className="text-xs text-amber-200/80">Authority access enabled for this address</span>
+        </div>
+      )}
         <div className="text-sm text-zinc-300">
           Saved wallet detected. Enter keystore password to unlock:
         </div>
@@ -407,7 +415,7 @@ export function WalletConnect() {
 
   const tabs: { id: ConnectTab; label: string }[] = [
     { id: "metamask", label: "MetaMask" },
-    ...(advancedMode ? advancedTabs : []),
+    ...(effectiveAdvanced ? advancedTabs : []),
   ];
 
   return (
@@ -430,7 +438,7 @@ export function WalletConnect() {
         ))}
       </div>
 
-      {!advancedMode && (
+      {!isAuthority && !advancedMode && (
         <button
           type="button"
           onClick={toggleAdvancedMode}
@@ -440,7 +448,7 @@ export function WalletConnect() {
         </button>
       )}
 
-      {advancedMode && (
+      {!isAuthority && advancedMode && (
         <button
           type="button"
           onClick={toggleAdvancedMode}

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useWalletStore } from "@/lib/wallet";
+import { isAuthorityAddress } from "@/lib/wallet/store";
 import { WalletConnect } from "./WalletConnect";
 import { AssetIcon } from "@/components/AssetIcon";
 import { useRoles, type Roles } from "@/lib/hooks/useRoles";
@@ -147,6 +148,11 @@ function WalletChip() {
           </span>
           <span className="tabular-nums text-zinc-200">
             {shortAddress(wallet.address ?? "")}
+            {isAuthorityAddress(wallet.address) && (
+              <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300">
+                Admin
+              </span>
+            )}
           </span>
         </button>
 
