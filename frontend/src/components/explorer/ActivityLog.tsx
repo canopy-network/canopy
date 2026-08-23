@@ -13,7 +13,6 @@ import {
 } from "@/lib/canopy/pluginRpc";
 import { useChainStatus } from "@/lib/hooks/useChainStatus";
 import { formatAmount } from "@/lib/arbor/format";
-import { ActivityLog } from "@/components/explorer/ActivityLog";
 
 const ASSETS = ["BTC", "ETH", "USDC"];
 const card = "rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur";
@@ -270,7 +269,7 @@ function AddressDossier({ address }: { address: string }) {
   );
 }
 
-export default function EventsPage() {
+export function ActivityLog() {
   const { address } = useWalletStore();
   const [lookupAddress, setLookupAddress] = useState("");
   const [activeAddress, setActiveAddress] = useState<string | null>(null);
@@ -342,9 +341,6 @@ export default function EventsPage() {
           </p>
         </div>
       )}
-    <div className="mt-12 border-t border-white/5 pt-8">
-      <ActivityLog />
-    </div>
     </div>
   );
 }
