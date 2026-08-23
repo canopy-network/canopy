@@ -12,28 +12,20 @@ import {
   getAllMarkets,
 } from "@/lib/canopy/pluginRpc";
 import { useChainStatus } from "@/lib/hooks/useChainStatus";
+import { queryTxsBySender } from "@/lib/canopy/rpc";
 import { formatAmount } from "@/lib/arbor/format";
 import { ActivityLog } from "@/components/explorer/ActivityLog";
 
 const ASSETS = ["BTC", "ETH", "USDC"];
 const card = "rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur";
 
-function LiveNetworkWidget() {
+function LiveNetworkWidget({ txCount }: { txCount: number | null }) {
   const { data: status } = useChainStatus();
   const { data: markets } = useQuery({
     queryKey: ["markets-count"],
     queryFn: getAllMarkets,
     staleTime: 30_000,
   });
-  const [txCount, setTxCount] = useState(0);
-
-  useEffect(() => {
-    if (!status?.connected) return;
-    const interval = setInterval(() => {
-      setTxCount((c) => c + Math.floor(Math.random() * 3));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [status?.connected]);
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-white/[0.02] to-transparent p-6 explorer-glow">
@@ -75,9 +67,9 @@ function LiveNetworkWidget() {
             </div>
           </div>
           <div>
-            <div className="text-xs text-zinc-500">TX Count</div>
+            <div className="text-xs text-zinc-500">Address TXs</div>
             <div className="text-xl font-bold tabular-nums text-emerald-400">
-              {txCount.toLocaleString()}
+              {txCount === null || txCount === undefined ? "—" : txCount.toLocaleString()}
             </div>
           </div>
         </div>
@@ -281,6 +273,13 @@ export default function EventsPage() {
     }
   }, [address, activeAddress]);
 
+  const { data: txTotal } = useQuery({
+    queryKey: ["tx-total", activeAddress],
+    queryFn: async () => (await queryTxsBySender(activeAddress as string)).length,
+    enabled: !!activeAddress,
+    refetchInterval: 15_000,
+  });
+
   function handleLookup(e: React.FormEvent) {
     e.preventDefault();
     if (lookupAddress.trim()) {
@@ -302,7 +301,7 @@ export default function EventsPage() {
         maximum privacy.
       </p>
 
-      <LiveNetworkWidget />
+      <LiveNetworkWidget txCount={txTotal ?? null} />
 
       <div className="mt-8 mb-8">
         <form onSubmit={handleLookup} className="flex gap-3">
@@ -343,7 +342,7 @@ export default function EventsPage() {
         </div>
       )}
     <div className="mt-12 border-t border-white/5 pt-8">
-      <ActivityLog />
+      <ActivityLog externalAddress={activeAddress} />
     </div>
     </div>
   );

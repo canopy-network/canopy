@@ -73,9 +73,12 @@ function short(v: string, head = 8, tail = 6): string {
   return `${v.slice(0, head)}…${v.slice(-tail)}`;
 }
 
-export function ActivityLog() {
+export function ActivityLog({ externalAddress }: { externalAddress?: string | null } = {}) {
   const wallet = useWalletStore();
   const [addr, setAddr] = useState("");
+  useEffect(() => {
+    if (externalAddress) setAddr(externalAddress.replace(/^0x/, ""));
+  }, [externalAddress]);
   const [tab, setTab] = useState<Tab>("activity");
   const [page, setPage] = useState(1);
 
