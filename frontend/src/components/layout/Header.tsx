@@ -261,7 +261,8 @@ export function Header() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMenuOpen(false); }, [pathname]);
   const roles = useRoles();
-  const nav = NAV.filter((i) => i.href !== "/admin" || roles.isProtocolAuthority);
+  const address = useWalletStore()?.address ?? null;
+  const nav = NAV.filter((n) => n.href !== "/admin" || isAuthorityAddress(address) || roles.isProtocolAuthority);
 
   return (
     <header className="sticky top-0 z-40 relative border-b border-white/5 arbor-surface">
