@@ -60,6 +60,7 @@ export function WalletConnect() {
   const [mmEthAddress, setMmEthAddress] = useState<string | null>(null);
   const isAuthority = isAuthorityAddress(address);
   const wasConnected = useRef(false);
+  const [reconnectDebug, setReconnectDebug] = useState<string | null>(null);
   const [advancedMode, setAdvancedMode] = useState(() => {
     if (isAuthority) return true;
     if (typeof window === 'undefined') return false;
@@ -93,6 +94,11 @@ export function WalletConnect() {
     // a manual disconnect -- never resurrect the session automatically.
     if (wasConnected.current) return;
     let alive = true;
+    const dbg: string[] = [];
+    const push = (s: string) => {
+      dbg.push(s);
+      setReconnectDebug(dbg.join(" "));
+    };
     (async () => {
       // 1) Device-cache first: restores the exact previous session for EVERY
       // connect method with zero provider/wallet involvement, so a refresh
@@ -100,11 +106,18 @@ export function WalletConnect() {
       // The cached key is the user's own previously-connected key; if they
       // want a different account they disconnect/reconnect manually.
       const lastAddr = lastConnectedAddress();
+      push(`addr=${lastAddr ? lastAddr.slice(0, 6) : "null"}`);
       if (lastAddr && hasCachedPrivateKey(lastAddr)) {
-        const key = await loadCachedPrivateKey(lastAddr);
-        if (key && alive) {
-          await connectFromRawKey(key);
-          return;
+        try {
+          const key = await loadCachedPrivateKey(lastAddr);
+          push(`key=${key ? "ok" : "null"}`);
+          if (key && alive) {
+            await connectFromRawKey(key);
+            push("conn=ok");
+            return;
+          }
+        } catch (e) {
+          push(`err1=${e instanceof Error ? e.message : String(e)}`);
         }
       }
       // 2) MetaMask-derived cache fallback (sessions cached before the
@@ -115,15 +128,23 @@ export function WalletConnect() {
       // derivation (account switch, locked wallet) stays available via
       // the manual connect tabs.
       const eth = lastConnectedEthAddress();
+      push(`eth=${eth ? eth.slice(0, 6) : "null"}`);
       if (eth && hasCachedKey(eth)) {
-        const mmKey = await loadCachedKey(eth);
-        if (mmKey && alive) {
-          await connectFromRawKey(mmKey);
-          setMmEthAddress(eth);
-          return;
+        try {
+          const mmKey = await loadCachedKey(eth);
+          push(`mkey=${mmKey ? "ok" : "null"}`);
+          if (mmKey && alive) {
+            await connectFromRawKey(mmKey);
+            setMmEthAddress(eth);
+            push("conn=ok");
+            return;
+          }
+        } catch (e) {
+          push(`err2=${e instanceof Error ? e.message : String(e)}`);
         }
       }
-    })().catch(() => {});
+      push("done=noop");
+    })().catch((e) => push(`fatal=${e instanceof Error ? e.message : String(e)}`));
     return () => {
       alive = false;
     };
@@ -318,8 +339,10 @@ export function WalletConnect() {
       const derived = await deriveBlsFromEthSignature(sig);
       await connectFromRawKey(derived.privateKeyHex);
       await cacheDerivedKey(ethAddress, derived.privateKeyHex);
-      const arbAddr = useWalletStore.getState().address;
-      if (arbAddr) await cachePrivateKey(arbAddr, derived.privateKeyHex);
+      // Use derived.address (synchronous) instead of the store's address:
+      // if connectFromRawKey hasn't committed it to the store yet, the old
+      // code silently skipped the write and refresh had nothing to restore.
+      await cachePrivateKey(derived.address, derived.privateKeyHex);
       rememberMmOrigin(ethAddress, derived.address);
       setMmEthAddress(ethAddress);
       await maybeSaveKeystore();
@@ -423,6 +446,9 @@ export function WalletConnect() {
   if (showUnlock && hasStoredKeystore) {
     return (
       <div className="space-y-3 rounded-xl glass backdrop-blur p-4">
+      {reconnectDebug && (
+        <p className="text-[10px] text-zinc-600">reconnect: {reconnectDebug}</p>
+      )}
       {isAuthority && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2">
           <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">Admin</span>
