@@ -13,6 +13,7 @@ import {
   loadCachedKey,
   hasCachedKey,
   getEthereumProvider,
+  waitForEthereumProvider,
   rememberMmOrigin,
   getMmOriginForAddress,
 } from "@/lib/wallet/metamask";
@@ -136,39 +137,52 @@ export function WalletConnect() {
   // admin-connected key that has nothing to do with MetaMask, so this only
   // acts when the *current* session was actually derived from MetaMask.
   useEffect(() => {
-    const eth = getEthereumProvider();
-    if (!eth?.on) return;
+    let cancelled = false;
+    let attachedEth: ReturnType<typeof getEthereumProvider> = null;
+    let handleAccountsChanged: ((accounts: unknown) => void) | null = null;
 
-    const handleAccountsChanged = async (accounts: unknown) => {
-      if (!mmEthAddress) return; // active session isn't MetaMask-derived
-      const accs = accounts as string[];
-      if (!accs.length) {
-        setMmEthAddress(null);
-        disconnect();
-        return;
-      }
-      const newAddr = accs[0].toLowerCase();
-      if (newAddr === mmEthAddress) return;
+    (async () => {
+      const eth = await waitForEthereumProvider();
+      if (cancelled || !eth?.on) return;
 
-      setError(null);
-      setBusy(true);
-      try {
-        const sig = await signDeriveMessage(newAddr);
-        const derived = await deriveBlsFromEthSignature(sig);
-        await connectFromRawKey(derived.privateKeyHex);
-        await cacheDerivedKey(newAddr, derived.privateKeyHex);
-        setMmEthAddress(newAddr);
-      } catch (err) {
-        setError(errMessage(err));
-        setMmEthAddress(null);
-        disconnect();
-      } finally {
-        setBusy(false);
+      handleAccountsChanged = async (accounts: unknown) => {
+        if (!mmEthAddress) return; // active session isn't MetaMask-derived
+        const accs = accounts as string[];
+        if (!accs.length) {
+          setMmEthAddress(null);
+          disconnect();
+          return;
+        }
+        const newAddr = accs[0].toLowerCase();
+        if (newAddr === mmEthAddress) return;
+
+        setError(null);
+        setBusy(true);
+        try {
+          const sig = await signDeriveMessage(newAddr);
+          const derived = await deriveBlsFromEthSignature(sig);
+          await connectFromRawKey(derived.privateKeyHex);
+          await cacheDerivedKey(newAddr, derived.privateKeyHex);
+          setMmEthAddress(newAddr);
+        } catch (err) {
+          setError(errMessage(err));
+          setMmEthAddress(null);
+          disconnect();
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      eth.on("accountsChanged", handleAccountsChanged);
+      attachedEth = eth;
+    })();
+
+    return () => {
+      cancelled = true;
+      if (attachedEth?.removeListener && handleAccountsChanged) {
+        attachedEth.removeListener("accountsChanged", handleAccountsChanged);
       }
     };
-
-    eth.on("accountsChanged", handleAccountsChanged);
-    return () => eth.removeListener?.("accountsChanged", handleAccountsChanged);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mmEthAddress]);
 

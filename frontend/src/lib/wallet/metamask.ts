@@ -129,7 +129,7 @@ export function clearCachedKey(ethAddress: string): void {
 
 // Minimal ambient typing for the one API surface used here -- kept local
 // rather than pulling in a full EIP-1193 provider type dependency.
-interface Eip1193Provider {
+export interface Eip1193Provider {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
   on?(event: string, handler: (...args: unknown[]) => void) : void;
   removeListener?(event: string, handler: (...args: unknown[]) => void): void;
@@ -139,6 +139,35 @@ export function getEthereumProvider(): Eip1193Provider | null {
   if (typeof window === "undefined") return null;
   const eth = (window as unknown as { ethereum?: Eip1193Provider }).ethereum;
   return eth ?? null;
+}
+
+// Mobile browser-extension bridges (e.g. Kiwi Browser + MetaMask) can
+// inject window.ethereum slightly *after* page hydration rather than
+// before it -- unlike desktop Chrome, where it's reliably present by the
+// time app code runs. A synchronous check on mount races that injection
+// and silently loses: no provider yet -> reconnect gives up for good,
+// even though the provider shows up half a second later. This waits for
+// either an already-present provider or the standard EIP-1193
+// "ethereum#initialized" announcement event, bounded by a timeout so a
+// page with no wallet at all doesn't hang.
+export function waitForEthereumProvider(timeoutMs = 3000): Promise<Eip1193Provider | null> {
+  return new Promise((resolve) => {
+    const existing = getEthereumProvider();
+    if (existing || typeof window === "undefined") {
+      resolve(existing);
+      return;
+    }
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("ethereum#initialized", finish);
+      clearTimeout(timer);
+      resolve(getEthereumProvider());
+    };
+    window.addEventListener("ethereum#initialized", finish);
+    const timer = setTimeout(finish, timeoutMs);
+  });
 }
 
 export async function requestEthAccount(): Promise<string> {
@@ -163,7 +192,7 @@ export async function signDeriveMessage(ethAddress: string): Promise<string> {
 // re-derive without a popup. Returns null (not a rejection) if MetaMask
 // exists but no account is already connected -- eth_accounts never prompts.
 export async function getAlreadyConnectedEthAccount(): Promise<string | null> {
-  const eth = getEthereumProvider();
+  const eth = await waitForEthereumProvider();
   if (!eth) return null;
   try {
     const accounts = (await eth.request({ method: "eth_accounts" })) as string[];
