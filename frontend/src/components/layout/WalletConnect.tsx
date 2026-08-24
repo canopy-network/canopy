@@ -132,7 +132,16 @@ export function WalletConnect() {
       if (!mmKey || !alive) return;
       await connectFromRawKey(mmKey);
       setMmEthAddress(eth);
-    })().catch(() => {});
+    })().catch((err) => {
+      // Temporary diagnostics: only fires on the returning-MetaMask-user
+      // path (gated above), so this won't alarm first-time visitors. This
+      // surfaces the actual RPC failure instead of the previous silent
+      // swallow, which made a real ongoing bug indistinguishable from
+      // "not connected."
+      if (lastConnectedEthAddress()) {
+        setError("[reconnect] " + errMessage(err));
+      }
+    });
     return () => {
       alive = false;
     };

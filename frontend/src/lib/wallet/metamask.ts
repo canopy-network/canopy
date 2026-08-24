@@ -195,17 +195,16 @@ export async function signDeriveMessage(ethAddress: string): Promise<string> {
 // already-authorized origin -- while eth_requestAccounts (the same call
 // the Connect button uses) resolved correctly. eth_requestAccounts only
 // shows a popup when permission genuinely isn't granted yet; for an
-// already-authorized origin it resolves immediately with no UI, so this
-// stays silent in the case that matters (the reconnect path) while
-// degrading gracefully (a real prompt) if origin authorization was
-// actually revoked -- never a hang, never a false "not connected".
+// already-authorized origin it resolves immediately with no UI.
+//
+// Errors are intentionally NOT swallowed here -- the caller decides how
+// to handle them. A prior version caught everything into a silent null,
+// which made a real, ongoing failure indistinguishable from "no wallet
+// installed." Callers on the reconnect path surface the message so we
+// can see what's actually failing instead of guessing.
 export async function getAlreadyConnectedEthAccount(): Promise<string | null> {
   const eth = await waitForEthereumProvider();
   if (!eth) return null;
-  try {
-    const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
-    return accounts && accounts.length ? accounts[0].toLowerCase() : null;
-  } catch {
-    return null;
-  }
+  const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+  return accounts && accounts.length ? accounts[0].toLowerCase() : null;
 }
