@@ -188,14 +188,22 @@ export async function signDeriveMessage(ethAddress: string): Promise<string> {
   return sig;
 }
 
-// Silent check for an already-connected account, used on page load to
-// re-derive without a popup. Returns null (not a rejection) if MetaMask
-// exists but no account is already connected -- eth_accounts never prompts.
+// "Silent" check for an already-connected account, used on page load to
+// re-derive without friction. This deliberately calls eth_requestAccounts,
+// not eth_accounts: eth_accounts is spec'd to never prompt, but on this
+// browser/extension bridge it was observed returning empty even for an
+// already-authorized origin -- while eth_requestAccounts (the same call
+// the Connect button uses) resolved correctly. eth_requestAccounts only
+// shows a popup when permission genuinely isn't granted yet; for an
+// already-authorized origin it resolves immediately with no UI, so this
+// stays silent in the case that matters (the reconnect path) while
+// degrading gracefully (a real prompt) if origin authorization was
+// actually revoked -- never a hang, never a false "not connected".
 export async function getAlreadyConnectedEthAccount(): Promise<string | null> {
   const eth = await waitForEthereumProvider();
   if (!eth) return null;
   try {
-    const accounts = (await eth.request({ method: "eth_accounts" })) as string[];
+    const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
     return accounts && accounts.length ? accounts[0].toLowerCase() : null;
   } catch {
     return null;

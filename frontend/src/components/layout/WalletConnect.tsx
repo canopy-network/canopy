@@ -16,6 +16,7 @@ import {
   waitForEthereumProvider,
   rememberMmOrigin,
   getMmOriginForAddress,
+  lastConnectedEthAddress,
 } from "@/lib/wallet/metamask";
 import {
   cachePrivateKey,
@@ -117,7 +118,14 @@ export function WalletConnect() {
           }
         }
       }
-      // 2) MetaMask silent (already connected + cached derived key)
+      // 2) MetaMask silent (already connected + cached derived key). Only
+      // probe MetaMask at all if this browser has connected via it before
+      // -- getAlreadyConnectedEthAccount now uses eth_requestAccounts
+      // under the hood (see its comment for why), which can show a
+      // permission popup for an origin that was never authorized. Gating
+      // on a local cache hit means a first-time visitor never sees that
+      // popup unprompted; only returning MetaMask users hit this branch.
+      if (!lastConnectedEthAddress()) return;
       const eth = await getAlreadyConnectedEthAccount();
       if (!eth || !hasCachedKey(eth)) return;
       const mmKey = await loadCachedKey(eth);
