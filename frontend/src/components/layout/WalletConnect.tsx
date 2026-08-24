@@ -126,6 +126,13 @@ export function WalletConnect() {
       // on a local cache hit means a first-time visitor never sees that
       // popup unprompted; only returning MetaMask users hit this branch.
       if (!lastConnectedEthAddress()) return;
+      // Mobile extension providers (Quetta/Rabby) inject window.ethereum
+      // asynchronously after page load -- poll up to ~6s so a refresh
+      // doesn't race the injection and silently give up.
+      for (let i = 0; i < 24; i++) {
+        if (typeof window !== "undefined" && (window as { ethereum?: unknown }).ethereum) break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
       const eth = await getAlreadyConnectedEthAccount();
       if (!eth || !hasCachedKey(eth)) return;
       const mmKey = await loadCachedKey(eth);
