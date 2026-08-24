@@ -24,10 +24,17 @@ export function useValidatorSet(committeeId: number, enabled: boolean = true) {
         enabled: enabled && committeeId !== undefined,
         staleTime: 30_000,
         queryFn: async (): Promise<ValidatorSetResponse> => {
-            return dsFetch<ValidatorSetResponse>('validatorSet', {
-                height: 0,
-                committeeId: committeeId
-            });
+            try {
+                return await dsFetch<ValidatorSetResponse>('validatorSet', {
+                    height: 0,
+                    committeeId: committeeId
+                });
+            } catch (error) {
+                if ((error as { code?: number }).code === 29) {
+                    return { validatorSet: [] };
+                }
+                throw error;
+            }
         }
     });
 }

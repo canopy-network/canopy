@@ -167,8 +167,14 @@ export async function fetchDsOnce<T=any>(chain: ChainLike, key: string, ctx?: Re
     const { url, init } = buildRequest(chain, leaf, ctx)
     if (!url) throw new Error(`Invalid DS url for key ${key}`)
     const res = await fetch(url, init)
-    if (!res.ok) throw new Error(`RPC ${res.status}`)
     const parsed = await parseResponse(res, leaf)
+    if (!res.ok) {
+        const error = new Error(`RPC ${res.status}`) as Error & { code?: number; status?: number; details?: any }
+        error.status = res.status
+        error.code = parsed?.code
+        error.details = parsed
+        throw error
+    }
     return parsed as T
 }
 
