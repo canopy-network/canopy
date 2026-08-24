@@ -17,6 +17,8 @@ import {
   rememberMmOrigin,
   getMmOriginForAddress,
   lastConnectedEthAddress,
+  clearCachedKey,
+  fullWalletDisconnect,
 } from "@/lib/wallet/metamask";
 import {
   cachePrivateKey,
@@ -150,13 +152,35 @@ export function WalletConnect() {
       push(`eth=${eth ? eth.slice(0, 6) : "null"}`);
       if (eth && hasCachedKey(eth)) {
         try {
-          const mmKey = await loadCachedKey(eth);
-          push(`mkey=${mmKey ? "ok" : "null"}`);
-          if (mmKey && alive) {
-            await connectFromRawKey(mmKey);
-            setMmEthAddress(eth);
-            push("conn=ok");
-            return;
+          // Verify the cached eth address is still the wallet's live active
+          // account before restoring it. Without this, a refresh after
+          // switching accounts in Rabby silently restored the OLD derived
+          // key -- the cache was stale but nothing ever re-validated it.
+          let liveMatches = true;
+          try {
+            const provider = await waitForEthereumProvider(1500);
+            if (provider) {
+              const live = (await provider.request({ method: "eth_accounts" })) as string[];
+              if (live && live.length) {
+                liveMatches = live[0].toLowerCase() === eth;
+              }
+            }
+          } catch {
+            // Provider probe failed -- don't block restore on this, the
+            // drift-check effect will catch a mismatch shortly after.
+          }
+          if (!liveMatches) {
+            push("skip=live-mismatch");
+            clearCachedKey(eth);
+          } else {
+            const mmKey = await loadCachedKey(eth);
+            push(`mkey=${mmKey ? "ok" : "null"}`);
+            if (mmKey && alive) {
+              await connectFromRawKey(mmKey);
+              setMmEthAddress(eth);
+              push("conn=ok");
+              return;
+            }
           }
         } catch (e) {
           push(`err2=${e instanceof Error ? e.message : String(e)}`);
@@ -258,6 +282,18 @@ export function WalletConnect() {
   // One-tap reconnect when drift is detected: re-derive for whatever
   // account the wallet now holds, or drop the session if the wallet
   // disconnected entirely.
+  async function handleFullDisconnect() {
+    // Shared with the header's own Disconnect button (fullWalletDisconnect
+    // in metamask.ts) so there's one source of truth for cache purge +
+    // permission revoke -- previously this logic was duplicated only here,
+    // and the header's separate Disconnect button skipped it entirely.
+    await fullWalletDisconnect(address);
+    setDismissedUnlock(false);
+    setMmEthAddress(null);
+    setWalletDrift(null);
+    disconnect();
+  }
+
   async function handleDriftReconnect() {
     setError(null);
     setBusy(true);
@@ -528,7 +564,7 @@ export function WalletConnect() {
               </button>
               <button
                 type="button"
-                onClick={() => { setWalletDrift(null); setMmEthAddress(null); disconnect(); }}
+                onClick={handleFullDisconnect}
                 className="rounded-lg border border-white/10 px-3 py-1 text-xs text-zinc-400 hover:text-zinc-200"
               >
                 Dismiss
@@ -554,7 +590,7 @@ export function WalletConnect() {
               🔒
             </span>
           )}
-          <button type="button" onClick={() => { setDismissedUnlock(false); setMmEthAddress(null); setWalletDrift(null); disconnect(); }} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200">
+          <button type="button" onClick={handleFullDisconnect} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200">
             Disconnect
           </button>
         </div>

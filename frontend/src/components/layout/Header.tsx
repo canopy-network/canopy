@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useWalletStore } from "@/lib/wallet";
 import { isAuthorityAddress } from "@/lib/wallet/store";
 import { WalletConnect } from "./WalletConnect";
+import { fullWalletDisconnect } from "@/lib/wallet/metamask";
 import { AssetIcon } from "@/components/AssetIcon";
 import { useRoles, type Roles } from "@/lib/hooks/useRoles";
 
@@ -191,7 +192,11 @@ function WalletChip() {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
+                  // Must purge the MetaMask-derived cache/origin binding and
+                  // revoke the wallet permission grant, or the next silent-
+                  // reconnect on mount pulls the old session right back in.
+                  await fullWalletDisconnect(wallet.address);
                   wallet.disconnect();
                   setOpen(false);
                 }}
@@ -217,19 +222,25 @@ function WalletChip() {
       </button>
 
       {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Close connect panel"
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-40 cursor-default"
-          />
-
-          <div className="absolute right-0 top-full z-50 mt-2 w-[min(92vw,22rem)] rounded-2xl border border-white/10 arbor-popover p-4 shadow-2xl shadow-black/50 backdrop-blur-xl">
-            <WalletConnect />
-          </div>
-        </>
+        <button
+          type="button"
+          aria-label="Close connect panel"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-40 cursor-default"
+        />
       )}
+      {/* Always mounted, not just when open, so WalletConnect's silent-
+          reconnect effect runs on page load. This was previously gated
+          behind {open && (...)}, so refreshing the page never triggered
+          the restore -- it only fired the instant the user tapped
+          Connect, which looked like "connect on tap" instead of
+          "stay connected across refresh". Visually hidden via the
+          `hidden` class when closed; still fully mounted underneath. */}
+      <div
+        className={`absolute right-0 top-full z-50 mt-2 w-[min(92vw,22rem)] rounded-2xl border border-white/10 arbor-popover p-4 shadow-2xl shadow-black/50 backdrop-blur-xl ${open ? "" : "hidden"}`}
+      >
+        <WalletConnect />
+      </div>
     </div>
   );
 }

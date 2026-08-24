@@ -110,6 +110,43 @@ export function getMmOriginForAddress(arborAddress: string): string | null {
   return localStorage.getItem(CACHE_PREFIX + "origin_" + arborAddress.toLowerCase());
 }
 
+// Removes the eth->arbor origin binding created by rememberMmOrigin(). Must
+// be called on disconnect, or a later silent-reconnect can still re-arm
+// drift detection / restore state against the disconnected session.
+export function clearMmOrigin(arborAddress: string): void {
+  localStorage.removeItem(CACHE_PREFIX + "origin_" + arborAddress.toLowerCase());
+}
+
+// Single source of truth for "fully disconnect the MetaMask-derived
+// session", shared by every UI entry point that can disconnect a wallet
+// (the header's chip menu AND the WalletConnect panel). Previously each
+// place cleared state independently and the header's own Disconnect
+// button never purged the MetaMask-derived cache or origin binding at
+// all -- so disconnecting from the header looked like it "reconnected by
+// itself" on the very next mount, even though the WalletConnect panel's
+// own Disconnect button was already fixed.
+export async function fullWalletDisconnect(arborAddress: string | null): Promise<void> {
+  try {
+    const eth = getEthereumProvider();
+    if (eth) {
+      await eth.request({
+        method: "wallet_revokePermissions",
+        params: [{ eth_accounts: {} }],
+      });
+    }
+  } catch {
+    // Not supported by this wallet, or user dismissed it -- cache purge
+    // below still runs regardless.
+  }
+  if (arborAddress) {
+    const origin = getMmOriginForAddress(arborAddress);
+    if (origin) {
+      clearCachedKey(origin);
+    }
+    clearMmOrigin(arborAddress);
+  }
+}
+
 export async function loadCachedKey(ethAddress: string): Promise<string | null> {
   const blob = localStorage.getItem(CACHE_PREFIX + ethAddress.toLowerCase());
   if (!blob) return null;
@@ -173,6 +210,22 @@ export function waitForEthereumProvider(timeoutMs = 3000): Promise<Eip1193Provid
 export async function requestEthAccount(): Promise<string> {
   const eth = getEthereumProvider();
   if (!eth) throw new Error("MetaMask not found — install the extension");
+  // Force the account picker instead of silently returning whatever account
+  // was authorized previously. eth_requestAccounts alone will NOT prompt
+  // again once an origin is authorized -- it just returns the wallet's
+  // current active account, which is exactly why "Connect" looked like it
+  // was reconnecting to the old address by itself after switching in Rabby.
+  // wallet_requestPermissions is supported by MetaMask/Rabby and forces a
+  // fresh chooser; fall back silently if the wallet doesn't support it.
+  try {
+    await eth.request({
+      method: "wallet_requestPermissions",
+      params: [{ eth_accounts: {} }],
+    });
+  } catch {
+    // Unsupported or user dismissed the permissions prompt -- fall through
+    // to eth_requestAccounts, which still returns a valid account.
+  }
   const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
   if (!accounts || !accounts.length) throw new Error("No accounts returned by MetaMask");
   return accounts[0].toLowerCase();
