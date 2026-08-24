@@ -61,6 +61,10 @@ export function WalletConnect() {
   const isAuthority = isAuthorityAddress(address);
   const wasConnected = useRef(false);
   const [reconnectDebug, setReconnectDebug] = useState<string | null>(null);
+  // Wallet drift: when the bound MetaMask account changes or disconnects
+  // mid-session. Set by the sync effect below; renders a banner with a
+  // one-tap reconnect.
+  const [walletDrift, setWalletDrift] = useState<"changed" | "disconnected" | null>(null);
   const [advancedMode, setAdvancedMode] = useState(() => {
     if (isAuthority) return true;
     if (typeof window === 'undefined') return false;
@@ -156,60 +160,121 @@ export function WalletConnect() {
     };
   }, [isConnected]);
 
-  // React to MetaMask account switches. Praxis's vanilla-JS version wires
-  // this at module scope with no cleanup and no session check -- fine for
-  // a single global page, wrong here: Arbor's tab can hold a paste/import/
-  // admin-connected key that has nothing to do with MetaMask, so this only
-  // acts when the *current* session was actually derived from MetaMask.
+  // Wallet sync: react to MetaMask account switches and disconnects.
+  // Uses eth_accounts (never prompts) instead of eth_requestAccounts, and
+  // polls every 15s + on focus/visibilitychange as a fallback for mobile
+  // bridges (Quetta/Rabby) that often never push accountsChanged.
+  // Only active when the session is MetaMask-derived (mmEthAddress set).
   useEffect(() => {
+    if (!mmEthAddress || !isConnected) {
+      setWalletDrift(null);
+      return;
+    }
     let cancelled = false;
     let attachedEth: ReturnType<typeof getEthereumProvider> = null;
-    let handleAccountsChanged: ((accounts: unknown) => void) | null = null;
+    let listener: ((accounts: unknown) => void) | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+    // Uses eth_accounts -- spec'd to never prompt, so we can poll safely.
+    const check = async () => {
+      if (cancelled) return;
+      try {
+        const eth = await waitForEthereumProvider(1500);
+        if (cancelled || !eth) return;
+        const accounts = (await eth.request({ method: "eth_accounts" })) as string[];
+        if (cancelled) return;
+        if (!accounts || !accounts.length) {
+          // Wallet locked or disconnected entirely
+          setWalletDrift("disconnected");
+          return;
+        }
+        const current = accounts[0].toLowerCase();
+        if (current === mmEthAddress) {
+          // All good -- clear any prior drift banner
+          setWalletDrift(null);
+          return;
+        }
+        // Different account active in the wallet
+        setWalletDrift("changed");
+      } catch {
+        // Provider errors are non-fatal; next poll will retry
+      }
+    };
 
     (async () => {
       const eth = await waitForEthereumProvider();
-      if (cancelled || !eth?.on) return;
+      if (cancelled || !eth) return;
 
-      handleAccountsChanged = async (accounts: unknown) => {
-        if (!mmEthAddress) return; // active session isn't MetaMask-derived
-        const accs = accounts as string[];
-        if (!accs.length) {
-          setMmEthAddress(null);
-          disconnect();
-          return;
-        }
-        const newAddr = accs[0].toLowerCase();
-        if (newAddr === mmEthAddress) return;
+      // Event-driven: attach accountsChanged when available
+      if (eth.on) {
+        listener = () => { void check(); };
+        eth.on("accountsChanged", listener);
+        attachedEth = eth;
+      }
 
-        setError(null);
-        setBusy(true);
-        try {
-          const sig = await signDeriveMessage(newAddr);
-          const derived = await deriveBlsFromEthSignature(sig);
-          await connectFromRawKey(derived.privateKeyHex);
-          await cacheDerivedKey(newAddr, derived.privateKeyHex);
-          setMmEthAddress(newAddr);
-        } catch (err) {
-          setError(errMessage(err));
-          setMmEthAddress(null);
-          disconnect();
-        } finally {
-          setBusy(false);
+      // Poll fallback: every 15s, plus on focus/visibility for mobile
+      // bridges that don't push events reliably.
+      pollTimer = setInterval(check, 15_000);
+      const onFocus = () => { void check(); };
+      const onVis = () => {
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+          void check();
         }
       };
+      if (typeof window !== "undefined") {
+        window.addEventListener("focus", onFocus);
+      }
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", onVis);
+      }
 
-      eth.on("accountsChanged", handleAccountsChanged);
-      attachedEth = eth;
+      // Initial check on attach
+      void check();
+
+      return () => {
+        if (typeof window !== "undefined") window.removeEventListener("focus", onFocus);
+        if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVis);
+      };
     })();
 
     return () => {
       cancelled = true;
-      if (attachedEth?.removeListener && handleAccountsChanged) {
-        attachedEth.removeListener("accountsChanged", handleAccountsChanged);
+      if (pollTimer) clearInterval(pollTimer);
+      if (attachedEth?.removeListener && listener) {
+        attachedEth.removeListener("accountsChanged", listener);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mmEthAddress]);
+  }, [mmEthAddress, isConnected]);
+
+  // One-tap reconnect when drift is detected: re-derive for whatever
+  // account the wallet now holds, or drop the session if the wallet
+  // disconnected entirely.
+  async function handleDriftReconnect() {
+    setError(null);
+    setBusy(true);
+    try {
+      const eth = await waitForEthereumProvider();
+      if (!eth) throw new Error("Wallet provider no longer available");
+      const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+      if (!accounts.length) throw new Error("No accounts available");
+      const newAddr = accounts[0].toLowerCase();
+      const sig = await signDeriveMessage(newAddr);
+      const derived = await deriveBlsFromEthSignature(sig);
+      await connectFromRawKey(derived.privateKeyHex);
+      await cacheDerivedKey(newAddr, derived.privateKeyHex);
+      await cachePrivateKey(derived.address, derived.privateKeyHex);
+      rememberMmOrigin(newAddr, derived.address);
+      setMmEthAddress(newAddr);
+      setWalletDrift(null);
+    } catch (err) {
+      setError(errMessage(err));
+      setMmEthAddress(null);
+      setWalletDrift(null);
+      disconnect();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   // Generate tab
   const [genPassword, setGenPassword] = useState("");
@@ -432,19 +497,58 @@ export function WalletConnect() {
 
   if (isConnected) {
     return (
-      <div className="flex items-center gap-3 rounded-xl glass backdrop-blur px-4 py-2">
-        <span className="text-xs text-zinc-400">Wallet</span>
-        <span className="font-mono text-xs text-zinc-200">
-          {formatAddress(address || "")}
-        </span>
-        {hasStoredKeystore && (
-          <span className="text-xs text-emerald-400" title="Saved to encrypted keystore">
-            🔒
-          </span>
+      <div className="space-y-2">
+        {walletDrift && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-300">⚠</span>
+              <span className="text-xs text-amber-200">
+                {walletDrift === "disconnected"
+                  ? "Wallet locked or disconnected"
+                  : "Wallet account changed"}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleDriftReconnect}
+                disabled={busy}
+                className="rounded-lg bg-amber-500/20 px-3 py-1 text-xs font-medium text-amber-200 hover:bg-amber-500/30 disabled:opacity-50"
+              >
+                {busy ? "Reconnecting..." : "Reconnect"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setWalletDrift(null); setMmEthAddress(null); disconnect(); }}
+                className="rounded-lg border border-white/10 px-3 py-1 text-xs text-zinc-400 hover:text-zinc-200"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
         )}
-        <button type="button" onClick={() => { setDismissedUnlock(false); setMmEthAddress(null); disconnect(); }} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200">
-          Disconnect
-        </button>
+        <div className="flex items-center gap-3 rounded-xl glass backdrop-blur px-4 py-2">
+          <span className="text-xs text-zinc-400">Wallet</span>
+          <span className="font-mono text-xs text-zinc-200">
+            {formatAddress(address || "")}
+          </span>
+          {mmEthAddress && (
+            <span
+              className="rounded-full bg-indigo-500/15 px-2 py-0.5 font-mono text-[10px] text-indigo-300"
+              title={`Bound to MetaMask account ${mmEthAddress}`}
+            >
+              via {mmEthAddress.slice(0, 6)}…{mmEthAddress.slice(-4)}
+            </span>
+          )}
+          {hasStoredKeystore && (
+            <span className="text-xs text-emerald-400" title="Saved to encrypted keystore">
+              🔒
+            </span>
+          )}
+          <button type="button" onClick={() => { setDismissedUnlock(false); setMmEthAddress(null); setWalletDrift(null); disconnect(); }} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200">
+            Disconnect
+          </button>
+        </div>
       </div>
     );
   }
