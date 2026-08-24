@@ -59,6 +59,7 @@ export function WalletConnect() {
   // import/admin) so accountsChanged only reacts to MetaMask sessions.
   const [mmEthAddress, setMmEthAddress] = useState<string | null>(null);
   const isAuthority = isAuthorityAddress(address);
+  const wasConnected = useRef(false);
   const [advancedMode, setAdvancedMode] = useState(() => {
     if (isAuthority) return true;
     if (typeof window === 'undefined') return false;
@@ -84,7 +85,13 @@ export function WalletConnect() {
   // Silent reconnect on load: device-cache first (any connect method),
   // then MetaMask silent (already connected + cached derived key).
   useEffect(() => {
-    if (isConnected) return;
+    if (isConnected) {
+      wasConnected.current = true;
+      return;
+    }
+    // Was connected earlier in this session and now disconnected: that was
+    // a manual disconnect -- never resurrect the session automatically.
+    if (wasConnected.current) return;
     let alive = true;
     (async () => {
       // 1) Device-cache first: restores the exact previous session for EVERY
@@ -100,22 +107,22 @@ export function WalletConnect() {
           return;
         }
       }
-      // 2) MetaMask silent fallback (returning MetaMask users with no
-      // device-cache entry). Mobile extension providers (Quetta/Rabby)
-      // inject window.ethereum asynchronously after page load -- poll up
-      // to ~6s so we don't race the injection.
-      for (let i = 0; i < 24; i++) {
-        if (!alive) return;
-        if (typeof window !== "undefined" && (window as { ethereum?: unknown }).ethereum) break;
-        await new Promise((r) => setTimeout(r, 250));
+      // 2) MetaMask-derived cache fallback (sessions cached before the
+      // device-cache existed): restore straight from the localStorage
+      // derived-key cache with ZERO provider probing -- on mobile the
+      // getAlreadyConnectedEthAccount() probe can popup or lock-fail,
+      // which is exactly why refresh reconnects kept dying. Fresh
+      // derivation (account switch, locked wallet) stays available via
+      // the manual connect tabs.
+      const eth = lastConnectedEthAddress();
+      if (eth && hasCachedKey(eth)) {
+        const mmKey = await loadCachedKey(eth);
+        if (mmKey && alive) {
+          await connectFromRawKey(mmKey);
+          setMmEthAddress(eth);
+          return;
+        }
       }
-      if (!lastConnectedEthAddress()) return;
-      const eth = await getAlreadyConnectedEthAccount();
-      if (!eth || !hasCachedKey(eth)) return;
-      const mmKey = await loadCachedKey(eth);
-      if (!mmKey || !alive) return;
-      await connectFromRawKey(mmKey);
-      setMmEthAddress(eth);
     })().catch(() => {});
     return () => {
       alive = false;
