@@ -87,72 +87,39 @@ export function WalletConnect() {
     if (isConnected) return;
     let alive = true;
     (async () => {
-      // 1) Device-cache (AES-GCM encrypted, works for all connect methods)
+      // 1) Device-cache first: restores the exact previous session for EVERY
+      // connect method with zero provider/wallet involvement, so a refresh
+      // reconnects even before (or without) the mobile extension injecting.
+      // The cached key is the user's own previously-connected key; if they
+      // want a different account they disconnect/reconnect manually.
       const lastAddr = lastConnectedAddress();
       if (lastAddr && hasCachedPrivateKey(lastAddr)) {
-        const origin = getMmOriginForAddress(lastAddr);
-        if (origin) {
-          // This cached session was derived from MetaMask. Don't trust it
-          // blindly -- MetaMask's active account may have changed since
-          // while this tab was closed, with no accountsChanged event to
-          // catch it. Verify before restoring.
-          const currentEth = await getAlreadyConnectedEthAccount();
-          if (currentEth === origin) {
-            const key = await loadCachedPrivateKey(lastAddr);
-            if (key && alive) {
-              await connectFromRawKey(key);
-              setMmEthAddress(origin);
-              return;
-            }
-          }
-          // Mismatch (or MetaMask now disconnected/locked): fall through
-          // to step 2, which derives fresh from whatever account MetaMask
-          // is actually on right now -- never silently, since that always
-          // requires a signature we don't have cached for a new account.
-        } else {
-          // Non-MetaMask session (paste/import/admin) -- restore as before.
-          const key = await loadCachedPrivateKey(lastAddr);
-          if (key && alive) {
-            await connectFromRawKey(key);
-            return;
-          }
+        const key = await loadCachedPrivateKey(lastAddr);
+        if (key && alive) {
+          await connectFromRawKey(key);
+          return;
         }
       }
-      // 2) MetaMask silent (already connected + cached derived key). Only
-      // probe MetaMask at all if this browser has connected via it before
-      // -- getAlreadyConnectedEthAccount now uses eth_requestAccounts
-      // under the hood (see its comment for why), which can show a
-      // permission popup for an origin that was never authorized. Gating
-      // on a local cache hit means a first-time visitor never sees that
-      // popup unprompted; only returning MetaMask users hit this branch.
-      if (!lastConnectedEthAddress()) return;
-      // Mobile extension providers (Quetta/Rabby) inject window.ethereum
-      // asynchronously after page load -- poll up to ~6s so a refresh
-      // doesn't race the injection and silently give up.
+      // 2) MetaMask silent fallback (returning MetaMask users with no
+      // device-cache entry). Mobile extension providers (Quetta/Rabby)
+      // inject window.ethereum asynchronously after page load -- poll up
+      // to ~6s so we don't race the injection.
       for (let i = 0; i < 24; i++) {
+        if (!alive) return;
         if (typeof window !== "undefined" && (window as { ethereum?: unknown }).ethereum) break;
         await new Promise((r) => setTimeout(r, 250));
       }
+      if (!lastConnectedEthAddress()) return;
       const eth = await getAlreadyConnectedEthAccount();
       if (!eth || !hasCachedKey(eth)) return;
       const mmKey = await loadCachedKey(eth);
       if (!mmKey || !alive) return;
       await connectFromRawKey(mmKey);
       setMmEthAddress(eth);
-    })().catch((err) => {
-      // Temporary diagnostics: only fires on the returning-MetaMask-user
-      // path (gated above), so this won't alarm first-time visitors. This
-      // surfaces the actual RPC failure instead of the previous silent
-      // swallow, which made a real ongoing bug indistinguishable from
-      // "not connected."
-      if (lastConnectedEthAddress()) {
-        setError("[reconnect] " + errMessage(err));
-      }
-    });
+    })().catch(() => {});
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 
   // React to MetaMask account switches. Praxis's vanilla-JS version wires
@@ -344,6 +311,8 @@ export function WalletConnect() {
       const derived = await deriveBlsFromEthSignature(sig);
       await connectFromRawKey(derived.privateKeyHex);
       await cacheDerivedKey(ethAddress, derived.privateKeyHex);
+      const arbAddr = useWalletStore.getState().address;
+      if (arbAddr) await cachePrivateKey(arbAddr, derived.privateKeyHex);
       rememberMmOrigin(ethAddress, derived.address);
       setMmEthAddress(ethAddress);
       await maybeSaveKeystore();
