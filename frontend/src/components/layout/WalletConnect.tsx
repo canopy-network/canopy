@@ -123,6 +123,15 @@ export function WalletConnect() {
           push(`key=${key ? "ok" : "null"}`);
           if (key && alive) {
             await connectFromRawKey(key);
+            // Re-arm mmEthAddress from the origin map so the wallet-sync
+            // effect (drift detection) attaches for MetaMask-origin sessions
+            // restored via device-cache. Without this, account switches
+            // after a refresh are invisible -- Praxis sets this on load.
+            const origin = getMmOriginForAddress(lastAddr);
+            if (origin) {
+              setMmEthAddress(origin);
+              push(`origin=${origin.slice(0, 6)}`);
+            }
             push("conn=ok");
             return;
           }
@@ -643,6 +652,9 @@ export function WalletConnect() {
 
   return (
     <div className="space-y-3 rounded-xl glass backdrop-blur p-4">
+      {reconnectDebug && (
+        <p className="text-[10px] text-zinc-600">reconnect: {reconnectDebug}</p>
+      )}
       <div className="flex gap-1 rounded-lg border border-white/5 bg-white/[0.02] p-1">
         {tabs.map((t) => (
           <button
