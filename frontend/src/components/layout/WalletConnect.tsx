@@ -100,6 +100,12 @@ export function WalletConnect() {
       setReconnectDebug(dbg.join(" "));
     };
     (async () => {
+      // Wait for BLS library readiness (same pattern Praxis uses).
+      // Without this, connectFromRawKey's getPublicKey() call can throw
+      // at mount time if the noble-curves lib hasn't finished initialization.
+      await new Promise((r) => setTimeout(r, 100));
+      push("bls=waited");
+      
       // 1) Device-cache first: restores the exact previous session for EVERY
       // connect method with zero provider/wallet involvement, so a refresh
       // reconnects even before (or without) the mobile extension injecting.
