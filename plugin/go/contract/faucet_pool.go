@@ -105,8 +105,8 @@ import (
 
 const (
 	defaultFaucetPoolClaimAmountUarb = 2_000_000 // 2 ARB, per your call — flat amount, not a range
-	defaultFaucetPoolCooldownBlocks  = dayBlocks // reuse quest_xp.go's existing 24h-equivalent constant
-	defaultFaucetPoolFeeUarb         = 10000     // matches submit_tx.go's fee convention
+	defaultFaucetPoolCooldownBlocks  = dayBlocks  // reuse quest_xp.go's existing 24h-equivalent constant
+	defaultFaucetPoolFeeUarb         = 10000      // matches submit_tx.go's fee convention
 )
 
 func faucetPoolAddress() string {
@@ -281,9 +281,9 @@ func faucetDecryptPrivateKeyLocal(epk *faucetEncryptedPrivateKey, password []byt
 }
 
 var (
-	faucetPoolKeyMu     sync.RWMutex
+	faucetPoolKeyMu   sync.RWMutex
 	faucetPoolLoadedKey *faucetPoolKey // nil until faucetPoolInit succeeds
-	faucetPoolInitErr   string         // human-readable reason claims are refused, if init failed/was skipped
+	faucetPoolInitErr   string          // human-readable reason claims are refused, if init failed/was skipped
 )
 
 // faucetPoolInit decrypts the pool key once, at process startup, exactly
@@ -340,7 +340,7 @@ var (
 
 type faucetPoolSnapshot struct {
 	LastClaimAddr map[string]int64 `json:"lastClaimAddr"`
-	SavedAt       int64            `json:"savedAt"`
+	SavedAt       int64             `json:"savedAt"`
 }
 
 func faucetPoolSaveState() {
@@ -702,6 +702,152 @@ func faucetPoolHandleClaim(w http.ResponseWriter, r *http.Request) {
 	faucetPoolSaveState()
 
 	faucetPoolWriteJSON(w, http.StatusOK, faucetPoolClaimResponse{Ok: true, TxHash: txHash, AmountUarb: claimAmount})
+}
+
+// ---- cooldown-ledger-only endpoints ----
+//
+// These exist for exactly one reason: on a deployment where this plugin's
+// own filesystem is read-only (confirmed on the current grad node — see
+// the design note at the top of this file), faucetPoolHandleClaim above
+// cannot function, because it needs a local keystore to sign from. But the
+// COOLDOWN TRACKING half of that logic has nothing to do with signing and
+// nothing to do with the keystore — it's just a map write to a JSON file,
+// which this process CAN still do (the keystore path is blocked, not the
+// state-file path; faucetPoolSaveState/LoadState already work today, as
+// proven by the local devnet test run).
+//
+// So the claim flow splits across two systems when the in-plugin signer
+// can't run: something else (a Vercel serverless function, holding the
+// pool key as an env var, since IT has a writable-enough environment for
+// that) does the actual signing and submission, but calls back here first
+// to atomically claim the cooldown slot, and again after if the send
+// failed, to release it. This process never sees the private key and
+// never signs anything in this flow -- it is purely a shared, persistent
+// "has this address claimed recently" ledger that something with signing
+// capability can consult.
+//
+// If a future deployment's filesystem stops being read-only,
+// faucetPoolHandleClaim (unchanged, still present above) becomes usable
+// again and this split is no longer necessary for that deployment -- both
+// paths can coexist indefinitely; nothing here assumes the other is absent.
+
+type faucetPoolReserveRequest struct {
+	Address string `json:"address"`
+}
+
+type faucetPoolReserveResponse struct {
+	Ok              bool   `json:"ok"`
+	Error           string `json:"error,omitempty"`
+	Height          int64  `json:"height,omitempty"`          // the height this reservation was recorded at -- caller should pass this back to /rollback if needed
+	BlocksRemaining uint64 `json:"blocksRemaining,omitempty"` // only set on cooldown refusal
+}
+
+// faucetPoolHandleCheckAndReserve atomically checks the cooldown and, if
+// clear, immediately records a claim -- BEFORE the caller has actually
+// sent anything. This ordering is deliberate: two concurrent requests for
+// the same address must not both pass the check, so the reservation has
+// to happen inside the same lock as the check, not as a separate later
+// step (which would reopen exactly the race this exists to prevent).
+// The cost of this ordering is that a request which reserves and then
+// fails to actually complete the send (e.g. the caller's own tx broadcast
+// errors) leaves the address looking like it claimed when it didn't --
+// that's what /rollback immediately below is for. A caller that reserves
+// and never calls either /claim-fulfilled implicitly (there isn't one --
+// success is simply not calling rollback) or /rollback has left the
+// address in a claimed state until the cooldown naturally expires; this
+// is an accepted tradeoff for simplicity over building a lease/expiry
+// mechanism for a low-volume faucet.
+func faucetPoolHandleCheckAndReserve(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		faucetPoolWriteJSON(w, http.StatusMethodNotAllowed, faucetPoolReserveResponse{Ok: false, Error: "POST only"})
+		return
+	}
+	var req faucetPoolReserveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		faucetPoolWriteJSON(w, http.StatusBadRequest, faucetPoolReserveResponse{Ok: false, Error: "invalid JSON body"})
+		return
+	}
+	claimAddr := strings.ToLower(strings.TrimPrefix(req.Address, "0x"))
+	if !faucetPoolValidAddress(claimAddr) {
+		faucetPoolWriteJSON(w, http.StatusBadRequest, faucetPoolReserveResponse{Ok: false, Error: "address is not a well-formed 20-byte hex address"})
+		return
+	}
+
+	height, err := fetchCurrentHeight()
+	if err != nil {
+		faucetPoolWriteJSON(w, http.StatusBadGateway, faucetPoolReserveResponse{Ok: false, Error: "could not reach core RPC for height"})
+		return
+	}
+
+	cooldownBlocks := faucetPoolCooldownBlocks()
+
+	faucetClaimMu.Lock()
+	lastClaim, hasClaimed := faucetLastClaimAddr[claimAddr]
+	if hasClaimed {
+		var blocksSince int64
+		if height > lastClaim {
+			blocksSince = height - lastClaim
+		}
+		if blocksSince < cooldownBlocks {
+			faucetClaimMu.Unlock()
+			faucetPoolWriteJSON(w, http.StatusTooManyRequests, faucetPoolReserveResponse{
+				Ok:              false,
+				Error:           "cooldown active — one claim per address per 24h",
+				BlocksRemaining: uint64(cooldownBlocks - blocksSince),
+			})
+			return
+		}
+	}
+	// Reserved: record the claim NOW, inside the lock, before releasing it
+	// or telling the caller they're clear -- this is what makes the
+	// check+reserve atomic against a second concurrent request.
+	faucetLastClaimAddr[claimAddr] = height
+	faucetClaimMu.Unlock()
+	faucetPoolSaveState()
+
+	faucetPoolWriteJSON(w, http.StatusOK, faucetPoolReserveResponse{Ok: true, Height: height})
+}
+
+// faucetPoolHandleRollback releases a reservation made by
+// /check-and-reserve, for exactly the case where the caller's own signing
+// or broadcast failed after reserving. It only rolls back a reservation
+// that matches the EXACT height the caller was given back from
+// /check-and-reserve -- if the recorded height has moved on since (e.g.
+// another successful claim+reservation happened for this address in the
+// meantime, which shouldn't be possible within one cooldown window but is
+// checked anyway), this refuses rather than clobbering a newer, valid
+// reservation with a stale rollback request.
+func faucetPoolHandleRollback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		faucetPoolWriteJSON(w, http.StatusMethodNotAllowed, faucetPoolReserveResponse{Ok: false, Error: "POST only"})
+		return
+	}
+	var req struct {
+		Address string `json:"address"`
+		Height  int64  `json:"height"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		faucetPoolWriteJSON(w, http.StatusBadRequest, faucetPoolReserveResponse{Ok: false, Error: "invalid JSON body"})
+		return
+	}
+	claimAddr := strings.ToLower(strings.TrimPrefix(req.Address, "0x"))
+	if !faucetPoolValidAddress(claimAddr) {
+		faucetPoolWriteJSON(w, http.StatusBadRequest, faucetPoolReserveResponse{Ok: false, Error: "address is not a well-formed 20-byte hex address"})
+		return
+	}
+
+	faucetClaimMu.Lock()
+	current, exists := faucetLastClaimAddr[claimAddr]
+	if !exists || current != req.Height {
+		faucetClaimMu.Unlock()
+		faucetPoolWriteJSON(w, http.StatusConflict, faucetPoolReserveResponse{Ok: false, Error: "no matching reservation at that height — already rolled back, already superseded, or never reserved"})
+		return
+	}
+	delete(faucetLastClaimAddr, claimAddr)
+	faucetClaimMu.Unlock()
+	faucetPoolSaveState()
+
+	faucetPoolWriteJSON(w, http.StatusOK, faucetPoolReserveResponse{Ok: true})
 }
 
 func faucetPoolWriteJSON(w http.ResponseWriter, status int, body interface{}) {

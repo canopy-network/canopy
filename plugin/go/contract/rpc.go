@@ -64,6 +64,8 @@ func (p *Plugin) StartRPCServer() {
 	mux.HandleFunc("/v1/query/questxp/leaderboard", questXPCORSMiddleware(questXPHandleLeaderboard))
 	mux.HandleFunc("/v1/admin/questxp/records", questXPHandleAdminListRecords)
 	mux.HandleFunc("/v1/faucetpool/claim", faucetPoolCORSMiddleware(faucetPoolHandleClaim))
+	mux.HandleFunc("/v1/faucetpool/check-and-reserve", faucetPoolCORSMiddleware(faucetPoolHandleCheckAndReserve))
+	mux.HandleFunc("/v1/faucetpool/rollback", faucetPoolCORSMiddleware(faucetPoolHandleRollback))
 	mux.HandleFunc("/v1/admin/questxp/records/delete", questXPHandleAdminDeleteRecord)
 	mux.HandleFunc("/v1/link", questXPCORSMiddleware(questXPHandleLink))
 	log.Printf("plugin RPC server (%s) listening on %s", PluginBuild, addr)
