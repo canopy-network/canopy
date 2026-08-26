@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { hexToBytes } from "@/lib/canopy/decode";
-import { signAndSubmitArborTx } from "@/lib/canopy/submitArborTx";
+import { signAndSubmitArborTx } from "@/lib/tx";
 
 /*
 This route exists because the grad node's own plugin filesystem is
