@@ -192,6 +192,17 @@ func (c *Controller) Stop() {
 	}
 }
 
+// SignalResetBFT() delivers a coalescing BFT reset without blocking the caller.
+// Producers hold the controller lock that the BFT loop needs to drain ResetBFT, so a
+// blocking send would deadlock; dropping a redundant signal when full is safe.
+func (c *Controller) SignalResetBFT(reset bft.ResetBFT) {
+	select {
+	case c.Consensus.ResetBFT <- reset:
+	default:
+		c.log.Warnf("ResetBFT channel full; dropping redundant reset signal")
+	}
+}
+
 // ROOT CHAIN CALLS BELOW
 
 // UpdateRootChainInfo() receives updates from the root-chain thread
@@ -214,10 +225,10 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp}
+		c.SignalResetBFT(bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp})
 	} else {
 		// signal to reset consensus
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp}
+		c.SignalResetBFT(bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp})
 	}
 	// update the peer 'must connect'
 	c.UpdateP2PMustConnect(info.ValidatorSet)
