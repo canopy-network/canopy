@@ -58,3 +58,5 @@ cache/solidity-files-cache.json
 *.bak
 plugin/go/scripts/__pycache__/
 node.log
+faucet_pool_state.json
+quest_xp_state.json
