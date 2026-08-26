@@ -26,6 +26,9 @@ const (
 	EventsPageName         = "events-page"
 )
 
+// multisigIntentDomainV1 separates threshold-multisig intent IDs from other hashes.
+const multisigIntentDomainV1 byte = 0x01
+
 // Messages must be pre-registered for Transaction JSON unmarshalling
 var RegisteredMessages map[string]MessageI
 
@@ -161,6 +164,37 @@ func (x *Transaction) GetSignBytes() ([]byte, ErrorI) {
 		ChainId:       x.ChainId,
 		Nonce:         x.Nonce,
 	})
+}
+
+// GetMultisigIntentID returns a stable replay identifier for a threshold-BLS
+// transaction. The identifier intentionally excludes the signer bitmap and aggregate
+// signature so alternate valid signer subsets produce the same ID.
+//
+// Layout: SHA-256(0x01 || multisig account address || SHA-256(canonical sign bytes)).
+// A nil ID means the transaction does not use a threshold-BLS account key.
+func (x *Transaction) GetMultisigIntentID() ([]byte, ErrorI) {
+	if x == nil || x.Signature == nil || len(x.Signature.PublicKey) == 0 {
+		return nil, nil
+	}
+	publicKey, err := PublicKeyFromBytes(x.Signature.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	multiKey, ok := publicKey.(*crypto.BLS12381MultiPublicKey)
+	if !ok || multiKey.Threshold() == 0 {
+		return nil, nil
+	}
+	signBytes, err := x.GetSignBytes()
+	if err != nil {
+		return nil, err
+	}
+	address := multiKey.Address().Bytes()
+	signHash := crypto.Hash(signBytes)
+	preimage := make([]byte, 1+len(address)+len(signHash))
+	preimage[0] = multisigIntentDomainV1
+	copy(preimage[1:], address)
+	copy(preimage[1+len(address):], signHash)
+	return crypto.Hash(preimage), nil
 }
 
 // Sign() executes a digital signature on the transaction

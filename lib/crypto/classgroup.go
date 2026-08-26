@@ -332,6 +332,9 @@ func (group *ClassGroup) Decode(bz []byte, discriminant *big.Int) (err error) {
 	if err = cdc.Unmarshal(bz, classGroup); err != nil {
 		return err
 	}
+	if len(classGroup.A) == 0 || len(classGroup.B) == 0 {
+		return fmt.Errorf("invalid empty class-group coefficient")
+	}
 	// convert the byte slices to big.Int values
 	a := decodeBigInt(classGroup.A)
 	b := decodeBigInt(classGroup.B)

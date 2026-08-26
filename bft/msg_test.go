@@ -289,3 +289,14 @@ func TestProposerMessageRejectsInvalidHighQC(t *testing.T) {
 	require.Error(t, errI)
 	require.Equal(t, lib.CodeInvalidAggregateSignature, errI.Code())
 }
+
+func TestProposerMessageRejectsPostElectionRelay(t *testing.T) {
+	c := newTestConsensus(t, Precommit, 3)
+	c.simPrecommitPhase(t, 0)
+	msg := c.bft.Proposals[0][phaseToString(Precommit)][0]
+	require.NoError(t, msg.Sign(c.valKeys[1]))
+
+	err := c.bft.HandleMessage(msg)
+	require.Error(t, err)
+	require.Equal(t, lib.CodeInvalidSigner, err.Code())
+}

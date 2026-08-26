@@ -493,7 +493,7 @@ func TestUnmarshalRejectsUnknownBlockFields(t *testing.T) {
 	require.NoError(t, Unmarshal(bz, &Block{}))
 }
 
-func TestUnmarshalRejectsUnknownTransactionFields(t *testing.T) {
+func TestUnmarshalRejectsNonCanonicalTransaction(t *testing.T) {
 	tx := &Transaction{
 		MessageType:   "noop",
 		Msg:           &anypb.Any{},
@@ -508,6 +508,10 @@ func TestUnmarshalRejectsUnknownTransactionFields(t *testing.T) {
 
 	withUnknown := appendUnknownField(bz)
 	err = Unmarshal(withUnknown, &Transaction{})
+	require.Error(t, err)
+	withDuplicateTime := protowire.AppendTag(append([]byte(nil), bz...), 5, protowire.VarintType)
+	withDuplicateTime = protowire.AppendVarint(withDuplicateTime, tx.Time)
+	err = Unmarshal(withDuplicateTime, &Transaction{})
 	require.Error(t, err)
 
 	require.NoError(t, Unmarshal(bz, &Transaction{}))

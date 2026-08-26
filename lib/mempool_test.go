@@ -597,3 +597,14 @@ func TestFailedTxCacheGetFailedForAddressEmptyReturnsAll(t *testing.T) {
 	// an empty address returns every failed tx in the cache, regardless of address
 	require.ElementsMatch(t, []*FailedTx{failedTx1, failedTx2}, cache.GetFailedForAddress(""))
 }
+
+func TestFailedTxCacheLimits(t *testing.T) {
+	cache := NewFailedTxCache()
+	for i := 0; i < failedTxCacheMaxEntries; i++ {
+		cache.cache[string(rune(i))] = &FailedTx{}
+	}
+	require.True(t, cache.Add(&FailedTx{Hash: "new"}))
+	require.Len(t, cache.cache, failedTxCacheMaxEntries)
+	require.Contains(t, cache.cache, "new")
+	require.False(t, cache.Add(&FailedTx{Hash: "oversized", bytes: make([]byte, failedTxCacheMaxTxBytes+1)}))
+}

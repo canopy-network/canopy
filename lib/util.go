@@ -329,6 +329,12 @@ func Unmarshal(protoBytes []byte, ptr any) ErrorI {
 		if err := rejectUnknownForCriticalMessages(msg); err != nil {
 			return ErrUnmarshal(err)
 		}
+		if _, ok := msg.(*Transaction); ok {
+			canonical, err := marshaller.Marshal(msg)
+			if err != nil || !bytes.Equal(protoBytes, canonical) {
+				return ErrUnmarshal(fmt.Errorf("non-canonical transaction encoding"))
+			}
+		}
 	}
 	// exit
 	return nil

@@ -262,6 +262,9 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	startTime := time.Now()
 	// use a map to check for 'same-block' duplicate transactions
 	deDuplicator := lib.NewDeDuplicator[string]()
+	// threshold-multisig signatures may use different valid signer subsets for the
+	// same intent, so track their stable intent IDs separately from envelope hashes.
+	multisigIntentDeDuplicator := lib.NewDeDuplicator[[crypto.HashSize]byte]()
 	// use a batch verifier for signatures
 	batchVerifier := crypto.NewBatchVerifier()
 	// get the governance parameter for max block size
@@ -271,6 +274,8 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	}
 	// keep a map to track transactions that failed 'check'
 	failedCheckTxs := map[int]error{}
+	// retain stable multisig intent IDs from the successful precheck pass
+	multisigIntentIDs := make([][]byte, len(txs))
 	// map signature batch indices back to original tx indices
 	batchToTxIdx := make([]int, 0, len(txs))
 	// first batch validate signatures over the entire set
@@ -282,8 +287,16 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 		if e != nil {
 			return e
 		}
-		if _, checkErr := s.CheckTx(tx, "", batchVerifier); checkErr != nil {
+		checkResult, checkErr := s.CheckTx(tx, "", batchVerifier)
+		if checkErr != nil {
 			failedCheckTxs[i] = checkErr
+		} else {
+			intentID, intentErr := checkResult.tx.GetMultisigIntentID()
+			if intentErr != nil {
+				failedCheckTxs[i] = intentErr
+			} else {
+				multisigIntentIDs[i] = intentID
+			}
 		}
 		checkTxn.Discard()
 		s.SetStore(checkStore)
@@ -330,6 +343,19 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 		// check if the transaction is a 'same block' duplicate
 		if found := deDuplicator.Found(hashString); found {
 			return lib.ErrDuplicateTx(hashString)
+		}
+		// reject alternate valid signature envelopes for the same multisig intent
+		if intentID := multisigIntentIDs[i]; len(intentID) != 0 {
+			var intentKey [crypto.HashSize]byte
+			copy(intentKey[:], intentID)
+			if found := multisigIntentDeDuplicator.Found(intentKey); found {
+				duplicateErr := lib.ErrDuplicateTx(lib.BytesToString(intentID))
+				if allowOversize {
+					r.AddFailed(lib.NewFailedTx(tx, duplicateErr))
+					continue
+				}
+				return duplicateErr
+			}
 		}
 		// get the tx size
 		txSize := uint64(len(tx))
