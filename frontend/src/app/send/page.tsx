@@ -6,6 +6,7 @@ import { SendForm } from "@/components/forms/SendForm";
 import { useAccount } from "@/lib/hooks/useAccount";
 import { Portfolio } from "@/components/sections/Portfolio";
 import { FaucetCard } from "@/components/sections/FaucetCard";
+import { ArborFaucetCard } from "@/components/sections/ArborFaucetCard";
 import { AssetRows } from "@/components/sections/AssetRows";
 import { AssetIcon } from "@/components/AssetIcon";
 import { formatAddress, formatAmount } from "@/lib/arbor/format";
@@ -193,6 +194,7 @@ export default function SendPage() {
           </div>
         )}
         <FaucetCard />
+        <ArborFaucetCard />
         <Portfolio />
       </section>
     </div>
