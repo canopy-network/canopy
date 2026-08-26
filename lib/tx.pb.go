@@ -58,7 +58,9 @@ type Transaction struct {
 	// network_id: The identity of the network the transaction is intended for
 	NetworkId uint64 `protobuf:"varint,8,opt,name=network_id,json=networkId,proto3" json:"networkID"` // @gotags: json:"networkID"
 	// chain_id: The identity of the committee the transaction is intended for
-	ChainId       uint64 `protobuf:"varint,9,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	ChainId uint64 `protobuf:"varint,9,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	// nonce: the sequence number for nonce-protected transactions
+	Nonce         uint64 `protobuf:"varint,10,opt,name=nonce,proto3" json:"nonce,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -156,6 +158,13 @@ func (x *Transaction) GetChainId() uint64 {
 	return 0
 }
 
+func (x *Transaction) GetNonce() uint64 {
+	if x != nil {
+		return x.Nonce
+	}
+	return 0
+}
+
 // TxResult represents the result of a processed transaction, including information about the sender, recipient,
 // transaction hash, and the associated block height and index.
 type TxResult struct {
@@ -173,7 +182,9 @@ type TxResult struct {
 	// transaction: The original transaction object
 	Transaction *Transaction `protobuf:"bytes,6,opt,name=transaction,proto3" json:"transaction,omitempty"`
 	// tx_hash: The unique hash that identifies the transaction
-	TxHash        string `protobuf:"bytes,7,opt,name=tx_hash,json=txHash,proto3" json:"txHash"` // @gotags: json:"txHash"
+	TxHash string `protobuf:"bytes,7,opt,name=tx_hash,json=txHash,proto3" json:"txHash"` // @gotags: json:"txHash"
+	// committed: Whether the transaction has been included in a committed block
+	Committed     *bool `protobuf:"varint,8,opt,name=committed,proto3,oneof" json:"committed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -257,6 +268,13 @@ func (x *TxResult) GetTxHash() string {
 	return ""
 }
 
+func (x *TxResult) GetCommitted() bool {
+	if x != nil && x.Committed != nil {
+		return *x.Committed
+	}
+	return false
+}
+
 // A Signature is a digital signature is a cryptographic "fingerprint" created with a private key,
 // allowing others to verify the authenticity and integrity of a message using the corresponding public key
 type Signature struct {
@@ -317,7 +335,7 @@ var File_tx_proto protoreflect.FileDescriptor
 
 const file_tx_proto_rawDesc = "" +
 	"\n" +
-	"\btx.proto\x12\x05types\x1a\x19google/protobuf/any.proto\"\xa3\x02\n" +
+	"\btx.proto\x12\x05types\x1a\x19google/protobuf/any.proto\"\xb9\x02\n" +
 	"\vTransaction\x12!\n" +
 	"\fmessage_type\x18\x01 \x01(\tR\vmessageType\x12&\n" +
 	"\x03msg\x18\x02 \x01(\v2\x14.google.protobuf.AnyR\x03msg\x12.\n" +
@@ -328,7 +346,9 @@ const file_tx_proto_rawDesc = "" +
 	"\x04memo\x18\a \x01(\tR\x04memo\x12\x1d\n" +
 	"\n" +
 	"network_id\x18\b \x01(\x04R\tnetworkId\x12\x19\n" +
-	"\bchain_id\x18\t \x01(\x04R\achainId\"\xe0\x01\n" +
+	"\bchain_id\x18\t \x01(\x04R\achainId\x12\x14\n" +
+	"\x05nonce\x18\n" +
+	" \x01(\x04R\x05nonce\"\x91\x02\n" +
 	"\bTxResult\x12\x16\n" +
 	"\x06sender\x18\x01 \x01(\fR\x06sender\x12\x1c\n" +
 	"\trecipient\x18\x02 \x01(\fR\trecipient\x12!\n" +
@@ -336,7 +356,10 @@ const file_tx_proto_rawDesc = "" +
 	"\x06height\x18\x04 \x01(\x04R\x06height\x12\x14\n" +
 	"\x05index\x18\x05 \x01(\x04R\x05index\x124\n" +
 	"\vtransaction\x18\x06 \x01(\v2\x12.types.TransactionR\vtransaction\x12\x17\n" +
-	"\atx_hash\x18\a \x01(\tR\x06txHash\"H\n" +
+	"\atx_hash\x18\a \x01(\tR\x06txHash\x12!\n" +
+	"\tcommitted\x18\b \x01(\bH\x00R\tcommitted\x88\x01\x01B\f\n" +
+	"\n" +
+	"_committed\"H\n" +
 	"\tSignature\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1c\n" +
@@ -377,6 +400,7 @@ func file_tx_proto_init() {
 	if File_tx_proto != nil {
 		return
 	}
+	file_tx_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

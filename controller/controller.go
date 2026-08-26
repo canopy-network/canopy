@@ -126,7 +126,11 @@ func (c *Controller) Start() {
 			} else if rootChainInfo != nil && rootChainInfo.Height != 0 {
 				c.log.Infof("Received root chain info with %d validators", len(rootChainInfo.ValidatorSet.GetValidatorSet()))
 				// call mempool check
-				c.Mempool.CheckMempool()
+				resetProposalConfig := c.SetFSMInConsensusModeForProposals()
+				if e := c.Mempool.CheckMempool(); e != nil {
+					c.log.Warnf("Initial mempool rebuild failed: %s", e.Error())
+				}
+				resetProposalConfig()
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
 				// exit the loop
@@ -206,6 +210,7 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	if info.Timestamp != 0 {
 		timestamp = time.UnixMicro(int64(info.Timestamp))
 	}
+	c.Mempool.dirtyVersion.Add(1)
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height
@@ -273,6 +278,9 @@ func (c *Controller) runPluginCtl(plugin, action string) ([]byte, lib.ErrorI) {
 	}
 	// create the command using the requested action
 	cmd := exec.Command(cmdPath, action)
+	// point the launcher at the persistent plugin home under the data dir so
+	// downloaded artifacts survive restarts
+	cmd.Env = append(os.Environ(), "CANOPY_PLUGIN_HOME="+c.Config.PluginHome(plugin))
 	// execute the command and capture output
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -327,8 +335,39 @@ func (c *Controller) PluginConnectSync() {
 	}
 	// create plugin object
 	c.Plugin = lib.NewPlugin(conn, c.log, time.Duration(c.Config.PluginTimeoutMS)*time.Millisecond)
+	// register the detached, read-only query provider so plugins can serve custom RPC endpoints
+	c.Plugin.SetQueryProvider(&pluginQueryProvider{controller: c})
 	// set plugin in FSM and mempool FSM
 	c.FSM.Plugin, c.Mempool.FSM.Plugin = c.Plugin, c.Plugin
+}
+
+// pluginQueryProvider serves detached, read-only state queries from the plugin by backing them
+// with Canopy's historical read-only snapshots (TimeMachine). It is the live-node-owned adapter
+// that lets plugin builders implement custom RPC endpoints without a tx/block in flight.
+type pluginQueryProvider struct {
+	controller *Controller
+}
+
+// QueryState() executes a read-only state read against a TimeMachine snapshot at the given height (0 = latest committed)
+func (p *pluginQueryProvider) QueryState(height uint64, request *lib.PluginStateReadRequest) (lib.PluginStateReadResponse, lib.ErrorI) {
+	// guard: a nil read request would nil-deref in StateRead()
+	if request == nil {
+		return lib.PluginStateReadResponse{}, lib.ErrNilPluginQueryRead()
+	}
+	// create a read-only state snapshot at the requested height
+	sm, err := p.controller.FSM.TimeMachine(height)
+	if err != nil {
+		return lib.PluginStateReadResponse{}, lib.ErrTimeMachine(err)
+	}
+	// at height 0 (fresh node, pre-first-commit) TimeMachine returns the LIVE FSM, not a snapshot;
+	// never read from — nor Discard() — the live consensus store
+	if sm == p.controller.FSM {
+		return lib.PluginStateReadResponse{}, lib.ErrNoCommittedState()
+	}
+	// ensure proper cleanup of the snapshot
+	defer sm.Discard()
+	// execute the read against the read-only state
+	return sm.StateRead(request)
 }
 
 // resolvePluginCtlPath() locates the plugin control script from common startup locations

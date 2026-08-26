@@ -2,7 +2,7 @@
 # Build from repository root: docker build -f plugin/kotlin/Dockerfile -t canopy-kotlin .
 
 # Stage 1: Build Canopy (Go)
-FROM golang:1.24-alpine AS canopy-builder
+FROM golang:1.26-alpine AS canopy-builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -18,7 +18,7 @@ RUN ./gradlew fatJar --no-daemon
 # Stage 3: Runtime
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-RUN apk add --no-cache bash && mkdir -p /tmp/plugin /root/.canopy plugin/kotlin/build/libs
+RUN apk add --no-cache bash procps && mkdir -p /tmp/plugin /root/.canopy plugin/kotlin/build/libs
 
 COPY --from=canopy-builder /canopy .
 COPY --from=kotlin-builder /app/build/libs/*-all.jar plugin/kotlin/build/libs/canopy-plugin-kotlin-1.0.0-all.jar

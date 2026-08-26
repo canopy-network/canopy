@@ -39,6 +39,13 @@ type BFT struct {
 	Controller               // reference to the Controller for callbacks like producing and validating the proposal via the plugin or gossiping commit message
 	ResetBFT   chan ResetBFT // trigger that resets the BFT due to a new Target block or a new Canopy block
 	syncing    *atomic.Bool  // if chain for this committee is currently catching up to latest height
+	phase      atomic.Int32  // atomic mirror of View.Phase for external readers
+	round      atomic.Uint64 // atomic mirror of View.Round for external readers
+	deadlineMs atomic.Int64  // atomic proposal vote mode deadline in unix milliseconds for external readers
+
+	forcedRound        uint64    // admin-scheduled round; 0 means none
+	forcedRoundAt      time.Time // earliest time at which forcedRound may be entered
+	forcedTimeoutRound *uint64   // pending/active timeout round override
 
 	PhaseTimer *time.Timer // ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
 
@@ -59,7 +66,7 @@ func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64, con
 		vdfTargetTime := time.Duration(float64(c.BlockTimeMS())*BlockTimeToVDFTargetCoefficient) * time.Millisecond
 		vdf = lib.NewVDFService(vdfTargetTime, l)
 	}
-	return &BFT{
+	b := &BFT{
 		View: &lib.View{
 			Height:     height,
 			RootHeight: rootHeight,
@@ -85,7 +92,27 @@ func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64, con
 		Metrics:           m,
 		HighVDF:           new(crypto.VDF),
 		VDFCache:          []*Message{},
-	}, nil
+	}
+	b.round.Store(b.Round)
+	return b, nil
+}
+
+// CurrentPhase() returns the current consensus phase using an atomic mirror for external readers
+func (b *BFT) CurrentPhase() Phase {
+	if b == nil {
+		return lib.Phase_ELECTION
+	}
+	return Phase(b.phase.Load())
+}
+
+// CurrentRound() returns the current consensus round using an atomic mirror for external readers
+func (b *BFT) CurrentRound() uint64 {
+	return b.round.Load()
+}
+
+// ProposalVoteDeadlineUnixMilli() returns the unix millisecond deadline for approve-list proposal voting
+func (b *BFT) ProposalVoteDeadlineUnixMilli() int64 {
+	return b.deadlineMs.Load()
 }
 
 // Start() initiates the HotStuff BFT service.
@@ -128,12 +155,9 @@ func (b *BFT) Start() {
 			func() {
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
-				// calculate time since
-				since := time.Since(resetBFT.StartTime)
-				// allow if 'since' is less than 1 block old
-				if int(since.Milliseconds()) < b.Config.BlockTimeMS() {
+				processTime = validProcessTime(resetBFT.StartTime, time.Duration(b.Config.BlockTimeMS())*time.Millisecond)
+				if processTime != 0 {
 					b.log.Infof("Using included timestamp to calculate process time: %s", resetBFT.StartTime.Format(time.StampMilli))
-					processTime = since
 				}
 				// if is a root-chain update reset back to round 0 but maintain locks to prevent 'fork attacks'
 				// else increment the height and don't maintain locks
@@ -142,6 +166,7 @@ func (b *BFT) Start() {
 					b.NewHeight(false)
 					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
 					b.BFTStartTime = time.Now()
+					b.deadlineMs.Store(b.BFTStartTime.Add(time.Duration(b.Config.BlockTimeMS()*3) * time.Millisecond).UnixMilli())
 				} else {
 					b.log.Info("Reset BFT (NEW_COMMITTEE)")
 					//if b.LoadIsOwnRoot() {
@@ -155,6 +180,13 @@ func (b *BFT) Start() {
 			}()
 		}
 	}
+}
+
+func validProcessTime(start time.Time, maxAge time.Duration) time.Duration {
+	if since := time.Since(start); since > 0 && since < maxAge {
+		return since
+	}
+	return 0
 }
 
 // HandlePhase() is the main BFT Phase stepping loop
@@ -192,7 +224,9 @@ func (b *BFT) HandlePhase() {
 	case CommitProcess:
 		b.StartCommitProcessPhase()
 	case Pacemaker:
-		b.Pacemaker()
+		if !b.Pacemaker() {
+			return
+		}
 	}
 	// after each phase, set the timers for the next phase
 	b.SetTimerForNextPhase(time.Since(startTime))
@@ -203,7 +237,7 @@ func (b *BFT) HandlePhase() {
 // - Replicas run the Cumulative Distribution Function and a 'practical' Verifiable Random Function
 // - If they are a candidate they send the VRF Out to the replicas
 func (b *BFT) StartElectionPhase() {
-	b.log.Infof(b.View.ToString())
+	b.log.Info(b.View.ToString())
 	// retrieve Validator object from the ValidatorSet
 	selfValidator, err := b.ValidatorSet.GetValidator(b.PublicKey)
 	if err != nil {
@@ -532,6 +566,7 @@ func (b *BFT) RoundInterrupt() {
 	b.Config.RoundInterruptTimeoutMS = b.msLeftInRound()
 	b.log.Warnf("Starting next round in %.2f secs", (time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond).Seconds())
 	b.Phase = RoundInterrupt
+	b.phase.Store(int32(b.Phase))
 	b.BlockResult = nil
 	b.VDFCache = []*Message{}
 	b.ResetFSM()
@@ -545,9 +580,22 @@ func (b *BFT) RoundInterrupt() {
 
 // Pacemaker() begins the Pacemaker process after ROUND-INTERRUPT timeout occurs
 // - sets the highest round that +2/3rds majority of replicas have seen
-func (b *BFT) Pacemaker() {
+func (b *BFT) Pacemaker() bool {
 	b.log.Info(b.View.ToString())
+	forcedRound := b.forcedRound
+	if forcedRound != 0 {
+		if wait := time.Until(b.forcedRoundAt); wait > 0 {
+			b.SetWaitTimers(wait, 0)
+			return false
+		}
+		b.Round = forcedRound - 1
+		b.forcedRound = 0
+	}
 	b.NewRound(false)
+	if forcedRound != 0 {
+		b.log.Warnf("Forced consensus round to %d", b.Round)
+		return true
+	}
 	// sort the pacemaker votes from the highest Round to the lowest Round
 	var sortedVotes []*Message
 	for _, vote := range b.PacemakerMessages {
@@ -565,8 +613,8 @@ func (b *BFT) Pacemaker() {
 			continue
 		}
 		totalVotedPower += validator.VotingPower
-		// if totalVotePower >= +33%, it's safe to advance to that round
-		if totalVotedPower >= lib.Uint64ReducePercentage(b.ValidatorSet.MinimumMaj23, 50) {
+		// if totalVotePower > 1/3, it's safe to advance to that round
+		if totalVotedPower > b.ValidatorSet.TotalPower/3 {
 			pacemakerRound = vote.Qc.Header.Round // set the highest round where +1/3rds have been
 			break
 		}
@@ -575,7 +623,25 @@ func (b *BFT) Pacemaker() {
 	if pacemakerRound > b.Round {
 		b.log.Infof("Pacemaker peers set round: %d", pacemakerRound)
 		b.Round = pacemakerRound
+		b.round.Store(b.Round)
 	}
+	return true
+}
+
+// ScheduleForceRound enters the exact target round at the first pacemaker
+// boundary at or after at. The caller must hold the Controller lock.
+func (b *BFT) ScheduleForceRound(round uint64, at time.Time, timeoutRound *uint64) error {
+	if round <= b.Round {
+		return fmt.Errorf("target round %d must be greater than current round %d", round, b.Round)
+	}
+	b.forcedRound = round
+	b.forcedRoundAt = at
+	b.forcedTimeoutRound = timeoutRound
+	b.log.Warnf("Scheduled forced consensus round %d at %s", round, at.Format(time.RFC3339Nano))
+	if b.Phase == Pacemaker {
+		b.SetWaitTimers(time.Until(at), 0)
+	}
+	return nil
 }
 
 // PacemakerMessages is a collection of 'View' messages keyed by each Replica's public key
@@ -628,6 +694,7 @@ func (b *BFT) NewRound(newHeight bool) {
 		// defensive: clear byzantine evidence
 		b.ByzantineEvidence = &ByzantineEvidence{DSE: DoubleSignEvidences{}}
 	}
+	b.round.Store(b.Round)
 	b.RefreshRootChainInfo()
 	// reset ProposerKey, Proposal, and Sortition data
 	b.ProposerKey = nil
@@ -656,6 +723,9 @@ func (b *BFT) RefreshRootChainInfo() {
 
 // NewHeight() initializes / resets consensus variables preparing for the NewHeight
 func (b *BFT) NewHeight(keepLocks ...bool) {
+	// A force-round recovery is scoped to the height on which it was requested.
+	b.forcedRound = 0
+	b.forcedTimeoutRound = nil
 	// reset VotesForHeight
 	b.Votes = make(VotesForHeight)
 	// reset ProposalsForHeight
@@ -666,6 +736,7 @@ func (b *BFT) NewHeight(keepLocks ...bool) {
 	b.NewRound(true)
 	// set phase to Election
 	b.Phase = Election
+	b.phase.Store(int32(b.Phase))
 	// if resetting due to new Canopy Block and Validator Set then KeepLocks
 	// - protecting any who may have committed against attacks like malicious proposers from withholding
 	// COMMIT_MSG and sending it after the next block is produces
@@ -689,7 +760,7 @@ func (b *BFT) SafeNode(msg *Message) lib.ErrorI {
 		return ErrNoSafeNodeJustification()
 	}
 	// ensure the messages' HighQC justifies its proposal (should have the same hashes)
-	if !bytes.Equal(b.BlockToHash(msg.Qc.Block), msg.HighQc.BlockHash) && !bytes.Equal(msg.Qc.Results.Hash(), msg.HighQc.ResultsHash) {
+	if !bytes.Equal(b.BlockToHash(msg.Qc.Block), msg.HighQc.BlockHash) || !bytes.Equal(msg.Qc.Results.Hash(), msg.HighQc.ResultsHash) {
 		return ErrMismatchedProposals()
 	}
 	// if the hashes of the Locked proposal is the same as the Leader's message
@@ -716,11 +787,15 @@ func (b *BFT) SetTimerForNextPhase(processTime time.Duration) {
 	case Pacemaker:
 		b.Phase = Election
 	}
+	b.phase.Store(int32(b.Phase))
 	b.SetWaitTimers(waitTime, processTime)
 }
 
 // WaitTime() returns the wait time (wait and receive consensus messages) for a specific Phase.Round
 func (b *BFT) WaitTime(phase Phase, round uint64) (waitTime time.Duration) {
+	if b.forcedRound == 0 && b.forcedTimeoutRound != nil {
+		round = *b.forcedTimeoutRound
+	}
 	switch phase {
 	case Election:
 		waitTime = b.waitTime(b.Config.ElectionTimeoutMS, round)

@@ -1,6 +1,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import { useCardData } from '../../hooks/useApi'
+import { usePersistentNumber } from '../../hooks/usePersistentNumber'
 import AnimatedNumber from '../AnimatedNumber'
 import stakingTexts from '../../data/staking.json'
 import { toCNPY } from '../../lib/utils'
@@ -9,14 +10,17 @@ import ExplorerOverviewCards from '../ExplorerOverviewCards'
 const SupplyView: React.FC = () => {
     const { data: cardData } = useCardData()
 
-    // Calculate supply metrics
-    const totalSupplyCNPY = React.useMemo(() => {
+    // Candidates are `null` until cardData arrives so the persistent hooks keep
+    // the last known values instead of dropping to zero on refresh/refetch.
+    const totalSupplyCandidate = React.useMemo(() => {
+        if (!cardData) return null
         const s = (cardData as any)?.supply || {}
         const total = s.total ?? s.totalSupply ?? s.total_cnpy ?? s.totalCNPY ?? 0
         return toCNPY(Number(total))
     }, [cardData])
 
-    const stakedSupplyCNPY = React.useMemo(() => {
+    const stakedSupplyCandidate = React.useMemo(() => {
+        if (!cardData) return null
         const s = (cardData as any)?.supply || {}
         const st = s.staked ?? 0
         if (st) return toCNPY(Number(st))
@@ -25,7 +29,8 @@ const SupplyView: React.FC = () => {
         return toCNPY(Number(bonded))
     }, [cardData])
 
-    const liquidSupplyCNPY = React.useMemo(() => {
+    const liquidSupplyCandidate = React.useMemo(() => {
+        if (!cardData) return null
         const s = (cardData as any)?.supply || {}
         const total = Number(s.total ?? 0)
         const staked = Number(s.staked ?? 0)
@@ -33,6 +38,20 @@ const SupplyView: React.FC = () => {
         const liquid = s.circulating ?? s.liquidSupply ?? s.liquid ?? 0
         return toCNPY(Number(liquid))
     }, [cardData])
+
+    const totalSupply = usePersistentNumber('totalSupply', totalSupplyCandidate)
+    const stakedSupply = usePersistentNumber('totalStake', stakedSupplyCandidate)
+    const liquidSupply = usePersistentNumber('liquidSupply', liquidSupplyCandidate)
+
+    const totalSupplyCNPY = totalSupply.value
+    const stakedSupplyCNPY = stakedSupply.value
+    const liquidSupplyCNPY = liquidSupply.value
+
+    // First-ever load (no cached value yet) → show "Loading…" instead of 0.
+    const isSupplyLoading = !totalSupply.hasValue
+    const isStakedLoading = !stakedSupply.hasValue
+    const isLiquidLoading = !liquidSupply.hasValue
+    const LoadingValue = () => <span className="text-white/40">Loading…</span>
 
     const stakingRatio = React.useMemo(() => {
         if (totalSupplyCNPY <= 0) return 0
@@ -47,7 +66,9 @@ const SupplyView: React.FC = () => {
     const supplyMetrics = [
         {
             title: 'Total',
-            value: (
+            value: isSupplyLoading ? (
+                <LoadingValue />
+            ) : (
                 <AnimatedNumber
                     value={totalSupplyCNPY}
                     format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
@@ -59,7 +80,9 @@ const SupplyView: React.FC = () => {
         },
         {
             title: 'Staked',
-            value: (
+            value: isStakedLoading ? (
+                <LoadingValue />
+            ) : (
                 <AnimatedNumber
                     value={stakedSupplyCNPY}
                     format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
@@ -71,7 +94,9 @@ const SupplyView: React.FC = () => {
         },
         {
             title: 'Liquid',
-            value: (
+            value: isLiquidLoading ? (
+                <LoadingValue />
+            ) : (
                 <AnimatedNumber
                     value={liquidSupplyCNPY}
                     format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
@@ -83,7 +108,9 @@ const SupplyView: React.FC = () => {
         },
         {
             title: 'Staking Ratio',
-            value: (
+            value: isSupplyLoading || isStakedLoading ? (
+                <LoadingValue />
+            ) : (
                 <AnimatedNumber
                     value={stakingRatio}
                     format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
@@ -165,31 +192,43 @@ const SupplyView: React.FC = () => {
                         <div className="flex justify-between items-center">
                             <span className="text-gray-400">Total</span>
                             <span className="text-white font-medium">
-                                <AnimatedNumber
-                                    value={totalSupplyCNPY}
-                                    format={{ maximumFractionDigits: 0 }}
-                                    className="text-white"
-                                /> CNPY
+                                {isSupplyLoading ? <LoadingValue /> : (
+                                    <>
+                                        <AnimatedNumber
+                                            value={totalSupplyCNPY}
+                                            format={{ maximumFractionDigits: 0 }}
+                                            className="text-white"
+                                        /> CNPY
+                                    </>
+                                )}
                             </span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="text-gray-400">Staked</span>
                             <span className="font-medium text-[#35cd48]">
-                                <AnimatedNumber
-                                    value={stakedSupplyCNPY}
-                                    format={{ maximumFractionDigits: 0 }}
-                                    className="text-[#35cd48]"
-                                /> CNPY
+                                {isStakedLoading ? <LoadingValue /> : (
+                                    <>
+                                        <AnimatedNumber
+                                            value={stakedSupplyCNPY}
+                                            format={{ maximumFractionDigits: 0 }}
+                                            className="text-[#35cd48]"
+                                        /> CNPY
+                                    </>
+                                )}
                             </span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="text-gray-400">Liquid</span>
                             <span className="font-medium text-[#216cd0]">
-                                <AnimatedNumber
-                                    value={liquidSupplyCNPY}
-                                    format={{ maximumFractionDigits: 0 }}
-                                    className="text-[#216cd0]"
-                                /> CNPY
+                                {isLiquidLoading ? <LoadingValue /> : (
+                                    <>
+                                        <AnimatedNumber
+                                            value={liquidSupplyCNPY}
+                                            format={{ maximumFractionDigits: 0 }}
+                                            className="text-[#216cd0]"
+                                        /> CNPY
+                                    </>
+                                )}
                             </span>
                         </div>
                     </div>

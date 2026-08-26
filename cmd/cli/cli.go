@@ -1,9 +1,9 @@
 package cli
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -21,6 +21,7 @@ import (
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/store"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"golang.org/x/term"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -29,38 +30,127 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "canopy",
 	Short: "the canopy blockchain software",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
+		l = lib.NewLogger(lib.LoggerConfig{
+			Level:      config.GetLogLevel(),
+			Structured: config.Structured,
+			JSON:       config.JSON,
+		}, config.DataDirPath)
+		if rpcURLFlag != "" {
+			config.RPCUrl = rpcURLFlag
+		}
+		if adminURLFlag != "" {
+			config.AdminRPCUrl = adminURLFlag
+		}
+		client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
+		return nil
+	},
 }
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number",
+	// version is self-contained: skip data-dir initialization so it never
+	// creates files or prompts for a password (e.g. when run non-interactively)
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(rpc.SoftwareVersion)
 	},
 }
 
+var newValidatorKeyCmd = &cobra.Command{
+	Use:   "new-validator-key",
+	Short: "Generate a new validator key (replaces current one if exists)",
+	// prevents the canopy root command to run and initialize directories
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		privateValKeyPath := filepath.Join(DataDir, lib.ValKeyPath)
+		if _, err := os.Stat(privateValKeyPath); err == nil {
+			if !confirm("Are you sure you want to replace the existing validator key?") {
+				log.Fatal("Aborting key replacement")
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			log.Fatalf("validator_key.json stat: %s", err.Error())
+		}
+		if err := WriteValidatorKeyToFile(DataDir, lib.NewDefaultLogger()); err != nil {
+			log.Fatalf("writing validator key: %s", err.Error())
+		}
+	},
+}
+
 var (
-	client, config, l     = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
-	DataDir, validatorKey = "", crypto.PrivateKeyI(nil)
+	client, config, l                             = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
+	DataDir, validatorKey                         = "", crypto.PrivateKeyI(nil)
+	rpcURLFlag, adminURLFlag, externalAddressFlag string
 )
 
+// globalFlag describes a persistent flag shared by the CLI and the auto-updater.
+type globalFlag struct {
+	name    string  // flag name, without the leading "--"
+	value   *string // bound package-level variable
+	def     string  // default value
+	usage   string  // help text
+	forward bool    // always forward to the child process, even when empty
+}
+
+// globalFlags is the single source of truth for the global persistent flags. It
+// is consumed by registerPersistentFlags (to define them) and by GlobalFlagArgs
+// (to forward them to a child canopy process).
+var globalFlags = []globalFlag{
+	{name: "data-dir", value: &DataDir, def: lib.DefaultDataDirPath(), usage: "custom data directory location", forward: true},
+	{name: "rpc-url", value: &rpcURLFlag, usage: "override the RPC URL from config"},
+	{name: "admin-url", value: &adminURLFlag, usage: "override the admin RPC URL from config"},
+	{name: "external-address", value: &externalAddressFlag, usage: "P2P external address"},
+}
+
 func init() {
-	flag.Parse()
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(queryCmd)
 	rootCmd.AddCommand(adminCmd)
 	rootCmd.AddCommand(autoCompleteCmd)
+	rootCmd.AddCommand(newValidatorKeyCmd)
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
-	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
-	l = lib.NewLogger(lib.LoggerConfig{
-		Level:      config.GetLogLevel(),
-		Structured: config.Structured,
-		JSON:       config.JSON,
-	})
-	client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
+	registerPersistentFlags(rootCmd.PersistentFlags())
+}
+
+// registerPersistentFlags binds the global persistent flags onto the given flag
+// set, shared by the CLI and the standalone auto-updater.
+func registerPersistentFlags(fs *pflag.FlagSet) {
+	for _, f := range globalFlags {
+		fs.StringVar(f.value, f.name, f.def, f.usage)
+	}
+}
+
+// ParseGlobalFlags parses the global flags from args, populates the package-level
+// flag values, and returns the remaining positional arguments. It lets consumers
+// outside of cobra (e.g. the auto-updater) honor them.
+func ParseGlobalFlags(args []string) ([]string, error) {
+	fs := pflag.NewFlagSet("canopy", pflag.ContinueOnError)
+	fs.ParseErrorsAllowlist.UnknownFlags = true
+	registerPersistentFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	return fs.Args(), nil
+}
+
+// GlobalFlagArgs reconstructs the global flags as arguments to forward to a child
+// canopy process. Flags marked 'forward' are always emitted; the rest only when set.
+func GlobalFlagArgs() []string {
+	var args []string
+	for _, f := range globalFlags {
+		if f.forward || *f.value != "" {
+			args = append(args, "--"+f.name, *f.value)
+		}
+	}
+	return args
 }
 
 func Execute() {
@@ -134,7 +224,10 @@ func waitForKill() {
 
 func getFirstPassword(log lib.LoggerI) string {
 	// allow flag config to skip initial password
-	if pwd == "" {
+	if pwd != "" {
+		return pwd
+	}
+	for {
 		// get the password from the user
 		log.Infof("Enter password for your new private key:")
 		password, e := term.ReadPassword(int(os.Stdin.Fd()))
@@ -143,12 +236,10 @@ func getFirstPassword(log lib.LoggerI) string {
 		}
 		if password == nil {
 			log.Infof("Password cannot be empty")
-			return getFirstPassword(log)
+			continue
 		}
 		return string(password)
 	}
-
-	return pwd
 }
 
 // InitializeDataDirectory() populates the data directory with configuration and data files if missing
@@ -168,38 +259,9 @@ func InitializeDataDirectory(dataDirPath string, log lib.LoggerI) (c lib.Config,
 	// make the private key file if missing
 	privateValKeyPath := filepath.Join(dataDirPath, lib.ValKeyPath)
 	if _, err := os.Stat(privateValKeyPath); errors.Is(err, os.ErrNotExist) {
-		blsPrivateKey, _ := crypto.NewBLS12381PrivateKey()
-		log.Infof("Creating %s file", lib.ValKeyPath)
-		if err = crypto.PrivateKeyToFile(blsPrivateKey, privateValKeyPath); err != nil {
+		if err := WriteValidatorKeyToFile(dataDirPath, log); err != nil {
 			log.Fatal(err.Error())
 		}
-		pwd = getFirstPassword(log)
-		// allow flag config to skip initial nickname
-		if nick == "" {
-			// get nickname from the user
-			log.Infof("Enter nickname for your new private key:")
-			_, e := fmt.Scanln(&nick)
-			if e != nil {
-				log.Fatal(e.Error())
-			}
-		}
-		// load the keystore from file
-		k, e := crypto.NewKeystoreFromFile(dataDirPath)
-		if e != nil {
-			log.Fatal(e.Error())
-		}
-		// import the validator key
-		address, e := k.ImportRaw(blsPrivateKey.Bytes(), pwd, crypto.ImportRawOpts{
-			Nickname: nick,
-		})
-		if e != nil {
-			log.Fatal(e.Error())
-		}
-		// save keystore to the file
-		if e = k.SaveToFile(dataDirPath); e != nil {
-			log.Fatal(e.Error())
-		}
-		log.Infof("Imported validator key %s to keystore", address)
 	}
 	// make the proposals.json file if missing
 	if _, err := os.Stat(filepath.Join(dataDirPath, lib.ProposalsFilePath)); errors.Is(err, os.ErrNotExist) {
@@ -267,6 +329,10 @@ func InitializeDataDirectory(dataDirPath string, log lib.LoggerI) (c lib.Config,
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	// if the external address is passed as a flag, it takes precedence over the file config
+	if externalAddressFlag != "" {
+		c.ExternalAddress = externalAddressFlag
+	}
 	// set the data-directory
 	c.DataDirPath = dataDirPath
 	return
@@ -293,6 +359,51 @@ func WriteDefaultGenesisFile(validatorPrivateKey crypto.PrivateKeyI, genesisFile
 	if err := os.WriteFile(genesisFilePath, bz, 0777); err != nil {
 		panic(err)
 	}
+}
+
+func WriteValidatorKeyToFile(dataDirPath string, log lib.LoggerI) error {
+	privateValKeyPath := filepath.Join(dataDirPath, lib.ValKeyPath)
+	blsPrivateKey, _ := crypto.NewBLS12381PrivateKey()
+	log.Infof("Creating %s file", lib.ValKeyPath)
+	if err := crypto.PrivateKeyToFile(blsPrivateKey, privateValKeyPath); err != nil {
+		return err
+	}
+	pwd = getFirstPassword(log)
+	// allow flag config to skip initial nickname
+	if nick == "" {
+		// get nickname from the user
+		log.Infof("Enter nickname for your new private key:")
+		_, e := fmt.Scanln(&nick)
+		if e != nil {
+			return e
+		}
+	}
+	// load the keystore from file
+	k, e := crypto.NewKeystoreFromFile(dataDirPath)
+	if e != nil {
+		return e
+	}
+	// import the validator key
+	address, e := k.ImportRaw(blsPrivateKey.Bytes(), pwd, crypto.ImportRawOpts{
+		Nickname: nick,
+	})
+	if e != nil {
+		return e
+	}
+	// save keystore to the file
+	if e = k.SaveToFile(dataDirPath); e != nil {
+		return e
+	}
+	log.Infof("Imported validator key %s to keystore", address)
+	return nil
+}
+
+func confirm(prompt string) bool {
+	fmt.Printf("%s [y/N]: ", prompt)
+	reader := bufio.NewReader(os.Stdin)
+	resp, _ := reader.ReadString('\n')
+	resp = strings.ToLower(strings.TrimSpace(resp))
+	return resp == "y" || resp == "yes"
 }
 
 func writeToConsole(a any, err error) {

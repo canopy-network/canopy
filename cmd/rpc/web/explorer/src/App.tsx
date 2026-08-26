@@ -16,12 +16,14 @@ import DexBatchesPage from './components/dex/DexBatchesPage'
 import StakingPage from './components/staking/StakingPage'
 import GovernancePage from './components/staking/GovernancePage'
 import SupplyPage from './components/staking/SupplyPage'
-import { useNetworkChangeHandler } from './hooks/useApi'
+import { useNetworkChangeHandler, useBlockSubscription } from './hooks/useApi'
 import ExplorerLayout from './components/layouts/ExplorerLayout'
 
 function App() {
   // Handle network changes and invalidate queries
   useNetworkChangeHandler();
+  // Detect new blocks globally and refresh dashboard queries on chain growth
+  useBlockSubscription();
 
   return (
     <Router>

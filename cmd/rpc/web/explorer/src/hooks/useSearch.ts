@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTxByHash, useAllValidators } from './useApi'
 import {
     getModalData,
@@ -33,29 +33,48 @@ const formatAccountBalanceSubtitle = (amount: number | string | undefined) =>
 
 export const useSearch = (searchTerm: string) => {
     const [results, setResults] = useState<SearchResults | null>(null)
-    const [loading, setLoading] = useState(false)
+    const [isSearching, setIsSearching] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    // Bumped per search so a stale (superseded) request can't overwrite newer results.
+    const requestIdRef = useRef(0)
 
     // Detect if search term is a transaction hash
     const isHashSearch = searchTerm && searchTerm.length >= 32 && /^[a-fA-F0-9]+$/.test(searchTerm)
 
-    // Only use this hook for exact hashes
-    const { data: hashSearchData } = useTxByHash(isHashSearch ? searchTerm : '')
+    // Warm the tx-by-hash cache for exact hashes.
+    useTxByHash(isHashSearch ? searchTerm : '')
 
     // Get all validators for partial address search
     const { data: allValidatorsData } = useAllValidators()
 
-    const searchInData = async (term: string) => {
-        if (!term.trim()) {
+    // Ref so searchInData reads fresh validators without being an effect dep
+    // (which re-ran the search on every refetch/focus and flickered in Brave).
+    const allValidatorsRef = useRef(allValidatorsData)
+    allValidatorsRef.current = allValidatorsData
+
+    // Term currently shown; avoids blanking results when a re-run finds nothing.
+    const committedTermRef = useRef<string | null>(null)
+
+    const searchInData = async (rawTerm: string) => {
+        const term = rawTerm.trim()
+
+        if (!term) {
+            // Invalidate any in-flight request and reset to the empty state.
+            requestIdRef.current++
+            committedTermRef.current = null
             setResults(null)
+            setIsSearching(false)
+            setError(null)
             return
         }
 
-        setLoading(true)
-        setError(null)
+        const requestId = ++requestIdRef.current
 
-        // Clear previous results immediately
-        setResults(null)
+        // Keep the previous results mounted while the new query runs (no clear),
+        // so the panel doesn't blink; values are swapped in place when ready.
+        setIsSearching(true)
+        setError(null)
 
         try {
             const searchResults: SearchResults = {
@@ -65,6 +84,32 @@ export const useSearch = (searchTerm: string) => {
                 addresses: [],
                 validators: [],
                 orders: []
+            }
+
+            // Publish results-so-far (only if still the latest request). Runs as
+            // each source resolves so fast lookups show without waiting for the
+            // slow order scan. Empty states are skipped unless `force` is set.
+            const publish = (force = false) => {
+                if (requestId !== requestIdRef.current) return
+                const total = searchResults.blocks.length +
+                    searchResults.transactions.length +
+                    searchResults.addresses.length +
+                    searchResults.validators.length +
+                    searchResults.orders.length
+                if (total === 0) {
+                    if (!force) return
+                    // Don't blank results already shown for this same term.
+                    if (committedTermRef.current === term) return
+                }
+                committedTermRef.current = term
+                setResults({
+                    total,
+                    blocks: [...searchResults.blocks],
+                    transactions: [...searchResults.transactions],
+                    addresses: [...searchResults.addresses],
+                    validators: [...searchResults.validators],
+                    orders: [...searchResults.orders],
+                })
             }
 
             // DIRECT SEARCH FOR BLOCKS, TRANSACTIONS, ACCOUNTS, AND VALIDATORS
@@ -227,8 +272,9 @@ export const useSearch = (searchTerm: string) => {
                     // Search in validators list if available (validators take priority)
                     const foundValidatorAddresses = new Set<string>()
 
-                    if (allValidatorsData?.results) {
-                        const matchingValidators = allValidatorsData.results.filter((v: any) => {
+                    const validatorsList = allValidatorsRef.current
+                    if (validatorsList?.results) {
+                        const matchingValidators = validatorsList.results.filter((v: any) => {
                             const address = (v.address || '').toLowerCase()
                             return address.startsWith(termLower)
                         })
@@ -384,39 +430,44 @@ export const useSearch = (searchTerm: string) => {
                     .catch(err => console.log('Order search error:', err))
             )
 
-            // Wait for all promises to complete
-            await Promise.all(searchPromises)
+            // Publish as each source settles so results appear progressively.
+            searchPromises.forEach(p => { p.then(() => publish()).catch(() => { }) })
 
-            // Calculate total
-            const total = searchResults.blocks.length +
-                searchResults.transactions.length +
-                searchResults.addresses.length +
-                searchResults.validators.length +
-                searchResults.orders.length
+            await Promise.allSettled(searchPromises)
 
-            setResults({
-                ...searchResults,
-                total
-            })
+            // Drop results if a newer search superseded this one.
+            if (requestId !== requestIdRef.current) return
+
+            // Final publish (forced) also renders the "no results" state.
+            publish(true)
         } catch (err) {
+            if (requestId !== requestIdRef.current) return
             setError('Error searching data')
             console.error('Search error:', err)
         } finally {
-            setLoading(false)
+            // Only the latest request may clear the searching flag.
+            if (requestId === requestIdRef.current) {
+                setIsSearching(false)
+            }
         }
     }
 
+    // Re-run only on term change (not on background refetch/focus, which
+    // flickered in Brave). Validators are read via a ref instead.
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             searchInData(searchTerm)
         }, 300) // 300ms debounce
 
         return () => clearTimeout(timeoutId)
-    }, [searchTerm, hashSearchData, isHashSearch, allValidatorsData])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchTerm])
 
     return {
         results,
-        loading,
+        // Spinner only on the first search (nothing shown yet); later searches update in place.
+        loading: isSearching && !results,
+        isSearching,
         error,
         search: searchInData
     }

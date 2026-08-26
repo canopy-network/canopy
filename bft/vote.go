@@ -5,6 +5,11 @@ import (
 	"github.com/canopy-network/canopy/lib/crypto"
 )
 
+const (
+	maxVDFElementSize = 1024
+	maxVDFIterations  = uint64(1<<31 - 1)
+)
+
 // LEADER TRACKING AND AGGREGATING MESSAGES FROM REPLICAS
 
 // NOTE: A 'Vote' is a digital signature of SignBytes from a Replica Validator. By signing a message and sending it to the Leader,
@@ -52,13 +57,13 @@ func (b *BFT) AddVote(vote *Message) lib.ErrorI {
 	b.Controller.Lock()
 	defer b.Controller.Unlock()
 	voteSet := b.getVoteSet(vote)
-	// handle high qc and byzantine evidence (only applicable if ELECTION-VOTE)
-	if err := b.handleHighQCVDFAndEvidence(vote); err != nil {
-		return err
-	}
 	// add the vote to the set
 	if err := b.addSigToVoteSet(vote, voteSet); err != nil {
 		return err
+	}
+	// optional attachments don't invalidate the signed vote
+	if err := b.handleHighQCVDFAndEvidence(vote); err != nil {
+		b.log.Warnf("Ignoring invalid vote attachment: %s", err.Error())
 	}
 	return nil
 }
@@ -143,6 +148,9 @@ func (b *BFT) handleHighQCVDFAndEvidence(vote *Message) lib.ErrorI {
 		}
 		// pre handle VDF if enabled
 		if b.Config.RunVDF && vote.Vdf != nil && vote.Vdf.Iterations != 0 {
+			if len(vote.Vdf.Proof) > maxVDFElementSize || len(vote.Vdf.Output) > maxVDFElementSize || vote.Vdf.Iterations > maxVDFIterations {
+				return lib.ErrInvalidVDF()
+			}
 			// save the obtained VDF vote to be processed at the PROPOSE phase
 			b.VDFCache = append(b.VDFCache, vote)
 		}

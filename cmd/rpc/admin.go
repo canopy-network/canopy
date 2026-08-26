@@ -137,6 +137,32 @@ func (s *Server) TransactionSend(w http.ResponseWriter, r *http.Request, _ httpr
 	})
 }
 
+// TransactionSendVesting sends an amount to another address with a recipient vesting schedule.
+func (s *Server) TransactionSendVesting(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		toAddress, err := crypto.NewAddressFromString(ptr.Output)
+		if err != nil {
+			return nil, err
+		}
+		if err = s.getFeeFromState(ptr, fsm.MessageSendName); err != nil {
+			return nil, err
+		}
+		return fsm.NewSendTransactionWithVesting(
+			p,
+			toAddress,
+			ptr.Amount,
+			ptr.VestingStartHeight,
+			ptr.VestingCliffHeight,
+			ptr.VestingEndHeight,
+			s.config.NetworkID,
+			s.config.ChainId,
+			ptr.Fee,
+			s.controller.ChainHeight(),
+			ptr.Memo,
+		)
+	})
+}
+
 // TransactionStake stakes a validator
 func (s *Server) TransactionStake(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
@@ -263,7 +289,7 @@ func (s *Server) TransactionDAOTransfer(w http.ResponseWriter, r *http.Request, 
 			return nil, err
 		}
 		// Create and return the transaction to be sent
-		return fsm.NewDAOTransferTx(p, ptr.Amount, ptr.StartBlock, ptr.EndBlock, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+		return fsm.NewDAOTransferTx(p, ptr.Amount, ptr.StartBlock, ptr.EndBlock, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Mint, ptr.Memo)
 	})
 }
 
@@ -501,6 +527,27 @@ func (s *Server) ConsensusInfo(w http.ResponseWriter, r *http.Request, _ httprou
 	if _, e := w.Write(summary); e != nil {
 		s.logger.Error(e.Error())
 	}
+}
+
+// ConsensusForceRound schedules coordinated recovery at the next pacemaker.
+func (s *Server) ConsensusForceRound(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	request := new(struct {
+		Round        uint64  `json:"round"`
+		TimeoutRound *uint64 `json:"timeoutRound,omitempty"`
+		UnixTimeMS   int64   `json:"unixTimeMS"`
+	})
+	if !unmarshal(w, r, request) {
+		return
+	}
+
+	s.controller.Lock()
+	err := s.controller.Consensus.ScheduleForceRound(request.Round, time.UnixMilli(request.UnixTimeMS), request.TimeoutRound)
+	s.controller.Unlock()
+	if err != nil {
+		write(w, lib.NewError(lib.NoCode, lib.RPCModule, err.Error()), http.StatusBadRequest)
+		return
+	}
+	write(w, request, http.StatusOK)
 }
 
 // PeerInfo retrieves node peer information

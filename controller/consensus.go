@@ -10,6 +10,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
+	"github.com/canopy-network/canopy/store"
 )
 
 const (
@@ -74,6 +75,10 @@ func (c *Controller) Sync() {
 	c.log.Infof("Sync started 🔄 for committee %d", c.Config.ChainId)
 	// set the Controller as 'syncing'
 	c.isSyncing.Store(true)
+	// notify the store to defer compaction during sync
+	if st, ok := c.FSM.Store().(*store.Store); ok {
+		st.SetSyncing(true)
+	}
 	// check if node is alone in the validator set
 	singleNode, err := c.singleNodeNetwork()
 	if err != nil {
@@ -178,7 +183,7 @@ func (c *Controller) processQueue(startHeight, stopHeight uint64, queue map[uint
 		// lock the controller
 		c.Lock()
 		// process the block message received from the peer
-		_, err := c.HandlePeerBlock(blockMsg, true)
+		_, err := c.handlePeerBlock(blockMsg, true, height+1 == stopHeight)
 		// unlock controller
 		c.Unlock()
 		// check error from HandlePeerBlock
@@ -311,16 +316,19 @@ func (c *Controller) ListenForConsensus() {
 		}
 		// execute in a sub-function to unify error handling and enable 'defer' functionality
 		if err := func() (err lib.ErrorI) {
-			// check and add the message to the cache to prevent duplicates
-			if ok := cache.Add(msg); !ok {
-				// duplicate, exit
-				return
-			}
 			// create a new 'consensus message' to unmarshal the bytes to
 			bftMsg := new(bft.Message)
 			// try to unmarshal into a consensus message
 			if err = lib.Unmarshal(msg.Message, bftMsg); err != nil {
 				// exit with error
+				return
+			}
+			// direct consensus messages must come from their signer; gossip messages may come from a relay
+			if !validConsensusSender(msg.Sender.Address.PublicKey, bftMsg, c.P2P.GossipMode()) {
+				return lib.ErrInvalidSigner()
+			}
+			// check and add the message to the cache to prevent duplicates
+			if ok := cache.Add(msg); !ok {
 				return
 			}
 			// check whether the message should be gossiped
@@ -346,6 +354,10 @@ func (c *Controller) ListenForConsensus() {
 			c.P2P.ChangeReputation(msg.Sender.Address.PublicKey, p2p.InvalidMsgRep)
 		}
 	}
+}
+
+func validConsensusSender(sender []byte, msg *bft.Message, gossipMode bool) bool {
+	return msg.GetSignature() != nil && (gossipMode || bytes.Equal(sender, msg.Signature.PublicKey))
 }
 
 // ShouldGossip() controls whether a consensus message should be gossiped
@@ -740,12 +752,32 @@ func (c *Controller) finishSyncing() {
 	c.Lock()
 	// when function completes, unlock
 	defer c.Unlock()
+	// reinitialize the mempool now that sync is complete
+	c.Mempool.L.Lock()
+	c.Mempool.Clear()
+	c.Mempool.FSM.Discard()
+	if mFSM, err := c.FSM.Copy(); err == nil {
+		c.Mempool.FSM = mFSM
+	}
+	c.Mempool.CheckMempool()
+	c.Mempool.FSM.Reset()
+	c.Mempool.L.Unlock()
 	// set the startup block metric (block height when first sync completed)
 	c.Metrics.SetStartupBlock(c.FSM.Height())
 	// signal a reset of bft for the chain
 	c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: c.LoadLastCommitTime(c.FSM.Height())}
 	// set syncing to false
 	c.isSyncing.Store(false)
+	// notify the store to resume compaction and trigger a full compaction of all prefixes
+	// (including SMT/indexer which are never compacted during normal operation)
+	if st, ok := c.FSM.Store().(*store.Store); ok {
+		st.SetSyncing(false)
+		go func() {
+			if err := st.CompactAll(st.Version()); err != nil {
+				c.log.Errorf("post-sync compaction failed: %s", err)
+			}
+		}()
+	}
 	// enable listening for a block
 	go c.ListenForBlock()
 }

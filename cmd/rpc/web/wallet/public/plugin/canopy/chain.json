@@ -43,7 +43,14 @@
           "height": "number"
         },
         "response": {
-          "amount": "number"
+          "amount": "number",
+          "totalAmount": "number",
+          "vestedAmount": "number",
+          "lockedAmount": "number",
+          "vestingAmount": "number",
+          "vestingStartHeight": "number",
+          "vestingCliffHeight": "number",
+          "vestingEndHeight": "number"
         }
       },
       "selector": ""

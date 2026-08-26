@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/canopy-network/canopy/fsm"
 
@@ -24,6 +25,13 @@ type Client struct {
 
 func NewClient(rpcURL, adminRPCUrl string) *Client {
 	return &Client{rpcURL: rpcURL, adminRpcUrl: adminRPCUrl, client: http.Client{}}
+}
+
+// NewClientWithTimeout() creates a Client that aborts requests exceeding the given timeout.
+// Required for callers that hold critical locks (e.g. the root-chain manager holds the
+// controller mutex), where a hung request would wedge the node.
+func NewClientWithTimeout(rpcURL, adminRPCUrl string, timeout time.Duration) *Client {
+	return &Client{rpcURL: rpcURL, adminRpcUrl: adminRPCUrl, client: http.Client{Timeout: timeout}}
 }
 
 func (c *Client) Version() (version *string, err lib.ErrorI) {
@@ -169,8 +177,8 @@ func (c *Client) TransactionsByRecipient(address string, params lib.PageParams) 
 	return
 }
 
-func (c *Client) Account(height uint64, address string) (p *fsm.Account, err lib.ErrorI) {
-	p = new(fsm.Account)
+func (c *Client) Account(height uint64, address string) (p *AccountView, err lib.ErrorI) {
+	p = new(AccountView)
 	err = c.heightAndAddressRequest(AccountRouteName, height, address, p)
 	return
 }
@@ -566,6 +574,27 @@ func (c *Client) TxSend(from AddrOrNickname, rec string, amt uint64, pwd string,
 	return c.transactionRequest(TxSendRouteName, txReq, submit)
 }
 
+func (c *Client) TxSendVesting(from AddrOrNickname, rec string, amt, vestingStartHeight, vestingCliffHeight, vestingEndHeight uint64, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txSendVesting{
+		Fee:                optFee,
+		Amount:             amt,
+		Output:             rec,
+		VestingStartHeight: vestingStartHeight,
+		VestingCliffHeight: vestingCliffHeight,
+		VestingEndHeight:   vestingEndHeight,
+		Submit:             submit,
+		Password:           pwd,
+	}
+
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxSendVestingRouteName, txReq, submit)
+}
+
 func (c *Client) TxStake(addrOrNick AddrOrNickname, netAddr string, amt uint64, committees, output string, signer AddrOrNickname, delegate, earlyWithdrawal bool, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	return c.txStake(addrOrNick, netAddr, amt, committees, output, delegate, earlyWithdrawal, signer, pwd, submit, false, optFee)
 }
@@ -609,12 +638,13 @@ func (c *Client) TxChangeParam(from AddrOrNickname, pSpace, pKey, pValue string,
 }
 
 func (c *Client) TxDaoTransfer(from AddrOrNickname, amt, startBlk, endBlk uint64,
-	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	pwd string, submit bool, optFee uint64, mint bool) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	txReq := txDaoTransfer{
 		Fee:      optFee,
 		Submit:   submit,
 		Password: pwd,
 		Amount:   amt,
+		Mint:     mint,
 		txChangeParamRequest: txChangeParamRequest{
 			StartBlock: startBlk,
 			EndBlock:   endBlk,

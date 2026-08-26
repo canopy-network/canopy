@@ -457,6 +457,7 @@ type eventDexLiquidityWithdrawal struct {
 	RemoteAmount uint64   `json:"remoteAmount"`
 	OrderId      HexBytes `json:"orderId"`
 	PointsBurned uint64   `json:"pointsBurned"`
+	Percent      uint64   `json:"percent"`
 }
 
 // MarshalJSON() implements custom JSON marshalling for EventDexLiquidityWithdrawal, converting []byte fields to HexBytes
@@ -466,6 +467,7 @@ func (e EventDexLiquidityWithdrawal) MarshalJSON() ([]byte, error) {
 		RemoteAmount: e.RemoteAmount,
 		OrderId:      e.OrderId,
 		PointsBurned: e.PointsBurned,
+		Percent:      e.Percent,
 	}
 	return json.Marshal(temp)
 }
@@ -481,6 +483,7 @@ func (e *EventDexLiquidityWithdrawal) UnmarshalJSON(b []byte) error {
 		RemoteAmount: temp.RemoteAmount,
 		OrderId:      temp.OrderId,
 		PointsBurned: temp.PointsBurned,
+		Percent:      temp.Percent,
 	}
 	return nil
 }

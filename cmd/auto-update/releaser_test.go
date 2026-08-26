@@ -20,7 +20,7 @@ func TestGetLatestPluginReleaseFiltersByPluginStream(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/repos/my-org/my-plugin-repo/releases", r.URL.Path)
-		_, _ = w.Write([]byte(fmt.Sprintf(`[
+		_, _ = fmt.Fprintf(w, `[
 			{
 				"tag_name": "v9.9.9",
 				"assets": [{"name": "cli-linux-amd64", "browser_download_url": "https://example.com/cli"}],
@@ -34,18 +34,18 @@ func TestGetLatestPluginReleaseFiltersByPluginStream(t *testing.T) {
 				"prerelease": false
 			},
 			{
-				"tag_name": "plugin-go-v2026.78.100",
-				"assets": [{"name": "%s", "browser_download_url": "https://example.com/go-old"}],
-				"draft": false,
-				"prerelease": false
-			},
-			{
 				"tag_name": "plugin-go-v2026.79.200",
 				"assets": [{"name": "%s", "browser_download_url": "https://example.com/go-new"}],
 				"draft": false,
 				"prerelease": false
+			},
+			{
+				"tag_name": "plugin-go-v2026.78.100",
+				"assets": [{"name": "%s", "browser_download_url": "https://example.com/go-old"}],
+				"draft": false,
+				"prerelease": false
 			}
-		]`, assetName, assetName)))
+		]`, assetName, assetName)
 	}))
 	defer server.Close()
 
@@ -60,7 +60,7 @@ func TestGetLatestPluginReleaseFiltersByPluginStream(t *testing.T) {
 			AssetName:    "go-plugin-%s-%s.tar.gz",
 			ArchSpecific: true,
 		},
-	}, "v0.0.0", true)
+	}, "v0.0.0")
 
 	release, err := rm.GetLatestRelease()
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestShouldUpdateAcceptsPluginPrefixedSemver(t *testing.T) {
 	rm := NewReleaseManager(&ReleaseManagerConfig{
 		Type:      ReleaseTypePlugin,
 		PluginDir: "plugin/go",
-	}, "v2026.78.100", true)
+	}, "v2026.78.100")
 
 	release := &Release{Version: "plugin-go-v2026.79.200"}
 	err := rm.ShouldUpdate(release)

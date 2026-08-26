@@ -8,6 +8,13 @@ import { cnpyDetailFormat, toCNPY } from '../../lib/utils'
 interface Account {
     address: string
     amount: number
+    totalAmount?: number
+    vestedAmount?: number
+    lockedAmount?: number
+    vestingAmount?: number
+    vestingStartHeight?: number
+    vestingCliffHeight?: number
+    vestingEndHeight?: number
 }
 
 interface AccountDetailHeaderProps {
@@ -21,6 +28,12 @@ const CopySymbol = ({ copied }: { copied: boolean }) => {
 
 const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) => {
     const [copied, setCopied] = useState(false)
+    const totalAmount = account.totalAmount ?? account.amount
+    const spendableAmount = account.amount
+    const vestedAmount = account.vestedAmount ?? 0
+    const lockedAmount = account.lockedAmount ?? 0
+    const vestingAmount = account.vestingAmount ?? 0
+    const hasVesting = vestingAmount > 0 || vestedAmount > 0 || lockedAmount > 0
 
     const copyToClipboard = async () => {
         try {
@@ -93,6 +106,52 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                         </p>
                     </div>
                 </div>
+
+                {hasVesting && (
+                    <>
+                        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            {[
+                                { label: 'Total', value: totalAmount },
+                                { label: 'Spendable', value: spendableAmount },
+                                { label: 'Locked', value: lockedAmount },
+                                { label: 'Vested', value: vestedAmount },
+                            ].map((item) => (
+                                <div key={item.label} className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
+                                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                                        {item.label}
+                                    </div>
+                                    <div className="mt-2 text-sm font-medium text-white tabular-nums">
+                                        <AnimatedNumber value={toCNPY(item.value)} format={cnpyDetailFormat} className="text-white" />
+                                        <span className="ml-1 text-white/55">CNPY</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/60">
+                            {vestingAmount > 0 && (
+                                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                    Vesting tranche: {toCNPY(vestingAmount).toLocaleString(undefined, { maximumFractionDigits: 4 })} CNPY
+                                </span>
+                            )}
+                            {account.vestingStartHeight ? (
+                                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                    Start: {account.vestingStartHeight.toLocaleString()}
+                                </span>
+                            ) : null}
+                            {account.vestingCliffHeight ? (
+                                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                    Cliff: {account.vestingCliffHeight.toLocaleString()}
+                                </span>
+                            ) : null}
+                            {account.vestingEndHeight ? (
+                                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                    End: {account.vestingEndHeight.toLocaleString()}
+                                </span>
+                            ) : null}
+                        </div>
+                    </>
+                )}
             </motion.div>
         </div>
     )

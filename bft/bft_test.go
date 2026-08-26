@@ -89,6 +89,12 @@ func TestStartElectionPhase(t *testing.T) {
 	}
 }
 
+func TestValidProcessTimeRejectsFutureTimestamp(t *testing.T) {
+	require.Zero(t, validProcessTime(time.Now().Add(time.Hour), time.Second))
+	require.Zero(t, validProcessTime(time.Now().Add(-time.Hour), time.Second))
+	require.Positive(t, validProcessTime(time.Now().Add(-time.Millisecond), time.Second))
+}
+
 func TestStartElectionVotePhase(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -745,6 +751,45 @@ func TestPacemaker(t *testing.T) {
 	}
 }
 
+func TestPacemakerRequiresMoreThanOneThird(t *testing.T) {
+	c := newTestConsensus(t, Propose, 2)
+	c.bft.ValidatorSet.ValidatorSet.ValidatorSet[0].VotingPower = 67
+	c.bft.ValidatorSet.ValidatorSet.ValidatorSet[1].VotingPower = 33
+	c.bft.ValidatorSet.TotalPower = 100
+	msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, 3)}}
+	require.NoError(t, msg.Sign(c.valKeys[1]))
+	require.NoError(t, c.bft.HandleMessage(msg))
+
+	c.bft.Pacemaker()
+	require.Equal(t, uint64(1), c.bft.Round)
+}
+
+func TestScheduleForceRound(t *testing.T) {
+	c := newTestConsensus(t, Election, 1)
+	c.bft.Round = 2
+	c.bft.round.Store(2)
+	lockedQC := &QC{}
+	c.bft.HighQC = lockedQC
+
+	timeoutRound := uint64(0)
+	require.NoError(t, c.bft.ScheduleForceRound(7, time.Now().Add(time.Hour), &timeoutRound))
+	c.bft.Phase = Pacemaker
+	c.bft.HandlePhase()
+	require.Equal(t, Pacemaker, c.bft.Phase)
+	require.Equal(t, uint64(2), c.bft.Round)
+
+	require.NoError(t, c.bft.ScheduleForceRound(7, time.Now(), &timeoutRound))
+	c.bft.HandlePhase()
+	require.Equal(t, uint64(7), c.bft.CurrentRound())
+	require.Equal(t, Election, c.bft.Phase)
+	require.Same(t, lockedQC, c.bft.HighQC)
+	require.Equal(t, time.Duration(c.bft.Config.ElectionTimeoutMS)*time.Millisecond, c.bft.WaitTime(Election, c.bft.Round+1))
+	require.Error(t, c.bft.ScheduleForceRound(7, time.Now(), nil))
+	c.bft.NewHeight()
+	require.Nil(t, c.bft.forcedTimeoutRound)
+	c.bft.PhaseTimer.Stop()
+}
+
 func TestPhaseHas23Maj(t *testing.T) {
 	c := newTestConsensus(t, Propose, 3)
 	// 75% votes
@@ -1010,9 +1055,11 @@ func TestSafeNode(t *testing.T) {
 					HighQc: c2.bft.HighQC,
 				})
 			default:
-				msgProposal, hash := c.cont.NewTestBlock(), c.cont.NewTestBlock2()
+				msgProposal, hash, resultsHash := c.cont.NewTestBlock(), c.cont.NewTestBlockHash2(), []byte(nil)
 				if test.samePropInMsg {
-					hash = c.cont.NewTestBlockHash()
+					msgProposal = c.cont.NewTestBlock2()
+					hash = c.cont.NewTestBlockHash2()
+					resultsHash = c.bft.HighQC.Results.Hash()
 				}
 				err = c.bft.SafeNode(&Message{
 					Qc: &QC{
@@ -1020,8 +1067,9 @@ func TestSafeNode(t *testing.T) {
 						Block:   msgProposal,
 					},
 					HighQc: &QC{
-						Header:    c.bft.HighQC.Header,
-						BlockHash: hash,
+						Header:      c.bft.HighQC.Header,
+						BlockHash:   hash,
+						ResultsHash: resultsHash,
 					},
 				})
 			}

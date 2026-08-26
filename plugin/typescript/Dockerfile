@@ -2,7 +2,7 @@
 # Build from repository root: docker build -f plugin/typescript/Dockerfile -t canopy-typescript .
 
 # Stage 1: Build Canopy (Go)
-FROM golang:1.25-alpine AS canopy-builder
+FROM golang:1.26-alpine AS canopy-builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -18,7 +18,7 @@ RUN npm ci && npm run build:all
 # Stage 3: Runtime
 FROM node:20-alpine
 WORKDIR /app
-RUN apk add --no-cache bash && mkdir -p /tmp/plugin /root/.canopy plugin/typescript
+RUN apk add --no-cache bash procps && mkdir -p /tmp/plugin /root/.canopy plugin/typescript
 
 COPY --from=canopy-builder /canopy .
 COPY --from=typescript-builder /app/dist plugin/typescript/dist/

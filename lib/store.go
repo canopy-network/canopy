@@ -60,6 +60,7 @@ type WIndexerI interface {
 
 // RIndexerI defines the read interface for the indexing operations
 type RIndexerI interface {
+	StateChangeKeys(version uint64, prefix []byte) (keys [][]byte, available bool, err ErrorI)     // get state keys written at a committed version
 	GetTxByHash(hash []byte) (*TxResult, ErrorI)                                                   // get the tx by the Transaction hash
 	GetTxsByHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)               // get Transactions for a height
 	GetTxsBySender(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)     // get Transactions for a sender
@@ -103,7 +104,7 @@ type ProveStoreI interface {
 // IteratorI defines an interface for iterating over key-value pairs in a data store
 type IteratorI interface {
 	Valid() bool           // if the item the iterator is pointing at is valid
-	Next()                 // move to next item
+	Next()                 // move to next itema
 	Key() (key []byte)     // retrieve key
 	Value() (value []byte) // retrieve value
 	Close()                // close the iterator when done, ensuring proper resource management

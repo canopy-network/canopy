@@ -22,7 +22,7 @@ RUN echo "Building from BRANCH=${BRANCH}" && \
     fi
 
 # Copy golang
-COPY --from=golang:1.24-alpine /usr/local/go/ /usr/local/go/
+COPY --from=golang:1.26-alpine /usr/local/go/ /usr/local/go/
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 RUN go version
@@ -63,8 +63,9 @@ COPY --from=builder /go/src/github.com/canopy-network/canopy/bin ./canopy
 COPY --from=builder ${BIN_PATH} ${BIN_PATH}
 
 # Create plugin directory and copy only pluginctl.sh
-# Self-contained plugin binary will be downloaded from upstream release and extracted on first start
-RUN mkdir -p /app/plugin/csharp/bin
+# Self-contained plugin binary will be downloaded from upstream release and
+# extracted into the persistent data dir (CANOPY_PLUGIN_HOME) on first start
+RUN mkdir -p /app/plugin/csharp
 COPY --from=builder /go/src/github.com/canopy-network/canopy/plugin/csharp/pluginctl.sh /app/plugin/csharp/pluginctl.sh
 
 # Copy entrypoint

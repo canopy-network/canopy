@@ -58,6 +58,12 @@ func DefaultConfig() Config {
 	}
 }
 
+// PluginHome() returns the persistent plugin directory under the data dir; the
+// single source of truth shared by the node launcher and the auto-updater
+func (c Config) PluginHome(plugin string) string {
+	return filepath.Join(c.DataDirPath, "plugin", plugin)
+}
+
 // MAIN CONFIG BELOW
 
 type MainConfig struct {
@@ -268,10 +274,11 @@ func DefaultP2PConfig() P2PConfig {
 
 // StoreConfig is user configurations for the key value database
 type StoreConfig struct {
-	DataDirPath    string `json:"dataDirPath"`    // path of the designated folder where the application stores its data
-	DBName         string `json:"dbName"`         // name of the database
-	IndexByAccount bool   `json:"indexByAccount"` // index transactions by account
-	InMemory       bool   `json:"inMemory"`       // non-disk database, only for testing
+	DataDirPath               string `json:"dataDirPath"`               // path of the designated folder where the application stores its data
+	DBName                    string `json:"dbName"`                    // name of the database
+	IndexByAccount            bool   `json:"indexByAccount"`            // index transactions by account
+	InMemory                  bool   `json:"inMemory"`                  // non-disk database, only for testing
+	StateChangeJournalEnabled bool   `json:"stateChangeJournalEnabled"` // persist state-change keys for indexer blob deltas
 	// recommended range: 500-2000 for optimal performance. Values below 500 increase disk I/O
 	// by several orders of magnitude, reducing performance and accelerating disk degradation during
 	// sync. Lower values also increase the risk of data loss due to a pebble issue where batches are
@@ -279,6 +286,7 @@ type StoreConfig struct {
 	LSSCompactionInterval uint64 `json:"lssCompactionInterval"` // interval for compacting latest store data
 	BackupDirectory       string `json:"backupDirectory"`       // directory where backups of the database are stored
 	BackupInterval        uint64 `json:"backupInterval"`        // interval in blocks for creating backups of the database (0 to disable automatic backups)
+	CompressionProfile    string `json:"compressionProfile"`    // the pebbledb compression profile to use.
 }
 
 // DefaultDataDirPath() is $USERHOME/.canopy
@@ -299,13 +307,15 @@ func DefaultDataDirPath() string {
 // DefaultStoreConfig() returns the developer recommended store configuration
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		DataDirPath:           DefaultDataDirPath(),                      // use the default data dir path
-		DBName:                "canopy",                                  // 'canopy' database name
-		IndexByAccount:        true,                                      // index transactions by account
-		InMemory:              false,                                     // persist to disk, not memory
-		LSSCompactionInterval: uint64(rand.Int32N(101) + 500),            // clean every 500-600 blocks (random)
-		BackupDirectory:       path.Join(DefaultDataDirPath(), "backup"), // backup directory name
-		BackupInterval:        0,                                         // backups disabled by default
+		DataDirPath:               DefaultDataDirPath(),                      // use the default data dir path
+		DBName:                    "canopy",                                  // 'canopy' database name
+		IndexByAccount:            true,                                      // index transactions by account
+		InMemory:                  false,                                     // persist to disk, not memory
+		StateChangeJournalEnabled: false,                                     // state-change journaling is disabled by default
+		LSSCompactionInterval:     uint64(rand.Int32N(101) + 500),            // clean every 500-600 blocks (random)
+		BackupDirectory:           path.Join(DefaultDataDirPath(), "backup"), // backup directory name
+		BackupInterval:            0,                                         // backups disabled by default
+		CompressionProfile:        "zstd",
 	}
 }
 
@@ -359,7 +369,7 @@ func (c Config) WriteToFile(filepath string) error {
 		return err
 	}
 	// write the config.json file to the data directory
-	return os.WriteFile(filepath, jsonBytes, os.ModePerm)
+	return os.WriteFile(filepath, jsonBytes, 0600)
 }
 
 // NewConfigFromFile() populates a Config object from a JSON file

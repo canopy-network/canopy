@@ -17,6 +17,9 @@ namespace CanopyPlugin
             using var plugin = new Plugin(config);
             await plugin.StartAsync();
 
+            // start the plugin's own HTTP server exposing custom, chain-specific RPC endpoints
+            _ = plugin.StartRpcServerAsync();
+
             Console.WriteLine("Plugin started - waiting for FSM requests...");
 
             // wait for shutdown signal

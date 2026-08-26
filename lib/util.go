@@ -21,6 +21,7 @@ import (
 	"unsafe"
 
 	"github.com/canopy-network/canopy/lib/crypto"
+	"golang.org/x/mod/semver"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -126,6 +127,30 @@ func (p *Page) Load(storePrefix []byte, reverse bool, results Pageable, db RStor
 	}
 	// calculate total pages
 	p.TotalPages = int(math.Ceil(float64(p.TotalCount) / float64(p.PerPage)))
+	// exit
+	return
+}
+
+// LoadCounted() fills a page when the total number of items and the position of each item
+// are already known, invoking the callback only for the indices that belong to the requested
+// page. Unlike Load(), no iteration over the skipped items is needed to calculate the params
+func (p *Page) LoadCounted(totalCount int, results Pageable, callback func(index int) ErrorI) (err ErrorI) {
+	// set the page results so that even if it's a zero page, it will have a castable type
+	p.Results, p.TotalCount = results, totalCount
+	// skip to index makes the starting point appropriate based on the page params
+	pageStartIndex := p.skipToIndex()
+	// calculate total pages
+	p.TotalPages = int(math.Ceil(float64(p.TotalCount) / float64(p.PerPage)))
+	// for each index of the requested page that actually exists
+	for i := pageStartIndex; i < pageStartIndex+p.PerPage && i < totalCount; i++ {
+		// execute the callback; passing the index within the complete result set
+		if err = callback(i); err != nil {
+			// exit with error
+			return
+		}
+		// set the results and increment the count
+		p.Results, p.Count = results, p.Count+1
+	}
 	// exit
 	return
 }
@@ -303,6 +328,12 @@ func Unmarshal(protoBytes []byte, ptr any) ErrorI {
 	if isCritical {
 		if err := rejectUnknownForCriticalMessages(msg); err != nil {
 			return ErrUnmarshal(err)
+		}
+		if _, ok := msg.(*Transaction); ok {
+			canonical, err := marshaller.Marshal(msg)
+			if err != nil || !bytes.Equal(protoBytes, canonical) {
+				return ErrUnmarshal(fmt.Errorf("non-canonical transaction encoding"))
+			}
 		}
 	}
 	// exit
@@ -500,7 +531,7 @@ func SaveJSONToFile(j any, dataDirPath, filePath string) (err ErrorI) {
 		return
 	}
 	// attempt to write the json bytes to a json file at the path
-	if e := os.WriteFile(filepath.Join(dataDirPath, filePath), jsonBytes, os.ModePerm); e != nil {
+	if e := os.WriteFile(filepath.Join(dataDirPath, filePath), jsonBytes, 0600); e != nil {
 		// exit with error
 		return ErrWriteFile(e)
 	}
@@ -768,7 +799,7 @@ func StopTimer(t *time.Timer) {
 // CatchPanic() catches any panic in the function call or child function calls
 func CatchPanic(l LoggerI) {
 	if r := recover(); r != nil {
-		l.Errorf(string(debug.Stack()))
+		l.Error(string(debug.Stack()))
 	}
 }
 
@@ -823,9 +854,10 @@ func DecodeLengthPrefixed(key []byte) (segments [][]byte) {
 
 // Retry is a simple exponential backoff retry structure in the form of doubling the timeout
 type Retry struct {
-	waitTimeMS uint64 // time to wait in milliseconds
-	maxLoops   uint64 // the maximum number of loops before quitting
-	loopCount  uint64 // the loop count itself
+	waitTimeMS    uint64 // time to wait in milliseconds
+	maxWaitTimeMS uint64 // optional cap on the wait time (0 = uncapped)
+	maxLoops      uint64 // the maximum number of loops before quitting
+	loopCount     uint64 // the loop count itself
 }
 
 // NewRetry() constructs a new Retry given parameters
@@ -833,6 +865,17 @@ func NewRetry(waitTimeMS, maxLoops uint64) *Retry {
 	return &Retry{
 		waitTimeMS: waitTimeMS,
 		maxLoops:   maxLoops,
+	}
+}
+
+// NewCappedRetry() constructs a Retry whose exponential backoff is capped at maxWaitTimeMS.
+// This keeps reconnect/poll loops responsive: the delay grows exponentially up to the cap and
+// then stays there, instead of ballooning into minutes (or longer) after a handful of failures.
+func NewCappedRetry(waitTimeMS, maxWaitTimeMS, maxLoops uint64) *Retry {
+	return &Retry{
+		waitTimeMS:    waitTimeMS,
+		maxWaitTimeMS: maxWaitTimeMS,
+		maxLoops:      maxLoops,
 	}
 }
 
@@ -849,6 +892,10 @@ func (r *Retry) WaitAndDoRetry() bool {
 		time.Sleep(time.Duration(r.waitTimeMS) * time.Millisecond)
 		// double the timeout
 		r.waitTimeMS += r.waitTimeMS
+		// clamp the wait time to the configured maximum (if any) to avoid runaway backoff
+		if r.maxWaitTimeMS != 0 && r.waitTimeMS > r.maxWaitTimeMS {
+			r.waitTimeMS = r.maxWaitTimeMS
+		}
 	}
 	// increment the loop count
 	r.loopCount++
@@ -1052,4 +1099,18 @@ func RandSlice(byteSize uint64) []byte {
 	value := make([]byte, byteSize)
 	rand.Read(value)
 	return value
+}
+
+// IsValidVersion reports whether version is valid semver, accepting an optional
+// leading "v". Shared so the release script and auto-updater validate alike.
+func IsValidVersion(version string) bool {
+	return semver.IsValid(normalizeVersion(version))
+}
+
+// normalizeVersion adds the leading "v" that golang.org/x/mod/semver requires.
+func normalizeVersion(version string) string {
+	if version == "" || version[0] == 'v' {
+		return version
+	}
+	return "v" + version
 }

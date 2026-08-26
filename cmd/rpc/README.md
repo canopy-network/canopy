@@ -303,7 +303,14 @@ $ curl -X POST localhost:50002/v1/query/indexer-blobs \
 **Response**:
 
 - **address**: `hex string` - the 20 byte identifier
-- **amount**: `uint64` - the balance of funds the account has
+- **amount**: `uint64` - the spendable balance of funds the account can currently withdraw
+- **totalAmount**: `uint64` - the total balance recorded for the account before vesting locks are applied
+- **vestedAmount**: `uint64` - the portion of `vestingAmount` that has vested at the queried height
+- **lockedAmount**: `uint64` - the portion of `vestingAmount` that is still locked at the queried height
+- **vestingAmount**: `uint64` - the total amount governed by the vesting schedule (omitted when zero)
+- **vestingStartHeight**: `uint64` - the block height where vesting begins (omitted when zero)
+- **vestingCliffHeight**: `uint64` - the block height where vesting first becomes spendable (omitted when zero)
+- **vestingEndHeight**: `uint64` - the block height where vesting fully completes (omitted when zero)
 
 **Example**:
 
@@ -317,7 +324,14 @@ $ curl -X POST localhost:50002/v1/query/account \
 
 > {
     "address": "0971d5d96f1533479ab1a6472fe0260df6ae732d",
-    "amount": 99990000
+    "amount": 99990000,
+    "totalAmount": 100000000,
+    "vestedAmount": 500000,
+    "lockedAmount": 10000,
+    "vestingAmount": 510000,
+    "vestingStartHeight": 900,
+    "vestingCliffHeight": 950,
+    "vestingEndHeight": 1200
   }
 ```
 
@@ -339,7 +353,14 @@ $ curl -X POST localhost:50002/v1/query/account \
 - **pageNumber**: `int` - the number of the page
 - **results**: `array` - the list of result objects
   - **address**: - `hex string` the 20 byte unique identifier of the account
-  - **amount**: - `uint64` the balance of funds the account has in micro denomination
+  - **amount**: - `uint64` the spendable balance in micro denomination
+  - **totalAmount**: - `uint64` the total recorded balance before vesting locks are applied
+  - **vestedAmount**: - `uint64` the vested portion of the vesting tranche at the queried height
+  - **lockedAmount**: - `uint64` the still-locked portion of the vesting tranche at the queried height
+  - **vestingAmount**: - `uint64` the total amount on the vesting schedule, omitted when zero
+  - **vestingStartHeight**: - `uint64` the height where vesting begins, omitted when zero
+  - **vestingCliffHeight**: - `uint64` the height where vesting first becomes spendable, omitted when zero
+  - **vestingEndHeight**: - `uint64` the height where vesting fully completes, omitted when zero
 - **type**: `string` - the type of results
 - **count**: `int` - length of results
 - **totalPages**: `int` - number of pages
@@ -362,15 +383,28 @@ $ curl -X POST localhost:50002/v1/query/accounts \
     "results": [
       {
         "address": "180c9d067ce4275612896dc7ce01390329e7f101",
-        "amount": 969901
+        "amount": 969901,
+        "totalAmount": 969901,
+        "vestedAmount": 0,
+        "lockedAmount": 0
       },
       {
         "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
-        "amount": 18239045002
+        "amount": 18239045002,
+        "totalAmount": 18239045002,
+        "vestedAmount": 0,
+        "lockedAmount": 0
       },
       {
         "address": "551f21e333012027b81701a35023efc88b864975",
-        "amount": 130
+        "amount": 130,
+        "totalAmount": 1000,
+        "vestedAmount": 30,
+        "lockedAmount": 870,
+        "vestingAmount": 900,
+        "vestingStartHeight": 900,
+        "vestingCliffHeight": 950,
+        "vestingEndHeight": 1200
       }
     ],
     "type": "accounts",
@@ -2415,8 +2449,9 @@ $ curl -X POST localhost:50002/v1/query/txs-by-rec \
 - **sender**: `hex-string` - the address of the user sending the transaction
 - **recipient**: `hex-string` - the address of the user receiving the transaction
 - **messageType**: `string` - the name of the of the message like 'send' or 'stake'
-- **height**: `uint64` - the block height at which the transaction was included
-- **index**: `uint64` - the position of the transaction within the block
+- **committed**: `bool` - `true` when the transaction has been included in a block or `false` when it is still in the mempool
+- **height**: `uint64` - the committed block height, or the candidate block height when `committed` is `false`
+- **index**: `uint64` - the committed transaction position, or the candidate position when `committed` is `false`
 - **transaction**: `object` - original transaction object
   - **messageType**: `string` - type of the transaction like 'send' or 'stake'
   - **msg**: `object` - the actual transaction message payload, which is encapsulated in a generic message format.
@@ -2508,6 +2543,7 @@ $ curl -X POST localhost:50002/v1/query/tx-by-hash \
   "sender": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
   "recipient": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
   "messageType": "send",
+  "committed": true,
   "height": 17585,
   "transaction": {
     "type": "send",

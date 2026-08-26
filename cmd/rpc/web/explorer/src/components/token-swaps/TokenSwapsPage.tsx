@@ -7,6 +7,8 @@ import RecentSwapsTable from './RecentSwapsTable';
 import { useOrders } from '../../hooks/useApi'
 import { formatDecimalWithSubscript, formatLocaleNumber, toCNPY } from '../../lib/utils';
 import ExplorerOverviewCards from '../ExplorerOverviewCards';
+import StatValue from '../StatValue';
+import { usePersistentNumber } from '../../hooks/usePersistentNumber';
 
 interface Order {
     id: string;
@@ -97,38 +99,44 @@ const TokenSwapsPage: React.FC = () => {
         return Array.from(set).sort((a, b) => a - b);
     }, [swaps]);
 
-    const overviewCards = useMemo(() => {
-        const activeCount = swaps.filter((swap) => swap.status === 'Active').length;
-        const lockedCount = swaps.filter((swap) => swap.status === 'Locked').length;
-        const totalVolume = swaps.reduce((sum, swap) => sum + swap.amountRaw, 0);
+    const swapCounts = useMemo(() => ({
+        orders: swaps.length,
+        active: swaps.filter((swap) => swap.status === 'Active').length,
+        locked: swaps.filter((swap) => swap.status === 'Locked').length,
+        volume: swaps.reduce((sum, swap) => sum + swap.amountRaw, 0),
+    }), [swaps]);
 
-        return [
-            {
-                title: 'Orders',
-                value: swaps.length.toLocaleString(),
-                subValue: 'Open book',
-                icon: 'fa-solid fa-book',
-            },
-            {
-                title: 'Active',
-                value: activeCount.toLocaleString(),
-                subValue: 'Open orders',
-                icon: 'fa-solid fa-unlock',
-            },
-            {
-                title: 'Locked',
-                value: lockedCount.toLocaleString(),
-                subValue: 'Buyer locked',
-                icon: 'fa-solid fa-lock',
-            },
-            {
-                title: 'Open Volume',
-                value: totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 }),
-                subValue: 'CNPY',
-                icon: 'fa-solid fa-chart-column',
-            },
-        ];
-    }, [swaps]);
+    const ordersStat = usePersistentNumber('swaps:orders', ordersData ? swapCounts.orders : null);
+    const activeStat = usePersistentNumber('swaps:active', ordersData ? swapCounts.active : null);
+    const lockedStat = usePersistentNumber('swaps:locked', ordersData ? swapCounts.locked : null);
+    const volumeStat = usePersistentNumber('swaps:volume', ordersData ? swapCounts.volume : null);
+
+    const overviewCards = [
+        {
+            title: 'Orders',
+            value: <StatValue stat={ordersStat} />,
+            subValue: 'Open book',
+            icon: 'fa-solid fa-book',
+        },
+        {
+            title: 'Active',
+            value: <StatValue stat={activeStat} />,
+            subValue: 'Open orders',
+            icon: 'fa-solid fa-unlock',
+        },
+        {
+            title: 'Locked',
+            value: <StatValue stat={lockedStat} />,
+            subValue: 'Buyer locked',
+            icon: 'fa-solid fa-lock',
+        },
+        {
+            title: 'Open Volume',
+            value: <StatValue stat={volumeStat} format={(n) => n.toLocaleString(undefined, { maximumFractionDigits: 2 })} />,
+            subValue: 'CNPY',
+            icon: 'fa-solid fa-chart-column',
+        },
+    ];
 
     const filteredSwaps = useMemo(() => {
         let result = swaps;

@@ -10,7 +10,7 @@ using Types;
 namespace CanopyPlugin
 {
     // Plugin defines the 'VM-less' extension of the Finite State Machine
-    public class Plugin : IDisposable
+    public partial class Plugin : IDisposable
     {
         private readonly Config _config;
         private readonly string _socketPath;
@@ -19,9 +19,17 @@ namespace CanopyPlugin
         private readonly ConcurrentDictionary<ulong, TaskCompletionSource<FSMToPlugin>> _pending = new();
         private PluginFSMConfig? _fsmConfig;
         private volatile bool _isConnected;
+        private static readonly Random Random = new();
 
         private const string SocketFileName = "plugin.sock";
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+
+        // PluginBuild is a human-readable build marker logged at startup so operators can confirm, via
+        // `tail -f /tmp/plugin/csharp-plugin.log`, that the running binary includes the expected features.
+        public const string PluginBuild = "csharp-plugin v1 (base SDK + detached custom RPC query path)";
+
+        // Config exposes the general app config so builders can back their own custom RPC endpoints
+        public Config Config => _config;
 
         public Plugin(Config config)
         {
@@ -32,6 +40,9 @@ namespace CanopyPlugin
         // StartPlugin creates and starts a plugin
         public async Task StartAsync()
         {
+            // log the build marker so the running version is obvious in the plugin log
+            Console.WriteLine($"==== STARTING {PluginBuild} ====");
+
             // connect to the socket with retry
             while (!_isConnected)
             {
@@ -76,6 +87,8 @@ namespace CanopyPlugin
                 pluginConfig.EventTypeUrls.Add(url);
             foreach (var fd in ContractConfig.FileDescriptorProtos)
                 pluginConfig.FileDescriptorProtos.Add(fd);
+            foreach (var p in ContractConfig.CustomStatePrefixes)
+                pluginConfig.CustomStatePrefixes.Add(ByteString.CopyFrom(p));
 
             var response = await SendToPluginSyncAsync(0, new PluginToFSM { Config = pluginConfig });
 
@@ -114,6 +127,40 @@ namespace CanopyPlugin
             {
                 Error = Contract.ErrUnexpectedFSMToPlugin("state_write response")
             };
+        }
+
+        // QueryState executes a detached, read-only state query against Canopy at the given height (0 = latest committed).
+        // Unlike StateRead, it is NOT tied to an in-flight tx/block lifecycle and does not require a Contract context;
+        // it allocates its own fresh random request id, making it safe to call from custom RPC handlers (e.g. an HTTP server).
+        public async Task<PluginStateReadResponse> QueryStateAsync(ulong height, PluginStateReadRequest request)
+        {
+            // generate a fresh random request id (not tied to any in-flight FSM request)
+            var requestId = (ulong)Random.NextInt64();
+
+            // send the detached query and wait for a response
+            var response = await SendToPluginSyncAsync(requestId, new PluginToFSM
+            {
+                Id = requestId,
+                Query = new PluginQueryRequest { Height = height, Read = request }
+            });
+
+            // unexpected or missing response
+            if (response?.Query == null)
+            {
+                return new PluginStateReadResponse
+                {
+                    Error = Contract.ErrUnexpectedFSMToPlugin("query response")
+                };
+            }
+
+            // surface any FSM-side error attached to the query response
+            if (response.Query.Error != null)
+            {
+                return new PluginStateReadResponse { Error = response.Query.Error };
+            }
+
+            // return the unwrapped read response
+            return response.Query.Read ?? new PluginStateReadResponse();
         }
 
         // ListenForInbound routes inbound requests from the plugin

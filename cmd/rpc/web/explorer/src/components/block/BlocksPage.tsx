@@ -4,6 +4,8 @@ import BlocksTable from './BlocksTable'
 import { useBlocks } from '../../hooks/useApi'
 import blocksTexts from '../../data/blocks.json'
 import ExplorerOverviewCards from '../ExplorerOverviewCards'
+import StatValue from '../StatValue'
+import { usePersistentNumber } from '../../hooks/usePersistentNumber'
 
 interface Block {
     height: number
@@ -91,22 +93,26 @@ const BlocksPage: React.FC = () => {
         const totalSize = sizedBlocks.reduce((sum, block) => sum + (block.size || 0), 0)
         return totalSize / sizedBlocks.length / 1024
     }, [paginatedBlocks])
+    const latestHeightStat = usePersistentNumber('blocks:latestHeight', blocksData ? latestHeight : null)
+    const pageTransactionsStat = usePersistentNumber('blocks:pageTransactions', blocksData ? pageTransactionCount : null)
+    const averageSizeStat = usePersistentNumber('blocks:averageSizeKb', blocksData ? averageBlockSizeKb : null)
+
     const overviewCards = [
         {
             title: 'Latest Height',
-            value: latestHeight.toLocaleString(),
+            value: <StatValue stat={latestHeightStat} loading={isLoading} />,
             subValue: 'Current page',
             icon: 'fa-solid fa-mountain-city',
         },
         {
             title: 'Page Transactions',
-            value: pageTransactionCount.toLocaleString(),
+            value: <StatValue stat={pageTransactionsStat} loading={isLoading} />,
             subValue: 'Visible rows',
             icon: 'fa-solid fa-arrow-right-arrow-left',
         },
         {
             title: 'Average Size',
-            value: `${averageBlockSizeKb.toFixed(2)} KB`,
+            value: <StatValue stat={averageSizeStat} loading={isLoading} format={(n) => `${n.toFixed(2)} KB`} />,
             subValue: 'Page average',
             icon: 'fa-solid fa-weight-hanging',
         },

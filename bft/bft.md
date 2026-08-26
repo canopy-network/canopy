@@ -72,7 +72,7 @@ the core sequence will exit and execution will jump to the recovery phases.
 
 - **Election:**
   - Each replica runs a Verifiable Random Function (VRF); if selected as a
-    candidate, the replica broadcasts an ELECTION messsage accouncing it's
+    candidate, the replica broadcasts an ELECTION message announcing its
     candidacy.
 
 - **ElectionVote:**
@@ -113,7 +113,7 @@ the core sequence will exit and execution will jump to the recovery phases.
 The two recovery phases address situations where errors cause a premature exit from a round:
 
 - **Round Interrupt**:
-  - In this phase concensus is halted and reset. Each replica shares its current
+  - In this phase consensus is halted and reset. Each replica shares its current
     View with all other replicas. This allows replicas to synchronize in the
     Pacemaker phase.
 
@@ -426,7 +426,7 @@ block-beta
     E--"Replicas Send Candidacy"-->EV
     EV--"Replicas Choose Leader"-->P
     P--"Leader Proposes Block"-->PV
-    PV--"Replices Verify Proposal"-->PC
+    PV--"Replicas Verify Proposal"-->PC
     PC--"Verified Majority"-->PCV
     PCV--"Replicas Validate Proposal"-->C
     C--"Majority Confirmed"-->CP

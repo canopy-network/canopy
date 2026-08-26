@@ -19,6 +19,7 @@ interface AddressData {
     fullAddress: string;
     nickname: string;
     totalValue: string;
+    lockedValue?: string;
 }
 
 const AddressRow = React.memo<{
@@ -41,6 +42,9 @@ const AddressRow = React.memo<{
             <CopyableIdentifier value={address.fullAddress} label="Address" className="mt-0.5 max-w-full text-xs text-muted-foreground/60">
                 {address.address}
             </CopyableIdentifier>
+            {address.lockedValue && (
+                <div className="mt-1 text-[11px] text-amber-300/75">{address.lockedValue} locked</div>
+            )}
         </div>
 
         <div className="ml-auto flex items-center gap-2.5 flex-shrink-0">
@@ -84,13 +88,17 @@ export const AllAddressesCard = React.memo(() => {
 
     const processedAddresses = useMemo((): AddressData[] =>
         accounts.map(account => {
-            const balance = balances.find(b => b.address === account.address)?.amount || 0;
+            const balance = balances.find(b => b.address === account.address);
+            const spendable = balance?.amount ?? 0;
+            const locked = balance?.lockedAmount ?? 0;
+            const total = balance?.totalAmount ?? spendable + locked;
             return {
                 id: account.address,
                 address: shortAddr(account.address),
                 fullAddress: account.address,
                 nickname: account.nickname || 'Unnamed',
-                totalValue: formatBalance(balance),
+                totalValue: formatBalance(total),
+                lockedValue: locked > 0 ? formatBalance(locked) : undefined,
             };
         }),
         [accounts, balances, formatBalance]

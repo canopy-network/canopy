@@ -47,6 +47,7 @@ export const Accounts = () => {
   const {
     totalBalance,
     totalLiquid,
+    totalLocked,
     totalStaked,
     balances,
     stakingData,
@@ -88,13 +89,22 @@ export const Accounts = () => {
   const getAccountSymbol = (index: number) => getCanopySymbol(index);
 
   const getRealTotal = (address: string) => {
-    const liquid = balances.find(b => b.address === address)?.amount ?? 0;
+    const balance = balances.find(b => b.address === address);
+    const liquid = balance?.amount ?? 0;
+    const locked = balance?.lockedAmount ?? 0;
+    const vested = balance?.vestedAmount ?? 0;
+    const vestingAmount = balance?.vestingAmount ?? 0;
+    const accountTotal = balance?.totalAmount ?? liquid + locked;
     const staked = stakingData.find(s => s.address === address)?.staked ?? 0;
-    return { liquid, staked, total: liquid + staked };
+    return { liquid, locked, vested, vestingAmount, staked, total: accountTotal + staked };
   };
 
   const getStatusInfo = (address: string) => {
+    const locked = balances.find(b => b.address === address)?.lockedAmount ?? 0;
     const staked = stakingData.find(s => s.address === address)?.staked ?? 0;
+    if (locked > 0) {
+      return { label: "Vesting", cls: WALLET_BADGE_TONE };
+    }
     return staked > 0
       ? { label: "Staked",  cls: WALLET_BADGE_TONE }
       : { label: "Liquid",  cls: WALLET_BADGE_TONE };
@@ -102,7 +112,7 @@ export const Accounts = () => {
 
   const processedAddresses = useMemo(() => accounts
     .map((account, index) => {
-      const { liquid, staked, total } = getRealTotal(account.address);
+      const { liquid, locked, vested, vestingAmount, staked, total } = getRealTotal(account.address);
       const { label: statusLabel, cls: statusCls } = getStatusInfo(account.address);
       const symbolSrc = getAccountSymbol(index);
       return {
@@ -113,6 +123,9 @@ export const Accounts = () => {
         publicKey:        account.publicKey || "",
         total,
         liquid,
+        locked,
+        vested,
+        vestingAmount,
         staked,
         stakedPct:        total > 0 ? (staked / total) * 100 : 0,
         liquidPct:        total > 0 ? (liquid / total) * 100 : 0,
@@ -291,6 +304,13 @@ export const Accounts = () => {
               <span className="text-foreground/70">{fmt(totalLiquid)}</span>
               <span className="text-muted-foreground/50">liquid</span>
             </div>
+            {totalLocked > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70 flex-shrink-0" />
+                <span className="text-foreground/70">{fmt(totalLocked)}</span>
+                <span className="text-muted-foreground/50">locked</span>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -455,10 +475,17 @@ export const Accounts = () => {
 
                     {/* Total */}
                     <td className={desktopRowCellClass}>
-                      <span className="text-sm text-foreground tabular-nums">
-                        {fmt(addr.total)}
-                      </span>
-                      <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                      <div>
+                        <span className="text-sm text-foreground tabular-nums">
+                          {fmt(addr.total)}
+                        </span>
+                        <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                        {addr.locked > 0 && (
+                          <div className="mt-1 text-[11px] text-amber-300/80">
+                            Locked {fmt(addr.locked)} {symbol}
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     {/* Staked */}
@@ -474,6 +501,11 @@ export const Accounts = () => {
                       <div>
                         <span className="text-sm text-foreground tabular-nums">{fmt(addr.liquid)}</span>
                         <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                        {addr.vested > 0 && (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Vested {fmt(addr.vested)} {symbol}
+                          </div>
+                        )}
                       </div>
                     </td>
 

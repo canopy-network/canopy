@@ -175,14 +175,9 @@ func (x *PeerMeta) Sign(key crypto.PrivateKeyI) *PeerMeta {
 
 // SignBytes() returns the canonical byte representation used to digitally sign the bytes
 func (x *PeerMeta) SignBytes() (signBytes []byte) {
-	// save the signature in a temporary variable
-	temp := x.Signature
-	// nullify the signature
-	x.Signature = nil
-	// convert the structure into proto bytes
-	signBytes, _ = Marshal(x)
-	// set the signature back into the object
-	x.Signature = temp
+	// marshal a copy with the signature omitted to avoid race conditions across
+	// concurrent handshake goroutines
+	signBytes, _ = Marshal(&PeerMeta{NetworkId: x.NetworkId, ChainId: x.ChainId})
 	// exit
 	return
 }
@@ -242,7 +237,7 @@ type peerInfoJSON struct {
 
 // MessageCache is a simple p2p message de-duplicator that protects redundancy in the p2p network
 type MessageCache struct {
-	queue   *list.List            // a FIFO list of MessageAndMetadata
+	queue   *list.List            // a FIFO list of message hashes
 	deDupe  *DeDuplicator[string] // the O(1) de-duplicator
 	maxSize int                   // the max size before evicting the oldest
 }
@@ -267,17 +262,13 @@ func (c *MessageCache) Add(msg *MessageAndMetadata) (ok bool) {
 		return false
 	}
 	// add the new message to the front
-	c.queue.PushFront(msg)
+	c.queue.PushFront(key)
 	// if the queue size is exceeded
 	if c.queue.Len() > c.maxSize {
 		// get the oldest element
 		e := c.queue.Back()
-		// cast it to a MessageAndMetadata
-		message := e.Value.(*MessageAndMetadata)
-		// create a key for the message
-		toDeleteKey := crypto.HashString(message.Message)
 		// delete it from the underlying de-duplicator
-		c.deDupe.Delete(toDeleteKey)
+		c.deDupe.Delete(e.Value.(string))
 		// remove it from the queue
 		c.queue.Remove(e)
 	}

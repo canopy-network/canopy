@@ -270,6 +270,31 @@ func TestSetGetValidators(t *testing.T) {
 	}
 }
 
+func TestGetCurrentValidatorsReturnsSharedCacheSliceOnCollision(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.cache.sharedCache = newValidatorSharedCache()
+	sm.cache.sharedValidatorSet = 5
+
+	require.NoError(t, sm.SetValidator(&Validator{
+		Address:      newTestAddressBytes(t),
+		StakedAmount: 100,
+		Committees:   []uint64{lib.CanopyChainId},
+	}))
+
+	cached := []*Validator{{
+		Address:      newTestAddressBytes(t, 1),
+		StakedAmount: 200,
+		Committees:   []uint64{lib.CanopyChainId},
+	}}
+	sm.cache.sharedCache.sets[sm.cache.sharedValidatorSet] = cached
+
+	got, err := sm.getCurrentValidators()
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Same(t, cached[0], got[0])
+	require.Same(t, cached[0], sm.cache.liveValidators[0])
+}
+
 func TestGetValidatorsPaginated(t *testing.T) {
 	const amount = uint64(100)
 	tests := []struct {

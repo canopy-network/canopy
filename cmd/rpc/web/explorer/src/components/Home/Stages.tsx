@@ -1,6 +1,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import { useCardData } from '../../hooks/useApi'
+import { usePersistentNumber } from '../../hooks/usePersistentNumber'
 import { getTotalTransactionCount, getTotalAccountCount, Validators, ValidatorsWithFilters } from '../../lib/api'
 import { convertNumber, toCNPY } from '../../lib/utils'
 import AnimatedNumber from '../AnimatedNumber'
@@ -11,6 +12,7 @@ interface StageCardProps {
     data: string
     icon: React.ReactNode
     metric: string
+    loading?: boolean
 }
 
 const stageCardSubtitleClass = 'explorer-overview-card-subvalue'
@@ -18,7 +20,11 @@ const stageCardSubtitleClass = 'explorer-overview-card-subvalue'
 const Stages = () => {
     const { data: cardData } = useCardData()
 
-    const latestBlockHeight: number = React.useMemo(() => {
+    // Candidate values are derived straight from cardData. They are `null`
+    // whenever cardData isn't available yet so the persistent hooks below keep
+    // showing the last known value instead of flickering to zero.
+    const latestBlockHeightCandidate: number | null = React.useMemo(() => {
+        if (!cardData) return null
         const list = (cardData as any)?.blocks
         const totalCount = list?.totalCount || list?.count
         if (typeof totalCount === 'number' && totalCount > 0) return totalCount
@@ -42,14 +48,16 @@ const Stages = () => {
     }, [cardData])
 
 
-    const totalSupplyCNPY: number = React.useMemo(() => {
+    const totalSupplyCandidate: number | null = React.useMemo(() => {
+        if (!cardData) return null
         const s = (cardData as any)?.supply || {}
         // new format: total in uCNPY
         const total = s.total ?? s.totalSupply ?? s.total_cnpy ?? s.totalCNPY ?? 0
         return toCNPY(Number(total) || 0)
     }, [cardData])
 
-    const totalStakeCNPY: number = React.useMemo(() => {
+    const totalStakeCandidate: number | null = React.useMemo(() => {
+        if (!cardData) return null
         const s = (cardData as any)?.supply || {}
         // prefer supply.staked; fallback to pool.bondedTokens
         const st = s.staked ?? 0
@@ -59,7 +67,8 @@ const Stages = () => {
         return toCNPY(Number(bonded) || 0)
     }, [cardData])
 
-    const liquidSupplyCNPY: number = React.useMemo(() => {
+    const liquidSupplyCandidate: number | null = React.useMemo(() => {
+        if (!cardData) return null
         const s = (cardData as any)?.supply || {}
         const total = Number(s.total ?? 0)
         const staked = Number(s.staked ?? 0)
@@ -69,115 +78,140 @@ const Stages = () => {
         return toCNPY(Number(liquid) || 0)
     }, [cardData])
 
-    const [totalAccounts, setTotalAccounts] = React.useState(0)
-    const [totalTxs, setTotalTxs] = React.useState(0)
-    const [totalValidating, setTotalValidating] = React.useState(0)
-    const [totalDelegating, setTotalDelegating] = React.useState(0)
-    const [isLoadingStats, setIsLoadingStats] = React.useState(true)
+    // Async stats stay `null` until a fetch succeeds. We never reset them to a
+    // value on failure, so a transient RPC error can't blank the cards.
+    const [totalAccountsCandidate, setTotalAccountsCandidate] = React.useState<number | null>(null)
+    const [totalTxsCandidate, setTotalTxsCandidate] = React.useState<number | null>(null)
+    const [totalValidatingCandidate, setTotalValidatingCandidate] = React.useState<number | null>(null)
+    const [totalDelegatingCandidate, setTotalDelegatingCandidate] = React.useState<number | null>(null)
 
     React.useEffect(() => {
+        if (!cardData) return
+
+        let cancelled = false
+
         const fetchStats = async () => {
-            try {
-                setIsLoadingStats(true)
-
-                if (totalTxsFromBlock !== null) {
-                    setTotalTxs(totalTxsFromBlock)
-                } else {
-                    const hasRealTransactions = cardData?.hasRealTransactions ?? true
-                    if (hasRealTransactions) {
+            if (totalTxsFromBlock !== null) {
+                if (!cancelled) setTotalTxsCandidate(totalTxsFromBlock)
+            } else {
+                const hasRealTransactions = cardData?.hasRealTransactions ?? true
+                if (hasRealTransactions) {
+                    try {
                         const txStats = await getTotalTransactionCount()
-                        setTotalTxs(txStats.total)
-                    } else {
-                        setTotalTxs(0)
+                        if (!cancelled) setTotalTxsCandidate(txStats.total)
+                    } catch (error) {
+                        console.error('Error fetching transaction stats:', error)
                     }
+                } else if (!cancelled) {
+                    setTotalTxsCandidate(0)
                 }
+            }
 
-                try {
-                    const accountStats = await getTotalAccountCount()
-                    setTotalAccounts(accountStats.total)
-                } catch (error) {
-                    console.error('Error fetching account stats:', error)
-                }
+            try {
+                const accountStats = await getTotalAccountCount()
+                if (!cancelled) setTotalAccountsCandidate(accountStats.total)
+            } catch (error) {
+                console.error('Error fetching account stats:', error)
+            }
 
-                try {
-                    const [validatorsStats, delegatorsStats] = await Promise.all([
-                        Validators(1, 0),
-                        ValidatorsWithFilters(1, 0, 0, 1, 0, 1),
-                    ])
+            try {
+                const [validatorsStats, delegatorsStats] = await Promise.all([
+                    Validators(1, 0),
+                    ValidatorsWithFilters(1, 0, 0, 1, 0, 1),
+                ])
 
-                    const totalValidatorsCount = Number(validatorsStats?.totalCount ?? validatorsStats?.count ?? 0)
-                    const totalDelegatorsCount = Number(delegatorsStats?.totalCount ?? delegatorsStats?.count ?? 0)
+                const totalValidatorsCount = Number(validatorsStats?.totalCount ?? validatorsStats?.count ?? 0)
+                const totalDelegatorsCount = Number(delegatorsStats?.totalCount ?? delegatorsStats?.count ?? 0)
 
-                    setTotalDelegating(totalDelegatorsCount)
-                    setTotalValidating(Math.max(0, totalValidatorsCount - totalDelegatorsCount))
-                } catch (error) {
-                    console.error('Error fetching validator stats:', error)
+                if (!cancelled) {
+                    setTotalDelegatingCandidate(totalDelegatorsCount)
+                    setTotalValidatingCandidate(Math.max(0, totalValidatorsCount - totalDelegatorsCount))
                 }
             } catch (error) {
-                console.error('Error fetching stats:', error)
-            } finally {
-                setIsLoadingStats(false)
+                console.error('Error fetching validator stats:', error)
             }
         }
 
-        if (cardData) {
-            fetchStats()
+        fetchStats()
+
+        return () => {
+            cancelled = true
         }
     }, [cardData, totalTxsFromBlock])
+
+    // Sticky values: hydrated from localStorage on mount (so a page refresh
+    // shows the previous numbers immediately) and only ever updated with fresh,
+    // valid data. This eliminates the flicker-to-zero on refresh and on polls.
+    const latestBlockHeight = usePersistentNumber('blockHeight', latestBlockHeightCandidate)
+    const totalSupplyCNPY = usePersistentNumber('totalSupply', totalSupplyCandidate)
+    const totalStakeCNPY = usePersistentNumber('totalStake', totalStakeCandidate)
+    const liquidSupplyCNPY = usePersistentNumber('liquidSupply', liquidSupplyCandidate)
+    const totalAccounts = usePersistentNumber('totalAccounts', totalAccountsCandidate)
+    const totalTxs = usePersistentNumber('totalTxs', totalTxsCandidate)
+    const totalValidating = usePersistentNumber('totalValidating', totalValidatingCandidate)
+    const totalDelegating = usePersistentNumber('totalDelegating', totalDelegatingCandidate)
 
     const stages: StageCardProps[] = [
         {
             title: 'Blocks',
-            data: latestBlockHeight.toString(),
+            data: latestBlockHeight.value.toString(),
+            loading: !latestBlockHeight.hasValue,
             subtitle: <p className={stageCardSubtitleClass}>Heights</p>,
             icon: <i className="fa-solid fa-cube"></i>,
             metric: 'blocks',
         },
         {
             title: 'Total Supply',
-            data: convertNumber(totalSupplyCNPY),
+            data: convertNumber(totalSupplyCNPY.value),
+            loading: !totalSupplyCNPY.hasValue,
             subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-wallet"></i>,
             metric: 'totalSupply',
         },
         {
             title: 'Liquid Supply',
-            data: convertNumber(liquidSupplyCNPY),
+            data: convertNumber(liquidSupplyCNPY.value),
+            loading: !liquidSupplyCNPY.hasValue,
             subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-droplet"></i>,
             metric: 'liquidSupply',
         },
         {
             title: 'Total Stake',
-            data: convertNumber(totalStakeCNPY),
+            data: convertNumber(totalStakeCNPY.value),
+            loading: !totalStakeCNPY.hasValue,
             subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-lock"></i>,
             metric: 'totalStake',
         },
         {
             title: 'Total Validating',
-            data: isLoadingStats ? 'Loading...' : convertNumber(totalValidating),
+            data: convertNumber(totalValidating.value),
+            loading: !totalValidating.hasValue,
             subtitle: <p className={stageCardSubtitleClass}>Validators</p>,
             icon: <i className="fa-solid fa-shield-halved"></i>,
             metric: 'totalValidating',
         },
         {
             title: 'Total Delegating',
-            data: isLoadingStats ? 'Loading...' : convertNumber(totalDelegating),
+            data: convertNumber(totalDelegating.value),
+            loading: !totalDelegating.hasValue,
             subtitle: <p className={stageCardSubtitleClass}>Delegators</p>,
             icon: <i className="fa-solid fa-coins"></i>,
             metric: 'totalDelegating',
         },
         {
             title: 'Total Accounts',
-            data: isLoadingStats ? 'Loading...' : convertNumber(totalAccounts),
+            data: convertNumber(totalAccounts.value),
+            loading: !totalAccounts.hasValue,
             icon: <i className="fa-solid fa-users"></i>,
             metric: 'accounts',
             subtitle: <p className={stageCardSubtitleClass}>Indexed accounts</p>,
         },
         {
             title: 'Total Txs',
-            data: isLoadingStats ? 'Loading...' : convertNumber(totalTxs),
+            data: convertNumber(totalTxs.value),
+            loading: !totalTxs.hasValue,
             icon: <i className="fa-solid fa-arrow-right-arrow-left"></i>,
             metric: 'txs',
             subtitle: <p className={stageCardSubtitleClass}>Confirmed txs</p>,
@@ -224,7 +258,9 @@ const Stages = () => {
 
                         <div className="mt-2 min-h-[2.5rem]">
                             <div className="explorer-overview-card-value">
-                                {(() => {
+                                {stage.loading ? (
+                                    <span className="text-white/40">Loading…</span>
+                                ) : (() => {
                                     const { number, prefix, suffix } = parseNumberFromString(stage.data)
                                     return (
                                         <>
