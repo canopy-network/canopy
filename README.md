@@ -1,4 +1,4 @@
-<img src="./canopy-logo-white-bg.svg" alt="Canopy Logo" width="500"/>
+<img src="./canopy-logo-white-bg.svg" alt="kapalapiLogo" width="500"/>
 
 _Official golang implementation of the Canopy Network Protocol_
 
