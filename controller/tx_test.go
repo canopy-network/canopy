@@ -1,40 +1,18 @@
 package controller
 
 import (
+	"math/big"
 	"sync"
 	"testing"
 
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 )
-
-func TestGetPendingTxByHash(t *testing.T) {
-	c := &Controller{
-		Mempool: &Mempool{
-			cachedResults: lib.TxResults{
-				&lib.TxResult{TxHash: "abcdef1234"},
-				&lib.TxResult{TxHash: "1234567890"},
-			},
-		},
-		Mutex: &sync.Mutex{},
-	}
-
-	tx, found := c.GetPendingTxByHash("ABCDEF1234")
-	require.True(t, found)
-	require.NotNil(t, tx)
-	require.Equal(t, "abcdef1234", tx.TxHash)
-
-	tx, found = c.GetPendingTxByHash("0x1234567890")
-	require.True(t, found)
-	require.NotNil(t, tx)
-	require.Equal(t, "1234567890", tx.TxHash)
-
-	tx, found = c.GetPendingTxByHash("missing")
-	require.False(t, found)
-	require.Nil(t, tx)
-}
 
 func TestGetProposalBlockFromMempool(t *testing.T) {
 	c := &Controller{Mempool: &Mempool{}}
@@ -74,4 +52,86 @@ func TestHandleTransactionsOnlyMarksDirtyOnSuccessfulNewTx(t *testing.T) {
 
 	require.Error(t, m.HandleTransactions([]byte("bad-tx")))
 	require.EqualValues(t, 1, m.dirtyVersion.Load())
+
+	config := lib.DefaultMempoolConfig()
+	config.MaxTransactionCount = 1
+	m = &Mempool{Mempool: lib.NewMempool(config), L: &sync.Mutex{}}
+	require.NoError(t, m.HandleTransactions(txBytes))
+	require.False(t, m.Contains(crypto.HashString(txBytes)))
+	require.ErrorContains(t, m.HandleTransactionAndVerifyRetained(txBytes, nil), "evicted from mempool")
+}
+
+func TestGetPendingTxByHashUsesCachedResults(t *testing.T) {
+	ctrl := &Controller{
+		Mutex: &sync.Mutex{},
+		Mempool: &Mempool{
+			L: &sync.Mutex{},
+			cachedResults: lib.TxResults{
+				&lib.TxResult{TxHash: "abc123"},
+			},
+		},
+	}
+	tx, found := ctrl.GetPendingTxByHash("0xABC123")
+	require.True(t, found)
+	require.NotNil(t, tx)
+	require.Equal(t, "abc123", tx.TxHash)
+
+	tx, found = ctrl.GetPendingTxByHash("missing")
+	require.False(t, found)
+	require.Nil(t, tx)
+}
+
+func TestGetPendingTxByHashAcceptsEthereumHash(t *testing.T) {
+	key, err := ethCrypto.GenerateKey()
+	require.NoError(t, err)
+	to := common.Address{1}
+	chainID, ok := fsm.CanopyIdsToEVMChainIdV2(1, 1)
+	require.True(t, ok)
+	ethTx := types.MustSignNewTx(key, types.LatestSignerForChainID(new(big.Int).SetUint64(chainID)), &types.DynamicFeeTx{
+		ChainID: new(big.Int).SetUint64(chainID), GasFeeCap: big.NewInt(fsm.EthereumBaseFeePerGas), Gas: 21_000, To: &to,
+		Value: fsm.UpscaleTo18Decimals(1),
+	})
+	raw, err := ethTx.MarshalBinary()
+	require.NoError(t, err)
+	tx, errI := fsm.RLPToCanopyTransactionV2(raw)
+	require.NoError(t, errI)
+	ctrl := &Controller{Mempool: &Mempool{L: &sync.Mutex{}, cachedResults: lib.TxResults{{Transaction: tx}}}}
+
+	_, found := ctrl.GetPendingTxByHash(ethTx.Hash().Hex())
+	require.True(t, found)
+}
+
+func TestPendingReadersReturnImmediatelyWhenMempoolIsLocked(t *testing.T) {
+	mempool := &Mempool{
+		L:             &sync.Mutex{},
+		cachedResults: lib.TxResults{{TxHash: "abc123"}},
+	}
+	ctrl := &Controller{Mutex: &sync.Mutex{}, Mempool: mempool}
+	mempool.L.Lock()
+	defer mempool.L.Unlock()
+
+	page, err := ctrl.GetPendingPage(lib.PageParams{PageNumber: 1, PerPage: 10})
+	require.NoError(t, err)
+	require.Zero(t, page.Count)
+	require.Zero(t, page.TotalCount)
+
+	tx, found := ctrl.GetPendingTxByHash("abc123")
+	require.False(t, found)
+	require.Nil(t, tx)
+
+	address := crypto.NewAddress(make([]byte, crypto.AddressSize))
+	require.EqualValues(t, 7, ctrl.GetPendingNonce(address, 7))
+}
+
+func TestGetPendingNonceUsesValidatedResults(t *testing.T) {
+	address := crypto.NewAddress(make([]byte, crypto.AddressSize))
+	ctrl := &Controller{Mempool: &Mempool{
+		L: &sync.Mutex{},
+		cachedResults: lib.TxResults{
+			{Sender: address.Bytes(), Transaction: &lib.Transaction{Memo: fsm.RLPV2Indicator, Nonce: 2}},
+			{Sender: address.Bytes(), Transaction: &lib.Transaction{Memo: fsm.RLPV2Indicator, Nonce: 5}},
+		},
+	}}
+
+	require.EqualValues(t, 6, ctrl.GetPendingNonce(address, 1))
 }

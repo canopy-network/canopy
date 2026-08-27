@@ -45,7 +45,7 @@ func (s *StateMachine) EventOrderBookSwap(order *lib.SellOrder) lib.ErrorI {
 // EventOrderBookLock() adds an order book lock event to the indexer when an order is reserved
 func (s *StateMachine) EventOrderBookLock(order *lib.SellOrder) lib.ErrorI {
 	return s.addEvent(lib.EventTypeOrderBookLock, &lib.EventOrderBookLock{
-		OrderId:            order.Id,
+		OrderId:             order.Id,
 		BuyerReceiveAddress: order.BuyerReceiveAddress,
 		BuyerSendAddress:    order.BuyerSendAddress,
 		BuyerChainDeadline:  order.BuyerChainDeadline,
@@ -81,12 +81,13 @@ func (s *StateMachine) EventDexLiquidityDeposit(address, orderId []byte, amount,
 }
 
 // EventDexLiquidityWithdraw() adds a liquidity withdraw event to the indexer
-func (s *StateMachine) EventDexLiquidityWithdraw(address, orderId []byte, localAmount, remoteAmount, pointsBurned, chainId uint64) lib.ErrorI {
+func (s *StateMachine) EventDexLiquidityWithdraw(address, orderId []byte, localAmount, remoteAmount, pointsBurned, percent, chainId uint64) lib.ErrorI {
 	return s.addEvent(lib.EventTypeDexLiquidityWithdraw, &lib.EventDexLiquidityWithdrawal{
 		LocalAmount:  localAmount,
 		RemoteAmount: remoteAmount,
 		OrderId:      orderId,
 		PointsBurned: pointsBurned,
+		Percent:      percent,
 	}, address, chainId)
 }
 

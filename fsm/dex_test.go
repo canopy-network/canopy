@@ -2606,7 +2606,6 @@ func TestHandleDexBatchOrdersEnforcesSettlementCap(t *testing.T) {
 
 	const extra = 5
 	total := lib.MaxOrdersSettledPerBlock + extra
-	// pool large enough that every *attempted* order succeeds (RequestedAmount 0)
 	pool := uint64(1_000_000_000_000)
 	require.NoError(t, sm.SetPool(&Pool{Id: chainId + LiquidityPoolAddend, Amount: pool}))
 
@@ -2614,31 +2613,19 @@ func TestHandleDexBatchOrdersEnforcesSettlementCap(t *testing.T) {
 	for i := range orders {
 		addr := make([]byte, crypto.AddressSize)
 		addr[0], addr[1] = byte(i+1), byte((i+1)>>8)
-		orders[i] = &lib.DexLimitOrder{
-			AmountForSale:   1_000,
-			RequestedAmount: 0,
-			Address:         addr,
-			OrderId:         addr,
-		}
+		orders[i] = &lib.DexLimitOrder{AmountForSale: 1_000, Address: addr, OrderId: addr}
 	}
-	batch := &lib.DexBatch{Committee: chainId, Orders: orders}
-
 	x, y := pool, pool
-	receipts, err := sm.HandleDexBatchOrders(batch, &x, &y, chainId)
+	receipts, err := sm.HandleDexBatchOrders(&lib.DexBatch{Committee: chainId, Orders: orders}, &x, &y, chainId)
 	require.NoError(t, err)
 	require.Len(t, receipts, total)
-
-	var settled, refunded int
-	for _, r := range receipts {
-		if r == 0 {
-			refunded++
-		} else {
+	var settled int
+	for _, receipt := range receipts {
+		if receipt != 0 {
 			settled++
 		}
 	}
-	// exactly the cap is settled; the remainder is left with a zero receipt for refund on the origin chain
 	require.Equal(t, lib.MaxOrdersSettledPerBlock, settled)
-	require.Equal(t, extra, refunded)
 }
 
 // Proves withdraw->redeposit cannot increase LP points (no gain loop), allowing only rounding loss.
@@ -2787,152 +2774,234 @@ func TestHandleBatchDepositZeroShareDoesNotCreateGhostProvider(t *testing.T) {
 	require.Equal(t, lib.CodePointHolderNotFound, pointErr.Code())
 }
 
-// A remote (local=false) deposit from a brand-new LP at the holder cap must NOT error the whole batch
-// (doing so would brick the nested chain). It is skipped without issuing points and without token movement.
-func TestHandleBatchDepositRemoteAtCapSkipsWithoutError(t *testing.T) {
+func TestHandleBatchDepositRemoteReplacesLowestProvider(t *testing.T) {
 	sm := newTestStateMachine(t)
 	chainId := uint64(2)
 	newProvider := newTestAddress(t, 2)
+	receiptHash, depositOrderId := []byte("receipt"), []byte{0x22}
 
 	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders)
+	totalPoints := uint64(100)
 	for i := range points {
-		points[i] = &lib.PoolPoints{Address: deadAddr.Bytes(), Points: 1}
+		address, amount := make([]byte, crypto.AddressSize), uint64(1)
+		address[len(address)-2], address[len(address)-1] = byte(i>>8), byte(i)
+		if i == 0 {
+			address, amount = deadAddr.Bytes(), 100
+		} else {
+			totalPoints++
+		}
+		points[i] = &lib.PoolPoints{Address: address, Points: amount}
 	}
 	require.NoError(t, sm.SetPool(&Pool{
 		Id:              chainId + LiquidityPoolAddend,
 		Amount:          100,
 		Points:          points,
-		TotalPoolPoints: lib.MaxLiquidityProviders,
+		TotalPoolPoints: totalPoints,
 	}))
 
 	x, y := uint64(100), uint64(100)
 	err := sm.HandleBatchDeposit(&lib.DexBatch{
-		Committee: chainId,
+		Committee:   chainId,
+		ReceiptHash: receiptHash,
 		Deposits: []*lib.DexLiquidityDeposit{{
 			Address: newProvider.Bytes(),
 			Amount:  100,
-			OrderId: []byte{0x22},
+			OrderId: depositOrderId,
 		}},
 	}, chainId, &x, &y, false)
-	// no error: the poison deposit is skipped, not fatal to the batch
 	require.NoError(t, err)
-
-	// the new provider was not added as an LP and the holder count is unchanged
 	pool, err := sm.GetPool(chainId + LiquidityPoolAddend)
 	require.NoError(t, err)
 	require.Len(t, pool.Points, lib.MaxLiquidityProviders)
-	_, pointErr := pool.GetPointsFor(newProvider.Bytes())
-	require.Error(t, pointErr)
-	require.Equal(t, lib.CodePointHolderNotFound, pointErr.Code())
-	// remote side does not move tokens, so the reserve mirror is unchanged
-	require.Equal(t, uint64(100), x)
+	_, err = pool.GetPointsFor(points[1].Address)
+	require.Error(t, err)
+	newPoints, err := pool.GetPointsFor(newProvider.Bytes())
+	require.NoError(t, err)
+	require.Greater(t, newPoints, uint64(1))
+	require.Len(t, sm.events.Events, 2)
+	withdrawal := sm.events.Events[0].GetDexLiquidityWithdrawal()
+	require.NotNil(t, withdrawal)
+	require.Equal(t, uint64(100), withdrawal.Percent)
+	require.NotEqual(t, depositOrderId, withdrawal.OrderId)
+	require.Equal(t, crypto.ShortHash(lib.JoinLenPrefix([]byte("dex-lp-eviction-v1"), receiptHash, points[1].Address, newProvider.Bytes())), withdrawal.OrderId)
 }
 
-// A local (local=true) deposit from a brand-new LP at the holder cap must be refunded to the depositor
-// from the holding pool instead of erroring the batch, and the existing holders/reserves stay intact.
-func TestHandleBatchDepositLocalAtCapRefunds(t *testing.T) {
+func TestHandleBatchDepositSplitNewProviderUsesOneSlot(t *testing.T) {
 	sm := newTestStateMachine(t)
-	chainId := uint64(2)
-	newProvider := newTestAddress(t, 2)
-	depositAmt := uint64(1_000_000)
-
-	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders)
+	chainID := uint64(2)
+	newProvider := newTestAddress(t, 3)
+	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders-1)
+	totalPoints := uint64(100)
 	for i := range points {
-		points[i] = &lib.PoolPoints{Address: deadAddr.Bytes(), Points: 1}
+		address, amount := make([]byte, crypto.AddressSize), uint64(2)
+		address[len(address)-2], address[len(address)-1] = byte(i>>8), byte(i)
+		if i == 0 {
+			address, amount = deadAddr.Bytes(), 100
+		} else {
+			totalPoints += amount
+		}
+		points[i] = &lib.PoolPoints{Address: address, Points: amount}
 	}
-	require.NoError(t, sm.SetPool(&Pool{
-		Id:              chainId + LiquidityPoolAddend,
-		Amount:          100,
-		Points:          points,
-		TotalPoolPoints: lib.MaxLiquidityProviders,
-	}))
-	// the deposit was previously escrowed into the holding pool at enqueue time
-	require.NoError(t, sm.SetPool(&Pool{Id: chainId + HoldingPoolAddend, Amount: depositAmt}))
-	require.NoError(t, sm.SetAccount(&Account{Address: newProvider.Bytes(), Amount: 0}))
-
-	x, y := uint64(100), uint64(100)
-	err := sm.HandleBatchDeposit(&lib.DexBatch{
-		Committee: chainId,
-		Deposits: []*lib.DexLiquidityDeposit{{
-			Address: newProvider.Bytes(),
-			Amount:  depositAmt,
-			OrderId: []byte{0x23},
-		}},
-	}, chainId, &x, &y, true)
-	require.NoError(t, err)
-
-	// funds refunded to the depositor and drained from the holding pool
-	acc, err := sm.GetAccount(newProvider)
-	require.NoError(t, err)
-	require.Equal(t, depositAmt, acc.Amount)
-	holding, err := sm.GetPool(chainId + HoldingPoolAddend)
-	require.NoError(t, err)
-	require.Zero(t, holding.Amount)
-
-	// no new LP, liquidity pool balance and reserve mirror untouched
-	pool, err := sm.GetPool(chainId + LiquidityPoolAddend)
-	require.NoError(t, err)
-	require.Len(t, pool.Points, lib.MaxLiquidityProviders)
-	require.Equal(t, uint64(100), pool.Amount)
-	require.Equal(t, uint64(100), x)
-}
-
-// A batch that mixes an accepted (existing LP) deposit with a rejected (new LP at cap) deposit must
-// process the accepted one and refund the rejected one, without leaking the rejected share to dust.
-func TestHandleBatchDepositMixedAtCapAcceptsExistingRefundsNew(t *testing.T) {
-	sm := newTestStateMachine(t)
-	chainId := uint64(2)
-	existing := newTestAddress(t, 1)
-	newProvider := newTestAddress(t, 2)
-	depositAmt := uint64(1_000_000)
-
-	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders)
-	points[0] = &lib.PoolPoints{Address: existing.Bytes(), Points: 1}
-	for i := 1; i < len(points); i++ {
-		points[i] = &lib.PoolPoints{Address: deadAddr.Bytes(), Points: 1}
-	}
-	require.NoError(t, sm.SetPool(&Pool{
-		Id:              chainId + LiquidityPoolAddend,
-		Amount:          1_000_000,
-		Points:          points,
-		TotalPoolPoints: lib.MaxLiquidityProviders,
-	}))
-	require.NoError(t, sm.SetPool(&Pool{Id: chainId + HoldingPoolAddend, Amount: 2 * depositAmt}))
-	require.NoError(t, sm.SetAccount(&Account{Address: newProvider.Bytes(), Amount: 0}))
-
-	existingBefore, err := (&Pool{Points: points}).GetPointsFor(existing.Bytes())
-	require.NoError(t, err)
+	require.NoError(t, sm.SetPool(&Pool{Id: chainID + LiquidityPoolAddend, Amount: 1_000_000, Points: points, TotalPoolPoints: totalPoints}))
 
 	x, y := uint64(1_000_000), uint64(1_000_000)
-	err = sm.HandleBatchDeposit(&lib.DexBatch{
-		Committee: chainId,
-		Deposits: []*lib.DexLiquidityDeposit{
-			{Address: existing.Bytes(), Amount: depositAmt, OrderId: []byte{0x24}},
-			{Address: newProvider.Bytes(), Amount: depositAmt, OrderId: []byte{0x25}},
-		},
-	}, chainId, &x, &y, true)
-	require.NoError(t, err)
+	require.NoError(t, sm.HandleBatchDeposit(&lib.DexBatch{Deposits: []*lib.DexLiquidityDeposit{
+		{Address: newProvider.Bytes(), Amount: 1_000, OrderId: []byte{1}},
+		{Address: newProvider.Bytes(), Amount: 1_000, OrderId: []byte{2}},
+	}}, chainID, &x, &y, false))
 
-	pool, err := sm.GetPool(chainId + LiquidityPoolAddend)
+	pool, err := sm.GetPool(chainID + LiquidityPoolAddend)
 	require.NoError(t, err)
-	// existing LP gained points; new LP was never added
-	existingAfter, err := pool.GetPointsFor(existing.Bytes())
-	require.NoError(t, err)
-	require.Greater(t, existingAfter, existingBefore)
 	require.Len(t, pool.Points, lib.MaxLiquidityProviders)
-	_, pointErr := pool.GetPointsFor(newProvider.Bytes())
-	require.Error(t, pointErr)
-	require.Equal(t, lib.CodePointHolderNotFound, pointErr.Code())
+	_, err = pool.GetPointsFor(points[1].Address)
+	require.NoError(t, err)
+	_, err = pool.GetPointsFor(newProvider.Bytes())
+	require.NoError(t, err)
+}
 
-	// new LP deposit refunded; only the accepted deposit entered the liquidity pool
-	acc, err := sm.GetAccount(newProvider)
+func TestHandleBatchDepositRanksNewcomersByProviderTotal(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainID := uint64(2)
+	points, total := make([]*lib.PoolPoints, lib.MaxLiquidityProviders), uint64(0)
+	for i := range points {
+		address, amount := make([]byte, crypto.AddressSize), uint64(1_000)
+		address[len(address)-2], address[len(address)-1] = byte(i>>8), byte(i)
+		if i == 0 {
+			address = deadAddr.Bytes()
+		} else if i == 1 {
+			amount = 200
+		}
+		points[i], total = &lib.PoolPoints{Address: address, Points: amount}, total+amount
+	}
+	require.NoError(t, sm.SetPool(&Pool{Id: chainID + LiquidityPoolAddend, Amount: 1_000_000, Points: points, TotalPoolPoints: total}))
+
+	split, single := newTestAddress(t, 4), newTestAddress(t, 5)
+	x, y := uint64(1_000_000), uint64(1_000_000)
+	require.NoError(t, sm.HandleBatchDeposit(&lib.DexBatch{Deposits: []*lib.DexLiquidityDeposit{
+		{Address: split.Bytes(), Amount: 60},
+		{Address: single.Bytes(), Amount: 100},
+		{Address: split.Bytes(), Amount: 60},
+	}}, chainID, &x, &y, false))
+
+	pool, err := sm.GetPool(chainID + LiquidityPoolAddend)
 	require.NoError(t, err)
-	require.Equal(t, depositAmt, acc.Amount)
-	require.Equal(t, uint64(1_000_000)+depositAmt, pool.Amount)
-	// holding started with 2 deposits: one moved into the pool, the other refunded, leaving zero
-	holding, err := sm.GetPool(chainId + HoldingPoolAddend)
+	_, err = pool.GetPointsFor(split.Bytes())
 	require.NoError(t, err)
-	require.Zero(t, holding.Amount)
+	_, err = pool.GetPointsFor(single.Bytes())
+	require.Error(t, err)
+	_, err = pool.GetPointsFor(points[1].Address)
+	require.Error(t, err)
+}
+
+func TestHandleBatchDepositUsesReceiptHashForEqualStakeTie(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainID, seed := uint64(2), []byte("receipt")
+	points, total := make([]*lib.PoolPoints, lib.MaxLiquidityProviders), uint64(0)
+	for i := range points {
+		address, amount := make([]byte, crypto.AddressSize), uint64(100)
+		address[len(address)-2], address[len(address)-1] = byte(i>>8), byte(i)
+		if i == 0 {
+			address = deadAddr.Bytes()
+		} else if i == 1 {
+			amount = 1
+		}
+		points[i], total = &lib.PoolPoints{Address: address, Points: amount}, total+amount
+	}
+	require.NoError(t, sm.SetPool(&Pool{Id: chainID + LiquidityPoolAddend, Amount: 1_000_000, Points: points, TotalPoolPoints: total}))
+
+	a, b := newTestAddress(t, 6), newTestAddress(t, 7)
+	winner, loser := a, b
+	if bytes.Compare(crypto.Hash(append(bytes.Clone(seed), a.Bytes()...)), crypto.Hash(append(bytes.Clone(seed), b.Bytes()...))) > 0 {
+		winner, loser = b, a
+	}
+	x, y := uint64(1_000_000), uint64(1_000_000)
+	require.NoError(t, sm.HandleBatchDeposit(&lib.DexBatch{ReceiptHash: seed, Deposits: []*lib.DexLiquidityDeposit{
+		{Address: loser.Bytes(), Amount: 100},
+		{Address: winner.Bytes(), Amount: 100},
+	}}, chainID, &x, &y, false))
+
+	pool, err := sm.GetPool(chainID + LiquidityPoolAddend)
+	require.NoError(t, err)
+	_, err = pool.GetPointsFor(winner.Bytes())
+	require.NoError(t, err)
+	_, err = pool.GetPointsFor(loser.Bytes())
+	require.Error(t, err)
+}
+
+func TestHandleBatchDepositRejectedEntryDoesNotChangeIncumbents(t *testing.T) {
+	chainID := uint64(2)
+	a, b, rejected := newTestAddress(t, 4), newTestAddress(t, 5), newTestAddress(t, 6)
+	run := func(includeRejected bool) (*Pool, uint64) {
+		sm := newTestStateMachine(t)
+		points, total := make([]*lib.PoolPoints, lib.MaxLiquidityProviders), uint64(100)
+		for i := range points {
+			address := make([]byte, crypto.AddressSize)
+			address[len(address)-2], address[len(address)-1] = byte(i>>8), byte(i)
+			if i == 0 {
+				address = deadAddr.Bytes()
+			} else {
+				total += 10
+			}
+			if i == 1 {
+				address = a.Bytes()
+			} else if i == 2 {
+				address = b.Bytes()
+			}
+			points[i] = &lib.PoolPoints{Address: address, Points: 10}
+		}
+		points[0].Points = 100
+		require.NoError(t, sm.SetPool(&Pool{Id: chainID + LiquidityPoolAddend, Amount: 1_000_000, Points: points, TotalPoolPoints: total}))
+		deposits := []*lib.DexLiquidityDeposit{{Address: a.Bytes(), Amount: 1_000}, {Address: b.Bytes(), Amount: 1_000}}
+		if includeRejected {
+			deposits = append(deposits, &lib.DexLiquidityDeposit{Address: rejected.Bytes(), Amount: 1})
+		}
+		x, y := uint64(1_000_000), uint64(1_000_000)
+		require.NoError(t, sm.HandleBatchDeposit(&lib.DexBatch{Deposits: deposits}, chainID, &x, &y, false))
+		pool, err := sm.GetPool(chainID + LiquidityPoolAddend)
+		require.NoError(t, err)
+		return pool, x
+	}
+	pool, x := run(true)
+	control, controlX := run(false)
+	for _, address := range [][]byte{a.Bytes(), b.Bytes()} {
+		points, err := pool.GetPointsFor(address)
+		require.NoError(t, err)
+		controlPoints, err := control.GetPointsFor(address)
+		require.NoError(t, err)
+		require.Equal(t, controlPoints, points)
+	}
+	_, err := pool.GetPointsFor(rejected.Bytes())
+	require.Error(t, err)
+	require.Equal(t, controlX, x)
+}
+
+func TestHandleBatchDepositRefundsRejectedLocalNewcomer(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainID, total := uint64(2), uint64(0)
+	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders)
+	for i := range points {
+		address := make([]byte, crypto.AddressSize)
+		address[len(address)-2], address[len(address)-1] = byte(i>>8), byte(i)
+		if i == 0 {
+			address = deadAddr.Bytes()
+		}
+		points[i], total = &lib.PoolPoints{Address: address, Points: 100}, total+100
+	}
+	require.NoError(t, sm.SetPool(&Pool{Id: chainID + LiquidityPoolAddend, Amount: 1_000_000, Points: points, TotalPoolPoints: total}))
+	require.NoError(t, sm.SetPool(&Pool{Id: chainID + HoldingPoolAddend, Amount: 1}))
+	newcomer := newTestAddress(t, 3)
+	x, y := uint64(1_000_000), uint64(1_000_000)
+	require.NoError(t, sm.HandleBatchDeposit(&lib.DexBatch{Deposits: []*lib.DexLiquidityDeposit{{
+		Address: newcomer.Bytes(), Amount: 1,
+	}}}, chainID, &x, &y, true))
+
+	balance, err := sm.GetAccountBalance(newcomer)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), balance)
+	holding, err := sm.GetPoolBalance(chainID + HoldingPoolAddend)
+	require.NoError(t, err)
+	require.Zero(t, holding)
+	require.Equal(t, uint64(1_000_000), x)
 }
 
 func TestHandleBatchWithdrawNilWithdrawalEntryDoesNotPanic(t *testing.T) {

@@ -43,6 +43,15 @@ func TestBatchVerifierAcceptsSerializedMultiBLSKey(t *testing.T) {
 	require.Equal(t, []int(nil), b.Verify())
 }
 
+func TestBatchTupleKeySeparatesComponents(t *testing.T) {
+	key, err := NewEd25519PrivateKey()
+	require.NoError(t, err)
+	signature := key.Sign([]byte("message"))
+	original := BatchTuple{PublicKey: key.PublicKey(), Message: []byte("message"), Signature: signature}
+	shifted := BatchTuple{PublicKey: key.PublicKey(), Message: append([]byte("message"), signature[0]), Signature: signature[1:]}
+	require.NotEqual(t, original.Key(), shifted.Key())
+}
+
 func TestKeyBatchFuzz(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		b := NewBatchVerifier()

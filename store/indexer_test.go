@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math/big"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/drand/kyber"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
@@ -81,17 +83,31 @@ func TestDeleteTxsForHeightRemovesEthereumHashAlias(t *testing.T) {
 	require.True(t, got == nil || got.TxHash == "")
 }
 
-func TestGetLatestMinedEthereumNonce(t *testing.T) {
+func TestMultisigIntentAliasIndexAndDelete(t *testing.T) {
 	store, _, cleanup := testStore(t)
 	defer cleanup()
 
-	txResult, _ := newRLPBackedTxResult(t)
-	require.NoError(t, store.IndexTx(txResult))
-
-	nonce, ok, err := store.GetLatestMinedEthereumNonce(crypto.NewAddress(txResult.Sender))
+	txResult := newMultisigTxResult(t)
+	intentID, err := txResult.Transaction.GetMultisigIntentID()
 	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, txResult.Transaction.CreatedHeight, nonce)
+	require.NotEmpty(t, intentID)
+	require.NotEqual(t, txResult.TxHash, lib.BytesToString(intentID))
+
+	require.NoError(t, store.IndexTx(txResult))
+	got, err := store.GetTxByHash(intentID)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, txResult, got)
+
+	_, err = store.Commit()
+	require.NoError(t, err)
+	require.NoError(t, store.DeleteTxsForHeight(testHeight))
+
+	raw, err := store.Indexer.db.Get(store.txHashKey(intentID))
+	require.NoError(t, err)
+	got, err = store.GetTxByHash(intentID)
+	require.NoError(t, err)
+	require.Empty(t, raw)
+	require.True(t, got == nil || got.TxHash == "")
 }
 
 const ethGasPriceTestValue = 10_000_000_000
@@ -120,11 +136,39 @@ func newRLPBackedTxResult(t *testing.T) (*lib.TxResult, common.Hash) {
 		Height:    testHeight,
 		Index:     0,
 		Transaction: &lib.Transaction{
-			Memo:      "RLP",
+			Memo:      lib.RLPIndicator,
 			Signature: &lib.Signature{Signature: rawEthTx},
 		},
 		TxHash: hex.EncodeToString(protoHash),
 	}, ethTx.Hash()
+}
+
+func newMultisigTxResult(t *testing.T) *lib.TxResult {
+	keys := make([]crypto.PrivateKeyI, 3)
+	for i := range keys {
+		var err error
+		keys[i], err = crypto.NewBLS12381PrivateKey()
+		require.NoError(t, err)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return bytes.Compare(keys[i].PublicKey().Bytes(), keys[j].PublicKey().Bytes()) < 0
+	})
+	points := make([]kyber.Point, len(keys))
+	for i, key := range keys {
+		point, err := crypto.BytesToBLS12381Point(key.PublicKey().Bytes())
+		require.NoError(t, err)
+		points[i] = point
+	}
+	multiKey, err := crypto.NewAccountAuthMultiBLSFromPoints(points, []byte{0b00000011}, 2)
+	require.NoError(t, err)
+	result, tx, _, _, _ := newTestTxResult(t)
+	tx.Signature = &lib.Signature{PublicKey: multiKey.Bytes(), Signature: []byte("aggregate")}
+	hash, err := tx.GetHash()
+	require.NoError(t, err)
+	result.Sender = multiKey.Address().Bytes()
+	result.Recipient = result.Sender
+	result.TxHash = lib.BytesToString(hash)
+	return result
 }
 
 func newTestTxResult(t *testing.T) (r *lib.TxResult, tx *lib.Transaction, hash []byte, msg *lib.CommitID, address crypto.AddressI) {

@@ -37,10 +37,14 @@ func (s *Server) Transaction(w http.ResponseWriter, r *http.Request, _ httproute
 // Transactions handles multiple transactions in a single request
 func (s *Server) Transactions(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// create a slice to hold the incoming transactions
-	var txs []lib.TransactionI
+	var transactions []*lib.Transaction
 	// unmarshal the HTTP request body into the transactions slice
-	if ok := unmarshal(w, r, &txs); !ok {
+	if ok := unmarshal(w, r, &transactions); !ok {
 		return
+	}
+	txs := make([]lib.TransactionI, len(transactions))
+	for i := range transactions {
+		txs[i] = transactions[i]
 	}
 	// submit transactions to RPC server
 	s.submitTxs(w, txs)
@@ -428,11 +432,17 @@ func (s *Server) TransactionByHash(w http.ResponseWriter, r *http.Request, _ htt
 		return
 	}
 	if tx != nil && tx.GetTxHash() != "" {
-		write(w, tx, http.StatusOK)
+		response := *tx
+		committed := true
+		response.Committed = &committed
+		write(w, &response, http.StatusOK)
 		return
 	}
 	if pendingTx, found := s.controller.GetPendingTxByHash(req.Hash); found {
-		write(w, pendingTx, http.StatusOK)
+		response := *pendingTx
+		committed := false
+		response.Committed = &committed
+		write(w, &response, http.StatusOK)
 		return
 	}
 	write(w, map[string]string{"error": "transaction not found"}, http.StatusNotFound)
@@ -550,12 +560,23 @@ func (s *Server) TransactionsByRecipient(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-// FailedTxs returns a list of failed mempool transactions for the specified address
+// FailedTxs returns a list of failed mempool transactions for the specified address, or for all addresses if none is given
 func (s *Server) FailedTxs(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.addrIndexer(w, r, func(_ lib.StoreI, address crypto.AddressI, p lib.PageParams) (any, lib.ErrorI) {
-		return s.controller.GetFailedTxsPage(address.String(), p)
-	})
+	req := new(paginatedAddressRequest)
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	// an empty address string means 'all addresses' to the failed tx cache
+	address := ""
+	if req.Address != nil {
+		address = crypto.NewAddressFromBytes(req.Address).String()
+	}
+	p, err := s.controller.GetFailedTxsPage(address, req.PageParams)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	write(w, p, http.StatusOK)
 }
 
 // Proposals returns the proposals present
@@ -617,6 +638,27 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 
 	if entry, ok := s.indexerBlobCache.get(height); ok && entry != nil && entry.deltaBlobs != nil && entry.deltaBytes != nil {
 		return entry.deltaBlobs, entry.deltaBytes, nil
+	}
+
+	// Newer store versions persist the state keys touched by each commit. This
+	// makes account delta construction proportional to block activity instead
+	// of total account count. Heights committed before the journal was enabled
+	// transparently use the full-snapshot fallback below.
+	journalDelta, available, journalErr := s.controller.FSM.IndexerBlobsFromStateChanges(height)
+	if journalErr != nil {
+		return nil, nil, journalErr
+	}
+	if available {
+		deltaBytes, marshalErr := lib.Marshal(journalDelta)
+		if marshalErr != nil {
+			return nil, nil, marshalErr
+		}
+		s.indexerBlobCache.put(height, &indexerBlobCacheEntry{
+			height:     height,
+			deltaBlobs: journalDelta,
+			deltaBytes: deltaBytes,
+		})
+		return journalDelta, deltaBytes, nil
 	}
 
 	current, err := s.controller.FSM.IndexerBlob(height)
@@ -750,6 +792,7 @@ func spendableAccountView(sm *fsm.StateMachine, account *fsm.Account) *AccountVi
 	return &AccountView{
 		Address:            account.Address,
 		Amount:             spendable,
+		Nonce:              account.Nonce,
 		TotalAmount:        total,
 		VestedAmount:       vested,
 		LockedAmount:       locked,

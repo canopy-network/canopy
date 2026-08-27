@@ -561,7 +561,7 @@ func (s *StateMachine) HandleMessageDexLiquidityDeposit(msg *MessageDexLiquidity
 		return err
 	}
 	// ensure there's some liquidity in the pool
-	if lPool.Amount == 0 || s.Config.ChainId == msg.ChainId || len(lPool.Points) >= lib.MaxLiquidityProviders {
+	if lPool.Amount == 0 || s.Config.ChainId == msg.ChainId {
 		return ErrInvalidLiquidityPool()
 	}
 	// hard limit ops to 5K per batch to prevent unchecked state growth

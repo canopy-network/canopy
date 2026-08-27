@@ -13,7 +13,7 @@ func (b *BFT) HandleMessage(message proto.Message) lib.ErrorI {
 	// ensure is a valid `Consensus Message` type
 	switch msg := message.(type) {
 	case *Message:
-		// capture the paramters needed to validate the message
+		// capture the parameters needed to validate the message
 		params, err := b.GetValidateMessageParams(msg)
 		if err != nil {
 			return err
@@ -81,6 +81,10 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 	if err = x.Qc.CheckBasic(); err != nil {
 		return
 	}
+	// ensure the sender is justified as the proposer
+	if !bytes.Equal(x.Qc.ProposerKey, x.Signature.PublicKey) {
+		return false, lib.ErrInvalidSigner()
+	}
 	// if an unexpected root height
 	if x.Qc.Header.RootHeight != p.rootHeight {
 		// load the proper committee
@@ -136,10 +140,6 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 		return false, lib.ErrInvalidQCCommitteeHeight()
 	}
 	if x.Header.Phase == Propose {
-		// ensure the sender is justified as the proposer
-		if !bytes.Equal(x.Qc.ProposerKey, x.Signature.PublicKey) {
-			return false, lib.ErrInvalidSigner()
-		}
 		// ensure the block isn't nil
 		if x.Qc.Block == nil {
 			return false, lib.ErrNilBlock()

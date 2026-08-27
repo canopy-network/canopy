@@ -118,8 +118,8 @@ message PluginBeginResponse {
   PluginError error = 99;
 }
 
-// PluginCheckRequest carries a transaction to be checked
-message PluginCheckRequest { Transaction tx = 1; }
+// PluginCheckRequest carries a transaction and its execution height to be checked
+message PluginCheckRequest { Transaction tx = 1; uint64 height = 2; }
 
 // PluginCheckResponse acknowledges transaction check
 message PluginCheckResponse {
@@ -131,8 +131,8 @@ message PluginCheckResponse {
   PluginError error = 99;
 }
 
-// PluginDeliverRequest carries a transaction to be processed
-message PluginDeliverRequest {Transaction tx = 1; }
+// PluginDeliverRequest carries a transaction and its execution height to be processed
+message PluginDeliverRequest {Transaction tx = 1; uint64 height = 2; }
 
 // PluginDeliverResponse acknowledges transaction delivery
 message PluginDeliverResponse {

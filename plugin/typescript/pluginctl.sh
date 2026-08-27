@@ -3,12 +3,23 @@
 # Usage: ./pluginctl.sh {start|stop|status|restart}
 # Configuration variables for paths and files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NODE_SCRIPT="$SCRIPT_DIR/dist/main.js"
+# Persistent plugin home under the data dir (set by canopy, else default location).
+PLUGIN_HOME="${CANOPY_PLUGIN_HOME:-${CANOPY_DATA_DIR:-$HOME/.canopy}/plugin/$(basename "$SCRIPT_DIR")}"
+mkdir -p "$PLUGIN_HOME"
+# Prefer a downloaded update in the data dir, else the code baked in the image.
+if [ -f "$PLUGIN_HOME/dist/main.js" ] || [ -f "$PLUGIN_HOME/typescript-plugin.tar.gz" ]; then
+    RUN_HOME="$PLUGIN_HOME"
+elif [ -f "$SCRIPT_DIR/dist/main.js" ]; then
+    RUN_HOME="$SCRIPT_DIR"
+else
+    RUN_HOME="$PLUGIN_HOME"
+fi
+NODE_SCRIPT="$RUN_HOME/dist/main.js"
 NODE_CMD="node"
 PID_FILE="/tmp/plugin/typescript-plugin.pid"
 LOG_FILE="/tmp/plugin/typescript-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
-TARBALL="$SCRIPT_DIR/typescript-plugin.tar.gz"
+TARBALL="$RUN_HOME/typescript-plugin.tar.gz"
 # Timeout in seconds for graceful shutdown
 STOP_TIMEOUT=10
 
@@ -22,7 +33,7 @@ extract_if_needed() {
     # Check for tarball
     if [ -f "$TARBALL" ]; then
         echo "Extracting $TARBALL..."
-        tar -xzf "$TARBALL" -C "$SCRIPT_DIR"
+        tar -xzf "$TARBALL" -C "$RUN_HOME"
         if [ $? -eq 0 ] && [ -f "$NODE_SCRIPT" ]; then
             echo "Extraction complete"
             return 0

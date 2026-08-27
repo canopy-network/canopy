@@ -24,6 +24,20 @@ func TestT(t *testing.T) {
 	}))
 }
 
+func TestAccountJSONPreservesNonce(t *testing.T) {
+	expected := &Account{
+		Address: newTestAddress(t).Bytes(),
+		Amount:  100,
+		Nonce:   7,
+	}
+	bz, err := json.Marshal(expected)
+	require.NoError(t, err)
+
+	got := new(Account)
+	require.NoError(t, json.Unmarshal(bz, got))
+	require.Equal(t, expected.Nonce, got.Nonce)
+}
+
 func TestSetGetAccount(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -198,6 +212,35 @@ func TestAccountVestingAccounting(t *testing.T) {
 			require.Equal(t, test.locked, sm.AccountLockedAmount(account))
 			require.Equal(t, test.authorized, sm.AccountSpendableAmount(account))
 		})
+	}
+}
+
+func TestAccountVestedAmountMaxValuesIsMonotonic(t *testing.T) {
+	sm := newTestStateMachine(t)
+	account := &Account{
+		Amount:             math.MaxUint64,
+		VestingAmount:      math.MaxUint64,
+		VestingStartHeight: 0,
+		VestingCliffHeight: 0,
+		VestingEndHeight:   math.MaxUint64,
+	}
+	heights := []uint64{
+		0,
+		1,
+		2,
+		math.MaxUint64 / 4,
+		math.MaxUint64 / 2,
+		math.MaxUint64 - 2,
+		math.MaxUint64 - 1,
+		math.MaxUint64,
+	}
+	var previous uint64
+	for _, height := range heights {
+		sm.height = height
+		vested := sm.AccountVestedAmount(account)
+		require.GreaterOrEqual(t, vested, previous)
+		require.Equal(t, height, vested)
+		previous = vested
 	}
 }
 

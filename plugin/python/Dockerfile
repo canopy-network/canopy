@@ -14,7 +14,7 @@ FROM python:3.12-alpine
 WORKDIR /app
 
 # Install bash (required for pluginctl.sh)
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash procps
 
 RUN mkdir -p /tmp/plugin /root/.canopy
 

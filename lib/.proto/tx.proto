@@ -40,6 +40,8 @@ message Transaction {
   uint64 network_id = 8; // @gotags: json:"networkID"
   // chain_id: The identity of the committee the transaction is intended for
   uint64 chain_id = 9; // @gotags: json:"chainID"
+  // nonce: the sequence number for nonce-protected transactions
+  uint64 nonce = 10;
 }
 
 // TxResult represents the result of a processed transaction, including information about the sender, recipient,
@@ -59,6 +61,8 @@ message TxResult {
   Transaction transaction = 6;
   // tx_hash: The unique hash that identifies the transaction
   string tx_hash = 7; // @gotags: json:"txHash"
+  // committed: Whether the transaction has been included in a committed block
+  optional bool committed = 8;
 }
 // A Signature is a digital signature is a cryptographic "fingerprint" created with a private key,
 // allowing others to verify the authenticity and integrity of a message using the corresponding public key

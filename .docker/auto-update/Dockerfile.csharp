@@ -63,8 +63,9 @@ COPY --from=builder /go/src/github.com/canopy-network/canopy/bin ./canopy
 COPY --from=builder ${BIN_PATH} ${BIN_PATH}
 
 # Create plugin directory and copy only pluginctl.sh
-# Self-contained plugin binary will be downloaded from upstream release and extracted on first start
-RUN mkdir -p /app/plugin/csharp/bin
+# Self-contained plugin binary will be downloaded from upstream release and
+# extracted into the persistent data dir (CANOPY_PLUGIN_HOME) on first start
+RUN mkdir -p /app/plugin/csharp
 COPY --from=builder /go/src/github.com/canopy-network/canopy/plugin/csharp/pluginctl.sh /app/plugin/csharp/pluginctl.sh
 
 # Copy entrypoint

@@ -529,6 +529,27 @@ func (s *Server) ConsensusInfo(w http.ResponseWriter, r *http.Request, _ httprou
 	}
 }
 
+// ConsensusForceRound schedules coordinated recovery at the next pacemaker.
+func (s *Server) ConsensusForceRound(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	request := new(struct {
+		Round        uint64  `json:"round"`
+		TimeoutRound *uint64 `json:"timeoutRound,omitempty"`
+		UnixTimeMS   int64   `json:"unixTimeMS"`
+	})
+	if !unmarshal(w, r, request) {
+		return
+	}
+
+	s.controller.Lock()
+	err := s.controller.Consensus.ScheduleForceRound(request.Round, time.UnixMilli(request.UnixTimeMS), request.TimeoutRound)
+	s.controller.Unlock()
+	if err != nil {
+		write(w, lib.NewError(lib.NoCode, lib.RPCModule, err.Error()), http.StatusBadRequest)
+		return
+	}
+	write(w, request, http.StatusOK)
+}
+
 // PeerInfo retrieves node peer information
 func (s *Server) PeerInfo(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	peers, numInbound, numOutbound := s.controller.P2P.GetAllInfos()

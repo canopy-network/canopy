@@ -3,7 +3,18 @@
 # Usage: ./pluginctl.sh {start|stop|status|restart}
 # Configuration variables for paths and files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BINARY_PATH="$SCRIPT_DIR/go-plugin"
+# Persistent plugin home under the data dir (set by canopy, else default location).
+PLUGIN_HOME="${CANOPY_PLUGIN_HOME:-${CANOPY_DATA_DIR:-$HOME/.canopy}/plugin/$(basename "$SCRIPT_DIR")}"
+mkdir -p "$PLUGIN_HOME"
+# Prefer a downloaded update in the data dir, else the artifact baked in the image.
+if [ -x "$PLUGIN_HOME/go-plugin" ] || ls "$PLUGIN_HOME"/go-plugin-linux-*.tar.gz >/dev/null 2>&1; then
+    RUN_HOME="$PLUGIN_HOME"
+elif [ -x "$SCRIPT_DIR/go-plugin" ]; then
+    RUN_HOME="$SCRIPT_DIR"
+else
+    RUN_HOME="$PLUGIN_HOME"
+fi
+BINARY_PATH="$RUN_HOME/go-plugin"
 PID_FILE="/tmp/plugin/go-plugin.pid"
 LOG_FILE="/tmp/plugin/go-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
@@ -35,11 +46,11 @@ extract_if_needed() {
     
     # Check for architecture-specific tarball
     local arch=$(get_arch)
-    local tarball="$SCRIPT_DIR/go-plugin-linux-${arch}.tar.gz"
+    local tarball="$RUN_HOME/go-plugin-linux-${arch}.tar.gz"
     
     if [ -f "$tarball" ]; then
         echo "Extracting $tarball..."
-        tar -xzf "$tarball" -C "$SCRIPT_DIR"
+        tar -xzf "$tarball" -C "$RUN_HOME"
         if [ $? -eq 0 ] && [ -f "$BINARY_PATH" ]; then
             chmod +x "$BINARY_PATH"
             echo "Extraction complete"

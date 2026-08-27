@@ -198,6 +198,60 @@ func TestRLPToSendTxDynamic(t *testing.T) {
 	}
 }
 
+func TestRLPV2DynamicFeeUsesEffectiveGasPrice(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	to := common.HexToAddress("0x000000000000000000000000000000000000dead")
+	evmChainID, ok := CanopyIdsToEVMChainIdV2(1, 1)
+	require.True(t, ok)
+	chainID := new(big.Int).SetUint64(evmChainID)
+	ethTx := types.MustSignNewTx(key, types.LatestSignerForChainID(chainID), &types.DynamicFeeTx{
+		ChainID: chainID, GasFeeCap: big.NewInt(20_000_000_000), GasTipCap: big.NewInt(0),
+		Gas: 21_000, To: &to, Value: UpscaleTo18Decimals(1),
+	})
+	raw, err := ethTx.MarshalBinary()
+	require.NoError(t, err)
+
+	tx, errI := RLPToCanopyTransactionV2(raw)
+	require.NoError(t, errI)
+	require.EqualValues(t, 210, tx.Fee)
+}
+
+func TestRLPV2DynamicFeeRejectsCapBelowBaseFee(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	to := common.HexToAddress("0x000000000000000000000000000000000000dead")
+	evmChainID, ok := CanopyIdsToEVMChainIdV2(1, 1)
+	require.True(t, ok)
+	chainID := new(big.Int).SetUint64(evmChainID)
+	ethTx := types.MustSignNewTx(key, types.LatestSignerForChainID(chainID), &types.DynamicFeeTx{
+		ChainID: chainID, GasFeeCap: big.NewInt(EthereumBaseFeePerGas - 1), GasTipCap: big.NewInt(0),
+		Gas: 21_000, To: &to, Value: UpscaleTo18Decimals(1),
+	})
+	raw, err := ethTx.MarshalBinary()
+	require.NoError(t, err)
+
+	_, errI := RLPToCanopyTransactionV2(raw)
+	require.Error(t, errI)
+}
+
+func TestRLPV2RejectsNonRepresentableNativeValue(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	to := common.HexToAddress("0x000000000000000000000000000000000000dead")
+	chainID, ok := CanopyIdsToEVMChainIdV2(1, 1)
+	require.True(t, ok)
+	tx := types.MustSignNewTx(key, types.LatestSignerForChainID(new(big.Int).SetUint64(chainID)), &types.DynamicFeeTx{
+		ChainID: new(big.Int).SetUint64(chainID), GasFeeCap: big.NewInt(EthereumBaseFeePerGas),
+		Gas: 21_000, To: &to, Value: new(big.Int).Add(scaleFactor, big.NewInt(1)),
+	})
+	raw, err := tx.MarshalBinary()
+	require.NoError(t, err)
+
+	_, errI := RLPToCanopyTransactionV2(raw)
+	require.Equal(t, ErrInvalidAmount().Code(), errI.Code())
+}
+
 func TestRLPToCanopyTransaction_RejectsChainIDAboveUint64(t *testing.T) {
 	privKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -219,6 +273,33 @@ func TestRLPToCanopyTransaction_RejectsChainIDAboveUint64(t *testing.T) {
 	_, errI := RLPToCanopyTransaction(rlpBytes)
 	require.Error(t, errI)
 	require.ErrorContains(t, errI, "chain id exceeds uint64")
+}
+
+func TestEthereumChainIDDomains(t *testing.T) {
+	legacy := CanopyIdsToEVMChainId(1, 1)
+	v2, ok := CanopyIdsToEVMChainIdV2(1, 1)
+	require.True(t, ok)
+	require.EqualValues(t, 0x100000001, legacy)
+	require.EqualValues(t, 0x140000001, v2)
+
+	chainID, networkID, errI := evmChainIdToCanopyIdsForRLP(legacy, RLPIndicator)
+	require.NoError(t, errI)
+	require.EqualValues(t, 1, chainID)
+	require.EqualValues(t, 1, networkID)
+	_, _, errI = evmChainIdToCanopyIdsForRLP(legacy, RLPV2Indicator)
+	require.ErrorContains(t, errI, "expected 1")
+
+	chainID, networkID, errI = evmChainIdToCanopyIdsForRLP(v2, RLPV2Indicator)
+	require.NoError(t, errI)
+	require.EqualValues(t, 1, chainID)
+	require.EqualValues(t, 1, networkID)
+	_, _, errI = evmChainIdToCanopyIdsForRLP(v2, RLPIndicator)
+	require.ErrorContains(t, errI, "expected 0")
+
+	_, ok = CanopyIdsToEVMChainIdV2(1<<30, 1)
+	require.False(t, ok)
+	_, ok = CanopyIdsToEVMChainIdV2(1, 1<<32)
+	require.False(t, ok)
 }
 
 func TestRLPToCanopyTransaction_RejectsDownscaledValueOverflow(t *testing.T) {

@@ -13,15 +13,39 @@ message Signature {
 }
 
 message Transaction {
-  string              message_type   = 1;
-  google.protobuf.Any msg            = 2;
-  Signature           signature      = 3;
-  uint64              created_height = 4;
-  uint64              time           = 5;
-  uint64              fee            = 6;
-  string              memo           = 7;
-  uint64              network_id     = 8;
-  uint64              chain_id       = 9;
+  // message_type: The type of the transaction like 'send' or 'stake'
+  string message_type = 1; // @gotags: json:"messageType"
+  // msg: The actual transaction message payload, which is encapsulated in a generic message format
+  google.protobuf.Any msg = 2;
+  // signature: The cryptographic signature used to verify the authenticity of the transaction
+  Signature signature = 3;
+  // created_height: The height when the transaction was created - allows 'safe pruning'
+  uint64 created_height = 4; // @gotags: json:"createdHeight"
+  // time: The timestamp when the transaction was created - used as temporal entropy to prevent hash collisions in txs
+  uint64 time = 5;
+  // fee: The fee associated with processing the transaction
+  uint64 fee = 6;
+  // memo: An optional message or note attached to the transaction
+  string memo = 7;
+  // network_id: The identity of the network the transaction is intended for
+  uint64 network_id = 8; // @gotags: json:"networkID"
+  // chain_id: The identity of the committee the transaction is intended for
+  uint64 chain_id = 9; // @gotags: json:"chainID"
+  // nonce: The sender's protocol replay-protection nonce
+  uint64 nonce = 10;
+  // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
+  // NO CONFLICT STARTING AT FIELD = 25
+}
+
+// MessageSend is a standard transfer transaction, taking tokens from the sender and transferring
+// them to the recipient
+message MessageSend {
+  // from_address: is the sender of the funds
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // to_address: is the recipient of the funds
+  bytes to_address = 2; // @gotags: json:"toAddress"
+  // amount: is the amount of tokens in micro-denomination (uCNPY)
+  uint64 amount = 3;
 }
 
 message FeeParams {

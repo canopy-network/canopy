@@ -564,6 +564,10 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool) (b *li
 
 // HandlePeerBlock() validates and handles an inbound certificate (with a block) from a remote peer
 func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.QuorumCertificate, lib.ErrorI) {
+	return c.handlePeerBlock(msg, syncing, false)
+}
+
+func (c *Controller) handlePeerBlock(msg *lib.BlockMessage, syncing, verifyQC bool) (*lib.QuorumCertificate, lib.ErrorI) {
 	// log the start of 'peer block handling'
 	c.log.Info("Handling peer block")
 	// define a convenience variable for the certificate
@@ -599,7 +603,7 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 			}
 		}
 	}
-	if !syncing || qc.Header.Height%CheckpointFrequency == 0 {
+	if verifyQC || !syncing || qc.Header.Height%CheckpointFrequency == 0 {
 		// load the committee from the root chain using the root height embedded in the certificate message
 		v, err := c.Consensus.LoadCommittee(c.LoadRootChainId(qc.Header.Height), qc.Header.RootHeight)
 		if err != nil {

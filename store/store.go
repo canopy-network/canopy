@@ -87,7 +87,7 @@ type Store struct {
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
 func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 	if config.StoreConfig.InMemory {
-		return NewStoreInMemory(l)
+		return NewStoreInMemory(l, config)
 	}
 	return NewStore(config, filepath.Join(config.DataDirPath, config.DBName), metrics, l)
 }
@@ -143,7 +143,7 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 }
 
 // NewStoreInMemory() creates a new instance of a mem DB
-func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
+func NewStoreInMemory(log lib.LoggerI, configs ...lib.Config) (lib.StoreI, lib.ErrorI) {
 	db, err := pebble.Open("", &pebble.Options{
 		FS:                    vfs.NewMem(),                // memory file system
 		L0CompactionThreshold: 20,                          // Delay compaction during bulk writes
@@ -157,7 +157,11 @@ func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 	if err != nil {
 		return nil, ErrOpenDB(err)
 	}
-	return NewStoreWithDB(lib.DefaultConfig(), db, nil, log)
+	config := lib.DefaultConfig()
+	if len(configs) != 0 {
+		config = configs[0]
+	}
+	return NewStoreWithDB(config, db, nil, log)
 }
 
 // NewStoreWithDB() returns a Store object given a DB and a logger
@@ -262,6 +266,13 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	}
 	// collect LSS tombstones before Flush() clears the txn operations
 	lssDeleteKeys := s.collectLssDeleteKeys()
+	// Persist the keys touched by this commit outside consensus state.
+	if s.config.StoreConfig.StateChangeJournalEnabled {
+		if err = s.recordStateChangeKeys(nextVersion); err != nil {
+			s.Reset()
+			return nil, err
+		}
+	}
 	// commit the in-memory txn to the pebbleDB batch
 	if e := s.Flush(); e != nil {
 		s.Reset()
@@ -290,6 +301,19 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	s.MaybeBackup()
 	// return the root
 	return
+}
+
+// recordStateChangeKeys snapshots the pending state transaction before Flush
+// clears it. Values are already available from the versioned state store, so
+// the journal only needs keys
+func (s *Store) recordStateChangeKeys(version uint64) lib.ErrorI {
+	s.ss.txn.l.Lock()
+	keys := make([][]byte, 0, len(s.ss.txn.ops))
+	for _, op := range s.ss.txn.ops {
+		keys = append(keys, bytes.Clone(op.key))
+	}
+	s.ss.txn.l.Unlock()
+	return s.Indexer.indexStateChangeKeys(version, keys)
 }
 
 // Rollback rewinds the store to a previous version (height).
@@ -682,6 +706,9 @@ func (s *Store) MaybeBackup() {
 	backupDir := s.config.StoreConfig.BackupDirectory
 	// ensure only complete backups exists on the actual backup directory
 	tempBackupDir := backupDir + "_temp"
+	// rotate: atomically move current backup to a previous slot so there is
+	// always at least one valid backup on disk during the swap
+	prevBackupDir := backupDir + "_prev"
 	// retrieve the current version
 	version := s.Version()
 	// verify that backups are enabled in the config
@@ -703,17 +730,29 @@ func (s *Store) MaybeBackup() {
 		var err error
 		start := time.Now()
 		defer func() {
-			s.backup.Store(false)
+			// ensure the temp backup files are always deleted
+			_ = os.RemoveAll(tempBackupDir)
 			if err == nil {
+				// the new backup is in the active slot so the previous one is no longer needed
+				_ = os.RemoveAll(prevBackupDir)
+				s.backup.Store(false)
 				return
 			}
+			// the backup failed, if the rotation already emptied the active slot then
+			// check whether the current backup exists
+			if _, statErr := os.Stat(backupDir); os.IsNotExist(statErr) {
+				// if not, try to restore the previous working backup
+				restoreErr := os.Rename(prevBackupDir, backupDir)
+				if restoreErr != nil && !os.IsNotExist(restoreErr) {
+					s.log.Errorf("failed to restore previous backup at height [%d]: %v", version, restoreErr)
+				}
+			} else {
+				// otherwise, remove dangling backup, continue with current working backup
+				_ = os.RemoveAll(prevBackupDir)
+			}
+			s.backup.Store(false)
 			s.log.Errorf("backup failed at height [%d]: %v", version, err)
 		}()
-		// delete current backup files as pebbleDB expects an empty directory
-		if err = os.RemoveAll(tempBackupDir); err != nil {
-			err = fmt.Errorf("remove temporary backup: %w", err)
-			return
-		}
 		// flush the memtable to SST before checkpointing so the backup does not
 		// depend on WAL replay for recovery (commits use NoSync so WAL records
 		// may not be durable on disk at checkpoint time)
@@ -733,9 +772,6 @@ func (s *Store) MaybeBackup() {
 			err = fmt.Errorf("write height file: %w", err)
 			return
 		}
-		// rotate: atomically move current backup to a previous slot so there is
-		// always at least one valid backup on disk during the swap
-		prevBackupDir := backupDir + "_prev"
 		if err = os.Rename(backupDir, prevBackupDir); err != nil && !os.IsNotExist(err) {
 			err = fmt.Errorf("rotate backup: %w", err)
 			return
@@ -744,10 +780,6 @@ func (s *Store) MaybeBackup() {
 		if err = os.Rename(tempBackupDir, backupDir); err != nil {
 			err = fmt.Errorf("finalize backup: %w", err)
 			return
-		}
-		// clean up the previous backup now that the new one is safely in place
-		if removeErr := os.RemoveAll(prevBackupDir); removeErr != nil {
-			s.log.Warnf("failed to remove previous backup: %v", removeErr)
 		}
 		backupDuration := time.Since(start)
 		// log results

@@ -3,8 +3,19 @@
 # Usage: ./pluginctl.sh {start|stop|status|restart}
 # Configuration variables for paths and files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JAR_PATH="$SCRIPT_DIR/build/libs/canopy-plugin-kotlin-1.0.0-all.jar"
-TARBALL="$SCRIPT_DIR/kotlin-plugin.tar.gz"
+# Persistent plugin home under the data dir (set by canopy, else default location).
+PLUGIN_HOME="${CANOPY_PLUGIN_HOME:-${CANOPY_DATA_DIR:-$HOME/.canopy}/plugin/$(basename "$SCRIPT_DIR")}"
+mkdir -p "$PLUGIN_HOME"
+# Prefer a downloaded update in the data dir, else the jar baked in the image.
+if [ -f "$PLUGIN_HOME/build/libs/canopy-plugin-kotlin-1.0.0-all.jar" ] || [ -f "$PLUGIN_HOME/kotlin-plugin.tar.gz" ]; then
+    RUN_HOME="$PLUGIN_HOME"
+elif [ -f "$SCRIPT_DIR/build/libs/canopy-plugin-kotlin-1.0.0-all.jar" ]; then
+    RUN_HOME="$SCRIPT_DIR"
+else
+    RUN_HOME="$PLUGIN_HOME"
+fi
+JAR_PATH="$RUN_HOME/build/libs/canopy-plugin-kotlin-1.0.0-all.jar"
+TARBALL="$RUN_HOME/kotlin-plugin.tar.gz"
 PID_FILE="/tmp/plugin/kotlin-plugin.pid"
 LOG_FILE="/tmp/plugin/kotlin-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
@@ -21,11 +32,11 @@ extract_if_needed() {
     # Check for tarball
     if [ -f "$TARBALL" ]; then
         echo "Extracting $TARBALL..."
-        mkdir -p "$SCRIPT_DIR/build/libs"
-        tar -xzf "$TARBALL" -C "$SCRIPT_DIR/build/libs"
+        mkdir -p "$RUN_HOME/build/libs"
+        tar -xzf "$TARBALL" -C "$RUN_HOME/build/libs"
         # Rename if needed (tarball contains kotlin-plugin.jar)
-        if [ -f "$SCRIPT_DIR/build/libs/kotlin-plugin.jar" ] && [ ! -f "$JAR_PATH" ]; then
-            mv "$SCRIPT_DIR/build/libs/kotlin-plugin.jar" "$JAR_PATH"
+        if [ -f "$RUN_HOME/build/libs/kotlin-plugin.jar" ] && [ ! -f "$JAR_PATH" ]; then
+            mv "$RUN_HOME/build/libs/kotlin-plugin.jar" "$JAR_PATH"
         fi
         if [ $? -eq 0 ] && [ -f "$JAR_PATH" ]; then
             echo "Extraction complete"

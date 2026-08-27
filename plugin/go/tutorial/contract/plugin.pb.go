@@ -767,10 +767,11 @@ func (x *PluginBeginResponse) GetError() *PluginError {
 	return nil
 }
 
-// PluginCheckRequest carries a transaction to be checked
+// PluginCheckRequest carries a transaction and its execution height to be checked
 type PluginCheckRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Tx            *Transaction           `protobuf:"bytes,1,opt,name=tx,proto3" json:"tx,omitempty"`
+	Height        uint64                 `protobuf:"varint,2,opt,name=height,proto3" json:"height,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -810,6 +811,13 @@ func (x *PluginCheckRequest) GetTx() *Transaction {
 		return x.Tx
 	}
 	return nil
+}
+
+func (x *PluginCheckRequest) GetHeight() uint64 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
 }
 
 // PluginCheckResponse acknowledges transaction check
@@ -876,10 +884,11 @@ func (x *PluginCheckResponse) GetError() *PluginError {
 	return nil
 }
 
-// PluginDeliverRequest carries a transaction to be processed
+// PluginDeliverRequest carries a transaction and its execution height to be processed
 type PluginDeliverRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Tx            *Transaction           `protobuf:"bytes,1,opt,name=tx,proto3" json:"tx,omitempty"`
+	Height        uint64                 `protobuf:"varint,2,opt,name=height,proto3" json:"height,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -919,6 +928,13 @@ func (x *PluginDeliverRequest) GetTx() *Transaction {
 		return x.Tx
 	}
 	return nil
+}
+
+func (x *PluginDeliverRequest) GetHeight() uint64 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
 }
 
 // PluginDeliverResponse acknowledges transaction delivery
@@ -1741,15 +1757,17 @@ const file_plugin_proto_rawDesc = "" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\"e\n" +
 	"\x13PluginBeginResponse\x12$\n" +
 	"\x06events\x18\x01 \x03(\v2\f.types.EventR\x06events\x12(\n" +
-	"\x05error\x18c \x01(\v2\x12.types.PluginErrorR\x05error\"8\n" +
+	"\x05error\x18c \x01(\v2\x12.types.PluginErrorR\x05error\"P\n" +
 	"\x12PluginCheckRequest\x12\"\n" +
-	"\x02tx\x18\x01 \x01(\v2\x12.types.TransactionR\x02tx\"\x8c\x01\n" +
+	"\x02tx\x18\x01 \x01(\v2\x12.types.TransactionR\x02tx\x12\x16\n" +
+	"\x06height\x18\x02 \x01(\x04R\x06height\"\x8c\x01\n" +
 	"\x13PluginCheckResponse\x12-\n" +
 	"\x12authorized_signers\x18\x01 \x03(\fR\x11authorizedSigners\x12\x1c\n" +
 	"\trecipient\x18\x02 \x01(\fR\trecipient\x12(\n" +
-	"\x05error\x18c \x01(\v2\x12.types.PluginErrorR\x05error\":\n" +
+	"\x05error\x18c \x01(\v2\x12.types.PluginErrorR\x05error\"R\n" +
 	"\x14PluginDeliverRequest\x12\"\n" +
-	"\x02tx\x18\x01 \x01(\v2\x12.types.TransactionR\x02tx\"g\n" +
+	"\x02tx\x18\x01 \x01(\v2\x12.types.TransactionR\x02tx\x12\x16\n" +
+	"\x06height\x18\x02 \x01(\x04R\x06height\"g\n" +
 	"\x15PluginDeliverResponse\x12$\n" +
 	"\x06events\x18\x01 \x03(\v2\f.types.EventR\x06events\x12(\n" +
 	"\x05error\x18c \x01(\v2\x12.types.PluginErrorR\x05error\"U\n" +

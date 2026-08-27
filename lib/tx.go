@@ -26,6 +26,9 @@ const (
 	EventsPageName         = "events-page"
 )
 
+// multisigIntentDomainV1 separates threshold-multisig intent IDs from other hashes.
+const multisigIntentDomainV1 byte = 0x01
+
 // Messages must be pre-registered for Transaction JSON unmarshalling
 var RegisteredMessages map[string]MessageI
 
@@ -159,7 +162,39 @@ func (x *Transaction) GetSignBytes() ([]byte, ErrorI) {
 		Memo:          x.Memo,
 		NetworkId:     x.NetworkId,
 		ChainId:       x.ChainId,
+		Nonce:         x.Nonce,
 	})
+}
+
+// GetMultisigIntentID returns a stable replay identifier for a threshold-BLS
+// transaction. The identifier intentionally excludes the signer bitmap and aggregate
+// signature so alternate valid signer subsets produce the same ID.
+//
+// Layout: SHA-256(0x01 || multisig account address || SHA-256(canonical sign bytes)).
+// A nil ID means the transaction does not use a threshold-BLS account key.
+func (x *Transaction) GetMultisigIntentID() ([]byte, ErrorI) {
+	if x == nil || x.Signature == nil || len(x.Signature.PublicKey) == 0 {
+		return nil, nil
+	}
+	publicKey, err := PublicKeyFromBytes(x.Signature.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	multiKey, ok := publicKey.(*crypto.BLS12381MultiPublicKey)
+	if !ok || multiKey.Threshold() == 0 {
+		return nil, nil
+	}
+	signBytes, err := x.GetSignBytes()
+	if err != nil {
+		return nil, err
+	}
+	address := multiKey.Address().Bytes()
+	signHash := crypto.Hash(signBytes)
+	preimage := make([]byte, 1+len(address)+len(signHash))
+	preimage[0] = multisigIntentDomainV1
+	copy(preimage[1:], address)
+	copy(preimage[1+len(address):], signHash)
+	return crypto.Hash(preimage), nil
 }
 
 // Sign() executes a digital signature on the transaction
@@ -193,6 +228,7 @@ type jsonTx struct {
 	Memo          string          `json:"memo,omitempty"`
 	NetworkId     uint64          `json:"networkID,omitempty"`
 	ChainId       uint64          `json:"chainID,omitempty"`
+	Nonce         uint64          `json:"nonce,omitempty"`
 }
 
 // MarshalJSON() implements the json.Marshaller interface for the Transaction type
@@ -224,6 +260,7 @@ func (x Transaction) MarshalJSON() (jsonBytes []byte, err error) {
 		Memo:          x.Memo,
 		NetworkId:     x.NetworkId,
 		ChainId:       x.ChainId,
+		Nonce:         x.Nonce,
 	})
 }
 
@@ -249,6 +286,7 @@ func (x *Transaction) UnmarshalJSON(jsonBytes []byte) (err error) {
 				Memo:          j.Memo,
 				NetworkId:     j.NetworkId,
 				ChainId:       j.ChainId,
+				Nonce:         j.Nonce,
 			}
 			return nil
 		} else if e.Code() != CodeUnknownMsgName {
@@ -281,6 +319,7 @@ func (x *Transaction) UnmarshalJSON(jsonBytes []byte) (err error) {
 			Memo:          j.Memo,
 			NetworkId:     j.NetworkId,
 			ChainId:       j.ChainId,
+			Nonce:         j.Nonce,
 		}
 		return nil
 	}
@@ -309,6 +348,7 @@ func (x *Transaction) UnmarshalJSON(jsonBytes []byte) (err error) {
 		Memo:          j.Memo,
 		NetworkId:     j.NetworkId,
 		ChainId:       j.ChainId,
+		Nonce:         j.Nonce,
 	}
 	// exit
 	return
@@ -333,6 +373,7 @@ type jsonTxResult struct {
 	Index       uint64       `json:"index,omitempty"`
 	Transaction *Transaction `json:"transaction,omitempty"`
 	TxHash      string       `json:"txHash,omitempty"`
+	Committed   *bool        `json:"committed,omitempty"`
 }
 
 // MarshalJSON() satisfies the json.Marshaller interface
@@ -345,6 +386,7 @@ func (x TxResult) MarshalJSON() ([]byte, error) {
 		Index:       x.Index,
 		Transaction: x.Transaction,
 		TxHash:      x.TxHash,
+		Committed:   x.Committed,
 	})
 }
 
@@ -366,6 +408,7 @@ func (x *TxResult) UnmarshalJSON(jsonBytes []byte) (err error) {
 		Index:       j.Index,
 		Transaction: j.Transaction,
 		TxHash:      j.TxHash,
+		Committed:   j.Committed,
 	}
 	// exit
 	return

@@ -214,12 +214,7 @@ git clone https://github.com/Makaveli912/canopy.git
 cd canopy
 git checkout feat/praxis-prediction-markets
 
-# Build the Canopy node binary
-go build -o ~/go/bin/canopy ./cmd/main
-
-# Build the Praxis plugin binary
-cd plugin/go
-go build -o go-plugin .
+**State Writing**:
 ```
 
 ### Run
@@ -229,11 +224,9 @@ go build -o go-plugin .
 canopy start
 ```
 
-Watch for:
-```
-Plugin go started: go-plugin started successfully
-Plugin service listening on socket: /tmp/plugin/plugin.sock
-```
+- **Fee Pool**: Write the updated fee pool.
+- **Accounts**: Write the updated sender and recipient records.
+- **Drained Accounts**: Delete nonce-zero native senders; retain records with committed nonce state and senders whose nonce will advance after `RLP.V2` delivery.
 
 ### Frontend
 
@@ -288,4 +281,7 @@ If no one bet on the losing side, the winner's original stake is returned unchan
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+- **Socket Communication**: Low-latency Unix domain sockets
+- **Batch Operations**: Multiple state operations in single FSM call
+- **Memory Efficiency**: Length-prefixed messaging avoids buffering issues
+- **Concurrent Safety**: Thread-safe request correlation and state management

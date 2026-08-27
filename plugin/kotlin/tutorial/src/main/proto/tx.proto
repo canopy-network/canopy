@@ -24,8 +24,10 @@ message Transaction {
   uint64 network_id = 8; // @gotags: json:"networkID"
   // chain_id: The identity of the committee the transaction is intended for
   uint64 chain_id = 9; // @gotags: json:"chainID"
+  // nonce: The sender's protocol replay-protection nonce
+  uint64 nonce = 10;
   // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
-  // NO CONFLICT STARTING AT FIELD = 10
+  // NO CONFLICT STARTING AT FIELD = 25
 }
 
 // MessageSend is a standard transfer transaction, taking tokens from the sender and transferring

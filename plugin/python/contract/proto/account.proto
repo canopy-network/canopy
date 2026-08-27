@@ -10,6 +10,8 @@ message Account {
   bytes address = 1;
   // amount: the balance of funds the account has
   uint64 amount = 2;
+  // nonce: the minimum accepted sequence number for nonce-protected transactions
+  uint64 nonce = 7;
   // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
 }
 

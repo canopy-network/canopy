@@ -54,8 +54,10 @@ type Account struct {
 	VestingCliffHeight uint64 `protobuf:"varint,5,opt,name=vesting_cliff_height,json=vestingCliffHeight,proto3" json:"vestingCliffHeight,omitempty"` // @gotags: json:"vestingCliffHeight,omitempty"
 	// vesting_end_height: the block height when the vesting amount is fully unlocked
 	VestingEndHeight uint64 `protobuf:"varint,6,opt,name=vesting_end_height,json=vestingEndHeight,proto3" json:"vestingEndHeight,omitempty"` // @gotags: json:"vestingEndHeight,omitempty"
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// nonce: the minimum accepted sequence number for nonce-protected transactions
+	Nonce         uint64 `protobuf:"varint,7,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Account) Reset() {
@@ -126,6 +128,13 @@ func (x *Account) GetVestingCliffHeight() uint64 {
 func (x *Account) GetVestingEndHeight() uint64 {
 	if x != nil {
 		return x.VestingEndHeight
+	}
+	return 0
+}
+
+func (x *Account) GetNonce() uint64 {
+	if x != nil {
+		return x.Nonce
 	}
 	return 0
 }
@@ -296,14 +305,15 @@ var File_account_proto protoreflect.FileDescriptor
 
 const file_account_proto_rawDesc = "" +
 	"\n" +
-	"\raccount.proto\x12\x05types\x1a\tdex.proto\"\xf4\x01\n" +
+	"\raccount.proto\x12\x05types\x1a\tdex.proto\"\x8a\x02\n" +
 	"\aAccount\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12%\n" +
 	"\x0evesting_amount\x18\x03 \x01(\x04R\rvestingAmount\x120\n" +
 	"\x14vesting_start_height\x18\x04 \x01(\x04R\x12vestingStartHeight\x120\n" +
 	"\x14vesting_cliff_height\x18\x05 \x01(\x04R\x12vestingCliffHeight\x12,\n" +
-	"\x12vesting_end_height\x18\x06 \x01(\x04R\x10vestingEndHeight\"\x85\x01\n" +
+	"\x12vesting_end_height\x18\x06 \x01(\x04R\x10vestingEndHeight\x12\x14\n" +
+	"\x05nonce\x18\a \x01(\x04R\x05nonce\"\x85\x01\n" +
 	"\x04Pool\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12)\n" +

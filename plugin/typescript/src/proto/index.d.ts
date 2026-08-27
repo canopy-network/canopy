@@ -11,6 +11,9 @@ export namespace types {
 
         /** Account amount */
         amount?: (number|Long|null);
+
+        /** Account nonce */
+        nonce?: (number|Long|null);
     }
 
     /** Represents an Account. */
@@ -27,6 +30,9 @@ export namespace types {
 
         /** Account amount. */
         public amount: (number|Long);
+
+        /** Account nonce. */
+        public nonce: (number|Long);
 
         /**
          * Creates a new Account instance using the specified properties.
@@ -1397,6 +1403,9 @@ export namespace types {
 
         /** PluginCheckRequest tx */
         tx?: (types.ITransaction|null);
+
+        /** PluginCheckRequest height */
+        height?: (number|Long|null);
     }
 
     /** Represents a PluginCheckRequest. */
@@ -1410,6 +1419,9 @@ export namespace types {
 
         /** PluginCheckRequest tx. */
         public tx?: (types.ITransaction|null);
+
+        /** PluginCheckRequest height. */
+        public height: (number|Long);
 
         /**
          * Creates a new PluginCheckRequest instance using the specified properties.
@@ -1603,6 +1615,9 @@ export namespace types {
 
         /** PluginDeliverRequest tx */
         tx?: (types.ITransaction|null);
+
+        /** PluginDeliverRequest height */
+        height?: (number|Long|null);
     }
 
     /** Represents a PluginDeliverRequest. */
@@ -1616,6 +1631,9 @@ export namespace types {
 
         /** PluginDeliverRequest tx. */
         public tx?: (types.ITransaction|null);
+
+        /** PluginDeliverRequest height. */
+        public height: (number|Long);
 
         /**
          * Creates a new PluginDeliverRequest instance using the specified properties.
@@ -3378,6 +3396,9 @@ export namespace types {
 
         /** Transaction chainId */
         chainId?: (number|Long|null);
+
+        /** Transaction nonce */
+        nonce?: (number|Long|null);
     }
 
     /** Represents a Transaction. */
@@ -3415,6 +3436,9 @@ export namespace types {
 
         /** Transaction chainId. */
         public chainId: (number|Long);
+
+        /** Transaction nonce. */
+        public nonce: (number|Long);
 
         /**
          * Creates a new Transaction instance using the specified properties.

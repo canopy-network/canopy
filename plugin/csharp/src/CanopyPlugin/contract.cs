@@ -117,7 +117,7 @@ namespace CanopyPlugin
             {
                 var msg = new MessageSend();
                 msg.MergeFrom(request.Tx.Msg.Value);
-                return await DeliverMessageSendAsync(msg, request.Tx.Fee);
+                return await DeliverMessageSendAsync(msg, request.Tx.Fee, request.Tx.Memo);
             }
             else
             {
@@ -161,7 +161,7 @@ namespace CanopyPlugin
         }
 
         // DeliverMessageSend handles a 'send' message
-        private async Task<PluginDeliverResponse> DeliverMessageSendAsync(MessageSend msg, ulong fee)
+        private async Task<PluginDeliverResponse> DeliverMessageSendAsync(MessageSend msg, ulong fee, string memo)
         {
             var fromQueryId = (ulong)Random.NextInt64();
             var toQueryId = (ulong)Random.NextInt64();
@@ -213,7 +213,10 @@ namespace CanopyPlugin
             if (feePoolBytes != null && feePoolBytes.Length > 0)
                 feePool.MergeFrom(feePoolBytes);
 
-            // add fee to 'amount to deduct'
+            if (msg.Amount > ulong.MaxValue - fee)
+            {
+                return new PluginDeliverResponse { Error = ErrInvalidAmount() };
+            }
             var amountToDeduct = msg.Amount + fee;
 
             // if the account amount is less than the amount to subtract; return insufficient funds
@@ -229,6 +232,12 @@ namespace CanopyPlugin
                 to = from;
             }
 
+            if (feePool.Amount > ulong.MaxValue - fee ||
+                (!isSelfTransfer && to.Amount > ulong.MaxValue - msg.Amount))
+            {
+                return new PluginDeliverResponse { Error = ErrInvalidAmount() };
+            }
+
             // subtract from sender
             from.Amount -= amountToDeduct;
             // add the fee to the 'fee pool'
@@ -239,23 +248,14 @@ namespace CanopyPlugin
             // execute writes to the database
             var writeRequest = new PluginStateWriteRequest();
 
-            // add fee pool update
-            writeRequest.Sets.Add(new PluginSetOp
-            {
-                Key = ByteString.CopyFrom(feePoolKey),
-                Value = ByteString.CopyFrom(from.Amount == 0 ? to.ToByteArray() : feePool.ToByteArray())
-            });
-
-            // fix: always write fee pool correctly
-            writeRequest.Sets.Clear();
             writeRequest.Sets.Add(new PluginSetOp
             {
                 Key = ByteString.CopyFrom(feePoolKey),
                 Value = ByteString.CopyFrom(feePool.ToByteArray())
             });
 
-            // if the from account is drained - delete the from account
-            if (from.Amount == 0)
+            // Retain drained accounts only when they carry nonce state or core will advance the nonce after RLP.V2 delivery.
+            if (from.Amount == 0 && from.Nonce == 0 && memo != "RLP.V2")
             {
                 writeRequest.Deletes.Add(new PluginDeleteOp { Key = ByteString.CopyFrom(fromKey) });
             }

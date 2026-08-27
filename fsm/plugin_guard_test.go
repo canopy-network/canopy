@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/canopy-network/canopy/lib"
+	"github.com/stretchr/testify/require"
 )
 
 // TestAssertPluginKeyWritable verifies the core guard that prevents plugins from writing records
@@ -48,4 +49,22 @@ func TestAssertPluginKeyWritable(t *testing.T) {
 			assertPluginKeyWritable(key)
 		}()
 	}
+}
+
+func TestPluginStateWriteClearsAccountCache(t *testing.T) {
+	sm := newTestStateMachine(t)
+	address := newTestAddress(t)
+	require.NoError(t, sm.SetAccount(&Account{Address: address.Bytes(), Amount: 10}))
+
+	value, err := sm.marshalAccount(&Account{Address: address.Bytes(), Amount: 5})
+	require.NoError(t, err)
+	_, err = sm.StateWrite(&lib.PluginStateWriteRequest{Sets: []*lib.PluginSetOp{{
+		Key:   KeyForAccount(address),
+		Value: value,
+	}}})
+	require.NoError(t, err)
+
+	account, err := sm.GetAccount(address)
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), account.Amount)
 }

@@ -1,7 +1,11 @@
 package contract
 
 import (
-"crypto/sha256"
+	"bytes"
+	"encoding/binary"
+	"log"
+	"math"
+	"math/rand"
 
 "google.golang.org/protobuf/types/known/anypb"
 )
@@ -137,10 +141,20 @@ copy(prev[:], r.Entries[0].Value[:8])
 }
 }
 
-heightBytes := make([]byte, 8)
-for i := 7; i >= 0; i-- {
-heightBytes[i] = byte(req.Height & 0xFF)
-req.Height >>= 8
+// DeliverTx() is code that is executed to apply a transaction
+func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverResponse {
+	// get the message
+	msg, err := FromAny(request.Tx.Msg)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	// handle the message
+	switch x := msg.(type) {
+	case *MessageSend:
+		return c.DeliverMessageSend(x, request.Tx.Fee, request.Tx.Memo)
+	default:
+		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
+	}
 }
 input := append(prev[:], heightBytes...)
 hash := sha256.Sum256(input)
@@ -158,12 +172,124 @@ _ = wr
 return &PluginBeginResponse{}
 }
 
-func (c *Contract) EndBlock(req *PluginEndRequest) *PluginEndResponse {
-	height := GetGlobalHeight()
-	if height > 0 && height%PRIS_EPOCH_BLOCKS == 0 {
-		_ = c.processEpochBoundary(height)
+// DeliverMessageSend() handles a 'send' message
+func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64, memo string) *PluginDeliverResponse {
+	log.Printf("DeliverMessageSend called: from=%x to=%x amount=%d fee=%d", msg.FromAddress, msg.ToAddress, msg.Amount, fee)
+	var (
+		fromKey, toKey, feePoolKey         []byte
+		fromBytes, toBytes, feePoolBytes   []byte
+		fromQueryId, toQueryId, feeQueryId = rand.Uint64(), rand.Uint64(), rand.Uint64()
+		from, to, feePool                  = new(Account), new(Account), new(Pool)
+	)
+	// calculate the from key and to key
+	fromKey, toKey, feePoolKey = KeyForAccount(msg.FromAddress), KeyForAccount(msg.ToAddress), KeyForFeePool(c.Config.ChainId)
+	log.Printf("Keys: fromKey=%x toKey=%x feePoolKey=%x", fromKey, toKey, feePoolKey)
+	// get the from and to account
+	response, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: feeQueryId, Key: feePoolKey},
+			{QueryId: fromQueryId, Key: fromKey},
+			{QueryId: toQueryId, Key: toKey},
+		}})
+	// check for internal error
+	if err != nil {
+		log.Printf("StateRead error: %v", err)
+		return &PluginDeliverResponse{Error: err}
 	}
-	return &PluginEndResponse{}
+	// ensure no error fsm error
+	if response.Error != nil {
+		log.Printf("StateRead FSM error: %v", response.Error)
+		return &PluginDeliverResponse{Error: response.Error}
+	}
+	log.Printf("StateRead returned %d results", len(response.Results))
+	// get the from bytes and to bytes
+	for _, resp := range response.Results {
+		log.Printf("Result QueryId=%d Entries=%d", resp.QueryId, len(resp.Entries))
+		if len(resp.Entries) == 0 {
+			log.Printf("WARNING: No entries for QueryId=%d", resp.QueryId)
+			continue
+		}
+		switch resp.QueryId {
+		case fromQueryId:
+			fromBytes = resp.Entries[0].Value
+			log.Printf("fromBytes len=%d", len(fromBytes))
+		case toQueryId:
+			toBytes = resp.Entries[0].Value
+			log.Printf("toBytes len=%d", len(toBytes))
+		case feeQueryId:
+			feePoolBytes = resp.Entries[0].Value
+			log.Printf("feePoolBytes len=%d", len(feePoolBytes))
+		}
+	}
+	// convert the bytes to account structures
+	if err = Unmarshal(fromBytes, from); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(toBytes, to); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(feePoolBytes, feePool); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if msg.Amount > math.MaxUint64-fee {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	amountToDeduct := msg.Amount + fee
+	log.Printf("from.Amount=%d to.Amount=%d feePool.Amount=%d", from.Amount, to.Amount, feePool.Amount)
+	// if the account amount is less than the amount to subtract; return insufficient funds
+	if from.Amount < amountToDeduct {
+		log.Printf("ERROR: Insufficient funds: from.Amount=%d amountToDeduct=%d", from.Amount, amountToDeduct)
+		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
+	}
+	// for self-transfer, use same account data
+	isSelfTransfer := bytes.Equal(fromKey, toKey)
+	if isSelfTransfer {
+		to = from
+	}
+	if feePool.Amount > math.MaxUint64-fee || (!isSelfTransfer && to.Amount > math.MaxUint64-msg.Amount) {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	// subtract from sender
+	from.Amount -= amountToDeduct
+	// add the fee to the 'fee pool'
+	feePool.Amount += fee
+	// add to recipient
+	to.Amount += msg.Amount
+	log.Printf("AFTER: from.Amount=%d to.Amount=%d feePool.Amount=%d", from.Amount, to.Amount, feePool.Amount)
+	// convert the accounts to bytes
+	fromBytes, err = Marshal(from)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	toBytes, err = Marshal(to)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	feePoolBytes, err = Marshal(feePool)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	// Retain drained accounts only when they carry nonce state or core will advance the nonce after RLP.V2 delivery.
+	request := &PluginStateWriteRequest{Sets: []*PluginSetOp{
+		{Key: feePoolKey, Value: feePoolBytes},
+		{Key: toKey, Value: toBytes},
+	}}
+	if from.Amount == 0 && from.Nonce == 0 && memo != "RLP.V2" {
+		request.Deletes = []*PluginDeleteOp{{Key: fromKey}}
+	} else {
+		request.Sets = append(request.Sets, &PluginSetOp{Key: fromKey, Value: fromBytes})
+	}
+	resp, err := c.plugin.StateWrite(c, request)
+	if err != nil {
+		log.Printf("StateWrite internal error: %v", err)
+		return &PluginDeliverResponse{Error: err}
+	}
+	if resp.Error != nil {
+		log.Printf("StateWrite FSM error: %v", resp.Error)
+		return &PluginDeliverResponse{Error: resp.Error}
+	}
+	log.Printf("StateWrite SUCCESS!")
+	return &PluginDeliverResponse{}
 }
 
 func (c *Contract) CheckTx(req *PluginCheckRequest) *PluginCheckResponse {
