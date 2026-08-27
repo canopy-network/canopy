@@ -2,6 +2,14 @@ import { NextRequest } from "next/server";
 import { hexToBytes } from "@/lib/canopy/decode";
 import { signAndSubmitArborTx } from "@/lib/tx";
 
+// This route can legitimately block for up to TX_TIMEOUT_MS (90s, see
+// lib/arbor/constants.ts) while signAndSubmitArborTx polls for on-chain
+// inclusion -- Vercel platform default function timeout is shorter than
+// that on most plans, which kills the invocation mid-poll before it can
+// ever respond. Must be >= TX_TIMEOUT_MS with headroom for the
+// check-and-reserve call, signing, and submitTx itself.
+export const maxDuration = 55;
+
 /*
 This route exists because the grad node's own plugin filesystem is
 read-only (confirmed directly against a live error: opening
