@@ -187,14 +187,20 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 	// add the events from end block
 	r.AddEvent(events...)
 	// load the validator set for the previous height
-	lastValidatorSet, _ := s.LoadCommittee(s.Config.ChainId, s.Height()-1)
+	lastValidatorSet, err := s.LoadCommittee(s.Config.ChainId, s.Height()-1)
+	if err != nil {
+		return nil, nil, err
+	}
 	// calculate the merkle root of the last validators to maintain validator continuity between blocks (if root)
 	lastValidatorRoot, err := lastValidatorSet.ValidatorSet.Root()
 	if err != nil {
 		return nil, nil, err
 	}
 	// load the 'next validator set' from the state
-	nextValidatorSet, _ := s.LoadCommittee(s.Config.ChainId, s.Height())
+	nextValidatorSet, err := s.LoadCommittee(s.Config.ChainId, s.Height())
+	if err != nil {
+		return nil, nil, err
+	}
 	// calculate the merkle root of the next validators to maintain validator continuity between blocks (if root)
 	nextValidatorRoot, err := nextValidatorSet.ValidatorSet.Root()
 	if err != nil {
