@@ -11,6 +11,10 @@ import (
 
 // NOTE: pages are covered in the FSM module
 
+type testPageItems []int
+
+func (t *testPageItems) New() Pageable { return new(testPageItems) }
+
 func TestMarshalUnmarshal(t *testing.T) {
 	// create a proto structure to test with
 	expected := &Signature{
@@ -26,6 +30,23 @@ func TestMarshalUnmarshal(t *testing.T) {
 	require.NoError(t, Unmarshal(gotBytes, got))
 	// compare got vs expected
 	require.EqualExportedValues(t, expected, got)
+}
+
+func TestPageLoadArrayNormalizesNegativeParams(t *testing.T) {
+	results := make(testPageItems, 0)
+	page := NewPage(PageParams{PageNumber: -2, PerPage: -5}, "test-items")
+
+	err := page.LoadArray([]int{1, 2, 3}, &results, func(item any) ErrorI {
+		results = append(results, item.(int))
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, page.PageNumber)
+	require.Equal(t, 10, page.PerPage)
+	require.Equal(t, 3, page.Count)
+	require.Equal(t, 1, page.TotalPages)
+	require.Equal(t, testPageItems{1, 2, 3}, results)
 }
 
 func TestJSONMarshalUnmarshal(t *testing.T) {
