@@ -964,7 +964,8 @@ func (t *Indexer) deleteAll(prefix []byte) lib.ErrorI {
 	defer it.Close()
 	var keysToDelete [][]byte
 	for ; it.Valid(); it.Next() {
-		keysToDelete = append(keysToDelete, it.Key())
+		// clone: iterator Key() is only valid until Next()
+		keysToDelete = append(keysToDelete, bytes.Clone(it.Key()))
 	}
 	for _, k := range keysToDelete {
 		if err = t.db.Delete(k); err != nil {
