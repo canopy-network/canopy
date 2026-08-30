@@ -27,6 +27,7 @@ DATA_DIR=$(cd "$DATA_DIR" && pwd) || { echo "failed to resolve data dir: $DATA_D
 echo "using data directory $DATA_DIR"
 
 # Persisting current version
+# TODO: remove this block as the auto-updater persists updates on its own
 # Check if it exist
 if [ -f "$DATA_DIR/cli" ]; then
   echo "Found existing persistent cli version"

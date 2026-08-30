@@ -58,6 +58,12 @@ func DefaultConfig() Config {
 	}
 }
 
+// PluginHome() returns the persistent plugin directory under the data dir; the
+// single source of truth shared by the node launcher and the auto-updater
+func (c Config) PluginHome(plugin string) string {
+	return filepath.Join(c.DataDirPath, "plugin", plugin)
+}
+
 // MAIN CONFIG BELOW
 
 type MainConfig struct {

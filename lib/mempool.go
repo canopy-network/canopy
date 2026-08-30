@@ -13,6 +13,11 @@ import (
 
 var _ Mempool = &FeeMempool{} // Mempool interface enforcement for FeeMempool implementation
 
+const (
+	failedTxCacheMaxEntries = 5000
+	failedTxCacheMaxTxBytes = 4 * 1024
+)
+
 // Mempool interface is a model for a pre-block, in-memory, Transaction store
 type Mempool interface {
 	Contains(txHash string) bool                             // whether the mempool has this transaction already (de-duplicated by hash)
@@ -376,6 +381,15 @@ func (f *FailedTxCache) Add(failed *FailedTx) (added bool) {
 	f.l.Lock()
 	// unlock when the function completes
 	defer f.l.Unlock()
+	if failed == nil || len(failed.bytes) > failedTxCacheMaxTxBytes {
+		return false
+	}
+	if _, exists := f.cache[failed.Hash]; !exists && len(f.cache) >= failedTxCacheMaxEntries {
+		for hash := range f.cache {
+			delete(f.cache, hash)
+			break
+		}
+	}
 	// add a new 'failed tx' type to the cache
 	f.cache[failed.Hash] = failed
 	// exit with 'added'

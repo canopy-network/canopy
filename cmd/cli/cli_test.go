@@ -25,7 +25,7 @@ func TestParseGlobalFlags(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			DataDir, rpcURLFlag, adminURLFlag = "", "", ""
+			DataDir, rpcURLFlag, adminURLFlag, externalAddressFlag = "", "", "", ""
 			pos, err := ParseGlobalFlags(tt.args)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -41,12 +41,12 @@ func TestParseGlobalFlags(t *testing.T) {
 }
 
 func TestGlobalFlagArgs(t *testing.T) {
-	DataDir, rpcURLFlag, adminURLFlag = "/custom", "", ""
+	DataDir, rpcURLFlag, adminURLFlag, externalAddressFlag = "/custom", "", "", ""
 	if got := GlobalFlagArgs(); !reflect.DeepEqual(got, []string{"--data-dir", "/custom"}) {
 		t.Fatalf("got %v", got)
 	}
-	DataDir, rpcURLFlag, adminURLFlag = "/custom", "http://r", "http://a"
-	want := []string{"--data-dir", "/custom", "--rpc-url", "http://r", "--admin-url", "http://a"}
+	DataDir, rpcURLFlag, adminURLFlag, externalAddressFlag = "/custom", "http://r", "http://a", "tcp://host"
+	want := []string{"--data-dir", "/custom", "--rpc-url", "http://r", "--admin-url", "http://a", "--external-address", "tcp://host"}
 	if got := GlobalFlagArgs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}

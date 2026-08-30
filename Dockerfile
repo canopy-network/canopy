@@ -2,7 +2,8 @@ FROM golang:1.26-alpine AS builder
 
 RUN apk update && apk add --no-cache make bash nodejs npm
 
-ARG BIN_PATH
+# default value for BIN_PATH, can be overridden at build time
+ARG BIN_PATH=./cli
 
 WORKDIR /go/src/github.com/canopy-network/canopy
 COPY . /go/src/github.com/canopy-network/canopy
@@ -23,10 +24,10 @@ FROM alpine:3.19
 
 RUN apk add --no-cache pigz ca-certificates
 
-ARG BIN_PATH
+ARG BIN_PATH=./cli
 
 WORKDIR /app
 COPY --from=builder /go/src/github.com/canopy-network/canopy/bin ./
 COPY --from=builder /go/src/github.com/canopy-network/canopy/${BIN_PATH} ${BIN_PATH}
-RUN chmod +x ${BIN_PATH}
+RUN chmod +x "${BIN_PATH}"
 ENTRYPOINT ["/app/bin"]

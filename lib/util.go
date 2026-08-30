@@ -21,6 +21,7 @@ import (
 	"unsafe"
 
 	"github.com/canopy-network/canopy/lib/crypto"
+	"golang.org/x/mod/semver"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -327,6 +328,12 @@ func Unmarshal(protoBytes []byte, ptr any) ErrorI {
 	if isCritical {
 		if err := rejectUnknownForCriticalMessages(msg); err != nil {
 			return ErrUnmarshal(err)
+		}
+		if _, ok := msg.(*Transaction); ok {
+			canonical, err := marshaller.Marshal(msg)
+			if err != nil || !bytes.Equal(protoBytes, canonical) {
+				return ErrUnmarshal(fmt.Errorf("non-canonical transaction encoding"))
+			}
 		}
 	}
 	// exit
@@ -1092,4 +1099,18 @@ func RandSlice(byteSize uint64) []byte {
 	value := make([]byte, byteSize)
 	rand.Read(value)
 	return value
+}
+
+// IsValidVersion reports whether version is valid semver, accepting an optional
+// leading "v". Shared so the release script and auto-updater validate alike.
+func IsValidVersion(version string) bool {
+	return semver.IsValid(normalizeVersion(version))
+}
+
+// normalizeVersion adds the leading "v" that golang.org/x/mod/semver requires.
+func normalizeVersion(version string) string {
+	if version == "" || version[0] == 'v' {
+		return version
+	}
+	return "v" + version
 }

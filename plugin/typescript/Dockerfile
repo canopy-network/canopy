@@ -18,7 +18,7 @@ RUN npm ci && npm run build:all
 # Stage 3: Runtime
 FROM node:20-alpine
 WORKDIR /app
-RUN apk add --no-cache bash && mkdir -p /tmp/plugin /root/.canopy plugin/typescript
+RUN apk add --no-cache bash procps && mkdir -p /tmp/plugin /root/.canopy plugin/typescript
 
 COPY --from=canopy-builder /canopy .
 COPY --from=typescript-builder /app/dist plugin/typescript/dist/

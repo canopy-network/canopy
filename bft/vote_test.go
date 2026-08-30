@@ -2,10 +2,11 @@ package bft
 
 import (
 	"bytes"
+	"testing"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestAddVote(t *testing.T) {
@@ -91,4 +92,32 @@ func TestAddVote(t *testing.T) {
 			require.EqualExportedValues(t, test.message, messages[payload].Vote)
 		})
 	}
+}
+
+func TestAddVoteAttachments(t *testing.T) {
+	consensus := newTestConsensus(t, ElectionVote, 4)
+	consensus.bft.Config.RunVDF = true
+	newVote := func(i int, vdf *crypto.VDF) *Message {
+		return &Message{
+			Qc: &QC{Header: &lib.View{Phase: ElectionVote}},
+			Signature: &lib.Signature{
+				PublicKey: consensus.valKeys[i].PublicKey().Bytes(),
+				Signature: bytes.Repeat([]byte("F"), 96),
+			},
+			Vdf: vdf,
+		}
+	}
+	require.NoError(t, consensus.bft.AddVote(newVote(0, nil)))
+	err := consensus.bft.AddVote(newVote(0, &crypto.VDF{Proof: make([]byte, maxVDFElementSize+1), Iterations: 1}))
+	require.ErrorContains(t, err, "duplicate vote")
+	for i, vdf := range []*crypto.VDF{
+		{Proof: make([]byte, maxVDFElementSize+1), Iterations: 1},
+		{Output: make([]byte, maxVDFElementSize+1), Iterations: 1},
+		{Iterations: maxVDFIterations + 1},
+	} {
+		vote := newVote(i+1, vdf)
+		require.NoError(t, consensus.bft.AddVote(vote))
+		require.NotZero(t, consensus.bft.getVoteSet(vote).TotalVotedPower)
+	}
+	require.Empty(t, consensus.bft.VDFCache)
 }

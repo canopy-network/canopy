@@ -1,0 +1,26 @@
+name: Protect main
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+
+jobs:
+  require-development:
+    name: Require development source branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "development" ]; then
+            echo "::error::PRs targeting main must come from the development branch (got '$HEAD_REF'). Open this PR against development instead, then promote development to main."
+            exit 1
+          fi
+          echo "PR is from development → main. OK."
