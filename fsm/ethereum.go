@@ -86,7 +86,7 @@ func rlpToCanopyTransaction(txBytes []byte, memo string) (transaction *lib.Trans
 	// get the signer type (supports: Legacy, EIP-155, EIP-1559, EIP-2930, EIP-4844, EIP-7702)
 	signer := ethTypes.LatestSignerForChainID(tx.ChainId())
 	// recover the public key from the rlp transaction and validate the signature
-	publicKey, err := crypto.RecoverPublicKey(signer, tx)
+	publicKey, err := crypto.RecoverPublicKey(signer, &tx)
 	if err != nil {
 		return nil, ErrInvalidPublicKey(err)
 	}
