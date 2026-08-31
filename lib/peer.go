@@ -538,13 +538,8 @@ func (p *ValidatorTCPProxy) acceptLoop(ctx context.Context, ln net.Listener, tar
 				return
 			default:
 			}
-			// if there's a temporary error (DEPRECATED)
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
-				p.log.Warnf("validator tcp proxy temporary accept error on port %d: %v", port, err)
-				time.Sleep(50 * time.Millisecond)
-				continue
-			}
-			// check the accept error
+			// back off briefly and retry; a listener that is genuinely gone is
+			// caught by the ctx.Done() check above
 			p.log.Warnf("validator tcp proxy accept error on port %d: %v", port, err)
 			time.Sleep(50 * time.Millisecond)
 			continue
