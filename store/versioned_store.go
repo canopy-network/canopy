@@ -366,7 +366,13 @@ func (vi *VersionedIterator) first() {
 		}
 	} else {
 		// position at first key >= LowerBound (prefix)
-		if !vi.iter.SeekGE(vi.prefix) {
+		// an empty prefix means "start from the beginning"; pass nil rather than a
+		// zero length slice so the seek key is unambiguously empty
+		seekKey := vi.prefix
+		if len(seekKey) == 0 {
+			seekKey = nil
+		}
+		if !vi.iter.SeekGE(seekKey) {
 			vi.isValid = false
 			return
 		}
