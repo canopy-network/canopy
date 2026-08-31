@@ -1,19 +1,22 @@
 package fsm
 
-import "github.com/canopy-network/canopy/lib"
+import (
+	"bytes"
+	"errors"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/codec"
+	"github.com/canopy-network/canopy/lib/crypto"
+)
 
 // INDEXER.GO IS ONLY USED FOR CANOPY INDEXING RPC - NOT A CRITICAL PIECE OF THE STATE MACHINE
-
-/*
-	TODO
-  - /v1/gov/poll — poll snapshots via cli.Poll in app/indexer/activity/poll.go.
-  - /v1/gov/proposals — proposal snapshots via cli.Proposals in app/indexer/activity/proposals.go.
-*/
 
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
 func (s *StateMachine) IndexerBlobs(height uint64) (b *IndexerBlobs, err lib.ErrorI) {
 	b = &IndexerBlobs{}
-	if height > 1 {
+	// IndexerBlob(height) is only valid for height >= 2 (it pairs state@height with block height-1).
+	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
+	if height > 2 {
 		b.Previous, err = s.IndexerBlob(height - 1)
 		if err != nil {
 			return nil, err
@@ -28,9 +31,67 @@ func (s *StateMachine) IndexerBlobs(height uint64) (b *IndexerBlobs, err lib.Err
 
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
 func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.ErrorI) {
+	return s.indexerBlob(height, nil, false, nil)
+}
+
+// IndexerBlobsFromStateChanges builds a state-sparse delta using the state
+// keys journaled for height. available=false means the height predates the
+// journal and callers must use the legacy full-snapshot comparison.
+func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
 	if height == 0 || height > s.height {
 		height = s.height
 	}
+	// At the genesis boundary there is no previous blob to compare against, so
+	// the indexer contract requires the complete current account snapshot. The
+	// height journal only contains changes made by block 1 and cannot represent
+	// genesis accounts that remained untouched.
+	if height == 2 {
+		return nil, false, nil
+	}
+	st, ok := s.store.(lib.StoreI)
+	if !ok {
+		return nil, false, nil
+	}
+	stateKeys, available, err := st.StateChangeKeys(height, AccountPrefix())
+	if err != nil || !available {
+		return nil, available, err
+	}
+	for _, prefix := range [][]byte{ValidatorPrefix(), NonSignerPrefix()} {
+		keys, _, keyErr := st.StateChangeKeys(height, prefix)
+		if keyErr != nil {
+			return nil, true, keyErr
+		}
+		stateKeys = append(stateKeys, keys...)
+	}
+
+	b = &IndexerBlobs{}
+	b.Current, err = s.indexerBlob(height, stateKeys, true, nil)
+	if err != nil {
+		return nil, true, err
+	}
+	if height > 2 {
+		b.Previous, err = s.indexerBlob(height-1, stateKeys, true, b.Current.Block)
+		if err != nil {
+			return nil, true, err
+		}
+	}
+	b, err = DeltaIndexerBlobs(b)
+	return b, true, err
+}
+
+func (s *StateMachine) indexerBlob(height uint64, stateKeys [][]byte, selectiveState bool, eventBlockBz []byte) (b *IndexerBlob, err lib.ErrorI) {
+	if height == 0 || height > s.height {
+		height = s.height
+	}
+	// Height semantics:
+	// - `height` is the state version (pre-block-apply for block `height`).
+	// - The latest committed block corresponding to that state is `height-1`.
+	// This keeps the blob consistent with RPC/state-at-height conventions.
+	if height <= 1 {
+		// No committed block exists yet to pair with the state snapshot.
+		return nil, lib.ErrWrongBlockHeight(0, 1)
+	}
+	blockHeight := height - 1
 	sm, err := s.TimeMachine(height)
 	if err != nil {
 		return nil, err
@@ -38,21 +99,39 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if sm != s {
 		defer sm.Discard()
 	}
-	st := s.store.(lib.StoreI)
+	// Use the snapshot store (not the live store) for all height-based indexer reads.
+	st := sm.store.(lib.StoreI)
 	// retrieve the block, transactions, and events
-	block, err := st.GetBlockByHeight(height)
+	block, err := st.GetBlockByHeight(blockHeight)
 	if err != nil {
 		return nil, err
 	}
 	if block == nil || block.BlockHeader == nil {
 		return nil, lib.ErrNilBlockHeader()
 	}
-	if block.BlockHeader.Height == 0 || block.BlockHeader.Height != height {
-		return nil, lib.ErrWrongBlockHeight(block.BlockHeader.Height, height)
+	if block.BlockHeader.Height == 0 || block.BlockHeader.Height != blockHeight {
+		return nil, lib.ErrWrongBlockHeight(block.BlockHeader.Height, blockHeight)
+	}
+	blockBz, err := lib.Marshal(block)
+	if err != nil {
+		return nil, err
+	}
+	if selectiveState && len(eventBlockBz) == 0 {
+		eventBlockBz = blockBz
 	}
 	// use sm for consistent snapshot reads at the requested height
-	// retrieve the accounts
-	accounts, err := sm.IterateAndAppend(AccountPrefix())
+	// retrieve either complete snapshots (legacy path) or journaled state
+	// entries (journal path).
+	var accounts [][]byte
+	if !selectiveState {
+		accounts, err = sm.IterateAndAppend(AccountPrefix())
+	} else {
+		eventAccountKeys, eventErr := rewardSlashAccountStateKeys(eventBlockBz)
+		if eventErr != nil {
+			return nil, eventErr
+		}
+		accounts, err = sm.valuesForStateKeys(append(stateKeys, eventAccountKeys...), AccountPrefix())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -62,9 +141,20 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		return nil, err
 	}
 	// retrieve validators
-	validators, err := sm.IterateAndAppend(ValidatorPrefix())
+	allValidators, err := sm.IterateAndAppend(ValidatorPrefix())
 	if err != nil {
 		return nil, err
+	}
+	validators := allValidators
+	if selectiveState {
+		eventValidatorKeys, eventErr := validatorForceStateKeys(eventBlockBz, allValidators)
+		if eventErr != nil {
+			return nil, eventErr
+		}
+		validators, err = sm.valuesForStateKeys(append(stateKeys, eventValidatorKeys...), ValidatorPrefix())
+		if err != nil {
+			return nil, err
+		}
 	}
 	// retrieve dex prices
 	dexPrices, err := sm.GetDexPrices()
@@ -72,14 +162,24 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		return nil, err
 	}
 	// retrieve nonSigners
-	nonSigners, err := sm.IterateAndAppend(NonSignerPrefix())
+	var nonSigners [][]byte
+	if selectiveState {
+		nonSigners, err = sm.valuesForStateKeys(stateKeys, NonSignerPrefix())
+	} else {
+		nonSigners, err = sm.IterateAndAppend(NonSignerPrefix())
+	}
 	if err != nil {
 		return nil, err
 	}
 	// retrieve doubleSigners
-	doubleSigners, err := st.GetDoubleSignersAsOf(height)
+	doubleSigners, err := st.GetDoubleSignersAsOf(blockHeight)
 	if err != nil {
 		return nil, err
+	}
+	// retrieve per-block non-signers from the committed QC for this block
+	blockNonSigners, err := sm.blockNonSignerAddresses(blockHeight)
+	if err != nil {
+		blockNonSigners = nil
 	}
 	// retrieve orders
 	orderBooks, err := sm.GetOrderBooks()
@@ -121,11 +221,6 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if err != nil {
 		return nil, err
 	}
-	// marshal block to bytes
-	blockBz, err := lib.Marshal(block)
-	if err != nil {
-		return nil, err
-	}
 	// marshal dex prices to bytes
 	var dexPricesBz [][]byte
 	for _, price := range dexPrices {
@@ -154,22 +249,452 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if err != nil {
 		return nil, err
 	}
+	// calculate validator/delegator status totals from the full snapshot
+	totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking,
+		totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking, err := validatorTotals(allValidators)
+	if err != nil {
+		return nil, err
+	}
 	// return the blob
 	return &IndexerBlob{
-		Block:                blockBz,
-		Accounts:             accounts,
-		Pools:                pools,
-		Validators:           validators,
-		DexPrices:            dexPricesBz,
-		NonSigners:           nonSigners,
-		DoubleSigners:        doubleSignersBz,
-		Orders:               orderBooksBz,
-		Params:               paramsBz,
-		DexBatches:           dexBatches,
-		NextDexBatches:       nextDexBatches,
-		CommitteesData:       committeesData,
-		SubsidizedCommittees: subsidizedCommittees,
-		RetiredCommittees:    retiredCommittees,
-		Supply:               supply,
+		Block:                    blockBz,
+		Accounts:                 accounts,
+		Pools:                    pools,
+		Validators:               validators,
+		DexPrices:                dexPricesBz,
+		NonSigners:               nonSigners,
+		DoubleSigners:            doubleSignersBz,
+		Orders:                   orderBooksBz,
+		Params:                   paramsBz,
+		DexBatches:               dexBatches,
+		NextDexBatches:           nextDexBatches,
+		CommitteesData:           committeesData,
+		SubsidizedCommittees:     subsidizedCommittees,
+		RetiredCommittees:        retiredCommittees,
+		Supply:                   supply,
+		TotalValidatorsActive:    totalValidatorsActive,
+		TotalValidatorsPaused:    totalValidatorsPaused,
+		TotalValidatorsUnstaking: totalValidatorsUnstaking,
+		TotalDelegatesActive:     totalDelegatesActive,
+		TotalDelegatesPaused:     totalDelegatesPaused,
+		TotalDelegatesUnstaking:  totalDelegatesUnstaking,
+		BlockNonSigners:          blockNonSigners,
 	}, nil
+}
+
+// valuesForStateKeys() returns the byte array for state keys
+func (s *StateMachine) valuesForStateKeys(keys [][]byte, prefix []byte) ([][]byte, lib.ErrorI) {
+	values := make([][]byte, 0, len(keys))
+	seen := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		if !bytes.HasPrefix(key, prefix) {
+			continue
+		}
+		keyString := string(key)
+		if _, ok := seen[keyString]; ok {
+			continue
+		}
+		seen[keyString] = struct{}{}
+		value, err := s.Get(key)
+		if err != nil {
+			return nil, err
+		}
+		if value != nil {
+			values = append(values, value)
+		}
+	}
+	return values, nil
+}
+
+func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64) ([][]byte, lib.ErrorI) {
+	if blockHeight <= 1 {
+		return nil, nil
+	}
+	qc, err := s.LoadCertificateHashesOnly(blockHeight)
+	if err != nil {
+		return nil, err
+	}
+	if qc == nil || qc.Header == nil || qc.Signature == nil {
+		return nil, nil
+	}
+	committee, err := s.LoadCommittee(qc.Header.ChainId, qc.Header.RootHeight)
+	if err != nil {
+		return nil, err
+	}
+	if committee.ValidatorSet == nil {
+		return nil, nil
+	}
+	nonSignerPubKeys, _, err := qc.GetNonSigners(committee.ValidatorSet)
+	if err != nil {
+		return nil, err
+	}
+	addresses := make([][]byte, 0, len(nonSignerPubKeys))
+	for _, pubKeyBytes := range nonSignerPubKeys {
+		pubKey, e := crypto.NewPublicKeyFromBytes(pubKeyBytes)
+		if e != nil {
+			return nil, lib.ErrPubKeyFromBytes(e)
+		}
+		addresses = append(addresses, pubKey.Address().Bytes())
+	}
+	return addresses, nil
+}
+
+// DeltaIndexerBlobs returns a clone of blobs where account, pool, and validator payloads
+// are reduced to changed/added/removed entries. Other entities remain full snapshots.
+func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
+	if blobs == nil {
+		return nil, nil
+	}
+	out := cloneIndexerBlobs(blobs)
+	if out == nil || out.Current == nil {
+		return out, nil
+	}
+	previous := nilSafeBlob(out.Previous)
+
+	// accounts: changed+added in current, changed+removed in previous
+	currentAccounts, currentAccountMap, err := accountEntries(out.Current.Accounts)
+	if err != nil {
+		return nil, err
+	}
+	previousAccounts, previousAccountMap, err := accountEntries(previous.Accounts)
+	if err != nil {
+		return nil, err
+	}
+	currentAccountKeys, previousAccountKeys := changedBlobKeys(currentAccountMap, previousAccountMap)
+	forcedAccountKeys, err := rewardSlashAccountKeys(out.Current.Block)
+	if err != nil {
+		return nil, err
+	}
+	forceIncludeKeys(currentAccountKeys, previousAccountKeys, currentAccountMap, previousAccountMap, forcedAccountKeys)
+	out.Current.Accounts = selectBlobEntries(currentAccounts, currentAccountKeys)
+	if out.Previous != nil {
+		out.Previous.Accounts = selectBlobEntries(previousAccounts, previousAccountKeys)
+	}
+
+	// pools: changed+added in current, changed+removed in previous
+	currentPools, currentPoolMap, err := poolEntries(out.Current.Pools)
+	if err != nil {
+		return nil, err
+	}
+	previousPools, previousPoolMap, err := poolEntries(previous.Pools)
+	if err != nil {
+		return nil, err
+	}
+	currentPoolKeys, previousPoolKeys := changedBlobKeys(currentPoolMap, previousPoolMap)
+	out.Current.Pools = selectBlobEntries(currentPools, currentPoolKeys)
+	if out.Previous != nil {
+		out.Previous.Pools = selectBlobEntries(previousPools, previousPoolKeys)
+	}
+
+	// validators: changed+added in current, changed+removed in previous
+	currentValidators, currentValidatorMap, currentOutputIndex, err := validatorEntries(out.Current.Validators)
+	if err != nil {
+		return nil, err
+	}
+	previousValidators, previousValidatorMap, previousOutputIndex, err := validatorEntries(previous.Validators)
+	if err != nil {
+		return nil, err
+	}
+	currentValidatorKeys, previousValidatorKeys := changedBlobKeys(currentValidatorMap, previousValidatorMap)
+	forcedValidatorKeys, err := validatorForceKeys(out.Current.Block, currentOutputIndex, previousOutputIndex)
+	if err != nil {
+		return nil, err
+	}
+	forceIncludeKeys(currentValidatorKeys, previousValidatorKeys, currentValidatorMap, previousValidatorMap, forcedValidatorKeys)
+	out.Current.Validators = selectBlobEntries(currentValidators, currentValidatorKeys)
+	out.Current.ValidatorsDelta = true
+	if out.Previous != nil {
+		out.Previous.Validators = selectBlobEntries(previousValidators, previousValidatorKeys)
+		out.Previous.ValidatorsDelta = true
+	}
+	return out, nil
+}
+
+type blobEntry struct {
+	key string
+	bz  []byte
+}
+
+func accountEntries(entries [][]byte) ([]blobEntry, map[string][]byte, lib.ErrorI) {
+	return entriesByKey(entries, accountEntryKey)
+}
+
+func poolEntries(entries [][]byte) ([]blobEntry, map[string][]byte, lib.ErrorI) {
+	return entriesByKey(entries, poolEntryKey)
+}
+
+func validatorEntries(entries [][]byte) ([]blobEntry, map[string][]byte, map[string][]string, lib.ErrorI) {
+	out := make([]blobEntry, 0, len(entries))
+	entriesByAddress := make(map[string][]byte, len(entries))
+	outputToValidator := make(map[string][]string)
+	for _, entry := range entries {
+		validator := new(Validator)
+		if err := lib.Unmarshal(entry, validator); err != nil {
+			return nil, nil, nil, err
+		}
+		key := string(validator.Address)
+		out = append(out, blobEntry{key: key, bz: entry})
+		entriesByAddress[key] = entry
+		if len(validator.Output) > 0 {
+			outputToValidator[string(validator.Output)] = append(outputToValidator[string(validator.Output)], key)
+		}
+	}
+	return out, entriesByAddress, outputToValidator, nil
+}
+
+func entriesByKey(entries [][]byte, keyExtractor func([]byte) (string, error)) ([]blobEntry, map[string][]byte, lib.ErrorI) {
+	out := make([]blobEntry, 0, len(entries))
+	entryMap := make(map[string][]byte, len(entries))
+	for _, entry := range entries {
+		key, err := keyExtractor(entry)
+		if err != nil {
+			return nil, nil, lib.ErrUnmarshal(err)
+		}
+		out = append(out, blobEntry{key: key, bz: entry})
+		entryMap[key] = entry
+	}
+	return out, entryMap, nil
+}
+
+// entryKeyOrZero extracts field #1 as a map key. In proto3, absent scalar
+// fields represent the zero value on the wire (Pool{Id:0}, Account{Address:nil}),
+// so codec.ErrFieldNotFound is a legal zero-value signal, not a parse error.
+// Real proto-parse errors (invalid tags, buffer overruns) still surface.
+func entryKeyOrZero(entry []byte) (string, error) {
+	field, err := codec.GetRawProtoField(entry, 1)
+	if err != nil {
+		if errors.Is(err, codec.ErrFieldNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	return string(field), nil
+}
+
+func accountEntryKey(entry []byte) (string, error) {
+	return entryKeyOrZero(entry) // Account.address
+}
+
+func poolEntryKey(entry []byte) (string, error) {
+	return entryKeyOrZero(entry) // Pool.id
+}
+
+func changedBlobKeys(current, previous map[string][]byte) (map[string]struct{}, map[string]struct{}) {
+	currentChanged := make(map[string]struct{})
+	previousChanged := make(map[string]struct{})
+	for key, currentEntry := range current {
+		if previousEntry, ok := previous[key]; !ok || !bytes.Equal(currentEntry, previousEntry) {
+			currentChanged[key] = struct{}{}
+		}
+	}
+	for key, previousEntry := range previous {
+		if currentEntry, ok := current[key]; !ok || !bytes.Equal(currentEntry, previousEntry) {
+			previousChanged[key] = struct{}{}
+		}
+	}
+	return currentChanged, previousChanged
+}
+
+func selectBlobEntries(entries []blobEntry, include map[string]struct{}) [][]byte {
+	selected := make([][]byte, 0, len(include))
+	seen := make(map[string]struct{}, len(include))
+	for _, entry := range entries {
+		if _, ok := include[entry.key]; !ok {
+			continue
+		}
+		if _, dup := seen[entry.key]; dup {
+			continue
+		}
+		selected = append(selected, entry.bz)
+		seen[entry.key] = struct{}{}
+	}
+	return selected
+}
+
+func forceIncludeKeys(
+	currentInclude, previousInclude map[string]struct{},
+	current, previous map[string][]byte,
+	keys map[string]struct{},
+) {
+	for key := range keys {
+		if _, ok := current[key]; ok {
+			currentInclude[key] = struct{}{}
+		}
+		if _, ok := previous[key]; ok {
+			previousInclude[key] = struct{}{}
+		}
+	}
+}
+
+// rewardSlashAccountKeys() finds reward/slash event addresses in the current block.
+func rewardSlashAccountKeys(blockBz []byte) (map[string]struct{}, lib.ErrorI) {
+	keys := make(map[string]struct{})
+	if len(blockBz) == 0 {
+		return keys, nil
+	}
+	block := new(lib.BlockResult)
+	if err := lib.Unmarshal(blockBz, block); err != nil {
+		return nil, err
+	}
+	for _, event := range block.Events {
+		if event == nil || len(event.Address) == 0 {
+			continue
+		}
+		switch event.EventType {
+		case string(lib.EventTypeReward), string(lib.EventTypeSlash):
+			keys[string(event.Address)] = struct{}{}
+		}
+	}
+	return keys, nil
+}
+
+// rewardSlashAccountStateKeys() returns account storage keys referenced by reward/slash events
+// Sparse journal reads use them to include event accounts even when their state is unchanged
+func rewardSlashAccountStateKeys(blockBz []byte) ([][]byte, lib.ErrorI) {
+	addresses, err := rewardSlashAccountKeys(blockBz)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([][]byte, 0, len(addresses))
+	for address := range addresses {
+		keys = append(keys, lib.JoinLenPrefix(accountPrefix, []byte(address)))
+	}
+	return keys, nil
+}
+
+func validatorForceStateKeys(blockBz []byte, validators [][]byte) ([][]byte, lib.ErrorI) {
+	_, validatorMap, outputIndex, err := validatorEntries(validators)
+	if err != nil {
+		return nil, err
+	}
+	forced, err := validatorForceKeys(blockBz, outputIndex, nil)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([][]byte, 0, len(forced))
+	for address := range forced {
+		if _, ok := validatorMap[address]; ok {
+			keys = append(keys, lib.JoinLenPrefix(validatorPrefix, []byte(address)))
+		}
+	}
+	return keys, nil
+}
+
+// validatorForceKeys() includes validators tied to lifecycle/reward events.
+func validatorForceKeys(blockBz []byte, currentOutputIndex, previousOutputIndex map[string][]string) (map[string]struct{}, lib.ErrorI) {
+	keys := make(map[string]struct{})
+	if len(blockBz) == 0 {
+		return keys, nil
+	}
+	block := new(lib.BlockResult)
+	if err := lib.Unmarshal(blockBz, block); err != nil {
+		return nil, err
+	}
+	for _, event := range block.Events {
+		if event == nil || len(event.Address) == 0 {
+			continue
+		}
+		eventKey := string(event.Address)
+		switch event.EventType {
+		case string(lib.EventTypeReward):
+			keys[eventKey] = struct{}{}
+			for _, validatorKey := range currentOutputIndex[eventKey] {
+				keys[validatorKey] = struct{}{}
+			}
+			for _, validatorKey := range previousOutputIndex[eventKey] {
+				keys[validatorKey] = struct{}{}
+			}
+		case string(lib.EventTypeSlash),
+			string(lib.EventTypeAutoPause),
+			string(lib.EventTypeAutoBeginUnstaking),
+			string(lib.EventTypeFinishUnstaking):
+			keys[eventKey] = struct{}{}
+		}
+	}
+	return keys, nil
+}
+
+func validatorTotals(validators [][]byte) (
+	totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking uint32,
+	totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking uint32,
+	err lib.ErrorI,
+) {
+	for _, entry := range validators {
+		validator := new(Validator)
+		if err = lib.Unmarshal(entry, validator); err != nil {
+			return
+		}
+		if validator.UnstakingHeight > 0 {
+			totalValidatorsUnstaking++
+			if validator.Delegate {
+				totalDelegatesUnstaking++
+			}
+			continue
+		}
+		if validator.MaxPausedHeight > 0 {
+			totalValidatorsPaused++
+			if validator.Delegate {
+				totalDelegatesPaused++
+			}
+			continue
+		}
+		totalValidatorsActive++
+		if validator.Delegate {
+			totalDelegatesActive++
+		}
+	}
+	return
+}
+
+// cloneIndexerBlobs() clones the top-level current/previous wrapper.
+func cloneIndexerBlobs(src *IndexerBlobs) *IndexerBlobs {
+	if src == nil {
+		return nil
+	}
+	return &IndexerBlobs{
+		Current:  cloneIndexerBlob(src.Current),
+		Previous: cloneIndexerBlob(src.Previous),
+	}
+}
+
+// cloneIndexerBlob() performs a lightweight structural copy.
+// The underlying byte payloads are shared read-only; delta logic replaces only
+// Accounts/Pools/Validators slice headers on the clone so cached snapshots remain untouched.
+func cloneIndexerBlob(src *IndexerBlob) *IndexerBlob {
+	if src == nil {
+		return nil
+	}
+	return &IndexerBlob{
+		Block:                    src.Block,
+		Accounts:                 src.Accounts,
+		Pools:                    src.Pools,
+		Validators:               src.Validators,
+		DexPrices:                src.DexPrices,
+		NonSigners:               src.NonSigners,
+		DoubleSigners:            src.DoubleSigners,
+		Orders:                   src.Orders,
+		Params:                   src.Params,
+		DexBatches:               src.DexBatches,
+		NextDexBatches:           src.NextDexBatches,
+		CommitteesData:           src.CommitteesData,
+		SubsidizedCommittees:     src.SubsidizedCommittees,
+		RetiredCommittees:        src.RetiredCommittees,
+		Supply:                   src.Supply,
+		TotalValidatorsActive:    src.TotalValidatorsActive,
+		TotalValidatorsPaused:    src.TotalValidatorsPaused,
+		TotalValidatorsUnstaking: src.TotalValidatorsUnstaking,
+		ValidatorsDelta:          src.ValidatorsDelta,
+		TotalDelegatesActive:     src.TotalDelegatesActive,
+		TotalDelegatesPaused:     src.TotalDelegatesPaused,
+		TotalDelegatesUnstaking:  src.TotalDelegatesUnstaking,
+		BlockNonSigners:          src.BlockNonSigners,
+	}
+}
+
+// nilSafeBlob() normalizes a nil blob to an empty blob for helper calls.
+func nilSafeBlob(blob *IndexerBlob) *IndexerBlob {
+	if blob != nil {
+		return blob
+	}
+	return &IndexerBlob{}
 }

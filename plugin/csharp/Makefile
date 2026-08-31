@@ -11,7 +11,14 @@ build:
 build-release:
 	dotnet build --configuration Release
 
+# Build self-contained for local development (same as root Makefile)
+# This builds a native executable that doesn't require .NET runtime
+build-local:
+	rm -rf bin && dotnet publish -c Release -r linux-x64 --self-contained true -o bin
+
 # Testing
+# `dotnet test` runs all test projects, including the tutorial integration tests
+# (transaction tests AND the custom RPC endpoints test).
 test:
 	dotnet test
 

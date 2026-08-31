@@ -45,12 +45,25 @@ Follow the pattern in `TUTORIAL.md`:
 4. Add `case` in `CheckTx` switch → implement `CheckMessage<Type>`
 5. Add `case` in `DeliverTx` switch → implement `DeliverMessage<Type>`
 
+## Adding Custom RPC Endpoints
+
+A plugin can expose its own read-only HTTP endpoints for chain-specific data (e.g. `/v1/query/faucets`, `/v1/query/rewards`). The plugin owns its HTTP server entirely — Canopy never needs to know about these routes. See `TUTORIAL.md` "Step 5b: Expose Custom RPC Endpoints" for the full walkthrough.
+
+1. **Persist queryable records during `DeliverTx`** — write a small protobuf record to state under a plugin-owned key prefix (e.g. `Faucet` under `[]byte{100}` via `KeyForFaucet(addr)`). Endpoints can only return data that lives in state.
+2. **Declare the prefix** — add every custom record prefix to `ContractConfig.CustomStatePrefixes`. Canopy validates this at handshake and **panics before the plugin starts** if a prefix collides with a core-reserved prefix (`1-15`). See "Key Prefixes" below.
+3. **Register routes** in the skeleton `contract/rpc.go` `StartRPCServer()` on the shared `http.ServeMux` (add as many as you want). The skeleton server registers no routes by default and is already started from `main.go` with `go plugin.StartRPCServer()`.
+4. **Back each handler with `QueryState`** — the detached, read-only query path: `p.QueryState(height, read)` returns raw key/value state at a historical height (`0` = latest committed). Use a single-key read (`KeyForFaucet(addr)`) for one record, or a range read over the prefix (`FaucetPrefix()`) to list all records. Decode the raw bytes into your own protobuf type and shape the JSON response however you like.
+5. **Listen address** comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
+
 ## State Management
 
 ### Key Prefixes
-- `[]byte{1}` - Account storage
-- `[]byte{2}` - Pool storage  
+- `[]byte{1}` - Account storage (shared with core; plugins may interoperate)
+- `[]byte{2}` - Pool storage (shared with core; plugins may interoperate)
 - `[]byte{7}` - Governance parameters
+- `[]byte{100}` / `[]byte{101}` - Example plugin-owned custom records (faucet/reward) **added by the tutorial**, not part of the base plugin
+
+> **Avoid prefix collisions:** the plugin shares Canopy's FSM keyspace. Canopy reserves the single-byte prefixes `1-15` for its own state (accounts, pools, validators, committees, params, …). Custom plugin records **must** use prefixes outside that range (e.g. `100`, `101`). Declare them in `ContractConfig.CustomStatePrefixes`; Canopy panics at handshake — before the plugin starts — if any declared prefix collides, and the core FSM additionally rejects any write to a reserved prefix.
 
 ### State Operations
 ```go
@@ -71,7 +84,64 @@ c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: [...], Deletes: [...]})
 
 ```bash
 cd plugin/go
-make build          # Builds to ~/go/bin/go-plugin
+make build          # Builds to plugin/go/go-plugin
+```
+
+## Running with Docker
+
+The Go plugin can be run in a Docker container that includes both Canopy and the plugin.
+
+### Build the Docker Image
+
+From the repository root:
+
+```bash
+make docker/plugin PLUGIN=go
+```
+
+This builds a Docker image named `canopy-go` that contains:
+- The Canopy binary
+- The Go plugin binary and control script
+- Pre-configured `config.json` with `"plugin": "go"`
+
+### Run the Container
+
+```bash
+make docker/run-go
+```
+
+Or manually with volume mount for persistent data:
+
+```bash
+docker run -v ~/.canopy:/root/.canopy canopy-go
+```
+
+### Expose Ports for Testing
+
+To run tests against the containerized Canopy, expose the RPC ports:
+
+```bash
+docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-go
+```
+
+| Port | Service |
+|------|---------|
+| 50002 | RPC API (transactions, queries) |
+| 50003 | Admin RPC (keystore operations) |
+
+Now you can run tests from your host machine that connect to `localhost:50002`.
+
+### View Logs
+
+```bash
+# Get the container ID
+docker ps
+
+# View Canopy logs
+docker exec -it <container_id> tail -f /root/.canopy/logs/log
+
+# View plugin logs
+docker exec -it <container_id> tail -f /tmp/plugin/go-plugin.log
 ```
 
 ## Running with Canopy
@@ -83,11 +153,18 @@ make build          # Builds to ~/go/bin/go-plugin
 ## Testing
 
 ```bash
-cd plugin/go/tutorial
-go test -v -run TestPluginTransactions -timeout 120s
+cd plugin/go
+make test
 ```
 
-Requires Canopy running with the plugin enabled and faucet/reward transactions implemented.
+`make test` runs both the transaction integration tests (`TestPluginTransactions`) and the custom RPC endpoints test (`TestPluginCustomRPCEndpoints`). Equivalent direct invocation:
+
+```bash
+cd plugin/go/tutorial
+go test -v -run 'TestPluginTransactions|TestPluginCustomRPCEndpoints' -timeout 600s
+```
+
+Requires Canopy running with the plugin enabled, faucet/reward transactions implemented, and the plugin's RPC server reachable on port `50010` for the custom RPC test.
 
 ## Code Conventions
 

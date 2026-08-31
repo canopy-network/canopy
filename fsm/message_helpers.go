@@ -6,6 +6,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
+	"slices"
 )
 
 const (
@@ -61,7 +62,19 @@ func (x *MessageSend) Check() lib.ErrorI {
 	if len(x.ToAddress) != crypto.AddressSize {
 		return ErrRecipientAddressSize()
 	}
-	return checkAmount(x.Amount)
+	if err := checkAmount(x.Amount); err != nil {
+		return err
+	}
+	if x.VestingStartHeight == 0 && x.VestingCliffHeight == 0 && x.VestingEndHeight == 0 {
+		return nil
+	}
+	if x.VestingEndHeight <= x.VestingStartHeight {
+		return ErrInvalidVesting()
+	}
+	if x.VestingCliffHeight < x.VestingStartHeight || x.VestingCliffHeight > x.VestingEndHeight {
+		return ErrInvalidVesting()
+	}
+	return nil
 }
 
 func (x *MessageSend) Name() string      { return MessageSendName }
@@ -71,9 +84,12 @@ func (x *MessageSend) Recipient() []byte { return crypto.NewAddressFromBytes(x.T
 // MarshalJSON() is the json.Marshaller implementation for MessageSend
 func (x MessageSend) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jsonMessageSend{
-		FromAddress: x.FromAddress,
-		ToAddress:   x.ToAddress,
-		Amount:      x.Amount,
+		FromAddress:        x.FromAddress,
+		ToAddress:          x.ToAddress,
+		Amount:             x.Amount,
+		VestingStartHeight: x.VestingStartHeight,
+		VestingCliffHeight: x.VestingCliffHeight,
+		VestingEndHeight:   x.VestingEndHeight,
 	})
 }
 
@@ -84,17 +100,23 @@ func (x *MessageSend) UnmarshalJSON(b []byte) (err error) {
 		return
 	}
 	*x = MessageSend{
-		FromAddress: j.FromAddress,
-		ToAddress:   j.ToAddress,
-		Amount:      j.Amount,
+		FromAddress:        j.FromAddress,
+		ToAddress:          j.ToAddress,
+		Amount:             j.Amount,
+		VestingStartHeight: j.VestingStartHeight,
+		VestingCliffHeight: j.VestingCliffHeight,
+		VestingEndHeight:   j.VestingEndHeight,
 	}
 	return
 }
 
 type jsonMessageSend struct {
-	FromAddress lib.HexBytes `json:"fromAddress"`
-	ToAddress   lib.HexBytes `json:"toAddress"`
-	Amount      uint64       `json:"amount"`
+	FromAddress        lib.HexBytes `json:"fromAddress"`
+	ToAddress          lib.HexBytes `json:"toAddress"`
+	Amount             uint64       `json:"amount"`
+	VestingStartHeight uint64       `json:"vestingStartHeight,omitempty"`
+	VestingCliffHeight uint64       `json:"vestingCliffHeight,omitempty"`
+	VestingEndHeight   uint64       `json:"vestingEndHeight,omitempty"`
 }
 
 var _ lib.MessageI = &MessageStake{} // interface enforcement
@@ -415,6 +437,7 @@ func (x MessageDAOTransfer) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jsonMessageDaoTransfer{
 		Address:      x.Address,
 		Amount:       x.Amount,
+		Mint:         x.Mint,
 		StartHeight:  x.StartHeight,
 		EndHeight:    x.EndHeight,
 		ProposalHash: x.ProposalHash,
@@ -430,6 +453,7 @@ func (x *MessageDAOTransfer) UnmarshalJSON(b []byte) (err error) {
 	*x = MessageDAOTransfer{
 		Address:      j.Address,
 		Amount:       j.Amount,
+		Mint:         j.Mint,
 		StartHeight:  j.StartHeight,
 		EndHeight:    j.EndHeight,
 		ProposalHash: j.ProposalHash,
@@ -440,6 +464,7 @@ func (x *MessageDAOTransfer) UnmarshalJSON(b []byte) (err error) {
 type jsonMessageDaoTransfer struct {
 	Address      lib.HexBytes `json:"address"`
 	Amount       uint64       `json:"amount"`
+	Mint         bool         `json:"mint,omitempty"`
 	StartHeight  uint64       `json:"startHeight"`
 	EndHeight    uint64       `json:"endHeight"`
 	ProposalHash string       `json:"proposalHash,omitempty"`
@@ -576,6 +601,9 @@ func (x *MessageCreateOrder) Check() lib.ErrorI {
 		return ErrInvalidAmount()
 	}
 	if err := ensureEmpty(x.OrderId); err != nil {
+		return err
+	}
+	if err := checkAddress(x.SellersSendAddress); err != nil {
 		return err
 	}
 	return checkExternalAddress(x.SellerReceiveAddress)
@@ -967,10 +995,8 @@ func checkCommittees(committees []uint64) lib.ErrorI {
 }
 
 func checkChainId(i uint64) lib.ErrorI {
-	for _, reserved := range ReservedIDs {
-		if i == reserved {
-			return ErrInvalidChainId()
-		}
+	if slices.Contains(ReservedIDs, i) {
+		return ErrInvalidChainId()
 	}
 	// ensure the chain id doesn't exceed max
 	if i > MaxChainId {
@@ -981,8 +1007,11 @@ func checkChainId(i uint64) lib.ErrorI {
 
 // checkStartEndHeight() validates the start/end height of the message
 func checkStartEndHeight(proposal GovProposal) lib.ErrorI {
-	blockRange := proposal.GetEndHeight() - proposal.GetStartHeight()
-	if blockRange > 10000 || blockRange <= 0 {
+	startHeight, endHeight := proposal.GetStartHeight(), proposal.GetEndHeight()
+	if startHeight >= endHeight {
+		return ErrInvalidBlockRange()
+	}
+	if endHeight-startHeight > 10000 {
 		return ErrInvalidBlockRange()
 	}
 	return nil

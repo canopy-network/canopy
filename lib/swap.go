@@ -7,6 +7,12 @@ import (
 
 /* This file implements 'sell order book' logic for token swaps that is used throughout the app */
 
+const OrdersPageName = "orders" // the name of a page of orders
+
+func init() {
+	RegisteredPageables[OrdersPageName] = new(SellOrders) // preregister the page type for unmarshalling
+}
+
 // GetOrder() retrieves a sell order from the OrderBook
 func (x *OrderBook) GetOrder(orderId []byte) (order *SellOrder, err ErrorI) {
 	// ensure non-nil
@@ -106,3 +112,12 @@ func (x *OrderBooks) UnmarshalJSON(jsonBytes []byte) (err error) {
 	// exit
 	return
 }
+
+// SellOrders is a slice of SellOrder pointers that implements the Pageable interface
+type SellOrders []*SellOrder
+
+// Len returns the number of orders in the slice
+func (s *SellOrders) Len() int { return len(*s) }
+
+// New returns a new empty SellOrders instance (satisfies Pageable interface)
+func (s *SellOrders) New() Pageable { return &SellOrders{} }

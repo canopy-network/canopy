@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"github.com/canopy-network/canopy/lib/crypto"
 	"strings"
+
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 var (
@@ -227,7 +228,7 @@ type dexBatch struct {
 	PoolPoints       []*PoolPoints           `json:"poolPoints"`
 	TotalPoolPoints  uint64                  `json:"totalPoolPoints"`
 	Receipts         []uint64                `json:"receipts"`
-	LockedHeight     uint64                  `json:"locked_height"`
+	LockedHeight     uint64                  `json:"lockedHeight"`
 	LivenessFallback bool                    `json:"livenessFallback"`
 }
 

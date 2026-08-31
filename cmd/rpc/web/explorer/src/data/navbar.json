@@ -1,0 +1,57 @@
+{
+  "home": {
+    "title": "",
+    "root": [
+      {
+        "label": "Blockchain",
+        "path": "/blocks",
+        "children": [
+          {
+            "label": "Blocks",
+            "path": "/blocks"
+          },
+          {
+            "label": "Transactions",
+            "path": "/transactions"
+          },
+          {
+            "label": "Accounts",
+            "path": "/accounts"
+          },
+          {
+            "label": "Swaps",
+            "path": "/token-swaps"
+          },
+          {
+            "label": "Dex",
+            "path": "/dex"
+          }
+        ]
+      },
+      {
+        "label": "Staking",
+        "path": "/staking",
+        "children": [
+          {
+            "label": "Staking",
+            "path": "/staking"
+          }
+        ]
+      },
+      {
+        "label": "Analytics",
+        "path": "/supply",
+        "children": [
+          {
+            "label": "Supply",
+            "path": "/supply"
+          },
+          {
+            "label": "Governance",
+            "path": "/governance"
+          }
+        ]
+      }
+    ]
+  }
+}

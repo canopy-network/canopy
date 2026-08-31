@@ -24,7 +24,7 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 
 	// if current block marks the ending of the NonSignWindow
 	if s.Height()%params.NonSignWindow == 0 {
-		// automatically slash and reset any non-signers that exceeded MaxNonSignPerWindow
+		// protocol v1/v2 settlement semantics are handled inside SlashAndResetNonSigners.
 		if err = s.SlashAndResetNonSigners(qc.Header.ChainId, params); err != nil {
 			return 0, err
 		}
@@ -39,7 +39,7 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 		qc.Signature.LogNonSigners(vs.ValidatorSet, qc.ProposerKey, qc.Header.Height, qc.Header.ChainId, s.log)
 	}
 	// increment the non-signing count for the non-signers
-	if err = s.IncrementNonSigners(nonSignerPubKeys); err != nil {
+	if err = s.IncrementNonSigners(qc.Header.ChainId, nonSignerPubKeys); err != nil {
 		return 0, err
 	}
 
@@ -57,8 +57,12 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 	return
 }
 
-// SlashAndResetNonSigners() resets the non-signer tracking and slashes those who exceeded the MaxNonSign threshold
+// SlashAndResetNonSigners() resets non-signer tracking and applies protocol-versioned settlement semantics.
+// Protocol v2 intentionally performs a single settlement per non-sign window:
+// the first chain processed during reset settles against its chain-scoped counters, then
+// all non-signer keys are erased for the next window.
 func (s *StateMachine) SlashAndResetNonSigners(chainId uint64, params *ValidatorParams) (err lib.ErrorI) {
+	committeeScoped := s.IsFeatureEnabled(2)
 	var keys, slashList [][]byte
 	// execute the callback for each key under 'non-signer' prefix
 	// for every key under 'non-signer' prefix; slashes the validator if exceeded the MaxNonSign threshold
@@ -69,7 +73,8 @@ func (s *StateMachine) SlashAndResetNonSigners(chainId uint64, params *Validator
 		// if so - add them to the bad list
 		addr, err := AddressFromKey(k)
 		if err != nil {
-			return
+			s.log.Warnf("skipping malformed non-signer key: %x", k)
+			return nil
 		}
 		// ensure no nil NonSigner
 		ptr := new(NonSigner)
@@ -77,8 +82,14 @@ func (s *StateMachine) SlashAndResetNonSigners(chainId uint64, params *Validator
 		if err = lib.Unmarshal(v, ptr); err != nil {
 			return
 		}
+		// protocol v1 uses global counters.
+		// protocol v2 uses per-chain counters when available.
+		count := ptr.Counter
+		if committeeScoped && len(ptr.ChainCounters) != 0 {
+			count = nonSignerCounterForChain(ptr, chainId)
+		}
 		// if the counter exceeds the max-non sign
-		if ptr.Counter > params.MaxNonSign {
+		if count > params.MaxNonSign {
 			// add the address to the 'bad list'
 			slashList = append(slashList, addr.Bytes())
 		}
@@ -93,7 +104,8 @@ func (s *StateMachine) SlashAndResetNonSigners(chainId uint64, params *Validator
 	if err = s.SlashNonSigners(chainId, params, slashList); err != nil {
 		return
 	}
-	// delete all keys under 'non-signer' prefix as part of the reset
+	// reset window state after settlement.
+	// this intentionally drops pending evidence for other chains in the same window.
 	_ = s.DeleteAll(keys)
 	return
 }
@@ -136,7 +148,8 @@ func (s *StateMachine) GetDoubleSigners() (results []*lib.DoubleSigner, e lib.Er
 }
 
 // IncrementNonSigners() upserts non-(QC)-signers by incrementing the non-signer count for the list
-func (s *StateMachine) IncrementNonSigners(nonSignerPubKeys [][]byte) lib.ErrorI {
+func (s *StateMachine) IncrementNonSigners(chainId uint64, nonSignerPubKeys [][]byte) lib.ErrorI {
+	trackByChain := s.IsFeatureEnabled(2)
 	// for each non-signer in the list
 	for _, ns := range nonSignerPubKeys {
 		// extract the public key from the list
@@ -159,6 +172,10 @@ func (s *StateMachine) IncrementNonSigners(nonSignerPubKeys [][]byte) lib.ErrorI
 		}
 		// increment the counter for the non-signer
 		ptr.Counter++
+		// protocol v2+ keeps a per-chain counter in the same state object.
+		if trackByChain {
+			incrementNonSignerChainCounter(ptr, chainId)
+		}
 		// set convert the object ref back to bytes
 		bz, err = lib.Marshal(ptr)
 		if err != nil {
@@ -283,41 +300,53 @@ func (s *StateMachine) SlashValidators(addresses [][]byte, chainId, percent uint
 
 // SlashValidator() burns a specified percentage of a validator's staked tokens
 func (s *StateMachine) SlashValidator(validator *Validator, chainId, percent uint64, p *ValidatorParams) (err lib.ErrorI) {
-	// ensure no unauthorized slashes may occur
-	if !slices.Contains(validator.Committees, chainId) {
-		// This may happen if an async event causes a validator edit stake to occur before being slashed
-		// Non-byzantine actors order 'certificate result' messages before 'edit stake'
-		s.log.Warn(ErrInvalidChainId().Error())
-		return nil
-	}
 	// create a convenience variable to hold the new validator committees (in case the validator was ejected)
 	newCommittees := slices.Clone(validator.Committees)
-	// a 'slash tracker' is used to limit the max slash per committee per block
-	// get the slashed percent so far in this block by this committee
-	slashTotal := s.slashTracker.GetTotalSlashPercent(validator.Address, chainId)
-	// check to see if it exceeds the max
-	if slashTotal >= p.MaxSlashPerCommittee {
-		return nil // no slash nor no removal logic occurs because this block already hit the limit with a previous slash
-	}
-	// check to see if it 'now' exceeds the max
-	if slashTotal+percent >= p.MaxSlashPerCommittee {
-		// only slash up to the maximum
-		percent = p.MaxSlashPerCommittee - slashTotal
-		// for each committee
-		for i, id := range newCommittees {
-			// if id is the slash chain id
-			if id == chainId {
-				// remove the validator from the committee
-				newCommittees = append(newCommittees[:i], newCommittees[i+1:]...)
-				// exit the loop
-				break
+	// protocol v2+ enables correct committee scoped slashing and ejection
+	if committeeScoped := s.IsFeatureEnabled(2); committeeScoped {
+		// ensure no unauthorized slashes may occur
+		if !slices.Contains(validator.Committees, chainId) {
+			// This may happen if an async event causes a validator edit stake to occur before being slashed
+			// Non-byzantine actors order 'certificate result' messages before 'edit stake'
+			s.log.Warn(ErrInvalidChainId().Error())
+			return nil
+		}
+		// a 'slash tracker' is used to limit the max slash per committee per block
+		// get the slashed percent so far in this block by this committee
+		slashTotal := s.slashTracker.GetTotalSlashPercent(validator.Address, chainId)
+		// check to see if it exceeds the max
+		if slashTotal >= p.MaxSlashPerCommittee {
+			return nil // no slash nor no removal logic occurs because this block already hit the limit with a previous slash
+		}
+		// check to see if it 'now' exceeds the max
+		if slashTotal+percent >= p.MaxSlashPerCommittee {
+			// only slash up to the maximum
+			percent = p.MaxSlashPerCommittee - slashTotal
+			// for each committee
+			for i, id := range newCommittees {
+				// if id is the slash chain id
+				if id == chainId {
+					// remove the validator from the committee
+					newCommittees = append(newCommittees[:i], newCommittees[i+1:]...)
+					// exit the loop
+					break
+				}
 			}
 		}
+		// update the slash tracker
+		s.slashTracker.AddSlash(validator.Address, chainId, percent)
 	}
-	// update the slash tracker
-	s.slashTracker.AddSlash(validator.Address, chainId, percent)
 	// initialize address and new stake variable
-	addr, stakeAfterSlash := crypto.NewAddressFromBytes(validator.Address), lib.Uint64ReducePercentage(validator.StakedAmount, percent)
+	addr := crypto.NewAddressFromBytes(validator.Address)
+	var stakeAfterSlash uint64
+	switch {
+	case percent >= 100 || validator.StakedAmount == 0:
+		stakeAfterSlash = 0
+	case percent == 0:
+		stakeAfterSlash = validator.StakedAmount
+	default:
+		stakeAfterSlash = lib.SafeMulDiv(validator.StakedAmount, 100-percent, 100)
+	}
 	// calculate the slash amount
 	slashAmount := validator.StakedAmount - stakeAfterSlash
 	// subtract from total supply
@@ -436,4 +465,28 @@ func (s *SlashTracker) toKey(address []byte) string {
 		(*s)[addr] = make(map[uint64]uint64)
 	}
 	return addr
+}
+
+// incrementNonSignerChainCounter() increases the non signer count (chain specific)
+func incrementNonSignerChainCounter(nonSigner *NonSigner, chainId uint64) {
+	for _, c := range nonSigner.ChainCounters {
+		if c.ChainId == chainId {
+			c.Counter++
+			return
+		}
+	}
+	nonSigner.ChainCounters = append(nonSigner.ChainCounters, &NonSignerChainCounter{
+		ChainId: chainId,
+		Counter: 1,
+	})
+}
+
+// nonSignerCounterForChain() returns the chain specific non-signer count
+func nonSignerCounterForChain(nonSigner *NonSigner, chainId uint64) uint64 {
+	for _, c := range nonSigner.ChainCounters {
+		if c.ChainId == chainId {
+			return c.Counter
+		}
+	}
+	return 0
 }

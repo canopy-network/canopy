@@ -23,6 +23,7 @@ plugin/kotlin/
 │   ├── Config.kt         # Configuration data class
 │   ├── Contract.kt       # Transaction logic (CheckTx, DeliverTx)
 │   ├── PluginClient.kt   # Unix socket communication with FSM
+│   ├── Rpc.kt            # Skeleton HTTP server for custom RPC endpoints (no routes by default)
 │   └── Error.kt          # Error definitions matching Go codes
 ├── src/main/proto/       # Protobuf definitions
 │   ├── account.proto     # Account/Pool state structures
@@ -88,16 +89,30 @@ See `TUTORIAL.md` for complete instructions. Summary:
 6. Update `fromAny()` to parse the new message type
 7. Add cases in `checkTx()` and `deliverTx()` when statements
 
+## Adding Custom RPC Endpoints
+
+A plugin can expose its own read-only HTTP endpoints for chain-specific data (e.g. `/v1/query/faucets`, `/v1/query/rewards`). The plugin owns its HTTP server entirely — Canopy never needs to know about these routes. See `TUTORIAL.md` "Step 5b: Expose Custom RPC Endpoints" for the full walkthrough.
+
+1. **Persist queryable records during `deliverTx`** — write a small protobuf record to state under a plugin-owned key prefix (e.g. `Faucet` under `byteArrayOf(100)` via `keyForFaucet(addr)`). Endpoints can only return data that lives in state.
+2. **Declare the prefix** — add every custom record prefix to the plugin config via `.addAllCustomStatePrefixes(...)` in `ContractConfig.toPluginConfig()` (`src/main/kotlin/com/canopy/plugin/Contract.kt`). Canopy validates this at handshake and **panics before the plugin starts** if a prefix collides with a core-reserved prefix (`1-15`). See "Key Prefixes" below.
+3. **Register routes** in `src/main/kotlin/com/canopy/plugin/Rpc.kt`. The skeleton `RpcServer.start()` already exists (it starts the JDK built-in `com.sun.net.httpserver.HttpServer` but registers **no routes** by default) and is already started from `Main.kt` on a daemon thread (`thread { RpcServer(plugin).start() }`). Just add your routes via `server.createContext(...)` (as many as you want) and their handlers, backed by `queryState`.
+4. **Back each handler with `queryState`** — the detached, read-only query path: `PluginClient.queryState(height, read)` returns raw key/value state at a historical height (`0` = latest committed) using a fresh random request id, so it is safe to call from HTTP handlers. Use a single-key read (`keyForFaucet(addr)`) for one record, or a range read over the prefix (`faucetPrefix()`) to list all records. Decode the raw bytes into your own protobuf type and shape the JSON response however you like.
+5. **Listen address** comes from the `rpcAddress` config field (default `0.0.0.0:50010`). The RPC server is **optional and non-fatal**: set `rpcAddress` to empty to disable it, and a startup/bind failure (e.g. port already in use) is logged without crashing the plugin.
+
 ## State Management
 
 ### Key Prefixes
 State is stored in a key-value store. Keys are constructed using length-prefixed byte arrays:
 
 ```kotlin
-private val ACCOUNT_PREFIX = byteArrayOf(1)   // Account balances
-private val POOL_PREFIX = byteArrayOf(2)       // Fee pool
+private val ACCOUNT_PREFIX = byteArrayOf(1)   // Account balances (shared with core; plugins may interoperate)
+private val POOL_PREFIX = byteArrayOf(2)       // Fee pool (shared with core; plugins may interoperate)
 private val PARAMS_PREFIX = byteArrayOf(7)     // Parameters (fee params)
+private val FAUCET_PREFIX = byteArrayOf(100)   // Example plugin-owned custom records (faucet) added by the tutorial, not part of the base plugin
+private val REWARD_PREFIX = byteArrayOf(101)   // Example plugin-owned custom records (reward) added by the tutorial, not part of the base plugin
 ```
+
+> **Avoid prefix collisions:** the plugin shares Canopy's FSM keyspace. Canopy reserves the single-byte prefixes `1-15` for its own state (accounts, pools, validators, committees, params, …). Custom plugin records **must** use prefixes outside that range (e.g. `100`, `101`). Declare them via `.addAllCustomStatePrefixes(...)` in `ContractConfig.toPluginConfig()`; Canopy panics at handshake — before the plugin starts — if any declared prefix collides, and the core FSM additionally rejects any write to a reserved prefix.
 
 ### State Read/Write Pattern
 
@@ -160,7 +175,7 @@ The `tutorial/` subdirectory is a separate Gradle project for testing custom tra
 Run tutorial tests:
 ```bash
 cd tutorial
-make test-rpc  # Requires running Canopy node
+make test  # Runs transaction + custom RPC tests; requires running Canopy node
 ```
 
 ## BLS12-381 Signing (Tutorial)
@@ -193,6 +208,15 @@ make build
 ./gradlew build -x test
 ```
 
+### Build Fat JAR (for deployment/Docker)
+```bash
+make fatjar
+# or
+./gradlew fatJar --no-daemon
+```
+
+This creates a single JAR with all dependencies bundled, used by Docker and the auto-update system.
+
 ### Run Plugin
 ```bash
 make run
@@ -209,7 +233,75 @@ make proto
 
 ### Run Tests
 ```bash
+# Plugin's own unit tests
 make test
+```
+
+For the integration tests, use the tutorial project. Its `make test` runs **both** the transaction integration tests (`testPluginTransactions`) and the custom RPC endpoints test (`testPluginCustomRPCEndpoints`) — both live in the `RpcTest` class, so `./gradlew test` picks them up automatically:
+
+```bash
+cd tutorial
+make test
+```
+
+Requires Canopy running with the plugin enabled, faucet/reward transactions implemented, and the plugin's RPC server reachable on port `50010` for the custom RPC test.
+
+## Running with Docker
+
+The Kotlin plugin can be run in a Docker container that includes both Canopy and the plugin.
+
+### Build the Docker Image
+
+From the repository root:
+
+```bash
+make docker/plugin PLUGIN=kotlin
+```
+
+This builds a Docker image named `canopy-kotlin` that contains:
+- The Canopy binary
+- The Kotlin plugin fat JAR
+- JRE 21 runtime
+- Pre-configured `config.json` with `"plugin": "kotlin"`
+
+### Run the Container
+
+```bash
+make docker/run-kotlin
+```
+
+Or manually with volume mount for persistent data:
+
+```bash
+docker run -v ~/.canopy:/root/.canopy canopy-kotlin
+```
+
+### Expose Ports for Testing
+
+To run tests against the containerized Canopy, expose the RPC ports:
+
+```bash
+docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-kotlin
+```
+
+| Port | Service |
+|------|---------|
+| 50002 | RPC API (transactions, queries) |
+| 50003 | Admin RPC (keystore operations) |
+
+Now you can run tests from your host machine that connect to `localhost:50002`.
+
+### View Logs
+
+```bash
+# Get the container ID
+docker ps
+
+# View Canopy logs
+docker exec -it <container_id> tail -f /root/.canopy/logs/log
+
+# View plugin logs
+docker exec -it <container_id> tail -f /tmp/plugin/kotlin-plugin.log
 ```
 
 ## Important Conventions

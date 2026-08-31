@@ -73,6 +73,30 @@ func TestUpdateParam(t *testing.T) {
 			},
 		},
 		{
+			name:   "consensus param block size below header rejected",
+			detail: "block size must be at least header size to avoid max-size underflow",
+			update: paramUpdate{
+				space: "cons",
+				name:  ParamBlockSize,
+				value: &lib.UInt64Wrapper{
+					Value: lib.MaxBlockHeaderSize - 1,
+				},
+			},
+			error: "invalid param: blockSize",
+		},
+		{
+			name:   "consensus param negative protocol version rejected",
+			detail: "a negative protocol version string must be rejected",
+			update: paramUpdate{
+				space: "cons",
+				name:  ParamProtocolVersion,
+				value: &lib.StringWrapper{
+					Value: "-1/-1",
+				},
+			},
+			error: "invalid protocol version",
+		},
+		{
 			name:   "governance param updated",
 			detail: "an update to dao reward percentage under the governance param space",
 			update: paramUpdate{
@@ -334,6 +358,36 @@ func TestConformStateToParamUpdate(t *testing.T) {
 	}
 }
 
+func TestConformStateToParamUpdate_MaxCommitteesShrinkGuard(t *testing.T) {
+	sm := newTestStateMachine(t)
+
+	previous := DefaultParams()
+	previous.Validator.MaxCommittees = 4
+	previous.Validator.MaxCommitteeSize = 1
+
+	updated := DefaultParams()
+	updated.Validator.MaxCommittees = 3
+	updated.Validator.MaxCommitteeSize = 1
+	require.NoError(t, sm.SetParams(updated))
+
+	supply := &Supply{}
+	v := &Validator{
+		Address:      newTestAddressBytes(t),
+		PublicKey:    newTestPublicKeyBytes(t),
+		Output:       newTestAddressBytes(t, 1),
+		StakedAmount: 100,
+		Committees:   []uint64{0, 1, 2, 3},
+	}
+	require.NoError(t, sm.SetValidators([]*Validator{v}, supply))
+	require.NoError(t, sm.SetSupply(supply))
+
+	require.NoError(t, sm.ConformStateToParamUpdate(previous))
+
+	got, err := sm.GetValidator(newTestAddress(t))
+	require.NoError(t, err)
+	require.Len(t, got.Committees, 3)
+}
+
 func TestSetGetParams(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -548,6 +602,14 @@ func TestIsFeatureEnabled(t *testing.T) {
 			expected:        false,
 		},
 		{
+			name:            "future upgrade does not enable early",
+			detail:          "before a far-future upgrade height, the scheduled version is not yet active",
+			height:          10,
+			protocolVersion: "2/1000",
+			version:         2,
+			expected:        false,
+		},
+		{
 			name:            "on version / height",
 			detail:          "exactly on the version and height",
 			height:          2,
@@ -584,4 +646,34 @@ func TestIsFeatureEnabled(t *testing.T) {
 			require.Equal(t, test.expected, sm.IsFeatureEnabled(test.version))
 		})
 	}
+}
+
+func TestUpdateParamProtocolVersionGuards(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 10
+
+	// disallow version jumps.
+	err := sm.UpdateParam(ParamSpaceCons, ParamProtocolVersion, &lib.StringWrapper{
+		Value: NewProtocolVersion(1000, 3),
+	})
+	require.ErrorContains(t, err, "invalid protocol version")
+
+	// allow scheduling the next version.
+	err = sm.UpdateParam(ParamSpaceCons, ParamProtocolVersion, &lib.StringWrapper{
+		Value: NewProtocolVersion(1000, 2),
+	})
+	require.NoError(t, err)
+
+	// disallow scheduling another version before the current scheduled version activates.
+	err = sm.UpdateParam(ParamSpaceCons, ParamProtocolVersion, &lib.StringWrapper{
+		Value: NewProtocolVersion(2000, 3),
+	})
+	require.ErrorContains(t, err, "invalid protocol version")
+
+	// once active, scheduling the next version is allowed.
+	sm.height = 1000
+	err = sm.UpdateParam(ParamSpaceCons, ParamProtocolVersion, &lib.StringWrapper{
+		Value: NewProtocolVersion(2000, 3),
+	})
+	require.NoError(t, err)
 }

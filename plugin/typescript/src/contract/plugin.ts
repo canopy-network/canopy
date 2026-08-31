@@ -11,7 +11,7 @@ import { types } from '../proto/types.js';
 // protobufjs may return uint64 as Long or number depending on value
 function normalizeId(id: Long | number | undefined): string {
     if (id === undefined || id === null) {
-        return "0";
+        return '0';
     }
     if (Long.isLong(id)) {
         return id.toString();
@@ -29,7 +29,7 @@ import {
     ErrUnexpectedFSMToPlugin,
     ErrInvalidFSMToPluginMMessage,
     ErrFromAny,
-    ErrInvalidMessageCast,
+    ErrInvalidMessageCast
 } from './error.js';
 
 // Forward declaration - Contract will be set after import
@@ -41,20 +41,27 @@ let ContractConfigValue: any;
 let ContractAsyncClass: any;
 
 // socketPath is the name of the plugin socket exposed by the base SDK
-const socketPath = "plugin.sock";
+const socketPath = 'plugin.sock';
+
+// PLUGIN_BUILD is a human-readable build marker logged at startup so operators can confirm, via
+// `tail -f /tmp/plugin/typescript-plugin.log`, that the running binary includes the expected features.
+export const PLUGIN_BUILD = 'typescript-plugin v1 (base SDK + detached custom RPC query path)';
 
 // CONFIG IMPLEMENTATION
 
 export interface Config {
     ChainId: number;
     DataDirPath: string;
+    // rpcAddress is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
+    rpcAddress: string;
 }
 
 // DefaultConfig() returns the default configuration
 export function DefaultConfig(): Config {
     return {
         ChainId: 1,
-        DataDirPath: "/tmp/plugin/",
+        DataDirPath: '/tmp/plugin/',
+        rpcAddress: '0.0.0.0:50010'
     };
 }
 
@@ -88,9 +95,11 @@ export class Plugin {
     }
 
     async Handshake(): Promise<IPluginError | null> {
-        console.log("Handshaking with FSM");
+        console.log('Handshaking with FSM');
         const contract = new ContractClass(this.config, this.fsmConfig, this, Long.ZERO);
-        const [response, err] = await this.sendToPluginSync(contract, { config: this.pluginConfig });
+        const [response, err] = await this.sendToPluginSync(contract, {
+            config: this.pluginConfig
+        });
         if (err) {
             return err;
         }
@@ -125,6 +134,27 @@ export class Plugin {
         return [response.stateWrite, null];
     }
 
+    // queryState() executes a detached, read-only state query against Canopy at the given height (0 = latest committed).
+    // Unlike StateRead(), it is NOT tied to an in-flight tx/block lifecycle and does not require a Contract context;
+    // it allocates its own random request id, making it safe to call from custom RPC handlers (e.g. an HTTP server).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async queryState(height: number, request: any): Promise<[any | null, IPluginError | null]> {
+        // send the detached query and wait for a response
+        const [response, err] = await this.sendDetachedSync({ query: { height, read: request } });
+        if (err) {
+            return [null, err];
+        }
+        if (!response || !response.query) {
+            return [null, ErrUnexpectedFSMToPlugin(typeof response)];
+        }
+        // surface any FSM-side error attached to the query response
+        if (response.query.error) {
+            return [null, response.query.error];
+        }
+        // return the unwrapped read response
+        return [response.query.read, null];
+    }
+
     ListenForInbound(): void {
         this.conn.on('data', (chunk: Buffer) => {
             this.buffer = Buffer.concat([this.buffer, chunk]);
@@ -137,7 +167,7 @@ export class Plugin {
         });
 
         this.conn.on('close', () => {
-            console.log("Socket closed");
+            console.log('Socket closed');
             process.exit(0);
         });
     }
@@ -180,7 +210,7 @@ export class Plugin {
 
         // Route based on which field has actual content
         if (msg.config && Object.keys(msg.config).length >= 0 && msg.payload === 'config') {
-            console.log("Received config response from FSM");
+            console.log('Received config response from FSM');
             const handleErr = this.handleFSMResponse(msg);
             if (handleErr) {
                 console.error(handleErr.msg);
@@ -188,7 +218,7 @@ export class Plugin {
             }
             return;
         } else if (msg.stateRead && msg.payload === 'stateRead') {
-            console.log("Received stateRead response from FSM");
+            console.log('Received stateRead response from FSM');
             const handleErr = this.handleFSMResponse(msg);
             if (handleErr) {
                 console.error(handleErr.msg);
@@ -196,7 +226,15 @@ export class Plugin {
             }
             return;
         } else if (msg.stateWrite && msg.payload === 'stateWrite') {
-            console.log("Received stateWrite response from FSM");
+            console.log('Received stateWrite response from FSM');
+            const handleErr = this.handleFSMResponse(msg);
+            if (handleErr) {
+                console.error(handleErr.msg);
+                process.exit(1);
+            }
+            return;
+        } else if (msg.query && msg.payload === 'query') {
+            console.log('Received query response from FSM');
             const handleErr = this.handleFSMResponse(msg);
             if (handleErr) {
                 console.error(handleErr.msg);
@@ -204,21 +242,21 @@ export class Plugin {
             }
             return;
         } else if (msg.genesis && msg.payload === 'genesis') {
-            console.log("Received genesis request from FSM");
+            console.log('Received genesis request from FSM');
             response = { genesis: c.Genesis(msg.genesis) };
         } else if (msg.begin && msg.payload === 'begin') {
-            console.log("Received begin request from FSM");
+            console.log('Received begin request from FSM');
             response = { begin: c.BeginBlock(msg.begin) };
         } else if (msg.check && msg.payload === 'check') {
-            console.log("Received check request from FSM");
+            console.log('Received check request from FSM');
             const checkResponse = await ContractAsyncClass.CheckTx(c, msg.check);
             response = { check: checkResponse };
         } else if (msg.deliver && msg.payload === 'deliver') {
-            console.log("Received deliver request from FSM");
+            console.log('Received deliver request from FSM');
             const deliverResponse = await ContractAsyncClass.DeliverTx(c, msg.deliver);
             response = { deliver: deliverResponse };
         } else if (msg.end && msg.payload === 'end') {
-            console.log("Received end request from FSM");
+            console.log('Received end request from FSM');
             response = { end: c.EndBlock(msg.end) };
         } else {
             // Fallback: check which field actually has content
@@ -228,10 +266,12 @@ export class Plugin {
             process.exit(1);
         }
 
-        const sendErr = this.sendProtoMsg(types.PluginToFSM.create({
-            id: msg.id,
-            ...response,
-        }));
+        const sendErr = this.sendProtoMsg(
+            types.PluginToFSM.create({
+                id: msg.id,
+                ...response
+            })
+        );
 
         if (sendErr) {
             console.error(sendErr.msg);
@@ -274,17 +314,60 @@ export class Plugin {
         });
         this.pending.set(requestId, { resolve: resolvePromise! });
         this.requestContract.set(requestId, c);
-        const err = this.sendProtoMsg(types.PluginToFSM.create({
-            id: c.fsmId,
-            ...payload,
-        }));
+        const err = this.sendProtoMsg(
+            types.PluginToFSM.create({
+                id: c.fsmId,
+                ...payload
+            })
+        );
+        return [promise, requestId, err];
+    }
+
+    // sendDetachedSync() sends a detached (non-lifecycle) request to the FSM and waits for a response.
+    // It does not depend on a Contract context and allocates its own request id.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async sendDetachedSync(payload: any): Promise<[any | null, IPluginError | null]> {
+        const [promise, requestId, err] = this.sendDetachedAsync(payload);
+        if (err) {
+            return [null, err];
+        }
+        return await this.waitForResponse(promise, requestId);
+    }
+
+    // sendDetachedAsync() sends a detached (non-lifecycle) request without waiting for a response.
+    // Unlike sendToPluginAsync(), it generates its own fresh random request id and does not track a Contract.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sendDetachedAsync(payload: any): [Promise<any>, string, IPluginError | null] {
+        // generate a fresh random request id (not tied to any in-flight FSM request)
+        const requestIdLong = Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
+        const requestId = normalizeId(requestIdLong);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let resolvePromise: (value: any) => void;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const promise = new Promise<any>((resolve) => {
+            resolvePromise = resolve;
+        });
+        this.pending.set(requestId, { resolve: resolvePromise! });
+        const err = this.sendProtoMsg(
+            types.PluginToFSM.create({
+                id: requestIdLong,
+                ...payload
+            })
+        );
+        // clean up on send error
+        if (err) {
+            this.pending.delete(requestId);
+        }
         return [promise, requestId, err];
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async waitForResponse(promise: Promise<any>, requestId: string): Promise<[any | null, IPluginError | null]> {
+    async waitForResponse(
+        promise: Promise<any>,
+        requestId: string
+    ): Promise<[any | null, IPluginError | null]> {
         const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("timeout")), 10000)
+            setTimeout(() => reject(new Error('timeout')), 10000)
         );
         try {
             const response = await Promise.race([promise, timeoutPromise]);
@@ -317,18 +400,25 @@ export class Plugin {
     }
 }
 
-// StartPlugin() creates and starts a plugin
-export function StartPlugin(c: Config): void {
+// StartPlugin() creates and starts a plugin, returning the running Plugin so builders can
+// access detached capabilities (e.g. queryState) to back their own custom RPC endpoints.
+export function StartPlugin(c: Config): Plugin {
+    // log the build marker so the running version is obvious in the plugin log
+    console.log(`==== STARTING ${PLUGIN_BUILD} ====`);
     const sockPath = path.join(c.DataDirPath, socketPath);
+
+    // construct the plugin up front so callers get the running instance immediately; the
+    // underlying socket is (re)assigned each time we successfully (re)connect below.
+    const plugin = new Plugin(c, null as unknown as net.Socket, ContractConfigValue);
 
     const tryConnect = (): void => {
         const conn = net.createConnection(sockPath);
 
         conn.on('connect', () => {
-            console.log("Connected to plugin socket");
-            const p = new Plugin(c, conn, ContractConfigValue);
-            p.ListenForInbound();
-            p.Handshake().then((err) => {
+            console.log('Connected to plugin socket');
+            plugin.conn = conn;
+            plugin.ListenForInbound();
+            plugin.Handshake().then((err) => {
                 if (err) {
                     console.error(err.msg);
                     process.exit(1);
@@ -343,6 +433,7 @@ export function StartPlugin(c: Config): void {
     };
 
     tryConnect();
+    return plugin;
 }
 
 // Initialize contract references after module load
@@ -372,7 +463,10 @@ export function Marshal(message: any): [Uint8Array | null, IPluginError | null] 
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function Unmarshal<T>(protoBytes: Uint8Array | Buffer, MessageType: any): [T | null, IPluginError | null] {
+export function Unmarshal<T>(
+    protoBytes: Uint8Array | Buffer,
+    MessageType: any
+): [T | null, IPluginError | null] {
     if (!protoBytes || protoBytes.length === 0) {
         return [null, null];
     }
@@ -386,15 +480,15 @@ export function Unmarshal<T>(protoBytes: Uint8Array | Buffer, MessageType: any):
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function FromAny(any: any): [any | null, string | null, IPluginError | null] {
     if (!any || !any.value) {
-        return [null, null, ErrFromAny(new Error("any is null or has no value"))];
+        return [null, null, ErrFromAny(new Error('any is null or has no value'))];
     }
-    
+
     // Check both typeUrl and type_url (protobuf field name variations)
-    const typeUrl = any.typeUrl || any.type_url || "";
-    
+    const typeUrl = any.typeUrl || any.type_url || '';
+
     try {
-        if (typeUrl.includes("MessageSend")) {
-            return [types.MessageSend.decode(any.value), "MessageSend", null];
+        if (typeUrl.includes('MessageSend')) {
+            return [types.MessageSend.decode(any.value), 'MessageSend', null];
         }
         // NOTE: To add new message types, see TUTORIAL.md
         return [null, null, ErrInvalidMessageCast()];

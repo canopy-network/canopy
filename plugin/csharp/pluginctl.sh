@@ -1,14 +1,87 @@
 #!/bin/bash
 # pluginctl.sh - Control script for managing the csharp-plugin binary
-# Usage: ./pluginctl.sh {start|stop|status|restart|build}
+# Usage: ./pluginctl.sh {start|stop|status|restart}
 # Configuration variables for paths and files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BINARY_PATH="$SCRIPT_DIR/bin/Debug/net9.0/CanopyPlugin"
+# Persistent plugin home under the data dir (set by canopy, else default location).
+PLUGIN_HOME="${CANOPY_PLUGIN_HOME:-${CANOPY_DATA_DIR:-$HOME/.canopy}/plugin/$(basename "$SCRIPT_DIR")}"
+mkdir -p "$PLUGIN_HOME"
+# Prefer a downloaded update in the data dir, else the binary baked in the image.
+if [ -f "$PLUGIN_HOME/bin/CanopyPlugin" ] || ls "$PLUGIN_HOME"/csharp-plugin-linux-*.tar.gz >/dev/null 2>&1; then
+    RUN_HOME="$PLUGIN_HOME"
+elif [ -f "$SCRIPT_DIR/bin/CanopyPlugin" ]; then
+    RUN_HOME="$SCRIPT_DIR"
+else
+    RUN_HOME="$PLUGIN_HOME"
+fi
+BINARY_PATH="$RUN_HOME/bin/CanopyPlugin"
 PID_FILE="/tmp/plugin/csharp-plugin.pid"
 LOG_FILE="/tmp/plugin/csharp-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
 # Timeout in seconds for graceful shutdown
 STOP_TIMEOUT=10
+
+# Detect system architecture
+get_arch() {
+    local arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64)
+            echo "x64"
+            ;;
+        aarch64|arm64)
+            echo "arm64"
+            ;;
+        *)
+            echo "x64"  # Default to x64
+            ;;
+    esac
+}
+
+# Detect if running on musl libc (Alpine)
+is_musl() {
+    [ -f /lib/ld-musl-*.so.1 ] 2>/dev/null && return 0
+    return 1
+}
+
+# Extract tarball if binary doesn't exist
+extract_if_needed() {
+    # If binary already exists, nothing to do
+    if [ -f "$BINARY_PATH" ]; then
+        return 0
+    fi
+    
+    # Check for architecture-specific tarball
+    local arch=$(get_arch)
+    local tarball=""
+    
+    # Try musl tarball first on Alpine, then glibc
+    if is_musl; then
+        tarball="$RUN_HOME/csharp-plugin-linux-musl-${arch}.tar.gz"
+    fi
+    
+    # Fall back to glibc tarball if musl not found or not on Alpine
+    if [ -z "$tarball" ] || [ ! -f "$tarball" ]; then
+        tarball="$RUN_HOME/csharp-plugin-linux-${arch}.tar.gz"
+    fi
+    
+    if [ -f "$tarball" ]; then
+        echo "Extracting $tarball..."
+        # Clear old bin directory to avoid leftover files from previous builds
+        rm -rf "$RUN_HOME/bin"
+        mkdir -p "$RUN_HOME/bin"
+        tar -xzf "$tarball" -C "$RUN_HOME/bin"
+        if [ $? -eq 0 ] && [ -f "$BINARY_PATH" ]; then
+            echo "Extraction complete"
+            return 0
+        else
+            echo "Error: Failed to extract from $tarball"
+            return 1
+        fi
+    fi
+    
+    return 1
+}
+
 # Check if the process is running based on PID file
 is_running() {
     # Return 1 if PID file doesn't exist
@@ -38,18 +111,6 @@ cleanup_pid() {
         rm -f "$PID_FILE"
     fi
 }
-# Build the csharp-plugin binary
-build() {
-    echo "Building csharp-plugin..."
-    cd "$SCRIPT_DIR" && dotnet build
-    if [ $? -eq 0 ]; then
-        echo "Build completed successfully"
-        return 0
-    else
-        echo "Error: Build failed"
-        return 1
-    fi
-}
 # Start the csharp-plugin binary
 start() {
     # Check if already running
@@ -59,14 +120,17 @@ start() {
     fi
     # Clean up any stale PID file
     cleanup_pid
-    # Check if binary exists and is executable
+    # Try to extract from tarball if binary doesn't exist
+    extract_if_needed
+    # Check if binary exists
     if [ ! -f "$BINARY_PATH" ]; then
-        echo "Binary not found at $BINARY_PATH, building..."
-        build || return 1
+        echo "Error: Binary not found at $BINARY_PATH"
+        echo "Run 'make build' or download csharp-plugin-linux-$(get_arch).tar.gz"
+        return 1
     fi
     # Ensure plugin directory exists
     mkdir -p "$PLUGIN_DIR"
-    # Start the binary in background with nohup
+    # Start the self-contained binary in background with nohup
     echo "Starting csharp-plugin..."
     nohup "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
     local pid=$!
@@ -160,11 +224,8 @@ case "${1:-}" in
     restart)
         restart
         ;;
-    build)
-        build
-        ;;
     *)
-        echo "Usage: $0 {start|stop|status|restart|build}"
+        echo "Usage: $0 {start|stop|status|restart}"
         exit 1
         ;;
 esac

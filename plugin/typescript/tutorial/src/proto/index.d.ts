@@ -11,6 +11,9 @@ export namespace types {
 
         /** Account amount */
         amount?: (number|Long|null);
+
+        /** Account nonce */
+        nonce?: (number|Long|null);
     }
 
     /** Represents an Account. */
@@ -27,6 +30,9 @@ export namespace types {
 
         /** Account amount. */
         public amount: (number|Long);
+
+        /** Account nonce. */
+        public nonce: (number|Long);
 
         /**
          * Creates a new Account instance using the specified properties.
@@ -478,6 +484,9 @@ export namespace types {
         /** FSMToPlugin stateWrite */
         stateWrite?: (types.IPluginStateWriteResponse|null);
 
+        /** FSMToPlugin query */
+        query?: (types.IPluginQueryResponse|null);
+
         /** FSMToPlugin error */
         error?: (types.IPluginError|null);
     }
@@ -518,11 +527,14 @@ export namespace types {
         /** FSMToPlugin stateWrite. */
         public stateWrite?: (types.IPluginStateWriteResponse|null);
 
+        /** FSMToPlugin query. */
+        public query?: (types.IPluginQueryResponse|null);
+
         /** FSMToPlugin error. */
         public error?: (types.IPluginError|null);
 
         /** FSMToPlugin payload. */
-        public payload?: ("config"|"genesis"|"begin"|"check"|"deliver"|"end"|"stateRead"|"stateWrite"|"error");
+        public payload?: ("config"|"genesis"|"begin"|"check"|"deliver"|"end"|"stateRead"|"stateWrite"|"query"|"error");
 
         /**
          * Creates a new FSMToPlugin instance using the specified properties.
@@ -631,6 +643,9 @@ export namespace types {
 
         /** PluginToFSM stateWrite */
         stateWrite?: (types.IPluginStateWriteRequest|null);
+
+        /** PluginToFSM query */
+        query?: (types.IPluginQueryRequest|null);
     }
 
     /** Represents a PluginToFSM. */
@@ -669,8 +684,11 @@ export namespace types {
         /** PluginToFSM stateWrite. */
         public stateWrite?: (types.IPluginStateWriteRequest|null);
 
+        /** PluginToFSM query. */
+        public query?: (types.IPluginQueryRequest|null);
+
         /** PluginToFSM payload. */
-        public payload?: ("config"|"genesis"|"begin"|"check"|"deliver"|"end"|"stateRead"|"stateWrite");
+        public payload?: ("config"|"genesis"|"begin"|"check"|"deliver"|"end"|"stateRead"|"stateWrite"|"query");
 
         /**
          * Creates a new PluginToFSM instance using the specified properties.
@@ -773,6 +791,9 @@ export namespace types {
 
         /** PluginConfig eventTypeUrls */
         eventTypeUrls?: (string[]|null);
+
+        /** PluginConfig customStatePrefixes */
+        customStatePrefixes?: (Uint8Array[]|null);
     }
 
     /** Represents a PluginConfig. */
@@ -804,6 +825,9 @@ export namespace types {
 
         /** PluginConfig eventTypeUrls. */
         public eventTypeUrls: string[];
+
+        /** PluginConfig customStatePrefixes. */
+        public customStatePrefixes: Uint8Array[];
 
         /**
          * Creates a new PluginConfig instance using the specified properties.
@@ -1379,6 +1403,9 @@ export namespace types {
 
         /** PluginCheckRequest tx */
         tx?: (types.ITransaction|null);
+
+        /** PluginCheckRequest height */
+        height?: (number|Long|null);
     }
 
     /** Represents a PluginCheckRequest. */
@@ -1392,6 +1419,9 @@ export namespace types {
 
         /** PluginCheckRequest tx. */
         public tx?: (types.ITransaction|null);
+
+        /** PluginCheckRequest height. */
+        public height: (number|Long);
 
         /**
          * Creates a new PluginCheckRequest instance using the specified properties.
@@ -1585,6 +1615,9 @@ export namespace types {
 
         /** PluginDeliverRequest tx */
         tx?: (types.ITransaction|null);
+
+        /** PluginDeliverRequest height */
+        height?: (number|Long|null);
     }
 
     /** Represents a PluginDeliverRequest. */
@@ -1598,6 +1631,9 @@ export namespace types {
 
         /** PluginDeliverRequest tx. */
         public tx?: (types.ITransaction|null);
+
+        /** PluginDeliverRequest height. */
+        public height: (number|Long);
 
         /**
          * Creates a new PluginDeliverRequest instance using the specified properties.
@@ -2089,6 +2125,212 @@ export namespace types {
 
         /**
          * Gets the default type url for PluginError
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a PluginQueryRequest. */
+    interface IPluginQueryRequest {
+
+        /** PluginQueryRequest height */
+        height?: (number|Long|null);
+
+        /** PluginQueryRequest read */
+        read?: (types.IPluginStateReadRequest|null);
+    }
+
+    /** Represents a PluginQueryRequest. */
+    class PluginQueryRequest implements IPluginQueryRequest {
+
+        /**
+         * Constructs a new PluginQueryRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: types.IPluginQueryRequest);
+
+        /** PluginQueryRequest height. */
+        public height: (number|Long);
+
+        /** PluginQueryRequest read. */
+        public read?: (types.IPluginStateReadRequest|null);
+
+        /**
+         * Creates a new PluginQueryRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PluginQueryRequest instance
+         */
+        public static create(properties?: types.IPluginQueryRequest): types.PluginQueryRequest;
+
+        /**
+         * Encodes the specified PluginQueryRequest message. Does not implicitly {@link types.PluginQueryRequest.verify|verify} messages.
+         * @param message PluginQueryRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: types.IPluginQueryRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PluginQueryRequest message, length delimited. Does not implicitly {@link types.PluginQueryRequest.verify|verify} messages.
+         * @param message PluginQueryRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: types.IPluginQueryRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PluginQueryRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PluginQueryRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginQueryRequest;
+
+        /**
+         * Decodes a PluginQueryRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PluginQueryRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginQueryRequest;
+
+        /**
+         * Verifies a PluginQueryRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PluginQueryRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PluginQueryRequest
+         */
+        public static fromObject(object: { [k: string]: any }): types.PluginQueryRequest;
+
+        /**
+         * Creates a plain object from a PluginQueryRequest message. Also converts values to other types if specified.
+         * @param message PluginQueryRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: types.PluginQueryRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PluginQueryRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PluginQueryRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a PluginQueryResponse. */
+    interface IPluginQueryResponse {
+
+        /** PluginQueryResponse read */
+        read?: (types.IPluginStateReadResponse|null);
+
+        /** PluginQueryResponse error */
+        error?: (types.IPluginError|null);
+    }
+
+    /** Represents a PluginQueryResponse. */
+    class PluginQueryResponse implements IPluginQueryResponse {
+
+        /**
+         * Constructs a new PluginQueryResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: types.IPluginQueryResponse);
+
+        /** PluginQueryResponse read. */
+        public read?: (types.IPluginStateReadResponse|null);
+
+        /** PluginQueryResponse error. */
+        public error?: (types.IPluginError|null);
+
+        /**
+         * Creates a new PluginQueryResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PluginQueryResponse instance
+         */
+        public static create(properties?: types.IPluginQueryResponse): types.PluginQueryResponse;
+
+        /**
+         * Encodes the specified PluginQueryResponse message. Does not implicitly {@link types.PluginQueryResponse.verify|verify} messages.
+         * @param message PluginQueryResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: types.IPluginQueryResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PluginQueryResponse message, length delimited. Does not implicitly {@link types.PluginQueryResponse.verify|verify} messages.
+         * @param message PluginQueryResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: types.IPluginQueryResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PluginQueryResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PluginQueryResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginQueryResponse;
+
+        /**
+         * Decodes a PluginQueryResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PluginQueryResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginQueryResponse;
+
+        /**
+         * Verifies a PluginQueryResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PluginQueryResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PluginQueryResponse
+         */
+        public static fromObject(object: { [k: string]: any }): types.PluginQueryResponse;
+
+        /**
+         * Creates a plain object from a PluginQueryResponse message. Also converts values to other types if specified.
+         * @param message PluginQueryResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: types.PluginQueryResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PluginQueryResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PluginQueryResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -3154,6 +3396,9 @@ export namespace types {
 
         /** Transaction chainId */
         chainId?: (number|Long|null);
+
+        /** Transaction nonce */
+        nonce?: (number|Long|null);
     }
 
     /** Represents a Transaction. */
@@ -3191,6 +3436,9 @@ export namespace types {
 
         /** Transaction chainId. */
         public chainId: (number|Long);
+
+        /** Transaction nonce. */
+        public nonce: (number|Long);
 
         /**
          * Creates a new Transaction instance using the specified properties.
@@ -3791,6 +4039,230 @@ export namespace types {
 
         /**
          * Gets the default type url for MessageFaucet
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Faucet. */
+    interface IFaucet {
+
+        /** Faucet recipientAddress */
+        recipientAddress?: (Uint8Array|null);
+
+        /** Faucet totalAmount */
+        totalAmount?: (number|Long|null);
+
+        /** Faucet count */
+        count?: (number|Long|null);
+    }
+
+    /** Represents a Faucet. */
+    class Faucet implements IFaucet {
+
+        /**
+         * Constructs a new Faucet.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: types.IFaucet);
+
+        /** Faucet recipientAddress. */
+        public recipientAddress: Uint8Array;
+
+        /** Faucet totalAmount. */
+        public totalAmount: (number|Long);
+
+        /** Faucet count. */
+        public count: (number|Long);
+
+        /**
+         * Creates a new Faucet instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Faucet instance
+         */
+        public static create(properties?: types.IFaucet): types.Faucet;
+
+        /**
+         * Encodes the specified Faucet message. Does not implicitly {@link types.Faucet.verify|verify} messages.
+         * @param message Faucet message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: types.IFaucet, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Faucet message, length delimited. Does not implicitly {@link types.Faucet.verify|verify} messages.
+         * @param message Faucet message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: types.IFaucet, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Faucet message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Faucet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.Faucet;
+
+        /**
+         * Decodes a Faucet message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Faucet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.Faucet;
+
+        /**
+         * Verifies a Faucet message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Faucet message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Faucet
+         */
+        public static fromObject(object: { [k: string]: any }): types.Faucet;
+
+        /**
+         * Creates a plain object from a Faucet message. Also converts values to other types if specified.
+         * @param message Faucet
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: types.Faucet, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Faucet to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Faucet
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Reward. */
+    interface IReward {
+
+        /** Reward recipientAddress */
+        recipientAddress?: (Uint8Array|null);
+
+        /** Reward lastAdminAddress */
+        lastAdminAddress?: (Uint8Array|null);
+
+        /** Reward totalAmount */
+        totalAmount?: (number|Long|null);
+
+        /** Reward count */
+        count?: (number|Long|null);
+    }
+
+    /** Represents a Reward. */
+    class Reward implements IReward {
+
+        /**
+         * Constructs a new Reward.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: types.IReward);
+
+        /** Reward recipientAddress. */
+        public recipientAddress: Uint8Array;
+
+        /** Reward lastAdminAddress. */
+        public lastAdminAddress: Uint8Array;
+
+        /** Reward totalAmount. */
+        public totalAmount: (number|Long);
+
+        /** Reward count. */
+        public count: (number|Long);
+
+        /**
+         * Creates a new Reward instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Reward instance
+         */
+        public static create(properties?: types.IReward): types.Reward;
+
+        /**
+         * Encodes the specified Reward message. Does not implicitly {@link types.Reward.verify|verify} messages.
+         * @param message Reward message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: types.IReward, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Reward message, length delimited. Does not implicitly {@link types.Reward.verify|verify} messages.
+         * @param message Reward message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: types.IReward, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Reward message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Reward
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.Reward;
+
+        /**
+         * Decodes a Reward message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Reward
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.Reward;
+
+        /**
+         * Verifies a Reward message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Reward message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Reward
+         */
+        public static fromObject(object: { [k: string]: any }): types.Reward;
+
+        /**
+         * Creates a plain object from a Reward message. Also converts values to other types if specified.
+         * @param message Reward
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: types.Reward, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Reward to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Reward
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

@@ -29,7 +29,9 @@ type Account struct {
 	// address: the short version of a public key
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// amount: the balance of funds the account has
-	Amount        uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"` // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
+	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	// nonce: the minimum accepted sequence number for nonce-protected transactions
+	Nonce         uint64 `protobuf:"varint,7,opt,name=nonce,proto3" json:"nonce,omitempty"` // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -74,6 +76,13 @@ func (x *Account) GetAddress() []byte {
 func (x *Account) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
+	}
+	return 0
+}
+
+func (x *Account) GetNonce() uint64 {
+	if x != nil {
+		return x.Nonce
 	}
 	return 0
 }
@@ -139,10 +148,11 @@ var File_account_proto protoreflect.FileDescriptor
 
 const file_account_proto_rawDesc = "" +
 	"\n" +
-	"\raccount.proto\x12\x05types\";\n" +
+	"\raccount.proto\x12\x05types\"Q\n" +
 	"\aAccount\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x04R\x06amount\".\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12\x14\n" +
+	"\x05nonce\x18\a \x01(\x04R\x05nonce\".\n" +
 	"\x04Pool\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amountB3Z1github.com/canopy-network/go-plugin-test/contractb\x06proto3"

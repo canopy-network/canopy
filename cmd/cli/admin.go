@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/canopy-network/canopy/store"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -23,6 +25,7 @@ var (
 	nick            string
 	data            string
 	fee             uint64
+	mint            bool
 	delegate        bool
 	earlyWithdrawal bool
 	sim             bool
@@ -35,6 +38,7 @@ func init() {
 	adminCmd.PersistentFlags().Uint64Var(&fee, "fee", 0, "custom fee, by default will use the minimum fee")
 	txStakeCmd.PersistentFlags().BoolVar(&delegate, "delegate", false, "delegate tokens to committee(s) only without actual validator operation")
 	txEditStakeCmd.PersistentFlags().BoolVar(&delegate, "delegate", false, "delegate tokens to committee(s) only without actual validator operation")
+	txDAOTransferCmd.PersistentFlags().BoolVar(&mint, "mint", false, "mint the transfer amount into the DAO pool before executing the treasury grant")
 	txStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
 	txEditStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
 	txCreateOrderCmd.PersistentFlags().StringVar(&data, "data", "", "data for create order")
@@ -45,6 +49,7 @@ func init() {
 	adminCmd.AddCommand(ksDeleteCmd)
 	adminCmd.AddCommand(ksGetCmd)
 	adminCmd.AddCommand(txSendCmd)
+	adminCmd.AddCommand(txSendVestingCmd)
 	adminCmd.AddCommand(txStakeCmd)
 	adminCmd.AddCommand(txEditStakeCmd)
 	adminCmd.AddCommand(txUnstakeCmd)
@@ -72,6 +77,7 @@ func init() {
 	adminCmd.AddCommand(approveProposalCmd)
 	adminCmd.AddCommand(rejectProposalCmd)
 	adminCmd.AddCommand(deleteVoteCmd)
+	adminCmd.AddCommand(rollbackCmd)
 }
 
 var (
@@ -118,7 +124,7 @@ var (
 		Short: "delete the key associated with the address or nickname from the keystore",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			writeToConsole(client.KeystoreDelete(argGetAddrOrNickname(args[0])))
+			writeToConsole(client.KeystoreDelete(argGetAddrOrNickname(args[0]), getPassword()))
 		},
 	}
 
@@ -138,6 +144,26 @@ var (
 		Args:    cobra.MinimumNArgs(3),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeTxResultToConsole(client.TxSend(argGetAddrOrNickname(args[0]), argGetAddr(args[1]), uint64(argToInt(args[2])), getPassword(), !sim, fee))
+		},
+	}
+
+	txSendVestingCmd = &cobra.Command{
+		Use:     "tx-send-vesting <address or nickname> <to-address> <amount> <vesting-start-height> <vesting-cliff-height> <vesting-end-height> --fee=10000 --simulate=true",
+		Short:   "send an amount to another address with a recipient vesting schedule",
+		Example: "tx-send-vesting dfd3c8dff19da7682f7fe5fde062c813b55c9eee eed6c9dff19da7682f7fe5fde062c813b42c7abc 10000 100 120 200",
+		Args:    cobra.MinimumNArgs(6),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxSendVesting(
+				argGetAddrOrNickname(args[0]),
+				argGetAddr(args[1]),
+				uint64(argToInt(args[2])),
+				uint64(argToInt(args[3])),
+				uint64(argToInt(args[4])),
+				uint64(argToInt(args[5])),
+				getPassword(),
+				!sim,
+				fee,
+			))
 		},
 	}
 
@@ -203,11 +229,11 @@ var (
 	}
 
 	txDAOTransferCmd = &cobra.Command{
-		Use:   "tx-dao-transfer <address or nickname> <amount> <proposal-start-block> <proposal-end-block> --fee=10000 --simulate=true",
+		Use:   "tx-dao-transfer <address or nickname> <amount> <proposal-start-block> <proposal-end-block> --mint --fee=10000 --simulate=true",
 		Short: "propose a treasury subsidy - use the simulate flag to generate json only",
 		Args:  cobra.MinimumNArgs(4),
 		Run: func(cmd *cobra.Command, args []string) {
-			writeTxResultToConsole(client.TxDaoTransfer(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), getPassword(), !sim, fee))
+			writeTxResultToConsole(client.TxDaoTransfer(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), getPassword(), !sim, fee, mint))
 		},
 	}
 
@@ -391,6 +417,36 @@ var (
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.DelVote(args[0]))
+		},
+	}
+
+	rollbackCmd = &cobra.Command{
+		Use:   "rollback <height>",
+		Short: "rollback local blockchain state to a specific height (node must be stopped)",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			targetHeight, err := strconv.ParseUint(args[0], 10, 64)
+			if err != nil {
+				l.Fatal(err.Error())
+			}
+			db, err := store.New(config, nil, l)
+			if err != nil {
+				l.Fatal(err.Error())
+			}
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					l.Error(closeErr.Error())
+				}
+			}()
+			st, ok := db.(*store.Store)
+			if !ok {
+				l.Fatal("unexpected store type for rollback")
+			}
+			currentHeight := st.Version()
+			if err = st.Rollback(targetHeight); err != nil {
+				l.Fatal(err.Error())
+			}
+			writeToConsole(fmt.Sprintf("Rolled back local chain from height %d to %d", currentHeight, targetHeight), nil)
 		},
 	}
 )

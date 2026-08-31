@@ -15,6 +15,7 @@ plugin/python/
 │   ├── contract.py          # Transaction handlers (CheckTx, DeliverTx)
 │   ├── error.py             # Error types matching Go implementation
 │   ├── plugin.py            # Socket communication with FSM
+│   ├── rpc.py               # Skeleton HTTP server for custom RPC endpoints (no routes by default)
 │   └── proto/               # Protobuf definitions and generated code
 │       ├── __init__.py      # Proto type exports
 │       ├── account.proto    # Account and Pool state types
@@ -73,7 +74,14 @@ Transaction message definitions. Currently supports:
 - State is stored in a key-value database on the FSM side
 - Plugin reads/writes state via `state_read()` and `state_write()` async methods
 - Keys are generated with length-prefixed byte arrays (see `join_len_prefix()`)
-- State prefixes: `0x01` = accounts, `0x02` = pools, `0x07` = params
+
+#### Key Prefixes
+- `0x01` (1) - Account storage (shared with core; plugins may interoperate)
+- `0x02` (2) - Pool storage (shared with core; plugins may interoperate)
+- `0x07` (7) - Governance parameters
+- `0x64` (100) / `0x65` (101) - Example plugin-owned custom records (faucet/reward) **added by the tutorial**, not part of the base plugin
+
+> **Avoid prefix collisions:** the plugin shares Canopy's FSM keyspace. Canopy reserves the single-byte prefixes `1-15` for its own state (accounts, pools, validators, committees, params, …). Custom plugin records **must** use prefixes outside that range (e.g. `100`, `101`). Declare them in `CONTRACT_CONFIG["custom_state_prefixes"]`; Canopy panics at handshake — before the plugin starts — if any declared prefix collides, and the core FSM additionally rejects any write to a reserved prefix.
 
 ### Transaction Flow
 1. FSM sends `check` request → Plugin validates statelessly, returns authorized signers
@@ -84,6 +92,16 @@ Transaction message definitions. Currently supports:
 - Plugin uses `asyncio` for concurrent request handling
 - `check_tx()` and `deliver_tx()` are async methods
 - Multiple transactions can be processed concurrently
+
+## Adding Custom RPC Endpoints
+
+A plugin can expose its own read-only HTTP endpoints for chain-specific data (e.g. `/v1/query/faucets`, `/v1/query/rewards`). The plugin owns its HTTP server entirely — Canopy never needs to know about these routes. See `TUTORIAL.md` "Step 5b: Expose Custom RPC Endpoints" for the full walkthrough.
+
+1. **Persist queryable records during `deliver_tx`** — write a small protobuf record to state under a plugin-owned key prefix (e.g. `Faucet` under `b"\x64"` / 100 via `key_for_faucet(addr)`). Endpoints can only return data that lives in state.
+2. **Declare the prefix** — add every custom record prefix to `CONTRACT_CONFIG["custom_state_prefixes"]` (in `contract/contract.py`). Canopy validates this at handshake and **panics before the plugin starts** if a prefix collides with a core-reserved prefix (`1-15`). See "Key Prefixes" above.
+3. **Register routes** by adding them to the skeleton `contract/rpc.py`, which already exists (its `start_rpc_server()` registers **no routes by default**) and is already started from `main.py` with `start_rpc_server(plugin)`. You only add your routes + handlers (backed by `query_state`); add route dispatch in `PluginRPCHandler.do_GET`. The server uses the Python standard library `http.server` (`ThreadingHTTPServer`) on a background daemon thread — add as many routes as you want.
+4. **Back each handler with `query_state`** — the detached, read-only query path on the `Plugin` class (`contract/plugin.py`): `await plugin.query_state(height, read)` returns raw key/value state at a historical height (`0` = latest committed). It allocates its own random request id so it is safe to call outside the tx/block lifecycle. Because the HTTP server runs on its own thread, each handler schedules the coroutine onto the plugin's asyncio loop via `asyncio.run_coroutine_threadsafe(...)` and blocks for the result. Use a single-key read (`key_for_faucet(addr)`) for one record, or a range read over the prefix (`faucet_prefix()`) to list all records. Decode the raw bytes into your own protobuf type and shape the JSON response however you like.
+5. **Listen address** comes from the `rpc_address` config field (default `0.0.0.0:50010`). The RPC server is **optional and non-fatal**: set `rpc_address` to empty to disable it, and a startup/bind failure (e.g. port already in use) is logged without crashing the plugin.
 
 ## Common Tasks
 
@@ -132,8 +150,68 @@ make test
 # With coverage
 make test-cov
 
-# Tutorial integration test (requires running Canopy node)
+# Tutorial integration tests (requires a running Canopy node with the python plugin).
+# `make test` runs BOTH the transaction tests and the custom RPC endpoints test
+# (/v1/query/faucets, /v1/query/rewards); the latter needs the plugin's RPC server on port 50010.
 cd tutorial && make test
+```
+
+### Running with Docker
+
+The Python plugin can be run in a Docker container that includes both Canopy and the plugin.
+
+#### Build the Docker Image
+
+From the repository root:
+
+```bash
+make docker/plugin PLUGIN=python
+```
+
+This builds a Docker image named `canopy-python` that contains:
+- The Canopy binary
+- The Python plugin with virtual environment
+- Python 3.12 runtime
+- Pre-configured `config.json` with `"plugin": "python"`
+
+#### Run the Container
+
+```bash
+make docker/run-python
+```
+
+Or manually with volume mount for persistent data:
+
+```bash
+docker run -v ~/.canopy:/root/.canopy canopy-python
+```
+
+#### Expose Ports for Testing
+
+To run tests against the containerized Canopy, expose the RPC ports:
+
+```bash
+docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-python
+```
+
+| Port | Service |
+|------|---------|
+| 50002 | RPC API (transactions, queries) |
+| 50003 | Admin RPC (keystore operations) |
+
+Now you can run tests from your host machine that connect to `localhost:50002`.
+
+#### View Logs
+
+```bash
+# Get the container ID
+docker ps
+
+# View Canopy logs
+docker exec -it <container_id> tail -f /root/.canopy/logs/log
+
+# View plugin logs
+docker exec -it <container_id> tail -f /tmp/plugin/python-plugin.log
 ```
 
 ### Regenerating Protobuf Code

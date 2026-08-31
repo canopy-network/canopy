@@ -94,10 +94,12 @@ func (s *Server) KeystoreImportRaw(w http.ResponseWriter, r *http.Request, _ htt
 func (s *Server) KeystoreDelete(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the keystore handler with a callback to perform the deletion
 	s.keystoreHandler(w, r, func(k *crypto.Keystore, ptr *keystoreRequest) (any, error) {
-		k.DeleteKey(crypto.DeleteOpts{
+		if err := k.DeleteKey(ptr.Password, crypto.DeleteOpts{
 			Address:  ptr.Address,
 			Nickname: ptr.Nickname,
-		})
+		}); err != nil {
+			return nil, err
+		}
 		// Update the keystore on disk and return the account address
 		return ptr.Address, k.SaveToFile(s.config.DataDirPath)
 	})
@@ -132,6 +134,32 @@ func (s *Server) TransactionSend(w http.ResponseWriter, r *http.Request, _ httpr
 
 		// Create and return the transaction to be sent
 		return fsm.NewSendTransaction(p, toAddress, ptr.Amount, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+	})
+}
+
+// TransactionSendVesting sends an amount to another address with a recipient vesting schedule.
+func (s *Server) TransactionSendVesting(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		toAddress, err := crypto.NewAddressFromString(ptr.Output)
+		if err != nil {
+			return nil, err
+		}
+		if err = s.getFeeFromState(ptr, fsm.MessageSendName); err != nil {
+			return nil, err
+		}
+		return fsm.NewSendTransactionWithVesting(
+			p,
+			toAddress,
+			ptr.Amount,
+			ptr.VestingStartHeight,
+			ptr.VestingCliffHeight,
+			ptr.VestingEndHeight,
+			s.config.NetworkID,
+			s.config.ChainId,
+			ptr.Fee,
+			s.controller.ChainHeight(),
+			ptr.Memo,
+		)
 	})
 }
 
@@ -261,7 +289,7 @@ func (s *Server) TransactionDAOTransfer(w http.ResponseWriter, r *http.Request, 
 			return nil, err
 		}
 		// Create and return the transaction to be sent
-		return fsm.NewDAOTransferTx(p, ptr.Amount, ptr.StartBlock, ptr.EndBlock, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+		return fsm.NewDAOTransferTx(p, ptr.Amount, ptr.StartBlock, ptr.EndBlock, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Mint, ptr.Memo)
 	})
 }
 
@@ -499,6 +527,27 @@ func (s *Server) ConsensusInfo(w http.ResponseWriter, r *http.Request, _ httprou
 	if _, e := w.Write(summary); e != nil {
 		s.logger.Error(e.Error())
 	}
+}
+
+// ConsensusForceRound schedules coordinated recovery at the next pacemaker.
+func (s *Server) ConsensusForceRound(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	request := new(struct {
+		Round        uint64  `json:"round"`
+		TimeoutRound *uint64 `json:"timeoutRound,omitempty"`
+		UnixTimeMS   int64   `json:"unixTimeMS"`
+	})
+	if !unmarshal(w, r, request) {
+		return
+	}
+
+	s.controller.Lock()
+	err := s.controller.Consensus.ScheduleForceRound(request.Round, time.UnixMilli(request.UnixTimeMS), request.TimeoutRound)
+	s.controller.Unlock()
+	if err != nil {
+		write(w, lib.NewError(lib.NoCode, lib.RPCModule, err.Error()), http.StatusBadRequest)
+		return
+	}
+	write(w, request, http.StatusOK)
 }
 
 // PeerInfo retrieves node peer information

@@ -23,7 +23,10 @@ const (
 	MaxWithdrawsPerDexBatch = 5_000
 	MaxOrdersPerDexBatch    = 10_000
 	MaxReceipts             = MaxOrdersPerDexBatch
-	MaxLiquidityProviders   = 50_000
+	MaxLiquidityProviders   = 5_000
+	// MaxOrdersSettledPerBlock caps DEX orders settled per block so begin_block can't exceed the consensus
+	// round budget; orders beyond the cap are failed (receipt 0) and refunded to the seller on the origin chain
+	MaxOrdersSettledPerBlock = 250
 )
 
 // MaxBlockHeaderSize is a consensus breaking change because it affects how the state machine
@@ -180,7 +183,7 @@ func (x *QuorumCertificate) CheckProposalBasic(height, networkId, chainId uint64
 		return nil, ErrMismatchHeaderBlockHash()
 	}
 	// ensure the results aren't empty
-	if x.Results == nil && x.Results.RewardRecipients != nil {
+	if x.Results == nil {
 		return nil, ErrNilCertResults()
 	}
 	// exit
@@ -260,7 +263,7 @@ func (x *QuorumCertificate) GetNonSigners(vs *ConsensusValidators) (nonSignerPub
 		// exit with empty qc error
 		return nil, 0, ErrEmptyQuorumCertificate()
 	}
-	// retrieve the non-signers from the signature using teh validator set
+	// retrieve the non-signers from the signature using the validator set
 	return x.Signature.GetNonSigners(vs)
 }
 
@@ -441,6 +444,9 @@ func (x *RewardRecipients) CheckBasic() (err ErrorI) {
 			return ErrInvalidAddress()
 		}
 		// add to total percent
+		if chainMap[pp.ChainId] > math.MaxUint64-pp.Percent {
+			return ErrInvalidPercentAllocation()
+		}
 		chainMap[pp.ChainId] += pp.Percent
 		// ensure the percent doesn't exceed 100
 		if chainMap[pp.ChainId] > 100 {
@@ -652,6 +658,10 @@ func (x *Orders) CheckBasic() (err ErrorI) {
 		// exit with no error
 		return
 	}
+	// enforce caps for all certificate order lists
+	if len(x.LockOrders) > MaxOrdersPerDexBatch || len(x.ResetOrders) > MaxOrdersPerDexBatch || len(x.CloseOrders) > MaxOrdersPerDexBatch {
+		return ErrTooManyDexOrders()
+	}
 	// for each lock order
 	for _, lock := range x.LockOrders {
 		// if the lock order is empty
@@ -668,6 +678,10 @@ func (x *Orders) CheckBasic() (err ErrorI) {
 		if len(lock.BuyerReceiveAddress) != crypto.AddressSize {
 			// exit with address error
 			return ErrInvalidBuyerReceiveAddress()
+		}
+		// ensure deadline is non-zero
+		if lock.BuyerChainDeadline == 0 {
+			return ErrInvalidBuyerDeadline()
 		}
 	}
 	// ensure no duplicates in the resets
@@ -869,21 +883,48 @@ func (x *DexBatch) CheckBasic() (err ErrorI) {
 	if len(x.Deposits) > MaxDepositsPerDexBatch {
 		return ErrTooManyDexDeposits()
 	}
+	// ensure each deposit is valid
+	for _, deposit := range x.Deposits {
+		if deposit == nil {
+			return ErrInvalidArgument()
+		}
+	}
 	// ensure there's not too many withdrawals
 	if len(x.Withdrawals) > MaxWithdrawsPerDexBatch {
 		return ErrTooManyDexWithdraws()
+	}
+	// ensure each withdrawal percent is valid
+	for _, withdrawal := range x.Withdrawals {
+		if withdrawal == nil || withdrawal.Percent == 0 || withdrawal.Percent > 100 {
+			return ErrInvalidPercentAllocation()
+		}
 	}
 	// ensure there's not too many orders
 	if len(x.Orders) > MaxOrdersPerDexBatch {
 		return ErrTooManyDexOrders()
 	}
+	// ensure each order is valid
+	for _, order := range x.Orders {
+		if order == nil {
+			return ErrInvalidArgument()
+		}
+	}
 	// ensure there's not too many receipts
 	if len(x.Receipts) > MaxReceipts {
 		return ErrTooManyDexReceipts()
 	}
-	// ensure there's not too many receipts
+	// ensure there's not too many liquidity providers
 	if len(x.PoolPoints) > MaxLiquidityProviders {
-		return ErrTooManyDexReceipts()
+		return ErrTooManyLiquidityProviders()
+	}
+	// ensure each pool point is valid
+	for _, point := range x.PoolPoints {
+		if point == nil {
+			return ErrInvalidArgument()
+		}
+		if len(point.Address) != crypto.AddressSize {
+			return ErrInvalidAddress()
+		}
 	}
 	// if the block hash size is larger than 100
 	if len(x.ReceiptHash) > 100 {
@@ -1084,12 +1125,17 @@ func (x *CommitteeData) Combine(data *CommitteeData, chainId uint64) (err ErrorI
 		if p.ChainId == chainId {
 			// combine the percents with the existing stubs
 			// percents can/will exceed 100 but are re-normalized using NumberOfSamples later
-			x.addPercents(p.Address, p.Percent, chainId)
+			if err = x.addPercents(p.Address, p.Percent, chainId); err != nil {
+				return
+			}
 		}
 	}
 	// new Proposal purposefully overwrites the Block and Meta of the current Proposal
 	// this is to ensure both Proposals have the latest Block and Meta information
 	// in the case where the caller uses a pattern where there may be a stale Block/Meta
+	if x.NumberOfSamples == math.MaxUint64 {
+		return ErrInvalidPercentAllocation()
+	}
 	*x = CommitteeData{
 		PaymentPercents:        x.PaymentPercents,           // maintain the payment percents
 		NumberOfSamples:        x.NumberOfSamples + 1,       // add to the number of samples
@@ -1102,20 +1148,23 @@ func (x *CommitteeData) Combine(data *CommitteeData, chainId uint64) (err ErrorI
 }
 
 // addPercents() is a helper function that adds reward distribution percents on behalf of an address
-func (x *CommitteeData) addPercents(address []byte, percent, chainId uint64) {
+func (x *CommitteeData) addPercents(address []byte, percent, chainId uint64) ErrorI {
 	// if payment percent is 0 simply exit
 	if percent == 0 {
 		// exit
-		return
+		return nil
 	}
 	// check to see if the address already exists
 	for i, p := range x.PaymentPercents {
 		// if already exists
 		if bytes.Equal(address, p.Address) {
 			// simply add the percent to the previous
+			if x.PaymentPercents[i].Percent > math.MaxUint64-percent {
+				return ErrInvalidPercentAllocation()
+			}
 			x.PaymentPercents[i].Percent += percent
 			// exit
-			return
+			return nil
 		}
 	}
 	// if the address doesn't already exist, append a sample to PaymentPercents
@@ -1124,6 +1173,7 @@ func (x *CommitteeData) addPercents(address []byte, percent, chainId uint64) {
 		Percent: percent,
 		ChainId: chainId,
 	})
+	return nil
 }
 
 // jsonDoubleSigner implements the json.Marshaller and json.Unmarshaler interfaces for double signers

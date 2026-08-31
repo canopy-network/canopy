@@ -6,10 +6,20 @@ This tutorial walks you through implementing two custom transaction types for th
 
 ## Prerequisites
 
+- Go 1.26.0 or higher (required to build Canopy)
 - Python 3.9 or later
 - `protoc` compiler installed (or use `grpcio-tools`)
 - The python plugin base code from `plugin/python`
-- Canopy node (running with the plugin will be explained in Step 7)
+
+## Step 0: Build Canopy
+
+Before working with plugins, build the Canopy binary from the repository root:
+
+```bash
+make build/canopy
+```
+
+This installs the `canopy` binary to your Go bin directory (`~/go/bin/canopy`).
 
 ## Step 1: Define the Protobuf Messages
 
@@ -79,6 +89,7 @@ CONTRACT_CONFIG = {
         "type.googleapis.com/types.MessageFaucet",  # Add here
     ],
     "event_type_urls": [],
+    "custom_state_prefixes": [FAUCET_PREFIX, REWARD_PREFIX],  # Add here
     "file_descriptor_protos": [
         any_pb2.DESCRIPTOR.serialized_pb,
         account_pb2.DESCRIPTOR.serialized_pb,
@@ -90,6 +101,8 @@ CONTRACT_CONFIG = {
 ```
 
 **Important**: The order of `supported_transactions` must match the order of `transaction_type_urls`.
+
+**Important**: Declare every custom record prefix in `custom_state_prefixes`. Canopy reserves single-byte prefixes 1-15 and panics at handshake — before processing any block — if a declared prefix collides with that range, so use prefixes outside 1-15 (e.g. 100, 101) for your own records.
 
 ## Step 5: Add CheckTx Validation
 
@@ -118,22 +131,45 @@ async def check_tx(self, request: PluginCheckRequest) -> PluginCheckResponse:
 
 ### CheckMessageFaucet Implementation
 
+Add this method inside the `Contract` class in `contract/contract.py`, after the existing `_check_message_send` method:
+
 ```python
 def _check_message_faucet(self, msg: MessageFaucet) -> PluginCheckResponse:
-    """CheckMessageFaucet statelessly validates a 'faucet' message."""
-    # Check signer address (must be exactly 20 bytes)
+    """
+    CheckMessageFaucet statelessly validates a 'faucet' message.
+    
+    This is called during mempool validation BEFORE the transaction is included in a block.
+    Faucet is a test transaction that mints tokens to any address without balance checks.
+    
+    Args:
+        msg: The faucet message containing signer_address, recipient_address, and amount
+        
+    Returns:
+        PluginCheckResponse with authorized signers set
+        
+    Raises:
+        PluginError: If any validation fails (invalid address or amount)
+    """
+    # Validate signer address - all Canopy addresses are exactly 20 bytes.
+    # This prevents malformed addresses from entering the mempool.
     if len(msg.signer_address) != 20:
         raise err_invalid_address()
 
-    # Check recipient address (must be exactly 20 bytes)
+    # Validate recipient address - same 20-byte requirement.
+    # The recipient will receive the minted tokens.
     if len(msg.recipient_address) != 20:
         raise err_invalid_address()
 
-    # Check amount (must be greater than 0)
+    # Validate amount - must be greater than zero.
+    # Zero-amount transactions are meaningless and waste block space.
     if msg.amount == 0:
         raise err_invalid_amount()
 
-    # Return authorized signers (signer must sign)
+    # Build and return the successful check response:
+    # - recipient: who receives funds (used for indexing/notifications)
+    # - authorized_signers: list of addresses that MUST sign this transaction.
+    #   The FSM will verify ALL addresses in this list have valid BLS signatures.
+    #   For faucet, only the signer needs to authorize the mint request.
     response = PluginCheckResponse()
     response.recipient = msg.recipient_address
     response.authorized_signers.append(msg.signer_address)
@@ -142,22 +178,42 @@ def _check_message_faucet(self, msg: MessageFaucet) -> PluginCheckResponse:
 
 ### CheckMessageReward Implementation
 
+Add this method inside the `Contract` class in `contract/contract.py`, after `_check_message_faucet`:
+
 ```python
 def _check_message_reward(self, msg: MessageReward) -> PluginCheckResponse:
-    """CheckMessageReward statelessly validates a 'reward' message."""
-    # Check admin address (must be exactly 20 bytes)
+    """
+    CheckMessageReward statelessly validates a 'reward' message.
+    
+    Rewards allow an admin to mint tokens to any recipient address.
+    The admin pays the transaction fee but the recipient gets the tokens.
+    
+    Args:
+        msg: The reward message containing admin_address, recipient_address, and amount
+        
+    Returns:
+        PluginCheckResponse with authorized signers set
+        
+    Raises:
+        PluginError: If any validation fails (invalid address or amount)
+    """
+    # Validate admin address - the admin is the authority who can mint rewards.
+    # In production, you might check against a whitelist of admin addresses.
     if len(msg.admin_address) != 20:
         raise err_invalid_address()
 
-    # Check recipient address (must be exactly 20 bytes)
+    # Validate recipient address - who will receive the minted tokens.
     if len(msg.recipient_address) != 20:
         raise err_invalid_address()
 
-    # Check amount (must be greater than 0)
+    # Validate amount - must be positive to be meaningful.
     if msg.amount == 0:
         raise err_invalid_amount()
 
-    # Return authorized signers (admin must sign)
+    # Build and return the successful check response:
+    # - authorized_signers: the ADMIN must sign to authorize this mint.
+    #   Unlike faucet, the admin (not recipient) must sign, making this
+    #   suitable for controlled token distribution.
     response = PluginCheckResponse()
     response.recipient = msg.recipient_address
     response.authorized_signers.append(msg.admin_address)
@@ -189,21 +245,43 @@ async def deliver_tx(self, request: PluginDeliverRequest) -> PluginDeliverRespon
 
 ### DeliverMessageFaucet Implementation
 
+Add this async method inside the `Contract` class in `contract/contract.py`, after the existing `_deliver_message_send` method:
+
 The faucet transaction mints tokens without requiring the signer to have any balance:
 
 ```python
 async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResponse:
-    """DeliverMessageFaucet handles a 'faucet' message (mints tokens to recipient - no fee, no balance check)."""
+    """
+    DeliverMessageFaucet handles a faucet message by minting tokens to the recipient.
+    
+    This is called AFTER CheckTx passes and the transaction is included in a block.
+    Unlike CheckTx, DeliverTx CAN read and write blockchain state.
+    Faucet is special: it mints tokens without requiring any existing balance (for testing).
+    
+    Args:
+        msg: The faucet message containing recipient_address and amount to mint
+        
+    Returns:
+        PluginDeliverResponse with empty error field on success
+    """
+    # Guard clause: verify the plugin infrastructure is initialized.
+    # plugin is the connection to Canopy FSM; config holds chain settings.
     if not self.plugin or not self.config:
         raise PluginError(1, "plugin", "plugin or config not initialized")
 
-    # Generate query ID
+    # Generate a unique query ID to correlate request/response in batch reads.
+    # When reading multiple keys, each gets a query_id so we can match results.
+    # Use random number in safe JavaScript integer range for compatibility.
     recipient_query_id = random.randint(0, 2**53)
 
-    # Calculate key
+    # Generate the state key for the recipient's account.
+    # key_for_account creates a length-prefixed key: [prefix][address]
+    # This ensures unique keys in the key-value store.
     recipient_key = key_for_account(msg.recipient_address)
 
-    # Read current recipient state
+    # Request the current state of the recipient's account from the FSM.
+    # state_read sends a request over the Unix socket to the Canopy FSM,
+    # which reads from the blockchain's state database.
     response = await self.plugin.state_read(
         self,
         PluginStateReadRequest(
@@ -213,28 +291,36 @@ async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResp
         ),
     )
 
-    # Check for internal error
+    # Check for application-level errors from the FSM read operation.
+    # HasField checks if the optional error field is populated in protobuf.
     if response.HasField("error"):
         result = PluginDeliverResponse()
-        result.error.CopyFrom(response.error)
+        result.error.CopyFrom(response.error)  # Copy error to response
         return result
 
-    # Get recipient bytes
+    # Extract the recipient's current account bytes from the response.
+    # Results are returned with their query_id so we can match them.
+    # If the account doesn't exist yet, recipient_bytes will be None.
     recipient_bytes = None
     for resp in response.results:
         if resp.query_id == recipient_query_id and resp.entries:
             recipient_bytes = resp.entries[0].value
 
-    # Unmarshal recipient account (or create new if doesn't exist)
+    # Unmarshal the protobuf Account message.
+    # If bytes are None, create a new empty Account with default values (amount=0).
     recipient_account = unmarshal(Account, recipient_bytes) if recipient_bytes else Account()
 
-    # Mint tokens to recipient
+    # CORE LOGIC: Add the faucet amount to the recipient's balance.
+    # This is where tokens are "minted" - we simply increase the balance.
+    # No balance check needed because faucet creates tokens from nothing.
     recipient_account.amount += msg.amount
 
-    # Marshal updated state
+    # Marshal the updated account back to protobuf bytes for storage.
     recipient_bytes_new = marshal(recipient_account)
 
-    # Write state changes
+    # Write the updated state back to the blockchain via the FSM.
+    # sets contains key-value pairs to write; deletes would remove keys.
+    # This persists the recipient's new balance to the blockchain.
     write_resp = await self.plugin.state_write(
         self,
         PluginStateWriteRequest(
@@ -244,33 +330,53 @@ async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResp
         ),
     )
 
+    # Build the response, copying any error from the write operation.
     result = PluginDeliverResponse()
     if write_resp.HasField("error"):
         result.error.CopyFrom(write_resp.error)
+    # Empty error field means success
     return result
 ```
 
 ### DeliverMessageReward Implementation
 
+Add this async method inside the `Contract` class in `contract/contract.py`, after `_deliver_message_faucet`:
+
 The reward transaction mints tokens to a recipient, with the admin paying the transaction fee:
 
 ```python
 async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginDeliverResponse:
-    """DeliverMessageReward handles a 'reward' message (mints tokens to recipient)."""
+    """
+    DeliverMessageReward handles a reward message by minting tokens to the recipient.
+    
+    The admin authorizes this transaction and pays the transaction fee.
+    This demonstrates a more complex DeliverTx with multiple account updates.
+    
+    Args:
+        msg: The reward message containing admin_address, recipient_address, and amount
+        fee: The transaction fee that the admin must pay
+        
+    Returns:
+        PluginDeliverResponse with empty error field on success
+    """
+    # Guard clause: verify the plugin infrastructure is initialized.
     if not self.plugin or not self.config:
         raise PluginError(1, "plugin", "plugin or config not initialized")
 
-    # Generate query IDs
+    # Generate unique query IDs for each key to correlate responses with requests.
+    # This is necessary because results may come back in any order.
     admin_query_id = random.randint(0, 2**53)
     recipient_query_id = random.randint(0, 2**53)
     fee_query_id = random.randint(0, 2**53)
 
-    # Calculate keys
-    admin_key = key_for_account(msg.admin_address)
-    recipient_key = key_for_account(msg.recipient_address)
-    fee_pool_key = key_for_fee_pool(self.config.chain_id)
+    # Calculate the state database keys for each entity we need to read/write.
+    # Each key type has a unique prefix to avoid collisions in the key-value store.
+    admin_key = key_for_account(msg.admin_address)        # Admin's account (pays fee)
+    recipient_key = key_for_account(msg.recipient_address) # Recipient's account (gets tokens)
+    fee_pool_key = key_for_fee_pool(self.config.chain_id)  # Fee pool for this chain
 
-    # Read current state
+    # Batch read all three accounts in a single round-trip to the FSM.
+    # This is more efficient than making three separate read requests.
     response = await self.plugin.state_read(
         self,
         PluginStateReadRequest(
@@ -282,13 +388,14 @@ async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginD
         ),
     )
 
-    # Check for internal error
+    # Check for application-level errors from the FSM read operation.
     if response.HasField("error"):
         result = PluginDeliverResponse()
         result.error.CopyFrom(response.error)
         return result
 
-    # Parse results by query_id
+    # Extract each account's bytes from the response, matching by query_id.
+    # None means the account doesn't exist yet (new account).
     admin_bytes = None
     recipient_bytes = None
     fee_pool_bytes = None
@@ -301,28 +408,35 @@ async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginD
         elif resp.query_id == fee_query_id:
             fee_pool_bytes = resp.entries[0].value if resp.entries else None
 
-    # Unmarshal accounts
+    # Unmarshal the protobuf messages using the appropriate type schemas.
+    # If bytes are None, create empty objects with default values (amount=0).
     admin_account = unmarshal(Account, admin_bytes) if admin_bytes else Account()
     recipient_account = unmarshal(Account, recipient_bytes) if recipient_bytes else Account()
     fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
 
-    # Admin must have enough to pay the fee
+    # BUSINESS LOGIC: Verify admin has sufficient funds to pay the transaction fee.
+    # This is a critical check - without it, admins could spam free transactions.
     if admin_account.amount < fee:
         raise err_insufficient_funds()
 
-    # Apply state changes
-    admin_account.amount -= fee  # Admin pays fee
-    recipient_account.amount += msg.amount  # Mint tokens to recipient
+    # CORE STATE CHANGES: Update balances for all three entities.
+    # 1. Deduct fee from admin's balance
+    admin_account.amount -= fee  # Admin pays the transaction fee
+    # 2. Mint new tokens to recipient (this increases total supply!)
+    recipient_account.amount += msg.amount  # Mint tokens (created from nothing)
+    # 3. Add fee to the pool for validator rewards
     fee_pool.amount += fee
 
-    # Marshal updated state
+    # Marshal all updated accounts to protobuf bytes for storage.
     admin_bytes_new = marshal(admin_account)
     recipient_bytes_new = marshal(recipient_account)
     fee_pool_bytes_new = marshal(fee_pool)
 
-    # Write state changes
+    # Write all state changes atomically.
+    # Special case: if admin's balance is now zero, delete their account to save space.
+    # This is a common pattern - zero-balance accounts are removed from state.
     if admin_account.amount == 0:
-        # Delete drained admin account
+        # Admin account is empty - delete it instead of storing zeros.
         write_resp = await self.plugin.state_write(
             self,
             PluginStateWriteRequest(
@@ -330,10 +444,11 @@ async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginD
                     PluginSetOp(key=fee_pool_key, value=fee_pool_bytes_new),
                     PluginSetOp(key=recipient_key, value=recipient_bytes_new),
                 ],
-                deletes=[PluginDeleteOp(key=admin_key)],
+                deletes=[PluginDeleteOp(key=admin_key)],  # Remove empty account
             ),
         )
     else:
+        # Admin still has balance - update all three accounts.
         write_resp = await self.plugin.state_write(
             self,
             PluginStateWriteRequest(
@@ -345,10 +460,114 @@ async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginD
             ),
         )
 
+    # Build the response, copying any error from the write operation.
     result = PluginDeliverResponse()
     if write_resp.HasField("error"):
         result.error.CopyFrom(write_resp.error)
+    # Empty error field means success
     return result
+```
+
+## Step 5b: Expose Custom RPC Endpoints
+
+A plugin can serve its own RPC endpoints for chain-specific data. Canopy core only exposes a single, generic, read-only transport over the unix socket: `Plugin.query_state(height, read)`, which returns raw key/value state at a historical height (`0` = latest committed). The plugin process owns its HTTP server entirely, so you can register as many routes as you want and decode your own keys/protobufs into any response shape. Canopy never needs to know about your endpoints.
+
+> Note: account and pool queries already exist in the Canopy node's own RPC (`/v1/query/account`, `/v1/query/pool`), so they make poor examples of a *custom* endpoint. This tutorial exposes faucet and reward data instead, which only the plugin knows about.
+
+### Persist queryable records during DeliverTx
+
+For data to be queryable, it has to live in state. The `_deliver_message_faucet` and `_deliver_message_reward` handlers above persist a small record alongside the balance update:
+
+- A `Faucet` record per recipient (`recipientAddress`, `totalAmount`, `count`), stored under prefix `b"\x64"` (100) via `key_for_faucet(addr)`.
+- A `Reward` record per recipient (`recipientAddress`, `lastAdminAddress`, `totalAmount`, `count`), stored under prefix `b"\x65"` (101) via `key_for_reward(addr)`.
+
+> **Important — avoid prefix collisions:** the plugin reads and writes Canopy's FSM keyspace directly (that's why `send` works on real accounts at prefix `1`). Canopy reserves single-byte prefixes `1–15` for its own state (e.g. `3` = validators, `4` = committees). Your plugin-specific records must use prefixes outside that range — otherwise a range/list scan over your prefix will return core records (validators, committees, …) that fail to decode as your type. We use `100`/`101` here.
+
+These `Faucet`/`Reward` messages and the `key_for_faucet`/`key_for_reward`/`faucet_prefix`/`reward_prefix` helpers live in `contract/proto/tx.proto` and `contract/contract.py`.
+
+### The detached, read-only query
+
+The framework adds `Plugin.query_state(height, read)` (`contract/plugin.py`), which mirrors `state_read` but is **not** tied to an in-flight tx/block lifecycle. It allocates its own RANDOM request id (instead of reusing an FSM request id), so it is safe to call from custom RPC handlers:
+
+```python
+async def query_state(self, height, request):
+    request_id = random.getrandbits(64)            # fresh random id (detached)
+    future = asyncio.Future()
+    self._pending[request_id] = future
+    message = PluginToFSM()
+    message.id = request_id
+    message.query.height = height
+    message.query.read.CopyFrom(request)
+    await self._send_proto_msg(message)
+    response = await asyncio.wait_for(future, timeout=10.0)
+    return response.query.read
+```
+
+This relies on the new `PluginQueryRequest`/`PluginQueryResponse` messages and the `query = 10` fields added to both oneofs in `contract/proto/plugin.proto`.
+
+### Register the endpoints
+
+The base plugin already ships a **skeleton** `contract/rpc.py`. Its `start_rpc_server(plugin)` runs the plugin's HTTP server using the Python standard library `http.server` in a background daemon thread (no extra dependencies), but it registers **no routes by default** — it's a blank canvas. It is also already started from `main.py`:
+
+```python
+plugin = await start_plugin(default_config())
+start_rpc_server(plugin)  # skeleton: registers no routes by default
+```
+
+So your job here is to **add your faucet/reward routes and handlers to the existing skeleton**, not to create the file. Add route dispatch in `PluginRPCHandler.do_GET` and implement the handlers (add as many routes as you like):
+
+```python
+def do_GET(self):
+    parsed = urlparse(self.path)
+    query = parse_qs(parsed.query)
+    # GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
+    if parsed.path == "/v1/query/faucets":
+        self._handle_query_faucets(query)
+    # GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
+    elif parsed.path == "/v1/query/rewards":
+        self._handle_query_rewards(query)
+    else:
+        self._write_json_error(404, "not found")
+```
+
+Because the HTTP server runs on a background thread while the plugin owns an asyncio event loop, each handler schedules the async `query_state` coroutine onto the plugin's loop and blocks for the result:
+
+```python
+future = asyncio.run_coroutine_threadsafe(plugin.query_state(height, request), plugin._loop)
+result = future.result(timeout=15)
+```
+
+Each handler then decodes the raw bytes into the plugin's own `Faucet`/`Reward` types:
+
+- Without `?address`, it does a **range read** over the record prefix (`faucet_prefix()` / `reward_prefix()`) and returns every record.
+- With `?address=<hex>`, it does a **single-key read** (`key_for_faucet(addr)` / `key_for_reward(addr)`) and returns just that recipient's record.
+
+The server is already started from `main.py` (no change needed):
+
+```python
+plugin = await start_plugin(default_config())
+start_rpc_server(plugin)
+```
+
+The listen address comes from the `rpc_address` config field (default `0.0.0.0:50010`). The RPC server is optional and non-fatal: set `rpc_address` to empty to disable it, and a bind failure (e.g. port already in use) is logged without crashing the plugin.
+
+### Query the endpoints
+
+After faucet/reward transactions have been included in blocks:
+
+```bash
+# all faucet records
+curl 'http://localhost:50010/v1/query/faucets'
+# {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
+
+# a single recipient's faucet record
+curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+
+# all reward records (optionally at a historical height)
+curl 'http://localhost:50010/v1/query/rewards?height=42'
+
+# a single recipient's reward record
+curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
 
 ## Step 7: Running Canopy with the Plugin
@@ -360,9 +579,11 @@ To run Canopy with the Python plugin enabled, you need to configure the `plugin`
 The configuration file is typically located at `~/.canopy/config.json`. If it doesn't exist, start Canopy once to generate the default configuration:
 
 ```bash
-~/go/bin/canopy start
+canopy start
 # Stop it after it generates the config (Ctrl+C)
 ```
+
+> **Note**: If your Go bin directory is not in your PATH, use `~/go/bin/canopy` instead of `canopy`.
 
 ### 2. Enable the Python plugin
 
@@ -380,8 +601,12 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"python"`:
 ### 3. Start Canopy
 
 ```bash
-~/go/bin/canopy start
+canopy start
 ```
+
+> **Note**: If your Go bin directory is not in your PATH, use `~/go/bin/canopy start` instead.
+
+> **Warning**: You may see error logs about the plugin failing to start on the first attempt. This is normal - Canopy will retry and the plugin should start successfully within a few seconds, then begin producing blocks.
 
 Canopy will automatically start the Python plugin and connect to it.
 
@@ -393,22 +618,83 @@ Check the plugin logs:
 tail -f /tmp/plugin/python-plugin.log
 ```
 
+### Step 7b: Running with Docker (Alternative)
+
+Instead of running Canopy and the plugin locally, you can use Docker to run everything in a container.
+
+#### 1. Build the Docker image
+
+From the repository root:
+
+```bash
+make docker/plugin PLUGIN=python
+```
+
+This creates a `canopy-python` image containing both Canopy and the Python plugin pre-configured.
+
+#### 2. Run the container
+
+```bash
+make docker/run-python
+```
+
+Or with a custom volume mount for persistent data:
+
+```bash
+docker run -v ~/.canopy:/root/.canopy canopy-python
+```
+
+#### 3. Expose RPC ports (for running tests)
+
+To run tests against the containerized Canopy, expose the RPC ports:
+
+```bash
+docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-python
+```
+
+| Port | Service |
+|------|---------|
+| 50002 | RPC API (transactions, queries) |
+| 50003 | Admin RPC (keystore operations) |
+
+Now you can run tests from your host machine that connect to `localhost:50002` and `localhost:50003`.
+
+#### 4. View logs inside the container
+
+```bash
+# Get the container ID
+docker ps
+
+# View Canopy logs
+docker exec -it <container_id> tail -f /root/.canopy/logs/log
+
+# View plugin logs
+docker exec -it <container_id> tail -f /tmp/plugin/python-plugin.log
+```
+
+#### 5. Interactive shell (for debugging)
+
+To inspect the container or debug issues:
+
+```bash
+docker run -it --entrypoint /bin/sh canopy-python
+```
+
 ## Step 8: Testing
 
-Run the RPC tests from the `tutorial` directory:
+Run the integration tests from the `tutorial` directory. `make test` runs the transaction tests **and** the custom RPC endpoints test:
+
+```bash
+cd plugin/python/tutorial
+make test
+```
+
+This is equivalent to running, from the `tutorial` directory (transactions first, then the custom RPC endpoints test):
 
 ```bash
 cd plugin/python/tutorial
 pip install -r requirements.txt
-python rpc_test.py
-```
-
-Or using make:
-
-```bash
-cd plugin/python/tutorial
-make install
-make test
+python rpc_test.py && python rpc_test.py custom
 ```
 
 ### Test Prerequisites
@@ -417,13 +703,23 @@ make test
 
 2. **Plugin must have the new transaction types registered** (faucet, reward)
 
+3. **The plugin's RPC server must be reachable** on port `50010` (Step 5b) for the custom RPC test
+
 ### What the Tests Do
+
+`python rpc_test.py` exercises the transaction flow:
 
 1. **Create test accounts** - Creates two new accounts in the Canopy keystore
 2. **Faucet test** - Mints tokens to account 1 using the faucet transaction
 3. **Send test** - Sends tokens from account 1 to account 2
 4. **Reward test** - Account 2 rewards tokens back to account 1
 5. **Balance verification** - Confirms balances changed as expected
+
+`python rpc_test.py custom` then verifies the custom RPC endpoints (Step 5b):
+
+1. **Submit faucet/reward transactions** and wait for inclusion
+2. **Query `/v1/query/faucets` and `/v1/query/rewards`** (both the list and single-recipient forms)
+3. **Validate the returned records' structure** (valid hex addresses, `count >= 1`, `totalAmount >= 1`), which also guards against prefix-collision regressions
 
 ## Transaction Signing Details
 
@@ -489,10 +785,9 @@ After implementing the new transaction types and starting Canopy with the plugin
 cd ~/canopy
 ~/go/bin/canopy start
 
-# Terminal 2: Run the tests
+# Terminal 2: Run the tests (transactions + custom RPC endpoints)
 cd ~/canopy/plugin/python/tutorial
-pip install -r requirements.txt
-python rpc_test.py
+make test
 ```
 
 The test will:

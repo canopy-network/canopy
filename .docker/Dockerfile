@@ -1,9 +1,10 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 RUN apk update && apk add --no-cache make bash nodejs npm
 
 WORKDIR /go/src/github.com/canopy-network/canopy
 COPY . /go/src/github.com/canopy-network/canopy
+
 
 RUN make build/wallet
 RUN make build/explorer

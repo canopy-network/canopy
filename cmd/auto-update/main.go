@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,9 +26,10 @@ const (
 	defaultRepoName     = "canopy"
 	defaultRepoOwner    = "canopy-network"
 	defaultBinPath      = "./cli"
+	defaultNewBinName   = "canopy_updated" // name of the downloaded binary, kept on the data directory
 	defaultCheckPeriod  = time.Minute * 30 // default check period for updates
 	defaultGracePeriod  = time.Second * 2  // default grace period for graceful shutdown
-	defaultMaxDelayTime = 30               // default max delay time for staggered updates
+	defaultMaxDelayTime = 30               // default max delay time for staggered updates (minutes)
 )
 
 var (
@@ -35,13 +38,58 @@ var (
 		1: envOrDefault("SNAPSHOT_1_URL", "http://canopy-mainnet-latest-chain-id1.us.nodefleet.net"),
 		2: envOrDefault("SNAPSHOT_2_URL", "http://canopy-mainnet-latest-chain-id2.us.nodefleet.net"),
 	}
+	// pluginReleaseConfigs maps plugin type to its full release configuration
+	pluginReleaseConfigs = map[string]*PluginReleaseConfig{
+		"go": {
+			AssetName:      "go-plugin-%s-%s.tar.gz",
+			ArchSpecific:   true,
+			OldBinaryPath:  "go-plugin",
+			ProcessPattern: "go-plugin",
+			PIDFile:        "/tmp/plugin/go-plugin.pid",
+		},
+		"kotlin": {
+			AssetName:      "kotlin-plugin.tar.gz",
+			ArchSpecific:   false,
+			OldBinaryPath:  "build/libs/canopy-plugin-kotlin-1.0.0-all.jar",
+			ProcessPattern: "canopy-plugin-kotlin",
+			PIDFile:        "/tmp/plugin/kotlin-plugin.pid",
+		},
+		"typescript": {
+			AssetName:      "typescript-plugin.tar.gz",
+			ArchSpecific:   false,
+			OldBinaryPath:  "dist/main.js",
+			ProcessPattern: "plugin/typescript/dist/main.js",
+			PIDFile:        "/tmp/plugin/typescript-plugin.pid",
+		},
+		"python": {
+			AssetName:      "python-plugin.tar.gz",
+			ArchSpecific:   false,
+			OldBinaryPath:  "main.py",
+			ProcessPattern: "plugin/python/main.py",
+			PIDFile:        "/tmp/plugin/python-plugin.pid",
+		},
+		"csharp": {
+			AssetName:      "csharp-plugin-%s-%s.tar.gz",
+			MuslAssetName:  "csharp-plugin-%s-musl-%s.tar.gz",
+			ArchSpecific:   true,
+			UseX64Arch:     true,
+			OldBinaryPath:  "bin/CanopyPlugin",
+			ProcessPattern: "plugin/csharp/bin/CanopyPlugin",
+			PIDFile:        "/tmp/plugin/csharp-plugin.pid",
+		},
+	}
 )
 
 func main() {
+	// parse global flags up front so they resolve the config and get forwarded
+	positionalArgs, err := cli.ParseGlobalFlags(os.Args[1:])
+	if err != nil {
+		lib.NewDefaultLogger().Fatalf("failed to parse flags: %v", err)
+	}
 	// get configs and logger
 	configs, logger := getConfigs()
 	// check if no start was called, this means it was just called as config
-	if len(os.Args) < 2 || os.Args[1] != "start" {
+	if len(positionalArgs) == 0 || positionalArgs[0] != "start" {
 		// TODO: This message is partly misleading due to the fact that the only place that it would
 		// make sense to have a setup complete message is on the context of the deployments repository.
 		// The actual behavior of this program should be to only start the CLI directly, not perform
@@ -51,23 +99,41 @@ func main() {
 			"This message appears because the program was started directly instead of using 'start'.")
 		return
 	}
-	// do not run the auto-update process if its disabled
-	if !configs.Coordinator.Canopy.AutoUpdate {
-		logger.Info("auto-update disabled, starting CLI directly")
-		cli.Start()
-		return
+	autoUpdaterEnabled := configs.Coordinator.Canopy.AutoUpdate
+	// run a previously downloaded update if there is one, the shipped binary otherwise
+	binPath := effectiveBinPath(configs.Coordinator.UpdatedBinPath, configs.Coordinator.BinPath)
+	// ensure the binary exists before proceeding
+	if binPath == "" {
+		logger.Fatalf("canopy binary not found or not executable: %s", binPath)
 	}
-	logger.Infof("auto-update enabled, starting coordinator on version %s", rpc.SoftwareVersion)
+	binaryVersion := getSoftwareVersion(autoUpdaterEnabled, binPath)
+	if autoUpdaterEnabled {
+		logger.Infof("auto-update enabled (updater version: %s, canopy version: %s)",
+			rpc.SoftwareVersion, binaryVersion)
+	} else {
+		logger.Infof("auto-update disabled (canopy version: %s)", rpc.SoftwareVersion)
+	}
 	// handle external shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	// setup the dependencies
-	updater := NewUpdateManager(configs.Updater, rpc.SoftwareVersion)
+	updater := NewReleaseManager(configs.Updater, binaryVersion)
 	snapshot := NewSnapshotManager(configs.Snapshot)
-	supervisor := NewSupervisor(logger)
-	coordinator := NewCoordinator(configs.Coordinator, updater, supervisor, snapshot, logger)
+	// setup plugin updater and config if configured
+	var pluginUpdater *ReleaseManager
+	var pluginConfig *PluginReleaseConfig
+	if configs.PluginUpdater != nil {
+		pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0")
+		pluginConfig = configs.PluginUpdater.PluginConfig
+		logger.Infof("plugin auto-update enabled from %s/%s",
+			configs.PluginUpdater.RepoOwner,
+			configs.PluginUpdater.RepoName)
+	}
+	// forward the resolved global flags (data-dir, url overrides) to the child
+	supervisor := NewSupervisor(logger, pluginConfig, cli.GlobalFlagArgs())
+	coordinator := NewCoordinator(configs.Coordinator, updater, pluginUpdater, supervisor, snapshot, logger)
 	// start the update loop
-	err := coordinator.UpdateLoop(sigChan)
+	err = coordinator.UpdateLoop(sigChan)
 	if err != nil {
 		exitCode, exitCodeStr := 1, "unknown"
 		// try to extract the exit code from the error
@@ -84,10 +150,11 @@ func main() {
 
 // Configs holds the configuration for the updater, snapshotter, and process supervisor.
 type Configs struct {
-	Updater     *UpdaterConfig
-	Snapshot    *SnapshotConfig
-	Coordinator *CoordinatorConfig
-	LoggerI     lib.LoggerI
+	Updater       *ReleaseManagerConfig
+	PluginUpdater *ReleaseManagerConfig
+	Snapshot      *SnapshotConfig
+	Coordinator   *CoordinatorConfig
+	LoggerI       lib.LoggerI
 }
 
 // getConfigs returns the configuration for the updater, snapshotter, and process supervisor.
@@ -97,15 +164,32 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		Level:      canopyConfig.GetLogLevel(),
 		Structured: canopyConfig.Structured,
 		JSON:       canopyConfig.JSON,
-	})
-
+	}, canopyConfig.DataDirPath)
+	// resolve to an absolute path of the binary
 	binPath := envOrDefault("BIN_PATH", defaultBinPath)
+	if abs, err := filepath.Abs(binPath); err == nil {
+		binPath = abs
+	}
+	// updates are downloaded on the data directory
+	updatedBinPath := filepath.Join(canopyConfig.DataDirPath, defaultNewBinName)
+	githubToken := envOrDefault("CANOPY_GITHUB_API_TOKEN", "")
 
-	updater := &UpdaterConfig{
-		RepoName:       envOrDefault("REPO_NAME", defaultRepoName),
-		RepoOwner:      envOrDefault("REPO_OWNER", defaultRepoOwner),
-		GithubApiToken: envOrDefault("CANOPY_GITHUB_API_TOKEN", ""),
-		BinPath:        binPath,
+	// core auto-update repo: config.json or defaults
+	repoOwner := canopyConfig.AutoUpdateRepoOwner
+	if repoOwner == "" {
+		repoOwner = defaultRepoOwner
+	}
+	repoName := canopyConfig.AutoUpdateRepoName
+	if repoName == "" {
+		repoName = defaultRepoName
+	}
+
+	updater := &ReleaseManagerConfig{
+		Type:           ReleaseTypeCLI,
+		RepoName:       repoName,
+		RepoOwner:      repoOwner,
+		GithubApiToken: githubToken,
+		BinPath:        updatedBinPath,
 		SnapshotKey:    snapshotMetadataKey,
 	}
 	snapshot := &SnapshotConfig{
@@ -113,19 +197,93 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		Name: snapshotFileName,
 	}
 	coordinator := &CoordinatorConfig{
-		Canopy:       canopyConfig,
-		BinPath:      binPath,
-		MaxDelayTime: defaultMaxDelayTime,
-		CheckPeriod:  defaultCheckPeriod,
-		GracePeriod:  defaultGracePeriod,
+		Canopy:         canopyConfig,
+		BinPath:        binPath,
+		UpdatedBinPath: updatedBinPath,
+		MaxDelayTime:   envOrDefaultInt("AUTO_UPDATE_MAX_DELAY_MINUTES", defaultMaxDelayTime),
+		CheckPeriod:    envOrDefaultDuration("AUTO_UPDATE_CHECK_PERIOD", defaultCheckPeriod),
+		GracePeriod:    defaultGracePeriod,
+	}
+
+	// setup plugin updater config if plugin auto-update is enabled
+	var pluginUpdater *ReleaseManagerConfig
+	pluginAutoUpdate := canopyConfig.PluginAutoUpdate
+	if pluginAutoUpdate.Enabled && canopyConfig.Plugin != "" {
+		// lookup plugin release config from map
+		pluginReleaseCfg, ok := pluginReleaseConfigs[canopyConfig.Plugin]
+		if !ok {
+			l.Warnf("unknown plugin type %q, plugin auto-update disabled", canopyConfig.Plugin)
+		} else {
+			// use configured repo or default to canopy-network/canopy
+			repoOwner := pluginAutoUpdate.RepoOwner
+			if repoOwner == "" {
+				repoOwner = defaultRepoOwner
+			}
+			repoName := pluginAutoUpdate.RepoName
+			if repoName == "" {
+				repoName = defaultRepoName
+			}
+			pluginUpdater = &ReleaseManagerConfig{
+				Type:           ReleaseTypePlugin,
+				RepoOwner:      repoOwner,
+				RepoName:       repoName,
+				PluginDir:      canopyConfig.PluginHome(canopyConfig.Plugin),
+				PluginConfig:   pluginReleaseCfg,
+				GithubApiToken: githubToken,
+			}
+		}
 	}
 
 	return &Configs{
-		Updater:     updater,
-		Snapshot:    snapshot,
-		Coordinator: coordinator,
-		LoggerI:     l,
+		Updater:       updater,
+		PluginUpdater: pluginUpdater,
+		Snapshot:      snapshot,
+		Coordinator:   coordinator,
+		LoggerI:       l,
 	}, l
+}
+
+// isExecutable returns true if path exists, is a regular file, and has execute permission.
+func isExecutable(path string) bool {
+	// resolve to absolute path to avoid relative path ambiguity
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	// check if the file exists and is accessible
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return false
+	}
+	// directories are not executable binaries
+	if info.IsDir() {
+		return false
+	}
+	// check for any execute bit (owner, group, or other)
+	return info.Mode()&0111 != 0
+}
+
+// effectiveBinPath returns the first valid binary to run, or an empty string if neither is valid
+func effectiveBinPath(paths ...string) string {
+	for _, path := range paths {
+		if isExecutable(path) {
+			return path
+		}
+	}
+	return ""
+}
+
+func getSoftwareVersion(autoUpdate bool, binPath string) string {
+	if !autoUpdate {
+		return rpc.SoftwareVersion
+	}
+	// forward only --data-dir so the check targets the initialized directory and
+	// avoids passing newer flags an older installed binary may not recognize
+	out, err := exec.Command(binPath, "version", "--data-dir", cli.DataDir).Output()
+	if err != nil {
+		panic(fmt.Sprintf("failed to get software version from binary: %v", err))
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // envOrDefault returns the value of the environment variable with the given key,
@@ -136,4 +294,33 @@ func envOrDefault(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// envOrDefaultInt returns the value of the environment variable as an int,
+// or the default value if the variable is not set or invalid.
+func envOrDefaultInt(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	var result int
+	if _, err := fmt.Sscanf(value, "%d", &result); err != nil {
+		return defaultValue
+	}
+	return result
+}
+
+// envOrDefaultDuration returns the value of the environment variable as a duration,
+// or the default value if the variable is not set or invalid.
+// Accepts formats like "30m", "1h", "30s", etc.
+func envOrDefaultDuration(key string, defaultValue time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	result, err := time.ParseDuration(value)
+	if err != nil {
+		return defaultValue
+	}
+	return result
 }

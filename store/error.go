@@ -18,6 +18,10 @@ func ErrCommitDB(err error) lib.ErrorI {
 	return lib.NewError(lib.CodeCommitDB, lib.StorageModule, fmt.Sprintf("commitDB() failed with err: %s", err.Error()))
 }
 
+func ErrCompactDB(err error) lib.ErrorI {
+	return lib.NewError(lib.CodeCompactDB, lib.StorageModule, fmt.Sprintf("compactDB() failed with err: %s", err.Error()))
+}
+
 func ErrGarbageCollectDB(err error) lib.ErrorI {
 	return lib.NewError(lib.CodeGarbageCollectDB, lib.StorageModule, fmt.Sprintf("garbageCollectDB() failed with err: %s", err.Error()))
 }

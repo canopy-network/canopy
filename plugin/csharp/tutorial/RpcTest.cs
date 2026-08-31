@@ -189,6 +189,198 @@ namespace CanopyPlugin.Tutorial
             Console.WriteLine($"  Final balances - Account 1: {bal1Final}, Account 2: {bal2Final}");
 
             Console.WriteLine("\n=== All transactions confirmed successfully! ===");
+            
+            // Print tip about verifying balances via RPC
+            Console.WriteLine("\n--- Verify Account Balances ---");
+            Console.WriteLine("You can manually check account balances at any time using the /v1/query/account RPC endpoint:");
+            Console.WriteLine($"  curl -X POST {QueryRpcUrl}/v1/query/account -H \"Content-Type: application/json\" -d '{{\"address\": \"{account1Addr}\"}}'");
+            Console.WriteLine($"  curl -X POST {QueryRpcUrl}/v1/query/account -H \"Content-Type: application/json\" -d '{{\"address\": \"{account2Addr}\"}}'");
+            Console.WriteLine("See documentation: https://github.com/canopy-network/canopy/blob/main/cmd/rpc/README.md#account");
+        }
+
+        /// <summary>
+        /// Tests the plugin's own custom RPC endpoints (/v1/query/faucets and /v1/query/rewards),
+        /// which are served by the plugin process (default 0.0.0.0:50010) and backed by the detached,
+        /// read-only QueryState path. It:
+        ///   1. Creates a recipient and an admin account
+        ///   2. Faucets the recipient twice and asserts the faucet record aggregates (totalAmount + count)
+        ///   3. Faucets the admin so it can pay reward fees
+        ///   4. Rewards the recipient and asserts the reward record (totalAmount, count, lastAdminAddress)
+        ///   5. Asserts both records also appear in the list (range-read) endpoints
+        ///
+        /// Run with: dotnet test --filter "TestPluginCustomRPCEndpoints" --logger "console;verbosity=detailed"
+        /// </summary>
+        [Fact]
+        public async Task TestPluginCustomRPCEndpoints()
+        {
+            const string pluginRpcUrl = "http://localhost:50010"; // the plugin's own custom RPC server
+
+            Console.WriteLine("=== C# Plugin Custom RPC Endpoints Test ===\n");
+
+            // Generous timeouts: a dev node can take many blocks to finalize/index a tx (especially right
+            // after a restart while consensus warms up), so don't fail on transient finalization lag.
+            var txTimeout = TimeSpan.FromSeconds(120);    // max wait for a tx to be committed + indexed
+            var recordTimeout = TimeSpan.FromSeconds(60); // max wait for the plugin RPC record to reflect committed state
+
+            // Skip gracefully with a helpful message if the plugin RPC server isn't reachable
+            Console.WriteLine($"Checking plugin RPC server reachability at {pluginRpcUrl} ...");
+            if (await GetRawJsonOrNullAsync($"{pluginRpcUrl}/v1/query/faucets") == null)
+            {
+                Console.WriteLine($"SKIP: plugin RPC server not reachable at {pluginRpcUrl} (is Canopy running with the csharp plugin and port 50010 exposed?)");
+                return;
+            }
+            Console.WriteLine("Plugin RPC server is reachable");
+
+            // Step 1: Create a recipient and an admin account in the keystore
+            Console.WriteLine("Step 1: Creating recipient and admin accounts in keystore...");
+
+            var suffix = RandomSuffix();
+            var recipientAddr = await KeystoreNewKeyAsync(AdminRpcUrl, $"test_rpc_recipient_{suffix}", TestPassword);
+            Console.WriteLine($"  Created recipient account: {recipientAddr}");
+
+            var adminAddr = await KeystoreNewKeyAsync(AdminRpcUrl, $"test_rpc_admin_{suffix}", TestPassword);
+            Console.WriteLine($"  Created admin account: {adminAddr}");
+
+            // Fetch signing keys for both accounts
+            var recipientKey = await KeystoreGetKeyAsync(AdminRpcUrl, recipientAddr, TestPassword);
+            var adminKey = await KeystoreGetKeyAsync(AdminRpcUrl, adminAddr, TestPassword);
+            Console.WriteLine("  Fetched signing keys for both accounts");
+
+            const ulong fee = 10000;
+
+            // Step 2: Faucet the recipient twice and verify the aggregated faucet record
+            const ulong faucetAmount1 = 700000000;
+            const ulong faucetAmount2 = 300000000;
+
+            Console.WriteLine($"\nStep 2: Sending first faucet to recipient (amount={faucetAmount1}, fee={fee})...");
+            var height = await GetHeightAsync(QueryRpcUrl);
+            Console.WriteLine($"  Current height: {height}");
+            var txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, faucetAmount1, fee, NetworkId, ChainId, height);
+            Console.WriteLine($"  First faucet transaction sent: {txHash}");
+
+            Console.WriteLine("  Waiting for first faucet transaction to be confirmed...");
+            var included = await WaitForTxInclusionAsync(QueryRpcUrl, recipientAddr, txHash, txTimeout);
+            Assert.True(included, "First faucet tx not included within timeout");
+            Console.WriteLine("  First faucet transaction confirmed!");
+
+            // after the first faucet, the record should exist with count=1 and totalAmount=faucetAmount1
+            Console.WriteLine($"  Querying plugin endpoint GET /v1/query/faucets?address={recipientAddr} ...");
+            var faucet = await PollFaucetRecordAsync(pluginRpcUrl, recipientAddr, recordTimeout);
+            Assert.NotNull(faucet);
+            Console.WriteLine($"  Faucet record after first faucet: recipient={faucet!.RecipientAddress} totalAmount={faucet.TotalAmount} count={faucet.Count}");
+            Assert.Equal(1UL, faucet.Count);
+            Assert.Equal(faucetAmount1, faucet.TotalAmount);
+            Assert.Equal(recipientAddr.ToLowerInvariant(), faucet.RecipientAddress.ToLowerInvariant());
+            Console.WriteLine("  Faucet record verified after first faucet (count=1)");
+
+            Console.WriteLine($"\n  Sending second faucet to recipient (amount={faucetAmount2}, fee={fee})...");
+            height = await GetHeightAsync(QueryRpcUrl);
+            Console.WriteLine($"  Current height: {height}");
+            txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, faucetAmount2, fee, NetworkId, ChainId, height);
+            Console.WriteLine($"  Second faucet transaction sent: {txHash}");
+
+            Console.WriteLine("  Waiting for second faucet transaction to be confirmed...");
+            included = await WaitForTxInclusionAsync(QueryRpcUrl, recipientAddr, txHash, txTimeout);
+            Assert.True(included, "Second faucet tx not included within timeout");
+            Console.WriteLine("  Second faucet transaction confirmed!");
+
+            // after the second faucet, count should be 2 and totalAmount the sum of both
+            const ulong wantTotal = faucetAmount1 + faucetAmount2;
+            Console.WriteLine("  Waiting for faucet record to reflect the second faucet (count=2)...");
+            faucet = await PollFaucetRecordUntilAsync(pluginRpcUrl, recipientAddr, 2, recordTimeout);
+            Assert.NotNull(faucet);
+            Console.WriteLine($"  Faucet record after second faucet: recipient={faucet!.RecipientAddress} totalAmount={faucet.TotalAmount} count={faucet.Count}");
+            Assert.Equal(2UL, faucet.Count);
+            Assert.Equal(wantTotal, faucet.TotalAmount);
+            Console.WriteLine($"  Faucet record aggregation verified (totalAmount={wantTotal}, count=2)");
+
+            // the recipient should also appear in the list (range-read) endpoint
+            Console.WriteLine("  Querying plugin endpoint GET /v1/query/faucets (list / range read)...");
+            var faucets = await QueryFaucetListAsync(pluginRpcUrl);
+            Console.WriteLine($"  Faucet list returned {faucets.Count} record(s)");
+            ValidateFaucetRecords(faucets);
+            Console.WriteLine($"  All {faucets.Count} faucet list record(s) are structurally valid");
+            var foundFaucet = FindFaucet(faucets, recipientAddr);
+            Assert.NotNull(foundFaucet);
+            Assert.Equal(wantTotal, foundFaucet!.TotalAmount);
+            Console.WriteLine($"  Recipient found in faucet list with totalAmount={foundFaucet.TotalAmount}");
+
+            // Step 3: Faucet the admin so it has balance to pay the reward fee
+            Console.WriteLine("\nStep 3: Funding admin via faucet so it can pay the reward fee...");
+            height = await GetHeightAsync(QueryRpcUrl);
+            Console.WriteLine($"  Current height: {height}");
+            txHash = await SendFaucetTxAsync(QueryRpcUrl, adminKey, adminAddr, 100000000, fee, NetworkId, ChainId, height);
+            Console.WriteLine($"  Admin faucet transaction sent: {txHash}");
+
+            Console.WriteLine("  Waiting for admin faucet transaction to be confirmed...");
+            included = await WaitForTxInclusionAsync(QueryRpcUrl, adminAddr, txHash, txTimeout);
+            Assert.True(included, "Admin faucet tx not included within timeout");
+            Console.WriteLine("  Admin faucet transaction confirmed!");
+
+            // Step 4: Reward the recipient and verify the reward record
+            const ulong rewardAmount = 50000000;
+            Console.WriteLine($"\nStep 4: Sending reward from admin to recipient (amount={rewardAmount}, fee={fee})...");
+            height = await GetHeightAsync(QueryRpcUrl);
+            Console.WriteLine($"  Current height: {height}");
+            txHash = await SendRewardTxAsync(QueryRpcUrl, adminKey, adminAddr, recipientAddr, rewardAmount, fee, NetworkId, ChainId, height);
+            Console.WriteLine($"  Reward transaction sent: {txHash}");
+
+            Console.WriteLine("  Waiting for reward transaction to be confirmed...");
+            included = await WaitForTxInclusionAsync(QueryRpcUrl, adminAddr, txHash, txTimeout);
+            Assert.True(included, "Reward tx not included within timeout");
+            Console.WriteLine("  Reward transaction confirmed!");
+
+            Console.WriteLine($"  Querying plugin endpoint GET /v1/query/rewards?address={recipientAddr} ...");
+            var reward = await PollRewardRecordAsync(pluginRpcUrl, recipientAddr, recordTimeout);
+            Assert.NotNull(reward);
+            Console.WriteLine($"  Reward record: recipient={reward!.RecipientAddress} lastAdmin={reward.LastAdminAddress} totalAmount={reward.TotalAmount} count={reward.Count}");
+            Assert.Equal(1UL, reward.Count);
+            Assert.Equal(rewardAmount, reward.TotalAmount);
+            Assert.Equal(recipientAddr.ToLowerInvariant(), reward.RecipientAddress.ToLowerInvariant());
+            Assert.Equal(adminAddr.ToLowerInvariant(), reward.LastAdminAddress.ToLowerInvariant());
+            Console.WriteLine("  Reward record verified (count=1, correct amount and lastAdminAddress)");
+
+            // the recipient should also appear in the reward list (range-read) endpoint
+            Console.WriteLine("  Querying plugin endpoint GET /v1/query/rewards (list / range read)...");
+            var rewards = await QueryRewardListAsync(pluginRpcUrl);
+            Console.WriteLine($"  Reward list returned {rewards.Count} record(s)");
+            ValidateRewardRecords(rewards);
+            Console.WriteLine($"  All {rewards.Count} reward list record(s) are structurally valid");
+            var foundReward = FindReward(rewards, recipientAddr);
+            Assert.NotNull(foundReward);
+            Assert.Equal(rewardAmount, foundReward!.TotalAmount);
+            Console.WriteLine($"  Recipient found in reward list with totalAmount={foundReward.TotalAmount}");
+
+            // Step 5: an address that never received a faucet/reward must return an EMPTY record from both
+            // single-record endpoints (the query finds nothing, so the record is zero-valued). The endpoint
+            // returns HTTP 200 with count=0 and totalAmount=0; the helper may also surface an absent record
+            // as null, so treat both as "empty".
+            var unusedAddr = RandomAddressHex();
+            Console.WriteLine($"\nStep 5: Querying both endpoints with an unused address ({unusedAddr}); expecting empty records...");
+
+            Console.WriteLine($"  Querying plugin endpoint GET /v1/query/faucets?address={unusedAddr} ...");
+            var emptyFaucet = await QueryFaucetRecordAsync(pluginRpcUrl, unusedAddr);
+            var emptyFaucetCount = emptyFaucet?.Count ?? 0UL;
+            var emptyFaucetTotal = emptyFaucet?.TotalAmount ?? 0UL;
+            Console.WriteLine($"  Faucet record for unused address: totalAmount={emptyFaucetTotal} count={emptyFaucetCount}");
+            Assert.Equal(0UL, emptyFaucetCount);
+            Assert.Equal(0UL, emptyFaucetTotal);
+            Console.WriteLine("  Faucet endpoint correctly returned an empty record for the unused address");
+
+            Console.WriteLine($"  Querying plugin endpoint GET /v1/query/rewards?address={unusedAddr} ...");
+            var emptyReward = await QueryRewardRecordAsync(pluginRpcUrl, unusedAddr);
+            var emptyRewardCount = emptyReward?.Count ?? 0UL;
+            var emptyRewardTotal = emptyReward?.TotalAmount ?? 0UL;
+            Console.WriteLine($"  Reward record for unused address: totalAmount={emptyRewardTotal} count={emptyRewardCount}");
+            Assert.Equal(0UL, emptyRewardCount);
+            Assert.Equal(0UL, emptyRewardTotal);
+            Console.WriteLine("  Reward endpoint correctly returned an empty record for the unused address");
+
+            Console.WriteLine("\n--- Custom RPC endpoints verified successfully! ---");
+            Console.WriteLine($"  curl '{pluginRpcUrl}/v1/query/faucets?address={recipientAddr}'");
+            Console.WriteLine($"  curl '{pluginRpcUrl}/v1/query/rewards?address={recipientAddr}'");
+            Console.WriteLine($"  curl '{pluginRpcUrl}/v1/query/faucets'");
+            Console.WriteLine($"  curl '{pluginRpcUrl}/v1/query/rewards'");
         }
 
         #region Helper Methods
@@ -199,6 +391,17 @@ namespace CanopyPlugin.Tutorial
         private static string RandomSuffix()
         {
             var bytes = new byte[4];
+            RandomNumberGenerator.Fill(bytes);
+            return BLSCrypto.BytesToHex(bytes);
+        }
+
+        /// <summary>
+        /// Generate a random 20-byte address as a lowercase hex string. Used to query an address that has
+        /// never received a faucet/reward, so the single-record endpoints should return an empty record.
+        /// </summary>
+        private static string RandomAddressHex()
+        {
+            var bytes = new byte[20];
             RandomNumberGenerator.Fill(bytes);
             return BLSCrypto.BytesToHex(bytes);
         }
@@ -542,6 +745,229 @@ namespace CanopyPlugin.Tutorial
             var txJson = JsonSerializer.Serialize(txJsonObject);
             var respBody = await PostRawJsonAsync($"{rpcUrl}/v1/tx", txJson);
             return JsonSerializer.Deserialize<string>(respBody, JsonOptions)!;
+        }
+
+        /// <summary>
+        /// HTTP GET helper that returns the raw response body (used by the plugin RPC endpoints).
+        /// </summary>
+        private static async Task<string> GetRawJsonAsync(string url)
+        {
+            var response = await HttpClient.GetAsync(url);
+            var responseBody = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"HTTP {(int)response.StatusCode}: {responseBody}");
+            }
+            return responseBody;
+        }
+
+        /// <summary>
+        /// HTTP GET helper that returns null on any failure (used for graceful skip checks).
+        /// </summary>
+        private static async Task<string?> GetRawJsonOrNullAsync(string url)
+        {
+            try
+            {
+                return await GetRawJsonAsync(url);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Mirrors the JSON shape returned by the plugin's /v1/query/faucets endpoint.
+        /// </summary>
+        private record FaucetRecord(string RecipientAddress, ulong TotalAmount, ulong Count);
+
+        /// <summary>
+        /// Mirrors the JSON shape returned by the plugin's /v1/query/rewards endpoint.
+        /// </summary>
+        private record RewardRecord(string RecipientAddress, string LastAdminAddress, ulong TotalAmount, ulong Count);
+
+        /// <summary>
+        /// Parse a faucet record JSON object node into a FaucetRecord.
+        /// </summary>
+        private static FaucetRecord ParseFaucet(JsonNode node) => new(
+            node["recipientAddress"]?.GetValue<string>() ?? "",
+            node["totalAmount"]?.GetValue<ulong>() ?? 0,
+            node["count"]?.GetValue<ulong>() ?? 0);
+
+        /// <summary>
+        /// Parse a reward record JSON object node into a RewardRecord.
+        /// </summary>
+        private static RewardRecord ParseReward(JsonNode node) => new(
+            node["recipientAddress"]?.GetValue<string>() ?? "",
+            node["lastAdminAddress"]?.GetValue<string>() ?? "",
+            node["totalAmount"]?.GetValue<ulong>() ?? 0,
+            node["count"]?.GetValue<ulong>() ?? 0);
+
+        /// <summary>
+        /// Fetch a single recipient's faucet record from the plugin RPC server.
+        /// </summary>
+        private static async Task<FaucetRecord?> QueryFaucetRecordAsync(string pluginUrl, string address)
+        {
+            var respBody = await GetRawJsonAsync($"{pluginUrl}/v1/query/faucets?address={address}");
+            var faucetNode = JsonNode.Parse(respBody)?["faucet"];
+            return faucetNode == null ? null : ParseFaucet(faucetNode);
+        }
+
+        /// <summary>
+        /// Fetch all faucet records from the plugin RPC server (range read).
+        /// </summary>
+        private static async Task<List<FaucetRecord>> QueryFaucetListAsync(string pluginUrl)
+        {
+            var respBody = await GetRawJsonAsync($"{pluginUrl}/v1/query/faucets");
+            var list = new List<FaucetRecord>();
+            if (JsonNode.Parse(respBody)?["faucets"] is JsonArray array)
+            {
+                foreach (var item in array)
+                {
+                    if (item != null) list.Add(ParseFaucet(item));
+                }
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Fetch a single recipient's reward record from the plugin RPC server.
+        /// </summary>
+        private static async Task<RewardRecord?> QueryRewardRecordAsync(string pluginUrl, string address)
+        {
+            var respBody = await GetRawJsonAsync($"{pluginUrl}/v1/query/rewards?address={address}");
+            var rewardNode = JsonNode.Parse(respBody)?["reward"];
+            return rewardNode == null ? null : ParseReward(rewardNode);
+        }
+
+        /// <summary>
+        /// Fetch all reward records from the plugin RPC server (range read).
+        /// </summary>
+        private static async Task<List<RewardRecord>> QueryRewardListAsync(string pluginUrl)
+        {
+            var respBody = await GetRawJsonAsync($"{pluginUrl}/v1/query/rewards");
+            var list = new List<RewardRecord>();
+            if (JsonNode.Parse(respBody)?["rewards"] is JsonArray array)
+            {
+                foreach (var item in array)
+                {
+                    if (item != null) list.Add(ParseReward(item));
+                }
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Poll the faucet endpoint until a record with count > 0 appears or the timeout elapses.
+        /// </summary>
+        private static Task<FaucetRecord?> PollFaucetRecordAsync(string pluginUrl, string address, TimeSpan timeout)
+            => PollFaucetRecordUntilAsync(pluginUrl, address, 1, timeout);
+
+        /// <summary>
+        /// Poll the faucet endpoint until the record's count reaches minCount or the timeout elapses.
+        /// </summary>
+        private static async Task<FaucetRecord?> PollFaucetRecordUntilAsync(string pluginUrl, string address, ulong minCount, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow.Add(timeout);
+            while (DateTime.UtcNow < deadline)
+            {
+                try
+                {
+                    var rec = await QueryFaucetRecordAsync(pluginUrl, address);
+                    if (rec != null && rec.Count >= minCount)
+                    {
+                        return rec;
+                    }
+                }
+                catch
+                {
+                    // Ignore and retry
+                }
+                await Task.Delay(1000);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Poll the reward endpoint until a record with count > 0 appears or the timeout elapses.
+        /// </summary>
+        private static async Task<RewardRecord?> PollRewardRecordAsync(string pluginUrl, string address, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow.Add(timeout);
+            while (DateTime.UtcNow < deadline)
+            {
+                try
+                {
+                    var rec = await QueryRewardRecordAsync(pluginUrl, address);
+                    if (rec != null && rec.Count > 0)
+                    {
+                        return rec;
+                    }
+                }
+                catch
+                {
+                    // Ignore and retry
+                }
+                await Task.Delay(1000);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Return the faucet record matching the address (case-insensitive), or null.
+        /// </summary>
+        private static FaucetRecord? FindFaucet(List<FaucetRecord> records, string address)
+            => records.Find(r => string.Equals(r.RecipientAddress, address, StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>
+        /// Return the reward record matching the address (case-insensitive), or null.
+        /// </summary>
+        private static RewardRecord? FindReward(List<RewardRecord> records, string address)
+            => records.Find(r => string.Equals(r.RecipientAddress, address, StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>
+        /// Return true if value is a 20-byte (40 hex char) address string.
+        /// </summary>
+        private static bool IsHexAddress(string value)
+        {
+            if (value is null || value.Length != 40) return false;
+            foreach (var c in value)
+            {
+                bool isHex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+                if (!isHex) return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Assert every record returned by the range/list endpoint is a well-formed faucet record. This
+        /// guards against the endpoint scanning a colliding key prefix and returning unrelated core
+        /// records (e.g. validators), which a lenient decoder would silently accept as a faucet with
+        /// count=0. A genuine faucet record always has count>=1 and totalAmount>=1.
+        /// </summary>
+        private static void ValidateFaucetRecords(List<FaucetRecord> records)
+        {
+            foreach (var rec in records)
+            {
+                Assert.True(IsHexAddress(rec.RecipientAddress), $"faucet list returned a record with malformed recipientAddress: \"{rec.RecipientAddress}\"");
+                Assert.True(rec.Count >= 1 && rec.TotalAmount >= 1,
+                    $"faucet list returned a malformed record (recipient={rec.RecipientAddress}, totalAmount={rec.TotalAmount}, count={rec.Count}); the endpoint may be reading colliding core state");
+            }
+        }
+
+        /// <summary>
+        /// Assert every record returned by the range/list endpoint is a well-formed reward record
+        /// (guards against colliding-prefix scans returning core state like committees).
+        /// </summary>
+        private static void ValidateRewardRecords(List<RewardRecord> records)
+        {
+            foreach (var rec in records)
+            {
+                Assert.True(IsHexAddress(rec.RecipientAddress), $"reward list returned a record with malformed recipientAddress: \"{rec.RecipientAddress}\"");
+                Assert.True(IsHexAddress(rec.LastAdminAddress), $"reward list returned a record with malformed lastAdminAddress: \"{rec.LastAdminAddress}\"");
+                Assert.True(rec.Count >= 1 && rec.TotalAmount >= 1,
+                    $"reward list returned a malformed record (recipient={rec.RecipientAddress}, totalAmount={rec.TotalAmount}, count={rec.Count}); the endpoint may be reading colliding core state");
+            }
         }
 
         #endregion

@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -57,18 +58,34 @@ func DefaultConfig() Config {
 	}
 }
 
+// PluginHome() returns the persistent plugin directory under the data dir; the
+// single source of truth shared by the node launcher and the auto-updater
+func (c Config) PluginHome(plugin string) string {
+	return filepath.Join(c.DataDirPath, "plugin", plugin)
+}
+
 // MAIN CONFIG BELOW
 
 type MainConfig struct {
-	LogLevel        string      `json:"logLevel"`        // any level includes the levels above it: debug < info < warning < error
-	ChainId         uint64      `json:"chainId"`         // the identifier of this particular chain within a single 'network id'
-	SleepUntil      uint64      `json:"sleepUntil"`      // allows coordinated 'wake-ups' for genesis or chain halt events
-	RootChain       []RootChain `json:"rootChain"`       // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
-	RunVDF          bool        `json:"runVDF"`          // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
-	Headless        bool        `json:"headless"`        // turn off the web wallet and block explorer 'web' front ends
-	AutoUpdate      bool        `json:"autoUpdate"`      // check for new versions of software each X time
-	Plugin          string      `json:"plugin"`          // the configured plugin to use
-	PluginTimeoutMS int         `json:"pluginTimeoutMS"` // plugin request timeout in milliseconds
+	LogLevel            string                 `json:"logLevel"`            // any level includes the levels above it: debug < info < warning < error
+	ChainId             uint64                 `json:"chainId"`             // the identifier of this particular chain within a single 'network id'
+	SleepUntil          uint64                 `json:"sleepUntil"`          // allows coordinated 'wake-ups' for genesis or chain halt events
+	RootChain           []RootChain            `json:"rootChain"`           // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
+	RunVDF              bool                   `json:"runVDF"`              // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
+	Headless            bool                   `json:"headless"`            // turn off the web wallet and block explorer 'web' front ends
+	AutoUpdate          bool                   `json:"autoUpdate"`          // check for new versions of software each X time
+	AutoUpdateRepoOwner string                 `json:"autoUpdateRepoOwner"` // GitHub repo owner for core auto-updates (e.g., "canopy-network")
+	AutoUpdateRepoName  string                 `json:"autoUpdateRepoName"`  // GitHub repo name for core auto-updates (e.g., "canopy")
+	Plugin              string                 `json:"plugin"`              // the configured plugin to use
+	PluginTimeoutMS     int                    `json:"pluginTimeoutMS"`     // plugin request timeout in milliseconds
+	PluginAutoUpdate    PluginAutoUpdateConfig `json:"pluginAutoUpdate"`    // plugin auto-update configuration
+}
+
+// PluginAutoUpdateConfig holds configuration for plugin auto-updates
+type PluginAutoUpdateConfig struct {
+	Enabled   bool   `json:"enabled"`   // whether plugin auto-update is enabled
+	RepoOwner string `json:"repoOwner"` // GitHub repository owner (e.g., "canopy-network")
+	RepoName  string `json:"repoName"`  // GitHub repository name (e.g., "canopy")
 }
 
 // DefaultMainConfig() sets log level to 'info'
@@ -112,6 +129,7 @@ type RPCConfig struct {
 	ExplorerPort               string `json:"explorerPort"`               // the port where the block explorer is hosted
 	RPCPort                    string `json:"rpcPort"`                    // the port where the rpc server is hosted
 	AdminPort                  string `json:"adminPort"`                  // the port where the admin rpc server is hosted
+	ProfilingPort              string `json:"profilingPort"`              // the port where the pprof profiling server is hosted
 	RPCUrl                     string `json:"rpcURL"`                     // the url where the rpc server is hosted
 	AdminRPCUrl                string `json:"adminRPCUrl"`                // the url where the admin rpc server is hosted
 	TimeoutS                   int    `json:"timeoutS"`                   // the rpc request timeout in seconds
@@ -137,6 +155,7 @@ func DefaultRPCConfig() RPCConfig {
 		ExplorerPort:               "50001",                    // find the explorer on localhost:50001
 		RPCPort:                    "50002",                    // the rpc is served on localhost:50002
 		AdminPort:                  "50003",                    // the admin rpc is served on localhost:50003
+		ProfilingPort:              "6060",                     // the pprof profiling server is served on localhost:6060
 		RPCUrl:                     "http://localhost:50002",   // use a local rpc by default
 		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
 		TimeoutS:                   3,                          // the rpc timeout is 3 seconds
@@ -164,6 +183,7 @@ const (
 type StateMachineConfig struct {
 	InitialTokensPerBlock uint64 `json:"initialTokensPerBlock"` // initial micro tokens minted per block (before halvenings)
 	BlocksPerHalvening    uint64 `json:"blocksPerHalvening"`    // number of blocks between block reward halvings
+	FaucetAddress         string `json:"faucetAddress"`         // if set: "send" txs from this address will auto-mint on insufficient funds (dev/test only)
 }
 
 // DefaultStateMachineConfig returns FSM defaults
@@ -171,6 +191,7 @@ func DefaultStateMachineConfig() StateMachineConfig {
 	return StateMachineConfig{
 		InitialTokensPerBlock: DefaultInitialTokensPerBlock,
 		BlocksPerHalvening:    DefaultBlocksPerHalvening,
+		FaucetAddress:         "",
 	}
 }
 
@@ -253,15 +274,19 @@ func DefaultP2PConfig() P2PConfig {
 
 // StoreConfig is user configurations for the key value database
 type StoreConfig struct {
-	DataDirPath    string `json:"dataDirPath"`    // path of the designated folder where the application stores its data
-	DBName         string `json:"dbName"`         // name of the database
-	IndexByAccount bool   `json:"indexByAccount"` // index transactions by account
-	InMemory       bool   `json:"inMemory"`       // non-disk database, only for testing
+	DataDirPath               string `json:"dataDirPath"`               // path of the designated folder where the application stores its data
+	DBName                    string `json:"dbName"`                    // name of the database
+	IndexByAccount            bool   `json:"indexByAccount"`            // index transactions by account
+	InMemory                  bool   `json:"inMemory"`                  // non-disk database, only for testing
+	StateChangeJournalEnabled bool   `json:"stateChangeJournalEnabled"` // persist state-change keys for indexer blob deltas
 	// recommended range: 500-2000 for optimal performance. Values below 500 increase disk I/O
 	// by several orders of magnitude, reducing performance and accelerating disk degradation during
 	// sync. Lower values also increase the risk of data loss due to a pebble issue where batches are
 	// returned before commit completion when compaction runs concurrently with commits.
 	LSSCompactionInterval uint64 `json:"lssCompactionInterval"` // interval for compacting latest store data
+	BackupDirectory       string `json:"backupDirectory"`       // directory where backups of the database are stored
+	BackupInterval        uint64 `json:"backupInterval"`        // interval in blocks for creating backups of the database (0 to disable automatic backups)
+	CompressionProfile    string `json:"compressionProfile"`    // the pebbledb compression profile to use.
 }
 
 // DefaultDataDirPath() is $USERHOME/.canopy
@@ -282,11 +307,15 @@ func DefaultDataDirPath() string {
 // DefaultStoreConfig() returns the developer recommended store configuration
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		DataDirPath:           DefaultDataDirPath(),           // use the default data dir path
-		DBName:                "canopy",                       // 'canopy' database name
-		IndexByAccount:        true,                           // index transactions by account
-		InMemory:              false,                          // persist to disk, not memory
-		LSSCompactionInterval: uint64(rand.Int32N(101) + 500), // clean every 500-600 blocks (random)
+		DataDirPath:               DefaultDataDirPath(),                      // use the default data dir path
+		DBName:                    "canopy",                                  // 'canopy' database name
+		IndexByAccount:            true,                                      // index transactions by account
+		InMemory:                  false,                                     // persist to disk, not memory
+		StateChangeJournalEnabled: false,                                     // state-change journaling is disabled by default
+		LSSCompactionInterval:     uint64(rand.Int32N(101) + 500),            // clean every 500-600 blocks (random)
+		BackupDirectory:           path.Join(DefaultDataDirPath(), "backup"), // backup directory name
+		BackupInterval:            0,                                         // backups disabled by default
+		CompressionProfile:        "zstd",
 	}
 }
 
@@ -308,7 +337,7 @@ func DefaultMempoolConfig() MempoolConfig {
 		MaxTransactionCount:        5000,                       // 5000 max transactions
 		IndividualMaxTxSize:        uint32(4 * units.Kilobyte), // 4 KB max individual tx size
 		DropPercentage:             35,                         // drop 35% if limits are reached
-		LazyMempoolCheckFrequencyS: 1,                          // check every 1 second
+		LazyMempoolCheckFrequencyS: 2,                          // check every 2 seconds
 	}
 }
 
@@ -340,7 +369,7 @@ func (c Config) WriteToFile(filepath string) error {
 		return err
 	}
 	// write the config.json file to the data directory
-	return os.WriteFile(filepath, jsonBytes, os.ModePerm)
+	return os.WriteFile(filepath, jsonBytes, 0600)
 }
 
 // NewConfigFromFile() populates a Config object from a JSON file

@@ -43,7 +43,6 @@ var (
 	orderBookPrefix        = []byte{13} // store key prefix for 'sell orders' before they are bid on
 	retiredCommitteePrefix = []byte{14} // store key prefix for 'retired' (dead) committees
 	dexPrefix              = []byte{15} // store key prefix for 'dex' functionality
-
 	lockedBatchSegment = []byte{1}
 	nextBatchSement    = []byte{2}
 )
@@ -78,6 +77,7 @@ func OrderBookPrefix(cId uint64) []byte { return lib.JoinLenPrefix(orderBookPref
 func KeyForOrder(chainId uint64, orderId []byte) []byte {
 	return append(OrderBookPrefix(chainId), lib.JoinLenPrefix(orderId)...)
 }
+
 func KeyForUnstaking(height uint64, address crypto.AddressI) []byte {
 	return append(UnstakingPrefix(height), lib.JoinLenPrefix(address.Bytes())...)
 }
@@ -112,16 +112,35 @@ func KeyForNextBatch(chainId uint64) []byte {
 }
 
 func AddressFromKey(k []byte) (crypto.AddressI, lib.ErrorI) {
-	segments := lib.DecodeLengthPrefixed(k)
+	segments, err := decodeLengthPrefixedSafe(k)
+	if err != nil {
+		return nil, err
+	}
 	return crypto.NewAddressFromBytes(segments[len(segments)-1]), nil
 }
 
 func IdFromKey(k []byte) (uint64, lib.ErrorI) {
-	segments := lib.DecodeLengthPrefixed(k)
-	if len(segments) < 2 {
+	segments, err := decodeLengthPrefixedSafe(k)
+	if err != nil {
+		return 0, err
+	}
+	if len(segments) < 2 || len(segments[1]) != 8 {
 		return 0, ErrInvalidKey(k)
 	}
 	return binary.BigEndian.Uint64(segments[1]), nil
+}
+
+func decodeLengthPrefixedSafe(k []byte) (segments [][]byte, err lib.ErrorI) {
+	defer func() {
+		if recover() != nil {
+			segments, err = nil, ErrInvalidKey(k)
+		}
+	}()
+	segments = lib.DecodeLengthPrefixed(k)
+	if len(segments) == 0 {
+		return nil, ErrInvalidKey(k)
+	}
+	return segments, nil
 }
 
 func formatUint64(u uint64) []byte {

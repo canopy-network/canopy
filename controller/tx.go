@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,10 +16,13 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 /* This file implements logic for transaction sending and handling as well as memory pooling */
+
+const slowProposalBuildThreshold = 2 * time.Second
 
 // SendTxMsgs() routes generated transaction messages to the listener for processing + gossiping
 func (c *Controller) SendTxMsgs(txs [][]byte) lib.ErrorI {
@@ -80,9 +85,12 @@ func (c *Controller) ListenForTx() {
 	}
 }
 
-// GetProposalBlockFromMempool() returns the cached proposal block
-func (c *Controller) GetProposalBlockFromMempool() *CachedProposal {
-	return c.Mempool.cachedProposal.Load().(*CachedProposal)
+// GetProposalBlockFromMempool() returns the cached proposal block if one has been built
+func (c *Controller) GetProposalBlockFromMempool() (p *CachedProposal, ok bool) {
+	if cached := c.Mempool.cachedProposal.Load(); cached != nil {
+		p, ok = cached.(*CachedProposal)
+	}
+	return
 }
 
 // CheckMempool() periodically checks the mempool:
@@ -95,29 +103,42 @@ func (c *Controller) CheckMempool() {
 	if c.Config.LazyMempoolCheckFrequencyS == 0 {
 		return
 	}
+	checkTimer := time.Duration(c.Config.LazyMempoolCheckFrequencyS) * time.Second
 	for {
+		// skip mempool checks while syncing
+		if c.isSyncing.Load() {
+			time.Sleep(checkTimer)
+			continue
+		}
 		// keep a list of transaction needing to be gossipped
 		var toGossip [][]byte
-		// if recheck is necessary
-		if c.Mempool.recheck.Load() {
-			// execute in a function call to allow defer
-			func() {
-				c.Mempool.L.Lock()
-				defer c.Mempool.L.Unlock()
-				// be mempool strict on proposals
-				resetProposalConfig := c.SetFSMInConsensusModeForProposals()
-				// once done proposing, 'reset' the proposal mode back to default to 'accept all'
-				defer func() { resetProposalConfig() }()
-				// reset the mempool
-				c.Mempool.FSM.Reset()
-				// check the mempool to cache a proposal block and validate the mempool itself
-				c.Mempool.CheckMempool()
-				// get the transactions to gossip
-				toGossip = c.Mempool.GetTransactions(math.MaxUint64)
-				// set recheck to false
-				c.Mempool.recheck.Store(false)
-			}()
-		}
+		// execute in a function call to allow defer
+		func() {
+			c.Mempool.L.Lock()
+			defer c.Mempool.L.Unlock()
+			// get the proposal block
+			p, ok := c.GetProposalBlockFromMempool()
+			// check for stale proposal
+			stale := !ok || p.dirtyVersion != c.Mempool.dirtyVersion.Load() || p.proposalVoteConfig != c.currentProposalVoteConfig()
+			// if the cached proposal is current or rebuilding is deferred during propose vote
+			if !stale || c.Consensus != nil && c.Consensus.CurrentPhase() == lib.Phase_PROPOSE_VOTE {
+				return
+			}
+			// be mempool strict on proposals
+			resetProposalConfig := c.SetFSMInConsensusModeForProposals()
+			// once done proposing, 'reset' the proposal mode back to default to 'accept all'
+			defer func() { resetProposalConfig() }()
+			// reset the mempool
+			c.Mempool.FSM.Reset()
+			// check the mempool to cache a proposal block and validate the mempool itself
+			err := c.Mempool.CheckMempool()
+			// exit on error
+			if err != nil {
+				return
+			}
+			// get the transactions to gossip
+			toGossip = c.Mempool.GetTransactions(math.MaxUint64)
+		}()
 		// for each transaction to gossip
 		var dedupedTxs [][]byte
 		for _, tx := range toGossip {
@@ -137,13 +158,13 @@ func (c *Controller) CheckMempool() {
 				c.log.Error(fmt.Sprintf("unable to gossip tx with err: %s", err.Error()))
 			}
 		}
-		// sleep for the recheck time
-		time.Sleep(time.Duration(c.Config.LazyMempoolCheckFrequencyS) * time.Second)
+		// sleep until the next periodic check
+		time.Sleep(checkTimer)
 	}
 }
 
 // Mempool accepts or rejects incoming txs based on the mempool (ephemeral copy) state
-// - recheck when
+// - invalidate cached proposal when
 //   - mempool dropped some percent of the lowest fee txs
 //   - new tx has higher fee than the lowest
 //
@@ -159,16 +180,18 @@ type Mempool struct {
 	metrics         *lib.Metrics       // telemetry
 	address         crypto.AddressI    // validator identity
 	cachedProposal  atomic.Value       // the cached block proposal set when mempool is 'checked'
-	recheck         atomic.Bool        // a signal to recheck the mempool
+	dirtyVersion    atomic.Uint64      // a monotonic version tracking proposal inputs that invalidate the cache
 	stop            context.CancelFunc // the cancellable context of the mempool
 	log             lib.LoggerI        // the logger
 }
 
 type CachedProposal struct {
-	Block         *lib.Block
-	BlockResult   *lib.BlockResult
-	CertResults   *lib.CertificateResult
-	rcBuildHeight uint64
+	Block              *lib.Block
+	BlockResult        *lib.BlockResult
+	CertResults        *lib.CertificateResult
+	rcBuildHeight      uint64
+	dirtyVersion       uint64
+	proposalVoteConfig fsm.GovProposalVoteConfig
 }
 
 // NewMempool() creates a new instance of a Mempool structure
@@ -178,7 +201,6 @@ func NewMempool(fsm *fsm.StateMachine, address crypto.AddressI, config lib.Mempo
 		Mempool:         lib.NewMempool(config),
 		L:               &sync.Mutex{},
 		cachedProposal:  atomic.Value{},
-		recheck:         atomic.Bool{},
 		cachedFailedTxs: lib.NewFailedTxCache(),
 		metrics:         metrics,
 		address:         address,
@@ -194,26 +216,46 @@ func NewMempool(fsm *fsm.StateMachine, address crypto.AddressI, config lib.Mempo
 	return m, err
 }
 
-// HandleTransactions() attempts to add a transaction to the mempool by validating, adding, and evicting overfull or newly invalid txs
+// HandleTransactions() attempts to add transactions to the mempool, allowing normal fee-based eviction.
 func (m *Mempool) HandleTransactions(tx ...[]byte) (err lib.ErrorI) {
+	return m.handleTransactions(false, nil, tx...)
+}
+
+// HandleTransactionAndVerifyRetained() adds one transaction and reports if fee-based eviction removed it.
+// This is used by synchronous submission APIs and must not be used to classify peer transactions as invalid.
+func (m *Mempool) HandleTransactionAndVerifyRetained(tx, replace []byte) lib.ErrorI {
+	return m.handleTransactions(true, replace, tx)
+}
+
+func (m *Mempool) handleTransactions(verifyRetained bool, replace []byte, tx ...[]byte) (err lib.ErrorI) {
 	// lock the mempool
 	m.L.Lock()
 	defer m.L.Unlock()
-	// signal a recheck
-	m.recheck.Store(true)
 	// add a transaction to the mempool
-	if err = m.AddTransactions(tx...); err != nil {
+	recheck, err := m.AddTransactions(tx...)
+	if err != nil {
 		// exit with the error
 		return
+	}
+	// invalidate the cached proposal version when the mempool changed
+	if recheck {
+		m.dirtyVersion.Add(1)
+	}
+	if verifyRetained && !m.Contains(crypto.HashString(tx[0])) {
+		return lib.NewError(lib.CodeInvalidArgument, lib.ConsensusModule, "transaction evicted from mempool")
+	}
+	if len(replace) != 0 {
+		m.DeleteTransaction(replace)
 	}
 	// exit
 	return
 }
 
 // CheckMempool() Checks each transaction in the mempool and caches a block proposal
-func (m *Mempool) CheckMempool() {
+func (m *Mempool) CheckMempool() (err lib.ErrorI) {
+	startTime := time.Now()
 	m.log.Info("Validating mempool and caching a new proposal block")
-	var err lib.ErrorI
+	buildVersion := m.dirtyVersion.Load()
 	// check if a validator
 	// create the actual block structure with the maximum amount of transactions allowed or available in the mempool
 	block := &lib.Block{
@@ -226,30 +268,72 @@ func (m *Mempool) CheckMempool() {
 	ctx, stop := context.WithCancel(context.Background())
 	// set the cancel function
 	m.stop = stop
-	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)
-	if err != nil {
-		m.log.Warnf("Check Mempool error: %s", err.Error())
-		return
-	}
-	// set the block result block header
-	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
-	// get RC build height
-	rcBuildHeight := m.controller.RootChainHeight()
 	// calculate rc build height
 	ownRoot, err := m.FSM.LoadIsOwnRoot()
 	if err != nil {
 		m.log.Error(err.Error())
 	}
+	rcBuildHeight := uint64(0)
 	// if ownRoot
 	if ownRoot {
 		rcBuildHeight = m.FSM.Height()
+	} else {
+		// Use mempool FSM snapshot to avoid races with controller FSM resets.
+		var rootChainID uint64
+		var e lib.ErrorI
+		if rootChainID, e = m.FSM.GetRootChainId(); e != nil {
+			m.log.Error(e.Error())
+		} else {
+			rcBuildHeight = m.controller.RCManager.GetHeight(rootChainID)
+		}
+		// for nested chains fetch and cache the DEX root batch, liveness is handled on the certificate results
+		var rootDexBatch *lib.DexBatch
+		rootDexBatch, err = m.controller.RCManager.GetDexBatch(rootChainID,
+			rcBuildHeight, m.controller.Config.ChainId, false)
+		if err != nil {
+			// CRITICAL: if the root chain query fails (e.g. the root-chain RPC/websocket is
+			// momentarily unreachable and returns EOF), DO NOT proceed to build a proposal.
+			// Caching a proposal with a nil root dex batch produces a state root that diverges
+			// from the deterministic value other nodes (and this node at commit time, which uses
+			// the embedded qc.Results.RootDexBatch) compute. That divergence surfaces as
+			// 'unequal block hash' and wedges consensus until the connection recovers.
+			// Bail out instead and keep the last valid cached proposal; the next check (or the
+			// next CommitCertificate) rebuilds it once the root chain is reachable again.
+			m.log.Warnf("Check Mempool skipped: unable to fetch root dex batch: %s", err.Error())
+			return
+		}
+		m.FSM.SetRootDexCache(rootDexBatch)
 	}
+	// apply the block to the mempool FSM to get the result and validate the transactions
+	applyBlockStartTime := time.Now()
+	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)
+	applyBlockDuration := time.Since(applyBlockStartTime)
+	if m.metrics != nil {
+		m.metrics.ProposalApplyBlockTime.Observe(applyBlockDuration.Seconds())
+	}
+	if err != nil {
+		m.log.Warnf("Check Mempool error: %s", err.Error())
+		if m.dirtyVersion.Load() == buildVersion {
+			m.dirtyVersion.Add(1)
+		}
+		return err
+	}
+	// set the block result block header
+	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
 	// cache the proposal
+	certResultsStartTime := time.Now()
+	certResults := m.controller.NewCertificateResults(m.FSM, block, blockResult, &bft.ByzantineEvidence{DSE: bft.DoubleSignEvidences{}}, rcBuildHeight)
+	certResultsDuration := time.Since(certResultsStartTime)
+	if m.metrics != nil {
+		m.metrics.ProposalCertResultsTime.Observe(certResultsDuration.Seconds())
+	}
 	m.cachedProposal.Store(&CachedProposal{
-		Block:         block,
-		BlockResult:   blockResult,
-		CertResults:   m.controller.NewCertificateResults(m.FSM, block, blockResult, &bft.ByzantineEvidence{DSE: bft.DoubleSignEvidences{}}, rcBuildHeight),
-		rcBuildHeight: rcBuildHeight,
+		Block:              block,
+		BlockResult:        blockResult,
+		CertResults:        certResults,
+		rcBuildHeight:      rcBuildHeight,
+		dirtyVersion:       buildVersion,
+		proposalVoteConfig: m.FSM.ProposalVoteConfig(),
 	})
 	// create a cache of failed tx bytes to evict from the mempool
 	var failedTxBz [][]byte
@@ -283,16 +367,27 @@ func (m *Mempool) CheckMempool() {
 		m.cachedResults = append(m.cachedResults, o)
 	}
 	m.log.Info("Done checking mempool")
+	totalDuration := time.Since(startTime)
+	if m.metrics != nil {
+		m.metrics.ProposalBuildTime.Observe(totalDuration.Seconds())
+	}
+	if totalDuration >= slowProposalBuildThreshold {
+		m.log.Warnf("Slow mempool proposal build height=%d txs=%d apply_block=%s cert_results=%s total=%s",
+			block.BlockHeader.Height, len(block.Transactions), applyBlockDuration, certResultsDuration, totalDuration)
+	}
 	// update the mempool metrics
 	m.metrics.UpdateMempoolMetrics(m.Mempool.TxCount(), m.Mempool.TxsBytes())
+	return nil
 }
 
 // GetPendingPage() returns a page of unconfirmed mempool transactions
 func (c *Controller) GetPendingPage(p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
-	// lock the controller for thread safety
-	c.Lock()
-	// unlock the controller when the function completes
-	defer c.Unlock()
+	// try to acquire the mempool lock without blocking - if block processing holds it, return empty
+	// rather than queuing (100+/sec callers queueing cause TCP write timeouts)
+	if c == nil || c.Mempool == nil || c.Mempool.L == nil || !c.Mempool.L.TryLock() {
+		return lib.NewPage(p, lib.PendingResultsPageName), nil
+	}
+	defer c.Mempool.L.Unlock()
 	// create a new page and transaction results list to populate
 	page, txResults := lib.NewPage(p, lib.PendingResultsPageName), make(lib.TxResults, 0)
 	// define a callback to execute when loading the page
@@ -315,11 +410,66 @@ func (c *Controller) GetPendingPage(p lib.PageParams) (page *lib.Page, err lib.E
 	return
 }
 
-// GetFailedTxsPage() returns a list of failed mempool transactions
+// GetPendingTxByHash() returns an unconfirmed mempool transaction by hash.
+func (c *Controller) GetPendingTxByHash(hash string) (*lib.TxResult, bool) {
+	// try to acquire the mempool lock without blocking - return not-found if block processing holds it
+	if c == nil || c.Mempool == nil || c.Mempool.L == nil || !c.Mempool.L.TryLock() {
+		return nil, false
+	}
+	defer c.Mempool.L.Unlock()
+	normalizedHash := normalizeTxHash(hash)
+	for _, tx := range c.Mempool.cachedResults {
+		if tx == nil {
+			continue
+		}
+		if normalizeTxHash(tx.TxHash) == normalizedHash {
+			return tx, true
+		}
+		if tx.Transaction != nil && fsm.IsRLPMemo(tx.Transaction.Memo) && tx.Transaction.Signature != nil {
+			var ethTx ethTypes.Transaction
+			if ethTx.UnmarshalBinary(tx.Transaction.Signature.Signature) == nil && normalizeTxHash(ethTx.Hash().Hex()) == normalizedHash {
+				return tx, true
+			}
+		}
+	}
+	return nil, false
+}
+
+// IsFailedTx reports whether stateful mempool validation rejected a transaction.
+func (c *Controller) IsFailedTx(hash string) bool {
+	if c == nil || c.Mempool == nil || c.Mempool.cachedFailedTxs == nil {
+		return false
+	}
+	_, found := c.Mempool.cachedFailedTxs.Get(normalizeTxHash(hash))
+	return found
+}
+
+// GetPendingNonce recommends the next nonce after the latest validated mempool snapshot.
+func (c *Controller) GetPendingNonce(address crypto.AddressI, confirmed uint64) uint64 {
+	if c == nil || c.Mempool == nil || c.Mempool.L == nil || !c.Mempool.L.TryLock() {
+		return confirmed
+	}
+	defer c.Mempool.L.Unlock()
+	for _, result := range c.Mempool.cachedResults {
+		if result == nil || result.Transaction == nil || result.Transaction.Memo != fsm.RLPV2Indicator ||
+			!bytes.Equal(result.Sender, address.Bytes()) || result.Transaction.Nonce < confirmed || result.Transaction.Nonce == math.MaxUint64 {
+			continue
+		}
+		confirmed = result.Transaction.Nonce + 1
+	}
+	return confirmed
+}
+
+func normalizeTxHash(hash string) string {
+	return strings.TrimPrefix(strings.ToLower(hash), "0x")
+}
+
+// GetFailedTxsPage() returns a list of failed mempool transactions for the given address, or all cached failed transactions if address is empty
 func (c *Controller) GetFailedTxsPage(address string, p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
-	// lock the controller for thread safety
-	c.Lock()
-	// unlock the controller when the function completes
+	// try to acquire the lock without blocking — return empty if block processing holds it
+	if !c.TryLock() {
+		return lib.NewPage(p, lib.FailedTxsPageName), nil
+	}
 	defer c.Unlock()
 	// create a new page and failed transaction results list to populate
 	page, failedTxs := lib.NewPage(p, lib.FailedTxsPageName), make(lib.FailedTxs, 0)

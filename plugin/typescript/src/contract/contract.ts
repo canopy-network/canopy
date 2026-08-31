@@ -1,6 +1,7 @@
 /* This file contains the base contract implementation that overrides the basic 'transfer' functionality */
 
 import Long from 'long';
+import protobuf from 'protobufjs/minimal.js';
 
 import { types } from '../proto/types.js';
 
@@ -10,25 +11,47 @@ import {
     ErrInvalidAddress,
     ErrInvalidAmount,
     ErrInvalidMessageCast,
-    ErrTxFeeBelowStateLimit,
+    ErrTxFeeBelowStateLimit
 } from './error.js';
 
 import type { Plugin, Config } from './plugin.js';
 import { JoinLenPrefix, FromAny, Unmarshal } from './plugin.js';
 import { fileDescriptorProtos } from '../proto/descriptors.js';
 
+const { Reader } = protobuf;
+const accountFields = new Set([1, 2, 7]);
+const poolFields = new Set([1, 2]);
+
+// protobufjs discards unknown fields, so retain fields outside each local schema verbatim.
+function encodePreservingUnknownFields(
+    MessageType: any,
+    message: any,
+    original: Uint8Array | null,
+    knownFields: Set<number>
+): Uint8Array {
+    const fields: Uint8Array[] = [MessageType.encode(message).finish()];
+    const reader = Reader.create(original || new Uint8Array());
+    while (reader.pos < reader.len) {
+        const start = reader.pos;
+        const tag = reader.uint32();
+        reader.skipType(tag & 7);
+        if (!knownFields.has(tag >>> 3)) {
+            fields.push(reader.buf.subarray(start, reader.pos));
+        }
+    }
+    return Buffer.concat(fields);
+}
+
 // ContractConfig: the configuration of the contract
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const ContractConfig: any = {
-    name: "go_plugin_contract",
+    name: 'go_plugin_contract',
     id: 1,
     version: 1,
-    supportedTransactions: ["send"],
-    transactionTypeUrls: [
-        "type.googleapis.com/types.MessageSend",
-    ],
+    supportedTransactions: ['send'],
+    transactionTypeUrls: ['type.googleapis.com/types.MessageSend'],
     eventTypeUrls: [],
-    fileDescriptorProtos,
+    fileDescriptorProtos
 };
 
 // Contract() defines the smart contract that implements the extended logic of the nested chain
@@ -84,7 +107,7 @@ export class Contract {
         // return the authorized signers
         return {
             recipient: msg.toAddress,
-            authorizedSigners: [msg.fromAddress],
+            authorizedSigners: [msg.fromAddress]
         };
     }
 }
@@ -97,8 +120,11 @@ export class ContractAsync {
         // validate fee
         const [resp, err] = await contract.plugin.StateRead(contract, {
             keys: [
-                { queryId: Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)), key: KeyForFeeParams() },
-            ],
+                {
+                    queryId: Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)),
+                    key: KeyForFeeParams()
+                }
+            ]
         });
 
         if (err) {
@@ -157,7 +183,7 @@ export class ContractAsync {
         if (msg) {
             switch (msgType) {
                 case 'MessageSend':
-                    return ContractAsync.DeliverMessageSend(contract, msg, request.tx?.fee as Long);
+                    return ContractAsync.DeliverMessageSend(contract, msg, request.tx?.fee as Long, request.tx?.memo || '');
                 default:
                     return { error: ErrInvalidMessageCast() };
             }
@@ -167,7 +193,12 @@ export class ContractAsync {
 
     // DeliverMessageSend() handles a 'send' message
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    static async DeliverMessageSend(contract: Contract, msg: any, fee: Long | number | undefined): Promise<any> {
+    static async DeliverMessageSend(
+        contract: Contract,
+        msg: any,
+        fee: Long | number | undefined,
+        memo: string
+    ): Promise<any> {
         const fromQueryId = Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
         const toQueryId = Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
         const feeQueryId = Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
@@ -182,8 +213,8 @@ export class ContractAsync {
             keys: [
                 { queryId: feeQueryId, key: feePoolKey },
                 { queryId: fromQueryId, key: fromKey },
-                { queryId: toQueryId, key: toKey },
-            ],
+                { queryId: toQueryId, key: toKey }
+            ]
         });
 
         // check for internal error
@@ -234,12 +265,19 @@ export class ContractAsync {
         const feePool = feePoolRaw as any;
 
         // add fee to 'amount to deduct'
-        const msgAmount = Long.isLong(msg.amount) ? msg.amount : Long.fromNumber(msg.amount as number || 0);
-        const feeAmount = Long.isLong(fee) ? fee : Long.fromNumber(fee as number || 0);
+        const msgAmount = Long.isLong(msg.amount)
+            ? msg.amount.toUnsigned()
+            : Long.fromNumber((msg.amount as number) || 0, true);
+        const feeAmount = Long.isLong(fee) ? fee.toUnsigned() : Long.fromNumber((fee as number) || 0, true);
+        if (msgAmount.greaterThan(Long.MAX_UNSIGNED_VALUE.subtract(feeAmount))) {
+            return { error: ErrInvalidAmount() };
+        }
         const amountToDeduct = msgAmount.add(feeAmount);
 
         // get from amount
-        const fromAmount = Long.isLong(from?.amount) ? from.amount : Long.fromNumber(from?.amount as number || 0);
+        const fromAmount = Long.isLong(from?.amount)
+            ? from.amount.toUnsigned()
+            : Long.fromNumber((from?.amount as number) || 0, true);
 
         // if the account amount is less than the amount to subtract; return insufficient funds
         if (fromAmount.lessThan(amountToDeduct)) {
@@ -251,45 +289,53 @@ export class ContractAsync {
         const toAccount = isSelfTransfer ? from : to;
 
         // get amounts as Long
-        const newFromAmount = fromAmount.subtract(amountToDeduct);
-        const toAmount = Long.isLong(toAccount?.amount) ? toAccount.amount : Long.fromNumber(toAccount?.amount as number || 0);
+        const newFromAmount = fromAmount.subtract(isSelfTransfer ? feeAmount : amountToDeduct);
+        const toAmount = Long.isLong(toAccount?.amount)
+            ? toAccount.amount.toUnsigned()
+            : Long.fromNumber((toAccount?.amount as number) || 0, true);
         const newToAmount = toAmount.add(msgAmount);
-        const poolAmount = Long.isLong(feePool?.amount) ? feePool.amount : Long.fromNumber(feePool?.amount as number || 0);
+        const poolAmount = Long.isLong(feePool?.amount)
+            ? feePool.amount.toUnsigned()
+            : Long.fromNumber((feePool?.amount as number) || 0, true);
+        if (poolAmount.greaterThan(Long.MAX_UNSIGNED_VALUE.subtract(feeAmount)) ||
+            (!isSelfTransfer && toAmount.greaterThan(Long.MAX_UNSIGNED_VALUE.subtract(msgAmount)))) {
+            return { error: ErrInvalidAmount() };
+        }
         const newPoolAmount = poolAmount.add(feeAmount);
 
         // Update the accounts
-        const updatedFrom = types.Account.create({ address: from?.address, amount: newFromAmount });
-        const updatedTo = types.Account.create({ address: toAccount?.address, amount: newToAmount });
+        const updatedFrom = types.Account.create({
+            address: from?.address,
+            amount: newFromAmount,
+            nonce: from?.nonce
+        });
+        const updatedTo = types.Account.create({
+            address: toAccount?.address,
+            amount: newToAmount,
+            nonce: toAccount?.nonce
+        });
         const updatedPool = types.Pool.create({ id: feePool?.id, amount: newPoolAmount });
 
         // convert the accounts to bytes
-        const newFromBytes = types.Account.encode(updatedFrom).finish();
-        const newToBytes = types.Account.encode(updatedTo).finish();
-        const newFeePoolBytes = types.Pool.encode(updatedPool).finish();
+        const newFromBytes = encodePreservingUnknownFields(types.Account, updatedFrom, fromBytes, accountFields);
+        const newToBytes = encodePreservingUnknownFields(types.Account, updatedTo, toBytes, accountFields);
+        const newFeePoolBytes = encodePreservingUnknownFields(types.Pool, updatedPool, feePoolBytes, poolFields);
 
         // execute writes to the database
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let writeResp: any;
         let writeErr: IPluginError | null;
 
-        // if the from account is drained - delete the from account
-        if (newFromAmount.isZero()) {
-            [writeResp, writeErr] = await contract.plugin.StateWrite(contract, {
-                sets: [
-                    { key: feePoolKey, value: newFeePoolBytes },
-                    { key: toKey, value: newToBytes },
-                ],
-                deletes: [{ key: fromKey }],
-            });
-        } else {
-            [writeResp, writeErr] = await contract.plugin.StateWrite(contract, {
-                sets: [
-                    { key: feePoolKey, value: newFeePoolBytes },
-                    { key: toKey, value: newToBytes },
-                    { key: fromKey, value: newFromBytes },
-                ],
-            });
-        }
+        // Retain drained accounts only when they carry nonce state or core will advance the nonce after RLP.V2 delivery.
+        const retainFrom = !newFromAmount.isZero() || !Long.fromValue(from?.nonce || 0).isZero() || memo === 'RLP.V2';
+        [writeResp, writeErr] = await contract.plugin.StateWrite(contract, {
+            sets: [
+                { key: feePoolKey, value: newFeePoolBytes },
+                ...(!isSelfTransfer ? [{ key: toKey, value: newToBytes }] : []),
+                ...(retainFrom ? [{ key: fromKey, value: newFromBytes }] : [])
+            ],
+            deletes: retainFrom ? [] : [{ key: fromKey }]
+        });
 
         if (writeErr) {
             return { error: writeErr };
@@ -303,8 +349,8 @@ export class ContractAsync {
 }
 
 const accountPrefix = Buffer.from([1]); // store key prefix for accounts
-const poolPrefix = Buffer.from([2]);    // store key prefix for pools
-const paramsPrefix = Buffer.from([7]);  // store key prefix for governance parameters
+const poolPrefix = Buffer.from([2]); // store key prefix for pools
+const paramsPrefix = Buffer.from([7]); // store key prefix for governance parameters
 
 // KeyForAccount() returns the state database key for an account
 export function KeyForAccount(addr: Uint8Array): Uint8Array {
@@ -313,7 +359,7 @@ export function KeyForAccount(addr: Uint8Array): Uint8Array {
 
 // KeyForFeeParams() returns the state database key for governance controlled 'fee parameters'
 export function KeyForFeeParams(): Uint8Array {
-    return JoinLenPrefix(paramsPrefix, Buffer.from("/f/"));
+    return JoinLenPrefix(paramsPrefix, Buffer.from('/f/'));
 }
 
 // KeyForFeePool() returns the state database key for governance controlled 'fee parameters'

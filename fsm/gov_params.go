@@ -121,6 +121,9 @@ var _ ParamSpace = &ConsensusParams{}
 
 // Check() validates the consensus params
 func (x *ConsensusParams) Check() lib.ErrorI {
+	if x.BlockSize < lib.MaxBlockHeaderSize {
+		return ErrInvalidParam(ParamBlockSize)
+	}
 	if _, err := x.ParseProtocolVersion(); err != nil {
 		return err
 	}
@@ -158,8 +161,8 @@ func (x *ConsensusParams) SetString(paramName string, value string) lib.ErrorI {
 		if err != nil {
 			return err
 		}
-		// ensure new version isn't less than old version
-		if newVersion.Version <= oldVersion.Version || newVersion.Height <= oldVersion.Height {
+		// enforce sequential upgrades and strictly increasing activation heights.
+		if newVersion.Version != oldVersion.Version+1 || newVersion.Height <= oldVersion.Height {
 			return ErrInvalidProtocolVersion()
 		}
 		x.ProtocolVersion = value
@@ -181,15 +184,15 @@ func checkProtocolVersion(v string) (*ProtocolVersion, lib.ErrorI) {
 	if len(arr) != 2 {
 		return nil, ErrInvalidProtocolVersion()
 	}
-	version, err := strconv.Atoi(arr[0])
+	version, err := strconv.ParseUint(arr[0], 10, 64)
 	if err != nil {
 		return nil, ErrInvalidProtocolVersion()
 	}
-	height, err := strconv.Atoi(arr[1])
+	height, err := strconv.ParseUint(arr[1], 10, 64)
 	if err != nil {
 		return nil, ErrInvalidProtocolVersion()
 	}
-	ptr.Height, ptr.Version = uint64(height), uint64(version)
+	ptr.Height, ptr.Version = height, version
 	return ptr, nil
 }
 

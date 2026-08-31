@@ -80,9 +80,9 @@ func TestKeystoreDeleteKeyWithOpts(t *testing.T) {
 	// validate got address vs expected
 	require.Equal(t, hex.EncodeToString(address), gotAddress)
 	// delete the key
-	ks.DeleteKey(DeleteOpts{
+	require.NoError(t, ks.DeleteKey(password, DeleteOpts{
 		Address: address,
-	})
+	}))
 	// check the key was imported with address
 	_, err = ks.GetKey(address, password)
 	require.ErrorContains(t, err, "key not found")
@@ -100,9 +100,9 @@ func TestKeystoreDeleteKeyWithOpts(t *testing.T) {
 	// validate got address vs expected
 	require.Equal(t, hex.EncodeToString(address), gotAddress)
 	// delete the key
-	ks.DeleteKey(DeleteOpts{
+	require.NoError(t, ks.DeleteKey(password, DeleteOpts{
 		Nickname: "pablito",
-	})
+	}))
 	// check the key was imported with address
 	_, err = ks.GetKey(address, password)
 	require.ErrorContains(t, err, "key not found")

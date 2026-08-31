@@ -1,9 +1,11 @@
 package fsm
 
 import (
+	"bytes"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"math"
 	"time"
 )
 
@@ -14,16 +16,31 @@ const BlockAcceptanceRange = 4320
 
 // ApplyTransaction() processes the transaction within the state machine, returning the corresponding TxResult.
 func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (*lib.TxResult, []*lib.Event, lib.ErrorI) {
+	applyTransactionStartTime := time.Now()
 	s.events.Refer(txHash)
 	// validate the transaction and get the check result
+	checkTxStartTime := time.Now()
 	result, err := s.CheckTx(transaction, txHash, batchVerifier)
 	if err != nil {
 		return nil, nil, err
 	}
+	messageType := result.tx.MessageType
+	if result.msg != nil {
+		messageType = result.msg.Name()
+	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyTransactionStageTime.WithLabelValues("check_tx", messageType).Observe(time.Since(checkTxStartTime).Seconds())
+	}
+	defer func() {
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("total", messageType).Observe(time.Since(applyTransactionStartTime).Seconds())
+		}
+	}()
 	// if the transaction is meant for the plugin
 	if result.plugin && s.Plugin != nil {
 		// route to plugin
-		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: result.tx})
+		pluginDeliverStartTime := time.Now()
+		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: result.tx, Height: s.Height()})
 		// handle error
 		if e != nil {
 			return nil, nil, e
@@ -35,21 +52,48 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 		if err = s.addPluginEvents(resp.Events); err != nil {
 			return nil, nil, err
 		}
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("plugin_deliver", messageType).Observe(time.Since(pluginDeliverStartTime).Seconds())
+		}
 	} else {
+		// faucet mode: ensure "send" txs from the faucet address never fail due to insufficient funds.
+		if send, ok := result.msg.(*MessageSend); ok {
+			required := send.Amount
+			if required > math.MaxUint64-result.tx.Fee {
+				return nil, nil, ErrInvalidAmount()
+			}
+			if err = s.maybeFaucetTopUpForSendTx(result.sender, required+result.tx.Fee); err != nil {
+				return nil, nil, err
+			}
+		}
 		// deduct fees for the transaction
+		deductFeesStartTime := time.Now()
 		if err = s.AccountDeductFees(result.sender, result.tx.Fee); err != nil {
 			return nil, nil, err
 		}
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("deduct_fees", messageType).Observe(time.Since(deductFeesStartTime).Seconds())
+		}
 		// handle the message (payload)
+		handleMessageStartTime := time.Now()
 		if err = s.HandleMessage(result.msg); err != nil {
+			return nil, nil, err
+		}
+		if s.Metrics != nil {
+			s.Metrics.ApplyTransactionStageTime.WithLabelValues("handle_message", messageType).Observe(time.Since(handleMessageStartTime).Seconds())
+		}
+	}
+	if result.tx.Memo == RLPV2Indicator {
+		account, e := s.GetAccount(result.sender)
+		if e != nil {
+			return nil, nil, e
+		}
+		account.Nonce = result.tx.Nonce + 1
+		if err = s.SetAccount(account); err != nil {
 			return nil, nil, err
 		}
 	}
 	// return the tx result
-	messageType := result.tx.MessageType
-	if result.msg != nil {
-		messageType = result.msg.Name()
-	}
 	return &lib.TxResult{
 		Sender:      result.sender.Bytes(),
 		Recipient:   result.recipient,
@@ -72,6 +116,7 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	)
 	tx := new(lib.Transaction)
 	// populate the object ref with the bytes of the transaction
+	decodeStartTime := time.Now()
 	if err = lib.Unmarshal(transaction, tx); err != nil {
 		return
 	}
@@ -79,14 +124,25 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	if err = tx.CheckBasic(); err != nil {
 		return
 	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxDecodeTime.Observe(time.Since(decodeStartTime).Seconds())
+	}
 	// validate the timestamp (prune friendly - replay protection)
+	replayStartTime := time.Now()
 	if err = s.CheckReplay(tx, txHash); err != nil {
 		return
 	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxReplayTime.Observe(time.Since(replayStartTime).Seconds())
+	}
+	if tx.Memo == RLPIndicator && s.IsFeatureEnabled(legacyRLPDisabledProtocolVersion) {
+		return nil, ErrInvalidProtocolVersion()
+	}
 	// if the transaction is meant for the plugin
+	messageStartTime := time.Now()
 	if s.Plugin != nil && s.Plugin.SupportsTransaction(tx.MessageType) {
 		// execute check tx on the plugin
-		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: tx})
+		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: tx, Height: s.Height()})
 		if e != nil {
 			return nil, e
 		}
@@ -114,10 +170,28 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 		// set recipient
 		recipient = msg.Recipient()
 	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxMessageTime.Observe(time.Since(messageStartTime).Seconds())
+	}
 	// validate the signature of the transaction
+	signatureStartTime := time.Now()
 	sender, err := s.CheckSignature(tx, authorizedSigners, batchVerifier)
 	if err != nil {
 		return
+	}
+	if s.Metrics != nil {
+		s.Metrics.CheckTxSignatureTime.Observe(time.Since(signatureStartTime).Seconds())
+	}
+	if tx.Memo == RLPV2Indicator {
+		account, e := s.GetAccount(sender)
+		if e != nil {
+			return nil, e
+		}
+		// The account nonce is a floor, not a requirement for consecutive submission.
+		// A successful gap transaction advances the floor past every skipped nonce.
+		if tx.Nonce < account.Nonce || tx.Nonce == math.MaxUint64 {
+			return nil, ErrInvalidTxNonce()
+		}
 	}
 	// populate special message fields (if applicable)
 	s.PopulateSpecialMessageFields(tx, sender, msg)
@@ -156,8 +230,19 @@ func (s *StateMachine) CheckSignature(tx *lib.Transaction, authorizedSigners [][
 	if e != nil {
 		return nil, ErrInvalidPublicKey(e)
 	}
-	// special case: check for a special RLP transaction
-	if _, hasEthPubKey := publicKey.(*crypto.ETHSECP256K1PublicKey); hasEthPubKey && tx.Memo == RLPIndicator {
+	if multiKey, ok := publicKey.(*crypto.BLS12381MultiPublicKey); ok && multiKey.Threshold() == 0 {
+		return nil, ErrInvalidSignature()
+	}
+	if !bytes.Equal(tx.Signature.PublicKey, publicKey.Bytes()) {
+		return nil, ErrInvalidSignature()
+	}
+	// Legacy "RLP" was historically an ordinary memo for non-Ethereum keys.
+	// RLP.V2 is reserved and always requires an Ethereum key.
+	_, hasEthPubKey := publicKey.(*crypto.ETHSECP256K1PublicKey)
+	if tx.Memo == RLPV2Indicator || (tx.Memo == RLPIndicator && hasEthPubKey) {
+		if !hasEthPubKey {
+			return nil, ErrInvalidSignature()
+		}
 		if err = s.VerifyRLPBytes(tx); err != nil {
 			return nil, err
 		}
@@ -222,14 +307,51 @@ func (s *StateMachine) CheckReplay(tx *lib.Transaction, txHash string) lib.Error
 		}
 		// ensure the tx doesn't already exist in the indexer
 		// same block replays are protected at a higher level
+		replayLookupStartTime := time.Now()
 		txResult, err := store.GetTxByHash(hashBz)
 		if err != nil {
 			return err
+		}
+		if s.Metrics != nil {
+			s.Metrics.CheckTxReplayLookupTime.Observe(time.Since(replayLookupStartTime).Seconds())
 		}
 		// if the tx transaction result isn't nil, and it has a hash
 		if txResult != nil && txResult.TxHash == txHash {
 			return lib.ErrDuplicateTx(txHash)
 		}
+		if IsRLPMemo(tx.Memo) && tx.Signature != nil && len(tx.Signature.Signature) != 0 {
+			publicKey, _ := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+			if _, ok := publicKey.(*crypto.ETHSECP256K1PublicKey); ok {
+				ethHash, e := ethereumTxHashFromRawBytes(tx.Signature.Signature)
+				if e != nil {
+					return e
+				}
+				txResult, err = store.GetTxByHash(ethHash)
+				if err != nil {
+					return err
+				}
+				if txResult != nil && txResult.TxHash != "" {
+					return lib.ErrDuplicateTx("0x" + lib.BytesToString(ethHash))
+				}
+			}
+		}
+		intentID, e := tx.GetMultisigIntentID()
+		if e != nil {
+			return e
+		}
+		if len(intentID) != 0 {
+			txResult, err = store.GetTxByHash(intentID)
+			if err != nil {
+				return err
+			}
+			if txResult != nil && txResult.TxHash != "" {
+				return lib.ErrDuplicateTx(lib.BytesToString(intentID))
+			}
+		}
+	}
+	// RLP.V2 uses the account nonce for replay protection and a canonical CreatedHeight sentinel.
+	if tx.Memo == RLPV2Indicator {
+		return nil
 	}
 	// this gives the protocol a theoretically safe tx indexer prune height
 	maxHeight, minHeight := s.Height()+BlockAcceptanceRange, uint64(0)
@@ -335,6 +457,18 @@ func NewSendTransaction(from crypto.PrivateKeyI, to crypto.AddressI, amount, net
 	}, networkId, chainId, fee, height, memo)
 }
 
+// NewSendTransactionWithVesting() creates a SendTransaction whose full amount is subject to the recipient vesting schedule
+func NewSendTransactionWithVesting(from crypto.PrivateKeyI, to crypto.AddressI, amount, vestingStartHeight, vestingCliffHeight, vestingEndHeight, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageSend{
+		FromAddress:        from.PublicKey().Address().Bytes(),
+		ToAddress:          to.Bytes(),
+		Amount:             amount,
+		VestingStartHeight: vestingStartHeight,
+		VestingCliffHeight: vestingCliffHeight,
+		VestingEndHeight:   vestingEndHeight,
+	}, networkId, chainId, fee, height, memo)
+}
+
 // NewStakeTx() creates a StakeTransaction object in the interface form of TransactionI
 func NewStakeTx(signer crypto.PrivateKeyI, from lib.HexBytes, outputAddress crypto.AddressI, netAddress string, committees []uint64, amount, networkId, chainId, fee, height uint64, delegate, earlyWithdrawal bool, memo string) (lib.TransactionI, lib.ErrorI) {
 	return NewTransaction(signer, &MessageStake{
@@ -408,10 +542,11 @@ func NewChangeParamTxString(from crypto.PrivateKeyI, space, key, value string, s
 }
 
 // NewDAOTransferTx() creates a DAOTransferTransaction object in the interface form of TransactionI
-func NewDAOTransferTx(from crypto.PrivateKeyI, amount, start, end, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+func NewDAOTransferTx(from crypto.PrivateKeyI, amount, start, end, networkId, chainId, fee, height uint64, mint bool, memo string) (lib.TransactionI, lib.ErrorI) {
 	return NewTransaction(from, &MessageDAOTransfer{
 		Address:     from.PublicKey().Address().Bytes(),
 		Amount:      amount,
+		Mint:        mint,
 		StartHeight: start,
 		EndHeight:   end,
 	}, networkId, chainId, fee, height, memo)

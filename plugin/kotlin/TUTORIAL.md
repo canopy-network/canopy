@@ -6,10 +6,20 @@ This tutorial walks you through implementing two custom transaction types for th
 
 ## Prerequisites
 
+- Go 1.26.0 or higher (required to build Canopy)
 - JDK 21 or later
 - Gradle 8.x
 - The kotlin-plugin base code from `plugin/kotlin`
-- Canopy node (running with the plugin will be explained in Step 7)
+
+## Step 0: Build Canopy
+
+Before working with plugins, build the Canopy binary from the repository root:
+
+```bash
+make build/canopy
+```
+
+This installs the `canopy` binary to your Go bin directory (`~/go/bin/canopy`).
 
 ## Step 1: Define the Protobuf Messages
 
@@ -65,10 +75,20 @@ object ContractConfig {
         "type.googleapis.com/types.MessageFaucet"   // Add here
     )
     // ... rest of config
+
+    fun toPluginConfig(): PluginConfig = PluginConfig.newBuilder()
+        // ... name, id, version, supported transactions, type urls, file descriptors ...
+        .addAllCustomStatePrefixes(listOf(            // Declare the prefixes this plugin owns
+            ByteString.copyFrom(FAUCET_PREFIX),       // byteArrayOf(100)
+            ByteString.copyFrom(REWARD_PREFIX)        // byteArrayOf(101)
+        ))
+        .build()
 }
 ```
 
 **Important**: The order of `SUPPORTED_TRANSACTIONS` must match the order of `TRANSACTION_TYPE_URLS`.
+
+**Declare every custom record prefix in `customStatePrefixes`.** Canopy reserves single-byte prefixes 1-15 and panics at handshake — before processing any block — if a declared prefix collides with that range, so use prefixes outside 1-15 (e.g. 100, 101) for your own records.
 
 Also add the imports at the top of the file:
 
@@ -98,32 +118,49 @@ fun checkTx(request: PluginCheckRequest): PluginCheckResponse {
 
 ### CheckMessageFaucet Implementation
 
+Add this function in `src/main/kotlin/com/canopy/plugin/Contract.kt`, inside the `Contract` class, after the existing `checkMessageSend` function:
+
 ```kotlin
 /**
- * CheckMessageFaucet validates a faucet message statelessly
+ * CheckMessageFaucet validates a faucet message statelessly.
+ * This is called during mempool validation BEFORE the transaction is included in a block.
+ * Faucet is a test transaction that mints tokens to any address without balance checks.
+ *
+ * @param msg The faucet message containing signer, recipient, and amount
+ * @return PluginCheckResponse with authorized signers or an error
  */
 private fun checkMessageFaucet(msg: MessageFaucet): PluginCheckResponse {
-    // Check signer address (must be 20 bytes)
+    // Validate signer address - all Canopy addresses are exactly 20 bytes.
+    // ByteString.size() returns the number of bytes in the address.
+    // This prevents malformed addresses from entering the mempool.
     if (msg.signerAddress.size() != 20) {
         return PluginCheckResponse.newBuilder()
             .setError(ErrInvalidAddress().toProto())
             .build()
     }
 
-    // Check recipient address (must be 20 bytes)
+    // Validate recipient address - same 20-byte requirement.
+    // The recipient will receive the minted tokens.
     if (msg.recipientAddress.size() != 20) {
         return PluginCheckResponse.newBuilder()
             .setError(ErrInvalidAddress().toProto())
             .build()
     }
 
-    // Check amount
+    // Validate amount - must be greater than zero.
+    // Zero-amount transactions are meaningless and waste block space.
+    // Note: Kotlin uses 0L for Long literal comparison.
     if (msg.amount == 0L) {
         return PluginCheckResponse.newBuilder()
             .setError(ErrInvalidAmount().toProto())
             .build()
     }
 
+    // Build and return the successful check response:
+    // - recipient: who receives funds (used for indexing/notifications)
+    // - authorizedSigners: list of addresses that MUST sign this transaction.
+    //   The FSM will verify ALL addresses in this list have valid BLS signatures.
+    //   For faucet, only the signer needs to authorize the mint request.
     return PluginCheckResponse.newBuilder()
         .setRecipient(msg.recipientAddress)
         .addAuthorizedSigners(msg.signerAddress)
@@ -133,32 +170,45 @@ private fun checkMessageFaucet(msg: MessageFaucet): PluginCheckResponse {
 
 ### CheckMessageReward Implementation
 
+Add this function in `src/main/kotlin/com/canopy/plugin/Contract.kt`, inside the `Contract` class, after `checkMessageFaucet`:
+
 ```kotlin
 /**
- * CheckMessageReward validates a reward message statelessly
+ * CheckMessageReward validates a reward message statelessly.
+ * Rewards allow an admin to mint tokens to any recipient address.
+ * The admin pays the transaction fee but the recipient gets the tokens.
+ *
+ * @param msg The reward message containing admin, recipient, and amount
+ * @return PluginCheckResponse with authorized signers or an error
  */
 private fun checkMessageReward(msg: MessageReward): PluginCheckResponse {
-    // Check admin address (must be 20 bytes)
+    // Validate admin address - the admin is the authority who can mint rewards.
+    // In production, you might check against a whitelist of admin addresses.
     if (msg.adminAddress.size() != 20) {
         return PluginCheckResponse.newBuilder()
             .setError(ErrInvalidAddress().toProto())
             .build()
     }
 
-    // Check recipient address (must be 20 bytes)
+    // Validate recipient address - who will receive the minted tokens.
     if (msg.recipientAddress.size() != 20) {
         return PluginCheckResponse.newBuilder()
             .setError(ErrInvalidAddress().toProto())
             .build()
     }
 
-    // Check amount
+    // Validate amount - must be positive to be meaningful.
     if (msg.amount == 0L) {
         return PluginCheckResponse.newBuilder()
             .setError(ErrInvalidAmount().toProto())
             .build()
     }
 
+    // Build and return the successful check response:
+    // - recipient: the address receiving tokens (for indexing)
+    // - authorizedSigners: the ADMIN must sign to authorize this mint.
+    //   Unlike faucet, the admin (not recipient) must sign, making this
+    //   suitable for controlled token distribution.
     return PluginCheckResponse.newBuilder()
         .setRecipient(msg.recipientAddress)
         .addAuthorizedSigners(msg.adminAddress)
@@ -190,30 +240,52 @@ fun deliverTx(request: PluginDeliverRequest): PluginDeliverResponse {
 
 ### DeliverMessageFaucet Implementation
 
+Add this function in `src/main/kotlin/com/canopy/plugin/Contract.kt`, inside the `Contract` class, after the existing `deliverMessageSend` function:
+
 The faucet transaction mints tokens without requiring the signer to have any balance:
 
 ```kotlin
 /**
- * DeliverMessageFaucet handles a faucet message (mints tokens to recipient - no fee, no balance check)
+ * DeliverMessageFaucet handles a faucet message by minting tokens to the recipient.
+ * This is called AFTER CheckTx passes and the transaction is included in a block.
+ * Unlike CheckTx, DeliverTx CAN read and write blockchain state.
+ * Faucet is special: it mints tokens without requiring any existing balance (for testing).
+ *
+ * @param msg The faucet message containing signer, recipient, and amount
+ * @return PluginDeliverResponse (empty on success, or contains error)
  */
 private fun deliverMessageFaucet(msg: MessageFaucet): PluginDeliverResponse {
+    // Generate the state key for the recipient's account.
+    // keyForAccount creates a length-prefixed key: [prefix][address]
+    // This ensures unique keys in the key-value store.
     val recipientKey = keyForAccount(msg.recipientAddress.toByteArray())
+
+    // Generate a unique query ID to correlate request/response in batch reads.
+    // When reading multiple keys, each gets a queryId so we can match results.
     val recipientQueryId = Random.nextLong()
 
-    // Read current recipient state
+    // Build and send a state read request to the FSM.
+    // This reads the recipient's current account balance from the blockchain.
     val readRequest = PluginStateReadRequest.newBuilder()
-        .addKeys(PluginKeyRead.newBuilder().setQueryId(recipientQueryId).setKey(ByteString.copyFrom(recipientKey)).build())
+        .addKeys(PluginKeyRead.newBuilder()
+            .setQueryId(recipientQueryId)
+            .setKey(ByteString.copyFrom(recipientKey))
+            .build())
         .build()
 
+    // plugin.stateRead sends the request over Unix socket to the Canopy FSM
     val readResponse = plugin.stateRead(this, readRequest)
 
+    // Check for errors from the FSM (e.g., database issues)
     if (readResponse.hasError() && readResponse.error.code != 0L) {
         return PluginDeliverResponse.newBuilder()
             .setError(readResponse.error)
             .build()
     }
 
-    // Get recipient bytes
+    // Extract the recipient's current account bytes from the response.
+    // Match by queryId since results may come back in any order.
+    // If the account doesn't exist yet, recipientBytes will be empty.
     var recipientBytes: ByteArray = byteArrayOf()
     for (result in readResponse.resultsList) {
         if (result.queryId == recipientQueryId && result.entriesCount > 0) {
@@ -221,19 +293,33 @@ private fun deliverMessageFaucet(msg: MessageFaucet): PluginDeliverResponse {
         }
     }
 
-    // Parse recipient account (or create new if doesn't exist)
-    val recipient = if (recipientBytes.isNotEmpty()) Account.parseFrom(recipientBytes) else Account.getDefaultInstance()
+    // Parse the protobuf Account message, or use default (amount=0) for new accounts.
+    // Account.parseFrom deserializes the protobuf bytes into a Kotlin object.
+    val recipient = if (recipientBytes.isNotEmpty()) 
+        Account.parseFrom(recipientBytes) 
+    else 
+        Account.getDefaultInstance()
 
-    // Mint tokens to recipient
-    val newRecipient = recipient.toBuilder().setAmount(recipient.amount + msg.amount).build()
-
-    // Write state changes
-    val writeRequest = PluginStateWriteRequest.newBuilder()
-        .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(recipientKey)).setValue(ByteString.copyFrom(newRecipient.toByteArray())).build())
+    // CORE LOGIC: Create updated recipient with minted tokens added.
+    // Protobuf objects are immutable, so we use toBuilder() to create a modified copy.
+    // This is where tokens are "minted" - we simply increase the balance.
+    val newRecipient = recipient.toBuilder()
+        .setAmount(recipient.amount + msg.amount)
         .build()
 
+    // Build and send a state write request to persist the new balance.
+    // Sets contains key-value pairs to write to the blockchain state.
+    val writeRequest = PluginStateWriteRequest.newBuilder()
+        .addSets(PluginSetOp.newBuilder()
+            .setKey(ByteString.copyFrom(recipientKey))
+            .setValue(ByteString.copyFrom(newRecipient.toByteArray()))
+            .build())
+        .build()
+
+    // Write the updated state back to the blockchain via the FSM
     val writeResponse = plugin.stateWrite(this, writeRequest)
 
+    // Return the result: empty response on success, or error if write failed
     return if (writeResponse.hasError() && writeResponse.error.code != 0L) {
         PluginDeliverResponse.newBuilder().setError(writeResponse.error).build()
     } else {
@@ -244,37 +330,53 @@ private fun deliverMessageFaucet(msg: MessageFaucet): PluginDeliverResponse {
 
 ### DeliverMessageReward Implementation
 
+Add this function in `src/main/kotlin/com/canopy/plugin/Contract.kt`, inside the `Contract` class, after `deliverMessageFaucet`:
+
 The reward transaction mints tokens to a recipient, with the admin paying the transaction fee:
 
 ```kotlin
 /**
- * DeliverMessageReward handles a reward message (mints tokens to recipient)
+ * DeliverMessageReward handles a reward message by minting tokens to the recipient.
+ * The admin authorizes this transaction and pays the transaction fee.
+ * This demonstrates a more complex DeliverTx with multiple account updates.
+ *
+ * @param msg The reward message containing admin, recipient, and amount
+ * @param fee The transaction fee that the admin must pay
+ * @return PluginDeliverResponse (empty on success, or contains error)
  */
 private fun deliverMessageReward(msg: MessageReward, fee: Long): PluginDeliverResponse {
-    val adminKey = keyForAccount(msg.adminAddress.toByteArray())
-    val recipientKey = keyForAccount(msg.recipientAddress.toByteArray())
-    val feePoolKey = keyForFeePool(config.chainId)
+    // Calculate the state database keys for each entity we need to read/write.
+    // Each key type has a unique prefix to avoid collisions in the key-value store.
+    val adminKey = keyForAccount(msg.adminAddress.toByteArray())     // Admin's account
+    val recipientKey = keyForAccount(msg.recipientAddress.toByteArray()) // Recipient's account
+    val feePoolKey = keyForFeePool(config.chainId)                   // Fee pool for this chain
 
+    // Generate unique query IDs for each key to correlate responses with requests.
+    // This is necessary because results may come back in any order.
     val adminQueryId = Random.nextLong()
     val recipientQueryId = Random.nextLong()
     val feeQueryId = Random.nextLong()
 
-    // Read admin, recipient, and fee pool state
+    // Batch read all three accounts in a single round-trip to the FSM.
+    // This is more efficient than making three separate read requests.
     val readRequest = PluginStateReadRequest.newBuilder()
         .addKeys(PluginKeyRead.newBuilder().setQueryId(feeQueryId).setKey(ByteString.copyFrom(feePoolKey)).build())
         .addKeys(PluginKeyRead.newBuilder().setQueryId(adminQueryId).setKey(ByteString.copyFrom(adminKey)).build())
         .addKeys(PluginKeyRead.newBuilder().setQueryId(recipientQueryId).setKey(ByteString.copyFrom(recipientKey)).build())
         .build()
 
+    // Send the batch read request to the FSM
     val readResponse = plugin.stateRead(this, readRequest)
 
+    // Check for FSM-level errors (e.g., database issues)
     if (readResponse.hasError() && readResponse.error.code != 0L) {
         return PluginDeliverResponse.newBuilder()
             .setError(readResponse.error)
             .build()
     }
 
-    // Parse results
+    // Extract each account's bytes from the response, matching by queryId.
+    // Empty ByteArray means the account doesn't exist yet.
     var adminBytes: ByteArray = byteArrayOf()
     var recipientBytes: ByteArray = byteArrayOf()
     var feePoolBytes: ByteArray = byteArrayOf()
@@ -287,32 +389,40 @@ private fun deliverMessageReward(msg: MessageReward, fee: Long): PluginDeliverRe
         }
     }
 
-    // Parse accounts
+    // Parse the protobuf messages. Use getDefaultInstance() for accounts that don't exist yet.
+    // Admin must exist (they're paying the fee), but recipient might be new.
     val admin = if (adminBytes.isNotEmpty()) Account.parseFrom(adminBytes) else Account.getDefaultInstance()
     val recipient = if (recipientBytes.isNotEmpty()) Account.parseFrom(recipientBytes) else Account.getDefaultInstance()
     val feePool = if (feePoolBytes.isNotEmpty()) Pool.parseFrom(feePoolBytes) else Pool.getDefaultInstance()
 
-    // Admin must have enough to pay the fee
+    // BUSINESS LOGIC: Verify admin has sufficient funds to pay the transaction fee.
+    // This is a critical check - without it, admins could spam free transactions.
     if (admin.amount < fee) {
         return PluginDeliverResponse.newBuilder()
             .setError(ErrInsufficientFunds().toProto())
             .build()
     }
 
-    // Apply state changes
+    // CORE STATE CHANGES: Create updated accounts with new balances.
+    // Protobuf objects are immutable, so we use toBuilder() to create modified copies.
+    // 1. Deduct fee from admin's balance
     val newAdmin = admin.toBuilder().setAmount(admin.amount - fee).build()
+    // 2. Mint new tokens to recipient (this increases total supply!)
     val newRecipient = recipient.toBuilder().setAmount(recipient.amount + msg.amount).build()
+    // 3. Add fee to the pool for validator rewards
     val newFeePool = feePool.toBuilder().setAmount(feePool.amount + fee).build()
 
-    // Write state
+    // Build the write request. Special case: if admin's balance is now zero, delete their account.
+    // This saves space in the state database - zero-balance accounts are removed.
     val writeRequest = if (newAdmin.amount == 0L) {
-        // Delete drained admin account
+        // Admin account is empty - delete it instead of storing zeros.
         PluginStateWriteRequest.newBuilder()
             .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(feePoolKey)).setValue(ByteString.copyFrom(newFeePool.toByteArray())).build())
             .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(recipientKey)).setValue(ByteString.copyFrom(newRecipient.toByteArray())).build())
             .addDeletes(PluginDeleteOp.newBuilder().setKey(ByteString.copyFrom(adminKey)).build())
             .build()
     } else {
+        // Admin still has balance - update all three accounts.
         PluginStateWriteRequest.newBuilder()
             .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(feePoolKey)).setValue(ByteString.copyFrom(newFeePool.toByteArray())).build())
             .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(adminKey)).setValue(ByteString.copyFrom(newAdmin.toByteArray())).build())
@@ -320,14 +430,90 @@ private fun deliverMessageReward(msg: MessageReward, fee: Long): PluginDeliverRe
             .build()
     }
 
+    // Write all state changes atomically to the blockchain
     val writeResponse = plugin.stateWrite(this, writeRequest)
 
+    // Return the result: empty response on success, or error if write failed
     return if (writeResponse.hasError() && writeResponse.error.code != 0L) {
         PluginDeliverResponse.newBuilder().setError(writeResponse.error).build()
     } else {
         PluginDeliverResponse.getDefaultInstance()
     }
 }
+```
+
+## Step 5b: Expose Custom RPC Endpoints
+
+A plugin can serve its own RPC endpoints for chain-specific data. Canopy core only exposes a single, generic, read-only transport over the unix socket: `PluginClient.queryState(height, read)`, which returns raw key/value state at a historical height (`0` = latest committed). The plugin process owns its HTTP server entirely, so you can register as many routes as you want and decode your own keys/protobufs into any response shape. Canopy never needs to know about your endpoints.
+
+> Note: account and pool queries already exist in the Canopy node's own RPC (`/v1/query/account`, `/v1/query/pool`), so they make poor examples of a *custom* endpoint. This tutorial exposes faucet and reward data instead, which only the plugin knows about.
+
+### Persist queryable records during DeliverTx
+
+For data to be queryable, it has to live in state. The `deliverMessageFaucet` and `deliverMessageReward` handlers persist a small record alongside the balance update:
+
+- A `Faucet` record per recipient (`recipientAddress`, `totalAmount`, `count`), stored under prefix `byteArrayOf(100)` via `keyForFaucet(addr)`.
+- A `Reward` record per recipient (`recipientAddress`, `lastAdminAddress`, `totalAmount`, `count`), stored under prefix `byteArrayOf(101)` via `keyForReward(addr)`.
+
+> **Important — avoid prefix collisions:** the plugin reads and writes Canopy's FSM keyspace directly (that's why `send` works on real accounts at prefix `1`). Canopy reserves single-byte prefixes `1–15` for its own state (e.g. `3` = validators, `4` = committees). Your plugin-specific records must use prefixes outside that range — otherwise a range/list scan over your prefix will return core records (validators, committees, …) that fail to decode as your type. We use `100`/`101` here.
+
+These `Faucet`/`Reward` messages live in `src/main/proto/tx.proto`, and the `keyForFaucet`/`keyForReward`/`faucetPrefix`/`rewardPrefix` helpers live in `src/main/kotlin/com/canopy/plugin/Contract.kt`.
+
+### Add the detached query transport
+
+The detached, read-only query is a new wire message (`PluginQueryRequest`/`PluginQueryResponse`, `query = 10` in both oneofs) added to `src/main/proto/plugin.proto`. The framework exposes it as `PluginClient.queryState(height, read)`, which allocates a fresh RANDOM request id (not tied to any in-flight tx/block lifecycle) so it is safe to call from HTTP handlers.
+
+### Register the endpoints
+
+The base plugin already ships a **skeleton** `src/main/kotlin/com/canopy/plugin/Rpc.kt`: `RpcServer.start()` reads the listen address from config, creates the JDK built-in `com.sun.net.httpserver.HttpServer`, logs a startup line, and starts listening — but registers **no routes by default**. `Main.kt` already starts it on a daemon thread:
+
+```kotlin
+val plugin = PluginClient(config)
+plugin.start()
+// start the plugin's own HTTP server exposing custom, chain-specific RPC endpoints
+thread(isDaemon = true, name = "plugin-rpc-server") {
+    RpcServer(plugin).start()
+}
+```
+
+Your job is to add routes to the existing skeleton. In `RpcServer.start()`, register your custom routes on the `server` before `server.start()` (add as many as you like):
+
+```kotlin
+fun start() {
+    // ... resolve host/port from plugin.rpcAddress ...
+    val server = HttpServer.create(InetSocketAddress(host, port), 0)
+    // GET /v1/query/faucets[?address=<hex>][&height=<uint64>]
+    server.createContext("/v1/query/faucets") { exchange -> handleQueryFaucets(exchange) }
+    // GET /v1/query/rewards[?address=<hex>][&height=<uint64>]
+    server.createContext("/v1/query/rewards") { exchange -> handleQueryRewards(exchange) }
+    server.start()
+}
+```
+
+Then add the `handleQueryFaucets` / `handleQueryRewards` handlers (and the JSON/hex helpers) to `Rpc.kt`. Each handler calls the detached, read-only `queryState`:
+
+- Without `?address`, it does a **range read** over the record prefix (`faucetPrefix()` / `rewardPrefix()`) and returns every record.
+- With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record.
+
+The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`). The RPC server is optional and non-fatal: set `rpcAddress` to empty to disable it, and a bind failure (e.g. port already in use) is logged without crashing the plugin.
+
+### Query the endpoints
+
+After faucet/reward transactions have been included in blocks:
+
+```bash
+# all faucet records
+curl 'http://localhost:50010/v1/query/faucets'
+# {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
+
+# a single recipient's faucet record
+curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+
+# all reward records (optionally at a historical height)
+curl 'http://localhost:50010/v1/query/rewards?height=42'
+
+# a single recipient's reward record
+curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
 
 ## Step 6: Update fromAny Function
@@ -362,18 +548,22 @@ make build
 
 ## Step 8: Running Canopy with the Plugin
 
-To run Canopy with the Kotlin plugin enabled, you need to configure the `plugin` field in your Canopy configuration file.
+There are two ways to run Canopy with the Kotlin plugin: locally or with Docker.
 
-### 1. Locate your config.json
+### Option A: Running Locally
+
+#### 1. Locate your config.json
 
 The configuration file is typically located at `~/.canopy/config.json`. If it doesn't exist, start Canopy once to generate the default configuration:
 
 ```bash
-~/go/bin/canopy start
+canopy start
 # Stop it after it generates the config (Ctrl+C)
 ```
 
-### 2. Enable the Kotlin plugin
+> **Note**: If your Go bin directory is not in your PATH, use `~/go/bin/canopy` instead of `canopy`.
+
+#### 2. Enable the Kotlin plugin
 
 Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"kotlin"`:
 
@@ -384,42 +574,117 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"kotlin"`:
 }
 ```
 
-### 3. Start Canopy
+#### 3. Start Canopy
 
 ```bash
-~/go/bin/canopy start
+canopy start
 ```
+
+> **Note**: If your Go bin directory is not in your PATH, use `~/go/bin/canopy start` instead.
+
+> **Warning**: You may see error logs about the plugin failing to start on the first attempt. This is normal - Canopy will retry and the plugin should start successfully within a few seconds, then begin producing blocks.
 
 Canopy will automatically start the Kotlin plugin and connect to it via Unix socket.
 
-## Step 9: Testing
+### Step 8b: Running with Docker (Alternative)
 
-Run the RPC tests from the `tutorial` directory:
+Instead of running Canopy and the plugin locally, you can use Docker to run everything in a container.
+
+#### 1. Build the Docker image
+
+From the repository root:
 
 ```bash
-cd plugin/kotlin/tutorial
-make test-rpc
+make docker/plugin PLUGIN=kotlin
 ```
 
-Or manually:
+This creates a `canopy-kotlin` image containing both Canopy and the Kotlin plugin pre-configured.
+
+#### 2. Run the container
+
+```bash
+make docker/run-kotlin
+```
+
+Or with a custom volume mount for persistent data:
+
+```bash
+docker run -v ~/.canopy:/root/.canopy canopy-kotlin
+```
+
+#### 3. Expose RPC ports (for running tests)
+
+To run tests against the containerized Canopy, expose the RPC ports:
+
+```bash
+docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-kotlin
+```
+
+| Port | Service |
+|------|---------|
+| 50002 | RPC API (transactions, queries) |
+| 50003 | Admin RPC (keystore operations) |
+
+Now you can run tests from your host machine that connect to `localhost:50002` and `localhost:50003`.
+
+#### 4. View logs inside the container
+
+```bash
+# Get the container ID
+docker ps
+
+# View Canopy logs
+docker exec -it <container_id> tail -f /root/.canopy/logs/log
+
+# View plugin logs
+docker exec -it <container_id> tail -f /tmp/plugin/kotlin-plugin.log
+```
+
+#### 5. Interactive shell (for debugging)
+
+To inspect the container or debug issues:
+
+```bash
+docker run -it --entrypoint /bin/bash canopy-kotlin
+```
+
+## Step 9: Testing
+
+Run the integration tests from the `tutorial` directory. `make test` runs the transaction tests **and** the custom RPC endpoints test (both live in the `RpcTest` class, so `./gradlew test` picks them up automatically):
 
 ```bash
 cd plugin/kotlin/tutorial
-./gradlew test --tests "com.canopy.tutorial.RpcTest" --rerun-tasks
+make test
+```
+
+This is equivalent to running, from the `tutorial` directory:
+
+```bash
+cd plugin/kotlin/tutorial
+./gradlew test
 ```
 
 ### Test Prerequisites
 
 1. **Canopy node must be running** with the Kotlin plugin enabled (see Step 8)
 2. **Plugin must have the new transaction types registered** (faucet, reward)
+3. **The plugin's RPC server must be reachable** on port `50010` (Step 5b) for the custom RPC test
 
 ### What the Tests Do
+
+`testPluginTransactions` exercises the transaction flow:
 
 1. **Create test accounts** - Creates two new accounts in the Canopy keystore
 2. **Faucet test** - Mints tokens to account 1 using the faucet transaction
 3. **Send test** - Sends tokens from account 1 to account 2
 4. **Reward test** - Account 2 rewards tokens back to account 1
 5. **Balance verification** - Confirms balances changed as expected
+
+`testPluginCustomRPCEndpoints` then verifies the custom RPC endpoints (Step 5b):
+
+1. **Submit faucet/reward transactions** and wait for inclusion
+2. **Query `/v1/query/faucets` and `/v1/query/rewards`** (both the list and single-recipient forms)
+3. **Validate the returned records' structure** (valid hex addresses, `count >= 1`, `totalAmount >= 1`), which also guards against prefix-collision regressions
 
 ## Transaction Signing Details
 
@@ -478,14 +743,27 @@ plugin/kotlin/
 
 After implementing the new transaction types and starting Canopy with the plugin:
 
+### Option A: With Local Canopy
+
 ```bash
 # Terminal 1: Start Canopy with the plugin
 cd ~/canopy
 ~/go/bin/canopy start
 
-# Terminal 2: Run the tests
+# Terminal 2: Run the tests (transactions + custom RPC endpoints)
 cd ~/canopy/plugin/kotlin/tutorial
-make test-rpc
+make test
+```
+
+### Option B: With Docker
+
+```bash
+# Terminal 1: Start Canopy in Docker with ports exposed
+docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-kotlin
+
+# Terminal 2: Run the tests (they connect to localhost:50002/50003)
+cd ~/canopy/plugin/kotlin/tutorial
+make test
 ```
 
 The test will:

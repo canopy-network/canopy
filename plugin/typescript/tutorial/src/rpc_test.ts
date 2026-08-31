@@ -1,12 +1,12 @@
 /**
  * RPC Test for TypeScript Plugin
- * 
+ *
  * Tests the full flow of plugin transactions via RPC:
  * 1. Adds two accounts to the keystore
  * 2. Uses faucet to add balance to one account
  * 3. Does a send transaction from the fauceted account to the other account
  * 4. Sends a reward from that account back to the original account
- * 
+ *
  * Run with: npx tsx src/rpc_test.ts
  */
 
@@ -39,6 +39,11 @@ function randomSuffix(): string {
     return randomBytes(4).toString('hex');
 }
 
+// Helper to generate a fresh random 20-byte address as a hex string (never used on-chain)
+function randomAddressHex(): string {
+    return randomBytes(20).toString('hex');
+}
+
 // Convert hex string to base64 (for protojson bytes encoding)
 function hexToBase64(hexStr: string): string {
     return Buffer.from(hexStr, 'hex').toString('base64');
@@ -59,7 +64,7 @@ async function postRawJSON(url: string, jsonBody: string): Promise<string> {
     const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: jsonBody,
+        body: jsonBody
     });
 
     const respBody = await response.text();
@@ -79,7 +84,11 @@ async function keystoreNewKey(rpcURL: string, nickname: string, password: string
 }
 
 // Get key info from the keystore
-async function keystoreGetKey(rpcURL: string, address: string, password: string): Promise<KeyGroup> {
+async function keystoreGetKey(
+    rpcURL: string,
+    address: string,
+    password: string
+): Promise<KeyGroup> {
     const reqJSON = JSON.stringify({ address, password });
     const respBody = await postRawJSON(`${rpcURL}/v1/admin/keystore-get`, reqJSON);
     const parsed = JSON.parse(respBody);
@@ -87,7 +96,7 @@ async function keystoreGetKey(rpcURL: string, address: string, password: string)
     return {
         address: parsed.address || parsed.Address || address,
         publicKey: parsed.publicKey || parsed.PublicKey || parsed.public_key,
-        privateKey: parsed.privateKey || parsed.PrivateKey || parsed.private_key,
+        privateKey: parsed.privateKey || parsed.PrivateKey || parsed.private_key
     };
 }
 
@@ -134,7 +143,7 @@ async function waitForTxInclusion(
             // Ignore errors and retry
         }
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     return false;
@@ -164,7 +173,7 @@ function getSignBytes(
     // Note: google.protobuf.Any uses snake_case field names (type_url, not typeUrl)
     const anyMsg = google.protobuf.Any.create({
         type_url: msgTypeUrl,
-        value: msgBytes,
+        value: msgBytes
     });
 
     // Create the transaction without signature for signing
@@ -180,7 +189,7 @@ function getSignBytes(
         time: Number(time),
         fee: Number(fee),
         networkId: Number(networkId),
-        chainId: Number(chainId),
+        chainId: Number(chainId)
     };
     if (memo) {
         txData.memo = memo;
@@ -243,7 +252,7 @@ async function buildSignAndSendTx(
             const msg = types.MessageSend.create({
                 fromAddress: fromAddr,
                 toAddress: toAddr,
-                amount: msgJSON['amount'] as number,
+                amount: msgJSON['amount'] as number
             });
             msgProto = types.MessageSend.encode(msg).finish();
             break;
@@ -254,7 +263,7 @@ async function buildSignAndSendTx(
             const msg = types.MessageReward.create({
                 adminAddress: adminAddr,
                 recipientAddress: recipientAddr,
-                amount: msgJSON['amount'] as number,
+                amount: msgJSON['amount'] as number
             });
             msgProto = types.MessageReward.encode(msg).finish();
             break;
@@ -265,7 +274,7 @@ async function buildSignAndSendTx(
             const msg = types.MessageFaucet.create({
                 signerAddress: signerAddr,
                 recipientAddress: recipientAddr,
-                amount: msgJSON['amount'] as number,
+                amount: msgJSON['amount'] as number
             });
             msgProto = types.MessageFaucet.encode(msg).finish();
             break;
@@ -303,14 +312,14 @@ async function buildSignAndSendTx(
             msg: msgJSON,
             signature: {
                 publicKey: bytesToHex(pubKeyBytes),
-                signature: bytesToHex(signature),
+                signature: bytesToHex(signature)
             },
             time: Number(txTime),
             createdHeight: Number(height),
             fee: Number(fee),
             memo: '',
             networkID: Number(networkId),
-            chainID: Number(chainId),
+            chainID: Number(chainId)
         };
     } else {
         tx = {
@@ -319,14 +328,14 @@ async function buildSignAndSendTx(
             msgBytes: bytesToHex(msgProto),
             signature: {
                 publicKey: bytesToHex(pubKeyBytes),
-                signature: bytesToHex(signature),
+                signature: bytesToHex(signature)
             },
             time: Number(txTime),
             createdHeight: Number(height),
             fee: Number(fee),
             memo: '',
             networkID: Number(networkId),
-            chainID: Number(chainId),
+            chainID: Number(chainId)
         };
     }
 
@@ -349,10 +358,19 @@ async function sendFaucetTx(
     const faucetMsg = {
         signerAddress: hexToBase64(signerKey.address),
         recipientAddress: hexToBase64(recipientAddr),
-        amount: Number(amount),
+        amount: Number(amount)
     };
 
-    return buildSignAndSendTx(rpcURL, signerKey, 'faucet', faucetMsg, fee, networkId, chainId, height);
+    return buildSignAndSendTx(
+        rpcURL,
+        signerKey,
+        'faucet',
+        faucetMsg,
+        fee,
+        networkId,
+        chainId,
+        height
+    );
 }
 
 // Send a send transaction
@@ -370,7 +388,7 @@ async function sendSendTx(
     const sendMsg = {
         fromAddress: hexToBase64(fromAddr),
         toAddress: hexToBase64(toAddr),
-        amount: Number(amount),
+        amount: Number(amount)
     };
 
     return buildSignAndSendTx(rpcURL, senderKey, 'send', sendMsg, fee, networkId, chainId, height);
@@ -391,10 +409,19 @@ async function sendRewardTx(
     const rewardMsg = {
         adminAddress: hexToBase64(adminAddr),
         recipientAddress: hexToBase64(recipientAddr),
-        amount: Number(amount),
+        amount: Number(amount)
     };
 
-    return buildSignAndSendTx(rpcURL, adminKey, 'reward', rewardMsg, fee, networkId, chainId, height);
+    return buildSignAndSendTx(
+        rpcURL,
+        adminKey,
+        'reward',
+        rewardMsg,
+        fee,
+        networkId,
+        chainId,
+        height
+    );
 }
 
 // Main test function
@@ -405,10 +432,18 @@ async function testPluginTransactions(): Promise<void> {
     console.log('Step 1: Creating two accounts in keystore...');
 
     const suffix = randomSuffix();
-    const account1Addr = await keystoreNewKey(ADMIN_RPC_URL, `test_faucet_1_${suffix}`, TEST_PASSWORD);
+    const account1Addr = await keystoreNewKey(
+        ADMIN_RPC_URL,
+        `test_faucet_1_${suffix}`,
+        TEST_PASSWORD
+    );
     console.log(`Created account 1: ${account1Addr}`);
 
-    const account2Addr = await keystoreNewKey(ADMIN_RPC_URL, `test_faucet_2_${suffix}`, TEST_PASSWORD);
+    const account2Addr = await keystoreNewKey(
+        ADMIN_RPC_URL,
+        `test_faucet_2_${suffix}`,
+        TEST_PASSWORD
+    );
     console.log(`Created account 2: ${account2Addr}`);
 
     // Get current height for transaction
@@ -438,7 +473,12 @@ async function testPluginTransactions(): Promise<void> {
 
     // Wait for faucet transaction to be included in a block
     console.log('Waiting for faucet transaction to be confirmed...');
-    const faucetIncluded = await waitForTxInclusion(QUERY_RPC_URL, account1Addr, faucetTxHash, 30000);
+    const faucetIncluded = await waitForTxInclusion(
+        QUERY_RPC_URL,
+        account1Addr,
+        faucetTxHash,
+        30000
+    );
     if (!faucetIncluded) {
         throw new Error('Faucet transaction not included within timeout');
     }
@@ -453,7 +493,9 @@ async function testPluginTransactions(): Promise<void> {
     // Print balances after faucet
     const bal1AfterFaucet = await getAccountBalance(QUERY_RPC_URL, account1Addr);
     const bal2AfterFaucet = await getAccountBalance(QUERY_RPC_URL, account2Addr);
-    console.log(`Balances after faucet - Account 1: ${bal1AfterFaucet}, Account 2: ${bal2AfterFaucet}`);
+    console.log(
+        `Balances after faucet - Account 1: ${bal1AfterFaucet}, Account 2: ${bal2AfterFaucet}`
+    );
 
     // Step 3: Send tokens from account 1 to account 2
     console.log('\nStep 3: Sending tokens from account 1 to account 2...');
@@ -523,7 +565,12 @@ async function testPluginTransactions(): Promise<void> {
 
     // Wait for reward transaction to be included
     console.log('Waiting for reward transaction to be confirmed...');
-    const rewardIncluded = await waitForTxInclusion(QUERY_RPC_URL, account2Addr, rewardTxHash, 30000);
+    const rewardIncluded = await waitForTxInclusion(
+        QUERY_RPC_URL,
+        account2Addr,
+        rewardTxHash,
+        30000
+    );
     if (!rewardIncluded) {
         throw new Error('Reward transaction not included within timeout');
     }
@@ -541,10 +588,525 @@ async function testPluginTransactions(): Promise<void> {
     console.log(`Final balances - Account 1: ${bal1Final}, Account 2: ${bal2Final}`);
 
     console.log('\n=== All transactions confirmed successfully! ===');
+
+    // Print tip about verifying balances via RPC
+    console.log('\n--- Verify Account Balances ---');
+    console.log(
+        'You can manually check account balances at any time using the /v1/query/account RPC endpoint:'
+    );
+    console.log(
+        `  curl -X POST ${QUERY_RPC_URL}/v1/query/account -H "Content-Type: application/json" -d '{"address": "${account1Addr}"}'`
+    );
+    console.log(
+        `  curl -X POST ${QUERY_RPC_URL}/v1/query/account -H "Content-Type: application/json" -d '{"address": "${account2Addr}"}'`
+    );
+    console.log(
+        'See documentation: https://github.com/canopy-network/canopy/blob/main/cmd/rpc/README.md#account'
+    );
 }
 
-// Run the test
-testPluginTransactions()
+// Plugin custom RPC server (default 0.0.0.0:50010), separate from the Canopy node RPC
+const PLUGIN_RPC_URL = 'http://localhost:50010';
+
+// HTTP GET helper (used by the plugin's own custom RPC endpoints)
+async function getRawJSON(url: string): Promise<string> {
+    const response = await fetch(url);
+    const respBody = await response.text();
+    if (response.status >= 400) {
+        throw new Error(`HTTP ${response.status}: ${respBody}`);
+    }
+    return respBody;
+}
+
+// faucetRecord mirrors the JSON shape returned by the plugin's /v1/query/faucets endpoint
+interface FaucetRecord {
+    recipientAddress: string;
+    totalAmount: bigint;
+    count: bigint;
+}
+
+// rewardRecord mirrors the JSON shape returned by the plugin's /v1/query/rewards endpoint
+interface RewardRecord {
+    recipientAddress: string;
+    lastAdminAddress: string;
+    totalAmount: bigint;
+    count: bigint;
+}
+
+// uint64 values are emitted as a JSON number or string; normalize either to bigint
+function toBigInt(v: number | string | undefined | null): bigint {
+    if (v === undefined || v === null) {
+        return 0n;
+    }
+    return BigInt(v);
+}
+
+// queryFaucetRecord fetches a single recipient's faucet record from the plugin RPC server
+async function queryFaucetRecord(pluginURL: string, address: string): Promise<FaucetRecord> {
+    const respBody = await getRawJSON(`${pluginURL}/v1/query/faucets?address=${address}`);
+    const parsed = JSON.parse(respBody) as {
+        faucet?: { recipientAddress?: string; totalAmount?: number | string; count?: number | string };
+    };
+    const faucet = parsed.faucet || {};
+    return {
+        recipientAddress: faucet.recipientAddress || '',
+        totalAmount: toBigInt(faucet.totalAmount),
+        count: toBigInt(faucet.count)
+    };
+}
+
+// queryFaucetList fetches all faucet records from the plugin RPC server (range read)
+async function queryFaucetList(pluginURL: string): Promise<FaucetRecord[]> {
+    const respBody = await getRawJSON(`${pluginURL}/v1/query/faucets`);
+    const parsed = JSON.parse(respBody) as {
+        faucets?: Array<{ recipientAddress?: string; totalAmount?: number | string; count?: number | string }>;
+    };
+    return (parsed.faucets || []).map((f) => ({
+        recipientAddress: f.recipientAddress || '',
+        totalAmount: toBigInt(f.totalAmount),
+        count: toBigInt(f.count)
+    }));
+}
+
+// queryRewardRecord fetches a single recipient's reward record from the plugin RPC server
+async function queryRewardRecord(pluginURL: string, address: string): Promise<RewardRecord> {
+    const respBody = await getRawJSON(`${pluginURL}/v1/query/rewards?address=${address}`);
+    const parsed = JSON.parse(respBody) as {
+        reward?: {
+            recipientAddress?: string;
+            lastAdminAddress?: string;
+            totalAmount?: number | string;
+            count?: number | string;
+        };
+    };
+    const reward = parsed.reward || {};
+    return {
+        recipientAddress: reward.recipientAddress || '',
+        lastAdminAddress: reward.lastAdminAddress || '',
+        totalAmount: toBigInt(reward.totalAmount),
+        count: toBigInt(reward.count)
+    };
+}
+
+// queryRewardList fetches all reward records from the plugin RPC server (range read)
+async function queryRewardList(pluginURL: string): Promise<RewardRecord[]> {
+    const respBody = await getRawJSON(`${pluginURL}/v1/query/rewards`);
+    const parsed = JSON.parse(respBody) as {
+        rewards?: Array<{
+            recipientAddress?: string;
+            lastAdminAddress?: string;
+            totalAmount?: number | string;
+            count?: number | string;
+        }>;
+    };
+    return (parsed.rewards || []).map((r) => ({
+        recipientAddress: r.recipientAddress || '',
+        lastAdminAddress: r.lastAdminAddress || '',
+        totalAmount: toBigInt(r.totalAmount),
+        count: toBigInt(r.count)
+    }));
+}
+
+// pollFaucetRecordUntil polls the faucet endpoint until the record's count reaches minCount or the timeout elapses
+async function pollFaucetRecordUntil(
+    pluginURL: string,
+    address: string,
+    minCount: bigint,
+    timeoutMs: number
+): Promise<FaucetRecord> {
+    const deadline = Date.now() + timeoutMs;
+    let lastErr: Error | null = null;
+    while (Date.now() < deadline) {
+        try {
+            const rec = await queryFaucetRecord(pluginURL, address);
+            if (rec.count >= minCount) {
+                return rec;
+            }
+        } catch (err) {
+            lastErr = err as Error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    if (lastErr) {
+        throw lastErr;
+    }
+    throw new Error(`faucet record for ${address} did not reach count ${minCount} within timeout`);
+}
+
+// pollFaucetRecord polls the faucet endpoint until a record with count > 0 appears or the timeout elapses
+async function pollFaucetRecord(
+    pluginURL: string,
+    address: string,
+    timeoutMs: number
+): Promise<FaucetRecord> {
+    return pollFaucetRecordUntil(pluginURL, address, 1n, timeoutMs);
+}
+
+// pollRewardRecord polls the reward endpoint until a record with count > 0 appears or the timeout elapses
+async function pollRewardRecord(
+    pluginURL: string,
+    address: string,
+    timeoutMs: number
+): Promise<RewardRecord> {
+    const deadline = Date.now() + timeoutMs;
+    let lastErr: Error | null = null;
+    while (Date.now() < deadline) {
+        try {
+            const rec = await queryRewardRecord(pluginURL, address);
+            if (rec.count > 0n) {
+                return rec;
+            }
+        } catch (err) {
+            lastErr = err as Error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    if (lastErr) {
+        throw lastErr;
+    }
+    throw new Error(`reward record for ${address} not found within timeout`);
+}
+
+// findFaucet returns the faucet record matching the address (case-insensitive), or null
+function findFaucet(records: FaucetRecord[], address: string): FaucetRecord | null {
+    for (const rec of records) {
+        if (rec.recipientAddress.toLowerCase() === address.toLowerCase()) {
+            return rec;
+        }
+    }
+    return null;
+}
+
+// findReward returns the reward record matching the address (case-insensitive), or null
+function findReward(records: RewardRecord[], address: string): RewardRecord | null {
+    for (const rec of records) {
+        if (rec.recipientAddress.toLowerCase() === address.toLowerCase()) {
+            return rec;
+        }
+    }
+    return null;
+}
+
+// Sentinel error used to signal that the custom-RPC test was skipped (not failed)
+class SkipError extends Error {}
+
+// testPluginCustomRPCEndpoints tests the plugin's own custom RPC endpoints (/v1/query/faucets and
+// /v1/query/rewards), which are served by the plugin process (default 0.0.0.0:50010) and backed by
+// the detached, read-only queryState path. It:
+//  1. Creates a recipient and an admin account
+//  2. Faucets the recipient twice and asserts the faucet record aggregates (totalAmount + count)
+//  3. Faucets the admin so it can pay reward fees
+//  4. Rewards the recipient and asserts the reward record (totalAmount, count, lastAdminAddress)
+//  5. Asserts both records also appear in the list (range-read) endpoints
+async function testPluginCustomRPCEndpoints(): Promise<void> {
+    console.log('\n=== TypeScript Plugin Custom RPC Endpoints Test ===\n');
+
+    // Generous timeouts: a dev node can take many blocks to finalize/index a tx (especially right
+    // after a restart while consensus warms up), so don't fail on transient finalization lag.
+    const txTimeout = 120000; // max wait for a tx to be committed + indexed (120s)
+    const recordTimeout = 60000; // max wait for the plugin RPC record to reflect committed state (60s)
+
+    // Skip early with a helpful message if the plugin RPC server isn't reachable
+    console.log(`Checking plugin RPC server reachability at ${PLUGIN_RPC_URL} ...`);
+    try {
+        await getRawJSON(`${PLUGIN_RPC_URL}/v1/query/faucets`);
+    } catch (err) {
+        throw new SkipError(
+            `plugin RPC server not reachable at ${PLUGIN_RPC_URL} (is Canopy running with the typescript plugin and port 50010 exposed?): ${(err as Error).message}`
+        );
+    }
+    console.log('Plugin RPC server is reachable');
+
+    // Step 1: Create a recipient and an admin account in the keystore
+    console.log('Step 1: Creating recipient and admin accounts in keystore...');
+
+    const suffix = randomSuffix();
+    const recipientAddr = await keystoreNewKey(
+        ADMIN_RPC_URL,
+        `test_rpc_recipient_${suffix}`,
+        TEST_PASSWORD
+    );
+    console.log(`Created recipient account: ${recipientAddr}`);
+
+    const adminAddr = await keystoreNewKey(ADMIN_RPC_URL, `test_rpc_admin_${suffix}`, TEST_PASSWORD);
+    console.log(`Created admin account: ${adminAddr}`);
+
+    // Fetch signing keys for both accounts
+    const recipientKey = await keystoreGetKey(ADMIN_RPC_URL, recipientAddr, TEST_PASSWORD);
+    const adminKey = await keystoreGetKey(ADMIN_RPC_URL, adminAddr, TEST_PASSWORD);
+    console.log('Fetched signing keys for both accounts');
+
+    const fee = 10000n;
+
+    // Step 2: Faucet the recipient twice and verify the aggregated faucet record
+    const faucetAmount1 = 700000000n;
+    const faucetAmount2 = 300000000n;
+
+    console.log(`Step 2: Sending first faucet to recipient (amount=${faucetAmount1}, fee=${fee})...`);
+    let height = await getHeight(QUERY_RPC_URL);
+    console.log(`Current height: ${height}`);
+    let txHash = await sendFaucetTx(
+        QUERY_RPC_URL,
+        recipientKey,
+        recipientAddr,
+        faucetAmount1,
+        fee,
+        NETWORK_ID,
+        CHAIN_ID,
+        height
+    );
+    console.log(`First faucet transaction sent: ${txHash}`);
+
+    console.log('Waiting for first faucet transaction to be confirmed...');
+    if (!(await waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeout))) {
+        throw new Error('First faucet tx not included within timeout');
+    }
+    console.log('First faucet transaction confirmed!');
+
+    // after the first faucet, the record should exist with count=1 and totalAmount=faucetAmount1
+    console.log(`Querying plugin endpoint GET /v1/query/faucets?address=${recipientAddr} ...`);
+    let faucet = await pollFaucetRecord(PLUGIN_RPC_URL, recipientAddr, recordTimeout);
+    console.log(
+        `Faucet record after first faucet: recipient=${faucet.recipientAddress} totalAmount=${faucet.totalAmount} count=${faucet.count}`
+    );
+    if (faucet.count !== 1n) {
+        throw new Error(`faucet count after first faucet = ${faucet.count}, want 1`);
+    }
+    if (faucet.totalAmount !== faucetAmount1) {
+        throw new Error(
+            `faucet totalAmount after first faucet = ${faucet.totalAmount}, want ${faucetAmount1}`
+        );
+    }
+    if (faucet.recipientAddress.toLowerCase() !== recipientAddr.toLowerCase()) {
+        throw new Error(`faucet recipientAddress = ${faucet.recipientAddress}, want ${recipientAddr}`);
+    }
+    console.log('Faucet record verified after first faucet (count=1)');
+
+    console.log(`Sending second faucet to recipient (amount=${faucetAmount2}, fee=${fee})...`);
+    height = await getHeight(QUERY_RPC_URL);
+    console.log(`Current height: ${height}`);
+    txHash = await sendFaucetTx(
+        QUERY_RPC_URL,
+        recipientKey,
+        recipientAddr,
+        faucetAmount2,
+        fee,
+        NETWORK_ID,
+        CHAIN_ID,
+        height
+    );
+    console.log(`Second faucet transaction sent: ${txHash}`);
+
+    console.log('Waiting for second faucet transaction to be confirmed...');
+    if (!(await waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeout))) {
+        throw new Error('Second faucet tx not included within timeout');
+    }
+    console.log('Second faucet transaction confirmed!');
+
+    // after the second faucet, count should be 2 and totalAmount the sum of both
+    const wantTotal = faucetAmount1 + faucetAmount2;
+    console.log('Waiting for faucet record to reflect the second faucet (count=2)...');
+    faucet = await pollFaucetRecordUntil(PLUGIN_RPC_URL, recipientAddr, 2n, recordTimeout);
+    console.log(
+        `Faucet record after second faucet: recipient=${faucet.recipientAddress} totalAmount=${faucet.totalAmount} count=${faucet.count}`
+    );
+    if (faucet.count !== 2n) {
+        throw new Error(`faucet count after second faucet = ${faucet.count}, want 2`);
+    }
+    if (faucet.totalAmount !== wantTotal) {
+        throw new Error(
+            `faucet totalAmount after second faucet = ${faucet.totalAmount}, want ${wantTotal}`
+        );
+    }
+    console.log(`Faucet record aggregation verified (totalAmount=${wantTotal}, count=2)`);
+
+    // the recipient should also appear in the list (range-read) endpoint
+    console.log('Querying plugin endpoint GET /v1/query/faucets (list / range read)...');
+    const faucets = await queryFaucetList(PLUGIN_RPC_URL);
+    console.log(`Faucet list returned ${faucets.length} record(s)`);
+    // structural validation: every record returned by the range/list endpoint MUST be a well-formed
+    // faucet record. This guards against the endpoint scanning a colliding key prefix and returning
+    // unrelated core records (e.g. validators), which a lenient decoder would silently accept as a
+    // faucet with count=0. A genuine faucet record always has count>=1 and totalAmount>=1.
+    for (const rec of faucets) {
+        if (!/^[0-9a-fA-F]{40}$/.test(rec.recipientAddress)) {
+            throw new Error(
+                `faucet list returned a record with malformed recipientAddress: "${rec.recipientAddress}"`
+            );
+        }
+        if (rec.count < 1n || rec.totalAmount < 1n) {
+            throw new Error(
+                `faucet list returned a malformed record (recipient=${rec.recipientAddress}, totalAmount=${rec.totalAmount}, count=${rec.count}); the endpoint may be reading colliding core state`
+            );
+        }
+    }
+    console.log(`All ${faucets.length} faucet list record(s) are structurally valid`);
+    const foundFaucet = findFaucet(faucets, recipientAddr);
+    if (!foundFaucet) {
+        throw new Error(`recipient ${recipientAddr} not found in faucet list endpoint`);
+    } else if (foundFaucet.totalAmount !== wantTotal) {
+        throw new Error(`faucet list totalAmount = ${foundFaucet.totalAmount}, want ${wantTotal}`);
+    } else {
+        console.log(`Recipient found in faucet list with totalAmount=${foundFaucet.totalAmount}`);
+    }
+
+    // Step 3: Faucet the admin so it has balance to pay the reward fee
+    console.log('Step 3: Funding admin via faucet so it can pay the reward fee...');
+    height = await getHeight(QUERY_RPC_URL);
+    console.log(`Current height: ${height}`);
+    txHash = await sendFaucetTx(
+        QUERY_RPC_URL,
+        adminKey,
+        adminAddr,
+        100000000n,
+        fee,
+        NETWORK_ID,
+        CHAIN_ID,
+        height
+    );
+    console.log(`Admin faucet transaction sent: ${txHash}`);
+
+    console.log('Waiting for admin faucet transaction to be confirmed...');
+    if (!(await waitForTxInclusion(QUERY_RPC_URL, adminAddr, txHash, txTimeout))) {
+        throw new Error('Admin faucet tx not included within timeout');
+    }
+    console.log('Admin faucet transaction confirmed!');
+
+    // Step 4: Reward the recipient and verify the reward record
+    const rewardAmount = 50000000n;
+    console.log(`Step 4: Sending reward from admin to recipient (amount=${rewardAmount}, fee=${fee})...`);
+    height = await getHeight(QUERY_RPC_URL);
+    console.log(`Current height: ${height}`);
+    txHash = await sendRewardTx(
+        QUERY_RPC_URL,
+        adminKey,
+        adminAddr,
+        recipientAddr,
+        rewardAmount,
+        fee,
+        NETWORK_ID,
+        CHAIN_ID,
+        height
+    );
+    console.log(`Reward transaction sent: ${txHash}`);
+
+    console.log('Waiting for reward transaction to be confirmed...');
+    if (!(await waitForTxInclusion(QUERY_RPC_URL, adminAddr, txHash, txTimeout))) {
+        throw new Error('Reward tx not included within timeout');
+    }
+    console.log('Reward transaction confirmed!');
+
+    console.log(`Querying plugin endpoint GET /v1/query/rewards?address=${recipientAddr} ...`);
+    const reward = await pollRewardRecord(PLUGIN_RPC_URL, recipientAddr, recordTimeout);
+    console.log(
+        `Reward record: recipient=${reward.recipientAddress} lastAdmin=${reward.lastAdminAddress} totalAmount=${reward.totalAmount} count=${reward.count}`
+    );
+    if (reward.count !== 1n) {
+        throw new Error(`reward count = ${reward.count}, want 1`);
+    }
+    if (reward.totalAmount !== rewardAmount) {
+        throw new Error(`reward totalAmount = ${reward.totalAmount}, want ${rewardAmount}`);
+    }
+    if (reward.recipientAddress.toLowerCase() !== recipientAddr.toLowerCase()) {
+        throw new Error(`reward recipientAddress = ${reward.recipientAddress}, want ${recipientAddr}`);
+    }
+    if (reward.lastAdminAddress.toLowerCase() !== adminAddr.toLowerCase()) {
+        throw new Error(`reward lastAdminAddress = ${reward.lastAdminAddress}, want ${adminAddr}`);
+    }
+    console.log('Reward record verified (count=1, correct amount and lastAdminAddress)');
+
+    // the recipient should also appear in the reward list (range-read) endpoint
+    console.log('Querying plugin endpoint GET /v1/query/rewards (list / range read)...');
+    const rewards = await queryRewardList(PLUGIN_RPC_URL);
+    console.log(`Reward list returned ${rewards.length} record(s)`);
+    // structural validation: every record returned by the range/list endpoint MUST be a well-formed
+    // reward record (guards against colliding-prefix scans returning core state like committees).
+    // A genuine reward record always has count>=1, totalAmount>=1 and a valid lastAdminAddress.
+    for (const rec of rewards) {
+        if (
+            !/^[0-9a-fA-F]{40}$/.test(rec.recipientAddress) ||
+            !/^[0-9a-fA-F]{40}$/.test(rec.lastAdminAddress)
+        ) {
+            throw new Error(
+                `reward list returned a record with malformed address(es) (recipient="${rec.recipientAddress}", lastAdmin="${rec.lastAdminAddress}")`
+            );
+        }
+        if (rec.count < 1n || rec.totalAmount < 1n) {
+            throw new Error(
+                `reward list returned a malformed record (recipient=${rec.recipientAddress}, totalAmount=${rec.totalAmount}, count=${rec.count}); the endpoint may be reading colliding core state`
+            );
+        }
+    }
+    console.log(`All ${rewards.length} reward list record(s) are structurally valid`);
+    const foundReward = findReward(rewards, recipientAddr);
+    if (!foundReward) {
+        throw new Error(`recipient ${recipientAddr} not found in reward list endpoint`);
+    } else if (foundReward.totalAmount !== rewardAmount) {
+        throw new Error(`reward list totalAmount = ${foundReward.totalAmount}, want ${rewardAmount}`);
+    } else {
+        console.log(`Recipient found in reward list with totalAmount=${foundReward.totalAmount}`);
+    }
+
+    // A never-used address must return an empty (zero-valued) record from the single-record
+    // endpoints: the query returns HTTP 200 with count=0 and totalAmount=0.
+    const unusedAddr = randomAddressHex();
+    console.log(
+        `Querying plugin endpoint GET /v1/query/faucets?address=${unusedAddr} (unused address, expecting empty record)...`
+    );
+    const emptyFaucet = await queryFaucetRecord(PLUGIN_RPC_URL, unusedAddr);
+    console.log(
+        `Empty faucet record for unused address: totalAmount=${emptyFaucet.totalAmount} count=${emptyFaucet.count}`
+    );
+    if (Number(emptyFaucet.count) !== 0 || Number(emptyFaucet.totalAmount) !== 0) {
+        throw new Error(
+            `faucet record for unused address ${unusedAddr} is not empty (totalAmount=${emptyFaucet.totalAmount}, count=${emptyFaucet.count})`
+        );
+    }
+    console.log('Faucet record for unused address verified empty (count=0, totalAmount=0)');
+
+    console.log(
+        `Querying plugin endpoint GET /v1/query/rewards?address=${unusedAddr} (unused address, expecting empty record)...`
+    );
+    const emptyReward = await queryRewardRecord(PLUGIN_RPC_URL, unusedAddr);
+    console.log(
+        `Empty reward record for unused address: totalAmount=${emptyReward.totalAmount} count=${emptyReward.count}`
+    );
+    if (Number(emptyReward.count) !== 0 || Number(emptyReward.totalAmount) !== 0) {
+        throw new Error(
+            `reward record for unused address ${unusedAddr} is not empty (totalAmount=${emptyReward.totalAmount}, count=${emptyReward.count})`
+        );
+    }
+    console.log('Reward record for unused address verified empty (count=0, totalAmount=0)');
+
+    console.log('');
+    console.log('--- Custom RPC endpoints verified successfully! ---');
+    console.log(`  curl '${PLUGIN_RPC_URL}/v1/query/faucets?address=${recipientAddr}'`);
+    console.log(`  curl '${PLUGIN_RPC_URL}/v1/query/rewards?address=${recipientAddr}'`);
+    console.log(`  curl '${PLUGIN_RPC_URL}/v1/query/faucets'`);
+    console.log(`  curl '${PLUGIN_RPC_URL}/v1/query/rewards'`);
+}
+
+// Run the tests sequentially
+async function main(): Promise<void> {
+    // optional selector: "transactions", "custom"/"rpc", or "all" (default)
+    const selected = process.argv[2] ?? 'all';
+    if (selected === 'all' || selected === 'transactions' || selected === 'tx') {
+        await testPluginTransactions();
+    }
+    if (selected === 'all' || selected === 'custom' || selected === 'rpc') {
+        try {
+            await testPluginCustomRPCEndpoints();
+        } catch (err) {
+            if (err instanceof SkipError) {
+                console.log(`\nSKIP custom RPC endpoints test: ${err.message}`);
+                return;
+            }
+            throw err;
+        }
+    }
+}
+
+main()
     .then(() => {
         console.log('\nTest completed successfully!');
         process.exit(0);

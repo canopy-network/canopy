@@ -143,7 +143,7 @@ class Contract(
                 .build()
 
         return when (msg) {
-            is MessageSend -> deliverMessageSend(msg, request.tx.fee)
+            is MessageSend -> deliverMessageSend(msg, request.tx.fee, request.tx.memo)
             else -> PluginDeliverResponse.newBuilder()
                 .setError(ErrInvalidMessageCast().toProto())
                 .build()
@@ -192,7 +192,7 @@ class Contract(
     /**
      * DeliverMessageSend handles a send message
      */
-    private fun deliverMessageSend(msg: MessageSend, fee: Long): PluginDeliverResponse {
+    private fun deliverMessageSend(msg: MessageSend, fee: Long, memo: String): PluginDeliverResponse {
         val fromKey = keyForAccount(msg.fromAddress.toByteArray())
         val toKey = keyForAccount(msg.toAddress.toByteArray())
         val feePoolKey = keyForFeePool(config.chainId)
@@ -234,42 +234,49 @@ class Contract(
         var to = if (toBytes.isNotEmpty()) Account.parseFrom(toBytes) else Account.getDefaultInstance()
         val feePool = if (feePoolBytes.isNotEmpty()) Pool.parseFrom(feePoolBytes) else Pool.getDefaultInstance()
 
+        if (java.lang.Long.compareUnsigned(msg.amount, -1L - fee) > 0) {
+            return PluginDeliverResponse.newBuilder()
+                .setError(ErrInvalidAmount().toProto())
+                .build()
+        }
         val amountToDeduct = msg.amount + fee
 
         // Check sufficient funds
-        if (from.amount < amountToDeduct) {
+        if (java.lang.Long.compareUnsigned(from.amount, amountToDeduct) < 0) {
             return PluginDeliverResponse.newBuilder()
                 .setError(ErrInsufficientFunds().toProto())
                 .build()
         }
 
         // For self-transfer, use same account
-        if (fromKey.contentEquals(toKey)) {
+        val isSelfTransfer = fromKey.contentEquals(toKey)
+        if (isSelfTransfer) {
             to = from
         }
 
-        // Update balances
-        val newFrom = from.toBuilder().setAmount(from.amount - amountToDeduct).build()
-        val newTo = to.toBuilder().setAmount(to.amount + msg.amount).build()
-        val newFeePool = feePool.toBuilder().setAmount(feePool.amount + fee).build()
-
-        // Write state
-        val writeRequest = if (newFrom.amount == 0L) {
-            // Delete drained account
-            PluginStateWriteRequest.newBuilder()
-                .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(feePoolKey)).setValue(ByteString.copyFrom(newFeePool.toByteArray())).build())
-                .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(toKey)).setValue(ByteString.copyFrom(newTo.toByteArray())).build())
-                .addDeletes(PluginDeleteOp.newBuilder().setKey(ByteString.copyFrom(fromKey)).build())
-                .build()
-        } else {
-            PluginStateWriteRequest.newBuilder()
-                .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(feePoolKey)).setValue(ByteString.copyFrom(newFeePool.toByteArray())).build())
-                .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(toKey)).setValue(ByteString.copyFrom(newTo.toByteArray())).build())
-                .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(fromKey)).setValue(ByteString.copyFrom(newFrom.toByteArray())).build())
+        if (java.lang.Long.compareUnsigned(feePool.amount, -1L - fee) > 0 ||
+            (!isSelfTransfer && java.lang.Long.compareUnsigned(to.amount, -1L - msg.amount) > 0)) {
+            return PluginDeliverResponse.newBuilder()
+                .setError(ErrInvalidAmount().toProto())
                 .build()
         }
 
-        val writeResponse = plugin.stateWrite(this, writeRequest)
+        // Update balances
+        val newFrom = from.toBuilder().setAmount(from.amount - (if (isSelfTransfer) fee else amountToDeduct)).build()
+        val newTo = to.toBuilder().setAmount(to.amount + msg.amount).build()
+        val newFeePool = feePool.toBuilder().setAmount(feePool.amount + fee).build()
+
+        // Retain drained accounts only when they carry nonce state or core will advance the nonce after RLP.V2 delivery.
+        val writeRequest = PluginStateWriteRequest.newBuilder()
+            .addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(feePoolKey)).setValue(ByteString.copyFrom(newFeePool.toByteArray())).build())
+        if (!isSelfTransfer) writeRequest.addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(toKey)).setValue(ByteString.copyFrom(newTo.toByteArray())).build())
+        if (newFrom.amount == 0L && newFrom.nonce == 0L && memo != "RLP.V2") {
+            writeRequest.addDeletes(PluginDeleteOp.newBuilder().setKey(ByteString.copyFrom(fromKey)).build())
+        } else {
+            writeRequest.addSets(PluginSetOp.newBuilder().setKey(ByteString.copyFrom(fromKey)).setValue(ByteString.copyFrom(newFrom.toByteArray())).build())
+        }
+
+        val writeResponse = plugin.stateWrite(this, writeRequest.build())
 
         return if (writeResponse.hasError() && writeResponse.error.code != 0L) {
             PluginDeliverResponse.newBuilder().setError(writeResponse.error).build()

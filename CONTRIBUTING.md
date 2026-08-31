@@ -84,9 +84,10 @@ discuss your intended approach for solving the problem in the comments for an ex
 - **Update the CHANGELOG** for all enhancements and bug fixes. Include the corresponding date, issue
   number if one exists and current version if any. Check the format of the [CHANGELOG](.docs/CHANGELOG.md).
 
-- **Use the repo's default main branch.** Branch from and
+- **Target the `development` branch.** The repo's default branch is still `main`, but do **not**
+  open pull requests against `main`. Branch from and
   [submit your pull request](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request-from-a-fork)
-  to the repo's default branch `main`.
+  to `development`.
 
 -
   **[Resolve any merge conflicts](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/resolving-a-merge-conflict-on-github)**

@@ -145,6 +145,70 @@ func TestBeginBlock(t *testing.T) {
 	}
 }
 
+func TestHandleCertificateResultsNilGuards(t *testing.T) {
+	tests := []struct {
+		name     string
+		qc       *lib.QuorumCertificate
+		expected lib.ErrorI
+	}{
+		{
+			name: "nil header",
+			qc: &lib.QuorumCertificate{
+				Results: &lib.CertificateResult{
+					RewardRecipients: &lib.RewardRecipients{
+						PaymentPercents: []*lib.PaymentPercents{{
+							Address: newTestAddressBytes(t),
+							ChainId: lib.CanopyChainId,
+							Percent: 100,
+						}},
+					},
+				},
+			},
+			expected: lib.ErrEmptyView(),
+		},
+		{
+			name: "nil reward recipients",
+			qc: &lib.QuorumCertificate{
+				Header: &lib.View{
+					ChainId:    lib.CanopyChainId,
+					Height:     1,
+					RootHeight: 1,
+				},
+				Results: &lib.CertificateResult{},
+			},
+			expected: lib.ErrNilRewardRecipients(),
+		},
+		{
+			name: "nil payment percent entry",
+			qc: &lib.QuorumCertificate{
+				Header: &lib.View{
+					ChainId:    lib.CanopyChainId,
+					Height:     1,
+					RootHeight: 1,
+				},
+				Results: &lib.CertificateResult{
+					RewardRecipients: &lib.RewardRecipients{
+						PaymentPercents: []*lib.PaymentPercents{
+							nil,
+						},
+					},
+				},
+			},
+			expected: lib.ErrInvalidPercentAllocation(),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sm := newSingleAccountStateMachine(t)
+			var err lib.ErrorI
+			require.NotPanics(t, func() {
+				err = sm.HandleCertificateResults(test.qc, nil)
+			})
+			require.Equal(t, test.expected, err)
+		})
+	}
+}
+
 func TestEndBlock(t *testing.T) {
 	// generate committee data for testing
 	committeeData := []*lib.CommitteeData{
@@ -539,6 +603,36 @@ func TestForceUnstakeMaxPaused(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestForceUnstakeMaxPausedSkipsMalformedKey(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 2
+
+	require.NoError(t, sm.UpdateParam(ParamSpaceVal, ParamUnstakingBlocks, &lib.UInt64Wrapper{Value: 1}))
+
+	addr := newTestAddress(t)
+	val := &Validator{
+		Address:         addr.Bytes(),
+		MaxPausedHeight: sm.Height(),
+	}
+	require.NoError(t, sm.SetValidatorPaused(addr, val, sm.Height()))
+
+	// malformed length-prefixed segment under paused prefix (triggers decode panic without guard)
+	badKey := append(PausedPrefix(sm.Height()), 0xff)
+	require.NoError(t, sm.Set(badKey, []byte{0x1}))
+
+	require.NoError(t, sm.ForceUnstakeMaxPaused())
+
+	// malformed key should be deleted instead of halting end-block logic
+	gotBad, err := sm.Get(badKey)
+	require.NoError(t, err)
+	require.Nil(t, gotBad)
+
+	updated, err := sm.GetValidator(addr)
+	require.NoError(t, err)
+	require.Zero(t, updated.MaxPausedHeight)
+	require.Equal(t, uint64(3), updated.UnstakingHeight)
 }
 
 func TestLastProposers(t *testing.T) {

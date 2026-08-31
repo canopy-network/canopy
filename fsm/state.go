@@ -2,9 +2,11 @@ package fsm
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -12,7 +14,8 @@ import (
 )
 
 const (
-	CurrentProtocolVersion = 1
+	CurrentProtocolVersion         = 2
+	slowApplyTransactionsThreshold = 2 * time.Second
 )
 
 /* This is the 'main' file of the state machine store, with the structure definition and other high level operations */
@@ -37,15 +40,39 @@ type StateMachine struct {
 	Plugin             *lib.Plugin                             // extensible plugin for the FSM
 }
 
-// cache is the set of items to be cached used by the state machine
-type cache struct {
-	accounts  map[uint64]*Account // cache of accounts accessed
-	feeParams *FeeParams          // fee params for the current block
-	valParams *ValidatorParams    // validator params for the current block
+type rootCacheStateStore interface {
+	IsRootCached() bool
 }
 
-// New() creates a new instance of a StateMachine
-func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+// cache is the set of items to be cached used by the state machine
+type cache struct {
+	accounts           map[uint64]*Account   // cache of accounts accessed
+	pools              map[uint64]*Pool      // cache of pools accessed
+	feeParams          *FeeParams            // fee params for the current block
+	valParams          *ValidatorParams      // validator params for the current block
+	rootDexBatch       *lib.DexBatch         // root dex batch
+	liveValidators     []*Validator          // private validator cache for the FSM's current height
+	sharedValidatorSet uint64                // historical height eligible for insertion into the shared validator cache
+	sharedCache        *validatorSharedCache // shared rolling cache of historical validators by height
+}
+
+// validatorSharedCache stores historical validator lists for reuse across FSM snapshots
+type validatorSharedCache struct {
+	sync.RWMutex
+	heights []uint64
+	sets    map[uint64][]*Validator
+}
+
+func newValidatorSharedCache() *validatorSharedCache {
+	return &validatorSharedCache{
+		sets: make(map[uint64][]*Validator),
+	}
+}
+
+func newStateMachine(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI, sharedCache *validatorSharedCache) (*StateMachine, lib.ErrorI) {
+	if sharedCache == nil {
+		sharedCache = newValidatorSharedCache()
+	}
 	// create the state machine object reference
 	sm := &StateMachine{
 		store:             nil,
@@ -59,7 +86,9 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 		log:               log,
 		events:            new(lib.EventsTracker),
 		cache: &cache{
-			accounts: make(map[uint64]*Account),
+			accounts:    make(map[uint64]*Account),
+			pools:       make(map[uint64]*Pool),
+			sharedCache: sharedCache,
 		},
 	}
 	// initialize the state machine
@@ -73,6 +102,11 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 	}
 	// initialize the state machine and exit
 	return sm, nil
+}
+
+// New() creates a new instance of a StateMachine
+func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+	return newStateMachine(c, store, plugin, metrics, log, nil)
 }
 
 // Initialize() initializes a StateMachine object using the StoreI
@@ -121,22 +155,34 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 		return nil, nil, ErrWrongStoreType()
 	}
 	// automated execution at the 'beginning of a block'
+	beginBlockStartTime := time.Now()
 	events, err := s.BeginBlock()
 	if err != nil {
 		return nil, nil, err
 	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyBlockBeginTime.Observe(time.Since(beginBlockStartTime).Seconds())
+	}
 	// add the events from begin block
 	r.AddEvent(events...)
 	// apply all Transactions in the block
+	applyTransactionsStartTime := time.Now()
 	if err = s.ApplyTransactions(ctx, b.Transactions, r, allowOversize); err != nil {
 		return nil, nil, err
+	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyBlockTransactionsTime.Observe(time.Since(applyTransactionsStartTime).Seconds())
 	}
 	// sub-out transactions for those that succeeded (only useful for mempool application)
 	b.Transactions = r.Txs
 	// automated execution at the 'ending of a block'
+	endBlockStartTime := time.Now()
 	events, err = s.EndBlock(b.BlockHeader.ProposerAddress)
 	if err != nil {
 		return nil, nil, err
+	}
+	if s.Metrics != nil {
+		s.Metrics.ApplyBlockEndTime.Observe(time.Since(endBlockStartTime).Seconds())
 	}
 	// add the events from end block
 	r.AddEvent(events...)
@@ -155,9 +201,20 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 		return nil, nil, err
 	}
 	// calculate the merkle root of the state database to enable consensus on the result of the state after applying the block
+	rootWasCached := false
+	if cacheAwareStore, ok := store.(rootCacheStateStore); ok {
+		rootWasCached = cacheAwareStore.IsRootCached()
+	}
+	rootStartTime := time.Time{}
+	if !rootWasCached {
+		rootStartTime = time.Now()
+	}
 	stateRoot, err := store.Root()
 	if err != nil {
 		return nil, nil, err
+	}
+	if !rootStartTime.IsZero() {
+		s.Metrics.UpdateFSMApplyBlockRootTime(rootStartTime)
 	}
 	// load the last block from the indexer
 	lastBlock, err := s.LoadBlock(s.height - 1)
@@ -202,8 +259,12 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 // 4. Returns the following for successful transactions within a block: <results, tx-list, root, count>
 // 5. Returns all transactions that failed during processing
 func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *lib.ApplyBlockResults, allowOversize bool) lib.ErrorI {
+	startTime := time.Now()
 	// use a map to check for 'same-block' duplicate transactions
 	deDuplicator := lib.NewDeDuplicator[string]()
+	// threshold-multisig signatures may use different valid signer subsets for the
+	// same intent, so track their stable intent IDs separately from envelope hashes.
+	multisigIntentDeDuplicator := lib.NewDeDuplicator[[crypto.HashSize]byte]()
 	// use a batch verifier for signatures
 	batchVerifier := crypto.NewBatchVerifier()
 	// get the governance parameter for max block size
@@ -213,21 +274,59 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	}
 	// keep a map to track transactions that failed 'check'
 	failedCheckTxs := map[int]error{}
+	// retain stable multisig intent IDs from the successful precheck pass
+	multisigIntentIDs := make([][]byte, len(txs))
+	// map signature batch indices back to original tx indices
+	batchToTxIdx := make([]int, 0, len(txs))
 	// first batch validate signatures over the entire set
+	checkStartTime := time.Now()
 	for i, tx := range txs {
-		if _, checkErr := s.CheckTx(tx, "", batchVerifier); checkErr != nil {
+		preCount := batchVerifier.Count()
+		checkStore := s.Store().(lib.StoreI)
+		checkTxn, e := s.TxnWrap()
+		if e != nil {
+			return e
+		}
+		checkResult, checkErr := s.CheckTx(tx, "", batchVerifier)
+		if checkErr != nil {
 			failedCheckTxs[i] = checkErr
+		} else {
+			intentID, intentErr := checkResult.tx.GetMultisigIntentID()
+			if intentErr != nil {
+				failedCheckTxs[i] = intentErr
+			} else {
+				multisigIntentIDs[i] = intentID
+			}
+		}
+		checkTxn.Discard()
+		s.SetStore(checkStore)
+		postCount := batchVerifier.Count()
+		for j := preCount; j < postCount; j++ {
+			batchToTxIdx = append(batchToTxIdx, i)
 		}
 	}
+	checkDuration := time.Since(checkStartTime)
+	if s.Metrics != nil {
+		s.Metrics.ApplyTxsCheckTime.Observe(checkDuration.Seconds())
+	}
 	// execute batch verification of the signatures in the block
+	batchVerifyStartTime := time.Now()
 	for _, failedIdx := range batchVerifier.Verify() {
-		failedCheckTxs[failedIdx] = ErrInvalidSignature()
+		if failedIdx < 0 || failedIdx >= len(batchToTxIdx) {
+			return ErrInvalidSignature()
+		}
+		failedCheckTxs[batchToTxIdx[failedIdx]] = ErrInvalidSignature()
+	}
+	batchVerifyDuration := time.Since(batchVerifyStartTime)
+	if s.Metrics != nil {
+		s.Metrics.ApplyTxsBatchVerifyTime.Observe(batchVerifyDuration.Seconds())
 	}
 	// set the store back to the original at the end of processing
 	originalStore := s.Store().(lib.StoreI)
 	defer s.SetStore(originalStore)
 	// create a variable to track if the block is over size
 	var oversize bool
+	var executeDuration, flushDuration time.Duration
 	// iterates over each transaction in the block
 	for i, tx := range txs {
 		// if interrupt signal
@@ -244,6 +343,19 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 		// check if the transaction is a 'same block' duplicate
 		if found := deDuplicator.Found(hashString); found {
 			return lib.ErrDuplicateTx(hashString)
+		}
+		// reject alternate valid signature envelopes for the same multisig intent
+		if intentID := multisigIntentIDs[i]; len(intentID) != 0 {
+			var intentKey [crypto.HashSize]byte
+			copy(intentKey[:], intentID)
+			if found := multisigIntentDeDuplicator.Found(intentKey); found {
+				duplicateErr := lib.ErrDuplicateTx(lib.BytesToString(intentID))
+				if allowOversize {
+					r.AddFailed(lib.NewFailedTx(tx, duplicateErr))
+					continue
+				}
+				return duplicateErr
+			}
 		}
 		// get the tx size
 		txSize := uint64(len(tx))
@@ -270,7 +382,9 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			return e
 		}
 		// apply the tx to the state machine, generating a transaction result
+		executeStartTime := time.Now()
 		result, events, e := s.ApplyTransaction(uint64(r.Count), tx, hashString, crypto.NewBatchVerifier(true))
+		executeDuration += time.Since(executeStartTime)
 		if e != nil {
 			// add to the failed list
 			r.AddFailed(lib.NewFailedTx(tx, e))
@@ -285,9 +399,11 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			continue
 		} else {
 			// write the transaction to the underlying store
+			flushStartTime := time.Now()
 			if err = txn.Flush(); err != nil {
 				return err
 			}
+			flushDuration += time.Since(flushStartTime)
 			s.SetStore(currentStore)
 		}
 		// encode the result to bytes
@@ -299,6 +415,15 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	}
 	// update metrics
 	s.Metrics.UpdateLargestTxSize(r.LargestTx)
+	if s.Metrics != nil {
+		s.Metrics.ApplyTxsExecuteTime.Observe(executeDuration.Seconds())
+		s.Metrics.ApplyTxsFlushTime.Observe(flushDuration.Seconds())
+	}
+	totalDuration := time.Since(startTime)
+	if totalDuration >= slowApplyTransactionsThreshold {
+		s.log.Warnf("Slow ApplyTransactions height=%d txs=%d failed=%d oversized=%d check=%s batch_verify=%s execute=%s flush=%s total=%s",
+			s.Height(), len(txs), len(r.Failed), len(r.Oversized), checkDuration, batchVerifyDuration, executeDuration, flushDuration, totalDuration)
+	}
 	// return and exit
 	return err
 }
@@ -325,20 +450,47 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 		return nil, err
 	}
 	// initialize a new state machine
-	return New(s.Config, heightStore, s.Plugin, s.Metrics, s.log)
+	historicalFSM, err := newStateMachine(s.Config, heightStore, s.Plugin, s.Metrics, s.log, s.cache.sharedCache)
+	if err != nil {
+		return nil, err
+	}
+	if height < s.height && s.cache.sharedCache != nil {
+		s.cache.sharedCache.RLock()
+		// set the live validators using the historical cache
+		if validators, ok := s.cache.sharedCache.sets[height]; ok {
+			historicalFSM.cache.liveValidators = validators
+		} else {
+			// defer insertion until first validator access to avoid unnecessary historical scans
+			historicalFSM.cache.sharedValidatorSet = height
+		}
+		s.cache.sharedCache.RUnlock()
+	}
+	return historicalFSM, nil
 }
 
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
 func (s *StateMachine) LoadCommittee(chainId uint64, height uint64) (lib.ValidatorSet, lib.ErrorI) {
+	startTime := time.Now()
+	observeStage := func(stage string, stageStartTime time.Time) {
+		if s.Metrics != nil {
+			s.Metrics.LoadCommitteeStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+		}
+	}
+	defer observeStage("total", startTime)
 	// get the historical state at the height
+	timeMachineStartTime := time.Now()
 	historicalFSM, err := s.TimeMachine(height)
+	observeStage("time_machine", timeMachineStartTime)
 	if err != nil {
 		return lib.ValidatorSet{}, err
 	}
 	// memory management for the historical FSM call
 	defer historicalFSM.Discard()
 	// return the 'committee members' (validator set) for that height
-	return historicalFSM.GetCommitteeMembers(chainId)
+	getCommitteeMembersStartTime := time.Now()
+	vs, err := historicalFSM.GetCommitteeMembers(chainId)
+	observeStage("get_committee_members", getCommitteeMembersStartTime)
+	return vs, err
 }
 
 // LoadCertificate() loads a quorum certificate (block, results + 2/3rd committee signatures)
@@ -428,6 +580,10 @@ func (s *StateMachine) GetMaxBlockSize() (uint64, lib.ErrorI) {
 	if err != nil {
 		return 0, err
 	}
+	// fail closed on malformed persisted config to avoid uint64 underflow.
+	if consParams.BlockSize < lib.MaxBlockHeaderSize {
+		return 0, ErrInvalidParam(ParamBlockSize)
+	}
 	// return the max block size
 	return consParams.BlockSize - lib.MaxBlockHeaderSize, nil
 }
@@ -452,10 +608,6 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo,
 		return nil, err
 	}
 	defer sm.Discard()
-	// if height is equal to latest height, provide the validator cache to the FSM
-	if height == s.height {
-		sm.cache = s.cache
-	}
 	// get the previous state machine height
 	lastSM, err := s.TimeMachine(lastHeight)
 	if err != nil {
@@ -520,7 +672,10 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		Plugin:             s.Plugin,
 		log:                s.log,
 		cache: &cache{
-			accounts: make(map[uint64]*Account),
+			accounts:     make(map[uint64]*Account),
+			pools:        make(map[uint64]*Pool),
+			rootDexBatch: s.cache.rootDexBatch,
+			sharedCache:  s.cache.sharedCache,
 		},
 		LastValidatorSet: s.LastValidatorSet,
 	}, nil
@@ -614,12 +769,8 @@ func (s *StateMachine) TxnWrap() (lib.StoreI, lib.ErrorI) {
 	return txn, nil
 }
 
-// catchPanic() acts as a failsafe, recovering from a panic and logging the error with the stack trace
-func (s *StateMachine) catchPanic() {
-	if r := recover(); r != nil {
-		s.log.Error(string(debug.Stack()))
-	}
-}
+// SetRooDexCache sets the root dex batch cache for the state machine
+func (s *StateMachine) SetRootDexCache(batch *lib.DexBatch) { s.cache.rootDexBatch = batch }
 
 // Reset() resets the state store and the slash tracker
 func (s *StateMachine) Reset() {
@@ -634,6 +785,14 @@ func (s *StateMachine) Reset() {
 // ResetCaches() dumps the state machine caches
 func (s *StateMachine) ResetCaches() {
 	s.cache.accounts = make(map[uint64]*Account)
+	s.cache.pools = make(map[uint64]*Pool)
+	s.cache.liveValidators = nil
+	s.cache.sharedValidatorSet = 0
+	// Params caches must not outlive the current store view, otherwise Reset()/rollback
+	// can leave the FSM reading stale values that disagree with the underlying store.
+	s.cache.valParams = nil
+	s.cache.feeParams = nil
+	s.cache.rootDexBatch = nil
 }
 
 // nonEmptyHash() ensures the hash isn't empty
@@ -651,6 +810,7 @@ func (s *StateMachine) SetStore(store lib.RWStoreI)                   { s.store 
 func (s *StateMachine) Height() uint64                                { return s.height }
 func (s *StateMachine) TotalVDFIterations() uint64                    { return s.totalVDFIterations }
 func (s *StateMachine) Discard()                                      { s.store.(lib.StoreI).Discard() }
+func (s *StateMachine) ProposalVoteConfig() GovProposalVoteConfig     { return s.proposeVoteConfig }
 func (s *StateMachine) SetProposalVoteConfig(c GovProposalVoteConfig) { s.proposeVoteConfig = c }
 
 var _ lib.PluginCompatibleFSM = new(StateMachine)
@@ -710,6 +870,19 @@ func (s *StateMachine) StateRead(request *lib.PluginStateReadRequest) (response 
 
 // StateWrite() implements the 'state write' interface for plugins
 func (s *StateMachine) StateWrite(request *lib.PluginStateWriteRequest) (response lib.PluginStateWriteResponse, err lib.ErrorI) {
+	// GUARD: validate the ENTIRE batch BEFORE applying any operation, so a misconfigured plugin can
+	// never (even partially) persist records that collide with reserved core state prefixes. This
+	// panics loudly rather than silently corrupting consensus state (e.g. writing a custom record
+	// under the validators prefix, which would later be mis-decoded as a Validator).
+	for _, setRequest := range request.Sets {
+		assertPluginKeyWritable(setRequest.Key)
+	}
+	for _, delRequest := range request.Deletes {
+		assertPluginKeyWritable(delRequest.Key)
+	}
+	// Plugin writes bypass typed setters, so cached accounts and pools may be stale.
+	s.cache.accounts = make(map[uint64]*Account)
+	s.cache.pools = make(map[uint64]*Pool)
 	// for each 'set' request
 	for _, setRequest := range request.Sets {
 		// execute the 'set'
@@ -725,4 +898,63 @@ func (s *StateMachine) StateWrite(request *lib.PluginStateWriteRequest) (respons
 		}
 	}
 	return
+}
+
+// pluginWritableCorePrefixes are the only core-owned store prefixes a plugin is permitted to write.
+// Plugins share the FSM keyspace, so they may interoperate with accounts and pools (e.g. a custom
+// 'send' that moves real balances), but writing under any OTHER core prefix would corrupt consensus
+// state and collide with plugin records on range reads.
+var pluginWritableCorePrefixes = map[byte]struct{}{
+	accountPrefix[0]: {},
+	poolPrefix[0]:    {},
+}
+
+// corePrefixNames maps every reserved single-byte core store prefix to a human-readable name.
+var corePrefixNames = map[byte]string{
+	accountPrefix[0]:          "accounts",
+	poolPrefix[0]:             "pools",
+	validatorPrefix[0]:        "validators",
+	committeePrefix[0]:        "committees",
+	unstakePrefix[0]:          "unstaking",
+	pausedPrefix[0]:           "paused",
+	paramsPrefix[0]:           "params",
+	nonSignerPrefix[0]:        "non-signers",
+	lastProposersPrefix[0]:    "last-proposers",
+	supplyPrefix[0]:           "supply",
+	delegatePrefix[0]:         "delegations",
+	committeesDataPrefix[0]:   "committees-data",
+	orderBookPrefix[0]:        "order-book",
+	retiredCommitteePrefix[0]: "retired-committees",
+	dexPrefix[0]:              "dex",
+}
+
+// assertPluginKeyWritable panics if a plugin write targets a reserved core prefix it must not touch.
+// Plugins choose their own key prefixes in plugin code (nothing is declared to core up front), so a
+// state write is the earliest point at which core can deterministically detect a colliding prefix.
+// Panicking here guarantees a misconfigured plugin can NEVER silently persist records that collide
+// with core state (the bug class where, e.g., custom records written under prefix 3 are later read
+// back as core validators). Plugin-owned records must use prefixes OUTSIDE the core-reserved range.
+func assertPluginKeyWritable(key []byte) {
+	// decode the leading length-prefixed segment; core store prefixes are a single byte
+	segments, err := decodeLengthPrefixedSafe(key)
+	if err != nil || len(segments) == 0 || len(segments[0]) != 1 {
+		// not a recognizable single-byte-prefixed core key; nothing to enforce
+		return
+	}
+	prefix := segments[0][0]
+	// only reserved core prefixes are enforced; plugin-owned prefixes (outside 1-15) are always fine
+	name, isCore := corePrefixNames[prefix]
+	if !isCore {
+		return
+	}
+	// accounts/pools are explicitly shared with plugins for interoperability
+	if _, allowed := pluginWritableCorePrefixes[prefix]; allowed {
+		return
+	}
+	panic(fmt.Sprintf(
+		"plugin attempted to write to reserved core state prefix %d (%s); plugins share the FSM "+
+			"keyspace and may only write to accounts/pools or use key prefixes OUTSIDE the "+
+			"core-reserved range (1-15) for their own records — see plugin TUTORIAL.md "+
+			"'avoid prefix collisions'", prefix, name,
+	))
 }

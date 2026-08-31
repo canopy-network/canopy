@@ -1,0 +1,281 @@
+import React, { useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import SwapFilters from './SwapFilters';
+import type { SwapFilterValues } from './SwapFilters';
+import RecentSwapsTable from './RecentSwapsTable';
+import { useOrders } from '../../hooks/useApi'
+import { formatDecimalWithSubscript, formatLocaleNumber, toCNPY } from '../../lib/utils';
+import ExplorerOverviewCards from '../ExplorerOverviewCards';
+import StatValue from '../StatValue';
+import { usePersistentNumber } from '../../hooks/usePersistentNumber';
+
+interface Order {
+    id: string;
+    committee: number;
+    data: string;
+    amountForSale: number;
+    requestedAmount: number;
+    sellerReceiveAddress: string;
+    buyerSendAddress?: string;
+    buyerChainDeadline?: number;
+    sellersSendAddress: string;
+}
+
+export interface SwapData {
+    orderId: string;
+    committee: number;
+    fromAddress: string;
+    fromAddressFull: string;
+    toAddress: string;
+    toAddressFull: string;
+    exchangeRate: string;
+    exchangeRateNum: number;
+    amount: string;
+    amountRaw: number;
+    status: 'Active' | 'Locked';
+}
+
+export type SortKey = 'committee' | 'exchangeRate' | 'amount' | 'status';
+export type SortDir = 'asc' | 'desc';
+
+const DEFAULT_FILTERS: SwapFilterValues = { minAmount: '', status: 'All', committee: 'All' };
+const SWAP_DECIMAL_PLACES = 2;
+
+const TokenSwapsPage: React.FC = () => {
+    const navigate = useNavigate();
+    const [filters, setFilters] = useState<SwapFilterValues>(DEFAULT_FILTERS);
+    const [sortKey, setSortKey] = useState<SortKey | null>(null);
+    const [sortDir, setSortDir] = useState<SortDir>('asc');
+    const [pageSize, setPageSize] = useState(10);
+
+    const { data: ordersData, isLoading } = useOrders();
+
+    const swaps = useMemo(() => {
+        const ordersList = Array.isArray((ordersData as Record<string, unknown>)?.orders)
+            ? (ordersData as Record<string, unknown[]>).orders
+            : Array.isArray((ordersData as Record<string, unknown>)?.results)
+                ? (ordersData as Record<string, unknown[]>).results
+                : [];
+
+        if (ordersList.length === 0) return [];
+
+        const truncateAddress = (addr: string) => {
+            if (!addr || addr.length < 10) return addr;
+            return addr.slice(0, 6) + '...' + addr.slice(-4);
+        };
+
+        return ordersList.map((rawOrder) => {
+            const order = rawOrder as Order;
+            const exchangeRateNum = order.requestedAmount > 0
+                ? order.amountForSale / order.requestedAmount
+                : 0;
+            const exchangeRate = exchangeRateNum > 0
+                ? `1 : ${formatDecimalWithSubscript(exchangeRateNum, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)}`
+                : 'N/A';
+
+            const status: 'Active' | 'Locked' = order.buyerSendAddress ? 'Locked' : 'Active';
+            const amountRaw = toCNPY(order.amountForSale);
+            const amount = `${formatLocaleNumber(amountRaw, SWAP_DECIMAL_PLACES, SWAP_DECIMAL_PLACES)} CNPY`;
+
+            return {
+                orderId: order.id,
+                committee: order.committee,
+                fromAddress: truncateAddress(order.sellersSendAddress),
+                fromAddressFull: order.sellersSendAddress,
+                toAddress: truncateAddress(order.sellerReceiveAddress),
+                toAddressFull: order.sellerReceiveAddress,
+                exchangeRate,
+                exchangeRateNum,
+                amount,
+                amountRaw,
+                status
+            } satisfies SwapData;
+        });
+    }, [ordersData]);
+
+    const availableCommittees = useMemo(() => {
+        const set = new Set(swaps.map((s) => s.committee));
+        return Array.from(set).sort((a, b) => a - b);
+    }, [swaps]);
+
+    const swapCounts = useMemo(() => ({
+        orders: swaps.length,
+        active: swaps.filter((swap) => swap.status === 'Active').length,
+        locked: swaps.filter((swap) => swap.status === 'Locked').length,
+        volume: swaps.reduce((sum, swap) => sum + swap.amountRaw, 0),
+    }), [swaps]);
+
+    const ordersStat = usePersistentNumber('swaps:orders', ordersData ? swapCounts.orders : null);
+    const activeStat = usePersistentNumber('swaps:active', ordersData ? swapCounts.active : null);
+    const lockedStat = usePersistentNumber('swaps:locked', ordersData ? swapCounts.locked : null);
+    const volumeStat = usePersistentNumber('swaps:volume', ordersData ? swapCounts.volume : null);
+
+    const overviewCards = [
+        {
+            title: 'Orders',
+            value: <StatValue stat={ordersStat} />,
+            subValue: 'Open book',
+            icon: 'fa-solid fa-book',
+        },
+        {
+            title: 'Active',
+            value: <StatValue stat={activeStat} />,
+            subValue: 'Open orders',
+            icon: 'fa-solid fa-unlock',
+        },
+        {
+            title: 'Locked',
+            value: <StatValue stat={lockedStat} />,
+            subValue: 'Buyer locked',
+            icon: 'fa-solid fa-lock',
+        },
+        {
+            title: 'Open Volume',
+            value: <StatValue stat={volumeStat} format={(n) => n.toLocaleString(undefined, { maximumFractionDigits: 2 })} />,
+            subValue: 'CNPY',
+            icon: 'fa-solid fa-chart-column',
+        },
+    ];
+
+    const filteredSwaps = useMemo(() => {
+        let result = swaps;
+
+        if (filters.minAmount) {
+            const min = parseFloat(filters.minAmount);
+            if (!isNaN(min)) {
+                result = result.filter((s) => s.amountRaw >= min);
+            }
+        }
+
+        if (filters.status !== 'All') {
+            result = result.filter((s) => s.status === filters.status);
+        }
+
+        if (filters.committee !== 'All') {
+            const cid = Number(filters.committee);
+            result = result.filter((s) => s.committee === cid);
+        }
+
+        return result;
+    }, [swaps, filters]);
+
+    const sortedSwaps = useMemo(() => {
+        if (!sortKey) return filteredSwaps;
+
+        const sorted = [...filteredSwaps];
+        sorted.sort((a, b) => {
+            let cmp = 0;
+            switch (sortKey) {
+                case 'committee':
+                    cmp = a.committee - b.committee;
+                    break;
+                case 'amount':
+                    cmp = a.amountRaw - b.amountRaw;
+                    break;
+                case 'exchangeRate':
+                    cmp = a.exchangeRateNum - b.exchangeRateNum;
+                    break;
+                case 'status':
+                    cmp = a.status.localeCompare(b.status);
+                    break;
+            }
+            return sortDir === 'asc' ? cmp : -cmp;
+        });
+        return sorted;
+    }, [filteredSwaps, sortKey, sortDir]);
+
+    const handleSort = (key: SortKey) => {
+        if (sortKey === key) {
+            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortKey(key);
+            setSortDir('asc');
+        }
+    };
+
+    const handleApplyFilters = (newFilters: SwapFilterValues) => {
+        setFilters(newFilters);
+    };
+
+    const handleResetFilters = () => {
+        setFilters(DEFAULT_FILTERS);
+        setSortKey(null);
+        setSortDir('asc');
+    };
+
+    const handleExportData = () => {
+        const csvContent = [
+            ['Order ID', 'Committee', 'From Address', 'To Address', 'Exchange Rate', 'Amount', 'Status'],
+            ...sortedSwaps.map((swap) => [
+                swap.orderId,
+                swap.committee.toString(),
+                swap.fromAddress,
+                swap.toAddress,
+                swap.exchangeRate,
+                swap.amount,
+                swap.status
+            ])
+        ].map(row => row.join(',')).join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'token-swaps.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+    };
+
+    const handleRowClick = (swap: SwapData) => {
+        navigate(`/order/${swap.committee}/${swap.orderId}`);
+    };
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="w-full"
+        >
+            <div className="mb-4 flex items-center justify-between">
+                <div>
+                    <h1 className="explorer-page-title">Token Swaps</h1>
+                    <p className="explorer-page-subtitle">Atomic swap orderbook on the Canopy network</p>
+                </div>
+                <div className="flex items-center space-x-4">
+                    <SwapFilters
+                        compact
+                        onApplyFilters={handleApplyFilters}
+                        onResetFilters={handleResetFilters}
+                        filters={filters}
+                        onFiltersChange={setFilters}
+                        availableCommittees={availableCommittees}
+                    />
+                    <button
+                        onClick={handleExportData}
+                        className="px-4 py-2 bg-card border-white/10 text-gray-300 hover:bg-card/80 rounded-lg transition-colors duration-200 font-medium"
+                    >
+                        <i className="fas fa-download mr-2"></i>Export
+                    </button>
+                </div>
+            </div>
+
+            <ExplorerOverviewCards cards={overviewCards} className="mb-8" />
+
+            <RecentSwapsTable
+                swaps={sortedSwaps}
+                loading={isLoading && !ordersData}
+                onRowClick={handleRowClick}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSort}
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
+            />
+        </motion.div>
+    );
+};
+
+export default TokenSwapsPage;

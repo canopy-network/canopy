@@ -59,3 +59,12 @@ message VDF {
   // iterations: number of serial executions (proxy for time)
   uint64 iterations = 3;
 }
+
+message MultiPublicKey {
+  // public_keys: the full signer set when the signature is an aggregate BLS multisig signature
+  repeated bytes public_keys = 1; // @gotags: json:"publicKeys,omitempty"
+  // bitmap: identifies which multi_public_keys are included in the aggregate signature
+  bytes bitmap = 2; // @gotags: json:"bitmap,omitempty"
+  // threshold: minimum number of enabled signers required for verification; 0 disables threshold enforcement
+  uint32 threshold = 3; // @gotags: json:"threshold,omitempty"
+}

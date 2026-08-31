@@ -3,6 +3,7 @@ package crypto
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"github.com/allegro/bigcache/v3"
 	oasisEd25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
@@ -75,15 +76,16 @@ func (b *BatchVerifier) Add(pk PublicKeyI, publicKey, message, signature []byte)
 	// initialize the batch tuple object and append to the proper list
 	t := BatchTuple{PublicKey: pk, Message: message, Signature: signature, index: b.count}
 	listIdx := b.count % 8
-	// depending on the public key length
-	switch len(publicKey) {
-	case Ed25519PubKeySize:
+	// classify by the decoded key type so serialized multisig keys follow the same path
+	// as one-by-one verification through NewPublicKeyFromBytes().
+	switch pk.(type) {
+	case *ED25519PublicKey:
 		b.ed25519[listIdx] = append(b.ed25519[listIdx], t)
-	case ETHSECP256K1PubKeySize, ETHSECP256K1PubKeySize + 1:
+	case *ETHSECP256K1PublicKey:
 		b.ethSecp256k1[listIdx] = append(b.ethSecp256k1[listIdx], t)
-	case SECP256K1PubKeySize:
+	case *SECP256K1PublicKey:
 		b.secp256k1[listIdx] = append(b.secp256k1[listIdx], t)
-	case BLS12381PubKeySize:
+	case *BLS12381PublicKey, *BLS12381MultiPublicKey:
 		b.bls12381[listIdx] = append(b.bls12381[listIdx], t)
 	default:
 		return fmt.Errorf("unrecognized public key format")
@@ -92,6 +94,14 @@ func (b *BatchVerifier) Add(pk PublicKeyI, publicKey, message, signature []byte)
 	b.count++
 	// exit
 	return
+}
+
+// Count() returns the number of signatures added to the batch verifier.
+func (b *BatchVerifier) Count() int {
+	if b == nil {
+		return 0
+	}
+	return b.count
 }
 
 // Verify() returns the indices of bad signatures (if any)
@@ -193,16 +203,12 @@ func (bt *BatchTuple) Key() string {
 	pk := bt.PublicKey.Bytes()
 	// calculate the total length of the key
 	totalLen := len(pk) + len(bt.Message) + len(bt.Signature)
-	// create the buffer and offset variables
-	b, offset := make([]byte, totalLen), 0
-	// copy pubkey in first part
-	copy(b[offset:], pk)
-	offset += len(pk)
-	// copy message in second part
-	copy(b[offset:], bt.Message)
-	offset += len(bt.Message)
-	// copy signature in third part
-	copy(b[offset:], bt.Signature)
+	// length-prefix each part so bytes cannot move across component boundaries
+	b := make([]byte, 0, totalLen+3*binary.MaxVarintLen64)
+	for _, part := range [][]byte{pk, bt.Message, bt.Signature} {
+		b = binary.AppendUvarint(b, uint64(len(part)))
+		b = append(b, part...)
+	}
 	// return string version
 	return string(b)
 }

@@ -1,6 +1,6 @@
 # Makefile for Canopy Kotlin Plugin
 
-.PHONY: all build clean test run dev lint format validate help
+.PHONY: all build clean test test-unit run dev lint format validate help
 
 # Default target
 all: build
@@ -16,9 +16,17 @@ clean:
 	./gradlew clean
 	rm -rf build/ out/
 
-# Run tests
+# Run the integration tests against a running Canopy node (matches Go's `make test`):
+# delegates to the tutorial project, which runs the transaction tests AND the custom RPC endpoints
+# test (/v1/query/faucets, /v1/query/rewards). Requires the node running with the kotlin plugin
+# and its RPC server exposed on port 50010.
 test:
-	@echo "Running tests..."
+	@echo "Running integration tests (transactions + custom RPC endpoints)..."
+	cd tutorial && $(MAKE) test
+
+# Unit tests for the main plugin (no node required)
+test-unit:
+	@echo "Running unit tests..."
 	./gradlew test
 
 # Run the application
@@ -44,8 +52,8 @@ type-check:
 	@echo "Type checking..."
 	./gradlew compileKotlin
 
-# Run all validation checks
-validate: lint type-check test
+# Run all validation checks (uses the node-less unit tests)
+validate: lint type-check test-unit
 	@echo "All validation checks passed!"
 
 # Generate protobuf files
@@ -58,10 +66,10 @@ jar:
 	@echo "Building JAR..."
 	./gradlew jar
 
-# Build fat JAR with all dependencies
+# Build fat JAR with all dependencies (same as root Makefile)
 fatjar:
 	@echo "Building fat JAR..."
-	./gradlew shadowJar
+	./gradlew fatJar --no-daemon
 
 # Run with debugging enabled
 debug:
@@ -73,7 +81,8 @@ help:
 	@echo "Available targets:"
 	@echo "  make build      - Build the project"
 	@echo "  make clean      - Clean build artifacts"
-	@echo "  make test       - Run tests"
+	@echo "  make test       - Run the integration tests (transactions + custom RPC endpoints; requires running Canopy node)"
+	@echo "  make test-unit  - Run the main plugin unit tests (no node required)"
 	@echo "  make run        - Run the application"
 	@echo "  make dev        - Run in development mode"
 	@echo "  make lint       - Run linter"

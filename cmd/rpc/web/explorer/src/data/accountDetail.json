@@ -1,0 +1,46 @@
+{
+  "header": {
+    "title": "Account Details",
+    "balance": "Balance",
+    "address": "Address",
+    "totalBalance": "Total Balance",
+    "status": "Status",
+    "active": "Active"
+  },
+  "tabs": {
+    "sentTransactions": "Sent Transactions",
+    "receivedTransactions": "Received Transactions"
+  },
+  "table": {
+    "sentTitle": "Sent Transactions",
+    "receivedTitle": "Received Transactions",
+    "headers": {
+      "hash": "Hash",
+      "type": "Type",
+      "from": "From",
+      "to": "To",
+      "amount": "Amount",
+      "fee": "Fee",
+      "status": "Status",
+      "age": "Age"
+    }
+  },
+  "status": {
+    "success": "Success",
+    "failed": "Failed",
+    "pending": "Pending"
+  },
+  "types": {
+    "transfer": "Transfer",
+    "stake": "Stake",
+    "unstake": "Unstake",
+    "swap": "Swap"
+  },
+  "messages": {
+    "noSentTransactions": "No sent transactions found",
+    "noReceivedTransactions": "No received transactions found",
+    "loadingAccount": "Loading account details...",
+    "accountNotFound": "Account not found",
+    "errorLoading": "Error loading account"
+  }
+}
