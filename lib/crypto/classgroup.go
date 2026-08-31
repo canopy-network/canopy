@@ -388,35 +388,29 @@ func NewDiscriminant(seed []byte) *big.Int {
 	// initialize a sieve to mark non-prime candidates within the range
 	sieveLen := 65536
 	sieve := make([]bool, sieveLen)
+	// reuse a single scratch integer for the sieve arithmetic
+	tmp := bip.New()
+	defer bip.Recycle(tmp)
 	for {
-		// reset the slice
-		sieve = sieve[:]
-		var wg sync.WaitGroup
-		// parallelize the marking of multiples
+		// clear the sieve so marks from the previous range do not leak into this one
+		clear(sieve)
+		// mark the multiples of each prime divisor as non-prime candidates
 		for _, v := range SieveInfo {
-			wg.Add(1)
-			go func(v Pair) {
-				tmp := bip.New().Set(temp)
-				defer wg.Done()
-				// `v.p` is a prime divisor, and `v.q` is the modular inverse of m mod v.p
-				// `i` calculates the starting index for marking multiples of v.p
-				// it represents the smallest integer such that:
-				//     m * i ≡ -n (mod v.p)
-				// simplified as:
-				//     i = ((-n % v.p) * v.q) % v.p
-				i := (tmp.Mod(negN, tmp.SetInt64(v.p)).Int64() * v.q) % v.p
-
-				// adjust `i` to ensure it's within the bounds of the sieve
-				for i < int64(sieveLen) {
-					// mark the sieve index as non-prime
-					sieve[i] = true
-					// move to the next multiple of v.p within the sieve range
-					i += v.p
-				}
-			}(v)
+			// `v.p` is a prime divisor, and `v.q` is the modular inverse of m mod v.p
+			// `i` calculates the starting index for marking multiples of v.p
+			// it represents the smallest integer such that:
+			//     m * i ≡ -n (mod v.p)
+			// simplified as:
+			//     i = ((-n % v.p) * v.q) % v.p
+			i := (tmp.Mod(negN, tmp.SetInt64(v.p)).Int64() * v.q) % v.p
+			// adjust `i` to ensure it's within the bounds of the sieve
+			for i < int64(sieveLen) {
+				// mark the sieve index as non-prime
+				sieve[i] = true
+				// move to the next multiple of v.p within the sieve range
+				i += v.p
+			}
 		}
-		// wait for all marking goroutines to finish
-		wg.Wait()
 		// check each number in the sieve range for primality.
 		for i, marked := range sieve {
 			// skip if pre-marked as non prime
