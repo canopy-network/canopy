@@ -63,7 +63,7 @@ export const templateFns = {
         if (v === '' || v == null) return 0
         const n = Number(v)
         if (!Number.isFinite(n)) return 0
-        return Math.floor(n * _denomFactor)
+        return Math.round(n * _denomFactor)
     },
 
     // DEPRECATED: Use fromMicroDenom instead
