@@ -261,3 +261,13 @@ export function formatPaginationRange(start: number, end: number): string {
     if (start === end) return `${start}`
     return `${start} to ${end}`
 }
+
+// Escapes the HTML metacharacters that a browser would otherwise interpret as markup.
+// JSON.stringify leaves these characters as-is, so any string field it serializes has to
+// be escaped before the result is injected as HTML.
+export function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+}

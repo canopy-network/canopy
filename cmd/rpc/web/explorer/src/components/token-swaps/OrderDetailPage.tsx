@@ -5,7 +5,7 @@ import { Copy } from 'lucide-react'
 import { useOrder } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 
-import { formatDecimalWithSubscript, formatLocaleNumber, formatMicroCNPY } from '../../lib/utils'
+import { escapeHtml, formatDecimalWithSubscript, formatLocaleNumber, formatMicroCNPY } from '../../lib/utils'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 
 const SWAP_DECIMAL_PLACES = 6
@@ -186,7 +186,7 @@ const OrderDetailPage: React.FC = () => {
                                 <div className="rounded-lg border border-white/10 p-4">
                                     <pre className="overflow-x-auto whitespace-pre-wrap text-xs">
                                         <code className="text-gray-300">
-                                            {JSON.stringify(order, null, 2)
+                                            {escapeHtml(JSON.stringify(order, null, 2))
                                                 .split('\n')
                                                 .map((line, index) => (
                                                     <div key={index} className="flex">
