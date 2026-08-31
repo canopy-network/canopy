@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="12 4 76 88" fill="none">
+  <defs>
+    <linearGradient id="arborMarkGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2FD6C0"/>
+      <stop offset="100%" stop-color="#7C6CF2"/>
+    </linearGradient>
+  </defs>
+  <path d="M50 14 L20 86" fill="none" stroke="url(#arborMarkGrad)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M50 14 L80 86" fill="none" stroke="url(#arborMarkGrad)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M32.6 55.8 L67.4 55.8" fill="none" stroke="url(#arborMarkGrad)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="50" cy="14" r="6" fill="#F2B84B"/>
+  <circle cx="32.6" cy="55.8" r="5" fill="#F2B84B"/>
+  <circle cx="67.4" cy="55.8" r="5" fill="#F2B84B"/>
+</svg>

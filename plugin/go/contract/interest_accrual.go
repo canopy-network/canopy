@@ -1,0 +1,501 @@
+package contract
+
+import (
+	"math/big"
+
+	"google.golang.org/protobuf/types/known/anypb"
+)
+
+// interest_accrual.go implements AYIS Section 7's BeginBlock interest
+// accrual sequence for a single market. AccrueInterest is called once per
+// market per block by the BeginBlock hook (which iterates PrefixMarkets,
+// {16}), and is ALSO called synchronously from DeliverTx by
+// borrow/repay/liquidate_position's own Step 1 (AYIS Section 12.3, Accrual
+// Ordering Contract: "AccrueInterest() MUST be the first call in
+// BeginBlock, before... loss-factor-application queue processing").
+//
+// [STALE COMMENT CORRECTED, SECOND PASS] The previous correction pass
+// (still preserved in git history) verified SumLenderBalancesInMarket,
+// ApplyLossFactor, EnqueueLossFactorApplication/PeekLossFactorQueue/
+// DequeueLossFactorApplication, and repay.go/liquidate_position.go all
+// exist, but still carried two claims that have SINCE been superseded
+// by work done after that pass -- both re-verified directly against the
+// real files for this correction, not re-assumed:
+//
+//   - ProcessLossFactorQueue (the BeginBlock drain caller): the previous
+//     pass called this "CONFIRMED NOT YET BUILT." It is now wired --
+//     contract.go's BeginBlock calls it in the same per-market loop as
+//     AccrueInterest, immediately after, per the Accrual Ordering
+//     Contract ("loss-factor-application queue processing runs after
+//     AccrueInterest, same market, same block").
+//
+//   - WillExhaustThisBlock (C4, ARCM v3.11.1 Section 9.3b Rule 3): the
+//     previous pass left a TODO(C4) here, since the function had not
+//     been written yet. It now exists (loss_factor_queue.go) and Step 8
+//     below DOES call it -- market.status == Insolvent ||
+//     WillExhaustThisBlock(...), closing the one-block misallocation
+//     window this rule addresses.
+//
+// Both gaps are closed. No open TODO remains in this doc comment as of
+// this correction.
+//
+// R_FUND SCOPE: this function correctly credits reserve_cut to R_fund
+// ({18}) for the non-Insolvent (Step 8/9/10) path, via SetReserveFundTry --
+// the BeginBlock-context leg ARCM Section 9.3 calls the "interest" source.
+// The Insolvent branch's own R_fund routing (ARCM Section 9.3, full
+// interest_earned -> R_fund for an already-Insolvent market) is
+// implemented below (see the Insolvent branch). The two DeliverTx-context
+// R_fund legs (repay principal, liquidation proceeds) live in repay.go and
+// liquidate_position.go respectively, now that both exist -- NOT in this
+// file. Those legs use EncodeUint128's reverting wrapper, NOT
+// SetReserveFundTry -- do not reuse this function's BeginBlock-context
+// helpers for them without re-deriving which encoding response applies
+// (Principle 14).
+
+const maxDeltaTLinear = 1000 // AYIS Section 13, immutable
+
+// AccrueInterest implements AYIS Section 7 for one market. Returns a
+// PluginError only for a genuine state-layer failure (RPC error, corrupt
+// unmarshal) -- an index-encoding overflow is NOT an error, it is handled
+// in-function by freezing the single affected market and returning nil,
+// per Principle 14 (no transaction exists to revert in BeginBlock context;
+// this function is also called from DeliverTx, but even there, an encoding
+// overflow's correct response for B_index/S_rate is defined by AYIS
+// Section 3.2/4.6 as a market freeze, not a transaction revert -- freezing
+// is the SAME response regardless of calling context for this specific
+// failure mode, unlike R_fund's routing split in ARCM Section 9.3).
+func AccrueInterest(c *Contract, marketID string) (event *Event, pErr *PluginError) {
+	currentBlock := c.plugin.CurrentHeight()
+
+	// Batched read: Market, BorrowIndex ({25}), SupplyIndex ({26}),
+	// LossFactor ({27}) -- one round trip. This function runs once per
+	// market EVERY block (BeginBlock) in addition to its DeliverTx-context
+	// calls, so batching here matters far more than in a single-transaction
+	// handler like deposit.go, which is why this reads inline rather than
+	// calling the four separate GetMarket/GetBorrowIndex/GetSupplyIndex/
+	// GetLossFactor accessors in state_accessors.go (those remain correct
+	// and useful for lower-frequency, single-key callers).
+	const (
+		qMarket = iota
+		qBorrowIndex
+		qSupplyIndex
+		qLossFactor
+	)
+	readResp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: qMarket, Key: KeyForMarket(marketID)},
+			{QueryId: qBorrowIndex, Key: KeyForBorrowIndex(marketID)},
+			{QueryId: qSupplyIndex, Key: KeyForSupplyIndex(marketID)},
+			{QueryId: qLossFactor, Key: KeyForLossFactor(marketID)},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if readResp.Error != nil {
+		return nil, readResp.Error
+	}
+
+	marketBytes := entryValue(readResp, qMarket)
+	if len(marketBytes) == 0 {
+		// Unreachable in practice: this market_id came from a range read
+		// over PrefixMarkets in the BeginBlock caller, or was validated to
+		// exist by the DeliverTx handler that called into this function.
+		// Guarded explicitly rather than assumed, per this project's
+		// standard (Section 10.6-style discipline extended to existence
+		// checks, not only cast boundaries).
+		return nil, ErrMarketNotFound(marketID)
+	}
+	market := &Market{}
+	if uErr := Unmarshal(marketBytes, market); uErr != nil {
+		return nil, uErr
+	}
+
+	// --- Step 0 [AYIS v1.10 Section 7, N1] ---
+	// Checked BEFORE delta_t is computed, not after a later guard attempts
+	// to use it. Without this, last_accrual_block never advances once
+	// frozen, so delta_t would grow without bound on every subsequent
+	// block, and CompoundExact's exact big.Int exponentiation would
+	// recompute an ever-larger result at ever-growing cost, forever, for
+	// this one market -- the Principle 11 violation N1 exists to close.
+	if market.IndexOverflowHalted {
+		return nil, nil
+	}
+
+	borrowIndexBytes := entryValue(readResp, qBorrowIndex)
+	if len(borrowIndexBytes) == 0 {
+		return nil, ErrMarketNotFound(marketID)
+	}
+	bIndex := DecodeUint128(borrowIndexBytes)
+
+	supplyIndexBytes := entryValue(readResp, qSupplyIndex)
+	if len(supplyIndexBytes) == 0 {
+		return nil, ErrMarketNotFound(marketID)
+	}
+	sRate, totalSharesOutstanding := DecodeSupplyIndexRecord(supplyIndexBytes)
+
+	lossFactorBytes := entryValue(readResp, qLossFactor)
+	if len(lossFactorBytes) == 0 {
+		return nil, ErrMarketNotFound(marketID)
+	}
+	// lossFactor is read for completeness with AYIS Section 7's full read
+	// set, but Step 8 below branches on market.Status, not on lossFactor
+	// directly -- Invariant I11 (Insolvency finality) guarantees status is
+	// already Insolvent at or before the block loss_factor reaches zero,
+	// so status is the correct, already-committed signal to branch on.
+	_ = DecodeUint128(lossFactorBytes)
+
+	// --- Step 1: delta_t ---
+	deltaT := currentBlock - market.LastAccrualBlock
+	if deltaT == 0 {
+		// Already accrued this block (e.g. a second DeliverTx-context call
+		// in the same block after BeginBlock already ran). No-op, not an
+		// error -- matches AYIS Section 7.2's double-accrual handling.
+		return nil, nil
+	}
+
+	// --- Step 2/3: utilization ---
+	totalBorrowed := market.TotalBorrowed
+	totalSupplied := market.TotalSupplied
+	if totalSupplied == 0 {
+		// AYIS Section 7, Step 3: "if total_supplied == 0: skip". No
+		// interest to accrue against zero supply; still advance
+		// last_accrual_block (Step 11) so delta_t does not silently grow
+		// for a market that is legitimately empty, not frozen.
+		market.LastAccrualBlock = currentBlock
+		if sErr := SaveMarket(c, marketID, market); sErr != nil {
+			return nil, sErr
+		}
+		return nil, nil
+	}
+	utilizationBps := ComputeUtilizationBps(totalBorrowed, totalSupplied)
+
+	// --- Step 4: annual rate ---
+	annualRateBps := ComputeBorrowRate(utilizationBps)
+
+	// --- Step 5: per-block rate ---
+	perBlockRate := AnnualRateToPerBlockRateRay(annualRateBps)
+
+	// --- Step 6: B_index update ---
+	var newBIndex *big.Int
+	if deltaT <= maxDeltaTLinear {
+		// Linear approximation: factor = RAY + (per_block_rate * delta_t)
+		factor := new(big.Int).Mul(perBlockRate, new(big.Int).SetUint64(deltaT))
+		factor.Add(factor, RAY)
+		newBIndex = new(big.Int).Mul(bIndex, factor)
+		newBIndex.Div(newBIndex, RAY)
+	} else {
+		newBIndex = CompoundExact(bIndex, perBlockRate, deltaT)
+	}
+
+	_, ok := TryEncodeUint128(newBIndex)
+	if !ok {
+		// [AYIS Section 3.2, M1] This market's B_index would not fit in
+		// 128 bits. Freeze THIS market only; every other market's
+		// BeginBlock processing is unaffected (Principle 2/14).
+		market.IndexOverflowHalted = true
+		if sErr := SaveMarket(c, marketID, market); sErr != nil {
+			return nil, sErr
+		}
+		return nil, nil
+	}
+
+	// --- Step 7: interest_earned ---
+	// [DUST FIX] interest_earned = (total_borrowed * per_block_rate * delta_t
+	// + interest_remainder_ray) / RAY, with the new remainder = that same
+	// numerator mod RAY carried into market.InterestRemainderRay for next
+	// accrual. Previously interest_earned = total_borrowed * per_block_rate *
+	// delta_t / RAY with no remainder tracking at all -- a real accounting
+	// bug, not test-scale noise: any accrual whose numerator doesn't clear one
+	// full RAY unit had that fractional interest silently discarded, forever,
+	// every single time. Confirmed live: a devnet market at ~100% APR with
+	// total_borrowed=294000 computed interest_earned ~= 0.186 per block,
+	// flooring to exactly 0 on every accrual call. This carry makes the
+	// computation exact -- no value is ever lost, it either becomes part of
+	// this block's interest_earned or carries forward as remainder.
+	//
+	// market.InterestRemainderRay is mutated on the in-memory market struct
+	// here, not written via its own dedicated SetXTry call -- every code path
+	// below that reaches this point already calls SaveMarket(c, marketID,
+	// market) at least once before returning (the Insolvent branch, the
+	// overflow-freeze branches, and Step 11's final save), so the remainder
+	// persists correctly via whichever of those saves this particular call
+	// happens to hit, with no new write call sites needed.
+	var prevRemainder *big.Int
+	if len(market.InterestRemainderRay) == 0 {
+		prevRemainder = big.NewInt(0)
+	} else {
+		prevRemainder = DecodeUint128(market.InterestRemainderRay)
+	}
+	numerator := new(big.Int).SetUint64(totalBorrowed)
+	numerator.Mul(numerator, perBlockRate)
+	numerator.Mul(numerator, new(big.Int).SetUint64(deltaT))
+	numerator.Add(numerator, prevRemainder)
+
+	interestEarned := new(big.Int).Div(numerator, RAY)
+	newRemainder := new(big.Int).Mod(numerator, RAY)
+
+	// [AYIS v1.10 Section 9, M1 discipline] BeginBlock-context write: use
+	// TryEncodeUint128, not the reverting EncodeUint128 wrapper -- matching
+	// every other accumulator write in this function. newRemainder is always
+	// < RAY by construction (the remainder of a division by RAY can never
+	// reach RAY itself), so !ok is structurally unreachable here, but this
+	// function still checks and handles it via the market-freeze convention
+	// rather than assuming the invariant and skipping the check, consistent
+	// with every other TryEncodeUint128 call site in this file.
+	remainderEncoded, rOk := TryEncodeUint128(newRemainder)
+	if !rOk {
+		market.IndexOverflowHalted = true
+		if sErr := SaveMarket(c, marketID, market); sErr != nil {
+			return nil, sErr
+		}
+		return nil, nil
+	}
+	market.InterestRemainderRay = remainderEncoded
+
+	// --- Step 8: branch on market.status ---
+	// [C4 FIX] Per ARCM v3.11.1 Section 9.3b Rule 3 / AYIS v1.11.1 Section 7
+	// Step 8 revised: this condition now also checks WillExhaustThisBlock,
+	// closing the one-block misallocation window where a market with a
+	// queued, same-block Layer-4 exhaustion would otherwise have this
+	// block's interest incorrectly split into reserve_cut/treasury_cut/
+	// supplier_interest instead of routed whole to R_fund, because
+	// market.Status hasn't been flipped to Insolvent yet -- ApplyLossFactor
+	// (the thing that flips it) doesn't run until ProcessLossFactorQueue's
+	// drain step, later in this same BeginBlock. WillExhaustThisBlock
+	// performs the identical exhaustion comparison ApplyLossFactor will
+	// independently make moments later, so this branch and that drain agree.
+	willExhaust, weErr := WillExhaustThisBlock(c, marketID)
+	if weErr != nil {
+		return nil, weErr
+	}
+	if market.Status == MarketStatus_INSOLVENT || willExhaust {
+		// [AYIS Section 7, Step 8, J1/K1] Full interest_earned routes to
+		// R_fund for an Insolvent market -- fixed: previously computed and
+		// discarded, an accounting leak identical in shape to the
+		// reserveCut leak fixed at Step 10 below, just on the Insolvent
+		// branch instead. Written BEFORE B_index/SaveMarket so that an
+		// overflow here freezes the market before anything else commits
+		// this block (Principle 8 atomicity, same discipline as Step 10).
+		rFund, rFundFound, rErr := GetReserveFund(c, marketID)
+		if rErr != nil {
+			return nil, rErr
+		}
+		if !rFundFound {
+			// Unreachable in practice: create_market always initializes {18} to
+			// zero (Section 4.5's zero-init contract). Guarded explicitly rather
+			// than assumed, per this project's established standard.
+			return nil, ErrMarketNotFound(marketID)
+		}
+		newRFundInsolvent := new(big.Int).Add(rFund, interestEarned)
+		rOkInsolvent, rWriteErrInsolvent := SetReserveFundTry(c, marketID, newRFundInsolvent)
+		if rWriteErrInsolvent != nil {
+			return nil, rWriteErrInsolvent
+		}
+		if !rOkInsolvent {
+			// [ARCM Section 9.3a] R_fund would not fit in 128 bits. Freeze this
+			// market, matching the non-Insolvent path's own overflow response.
+			// B_index has not been written yet at this point, so nothing
+			// partially commits (Principle 8).
+			market.IndexOverflowHalted = true
+			if sErr := SaveMarket(c, marketID, market); sErr != nil {
+				return nil, sErr
+			}
+			return nil, nil
+		}
+
+		// B_index still advances normally for an Insolvent market
+		// (ScaledDebt() must remain computable for existing borrowers,
+		// AYIS Section 6) -- only the S_rate split is skipped.
+		bOk, wErr := SetBorrowIndexTry(c, marketID, newBIndex)
+		if wErr != nil {
+			return nil, wErr
+		}
+		if !bOk {
+			return nil, ErrUint128EncodingOverflow(newBIndex.String())
+		}
+		market.LastAccrualBlock = currentBlock
+		if sErr := SaveMarket(c, marketID, market); sErr != nil {
+			return nil, sErr
+		}
+		// [C4 FIX] Emit EventInsolventMarketValueRecovered per ARCM v3.11.1
+		// Section 9.3b Rule 3 / AYIS v1.11.1 Section 7 Step 8's revised
+		// pseudocode -- this event was never emitted here before this fix,
+		// despite the event type already existing and being registered in
+		// contract.go's EventTypeUrls. Guards RecoveredAmount's uint64 cast
+		// the same way liquidate_position.go guards collateralSeized, since
+		// interestEarned is an unbounded big.Int by construction.
+		if interestEarned.BitLen() > 64 {
+			return nil, ErrUint128EncodingOverflow(interestEarned.String())
+		}
+		payload := &EventInsolventMarketValueRecovered{
+			MarketId:        marketID,
+			RecoveredAmount: interestEarned.Uint64(),
+			Source:          "interest",
+		}
+		anyMsg, aErr := anypb.New(payload)
+		if aErr != nil {
+			return nil, ErrMarshal(aErr)
+		}
+		return &Event{
+			EventType: "insolvent_market_value_recovered",
+			Msg:       &Event_Custom{Custom: &EventCustom{Msg: anyMsg}},
+		}, nil
+	}
+
+	// Non-Insolvent path: split interest into reserve_cut / treasury_cut /
+	// supplier_interest. treasury_cut is a GLOBAL governance-set rate
+	// (GovernanceParams.TreasuryCutBps, {22} -- see MessageSetTreasuryCut's
+	// doc comment in arbor.proto for full rationale), unlike reserve_cut's
+	// per-market ReserveFactorBps. Read once per accrual call; if
+	// governance has never called set_treasury_cut, GetGovernanceParams
+	// returns found=false and params is nil, which this treats as
+	// TreasuryCutBps=0 -- Layer 3 simply accumulates nothing until
+	// explicitly configured, matching R_fund's own zero-init-safe
+	// convention (no error, no freeze, just a zero cut).
+	reserveFactorRay := new(big.Int).SetUint64(market.ReserveFactorBps)
+	reserveFactorRay.Mul(reserveFactorRay, RAY)
+	reserveFactorRay.Div(reserveFactorRay, big.NewInt(10000))
+
+	reserveCut := new(big.Int).Mul(interestEarned, reserveFactorRay)
+	reserveCut.Div(reserveCut, RAY)
+
+	govParams, _, govErr := GetGovernanceParams(c)
+	if govErr != nil {
+		return nil, govErr
+	}
+	var treasuryCutBps uint64
+	if govParams != nil {
+		treasuryCutBps = govParams.TreasuryCutBps
+	}
+	treasuryCutRay := new(big.Int).SetUint64(treasuryCutBps)
+	treasuryCutRay.Mul(treasuryCutRay, RAY)
+	treasuryCutRay.Div(treasuryCutRay, big.NewInt(10000))
+	treasuryCut := new(big.Int).Mul(interestEarned, treasuryCutRay)
+	treasuryCut.Div(treasuryCut, RAY)
+
+	supplierInterest := new(big.Int).Sub(interestEarned, reserveCut)
+	supplierInterest.Sub(supplierInterest, treasuryCut)
+
+	// --- Step 10 (moved earlier, before S_rate write) [ARCM Section 9.3/12.3] ---
+	// reserveCut was previously computed and discarded here -- a real
+	// accounting leak: this value was subtracted from what suppliers
+	// receive (supplierInterest, above) but never credited anywhere. Fixed
+	// by reading R_fund, adding reserveCut, and writing it back via the
+	// BeginBlock-context-safe TryEncodeUint128 path (Section 9.3,
+	// "interest" source leg -- NOT the DeliverTx repay/liquidation legs,
+	// which are out of scope; those don't exist yet). On overflow, freeze
+	// the market exactly as B_index/S_rate do -- consistent response to
+	// the same failure mode at a third accumulator (Principle 14).
+	rFund, rFundFound, rErr := GetReserveFund(c, marketID)
+	if rErr != nil {
+		return nil, rErr
+	}
+	if !rFundFound {
+		// Unreachable in practice: create_market always initializes {18} to
+		// zero (Section 4.5's zero-init contract). Guarded explicitly rather
+		// than assumed, per this project's established standard.
+		return nil, ErrMarketNotFound(marketID)
+	}
+	newRFund := new(big.Int).Add(rFund, reserveCut)
+	rOk, rWriteErr := SetReserveFundTry(c, marketID, newRFund)
+	if rWriteErr != nil {
+		return nil, rWriteErr
+	}
+	if !rOk {
+		// [ARCM Section 9.3a] R_fund would not fit in 128 bits. Freeze this
+		// market only, matching B_index/S_rate's own overflow response.
+		// Neither B_index nor S_rate has been written yet at this point in
+		// the function, so nothing partially commits (Principle 8).
+		market.IndexOverflowHalted = true
+		if sErr := SaveMarket(c, marketID, market); sErr != nil {
+			return nil, sErr
+		}
+		return nil, nil
+	}
+
+	// --- Step 10 (treasury_cut leg) --- treasuryCut flushed to the GLOBAL
+	// Arbor treasury ({40}) via SetTreasuryArborTry, the BeginBlock-safe
+	// path -- same overflow-freeze contract as reserveCut's flush directly
+	// above. When treasuryCutBps is 0 (governance never configured it),
+	// treasuryCut is already 0, so this Add/write is a real no-op in
+	// effect, not a special-cased skip branch.
+	tFund, _, tFundErr := GetTreasuryArbor(c)
+	if tFundErr != nil {
+		return nil, tFundErr
+	}
+	if tFund == nil {
+		tFund = big.NewInt(0)
+	}
+	newTFund := new(big.Int).Add(tFund, treasuryCut)
+	tOk, tWriteErr := SetTreasuryArborTry(c, newTFund)
+	if tWriteErr != nil {
+		return nil, tWriteErr
+	}
+	if !tOk {
+		// Global treasury ({40}) would not fit in 128 bits. This is a GLOBAL
+		// accumulator, not per-market -- freezing only this one market would
+		// not stop every other market's accrual from continuing to grow the
+		// same overflowing value. No dedicated protocol-wide freeze signal
+		// exists yet for a global accumulator overflow (tracked as a real
+		// follow-up, not silently ignored); reusing this market's own
+		// IndexOverflowHalted here is a known, flagged gap, not a correct
+		// fix -- it only prevents this market's own future accrual calls
+		// from re-adding to an already-overflowed global value, matching
+		// SetTreasuryArborTry's own doc comment that a protocol-level
+		// response is required, not a mechanism this halt alone provides.
+		market.IndexOverflowHalted = true
+		if sErr := SaveMarket(c, marketID, market); sErr != nil {
+			return nil, sErr
+		}
+		return nil, nil
+	}
+
+	// --- Step 9: S_rate update ---
+	// S_rate(t) = S_rate(t-1) + (S_rate(t-1) * supplier_interest / total_supplied)
+	sRateDelta := new(big.Int).Mul(sRate, supplierInterest)
+	sRateDelta.Div(sRateDelta, new(big.Int).SetUint64(totalSupplied))
+	newSRate := new(big.Int).Add(sRate, sRateDelta)
+
+	newSRateEncoded, sOk := TryEncodeUint128(newSRate)
+	if !sOk {
+		// [AYIS Section 4.6, M1] This market's S_rate would not fit in 128
+		// bits. Per Section 4.6: the entire Step 8/9 update for this
+		// market this block is atomic -- B_index (Step 6) has already been
+		// computed above but NOT YET WRITTEN, so skipping the write here
+		// means neither B_index nor S_rate commits this block, preserving
+		// atomicity (Principle 8).
+		market.IndexOverflowHalted = true
+		if sErr := SaveMarket(c, marketID, market); sErr != nil {
+			return nil, sErr
+		}
+		return nil, nil
+	}
+
+	// Both B_index and S_rate are valid to commit -- write both now.
+	bOk, wErr := SetBorrowIndexTry(c, marketID, newBIndex)
+	if wErr != nil {
+		return nil, wErr
+	}
+	if !bOk {
+		return nil, ErrUint128EncodingOverflow(newBIndex.String())
+	}
+	writeResp, wErr := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: KeyForSupplyIndex(marketID), Value: EncodeSupplyIndexRecord(newSRateEncoded, totalSharesOutstanding)},
+		},
+	})
+	if wErr != nil {
+		return nil, wErr
+	}
+	if writeResp.Error != nil {
+		return nil, writeResp.Error
+	}
+
+	// --- Step 11: advance last_accrual_block ---
+	market.LastAccrualBlock = currentBlock
+	if sErr := SaveMarket(c, marketID, market); sErr != nil {
+		return nil, sErr
+	}
+	return nil, nil
+}
