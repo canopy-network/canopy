@@ -21,6 +21,7 @@ import (
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/store"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"golang.org/x/term"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -35,7 +36,7 @@ var rootCmd = &cobra.Command{
 			Level:      config.GetLogLevel(),
 			Structured: config.Structured,
 			JSON:       config.JSON,
-		})
+		}, config.DataDirPath)
 		if rpcURLFlag != "" {
 			config.RPCUrl = rpcURLFlag
 		}
@@ -50,6 +51,11 @@ var rootCmd = &cobra.Command{
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number",
+	// version is self-contained: skip data-dir initialization so it never
+	// creates files or prompts for a password (e.g. when run non-interactively)
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(rpc.SoftwareVersion)
 	},
@@ -78,10 +84,29 @@ var newValidatorKeyCmd = &cobra.Command{
 }
 
 var (
-	client, config, l        = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
-	DataDir, validatorKey    = "", crypto.PrivateKeyI(nil)
-	rpcURLFlag, adminURLFlag string
+	client, config, l                             = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
+	DataDir, validatorKey                         = "", crypto.PrivateKeyI(nil)
+	rpcURLFlag, adminURLFlag, externalAddressFlag string
 )
+
+// globalFlag describes a persistent flag shared by the CLI and the auto-updater.
+type globalFlag struct {
+	name    string  // flag name, without the leading "--"
+	value   *string // bound package-level variable
+	def     string  // default value
+	usage   string  // help text
+	forward bool    // always forward to the child process, even when empty
+}
+
+// globalFlags is the single source of truth for the global persistent flags. It
+// is consumed by registerPersistentFlags (to define them) and by GlobalFlagArgs
+// (to forward them to a child canopy process).
+var globalFlags = []globalFlag{
+	{name: "data-dir", value: &DataDir, def: lib.DefaultDataDirPath(), usage: "custom data directory location", forward: true},
+	{name: "rpc-url", value: &rpcURLFlag, usage: "override the RPC URL from config"},
+	{name: "admin-url", value: &adminURLFlag, usage: "override the admin RPC URL from config"},
+	{name: "external-address", value: &externalAddressFlag, usage: "P2P external address"},
+}
 
 func init() {
 	rootCmd.AddCommand(startCmd)
@@ -92,9 +117,40 @@ func init() {
 	rootCmd.AddCommand(newValidatorKeyCmd)
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
-	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-	rootCmd.PersistentFlags().StringVar(&rpcURLFlag, "rpc-url", "", "override the RPC URL from config")
-	rootCmd.PersistentFlags().StringVar(&adminURLFlag, "admin-url", "", "override the admin RPC URL from config")
+	registerPersistentFlags(rootCmd.PersistentFlags())
+}
+
+// registerPersistentFlags binds the global persistent flags onto the given flag
+// set, shared by the CLI and the standalone auto-updater.
+func registerPersistentFlags(fs *pflag.FlagSet) {
+	for _, f := range globalFlags {
+		fs.StringVar(f.value, f.name, f.def, f.usage)
+	}
+}
+
+// ParseGlobalFlags parses the global flags from args, populates the package-level
+// flag values, and returns the remaining positional arguments. It lets consumers
+// outside of cobra (e.g. the auto-updater) honor them.
+func ParseGlobalFlags(args []string) ([]string, error) {
+	fs := pflag.NewFlagSet("canopy", pflag.ContinueOnError)
+	fs.ParseErrorsAllowlist.UnknownFlags = true
+	registerPersistentFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	return fs.Args(), nil
+}
+
+// GlobalFlagArgs reconstructs the global flags as arguments to forward to a child
+// canopy process. Flags marked 'forward' are always emitted; the rest only when set.
+func GlobalFlagArgs() []string {
+	var args []string
+	for _, f := range globalFlags {
+		if f.forward || *f.value != "" {
+			args = append(args, "--"+f.name, *f.value)
+		}
+	}
+	return args
 }
 
 func Execute() {
@@ -272,6 +328,10 @@ func InitializeDataDirectory(dataDirPath string, log lib.LoggerI) (c lib.Config,
 	c, err = lib.NewConfigFromFile(configFilePath)
 	if err != nil {
 		log.Fatal(err.Error())
+	}
+	// if the external address is passed as a flag, it takes precedence over the file config
+	if externalAddressFlag != "" {
+		c.ExternalAddress = externalAddressFlag
 	}
 	// set the data-directory
 	c.DataDirPath = dataDirPath

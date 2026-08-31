@@ -31,6 +31,55 @@ func (s *StateMachine) IndexerBlobs(height uint64) (b *IndexerBlobs, err lib.Err
 
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
 func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.ErrorI) {
+	return s.indexerBlob(height, nil, false, nil)
+}
+
+// IndexerBlobsFromStateChanges builds a state-sparse delta using the state
+// keys journaled for height. available=false means the height predates the
+// journal and callers must use the legacy full-snapshot comparison.
+func (s *StateMachine) IndexerBlobsFromStateChanges(height uint64) (b *IndexerBlobs, available bool, err lib.ErrorI) {
+	if height == 0 || height > s.height {
+		height = s.height
+	}
+	// At the genesis boundary there is no previous blob to compare against, so
+	// the indexer contract requires the complete current account snapshot. The
+	// height journal only contains changes made by block 1 and cannot represent
+	// genesis accounts that remained untouched.
+	if height == 2 {
+		return nil, false, nil
+	}
+	st, ok := s.store.(lib.StoreI)
+	if !ok {
+		return nil, false, nil
+	}
+	stateKeys, available, err := st.StateChangeKeys(height, AccountPrefix())
+	if err != nil || !available {
+		return nil, available, err
+	}
+	for _, prefix := range [][]byte{ValidatorPrefix(), NonSignerPrefix()} {
+		keys, _, keyErr := st.StateChangeKeys(height, prefix)
+		if keyErr != nil {
+			return nil, true, keyErr
+		}
+		stateKeys = append(stateKeys, keys...)
+	}
+
+	b = &IndexerBlobs{}
+	b.Current, err = s.indexerBlob(height, stateKeys, true, nil)
+	if err != nil {
+		return nil, true, err
+	}
+	if height > 2 {
+		b.Previous, err = s.indexerBlob(height-1, stateKeys, true, b.Current.Block)
+		if err != nil {
+			return nil, true, err
+		}
+	}
+	b, err = DeltaIndexerBlobs(b)
+	return b, true, err
+}
+
+func (s *StateMachine) indexerBlob(height uint64, stateKeys [][]byte, selectiveState bool, eventBlockBz []byte) (b *IndexerBlob, err lib.ErrorI) {
 	if height == 0 || height > s.height {
 		height = s.height
 	}
@@ -63,9 +112,26 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if block.BlockHeader.Height == 0 || block.BlockHeader.Height != blockHeight {
 		return nil, lib.ErrWrongBlockHeight(block.BlockHeader.Height, blockHeight)
 	}
+	blockBz, err := lib.Marshal(block)
+	if err != nil {
+		return nil, err
+	}
+	if selectiveState && len(eventBlockBz) == 0 {
+		eventBlockBz = blockBz
+	}
 	// use sm for consistent snapshot reads at the requested height
-	// retrieve the accounts
-	accounts, err := sm.IterateAndAppend(AccountPrefix())
+	// retrieve either complete snapshots (legacy path) or journaled state
+	// entries (journal path).
+	var accounts [][]byte
+	if !selectiveState {
+		accounts, err = sm.IterateAndAppend(AccountPrefix())
+	} else {
+		eventAccountKeys, eventErr := rewardSlashAccountStateKeys(eventBlockBz)
+		if eventErr != nil {
+			return nil, eventErr
+		}
+		accounts, err = sm.valuesForStateKeys(append(stateKeys, eventAccountKeys...), AccountPrefix())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -75,9 +141,20 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		return nil, err
 	}
 	// retrieve validators
-	validators, err := sm.IterateAndAppend(ValidatorPrefix())
+	allValidators, err := sm.IterateAndAppend(ValidatorPrefix())
 	if err != nil {
 		return nil, err
+	}
+	validators := allValidators
+	if selectiveState {
+		eventValidatorKeys, eventErr := validatorForceStateKeys(eventBlockBz, allValidators)
+		if eventErr != nil {
+			return nil, eventErr
+		}
+		validators, err = sm.valuesForStateKeys(append(stateKeys, eventValidatorKeys...), ValidatorPrefix())
+		if err != nil {
+			return nil, err
+		}
 	}
 	// retrieve dex prices
 	dexPrices, err := sm.GetDexPrices()
@@ -85,7 +162,12 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		return nil, err
 	}
 	// retrieve nonSigners
-	nonSigners, err := sm.IterateAndAppend(NonSignerPrefix())
+	var nonSigners [][]byte
+	if selectiveState {
+		nonSigners, err = sm.valuesForStateKeys(stateKeys, NonSignerPrefix())
+	} else {
+		nonSigners, err = sm.IterateAndAppend(NonSignerPrefix())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -139,11 +221,6 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if err != nil {
 		return nil, err
 	}
-	// marshal block to bytes
-	blockBz, err := lib.Marshal(block)
-	if err != nil {
-		return nil, err
-	}
 	// marshal dex prices to bytes
 	var dexPricesBz [][]byte
 	for _, price := range dexPrices {
@@ -174,7 +251,7 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	}
 	// calculate validator/delegator status totals from the full snapshot
 	totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking,
-		totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking, err := validatorTotals(validators)
+		totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking, err := validatorTotals(allValidators)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +280,30 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		TotalDelegatesUnstaking:  totalDelegatesUnstaking,
 		BlockNonSigners:          blockNonSigners,
 	}, nil
+}
+
+// valuesForStateKeys() returns the byte array for state keys
+func (s *StateMachine) valuesForStateKeys(keys [][]byte, prefix []byte) ([][]byte, lib.ErrorI) {
+	values := make([][]byte, 0, len(keys))
+	seen := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		if !bytes.HasPrefix(key, prefix) {
+			continue
+		}
+		keyString := string(key)
+		if _, ok := seen[keyString]; ok {
+			continue
+		}
+		seen[keyString] = struct{}{}
+		value, err := s.Get(key)
+		if err != nil {
+			return nil, err
+		}
+		if value != nil {
+			values = append(values, value)
+		}
+	}
+	return values, nil
 }
 
 func (s *StateMachine) blockNonSignerAddresses(blockHeight uint64) ([][]byte, lib.ErrorI) {
@@ -442,6 +543,38 @@ func rewardSlashAccountKeys(blockBz []byte) (map[string]struct{}, lib.ErrorI) {
 		switch event.EventType {
 		case string(lib.EventTypeReward), string(lib.EventTypeSlash):
 			keys[string(event.Address)] = struct{}{}
+		}
+	}
+	return keys, nil
+}
+
+// rewardSlashAccountStateKeys() returns account storage keys referenced by reward/slash events
+// Sparse journal reads use them to include event accounts even when their state is unchanged
+func rewardSlashAccountStateKeys(blockBz []byte) ([][]byte, lib.ErrorI) {
+	addresses, err := rewardSlashAccountKeys(blockBz)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([][]byte, 0, len(addresses))
+	for address := range addresses {
+		keys = append(keys, lib.JoinLenPrefix(accountPrefix, []byte(address)))
+	}
+	return keys, nil
+}
+
+func validatorForceStateKeys(blockBz []byte, validators [][]byte) ([][]byte, lib.ErrorI) {
+	_, validatorMap, outputIndex, err := validatorEntries(validators)
+	if err != nil {
+		return nil, err
+	}
+	forced, err := validatorForceKeys(blockBz, outputIndex, nil)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([][]byte, 0, len(forced))
+	for address := range forced {
+		if _, ok := validatorMap[address]; ok {
+			keys = append(keys, lib.JoinLenPrefix(validatorPrefix, []byte(address)))
 		}
 	}
 	return keys, nil

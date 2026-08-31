@@ -18,7 +18,7 @@ RUN go build -o /plugin .
 # Stage 3: Runtime
 FROM alpine:latest
 WORKDIR /app
-RUN apk add --no-cache bash && mkdir -p /tmp/plugin /root/.canopy plugin/go
+RUN apk add --no-cache bash procps && mkdir -p /tmp/plugin /root/.canopy plugin/go
 
 COPY --from=canopy-builder /canopy .
 COPY --from=plugin-builder /plugin plugin/go/go-plugin

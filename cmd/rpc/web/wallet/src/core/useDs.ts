@@ -11,7 +11,8 @@ export type DSOptions<T = any> = {
     // Caching & refetching
     staleTimeMs?: number
     gcTimeMs?: number
-    refetchIntervalMs?: number
+    // `false` disables interval polling.
+    refetchIntervalMs?: number | false
     refetchOnWindowFocus?: boolean
     refetchOnMount?: boolean
     refetchOnReconnect?: boolean

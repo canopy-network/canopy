@@ -26,6 +26,7 @@ const (
 	defaultRepoName     = "canopy"
 	defaultRepoOwner    = "canopy-network"
 	defaultBinPath      = "./cli"
+	defaultNewBinName   = "canopy_updated" // name of the downloaded binary, kept on the data directory
 	defaultCheckPeriod  = time.Minute * 30 // default check period for updates
 	defaultGracePeriod  = time.Second * 2  // default grace period for graceful shutdown
 	defaultMaxDelayTime = 30               // default max delay time for staggered updates (minutes)
@@ -80,10 +81,15 @@ var (
 )
 
 func main() {
+	// parse global flags up front so they resolve the config and get forwarded
+	positionalArgs, err := cli.ParseGlobalFlags(os.Args[1:])
+	if err != nil {
+		lib.NewDefaultLogger().Fatalf("failed to parse flags: %v", err)
+	}
 	// get configs and logger
 	configs, logger := getConfigs()
 	// check if no start was called, this means it was just called as config
-	if len(os.Args) < 2 || os.Args[1] != "start" {
+	if len(positionalArgs) == 0 || positionalArgs[0] != "start" {
 		// TODO: This message is partly misleading due to the fact that the only place that it would
 		// make sense to have a setup complete message is on the context of the deployments repository.
 		// The actual behavior of this program should be to only start the CLI directly, not perform
@@ -94,37 +100,40 @@ func main() {
 		return
 	}
 	autoUpdaterEnabled := configs.Coordinator.Canopy.AutoUpdate
-	binPath := configs.Coordinator.BinPath
+	// run a previously downloaded update if there is one, the shipped binary otherwise
+	binPath := effectiveBinPath(configs.Coordinator.UpdatedBinPath, configs.Coordinator.BinPath)
 	// ensure the binary exists before proceeding
-	if !isExecutable(binPath) {
+	if binPath == "" {
 		logger.Fatalf("canopy binary not found or not executable: %s", binPath)
 	}
+	binaryVersion := getSoftwareVersion(autoUpdaterEnabled, binPath)
 	if autoUpdaterEnabled {
-		logger.Infof("auto-update enabled, starting coordinator on version %s", rpc.SoftwareVersion)
+		logger.Infof("auto-update enabled (updater version: %s, canopy version: %s)",
+			rpc.SoftwareVersion, binaryVersion)
 	} else {
-		logger.Infof("auto-update disabled, starting binary: %s", binPath)
+		logger.Infof("auto-update disabled (canopy version: %s)", rpc.SoftwareVersion)
 	}
 	// handle external shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	// setup the dependencies
-	updater := NewReleaseManager(configs.Updater,
-		getSoftwareVersion(autoUpdaterEnabled, binPath), autoUpdaterEnabled)
+	updater := NewReleaseManager(configs.Updater, binaryVersion)
 	snapshot := NewSnapshotManager(configs.Snapshot)
 	// setup plugin updater and config if configured
 	var pluginUpdater *ReleaseManager
 	var pluginConfig *PluginReleaseConfig
 	if configs.PluginUpdater != nil {
-		pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0", true)
+		pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0")
 		pluginConfig = configs.PluginUpdater.PluginConfig
 		logger.Infof("plugin auto-update enabled from %s/%s",
 			configs.PluginUpdater.RepoOwner,
 			configs.PluginUpdater.RepoName)
 	}
-	supervisor := NewSupervisor(logger, pluginConfig)
+	// forward the resolved global flags (data-dir, url overrides) to the child
+	supervisor := NewSupervisor(logger, pluginConfig, cli.GlobalFlagArgs())
 	coordinator := NewCoordinator(configs.Coordinator, updater, pluginUpdater, supervisor, snapshot, logger)
 	// start the update loop
-	err := coordinator.UpdateLoop(sigChan)
+	err = coordinator.UpdateLoop(sigChan)
 	if err != nil {
 		exitCode, exitCodeStr := 1, "unknown"
 		// try to extract the exit code from the error
@@ -155,9 +164,14 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		Level:      canopyConfig.GetLogLevel(),
 		Structured: canopyConfig.Structured,
 		JSON:       canopyConfig.JSON,
-	})
-
+	}, canopyConfig.DataDirPath)
+	// resolve to an absolute path of the binary
 	binPath := envOrDefault("BIN_PATH", defaultBinPath)
+	if abs, err := filepath.Abs(binPath); err == nil {
+		binPath = abs
+	}
+	// updates are downloaded on the data directory
+	updatedBinPath := filepath.Join(canopyConfig.DataDirPath, defaultNewBinName)
 	githubToken := envOrDefault("CANOPY_GITHUB_API_TOKEN", "")
 
 	// core auto-update repo: config.json or defaults
@@ -175,7 +189,7 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		RepoName:       repoName,
 		RepoOwner:      repoOwner,
 		GithubApiToken: githubToken,
-		BinPath:        binPath,
+		BinPath:        updatedBinPath,
 		SnapshotKey:    snapshotMetadataKey,
 	}
 	snapshot := &SnapshotConfig{
@@ -183,11 +197,12 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		Name: snapshotFileName,
 	}
 	coordinator := &CoordinatorConfig{
-		Canopy:       canopyConfig,
-		BinPath:      binPath,
-		MaxDelayTime: envOrDefaultInt("AUTO_UPDATE_MAX_DELAY_MINUTES", defaultMaxDelayTime),
-		CheckPeriod:  envOrDefaultDuration("AUTO_UPDATE_CHECK_PERIOD", defaultCheckPeriod),
-		GracePeriod:  defaultGracePeriod,
+		Canopy:         canopyConfig,
+		BinPath:        binPath,
+		UpdatedBinPath: updatedBinPath,
+		MaxDelayTime:   envOrDefaultInt("AUTO_UPDATE_MAX_DELAY_MINUTES", defaultMaxDelayTime),
+		CheckPeriod:    envOrDefaultDuration("AUTO_UPDATE_CHECK_PERIOD", defaultCheckPeriod),
+		GracePeriod:    defaultGracePeriod,
 	}
 
 	// setup plugin updater config if plugin auto-update is enabled
@@ -212,7 +227,7 @@ func getConfigs() (*Configs, lib.LoggerI) {
 				Type:           ReleaseTypePlugin,
 				RepoOwner:      repoOwner,
 				RepoName:       repoName,
-				PluginDir:      fmt.Sprintf("plugin/%s", canopyConfig.Plugin),
+				PluginDir:      canopyConfig.PluginHome(canopyConfig.Plugin),
 				PluginConfig:   pluginReleaseCfg,
 				GithubApiToken: githubToken,
 			}
@@ -248,11 +263,23 @@ func isExecutable(path string) bool {
 	return info.Mode()&0111 != 0
 }
 
+// effectiveBinPath returns the first valid binary to run, or an empty string if neither is valid
+func effectiveBinPath(paths ...string) string {
+	for _, path := range paths {
+		if isExecutable(path) {
+			return path
+		}
+	}
+	return ""
+}
+
 func getSoftwareVersion(autoUpdate bool, binPath string) string {
 	if !autoUpdate {
 		return rpc.SoftwareVersion
 	}
-	out, err := exec.Command(binPath, "version").Output()
+	// forward only --data-dir so the check targets the initialized directory and
+	// avoids passing newer flags an older installed binary may not recognize
+	out, err := exec.Command(binPath, "version", "--data-dir", cli.DataDir).Output()
 	if err != nil {
 		panic(fmt.Sprintf("failed to get software version from binary: %v", err))
 	}

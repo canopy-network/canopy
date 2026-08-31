@@ -15,7 +15,7 @@ func TestAddress(t *testing.T) {
 	require.NoError(t, err)
 	// cast the public key to bytes
 	addressBytes := Hash(public)[:20]
-	// covert to an address object
+	// convert to an address object
 	address := NewAddress(addressBytes)
 	// validate string function
 	require.Equal(t, address.String(), hex.EncodeToString(addressBytes))

@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"bytes"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -229,6 +230,12 @@ func (s *StateMachine) CheckSignature(tx *lib.Transaction, authorizedSigners [][
 	if e != nil {
 		return nil, ErrInvalidPublicKey(e)
 	}
+	if multiKey, ok := publicKey.(*crypto.BLS12381MultiPublicKey); ok && multiKey.Threshold() == 0 {
+		return nil, ErrInvalidSignature()
+	}
+	if !bytes.Equal(tx.Signature.PublicKey, publicKey.Bytes()) {
+		return nil, ErrInvalidSignature()
+	}
 	// Legacy "RLP" was historically an ordinary memo for non-Ethereum keys.
 	// RLP.V2 is reserved and always requires an Ethereum key.
 	_, hasEthPubKey := publicKey.(*crypto.ETHSECP256K1PublicKey)
@@ -326,6 +333,19 @@ func (s *StateMachine) CheckReplay(tx *lib.Transaction, txHash string) lib.Error
 				if txResult != nil && txResult.TxHash != "" {
 					return lib.ErrDuplicateTx("0x" + lib.BytesToString(ethHash))
 				}
+			}
+		}
+		intentID, e := tx.GetMultisigIntentID()
+		if e != nil {
+			return e
+		}
+		if len(intentID) != 0 {
+			txResult, err = store.GetTxByHash(intentID)
+			if err != nil {
+				return err
+			}
+			if txResult != nil && txResult.TxHash != "" {
+				return lib.ErrDuplicateTx(lib.BytesToString(intentID))
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"github.com/canopy-network/canopy/lib"
@@ -10,9 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"math"
 	"math/big"
+	"sort"
 	"testing"
 	"time"
 )
@@ -344,57 +347,117 @@ func TestCheckTx(t *testing.T) {
 func TestCheckTxAcceptsSerializedMultiBLSSigner(t *testing.T) {
 	sm := newTestStateMachine(t)
 	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 1}))
+	address, recipient, _, txBytes := newAlternateMultisigSendTransactions(t, sm)
 
+	got, err := sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
+	require.NoError(t, err)
+	require.Equal(t, address.Bytes(), got.sender.Bytes())
+	gotMsg, ok := got.msg.(*MessageSend)
+	require.True(t, ok)
+	require.Equal(t, recipient.Bytes(), gotMsg.ToAddress)
+}
+
+func TestApplyTransactionsRejectsAlternateMultisigSignerSubsets(t *testing.T) {
+	t.Run("mempool selection records the alternate envelope as failed", func(t *testing.T) {
+		sm := newTestStateMachine(t)
+		require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 1}))
+		address, _, txAB, txAC := newAlternateMultisigSendTransactions(t, sm)
+		require.NoError(t, sm.AccountAdd(address, 20))
+
+		results := new(lib.ApplyBlockResults)
+		require.NoError(t, sm.ApplyTransactions(context.Background(), [][]byte{txAB, txAC}, results, true))
+		require.Len(t, results.Results, 1)
+		require.Len(t, results.Failed, 1)
+		require.ErrorContains(t, results.Failed[0].Error, "is a duplicate")
+	})
+
+	t.Run("block validation rejects the alternate envelope", func(t *testing.T) {
+		sm := newTestStateMachine(t)
+		require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 1}))
+		address, _, txAB, txAC := newAlternateMultisigSendTransactions(t, sm)
+		require.NoError(t, sm.AccountAdd(address, 20))
+
+		err := sm.ApplyTransactions(context.Background(), [][]byte{txAB, txAC}, new(lib.ApplyBlockResults), false)
+		require.ErrorContains(t, err, "is a duplicate")
+	})
+}
+
+func TestCheckTxRejectsIndexedMultisigIntentWithAlternateSignerSubset(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 1}))
+	address, recipient, txABBytes, txACBytes := newAlternateMultisigSendTransactions(t, sm)
+	require.NotEqual(t, crypto.Hash(txABBytes), crypto.Hash(txACBytes))
+
+	txAB := new(lib.Transaction)
+	require.NoError(t, lib.Unmarshal(txABBytes, txAB))
+	require.NoError(t, sm.store.(lib.StoreI).IndexTx(&lib.TxResult{
+		Sender:      address.Bytes(),
+		Recipient:   recipient.Bytes(),
+		MessageType: MessageSendName,
+		Height:      sm.Height() - 1,
+		Index:       0,
+		Transaction: txAB,
+		TxHash:      crypto.HashString(txABBytes),
+	}))
+
+	_, err := sm.CheckTx(txACBytes, crypto.HashString(txACBytes), nil)
+	require.ErrorContains(t, err, "is a duplicate")
+}
+
+func newAlternateMultisigSendTransactions(
+	t *testing.T,
+	sm StateMachine,
+) (address, recipient crypto.AddressI, txAB, txAC []byte) {
+	t.Helper()
 	signers := newTestKeyGroups(t, 3)
-	points := make([]kyber.Point, 0, len(signers))
-	for _, kg := range signers {
-		point, err := crypto.BytesToBLS12381Point(kg.PublicKey.Bytes())
+	sort.Slice(signers, func(i, j int) bool {
+		return bytes.Compare(signers[i].PublicKey.Bytes(), signers[j].PublicKey.Bytes()) < 0
+	})
+	points := make([]kyber.Point, len(signers))
+	for i, signer := range signers {
+		point, err := crypto.BytesToBLS12381Point(signer.PublicKey.Bytes())
 		require.NoError(t, err)
-		points = append(points, point)
+		points[i] = point
 	}
 
-	multiKey, err := crypto.NewAccountAuthMultiBLSFromPoints(points, nil, 2)
+	accountKey, err := crypto.NewAccountAuthMultiBLSFromPoints(points, nil, 2)
 	require.NoError(t, err)
-
+	address = accountKey.Address()
+	recipient = newTestAddress(t, 4)
 	msg := &MessageSend{
-		FromAddress: multiKey.Address().Bytes(),
-		ToAddress:   newTestAddressBytes(t, 4),
-		Amount:      100,
+		FromAddress: address.Bytes(),
+		ToAddress:   recipient.Bytes(),
+		Amount:      5,
 	}
-	a, err := lib.NewAny(msg)
+	anyMsg, err := lib.NewAny(msg)
 	require.NoError(t, err)
-
-	tx := &lib.Transaction{
+	base := &lib.Transaction{
 		MessageType:   msg.Name(),
-		Msg:           a,
+		Msg:           anyMsg,
 		CreatedHeight: sm.Height(),
 		Time:          uint64(time.Now().UnixMicro()),
 		Fee:           1,
 		NetworkId:     uint64(sm.NetworkID),
 		ChainId:       sm.Config.ChainId,
 	}
-	signBytes, err := tx.GetSignBytes()
+	signBytes, err := base.GetSignBytes()
 	require.NoError(t, err)
 
-	require.NoError(t, multiKey.AddSigner(signers[0].PrivateKey.Sign(signBytes), 0))
-	require.NoError(t, multiKey.AddSigner(signers[2].PrivateKey.Sign(signBytes), 2))
-	aggregateSignature, err := multiKey.AggregateSignatures()
-	require.NoError(t, err)
-	tx.Signature = &lib.Signature{
-		PublicKey: multiKey.Bytes(),
-		Signature: aggregateSignature,
+	makeEnvelope := func(indices ...int) []byte {
+		multiKey, keyErr := crypto.NewAccountAuthMultiBLSFromPoints(points, nil, 2)
+		require.NoError(t, keyErr)
+		for _, index := range indices {
+			require.NoError(t, multiKey.AddSigner(signers[index].PrivateKey.Sign(signBytes), index))
+		}
+		aggregate, aggregateErr := multiKey.AggregateSignatures()
+		require.NoError(t, aggregateErr)
+		tx := proto.Clone(base).(*lib.Transaction)
+		tx.Signature = &lib.Signature{PublicKey: multiKey.Bytes(), Signature: aggregate}
+		encoded, marshalErr := lib.Marshal(tx)
+		require.NoError(t, marshalErr)
+		return encoded
 	}
-
-	txBytes, err := lib.Marshal(tx)
-	require.NoError(t, err)
-
-	got, err := sm.CheckTx(txBytes, crypto.HashString(txBytes), nil)
-	require.NoError(t, err)
-	require.EqualExportedValues(t, tx, got.tx)
-	require.Equal(t, multiKey.Address().Bytes(), got.sender.Bytes())
-	gotMsg, ok := got.msg.(*MessageSend)
-	require.True(t, ok)
-	require.EqualExportedValues(t, msg, gotMsg)
+	return address, recipient, makeEnvelope(0, 1), makeEnvelope(0, 2)
 }
 
 func TestCheckTxRejectsReversedGovernanceRange(t *testing.T) {
@@ -604,6 +667,44 @@ func TestCheckSignature(t *testing.T) {
 			require.Equal(t, test.expectedSigner, signer)
 		})
 	}
+}
+
+func TestCheckSignatureRejectsNonCanonicalPublicKey(t *testing.T) {
+	key, err := crypto.NewETHSECP256K1PrivateKey()
+	require.NoError(t, err)
+	tx := &lib.Transaction{Time: 1}
+	signBytes, errI := tx.GetSignBytes()
+	require.NoError(t, errI)
+	tx.Signature = &lib.Signature{
+		PublicKey: key.PublicKey().(*crypto.ETHSECP256K1PublicKey).BytesWithPrefix(),
+		Signature: key.Sign(signBytes),
+	}
+	_, errI = (&StateMachine{}).CheckSignature(tx, [][]byte{key.PublicKey().Address().Bytes()}, nil)
+	require.ErrorContains(t, errI, "invalid signature")
+}
+
+func TestCheckSignatureRejectsThresholdZeroMultisig(t *testing.T) {
+	key, err := crypto.NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(&crypto.MultiPublicKey{
+		PublicKeys: [][]byte{key.PublicKey().Bytes()},
+		Bitmap:     []byte{0},
+	})
+	require.NoError(t, err)
+	publicKey, err := crypto.NewMultiBLSFromPublicKey(encoded)
+	require.NoError(t, err)
+	tx := &lib.Transaction{Time: 1}
+	signBytes, errI := tx.GetSignBytes()
+	require.NoError(t, errI)
+	identitySignature := make([]byte, crypto.BLS12381SignatureSize)
+	identitySignature[0] = 0xc0
+	require.True(t, publicKey.VerifyBytes(signBytes, identitySignature))
+	tx.Signature = &lib.Signature{
+		PublicKey: encoded,
+		Signature: identitySignature,
+	}
+	_, errI = (&StateMachine{}).CheckSignature(tx, [][]byte{publicKey.Address().Bytes()}, nil)
+	require.ErrorContains(t, errI, "invalid signature")
 }
 
 func TestCheckReplay(t *testing.T) {

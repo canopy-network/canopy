@@ -60,6 +60,7 @@ type WIndexerI interface {
 
 // RIndexerI defines the read interface for the indexing operations
 type RIndexerI interface {
+	StateChangeKeys(version uint64, prefix []byte) (keys [][]byte, available bool, err ErrorI)     // get state keys written at a committed version
 	GetTxByHash(hash []byte) (*TxResult, ErrorI)                                                   // get the tx by the Transaction hash
 	GetTxsByHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)               // get Transactions for a height
 	GetTxsBySender(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)     // get Transactions for a sender

@@ -26,3 +26,11 @@ Usage
 - fsm.StateMachine.IndexerBlob(height) returns the protobuf-ready structure
   for a specific height.
 - fsm.StateMachine.IndexerBlobs(height) returns current and previous blobs.
+
+Delta performance
+- Each committed store version persists the state keys touched by that commit
+  in non-consensus indexer storage.
+- The RPC reads account values for those keys from the current and previous
+  snapshots instead of scanning the complete account prefix.
+- Heights committed before the change journal existed automatically fall back
+  to comparing full snapshots, so upgrades do not require a data migration.

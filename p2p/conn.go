@@ -399,9 +399,9 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 	// restrict the instantaneous data flow to rate bytes per second
 	// Limit() request maxPacketSize bytes from the limiter and the limiter
 	// will block the execution until at or below the desired rate of flow
-	//m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
+	m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
 	// read the proto message from the wire
-	_, err := receiveProtoMsg(c.conn, msg)
+	lenM, err := receiveProtoMsg(c.conn, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +409,7 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 		c.p2p.metrics.ReceiveWireTime.Observe(time.Since(receiveStart).Seconds())
 	}
 	// update the limiter
-	//m.Update(lenM)
+	m.Update(lenM)
 	// unmarshal the payload from proto.any
 	return lib.FromAny(msg.Payload)
 }

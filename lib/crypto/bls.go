@@ -178,6 +178,9 @@ func BytesToBLS12381Point(bz []byte) (kyber.Point, error) {
 	if err := point.UnmarshalBinary(bz); err != nil {
 		return nil, err
 	}
+	if point.Equal(newBLSSuite().G1().Point().Null()) {
+		return nil, errors.New("invalid bls public key: point at infinity")
+	}
 	return point, nil
 }
 
@@ -322,6 +325,20 @@ func NewMultiBLSFromPublicKey(publicKey []byte) (MultiPublicKeyI, error) {
 	if len(mpk.PublicKeys) == 0 || len(mpk.Bitmap) == 0 || mpk.Threshold > uint32(len(mpk.PublicKeys)) {
 		return nil, errInvalidPK
 	}
+	if mpk.Threshold > 0 {
+		for i := 1; i < len(mpk.PublicKeys); i++ {
+			if bytes.Compare(mpk.PublicKeys[i-1], mpk.PublicKeys[i]) >= 0 {
+				return nil, errInvalidPK
+			}
+		}
+	}
+	// Reject unused bits because kyber ignores them during verification.
+	if remainder := len(mpk.PublicKeys) % 8; remainder != 0 {
+		paddingMask := byte(0xff << remainder)
+		if mpk.Bitmap[len(mpk.Bitmap)-1]&paddingMask != 0 {
+			return nil, errInvalidPK
+		}
+	}
 	var points []kyber.Point
 	seen := make(map[string]struct{}, len(mpk.PublicKeys))
 	// convert to a kyber.point
@@ -343,7 +360,12 @@ func NewMultiBLSFromPublicKey(publicKey []byte) (MultiPublicKeyI, error) {
 	if err = mask.SetMask(mpk.Bitmap); err != nil {
 		return nil, err
 	}
-	return newBLSMultiPublicKey(mask, mpk.Threshold), nil
+	key := newBLSMultiPublicKey(mask, mpk.Threshold)
+	// Reject semantically equivalent protobuf encodings that would produce different transaction hashes.
+	if !bytes.Equal(publicKey, key.Bytes()) {
+		return nil, errInvalidPK
+	}
+	return key, nil
 }
 
 // NewAccountAuthMultiBLSFromPublicKey creates a serialized multisig public key intended for account authorization.
@@ -445,7 +467,7 @@ func (b *BLS12381MultiPublicKey) Bytes() []byte {
 	for _, key := range b.mask.Publics() {
 		publicKeys = append(publicKeys, NewBLS12381PublicKey(key).Bytes())
 	}
-	bz, _ := proto.Marshal(&MultiPublicKey{
+	bz, _ := proto.MarshalOptions{Deterministic: true}.Marshal(&MultiPublicKey{
 		PublicKeys: publicKeys,
 		Bitmap:     b.Bitmap(),
 		Threshold:  b.threshold,

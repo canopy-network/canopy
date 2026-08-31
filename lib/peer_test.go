@@ -58,13 +58,9 @@ func TestMessageCacheAdd(t *testing.T) {
 			cache: MessageCache{
 				queue: func() (l *list.List) {
 					l = list.New()
-					l.PushFront(&MessageAndMetadata{
-						Message: func() []byte {
-							bz, err := Marshal(&StringWrapper{Value: "b"})
-							require.NoError(t, err)
-							return bz
-						}(),
-					})
+					bz, err := Marshal(&StringWrapper{Value: "b"})
+					require.NoError(t, err)
+					l.PushFront(crypto.HashString(bz))
 					return
 				}(),
 				deDupe: &DeDuplicator[string]{m: map[string]struct{}{
@@ -100,13 +96,9 @@ func TestMessageCacheAdd(t *testing.T) {
 			cache: MessageCache{
 				queue: func() (l *list.List) {
 					l = list.New()
-					l.PushFront(&MessageAndMetadata{
-						Message: func() []byte {
-							bz, err := Marshal(&StringWrapper{Value: "b"})
-							require.NoError(t, err)
-							return bz
-						}(),
-					})
+					bz, err := Marshal(&StringWrapper{Value: "b"})
+					require.NoError(t, err)
+					l.PushFront(crypto.HashString(bz))
 					return
 				}(),
 				deDupe: &DeDuplicator[string]{m: map[string]struct{}{

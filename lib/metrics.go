@@ -58,7 +58,7 @@ const metricsPattern = "/metrics"
 type Metrics struct {
 	server          *http.Server  // the http prometheus server
 	chainID         float64       // the chain id the node is running
-	softwareVersion string        // the sofware version the node is running
+	softwareVersion string        // the software version the node is running
 	config          MetricsConfig // the configuration
 	nodeAddress     []byte        // the node's address
 	log             LoggerI       // the logger

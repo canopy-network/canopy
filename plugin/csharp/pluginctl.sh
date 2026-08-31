@@ -3,8 +3,18 @@
 # Usage: ./pluginctl.sh {start|stop|status|restart}
 # Configuration variables for paths and files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Self-contained executable (not DLL)
-BINARY_PATH="$SCRIPT_DIR/bin/CanopyPlugin"
+# Persistent plugin home under the data dir (set by canopy, else default location).
+PLUGIN_HOME="${CANOPY_PLUGIN_HOME:-${CANOPY_DATA_DIR:-$HOME/.canopy}/plugin/$(basename "$SCRIPT_DIR")}"
+mkdir -p "$PLUGIN_HOME"
+# Prefer a downloaded update in the data dir, else the binary baked in the image.
+if [ -f "$PLUGIN_HOME/bin/CanopyPlugin" ] || ls "$PLUGIN_HOME"/csharp-plugin-linux-*.tar.gz >/dev/null 2>&1; then
+    RUN_HOME="$PLUGIN_HOME"
+elif [ -f "$SCRIPT_DIR/bin/CanopyPlugin" ]; then
+    RUN_HOME="$SCRIPT_DIR"
+else
+    RUN_HOME="$PLUGIN_HOME"
+fi
+BINARY_PATH="$RUN_HOME/bin/CanopyPlugin"
 PID_FILE="/tmp/plugin/csharp-plugin.pid"
 LOG_FILE="/tmp/plugin/csharp-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
@@ -46,20 +56,20 @@ extract_if_needed() {
     
     # Try musl tarball first on Alpine, then glibc
     if is_musl; then
-        tarball="$SCRIPT_DIR/csharp-plugin-linux-musl-${arch}.tar.gz"
+        tarball="$RUN_HOME/csharp-plugin-linux-musl-${arch}.tar.gz"
     fi
     
     # Fall back to glibc tarball if musl not found or not on Alpine
     if [ -z "$tarball" ] || [ ! -f "$tarball" ]; then
-        tarball="$SCRIPT_DIR/csharp-plugin-linux-${arch}.tar.gz"
+        tarball="$RUN_HOME/csharp-plugin-linux-${arch}.tar.gz"
     fi
     
     if [ -f "$tarball" ]; then
         echo "Extracting $tarball..."
         # Clear old bin directory to avoid leftover files from previous builds
-        rm -rf "$SCRIPT_DIR/bin"
-        mkdir -p "$SCRIPT_DIR/bin"
-        tar -xzf "$tarball" -C "$SCRIPT_DIR/bin"
+        rm -rf "$RUN_HOME/bin"
+        mkdir -p "$RUN_HOME/bin"
+        tar -xzf "$tarball" -C "$RUN_HOME/bin"
         if [ $? -eq 0 ] && [ -f "$BINARY_PATH" ]; then
             echo "Extraction complete"
             return 0
