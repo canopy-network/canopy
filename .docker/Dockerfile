@@ -10,7 +10,7 @@ RUN make build/wallet
 RUN make build/explorer
 RUN go build -a -o bin ./cmd/main/...
 
-FROM alpine:3.19
+FROM alpine:3.22
 WORKDIR /app
 COPY --from=builder /go/src/github.com/canopy-network/canopy/bin ./
 ENTRYPOINT ["/app/bin"]
