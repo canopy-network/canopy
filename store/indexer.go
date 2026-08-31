@@ -636,6 +636,11 @@ func (t *Indexer) IsValidDoubleSigner(address []byte, height uint64) (bool, lib.
 func (t *Indexer) IndexEvent(e *lib.Event, index int) lib.ErrorI {
 	// index the event by hash
 	hashKey, err := t.indexEventByHash(e)
+	// if indexing by hash failed, hashKey is not usable as a target for the
+	// secondary indexes below, so exit before writing them
+	if err != nil {
+		return err
+	}
 	// index the event by height and index
 	heightAndIndexKey := t.eventHeightAndIndexKey(e.Height, uint64(index))
 	// store the hash key by height.index
