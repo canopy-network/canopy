@@ -237,7 +237,7 @@ type peerInfoJSON struct {
 
 // MessageCache is a simple p2p message de-duplicator that protects redundancy in the p2p network
 type MessageCache struct {
-	queue   *list.List            // a FIFO list of MessageAndMetadata
+	queue   *list.List            // a FIFO list of message hashes
 	deDupe  *DeDuplicator[string] // the O(1) de-duplicator
 	maxSize int                   // the max size before evicting the oldest
 }
@@ -262,17 +262,13 @@ func (c *MessageCache) Add(msg *MessageAndMetadata) (ok bool) {
 		return false
 	}
 	// add the new message to the front
-	c.queue.PushFront(msg)
+	c.queue.PushFront(key)
 	// if the queue size is exceeded
 	if c.queue.Len() > c.maxSize {
 		// get the oldest element
 		e := c.queue.Back()
-		// cast it to a MessageAndMetadata
-		message := e.Value.(*MessageAndMetadata)
-		// create a key for the message
-		toDeleteKey := crypto.HashString(message.Message)
 		// delete it from the underlying de-duplicator
-		c.deDupe.Delete(toDeleteKey)
+		c.deDupe.Delete(e.Value.(string))
 		// remove it from the queue
 		c.queue.Remove(e)
 	}

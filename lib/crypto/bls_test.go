@@ -5,6 +5,7 @@ import (
 	"github.com/drand/kyber"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"sort"
 	"testing"
 )
 
@@ -83,7 +84,8 @@ func TestMultiBLSBytesRoundTripPreservesOrderAndBitmap(t *testing.T) {
 	require.NoError(t, multiKey.AddSigner(keys[1].Sign([]byte("hello")), 0))
 	require.NoError(t, multiKey.AddSigner(keys[0].Sign([]byte("hello")), 2))
 
-	roundTrip, err := NewMultiBLSFromPublicKey(multiKey.(*BLS12381MultiPublicKey).Bytes())
+	canonical := multiKey.(*BLS12381MultiPublicKey).Bytes()
+	roundTrip, err := NewMultiBLSFromPublicKey(canonical)
 	require.NoError(t, err)
 
 	originalPublicKeys := multiKey.PublicKeys()
@@ -101,6 +103,18 @@ func TestMultiBLSBytesRoundTripPreservesOrderAndBitmap(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, enabled, roundTripEnabled)
 	}
+
+	var encoded MultiPublicKey
+	require.NoError(t, proto.Unmarshal(canonical, &encoded))
+	encoded.Bitmap[0] |= 0x80
+	paddingVariant, err := proto.Marshal(&encoded)
+	require.NoError(t, err)
+	_, err = NewMultiBLSFromPublicKey(paddingVariant)
+	require.Error(t, err)
+
+	unknownFieldVariant := append(bytes.Clone(canonical), 0x78, 0x01)
+	_, err = NewMultiBLSFromPublicKey(unknownFieldVariant)
+	require.Error(t, err)
 }
 
 func TestMultiBLSThresholdEnforcedByVerifyBytes(t *testing.T) {
@@ -112,7 +126,13 @@ func TestMultiBLSThresholdEnforcedByVerifyBytes(t *testing.T) {
 		var err error
 		keys[i], err = NewBLS12381PrivateKey()
 		require.NoError(t, err)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return bytes.Compare(keys[i].PublicKey().Bytes(), keys[j].PublicKey().Bytes()) < 0
+	})
+	for i := range keys {
 		publicKeys[i] = keys[i].PublicKey().Bytes()
+		var err error
 		points[i], err = BytesToBLS12381Point(publicKeys[i])
 		require.NoError(t, err)
 	}
@@ -162,6 +182,13 @@ func TestAccountAuthMultiBLSConstructorsRequirePositiveThreshold(t *testing.T) {
 	_, err := NewAccountAuthMultiBLSFromPoints(points, nil, 0)
 	require.ErrorIs(t, err, errAccountAuthThreshold)
 
+	sort.Slice(points, func(i, j int) bool {
+		left, leftErr := points[i].MarshalBinary()
+		require.NoError(t, leftErr)
+		right, rightErr := points[j].MarshalBinary()
+		require.NoError(t, rightErr)
+		return bytes.Compare(left, right) < 0
+	})
 	accountAuthKey, err := NewAccountAuthMultiBLSFromPoints(points, nil, 2)
 	require.NoError(t, err)
 	require.Equal(t, uint32(2), accountAuthKey.(*BLS12381MultiPublicKey).Threshold())
@@ -174,4 +201,31 @@ func TestAccountAuthMultiBLSConstructorsRequirePositiveThreshold(t *testing.T) {
 	require.NoError(t, err)
 	_, err = NewAccountAuthMultiBLSFromPublicKey(consensusStyleKey.(*BLS12381MultiPublicKey).Bytes())
 	require.ErrorIs(t, err, errAccountAuthThreshold)
+
+	reversed := accountAuthKey.PublicKeys()
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(&MultiPublicKey{
+		PublicKeys: [][]byte{reversed[2].Bytes(), reversed[1].Bytes(), reversed[0].Bytes()},
+		Bitmap:     accountAuthKey.Bitmap(),
+		Threshold:  2,
+	})
+	require.NoError(t, err)
+	_, err = NewMultiBLSFromPublicKey(encoded)
+	require.Error(t, err)
+}
+
+func TestBLSRejectsPointAtInfinity(t *testing.T) {
+	infinity, err := newBLSSuite().G1().Point().Null().MarshalBinary()
+	require.NoError(t, err)
+
+	_, err = BytesToBLS12381Public(infinity)
+	require.Error(t, err)
+
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(&MultiPublicKey{
+		PublicKeys: [][]byte{infinity},
+		Bitmap:     []byte{1},
+		Threshold:  1,
+	})
+	require.NoError(t, err)
+	_, err = NewMultiBLSFromPublicKey(encoded)
+	require.Error(t, err)
 }

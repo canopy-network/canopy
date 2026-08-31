@@ -54,7 +54,7 @@ func TestGetLatestPluginReleaseFiltersByPluginAssetStream(t *testing.T) {
 			AssetName:    "go-plugin-%s-%s.tar.gz",
 			ArchSpecific: true,
 		},
-	}, "v0.0.0", true)
+	}, "v0.0.0")
 
 	release, err := rm.GetLatestRelease()
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestGetLatestCLIReleaseIgnoresPluginOnlyReleases(t *testing.T) {
 		Type:      ReleaseTypeCLI,
 		RepoOwner: "canopy-network",
 		RepoName:  "canopy",
-	}, "v0.1.17", true)
+	}, "v0.1.17")
 
 	release, err := rm.GetLatestRelease()
 	require.NoError(t, err)

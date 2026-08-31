@@ -27,6 +27,49 @@ func TestStoreSetGetDelete(t *testing.T) {
 	require.NoError(t, store.Close())
 }
 
+func TestStateChangeKeys(t *testing.T) {
+	st, _, cleanup := testStore(t)
+	defer cleanup()
+	require.False(t, st.config.StoreConfig.StateChangeJournalEnabled)
+	st.config.StoreConfig.StateChangeJournalEnabled = true
+
+	accountPrefix := lib.JoinLenPrefix([]byte{1})
+	accountA := lib.JoinLenPrefix([]byte{1}, []byte("account-a"))
+	accountB := lib.JoinLenPrefix([]byte{1}, []byte("account-b"))
+	otherKey := lib.JoinLenPrefix([]byte{2}, []byte("other"))
+
+	_, available, err := st.StateChangeKeys(1, accountPrefix)
+	require.NoError(t, err)
+	require.False(t, available)
+
+	require.NoError(t, st.Set(accountA, []byte("a1")))
+	require.NoError(t, st.Set(otherKey, []byte("other")))
+	_, err = st.Commit()
+	require.NoError(t, err)
+
+	keys, available, err := st.StateChangeKeys(1, accountPrefix)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.Equal(t, [][]byte{accountA}, keys)
+
+	require.NoError(t, st.Delete(accountA))
+	require.NoError(t, st.Set(accountB, []byte("b1")))
+	_, err = st.Commit()
+	require.NoError(t, err)
+
+	keys, available, err = st.StateChangeKeys(2, accountPrefix)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.Equal(t, [][]byte{accountA, accountB}, keys)
+
+	_, err = st.Commit()
+	require.NoError(t, err)
+	keys, available, err = st.StateChangeKeys(3, accountPrefix)
+	require.NoError(t, err)
+	require.True(t, available)
+	require.Empty(t, keys)
+}
+
 func TestIteratorCommitBasic(t *testing.T) {
 	parent, _, cleanup := testStore(t)
 	defer cleanup()

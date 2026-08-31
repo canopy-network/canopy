@@ -1,12 +1,15 @@
 package lib
 
 import (
+	"bytes"
 	"encoding/json"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/drand/kyber"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,6 +17,74 @@ func TestTransactionNonceUsesProtocolFieldNumber(t *testing.T) {
 	field := new(Transaction).ProtoReflect().Descriptor().Fields().ByName("nonce")
 	require.NotNil(t, field)
 	require.EqualValues(t, 10, field.Number())
+}
+
+func TestMultisigIntentIDIgnoresSignerSubset(t *testing.T) {
+	keys := make([]crypto.PrivateKeyI, 3)
+	for i := range keys {
+		var err error
+		keys[i], err = crypto.NewBLS12381PrivateKey()
+		require.NoError(t, err)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return bytes.Compare(keys[i].PublicKey().Bytes(), keys[j].PublicKey().Bytes()) < 0
+	})
+	points := make([]kyber.Point, len(keys))
+	for i := range keys {
+		var err error
+		points[i], err = crypto.BytesToBLS12381Point(keys[i].PublicKey().Bytes())
+		require.NoError(t, err)
+	}
+
+	makeTx := func(bitmap byte) *Transaction {
+		multiKey, err := crypto.NewAccountAuthMultiBLSFromPoints(points, []byte{bitmap}, 2)
+		require.NoError(t, err)
+		msg, err := NewAny(&Signature{})
+		require.NoError(t, err)
+		return &Transaction{
+			MessageType:   "test",
+			Msg:           msg,
+			Signature:     &Signature{PublicKey: multiKey.Bytes(), Signature: []byte{bitmap}},
+			CreatedHeight: 2,
+			Time:          1,
+			Fee:           1,
+			NetworkId:     1,
+			ChainId:       1,
+		}
+	}
+
+	txAB, txAC := makeTx(0b00000011), makeTx(0b00000101)
+	idAB, err := txAB.GetMultisigIntentID()
+	require.NoError(t, err)
+	idAC, err := txAC.GetMultisigIntentID()
+	require.NoError(t, err)
+	require.Len(t, idAB, crypto.HashSize)
+	require.Equal(t, idAB, idAC)
+	publicKey, err := PublicKeyFromBytes(txAB.Signature.PublicKey)
+	require.NoError(t, err)
+	signBytes, err := txAB.GetSignBytes()
+	require.NoError(t, err)
+	preimage := append([]byte{multisigIntentDomainV1}, publicKey.Address().Bytes()...)
+	preimage = append(preimage, crypto.Hash(signBytes)...)
+	require.Equal(t, crypto.Hash(preimage), idAB)
+
+	otherPolicy, keyErr := crypto.NewAccountAuthMultiBLSFromPoints(points, []byte{0b00000111}, 3)
+	require.NoError(t, keyErr)
+	txOtherPolicy := makeTx(0b00000111)
+	txOtherPolicy.Signature.PublicKey = otherPolicy.Bytes()
+	otherPolicyID, err := txOtherPolicy.GetMultisigIntentID()
+	require.NoError(t, err)
+	require.NotEqual(t, idAB, otherPolicyID)
+
+	txAC.Fee++
+	changedID, err := txAC.GetMultisigIntentID()
+	require.NoError(t, err)
+	require.NotEqual(t, idAB, changedID)
+
+	txAB.Signature.PublicKey = keys[0].PublicKey().Bytes()
+	notMultisig, err := txAB.GetMultisigIntentID()
+	require.NoError(t, err)
+	require.Nil(t, notMultisig)
 }
 
 func TestTransactionCheckBasic(t *testing.T) {

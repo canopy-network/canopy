@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -34,6 +35,14 @@ const (
 	// maxReconnectRetries is effectively "retry indefinitely" — the root-chain subscription is
 	// essential, so we keep attempting to reconnect (at the capped interval) rather than giving up.
 	maxReconnectRetries = uint64(1) << 62
+	// rootChainRequestTimeout bounds on-demand root-chain HTTP calls; these often run while
+	// holding the controller mutex, so an unbounded hang would wedge the node until restart
+	rootChainRequestTimeout = 10 * time.Second
+	// rcSubscriptionReadTimeout is the max quiet period on the subscription websocket before it
+	// is considered dead and redialed (the publisher pings every 50s by default)
+	rcSubscriptionReadTimeout = 3 * defaultRCSubscriberPingPeriod
+	// rcSubscriptionPongWriteTimeout bounds pong control-frame writes on the subscription websocket
+	rcSubscriptionPongWriteTimeout = 10 * time.Second
 )
 
 // lotteryCache holds a single cached lottery result keyed by (height, id).
@@ -429,7 +438,7 @@ func (r *RCManager) NewSubscription(rc lib.RootChain) {
 		chainId: rc.ChainId,
 		Info:    new(lib.RootChainInfo),
 		manager: r,
-		Client:  NewClient(rc.Url, rc.Url),
+		Client:  NewClientWithTimeout(rc.Url, rc.Url, rootChainRequestTimeout),
 		log:     r.log,
 	}
 	// start to connect with backoff
@@ -498,6 +507,20 @@ func (r *RCSubscription) dialWithBackoff(chainId uint64, config lib.RootChain) {
 
 // Listen() begins listening on the websockets client
 func (r *RCSubscription) Listen() {
+	// arm a read deadline so a half-open connection errors out and triggers a redial
+	_ = r.conn.SetReadDeadline(time.Now().Add(rcSubscriptionReadTimeout))
+	r.conn.SetPingHandler(func(appData string) error {
+		// a ping proves liveness, refresh the deadline
+		_ = r.conn.SetReadDeadline(time.Now().Add(rcSubscriptionReadTimeout))
+		// reply with a pong (mirrors the default gorilla ping handler)
+		err := r.conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(rcSubscriptionPongWriteTimeout))
+		if err == websocket.ErrCloseSent {
+			return nil
+		} else if e, ok := err.(net.Error); ok && e.Timeout() {
+			return nil
+		}
+		return err
+	})
 	for {
 		// get the message from the buffer
 		_, bz, err := r.conn.ReadMessage()
@@ -505,6 +528,8 @@ func (r *RCSubscription) Listen() {
 			r.Stop(err)
 			return
 		}
+		// a message proves liveness, refresh the deadline
+		_ = r.conn.SetReadDeadline(time.Now().Add(rcSubscriptionReadTimeout))
 		// read the message into a rootChainInfo struct
 		newInfo := new(lib.RootChainInfo)
 		// unmarshal proto bytes into the message

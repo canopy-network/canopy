@@ -96,6 +96,7 @@ const (
 	ResourceUsageRoutePath     = "/v1/admin/resource-usage"
 	PeerInfoRoutePath          = "/v1/admin/peer-info"
 	ConsensusInfoRoutePath     = "/v1/admin/consensus-info"
+	ForceRoundRoutePath        = "/v1/admin/consensus-force-round"
 	PeerBookRoutePath          = "/v1/admin/peer-book"
 	ConfigRoutePath            = "/v1/admin/config"
 	LogsRoutePath              = "/v1/admin/log"
@@ -195,6 +196,7 @@ const (
 	ResourceUsageRouteName          = "resource-usage"
 	PeerInfoRouteName               = "peer-info"
 	ConsensusInfoRouteName          = "consensus-info"
+	ForceRoundRouteName             = "consensus-force-round"
 	PeerBookRouteName               = "peer-book"
 	ConfigRouteName                 = "config"
 	LogsRouteName                   = "logs"
@@ -297,6 +299,7 @@ var routePaths = routes{
 	ResourceUsageRouteName:          {Method: http.MethodGet, Path: ResourceUsageRoutePath},
 	PeerInfoRouteName:               {Method: http.MethodGet, Path: PeerInfoRoutePath},
 	ConsensusInfoRouteName:          {Method: http.MethodGet, Path: ConsensusInfoRoutePath},
+	ForceRoundRouteName:             {Method: http.MethodPost, Path: ForceRoundRoutePath},
 	PeerBookRouteName:               {Method: http.MethodGet, Path: PeerBookRoutePath},
 	ConfigRouteName:                 {Method: http.MethodGet, Path: ConfigRoutePath},
 	LogsRouteName:                   {Method: http.MethodGet, Path: LogsRoutePath},
@@ -415,6 +418,7 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		ResourceUsageRouteName:          s.ResourceUsage,
 		PeerInfoRouteName:               s.PeerInfo,
 		ConsensusInfoRouteName:          s.ConsensusInfo,
+		ForceRoundRouteName:             s.ConsensusForceRound,
 		PeerBookRouteName:               s.PeerBook,
 		ConfigRouteName:                 s.Config,
 		LogsRouteName:                   logsHandler(s),

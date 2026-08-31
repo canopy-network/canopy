@@ -4,16 +4,44 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag for the release (e.g. v1.0.0)"
+        description: "Semantic version for the release (e.g. 1.0.0). The 'v' prefix is added automatically."
         required: true
 
 permissions:
   contents: write
 
 jobs:
+  validate:
+    name: Validate version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.compute.outputs.tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Validate version and compute tag
+        id: compute
+        env:
+          VERSION: ${{ github.event.inputs.tag }}
+        run: |
+          # Tolerate a leading "v" (e.g. v1.0.0) so the tag isn't doubled into "vv1.0.0".
+          VERSION="${VERSION#v}"
+          # Validate via the shared script (same semver check as the auto-updater).
+          go run ./cmd/scripts/semver "$VERSION"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version '$VERSION' is valid. Release tag: v${VERSION}"
+
   release:
     name: Build and Release
     runs-on: ubuntu-latest
+    needs: validate
 
     steps:
       - name: Checkout code
@@ -34,23 +62,31 @@ jobs:
           GOARCH=amd64 CGO_ENABLED=0 GOOS=linux go build -a -o dist/cli-linux-amd64 ./cmd/main/...
           GOARCH=arm64 CGO_ENABLED=0 GOOS=linux go build -a -o dist/cli-linux-arm64 ./cmd/main/...
           GOARCH=arm64 CGO_ENABLED=0 GOOS=darwin go build -a -o dist/cli-darwin-arm64 ./cmd/main/...
+          GOARCH=amd64 CGO_ENABLED=0 GOOS=linux go build -a -o dist/signer-linux-amd64 ./cmd/signer/...
+          GOARCH=arm64 CGO_ENABLED=0 GOOS=linux go build -a -o dist/signer-linux-arm64 ./cmd/signer/...
+          GOARCH=arm64 CGO_ENABLED=0 GOOS=darwin go build -a -o dist/signer-darwin-arm64 ./cmd/signer/...
+          sha256sum dist/cli-* dist/signer-* > dist/SHA256SUMS
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event.inputs.tag }}
+          tag_name: ${{ needs.validate.outputs.tag }}
           target_commitish: ${{ github.sha }}
           files: |
             dist/cli-linux-amd64
             dist/cli-linux-arm64
             dist/cli-darwin-arm64
+            dist/signer-linux-amd64
+            dist/signer-linux-arm64
+            dist/signer-darwin-arm64
+            dist/SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker-main:
     name: Docker - Main
     runs-on: ubuntu-latest
-    needs: release
+    needs: [validate, release]
 
     steps:
       - name: Checkout code
@@ -69,7 +105,7 @@ jobs:
 
       - name: Build and push
         run: |
-          TAG=${{ github.event.inputs.tag }}
+          TAG=${{ needs.validate.outputs.tag }}
           DOCKER_TAG=${TAG//+/-}
           docker build \
             -t canopynetwork/canopy:${DOCKER_TAG} \
@@ -83,7 +119,7 @@ jobs:
   docker-go:
     name: Docker - Go Plugin
     runs-on: ubuntu-latest
-    needs: release
+    needs: [validate, release]
 
     steps:
       - name: Checkout code
@@ -102,7 +138,7 @@ jobs:
 
       - name: Build and push
         run: |
-          TAG=${{ github.event.inputs.tag }}
+          TAG=${{ needs.validate.outputs.tag }}
           DOCKER_TAG=${TAG//+/-}
           docker build \
             -t canopynetwork/canopy:go-${DOCKER_TAG} \
@@ -117,7 +153,7 @@ jobs:
   docker-python:
     name: Docker - Python Plugin
     runs-on: ubuntu-latest
-    needs: release
+    needs: [validate, release]
 
     steps:
       - name: Checkout code
@@ -136,7 +172,7 @@ jobs:
 
       - name: Build and push
         run: |
-          TAG=${{ github.event.inputs.tag }}
+          TAG=${{ needs.validate.outputs.tag }}
           DOCKER_TAG=${TAG//+/-}
           docker build \
             -t canopynetwork/canopy:python-${DOCKER_TAG} \
@@ -151,7 +187,7 @@ jobs:
   docker-typescript:
     name: Docker - TypeScript Plugin
     runs-on: ubuntu-latest
-    needs: release
+    needs: [validate, release]
 
     steps:
       - name: Checkout code
@@ -170,7 +206,7 @@ jobs:
 
       - name: Build and push
         run: |
-          TAG=${{ github.event.inputs.tag }}
+          TAG=${{ needs.validate.outputs.tag }}
           DOCKER_TAG=${TAG//+/-}
           docker build \
             -t canopynetwork/canopy:typescript-${DOCKER_TAG} \
@@ -185,7 +221,7 @@ jobs:
   docker-kotlin:
     name: Docker - Kotlin Plugin
     runs-on: ubuntu-latest
-    needs: release
+    needs: [validate, release]
 
     steps:
       - name: Checkout code
@@ -204,7 +240,7 @@ jobs:
 
       - name: Build and push
         run: |
-          TAG=${{ github.event.inputs.tag }}
+          TAG=${{ needs.validate.outputs.tag }}
           DOCKER_TAG=${TAG//+/-}
           docker build \
             -t canopynetwork/canopy:kotlin-${DOCKER_TAG} \
@@ -219,7 +255,7 @@ jobs:
   docker-csharp:
     name: Docker - C# Plugin
     runs-on: ubuntu-latest
-    needs: release
+    needs: [validate, release]
 
     steps:
       - name: Checkout code
@@ -238,7 +274,7 @@ jobs:
 
       - name: Build and push
         run: |
-          TAG=${{ github.event.inputs.tag }}
+          TAG=${{ needs.validate.outputs.tag }}
           DOCKER_TAG=${TAG//+/-}
           docker build \
             -t canopynetwork/canopy:csharp-${DOCKER_TAG} \

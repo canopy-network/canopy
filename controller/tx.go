@@ -464,7 +464,7 @@ func normalizeTxHash(hash string) string {
 	return strings.TrimPrefix(strings.ToLower(hash), "0x")
 }
 
-// GetFailedTxsPage() returns a list of failed mempool transactions
+// GetFailedTxsPage() returns a list of failed mempool transactions for the given address, or all cached failed transactions if address is empty
 func (c *Controller) GetFailedTxsPage(address string, p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
 	// try to acquire the lock without blocking — return empty if block processing holds it
 	if !c.TryLock() {

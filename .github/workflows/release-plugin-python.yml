@@ -4,16 +4,48 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag for the plugin release (e.g. plugin-python-v1.0.0)"
+        description: "Semantic version for the plugin release (e.g. 1.0.0). The 'plugin-python-v' prefix is added automatically."
         required: true
 
 permissions:
   contents: write
 
 jobs:
+  validate:
+    name: Validate version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.compute.outputs.tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Validate version and compute tag
+        id: compute
+        env:
+          VERSION: ${{ github.event.inputs.tag }}
+        run: |
+          PREFIX="plugin-python-v"
+          # Back-compat: accept the full tag form (e.g. plugin-python-v1.0.4) too, not just
+          # the bare version. DO NOT REMOVE: old forks pass the full tag when releasing.
+          VERSION="${VERSION#"$PREFIX"}"
+          # Tolerate a bare "v" prefix (e.g. v1.0.4) so the tag isn't doubled below.
+          VERSION="${VERSION#v}"
+          # Validate via the shared script (same semver check as the auto-updater).
+          go run ./cmd/scripts/semver "$VERSION"
+          echo "tag=${PREFIX}${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version '$VERSION' is valid. Release tag: ${PREFIX}${VERSION}"
+
   release:
     name: Build and Release Python Plugin
     runs-on: ubuntu-latest
+    needs: validate
 
     steps:
       - name: Checkout code
@@ -42,10 +74,10 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: "Python Plugin ${{ github.event.inputs.tag }}"
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: "Python Plugin ${{ needs.validate.outputs.tag }}"
           body: |
-            Python Plugin Release ${{ github.event.inputs.tag }}
+            Python Plugin Release ${{ needs.validate.outputs.tag }}
             
             ## Requirements
             - Python 3.9 or later

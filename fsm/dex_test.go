@@ -2780,17 +2780,15 @@ func TestHandleBatchDepositRemoteReplacesLowestProvider(t *testing.T) {
 	newProvider := newTestAddress(t, 2)
 	receiptHash, depositOrderId := []byte("receipt"), []byte{0x22}
 
-	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders+1)
+	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders)
 	totalPoints := uint64(100)
 	for i := range points {
 		address, amount := make([]byte, crypto.AddressSize), uint64(1)
 		address[len(address)-2], address[len(address)-1] = byte(i>>8), byte(i)
 		if i == 0 {
 			address, amount = deadAddr.Bytes(), 100
-		} else if i < lib.MaxLiquidityProviders {
-			totalPoints++
 		} else {
-			amount = 0 // legacy zero-point holder
+			totalPoints++
 		}
 		points[i] = &lib.PoolPoints{Address: address, Points: amount}
 	}
@@ -2893,36 +2891,6 @@ func TestHandleBatchDepositRanksNewcomersByProviderTotal(t *testing.T) {
 	require.Error(t, err)
 	_, err = pool.GetPointsFor(points[1].Address)
 	require.Error(t, err)
-}
-
-func TestHandleBatchDepositMigratesPoolBeforeDeposits(t *testing.T) {
-	sm := newTestStateMachine(t)
-	chainID := uint64(2)
-	points := make([]*lib.PoolPoints, 50_000)
-	var total uint64
-	for i := range points {
-		address := make([]byte, crypto.AddressSize)
-		address[len(address)-2], address[len(address)-1] = byte(i>>8), byte(i)
-		amount := uint64(i + 1)
-		if i == 0 {
-			address, amount = deadAddr.Bytes(), 100
-		}
-		points[i], total = &lib.PoolPoints{Address: address, Points: amount}, total+amount
-	}
-	require.NoError(t, sm.SetPool(&Pool{Id: chainID + LiquidityPoolAddend, Amount: 1_000_000, Points: points, TotalPoolPoints: total}))
-
-	x, y := uint64(1_000_000), uint64(1_000_000)
-	require.NoError(t, sm.HandleBatchDeposit(&lib.DexBatch{Deposits: []*lib.DexLiquidityDeposit{{
-		Address: points[len(points)-1].Address, Amount: 100,
-	}}}, chainID, &x, &y, false))
-
-	pool, err := sm.GetPool(chainID + LiquidityPoolAddend)
-	require.NoError(t, err)
-	require.Len(t, pool.Points, lib.MaxLiquidityProviders)
-	for _, evicted := range points[1:3] {
-		_, err = pool.GetPointsFor(evicted.Address)
-		require.Error(t, err)
-	}
 }
 
 func TestHandleBatchDepositUsesReceiptHashForEqualStakeTie(t *testing.T) {

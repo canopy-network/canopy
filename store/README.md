@@ -46,7 +46,7 @@ In Canopy's store's module:
 
 The store package is built from several key components that work together, like building blocks, to
 create a complete storage system. It could be represented like a well-organized filing cabinet,
-where each component has a specific job in managing and storing data. Each compoent from the
+where each component has a specific job in managing and storing data. Each component from the
 simplest to the most complex is described as follows:
 
 1. **`Txn`**: Database transaction manager and BadgerDB bridge

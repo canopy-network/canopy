@@ -46,7 +46,7 @@
       "spacing": 4,
       "pagination": {
         "visible": true,
-        "itemsPerPage": 10
+        "itemsPerPage": 50
       },
       "loading": {
         "visible": true,

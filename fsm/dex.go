@@ -10,12 +10,8 @@ import (
 	"strings"
 )
 
-const (
-	// dexLPEvictionIDDomain separates replacement withdrawal IDs from other deterministic DEX IDs.
-	dexLPEvictionIDDomain = "dex-lp-eviction-v1"
-	// dexLPMigrationIDDomain separates migration withdrawal IDs from other deterministic DEX IDs.
-	dexLPMigrationIDDomain = "dex-lp-migration-v1"
-)
+// dexLPEvictionIDDomain separates replacement withdrawal IDs from other deterministic DEX IDs.
+const dexLPEvictionIDDomain = "dex-lp-eviction-v1"
 
 /* Dex.go implements logic to handle AMM style atomic exchanges between root & nested chains
    not to be confused with 1 way order book swaps implemented in swap.go */
@@ -673,13 +669,9 @@ func (s *StateMachine) handleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	return nil
 }
 
-// handleCappedBatchDeposit migrates legacy pools and deterministically admits the best-funded newcomers.
+// handleCappedBatchDeposit deterministically admits the best-funded newcomers.
 // MaxLiquidityProviders bounds serialized point entries, so the permanent dead address consumes one slot.
 func (s *StateMachine) handleCappedBatchDeposit(batch *lib.DexBatch, p *Pool, chainId uint64, x, y *uint64, local bool) (bool, lib.ErrorI) {
-	// execute the one-time legacy migration before processing newcomers
-	if err := s.migrateLegacyLPs(batch, p, chainId, x, y, local); err != nil {
-		return true, err
-	}
 	// initialize vars
 	var err lib.ErrorI
 	type candidate struct {
@@ -813,57 +805,6 @@ func liquidityDepositPoints(totalPoints, x, y, amount uint64) (uint64, lib.Error
 		return 0, ErrInvalidLiquidityPool()
 	}
 	return lib.SafeMulDiv(totalPoints, newK-oldK, oldK), nil
-}
-
-// migrateLegacyLPs() performs the one-time migration of a pool above the provider limit.
-func (s *StateMachine) migrateLegacyLPs(batch *lib.DexBatch, p *Pool, chainId uint64, x, y *uint64, local bool) lib.ErrorI {
-	// calculate how many legacy providers must be removed to reach the limit
-	excess := len(p.Points) - lib.MaxLiquidityProviders
-	if excess <= 0 {
-		return nil
-	}
-	// rank the providers from lowest to highest points
-	sort.Slice(p.Points, func(i, j int) bool {
-		// rank by points first
-		if p.Points[i].Points != p.Points[j].Points {
-			return p.Points[i].Points < p.Points[j].Points
-		}
-		// break equal-point ties deterministically using the receipt hash
-		return bytes.Compare(liquidityProviderTieBreakHash(batch.ReceiptHash, p.Points[i].Address), liquidityProviderTieBreakHash(batch.ReceiptHash, p.Points[j].Address)) < 0
-	})
-	// preallocate one full withdrawal for each excess provider
-	withdrawals := make([]*lib.DexLiquidityWithdraw, 0, excess)
-	// select the lowest-ranked providers
-	for _, point := range p.Points {
-		// the permanent dead address cannot be evicted
-		if !bytes.Equal(point.Address, deadAddr.Bytes()) {
-			// create a full withdrawal with a deterministic migration order ID
-			withdrawals = append(withdrawals, &lib.DexLiquidityWithdraw{Address: point.Address, Percent: 100,
-				OrderId: crypto.ShortHash(lib.JoinLenPrefix([]byte(dexLPMigrationIDDomain), batch.ReceiptHash, point.Address))})
-		}
-		// stop after selecting exactly the excess providers
-		if len(withdrawals) == excess {
-			break
-		}
-	}
-	// ensure the pool contained enough removable providers
-	if len(withdrawals) != excess {
-		return ErrInvalidLiquidityPool()
-	}
-	// execute and persist the migration through the standard withdrawal path
-	if err := s.HandleBatchWithdraw(&lib.DexBatch{Withdrawals: withdrawals}, chainId, x, y, local); err != nil {
-		return err
-	}
-	// reload the pool updated by HandleBatchWithdraw()
-	migrated, err := s.GetPool(chainId + LiquidityPoolAddend)
-	if err != nil {
-		return err
-	}
-	// refresh the working pool before processing the incoming deposits
-	p.Amount = migrated.Amount
-	p.Points = migrated.Points
-	p.TotalPoolPoints = migrated.TotalPoolPoints
-	return nil
 }
 
 // RotateDexBatches() sets 'next batch' as 'locked batch' and deletes reference for 'next batch'

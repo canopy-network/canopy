@@ -25,9 +25,11 @@ export const TextField: React.FC<BaseFieldProps> = ({
 
     const isOncePopulate = (field as Record<string, unknown>).autoPopulate === 'once'
 
-    // Sync field value when the resolved template changes (e.g., table selection)
-    // This allows computed fields to stay in sync while still being editable
+    // Keep computed fields in sync with their template, but never for
+    // `autoPopulate: "once"` fields (they are populated a single time and must
+    // not be re-written when the data source refetches).
     React.useEffect(() => {
+        if (isOncePopulate) return
         if (field.value && resolvedValue != null) {
             const resolvedStr = String(resolvedValue)
             if (prevResolvedRef.current !== null && prevResolvedRef.current !== resolvedStr) {
@@ -36,7 +38,7 @@ export const TextField: React.FC<BaseFieldProps> = ({
             }
             prevResolvedRef.current = resolvedStr
         }
-    }, [resolvedValue, field.value, onChange])
+    }, [resolvedValue, field.value, onChange, isOncePopulate])
 
     // For readOnly fields with a value template, always use the resolved template
     // For editable fields with autoPopulate=once, respect user clearing the field

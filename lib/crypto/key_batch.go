@@ -3,6 +3,7 @@ package crypto
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"github.com/allegro/bigcache/v3"
 	oasisEd25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
@@ -202,16 +203,12 @@ func (bt *BatchTuple) Key() string {
 	pk := bt.PublicKey.Bytes()
 	// calculate the total length of the key
 	totalLen := len(pk) + len(bt.Message) + len(bt.Signature)
-	// create the buffer and offset variables
-	b, offset := make([]byte, totalLen), 0
-	// copy pubkey in first part
-	copy(b[offset:], pk)
-	offset += len(pk)
-	// copy message in second part
-	copy(b[offset:], bt.Message)
-	offset += len(bt.Message)
-	// copy signature in third part
-	copy(b[offset:], bt.Signature)
+	// length-prefix each part so bytes cannot move across component boundaries
+	b := make([]byte, 0, totalLen+3*binary.MaxVarintLen64)
+	for _, part := range [][]byte{pk, bt.Message, bt.Signature} {
+		b = binary.AppendUvarint(b, uint64(len(part)))
+		b = append(b, part...)
+	}
 	// return string version
 	return string(b)
 }

@@ -218,36 +218,60 @@ func (ks *Keystore) SaveToFile(dataDirPath string) error {
 	return os.WriteFile(filepath.Join(dataDirPath, KeyStoreName), bz, 0600)
 }
 
-// EncryptedPrivateKey represents an encrypted form of a private key, including the public key,
-// salt used in key derivation, and the encrypted private key itself
+// Default Argon2 KDF cost params, used when an EncryptedPrivateKey has none of its own
+// (i.e. any key encrypted before these fields existed).
+const (
+	DefaultKdfTime     = 3
+	DefaultKdfMemoryKB = 32 * 1024 // 32MB
+	DefaultKdfThreads  = 4
+	kdfKeyLen          = 32
+)
+
+// KdfTime/KdfMemoryKB/KdfThreads record the Argon2 params used to encrypt this key, so decrypt
+// always matches; zero values fall back to Default* for pre-existing keys.
 type EncryptedPrivateKey struct {
 	PublicKey   string `json:"publicKey"`
 	Salt        string `json:"salt"`
 	Encrypted   string `json:"encrypted"`
 	KeyAddress  string `json:"keyAddress"`            // TODO: better naming
 	KeyNickname string `json:"keyNickname,omitempty"` // TODO: better naming
+	KdfTime     uint32 `json:"kdfTime,omitempty"`
+	KdfMemoryKB uint32 `json:"kdfMemoryKb,omitempty"`
+	KdfThreads  uint8  `json:"kdfThreads,omitempty"`
 }
 
-// EncryptPrivateKey creates an encrypted private key by generating a random salt
-// and deriving an encryption key with the KDF, and finally encrypting key using AES-GCM
+// EncryptPrivateKey keeps its existing signature/behavior, using the default Argon2 params.
 func EncryptPrivateKey(publicKey, privateKey, password []byte, address string) (*EncryptedPrivateKey, error) {
+	return EncryptPrivateKeyWithParams(publicKey, privateKey, password, address, DefaultKdfTime, DefaultKdfMemoryKB, DefaultKdfThreads)
+}
+
+// EncryptPrivateKeyWithParams lets a caller pick cheaper (or stricter) Argon2 params;
+// they're stored on the result, so DecryptPrivateKey doesn't need to be told separately.
+func EncryptPrivateKeyWithParams(publicKey, privateKey, password []byte, address string, time, memoryKB uint32, threads uint8) (*EncryptedPrivateKey, error) {
 	// generate random 16 bytes salt
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
 		return nil, err
 	}
 	// derive an AES-GCM encryption key and nonce using the password and salt
-	gcm, nonce, err := kdf(password, salt)
+	gcm, nonce, err := kdf(password, salt, time, memoryKB, threads)
 	if err != nil {
 		return nil, err
 	}
 	// encrypt the private key with AES-GCM using the derived key and nonce
-	return &EncryptedPrivateKey{
+	epk := &EncryptedPrivateKey{
 		PublicKey:  hex.EncodeToString(publicKey),
 		Salt:       hex.EncodeToString(salt),
 		Encrypted:  hex.EncodeToString(gcm.Seal(nil, nonce, privateKey, nil)),
 		KeyAddress: address,
-	}, nil
+	}
+	// omit kdf* fields at the defaults so the common case marshals like a pre-kdf-params keystore.
+	if time != DefaultKdfTime || memoryKB != DefaultKdfMemoryKB || threads != DefaultKdfThreads {
+		epk.KdfTime = time
+		epk.KdfMemoryKB = memoryKB
+		epk.KdfThreads = threads
+	}
+	return epk, nil
 }
 
 // DecryptPrivateKey takes an EncryptedPrivateKey and decrypts it to a PrivateKeyI interface using the password
@@ -260,7 +284,12 @@ func DecryptPrivateKey(epk *EncryptedPrivateKey, password []byte) (pk PrivateKey
 	if err != nil {
 		return nil, err
 	}
-	gcm, nonce, err := kdf(password, salt)
+	// use this key's own recorded params, falling back to defaults for pre-existing keys
+	time, memoryKB, threads := epk.KdfTime, epk.KdfMemoryKB, uint32(epk.KdfThreads)
+	if time == 0 && memoryKB == 0 && threads == 0 {
+		time, memoryKB, threads = DefaultKdfTime, DefaultKdfMemoryKB, DefaultKdfThreads
+	}
+	gcm, nonce, err := kdf(password, salt, time, memoryKB, uint8(threads))
 	if err != nil {
 		return nil, err
 	}
@@ -273,9 +302,9 @@ func DecryptPrivateKey(epk *EncryptedPrivateKey, password []byte) (pk PrivateKey
 
 // kdf derives an AES-GCM encryption key and nonce from a password and salt using Argon2 key derivation
 // This key is used to initialize AES-GCM, and a 12-byte nonce is returned for encryption
-func kdf(password, salt []byte) (gcm cipher.AEAD, nonce []byte, err error) {
+func kdf(password, salt []byte, time, memoryKB uint32, threads uint8) (gcm cipher.AEAD, nonce []byte, err error) {
 	// use Argon2 to derive a 32 byte key from the password and salt
-	key := argon2.Key(password, salt, 3, 32*1024, 4, 32)
+	key := argon2.Key(password, salt, time, memoryKB, threads, kdfKeyLen)
 	// init AES block cipher with the derived key
 	block, err := aes.NewCipher(key)
 	if err != nil {

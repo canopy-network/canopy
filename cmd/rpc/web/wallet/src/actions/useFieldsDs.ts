@@ -121,7 +121,8 @@ export function useFieldDs(field: Field, ctx: any) {
             // Caching options - use shorter staleTime when watching values for better reactivity
             staleTimeMs: watchPaths.length > 0 ? 0 : (opts.staleTimeMs ?? 5000),
             gcTimeMs: opts.gcTimeMs,
-            refetchIntervalMs: opts.refetchIntervalMs,
+            // One-shot by default: don't inherit the global dashboard poll interval.
+            refetchIntervalMs: opts.refetchIntervalMs ?? false,
             refetchOnWindowFocus: opts.refetchOnWindowFocus ?? false,
             refetchOnMount: opts.refetchOnMount ?? true,
             refetchOnReconnect: opts.refetchOnReconnect ?? false,

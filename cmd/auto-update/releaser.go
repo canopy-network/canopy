@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/canopy-network/canopy/lib"
 	"golang.org/x/mod/semver"
 )
 
@@ -79,16 +80,14 @@ type ReleaseManager struct {
 	config     *ReleaseManagerConfig
 	httpClient *http.Client
 	Version    string // current version
-	Enabled    bool   // whether this updater should actively check for updates
 }
 
 // NewReleaseManager creates a new ReleaseManager instance
-func NewReleaseManager(config *ReleaseManagerConfig, version string, enabled bool) *ReleaseManager {
+func NewReleaseManager(config *ReleaseManagerConfig, version string) *ReleaseManager {
 	return &ReleaseManager{
 		config:     config,
 		httpClient: &http.Client{Timeout: httpReleaseClientTimeout},
 		Version:    version,
-		Enabled:    enabled,
 	}
 }
 
@@ -213,16 +212,16 @@ func (rm *ReleaseManager) ShouldUpdate(release *Release) error {
 	candidate := semver.Canonical(candidateTag)
 	current := semver.Canonical(rm.Version)
 	// for plugins, if current version is invalid (first run), always update
-	if rm.config.Type == ReleaseTypePlugin && (current == "" || !semver.IsValid(current)) {
+	if rm.config.Type == ReleaseTypePlugin && (current == "" || !lib.IsValidVersion(current)) {
 		release.ShouldUpdate = true
 		release.Version = candidate
 		return nil
 	}
 	// validate versions
-	if candidate == "" || !semver.IsValid(candidate) {
+	if candidate == "" || !lib.IsValidVersion(candidate) {
 		return fmt.Errorf("invalid release version: %s", release.Version)
 	}
-	if current == "" || !semver.IsValid(current) {
+	if current == "" || !lib.IsValidVersion(current) {
 		return fmt.Errorf("invalid local version: %s", rm.Version)
 	}
 	// should update if the candidate version is greater than the current version

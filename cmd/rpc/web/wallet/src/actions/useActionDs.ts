@@ -196,7 +196,9 @@ export function useActionDs(actionDs: any, ctx: any, actionId: string, accountAd
                 scope: uniqueScope,
                 staleTimeMs: dsLocalOptions.staleTimeMs ?? globalOptions.staleTimeMs ?? 5000,
                 gcTimeMs: dsLocalOptions.gcTimeMs ?? globalOptions.gcTimeMs ?? 300000,
-                refetchIntervalMs: dsLocalOptions.refetchIntervalMs ?? globalOptions.refetchIntervalMs,
+                // One-shot by default: don't inherit the global dashboard poll interval,
+                // which makes DS-driven fields/sections flicker while a modal stays open.
+                refetchIntervalMs: dsLocalOptions.refetchIntervalMs ?? globalOptions.refetchIntervalMs ?? false,
                 refetchOnWindowFocus: dsLocalOptions.refetchOnWindowFocus ?? globalOptions.refetchOnWindowFocus ?? false,
                 refetchOnMount: dsLocalOptions.refetchOnMount ?? globalOptions.refetchOnMount ?? true,
                 refetchOnReconnect: dsLocalOptions.refetchOnReconnect ?? globalOptions.refetchOnReconnect ?? false,
@@ -250,19 +252,32 @@ export function useActionDs(actionDs: any, ctx: any, actionId: string, accountAd
         return merged;
     }, [dsResults]);
 
-    // Refetch all when watch values change
-    const prevWatchKeyRef = React.useRef<string>(watchKey);
-    React.useEffect(() => {
-        if (prevWatchKeyRef.current !== watchKey && prevWatchKeyRef.current !== '') {
-            // Watch values changed, refetch all enabled DS
-            for (const result of dsResults) {
-                if (result.refetch) {
-                    result.refetch();
+    // Refetch each DS only when its OWN resolved params change, so independent
+    // fields (e.g. operator vs. rewards address) don't refetch each other's DS.
+    const dsParamKeys = React.useMemo(
+        () =>
+            dsConfigs.map((config) => {
+                try {
+                    return JSON.stringify(config.renderedParams ?? {});
+                } catch {
+                    return "";
                 }
+            }),
+        [dsConfigs],
+    );
+
+    const prevParamKeysRef = React.useRef<string[]>(dsParamKeys);
+    React.useEffect(() => {
+        const prevKeys = prevParamKeysRef.current;
+        dsResults.forEach((result, idx) => {
+            const prevKey = prevKeys[idx];
+            const currentKey = dsParamKeys[idx];
+            if (prevKey !== undefined && prevKey !== currentKey && result.refetch) {
+                result.refetch();
             }
-        }
-        prevWatchKeyRef.current = watchKey;
-    }, [watchKey, dsResults]);
+        });
+        prevParamKeysRef.current = dsParamKeys;
+    }, [dsParamKeys, dsResults]);
 
     const isLoading = dsResults.some(r => r.isLoading);
     const hasError = dsResults.some(r => r.error);
