@@ -221,10 +221,15 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 	if !rootStartTime.IsZero() {
 		s.Metrics.UpdateFSMApplyBlockRootTime(rootStartTime)
 	}
-	// load the last block from the indexer
-	lastBlock, err := s.LoadBlock(s.height - 1)
-	if err != nil {
-		return nil, nil, err
+	// The state committed from genesis is version 1, but there is no indexed
+	// block yet. Treat the predecessor of the first consensus block as an empty
+	// genesis boundary; later heights must always resolve their prior block.
+	lastBlock := &lib.BlockResult{BlockHeader: new(lib.BlockHeader)}
+	if s.height > 1 {
+		lastBlock, err = s.LoadBlock(s.height - 1)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	// get the transaction root
 	transactionRoot, err := r.TransactionRoot()
