@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -285,6 +286,43 @@ func TestApplyBlock(t *testing.T) {
 			require.EqualExportedValues(t, test.expectedResults, result.Results[0])
 		})
 	}
+}
+
+func TestApplyFirstBlockWithoutIndexedPredecessor(t *testing.T) {
+	log := lib.NewDefaultLogger()
+	db, err := store.NewStoreInMemory(log)
+	require.NoError(t, err)
+	defer db.Close()
+	sm := StateMachine{
+		store:           db,
+		ProtocolVersion: CurrentProtocolVersion,
+		NetworkID:       1,
+		height:          1,
+		slashTracker:    NewSlashTracker(),
+		events:          new(lib.EventsTracker),
+		Config: lib.Config{
+			MainConfig:         lib.DefaultMainConfig(),
+			StateMachineConfig: lib.DefaultStateMachineConfig(),
+		},
+		log: log,
+		cache: &cache{
+			accounts: make(map[uint64]*Account),
+			pools:    make(map[uint64]*Pool),
+		},
+	}
+	require.NoError(t, sm.SetParams(DefaultParams()))
+
+	block := &lib.Block{BlockHeader: &lib.BlockHeader{
+		Time:            uint64(time.Now().UnixMicro()),
+		ProposerAddress: newTestAddressBytes(t),
+	}}
+	header, result, err := sm.ApplyBlock(context.Background(), block, false)
+	require.NoError(t, err)
+	require.Empty(t, result.Failed)
+	require.EqualValues(t, 1, header.Height)
+	require.Zero(t, header.TotalTxs)
+	require.Zero(t, header.TotalVdfIterations)
+	require.Equal(t, bytes.Repeat([]byte("F"), crypto.HashSize), []byte(header.LastBlockHash))
 }
 
 func TestApplyTransactions_DoesNotReturnCheckErrors(t *testing.T) {
