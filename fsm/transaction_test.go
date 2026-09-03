@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -342,6 +344,45 @@ func TestCheckTx(t *testing.T) {
 			require.EqualExportedValues(t, test.expected, got)
 		})
 	}
+}
+
+func TestCheckTxRejectsRestrictedSignerForAnyMessage(t *testing.T) {
+	sm := newTestStateMachine(t)
+	restrictedTxCount := prometheus.NewGauge(prometheus.GaugeOpts{})
+	sm.Metrics = &lib.Metrics{FSMMetrics: lib.FSMMetrics{
+		CheckTxDecodeTime:    prometheus.NewHistogram(prometheus.HistogramOpts{}),
+		CheckTxReplayTime:    prometheus.NewHistogram(prometheus.HistogramOpts{}),
+		CheckTxMessageTime:   prometheus.NewHistogram(prometheus.HistogramOpts{}),
+		CheckTxSignatureTime: prometheus.NewHistogram(prometheus.HistogramOpts{}),
+		RestrictedTxCount:    restrictedTxCount,
+	}}
+	kg := newTestKeyGroup(t)
+	sm.Config.RestrictedAddresses = []string{kg.Address.String()}
+	sm.SetProposalVoteConfig(ProposalApproveList)
+	require.NoError(t, sm.UpdateParam("fee", ParamStakeFee, &lib.UInt64Wrapper{Value: 1}))
+	tx, err := NewStakeTx(kg.PrivateKey, kg.PublicKey.Bytes(), newTestAddress(t, 1), "", []uint64{1}, 1, 1, 1, 1, sm.Height(), true, false, "")
+	require.NoError(t, err)
+	bz, err := lib.Marshal(tx)
+	require.NoError(t, err)
+	_, errI := sm.CheckTx(bz, "", nil)
+	require.ErrorContains(t, errI, "restricted address")
+	metric := new(dto.Metric)
+	require.NoError(t, restrictedTxCount.Write(metric))
+	require.Equal(t, float64(1), metric.GetGauge().GetValue())
+}
+
+func TestBeginBlockResetsRestrictedTxCount(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 1
+	restrictedTxCount := prometheus.NewGauge(prometheus.GaugeOpts{})
+	restrictedTxCount.Set(2)
+	sm.Metrics = &lib.Metrics{FSMMetrics: lib.FSMMetrics{RestrictedTxCount: restrictedTxCount}}
+
+	_, err := sm.BeginBlock()
+	require.NoError(t, err)
+	metric := new(dto.Metric)
+	require.NoError(t, restrictedTxCount.Write(metric))
+	require.Zero(t, metric.GetGauge().GetValue())
 }
 
 func TestCheckTxAcceptsSerializedMultiBLSSigner(t *testing.T) {

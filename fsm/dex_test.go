@@ -2532,7 +2532,7 @@ func TestDexFuzzHarness(t *testing.T) {
 				sim.chainX.poolBalance(), sim.chainY.poolBalance(),
 				sim.chainX.poolPoints(), sim.chainY.poolPoints())
 		}
-		sim.advanceHeight()
+		sim.advanceHeight(t)
 		history = append(history, stepLabel)
 	}
 	_ = history // retained for future expansion; appended only on invariant breach.
@@ -3114,7 +3114,9 @@ func newDexChain(t *testing.T, chainId, counterId uint64, rng *rand.Rand) *dexCh
 	}
 }
 
-func (s *dexSim) advanceHeight() {
+func (s *dexSim) advanceHeight(t *testing.T) {
+	require.NoError(t, s.chainX.sm.Store().(lib.StoreI).IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{Height: s.chainX.sm.height}}))
+	require.NoError(t, s.chainY.sm.Store().(lib.StoreI).IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{Height: s.chainY.sm.height}}))
 	s.chainX.sm.height++
 	s.chainY.sm.height++
 }

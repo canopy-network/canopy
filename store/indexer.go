@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -117,6 +118,7 @@ func (t *Indexer) IndexBlock(b *lib.BlockResult) lib.ErrorI {
 		return err
 	}
 	var eg errgroup.Group
+	eg.SetLimit(32)
 	// index block header in its own goroutine
 	eg.Go(func() error {
 		hashKey, err := t.indexBlockByHash(b.BlockHeader.Hash, bz)
@@ -220,6 +222,9 @@ func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.E
 // blocks are indexed contiguously by height, so the page params are derived from the
 // oldest and newest indexed heights instead of walking the entire block index
 func (t *Indexer) GetBlocks(p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
+	if p.PerPage > 100 {
+		p.PerPage = 100
+	}
 	results, page := make(lib.BlockResults, 0), lib.NewPage(p, lib.BlockResultsPageName)
 	// get the height boundaries of the index
 	oldest, newest, found, err := t.blockHeightBounds()
@@ -636,6 +641,9 @@ func (t *Indexer) IsValidDoubleSigner(address []byte, height uint64) (bool, lib.
 func (t *Indexer) IndexEvent(e *lib.Event, index int) lib.ErrorI {
 	// index the event by hash
 	hashKey, err := t.indexEventByHash(e)
+	if err != nil {
+		return err
+	}
 	// index the event by height and index
 	heightAndIndexKey := t.eventHeightAndIndexKey(e.Height, uint64(index))
 	// store the hash key by height.index
@@ -720,6 +728,9 @@ func (t *Indexer) getEvent(hashKey []byte) (*lib.Event, lib.ErrorI) {
 	bz, err := t.db.Get(hashKey)
 	if err != nil {
 		return nil, err
+	}
+	if len(bz) == 0 {
+		return nil, ErrStoreGet(errors.New("event not found"))
 	}
 	ptr := new(lib.Event)
 	if err = lib.Unmarshal(bz, ptr); err != nil {
@@ -854,6 +865,9 @@ func (t *Indexer) getQC(heightKey []byte) (*lib.QuorumCertificate, lib.ErrorI) {
 	if err != nil {
 		return nil, err
 	}
+	if len(bz) == 0 {
+		return nil, ErrStoreGet(errors.New("quorum certificate not found"))
+	}
 	// convert to QC object
 	ptr := new(lib.QuorumCertificate)
 	if err = lib.Unmarshal(bz, ptr); err != nil {
@@ -867,6 +881,9 @@ func (t *Indexer) getBlock(hashKey []byte, transactions bool) (*lib.BlockResult,
 	bz, err := t.db.Get(hashKey)
 	if err != nil {
 		return nil, err
+	}
+	if len(bz) == 0 {
+		return nil, ErrStoreGet(errors.New("block not found"))
 	}
 	ptr := new(lib.BlockHeader)
 	if err = lib.Unmarshal(bz, ptr); err != nil {
@@ -911,6 +928,9 @@ func (t *Indexer) getTx(key []byte) (*lib.TxResult, lib.ErrorI) {
 	bz, err := t.db.Get(key)
 	if err != nil {
 		return nil, err
+	}
+	if len(bz) == 0 {
+		return nil, nil
 	}
 	ptr := new(lib.TxResult)
 	if err = lib.Unmarshal(bz, ptr); err != nil {

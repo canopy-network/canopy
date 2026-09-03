@@ -384,6 +384,9 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 	if isPartialQC {
 		return lib.ErrNoMaj23()
 	}
+	if msg.Qc.Header.Phase != lib.Phase_PRECOMMIT_VOTE {
+		return lib.ErrWrongPhase()
+	}
 	// handle the certificate results
 	handleCertificateResultsStartTime := time.Now()
 	err = s.HandleCertificateResults(msg.Qc, committee)

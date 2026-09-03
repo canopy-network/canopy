@@ -114,7 +114,7 @@ func (t *Txn) Get(key []byte) ([]byte, lib.ErrorI) {
 			return nil, nil
 		}
 		// TODO: should a sentinel value be returned when a key is found but the value is nil
-		return v.value, nil
+		return bytes.Clone(v.value), nil
 	}
 	// if not found, retrieve from the parent reader
 	return t.reader.Get(lib.AppendWithBuffer(&t.txn.rbuf, t.prefix, key))
@@ -142,6 +142,7 @@ func (t *Txn) DeleteAt(key []byte, version uint64) lib.ErrorI {
 
 // update() modifies or adds an operation to the txn
 func (t *Txn) update(key []byte, val []byte, version uint64, opAction op) (e lib.ErrorI) {
+	key, val = bytes.Clone(key), bytes.Clone(val)
 	hashedKey := lib.MemHash(key)
 	t.txn.l.Lock()
 	defer t.txn.l.Unlock()

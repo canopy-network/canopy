@@ -20,6 +20,10 @@ func ErrUnauthorizedTx() lib.ErrorI {
 	return lib.NewError(lib.CodeUnauthorizedTx, lib.StateMachineModule, "unauthorized tx")
 }
 
+func ErrRestrictedAddress() lib.ErrorI {
+	return lib.NewError(lib.CodeUnauthorizedTx, lib.StateMachineModule, "restricted address")
+}
+
 func ErrInvalidTxMessage() lib.ErrorI {
 	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid transaction message")
 }

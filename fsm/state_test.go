@@ -1,7 +1,9 @@
 package fsm
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"slices"
@@ -286,6 +288,43 @@ func TestApplyBlock(t *testing.T) {
 	}
 }
 
+func TestApplyFirstBlockWithoutIndexedPredecessor(t *testing.T) {
+	log := lib.NewDefaultLogger()
+	db, err := store.NewStoreInMemory(log)
+	require.NoError(t, err)
+	defer db.Close()
+	sm := StateMachine{
+		store:           db,
+		ProtocolVersion: CurrentProtocolVersion,
+		NetworkID:       1,
+		height:          1,
+		slashTracker:    NewSlashTracker(),
+		events:          new(lib.EventsTracker),
+		Config: lib.Config{
+			MainConfig:         lib.DefaultMainConfig(),
+			StateMachineConfig: lib.DefaultStateMachineConfig(),
+		},
+		log: log,
+		cache: &cache{
+			accounts: make(map[uint64]*Account),
+			pools:    make(map[uint64]*Pool),
+		},
+	}
+	require.NoError(t, sm.SetParams(DefaultParams()))
+
+	block := &lib.Block{BlockHeader: &lib.BlockHeader{
+		Time:            uint64(time.Now().UnixMicro()),
+		ProposerAddress: newTestAddressBytes(t),
+	}}
+	header, result, err := sm.ApplyBlock(context.Background(), block, false)
+	require.NoError(t, err)
+	require.Empty(t, result.Failed)
+	require.EqualValues(t, 1, header.Height)
+	require.Zero(t, header.TotalTxs)
+	require.Zero(t, header.TotalVdfIterations)
+	require.Equal(t, bytes.Repeat([]byte("F"), crypto.HashSize), []byte(header.LastBlockHash))
+}
+
 func TestApplyTransactions_DoesNotReturnCheckErrors(t *testing.T) {
 	sm := newTestStateMachine(t)
 	kg := newTestKeyGroup(t)
@@ -420,6 +459,7 @@ func newTestStateMachine(t *testing.T) StateMachine {
 		},
 	}
 	require.NoError(t, sm.SetParams(DefaultParams()))
+	require.NoError(t, db.IndexBlock(&lib.BlockResult{BlockHeader: &lib.BlockHeader{Height: 1}}))
 	db.Commit()
 	require.NoError(t, sm.SetParams(DefaultParams()))
 	return sm
@@ -896,4 +936,22 @@ func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) 
 	val3, err := sm.GetValidator(crypto.NewAddressFromBytes(validators[3].Address))
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), val3.UnstakingHeight, "delegate 3 should NOT be unstaking")
+}
+
+func TestRestrictedAddresses(t *testing.T) {
+	hardcoded, err := hex.DecodeString("0330070fd38ec3bb94f58fa55d40368271e9e54a")
+	require.NoError(t, err)
+	dynamic, err := hex.DecodeString("1111111111111111111111111111111111111111")
+	require.NoError(t, err)
+	sm := &StateMachine{Config: lib.Config{StateMachineConfig: lib.StateMachineConfig{
+		RestrictedAddresses: []string{"0x1111111111111111111111111111111111111111"},
+	}}}
+
+	require.True(t, sm.isRestricted(hardcoded))
+	require.False(t, sm.isRestricted(dynamic), "a committed +2/3 block must override local additions")
+	sm.SetProposalVoteConfig(ProposalApproveList)
+	require.True(t, sm.isRestricted(dynamic), "validators must apply local additions while voting")
+	require.False(t, sm.isRestricted(make([]byte, 20)))
+	require.False(t, sm.isRestricted(nil))
+	require.Len(t, lib.RestrictedAddresses, 124)
 }

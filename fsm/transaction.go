@@ -158,6 +158,9 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 		if err != nil {
 			return
 		}
+		if tx.MessageType != msg.Name() {
+			return nil, lib.ErrUnknownMessageName(tx.MessageType)
+		}
 		// validate the fee associated with the transaction
 		if err = s.CheckFee(tx.Fee, msg); err != nil {
 			return
@@ -178,6 +181,12 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	sender, err := s.CheckSignature(tx, authorizedSigners, batchVerifier)
 	if err != nil {
 		return
+	}
+	if s.isRestricted(sender.Bytes()) || s.isRestricted(recipient) {
+		if s.Metrics != nil {
+			s.Metrics.RestrictedTxCount.Inc()
+		}
+		return nil, ErrRestrictedAddress()
 	}
 	if s.Metrics != nil {
 		s.Metrics.CheckTxSignatureTime.Observe(time.Since(signatureStartTime).Seconds())

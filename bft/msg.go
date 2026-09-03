@@ -81,6 +81,11 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 	if err = x.Qc.CheckBasic(); err != nil {
 		return
 	}
+	qcHeader := x.Header.Copy()
+	qcHeader.Phase--
+	if !x.Qc.Header.Equals(qcHeader) {
+		return false, lib.ErrWrongPhase()
+	}
 	// ensure the sender is justified as the proposer
 	if !bytes.Equal(x.Qc.ProposerKey, x.Signature.PublicKey) {
 		return false, lib.ErrInvalidSigner()
