@@ -244,7 +244,7 @@ func TestStart(t *testing.T) {
 	startTestP2PNode(t, n4)
 	c := newTestP2PConfig(t)
 	// test dial peers
-	c.DialPeers = []string{fmt.Sprintf("%s@%s", lib.BytesToString(n2.pub), n2.listener.Addr().String())}
+	c.DialPeers = []string{fmt.Sprintf("%s@%s", lib.BytesToString(n2.pub), n2.ListenerAddress().String())}
 	n1 := newTestP2PNodeWithConfig(t, c)
 	// test churn process
 	private, _ := crypto.NewBLS12381PrivateKey()
@@ -255,7 +255,7 @@ func TestStart(t *testing.T) {
 	}
 	randomPeerAddress := &lib.PeerAddress{
 		PublicKey:  random.Bytes(),
-		NetAddress: n4.listener.Addr().String(),
+		NetAddress: n4.ListenerAddress().String(),
 		PeerMeta:   pm,
 	}
 	n1.book.Add(&BookPeer{
@@ -265,7 +265,7 @@ func TestStart(t *testing.T) {
 	// test validator receiver
 	n1.MustConnectsReceiver <- []*lib.PeerAddress{{
 		PublicKey:  n2.pub,
-		NetAddress: n2.listener.Addr().String(),
+		NetAddress: n2.ListenerAddress().String(),
 		PeerMeta:   pm,
 	}}
 	test := func() (ok bool, reason string) {
@@ -295,7 +295,7 @@ func TestStart(t *testing.T) {
 	<-time.After(200 * time.Millisecond)
 	err := n3.Dial(&lib.PeerAddress{
 		PublicKey:  n1.pub,
-		NetAddress: n1.listener.Addr().String(),
+		NetAddress: n1.ListenerAddress().String(),
 		PeerMeta:   pm,
 	}, false, true)
 	if err != nil {
@@ -322,7 +322,7 @@ func TestDialDisconnect(t *testing.T) {
 	defer func() { n1.Stop(); n2.Stop() }()
 	require.NoError(t, n1.DialAndDisconnect(&lib.PeerAddress{
 		PublicKey:  n2.pub,
-		NetAddress: n2.listener.Addr().String(),
+		NetAddress: n2.ListenerAddress().String(),
 	}, false))
 	_, err := n1.PeerSet.GetPeerInfo(n2.pub)
 	require.Error(t, err)
@@ -335,7 +335,7 @@ func TestConnectValidator(t *testing.T) {
 	n1.MustConnectsReceiver <- []*lib.PeerAddress{
 		{
 			PublicKey:  n2.pub,
-			NetAddress: n2.listener.Addr().String(),
+			NetAddress: n2.ListenerAddress().String(),
 			PeerMeta:   n2.meta,
 		},
 	}
@@ -526,7 +526,7 @@ func TestMaxPacketSize(t *testing.T) {
 func connectStartedNodes(t *testing.T, n1, n2 testP2PNode) error {
 	if err := n1.Dial(&lib.PeerAddress{
 		PublicKey:  n2.pub,
-		NetAddress: n2.listener.Addr().String(),
+		NetAddress: n2.ListenerAddress().String(),
 	}, false, true); err != nil {
 		return err
 	}
@@ -560,7 +560,7 @@ func startTestP2PNode(t *testing.T, n testP2PNode) testP2PNode {
 	for {
 		select {
 		default:
-			if n.listener != nil {
+			if n.ListenerAddress() != nil {
 				return n
 			}
 		case <-time.After(testTimeout):
@@ -801,7 +801,7 @@ func TestDialFailedPeers_PrefersMustConnectNetAddress(t *testing.T) {
 	require.NoError(t, connectStartedNodes(t, n1, n2))
 
 	// Seed the must-connect net address index (normally done by ListenForMustConnects()).
-	dialable := n2.listener.Addr().String()
+	dialable := n2.ListenerAddress().String()
 	n1.mustConnectIndex.Store(string(n2.pub), dialable)
 	n1.UpdateMustConnects([]*lib.PeerAddress{{
 		PublicKey:  n2.pub,
