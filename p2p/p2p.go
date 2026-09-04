@@ -58,9 +58,10 @@ type P2P struct {
 	config                 lib.Config
 	metrics                *lib.Metrics
 	log                    lib.LoggerI
-	gossip                 bool     // whether gossip mode is active
-	failedPeers            sync.Map // peers that have connection errors
-	mustConnectIndex       sync.Map // pubKey string -> netAddress (for reconnect/dial correctness)
+	gossip                 bool        // whether gossip mode is active
+	selfIsValidator        atomic.Bool // whether this node is an active validator (full nodes get the inbox DLQ, validators don't)
+	failedPeers            sync.Map    // peers that have connection errors
+	mustConnectIndex       sync.Map    // pubKey string -> netAddress (for reconnect/dial correctness)
 }
 
 // New() creates an initialized pointer instance of a P2P object
@@ -545,6 +546,7 @@ func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
 			sendQueue:    make(chan *PacketWithTiming, maxStreamSendQueueSize),
 			inbox:        p.Inbox(i),
 			logger:       p.log,
+			p2p:          p,
 		}
 	}
 	// reserved stream for heartbeats (not forwarded to application inbox)
@@ -554,6 +556,7 @@ func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
 		sendQueue:    make(chan *PacketWithTiming, maxStreamSendQueueSize),
 		inbox:        nil,
 		logger:       p.log,
+		p2p:          p,
 	}
 	return
 }
@@ -845,6 +848,16 @@ func (p *P2P) UpdateQueueDepthMetrics() {
 // SetGossipMode sets the gossip mode for the P2P instance
 func (p *P2P) SetGossipMode(gossip bool) {
 	p.gossip = gossip
+}
+
+// SetSelfIsValidator records whether this node is a validator (validators are exempt from the inbox DLQ)
+func (p *P2P) SetSelfIsValidator(isValidator bool) {
+	p.selfIsValidator.Store(isValidator)
+}
+
+// SelfIsValidator returns whether this node is currently an active validator.
+func (p *P2P) SelfIsValidator() bool {
+	return p.selfIsValidator.Load()
 }
 
 // GossipMode returns the current gossip mode for the P2P instance

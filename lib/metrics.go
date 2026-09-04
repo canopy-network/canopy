@@ -120,6 +120,7 @@ type P2PMetrics struct {
 	PacketsPerMessage   prometheus.Histogram   // number of packets per message
 	SendQueueTimeout    prometheus.Counter     // count of send queue timeout errors
 	SendQueueFull       *prometheus.CounterVec // count of send queue full events by topic
+	InboxFlush          *prometheus.CounterVec // count of messages dropped by the full-node inbox dead-letter flush by topic
 
 	// Heartbeat / liveness telemetry (low-cardinality; no per-peer labels)
 	HeartbeatPingSent prometheus.Counter   // heartbeat ping packets queued for send
@@ -374,6 +375,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			SendQueueFull: promauto.NewCounterVec(prometheus.CounterOpts{
 				Name: "canopy_p2p_send_queue_full_total",
 				Help: "Total count of send queue full events by topic",
+			}, []string{"topic"}),
+			InboxFlush: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_p2p_inbox_flush_dropped_total",
+				Help: "Total count of messages dropped by the full-node inbox dead-letter flush by topic",
 			}, []string{"topic"}),
 
 			HeartbeatPingSent: promauto.NewCounter(prometheus.CounterOpts{

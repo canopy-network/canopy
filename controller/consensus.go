@@ -624,6 +624,9 @@ func (c *Controller) UpdateP2PMustConnect(v *lib.ConsensusValidators) {
 	// update the validator count metric
 	lenMustConnects := len(mustConnects)
 	c.Metrics.UpdateValidatorCount(lenMustConnects)
+	// inform the P2P module whether this node is a validator; full nodes (non-validators)
+	// enable the inbox dead-letter policy that drops a backed-up inbox to avoid stalling
+	c.P2P.SetSelfIsValidator(selfIsValidator)
 	// if this node 'is validator'
 	if selfIsValidator {
 		// log the must connect update
