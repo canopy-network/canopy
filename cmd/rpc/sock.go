@@ -76,6 +76,15 @@ type ordersCache struct {
 	result *lib.OrderBook
 }
 
+// committeeCache holds a single cached committee result for GetValidatorSet calls on a
+// non-subscription chain id, keyed by (rootChainId, id, height); height 0 is never cached.
+type committeeCache struct {
+	rootChainId uint64
+	id          uint64
+	height      uint64
+	result      *lib.ConsensusValidators
+}
+
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
@@ -89,6 +98,7 @@ type RCManager struct {
 	lottery       lotteryCache                  // per-height cache for GetLotteryWinner
 	dexBatch      dexBatchCache                 // per-height cache for GetDexBatch
 	orders        ordersCache                   // per-height cache for GetOrders
+	committee     committeeCache                // per-height cache for GetValidatorSet on a foreign (non-subscription) chain id
 	// rc subscriber limits
 	rcSubscriberReadLimitBytes int64
 	rcSubscriberWriteTimeout   time.Duration
@@ -246,20 +256,39 @@ func (r *RCManager) GetValidatorSet(rootChainId, id, rootHeight uint64) (lib.Val
 		// exit with 'not subscribed' error
 		return lib.ValidatorSet{}, lib.ErrNotSubscribed()
 	}
-	// if rootHeight is the same as the RootChainInfo height
-	if rootHeight == sub.Info.Height || rootHeight == 0 {
-		// exit with a copy the validator set
-		return lib.NewValidatorSet(sub.Info.ValidatorSet)
+	// sub.Info is only ever populated for the subscription's own chain id, so it can only
+	// answer a request for that same id - never serve a foreign id from it
+	if id == sub.chainId {
+		// if rootHeight is the same as the RootChainInfo height
+		if rootHeight == sub.Info.Height || rootHeight == 0 {
+			// exit with a copy the validator set
+			return lib.NewValidatorSet(sub.Info.ValidatorSet)
+		}
+		// if rootHeight is 1 before the RootChainInfo height
+		if rootHeight == sub.Info.Height-1 {
+			// exit with a copy of the previous validator set
+			return lib.NewValidatorSet(sub.Info.LastValidatorSet)
+		}
 	}
-	// if rootHeight is 1 before the RootChainInfo height
-	if rootHeight == sub.Info.Height-1 {
-		// exit with a copy of the previous validator set
-		return lib.NewValidatorSet(sub.Info.LastValidatorSet)
+	// return the cached result if rootChainId, id, and height all match - excludes height 0
+	// ('latest') since that can move between calls
+	if rootHeight != 0 && r.committee.rootChainId == rootChainId && r.committee.id == id && r.committee.height == rootHeight {
+		return lib.NewValidatorSet(r.committee.result)
 	}
 	// warn of the remote RPC call to the root chain API
-	r.log.Warnf("Executing remote GetValidatorSet call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, sub.Info.Height)
+	r.log.Warnf("Executing remote GetValidatorSet call with requested height=%d for rootChainId=%d id=%d with latest root height at %d", rootHeight, rootChainId, id, sub.Info.Height)
 	// execute the remote RPC call to the root chain API
-	return sub.ValidatorSet(rootHeight, id)
+	vs, err := sub.ValidatorSet(rootHeight, id)
+	if err != nil {
+		// exit with error
+		return lib.ValidatorSet{}, err
+	}
+	// cache the result, excluding height 0 ('latest')
+	if rootHeight != 0 {
+		r.committee = committeeCache{rootChainId: rootChainId, id: id, height: rootHeight, result: vs.ValidatorSet}
+	}
+	// exit with the validator set from the remote call
+	return vs, nil
 }
 
 // GetOrders() returns the order book from the root-chain
