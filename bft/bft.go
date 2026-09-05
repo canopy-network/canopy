@@ -342,13 +342,19 @@ func (b *BFT) StartProposePhase() {
 	} else {
 		b.Block, b.Results = b.HighQC.Block, b.HighQC.Results
 	}
+	// compute the results hash
+	resultsHash, err := b.Results.Hash()
+	if err != nil {
+		b.log.Error(err.Error())
+		return
+	}
 	// send PROPOSE message to the replicas
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Header: b.View.Copy(),
 		Qc: &QC{
 			Header:      vote.Qc.Header, // the current view
 			Results:     b.Results,      // the proposed `certificate results`
-			ResultsHash: b.Results.Hash(),
+			ResultsHash: resultsHash,
 			Block:       b.Block,
 			BlockHash:   b.GetBlockHash(),
 			ProposerKey: vote.Qc.ProposerKey, // self-public-key, Replicas use this to validate the Aggregate (multi) Signature
@@ -413,12 +419,18 @@ func (b *BFT) StartProposeVotePhase() {
 	if err := b.RunVDF(b.GetBlockHash()); err != nil {
 		b.log.Errorf("RunVDF() failed with error, %s", err.Error())
 	}
+	// compute the results hash
+	resultsHash, err := b.Results.Hash()
+	if err != nil {
+		b.log.Errorf("Results.Hash() failed with error, %s", err.Error())
+		return
+	}
 	// send vote to the proposer
 	b.SendToProposer(&Message{
 		Qc: &QC{ // NOTE: Replicas use the QC to communicate important information so that it's aggregable by the Leader
 			Header:      b.View.Copy(),
 			BlockHash:   b.GetBlockHash(),
-			ResultsHash: b.Results.Hash(),
+			ResultsHash: resultsHash,
 			ProposerKey: b.ProposerKey,
 		},
 	})
@@ -442,13 +454,20 @@ func (b *BFT) StartPrecommitPhase() {
 		b.RoundInterrupt()
 		return
 	}
+	// compute the results hash
+	resultsHash, err := b.Results.Hash()
+	if err != nil {
+		b.log.Error(err.Error())
+		b.RoundInterrupt()
+		return
+	}
 	// send PRECOMMIT msg to Replicas
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Header: b.Copy(),
 		Qc: &QC{
 			Header:      vote.Qc.Header,   // vote view
 			BlockHash:   b.GetBlockHash(), // vote block payload
-			ResultsHash: b.Results.Hash(), // vote certificate results payload
+			ResultsHash: resultsHash,      // vote certificate results payload
 			ProposerKey: b.ProposerKey,
 			Signature:   as,
 		},
@@ -480,12 +499,19 @@ func (b *BFT) StartPrecommitVotePhase() {
 	b.HighQC.Block = b.Block
 	b.HighQC.Results = b.Results
 	b.log.Infof("🔒 Locked on proposal %s", lib.BytesToTruncatedString(b.HighQC.BlockHash))
+	// compute the results hash
+	resultsHash, err := b.Results.Hash()
+	if err != nil {
+		b.log.Error(err.Error())
+		b.RoundInterrupt()
+		return
+	}
 	// send vote to the proposer
 	b.SendToProposer(&Message{
 		Qc: &QC{ // NOTE: Replicas use the QC to communicate important information so that it's aggregable by the Leader
 			Header:      b.View.Copy(),
 			BlockHash:   b.GetBlockHash(),
-			ResultsHash: b.Results.Hash(),
+			ResultsHash: resultsHash,
 			ProposerKey: b.ProposerKey,
 		},
 	})
@@ -509,13 +535,20 @@ func (b *BFT) StartCommitPhase() {
 		b.RoundInterrupt()
 		return
 	}
+	// compute the results hash
+	resultsHash, err := b.Results.Hash()
+	if err != nil {
+		b.log.Error(err.Error())
+		b.RoundInterrupt()
+		return
+	}
 	// SEND MSG TO REPLICAS
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Header: b.Copy(), // header
 		Qc: &QC{
 			Header:      vote.Qc.Header,   // vote view
 			BlockHash:   b.GetBlockHash(), // vote block payload
-			ResultsHash: b.Results.Hash(), // vote certificate results payload
+			ResultsHash: resultsHash,      // vote certificate results payload
 			ProposerKey: b.ProposerKey,
 			Signature:   as,
 		},
@@ -677,7 +710,12 @@ func (b *BFT) CheckProposerAndProposal(msg *Message) (interrupt bool) {
 	}
 
 	// confirm is expected proposal
-	if !bytes.Equal(b.GetBlockHash(), msg.Qc.BlockHash) || !bytes.Equal(b.Results.Hash(), msg.Qc.ResultsHash) {
+	resultsHash, err := b.Results.Hash()
+	if err != nil {
+		b.log.Error(err.Error())
+		return true
+	}
+	if !bytes.Equal(b.GetBlockHash(), msg.Qc.BlockHash) || !bytes.Equal(resultsHash, msg.Qc.ResultsHash) {
 		b.log.Error(ErrMismatchedProposals().Error())
 		return true
 	}
@@ -759,8 +797,13 @@ func (b *BFT) SafeNode(msg *Message) lib.ErrorI {
 	if msg == nil || msg.Qc == nil || msg.HighQc == nil {
 		return ErrNoSafeNodeJustification()
 	}
+	// compute the results hash for comparison
+	resultsHash, err := msg.Qc.Results.Hash()
+	if err != nil {
+		return err
+	}
 	// ensure the messages' HighQC justifies its proposal (should have the same hashes)
-	if !bytes.Equal(b.BlockToHash(msg.Qc.Block), msg.HighQc.BlockHash) || !bytes.Equal(msg.Qc.Results.Hash(), msg.HighQc.ResultsHash) {
+	if !bytes.Equal(b.BlockToHash(msg.Qc.Block), msg.HighQc.BlockHash) || !bytes.Equal(resultsHash, msg.HighQc.ResultsHash) {
 		return ErrMismatchedProposals()
 	}
 	// if the hashes of the Locked proposal is the same as the Leader's message
