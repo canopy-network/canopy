@@ -208,13 +208,18 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 	} else {
 		stateReader = NewTxn(hssReader, nil, historicStatePrefix, false, false, true)
 	}
+	// create the state commit SMT
+	sc, err := NewDefaultSMT(NewTxn(hssReader, nil, stateCommitIDPrefix, false, false, true))
+	if err != nil {
+		return nil, err
+	}
 	// return the store object
 	return &Store{
 		version:    queryVersion,
 		log:        s.log,
 		db:         s.db,
 		ss:         stateReader,
-		sc:         NewDefaultSMT(NewTxn(hssReader, nil, stateCommitIDPrefix, false, false, true)),
+		sc:         sc,
 		Indexer:    &Indexer{NewTxn(hssReader, nil, indexerPrefix, false, false, false), s.config},
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
@@ -548,7 +553,11 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 		defer s.metrics.UpdateStoreRootTime(startTime)
 		nextVersion := s.version + 1
 		// set up the state commit store
-		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
+		sc, err := NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
+		if err != nil {
+			return nil, err
+		}
+		s.sc = sc
 		// commit the SMT directly using the txn ops
 		//
 		// NOTE: the SMT node cache MUST NOT be persisted across blocks. `node.copy()` is a
