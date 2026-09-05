@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 
@@ -77,6 +78,7 @@ func TestDexLimitOrder_Copy(t *testing.T) {
 		AmountForSale:   1000,
 		RequestedAmount: 2000,
 		Address:         []byte("test-address"),
+		OrderId:         []byte("order-id-20-bytes-00"),
 	}
 
 	copy := original.Copy()
@@ -86,6 +88,18 @@ func TestDexLimitOrder_Copy(t *testing.T) {
 	}
 	if copy.RequestedAmount != original.RequestedAmount {
 		t.Errorf("expected requestedAmount %d, got %d", original.RequestedAmount, copy.RequestedAmount)
+	}
+	if !bytes.Equal(copy.Address, original.Address) {
+		t.Errorf("expected address %x, got %x", original.Address, copy.Address)
+	}
+	// OrderId identifies the originating order in emitted swap events, so the copy must carry it
+	if !bytes.Equal(copy.OrderId, original.OrderId) {
+		t.Errorf("expected orderId %x, got %x", original.OrderId, copy.OrderId)
+	}
+	// the copy must be deep: mutating the original's slices must not affect the copy
+	original.Address[0], original.OrderId[0] = 'X', 'X'
+	if copy.Address[0] == 'X' || copy.OrderId[0] == 'X' {
+		t.Error("expected Copy() to deep-copy Address and OrderId")
 	}
 }
 
