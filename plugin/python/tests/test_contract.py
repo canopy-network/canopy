@@ -845,5 +845,92 @@ class TestDashboardOnChain(unittest.TestCase):
         self.assertEqual(dashboard['total_models'], 1)
         self.assertEqual(dashboard['active_model'], 1)
 
+class TestDynamicFee(unittest.TestCase):
+    """Test the deterministic dynamic fee computation from dashboard metrics."""
+
+    def setUp(self):
+        self.plugin = MockPlugin({})
+        self.contract = Contract(config=Config(chain_id=1), plugin=self.plugin)
+        # Seed fee params
+        fee_params = FeeParams(send_fee=10, predict_fee=100)
+        self.plugin.state[key_for_fee_params()] = fee_params.SerializeToString()
+        # Seed sender account
+        self.sender = bytes(range(20))
+        self.sender_account = Account(amount=1_000_000, nonce=0)
+        self.plugin.state[key_for_account(self.sender)] = self.sender_account.SerializeToString()
+
+    def _check_tx(self, msg, type_url, fee):
+        """Run check_tx with the given message and fee."""
+        tx = Transaction(msg=Any(type_url=type_url, value=msg.SerializeToString()), fee=fee)
+        return asyncio.get_event_loop().run_until_complete(self.contract.check_tx(PluginCheckRequest(tx=tx)))
+
+    def test_no_dashboard_uses_base_fee(self):
+        """Without dashboard, fee must be at least base predict_fee (100)."""
+        msg = MessagePredict(from_address=self.sender, features=[1.0]*7)
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=100)
+        self.assertFalse(resp.HasField('error'))
+
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=99)
+        self.assertTrue(resp.HasField('error'))
+
+    def test_volume_increases_fee(self):
+        """Dashboard with 1000 predictions increases predict fee by 50% (100 -> 150)."""
+        dashboard = {"total_predictions": 1000, "accuracy": 0.0}
+        self.plugin.state[key_for_dashboard()] = json.dumps(dashboard).encode('utf-8')
+
+        msg = MessagePredict(from_address=self.sender, features=[1.0]*7)
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=150)
+        self.assertFalse(resp.HasField('error'))
+
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=149)
+        self.assertTrue(resp.HasField('error'))
+
+    def test_accuracy_increases_fee(self):
+        """Dashboard accuracy=1.0 adds +20% (100 -> 120)."""
+        dashboard = {"total_predictions": 0, "accuracy": 1.0}
+        self.plugin.state[key_for_dashboard()] = json.dumps(dashboard).encode('utf-8')
+
+        msg = MessagePredict(from_address=self.sender, features=[1.0]*7)
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=120)
+        self.assertFalse(resp.HasField('error'))
+
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=119)
+        self.assertTrue(resp.HasField('error'))
+
+    def test_complexity_increases_fee(self):
+        """42 features add +50% complexity premium (100 -> 150)."""
+        msg = MessagePredict(from_address=self.sender, features=[1.0]*42)
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=150)
+        self.assertFalse(resp.HasField('error'))
+
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=149)
+        self.assertTrue(resp.HasField('error'))
+
+    def test_combined_factors(self):
+        """All factors combine: 1000 preds (1.5) * acc=1.0 (1.2) * 42 features (1.5) = 100 * 2.7 = 270."""
+        dashboard = {"total_predictions": 1000, "accuracy": 1.0}
+        self.plugin.state[key_for_dashboard()] = json.dumps(dashboard).encode('utf-8')
+
+        msg = MessagePredict(from_address=self.sender, features=[1.0]*42)
+        # 100 * 1.5 * 1.2 * 1.5 = 270
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=270)
+        self.assertFalse(resp.HasField('error'))
+
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessagePredict', fee=269)
+        self.assertTrue(resp.HasField('error'))
+
+    def test_send_fee_dynamic(self):
+        """Send fee also scales with volume (10 -> 15)."""
+        dashboard = {"total_predictions": 1000, "accuracy": 0.0}
+        self.plugin.state[key_for_dashboard()] = json.dumps(dashboard).encode('utf-8')
+
+        msg = MessageSend(from_address=self.sender, to_address=b"b"*20, amount=100)
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessageSend', fee=15)
+        self.assertFalse(resp.HasField('error'))
+
+        resp = self._check_tx(msg, 'type.googleapis.com/types.MessageSend', fee=14)
+        self.assertTrue(resp.HasField('error'))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -297,11 +297,41 @@ class Contract:
             # Get the message and handle by type
             type_url = request.tx.msg.type_url
 
-            # Check for minimum fee (predict uses its own fee threshold)
+            # Read on-chain dashboard for dynamic fee computation
+            dashboard_resp = await self.plugin.state_read(
+                self,
+                PluginStateReadRequest(
+                    keys=[PluginKeyRead(query_id=random.randint(0, 2**53), key=key_for_dashboard())]
+                ),
+            )
+            dashboard = {}
+            if not dashboard_resp.HasField("error"):
+                for d_resp in dashboard_resp.results:
+                    if d_resp.entries:
+                        try:
+                            dashboard = json.loads(d_resp.entries[0].value.decode("utf-8"))
+                        except Exception:
+                            dashboard = {}
+
+            # Determine n_features for predict complexity pricing
+            n_features = 0
             if type_url.endswith("/types.MessagePredict"):
-                if request.tx.fee < min_fees.predict_fee:
-                    raise err_tx_fee_below_state_limit()
-            elif request.tx.fee < min_fees.send_fee:
+                try:
+                    pred_msg = MessagePredict()
+                    pred_msg.ParseFromString(request.tx.msg.value)
+                    n_features = len(pred_msg.features)
+                except Exception:
+                    n_features = 0
+
+            # Compute dynamic fee from dashboard metrics
+            if type_url.endswith("/types.MessagePredict"):
+                base_fee = min_fees.predict_fee
+            else:
+                base_fee = min_fees.send_fee
+            required_fee = self._compute_dynamic_fee(base_fee, dashboard, n_features)
+
+            # Check for minimum fee (predict uses its own fee threshold)
+            if request.tx.fee < required_fee:
                 raise err_tx_fee_below_state_limit()
 
             if type_url.endswith("/types.MessageSend"):
@@ -485,6 +515,30 @@ class Contract:
         )
         if write_resp.HasField("error"):
             raise PluginError(1, "plugin", "failed to write dashboard")
+
+    def _compute_dynamic_fee(self, base_fee: int, dashboard: Dict[str, Any], n_features: int = 0) -> int:
+        """Compute a deterministic dynamic fee from on-chain dashboard metrics.
+
+        Factors (all derived from state - no wall-clock time, fully deterministic):
+          1. volume_factor   : 1.0 + min(total_predictions / 1000, 1.0) * 0.5
+                               = congestion pricing (max +50%)
+          2. accuracy_factor : 1.0 + accuracy * 0.2
+                               = quality premium (max +20%)
+          3. complexity      : 1.0 + min(max(n_features - 7, 0) / 42, 0.5)
+                               = per-feature cost for predict (max +50%)
+
+        dynamic_fee = int(base_fee * volume * accuracy * complexity), never below base_fee.
+        """
+        total_predictions = dashboard.get("total_predictions", 0)
+        volume_factor = 1.0 + min(total_predictions / 1000.0, 1.0) * 0.5
+
+        accuracy = dashboard.get("accuracy", 0.0)
+        accuracy_factor = 1.0 + accuracy * 0.2
+
+        complexity_factor = 1.0 + min(max(n_features - 7, 0) / 42.0, 0.5)
+
+        dynamic_fee = int(base_fee * volume_factor * accuracy_factor * complexity_factor)
+        return max(dynamic_fee, base_fee)
 
     def _check_message_send(self, msg: MessageSend) -> PluginCheckResponse:
         """CheckMessageSend statelessly validates a 'send' message."""
