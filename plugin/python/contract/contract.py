@@ -702,9 +702,10 @@ class Contract:
         from_account.amount -= fee + msg.amount
         fee_pool.amount += fee
 
-        # Update market pool
+        # Update market pool (JSON keys are strings after serialization)
         market["total_pool"] = market.get("total_pool", 0) + msg.amount
-        market["outcome_pools"][msg.outcome] = market["outcome_pools"].get(msg.outcome, 0) + msg.amount
+        outcome_key = str(msg.outcome)
+        market["outcome_pools"][outcome_key] = market["outcome_pools"].get(outcome_key, 0) + msg.amount
 
         # Update or create stake record
         if stake is None:
@@ -1045,6 +1046,7 @@ class Contract:
             raise PluginError(1, "plugin", "stake was not correct")
 
         # Calculate reward: share of winning pool proportional to stake
+        # (JSON keys are strings after serialization)
         winning_pool = market.get("outcome_pools", {}).get(str(actual_class), 0)
         if winning_pool <= 0:
             raise PluginError(1, "plugin", "winning pool is empty")
