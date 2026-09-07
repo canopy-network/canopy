@@ -77,6 +77,18 @@ CONTRACT_CONFIG = {
         "type.googleapis.com/types.MessageRegisterModel",
     ],
     "event_type_urls": [],
+    # App-owned state prefixes (MUST be outside the core-reserved range 1-15).
+    # Canopy panics at handshake if any collides with a core-reserved prefix.
+    "custom_state_prefixes": [
+        bytes([100]),  # predict logs
+        bytes([101]),  # feedback logs
+        bytes([102]),  # markets
+        bytes([103]),  # stakes
+        bytes([104]),  # market id counter
+        bytes([105]),  # model registry
+        bytes([106]),  # model version counter
+        bytes([107]),  # dashboard
+    ],
     # Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
     "file_descriptor_protos": [
         any_pb2.DESCRIPTOR.serialized_pb,
@@ -88,26 +100,30 @@ CONTRACT_CONFIG = {
 }
 
 
-# State key prefixes (matching Go)
+# State key prefixes.
+# ACCOUNT_PREFIX / POOL_PREFIX are core-owned but explicitly shared with plugins.
+# PARAMS_PREFIX is core-owned and READ-ONLY (fee params are managed by governance).
+# All app-owned prefixes must live OUTSIDE the core-reserved range (1-15) — see
+# fsm/state.go assertPluginKeyWritable(): a write under 1-15 panics the node.
 ACCOUNT_PREFIX = b"\x01"
 POOL_PREFIX = b"\x02"
-# Predict results (AI/ML inference output from G2 ZeroPerceptron)
-PREDICT_PREFIX = b"\x03"
-# Feedback log (on-chain learning signals: correct/incorrect predictions)
-FEEDBACK_PREFIX = b"\x04"
-# Prediction markets (QARD staking pools)
-MARKET_PREFIX = b"\x05"
-# Stakes (user positions in prediction markets)
-STAKE_PREFIX = b"\x06"
 PARAMS_PREFIX = b"\x07"
+# Predict results (AI/ML inference output from G2 ZeroPerceptron)
+PREDICT_PREFIX = bytes([100])
+# Feedback log (on-chain learning signals: correct/incorrect predictions)
+FEEDBACK_PREFIX = bytes([101])
+# Prediction markets (QARD staking pools)
+MARKET_PREFIX = bytes([102])
+# Stakes (user positions in prediction markets)
+STAKE_PREFIX = bytes([103])
 # Market ID counter (monotonic sequence for market creation)
-MARKET_COUNTER_PREFIX = b"\x08"
+MARKET_COUNTER_PREFIX = bytes([104])
 # Model versioning registry (G2 ZeroPerceptron model versions)
-MODEL_PREFIX = b"\x09"
+MODEL_PREFIX = bytes([105])
 # Model version counter (monotonic sequence for model registration)
-MODEL_COUNTER_PREFIX = b"\x0a"
+MODEL_COUNTER_PREFIX = bytes([106])
 # Dashboard on-chain (aggregated stats: predictions, accuracy, top classes, revenue)
-DASHBOARD_PREFIX = b"\x0b"
+DASHBOARD_PREFIX = bytes([107])
 
 
 # Key generation functions (from keys.py)
