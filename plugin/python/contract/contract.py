@@ -29,6 +29,7 @@ from .proto import (
     PluginEndResponse,
     MessageSend,
     MessagePredict,
+    MessageFeedback,
     PluginKeyRead,
     PluginStateReadRequest,
     PluginStateWriteRequest,
@@ -59,10 +60,11 @@ CONTRACT_CONFIG = {
     "name": "python_plugin_contract",
     "id": 1,
     "version": 1,
-    "supported_transactions": ["send", "predict"],
+    "supported_transactions": ["send", "predict", "feedback"],
     "transaction_type_urls": [
         "type.googleapis.com/types.MessageSend",
         "type.googleapis.com/types.MessagePredict",
+        "type.googleapis.com/types.MessageFeedback",
     ],
     "event_type_urls": [],
     # Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
@@ -81,6 +83,8 @@ ACCOUNT_PREFIX = b"\x01"
 POOL_PREFIX = b"\x02"
 # Predict results (AI/ML inference output from G2 ZeroPerceptron)
 PREDICT_PREFIX = b"\x03"
+# Feedback log (on-chain learning signals: correct/incorrect predictions)
+FEEDBACK_PREFIX = b"\x04"
 PARAMS_PREFIX = b"\x07"
 
 
@@ -126,8 +130,19 @@ def key_for_fee_pool(chain_id: int) -> bytes:
 def key_for_predict_log(address: bytes, seq: int) -> bytes:
     """Generate state database key for an AI prediction result.
 
+
+
     Namespace: 0x03 + address + sequence (big-endian)."""
     return join_len_prefix(PREDICT_PREFIX, address, format_uint64(seq))
+
+
+def key_for_feedback_log(address: bytes, seq: int) -> bytes:
+    """Generate state database key for a feedback entry.
+
+
+
+    Namespace: 0x04 + address + sequence (big-endian)."""
+    return join_len_prefix(FEEDBACK_PREFIX, address, format_uint64(seq))
 
 
 # Proto marshal/unmarshal utilities
@@ -226,6 +241,10 @@ class Contract:
                 msg = MessagePredict()
                 msg.ParseFromString(request.tx.msg.value)
                 return self._check_message_predict(msg)
+            elif type_url.endswith("/types.MessageFeedback"):
+                msg = MessageFeedback()
+                msg.ParseFromString(request.tx.msg.value)
+                return self._check_message_feedback(msg)
             else:
                 raise err_invalid_message_cast()
 
@@ -255,6 +274,10 @@ class Contract:
                 msg = MessagePredict()
                 msg.ParseFromString(request.tx.msg.value)
                 return await self._deliver_message_predict(msg, request.tx.fee, request.tx.memo)
+            elif type_url.endswith("/types.MessageFeedback"):
+                msg = MessageFeedback()
+                msg.ParseFromString(request.tx.msg.value)
+                return await self._deliver_message_feedback(msg, request.tx.fee, request.tx.memo)
             else:
                 raise err_invalid_message_cast()
 
@@ -507,6 +530,99 @@ class Contract:
             PluginSetOp(key=from_key, value=marshal(from_account)),
             PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
             PluginSetOp(key=predict_key, value=log_value),
+        ]
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(sets=sets, deletes=[]),
+        )
+
+        result = PluginDeliverResponse()
+        result.events.extend([])
+        if write_resp.HasField("error"):
+            result.error.CopyFrom(write_resp.error)
+        return result
+
+    def _check_message_feedback(self, msg: MessageFeedback) -> PluginCheckResponse:
+        """CheckMessageFeedback statelessly validates a 'feedback' message.
+
+        The message carries an on-chain learning signal: whether a previous
+        prediction was correct. This enables the G2 model to improve over time."""
+        # Check sender address (must be exactly 20 bytes)
+        if len(msg.from_address) != 20:
+            raise err_invalid_address()
+
+        # Return authorized signers (sender must sign)
+        response = PluginCheckResponse()
+        response.authorized_signers.append(msg.from_address)
+
+        return response
+
+    async def _deliver_message_feedback(self, msg: MessageFeedback, fee: int, memo: str) -> PluginDeliverResponse:
+        """DeliverMessageFeedback stores an on-chain learning signal.
+
+        The feedback (correct/incorrect + actual class) is persisted under
+        FEEDBACK_PREFIX (b'\\x04') keyed by sender address + predict_seq.
+        This data can be exported off-chain for retraining / governance."""
+        if not self.plugin or not self.config:
+            raise PluginError(1, "plugin", "plugin or config not initialized")
+
+        # Read sender account (for fee deduction)
+        from_key = key_for_account(msg.from_address)
+
+        fee_pool_key = key_for_fee_pool(self.config.chain_id)
+
+
+
+        from_query_id = random.randint(0, 2**53)
+        fee_query_id = random.randint(0, 2**53)
+
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[
+                    PluginKeyRead(query_id=fee_query_id, key=fee_pool_key),
+                    PluginKeyRead(query_id=from_query_id, key=from_key),
+                ]
+            ),
+        )
+        if response.HasField("error"):
+            result = PluginDeliverResponse()
+            result.error.CopyFrom(response.error)
+            return result
+
+        from_bytes = None
+        fee_pool_bytes = None
+        for resp in response.results:
+
+            if resp.query_id == from_query_id:
+                from_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == fee_query_id:
+                fee_pool_bytes = resp.entries[0].value if resp.entries else None
+
+        from_account = unmarshal(Account, from_bytes) if from_bytes else Account()
+        fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
+
+        # Must be able to pay the feedback fee (same as send fee)
+        if from_account.amount < fee:
+            raise err_insufficient_funds()
+
+        # Deduct fee -> pool
+        from_account.amount -= fee
+        fee_pool.amount += fee
+
+        # Persist feedback log under 0x04 namespace
+        feedback_key = key_for_feedback_log(msg.from_address, msg.predict_seq)
+        feedback_value = json.dumps({
+            "predict_seq": int(msg.predict_seq),
+            "correct": bool(msg.correct),
+            "actual_class": int(msg.actual_class),
+            "height": 0,
+        }).encode("utf-8")
+
+        sets = [
+            PluginSetOp(key=from_key, value=marshal(from_account)),
+            PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
+            PluginSetOp(key=feedback_key, value=feedback_value),
         ]
         write_resp = await self.plugin.state_write(
             self,

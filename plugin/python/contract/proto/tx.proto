@@ -52,6 +52,20 @@ message MessagePredict {
   uint32 expected_class = 3; // @gotags: json:"expectedClass"
 }
 
+// MessageFeedback is an on-chain learning signal: users report whether a
+// previous prediction was correct. The plugin aggregates accuracy stats
+// under the 0x04 namespace for future retraining / governance.
+message MessageFeedback {
+  // from_address: is the account submitting the feedback
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // predict_seq: the nonce/sequence of the prediction being rated
+  uint64 predict_seq = 2; // @gotags: json:"predictSeq"
+  // correct: true if the prediction was correct, false otherwise
+  bool correct = 3;
+  // actual_class: the ground-truth class (0-15) if known
+  uint32 actual_class = 4; // @gotags: json:"actualClass"
+}
+
 // FeeParams is the parameter space that defines various amounts for transaction fees
 message FeeParams {
   // send_fee: is the fee amount (in uCNPY) for Message Send

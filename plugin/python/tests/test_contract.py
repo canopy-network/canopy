@@ -13,6 +13,7 @@ from contract.error import PluginError
 from contract.proto import (
     MessageSend,
     MessagePredict,
+    MessageFeedback,
     PluginGenesisRequest,
     PluginBeginRequest,
     PluginEndRequest,
@@ -119,7 +120,23 @@ class TestCheckMessagePredict:
         assert "features too large" in exc.value.msg
 
 
-@pytest.mark.asyncio
+class TestCheckMessageFeedback:
+    """Stateless validation of the on-chain learning 'feedback' message."""
+
+    def test_valid(self, contract):
+        msg = MessageFeedback(from_address=ADDR_A, predict_seq=5, correct=True, actual_class=3)
+        result = contract._check_message_feedback(msg)
+
+        assert not result.HasField("error")
+        assert list(result.authorized_signers) == [ADDR_A]
+
+    def test_invalid_from_address(self, contract):
+        msg = MessageFeedback(from_address=ADDR_SHORT, predict_seq=5, correct=True)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_feedback(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
+
+
 class TestCheckTx:
     """check_tx wiring guards."""
 
