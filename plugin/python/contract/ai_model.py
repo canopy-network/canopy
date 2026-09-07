@@ -20,11 +20,11 @@ See NOTICE for licensing restrictions on cryptographic derivative use.
 
 G2 ZeroPerceptron VM — Canopy L1 plugin (czysty python, bez torch/numpy)
 =========================================================================
-Wagi: 277 520 floatow wyeksportowane z treningu GPU RTX 4060
-(13400+ epok, acc=1.0) — murowana jako zrodlo AI dla cansatell.
+Wagi: wyeksportowane z treningu GPU RTX 4060 (acc=1.0) — murowana
+jako zrodlo AI dla cansatell.
 
 Architektura (dokladnie jak trening):
-  fc00[256,28] -> block1[512,256] -> block2[256,512] -> head[16,256]
+  fc00[256,42] -> block1[512,256] -> block2[256,512] -> head[16,256]
 
 Uzycie przez contract.py:
 
@@ -52,7 +52,7 @@ _WEIGHTS_DEFAULT = os.path.join(
 )
 
 N_CLASSES = 16
-N_FEATURES = 28  # extended multimodal 7+14+7
+N_FEATURES = 42  # extended42 multimodal 7+14+7+7+7
 
 
 # ============================================================
@@ -142,7 +142,7 @@ class TemporalEncoder:
 
 
 # ============================================================
-# 3. FUZJA G2 extended 28D
+# 3. FUZJA G2 extended42 42D
 # ============================================================
 class G2Encoder:
     def __init__(self, window: int = 30):
@@ -201,10 +201,28 @@ class G2Encoder:
         fused14[13] = 0.5 * fused14[13] + 0.5 * ctx
         self._recent.append(fused14[13])
 
-        # extended: raw7 + fused14 + inter7
+        # extended42: raw7 + fused14 + inter7 + meta7 + cross7_self
         raw7 = self._raw_average(modalities, present)
         inter7 = [raw7[i] * fused14[i] for i in range(7)]
-        return raw7 + fused14 + inter7
+
+        # meta7 — średnia kwadratów modalności (energia)
+        meta7 = [0.0] * 7
+        n_present = 0
+        for name in present:
+            v = modalities.get(name)
+            if v is not None and len(v) == 7:
+                meta7 = [meta7[i] + v[i] * v[i] for i in range(7)]
+                n_present += 1
+        if n_present > 0:
+            meta7 = [x / n_present for x in meta7]
+        meta7 = [max(-1.0, min(1.0, x)) for x in meta7]
+
+        # cross7_self — druga runda oktonionowa raw7 × fused7
+        cross7_self = cross7(raw7, fused14[:7])
+        scale = max(abs(x) for x in cross7_self) + 1e-8
+        cross7_self = [x / scale for x in cross7_self]
+
+        return raw7 + fused14 + inter7 + meta7 + cross7_self
 
     def reset(self):
         self._recent.clear()
@@ -243,10 +261,10 @@ class ZeroPerceptronVM:
     def __init__(self, weights: dict):
         self.w = weights
 
-    def forward(self, x28: list) -> list:
+    def forward(self, x42: list) -> list:
         w = self.w
-        # fc00: [256,28]
-        s = matmul_vec(w["backbone.fc00.weight"], x28, w["backbone.fc00.bias"])
+        # fc00: [256,42]
+        s = matmul_vec(w["backbone.fc00.weight"], x42, w["backbone.fc00.bias"])
         h = zero_act(s)
 
         # block1 512[256 -> 512]
@@ -330,15 +348,15 @@ class G2Model:
         x = self.vectorize(text, numbers, timestamp)
         return self._predict_impl(x)
 
-    def predict_raw(self, features28: list) -> dict:
-        if len(features28) != N_FEATURES:
+    def predict_raw(self, features42: list) -> dict:
+        if len(features42) != N_FEATURES:
             raise ValueError(
-                "features28 must be exactly {} floats".format(N_FEATURES))
-        return self._predict_impl(features28)
+                "features42 must be exactly {} floats".format(N_FEATURES))
+        return self._predict_impl(features42)
 
-    def _predict_impl(self, x28: list, temperature: float = 1.5) -> dict:
+    def _predict_impl(self, x42: list, temperature: float = 1.5) -> dict:
         self._ensure_loaded()
-        logits = self._model.forward(x28)
+        logits = self._model.forward(x42)
         y = logits.index(max(logits))
         probs = self._softmax(logits, temperature)
 
@@ -349,7 +367,7 @@ class G2Model:
                 for name, p in ranked[:3]]
 
         # feature importance — numeryczny gradient logitu klasy zwycięskiej
-        importance = self._feature_importance(x28, logits, y)
+        importance = self._feature_importance(x42, logits, y)
 
         return {
             "y": int(y),
@@ -359,17 +377,17 @@ class G2Model:
             "top3": top3,
             "feature_importance": [round(float(v), 6) for v in importance],
             "temperature": float(temperature),
-            "vector": [round(float(v), 6) for v in x28],
+            "vector": [round(float(v), 6) for v in x42],
             "meta": self.meta,
         }
 
-    def _feature_importance(self, x28: list, logits: list, y: int,
+    def _feature_importance(self, x42: list, logits: list, y: int,
                             eps: float = 1e-3) -> list:
-        """Numeryczny gradient logitu klasy y względem każdego z 28 wymiarów."""
+        """Numeryczny gradient logitu klasy y względem każdego z 42 wymiarów."""
         base = logits[y]
         imp = []
-        for i in range(len(x28)):
-            x_plus = list(x28)
+        for i in range(len(x42)):
+            x_plus = list(x42)
             x_plus[i] += eps
             logits_plus = self._model.forward(x_plus)
             # normalizacja przez eps — przybliżenie ∂L_y/∂x_i

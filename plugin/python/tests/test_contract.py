@@ -90,8 +90,8 @@ class TestCheckMessageSend:
 class TestCheckMessagePredict:
     """Stateless validation of the on-chain AI 'predict' message."""
 
-    def test_valid_28d(self, contract):
-        msg = MessagePredict(from_address=ADDR_A, features=[0.1] * 28)
+    def test_valid_42d(self, contract):
+        msg = MessagePredict(from_address=ADDR_A, features=[0.1] * 42)
         result = contract._check_message_predict(msg)
 
         assert not result.HasField("error")
@@ -107,7 +107,7 @@ class TestCheckMessagePredict:
         assert list(result.authorized_signers) == [ADDR_A]
 
     def test_invalid_from_address(self, contract):
-        msg = MessagePredict(from_address=ADDR_SHORT, features=[0.1] * 28)
+        msg = MessagePredict(from_address=ADDR_SHORT, features=[0.1] * 42)
         with pytest.raises(PluginError) as exc:
             contract._check_message_predict(msg)
         assert exc.value.code == CODE_INVALID_ADDRESS

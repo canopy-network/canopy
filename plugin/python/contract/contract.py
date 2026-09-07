@@ -448,7 +448,7 @@ class Contract:
     async def _deliver_message_predict(self, msg: MessagePredict, fee: int, memo: str) -> PluginDeliverResponse:
         """DeliverMessagePredict runs on-chain AI inference.
 
-        Features from the message are passed through the G2 28D encoder
+        Features from the message are passed through the G2 42D encoder
         (text/numbers/timestamp modalities with octonion cross7 fusion)
         and the ZeroPerceptron backbone produces a 16-class decision.
 
@@ -494,13 +494,13 @@ class Contract:
             raise err_insufficient_funds()
 
         # Run the G2 ZeroPerceptron inference.
-        # MessagePredict carries only numeric features; a 28-D vector is
+        # MessagePredict carries only numeric features; a 42-D vector is
         # consumed directly (raw mode). Shorter vectors (7-D numeric or
         # empty) are encoded via the G2 multimodal numeric encoder path.
         model = get_model()
         model.reset()
         features = list(msg.features)
-        if len(features) == 28:
+        if len(features) == 42:
             result = model.predict_raw(features)
         else:
             result = model.predict_from_event(
