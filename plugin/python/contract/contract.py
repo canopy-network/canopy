@@ -106,6 +106,8 @@ MARKET_COUNTER_PREFIX = b"\x08"
 MODEL_PREFIX = b"\x09"
 # Model version counter (monotonic sequence for model registration)
 MODEL_COUNTER_PREFIX = b"\x0a"
+# Dashboard on-chain (aggregated stats: predictions, accuracy, top classes, revenue)
+DASHBOARD_PREFIX = b"\x0b"
 
 
 # Key generation functions (from keys.py)
@@ -205,6 +207,13 @@ def key_for_active_model() -> bytes:
 
     Namespace: 0x09 + '/active/' (single global pointer)."""
     return join_len_prefix(MODEL_PREFIX, b"/active/")
+
+
+def key_for_dashboard() -> bytes:
+    """Generate state database key for the on-chain dashboard.
+
+    Namespace: 0x0b + '/d/' (single global dashboard record)."""
+    return join_len_prefix(DASHBOARD_PREFIX, b"/d/")
 
 
 # Proto marshal/unmarshal utilities
@@ -399,6 +408,83 @@ class Contract:
     def end_block(self, request: PluginEndRequest) -> PluginEndResponse:
         """EndBlock is code that is executed at the end of applying a block."""
         return PluginEndResponse()
+
+    async def _update_dashboard(self, updates: Dict[str, Any]) -> None:
+        """Update the on-chain dashboard aggregate record.
+
+        The dashboard is a single JSON record under DASHBOARD_PREFIX (b'\x0b')
+        that tracks key metrics: total predictions, feedback accuracy,
+        top classes, revenue from fees, market stats, and model versions.
+        """
+        if not self.plugin:
+            raise PluginError(1, "plugin", "plugin not initialized")
+
+        dashboard_key = key_for_dashboard()
+        query_id = random.randint(0, 2**53)
+
+        # Read current dashboard
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[PluginKeyRead(query_id=query_id, key=dashboard_key)]
+            ),
+        )
+        if response.HasField("error"):
+            raise PluginError(1, "plugin", "failed to read dashboard")
+
+        dashboard_bytes = None
+        for resp in response.results:
+            if resp.query_id == query_id:
+                dashboard_bytes = resp.entries[0].value if resp.entries else None
+
+        dashboard = json.loads(dashboard_bytes.decode("utf-8")) if dashboard_bytes else {}
+
+        # Apply updates
+        for key, value in updates.items():
+            if key == "class_counts":
+                # Merge class counts
+                class_counts = dashboard.get("class_counts", {})
+                for cls, count in value.items():
+                    class_counts[str(cls)] = class_counts.get(str(cls), 0) + count
+                dashboard["class_counts"] = class_counts
+            elif key == "revenue":
+                dashboard["revenue"] = dashboard.get("revenue", 0) + value
+            elif key == "total_predictions":
+                dashboard["total_predictions"] = dashboard.get("total_predictions", 0) + value
+            elif key == "total_feedback":
+                dashboard["total_feedback"] = dashboard.get("total_feedback", 0) + value
+            elif key == "correct_feedback":
+                dashboard["correct_feedback"] = dashboard.get("correct_feedback", 0) + value
+            elif key == "total_staked":
+                dashboard["total_staked"] = dashboard.get("total_staked", 0) + value
+            elif key == "total_markets":
+                dashboard["total_markets"] = dashboard.get("total_markets", 0) + value
+            elif key == "resolved_markets":
+                dashboard["resolved_markets"] = dashboard.get("resolved_markets", 0) + value
+            elif key == "total_rewards":
+                dashboard["total_rewards"] = dashboard.get("total_rewards", 0) + value
+            elif key == "total_models":
+                dashboard["total_models"] = dashboard.get("total_models", 0) + value
+            elif key == "active_model":
+                dashboard["active_model"] = value
+            else:
+                dashboard[key] = value
+
+        # Recalculate accuracy
+        total_feedback = dashboard.get("total_feedback", 0)
+        correct_feedback = dashboard.get("correct_feedback", 0)
+        dashboard["accuracy"] = round(correct_feedback / total_feedback, 4) if total_feedback > 0 else 0.0
+
+        # Write updated dashboard
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(
+                sets=[PluginSetOp(key=dashboard_key, value=json.dumps(dashboard).encode("utf-8"))],
+                deletes=[],
+            ),
+        )
+        if write_resp.HasField("error"):
+            raise PluginError(1, "plugin", "failed to write dashboard")
 
     def _check_message_send(self, msg: MessageSend) -> PluginCheckResponse:
         """CheckMessageSend statelessly validates a 'send' message."""
@@ -638,6 +724,13 @@ class Contract:
             PluginStateWriteRequest(sets=sets, deletes=[]),
         )
 
+        # Update dashboard: total predictions, class counts, revenue
+        await self._update_dashboard({
+            "total_predictions": 1,
+            "class_counts": {str(result["y"]): 1},
+            "revenue": fee,
+        })
+
         result = PluginDeliverResponse()
         result.events.extend([])
         if write_resp.HasField("error"):
@@ -765,6 +858,12 @@ class Contract:
             PluginStateWriteRequest(sets=sets, deletes=[]),
         )
 
+        # Update dashboard: total staked, revenue
+        await self._update_dashboard({
+            "total_staked": msg.amount,
+            "revenue": fee,
+        })
+
         result = PluginDeliverResponse()
         result.events.extend([])
         if write_resp.HasField("error"):
@@ -879,6 +978,13 @@ class Contract:
             PluginStateWriteRequest(sets=sets, deletes=[]),
         )
 
+        # Update dashboard: total markets, total staked, revenue
+        await self._update_dashboard({
+            "total_markets": 1,
+            "total_staked": msg.stake,
+            "revenue": fee,
+        })
+
         result = PluginDeliverResponse()
         result.events.extend([])
         if write_resp.HasField("error"):
@@ -985,6 +1091,12 @@ class Contract:
             self,
             PluginStateWriteRequest(sets=sets, deletes=[]),
         )
+
+        # Update dashboard: resolved markets, revenue
+        await self._update_dashboard({
+            "resolved_markets": 1,
+            "revenue": fee,
+        })
 
         result = PluginDeliverResponse()
         result.events.extend([])
@@ -1106,6 +1218,12 @@ class Contract:
             self,
             PluginStateWriteRequest(sets=sets, deletes=[]),
         )
+
+        # Update dashboard: total rewards, revenue
+        await self._update_dashboard({
+            "total_rewards": reward,
+            "revenue": fee,
+        })
 
         result = PluginDeliverResponse()
         result.events.extend([])
@@ -1239,6 +1357,13 @@ class Contract:
             PluginStateWriteRequest(sets=sets, deletes=[]),
         )
 
+        # Update dashboard: total models, active model, revenue
+        await self._update_dashboard({
+            "total_models": 1,
+            "active_model": new_version,
+            "revenue": fee,
+        })
+
         result = PluginDeliverResponse()
         result.events.extend([])
         if write_resp.HasField("error"):
@@ -1331,6 +1456,13 @@ class Contract:
             self,
             PluginStateWriteRequest(sets=sets, deletes=[]),
         )
+
+        # Update dashboard: total feedback, correct feedback, revenue
+        await self._update_dashboard({
+            "total_feedback": 1,
+            "correct_feedback": 1 if msg.correct else 0,
+            "revenue": fee,
+        })
 
         result = PluginDeliverResponse()
         result.events.extend([])

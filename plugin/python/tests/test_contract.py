@@ -5,7 +5,19 @@ Covers the current `contract.contract` API: lifecycle hooks, stateless message
 validation for the base 'send' transaction, and the on-chain AI 'predict' transaction.
 """
 
+import asyncio
+import json
+import unittest
+
 import pytest
+from google.protobuf.any_pb2 import Any
+
+from contract.contract import (
+    Contract,
+    key_for_account,
+    key_for_dashboard,
+    key_for_fee_params,
+)
 
 from contract.contract import Contract
 from contract.plugin import Config
@@ -748,3 +760,90 @@ class TestDeliverModelRegistry:
 
         assert resp.HasField("error")
         assert "insufficient funds" in resp.error.msg
+
+
+class TestDashboardOnChain(unittest.TestCase):
+    """Test the on-chain dashboard aggregate record (0x0b)."""
+
+    def setUp(self):
+        self.plugin = MockPlugin({})
+        self.contract = Contract(config=Config(chain_id=1), plugin=self.plugin)
+        # Seed fee params
+        fee_params = FeeParams(send_fee=10, predict_fee=20)
+        self.plugin.state[key_for_fee_params()] = fee_params.SerializeToString()
+        # Seed sender account with 1M QARD
+        self.sender = bytes(range(20))
+        self.sender_account = Account(amount=1_000_000, nonce=0)
+        self.plugin.state[key_for_account(self.sender)] = self.sender_account.SerializeToString()
+
+    def _make_predict_tx(self):
+        msg = MessagePredict(from_address=self.sender, features=[1.0]*42)
+        tx = Transaction(msg=Any(type_url='type.googleapis.com/types.MessagePredict', value=msg.SerializeToString()), fee=20)
+        return tx
+
+    def test_dashboard_created_after_predict(self):
+        """Dashboard record is created after a predict tx."""
+        tx = self._make_predict_tx()
+        resp = asyncio.get_event_loop().run_until_complete(self.contract.deliver_tx(PluginDeliverRequest(tx=tx)))
+        self.assertFalse(resp.HasField('error'))
+        dashboard_key = key_for_dashboard()
+        self.assertIn(dashboard_key, self.plugin.state)
+        dashboard = json.loads(self.plugin.state[dashboard_key].decode('utf-8'))
+        self.assertEqual(dashboard['total_predictions'], 1)
+        self.assertEqual(dashboard['revenue'], 20)
+        self.assertIn('class_counts', dashboard)
+        self.assertIn('accuracy', dashboard)
+        self.assertEqual(dashboard['accuracy'], 0.0)
+
+    def test_dashboard_accumulates_predictions(self):
+        """Dashboard accumulates multiple predictions."""
+        for _ in range(3):
+            tx = self._make_predict_tx()
+            resp = asyncio.get_event_loop().run_until_complete(self.contract.deliver_tx(PluginDeliverRequest(tx=tx)))
+            self.assertFalse(resp.HasField('error'))
+        dashboard_key = key_for_dashboard()
+        dashboard = json.loads(self.plugin.state[dashboard_key].decode('utf-8'))
+        self.assertEqual(dashboard['total_predictions'], 3)
+        self.assertEqual(dashboard['revenue'], 60)
+
+    def test_dashboard_feedback_updates_accuracy(self):
+        """Feedback updates accuracy in dashboard."""
+        # First predict
+        tx = self._make_predict_tx()
+        resp = asyncio.get_event_loop().run_until_complete(self.contract.deliver_tx(PluginDeliverRequest(tx=tx)))
+        self.assertFalse(resp.HasField('error'))
+        # Send feedback (correct)
+        msg = MessageFeedback(from_address=self.sender, predict_seq=0, correct=True, actual_class=1)
+        tx = Transaction(msg=Any(type_url='type.googleapis.com/types.MessageFeedback', value=msg.SerializeToString()), fee=10)
+        resp = asyncio.get_event_loop().run_until_complete(self.contract.deliver_tx(PluginDeliverRequest(tx=tx)))
+        self.assertFalse(resp.HasField('error'))
+        dashboard_key = key_for_dashboard()
+        dashboard = json.loads(self.plugin.state[dashboard_key].decode('utf-8'))
+        self.assertEqual(dashboard['total_feedback'], 1)
+        self.assertEqual(dashboard['correct_feedback'], 1)
+        self.assertEqual(dashboard['accuracy'], 1.0)
+
+    def test_dashboard_market_creation(self):
+        """Dashboard tracks market creation."""
+        msg = MessageCreateMarket(from_address=self.sender, question='Will G2 predict?', resolution_height=100, stake=100)
+        tx = Transaction(msg=Any(type_url='type.googleapis.com/types.MessageCreateMarket', value=msg.SerializeToString()), fee=10)
+        resp = asyncio.get_event_loop().run_until_complete(self.contract.deliver_tx(PluginDeliverRequest(tx=tx)))
+        self.assertFalse(resp.HasField('error'))
+        dashboard_key = key_for_dashboard()
+        dashboard = json.loads(self.plugin.state[dashboard_key].decode('utf-8'))
+        self.assertEqual(dashboard['total_markets'], 1)
+        self.assertEqual(dashboard['total_staked'], 100)
+
+    def test_dashboard_model_registration(self):
+        """Dashboard tracks model registration."""
+        msg = MessageRegisterModel(from_address=self.sender, version=1, weights_hash='abc123', accuracy=0.95, in_dim=42, n_classes=16, description='test')
+        tx = Transaction(msg=Any(type_url='type.googleapis.com/types.MessageRegisterModel', value=msg.SerializeToString()), fee=10)
+        resp = asyncio.get_event_loop().run_until_complete(self.contract.deliver_tx(PluginDeliverRequest(tx=tx)))
+        self.assertFalse(resp.HasField('error'))
+        dashboard_key = key_for_dashboard()
+        dashboard = json.loads(self.plugin.state[dashboard_key].decode('utf-8'))
+        self.assertEqual(dashboard['total_models'], 1)
+        self.assertEqual(dashboard['active_model'], 1)
+
+if __name__ == '__main__':
+    unittest.main()
