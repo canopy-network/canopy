@@ -30,6 +30,10 @@ from .proto import (
     MessageSend,
     MessagePredict,
     MessageFeedback,
+    MessageStake,
+    MessageCreateMarket,
+    MessageResolveMarket,
+    MessageClaimReward,
     PluginKeyRead,
     PluginStateReadRequest,
     PluginStateWriteRequest,
@@ -60,11 +64,15 @@ CONTRACT_CONFIG = {
     "name": "python_plugin_contract",
     "id": 1,
     "version": 1,
-    "supported_transactions": ["send", "predict", "feedback"],
+    "supported_transactions": ["send", "predict", "feedback", "stake", "create_market", "resolve_market", "claim_reward"],
     "transaction_type_urls": [
         "type.googleapis.com/types.MessageSend",
         "type.googleapis.com/types.MessagePredict",
         "type.googleapis.com/types.MessageFeedback",
+        "type.googleapis.com/types.MessageStake",
+        "type.googleapis.com/types.MessageCreateMarket",
+        "type.googleapis.com/types.MessageResolveMarket",
+        "type.googleapis.com/types.MessageClaimReward",
     ],
     "event_type_urls": [],
     # Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
@@ -85,7 +93,13 @@ POOL_PREFIX = b"\x02"
 PREDICT_PREFIX = b"\x03"
 # Feedback log (on-chain learning signals: correct/incorrect predictions)
 FEEDBACK_PREFIX = b"\x04"
+# Prediction markets (QARD staking pools)
+MARKET_PREFIX = b"\x05"
+# Stakes (user positions in prediction markets)
+STAKE_PREFIX = b"\x06"
 PARAMS_PREFIX = b"\x07"
+# Market ID counter (monotonic sequence for market creation)
+MARKET_COUNTER_PREFIX = b"\x08"
 
 
 # Key generation functions (from keys.py)
@@ -143,6 +157,27 @@ def key_for_feedback_log(address: bytes, seq: int) -> bytes:
 
     Namespace: 0x04 + address + sequence (big-endian)."""
     return join_len_prefix(FEEDBACK_PREFIX, address, format_uint64(seq))
+
+
+def key_for_market_counter() -> bytes:
+    """Generate state database key for the market ID counter.
+
+    Namespace: 0x08 (single global counter)."""
+    return join_len_prefix(MARKET_COUNTER_PREFIX, b"/c/")
+
+
+def key_for_market(market_id: int) -> bytes:
+    """Generate state database key for a prediction market.
+
+    Namespace: 0x05 + market_id (big-endian)."""
+    return join_len_prefix(MARKET_PREFIX, format_uint64(market_id))
+
+
+def key_for_stake(address: bytes, market_id: int) -> bytes:
+    """Generate state database key for a user's stake in a market.
+
+    Namespace: 0x06 + address + market_id (big-endian)."""
+    return join_len_prefix(STAKE_PREFIX, address, format_uint64(market_id))
 
 
 # Proto marshal/unmarshal utilities
@@ -245,6 +280,22 @@ class Contract:
                 msg = MessageFeedback()
                 msg.ParseFromString(request.tx.msg.value)
                 return self._check_message_feedback(msg)
+            elif type_url.endswith("/types.MessageStake"):
+                msg = MessageStake()
+                msg.ParseFromString(request.tx.msg.value)
+                return self._check_message_stake(msg)
+            elif type_url.endswith("/types.MessageCreateMarket"):
+                msg = MessageCreateMarket()
+                msg.ParseFromString(request.tx.msg.value)
+                return self._check_message_create_market(msg)
+            elif type_url.endswith("/types.MessageResolveMarket"):
+                msg = MessageResolveMarket()
+                msg.ParseFromString(request.tx.msg.value)
+                return self._check_message_resolve_market(msg)
+            elif type_url.endswith("/types.MessageClaimReward"):
+                msg = MessageClaimReward()
+                msg.ParseFromString(request.tx.msg.value)
+                return self._check_message_claim_reward(msg)
             else:
                 raise err_invalid_message_cast()
 
@@ -278,6 +329,22 @@ class Contract:
                 msg = MessageFeedback()
                 msg.ParseFromString(request.tx.msg.value)
                 return await self._deliver_message_feedback(msg, request.tx.fee, request.tx.memo)
+            elif type_url.endswith("/types.MessageStake"):
+                msg = MessageStake()
+                msg.ParseFromString(request.tx.msg.value)
+                return await self._deliver_message_stake(msg, request.tx.fee, request.tx.memo)
+            elif type_url.endswith("/types.MessageCreateMarket"):
+                msg = MessageCreateMarket()
+                msg.ParseFromString(request.tx.msg.value)
+                return await self._deliver_message_create_market(msg, request.tx.fee, request.tx.memo)
+            elif type_url.endswith("/types.MessageResolveMarket"):
+                msg = MessageResolveMarket()
+                msg.ParseFromString(request.tx.msg.value)
+                return await self._deliver_message_resolve_market(msg, request.tx.fee, request.tx.memo)
+            elif type_url.endswith("/types.MessageClaimReward"):
+                msg = MessageClaimReward()
+                msg.ParseFromString(request.tx.msg.value)
+                return await self._deliver_message_claim_reward(msg, request.tx.fee, request.tx.memo)
             else:
                 raise err_invalid_message_cast()
 
@@ -530,6 +597,473 @@ class Contract:
             PluginSetOp(key=from_key, value=marshal(from_account)),
             PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
             PluginSetOp(key=predict_key, value=log_value),
+        ]
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(sets=sets, deletes=[]),
+        )
+
+        result = PluginDeliverResponse()
+        result.events.extend([])
+        if write_resp.HasField("error"):
+            result.error.CopyFrom(write_resp.error)
+        return result
+
+    def _check_message_stake(self, msg: MessageStake) -> PluginCheckResponse:
+        """CheckMessageStake statelessly validates a 'stake' message.
+
+        Users lock QARD into a prediction market pool to earn rewards
+        from correct predictions."""
+        # Check sender address (must be exactly 20 bytes)
+        if len(msg.from_address) != 20:
+            raise err_invalid_address()
+
+        # Check amount (must be greater than 0)
+        if msg.amount == 0:
+            raise err_invalid_amount()
+
+        # Outcome must be a valid class (0-15)
+        if msg.outcome > 15:
+            raise PluginError(1, "plugin", "invalid outcome class")
+
+        # Return authorized signers (sender must sign)
+        response = PluginCheckResponse()
+        response.authorized_signers.append(msg.from_address)
+        return response
+
+    async def _deliver_message_stake(self, msg: MessageStake, fee: int, memo: str) -> PluginDeliverResponse:
+        """DeliverMessageStake locks QARD into a prediction market.
+
+        The stake is recorded under STAKE_PREFIX (b'\\x06') keyed by
+        sender address + market_id. The market's total pool is updated
+        under MARKET_PREFIX (b'\\x05')."""
+        if not self.plugin or not self.config:
+            raise PluginError(1, "plugin", "plugin or config not initialized")
+
+        # Read sender account, fee pool, market, and existing stake
+        from_key = key_for_account(msg.from_address)
+        fee_pool_key = key_for_fee_pool(self.config.chain_id)
+        market_key = key_for_market(msg.market_id)
+        stake_key = key_for_stake(msg.from_address, msg.market_id)
+
+        from_query_id = random.randint(0, 2**53)
+        fee_query_id = random.randint(0, 2**53)
+        market_query_id = random.randint(0, 2**53)
+        stake_query_id = random.randint(0, 2**53)
+
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[
+                    PluginKeyRead(query_id=fee_query_id, key=fee_pool_key),
+                    PluginKeyRead(query_id=from_query_id, key=from_key),
+                    PluginKeyRead(query_id=market_query_id, key=market_key),
+                    PluginKeyRead(query_id=stake_query_id, key=stake_key),
+                ]
+            ),
+        )
+        if response.HasField("error"):
+            result = PluginDeliverResponse()
+            result.error.CopyFrom(response.error)
+            return result
+
+        from_bytes = None
+        fee_pool_bytes = None
+        market_bytes = None
+        stake_bytes = None
+        for resp in response.results:
+            if resp.query_id == from_query_id:
+                from_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == fee_query_id:
+                fee_pool_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == market_query_id:
+                market_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == stake_query_id:
+                stake_bytes = resp.entries[0].value if resp.entries else None
+
+        from_account = unmarshal(Account, from_bytes) if from_bytes else Account()
+        fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
+        market = json.loads(market_bytes.decode("utf-8")) if market_bytes else None
+        stake = json.loads(stake_bytes.decode("utf-8")) if stake_bytes else None
+
+        # Market must exist
+        if market is None:
+            raise PluginError(1, "plugin", "market not found")
+
+        # Market must be open (not resolved)
+        if market.get("resolved", False):
+            raise PluginError(1, "plugin", "market already resolved")
+
+        # Must be able to pay fee + stake
+        if from_account.amount < fee + msg.amount:
+            raise err_insufficient_funds()
+
+        # Deduct fee + stake from sender
+        from_account.amount -= fee + msg.amount
+        fee_pool.amount += fee
+
+        # Update market pool
+        market["total_pool"] = market.get("total_pool", 0) + msg.amount
+        market["outcome_pools"][msg.outcome] = market["outcome_pools"].get(msg.outcome, 0) + msg.amount
+
+        # Update or create stake record
+        if stake is None:
+            stake = {
+                "market_id": int(msg.market_id),
+                "outcome": int(msg.outcome),
+                "amount": int(msg.amount),
+                "claimed": False,
+            }
+        else:
+            stake["amount"] = stake.get("amount", 0) + msg.amount
+            stake["outcome"] = int(msg.outcome)
+
+        sets = [
+            PluginSetOp(key=from_key, value=marshal(from_account)),
+            PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
+            PluginSetOp(key=market_key, value=json.dumps(market).encode("utf-8")),
+            PluginSetOp(key=stake_key, value=json.dumps(stake).encode("utf-8")),
+        ]
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(sets=sets, deletes=[]),
+        )
+
+        result = PluginDeliverResponse()
+        result.events.extend([])
+        if write_resp.HasField("error"):
+            result.error.CopyFrom(write_resp.error)
+        return result
+
+    def _check_message_create_market(self, msg: MessageCreateMarket) -> PluginCheckResponse:
+        """CheckMessageCreateMarket statelessly validates a 'create_market' message.
+
+        Users create a new prediction market for the G2 model to predict on."""
+        # Check sender address (must be exactly 20 bytes)
+        if len(msg.from_address) != 20:
+            raise err_invalid_address()
+
+        # Question must not be empty
+        if not msg.question:
+            raise PluginError(1, "plugin", "question cannot be empty")
+
+        # Resolution height must be in the future
+        if msg.resolution_height == 0:
+            raise PluginError(1, "plugin", "resolution height must be > 0")
+
+        # Initial stake must be > 0
+        if msg.stake == 0:
+            raise err_invalid_amount()
+
+        # Return authorized signers (sender must sign)
+        response = PluginCheckResponse()
+        response.authorized_signers.append(msg.from_address)
+        return response
+
+    async def _deliver_message_create_market(self, msg: MessageCreateMarket, fee: int, memo: str) -> PluginDeliverResponse:
+        """DeliverMessageCreateMarket creates a new prediction market.
+
+        A new market ID is allocated from the monotonic counter (0x08),
+        and the market record is stored under MARKET_PREFIX (b'\\x05')."""
+        if not self.plugin or not self.config:
+            raise PluginError(1, "plugin", "plugin or config not initialized")
+
+        # Read sender account, fee pool, and market counter
+        from_key = key_for_account(msg.from_address)
+        fee_pool_key = key_for_fee_pool(self.config.chain_id)
+        counter_key = key_for_market_counter()
+
+        from_query_id = random.randint(0, 2**53)
+        fee_query_id = random.randint(0, 2**53)
+        counter_query_id = random.randint(0, 2**53)
+
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[
+                    PluginKeyRead(query_id=fee_query_id, key=fee_pool_key),
+                    PluginKeyRead(query_id=from_query_id, key=from_key),
+                    PluginKeyRead(query_id=counter_query_id, key=counter_key),
+                ]
+            ),
+        )
+        if response.HasField("error"):
+            result = PluginDeliverResponse()
+            result.error.CopyFrom(response.error)
+            return result
+
+        from_bytes = None
+        fee_pool_bytes = None
+        counter_bytes = None
+        for resp in response.results:
+            if resp.query_id == from_query_id:
+                from_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == fee_query_id:
+                fee_pool_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == counter_query_id:
+                counter_bytes = resp.entries[0].value if resp.entries else None
+
+        from_account = unmarshal(Account, from_bytes) if from_bytes else Account()
+        fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
+
+        # Must be able to pay fee + initial stake
+        if from_account.amount < fee + msg.stake:
+            raise err_insufficient_funds()
+
+        # Allocate new market ID
+        market_id = int.from_bytes(counter_bytes, "big") if counter_bytes else 0
+        new_market_id = market_id + 1
+
+        # Deduct fee + stake from sender
+        from_account.amount -= fee + msg.stake
+        fee_pool.amount += fee
+
+        # Create market record
+        market = {
+            "id": new_market_id,
+            "creator": msg.from_address.hex(),
+            "question": msg.question,
+            "resolution_height": int(msg.resolution_height),
+            "total_pool": int(msg.stake),
+            "outcome_pools": {},
+            "resolved": False,
+            "actual_class": None,
+            "resolver": None,
+        }
+
+        market_key = key_for_market(new_market_id)
+        sets = [
+            PluginSetOp(key=from_key, value=marshal(from_account)),
+            PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
+            PluginSetOp(key=counter_key, value=new_market_id.to_bytes(8, "big")),
+            PluginSetOp(key=market_key, value=json.dumps(market).encode("utf-8")),
+        ]
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(sets=sets, deletes=[]),
+        )
+
+        result = PluginDeliverResponse()
+        result.events.extend([])
+        if write_resp.HasField("error"):
+            result.error.CopyFrom(write_resp.error)
+        return result
+
+    def _check_message_resolve_market(self, msg: MessageResolveMarket) -> PluginCheckResponse:
+        """CheckMessageResolveMarket statelessly validates a 'resolve_market' message.
+
+        The market creator or designated resolver settles the market based
+        on the actual outcome, distributing rewards to correct stakers."""
+        # Check sender address (must be exactly 20 bytes)
+        if len(msg.from_address) != 20:
+            raise err_invalid_address()
+
+        # Actual class must be valid (0-15)
+        if msg.actual_class > 15:
+            raise PluginError(1, "plugin", "invalid actual class")
+
+        # Return authorized signers (sender must sign)
+        response = PluginCheckResponse()
+        response.authorized_signers.append(msg.from_address)
+        return response
+
+    async def _deliver_message_resolve_market(self, msg: MessageResolveMarket, fee: int, memo: str) -> PluginDeliverResponse:
+        """DeliverMessageResolveMarket resolves a prediction market.
+
+        The market is marked as resolved with the actual outcome class.
+        Rewards are distributed proportionally to stakers who predicted
+        the correct outcome."""
+        if not self.plugin or not self.config:
+            raise PluginError(1, "plugin", "plugin or config not initialized")
+
+        # Read sender account, fee pool, and market
+        from_key = key_for_account(msg.from_address)
+        fee_pool_key = key_for_fee_pool(self.config.chain_id)
+        market_key = key_for_market(msg.market_id)
+
+        from_query_id = random.randint(0, 2**53)
+        fee_query_id = random.randint(0, 2**53)
+        market_query_id = random.randint(0, 2**53)
+
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[
+                    PluginKeyRead(query_id=fee_query_id, key=fee_pool_key),
+                    PluginKeyRead(query_id=from_query_id, key=from_key),
+                    PluginKeyRead(query_id=market_query_id, key=market_key),
+                ]
+            ),
+        )
+        if response.HasField("error"):
+            result = PluginDeliverResponse()
+            result.error.CopyFrom(response.error)
+            return result
+
+        from_bytes = None
+        fee_pool_bytes = None
+        market_bytes = None
+        for resp in response.results:
+            if resp.query_id == from_query_id:
+                from_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == fee_query_id:
+                fee_pool_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == market_query_id:
+                market_bytes = resp.entries[0].value if resp.entries else None
+
+        from_account = unmarshal(Account, from_bytes) if from_bytes else Account()
+        fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
+        market = json.loads(market_bytes.decode("utf-8")) if market_bytes else None
+
+        # Market must exist
+        if market is None:
+            raise PluginError(1, "plugin", "market not found")
+
+        # Market must not already be resolved
+        if market.get("resolved", False):
+            raise PluginError(1, "plugin", "market already resolved")
+
+        # Only the creator can resolve
+        if market.get("creator") != msg.from_address.hex():
+            raise PluginError(1, "plugin", "only market creator can resolve")
+
+        # Must be able to pay fee
+        if from_account.amount < fee:
+            raise err_insufficient_funds()
+
+        # Deduct fee
+        from_account.amount -= fee
+        fee_pool.amount += fee
+
+        # Resolve market
+        market["resolved"] = True
+        market["actual_class"] = int(msg.actual_class)
+        market["resolver"] = msg.from_address.hex()
+
+        sets = [
+            PluginSetOp(key=from_key, value=marshal(from_account)),
+            PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
+            PluginSetOp(key=market_key, value=json.dumps(market).encode("utf-8")),
+        ]
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(sets=sets, deletes=[]),
+        )
+
+        result = PluginDeliverResponse()
+        result.events.extend([])
+        if write_resp.HasField("error"):
+            result.error.CopyFrom(write_resp.error)
+        return result
+
+    def _check_message_claim_reward(self, msg: MessageClaimReward) -> PluginCheckResponse:
+        """CheckMessageClaimReward statelessly validates a 'claim_reward' message.
+
+        Stakers who predicted correctly can claim their share of the reward pool."""
+        # Check sender address (must be exactly 20 bytes)
+        if len(msg.from_address) != 20:
+            raise err_invalid_address()
+
+        # Return authorized signers (sender must sign)
+        response = PluginCheckResponse()
+        response.authorized_signers.append(msg.from_address)
+        return response
+
+    async def _deliver_message_claim_reward(self, msg: MessageClaimReward, fee: int, memo: str) -> PluginDeliverResponse:
+        """DeliverMessageClaimReward pays out rewards to correct stakers.
+
+        The reward is calculated as the staker's share of the winning
+        outcome pool, proportional to their stake."""
+        if not self.plugin or not self.config:
+            raise PluginError(1, "plugin", "plugin or config not initialized")
+
+        # Read sender account, fee pool, market, and stake
+        from_key = key_for_account(msg.from_address)
+        fee_pool_key = key_for_fee_pool(self.config.chain_id)
+        market_key = key_for_market(msg.market_id)
+        stake_key = key_for_stake(msg.from_address, msg.market_id)
+
+        from_query_id = random.randint(0, 2**53)
+        fee_query_id = random.randint(0, 2**53)
+        market_query_id = random.randint(0, 2**53)
+        stake_query_id = random.randint(0, 2**53)
+
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[
+                    PluginKeyRead(query_id=fee_query_id, key=fee_pool_key),
+                    PluginKeyRead(query_id=from_query_id, key=from_key),
+                    PluginKeyRead(query_id=market_query_id, key=market_key),
+                    PluginKeyRead(query_id=stake_query_id, key=stake_key),
+                ]
+            ),
+        )
+        if response.HasField("error"):
+            result = PluginDeliverResponse()
+            result.error.CopyFrom(response.error)
+            return result
+
+        from_bytes = None
+        fee_pool_bytes = None
+        market_bytes = None
+        stake_bytes = None
+        for resp in response.results:
+            if resp.query_id == from_query_id:
+                from_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == fee_query_id:
+                fee_pool_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == market_query_id:
+                market_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == stake_query_id:
+                stake_bytes = resp.entries[0].value if resp.entries else None
+
+        from_account = unmarshal(Account, from_bytes) if from_bytes else Account()
+        fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
+        market = json.loads(market_bytes.decode("utf-8")) if market_bytes else None
+        stake = json.loads(stake_bytes.decode("utf-8")) if stake_bytes else None
+
+        # Market must exist and be resolved
+        if market is None:
+            raise PluginError(1, "plugin", "market not found")
+        if not market.get("resolved", False):
+            raise PluginError(1, "plugin", "market not resolved yet")
+
+        # Stake must exist and not be claimed
+        if stake is None:
+            raise PluginError(1, "plugin", "no stake found")
+        if stake.get("claimed", False):
+            raise PluginError(1, "plugin", "reward already claimed")
+
+        # Must be able to pay fee
+        if from_account.amount < fee:
+            raise err_insufficient_funds()
+
+        # Only correct stakers get rewards
+        actual_class = market.get("actual_class")
+        if stake.get("outcome") != actual_class:
+            raise PluginError(1, "plugin", "stake was not correct")
+
+        # Calculate reward: share of winning pool proportional to stake
+        winning_pool = market.get("outcome_pools", {}).get(str(actual_class), 0)
+        if winning_pool <= 0:
+            raise PluginError(1, "plugin", "winning pool is empty")
+
+        stake_amount = stake.get("amount", 0)
+        reward = (stake_amount * market.get("total_pool", 0)) // winning_pool
+
+        # Deduct fee, add reward
+        from_account.amount -= fee
+        from_account.amount += reward
+        fee_pool.amount += fee
+
+        # Mark stake as claimed
+        stake["claimed"] = True
+
+        sets = [
+            PluginSetOp(key=from_key, value=marshal(from_account)),
+            PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
+            PluginSetOp(key=stake_key, value=json.dumps(stake).encode("utf-8")),
         ]
         write_resp = await self.plugin.state_write(
             self,

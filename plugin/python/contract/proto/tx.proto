@@ -66,6 +66,53 @@ message MessageFeedback {
   uint32 actual_class = 4; // @gotags: json:"actualClass"
 }
 
+// MessageStake is a prediction market staking transaction: users lock QARD
+// into a prediction market pool to earn rewards from correct predictions.
+message MessageStake {
+  // from_address: is the account submitting the stake
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // market_id: the prediction market being staked into
+  uint64 market_id = 2; // @gotags: json:"marketId"
+  // amount: the amount of QARD being staked (in micro-denomination uQARD)
+  uint64 amount = 3;
+  // outcome: the predicted outcome class (0-15) being staked on
+  uint32 outcome = 4;
+}
+
+// MessageCreateMarket is a prediction market creation transaction: users
+// create a new market for the G2 ZeroPerceptron model to predict on.
+message MessageCreateMarket {
+  // from_address: is the account creating the market
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // question: the market question / prediction target
+  string question = 2;
+  // resolution_height: the block height at which the market resolves
+  uint64 resolution_height = 3; // @gotags: json:"resolutionHeight"
+  // stake: the initial stake amount (in uQARD) required to create the market
+  uint64 stake = 4;
+}
+
+// MessageResolveMarket is a prediction market resolution transaction: the
+// market creator or designated resolver settles the market based on the
+// actual outcome, distributing rewards to correct stakers.
+message MessageResolveMarket {
+  // from_address: is the account resolving the market
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // market_id: the prediction market being resolved
+  uint64 market_id = 2; // @gotags: json:"marketId"
+  // actual_class: the ground-truth outcome class (0-15)
+  uint32 actual_class = 3; // @gotags: json:"actualClass"
+}
+
+// MessageClaimReward is a prediction market reward claim transaction: stakers
+// who predicted correctly can claim their share of the reward pool.
+message MessageClaimReward {
+  // from_address: is the account claiming the reward
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // market_id: the prediction market being claimed from
+  uint64 market_id = 2; // @gotags: json:"marketId"
+}
+
 // FeeParams is the parameter space that defines various amounts for transaction fees
 message FeeParams {
   // send_fee: is the fee amount (in uCNPY) for Message Send

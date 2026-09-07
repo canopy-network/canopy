@@ -14,6 +14,10 @@ from contract.proto import (
     MessageSend,
     MessagePredict,
     MessageFeedback,
+    MessageStake,
+    MessageCreateMarket,
+    MessageResolveMarket,
+    MessageClaimReward,
     PluginGenesisRequest,
     PluginBeginRequest,
     PluginEndRequest,
@@ -134,6 +138,114 @@ class TestCheckMessageFeedback:
         msg = MessageFeedback(from_address=ADDR_SHORT, predict_seq=5, correct=True)
         with pytest.raises(PluginError) as exc:
             contract._check_message_feedback(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
+
+
+class TestCheckMessageStake:
+    """Stateless validation of the prediction market 'stake' message."""
+
+    def test_valid(self, contract):
+        msg = MessageStake(from_address=ADDR_A, market_id=1, amount=1000, outcome=3)
+        result = contract._check_message_stake(msg)
+
+        assert not result.HasField("error")
+        assert list(result.authorized_signers) == [ADDR_A]
+
+    def test_invalid_from_address(self, contract):
+        msg = MessageStake(from_address=ADDR_SHORT, market_id=1, amount=1000, outcome=3)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_stake(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
+
+    def test_invalid_amount(self, contract):
+        msg = MessageStake(from_address=ADDR_A, market_id=1, amount=0, outcome=3)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_stake(msg)
+        assert exc.value.code == CODE_INVALID_AMOUNT
+
+    def test_invalid_outcome(self, contract):
+        msg = MessageStake(from_address=ADDR_A, market_id=1, amount=1000, outcome=16)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_stake(msg)
+        assert exc.value.code == 1
+        assert "invalid outcome class" in exc.value.msg
+
+
+class TestCheckMessageCreateMarket:
+    """Stateless validation of the prediction market 'create_market' message."""
+
+    def test_valid(self, contract):
+        msg = MessageCreateMarket(from_address=ADDR_A, question="BTC up?", resolution_height=1000, stake=5000)
+        result = contract._check_message_create_market(msg)
+
+        assert not result.HasField("error")
+        assert list(result.authorized_signers) == [ADDR_A]
+
+    def test_invalid_from_address(self, contract):
+        msg = MessageCreateMarket(from_address=ADDR_SHORT, question="BTC up?", resolution_height=1000, stake=5000)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_create_market(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
+
+    def test_empty_question(self, contract):
+        msg = MessageCreateMarket(from_address=ADDR_A, question="", resolution_height=1000, stake=5000)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_create_market(msg)
+        assert exc.value.code == 1
+        assert "question cannot be empty" in exc.value.msg
+
+    def test_zero_resolution_height(self, contract):
+        msg = MessageCreateMarket(from_address=ADDR_A, question="BTC up?", resolution_height=0, stake=5000)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_create_market(msg)
+        assert exc.value.code == 1
+        assert "resolution height must be > 0" in exc.value.msg
+
+    def test_zero_stake(self, contract):
+        msg = MessageCreateMarket(from_address=ADDR_A, question="BTC up?", resolution_height=1000, stake=0)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_create_market(msg)
+        assert exc.value.code == CODE_INVALID_AMOUNT
+
+
+class TestCheckMessageResolveMarket:
+    """Stateless validation of the prediction market 'resolve_market' message."""
+
+    def test_valid(self, contract):
+        msg = MessageResolveMarket(from_address=ADDR_A, market_id=1, actual_class=3)
+        result = contract._check_message_resolve_market(msg)
+
+        assert not result.HasField("error")
+        assert list(result.authorized_signers) == [ADDR_A]
+
+    def test_invalid_from_address(self, contract):
+        msg = MessageResolveMarket(from_address=ADDR_SHORT, market_id=1, actual_class=3)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_resolve_market(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
+
+    def test_invalid_actual_class(self, contract):
+        msg = MessageResolveMarket(from_address=ADDR_A, market_id=1, actual_class=16)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_resolve_market(msg)
+        assert exc.value.code == 1
+        assert "invalid actual class" in exc.value.msg
+
+
+class TestCheckMessageClaimReward:
+    """Stateless validation of the prediction market 'claim_reward' message."""
+
+    def test_valid(self, contract):
+        msg = MessageClaimReward(from_address=ADDR_A, market_id=1)
+        result = contract._check_message_claim_reward(msg)
+
+        assert not result.HasField("error")
+        assert list(result.authorized_signers) == [ADDR_A]
+
+    def test_invalid_from_address(self, contract):
+        msg = MessageClaimReward(from_address=ADDR_SHORT, market_id=1)
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_claim_reward(msg)
         assert exc.value.code == CODE_INVALID_ADDRESS
 
 
