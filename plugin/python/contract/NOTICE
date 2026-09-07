@@ -1,0 +1,66 @@
+Ortoplex G2 ZeroPerceptron — Canopy L1 plugin
+Copyright (c) 2026 Sawelew Tech / Ortoplex Research Division
+
+This product includes software developed by Sawelew Tech / Ortoplex Research Division.
+Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
+
+---
+
+PATENT NOTICE
+=============
+
+Portions of this software implement algorithms covered by the patent
+application "Quantum Mayan Resonance System (QMRS) — Algorytm Faktoryzacji
+RSA z Wykorzystaniem Algebry Oktonionów G2 i Rezonansu Piramidy Majów"
+(see PATENT_QMRS.md in the parent repository).
+
+Specifically, the following component is subject to the patent claims
+under Zastrzeżenie 1 (cross7 — 7-dimensional vector product defining the
+G2 octonion algebra):
+
+    cross7(a, b)  -- the 7D vector product used by the Orthoplex Gate
+                     anomaly detector and the G2+Zero classifier fusion.
+
+Any use, reproduction, or distribution of software that incorporates the
+cross7 operation, the G2 octonion algebra in 7 dimensions, or the QMRS
+resonance structure (Maya pyramid 13x20, collapse 72, QFT_G2 unitary)
+outside of the terms granted by the Apache-2.0 copyright license may require
+a separate license from the patent holder.
+
+If your project makes DERIVATIVE USE of the cross7 / G2 / QMRS algorithms
+for cryptographic purposes (integer factorization, RSA, lattice reduction,
+or post-quantum cryptography), please contact the patent holder BEFORE
+distribution.
+
+Contact: https://github.com/Zakil11/ortoplex_gate
+
+---
+
+NOTICE (Apache-2.0 mandatory attribution)
+==========================================
+
+This product includes software developed by the Canopy Network
+(https://github.com/canopy-network/canopy), licensed under the MIT License.
+The parts of this directory that are NOT listed above are maintained
+under the Canopy MIT License.
+
+All custom AI code (ai_model.py, g2 fusion, ZeroPerceptron, G2Model) is
+original work of Sawelew Tech / Ortoplex Research Division, licensed under
+Apache-2.0 with additional patent restrictions as noted above.
+</write_to_file>
+<task_progress>
+- [x] Sprawdzenie obecnych plików licencyjnych (ortoplex_gate, fork canopy)
+- [x] Analiza struktury ortoplex_gate (README, main.py, data/)
+- [x] Analiza PATENT_QMRS.md — klauzula na cross7/G2
+- [x] Decyzja: Apache-2.0 + NOTICE (ochrona patentowa, kompatybilna z Canopy MIT)
+- [x] Dodanie pliku LICENSE (Apache-2.0) do ortoplex_gate
+- [x] Dodanie NOTICE z klauzulą PATENT_QMRS do ortoplex_gate
+- [x] Aktualizacja README (License → Apache-2.0)
+- [x] Nagłówek Apache-2.0 w ortoplex_gate/main.py
+- [x] Nagłówek Apache-2.0 w /tmp/canopy_fork/plugin/python/contract/ai_model.py
+- [ ] Dodanie NOTICE w /tmp/canopy_fork/plugin/python/contract/NOTICE
+- [ ] Uruchomienie testów (pytest) po zmianach
+- [ ] Commit + push ortoplex_gate (LICENSE, NOTICE, README, main.py)
+- [ ] Commit + push canopy fork (ai_model.py, NOTICE)
+</task_progress>
+</write_to_file>
