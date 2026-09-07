@@ -5,6 +5,7 @@ This file contains the base contract implementation that handles the 'send' tran
 Matches Go's contract/contract.go structure.
 """
 
+import json
 import random
 import struct
 from typing import Optional, Dict, Any, Union, Protocol, TYPE_CHECKING
@@ -27,6 +28,7 @@ from .proto import (
     PluginEndRequest,
     PluginEndResponse,
     MessageSend,
+    MessagePredict,
     PluginKeyRead,
     PluginStateReadRequest,
     PluginStateWriteRequest,
@@ -39,6 +41,7 @@ from .proto import (
 )
 from .proto import account_pb2, event_pb2, plugin_pb2, tx_pb2
 from google.protobuf import any_pb2
+from .ai_model import get_model
 
 from .error import (
     PluginError,
@@ -56,9 +59,10 @@ CONTRACT_CONFIG = {
     "name": "python_plugin_contract",
     "id": 1,
     "version": 1,
-    "supported_transactions": ["send"],
+    "supported_transactions": ["send", "predict"],
     "transaction_type_urls": [
         "type.googleapis.com/types.MessageSend",
+        "type.googleapis.com/types.MessagePredict",
     ],
     "event_type_urls": [],
     # Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
@@ -75,6 +79,8 @@ CONTRACT_CONFIG = {
 # State key prefixes (matching Go)
 ACCOUNT_PREFIX = b"\x01"
 POOL_PREFIX = b"\x02"
+# Predict results (AI/ML inference output from G2 ZeroPerceptron)
+PREDICT_PREFIX = b"\x03"
 PARAMS_PREFIX = b"\x07"
 
 
@@ -115,6 +121,13 @@ def key_for_fee_params() -> bytes:
 def key_for_fee_pool(chain_id: int) -> bytes:
     """Generate state database key for fee pool."""
     return join_len_prefix(POOL_PREFIX, format_uint64(chain_id))
+
+
+def key_for_predict_log(address: bytes, seq: int) -> bytes:
+    """Generate state database key for an AI prediction result.
+
+    Namespace: 0x03 + address + sequence (big-endian)."""
+    return join_len_prefix(PREDICT_PREFIX, address, format_uint64(seq))
 
 
 # Proto marshal/unmarshal utilities
@@ -195,16 +208,24 @@ class Contract:
             if not min_fees:
                 raise PluginError(1, "plugin", "Failed to decode fee parameters")
 
-            # Check for minimum fee
-            if request.tx.fee < min_fees.send_fee:
-                raise err_tx_fee_below_state_limit()
-
             # Get the message and handle by type
             type_url = request.tx.msg.type_url
+
+            # Check for minimum fee (predict uses its own fee threshold)
+            if type_url.endswith("/types.MessagePredict"):
+                if request.tx.fee < min_fees.predict_fee:
+                    raise err_tx_fee_below_state_limit()
+            elif request.tx.fee < min_fees.send_fee:
+                raise err_tx_fee_below_state_limit()
+
             if type_url.endswith("/types.MessageSend"):
                 msg = MessageSend()
                 msg.ParseFromString(request.tx.msg.value)
                 return self._check_message_send(msg)
+            elif type_url.endswith("/types.MessagePredict"):
+                msg = MessagePredict()
+                msg.ParseFromString(request.tx.msg.value)
+                return self._check_message_predict(msg)
             else:
                 raise err_invalid_message_cast()
 
@@ -230,6 +251,10 @@ class Contract:
                 msg = MessageSend()
                 msg.ParseFromString(request.tx.msg.value)
                 return await self._deliver_message_send(msg, request.tx.fee, request.tx.memo)
+            elif type_url.endswith("/types.MessagePredict"):
+                msg = MessagePredict()
+                msg.ParseFromString(request.tx.msg.value)
+                return await self._deliver_message_predict(msg, request.tx.fee, request.tx.memo)
             else:
                 raise err_invalid_message_cast()
 
@@ -373,6 +398,120 @@ class Contract:
         )
 
         result = PluginDeliverResponse()
+        if write_resp.HasField("error"):
+            result.error.CopyFrom(write_resp.error)
+        return result
+
+    def _check_message_predict(self, msg: MessagePredict) -> PluginCheckResponse:
+        """CheckMessagePredict statelessly validates a 'predict' message.
+
+        The message carries multimodal features (text / numbers / timestamp)
+        that the G2 ZeroPerceptron model consumes on-chain."""
+        # Check sender address (must be exactly 20 bytes)
+        if len(msg.from_address) != 20:
+            raise err_invalid_address()
+
+        # Features may be empty (pure text-event) but never negative:
+        # model normalizes it. We only reject absurd sizes to keep
+        # transaction size bounded.
+        if len(msg.features) > 256:
+            raise PluginError(1, "plugin", "features too large")
+
+        # Return authorized signers (sender must sign)
+        response = PluginCheckResponse()
+        response.authorized_signers.append(msg.from_address)
+        return response
+
+    async def _deliver_message_predict(self, msg: MessagePredict, fee: int, memo: str) -> PluginDeliverResponse:
+        """DeliverMessagePredict runs on-chain AI inference.
+
+        Features from the message are passed through the G2 28D encoder
+        (text/numbers/timestamp modalities with octonion cross7 fusion)
+        and the ZeroPerceptron backbone produces a 16-class decision.
+
+        The result (class + confidence) is written into state under
+        PREDICT_PREFIX (b'\\x03') keyed by sender address + nonce.
+        """
+        if not self.plugin or not self.config:
+            raise PluginError(1, "plugin", "plugin or config not initialized")
+
+        # Read sender account (for fee deduction + nonce)
+        from_key = key_for_account(msg.from_address)
+        fee_pool_key = key_for_fee_pool(self.config.chain_id)
+        from_query_id = random.randint(0, 2**53)
+        fee_query_id = random.randint(0, 2**53)
+
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[
+                    PluginKeyRead(query_id=fee_query_id, key=fee_pool_key),
+                    PluginKeyRead(query_id=from_query_id, key=from_key),
+                ]
+            ),
+        )
+        if response.HasField("error"):
+            result = PluginDeliverResponse()
+            result.error.CopyFrom(response.error)
+            return result
+
+        from_bytes = None
+        fee_pool_bytes = None
+        for resp in response.results:
+            if resp.query_id == from_query_id:
+                from_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == fee_query_id:
+                fee_pool_bytes = resp.entries[0].value if resp.entries else None
+
+        from_account = unmarshal(Account, from_bytes) if from_bytes else Account()
+        fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
+
+        # Must be able to pay the predict fee
+        if from_account.amount < fee:
+            raise err_insufficient_funds()
+
+        # Run the G2 ZeroPerceptron inference.
+        # MessagePredict carries only numeric features; a 28-D vector is
+        # consumed directly (raw mode). Shorter vectors (7-D numeric or
+        # empty) are encoded via the G2 multimodal numeric encoder path.
+        model = get_model()
+        model.reset()
+        features = list(msg.features)
+        if len(features) == 28:
+            result = model.predict_raw(features)
+        else:
+            result = model.predict_from_event(
+                text="",
+                numbers=features,
+                timestamp=0.0,
+            )
+
+        # Deduct fee -> pool, keep nonce
+        from_account.amount -= fee
+        fee_pool.amount += fee
+
+        # Persist prediction log under 0x03 namespace
+        seq = from_account.nonce
+        predict_key = key_for_predict_log(msg.from_address, seq)
+        log_value = json.dumps({
+            "y": result["y"],
+            "class": result.get("class", ""),
+            "top_probs": result.get("probs", [])[:3],
+            "height": 0,
+        }).encode("utf-8")
+
+        sets = [
+            PluginSetOp(key=from_key, value=marshal(from_account)),
+            PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
+            PluginSetOp(key=predict_key, value=log_value),
+        ]
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(sets=sets, deletes=[]),
+        )
+
+        result = PluginDeliverResponse()
+        result.events.extend([])
         if write_resp.HasField("error"):
             result.error.CopyFrom(write_resp.error)
         return result

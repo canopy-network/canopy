@@ -8,7 +8,7 @@ between the plugin and FSM.
 # Import generated protobuf classes
 from .account_pb2 import Account, Pool  # type: ignore[attr-defined]
 from .event_pb2 import Event, EventCustom  # type: ignore[attr-defined]
-from .tx_pb2 import Transaction, MessageSend, FeeParams, Signature  # type: ignore[attr-defined]
+from .tx_pb2 import Transaction, MessageSend, MessagePredict, FeeParams, Signature  # type: ignore[attr-defined]
 
 # Import plugin proto classes
 from .plugin_pb2 import (  # type: ignore[attr-defined]
@@ -55,6 +55,7 @@ __all__ = [
     # Transaction types
     "Transaction",
     "MessageSend",
+    "MessagePredict",
     "FeeParams",
     "Signature",
     # Plugin communication types

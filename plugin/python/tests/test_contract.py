@@ -2,8 +2,7 @@
 Unit tests for the Contract class.
 
 Covers the current `contract.contract` API: lifecycle hooks, stateless message
-validation for the base 'send' transaction, and the tutorial 'faucet'/'reward'
-transactions.
+validation for the base 'send' transaction, and the on-chain AI 'predict' transaction.
 """
 
 import pytest
@@ -13,8 +12,7 @@ from contract.plugin import Config
 from contract.error import PluginError
 from contract.proto import (
     MessageSend,
-    MessageFaucet,
-    MessageReward,
+    MessagePredict,
     PluginGenesisRequest,
     PluginBeginRequest,
     PluginEndRequest,
@@ -88,52 +86,37 @@ class TestCheckMessageSend:
         assert exc.value.code == CODE_INVALID_AMOUNT
 
 
-class TestCheckMessageFaucet:
-    """Stateless validation of the tutorial 'faucet' message."""
+class TestCheckMessagePredict:
+    """Stateless validation of the on-chain AI 'predict' message."""
 
-    def test_valid(self, contract):
-        msg = MessageFaucet(signer_address=ADDR_A, recipient_address=ADDR_B, amount=500)
-        result = contract._check_message_faucet(msg)
-
-        assert not result.HasField("error")
-        assert result.recipient == ADDR_B
-        assert list(result.authorized_signers) == [ADDR_A]
-
-    def test_invalid_recipient(self, contract):
-        msg = MessageFaucet(signer_address=ADDR_A, recipient_address=ADDR_SHORT, amount=500)
-        with pytest.raises(PluginError) as exc:
-            contract._check_message_faucet(msg)
-        assert exc.value.code == CODE_INVALID_ADDRESS
-
-    def test_invalid_amount(self, contract):
-        msg = MessageFaucet(signer_address=ADDR_A, recipient_address=ADDR_B, amount=0)
-        with pytest.raises(PluginError) as exc:
-            contract._check_message_faucet(msg)
-        assert exc.value.code == CODE_INVALID_AMOUNT
-
-
-class TestCheckMessageReward:
-    """Stateless validation of the tutorial 'reward' message."""
-
-    def test_valid(self, contract):
-        msg = MessageReward(admin_address=ADDR_A, recipient_address=ADDR_B, amount=750)
-        result = contract._check_message_reward(msg)
+    def test_valid_28d(self, contract):
+        msg = MessagePredict(from_address=ADDR_A, features=[0.1] * 28)
+        result = contract._check_message_predict(msg)
 
         assert not result.HasField("error")
-        assert result.recipient == ADDR_B
         assert list(result.authorized_signers) == [ADDR_A]
 
-    def test_invalid_admin(self, contract):
-        msg = MessageReward(admin_address=ADDR_SHORT, recipient_address=ADDR_B, amount=750)
+    def test_valid_7d(self, contract):
+        msg = MessagePredict(from_address=ADDR_A, features=[1.0, 2.0, 3.0])
+        result = contract._check_message_predict(msg)
+
+
+
+        assert not result.HasField("error")
+        assert list(result.authorized_signers) == [ADDR_A]
+
+    def test_invalid_from_address(self, contract):
+        msg = MessagePredict(from_address=ADDR_SHORT, features=[0.1] * 28)
         with pytest.raises(PluginError) as exc:
-            contract._check_message_reward(msg)
+            contract._check_message_predict(msg)
         assert exc.value.code == CODE_INVALID_ADDRESS
 
-    def test_invalid_amount(self, contract):
-        msg = MessageReward(admin_address=ADDR_A, recipient_address=ADDR_B, amount=0)
+    def test_features_too_large(self, contract):
+        msg = MessagePredict(from_address=ADDR_A, features=[0.0] * 257)
         with pytest.raises(PluginError) as exc:
-            contract._check_message_reward(msg)
-        assert exc.value.code == CODE_INVALID_AMOUNT
+            contract._check_message_predict(msg)
+        assert exc.value.code == 1
+        assert "features too large" in exc.value.msg
 
 
 @pytest.mark.asyncio

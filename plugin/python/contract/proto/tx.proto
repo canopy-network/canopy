@@ -41,10 +41,23 @@ message MessageSend {
   uint64 amount = 3;
 }
 
+// MessagePredict is an AI inference transaction executed by the G2/ZeroPerceptron VM embedded in the plugin.
+// The plugin performs deterministic 28D octonion-fused inference and stores the result in the chain state.
+message MessagePredict {
+  // from_address: is the account submitting the prediction request
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // features: pre-encoded raw features (7 or 28 floats). If 7, the plugin applies the G2 octo-fusion expansion to 28D.
+  repeated double features = 2; // @gotags: json:"features"
+  // expected_class: optional label (0-15) used for on-chain verification. Set to 16 (or omit) for auto-only.
+  uint32 expected_class = 3; // @gotags: json:"expectedClass"
+}
+
 // FeeParams is the parameter space that defines various amounts for transaction fees
 message FeeParams {
   // send_fee: is the fee amount (in uCNPY) for Message Send
   uint64 send_fee = 1; // @gotags: json:"sendFee"
+  // predict_fee: is the fee amount (in uCNPY) for AI Message Predict
+  uint64 predict_fee = 2; // @gotags: json:"predictFee"
   // NO CONFLICT STARTING AT FIELD = 14
 }
 
