@@ -17,6 +17,7 @@ from .tx_pb2 import (
     MessageCreateMarket,
     MessageResolveMarket,
     MessageClaimReward,
+    MessageRegisterModel,
     FeeParams,
     Signature,
 )  # type: ignore[attr-defined]
@@ -72,6 +73,7 @@ __all__ = [
     "MessageCreateMarket",
     "MessageResolveMarket",
     "MessageClaimReward",
+    "MessageRegisterModel",
     "FeeParams",
     "Signature",
     # Plugin communication types

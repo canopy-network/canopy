@@ -18,6 +18,7 @@ from contract.proto import (
     MessageCreateMarket,
     MessageResolveMarket,
     MessageClaimReward,
+    MessageRegisterModel,
     PluginGenesisRequest,
     PluginBeginRequest,
     PluginEndRequest,
@@ -287,6 +288,9 @@ from contract.contract import (
     key_for_market,
     key_for_market_counter,
     key_for_stake,
+    key_for_model_counter,
+    key_for_model_registry,
+    key_for_active_model,
     marshal,
 )
 
@@ -531,6 +535,216 @@ class TestDeliverMarketplace:
             stake=5000,
         )
         resp = await contract.deliver_tx(_deliver_request(create_msg, "type.googleapis.com/types.MessageCreateMarket"))
+
+        assert resp.HasField("error")
+        assert "insufficient funds" in resp.error.msg
+
+
+class TestCheckMessageRegisterModel:
+    """Stateless validation of the model versioning 'register_model' message."""
+
+    def test_valid(self, contract):
+        msg = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=1,
+            weights_hash="abc123",
+            accuracy=0.95,
+            in_dim=42,
+            n_classes=16,
+            description="42D krypto",
+        )
+        result = contract._check_message_register_model(msg)
+
+        assert not result.HasField("error")
+        assert list(result.authorized_signers) == [ADDR_A]
+
+    def test_invalid_from_address(self, contract):
+        msg = MessageRegisterModel(
+            from_address=ADDR_SHORT,
+            version=1,
+            weights_hash="abc123",
+            accuracy=0.95,
+            in_dim=42,
+            n_classes=16,
+        )
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_register_model(msg)
+        assert exc.value.code == CODE_INVALID_ADDRESS
+
+    def test_zero_version(self, contract):
+        msg = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=0,
+            weights_hash="abc123",
+            accuracy=0.95,
+            in_dim=42,
+            n_classes=16,
+        )
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_register_model(msg)
+        assert exc.value.code == 1
+        assert "version must be > 0" in exc.value.msg
+
+    def test_empty_weights_hash(self, contract):
+        msg = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=1,
+            weights_hash="",
+            accuracy=0.95,
+            in_dim=42,
+            n_classes=16,
+        )
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_register_model(msg)
+        assert exc.value.code == 1
+        assert "weights hash cannot be empty" in exc.value.msg
+
+    def test_invalid_accuracy(self, contract):
+        msg = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=1,
+            weights_hash="abc123",
+            accuracy=1.5,
+            in_dim=42,
+            n_classes=16,
+        )
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_register_model(msg)
+        assert exc.value.code == 1
+        assert "accuracy must be in [0, 1]" in exc.value.msg
+
+    def test_invalid_in_dim(self, contract):
+        msg = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=1,
+            weights_hash="abc123",
+            accuracy=0.95,
+            in_dim=64,
+            n_classes=16,
+        )
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_register_model(msg)
+        assert exc.value.code == 1
+        assert "in_dim must be 28 or 42" in exc.value.msg
+
+    def test_zero_n_classes(self, contract):
+        msg = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=1,
+            weights_hash="abc123",
+            accuracy=0.95,
+            in_dim=42,
+            n_classes=0,
+        )
+        with pytest.raises(PluginError) as exc:
+            contract._check_message_register_model(msg)
+        assert exc.value.code == 1
+        assert "n_classes must be > 0" in exc.value.msg
+
+
+class TestDeliverModelRegistry:
+    """Full end-to-end model versioning: register_model → registry + active pointer."""
+
+    async def test_register_first_model(self):
+        contract = _make_deliver_contract()
+
+        msg = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=1,
+            weights_hash="abc123",
+            accuracy=0.95,
+            in_dim=42,
+            n_classes=16,
+            description="42D krypto",
+        )
+        resp = await contract.deliver_tx(_deliver_request(msg, "type.googleapis.com/types.MessageRegisterModel"))
+        assert not resp.HasField("error"), resp.error
+
+        # Model version 1 should exist in registry
+        model_bytes = contract.plugin.state.get(key_for_model_registry(1))
+        assert model_bytes is not None
+        model = _json.loads(model_bytes.decode("utf-8"))
+        assert model["version"] == 1
+        assert model["weights_hash"] == "abc123"
+        assert model["accuracy"] == 0.95
+        assert model["in_dim"] == 42
+        assert model["n_classes"] == 16
+        assert model["description"] == "42D krypto"
+        assert model["registered_by"] == ADDR_A.hex()
+
+        # Counter should be 1
+        counter_bytes = contract.plugin.state.get(key_for_model_counter())
+        assert int.from_bytes(counter_bytes, "big") == 1
+
+        # Active model pointer should be 1
+        active_bytes = contract.plugin.state.get(key_for_active_model())
+        assert active_bytes.decode("utf-8") == "1"
+
+        # Account balance: 1_000_000 - 10 (fee)
+        acct_bytes = contract.plugin.state.get(key_for_account(ADDR_A))
+        acct = Account.FromString(acct_bytes)
+        assert acct.amount == 1_000_000 - 10
+
+    async def test_register_second_model_updates_active(self):
+        contract = _make_deliver_contract()
+
+        # Register v1
+        msg1 = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=1,
+            weights_hash="abc123",
+            accuracy=0.90,
+            in_dim=28,
+            n_classes=16,
+            description="28D",
+        )
+        resp = await contract.deliver_tx(_deliver_request(msg1, "type.googleapis.com/types.MessageRegisterModel"))
+        assert not resp.HasField("error"), resp.error
+
+        # Register v2
+        msg2 = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=2,
+            weights_hash="def456",
+            accuracy=0.95,
+            in_dim=42,
+            n_classes=16,
+            description="42D krypto",
+        )
+        resp = await contract.deliver_tx(_deliver_request(msg2, "type.googleapis.com/types.MessageRegisterModel"))
+        assert not resp.HasField("error"), resp.error
+
+        # Both versions in registry
+        model1_bytes = contract.plugin.state.get(key_for_model_registry(1))
+        model1 = _json.loads(model1_bytes.decode("utf-8"))
+        assert model1["version"] == 1
+        assert model1["in_dim"] == 28
+
+        model2_bytes = contract.plugin.state.get(key_for_model_registry(2))
+        model2 = _json.loads(model2_bytes.decode("utf-8"))
+        assert model2["version"] == 2
+        assert model2["in_dim"] == 42
+
+        # Counter should be 2
+        counter_bytes = contract.plugin.state.get(key_for_model_counter())
+        assert int.from_bytes(counter_bytes, "big") == 2
+
+        # Active model pointer should be 2 (latest)
+        active_bytes = contract.plugin.state.get(key_for_active_model())
+        assert active_bytes.decode("utf-8") == "2"
+
+    async def test_register_insufficient_funds_fails(self):
+        contract = _make_deliver_contract(initial_balance=5)
+
+        msg = MessageRegisterModel(
+            from_address=ADDR_A,
+            version=1,
+            weights_hash="abc123",
+            accuracy=0.95,
+            in_dim=42,
+            n_classes=16,
+        )
+        resp = await contract.deliver_tx(_deliver_request(msg, "type.googleapis.com/types.MessageRegisterModel"))
 
         assert resp.HasField("error")
         assert "insufficient funds" in resp.error.msg

@@ -34,6 +34,7 @@ from .proto import (
     MessageCreateMarket,
     MessageResolveMarket,
     MessageClaimReward,
+    MessageRegisterModel,
     PluginKeyRead,
     PluginStateReadRequest,
     PluginStateWriteRequest,
@@ -64,7 +65,7 @@ CONTRACT_CONFIG = {
     "name": "python_plugin_contract",
     "id": 1,
     "version": 1,
-    "supported_transactions": ["send", "predict", "feedback", "stake", "create_market", "resolve_market", "claim_reward"],
+    "supported_transactions": ["send", "predict", "feedback", "stake", "create_market", "resolve_market", "claim_reward", "register_model"],
     "transaction_type_urls": [
         "type.googleapis.com/types.MessageSend",
         "type.googleapis.com/types.MessagePredict",
@@ -73,6 +74,7 @@ CONTRACT_CONFIG = {
         "type.googleapis.com/types.MessageCreateMarket",
         "type.googleapis.com/types.MessageResolveMarket",
         "type.googleapis.com/types.MessageClaimReward",
+        "type.googleapis.com/types.MessageRegisterModel",
     ],
     "event_type_urls": [],
     # Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
@@ -100,6 +102,10 @@ STAKE_PREFIX = b"\x06"
 PARAMS_PREFIX = b"\x07"
 # Market ID counter (monotonic sequence for market creation)
 MARKET_COUNTER_PREFIX = b"\x08"
+# Model versioning registry (G2 ZeroPerceptron model versions)
+MODEL_PREFIX = b"\x09"
+# Model version counter (monotonic sequence for model registration)
+MODEL_COUNTER_PREFIX = b"\x0a"
 
 
 # Key generation functions (from keys.py)
@@ -178,6 +184,27 @@ def key_for_stake(address: bytes, market_id: int) -> bytes:
 
     Namespace: 0x06 + address + market_id (big-endian)."""
     return join_len_prefix(STAKE_PREFIX, address, format_uint64(market_id))
+
+
+def key_for_model_counter() -> bytes:
+    """Generate state database key for the model version counter.
+
+    Namespace: 0x0a (single global counter)."""
+    return join_len_prefix(MODEL_COUNTER_PREFIX, b"/c/")
+
+
+def key_for_model_registry(version: int) -> bytes:
+    """Generate state database key for a model version record.
+
+    Namespace: 0x09 + version (big-endian)."""
+    return join_len_prefix(MODEL_PREFIX, format_uint64(version))
+
+
+def key_for_active_model() -> bytes:
+    """Generate state database key for the active model version.
+
+    Namespace: 0x09 + '/active/' (single global pointer)."""
+    return join_len_prefix(MODEL_PREFIX, b"/active/")
 
 
 # Proto marshal/unmarshal utilities
@@ -296,6 +323,10 @@ class Contract:
                 msg = MessageClaimReward()
                 msg.ParseFromString(request.tx.msg.value)
                 return self._check_message_claim_reward(msg)
+            elif type_url.endswith("/types.MessageRegisterModel"):
+                msg = MessageRegisterModel()
+                msg.ParseFromString(request.tx.msg.value)
+                return self._check_message_register_model(msg)
             else:
                 raise err_invalid_message_cast()
 
@@ -345,6 +376,10 @@ class Contract:
                 msg = MessageClaimReward()
                 msg.ParseFromString(request.tx.msg.value)
                 return await self._deliver_message_claim_reward(msg, request.tx.fee, request.tx.memo)
+            elif type_url.endswith("/types.MessageRegisterModel"):
+                msg = MessageRegisterModel()
+                msg.ParseFromString(request.tx.msg.value)
+                return await self._deliver_message_register_model(msg, request.tx.fee, request.tx.memo)
             else:
                 raise err_invalid_message_cast()
 
@@ -1066,6 +1101,138 @@ class Contract:
             PluginSetOp(key=from_key, value=marshal(from_account)),
             PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
             PluginSetOp(key=stake_key, value=json.dumps(stake).encode("utf-8")),
+        ]
+        write_resp = await self.plugin.state_write(
+            self,
+            PluginStateWriteRequest(sets=sets, deletes=[]),
+        )
+
+        result = PluginDeliverResponse()
+        result.events.extend([])
+        if write_resp.HasField("error"):
+            result.error.CopyFrom(write_resp.error)
+        return result
+
+    def _check_message_register_model(self, msg: MessageRegisterModel) -> PluginCheckResponse:
+        """CheckMessageRegisterModel statelessly validates a 'register_model' message.
+
+        Governance registers a new G2 ZeroPerceptron model version with
+        its weights hash, accuracy, and input dimension."""
+        # Check sender address (must be exactly 20 bytes)
+        if len(msg.from_address) != 20:
+            raise err_invalid_address()
+
+        # Version must be > 0
+        if msg.version == 0:
+            raise PluginError(1, "plugin", "version must be > 0")
+
+        # Weights hash must not be empty
+        if not msg.weights_hash:
+            raise PluginError(1, "plugin", "weights hash cannot be empty")
+
+        # Accuracy must be in [0, 1]
+        if msg.accuracy < 0.0 or msg.accuracy > 1.0:
+            raise PluginError(1, "plugin", "accuracy must be in [0, 1]")
+
+        # Input dimension must be valid (28 or 42)
+        if msg.in_dim not in (28, 42):
+            raise PluginError(1, "plugin", "in_dim must be 28 or 42")
+
+        # Number of classes must be > 0
+        if msg.n_classes == 0:
+            raise PluginError(1, "plugin", "n_classes must be > 0")
+
+        # Return authorized signers (sender must sign)
+        response = PluginCheckResponse()
+        response.authorized_signers.append(msg.from_address)
+        return response
+
+    async def _deliver_message_register_model(self, msg: MessageRegisterModel, fee: int, memo: str) -> PluginDeliverResponse:
+        """DeliverMessageRegisterModel registers a new model version.
+
+        The model record (version, weights hash, accuracy, input dim,
+        class count, description) is stored under MODEL_PREFIX (b'\\x09')
+        keyed by version. The active model pointer is updated to the
+        highest registered version."""
+        if not self.plugin or not self.config:
+            raise PluginError(1, "plugin", "plugin or config not initialized")
+
+        # Read sender account, fee pool, model counter, and active model
+        from_key = key_for_account(msg.from_address)
+        fee_pool_key = key_for_fee_pool(self.config.chain_id)
+        counter_key = key_for_model_counter()
+        active_key = key_for_active_model()
+
+        from_query_id = random.randint(0, 2**53)
+        fee_query_id = random.randint(0, 2**53)
+        counter_query_id = random.randint(0, 2**53)
+        active_query_id = random.randint(0, 2**53)
+
+        response = await self.plugin.state_read(
+            self,
+            PluginStateReadRequest(
+                keys=[
+                    PluginKeyRead(query_id=fee_query_id, key=fee_pool_key),
+                    PluginKeyRead(query_id=from_query_id, key=from_key),
+                    PluginKeyRead(query_id=counter_query_id, key=counter_key),
+                    PluginKeyRead(query_id=active_query_id, key=active_key),
+                ]
+            ),
+        )
+        if response.HasField("error"):
+            result = PluginDeliverResponse()
+            result.error.CopyFrom(response.error)
+            return result
+
+        from_bytes = None
+        fee_pool_bytes = None
+        counter_bytes = None
+        active_bytes = None
+        for resp in response.results:
+            if resp.query_id == from_query_id:
+                from_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == fee_query_id:
+                fee_pool_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == counter_query_id:
+                counter_bytes = resp.entries[0].value if resp.entries else None
+            elif resp.query_id == active_query_id:
+                active_bytes = resp.entries[0].value if resp.entries else None
+
+        from_account = unmarshal(Account, from_bytes) if from_bytes else Account()
+        fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
+
+        # Must be able to pay fee
+        if from_account.amount < fee:
+            raise err_insufficient_funds()
+
+        # Allocate new model version from counter
+        model_version = int.from_bytes(counter_bytes, "big") if counter_bytes else 0
+        new_version = model_version + 1
+
+        # Deduct fee -> pool
+        from_account.amount -= fee
+        fee_pool.amount += fee
+
+        # Create model registry record
+        model_record = {
+            "version": new_version,
+            "weights_hash": msg.weights_hash,
+            "accuracy": float(msg.accuracy),
+            "in_dim": int(msg.in_dim),
+            "n_classes": int(msg.n_classes),
+            "description": msg.description,
+            "registered_by": msg.from_address.hex(),
+            "height": 0,
+        }
+
+        model_key = key_for_model_registry(new_version)
+        sets = [
+            PluginSetOp(key=from_key, value=marshal(from_account)),
+            PluginSetOp(key=fee_pool_key, value=marshal(fee_pool)),
+            PluginSetOp(key=counter_key, value=new_version.to_bytes(8, "big")),
+            PluginSetOp(key=model_key, value=json.dumps(model_record).encode("utf-8")),
+            # Update active model pointer to the latest version
+            PluginSetOp(key=active_key, value=str(new_version).encode("utf-8")),
         ]
         write_resp = await self.plugin.state_write(
             self,

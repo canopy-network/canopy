@@ -113,6 +113,27 @@ message MessageClaimReward {
   uint64 market_id = 2; // @gotags: json:"marketId"
 }
 
+// MessageRegisterModel is a model versioning transaction: governance registers
+// a new G2 ZeroPerceptron model version (weights hash, accuracy, input dim).
+// The plugin stores the registry under the 0x09 namespace and tracks the
+// latest active version for on-chain inference.
+message MessageRegisterModel {
+  // from_address: is the account registering the model (governance)
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // version: the model version number (monotonic, > 0)
+  uint32 version = 2;
+  // weights_hash: SHA-256 hex digest of the weights file
+  string weights_hash = 3; // @gotags: json:"weightsHash"
+  // accuracy: the model accuracy on the evaluation set (0.0 - 1.0)
+  double accuracy = 4;
+  // in_dim: the input feature dimension (28 or 42)
+  uint32 in_dim = 5; // @gotags: json:"inDim"
+  // n_classes: the number of output classes (16)
+  uint32 n_classes = 6; // @gotags: json:"nClasses"
+  // description: human-readable description of the model changes
+  string description = 7;
+}
+
 // FeeParams is the parameter space that defines various amounts for transaction fees
 message FeeParams {
   // send_fee: is the fee amount (in uCNPY) for Message Send
