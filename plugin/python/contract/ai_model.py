@@ -336,24 +336,57 @@ class G2Model:
                 "features28 must be exactly {} floats".format(N_FEATURES))
         return self._predict_impl(features28)
 
-    def _predict_impl(self, x28: list) -> dict:
+    def _predict_impl(self, x28: list, temperature: float = 1.5) -> dict:
         self._ensure_loaded()
         logits = self._model.forward(x28)
         y = logits.index(max(logits))
-        probs = self._softmax(logits)
+        probs = self._softmax(logits, temperature)
+
+        # top-3 klasy (nazwy + prawdopodobieństwa)
+        ranked = sorted(zip(_CLASS_NAMES, probs), key=lambda kv: kv[1],
+                        reverse=True)
+        top3 = [{"class": name, "prob": round(float(p), 6)}
+                for name, p in ranked[:3]]
+
+        # feature importance — numeryczny gradient logitu klasy zwycięskiej
+        importance = self._feature_importance(x28, logits, y)
+
         return {
             "y": int(y),
             "class": _CLASS_NAMES[y] if 0 <= y < len(_CLASS_NAMES) else "CLASS_{}".format(y),
             "logits": [round(float(v), 6) for v in logits],
             "probs": [round(float(p), 6) for p in probs],
+            "top3": top3,
+            "feature_importance": [round(float(v), 6) for v in importance],
+            "temperature": float(temperature),
             "vector": [round(float(v), 6) for v in x28],
             "meta": self.meta,
         }
 
+    def _feature_importance(self, x28: list, logits: list, y: int,
+                            eps: float = 1e-3) -> list:
+        """Numeryczny gradient logitu klasy y względem każdego z 28 wymiarów."""
+        base = logits[y]
+        imp = []
+        for i in range(len(x28)):
+            x_plus = list(x28)
+            x_plus[i] += eps
+            logits_plus = self._model.forward(x_plus)
+            # normalizacja przez eps — przybliżenie ∂L_y/∂x_i
+            imp.append((logits_plus[y] - base) / eps)
+        # normalizacja do [-1, 1] dla czytelności
+        mx = max(abs(v) for v in imp) if imp else 1.0
+        if mx > 1e-12:
+            imp = [v / mx for v in imp]
+        return imp
+
     @staticmethod
-    def _softmax(logits: list) -> list:
-        m = max(logits)
-        exp = [math.exp(v - m) for v in logits]
+    def _softmax(logits: list, temperature: float = 1.0) -> list:
+        if temperature <= 0:
+            temperature = 1.0
+        scaled = [v / temperature for v in logits]
+        m = max(scaled)
+        exp = [math.exp(v - m) for v in scaled]
         s = sum(exp)
         return [e / s for e in exp]
 

@@ -497,6 +497,9 @@ class Contract:
             "y": result["y"],
             "class": result.get("class", ""),
             "top_probs": result.get("probs", [])[:3],
+            "top3": result.get("top3", []),
+            "feature_importance": result.get("feature_importance", []),
+            "temperature": result.get("temperature", 1.5),
             "height": 0,
         }).encode("utf-8")
 
