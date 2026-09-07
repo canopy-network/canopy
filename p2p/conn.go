@@ -463,6 +463,7 @@ func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) {
 	a, err := lib.NewAny(message)
 	if err != nil {
 		c.Error(err)
+		return
 	}
 	// restrict the instantaneous data flow to rate bytes per second
 	// Limit() request maxPacketSize bytes from the limiter and the limiter
@@ -473,6 +474,7 @@ func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) {
 	lenM, err := sendProtoMsg(c.conn, &Envelope{Payload: a})
 	if err != nil {
 		c.Error(err)
+		return
 	}
 	// update the rate limiter with how many bytes were written
 	m.Update(lenM)
