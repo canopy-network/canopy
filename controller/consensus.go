@@ -810,7 +810,10 @@ func (c *Controller) ConsensusSummary() ([]byte, lib.ErrorI) {
 	consensusSummary.BlockHash = c.Consensus.BlockHash
 	// if exists, populate the proposal hash
 	if c.Consensus.Results != nil {
-		consensusSummary.ResultsHash = c.Consensus.Results.Hash()
+		resultsHash, err := c.Consensus.Results.Hash()
+		if err == nil {
+			consensusSummary.ResultsHash = resultsHash
+		}
 	}
 	// if high qc exists, populate the block hash and results hash
 	if c.Consensus.HighQC != nil {
