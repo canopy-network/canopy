@@ -778,14 +778,13 @@ func (s *Store) MaybeBackup() {
 			err = fmt.Errorf("flush before checkpoint: %w", err)
 			return
 		}
+		s.mu.Unlock()
 		// perform the backup using pebble's checkpointing mechanism which creates a
 		// consistent snapshot of the database at the specified directory
 		if err = s.db.Checkpoint(tempBackupDir); err != nil {
-			s.mu.Unlock()
 			err = fmt.Errorf("checkpoint creation: %w", err)
 			return
 		}
-		s.mu.Unlock()
 		// write the current height to a separate file
 		heightFile := filepath.Join(tempBackupDir, "height.txt")
 		if err = os.WriteFile(heightFile, fmt.Appendf(nil, "%d", version), 0644); err != nil {

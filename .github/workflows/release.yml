@@ -134,7 +134,7 @@ jobs:
             canopynetwork/canopy:${{ steps.prep.outputs.docker_tag }}
             canopynetwork/canopy:latest
           build-args: |
-            BRANCH=${{ github.event.inputs.tag }}
+            BRANCH=${{ needs.validate.outputs.tag }}
             BUILD_PATH=cmd/cli
 
   docker-go:
@@ -178,7 +178,7 @@ jobs:
             canopynetwork/canopy-plugin-go:${{ steps.prep.outputs.docker_tag }}
             canopynetwork/canopy-plugin-go:latest
           build-args: |
-            BRANCH=${{ github.event.inputs.tag }}
+            BRANCH=${{ needs.validate.outputs.tag }}
             BUILD_PATH=cmd/cli
 
   docker-python:
@@ -222,7 +222,7 @@ jobs:
             canopynetwork/canopy-plugin-python:${{ steps.prep.outputs.docker_tag }}
             canopynetwork/canopy-plugin-python:latest
           build-args: |
-            BRANCH=${{ github.event.inputs.tag }}
+            BRANCH=${{ needs.validate.outputs.tag }}
             BUILD_PATH=cmd/cli
 
   docker-typescript:
@@ -266,7 +266,7 @@ jobs:
             canopynetwork/canopy-plugin-typescript:${{ steps.prep.outputs.docker_tag }}
             canopynetwork/canopy-plugin-typescript:latest
           build-args: |
-            BRANCH=${{ github.event.inputs.tag }}
+            BRANCH=${{ needs.validate.outputs.tag }}
             BUILD_PATH=cmd/cli
 
   docker-kotlin:
@@ -310,7 +310,7 @@ jobs:
             canopynetwork/canopy-plugin-kotlin:${{ steps.prep.outputs.docker_tag }}
             canopynetwork/canopy-plugin-kotlin:latest
           build-args: |
-            BRANCH=${{ github.event.inputs.tag }}
+            BRANCH=${{ needs.validate.outputs.tag }}
             BUILD_PATH=cmd/cli
 
   docker-csharp:
@@ -354,5 +354,5 @@ jobs:
             canopynetwork/canopy-plugin-csharp:${{ steps.prep.outputs.docker_tag }}
             canopynetwork/canopy-plugin-csharp:latest
           build-args: |
-            BRANCH=${{ github.event.inputs.tag }}
+            BRANCH=${{ needs.validate.outputs.tag }}
             BUILD_PATH=cmd/cli
