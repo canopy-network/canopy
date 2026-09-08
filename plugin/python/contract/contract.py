@@ -170,7 +170,7 @@ def key_for_predict_log(address: bytes, seq: int) -> bytes:
 
 
 
-    Namespace: 0x03 + address + sequence (big-endian)."""
+    Namespace: 100 (PREDICT_PREFIX) + address + sequence (big-endian)."""
     return join_len_prefix(PREDICT_PREFIX, address, format_uint64(seq))
 
 
@@ -179,56 +179,56 @@ def key_for_feedback_log(address: bytes, seq: int) -> bytes:
 
 
 
-    Namespace: 0x04 + address + sequence (big-endian)."""
+    Namespace: 101 (FEEDBACK_PREFIX) + address + sequence (big-endian)."""
     return join_len_prefix(FEEDBACK_PREFIX, address, format_uint64(seq))
 
 
 def key_for_market_counter() -> bytes:
     """Generate state database key for the market ID counter.
 
-    Namespace: 0x08 (single global counter)."""
+    Namespace: 104 (MARKET_COUNTER_PREFIX) (single global counter)."""
     return join_len_prefix(MARKET_COUNTER_PREFIX, b"/c/")
 
 
 def key_for_market(market_id: int) -> bytes:
     """Generate state database key for a prediction market.
 
-    Namespace: 0x05 + market_id (big-endian)."""
+    Namespace: 102 (MARKET_PREFIX) + market_id (big-endian)."""
     return join_len_prefix(MARKET_PREFIX, format_uint64(market_id))
 
 
 def key_for_stake(address: bytes, market_id: int) -> bytes:
     """Generate state database key for a user's stake in a market.
 
-    Namespace: 0x06 + address + market_id (big-endian)."""
+    Namespace: 103 (STAKE_PREFIX) + address + market_id (big-endian)."""
     return join_len_prefix(STAKE_PREFIX, address, format_uint64(market_id))
 
 
 def key_for_model_counter() -> bytes:
     """Generate state database key for the model version counter.
 
-    Namespace: 0x0a (single global counter)."""
+    Namespace: 106 (MODEL_COUNTER_PREFIX) (single global counter)."""
     return join_len_prefix(MODEL_COUNTER_PREFIX, b"/c/")
 
 
 def key_for_model_registry(version: int) -> bytes:
     """Generate state database key for a model version record.
 
-    Namespace: 0x09 + version (big-endian)."""
+    Namespace: 105 (MODEL_PREFIX) + version (big-endian)."""
     return join_len_prefix(MODEL_PREFIX, format_uint64(version))
 
 
 def key_for_active_model() -> bytes:
     """Generate state database key for the active model version.
 
-    Namespace: 0x09 + '/active/' (single global pointer)."""
+    Namespace: 105 (MODEL_PREFIX) + '/active/' (single global pointer)."""
     return join_len_prefix(MODEL_PREFIX, b"/active/")
 
 
 def key_for_dashboard() -> bytes:
     """Generate state database key for the on-chain dashboard.
 
-    Namespace: 0x0b + '/d/' (single global dashboard record)."""
+    Namespace: 107 (DASHBOARD_PREFIX) + '/d/' (single global dashboard record)."""
     return join_len_prefix(DASHBOARD_PREFIX, b"/d/")
 
 
@@ -458,7 +458,7 @@ class Contract:
     async def _update_dashboard(self, updates: Dict[str, Any]) -> None:
         """Update the on-chain dashboard aggregate record.
 
-        The dashboard is a single JSON record under DASHBOARD_PREFIX (b'\x0b')
+        The dashboard is a single JSON record under DASHBOARD_PREFIX (107)
         that tracks key metrics: total predictions, feedback accuracy,
         top classes, revenue from fees, market stats, and model versions.
         """
@@ -711,7 +711,7 @@ class Contract:
         and the ZeroPerceptron backbone produces a 16-class decision.
 
         The result (class + confidence) is written into state under
-        PREDICT_PREFIX (b'\\x03') keyed by sender address + nonce.
+        PREDICT_PREFIX (100) keyed by sender address + nonce.
         """
         if not self.plugin or not self.config:
             raise PluginError(1, "plugin", "plugin or config not initialized")
@@ -771,7 +771,7 @@ class Contract:
         from_account.amount -= fee
         fee_pool.amount += fee
 
-        # Persist prediction log under 0x03 namespace
+        # Persist prediction log under 100 (PREDICT_PREFIX) namespace
         seq = from_account.nonce
         predict_key = key_for_predict_log(msg.from_address, seq)
         log_value = json.dumps({
@@ -832,9 +832,9 @@ class Contract:
     async def _deliver_message_stake(self, msg: MessageStake, fee: int, memo: str) -> PluginDeliverResponse:
         """DeliverMessageStake locks QARD into a prediction market.
 
-        The stake is recorded under STAKE_PREFIX (b'\\x06') keyed by
+        The stake is recorded under STAKE_PREFIX (103) keyed by
         sender address + market_id. The market's total pool is updated
-        under MARKET_PREFIX (b'\\x05')."""
+        under MARKET_PREFIX (102)."""
         if not self.plugin or not self.config:
             raise PluginError(1, "plugin", "plugin or config not initialized")
 
@@ -968,8 +968,8 @@ class Contract:
     async def _deliver_message_create_market(self, msg: MessageCreateMarket, fee: int, memo: str) -> PluginDeliverResponse:
         """DeliverMessageCreateMarket creates a new prediction market.
 
-        A new market ID is allocated from the monotonic counter (0x08),
-        and the market record is stored under MARKET_PREFIX (b'\\x05')."""
+        A new market ID is allocated from the monotonic counter (104),
+        and the market record is stored under MARKET_PREFIX (102)."""
         if not self.plugin or not self.config:
             raise PluginError(1, "plugin", "plugin or config not initialized")
 
@@ -1339,7 +1339,7 @@ class Contract:
         """DeliverMessageRegisterModel registers a new model version.
 
         The model record (version, weights hash, accuracy, input dim,
-        class count, description) is stored under MODEL_PREFIX (b'\\x09')
+        class count, description) is stored under MODEL_PREFIX (105)
         keyed by version. The active model pointer is updated to the
         highest registered version."""
         if not self.plugin or not self.config:
@@ -1459,7 +1459,7 @@ class Contract:
         """DeliverMessageFeedback stores an on-chain learning signal.
 
         The feedback (correct/incorrect + actual class) is persisted under
-        FEEDBACK_PREFIX (b'\\x04') keyed by sender address + predict_seq.
+        FEEDBACK_PREFIX (101) keyed by sender address + predict_seq.
         This data can be exported off-chain for retraining / governance."""
         if not self.plugin or not self.config:
             raise PluginError(1, "plugin", "plugin or config not initialized")
@@ -1508,7 +1508,7 @@ class Contract:
         from_account.amount -= fee
         fee_pool.amount += fee
 
-        # Persist feedback log under 0x04 namespace
+        # Persist feedback log under 101 (FEEDBACK_PREFIX) namespace
         feedback_key = key_for_feedback_log(msg.from_address, msg.predict_seq)
         feedback_value = json.dumps({
             "predict_seq": int(msg.predict_seq),
