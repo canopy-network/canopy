@@ -816,3 +816,24 @@ func validateWithExportedState(t *testing.T, sm StateMachine, expected *GenesisS
 	// compare got vs expected
 	require.EqualExportedValues(t, expected, got, fmt.Sprintf("EXPECTED:\n%s\nGOT:\n%s", expectedJson, gotJson))
 }
+
+// TestGenesisJSONRoundTripPreservesRetiredCommittees ensures that retired committees survive a
+// GenesisState -> JSON -> GenesisState round trip. Retired committees are non-subsidized "for
+// eternity"; if the JSON codec drops them, an export/import upgrade silently makes them live
+// again and they resume receiving minted rewards.
+func TestGenesisJSONRoundTripPreservesRetiredCommittees(t *testing.T) {
+	// a genesis state carrying two retired committees
+	expected := &GenesisState{
+		Params:            DefaultParams(),
+		RetiredCommittees: []uint64{7, 21},
+	}
+	// marshal to JSON via the custom GenesisState codec
+	bz, err := json.Marshal(expected)
+	require.NoError(t, err)
+	// unmarshal back into a fresh GenesisState
+	got := new(GenesisState)
+	require.NoError(t, json.Unmarshal(bz, got))
+	// the retired committees must survive the round trip
+	require.Equal(t, expected.RetiredCommittees, got.RetiredCommittees,
+		"retired committees must survive a genesis export/import round trip; json=%s", string(bz))
+}
