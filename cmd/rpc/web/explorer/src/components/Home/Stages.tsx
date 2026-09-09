@@ -2,7 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { useCardData } from '../../hooks/useApi'
 import { usePersistentNumber } from '../../hooks/usePersistentNumber'
-import { getTotalTransactionCount, getTotalAccountCount, Validators, ValidatorsWithFilters } from '../../lib/api'
+import { getTotalTransactionCount, Validators, ValidatorsWithFilters } from '../../lib/api'
 import { convertNumber, toCNPY } from '../../lib/utils'
 import AnimatedNumber from '../AnimatedNumber'
 
@@ -67,20 +67,8 @@ const Stages = () => {
         return toCNPY(Number(bonded) || 0)
     }, [cardData])
 
-    const liquidSupplyCandidate: number | null = React.useMemo(() => {
-        if (!cardData) return null
-        const s = (cardData as any)?.supply || {}
-        const total = Number(s.total ?? 0)
-        const staked = Number(s.staked ?? 0)
-        if (total > 0) return toCNPY(Math.max(0, total - staked))
-        // fallback to other fields if they don't exist
-        const liquid = s.circulating ?? s.liquidSupply ?? s.liquid ?? 0
-        return toCNPY(Number(liquid) || 0)
-    }, [cardData])
-
     // Async stats stay `null` until a fetch succeeds. We never reset them to a
     // value on failure, so a transient RPC error can't blank the cards.
-    const [totalAccountsCandidate, setTotalAccountsCandidate] = React.useState<number | null>(null)
     const [totalTxsCandidate, setTotalTxsCandidate] = React.useState<number | null>(null)
     const [totalValidatingCandidate, setTotalValidatingCandidate] = React.useState<number | null>(null)
     const [totalDelegatingCandidate, setTotalDelegatingCandidate] = React.useState<number | null>(null)
@@ -105,13 +93,6 @@ const Stages = () => {
                 } else if (!cancelled) {
                     setTotalTxsCandidate(0)
                 }
-            }
-
-            try {
-                const accountStats = await getTotalAccountCount()
-                if (!cancelled) setTotalAccountsCandidate(accountStats.total)
-            } catch (error) {
-                console.error('Error fetching account stats:', error)
             }
 
             try {
@@ -145,8 +126,6 @@ const Stages = () => {
     const latestBlockHeight = usePersistentNumber('blockHeight', latestBlockHeightCandidate)
     const totalSupplyCNPY = usePersistentNumber('totalSupply', totalSupplyCandidate)
     const totalStakeCNPY = usePersistentNumber('totalStake', totalStakeCandidate)
-    const liquidSupplyCNPY = usePersistentNumber('liquidSupply', liquidSupplyCandidate)
-    const totalAccounts = usePersistentNumber('totalAccounts', totalAccountsCandidate)
     const totalTxs = usePersistentNumber('totalTxs', totalTxsCandidate)
     const totalValidating = usePersistentNumber('totalValidating', totalValidatingCandidate)
     const totalDelegating = usePersistentNumber('totalDelegating', totalDelegatingCandidate)
@@ -167,14 +146,6 @@ const Stages = () => {
             subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
             icon: <i className="fa-solid fa-wallet"></i>,
             metric: 'totalSupply',
-        },
-        {
-            title: 'Liquid Supply',
-            data: convertNumber(liquidSupplyCNPY.value),
-            loading: !liquidSupplyCNPY.hasValue,
-            subtitle: <p className={stageCardSubtitleClass}>CNPY</p>,
-            icon: <i className="fa-solid fa-droplet"></i>,
-            metric: 'liquidSupply',
         },
         {
             title: 'Total Stake',
@@ -199,14 +170,6 @@ const Stages = () => {
             subtitle: <p className={stageCardSubtitleClass}>Delegators</p>,
             icon: <i className="fa-solid fa-coins"></i>,
             metric: 'totalDelegating',
-        },
-        {
-            title: 'Total Accounts',
-            data: convertNumber(totalAccounts.value),
-            loading: !totalAccounts.hasValue,
-            icon: <i className="fa-solid fa-users"></i>,
-            metric: 'accounts',
-            subtitle: <p className={stageCardSubtitleClass}>Indexed accounts</p>,
         },
         {
             title: 'Total Txs',
