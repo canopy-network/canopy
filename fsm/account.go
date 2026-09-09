@@ -57,6 +57,15 @@ func (s *StateMachine) GetAccounts() (result []*Account, err lib.ErrorI) {
 		if err != nil {
 			return nil, err
 		}
+		// accounts are keyed by address, so the key is authoritative - legacy
+		// records whose value omits the address would otherwise report empty
+		if len(acc.Address) == 0 {
+			addr, e := AddressFromKey(it.Key())
+			if e != nil {
+				return nil, e
+			}
+			acc.Address = addr.Bytes()
+		}
 		result = append(result, acc)
 	}
 	// return the result
@@ -68,11 +77,21 @@ func (s *StateMachine) GetAccountsPaginated(p lib.PageParams) (page *lib.Page, e
 	// create a new 'accounts' page
 	page, res := lib.NewPage(p, AccountsPageName), make(AccountPage, 0)
 	// load the page using the account prefix iterator
-	err = page.Load(AccountPrefix(), false, &res, s.store, func(_, b []byte) (err lib.ErrorI) {
+	err = page.Load(AccountPrefix(), false, &res, s.store, func(k, b []byte) (err lib.ErrorI) {
 		acc, err := s.unmarshalAccount(b)
-		if err == nil {
-			res = append(res, acc)
+		if err != nil {
+			return
 		}
+		// accounts are keyed by address, so the key is authoritative - legacy
+		// records whose value omits the address would otherwise report empty
+		if len(acc.Address) == 0 {
+			addr, e := AddressFromKey(k)
+			if e != nil {
+				return e
+			}
+			acc.Address = addr.Bytes()
+		}
+		res = append(res, acc)
 		return
 	})
 	return
