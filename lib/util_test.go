@@ -555,6 +555,57 @@ func TestAddUint64(t *testing.T) {
 	require.True(t, overflow)
 }
 
+func TestContainsByteSlice(t *testing.T) {
+	tests := []struct {
+		name     string
+		detail   string
+		list     [][]byte
+		target   []byte
+		expected bool
+	}{
+		{
+			name:     "empty list",
+			detail:   "a nil list never contains the target",
+			list:     nil,
+			target:   []byte("a"),
+			expected: false,
+		},
+		{
+			name:     "present at head",
+			detail:   "the target is the first element of the list",
+			list:     [][]byte{[]byte("a"), []byte("b"), []byte("c")},
+			target:   []byte("a"),
+			expected: true,
+		},
+		{
+			name:     "present in middle",
+			detail:   "the target is somewhere within the list",
+			list:     [][]byte{[]byte("a"), []byte("b"), []byte("c")},
+			target:   []byte("b"),
+			expected: true,
+		},
+		{
+			name:     "present at tail",
+			detail:   "the target is the last element of the list",
+			list:     [][]byte{[]byte("a"), []byte("b"), []byte("c")},
+			target:   []byte("c"),
+			expected: true,
+		},
+		{
+			name:     "absent",
+			detail:   "the target is not a member of the list",
+			list:     [][]byte{[]byte("a"), []byte("b"), []byte("c")},
+			target:   []byte("z"),
+			expected: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.expected, ContainsByteSlice(test.list, test.target))
+		})
+	}
+}
+
 func TestLoadCounted(t *testing.T) {
 	tests := []struct {
 		name           string
