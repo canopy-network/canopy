@@ -2,11 +2,12 @@ package fsm
 
 import (
 	"bytes"
+	"math"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/types/known/anypb"
-	"math"
-	"time"
 )
 
 /* This file contains transaction handling logic - for the payload handling check message.go */
@@ -182,9 +183,17 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	if err != nil {
 		return
 	}
-	if s.isRestricted(sender.Bytes()) || s.isRestricted(recipient) {
+	var restrictedAddress []byte
+	switch {
+	case s.isRestricted(sender.Bytes()):
+		restrictedAddress = sender.Bytes()
+	case s.isRestricted(recipient):
+		restrictedAddress = recipient
+	}
+	if restrictedAddress != nil {
 		if s.Metrics != nil {
 			s.Metrics.RestrictedTxCount.Inc()
+			s.log.Debugf("found restricted address %x in transaction %s of type %s", restrictedAddress, txHash, tx.MessageType)
 		}
 		return nil, ErrRestrictedAddress()
 	}
