@@ -8,7 +8,7 @@ The auto-update package provides a robust mechanism to:
 - Check for new releases on GitHub
 - Download and install updates automatically
 - Manage the running CLI process
-- Handle graceful updates without disrupting the user experience
+- Handle graceful updates without disrupting the user experiencee
 
 ## Architecture
 
