@@ -71,10 +71,15 @@ func getRandomAllowedPeer(peers []string, limiter *lib.SimpleLimiter) string {
 // 7) Do this until reach the max-peer-height
 // 8) Stay on top by listening to incoming cert messages
 func (c *Controller) Sync() {
+	// guard against concurrent syncs; a second Inbox(Block) consumer would corrupt the block queue
+	if !c.isSyncing.CompareAndSwap(false, true) {
+		c.log.Debug("Sync already in progress; skipping duplicate trigger")
+		return
+	}
 	// log the initialization of the syncing process
 	c.log.Infof("Sync started 🔄 for committee %d", c.Config.ChainId)
-	// set the Controller as 'syncing'
-	c.isSyncing.Store(true)
+	// suppress the full-node block-inbox DLQ while syncing so Sync() can consume in-order responses
+	c.P2P.SetSyncing(true)
 	// notify the store to defer compaction during sync
 	if st, ok := c.FSM.Store().(*store.Store); ok {
 		st.SetSyncing(true)
@@ -771,6 +776,8 @@ func (c *Controller) finishSyncing() {
 	c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: c.LoadLastCommitTime(c.FSM.Height())}
 	// set syncing to false
 	c.isSyncing.Store(false)
+	// re-enable the full-node block-inbox DLQ now that we are back to steady-state gossip
+	c.P2P.SetSyncing(false)
 	// notify the store to resume compaction and trigger a full compaction of all prefixes
 	// (including SMT/indexer which are never compacted during normal operation)
 	if st, ok := c.FSM.Store().(*store.Store); ok {
