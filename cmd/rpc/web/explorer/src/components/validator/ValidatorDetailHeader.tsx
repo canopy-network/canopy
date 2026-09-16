@@ -1,4 +1,5 @@
 import React from 'react'
+import { copyText } from '../../lib/clipboard'
 import validatorDetailTexts from '../../data/validatorDetail.json'
 import toast from 'react-hot-toast'
 import { Copy } from 'lucide-react'
@@ -61,16 +62,20 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
         }
     }
 
-    const copyToClipboard = (text: string, label: string = 'Address') => {
-        navigator.clipboard.writeText(text)
-        toast.success(`${label} copied to clipboard`, {
-            duration: 2000,
-            position: 'top-right',
-            style: {
-                background: '#171717',
-                color: '#35cd48',
-            },
-        })
+    const copyToClipboard = async (text: string, label: string = 'Address') => {
+        try {
+            await copyText(text)
+            toast.success(`${label} copied to clipboard`, {
+                duration: 2000,
+                position: 'top-right',
+                style: {
+                    background: '#171717',
+                    color: '#35cd48',
+                },
+            })
+        } catch {
+            toast.error('Unable to copy to clipboard')
+        }
     }
 
     // Determine button label and icon based on validator type

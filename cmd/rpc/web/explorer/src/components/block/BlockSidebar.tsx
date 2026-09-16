@@ -2,6 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { copyText } from '../../lib/clipboard'
 import blockDetailTexts from '../../data/blockDetail.json'
 
 interface BlockSidebarProps {
@@ -31,10 +32,14 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
         return `${address.slice(0, startLength)}...${address.slice(-endLength)}`
     }
 
-    const copyToClipboard = (text: string, label: string = 'Address') => {
+    const copyToClipboard = async (text: string, label: string = 'Address') => {
         if (text && text !== 'N/A') {
-            navigator.clipboard.writeText(text)
-            toast.success(`${label} copied to clipboard`)
+            try {
+                await copyText(text)
+                toast.success(`${label} copied to clipboard`)
+            } catch {
+                toast.error('Unable to copy to clipboard')
+            }
         }
     }
 

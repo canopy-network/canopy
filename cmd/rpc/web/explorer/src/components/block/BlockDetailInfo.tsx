@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { copyText } from '../../lib/clipboard'
 import blockDetailTexts from '../../data/blockDetail.json'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
 import { formatCNPY } from '../../lib/utils'
@@ -26,16 +27,20 @@ const CopySymbol = () => <Copy aria-hidden="true" className="h-3.5 w-3.5" stroke
 
 const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) => {
     const [viewMode, setViewMode] = useState<'decoded' | 'raw'>('decoded')
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text)
-        toast.success('Copied to clipboard!', {
-            icon: '📋',
-            style: {
-                background: '#1a1a1a',
-                color: '#fafafa',
-                border: '1px solid #45ca46',
-            },
-        })
+    const copyToClipboard = async (text: string) => {
+        try {
+            await copyText(text)
+            toast.success('Copied to clipboard!', {
+                icon: '📋',
+                style: {
+                    background: '#1a1a1a',
+                    color: '#fafafa',
+                    border: '1px solid #45ca46',
+                },
+            })
+        } catch {
+            toast.error('Unable to copy to clipboard')
+        }
     }
 
     const formatTimestamp = (timestamp: string) => {
