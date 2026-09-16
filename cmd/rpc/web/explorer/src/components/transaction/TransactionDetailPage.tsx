@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Copy } from 'lucide-react'
+import { copyText } from '../../lib/clipboard'
 import { useTxByHash, useBlockByHeight, useLatestBlock } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
@@ -132,16 +133,20 @@ const TransactionDetailPage: React.FC = () => {
         return str.length > n * 2 ? `${str.slice(0, n)}…${str.slice(-8)}` : str
     }
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text)
-        toast.success('Copied to clipboard!', {
-            icon: '📋',
-            style: {
-                background: '#1a1a1a',
-                color: '#fafafa',
-                border: '1px solid #45ca46',
-            },
-        })
+    const copyToClipboard = async (text: string) => {
+        try {
+            await copyText(text)
+            toast.success('Copied to clipboard!', {
+                icon: '📋',
+                style: {
+                    background: '#1a1a1a',
+                    color: '#fafafa',
+                    border: '1px solid #45ca46',
+                },
+            })
+        } catch {
+            toast.error('Unable to copy to clipboard')
+        }
     }
 
     const formatTimestamp = (timestamp: string | number) => {
