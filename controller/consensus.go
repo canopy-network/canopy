@@ -71,10 +71,15 @@ func getRandomAllowedPeer(peers []string, limiter *lib.SimpleLimiter) string {
 // 7) Do this until reach the max-peer-height
 // 8) Stay on top by listening to incoming cert messages
 func (c *Controller) Sync() {
+	// guard against concurrent syncs; a second Inbox(Block) consumer would corrupt the block queue
+	if !c.isSyncing.CompareAndSwap(false, true) {
+		c.log.Debug("Sync already in progress; skipping duplicate trigger")
+		return
+	}
 	// log the initialization of the syncing process
 	c.log.Infof("Sync started 🔄 for committee %d", c.Config.ChainId)
-	// set the Controller as 'syncing'
-	c.isSyncing.Store(true)
+	// suppress the full-node block-inbox DLQ while syncing so Sync() can consume in-order responses
+	c.P2P.SetSyncing(true)
 	// notify the store to defer compaction during sync
 	if st, ok := c.FSM.Store().(*store.Store); ok {
 		st.SetSyncing(true)
@@ -751,36 +756,45 @@ func (c *Controller) syncingDone(maxHeight, minVDFIterations uint64) bool {
 func (c *Controller) finishSyncing() {
 	c.log.Debug("Finish syncing")
 	//defer lib.TimeTrack(c.log, time.Now())
-	// lock the controller for thread safety
-	c.Lock()
-	// when function completes, unlock
-	defer c.Unlock()
-	// reinitialize the mempool now that sync is complete
-	c.Mempool.L.Lock()
-	c.Mempool.Clear()
-	c.Mempool.FSM.Discard()
-	if mFSM, err := c.FSM.Copy(); err == nil {
-		c.Mempool.FSM = mFSM
-	}
-	c.Mempool.CheckMempool()
-	c.Mempool.FSM.Reset()
-	c.Mempool.L.Unlock()
-	// set the startup block metric (block height when first sync completed)
-	c.Metrics.SetStartupBlock(c.FSM.Height())
-	// signal a reset of bft for the chain
-	c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: c.LoadLastCommitTime(c.FSM.Height())}
-	// set syncing to false
-	c.isSyncing.Store(false)
-	// notify the store to resume compaction and trigger a full compaction of all prefixes
-	// (including SMT/indexer which are never compacted during normal operation)
-	if st, ok := c.FSM.Store().(*store.Store); ok {
-		st.SetSyncing(false)
-		go func() {
-			if err := st.CompactAll(st.Version()); err != nil {
-				c.log.Errorf("post-sync compaction failed: %s", err)
-			}
-		}()
-	}
+	// timestamp used to reset the bft, captured under the lock but sent after releasing it
+	var resetTime time.Time
+	// wrap the locked section so the controller lock is released before the ResetBFT send below
+	func() {
+		// lock the controller for thread safety
+		c.Lock()
+		// when the locked section completes, unlock
+		defer c.Unlock()
+		// reinitialize the mempool now that sync is complete
+		c.Mempool.L.Lock()
+		c.Mempool.Clear()
+		c.Mempool.FSM.Discard()
+		if mFSM, err := c.FSM.Copy(); err == nil {
+			c.Mempool.FSM = mFSM
+		}
+		c.Mempool.CheckMempool()
+		c.Mempool.FSM.Reset()
+		c.Mempool.L.Unlock()
+		// set the startup block metric (block height when first sync completed)
+		c.Metrics.SetStartupBlock(c.FSM.Height())
+		// capture the reset timestamp while holding the lock
+		resetTime = c.LoadLastCommitTime(c.FSM.Height())
+		// set syncing to false
+		c.isSyncing.Store(false)
+		// re-enable the full-node block-inbox DLQ now that we are back to steady-state gossip
+		c.P2P.SetSyncing(false)
+		// notify the store to resume compaction and trigger a full compaction of all prefixes
+		// (including SMT/indexer which are never compacted during normal operation)
+		if st, ok := c.FSM.Store().(*store.Store); ok {
+			st.SetSyncing(false)
+			go func() {
+				if err := st.CompactAll(st.Version()); err != nil {
+					c.log.Errorf("post-sync compaction failed: %s", err)
+				}
+			}()
+		}
+	}()
+	// signal the bft reset outside the controller lock (the BFT loop needs that lock to drain it)
+	c.signalResetBFT(bft.ResetBFT{StartTime: resetTime})
 	// enable listening for a block
 	go c.ListenForBlock()
 }

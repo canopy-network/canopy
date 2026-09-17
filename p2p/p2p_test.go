@@ -1045,3 +1045,86 @@ func TestInboxStatsWithFullChannel(t *testing.T) {
 		}
 	}
 }
+
+// fillInbox fills the given stream's shared inbox with n placeholder messages
+func fillInbox(t *testing.T, s *Stream, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		select {
+		case s.inbox <- &lib.MessageAndMetadata{Message: []byte("x")}:
+		default:
+			t.Fatalf("inbox unexpectedly full at %d", i)
+		}
+	}
+}
+
+// resyncSignaled reports whether the full-node resync signal is pending (non-blocking)
+func resyncSignaled(p *P2P) bool {
+	select {
+	case <-p.MustResync():
+		return true
+	default:
+		return false
+	}
+}
+
+// TestDropInboxIfBackedUp verifies the full-node block-inbox DLQ and that a backed-up BLOCK
+// inbox triggers an active resync instead of silently dropping the backlog
+func TestDropInboxIfBackedUp(t *testing.T) {
+	tests := []struct {
+		name        string
+		topic       lib.Topic
+		isValidator bool
+		isSyncing   bool
+		wantDrained bool
+		wantResync  bool
+	}{
+		{
+			name:        "full node block inbox backed up drains and triggers resync",
+			topic:       lib.Topic_BLOCK,
+			wantDrained: true,
+			wantResync:  true,
+		},
+		{
+			name:        "full node block inbox while syncing is left intact and does not re-trigger",
+			topic:       lib.Topic_BLOCK,
+			isSyncing:   true,
+			wantDrained: false,
+			wantResync:  false,
+		},
+		{
+			name:        "validator block inbox is never flushed",
+			topic:       lib.Topic_BLOCK,
+			isValidator: true,
+			wantDrained: false,
+			wantResync:  false,
+		},
+		{
+			name:        "full node non-block inbox drains but does not trigger resync",
+			topic:       lib.Topic_TX,
+			wantDrained: true,
+			wantResync:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := newTestP2PNode(t)
+			n.SetSelfIsValidator(tt.isValidator)
+			n.SetSyncing(tt.isSyncing)
+			streams := n.NewStreams()
+			s := streams[tt.topic]
+			// fill the inbox up to the flush threshold so the DLQ engages
+			fillInbox(t, s, inboxFlushThreshold)
+			// run the dead-letter policy
+			s.dropInboxIfBackedUp()
+			// assert whether the backlog was drained
+			if tt.wantDrained {
+				require.Equal(t, 0, len(s.inbox), "inbox should have been drained")
+			} else {
+				require.Equal(t, inboxFlushThreshold, len(s.inbox), "inbox should have been left intact")
+			}
+			// assert whether an active resync was signaled
+			require.Equal(t, tt.wantResync, resyncSignaled(n.P2P), "unexpected resync signal state")
+		})
+	}
+}

@@ -600,6 +600,16 @@ func (s *Stream) dropInboxIfBackedUp() {
 	if len(s.inbox) < inboxFlushThreshold {
 		return
 	}
+	// a backed-up block inbox means the full node fell behind; dropping the backlog alone can't
+	// recover it (gossip is de-duplicated + in-order) so trigger an active resync instead
+	if s.topic == lib.Topic_BLOCK {
+		// while syncing, Sync() consumes this inbox and needs the in-order responses; don't flush
+		if s.p2p.IsSyncing() {
+			return
+		}
+		// signal the controller to kick off an active resync (non-blocking / coalesced)
+		s.p2p.signalResync()
+	}
 	// drain the entire backlog non-blockingly
 	dropped := 0
 	for {

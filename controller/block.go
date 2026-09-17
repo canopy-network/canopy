@@ -24,66 +24,92 @@ func (c *Controller) ListenForBlock() {
 	// initialize a cache that prevents duplicate messages and  create a map of peers that signal 'new block'
 	cache, syncDetector := lib.NewMessageCache(), lib.NewBlockTracker(c.Sync, c.log)
 	// wait and execute for each inbound message received
-	for msg := range c.P2P.Inbox(Block) {
+	for {
 		// create a variable to signal a 'stop loop'
 		var quit bool
-		// wrap in a function call to use 'defer' functionality
-		func() {
-			// lock the controller to prevent multi-thread conflicts
-			c.Lock()
-			// when iteration completes, unlock
-			defer c.Unlock()
-			// add a convenience variable to track the sender
-			sender := msg.Sender.Address.PublicKey
-			// check and add the message to the cache to prevent duplicates
-			if ok := cache.Add(msg); !ok {
-				// if fallen out of sync
-				quit = syncDetector.AddIfHas(sender, msg.Message, c.P2P.PeerCount())
-				// exit iteration
+		select {
+		// full-node block inbox backed up: hand off to an active resync (gossip can't fill the gaps)
+		case <-c.P2P.MustResync():
+			// only trigger if not already syncing (Sync() also guards this defensively)
+			if !c.isSyncing.Load() {
+				c.log.Warn("Block inbox backed up on full node; triggering resync 🔄")
+				// start syncing and stop consuming Inbox(Block); Sync() re-launches this on completion
+				go c.Sync()
 				return
 			}
-			c.log.Debug("Handling block message")
-			// log the receipt of the block message
-			c.log.Infof("Received new block from %s ✉️", lib.BytesToTruncatedString(sender))
-			// try to unmarshal the message to a block message
-			blockMessage := new(lib.BlockMessage)
-			if err := lib.Unmarshal(msg.Message, blockMessage); err != nil {
-				// log the error
-				c.log.Debug("Invalid Peer Block Message")
-				// slash the peer's reputation
-				c.P2P.ChangeReputation(msg.Sender.Address.PublicKey, p2p.InvalidBlockRep)
-				// exit iteration
+		// wait and execute for each inbound message received
+		case msg, ok := <-c.P2P.Inbox(Block):
+			// channel closed, stop listening
+			if !ok {
 				return
 			}
-			// 'handle' the peer block and certificate appropriately
-			qc, err := c.HandlePeerBlock(blockMessage, false)
-			// ensure no error
-			if err != nil {
-				// if new height notified
-				if err.Error() == lib.ErrNewHeight().Error() {
+			// gossip/reset intent captured under the lock but executed after it is released (see below)
+			var (
+				gossipQC     *lib.QuorumCertificate
+				gossipSender []byte
+				gossipTime   uint64
+			)
+			// wrap in a function call to use 'defer' functionality
+			func() {
+				// lock the controller to prevent multi-thread conflicts
+				c.Lock()
+				// when iteration completes, unlock
+				defer c.Unlock()
+				// add a convenience variable to track the sender
+				sender := msg.Sender.Address.PublicKey
+				// check and add the message to the cache to prevent duplicates
+				if ok := cache.Add(msg); !ok {
 					// if fallen out of sync
-					if quit = syncDetector.Add(sender, msg.Message, blockMessage.BlockAndCertificate.Header.Height, c.P2P.PeerCount()); quit {
-						// exit iteration
-						return
-					}
+					quit = syncDetector.AddIfHas(sender, msg.Message, c.P2P.PeerCount())
+					// exit iteration
+					return
 				}
-				// log the error
-				c.log.Warnf("Peer block invalid:\n%s", err.Error())
-				// slash the peer's reputation
-				c.P2P.ChangeReputation(msg.Sender.Address.PublicKey, p2p.InvalidBlockRep)
-				// exit iteration
-				return
+				c.log.Debug("Handling block message")
+				// log the receipt of the block message
+				c.log.Infof("Received new block from %s ✉️", lib.BytesToTruncatedString(sender))
+				// try to unmarshal the message to a block message
+				blockMessage := new(lib.BlockMessage)
+				if err := lib.Unmarshal(msg.Message, blockMessage); err != nil {
+					// log the error
+					c.log.Debug("Invalid Peer Block Message")
+					// slash the peer's reputation
+					c.P2P.ChangeReputation(msg.Sender.Address.PublicKey, p2p.InvalidBlockRep)
+					// exit iteration
+					return
+				}
+				// 'handle' the peer block and certificate appropriately
+				qc, err := c.HandlePeerBlock(blockMessage, false)
+				// ensure no error
+				if err != nil {
+					// if new height notified
+					if err.Error() == lib.ErrNewHeight().Error() {
+						// if fallen out of sync
+						if quit = syncDetector.Add(sender, msg.Message, blockMessage.BlockAndCertificate.Header.Height, c.P2P.PeerCount()); quit {
+							// exit iteration
+							return
+						}
+					}
+					// log the error
+					c.log.Warnf("Peer block invalid:\n%s", err.Error())
+					// slash the peer's reputation
+					c.P2P.ChangeReputation(msg.Sender.Address.PublicKey, p2p.InvalidBlockRep)
+					// exit iteration
+					return
+				}
+				// if not syncing, capture the block to gossip + reset the bft after releasing the lock
+				if !c.Syncing().Load() {
+					gossipQC, gossipSender, gossipTime = qc, sender, blockMessage.Time
+				}
+				// reset 'syncDetector' because a new block was received properly
+				syncDetector.Reset()
+			}()
+			// gossip + BFT reset run outside the controller lock: both can block and the BFT loop
+			// needs that lock to drain ResetBFT, so holding it here would stall/deadlock the node
+			if gossipQC != nil {
+				c.GossipBlock(gossipQC, gossipSender, gossipTime)
+				c.signalResetBFT(bft.ResetBFT{StartTime: time.UnixMicro(int64(gossipTime))})
 			}
-			// if not syncing - gossip the block
-			if !c.Syncing().Load() {
-				// gossip the block to our peers
-				c.GossipBlock(qc, sender, blockMessage.Time)
-				// signal a reset to the bft module
-				c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: time.UnixMicro(int64(blockMessage.Time))}
-			}
-			// reset 'syncDetector' because a new block was received properly
-			syncDetector.Reset()
-		}()
+		}
 		// if quit signaled
 		if quit {
 			// exit the loop
