@@ -194,6 +194,19 @@ func (c *Controller) Stop() {
 
 // ROOT CHAIN CALLS BELOW
 
+// signalResetBFT() delivers a reset to the BFT loop without ever blocking the caller; the BFT loop
+// drains ResetBFT while holding the controller (and maybe RCManager) lock, so a blocking send from a
+// lock holder would deadlock the node
+func (c *Controller) signalResetBFT(reset bft.ResetBFT) {
+	select {
+	case c.Consensus.ResetBFT <- reset:
+	default:
+		// buffer full: deliver from a detached, lock-free goroutine so the BFT loop can drain it
+		c.log.Warn("ResetBFT buffer full; delivering reset asynchronously to avoid blocking under lock")
+		go func() { c.Consensus.ResetBFT <- reset }()
+	}
+}
+
 // UpdateRootChainInfo() receives updates from the root-chain thread
 func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	c.log.Debugf("Updating root chain info")
@@ -211,13 +224,13 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		timestamp = time.UnixMicro(int64(info.Timestamp))
 	}
 	c.Mempool.dirtyVersion.Add(1)
-	// if the last validator set is empty
+	// signal a reset without blocking (caller holds the RCManager lock the BFT loop may also need)
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp}
+		c.signalResetBFT(bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp})
 	} else {
 		// signal to reset consensus
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp}
+		c.signalResetBFT(bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp})
 	}
 	// update the peer 'must connect'
 	c.UpdateP2PMustConnect(info.ValidatorSet)

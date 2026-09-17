@@ -43,6 +43,12 @@ func (c *Controller) ListenForBlock() {
 			if !ok {
 				return
 			}
+			// gossip/reset intent captured under the lock but executed after it is released (see below)
+			var (
+				gossipQC     *lib.QuorumCertificate
+				gossipSender []byte
+				gossipTime   uint64
+			)
 			// wrap in a function call to use 'defer' functionality
 			func() {
 				// lock the controller to prevent multi-thread conflicts
@@ -90,16 +96,19 @@ func (c *Controller) ListenForBlock() {
 					// exit iteration
 					return
 				}
-				// if not syncing - gossip the block
+				// if not syncing, capture the block to gossip + reset the bft after releasing the lock
 				if !c.Syncing().Load() {
-					// gossip the block to our peers
-					c.GossipBlock(qc, sender, blockMessage.Time)
-					// signal a reset to the bft module
-					c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: time.UnixMicro(int64(blockMessage.Time))}
+					gossipQC, gossipSender, gossipTime = qc, sender, blockMessage.Time
 				}
 				// reset 'syncDetector' because a new block was received properly
 				syncDetector.Reset()
 			}()
+			// gossip + BFT reset run outside the controller lock: both can block and the BFT loop
+			// needs that lock to drain ResetBFT, so holding it here would stall/deadlock the node
+			if gossipQC != nil {
+				c.GossipBlock(gossipQC, gossipSender, gossipTime)
+				c.signalResetBFT(bft.ResetBFT{StartTime: time.UnixMicro(int64(gossipTime))})
+			}
 		}
 		// if quit signaled
 		if quit {
