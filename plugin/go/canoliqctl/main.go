@@ -11,6 +11,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 )
 
 // globalFlags are accepted by every subcommand and have sane localnet defaults.
@@ -21,6 +23,8 @@ type globalFlags struct {
 	chainID   uint64
 	fee       uint64
 	password  string
+	noWait    bool          // skip confirmation; print the hash and exit
+	waitFor   time.Duration // how long to wait for a terminal outcome
 }
 
 // commands lists every subcommand alongside its handler. Adding a new command
@@ -95,6 +99,14 @@ func main() {
 	fs.Uint64Var(&gf.chainID, "chain-id", uint64(envDefaultInt("CANOLIQCTL_CHAIN_ID", 1)), "chain id of the NODE being submitted to (not the canoLiq committee id)")
 	fs.Uint64Var(&gf.fee, "fee", uint64(envDefaultInt("CANOLIQCTL_FEE", 10_000)), "tx fee (uCNPY)")
 	fs.StringVar(&gf.password, "password", os.Getenv("CANOLIQCTL_PASSWORD"), "keystore password (or set CANOLIQCTL_PASSWORD)")
+	// Submitting is not the same as succeeding: /v1/tx admits a transaction on
+	// CheckBasic alone, so it returns a hash for transactions the next mempool
+	// re-check will reject and drop. Every command therefore waits for a
+	// terminal outcome by default and exits non-zero if the transaction failed.
+	// --no-wait restores the old fire-and-forget behaviour for scripts that do
+	// their own tracking.
+	fs.BoolVar(&gf.noWait, "no-wait", envDefaultBool("CANOLIQCTL_NO_WAIT", false), "print the tx hash and exit without confirming the outcome")
+	fs.DurationVar(&gf.waitFor, "wait-timeout", 45*time.Second, "how long to wait for a submitted tx to be included or rejected")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		os.Exit(2)
 	}
@@ -117,12 +129,21 @@ func printUsage() {
 	}
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "global flags (all commands):")
-	fmt.Fprintln(os.Stderr, "  --rpc-url, --admin-url, --network-id, --chain-id, --fee, --password")
+	fmt.Fprintln(os.Stderr, "  --rpc-url, --admin-url, --network-id, --chain-id, --fee, --password, --no-wait, --wait-timeout")
 }
 
 func envDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envDefaultBool(key string, fallback bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
 	}
 	return fallback
 }

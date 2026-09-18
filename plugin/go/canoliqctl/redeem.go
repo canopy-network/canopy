@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -30,10 +29,6 @@ func cmdRedeem(args []string, gf globalFlags) error {
 		FromAddress: from,
 		CcnpyAmount: amount,
 	}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "canoliq_redeem", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("redeem submitted: tx_hash=%s from=%s ccnpy=%d\n", hash, signer.Address, amount)
-	return nil
+	return submitAndReport(gf, signer, "canoliq_redeem", msg, "redeem",
+		fmt.Sprintf("from=%s ccnpy=%d", signer.Address, amount))
 }

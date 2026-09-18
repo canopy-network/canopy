@@ -988,7 +988,21 @@ Global flags (also configurable via env vars `CANOLIQCTL_RPC_URL`,
 --chain-id     chain id of the NODE being submitted to (default 1)
 --fee          tx fee in uCNPY (default 10000)
 --password     keystore password — required
+--no-wait      print the tx hash and exit without confirming the outcome
+--wait-timeout how long to wait for inclusion or rejection (default 45s)
 ```
+
+> **Commands wait for a real outcome by default.** Submitting is not succeeding: `/v1/tx` admits
+> a transaction on `CheckBasic` alone — no chain-id check, no signature check, no state — so it
+> returns a hash for transactions the next mempool re-check will reject and drop. `canoliqctl`
+> therefore polls `tx-by-hash` for inclusion and `failed-txs` for rejection, printing the block a
+> transaction landed in or exiting non-zero with the node's own reason. Pass `--no-wait` for the
+> old fire-and-forget behaviour.
+>
+> **Global flags must precede the positional arguments** — `canoliqctl deposit --no-wait <address>
+> <amount>`, not `… <address> <amount> --no-wait`. Go's flag parser stops at the first
+> non-flag argument, so a trailing flag is silently ignored. This applies to every global flag,
+> not just `--no-wait`.
 
 > **`--chain-id` is the node's chain id, not the canoLiq committee id.** A transaction is signed
 > for the chain it is submitted to; `fsm/transaction.go::CheckReplay` rejects a mismatch with

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -30,10 +29,6 @@ func cmdClaim(args []string, gf globalFlags) error {
 		FromAddress:  from,
 		RedemptionId: id,
 	}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "canoliq_claim_redemption", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("claim submitted: tx_hash=%s from=%s redemption_id=%d\n", hash, signer.Address, id)
-	return nil
+	return submitAndReport(gf, signer, "canoliq_claim_redemption", msg, "claim",
+		fmt.Sprintf("from=%s redemption_id=%d", signer.Address, id))
 }

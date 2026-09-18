@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -50,12 +49,8 @@ func cmdOTCLockCreate(args []string, gf globalFlags) error {
 		CcnpyAmount: amount,
 		Tier:        tier,
 	}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "otc_lock_create", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("otc lock submitted: tx_hash=%s from=%s ccnpy=%d tier=%s\n", hash, signer.Address, amount, args[2])
-	return nil
+	return submitAndReport(gf, signer, "otc_lock_create", msg, "otc-lock",
+		fmt.Sprintf("from=%s ccnpy=%d tier=%s", signer.Address, amount, args[2]))
 }
 
 // cmdOTCLockClaim submits MessageOTCLockClaim, releasing a matured position's
@@ -78,12 +73,8 @@ func cmdOTCLockClaim(args []string, gf globalFlags) error {
 	}
 
 	msg := &contract.MessageOTCLockClaim{FromAddress: from, LockId: lockID}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "otc_lock_claim", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("otc lock claim submitted: tx_hash=%s from=%s lock_id=%d\n", hash, signer.Address, lockID)
-	return nil
+	return submitAndReport(gf, signer, "otc_lock_claim", msg, "otc-lock-claim",
+		fmt.Sprintf("from=%s lock_id=%d", signer.Address, lockID))
 }
 
 // cmdOTCLockCancel submits MessageOTCLockCancel. This forfeits the entire CPLQ
@@ -107,10 +98,6 @@ func cmdOTCLockCancel(args []string, gf globalFlags) error {
 	}
 
 	msg := &contract.MessageOTCLockCancel{FromAddress: from, LockId: lockID}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "otc_lock_cancel", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("otc lock cancelled (CPLQ reward forfeited): tx_hash=%s from=%s lock_id=%d\n", hash, signer.Address, lockID)
-	return nil
+	return submitAndReport(gf, signer, "otc_lock_cancel", msg, "otc-lock-cancel (forfeits the CPLQ reward)",
+		fmt.Sprintf("from=%s lock_id=%d", signer.Address, lockID))
 }

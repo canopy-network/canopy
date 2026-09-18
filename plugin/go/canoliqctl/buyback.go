@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -27,10 +26,6 @@ func cmdBuybackExecute(args []string, gf globalFlags) error {
 	}
 
 	msg := &contract.MessageBuybackExecute{FromAddress: from, ProposalId: proposalID}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "buyback_execute", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("buyback-execute submitted: tx_hash=%s from=%s proposal_id=%d\n", hash, signer.Address, proposalID)
-	return nil
+	return submitAndReport(gf, signer, "buyback_execute", msg, "buyback-execute",
+		fmt.Sprintf("from=%s proposal_id=%d", signer.Address, proposalID))
 }
