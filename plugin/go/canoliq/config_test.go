@@ -470,21 +470,25 @@ func TestSafetyCheckRejectsUnsetChainId(t *testing.T) {
 	}
 }
 
-// TestMainnetConfigCarriesCommitteeId pins the shipped mainnet config to a real
-// committee id. The genesis it points at is still a placeholder template that
-// refuses to boot (TestShippedTemplatesRefuseToBoot), but the chain id is the
-// one value an operator cannot derive from the repo, so a regression to 0 must
-// fail here rather than on a live mainnet.
+// mainnetCommitteeId is canoLiq's committee id on Canopy mainnet, confirmed
+// against the registration. It is the one value in the mainnet config that
+// cannot be derived from anything else in the repo, and it is load-bearing:
+// every fee-pool key is scoped by it and committee membership is matched on
+// it, so a wrong value fails silently rather than loudly (see
+// TestSafetyCheckRejectsUnsetChainId).
+const mainnetCommitteeId = 19
+
+// TestMainnetConfigCarriesCommitteeId pins the shipped mainnet config to the
+// registered committee id. The genesis it points at is still a placeholder
+// template that refuses to boot (TestShippedTemplatesRefuseToBoot), but genesis
+// is one-shot, so a regression here must fail in CI rather than on a live
+// mainnet.
 func TestMainnetConfigCarriesCommitteeId(t *testing.T) {
 	c, err := NewConfigFromFile("canoliq-config.mainnet.json")
 	if err != nil {
 		t.Fatalf("load mainnet config: %v", err)
 	}
-	if c.ChainId == 0 {
-		t.Fatal("mainnet config must carry the registered canoLiq committee id, not the 0 placeholder")
+	if c.ChainId != mainnetCommitteeId {
+		t.Fatalf("mainnet committee id = %d, want %d", c.ChainId, mainnetCommitteeId)
 	}
-	if c.ChainId == 19 {
-		return
-	}
-	t.Logf("note: mainnet committee id is %d, not the expected 19 — confirm against the registration", c.ChainId)
 }

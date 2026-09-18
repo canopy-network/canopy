@@ -1,5 +1,5 @@
 {
-  "_comment": "MAINNET plugin config. chainId 19 is the canoLiq committee id registered on Canopy mainnet — this is NOT the node's own chain id, and must not be copied into CANOLIQCTL_CHAIN_ID. Set redemptionUnstakingBlocks to match Canopy's valParams.UnstakingBlocks (thousands of blocks; SafetyCheck refuses anything below 1000). profile=mainnet enables every startup guard.",
+  "_comment": "MAINNET plugin config. chainId 19 is canoLiq's registered committee id on Canopy mainnet (confirmed against the registration) — this is NOT the node's own chain id, and must not be copied into CANOLIQCTL_CHAIN_ID. Set redemptionUnstakingBlocks to match Canopy's valParams.UnstakingBlocks (thousands of blocks; SafetyCheck refuses anything below 1000). profile=mainnet enables every startup guard.",
   "profile": "mainnet",
   "chainId": 19,
   "dataDirPath": "/tmp/plugin",
