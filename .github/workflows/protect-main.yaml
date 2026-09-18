@@ -2,8 +2,6 @@ name: Protect main
 
 on:
   pull_request:
-    branches:
-      - main
     types:
       - opened
       - synchronize
@@ -14,11 +12,24 @@ jobs:
   require-development:
     name: Require development source branch
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
     steps:
       - name: Check source branch
         env:
-          HEAD_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
+          # Read the LIVE base/head of the PR, not the (possibly stale) event payload
+          read -r BASE_REF HEAD_REF < <(gh api "repos/$REPO/pulls/$PR_NUMBER" \
+            --jq '"\(.base.ref) \(.head.ref)"')
+          echo "Live base=$BASE_REF head=$HEAD_REF"
+
+          if [ "$BASE_REF" != "main" ]; then
+            echo "PR does not target main (targets '$BASE_REF'). No restriction applies. OK."
+            exit 0
+          fi
           if [ "$HEAD_REF" != "development" ]; then
             echo "::error::PRs targeting main must come from the development branch (got '$HEAD_REF'). Open this PR against development instead, then promote development to main."
             exit 1
