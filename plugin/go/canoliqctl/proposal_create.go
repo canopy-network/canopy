@@ -291,14 +291,9 @@ func submitProposalCreate(gf globalFlags, signer *internal.Key, from []byte,
 		Payload:     payload,
 		Description: description,
 	}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_proposal_create", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("proposal-create %s submitted: tx_hash=%s from=%s description=%q\n",
-		kind, hash, signer.Address, description)
-	fmt.Printf("  payload typeUrl=%s bytes=%d\n", payload.TypeUrl, len(payload.Value))
-	return nil
+	return submitAndReport(gf, signer, "cplq_proposal_create", msg, "proposal-create "+kind,
+		fmt.Sprintf("from=%s description=%q payload=%s (%d bytes)",
+			signer.Address, description, payload.TypeUrl, len(payload.Value)))
 }
 
 // parseDescriptionFlag pulls "--description X" out of args. We use a
