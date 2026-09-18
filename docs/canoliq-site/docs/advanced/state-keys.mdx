@@ -65,8 +65,7 @@ outer `{20}` plugin prefix — they occupy different key positions.
 
 The FSM answers **point reads** by key. To enumerate records, canoLiq keeps explicit
 index domains — `Vesting Index`, `Redemption Index`, `Unstake Index`, `OTC Lock Index`,
-`Proposal` index, `Stake Index`, the treasury-spend index, and the validator registry —
-each listing the
-ids or addresses that belong to a set. Mature redemptions are the one range-ordered case:
+`Proposal` index, `Stake Index`, the treasury-spend index, and the validator registry — each
+listing the ids or addresses that belong to a set. Mature redemptions are the one range-ordered case:
 they are stored under a `Mature Redemption` key prefixed by maturity height, so the
 protocol can scan everything that has come due at or before the current block.

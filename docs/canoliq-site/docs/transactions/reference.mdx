@@ -16,7 +16,7 @@ Complete reference of all canoLiq transaction messages.
 | `MessageCPLQStake` | Locks liquid CPLQ for governance weight | 2 |
 | `MessageCPLQUnstake` | Queues CPLQ unstake; voting weight drops immediately | 2 |
 | `MessageCPLQClaimUnstake` | Returns matured CPLQ to liquid balance | 2 |
-| `MessageCPLQProposalCreate` | Opens a governance proposal (param change \| buyback \| treasury spend) | 2 |
+| `MessageCPLQProposalCreate` | Opens a governance proposal (one of [seven payload types](../governance/proposals.mdx)) | 2 |
 | `MessageCPLQVote` | Votes yes/no/abstain on an active proposal | 2 |
 | `MessageBuybackExecute` | Triggers a passed buyback proposal (BURN or DISTRIBUTE_STAKERS) | 2 |
 | `MessageDAOTreasurySpend` | Triggers a passed treasury spend (timelock + multisig above threshold) | 2 |

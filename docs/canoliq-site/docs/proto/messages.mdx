@@ -104,6 +104,47 @@ message MessageCPLQClaimUnstake {
 }
 ```
 
+## OTC Lock Program
+
+See [OTC Lock Accounting](../advanced/otc-lock-accounting.mdx) for the invariants behind these.
+
+### MessageOTCLockCreate
+
+Opens a lock position: debits `ccnpy_amount` from the sender's spendable cCNPY balance, holds it
+on the position record, and reserves the tier reward out of the program's unreserved budget.
+
+```protobuf
+message MessageOTCLockCreate {
+  bytes from_address = 1;
+  uint64 ccnpy_amount = 2;          // uccnpy; must be >= params.otc_min_lock_uccnpy
+  OTCLockTier tier = 3;             // OTC_LOCK_90D | OTC_LOCK_120D
+}
+```
+
+### MessageOTCLockClaim
+
+Closes a matured position, returning the cCNPY and paying the reserved CPLQ reward. Rejected
+before `mature_height`.
+
+```protobuf
+message MessageOTCLockClaim {
+  bytes from_address = 1;
+  uint64 lock_id = 2;
+}
+```
+
+### MessageOTCLockCancel
+
+Exits a position early. The cCNPY is returned intact and the CPLQ reward is forfeited back to
+the program budget. Rejected at or after `mature_height` — a matured position must be claimed.
+
+```protobuf
+message MessageOTCLockCancel {
+  bytes from_address = 1;
+  uint64 lock_id = 2;
+}
+```
+
 ## Governance
 
 ### MessageCPLQProposalCreate
@@ -238,5 +279,18 @@ on-chain dispatch). → `ACTION_PROTOCOL_UPGRADE`.
 message ProposalProtocolUpgrade {
   string version = 1;
   bytes payload = 2;  // opaque upgrade descriptor
+}
+```
+
+### ProposalOTCProgramFund
+
+Moves CPLQ from the DAO treasury balance into the
+[OTC lock program](../tokenomics/otc-lock-program.mdx) budget on pass. This is the only way CPLQ
+enters the program. Has no configured governance tier, so it resolves through the scalar
+fallback. → `ACTION_OTC_PROGRAM_FUND`.
+
+```protobuf
+message ProposalOTCProgramFund {
+  uint64 amount = 1;  // uCPLQ; must not exceed the treasury CPLQ balance
 }
 ```

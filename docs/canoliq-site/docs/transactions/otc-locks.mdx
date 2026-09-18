@@ -1,0 +1,107 @@
+---
+sidebar_label: OTC Locks
+---
+
+# OTC Locks
+
+**In one sentence:** commit cCNPY for a fixed 90- or 120-day term and collect a one-off CPLQ
+reward when it matures, while the cCNPY keeps earning staking yield the whole time.
+
+The OTC lock program is aimed at buyers who are happy to hold cCNPY for a set period. You give
+up the ability to redeem for the term; in exchange you receive CPLQ on top of the yield your
+cCNPY was already earning.
+
+:::info Added after the v1.2 papers
+This program is not described in the canoLiq v1.2 Whitepaper or Tokenomics paper. It was
+specified separately and shipped afterwards; both papers are pending an update.
+:::
+
+## The two tiers
+
+| Term | Reward | You get back |
+|------|--------|--------------|
+| 90 days | 5% of the locked amount, paid in CPLQ | All of your cCNPY, plus the reward |
+| 120 days | 8% of the locked amount, paid in CPLQ | All of your cCNPY, plus the reward |
+
+The reward is a straight quantity conversion: lock 50,000 cCNPY on the 90-day tier and you are
+promised 2,500 CPLQ. There is no price feed involved, so the reward you are quoted when you
+lock is exactly the reward you receive.
+
+**Minimum position: 50,000 cCNPY.** Anything smaller is rejected.
+
+## What to know before you lock
+
+- **Your cCNPY is not redeemable during the term.** It leaves your spendable balance and sits
+  in the lock position until you close it.
+- **It keeps earning.** Locking does not remove your cCNPY from the staking pool, so it goes on
+  appreciating at the normal exchange rate for the whole term. The cCNPY you get back is worth
+  more CNPY than the cCNPY you put in.
+- **Your reward is set aside up front.** When your lock is accepted, its CPLQ is reserved out of
+  the program budget immediately, so a matured position is always payable. If the budget cannot
+  cover a new position, that lock is rejected rather than accepted and underfunded.
+- **Leaving early costs you the whole reward.** You get every cCNPY back, but no CPLQ.
+- **Once matured, you must claim, not cancel.** Cancelling a matured position is refused, so a
+  mistimed command cannot destroy a reward you have already earned.
+
+## Locking
+
+```bash
+canoliqctl otc-lock <nickname> <ccnpy-amount> <90d|120d>
+```
+
+Amounts are in micro-cCNPY, so the 50,000 cCNPY minimum is `50000000000`.
+
+```bash
+canoliqctl otc-lock alice 50000000000 90d
+# otc lock submitted: tx_hash=… from=… ccnpy=50000000000 tier=90d
+```
+
+Note the lock id from the resulting position — you need it to close the lock. It is also listed
+under `otcLocks` on `GET /v1/account/{addr}`.
+
+## Claiming at maturity
+
+Once the term has elapsed, claim to collect both sides:
+
+```bash
+canoliqctl otc-lock-claim <nickname> <lock-id>
+```
+
+This returns your cCNPY to your spendable balance and credits the CPLQ reward. A claim submitted
+before maturity is rejected.
+
+## Cancelling early
+
+```bash
+canoliqctl otc-lock-cancel <nickname> <lock-id>
+```
+
+Your cCNPY is returned in full and the CPLQ reward is released back to the program budget for
+someone else to claim. This is irreversible: the position is gone, and re-locking starts a fresh
+term.
+
+## Fees
+
+| Action | Fee |
+|--------|-----|
+| `otc-lock` | `stake_fee` |
+| `otc-lock-claim` | `claim_fee` |
+| `otc-lock-cancel` | `claim_fee` |
+
+All default to 10,000 uCNPY and are governance-configurable.
+
+## Not the same as a vote-escrow lock
+
+canoLiq has two lock systems and they do different things:
+
+| | OTC lock | [Vote-escrow lock](../tokenomics/vote-escrow.mdx) |
+|---|---|---|
+| What you lock | cCNPY | CPLQ |
+| Terms | 90 or 120 days | 3, 6, 12, or 24 months |
+| What you get | A one-off CPLQ reward | Multiplied voting weight and a bigger buyback share |
+
+## Related
+
+- [OTC Lock Program](../tokenomics/otc-lock-program.mdx) — where the reward budget comes from
+- [OTC Lock Accounting](../advanced/otc-lock-accounting.mdx) — budget invariants and supply effects
+- [Deposit & Redeem](./deposit-redeem.mdx) — how to get cCNPY in the first place

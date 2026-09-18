@@ -4,6 +4,9 @@ sidebar_label: Overview
 
 # Tokenomics Overview
 
+**In one sentence:** canoLiq runs on a yield-bearing receipt token and a fixed-supply governance
+token, and this page is the reference for both.
+
 canoLiq manages two tokens alongside CNPY — a yield-bearing receipt and a fixed-supply
 governance token. If you want the friendly version first, read
 [The Two Tokens](../concepts/two-tokens.mdx); this page is the reference.
@@ -34,11 +37,21 @@ CPLQ is a **fixed-supply** (100M) governance and value-capture token.
 
 ### Genesis Distribution Buckets
 
-| Bucket | BPS | Vesting |
-|--------|-----|---------|
-| Community | Varies | Cliff + linear |
-| Team | Varies | Cliff + linear |
-| DAO Treasury | Varies | Immediate (liquid) |
-| Liquidity | Varies | Varies |
+The full 100,000,000 CPLQ supply is allocated at genesis. Mainnet allocations follow CPLQ
+Tokenomics v1.2 §2:
 
-Configure your specific distribution in `genesis.json`.
+| Bucket | BPS | Share | CPLQ | Vesting |
+|--------|-----|-------|------|---------|
+| Validators & Infrastructure | 2200 | 22% | 22,000,000 | 12-mo cliff, then 24-mo linear |
+| Community & Airdrops | 2000 | 20% | 20,000,000 | 12-mo linear, no cliff |
+| Liquidity Incentives | 1500 | 15% | 15,000,000 | 24-mo linear, no cliff |
+| DAO Treasury (canoLiq) | 1500 | 15% | 15,000,000 | Not vested — protocol-held, non-circulating |
+| Founders & Core Team | 1200 | 12% | 12,000,000 | 12-mo cliff, then 36-mo linear |
+| Strategic Partners & Integrations | 1000 | 10% | 10,000,000 | 6-mo cliff, then 12-mo linear |
+| Developer Grants & Ecosystem | 600 | 6% | 6,000,000 | Liquid at genesis |
+
+Bucket BPS must sum to `10,000`. See [Vesting](./vesting.mdx) for the schedules in full, and
+note that the DAO Treasury tranche is credited to the protocol rather than a wallet — genesis
+**circulating** supply is 85,000,000 CPLQ.
+
+Localnet and testnet ship shortened schedules; the values above are `genesis.mainnet.json`.

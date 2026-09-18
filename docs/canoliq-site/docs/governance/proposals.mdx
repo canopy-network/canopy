@@ -4,7 +4,10 @@ sidebar_label: Proposal Types
 
 # Proposal Types
 
-canoLiq supports six proposal types, each carried as a `google.protobuf.Any` payload. The
+**In one sentence:** every change to canoLiq is made by passing one of seven proposal types, and
+which type you use decides how hard it is to pass.
+
+canoLiq supports seven proposal types, each carried as a `google.protobuf.Any` payload. The
 payload determines the proposal's `ActionType`, which in turn selects its
 [governance tier](./governance-tiers.mdx) (quorum, approval threshold, timelock, voting
 period):
@@ -17,6 +20,7 @@ period):
 | `ProposalValidatorEject` | `ACTION_VALIDATOR_EJECT` | Remove a validator from the registry |
 | `ProposalEmergency` | `ACTION_EMERGENCY` | Fast-track action with an optional param diff |
 | `ProposalProtocolUpgrade` | `ACTION_PROTOCOL_UPGRADE` | Signal a target protocol version |
+| `ProposalOTCProgramFund` | `ACTION_OTC_PROGRAM_FUND` → scalar fallback tier | Move CPLQ from the DAO treasury into the [OTC lock program](../tokenomics/otc-lock-program.mdx) budget |
 
 ## Param Change
 
@@ -109,6 +113,13 @@ Once a proposal exists, cast votes with:
 canoliqctl vote <address> <proposal-id> yes
 ```
 
-:::note
-`proposal-create` is intentionally not yet wired as a standalone CLI command. Its payload is a `google.protobuf.Any` carrying one of the six sub-types above, each with a distinct argument surface. Construct proposals via in-process tests or hand-built JSON.
+Create proposals with:
+
+```bash
+canoliqctl proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency> <args> [--description …]
+```
+
+:::note `otc-program-fund` has no CLI subcommand yet
+`ProposalOTCProgramFund` is accepted on-chain but `proposal-create` does not yet build it.
+Submit it as a hand-built payload until the subcommand lands.
 :::
