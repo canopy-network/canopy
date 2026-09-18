@@ -46,14 +46,14 @@ lock is exactly the reward you receive.
 ## Locking
 
 ```bash
-canoliqctl otc-lock <nickname> <ccnpy-amount> <90d|120d>
+canoliqctl otc-lock <address> <ccnpy-amount> <90d|120d>
 ```
 
 Amounts are in micro-cCNPY, so the 50,000 cCNPY minimum is `50000000000`.
 
 ```bash
-canoliqctl otc-lock alice 50000000000 90d
-# otc lock submitted: tx_hash=… from=… ccnpy=50000000000 tier=90d
+canoliqctl otc-lock 851e90eaef1fa27debaee2c2591503bdeec1d123 50000000000 90d
+# otc lock submitted: tx_hash=… from=851e90… ccnpy=50000000000 tier=90d
 ```
 
 Note the lock id from the resulting position — you need it to close the lock. It is also listed
@@ -64,7 +64,7 @@ under `otcLocks` on `GET /v1/account/{addr}`.
 Once the term has elapsed, claim to collect both sides:
 
 ```bash
-canoliqctl otc-lock-claim <nickname> <lock-id>
+canoliqctl otc-lock-claim <address> <lock-id>
 ```
 
 This returns your cCNPY to your spendable balance and credits the CPLQ reward. A claim submitted
@@ -73,7 +73,7 @@ before maturity is rejected.
 ## Cancelling early
 
 ```bash
-canoliqctl otc-lock-cancel <nickname> <lock-id>
+canoliqctl otc-lock-cancel <address> <lock-id>
 ```
 
 Your cCNPY is returned in full and the CPLQ reward is released back to the program budget for

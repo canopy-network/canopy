@@ -45,10 +45,12 @@ func cmdProposalCreate(args []string, gf globalFlags) error {
 		return cmdProposalValidatorEject(args[1:], gf)
 	case "emergency":
 		return cmdProposalEmergency(args[1:], gf)
+	case "otc-program-fund":
+		return cmdProposalOTCProgramFund(args[1:], gf)
 	case "help", "-h", "--help":
 		return printProposalCreateHelp()
 	default:
-		return fmt.Errorf("unknown proposal-create subcommand %q (want param-change|buyback|treasury-spend|validator-eject|emergency)", args[0])
+		return fmt.Errorf("unknown proposal-create subcommand %q (want param-change|buyback|treasury-spend|validator-eject|emergency|otc-program-fund)", args[0])
 	}
 }
 
@@ -61,6 +63,7 @@ func printProposalCreateHelp() error {
 	fmt.Println("  treasury-spend  authorize a transfer from treasury_canoliq (CNPY) or treasury_cplq (CPLQ)")
 	fmt.Println("  validator-eject remove a validator from the committee registry (F12)")
 	fmt.Println("  emergency       security-critical fast-track action with optional param diff (F13)")
+	fmt.Println("  otc-program-fund move CPLQ from treasury_cplq into the OTC lock program budget")
 	return nil
 }
 
@@ -212,6 +215,38 @@ func cmdProposalValidatorEject(args []string, gf globalFlags) error {
 		return fmt.Errorf("wrap validator-eject payload: %w", err)
 	}
 	return submitProposalCreate(gf, signer, from, payload, description, "validator-eject")
+}
+
+// cmdProposalOTCProgramFund submits a ProposalOTCProgramFund, moving CPLQ from
+// treasury_cplq into the OTC lock program's unreserved budget on pass. This is
+// the only path by which the program is funded: nothing mints, and the amount
+// is capped at the treasury balance at execution time.
+func cmdProposalOTCProgramFund(args []string, gf globalFlags) error {
+	usage := "proposal-create otc-program-fund <nickname> <amount-uCPLQ> [--description \"…\"]"
+	rest, description := parseDescriptionFlag(args)
+	if len(rest) < 2 {
+		return fmt.Errorf("expected 2 positional args (usage: %s)", usage)
+	}
+	signer, err := fetchSigner(gf.adminURL, rest[0], gf.password)
+	if err != nil {
+		return err
+	}
+	from, err := addrFromHex(signer.Address)
+	if err != nil {
+		return err
+	}
+	amount, err := parseUint(rest[1], "amount-uCPLQ")
+	if err != nil {
+		return err
+	}
+	if amount == 0 {
+		return fmt.Errorf("amount-uCPLQ must be non-zero")
+	}
+	payload, err := anypb.New(&contract.ProposalOTCProgramFund{Amount: amount})
+	if err != nil {
+		return fmt.Errorf("wrap otc-program-fund payload: %w", err)
+	}
+	return submitProposalCreate(gf, signer, from, payload, description, "otc-program-fund")
 }
 
 // cmdProposalEmergency submits a ProposalEmergency on the fast-track tier

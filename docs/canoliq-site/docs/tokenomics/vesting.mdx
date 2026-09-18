@@ -31,8 +31,16 @@ The 15% treasury bucket is credited to the protocol's own `treasury_cplq` balanc
 address. It has no recipients, cannot vest, and **does not count toward circulating supply**.
 It is spent only by a passed governance proposal — treasury spends, the buyback, and funding
 the [OTC Lock Program](./otc-lock-program.mdx).
+:::
 
-Genesis circulating supply is therefore **85,000,000 CPLQ**, not 100,000,000.
+:::note Circulating supply at genesis is small
+Only buckets with no cliff **and** no vesting period are liquid at genesis, and only those count
+toward circulating supply. On mainnet that is Developer Grants alone, so genesis circulating
+supply is **6,000,000 CPLQ** of the 100,000,000 total.
+
+Everything else enters circulation gradually: vesting allocations as recipients claim them, and
+treasury CPLQ only when governance spends it. (Localnet and testnet show a much larger figure
+because they ship several buckets with vesting switched off.)
 :::
 
 :::warning Localnet and testnet differ

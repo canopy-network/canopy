@@ -59,7 +59,7 @@ var commandUsages = map[string]string{
 	"buyback-execute":    "buyback-execute <nickname> <proposal-id>",
 	"spend-execute":      "spend-execute <nickname> <proposal-id>",
 	"multisig-approve":   "multisig-approve <signer-nickname> <spend-id>",
-	"proposal-create":    "proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency> <args> [--description …]",
+	"proposal-create":    "proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency|otc-program-fund> <args> [--description …]",
 	"otc-lock":           "otc-lock <nickname> <ccnpy-amount> <90d|120d>",
 	"otc-lock-claim":     "otc-lock-claim <nickname> <lock-id>",
 	"otc-lock-cancel":    "otc-lock-cancel <nickname> <lock-id>   (forfeits the CPLQ reward)",

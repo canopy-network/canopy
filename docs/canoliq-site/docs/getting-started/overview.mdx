@@ -47,6 +47,14 @@ Orientation for contributors reading the plugin source; operators do not need th
 
 ## Environment Variables
 
+:::caution `CANOLIQCTL_CHAIN_ID` must match the node, not the committee
+The default is `2`, but a transaction is signed for the chain the **node** runs, and the
+bundled localnet runs `chainId: 1`. Signing for the wrong chain is silent: `canoliqctl` prints
+a transaction hash and exits 0, the node accepts the transaction into its mempool, then drops
+it, and nothing in the CLI output says so. If a command reports success but state never
+changes, check this first.
+:::
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `CANOPY_PLUGIN_MODE` | Selects plugin mode: `contract` or `canoliq` | `contract` |
@@ -54,6 +62,6 @@ Orientation for contributors reading the plugin source; operators do not need th
 | `CANOLIQCTL_RPC_URL` | Node query RPC URL | `http://localhost:50002` |
 | `CANOLIQCTL_ADMIN_URL` | Admin RPC URL (keystore) | `http://localhost:50003` |
 | `CANOLIQCTL_NETWORK_ID` | Canopy network ID | `1` |
-| `CANOLIQCTL_CHAIN_ID` | canoLiq committee chain ID | `2` |
+| `CANOLIQCTL_CHAIN_ID` | Chain ID the transaction is signed for | `2` |
 | `CANOLIQCTL_PASSWORD` | Keystore password | — |
 | `CANOLIQ_RPC_ADDR` | Plugin RPC listen address (Phase 3) | — (disabled) |

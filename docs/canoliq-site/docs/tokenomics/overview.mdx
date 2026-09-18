@@ -50,8 +50,12 @@ Tokenomics v1.2 §2:
 | Strategic Partners & Integrations | 1000 | 10% | 10,000,000 | 6-mo cliff, then 12-mo linear |
 | Developer Grants & Ecosystem | 600 | 6% | 6,000,000 | Liquid at genesis |
 
-Bucket BPS must sum to `10,000`. See [Vesting](./vesting.mdx) for the schedules in full, and
-note that the DAO Treasury tranche is credited to the protocol rather than a wallet — genesis
-**circulating** supply is 85,000,000 CPLQ.
+Bucket BPS must sum to `10,000`. See [Vesting](./vesting.mdx) for the schedules in full.
+
+Note that **allocated is not circulating**. Only buckets with no cliff and no vesting are liquid
+at genesis — on mainnet just Developer Grants — so genesis circulating supply is **6,000,000
+CPLQ**. Vesting allocations enter circulation as they are claimed, and the DAO Treasury tranche
+is credited to the protocol rather than a wallet, entering circulation only when governance
+spends it.
 
 Localnet and testnet ship shortened schedules; the values above are `genesis.mainnet.json`.

@@ -6,9 +6,10 @@ sidebar_label: CPLQ Operations
 
 **In one sentence:** the five commands for moving, staking, and unlocking your CPLQ.
 
-:::note Commands take a wallet nickname
-Every `canoliqctl` command below takes the **nickname** of a wallet in your local keystore, not
-a hex address. The one exception is a transfer's *destination*, which is a hex address.
+:::note Use the signer's hex address
+Every `canoliqctl` command below identifies the signing account by its **hex address**. The
+`--help` text calls this a nickname, and the lookup is written to accept either, but a node's
+admin RPC hex-decodes the value, so a keystore nickname is rejected. Pass the address.
 :::
 
 ## CPLQ Transfer
@@ -16,7 +17,7 @@ a hex address. The one exception is a transfer's *destination*, which is a hex a
 Transfers liquid (already-vested) CPLQ between accounts.
 
 ```bash
-canoliqctl cplq-transfer <from-nickname> <to-address-hex> <amount-uCPLQ>
+canoliqctl cplq-transfer <from-address> <to-address-hex> <amount-uCPLQ>
 ```
 
 Only vested CPLQ can be transferred. Vesting-locked CPLQ is not spendable.
@@ -26,7 +27,7 @@ Only vested CPLQ can be transferred. Vesting-locked CPLQ is not spendable.
 Locks liquid CPLQ into a stake record, granting governance weight.
 
 ```bash
-canoliqctl cplq-stake <nickname> <amount-uCPLQ> [--lock none|3m|6m|12m|24m]
+canoliqctl cplq-stake <address> <amount-uCPLQ> [--lock none|3m|6m|12m|24m]
 ```
 
 **Effect**:
@@ -54,7 +55,7 @@ This locks **CPLQ** for governance weight. The [OTC lock program](./otc-locks.md
 Queues an unstake, returning CPLQ to liquid balance after the unbond window.
 
 ```bash
-canoliqctl cplq-unstake <nickname> <amount-uCPLQ>
+canoliqctl cplq-unstake <address> <amount-uCPLQ>
 ```
 
 **Effect**:
@@ -68,7 +69,7 @@ canoliqctl cplq-unstake <nickname> <amount-uCPLQ>
 Claims a matured unstake, returning CPLQ to liquid balance.
 
 ```bash
-canoliqctl cplq-claim-unstake <nickname> <unstake-id>
+canoliqctl cplq-claim-unstake <address> <unstake-id>
 ```
 
 ## CPLQ Claim Vested
@@ -76,7 +77,7 @@ canoliqctl cplq-claim-unstake <nickname> <unstake-id>
 Unlocks newly-vested CPLQ across all of the caller's vesting schedules.
 
 ```bash
-canoliqctl cplq-claim-vested <nickname>
+canoliqctl cplq-claim-vested <address>
 ```
 
 Reads the `VestingIndex` to find all schedules, then computes unlocked amounts for each.
