@@ -503,6 +503,8 @@ func (c *Canoliq) dispatchPassed(prop *contract.Proposal, params *contract.Canol
 		return nil
 	case *contract.ProposalTreasurySpend:
 		return c.queueTreasurySpend(prop, p, params, height)
+	case *contract.ProposalOTCProgramFund:
+		return c.fundOTCProgram(p)
 	case *contract.ProposalValidatorEject:
 		// F12: drop the validator from the committee registry and clear its
 		// accrued incentives. Idempotent.
@@ -552,7 +554,8 @@ func unwrapPayload(any *anypb.Any) (interface{}, *contract.PluginError) {
 	}
 	switch msg.(type) {
 	case *contract.ProposalParamChange, *contract.ProposalBuyback, *contract.ProposalTreasurySpend,
-		*contract.ProposalValidatorEject, *contract.ProposalEmergency, *contract.ProposalProtocolUpgrade:
+		*contract.ProposalValidatorEject, *contract.ProposalEmergency, *contract.ProposalProtocolUpgrade,
+		*contract.ProposalOTCProgramFund:
 		return msg, nil
 	default:
 		return nil, ErrUnknownProposalPayload()
@@ -581,6 +584,8 @@ func actionTypeForPayload(payload interface{}) contract.ActionType {
 		return contract.ActionType_ACTION_EMERGENCY
 	case *contract.ProposalProtocolUpgrade:
 		return contract.ActionType_ACTION_PROTOCOL_UPGRADE
+	case *contract.ProposalOTCProgramFund:
+		return contract.ActionType_ACTION_OTC_PROGRAM_FUND
 	default:
 		return contract.ActionType_ACTION_UNKNOWN
 	}

@@ -43,12 +43,17 @@ var (
 	domainEscrow        = []byte{25}
 	domainTxFeeAccrual  = []byte{26}
 	domainEjected       = []byte{27}
+	domainOTCLock       = []byte{28}
+	domainOTCLockIndex  = []byte{29}
+	domainOTCBudget     = []byte{30}
 
 	treasuryCanopy = []byte("canopy")
 	treasuryCplq   = []byte("cplq")
 	buybackPool    = []byte("pool")
 	indexSingleton = []byte("index")
 	insuranceSlot  = []byte("pool")
+	otcAvailable   = []byte("available")
+	otcReserved    = []byte("reserved")
 )
 
 // JoinLenPrefix mirrors contract.JoinLenPrefix to avoid an import cycle for
@@ -226,6 +231,36 @@ func KeyForValidatorRegistry() []byte {
 // operator and silently undo the passed proposal.
 func KeyForEjectedValidator(addr []byte) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainEjected, addr)
+}
+
+// KeyForOTCLock returns the OTC lock position record key for an
+// (address, lock_id) pair. Mirrors KeyForCPLQUnstaking: the position is a
+// per-address record addressed by a globally monotonic id.
+func KeyForOTCLock(addr []byte, lockID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainOTCLock, addr, FormatUint64(lockID))
+}
+
+// KeyForOTCLockIndex returns the per-address index key listing open lock ids
+// so the account view can enumerate positions without a state-range scan.
+func KeyForOTCLockIndex(addr []byte) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainOTCLockIndex, addr)
+}
+
+// KeyForOTCBudgetAvailable returns the scalar holding unreserved OTC program
+// CPLQ. Funded only by a passed ProposalOTCProgramFund, which moves CPLQ out
+// of treasury_cplq — nothing mints, so this is always a transfer from an
+// existing allocation.
+func KeyForOTCBudgetAvailable() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainOTCBudget, otcAvailable)
+}
+
+// KeyForOTCBudgetReserved returns the scalar holding CPLQ committed to open
+// lock positions. available + reserved is the program's funded total; the
+// split is what makes the cap hard, since a lock is rejected unless the
+// reward can be moved from available to reserved up front. No matured
+// position can therefore exceed what the program can pay.
+func KeyForOTCBudgetReserved() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainOTCBudget, otcReserved)
 }
 
 // EjectedValidatorPrefix returns the prefix used to range-scan the ejection

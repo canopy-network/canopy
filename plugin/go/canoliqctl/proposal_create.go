@@ -437,6 +437,11 @@ type paramsJSON struct {
 	GraduationMinRunwayMonths uint64               `json:"graduationMinRunwayMonths"`
 	Governance                []governanceTierJSON `json:"governance"`
 	RestakingPolicy           []restakingEntryJSON `json:"restakingPolicy"`
+
+	// OTC lock program tier rates and minimum position size.
+	OtcTier90Bps     uint64 `json:"otcTier90Bps"`
+	OtcTier120Bps    uint64 `json:"otcTier120Bps"`
+	OtcMinLockUccnpy uint64 `json:"otcMinLockUccnpy"`
 }
 
 // governanceTierJSON is one row of the per-action governance matrix. Action is
@@ -537,6 +542,9 @@ func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 		GraduationMinRunwayMonths: p.GraduationMinRunwayMonths,
 		Governance:                tiers,
 		RestakingPolicy:           restaking,
+		OtcTier90Bps:              p.OtcTier90Bps,
+		OtcTier120Bps:             p.OtcTier120Bps,
+		OtcMinLockUccnpy:          p.OtcMinLockUccnpy,
 	}, nil
 }
 

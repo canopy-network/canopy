@@ -43,6 +43,9 @@ var CanoliqConfig = &contract.PluginConfig{
 		"buyback_execute",
 		"dao_treasury_spend",
 		"multisig_approve",
+		"otc_lock_create",
+		"otc_lock_claim",
+		"otc_lock_cancel",
 	},
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
@@ -59,6 +62,9 @@ var CanoliqConfig = &contract.PluginConfig{
 		"type.googleapis.com/types.MessageBuybackExecute",
 		"type.googleapis.com/types.MessageDAOTreasurySpend",
 		"type.googleapis.com/types.MessageMultisigApprove",
+		"type.googleapis.com/types.MessageOTCLockCreate",
+		"type.googleapis.com/types.MessageOTCLockClaim",
+		"type.googleapis.com/types.MessageOTCLockCancel",
 	},
 	EventTypeUrls: nil,
 }
@@ -151,6 +157,29 @@ type AlertConfig struct {
 // prevents the most common foot-gun: shipping the localnet genesis.json
 // into a real environment.
 const localnetPlaceholderAddress = "851e90eaef1fa27debaee2c2591503bdeec1d123"
+
+// templatePlaceholderPrefix marks an address slot in a shipped genesis template
+// that an operator is expected to replace. Any 20-byte address whose first 18
+// bytes are zero matches, so templates can tag slots distinctly (…0001, …0002)
+// while remaining collectively recognizable.
+//
+// The single-address check against localnetPlaceholderAddress was not enough on
+// its own. The testnet template deliberately used seven *distinct* fake
+// addresses so that check would pass, which means copying a template forward
+// and filling in six of seven slots produced a genesis that booted happily with
+// real CPLQ minted to an address nobody controls. Genesis is one-shot, so that
+// is unrecoverable. Matching on the shape instead catches every unfilled slot.
+const templatePlaceholderPrefix = "000000000000000000000000000000000000"
+
+// isTemplatePlaceholder reports whether a hex address is an unfilled template
+// slot. Accepts the address with or without an 0x prefix, case-insensitively.
+func isTemplatePlaceholder(hexAddr string) bool {
+	raw := strings.ToLower(strings.TrimPrefix(strings.TrimPrefix(hexAddr, "0x"), "0X"))
+	if strings.EqualFold(raw, localnetPlaceholderAddress) {
+		return true
+	}
+	return len(raw) == 40 && strings.HasPrefix(raw, templatePlaceholderPrefix)
+}
 
 // minNonLocalnetRedemptionBlocks is the floor SafetyCheck enforces on
 // RedemptionUnstakingBlocks under testnet/mainnet (M2). Canopy's real
@@ -252,7 +281,21 @@ func (c Config) LogProfileBanner() {
 // guard rail, not a strict validator. Genesis schema correctness is
 // enforced separately by validateGenesis.
 func (c Config) SafetyCheck() error {
-	if c.Profile == ProfileLocalnet || c.Profile == "" {
+	// Fail closed on a profile this build does not recognize. Previously an
+	// unset profile skipped every check below, on the assumption that it had
+	// already been normalized to localnet by NewConfigFromFile. That holds for
+	// a config loaded from a file and not for one built any other way, and the
+	// failure mode is silent: a node intended for mainnet would boot with the
+	// placeholder-address and redemption-window guards disabled. A typo such as
+	// "mainet" lands here too, rather than being treated as some unnamed
+	// environment whose rules nobody has decided.
+	switch c.Profile {
+	case ProfileLocalnet, ProfileDevnet, ProfileTestnet, ProfileMainnet:
+	default:
+		return fmt.Errorf("canoliq: refusing to start with unrecognized profile %q (want one of %q, %q, %q, %q)",
+			c.Profile, ProfileLocalnet, ProfileDevnet, ProfileTestnet, ProfileMainnet)
+	}
+	if c.Profile == ProfileLocalnet {
 		return nil
 	}
 	// M2: fail closed on an implausibly small redemption window. Under
@@ -278,9 +321,21 @@ func (c Config) SafetyCheck() error {
 	}
 	for _, b := range gf.Buckets {
 		for _, r := range b.Recipients {
-			if strings.EqualFold(strings.TrimPrefix(r.Address, "0x"), localnetPlaceholderAddress) {
-				return fmt.Errorf("canoliq: refusing to start profile=%q with localnet placeholder address in bucket %q (set real bucket recipient addresses in %s)",
-					c.Profile, b.Name, c.GenesisPath)
+			if isTemplatePlaceholder(r.Address) {
+				return fmt.Errorf("canoliq: refusing to start profile=%q with unfilled placeholder address %q in bucket %q (set real bucket recipient addresses in %s)",
+					c.Profile, r.Address, b.Name, c.GenesisPath)
+			}
+		}
+	}
+	// Multisig signers get the same treatment. An unfilled signer slot is worse
+	// than an unfilled recipient: the treasury still appears governed, but the
+	// approvals a large spend needs can never be collected, so anything above
+	// the threshold is frozen permanently.
+	if gf.Params != nil {
+		for i, s := range gf.Params.MultisigSigners {
+			if isTemplatePlaceholder(s) {
+				return fmt.Errorf("canoliq: refusing to start profile=%q with unfilled placeholder multisig signer %q (index %d) in %s",
+					c.Profile, s, i, c.GenesisPath)
 			}
 		}
 	}
@@ -342,6 +397,12 @@ func DefaultParams() *contract.CanoliqParams {
 		MultisigApproveFee:        10_000,
 		MinStakeToPropose:         1_000_000, // 1 CPLQ minimum to deter spam
 		Governance:                defaultGovernanceTiers(),
+		// OTC lock program: 90d pays 5%, 120d pays 8%, both as basis points of
+		// the locked cCNPY quantity converted 1:1 into uCPLQ. Minimum position
+		// is 50,000 cCNPY, which reserves 2,500 CPLQ at the 90d tier.
+		OtcTier90Bps:     500,
+		OtcTier120Bps:    800,
+		OtcMinLockUccnpy: 50_000_000_000,
 	}
 }
 
@@ -398,6 +459,29 @@ func ValidateParams(p *contract.CanoliqParams) *contract.PluginError {
 		if p.MultisigThreshold == 0 || p.MultisigThreshold > signers {
 			return ErrInvalidParams()
 		}
+		// Signers must be distinct. countMultisigApprovals (treasury.go) tallies
+		// by iterating this list and probing one approval key per entry, so a
+		// duplicated address contributes its single approval once per occurrence.
+		// Five slots holding four distinct keys would let one holder cast two of
+		// the three approvals a large spend needs.
+		seenSigner := make(map[string]bool, signers)
+		for _, s := range p.MultisigSigners {
+			if seenSigner[string(s)] {
+				return ErrInvalidParams()
+			}
+			seenSigner[string(s)] = true
+		}
+	}
+	// OTC lock program. Tier rates are bounded rather than merely non-zero: at
+	// 1:1 quantity conversion a rate above 100% would reserve more uCPLQ than
+	// the position holds in uccnpy, which is not a supply violation but is
+	// certainly not intended. A zero minimum would permit dust positions, each
+	// a permanent state record.
+	if p.OtcTier90Bps > 10_000 || p.OtcTier120Bps > 10_000 {
+		return ErrInvalidParams()
+	}
+	if (p.OtcTier90Bps > 0 || p.OtcTier120Bps > 0) && p.OtcMinLockUccnpy == 0 {
+		return ErrInvalidParams()
 	}
 	// Unstaking window must be ≥ voting period so a voter cannot stake → vote
 	// → unstake → unwind their position before tally. Skip the check if either

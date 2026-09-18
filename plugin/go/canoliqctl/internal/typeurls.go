@@ -19,4 +19,7 @@ var MsgTypeURL = map[string]string{
 	"buyback_execute":          "type.googleapis.com/types.MessageBuybackExecute",
 	"dao_treasury_spend":       "type.googleapis.com/types.MessageDAOTreasurySpend",
 	"multisig_approve":         "type.googleapis.com/types.MessageMultisigApprove",
+	"otc_lock_create":          "type.googleapis.com/types.MessageOTCLockCreate",
+	"otc_lock_claim":           "type.googleapis.com/types.MessageOTCLockClaim",
+	"otc_lock_cancel":          "type.googleapis.com/types.MessageOTCLockCancel",
 }

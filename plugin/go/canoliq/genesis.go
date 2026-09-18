@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
@@ -39,13 +40,37 @@ type GenesisValidatorRegistryEntry struct {
 	Stake   uint64 `json:"stake"`   // share-out weight
 }
 
+// Bucket destinations. Empty string normalizes to BucketDestAddress for
+// backwards compatibility with every genesis file written before this existed.
+//
+// BucketDestTreasury credits the protocol-owned treasury_cplq scalar instead
+// of a recipient address. It exists because nothing else ever credited that
+// scalar: applyGenesisBuckets only ever wrote per-address balances and vesting
+// schedules, so treasury_cplq read zero forever and both of its consumers —
+// SPEND_CPLQ treasury spends (treasury.go::applySpend) and every
+// MessageBuybackExecute (buyback.go) — failed their balance guard on any real
+// chain. A treasury-destined bucket takes no recipients and does not count
+// toward CplqCirculatingSupply, since treasury holdings are not circulating.
+const (
+	BucketDestAddress  = "address"
+	BucketDestTreasury = "treasury"
+)
+
 // GenesisBucket describes one of the CPLQ allocation tranches.
 type GenesisBucket struct {
-	Name        string              `json:"name"`
-	Bps         uint64              `json:"bps"`
+	Name string `json:"name"`
+	Bps  uint64 `json:"bps"`
+	// Destination selects where the tranche lands: "address" (the default,
+	// splitting across Recipients) or "treasury" (the treasury_cplq scalar).
+	Destination string              `json:"destination,omitempty"`
 	CliffMonths uint64              `json:"cliffMonths"`
 	VestMonths  uint64              `json:"vestMonths"`
 	Recipients  []GenesisAllocation `json:"recipients"`
+}
+
+// isTreasuryDest reports whether the bucket credits the protocol treasury.
+func (b GenesisBucket) isTreasuryDest() bool {
+	return b.Destination == BucketDestTreasury
 }
 
 // GenesisAllocation is a single (address, share) pair within a bucket.
@@ -89,6 +114,13 @@ type GenesisParamsJSON struct {
 	// genesis really does want the cap off. Permitted only on the development
 	// profiles — see isDevProfile.
 	TvlCapBps *uint64 `json:"tvlCapBps"`
+	// OTC lock program tier rates and minimum position size. Plain `!= 0`
+	// fallback like the rest: zero means absent, and zero is not a meaningful
+	// value for any of the three (a zero rate is a program that pays nothing,
+	// a zero minimum permits dust positions).
+	OtcTier90Bps     uint64 `json:"otcTier90Bps"`
+	OtcTier120Bps    uint64 `json:"otcTier120Bps"`
+	OtcMinLockUccnpy uint64 `json:"otcMinLockUccnpy"`
 }
 
 // runGenesis is the body of Canoliq.Genesis. It is a no-op once the globals
@@ -205,11 +237,40 @@ func validateGenesis(gf *GenesisFile) *contract.PluginError {
 	bpsSum := uint64(0)
 	for _, b := range gf.Buckets {
 		bpsSum += b.Bps
+		switch b.Destination {
+		case "", BucketDestAddress, BucketDestTreasury:
+		default:
+			return ErrStateUnmarshal(fmt.Errorf("bucket %q: unknown destination %q (want %q or %q)",
+				b.Name, b.Destination, BucketDestAddress, BucketDestTreasury))
+		}
+		// A treasury-destined bucket has no recipients to split across, so the
+		// recipients-sum rule does not apply. Listing any is a config error
+		// rather than a silently ignored field.
+		if b.isTreasuryDest() {
+			if len(b.Recipients) != 0 {
+				return ErrStateUnmarshal(fmt.Errorf("bucket %q: destination %q takes no recipients (got %d)",
+					b.Name, BucketDestTreasury, len(b.Recipients)))
+			}
+			if b.CliffMonths != 0 || b.VestMonths != 0 {
+				return ErrStateUnmarshal(fmt.Errorf("bucket %q: destination %q cannot vest", b.Name, BucketDestTreasury))
+			}
+			continue
+		}
 		recBps := uint64(0)
 		for _, r := range b.Recipients {
 			recBps += r.Bps
-			if _, err := hex.DecodeString(r.Address); err != nil {
+			// Length matters as much as decodability. hex.DecodeString accepts
+			// any even-length string, so a truncated or over-long address used
+			// to pass validation here and then have its decode error discarded
+			// in applyGenesisBuckets, minting a whole tranche to a key nobody
+			// can ever spend from. Genesis is one-shot, so that is unrecoverable.
+			raw := strings.TrimPrefix(strings.TrimPrefix(r.Address, "0x"), "0X")
+			decoded, err := hex.DecodeString(raw)
+			if err != nil {
 				return ErrStateUnmarshal(fmt.Errorf("invalid hex address %q: %w", r.Address, err))
+			}
+			if len(decoded) != 20 {
+				return ErrStateUnmarshal(fmt.Errorf("address %q must be 20 bytes, got %d", r.Address, len(decoded)))
 			}
 		}
 		if recBps != 10_000 {
@@ -238,10 +299,32 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 	sets := make([]*contract.PluginSetOp, 0)
 	indexUpdates := make(map[string]*contract.VestingIndex)
 	scheduleCounter := uint64(0)
+	// treasuryCplq accumulates across every treasury-destined bucket so the
+	// scalar is written once. readScalar would not see a pending set op, and
+	// two set ops on one key do not compose — last write wins (fsm/state.go).
+	treasuryCplq := uint64(0)
 	for _, b := range gf.Buckets {
 		bucketTotal := mulDiv(CPLQTotalSupply, b.Bps, 10_000)
+		if b.isTreasuryDest() {
+			// Deliberately no CplqCirculatingSupply bump: treasury holdings are
+			// not circulating. They enter circulation only when a passed
+			// proposal pays them out, and that path does the bump itself.
+			treasuryCplq += bucketTotal
+			continue
+		}
 		for _, r := range b.Recipients {
-			addrBytes, _ := hex.DecodeString(r.Address)
+			// validateGenesis has already proven this decodes to 20 bytes, so a
+			// failure here is impossible rather than merely unlikely. Returning
+			// instead of discarding means it stays impossible if that guard is
+			// ever weakened — genesis is one-shot and a mis-decoded address
+			// mints a whole tranche to an unspendable key.
+			addrBytes, err := hex.DecodeString(strings.TrimPrefix(strings.TrimPrefix(r.Address, "0x"), "0X"))
+			if err != nil {
+				return ErrStateUnmarshal(fmt.Errorf("invalid hex address %q: %w", r.Address, err))
+			}
+			if len(addrBytes) != 20 {
+				return ErrStateUnmarshal(fmt.Errorf("address %q must be 20 bytes, got %d", r.Address, len(addrBytes)))
+			}
 			amount := mulDiv(bucketTotal, r.Bps, 10_000)
 			if amount == 0 {
 				continue
@@ -289,14 +372,23 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 		}
 	}
 	for addr, idx := range indexUpdates {
-		addrBytes, _ := hex.DecodeString(addr)
-		bz, e := contract.Marshal(idx)
+		addrBytes, e := hex.DecodeString(strings.TrimPrefix(strings.TrimPrefix(addr, "0x"), "0X"))
 		if e != nil {
-			return e
+			return ErrStateUnmarshal(fmt.Errorf("invalid hex address %q: %w", addr, e))
+		}
+		bz, e2 := contract.Marshal(idx)
+		if e2 != nil {
+			return e2
 		}
 		sets = append(sets, &contract.PluginSetOp{
 			Key:   KeyForVestingIndex(addrBytes),
 			Value: bz,
+		})
+	}
+	if treasuryCplq > 0 {
+		sets = append(sets, &contract.PluginSetOp{
+			Key:   KeyForTreasuryCPLQ(),
+			Value: EncodeUint64(treasuryCplq),
 		})
 	}
 	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets}); err != nil {
@@ -381,6 +473,15 @@ func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
 	// point of the knob, so only a nil pointer falls back to the default.
 	if p.TvlCapBps != nil {
 		d.TvlCapBps = *p.TvlCapBps
+	}
+	if p.OtcTier90Bps != 0 {
+		d.OtcTier90Bps = p.OtcTier90Bps
+	}
+	if p.OtcTier120Bps != 0 {
+		d.OtcTier120Bps = p.OtcTier120Bps
+	}
+	if p.OtcMinLockUccnpy != 0 {
+		d.OtcMinLockUccnpy = p.OtcMinLockUccnpy
 	}
 	return d
 }

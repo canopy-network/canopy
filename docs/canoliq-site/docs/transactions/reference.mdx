@@ -21,6 +21,9 @@ Complete reference of all canoLiq transaction messages.
 | `MessageBuybackExecute` | Triggers a passed buyback proposal (BURN or DISTRIBUTE_STAKERS) | 2 |
 | `MessageDAOTreasurySpend` | Triggers a passed treasury spend (timelock + multisig above threshold) | 2 |
 | `MessageMultisigApprove` | Per-signer approval of an above-threshold spend | 2 |
+| `MessageOTCLockCreate` | Locks cCNPY for a 90d/120d term; reserves its CPLQ reward | 3 |
+| `MessageOTCLockClaim` | Releases a matured lock: cCNPY back plus the reserved CPLQ | 3 |
+| `MessageOTCLockCancel` | Early exit: cCNPY back, CPLQ reward forfeited to the budget | 3 |
 | `MessageSend` | Standard CNPY transfer (drop-in compatibility) | 1 |
 
 ## Fee Schedule
@@ -40,5 +43,8 @@ Complete reference of all canoLiq transaction messages.
 | Buyback Execute | — |
 | Treasury Spend | — |
 | Multisig Approve | `multisig_approve_fee` |
+| OTC Lock Create | `stake_fee` |
+| OTC Lock Claim | `claim_fee` |
+| OTC Lock Cancel | `claim_fee` |
 
 All fees are configurable via governance through `CanoliqParams`.

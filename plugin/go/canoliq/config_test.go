@@ -59,8 +59,13 @@ func TestSafetyCheckTestnetRefusesPlaceholderAddress(t *testing.T) {
 	if err == nil {
 		t.Fatalf("testnet safety check accepted placeholder address")
 	}
-	if !strings.Contains(err.Error(), "localnet placeholder") {
-		t.Fatalf("error should mention 'localnet placeholder': %v", err)
+	// The message is broader than it used to be: the check now rejects any
+	// unfilled template slot, not only the localnet seed key.
+	if !strings.Contains(err.Error(), "placeholder address") {
+		t.Fatalf("error should mention the placeholder address: %v", err)
+	}
+	if !strings.Contains(err.Error(), localnetPlaceholderAddress) {
+		t.Fatalf("error should name the offending address: %v", err)
 	}
 	if !strings.Contains(err.Error(), "Liquidity") {
 		// Fixture's only bucket is named "Liquidity" — confirm the
@@ -185,11 +190,14 @@ func TestRedemptionWindowFallsBackTo5WhenZero(t *testing.T) {
 	}
 }
 
-func TestBundledTestnetGenesisIsSafetyCheckClean(t *testing.T) {
-	// The committed plugin/go/canoliq/genesis.testnet.json must pass
-	// safety check under profile=testnet — even though its addresses are
-	// TODO placeholders, none of them is the localnet placeholder.
-	// Tests run from the package dir, so the file is in cwd.
+// TestBundledTestnetGenesisRefusesPlaceholders replaces an earlier test that
+// asserted the opposite: that the bundled testnet template passed SafetyCheck
+// *because* its placeholder addresses were merely distinct from the localnet
+// seed key. That property was the hole. It meant an operator could copy the
+// template, fill in six of seven slots, and boot a chain that minted a real
+// CPLQ tranche to an address nobody controls — unrecoverable, since genesis
+// runs once. A shipped template must not be bootable as shipped.
+func TestBundledTestnetGenesisRefusesPlaceholders(t *testing.T) {
 	c := DefaultConfig()
 	c.Profile = ProfileTestnet
 	c.RedemptionUnstakingBlocks = 30240 // matches canoliq-config.testnet.json (M2 floor)
@@ -197,8 +205,39 @@ func TestBundledTestnetGenesisIsSafetyCheckClean(t *testing.T) {
 	if _, err := os.Stat(c.GenesisPath); err != nil {
 		t.Skipf("genesis.testnet.json not present: %v", err)
 	}
+	err := c.SafetyCheck()
+	if err == nil {
+		t.Fatal("bundled testnet template booted with placeholders still unfilled")
+	}
+	if !strings.Contains(err.Error(), "placeholder") {
+		t.Fatalf("refusal should name the placeholder: %v", err)
+	}
+	// A filled-in copy of the same template must still pass, so the guard
+	// blocks unfilled slots rather than the template shape itself.
+	data, rerr := os.ReadFile("genesis.testnet.json")
+	if rerr != nil {
+		t.Fatalf("read template: %v", rerr)
+	}
+	filled := strings.NewReplacer(
+		"0000000000000000000000000000000000000001", "0102030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000002", "0202030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000003", "0302030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000004", "0402030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000005", "0502030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000006", "0602030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000010", "1002030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000011", "1102030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000012", "1202030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000013", "1302030405060708090a0b0c0d0e0f1011121314",
+		"0000000000000000000000000000000000000014", "1402030405060708090a0b0c0d0e0f1011121314",
+	).Replace(string(data))
+	gp := filepath.Join(t.TempDir(), "genesis.json")
+	if werr := os.WriteFile(gp, []byte(filled), 0o600); werr != nil {
+		t.Fatalf("write filled template: %v", werr)
+	}
+	c.GenesisPath = gp
 	if err := c.SafetyCheck(); err != nil {
-		t.Fatalf("bundled testnet template should pass safety check: %v", err)
+		t.Fatalf("filled-in template should pass: %v", err)
 	}
 }
 
@@ -297,5 +336,94 @@ func mustWrite(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// TestSafetyCheckRejectsUnrecognizedProfile pins the fail-closed behavior. An
+// unset profile used to skip every guard below it, which is silent and exactly
+// backwards: the less a deployment has declared about itself, the more checks
+// it should get, not fewer. A typo'd profile lands here too.
+func TestSafetyCheckRejectsUnrecognizedProfile(t *testing.T) {
+	gp := writeGenesisFixture(t, "0102030405060708090a0b0c0d0e0f1011121314")
+	for _, profile := range []string{"", "mainet", "prod", "LOCALNET"} {
+		t.Run("profile="+profile, func(t *testing.T) {
+			c := DefaultConfig()
+			c.Profile = profile
+			c.RedemptionUnstakingBlocks = 30240
+			c.GenesisPath = gp
+			err := c.SafetyCheck()
+			if err == nil {
+				t.Fatalf("profile %q was accepted", profile)
+			}
+			if !strings.Contains(err.Error(), "unrecognized profile") {
+				t.Fatalf("error should name the unrecognized profile: %v", err)
+			}
+		})
+	}
+	// The four known profiles still pass.
+	for _, profile := range []string{ProfileLocalnet, ProfileDevnet, ProfileTestnet, ProfileMainnet} {
+		c := DefaultConfig()
+		c.Profile = profile
+		c.RedemptionUnstakingBlocks = 30240
+		c.GenesisPath = gp
+		if err := c.SafetyCheck(); err != nil {
+			t.Errorf("profile %q rejected: %v", profile, err)
+		}
+	}
+}
+
+// TestSafetyCheckRejectsTemplatePlaceholders covers the hole that let a
+// half-filled template boot. The shipped testnet template used seven distinct
+// fake addresses precisely so the old single-address check would pass, so
+// copying it forward and missing one slot minted a real tranche to an address
+// nobody controls. Genesis is one-shot, so that is unrecoverable.
+func TestSafetyCheckRejectsTemplatePlaceholders(t *testing.T) {
+	for _, addr := range []string{
+		"0000000000000000000000000000000000000001",
+		"0x0000000000000000000000000000000000000002",
+		"000000000000000000000000000000000000FFFF",
+		localnetPlaceholderAddress,
+	} {
+		if !isTemplatePlaceholder(addr) {
+			t.Errorf("isTemplatePlaceholder(%q) = false, want true", addr)
+		}
+	}
+	for _, addr := range []string{
+		"0102030405060708090a0b0c0d0e0f1011121314",
+		"851e90eaef1fa27debaee2c2591503bdeec1d124", // one digit off the localnet key
+	} {
+		if isTemplatePlaceholder(addr) {
+			t.Errorf("isTemplatePlaceholder(%q) = true, want false", addr)
+		}
+	}
+	// End to end: a template placeholder in a bucket refuses to boot.
+	gp := writeGenesisFixture(t, "0000000000000000000000000000000000000003")
+	c := DefaultConfig()
+	c.Profile = ProfileMainnet
+	c.RedemptionUnstakingBlocks = 30240
+	c.GenesisPath = gp
+	err := c.SafetyCheck()
+	if err == nil {
+		t.Fatal("mainnet accepted a template placeholder address")
+	}
+	if !strings.Contains(err.Error(), "placeholder") {
+		t.Fatalf("error should name the placeholder: %v", err)
+	}
+}
+
+// TestShippedTemplatesRefuseToBoot is the regression test for the whole class:
+// both shipped non-localnet templates must be unbootable as committed. If
+// someone fills one in and commits it, this fails loudly, which is the point.
+func TestShippedTemplatesRefuseToBoot(t *testing.T) {
+	for _, path := range []string{"genesis.testnet.json", "genesis.mainnet.json"} {
+		t.Run(path, func(t *testing.T) {
+			c := DefaultConfig()
+			c.Profile = ProfileMainnet
+			c.RedemptionUnstakingBlocks = 30240
+			c.GenesisPath = path
+			if err := c.SafetyCheck(); err == nil {
+				t.Fatalf("%s booted with placeholders still in place", path)
+			}
+		})
 	}
 }

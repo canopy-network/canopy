@@ -103,6 +103,9 @@ message CanoliqGlobals {
   // treasury_spent_total: cumulative CNPY spent from treasury/canoliq, used to
   // estimate the monthly burn for the runway metric.
   uint64 treasury_spent_total = 21; // @gotags: json:"treasurySpentTotal"
+  // next_otc_lock_id: monotonically-increasing OTC lock position id counter.
+  // Global rather than per-address, matching next_unstake_id.
+  uint64 next_otc_lock_id = 22; // @gotags: json:"nextOtcLockId"
 }
 
 // Redemption is a queued cCNPY → CNPY conversion that matures after the
@@ -232,6 +235,17 @@ message CanoliqParams {
   // rebalancing requires a delegation-routing primitive not yet defined in
   // the codebase and is deferred per §11 roadmap.
   repeated RestakingPolicyEntry restaking_policy = 32; // @gotags: json:"restakingPolicy"
+  // === OTC Lock Program ===
+  // otc_tier90_bps: CPLQ reward for the 90-day tier, in basis points of the
+  // locked cCNPY quantity (500 = 5%). Reward is a 1:1 micro-unit quantity
+  // conversion, not a priced conversion — see OTCLock.
+  uint64 otc_tier90_bps = 33; // @gotags: json:"otcTier90Bps"
+  // otc_tier120_bps: CPLQ reward for the 120-day tier, in basis points of
+  // the locked cCNPY quantity (800 = 8%).
+  uint64 otc_tier120_bps = 34; // @gotags: json:"otcTier120Bps"
+  // otc_min_lock_uccnpy: minimum position size (uccnpy). Guards against dust
+  // positions, each of which would be a permanent state record.
+  uint64 otc_min_lock_uccnpy = 35; // @gotags: json:"otcMinLockUccnpy"
 }
 
 // RestakingPolicyEntry declares the desired share of canoLiq's stake exposure
@@ -267,6 +281,7 @@ enum ActionType {
   ACTION_VALIDATOR_EJECT = 5;
   ACTION_PROTOCOL_UPGRADE = 6;
   ACTION_AUTONOMY_GRADUATE = 7;
+  ACTION_OTC_PROGRAM_FUND = 8;
 }
 
 // GovernanceTier carries the governance rules for a single ActionType.
@@ -645,4 +660,102 @@ message AlertState {
   uint64 window_start_height = 2; // @gotags: json:"windowStartHeight"
   // window_baseline: the measured value at window open (e.g. pool balance).
   uint64 window_baseline = 3; // @gotags: json:"windowBaseline"
+}
+
+// === OTC Lock Program ===
+//
+// A term-lock program for cCNPY holders: lock cCNPY for a fixed tier duration
+// and receive a one-off CPLQ reward at maturity. The reward is computed and
+// reserved from a capped program budget at lock time, so a matured position
+// can never exceed what the program can pay. Early exit returns the cCNPY
+// intact and forfeits the whole reward, which returns to the program budget.
+//
+// The reward is a pure quantity conversion at 1:1 micro-units
+// (reward_uCPLQ = locked_uccnpy * tier_bps / 10000). There is no price and no
+// oracle, which keeps the whitepaper's "no external price oracle on the core
+// yield path" commitment intact.
+//
+// Deliberately NOT modelled with LockTier: that enum drives governance vote
+// weight (stake.go::voteWeightFor) and buyback distribution shares
+// (buyback.go), neither of which this program grants, and its ordering is
+// load-bearing for the "stronger tier" comparison in DeliverMessageCPLQStake.
+
+// OTCLockTier enumerates the legal lock durations.
+enum OTCLockTier {
+  OTC_LOCK_UNSPECIFIED = 0;
+  // 90 days at 6s blocks = 90 * 14_400 = 1_296_000 blocks
+  OTC_LOCK_90D = 1;
+  // 120 days at 6s blocks = 120 * 14_400 = 1_728_000 blocks
+  OTC_LOCK_120D = 2;
+}
+
+// OTCLock is an open or matured lock position. The locked cCNPY is debited
+// from the holder's balance and held here, mirroring how vesting and
+// vote-escrow move tokens out of the spendable balance rather than annotating
+// it. globals.total_ccnpy_supply is deliberately untouched by a lock: the
+// cCNPY still exists, so the position keeps appreciating at the pool's normal
+// exchange rate for the whole term.
+message OTCLock {
+  // id: per-address lock id
+  uint64 id = 1;
+  // address: the locker
+  bytes address = 2;
+  // ccnpy_amount: cCNPY held by this position (uccnpy)
+  uint64 ccnpy_amount = 3; // @gotags: json:"ccnpyAmount"
+  // tier: the lock duration tier chosen at creation
+  OTCLockTier tier = 4;
+  // reward_cplq: CPLQ reserved at creation, paid in full at maturity or
+  // forfeited in full on early exit (uCPLQ)
+  uint64 reward_cplq = 5; // @gotags: json:"rewardCplq"
+  // start_height: block height at which the lock was created
+  uint64 start_height = 6; // @gotags: json:"startHeight"
+  // mature_height: start_height + tier duration; claimable at or after this
+  uint64 mature_height = 7; // @gotags: json:"matureHeight"
+}
+
+// OTCLockIndex enumerates open lock ids per address so the account view can
+// list them without a state-range scan.
+message OTCLockIndex {
+  // ids: open lock ids owned by the indexed address
+  repeated uint64 ids = 1;
+}
+
+// MessageOTCLockCreate opens a lock position, debiting cCNPY from the sender
+// and reserving the tier's CPLQ reward from the program budget.
+message MessageOTCLockCreate {
+  // from_address: the locker
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // ccnpy_amount: cCNPY to lock (uccnpy); must be >= params.otc_min_lock_uccnpy
+  uint64 ccnpy_amount = 2; // @gotags: json:"ccnpyAmount"
+  // tier: the lock duration tier
+  OTCLockTier tier = 3;
+}
+
+// MessageOTCLockClaim closes a matured position, returning the cCNPY and
+// paying the reserved CPLQ in one transaction. Fails before mature_height.
+message MessageOTCLockClaim {
+  // from_address: the locker
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // lock_id: the position to claim
+  uint64 lock_id = 2; // @gotags: json:"lockId"
+}
+
+// MessageOTCLockCancel exits a position early. The cCNPY is returned intact
+// and the whole CPLQ reward is forfeited back to the program budget. Kept
+// separate from Claim so forfeiting a reward is always deliberate, never the
+// result of a mistimed claim.
+message MessageOTCLockCancel {
+  // from_address: the locker
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // lock_id: the position to cancel
+  uint64 lock_id = 2; // @gotags: json:"lockId"
+}
+
+// ProposalOTCProgramFund moves CPLQ from the DAO treasury into the OTC lock
+// program budget. This is the only way the program is funded: CPLQ supply is
+// fixed at genesis and nothing mints, so the budget is always a transfer from
+// an existing allocation.
+message ProposalOTCProgramFund {
+  // amount: CPLQ to move from treasury_cplq into the program budget (uCPLQ)
+  uint64 amount = 1;
 }

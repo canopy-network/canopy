@@ -53,6 +53,12 @@ const (
 	codeTVLCapExceeded
 	codeCanopyStakeUnavailable
 	codeUncappedOutsideDevProfile
+	codeInvalidOTCLockTier
+	codeOTCLockBelowMinimum
+	codeOTCBudgetExhausted
+	codeOTCLockNotFound
+	codeOTCLockNotMature
+	codeOTCLockMatured
 )
 
 // newError constructs a PluginError stamped with the canoLiq module.
@@ -280,4 +286,46 @@ func ErrUncappedOutsideDevProfile(profile string) *contract.PluginError {
 		profile = "<unset>"
 	}
 	return newError(codeUncappedOutsideDevProfile, "refusing to run genesis with tvlCapBps=0 under profile="+profile+": an uncapped genesis is allowed only on the localnet and devnet profiles; elsewhere lifting the TVL cap is a governance decision (WP §9.4), not a genesis setting")
+}
+
+// === OTC lock program ===
+
+// ErrInvalidOTCLockTier is returned when the tier is unset or unrecognized.
+func ErrInvalidOTCLockTier() *contract.PluginError {
+	return newError(codeInvalidOTCLockTier, "invalid OTC lock tier")
+}
+
+// ErrOTCLockBelowMinimum is returned when a position is smaller than
+// params.otc_min_lock_uccnpy.
+func ErrOTCLockBelowMinimum() *contract.PluginError {
+	return newError(codeOTCLockBelowMinimum, "OTC lock amount below minimum position size")
+}
+
+// ErrOTCBudgetExhausted is returned when the program's unreserved budget
+// cannot cover the reward this position would earn. Rejecting here is what
+// guarantees no matured position outruns what the program can pay.
+func ErrOTCBudgetExhausted() *contract.PluginError {
+	return newError(codeOTCBudgetExhausted, "OTC lock program budget exhausted")
+}
+
+// ErrOTCLockNotFound is returned when the (address, lock_id) pair has no
+// open position.
+func ErrOTCLockNotFound() *contract.PluginError {
+	return newError(codeOTCLockNotFound, "OTC lock position not found")
+}
+
+// ErrOTCLockNotMature is returned when a claim arrives before mature_height.
+// Early exit is available through MessageOTCLockCancel, which forfeits the
+// reward — deliberately a separate message so forfeiture is never accidental.
+func ErrOTCLockNotMature() *contract.PluginError {
+	return newError(codeOTCLockNotMature, "OTC lock position has not yet matured")
+}
+
+// ErrOTCLockMatured is returned when a cancel arrives at or after
+// mature_height. The reward is already earned at that point, so cancelling
+// would forfeit it for nothing: the position can simply be claimed instead.
+// Refusing here is a guard against a user destroying their own reward with a
+// mistimed transaction.
+func ErrOTCLockMatured() *contract.PluginError {
+	return newError(codeOTCLockMatured, "OTC lock position has matured; claim it instead of cancelling")
 }
