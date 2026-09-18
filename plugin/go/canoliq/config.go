@@ -298,6 +298,19 @@ func (c Config) SafetyCheck() error {
 	if c.Profile == ProfileLocalnet {
 		return nil
 	}
+	// ChainId is the canoLiq *committee* id on Canopy — the id validators list
+	// in their MessageStake and the key every fee pool read is scoped by. The
+	// shipped non-localnet templates leave it 0 for an operator to fill in, and
+	// nothing else validates it, so without this guard a node boots happily on
+	// the placeholder and fails silently rather than loudly: no validator
+	// declares committee 0, so committeeValidators reconciles the live set to
+	// empty and validatorOnCommittee never matches. The registry empties, the
+	// validator-incentive slice routes to the synthetic aggregator key nobody
+	// can spend from, and KeyForFeePool(0) reads a pool that is not canoLiq's.
+	if c.ChainId == 0 {
+		return fmt.Errorf("canoliq: refusing to start profile=%q with chainId=0 (set chainId to the canoLiq committee id registered on this network; it is NOT the node's own chain id)",
+			c.Profile)
+	}
 	// M2: fail closed on an implausibly small redemption window. Under
 	// testnet/mainnet the value must mirror Canopy's valParams.UnstakingBlocks
 	// (thousands of blocks); a missing/tiny value would mature redemptions in
@@ -403,10 +416,17 @@ func DefaultParams() *contract.CanoliqParams {
 		OtcTier90Bps:     500,
 		OtcTier120Bps:    800,
 		OtcMinLockUccnpy: 50_000_000_000,
+		OtcTier90Blocks:  90 * blocksPerDay,  // 1_296_000 — 90 days at 6s blocks
+		OtcTier120Blocks: 120 * blocksPerDay, // 1_728_000 — 120 days at 6s blocks
 	}
 }
 
 // Block-count constants for governance timing at the 6s localnet block time.
+// maxOtcTierBlocks bounds an OTC lock term. Generous on purpose — the point is
+// to reject a typo, not to express policy. At the 6s block time this is about
+// 27 years.
+const maxOtcTierBlocks = 144_000_000
+
 const (
 	blocks24h = 14_400  // ~24h at 6s blocks
 	blocks48h = 28_800  // ~48h
@@ -427,6 +447,17 @@ func defaultGovernanceTiers() []*contract.GovernanceTier {
 		{Action: contract.ActionType_ACTION_VALIDATOR_EJECT, QuorumBps: 500, ApprovalBps: 5100, TimelockBlocks: blocks48h, VotingPeriodBlocks: blocks7d},
 		{Action: contract.ActionType_ACTION_PROTOCOL_UPGRADE, QuorumBps: 1000, ApprovalBps: 6700, TimelockBlocks: blocks7d, VotingPeriodBlocks: blocks7d},
 		{Action: contract.ActionType_ACTION_AUTONOMY_GRADUATE, QuorumBps: 1500, ApprovalBps: 7500, TimelockBlocks: blocks14d, VotingPeriodBlocks: blocks7d},
+		// Funding the OTC lock program is a significant treasury movement, so
+		// it carries the same 10%/67% bar as a large treasury spend.
+		//
+		// TimelockBlocks is deliberately 0, not an oversight. fundOTCProgram
+		// is dispatched straight from dispatchPassed and moves the CPLQ in
+		// that block; unlike queueTreasurySpend it writes no queued record and
+		// takes neither params nor height, so a non-zero timelock here would
+		// be decorative. That is defensible because funding moves CPLQ between
+		// two protocol-held, non-circulating balances — nothing leaves the
+		// protocol, and only a claimed lock reward ever enters circulation.
+		{Action: contract.ActionType_ACTION_OTC_PROGRAM_FUND, QuorumBps: 1000, ApprovalBps: 6700, TimelockBlocks: 0, VotingPeriodBlocks: blocks7d},
 	}
 }
 
@@ -481,6 +512,16 @@ func ValidateParams(p *contract.CanoliqParams) *contract.PluginError {
 		return ErrInvalidParams()
 	}
 	if (p.OtcTier90Bps > 0 || p.OtcTier120Bps > 0) && p.OtcMinLockUccnpy == 0 {
+		return ErrInvalidParams()
+	}
+	// Tier terms must be a real, bounded number of blocks. Zero would mature a
+	// position in the same block it opened, collapsing the lock into a free
+	// draw from the program budget. The ceiling keeps a fat-fingered value from
+	// creating a position that outlives any plausible chain.
+	if p.OtcTier90Blocks == 0 || p.OtcTier120Blocks == 0 {
+		return ErrInvalidParams()
+	}
+	if p.OtcTier90Blocks > maxOtcTierBlocks || p.OtcTier120Blocks > maxOtcTierBlocks {
 		return ErrInvalidParams()
 	}
 	// Unstaking window must be ≥ voting period so a voter cannot stake → vote

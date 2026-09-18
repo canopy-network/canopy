@@ -47,22 +47,22 @@ var commands = map[string]func([]string, globalFlags) error{
 }
 
 var commandUsages = map[string]string{
-	"deposit":            "deposit <nickname> <amount-uCNPY>",
-	"redeem":             "redeem <nickname> <ccnpy-amount>",
-	"claim":              "claim <nickname> <redemption-id>",
-	"cplq-transfer":      "cplq-transfer <from-nickname> <to-address-hex> <amount-uCPLQ>",
-	"cplq-claim-vested":  "cplq-claim-vested <nickname>",
-	"cplq-stake":         "cplq-stake <nickname> <amount-uCPLQ> [--lock none|3m|6m|12m|24m]",
-	"cplq-unstake":       "cplq-unstake <nickname> <amount-uCPLQ>",
-	"cplq-claim-unstake": "cplq-claim-unstake <nickname> <unstake-id>",
-	"vote":               "vote <nickname> <proposal-id> <yes|no|abstain>",
-	"buyback-execute":    "buyback-execute <nickname> <proposal-id>",
-	"spend-execute":      "spend-execute <nickname> <proposal-id>",
-	"multisig-approve":   "multisig-approve <signer-nickname> <spend-id>",
+	"deposit":            "deposit <address> <amount-uCNPY>",
+	"redeem":             "redeem <address> <ccnpy-amount>",
+	"claim":              "claim <address> <redemption-id>",
+	"cplq-transfer":      "cplq-transfer <from-address> <to-address-hex> <amount-uCPLQ>",
+	"cplq-claim-vested":  "cplq-claim-vested <address>",
+	"cplq-stake":         "cplq-stake <address> <amount-uCPLQ> [--lock none|3m|6m|12m|24m]",
+	"cplq-unstake":       "cplq-unstake <address> <amount-uCPLQ>",
+	"cplq-claim-unstake": "cplq-claim-unstake <address> <unstake-id>",
+	"vote":               "vote <address> <proposal-id> <yes|no|abstain>",
+	"buyback-execute":    "buyback-execute <address> <proposal-id>",
+	"spend-execute":      "spend-execute <address> <proposal-id>",
+	"multisig-approve":   "multisig-approve <signer-address> <spend-id>",
 	"proposal-create":    "proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency|otc-program-fund> <args> [--description …]",
-	"otc-lock":           "otc-lock <nickname> <ccnpy-amount> <90d|120d>",
-	"otc-lock-claim":     "otc-lock-claim <nickname> <lock-id>",
-	"otc-lock-cancel":    "otc-lock-cancel <nickname> <lock-id>   (forfeits the CPLQ reward)",
+	"otc-lock":           "otc-lock <address> <ccnpy-amount> <90d|120d>",
+	"otc-lock-claim":     "otc-lock-claim <address> <lock-id>",
+	"otc-lock-cancel":    "otc-lock-cancel <address> <lock-id>   (forfeits the CPLQ reward)",
 }
 
 func main() {
@@ -83,7 +83,16 @@ func main() {
 	fs.StringVar(&gf.rpcURL, "rpc-url", envDefault("CANOLIQCTL_RPC_URL", "http://localhost:50002"), "node query RPC URL")
 	fs.StringVar(&gf.adminURL, "admin-url", envDefault("CANOLIQCTL_ADMIN_URL", "http://localhost:50003"), "node admin RPC URL (keystore)")
 	fs.Uint64Var(&gf.networkID, "network-id", uint64(envDefaultInt("CANOLIQCTL_NETWORK_ID", 1)), "Canopy network id")
-	fs.Uint64Var(&gf.chainID, "chain-id", uint64(envDefaultInt("CANOLIQCTL_CHAIN_ID", 2)), "canoLiq committee chain id")
+	// The chain id a transaction is SIGNED for is the chain id of the node it is
+	// submitted to — fsm/transaction.go::CheckReplay rejects any mismatch with
+	// ErrWrongChainId before the plugin is ever consulted. It is NOT the canoLiq
+	// committee id from the plugin config, which only ever scopes fee-pool keys
+	// and committee membership; the two are designed to differ (testnet pairs
+	// node chain 1 with committee 42, mainnet with committee 19). Defaulting
+	// this to the committee id made every command fail silently: the RPC runs
+	// only CheckBasic, so it accepts the tx and returns a hash, then the mempool
+	// re-check drops it with nothing printed.
+	fs.Uint64Var(&gf.chainID, "chain-id", uint64(envDefaultInt("CANOLIQCTL_CHAIN_ID", 1)), "chain id of the NODE being submitted to (not the canoLiq committee id)")
 	fs.Uint64Var(&gf.fee, "fee", uint64(envDefaultInt("CANOLIQCTL_FEE", 10_000)), "tx fee (uCNPY)")
 	fs.StringVar(&gf.password, "password", os.Getenv("CANOLIQCTL_PASSWORD"), "keystore password (or set CANOLIQCTL_PASSWORD)")
 	if err := fs.Parse(os.Args[2:]); err != nil {

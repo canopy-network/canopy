@@ -1253,6 +1253,25 @@ type CanoliqParams struct {
 	// otc_min_lock_uccnpy: minimum position size (uccnpy). Guards against dust
 	// positions, each of which would be a permanent state record.
 	OtcMinLockUccnpy uint64 `protobuf:"varint,35,opt,name=otc_min_lock_uccnpy,json=otcMinLockUccnpy,proto3" json:"otcMinLockUccnpy"` // @gotags: json:"otcMinLockUccnpy"
+	// otc_tier90_blocks / otc_tier120_blocks: term length of each tier, in
+	// blocks — the same unit every other duration parameter uses
+	// (voting_period_blocks, timelock_blocks, cplq_unstaking_blocks). At the 6s
+	// block time the defaults are 90 and 120 days.
+	//
+	// These are parameters rather than constants for two reasons: governance
+	// already tunes the tier *rates*, so fixing the *terms* in the binary was
+	// inconsistent; and with the terms hard-coded at 90/120 days, claim-at-
+	// maturity could not be exercised on any chain without patching and
+	// rebuilding the plugin.
+	//
+	// NOTE: the OTCLockTier enum names (OTC_LOCK_90D / OTC_LOCK_120D) are tier
+	// *identities*, not a restatement of these values. Governance setting
+	// otc_tier90_blocks to 45 days' worth leaves the enum name saying 90; the
+	// name is the key, the param is the term. Open positions are unaffected
+	// either way, since
+	// OTCLock.mature_height is fixed when the position is created.
+	OtcTier90Blocks  uint64 `protobuf:"varint,36,opt,name=otc_tier90_blocks,json=otcTier90Blocks,proto3" json:"otcTier90Blocks"`    // @gotags: json:"otcTier90Blocks"
+	OtcTier120Blocks uint64 `protobuf:"varint,37,opt,name=otc_tier120_blocks,json=otcTier120Blocks,proto3" json:"otcTier120Blocks"` // @gotags: json:"otcTier120Blocks"
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1528,6 +1547,20 @@ func (x *CanoliqParams) GetOtcTier120Bps() uint64 {
 func (x *CanoliqParams) GetOtcMinLockUccnpy() uint64 {
 	if x != nil {
 		return x.OtcMinLockUccnpy
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetOtcTier90Blocks() uint64 {
+	if x != nil {
+		return x.OtcTier90Blocks
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetOtcTier120Blocks() uint64 {
+	if x != nil {
+		return x.OtcTier120Blocks
 	}
 	return 0
 }
@@ -3966,7 +3999,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\fstart_height\x18\x05 \x01(\x04R\vstartHeight\x12\x1d\n" +
 	"\n" +
 	"end_height\x18\x06 \x01(\x04R\tendHeight\x12%\n" +
-	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\x82\f\n" +
+	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\xdc\f\n" +
 	"\rCanoliqParams\x12\x17\n" +
 	"\afee_bps\x18\x01 \x01(\x04R\x06feeBps\x12&\n" +
 	"\x0fuser_rebate_bps\x18\x02 \x01(\x04R\ruserRebateBps\x12!\n" +
@@ -4009,7 +4042,9 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x10restaking_policy\x18  \x03(\v2\x1b.types.RestakingPolicyEntryR\x0frestakingPolicy\x12$\n" +
 	"\x0eotc_tier90_bps\x18! \x01(\x04R\fotcTier90Bps\x12&\n" +
 	"\x0fotc_tier120_bps\x18\" \x01(\x04R\rotcTier120Bps\x12-\n" +
-	"\x13otc_min_lock_uccnpy\x18# \x01(\x04R\x10otcMinLockUccnpy\"\xb5\x01\n" +
+	"\x13otc_min_lock_uccnpy\x18# \x01(\x04R\x10otcMinLockUccnpy\x12*\n" +
+	"\x11otc_tier90_blocks\x18$ \x01(\x04R\x0fotcTier90Blocks\x12,\n" +
+	"\x12otc_tier120_blocks\x18% \x01(\x04R\x10otcTier120Blocks\"\xb5\x01\n" +
 	"\x14RestakingPolicyEntry\x12!\n" +
 	"\fcommittee_id\x18\x01 \x01(\x04R\vcommitteeId\x12*\n" +
 	"\x11target_weight_bps\x18\x02 \x01(\x04R\x0ftargetWeightBps\x12&\n" +

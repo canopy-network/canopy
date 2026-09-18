@@ -27,9 +27,9 @@ import (
 //
 // Usage:
 //
-//	canoliqctl proposal-create param-change    <nickname> <params-json-file> [--description ...]
-//	canoliqctl proposal-create buyback         <nickname> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description ...]
-//	canoliqctl proposal-create treasury-spend  <nickname> <recipient-hex> <amount> <cnpy|cplq> [--description ...]
+//	canoliqctl proposal-create param-change    <address> <params-json-file> [--description ...]
+//	canoliqctl proposal-create buyback         <address> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description ...]
+//	canoliqctl proposal-create treasury-spend  <address> <recipient-hex> <amount> <cnpy|cplq> [--description ...]
 func cmdProposalCreate(args []string, gf globalFlags) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: %s", commandUsages["proposal-create"])
@@ -73,7 +73,7 @@ func printProposalCreateHelp() error {
 // dispatchPassed, so invalid bps sums or signer/threshold mismatches surface
 // only after the proposal passes — operators should pre-validate.
 func cmdProposalParamChange(args []string, gf globalFlags) error {
-	usage := "proposal-create param-change <nickname> <params-json-file> [--description \"…\"]"
+	usage := "proposal-create param-change <address> <params-json-file> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 2 {
 		return fmt.Errorf("expected 2 positional args (usage: %s)", usage)
@@ -103,7 +103,7 @@ func cmdProposalParamChange(args []string, gf globalFlags) error {
 // price-micro-cnpy-per-cplq is "how many uCNPY = 1 CPLQ × 10^6"; the plugin
 // computes `cplq_acquired = cnpy_amount * 10^6 / price`.
 func cmdProposalBuyback(args []string, gf globalFlags) error {
-	usage := "proposal-create buyback <nickname> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description \"…\"]"
+	usage := "proposal-create buyback <address> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 4 {
 		return fmt.Errorf("expected 4 positional args (usage: %s)", usage)
@@ -147,7 +147,7 @@ func cmdProposalBuyback(args []string, gf globalFlags) error {
 // Above-threshold spends additionally require multisig + timelock — those
 // are enforced at execution, not at proposal create.
 func cmdProposalTreasurySpend(args []string, gf globalFlags) error {
-	usage := "proposal-create treasury-spend <nickname> <recipient-hex> <amount> <cnpy|cplq> [--description \"…\"]"
+	usage := "proposal-create treasury-spend <address> <recipient-hex> <amount> <cnpy|cplq> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 4 {
 		return fmt.Errorf("expected 4 positional args (usage: %s)", usage)
@@ -190,7 +190,7 @@ func cmdProposalTreasurySpend(args []string, gf globalFlags) error {
 // validator from the committee registry on pass (F12). The plugin infers the
 // ACTION_VALIDATOR_EJECT tier (5% quorum / 51% / 48h) from the payload type.
 func cmdProposalValidatorEject(args []string, gf globalFlags) error {
-	usage := "proposal-create validator-eject <nickname> <validator-hex> [--description \"…\"]"
+	usage := "proposal-create validator-eject <address> <validator-hex> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 2 {
 		return fmt.Errorf("expected 2 positional args (usage: %s)", usage)
@@ -222,7 +222,7 @@ func cmdProposalValidatorEject(args []string, gf globalFlags) error {
 // the only path by which the program is funded: nothing mints, and the amount
 // is capped at the treasury balance at execution time.
 func cmdProposalOTCProgramFund(args []string, gf globalFlags) error {
-	usage := "proposal-create otc-program-fund <nickname> <amount-uCPLQ> [--description \"…\"]"
+	usage := "proposal-create otc-program-fund <address> <amount-uCPLQ> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 2 {
 		return fmt.Errorf("expected 2 positional args (usage: %s)", usage)
@@ -253,7 +253,7 @@ func cmdProposalOTCProgramFund(args []string, gf globalFlags) error {
 // (ACTION_EMERGENCY: 8% quorum / 67% / 24h vote / no timelock). An optional
 // params-json-file is included as the emergency param diff applied on pass.
 func cmdProposalEmergency(args []string, gf globalFlags) error {
-	usage := "proposal-create emergency <nickname> [params-json-file] [--description \"…\"]"
+	usage := "proposal-create emergency <address> [params-json-file] [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 1 {
 		return fmt.Errorf("expected at least 1 positional arg (usage: %s)", usage)
@@ -473,10 +473,12 @@ type paramsJSON struct {
 	Governance                []governanceTierJSON `json:"governance"`
 	RestakingPolicy           []restakingEntryJSON `json:"restakingPolicy"`
 
-	// OTC lock program tier rates and minimum position size.
+	// OTC lock program tier rates, minimum position size, and tier terms.
 	OtcTier90Bps     uint64 `json:"otcTier90Bps"`
 	OtcTier120Bps    uint64 `json:"otcTier120Bps"`
 	OtcMinLockUccnpy uint64 `json:"otcMinLockUccnpy"`
+	OtcTier90Blocks  uint64 `json:"otcTier90Blocks"`
+	OtcTier120Blocks uint64 `json:"otcTier120Blocks"`
 }
 
 // governanceTierJSON is one row of the per-action governance matrix. Action is
@@ -580,6 +582,8 @@ func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 		OtcTier90Bps:              p.OtcTier90Bps,
 		OtcTier120Bps:             p.OtcTier120Bps,
 		OtcMinLockUccnpy:          p.OtcMinLockUccnpy,
+		OtcTier90Blocks:           p.OtcTier90Blocks,
+		OtcTier120Blocks:          p.OtcTier120Blocks,
 	}, nil
 }
 

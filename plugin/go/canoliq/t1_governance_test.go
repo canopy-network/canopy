@@ -49,6 +49,10 @@ func TestT1DefaultTiersMatchSpec(t *testing.T) {
 		contract.ActionType_ACTION_VALIDATOR_EJECT:      {500, 5100, blocks48h},
 		contract.ActionType_ACTION_PROTOCOL_UPGRADE:     {1000, 6700, blocks7d},
 		contract.ActionType_ACTION_AUTONOMY_GRADUATE:    {1500, 7500, blocks14d},
+		// Funding the OTC lock program carries the large-treasury-spend bar.
+		// Timelock is 0 by design: fundOTCProgram moves the CPLQ in the block
+		// the proposal passes, so a non-zero value here would be decorative.
+		contract.ActionType_ACTION_OTC_PROGRAM_FUND: {1000, 6700, 0},
 	}
 	if len(p.Governance) != len(want) {
 		t.Fatalf("tier count: got %d want %d", len(p.Governance), len(want))

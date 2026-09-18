@@ -8,9 +8,16 @@ import (
 	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 )
 
-// fetchSigner resolves a nickname OR raw hex address into the corresponding
+// fetchSigner resolves a signer for the given account. The parameter is named
+// nickOrAddr because the intent was to accept either form, but a node's admin
+// keystore endpoint hex-decodes whatever it is given, so a nickname comes back
+// as `encoding/hex: invalid byte`. Pass the hex address until nickname
+// resolution is actually implemented; every usage string says <address> for
+// that reason.
+//
+// Resolves a hex address into the corresponding
 // keystore record by first treating the input as a hex address, then falling
-// back to nickname (the admin keystore accepts either form).
+// key material via the admin keystore.
 func fetchSigner(adminURL, nickOrAddr, password string) (*internal.Key, error) {
 	k, err := internal.KeystoreGet(adminURL, nickOrAddr, password)
 	if err != nil {

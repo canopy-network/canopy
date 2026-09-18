@@ -32,24 +32,24 @@ import (
 // oracle, preserving the whitepaper's "no external price oracle on the core
 // yield path" commitment.
 
-// OTC lock tier durations. Expressed in days against the existing
-// blocksPerDay constant (stake.go) rather than via LockTier, which is a closed
-// 3/6/12/24-month set whose ordering is load-bearing for the "stronger tier"
-// comparison in DeliverMessageCPLQStake and whose only consumers are
-// governance vote weight and buyback shares. This program grants neither.
-const (
-	otcLock90DBlocks  = 90 * blocksPerDay  // 1_296_000
-	otcLock120DBlocks = 120 * blocksPerDay // 1_728_000
-)
-
-// otcLockDurationBlocks returns the lock duration in blocks for a tier.
-// Returns 0 for an unknown tier; callers gate on validOTCLockTier first.
-func otcLockDurationBlocks(tier contract.OTCLockTier) uint64 {
+// otcLockDurationBlocks returns the lock duration in blocks for a tier, read
+// straight from params. Returns 0 for an unknown tier; callers gate on
+// validOTCLockTier first.
+//
+// A separate OTCLockTier enum is used rather than LockTier because LockTier is
+// a closed 3/6/12/24-month set whose ordering is load-bearing for the
+// "stronger tier" comparison in DeliverMessageCPLQStake, and whose only
+// consumers are governance vote weight and buyback shares. This program grants
+// neither.
+func otcLockDurationBlocks(tier contract.OTCLockTier, params *contract.CanoliqParams) uint64 {
+	if params == nil {
+		return 0
+	}
 	switch tier {
 	case contract.OTCLockTier_OTC_LOCK_90D:
-		return otcLock90DBlocks
+		return params.OtcTier90Blocks
 	case contract.OTCLockTier_OTC_LOCK_120D:
-		return otcLock120DBlocks
+		return params.OtcTier120Blocks
 	default:
 		return 0
 	}
@@ -235,7 +235,7 @@ func (c *Canoliq) DeliverMessageOTCLockCreate(msg *contract.MessageOTCLockCreate
 		Tier:         msg.Tier,
 		RewardCplq:   reward,
 		StartHeight:  height,
-		MatureHeight: height + otcLockDurationBlocks(msg.Tier),
+		MatureHeight: height + otcLockDurationBlocks(msg.Tier, params),
 	}
 	idx.Ids = append(idx.Ids, lockID)
 	lockBz, e := contract.Marshal(lock)

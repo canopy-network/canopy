@@ -27,13 +27,23 @@ In short: the program changes *when* treasury CPLQ enters circulation, never *ho
 
 ## Terms
 
-| Tier | Term | Reward rate | Parameter |
-|------|------|-------------|-----------|
-| 90-day | 90 days | 5% of the locked cCNPY | `otc_tier90_bps` = 500 |
-| 120-day | 120 days | 8% of the locked cCNPY | `otc_tier120_bps` = 800 |
+| Tier | Term | Reward rate |
+|------|------|-------------|
+| 90-day | 90 days — `otc_tier90_blocks` = 1,296,000 | 5% — `otc_tier90_bps` = 500 |
+| 120-day | 120 days — `otc_tier120_blocks` = 1,728,000 | 8% — `otc_tier120_bps` = 800 |
 
-Minimum position: **50,000 cCNPY** (`otc_min_lock_uccnpy` = 50,000,000,000). All three are
-governance-tunable.
+Minimum position: **50,000 cCNPY** (`otc_min_lock_uccnpy` = 50,000,000,000). Every one of these
+five values is governance-tunable.
+
+:::note A term change never moves an open position
+A lock's maturity is written once, when the position is created. If governance later shortens or
+lengthens a tier, existing positions keep the term they were sold; only new positions use the new
+one. Governance cannot reach back into a lock somebody already agreed to.
+
+Terms are expressed in blocks, like every other duration parameter. The tier *names* are fixed
+identifiers, so a tier called `OTC_LOCK_90D` whose term governance shortened to 45 days' worth of
+blocks is still named `90D`. Read the term from the parameter, not the name.
+:::
 
 The reward is a 1:1 quantity conversion — `reward = locked cCNPY × tier rate` — evaluated in
 micro-units and rounded down. No price and no oracle are involved, which keeps the program off

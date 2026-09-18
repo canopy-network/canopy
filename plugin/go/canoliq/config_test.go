@@ -427,3 +427,64 @@ func TestShippedTemplatesRefuseToBoot(t *testing.T) {
 		})
 	}
 }
+
+// TestSafetyCheckRejectsUnsetChainId covers the committee id being left at its
+// template placeholder of 0. Nothing else validates ChainId, and the failure it
+// causes is silent rather than loud: no validator declares committee 0, so the
+// registry reconciles to empty, the validator-incentive slice routes to the
+// synthetic aggregator key, and every fee-pool read is scoped to the wrong
+// pool. Localnet is exempt, as it is for every other guard.
+func TestSafetyCheckRejectsUnsetChainId(t *testing.T) {
+	gp := writeGenesisFixture(t, "0102030405060708090a0b0c0d0e0f1011121314")
+	for _, profile := range []string{ProfileDevnet, ProfileTestnet, ProfileMainnet} {
+		t.Run("profile="+profile, func(t *testing.T) {
+			c := DefaultConfig()
+			c.Profile = profile
+			c.ChainId = 0
+			c.RedemptionUnstakingBlocks = 30240
+			c.GenesisPath = gp
+			err := c.SafetyCheck()
+			if err == nil {
+				t.Fatal("chainId=0 was accepted outside localnet")
+			}
+			if !strings.Contains(err.Error(), "chainId=0") {
+				t.Fatalf("error should name the offending field, got: %v", err)
+			}
+		})
+	}
+	// Localnet is deliberately exempt so a bare DefaultConfig still boots.
+	c := DefaultConfig()
+	c.Profile = ProfileLocalnet
+	c.ChainId = 0
+	if err := c.SafetyCheck(); err != nil {
+		t.Fatalf("localnet must stay exempt: %v", err)
+	}
+	// A real committee id passes.
+	c = DefaultConfig()
+	c.Profile = ProfileMainnet
+	c.ChainId = 19
+	c.RedemptionUnstakingBlocks = 30240
+	c.GenesisPath = gp
+	if err := c.SafetyCheck(); err != nil {
+		t.Fatalf("chainId=19 should pass: %v", err)
+	}
+}
+
+// TestMainnetConfigCarriesCommitteeId pins the shipped mainnet config to a real
+// committee id. The genesis it points at is still a placeholder template that
+// refuses to boot (TestShippedTemplatesRefuseToBoot), but the chain id is the
+// one value an operator cannot derive from the repo, so a regression to 0 must
+// fail here rather than on a live mainnet.
+func TestMainnetConfigCarriesCommitteeId(t *testing.T) {
+	c, err := NewConfigFromFile("canoliq-config.mainnet.json")
+	if err != nil {
+		t.Fatalf("load mainnet config: %v", err)
+	}
+	if c.ChainId == 0 {
+		t.Fatal("mainnet config must carry the registered canoLiq committee id, not the 0 placeholder")
+	}
+	if c.ChainId == 19 {
+		return
+	}
+	t.Logf("note: mainnet committee id is %d, not the expected 19 — confirm against the registration", c.ChainId)
+}
