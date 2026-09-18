@@ -1,0 +1,114 @@
+---
+sidebar_label: OTC Lock Accounting
+---
+
+# OTC Lock Accounting
+
+**In one sentence:** how the OTC lock program keeps a fixed CPLQ budget honest — reserving
+rewards up front, leaving cCNPY supply untouched, and moving circulating supply only on a
+successful claim.
+
+This page covers the invariants behind the [OTC Lock Program](../tokenomics/otc-lock-program.mdx).
+For how to use it, see [OTC Locks](../transactions/otc-locks.mdx).
+
+## Budget scalars
+
+The program keeps two scalars under the `OTC Budget` domain (see [State Keys](./state-keys.mdx)):
+
+| Slot | Meaning |
+|------|---------|
+| `available` | CPLQ that can still back a new position |
+| `reserved` | CPLQ already promised to open positions |
+
+Their sum is the program's total budget. Neither is part of circulating supply.
+
+## Transitions
+
+| Event | `available` | `reserved` | Circulating CPLQ |
+|-------|-------------|------------|------------------|
+| `ProposalOTCProgramFund` executes | `+= amount` | — | unchanged |
+| Lock created | `-= reward` | `+= reward` | unchanged |
+| Claim at maturity | — | `-= reward` | `+= reward` |
+| Cancel before maturity | `+= reward` | `-= reward` | unchanged |
+
+Funding debits the protocol's CPLQ treasury balance by the same amount, so the two together
+conserve total protocol-held CPLQ.
+
+## Reserve-at-lock-time is what makes the cap hard
+
+The reward is computed and reserved when the position opens, not when it matures. A lock whose
+reward exceeds `available` is rejected with `ErrOTCBudgetExhausted`.
+
+The consequence worth stating: **no set of open positions can ever mature into more than the
+program holds.** Had the reward instead been computed at maturity, a burst of locks could
+collectively promise more than the budget and the last claimants would find nothing left.
+
+A reward that rounds to zero is also rejected, so a position can never open with nothing
+reserved against it.
+
+## Reward math
+
+```
+reward_uCPLQ = floor(locked_uccnpy × tier_bps / 10_000)
+```
+
+A pure quantity conversion at 1:1 micro-units. Flooring favours the budget, never the depositor,
+so rounding can never overcommit. There is no price term, which is what keeps the program off
+the exchange-rate path and preserves the whitepaper's guarantee that no external price oracle
+sits on the core yield path.
+
+## Locking does not change cCNPY supply
+
+A lock debits the holder's spendable cCNPY balance and holds the amount on the position record.
+This mirrors how CPLQ vesting and vote-escrow stake already work: tokens move out of the
+spendable balance into a separate record rather than being annotated in place.
+
+**`TotalCcnpySupply` is deliberately not decremented.** The cCNPY still exists; it has only
+changed custody. Leaving supply untouched is exactly what lets a locked position keep
+appreciating at the pool's normal exchange rate for the whole term — the property the program
+promises depositors.
+
+It also means redemption needs no special case: the balance a redeem reads is already reduced,
+so locked cCNPY is unredeemable by construction rather than by an extra guard.
+
+## Circulating supply moves on claim only
+
+CPLQ entering a liquid balance from a non-circulating reserve must raise
+`CplqCirculatingSupply`. A claim does this by exactly the reserved reward.
+
+Cancel must **not**, because nothing entered circulation — the reward returns to the budget.
+Funding must not either, since treasury and program budget are both non-circulating.
+
+The supply invariant `CplqCirculatingSupply ≤ CplqTotalSupply ≤ 100M` therefore holds across
+every path, and the program's maximum contribution to circulating supply is capped at the
+voted budget.
+
+## Claim and cancel are separate messages
+
+Maturity is user-driven: nothing scans open positions per block, so the program's cost to block
+production stays flat as it grows.
+
+Closing a position uses two distinct messages rather than one that branches on height:
+
+- **Claim** requires `current_height >= mature_height`, else `ErrOTCLockNotMature`.
+- **Cancel** is refused at or after maturity with `ErrOTCLockMatured`.
+
+A single close message deciding by height would let a mistimed transaction silently forfeit an
+earned reward. Splitting them makes forfeiture deliberate.
+
+## Error codes
+
+| Error | Raised when |
+|-------|-------------|
+| `ErrInvalidOTCLockTier` | Tier is unset or unrecognized |
+| `ErrOTCLockBelowMinimum` | Position is smaller than `otc_min_lock_uccnpy` |
+| `ErrOTCBudgetExhausted` | Unreserved budget cannot cover the reward |
+| `ErrOTCLockNotFound` | No position for that address and id |
+| `ErrOTCLockNotMature` | Claim arrived before `mature_height` |
+| `ErrOTCLockMatured` | Cancel arrived at or after `mature_height` |
+
+## Related
+
+- [OTC Lock Program](../tokenomics/otc-lock-program.mdx) — budget, funding, and supply effects
+- [OTC Locks](../transactions/otc-locks.mdx) — the transactions themselves
+- [State Keys](./state-keys.mdx) — the `OTC Lock`, `OTC Lock Index`, and `OTC Budget` domains

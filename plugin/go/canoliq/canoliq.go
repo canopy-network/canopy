@@ -112,6 +112,12 @@ func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.Plugin
 		return c.CheckMessageDAOTreasurySpend(x, request.Tx.Fee, params)
 	case *contract.MessageMultisigApprove:
 		return c.CheckMessageMultisigApprove(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockCreate:
+		return c.CheckMessageOTCLockCreate(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockClaim:
+		return c.CheckMessageOTCLockClaim(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockCancel:
+		return c.CheckMessageOTCLockCancel(x, request.Tx.Fee, params)
 	default:
 		return &contract.PluginCheckResponse{Error: ErrUnsupportedMessage()}
 	}
@@ -193,6 +199,12 @@ func (c *Canoliq) dispatchDeliver(request *contract.PluginDeliverRequest) *contr
 		return c.DeliverMessageDAOTreasurySpend(x, request.Tx.Fee, params)
 	case *contract.MessageMultisigApprove:
 		return c.DeliverMessageMultisigApprove(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockCreate:
+		return c.DeliverMessageOTCLockCreate(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockClaim:
+		return c.DeliverMessageOTCLockClaim(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockCancel:
+		return c.DeliverMessageOTCLockCancel(x, request.Tx.Fee, params)
 	default:
 		return &contract.PluginDeliverResponse{Error: ErrUnsupportedMessage()}
 	}

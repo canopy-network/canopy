@@ -4,6 +4,9 @@ sidebar_label: Implementation Plan
 
 # canoLiq Implementation Plan
 
+**In one sentence:** what is built, what is in flight, and what is still open — a status
+snapshot, not a specification.
+
 ## Phase 1 — MVP
 
 ### Completed
@@ -46,11 +49,10 @@ sidebar_label: Implementation Plan
 - [x] Validators endpoint
 - [x] Stakers and graduation endpoints
 - [x] Redemption and vesting endpoints
+- [x] Per-address redemption and unstake indexes
 
 ### In Progress
 
-- [ ] Per-address redemption index
-- [ ] Per-address unstake index
 - [ ] Insurance fund disbursement (slashing reimbursement)
 - [ ] Validator registry automation from Canopy validator-set readback
 
@@ -64,3 +66,5 @@ sidebar_label: Implementation Plan
 - [x] **T4** — Insurance fund peak-TVL targeting with auto-off skim
 - [x] **T5** — Autonomy-graduation metric tracking (TVL, validators, turnout, daily tx, runway)
 - [x] **T6** — Push-alert webhooks (buyback drain, validator concentration, TVL drop)
+- [x] **T7** — [OTC lock program](./tokenomics/otc-lock-program.mdx): 90d/120d cCNPY term locks
+  paying a reserved CPLQ reward from a DAO-voted treasury budget

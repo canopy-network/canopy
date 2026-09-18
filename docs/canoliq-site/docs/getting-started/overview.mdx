@@ -18,6 +18,8 @@ canoLiq is implemented as a sibling of `plugin/go/contract/`. It reuses the prot
 
 ### Key Components
 
+Orientation for contributors reading the plugin source; operators do not need this table.
+
 | File | Purpose |
 |------|---------|
 | `canoliq.go` | Main contract logic, CheckTx/DeliverTx handlers |
@@ -32,8 +34,16 @@ canoLiq is implemented as a sibling of `plugin/go/contract/`. It reuses the prot
 | `treasury.go` | Treasury spend with multisig + timelock |
 | `vesting.go` | Vesting schedule tracking and claim |
 | `stake.go` | CPLQ staking and unstaking |
+| `otclock.go` | OTC lock program: create, claim, cancel, and program funding |
+| `registry.go` | Validator registry, reconciled against committee membership |
+| `restaking.go` | Restaking allocation policy and drift reporting |
+| `graduation.go` | Autonomy-graduation metric tracking |
+| `alerts.go` | Push-alert evaluation and webhook dispatch |
+| `params.go` | Parameter validation and persistence |
 | `rpc.go` | Read-only HTTP query server (Phase 3) |
 | `query.go` | Query helpers for RPC endpoints |
+| `snapshot.go` | Block-cadence state snapshot backing the query API |
+| `lazy_query.go` | Per-address views resolved off the snapshot path |
 
 ## Environment Variables
 

@@ -1122,10 +1122,106 @@ release in milestone-gated tranches at the DAO's discretion.
 | `MessageBuybackExecute` | Triggers a passed buyback proposal (BURN or DISTRIBUTE_STAKERS) |
 | `MessageDAOTreasurySpend` | Triggers a passed treasury spend (timelock + multisig above threshold) |
 | `MessageMultisigApprove` | Per-signer approval of an above-threshold spend |
+| `MessageOTCLockCreate` | Locks cCNPY for a 90d/120d term and reserves its CPLQ reward from the program budget |
+| `MessageOTCLockClaim` | Releases a matured lock: returns the cCNPY and pays the reserved CPLQ |
+| `MessageOTCLockCancel` | Exits a lock early: returns the cCNPY, forfeits the whole CPLQ reward |
 
 The plain `MessageSend` is also accepted so the canoLiq plugin is a drop-in
 replacement for the tutorial when the `CANOPY_PLUGIN_MODE=canoliq` binary is
 selected.
+
+## OTC lock program
+
+Term-lock for cCNPY holders: lock cCNPY for a fixed tier, receive a one-off
+CPLQ reward at maturity.
+
+| Tier | Duration | Blocks | Reward | Param |
+|---|---|---|---|---|
+| `OTC_LOCK_90D` | 90 days | 1,296,000 | 5% | `otcTier90Bps` |
+| `OTC_LOCK_120D` | 120 days | 1,728,000 | 8% | `otcTier120Bps` |
+
+The reward is a **1:1 micro-unit quantity conversion**,
+`reward_uCPLQ = locked_uccnpy * tier_bps / 10000`. There is no price and no
+oracle, which keeps the whitepaper's "no external price oracle on the core
+yield path" commitment intact. At the default minimum of 50,000 cCNPY a 90-day
+position reserves 2,500 CPLQ.
+
+### Funding
+
+CPLQ supply is fixed at genesis and nothing mints, so every uCPLQ the program
+pays already exists. The budget is filled by a passed `ProposalOTCProgramFund`,
+which moves CPLQ from `treasury_cplq` into `canoliq/otc_budget/available`.
+
+That path depends on the treasury actually holding CPLQ, which before this
+change it never did: `applyGenesisBuckets` only wrote per-address balances, so
+`treasury_cplq` read zero forever and both of its consumers — `SPEND_CPLQ`
+treasury spends and every `MessageBuybackExecute` — failed their balance guard
+on any real chain. A genesis bucket now credits it directly:
+
+```json
+{ "name": "DAO Treasury (canoLiq)", "bps": 1500, "destination": "treasury" }
+```
+
+A treasury-destined bucket takes no recipients, cannot vest, and does **not**
+count toward `cplq_circulating_supply` — treasury holdings are not circulating.
+
+### Budget accounting
+
+Two scalars under domain 30: `available` (unreserved) and `reserved`
+(committed to open positions).
+
+| Event | available | reserved | circulating |
+|---|---|---|---|
+| Fund proposal passes | `+= amount` | — | unchanged |
+| Lock created | `-= reward` | `+= reward` | unchanged |
+| Claim at maturity | — | `-= reward` | `+= reward` |
+| Early exit | `+= reward` | `-= reward` | unchanged |
+
+Reserving at lock time, and rejecting the lock when `available < reward`, is
+what makes the cap hard: no matured position can outrun what the program can
+pay. The circulating bump on claim is required by the L4 supply invariant,
+since the reward leaves a non-circulating reserve for a liquid balance. A
+forfeited reward never circulates, so cancel must not bump.
+
+### Lock mechanics
+
+A lock **moves** the cCNPY out of the holder's balance into the position
+record, the same way vesting and vote-escrow lock tokens, rather than
+annotating the balance. Two consequences worth knowing:
+
+- `DeliverMessageCanoliqRedeem` needs no change. The balance it reads is
+  already reduced, so locked cCNPY is simply not there to redeem.
+- `globals.total_ccnpy_supply` is deliberately **untouched**. The cCNPY still
+  exists, it has only changed custody. Leaving the supply alone is exactly what
+  keeps a locked position appreciating at the pool's normal exchange rate for
+  the whole term. Decrementing it would silently stop locked positions earning
+  and hand every unlocked holder a windfall.
+
+Maturity is user-driven: nothing scans open positions per block, so the cost of
+the program to block production stays flat as it grows.
+
+`Cancel` is a separate message from `Claim`, and is refused at or after
+`mature_height`. By then the reward is earned, so cancelling would destroy it
+for nothing when a claim would pay. Forfeiture should always be deliberate.
+
+### Tiers are not `LockTier`
+
+`LockTier` is a closed 3/6/12/24-month set whose only consumers are governance
+vote weight and buyback distribution shares, neither of which this program
+grants. Its ordering is also load-bearing — `DeliverMessageCPLQStake` uses
+`msg.LockTier > stake.LockTier` as "stronger tier" — so appending a 4-month
+value would rank it above 24 months. `OTCLockTier` is a separate enum.
+
+### CLI
+
+```
+canoliqctl otc-lock <nickname> <ccnpy-amount> <90d|120d>
+canoliqctl otc-lock-claim <nickname> <lock-id>
+canoliqctl otc-lock-cancel <nickname> <lock-id>   # forfeits the CPLQ reward
+```
+
+Open positions appear under `otcLocks` on `GET /v1/account/{addr}`; the program
+budget appears as `otcBudgetAvailable` / `otcBudgetReserved` on `GET /v1/pools`.
 
 ## Governance lifecycle
 

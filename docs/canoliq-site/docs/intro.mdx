@@ -23,6 +23,7 @@ every term.
 - **On-Chain Governance**: All protocol parameters are tunable through proposals — fee splits, buyback mechanics, multisig membership, and more.
 - **Buyback Mechanism**: The protocol can buy back and burn CPLQ or distribute acquired CPLQ to stakers, governed by DAO vote.
 - **Vote-Escrow**: Lock staked CPLQ for 3–24 months to multiply voting weight (up to 4×) and boost buyback rewards.
+- **OTC Lock Program**: Commit cCNPY for a fixed 90- or 120-day term and collect a one-off CPLQ reward, paid from a DAO-voted treasury budget rather than new supply.
 - **Tiered Governance**: Different decisions clear different bars — quorum, approval, and timelock scale with risk.
 - **Self-Monitoring**: A peak-TVL-targeted insurance reserve, autonomy-graduation metrics, and optional push-alert webhooks.
 
@@ -69,6 +70,7 @@ canoLiq runs as a **Go plugin** alongside the Canopy FSM (Finite State Machine).
 | **Autonomy graduation** | ✅ | Five health metrics + eligibility tracking |
 | **HTTP query API** | ✅ | Read-only snapshot-backed endpoints |
 | **Push alerts** | ✅ | Optional webhooks for drain / concentration / TVL-drop |
+| **OTC lock program** | ✅ | 90d/120d cCNPY term locks paying a reserved CPLQ reward |
 
 ## Quick Links
 

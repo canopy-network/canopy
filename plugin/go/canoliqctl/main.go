@@ -41,6 +41,9 @@ var commands = map[string]func([]string, globalFlags) error{
 	"spend-execute":      cmdSpendExecute,
 	"multisig-approve":   cmdMultisigApprove,
 	"proposal-create":    cmdProposalCreate,
+	"otc-lock":           cmdOTCLockCreate,
+	"otc-lock-claim":     cmdOTCLockClaim,
+	"otc-lock-cancel":    cmdOTCLockCancel,
 }
 
 var commandUsages = map[string]string{
@@ -57,6 +60,9 @@ var commandUsages = map[string]string{
 	"spend-execute":      "spend-execute <nickname> <proposal-id>",
 	"multisig-approve":   "multisig-approve <signer-nickname> <spend-id>",
 	"proposal-create":    "proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency> <args> [--description …]",
+	"otc-lock":           "otc-lock <nickname> <ccnpy-amount> <90d|120d>",
+	"otc-lock-claim":     "otc-lock-claim <nickname> <lock-id>",
+	"otc-lock-cancel":    "otc-lock-cancel <nickname> <lock-id>   (forfeits the CPLQ reward)",
 }
 
 func main() {

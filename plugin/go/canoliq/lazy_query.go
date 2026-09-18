@@ -97,6 +97,7 @@ type AccountView struct {
 	Vestings           []*VestingView            `json:"vestings,omitempty"`
 	Redemptions        []*contract.Redemption    `json:"redemptions,omitempty"`
 	Unstakes           []*contract.UnstakingCPLQ `json:"unstakes,omitempty"`
+	OTCLocks           []*contract.OTCLock       `json:"otcLocks,omitempty"`
 }
 
 // VestingView is one schedule annotated with the cumulative unlocked
@@ -223,7 +224,9 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 	vestIdxKey := KeyForVestingIndex(addr)
 	redemIdxKey := KeyForRedemptionIndex(addr)
 	unstIdxKey := KeyForUnstakingIndex(addr)
+	otcIdxKey := KeyForOTCLockIndex(addr)
 	cQ, ccQ, lcQ, sQ, viQ, vQ, riQ, uiQ := qid(), qid(), qid(), qid(), qid(), qid(), qid(), qid()
+	oiQ := qid()
 	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
 		Keys: []*contract.PluginKeyRead{
 			{QueryId: cQ, Key: cnpyKey},
@@ -234,6 +237,7 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 			{QueryId: vQ, Key: vestIdxKey},
 			{QueryId: riQ, Key: redemIdxKey},
 			{QueryId: uiQ, Key: unstIdxKey},
+			{QueryId: oiQ, Key: otcIdxKey},
 		},
 	})
 	if err != nil {
@@ -243,7 +247,7 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 		return nil, resp.Error
 	}
 	view := &AccountView{Address: hexAddress(addr)}
-	var vestIdxBz, redemIdxBz, unstIdxBz []byte
+	var vestIdxBz, redemIdxBz, unstIdxBz, otcIdxBz []byte
 	for _, r := range resp.Results {
 		if len(r.Entries) == 0 {
 			continue
@@ -276,6 +280,8 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 			redemIdxBz = raw
 		case uiQ:
 			unstIdxBz = raw
+		case oiQ:
+			otcIdxBz = raw
 		}
 	}
 	if len(vestIdxBz) > 0 {
@@ -311,7 +317,53 @@ func (c *Canoliq) buildAccountView(addr []byte) (*AccountView, *contract.PluginE
 		}
 		view.Unstakes = uns
 	}
+	if len(otcIdxBz) > 0 {
+		idx := new(contract.OTCLockIndex)
+		if e := contract.Unmarshal(otcIdxBz, idx); e != nil {
+			return nil, e
+		}
+		locks, err := c.readOTCLocks(addr, idx.Ids)
+		if err != nil {
+			return nil, err
+		}
+		view.OTCLocks = locks
+	}
 	return view, nil
+}
+
+// readOTCLocks batch-reads OTCLock records for the given ids. Same contract as
+// readUnstakings: missing entries are skipped rather than erroring, since the
+// index can briefly name an id closed concurrently in the same block.
+func (c *Canoliq) readOTCLocks(addr []byte, ids []uint64) ([]*contract.OTCLock, *contract.PluginError) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	keys := make([]*contract.PluginKeyRead, 0, len(ids))
+	for _, id := range ids {
+		keys = append(keys, &contract.PluginKeyRead{QueryId: qid(), Key: KeyForOTCLock(addr, id)})
+	}
+	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{Keys: keys})
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+	out := make([]*contract.OTCLock, 0, len(ids))
+	for _, r := range resp.Results {
+		if len(r.Entries) == 0 || len(r.Entries[0].Value) == 0 {
+			continue
+		}
+		l := new(contract.OTCLock)
+		if e := contract.Unmarshal(r.Entries[0].Value, l); e != nil {
+			return nil, e
+		}
+		if l.Address == nil {
+			continue
+		}
+		out = append(out, l)
+	}
+	return out, nil
 }
 
 // readRedemptions batch-reads Redemption records for the given ids.

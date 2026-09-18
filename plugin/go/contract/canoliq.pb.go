@@ -36,6 +36,7 @@ const (
 	ActionType_ACTION_VALIDATOR_EJECT      ActionType = 5
 	ActionType_ACTION_PROTOCOL_UPGRADE     ActionType = 6
 	ActionType_ACTION_AUTONOMY_GRADUATE    ActionType = 7
+	ActionType_ACTION_OTC_PROGRAM_FUND     ActionType = 8
 )
 
 // Enum value maps for ActionType.
@@ -49,6 +50,7 @@ var (
 		5: "ACTION_VALIDATOR_EJECT",
 		6: "ACTION_PROTOCOL_UPGRADE",
 		7: "ACTION_AUTONOMY_GRADUATE",
+		8: "ACTION_OTC_PROGRAM_FUND",
 	}
 	ActionType_value = map[string]int32{
 		"ACTION_UNKNOWN":              0,
@@ -59,6 +61,7 @@ var (
 		"ACTION_VALIDATOR_EJECT":      5,
 		"ACTION_PROTOCOL_UPGRADE":     6,
 		"ACTION_AUTONOMY_GRADUATE":    7,
+		"ACTION_OTC_PROGRAM_FUND":     8,
 	}
 )
 
@@ -355,6 +358,58 @@ func (SpendDenomination) EnumDescriptor() ([]byte, []int) {
 	return file_canoliq_proto_rawDescGZIP(), []int{5}
 }
 
+// OTCLockTier enumerates the legal lock durations.
+type OTCLockTier int32
+
+const (
+	OTCLockTier_OTC_LOCK_UNSPECIFIED OTCLockTier = 0
+	// 90 days at 6s blocks = 90 * 14_400 = 1_296_000 blocks
+	OTCLockTier_OTC_LOCK_90D OTCLockTier = 1
+	// 120 days at 6s blocks = 120 * 14_400 = 1_728_000 blocks
+	OTCLockTier_OTC_LOCK_120D OTCLockTier = 2
+)
+
+// Enum value maps for OTCLockTier.
+var (
+	OTCLockTier_name = map[int32]string{
+		0: "OTC_LOCK_UNSPECIFIED",
+		1: "OTC_LOCK_90D",
+		2: "OTC_LOCK_120D",
+	}
+	OTCLockTier_value = map[string]int32{
+		"OTC_LOCK_UNSPECIFIED": 0,
+		"OTC_LOCK_90D":         1,
+		"OTC_LOCK_120D":        2,
+	}
+)
+
+func (x OTCLockTier) Enum() *OTCLockTier {
+	p := new(OTCLockTier)
+	*p = x
+	return p
+}
+
+func (x OTCLockTier) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OTCLockTier) Descriptor() protoreflect.EnumDescriptor {
+	return file_canoliq_proto_enumTypes[6].Descriptor()
+}
+
+func (OTCLockTier) Type() protoreflect.EnumType {
+	return &file_canoliq_proto_enumTypes[6]
+}
+
+func (x OTCLockTier) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OTCLockTier.Descriptor instead.
+func (OTCLockTier) EnumDescriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{6}
+}
+
 // MessageCanoliqDeposit deposits CNPY into the canoLiq pool and mints cCNPY
 // to the sender at the current exchange rate.
 type MessageCanoliqDeposit struct {
@@ -643,7 +698,10 @@ type CanoliqGlobals struct {
 	TotalPooledCnpy uint64 `protobuf:"varint,2,opt,name=total_pooled_cnpy,json=totalPooledCnpy,proto3" json:"totalPooledCnpy"` // @gotags: json:"totalPooledCnpy"
 	// pending_redemption_cnpy: CNPY reserved for in-flight redemptions (uCNPY)
 	PendingRedemptionCnpy uint64 `protobuf:"varint,3,opt,name=pending_redemption_cnpy,json=pendingRedemptionCnpy,proto3" json:"pendingRedemptionCnpy"` // @gotags: json:"pendingRedemptionCnpy"
-	// last_processed_reward_pool: pool balance observed at the last reward sweep
+	// last_processed_reward_pool: aggregate canoLiq committee stake observed at
+	// the last reward sweep. Reward is the block-over-block growth of this value
+	// (Canopy compounds committee rewards into bonded stake); the field name is
+	// retained for wire/JSON compatibility. See reward.go::ProcessRewards.
 	LastProcessedRewardPool uint64 `protobuf:"varint,4,opt,name=last_processed_reward_pool,json=lastProcessedRewardPool,proto3" json:"lastProcessedRewardPool"` // @gotags: json:"lastProcessedRewardPool"
 	// cplq_total_supply: hard-cap CPLQ supply minted at genesis (uCPLQ)
 	CplqTotalSupply uint64 `protobuf:"varint,5,opt,name=cplq_total_supply,json=cplqTotalSupply,proto3" json:"cplqTotalSupply"` // @gotags: json:"cplqTotalSupply"
@@ -682,8 +740,11 @@ type CanoliqGlobals struct {
 	// treasury_spent_total: cumulative CNPY spent from treasury/canoliq, used to
 	// estimate the monthly burn for the runway metric.
 	TreasurySpentTotal uint64 `protobuf:"varint,21,opt,name=treasury_spent_total,json=treasurySpentTotal,proto3" json:"treasurySpentTotal"` // @gotags: json:"treasurySpentTotal"
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// next_otc_lock_id: monotonically-increasing OTC lock position id counter.
+	// Global rather than per-address, matching next_unstake_id.
+	NextOtcLockId uint64 `protobuf:"varint,22,opt,name=next_otc_lock_id,json=nextOtcLockId,proto3" json:"nextOtcLockId"` // @gotags: json:"nextOtcLockId"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CanoliqGlobals) Reset() {
@@ -859,6 +920,13 @@ func (x *CanoliqGlobals) GetTurnoutSampleCount() uint64 {
 func (x *CanoliqGlobals) GetTreasurySpentTotal() uint64 {
 	if x != nil {
 		return x.TreasurySpentTotal
+	}
+	return 0
+}
+
+func (x *CanoliqGlobals) GetNextOtcLockId() uint64 {
+	if x != nil {
+		return x.NextOtcLockId
 	}
 	return 0
 }
@@ -1174,8 +1242,19 @@ type CanoliqParams struct {
 	// rebalancing requires a delegation-routing primitive not yet defined in
 	// the codebase and is deferred per §11 roadmap.
 	RestakingPolicy []*RestakingPolicyEntry `protobuf:"bytes,32,rep,name=restaking_policy,json=restakingPolicy,proto3" json:"restakingPolicy"` // @gotags: json:"restakingPolicy"
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// === OTC Lock Program ===
+	// otc_tier90_bps: CPLQ reward for the 90-day tier, in basis points of the
+	// locked cCNPY quantity (500 = 5%). Reward is a 1:1 micro-unit quantity
+	// conversion, not a priced conversion — see OTCLock.
+	OtcTier90Bps uint64 `protobuf:"varint,33,opt,name=otc_tier90_bps,json=otcTier90Bps,proto3" json:"otcTier90Bps"` // @gotags: json:"otcTier90Bps"
+	// otc_tier120_bps: CPLQ reward for the 120-day tier, in basis points of
+	// the locked cCNPY quantity (800 = 8%).
+	OtcTier120Bps uint64 `protobuf:"varint,34,opt,name=otc_tier120_bps,json=otcTier120Bps,proto3" json:"otcTier120Bps"` // @gotags: json:"otcTier120Bps"
+	// otc_min_lock_uccnpy: minimum position size (uccnpy). Guards against dust
+	// positions, each of which would be a permanent state record.
+	OtcMinLockUccnpy uint64 `protobuf:"varint,35,opt,name=otc_min_lock_uccnpy,json=otcMinLockUccnpy,proto3" json:"otcMinLockUccnpy"` // @gotags: json:"otcMinLockUccnpy"
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CanoliqParams) Reset() {
@@ -1430,6 +1509,27 @@ func (x *CanoliqParams) GetRestakingPolicy() []*RestakingPolicyEntry {
 		return x.RestakingPolicy
 	}
 	return nil
+}
+
+func (x *CanoliqParams) GetOtcTier90Bps() uint64 {
+	if x != nil {
+		return x.OtcTier90Bps
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetOtcTier120Bps() uint64 {
+	if x != nil {
+		return x.OtcTier120Bps
+	}
+	return 0
+}
+
+func (x *CanoliqParams) GetOtcMinLockUccnpy() uint64 {
+	if x != nil {
+		return x.OtcMinLockUccnpy
+	}
+	return 0
 }
 
 // RestakingPolicyEntry declares the desired share of canoLiq's stake exposure
@@ -3422,6 +3522,387 @@ func (x *AlertState) GetWindowBaseline() uint64 {
 	return 0
 }
 
+// OTCLock is an open or matured lock position. The locked cCNPY is debited
+// from the holder's balance and held here, mirroring how vesting and
+// vote-escrow move tokens out of the spendable balance rather than annotating
+// it. globals.total_ccnpy_supply is deliberately untouched by a lock: the
+// cCNPY still exists, so the position keeps appreciating at the pool's normal
+// exchange rate for the whole term.
+type OTCLock struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id: per-address lock id
+	Id uint64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// address: the locker
+	Address []byte `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	// ccnpy_amount: cCNPY held by this position (uccnpy)
+	CcnpyAmount uint64 `protobuf:"varint,3,opt,name=ccnpy_amount,json=ccnpyAmount,proto3" json:"ccnpyAmount"` // @gotags: json:"ccnpyAmount"
+	// tier: the lock duration tier chosen at creation
+	Tier OTCLockTier `protobuf:"varint,4,opt,name=tier,proto3,enum=types.OTCLockTier" json:"tier,omitempty"`
+	// reward_cplq: CPLQ reserved at creation, paid in full at maturity or
+	// forfeited in full on early exit (uCPLQ)
+	RewardCplq uint64 `protobuf:"varint,5,opt,name=reward_cplq,json=rewardCplq,proto3" json:"rewardCplq"` // @gotags: json:"rewardCplq"
+	// start_height: block height at which the lock was created
+	StartHeight uint64 `protobuf:"varint,6,opt,name=start_height,json=startHeight,proto3" json:"startHeight"` // @gotags: json:"startHeight"
+	// mature_height: start_height + tier duration; claimable at or after this
+	MatureHeight  uint64 `protobuf:"varint,7,opt,name=mature_height,json=matureHeight,proto3" json:"matureHeight"` // @gotags: json:"matureHeight"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OTCLock) Reset() {
+	*x = OTCLock{}
+	mi := &file_canoliq_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OTCLock) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OTCLock) ProtoMessage() {}
+
+func (x *OTCLock) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OTCLock.ProtoReflect.Descriptor instead.
+func (*OTCLock) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *OTCLock) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *OTCLock) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *OTCLock) GetCcnpyAmount() uint64 {
+	if x != nil {
+		return x.CcnpyAmount
+	}
+	return 0
+}
+
+func (x *OTCLock) GetTier() OTCLockTier {
+	if x != nil {
+		return x.Tier
+	}
+	return OTCLockTier_OTC_LOCK_UNSPECIFIED
+}
+
+func (x *OTCLock) GetRewardCplq() uint64 {
+	if x != nil {
+		return x.RewardCplq
+	}
+	return 0
+}
+
+func (x *OTCLock) GetStartHeight() uint64 {
+	if x != nil {
+		return x.StartHeight
+	}
+	return 0
+}
+
+func (x *OTCLock) GetMatureHeight() uint64 {
+	if x != nil {
+		return x.MatureHeight
+	}
+	return 0
+}
+
+// OTCLockIndex enumerates open lock ids per address so the account view can
+// list them without a state-range scan.
+type OTCLockIndex struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ids: open lock ids owned by the indexed address
+	Ids           []uint64 `protobuf:"varint,1,rep,packed,name=ids,proto3" json:"ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OTCLockIndex) Reset() {
+	*x = OTCLockIndex{}
+	mi := &file_canoliq_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OTCLockIndex) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OTCLockIndex) ProtoMessage() {}
+
+func (x *OTCLockIndex) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OTCLockIndex.ProtoReflect.Descriptor instead.
+func (*OTCLockIndex) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *OTCLockIndex) GetIds() []uint64 {
+	if x != nil {
+		return x.Ids
+	}
+	return nil
+}
+
+// MessageOTCLockCreate opens a lock position, debiting cCNPY from the sender
+// and reserving the tier's CPLQ reward from the program budget.
+type MessageOTCLockCreate struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// from_address: the locker
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
+	// ccnpy_amount: cCNPY to lock (uccnpy); must be >= params.otc_min_lock_uccnpy
+	CcnpyAmount uint64 `protobuf:"varint,2,opt,name=ccnpy_amount,json=ccnpyAmount,proto3" json:"ccnpyAmount"` // @gotags: json:"ccnpyAmount"
+	// tier: the lock duration tier
+	Tier          OTCLockTier `protobuf:"varint,3,opt,name=tier,proto3,enum=types.OTCLockTier" json:"tier,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageOTCLockCreate) Reset() {
+	*x = MessageOTCLockCreate{}
+	mi := &file_canoliq_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageOTCLockCreate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageOTCLockCreate) ProtoMessage() {}
+
+func (x *MessageOTCLockCreate) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageOTCLockCreate.ProtoReflect.Descriptor instead.
+func (*MessageOTCLockCreate) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *MessageOTCLockCreate) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageOTCLockCreate) GetCcnpyAmount() uint64 {
+	if x != nil {
+		return x.CcnpyAmount
+	}
+	return 0
+}
+
+func (x *MessageOTCLockCreate) GetTier() OTCLockTier {
+	if x != nil {
+		return x.Tier
+	}
+	return OTCLockTier_OTC_LOCK_UNSPECIFIED
+}
+
+// MessageOTCLockClaim closes a matured position, returning the cCNPY and
+// paying the reserved CPLQ in one transaction. Fails before mature_height.
+type MessageOTCLockClaim struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// from_address: the locker
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
+	// lock_id: the position to claim
+	LockId        uint64 `protobuf:"varint,2,opt,name=lock_id,json=lockId,proto3" json:"lockId"` // @gotags: json:"lockId"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageOTCLockClaim) Reset() {
+	*x = MessageOTCLockClaim{}
+	mi := &file_canoliq_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageOTCLockClaim) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageOTCLockClaim) ProtoMessage() {}
+
+func (x *MessageOTCLockClaim) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageOTCLockClaim.ProtoReflect.Descriptor instead.
+func (*MessageOTCLockClaim) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *MessageOTCLockClaim) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageOTCLockClaim) GetLockId() uint64 {
+	if x != nil {
+		return x.LockId
+	}
+	return 0
+}
+
+// MessageOTCLockCancel exits a position early. The cCNPY is returned intact
+// and the whole CPLQ reward is forfeited back to the program budget. Kept
+// separate from Claim so forfeiting a reward is always deliberate, never the
+// result of a mistimed claim.
+type MessageOTCLockCancel struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// from_address: the locker
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
+	// lock_id: the position to cancel
+	LockId        uint64 `protobuf:"varint,2,opt,name=lock_id,json=lockId,proto3" json:"lockId"` // @gotags: json:"lockId"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageOTCLockCancel) Reset() {
+	*x = MessageOTCLockCancel{}
+	mi := &file_canoliq_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageOTCLockCancel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageOTCLockCancel) ProtoMessage() {}
+
+func (x *MessageOTCLockCancel) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageOTCLockCancel.ProtoReflect.Descriptor instead.
+func (*MessageOTCLockCancel) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *MessageOTCLockCancel) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageOTCLockCancel) GetLockId() uint64 {
+	if x != nil {
+		return x.LockId
+	}
+	return 0
+}
+
+// ProposalOTCProgramFund moves CPLQ from the DAO treasury into the OTC lock
+// program budget. This is the only way the program is funded: CPLQ supply is
+// fixed at genesis and nothing mints, so the budget is always a transfer from
+// an existing allocation.
+type ProposalOTCProgramFund struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// amount: CPLQ to move from treasury_cplq into the program budget (uCPLQ)
+	Amount        uint64 `protobuf:"varint,1,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProposalOTCProgramFund) Reset() {
+	*x = ProposalOTCProgramFund{}
+	mi := &file_canoliq_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProposalOTCProgramFund) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProposalOTCProgramFund) ProtoMessage() {}
+
+func (x *ProposalOTCProgramFund) ProtoReflect() protoreflect.Message {
+	mi := &file_canoliq_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProposalOTCProgramFund.ProtoReflect.Descriptor instead.
+func (*ProposalOTCProgramFund) Descriptor() ([]byte, []int) {
+	return file_canoliq_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *ProposalOTCProgramFund) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
 var File_canoliq_proto protoreflect.FileDescriptor
 
 const file_canoliq_proto_rawDesc = "" +
@@ -3442,7 +3923,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\x04R\x06amount\";\n" +
 	"\x16MessageCPLQClaimVested\x12!\n" +
-	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\"\xe7\a\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\"\x90\b\n" +
 	"\x0eCanoliqGlobals\x12,\n" +
 	"\x12total_ccnpy_supply\x18\x01 \x01(\x04R\x10totalCcnpySupply\x12*\n" +
 	"\x11total_pooled_cnpy\x18\x02 \x01(\x04R\x0ftotalPooledCnpy\x126\n" +
@@ -3465,7 +3946,8 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x13last_daily_tx_count\x18\x12 \x01(\x04R\x10lastDailyTxCount\x12&\n" +
 	"\x0fturnout_sum_bps\x18\x13 \x01(\x04R\rturnoutSumBps\x120\n" +
 	"\x14turnout_sample_count\x18\x14 \x01(\x04R\x12turnoutSampleCount\x120\n" +
-	"\x14treasury_spent_total\x18\x15 \x01(\x04R\x12treasurySpentTotal\"\x8d\x01\n" +
+	"\x14treasury_spent_total\x18\x15 \x01(\x04R\x12treasurySpentTotal\x12'\n" +
+	"\x10next_otc_lock_id\x18\x16 \x01(\x04R\rnextOtcLockId\"\x8d\x01\n" +
 	"\n" +
 	"Redemption\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x18\n" +
@@ -3484,7 +3966,7 @@ const file_canoliq_proto_rawDesc = "" +
 	"\fstart_height\x18\x05 \x01(\x04R\vstartHeight\x12\x1d\n" +
 	"\n" +
 	"end_height\x18\x06 \x01(\x04R\tendHeight\x12%\n" +
-	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\x85\v\n" +
+	"\x0eclaimed_amount\x18\a \x01(\x04R\rclaimedAmount\"\x82\f\n" +
 	"\rCanoliqParams\x12\x17\n" +
 	"\afee_bps\x18\x01 \x01(\x04R\x06feeBps\x12&\n" +
 	"\x0fuser_rebate_bps\x18\x02 \x01(\x04R\ruserRebateBps\x12!\n" +
@@ -3524,7 +4006,10 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x1agraduation_min_turnout_bps\x18\x1d \x01(\x04R\x17graduationMinTurnoutBps\x125\n" +
 	"\x17graduation_min_daily_tx\x18\x1e \x01(\x04R\x14graduationMinDailyTx\x12?\n" +
 	"\x1cgraduation_min_runway_months\x18\x1f \x01(\x04R\x19graduationMinRunwayMonths\x12F\n" +
-	"\x10restaking_policy\x18  \x03(\v2\x1b.types.RestakingPolicyEntryR\x0frestakingPolicy\"\xb5\x01\n" +
+	"\x10restaking_policy\x18  \x03(\v2\x1b.types.RestakingPolicyEntryR\x0frestakingPolicy\x12$\n" +
+	"\x0eotc_tier90_bps\x18! \x01(\x04R\fotcTier90Bps\x12&\n" +
+	"\x0fotc_tier120_bps\x18\" \x01(\x04R\rotcTier120Bps\x12-\n" +
+	"\x13otc_min_lock_uccnpy\x18# \x01(\x04R\x10otcMinLockUccnpy\"\xb5\x01\n" +
 	"\x14RestakingPolicyEntry\x12!\n" +
 	"\fcommittee_id\x18\x01 \x01(\x04R\vcommitteeId\x12*\n" +
 	"\x11target_weight_bps\x18\x02 \x01(\x04R\x0ftargetWeightBps\x12&\n" +
@@ -3660,7 +4145,30 @@ const file_canoliq_proto_rawDesc = "" +
 	"AlertState\x12*\n" +
 	"\x11last_fired_height\x18\x01 \x01(\x04R\x0flastFiredHeight\x12.\n" +
 	"\x13window_start_height\x18\x02 \x01(\x04R\x11windowStartHeight\x12'\n" +
-	"\x0fwindow_baseline\x18\x03 \x01(\x04R\x0ewindowBaseline*\xe6\x01\n" +
+	"\x0fwindow_baseline\x18\x03 \x01(\x04R\x0ewindowBaseline\"\xe7\x01\n" +
+	"\aOTCLock\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\fR\aaddress\x12!\n" +
+	"\fccnpy_amount\x18\x03 \x01(\x04R\vccnpyAmount\x12&\n" +
+	"\x04tier\x18\x04 \x01(\x0e2\x12.types.OTCLockTierR\x04tier\x12\x1f\n" +
+	"\vreward_cplq\x18\x05 \x01(\x04R\n" +
+	"rewardCplq\x12!\n" +
+	"\fstart_height\x18\x06 \x01(\x04R\vstartHeight\x12#\n" +
+	"\rmature_height\x18\a \x01(\x04R\fmatureHeight\" \n" +
+	"\fOTCLockIndex\x12\x10\n" +
+	"\x03ids\x18\x01 \x03(\x04R\x03ids\"\x84\x01\n" +
+	"\x14MessageOTCLockCreate\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12!\n" +
+	"\fccnpy_amount\x18\x02 \x01(\x04R\vccnpyAmount\x12&\n" +
+	"\x04tier\x18\x03 \x01(\x0e2\x12.types.OTCLockTierR\x04tier\"Q\n" +
+	"\x13MessageOTCLockClaim\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x17\n" +
+	"\alock_id\x18\x02 \x01(\x04R\x06lockId\"R\n" +
+	"\x14MessageOTCLockCancel\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x17\n" +
+	"\alock_id\x18\x02 \x01(\x04R\x06lockId\"0\n" +
+	"\x16ProposalOTCProgramFund\x12\x16\n" +
+	"\x06amount\x18\x01 \x01(\x04R\x06amount*\x83\x02\n" +
 	"\n" +
 	"ActionType\x12\x12\n" +
 	"\x0eACTION_UNKNOWN\x10\x00\x12\x15\n" +
@@ -3670,7 +4178,8 @@ const file_canoliq_proto_rawDesc = "" +
 	"\x10ACTION_EMERGENCY\x10\x04\x12\x1a\n" +
 	"\x16ACTION_VALIDATOR_EJECT\x10\x05\x12\x1b\n" +
 	"\x17ACTION_PROTOCOL_UPGRADE\x10\x06\x12\x1c\n" +
-	"\x18ACTION_AUTONOMY_GRADUATE\x10\a*O\n" +
+	"\x18ACTION_AUTONOMY_GRADUATE\x10\a\x12\x1b\n" +
+	"\x17ACTION_OTC_PROGRAM_FUND\x10\b*O\n" +
 	"\bLockTier\x12\r\n" +
 	"\tLOCK_NONE\x10\x00\x12\v\n" +
 	"\aLOCK_3M\x10\x01\x12\v\n" +
@@ -3698,7 +4207,11 @@ const file_canoliq_proto_rawDesc = "" +
 	"\n" +
 	"SPEND_CNPY\x10\x01\x12\x0e\n" +
 	"\n" +
-	"SPEND_CPLQ\x10\x02B.Z,github.com/canopy-network/go-plugin/contractb\x06proto3"
+	"SPEND_CPLQ\x10\x02*L\n" +
+	"\vOTCLockTier\x12\x18\n" +
+	"\x14OTC_LOCK_UNSPECIFIED\x10\x00\x12\x10\n" +
+	"\fOTC_LOCK_90D\x10\x01\x12\x11\n" +
+	"\rOTC_LOCK_120D\x10\x02B.Z,github.com/canopy-network/go-plugin/contractb\x06proto3"
 
 var (
 	file_canoliq_proto_rawDescOnce sync.Once
@@ -3712,8 +4225,8 @@ func file_canoliq_proto_rawDescGZIP() []byte {
 	return file_canoliq_proto_rawDescData
 }
 
-var file_canoliq_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_canoliq_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_canoliq_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
+var file_canoliq_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
 var file_canoliq_proto_goTypes = []any{
 	(ActionType)(0),                       // 0: types.ActionType
 	(LockTier)(0),                         // 1: types.LockTier
@@ -3721,74 +4234,83 @@ var file_canoliq_proto_goTypes = []any{
 	(ProposalStatus)(0),                   // 3: types.ProposalStatus
 	(BuybackMode)(0),                      // 4: types.BuybackMode
 	(SpendDenomination)(0),                // 5: types.SpendDenomination
-	(*MessageCanoliqDeposit)(nil),         // 6: types.MessageCanoliqDeposit
-	(*MessageCanoliqRedeem)(nil),          // 7: types.MessageCanoliqRedeem
-	(*MessageCanoliqClaimRedemption)(nil), // 8: types.MessageCanoliqClaimRedemption
-	(*MessageCPLQTransfer)(nil),           // 9: types.MessageCPLQTransfer
-	(*MessageCPLQClaimVested)(nil),        // 10: types.MessageCPLQClaimVested
-	(*CanoliqGlobals)(nil),                // 11: types.CanoliqGlobals
-	(*Redemption)(nil),                    // 12: types.Redemption
-	(*RedemptionIndex)(nil),               // 13: types.RedemptionIndex
-	(*VestingSchedule)(nil),               // 14: types.VestingSchedule
-	(*CanoliqParams)(nil),                 // 15: types.CanoliqParams
-	(*RestakingPolicyEntry)(nil),          // 16: types.RestakingPolicyEntry
-	(*GovernanceTier)(nil),                // 17: types.GovernanceTier
-	(*VestingIndex)(nil),                  // 18: types.VestingIndex
-	(*MessageCPLQStake)(nil),              // 19: types.MessageCPLQStake
-	(*MessageCPLQUnstake)(nil),            // 20: types.MessageCPLQUnstake
-	(*MessageCPLQClaimUnstake)(nil),       // 21: types.MessageCPLQClaimUnstake
-	(*MessageCPLQProposalCreate)(nil),     // 22: types.MessageCPLQProposalCreate
-	(*MessageCPLQVote)(nil),               // 23: types.MessageCPLQVote
-	(*MessageBuybackExecute)(nil),         // 24: types.MessageBuybackExecute
-	(*MessageDAOTreasurySpend)(nil),       // 25: types.MessageDAOTreasurySpend
-	(*MessageMultisigApprove)(nil),        // 26: types.MessageMultisigApprove
-	(*CPLQStake)(nil),                     // 27: types.CPLQStake
-	(*UnstakingCPLQ)(nil),                 // 28: types.UnstakingCPLQ
-	(*UnstakingIndex)(nil),                // 29: types.UnstakingIndex
-	(*Proposal)(nil),                      // 30: types.Proposal
-	(*ProposalIndex)(nil),                 // 31: types.ProposalIndex
-	(*Vote)(nil),                          // 32: types.Vote
-	(*ProposalParamChange)(nil),           // 33: types.ProposalParamChange
-	(*ProposalBuyback)(nil),               // 34: types.ProposalBuyback
-	(*ProposalTreasurySpend)(nil),         // 35: types.ProposalTreasurySpend
-	(*ProposalValidatorEject)(nil),        // 36: types.ProposalValidatorEject
-	(*ProposalEmergency)(nil),             // 37: types.ProposalEmergency
-	(*ProposalProtocolUpgrade)(nil),       // 38: types.ProposalProtocolUpgrade
-	(*BuybackOrder)(nil),                  // 39: types.BuybackOrder
-	(*TreasurySpend)(nil),                 // 40: types.TreasurySpend
-	(*MultisigApproval)(nil),              // 41: types.MultisigApproval
-	(*CPLQStakeIndex)(nil),                // 42: types.CPLQStakeIndex
-	(*ValidatorRegistryEntry)(nil),        // 43: types.ValidatorRegistryEntry
-	(*ValidatorRegistry)(nil),             // 44: types.ValidatorRegistry
-	(*AlertState)(nil),                    // 45: types.AlertState
-	(*anypb.Any)(nil),                     // 46: google.protobuf.Any
+	(OTCLockTier)(0),                      // 6: types.OTCLockTier
+	(*MessageCanoliqDeposit)(nil),         // 7: types.MessageCanoliqDeposit
+	(*MessageCanoliqRedeem)(nil),          // 8: types.MessageCanoliqRedeem
+	(*MessageCanoliqClaimRedemption)(nil), // 9: types.MessageCanoliqClaimRedemption
+	(*MessageCPLQTransfer)(nil),           // 10: types.MessageCPLQTransfer
+	(*MessageCPLQClaimVested)(nil),        // 11: types.MessageCPLQClaimVested
+	(*CanoliqGlobals)(nil),                // 12: types.CanoliqGlobals
+	(*Redemption)(nil),                    // 13: types.Redemption
+	(*RedemptionIndex)(nil),               // 14: types.RedemptionIndex
+	(*VestingSchedule)(nil),               // 15: types.VestingSchedule
+	(*CanoliqParams)(nil),                 // 16: types.CanoliqParams
+	(*RestakingPolicyEntry)(nil),          // 17: types.RestakingPolicyEntry
+	(*GovernanceTier)(nil),                // 18: types.GovernanceTier
+	(*VestingIndex)(nil),                  // 19: types.VestingIndex
+	(*MessageCPLQStake)(nil),              // 20: types.MessageCPLQStake
+	(*MessageCPLQUnstake)(nil),            // 21: types.MessageCPLQUnstake
+	(*MessageCPLQClaimUnstake)(nil),       // 22: types.MessageCPLQClaimUnstake
+	(*MessageCPLQProposalCreate)(nil),     // 23: types.MessageCPLQProposalCreate
+	(*MessageCPLQVote)(nil),               // 24: types.MessageCPLQVote
+	(*MessageBuybackExecute)(nil),         // 25: types.MessageBuybackExecute
+	(*MessageDAOTreasurySpend)(nil),       // 26: types.MessageDAOTreasurySpend
+	(*MessageMultisigApprove)(nil),        // 27: types.MessageMultisigApprove
+	(*CPLQStake)(nil),                     // 28: types.CPLQStake
+	(*UnstakingCPLQ)(nil),                 // 29: types.UnstakingCPLQ
+	(*UnstakingIndex)(nil),                // 30: types.UnstakingIndex
+	(*Proposal)(nil),                      // 31: types.Proposal
+	(*ProposalIndex)(nil),                 // 32: types.ProposalIndex
+	(*Vote)(nil),                          // 33: types.Vote
+	(*ProposalParamChange)(nil),           // 34: types.ProposalParamChange
+	(*ProposalBuyback)(nil),               // 35: types.ProposalBuyback
+	(*ProposalTreasurySpend)(nil),         // 36: types.ProposalTreasurySpend
+	(*ProposalValidatorEject)(nil),        // 37: types.ProposalValidatorEject
+	(*ProposalEmergency)(nil),             // 38: types.ProposalEmergency
+	(*ProposalProtocolUpgrade)(nil),       // 39: types.ProposalProtocolUpgrade
+	(*BuybackOrder)(nil),                  // 40: types.BuybackOrder
+	(*TreasurySpend)(nil),                 // 41: types.TreasurySpend
+	(*MultisigApproval)(nil),              // 42: types.MultisigApproval
+	(*CPLQStakeIndex)(nil),                // 43: types.CPLQStakeIndex
+	(*ValidatorRegistryEntry)(nil),        // 44: types.ValidatorRegistryEntry
+	(*ValidatorRegistry)(nil),             // 45: types.ValidatorRegistry
+	(*AlertState)(nil),                    // 46: types.AlertState
+	(*OTCLock)(nil),                       // 47: types.OTCLock
+	(*OTCLockIndex)(nil),                  // 48: types.OTCLockIndex
+	(*MessageOTCLockCreate)(nil),          // 49: types.MessageOTCLockCreate
+	(*MessageOTCLockClaim)(nil),           // 50: types.MessageOTCLockClaim
+	(*MessageOTCLockCancel)(nil),          // 51: types.MessageOTCLockCancel
+	(*ProposalOTCProgramFund)(nil),        // 52: types.ProposalOTCProgramFund
+	(*anypb.Any)(nil),                     // 53: google.protobuf.Any
 }
 var file_canoliq_proto_depIdxs = []int32{
-	17, // 0: types.CanoliqParams.governance:type_name -> types.GovernanceTier
-	16, // 1: types.CanoliqParams.restaking_policy:type_name -> types.RestakingPolicyEntry
+	18, // 0: types.CanoliqParams.governance:type_name -> types.GovernanceTier
+	17, // 1: types.CanoliqParams.restaking_policy:type_name -> types.RestakingPolicyEntry
 	0,  // 2: types.GovernanceTier.action:type_name -> types.ActionType
 	1,  // 3: types.MessageCPLQStake.lock_tier:type_name -> types.LockTier
-	46, // 4: types.MessageCPLQProposalCreate.payload:type_name -> google.protobuf.Any
+	53, // 4: types.MessageCPLQProposalCreate.payload:type_name -> google.protobuf.Any
 	2,  // 5: types.MessageCPLQVote.choice:type_name -> types.VoteChoice
 	1,  // 6: types.CPLQStake.lock_tier:type_name -> types.LockTier
-	46, // 7: types.Proposal.payload:type_name -> google.protobuf.Any
+	53, // 7: types.Proposal.payload:type_name -> google.protobuf.Any
 	3,  // 8: types.Proposal.status:type_name -> types.ProposalStatus
 	0,  // 9: types.Proposal.action_type:type_name -> types.ActionType
-	17, // 10: types.Proposal.tier:type_name -> types.GovernanceTier
+	18, // 10: types.Proposal.tier:type_name -> types.GovernanceTier
 	2,  // 11: types.Vote.choice:type_name -> types.VoteChoice
-	15, // 12: types.ProposalParamChange.params:type_name -> types.CanoliqParams
+	16, // 12: types.ProposalParamChange.params:type_name -> types.CanoliqParams
 	4,  // 13: types.ProposalBuyback.mode:type_name -> types.BuybackMode
 	5,  // 14: types.ProposalTreasurySpend.denomination:type_name -> types.SpendDenomination
-	33, // 15: types.ProposalEmergency.param_change:type_name -> types.ProposalParamChange
+	34, // 15: types.ProposalEmergency.param_change:type_name -> types.ProposalParamChange
 	4,  // 16: types.BuybackOrder.mode:type_name -> types.BuybackMode
-	34, // 17: types.BuybackOrder.payload:type_name -> types.ProposalBuyback
-	35, // 18: types.TreasurySpend.payload:type_name -> types.ProposalTreasurySpend
-	43, // 19: types.ValidatorRegistry.entries:type_name -> types.ValidatorRegistryEntry
-	20, // [20:20] is the sub-list for method output_type
-	20, // [20:20] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	35, // 17: types.BuybackOrder.payload:type_name -> types.ProposalBuyback
+	36, // 18: types.TreasurySpend.payload:type_name -> types.ProposalTreasurySpend
+	44, // 19: types.ValidatorRegistry.entries:type_name -> types.ValidatorRegistryEntry
+	6,  // 20: types.OTCLock.tier:type_name -> types.OTCLockTier
+	6,  // 21: types.MessageOTCLockCreate.tier:type_name -> types.OTCLockTier
+	22, // [22:22] is the sub-list for method output_type
+	22, // [22:22] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_canoliq_proto_init() }
@@ -3801,8 +4323,8 @@ func file_canoliq_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_canoliq_proto_rawDesc), len(file_canoliq_proto_rawDesc)),
-			NumEnums:      6,
-			NumMessages:   40,
+			NumEnums:      7,
+			NumMessages:   46,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -19,11 +19,16 @@ import (
 // committee fee pool. Validator-incentive accruals are itemized so a
 // dashboard can flag uneven share-out across the registered validator set.
 type PoolsView struct {
-	CommitteePool       uint64               `json:"committeePool"`
-	TreasuryCNPY        uint64               `json:"treasuryCnpy"`
-	TreasuryCPLQ        uint64               `json:"treasuryCplq"`
-	BuybackPool         uint64               `json:"buybackPool"`
-	InsurancePool       uint64               `json:"insurancePool"`
+	CommitteePool uint64 `json:"committeePool"`
+	TreasuryCNPY  uint64 `json:"treasuryCnpy"`
+	TreasuryCPLQ  uint64 `json:"treasuryCplq"`
+	BuybackPool   uint64 `json:"buybackPool"`
+	InsurancePool uint64 `json:"insurancePool"`
+	// OTCBudgetAvailable is unreserved OTC lock program CPLQ; OTCBudgetReserved
+	// is CPLQ committed to open positions. Their sum is the funded total, and
+	// reserved is what open positions are guaranteed to be paid.
+	OTCBudgetAvailable  uint64               `json:"otcBudgetAvailable"`
+	OTCBudgetReserved   uint64               `json:"otcBudgetReserved"`
 	ValidatorIncentives []ValidatorIncentive `json:"validatorIncentives"`
 	// PeakTvlUcnpy is the running max of total_pooled_cnpy (T4).
 	PeakTvlUcnpy uint64 `json:"peakTvlUcnpy"`
@@ -207,7 +212,10 @@ func (p *Plugin) QueryPools() *PoolsView {
 		TreasuryCPLQ:  s.TreasuryCPLQ,
 		BuybackPool:   s.BuybackPool,
 		InsurancePool: s.InsurancePool,
-		PeakTvlUcnpy:  s.Globals.PeakTvlUcnpy,
+
+		OTCBudgetAvailable: s.OTCBudgetAvailable,
+		OTCBudgetReserved:  s.OTCBudgetReserved,
+		PeakTvlUcnpy:       s.Globals.PeakTvlUcnpy,
 	}
 	if s.Params.InsuranceTargetBps > 0 {
 		view.InsuranceTargetUcnpy = mulDiv(s.Globals.PeakTvlUcnpy, s.Params.InsuranceTargetBps, 10_000)

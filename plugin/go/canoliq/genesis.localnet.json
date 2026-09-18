@@ -40,14 +40,9 @@
     {
       "name": "DAO Treasury (canoLiq)",
       "bps": 1500,
+      "destination": "treasury",
       "cliffMonths": 0,
-      "vestMonths": 0,
-      "recipients": [
-        {
-          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-          "bps": 10000
-        }
-      ]
+      "vestMonths": 0
     },
     {
       "name": "Founders & Core Team",

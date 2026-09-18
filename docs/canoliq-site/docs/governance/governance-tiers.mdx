@@ -12,10 +12,10 @@ A routine fee tweak and a multi-million-CNPY treasury spend should not clear the
 canoLiq classifies each proposal by its **action type** and applies the matching tier of
 rules.
 
-## The seven tiers
+## The seven configured tiers
 
-When a proposal is created, its payload is inspected and assigned one of seven `ActionType`
-values. Each carries its own rule set (defaults shown; all are governance-tunable):
+When a proposal is created, its payload is inspected and assigned an `ActionType`. Seven of
+them carry their own rule set (defaults shown; all are governance-tunable):
 
 | Action | Quorum | Approval | Timelock | Voting period |
 |--------|--------|----------|----------|---------------|
@@ -30,6 +30,24 @@ values. Each carries its own rule set (defaults shown; all are governance-tunabl
 Percentages are stored in basis points (e.g. 67% = `6,700 bps`). Time periods are stored as
 block counts at the 6-second block time: 24h ≈ `14,400`, 48h ≈ `28,800`, 7d ≈ `100,800`,
 14d ≈ `201,600` blocks.
+
+### Actions with no configured tier
+
+Two action types exist but ship without a row in the matrix, so they resolve through the
+[scalar fallback](#scalar-fallback) below — a 33% quorum, a simple majority, a 48-hour timelock,
+and a 7-day vote:
+
+| Action | Payload |
+|--------|---------|
+| `ACTION_UNKNOWN` | `ProposalBuyback` |
+| `ACTION_OTC_PROGRAM_FUND` | `ProposalOTCProgramFund` |
+
+:::caution
+The fallback quorum (33%) is far higher than any configured tier (5–15%), while its approval
+bar (just over 50%) is the lowest. Funding the
+[OTC lock program](../tokenomics/otc-lock-program.mdx) therefore needs unusually high turnout
+but only a simple majority. Giving `ACTION_OTC_PROGRAM_FUND` its own tier is tracked work.
+:::
 
 ### What each field means
 
@@ -54,6 +72,7 @@ governance parameters mid-vote cannot move the goalposts on an in-flight proposa
 - A `ProposalTreasurySpend` → `ACTION_TREASURY_SPEND_SMALL` or `_LARGE` depending on amount.
 - `ProposalValidatorEject`, `ProposalProtocolUpgrade`, `ProposalEmergency`, and the autonomy
   graduation proposal map to their matching action types.
+- `ProposalBuyback` and `ProposalOTCProgramFund` have no configured tier and use the scalars.
 
 ## Scalar fallback
 

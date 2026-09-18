@@ -1,0 +1,98 @@
+---
+sidebar_label: OTC Lock Program
+---
+
+# OTC Lock Program
+
+**In one sentence:** a fixed CPLQ budget, voted out of the DAO treasury, that pays cCNPY holders
+to commit their position for 90 or 120 days — and it mints nothing.
+
+:::info Added after the v1.2 papers
+This program is not described in the canoLiq v1.2 Whitepaper or Tokenomics paper. It was
+specified separately and shipped afterwards; both papers are pending an update.
+:::
+
+## It does not inflate CPLQ
+
+CPLQ supply is fixed at 100,000,000 and nothing mints after genesis. That commitment is
+unaffected by this program.
+
+Every CPLQ paid out as an OTC lock reward already existed at genesis. It comes from the **15%
+DAO Treasury tranche**, which is credited to the protocol's own balance rather than to any
+wallet and is **not counted as circulating supply**. Funding the program moves CPLQ from one
+non-circulating protocol balance into another; only a claimed reward actually enters
+circulation, and it does so out of a pot that was already allocated.
+
+In short: the program changes *when* treasury CPLQ enters circulation, never *how much* exists.
+
+## Terms
+
+| Tier | Term | Reward rate | Parameter |
+|------|------|-------------|-----------|
+| 90-day | 90 days | 5% of the locked cCNPY | `otc_tier90_bps` = 500 |
+| 120-day | 120 days | 8% of the locked cCNPY | `otc_tier120_bps` = 800 |
+
+Minimum position: **50,000 cCNPY** (`otc_min_lock_uccnpy` = 50,000,000,000). All three are
+governance-tunable.
+
+The reward is a 1:1 quantity conversion — `reward = locked cCNPY × tier rate` — evaluated in
+micro-units and rounded down. No price and no oracle are involved, which keeps the program off
+the exchange-rate path and preserves the protocol's "no external price oracle" property.
+
+At these rates a 500,000 CPLQ budget covers 10,000,000 cCNPY locked entirely at the 90-day tier,
+or 6,250,000 cCNPY at the 120-day tier. A minimum-size position reserves 2,500 CPLQ on the
+90-day tier, or 4,000 CPLQ on the 120-day.
+
+## Funding the budget
+
+The program starts with nothing. CPLQ reaches it only through a passed governance proposal:
+
+| Step | What happens |
+|------|--------------|
+| 1. Genesis | The 15% DAO Treasury tranche credits the protocol's CPLQ treasury balance |
+| 2. Proposal | A `ProposalOTCProgramFund` proposes moving a set amount into the program budget |
+| 3. Vote | CPLQ holders vote; the proposal must clear its governance bar |
+| 4. Funded | On execution, CPLQ moves from the treasury into the program's available budget |
+
+The DAO decides the budget size, and can top it up later with another proposal. Nothing else can
+put CPLQ into the program.
+
+:::note This proposal currently uses the fallback governance tier
+`ProposalOTCProgramFund` does not yet have its own row in the governance tier matrix, so it
+falls back to the scalar defaults — a 33% quorum and a simple majority — rather than a tier
+sized for it. See [Governance Tiers](../governance/governance-tiers.mdx).
+:::
+
+## The budget is a hard cap
+
+The program tracks two balances: **available** (unreserved) and **reserved** (already promised to
+open positions).
+
+A lock reserves its full reward the moment it is accepted. If the available budget cannot cover
+it, the lock is rejected outright. That ordering is what makes the cap real: every open position
+is fully funded from the day it opens, so the program can never mature more obligations than it
+can pay.
+
+Cancelling early returns the forfeited reward to the available budget, where it can fund someone
+else's position.
+
+Both balances are published on `GET /v1/pools` as `otcBudgetAvailable` and `otcBudgetReserved`.
+
+## Effect on circulating supply
+
+| Event | Circulating CPLQ |
+|-------|------------------|
+| Program funded from treasury | Unchanged — both balances are non-circulating |
+| Lock created | Unchanged — the reward is reserved, not paid |
+| Lock claimed at maturity | **Rises** by the reward amount |
+| Lock cancelled early | Unchanged — nothing was ever paid |
+
+So the maximum this program can add to circulating supply is exactly the budget the DAO voted,
+and only as positions actually mature and are claimed.
+
+## Related
+
+- [OTC Locks](../transactions/otc-locks.mdx) — how to open, claim, and cancel a position
+- [OTC Lock Accounting](../advanced/otc-lock-accounting.mdx) — the full invariants
+- [Vesting](./vesting.mdx) — where the treasury tranche comes from
+- [Vote-Escrow](./vote-escrow.mdx) — the other, unrelated lock system

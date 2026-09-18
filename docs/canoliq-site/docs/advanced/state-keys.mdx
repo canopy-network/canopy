@@ -50,6 +50,10 @@ as a `JoinLenPrefix` segment). Source of truth: `plugin/go/canoliq/state.go`.
 | Mature Redemption | 24 | Height-ordered scan key | 1 |
 | Escrow | 25 | Singleton | 1 |
 | Tx Fee Accrual | 26 | Singleton | 1 |
+| Ejected Validator | 27 | Per-validator tombstone | 2 |
+| OTC Lock | 28 | Per-address, per-id | 3 |
+| OTC Lock Index | 29 | Per-address | 3 |
+| OTC Budget | 30 | Pool — two slots: `available`, `reserved` | 3 |
 
 :::note
 Domain `10` is intentionally unused (a gap left between the Phase-1 and later domains);
@@ -60,8 +64,8 @@ outer `{20}` plugin prefix — they occupy different key positions.
 ## Iterating state
 
 The FSM answers **point reads** by key. To enumerate records, canoLiq keeps explicit
-index domains — `Vesting Index`, `Redemption Index`, `Unstake Index`, `Proposal` index,
-`Stake Index`, the treasury-spend index, and the validator registry — each listing the
-ids or addresses that belong to a set. Mature redemptions are the one range-ordered case:
+index domains — `Vesting Index`, `Redemption Index`, `Unstake Index`, `OTC Lock Index`,
+`Proposal` index, `Stake Index`, the treasury-spend index, and the validator registry — each
+listing the ids or addresses that belong to a set. Mature redemptions are the one range-ordered case:
 they are stored under a `Mature Redemption` key prefixed by maturity height, so the
 protocol can scan everything that has come due at or before the current block.
