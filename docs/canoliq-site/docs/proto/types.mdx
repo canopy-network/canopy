@@ -87,6 +87,8 @@ message CanoliqParams {
   uint64 otc_tier90_bps = 33;            // Default 500 (5% of locked cCNPY)
   uint64 otc_tier120_bps = 34;           // Default 800 (8% of locked cCNPY)
   uint64 otc_min_lock_uccnpy = 35;       // Default 50_000_000_000 (50,000 cCNPY)
+  uint64 otc_tier90_blocks = 36;         // Default 1_296_000 (~90d at 6s blocks)
+  uint64 otc_tier120_blocks = 37;        // Default 1_728_000 (~120d at 6s blocks)
 }
 ```
 
@@ -361,7 +363,7 @@ enum ActionType {
   ACTION_VALIDATOR_EJECT = 5;
   ACTION_PROTOCOL_UPGRADE = 6;
   ACTION_AUTONOMY_GRADUATE = 7;
-  ACTION_OTC_PROGRAM_FUND = 8;   // no configured tier — uses the scalar fallback
+  ACTION_OTC_PROGRAM_FUND = 8;   // 10% quorum / 67% approval / no timelock
 }
 ```
 
@@ -382,14 +384,17 @@ enum LockTier {
 
 ### OTCLockTier
 
-Term length for an [OTC lock](../tokenomics/otc-lock-program.mdx) position. Unrelated to
-`LockTier`: this locks cCNPY for a one-off CPLQ reward, not CPLQ for voting weight.
+Identifies which [OTC lock](../tokenomics/otc-lock-program.mdx) tier a position belongs to.
+Unrelated to `LockTier`: this locks cCNPY for a one-off CPLQ reward, not CPLQ for voting weight.
+
+The names are fixed identifiers, not a restatement of the terms — each tier's actual length comes
+from its `otc_tier*_blocks` parameter and is governance-tunable.
 
 ```protobuf
 enum OTCLockTier {
   OTC_LOCK_UNSPECIFIED = 0;  // rejected; never a valid choice
-  OTC_LOCK_90D = 1;          // 1,296,000 blocks; pays otc_tier90_bps
-  OTC_LOCK_120D = 2;         // 1,728,000 blocks; pays otc_tier120_bps
+  OTC_LOCK_90D = 1;          // term otc_tier90_blocks;  pays otc_tier90_bps
+  OTC_LOCK_120D = 2;         // term otc_tier120_blocks; pays otc_tier120_bps
 }
 ```
 

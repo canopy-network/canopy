@@ -20,7 +20,7 @@ period):
 | `ProposalValidatorEject` | `ACTION_VALIDATOR_EJECT` | Remove a validator from the registry |
 | `ProposalEmergency` | `ACTION_EMERGENCY` | Fast-track action with an optional param diff |
 | `ProposalProtocolUpgrade` | `ACTION_PROTOCOL_UPGRADE` | Signal a target protocol version |
-| `ProposalOTCProgramFund` | `ACTION_OTC_PROGRAM_FUND` → scalar fallback tier | Move CPLQ from the DAO treasury into the [OTC lock program](../tokenomics/otc-lock-program.mdx) budget |
+| `ProposalOTCProgramFund` | `ACTION_OTC_PROGRAM_FUND` | Move CPLQ from the DAO treasury into the [OTC lock program](../tokenomics/otc-lock-program.mdx) budget |
 
 ## Param Change
 
@@ -116,10 +116,7 @@ canoliqctl vote <address> <proposal-id> yes
 Create proposals with:
 
 ```bash
-canoliqctl proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency> <args> [--description …]
+canoliqctl proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency|otc-program-fund> <args> [--description …]
 ```
 
-:::note `otc-program-fund` has no CLI subcommand yet
-`ProposalOTCProgramFund` is accepted on-chain but `proposal-create` does not yet build it.
-Submit it as a hand-built payload until the subcommand lands.
-:::
+

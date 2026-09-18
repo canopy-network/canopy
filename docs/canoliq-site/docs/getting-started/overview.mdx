@@ -47,6 +47,19 @@ Orientation for contributors reading the plugin source; operators do not need th
 
 ## Environment Variables
 
+:::caution Two different chain IDs
+A transaction is signed for the chain ID of the **node** it is submitted to — that is what
+`CANOLIQCTL_CHAIN_ID` sets, and it now defaults to `1`. The `chainId` in the *plugin* config is
+something else entirely: the canoLiq **committee ID** on Canopy, used to scope fee pools and
+committee membership. The two are meant to differ — testnet pairs node chain `1` with committee
+`42`, mainnet with committee `19`.
+
+Never copy the committee ID into `CANOLIQCTL_CHAIN_ID`. Signing for the wrong chain fails
+silently: `canoliqctl` prints a transaction hash and exits 0, the node admits the transaction to
+its mempool, then drops it, and nothing in the output says so. If a command reports success but
+state never changes, check this first.
+:::
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `CANOPY_PLUGIN_MODE` | Selects plugin mode: `contract` or `canoliq` | `contract` |
@@ -54,6 +67,7 @@ Orientation for contributors reading the plugin source; operators do not need th
 | `CANOLIQCTL_RPC_URL` | Node query RPC URL | `http://localhost:50002` |
 | `CANOLIQCTL_ADMIN_URL` | Admin RPC URL (keystore) | `http://localhost:50003` |
 | `CANOLIQCTL_NETWORK_ID` | Canopy network ID | `1` |
-| `CANOLIQCTL_CHAIN_ID` | canoLiq committee chain ID | `2` |
+| `CANOLIQCTL_CHAIN_ID` | Chain ID of the node being submitted to (**not** the canoLiq committee ID) | `1` |
+| `CANOLIQCTL_NO_WAIT` | Skip outcome confirmation; print the tx hash and exit | `false` |
 | `CANOLIQCTL_PASSWORD` | Keystore password | — |
 | `CANOLIQ_RPC_ADDR` | Plugin RPC listen address (Phase 3) | — (disabled) |

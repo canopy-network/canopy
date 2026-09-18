@@ -121,6 +121,31 @@ type GenesisParamsJSON struct {
 	OtcTier90Bps     uint64 `json:"otcTier90Bps"`
 	OtcTier120Bps    uint64 `json:"otcTier120Bps"`
 	OtcMinLockUccnpy uint64 `json:"otcMinLockUccnpy"`
+	// Tier terms in blocks. Same `!= 0` convention: zero means absent, and zero
+	// is not a meaningful term (a position would mature in the block it opened).
+	OtcTier90Blocks  uint64 `json:"otcTier90Blocks"`
+	OtcTier120Blocks uint64 `json:"otcTier120Blocks"`
+	// Governance optionally replaces the whole per-action tier matrix. Unlike
+	// every scalar above this is all-or-nothing: a non-empty list replaces
+	// defaultGovernanceTiers() outright, matching ProposalParamChange's
+	// full-set-replacement semantics, so a partial list silently drops the
+	// tiers it omits to the scalar fallback. Absent (nil) keeps the defaults.
+	//
+	// This exists because the tier matrix was otherwise only settable in the
+	// binary, which left every tiered action carrying a 7-day voting period on
+	// localnet and made the whole governance surface untestable there.
+	Governance []GenesisGovernanceTierJSON `json:"governance,omitempty"`
+}
+
+// GenesisGovernanceTierJSON is one row of the per-action governance matrix.
+// Action is the numeric ActionType, matching both the enum's JSON encoding and
+// the shape canoliqctl's paramsJSON already uses for ProposalParamChange.
+type GenesisGovernanceTierJSON struct {
+	Action             int32  `json:"action"`
+	QuorumBps          uint64 `json:"quorumBps"`
+	ApprovalBps        uint64 `json:"approvalBps"`
+	TimelockBlocks     uint64 `json:"timelockBlocks"`
+	VotingPeriodBlocks uint64 `json:"votingPeriodBlocks"`
 }
 
 // runGenesis is the body of Canoliq.Genesis. It is a no-op once the globals
@@ -482,6 +507,25 @@ func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
 	}
 	if p.OtcMinLockUccnpy != 0 {
 		d.OtcMinLockUccnpy = p.OtcMinLockUccnpy
+	}
+	if p.OtcTier90Blocks != 0 {
+		d.OtcTier90Blocks = p.OtcTier90Blocks
+	}
+	if p.OtcTier120Blocks != 0 {
+		d.OtcTier120Blocks = p.OtcTier120Blocks
+	}
+	if len(p.Governance) > 0 {
+		tiers := make([]*contract.GovernanceTier, 0, len(p.Governance))
+		for _, t := range p.Governance {
+			tiers = append(tiers, &contract.GovernanceTier{
+				Action:             contract.ActionType(t.Action),
+				QuorumBps:          t.QuorumBps,
+				ApprovalBps:        t.ApprovalBps,
+				TimelockBlocks:     t.TimelockBlocks,
+				VotingPeriodBlocks: t.VotingPeriodBlocks,
+			})
+		}
+		d.Governance = tiers
 	}
 	return d
 }

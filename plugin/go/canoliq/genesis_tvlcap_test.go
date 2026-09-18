@@ -196,7 +196,7 @@ func TestSafetyCheckRejectsUncappedGenesisOffDevProfiles(t *testing.T) {
 	capped := uint64(3300)
 
 	for _, profile := range []string{ProfileTestnet, ProfileMainnet} {
-		cfg := Config{Profile: profile, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &zero)}
+		cfg := Config{Profile: profile, ChainId: 2, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &zero)}
 		err := cfg.SafetyCheck()
 		if err == nil {
 			t.Fatalf("profile=%q: SafetyCheck must reject an uncapped genesis at startup", profile)
@@ -206,13 +206,13 @@ func TestSafetyCheckRejectsUncappedGenesisOffDevProfiles(t *testing.T) {
 		}
 	}
 	// devnet is allowed to be uncapped and must still start.
-	dev := Config{Profile: ProfileDevnet, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &zero)}
+	dev := Config{Profile: ProfileDevnet, ChainId: 2, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &zero)}
 	if err := dev.SafetyCheck(); err != nil {
 		t.Fatalf("devnet must be allowed an uncapped genesis: %v", err)
 	}
 	// A capped genesis starts everywhere.
 	for _, profile := range []string{ProfileTestnet, ProfileMainnet, ProfileDevnet} {
-		cfg := Config{Profile: profile, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &capped)}
+		cfg := Config{Profile: profile, ChainId: 2, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &capped)}
 		if err := cfg.SafetyCheck(); err != nil {
 			t.Fatalf("profile=%q with a capped genesis: %v", profile, err)
 		}

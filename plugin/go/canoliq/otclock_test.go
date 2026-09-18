@@ -85,16 +85,27 @@ func TestOTCRewardMathBothTiers(t *testing.T) {
 	}
 }
 
-// TestOTCLockDurations pins both tier durations in blocks.
+// TestOTCLockDurations pins both tier durations in blocks at the defaults.
 func TestOTCLockDurations(t *testing.T) {
-	if got := otcLockDurationBlocks(contract.OTCLockTier_OTC_LOCK_90D); got != 1_296_000 {
+	p := DefaultParams()
+	if got := otcLockDurationBlocks(contract.OTCLockTier_OTC_LOCK_90D, p); got != 1_296_000 {
 		t.Errorf("90d = %d blocks, want 1_296_000", got)
 	}
-	if got := otcLockDurationBlocks(contract.OTCLockTier_OTC_LOCK_120D); got != 1_728_000 {
+	if got := otcLockDurationBlocks(contract.OTCLockTier_OTC_LOCK_120D, p); got != 1_728_000 {
 		t.Errorf("120d = %d blocks, want 1_728_000", got)
 	}
-	if got := otcLockDurationBlocks(contract.OTCLockTier_OTC_LOCK_UNSPECIFIED); got != 0 {
+	if got := otcLockDurationBlocks(contract.OTCLockTier_OTC_LOCK_UNSPECIFIED, p); got != 0 {
 		t.Errorf("unspecified = %d, want 0", got)
+	}
+	// Nil params must not panic — the helper is called from a handler that
+	// always has params, but a zero value should degrade to "unknown tier".
+	if got := otcLockDurationBlocks(contract.OTCLockTier_OTC_LOCK_90D, nil); got != 0 {
+		t.Errorf("nil params = %d, want 0", got)
+	}
+	// Terms are governance-tunable: a changed param moves the duration.
+	p.OtcTier90Blocks = 45 * blocksPerDay
+	if got := otcLockDurationBlocks(contract.OTCLockTier_OTC_LOCK_90D, p); got != 45*blocksPerDay {
+		t.Errorf("tuned 90d tier = %d blocks, want %d", got, 45*blocksPerDay)
 	}
 	if validOTCLockTier(contract.OTCLockTier_OTC_LOCK_UNSPECIFIED) {
 		t.Error("OTC_LOCK_UNSPECIFIED must not validate: a zero-valued field is not a choice")
@@ -635,5 +646,60 @@ func TestBuybackRefundDoesNotMint(t *testing.T) {
 	got := DecodeUint64(sets[0].Value)
 	if got != treasury {
 		t.Errorf("refund wrote %d, want %d — anything higher is a mint", got, uint64(treasury))
+	}
+}
+
+// TestOTCLockTermChangeDoesNotMoveOpenPositions covers the consequence of
+// making the tier terms governance-tunable: a term change must apply to new
+// positions only. MatureHeight is written once at creation, so an open position
+// keeps the maturity it was sold, and governance cannot shorten or extend a
+// lock somebody already agreed to.
+func TestOTCLockTermChangeDoesNotMoveOpenPositions(t *testing.T) {
+	c, s, user, params := otcFixture(t, testLockAmount, testBudget)
+	if resp := c.DeliverMessageOTCLockCreate(&contract.MessageOTCLockCreate{
+		FromAddress: user,
+		CcnpyAmount: testLockAmount,
+		Tier:        contract.OTCLockTier_OTC_LOCK_90D,
+	}, testFee, params); resp.Error != nil {
+		t.Fatalf("create: %v", resp.Error)
+	}
+	before := loadOTCLock(t, s, user, 1)
+	if before == nil {
+		t.Fatal("lock record not written")
+	}
+	wantMature := uint64(100 + 1_296_000)
+	if before.MatureHeight != wantMature {
+		t.Fatalf("MatureHeight = %d, want %d", before.MatureHeight, wantMature)
+	}
+
+	// Governance shortens the 90-day tier to 10 days. The open position must
+	// not move, and a claim before its original maturity must still be refused.
+	params.OtcTier90Blocks = 10 * blocksPerDay
+	if got := loadOTCLock(t, s, user, 1).MatureHeight; got != wantMature {
+		t.Errorf("MatureHeight after term change = %d, want %d (unchanged)", got, wantMature)
+	}
+	c.plugin.setHeight(100 + 10*blocksPerDay + 1) // past the NEW term, not the old
+	resp := c.DeliverMessageOTCLockClaim(&contract.MessageOTCLockClaim{
+		FromAddress: user, LockId: 1,
+	}, testFee, params)
+	if resp.Error == nil {
+		t.Fatal("claim succeeded against the shortened term; an open position must keep its original maturity")
+	}
+
+	// A position opened after the change gets the new, shorter term.
+	seedCcnpy(s, user, testLockAmount)
+	if resp := c.DeliverMessageOTCLockCreate(&contract.MessageOTCLockCreate{
+		FromAddress: user,
+		CcnpyAmount: testLockAmount,
+		Tier:        contract.OTCLockTier_OTC_LOCK_90D,
+	}, testFee, params); resp.Error != nil {
+		t.Fatalf("create after term change: %v", resp.Error)
+	}
+	second := loadOTCLock(t, s, user, 2)
+	if second == nil {
+		t.Fatal("second lock not written")
+	}
+	if got, want := second.MatureHeight-second.StartHeight, uint64(10*blocksPerDay); got != want {
+		t.Errorf("new position term = %d blocks, want %d", got, want)
 	}
 }

@@ -246,6 +246,25 @@ message CanoliqParams {
   // otc_min_lock_uccnpy: minimum position size (uccnpy). Guards against dust
   // positions, each of which would be a permanent state record.
   uint64 otc_min_lock_uccnpy = 35; // @gotags: json:"otcMinLockUccnpy"
+  // otc_tier90_blocks / otc_tier120_blocks: term length of each tier, in
+  // blocks — the same unit every other duration parameter uses
+  // (voting_period_blocks, timelock_blocks, cplq_unstaking_blocks). At the 6s
+  // block time the defaults are 90 and 120 days.
+  //
+  // These are parameters rather than constants for two reasons: governance
+  // already tunes the tier *rates*, so fixing the *terms* in the binary was
+  // inconsistent; and with the terms hard-coded at 90/120 days, claim-at-
+  // maturity could not be exercised on any chain without patching and
+  // rebuilding the plugin.
+  //
+  // NOTE: the OTCLockTier enum names (OTC_LOCK_90D / OTC_LOCK_120D) are tier
+  // *identities*, not a restatement of these values. Governance setting
+  // otc_tier90_blocks to 45 days' worth leaves the enum name saying 90; the
+  // name is the key, the param is the term. Open positions are unaffected
+  // either way, since
+  // OTCLock.mature_height is fixed when the position is created.
+  uint64 otc_tier90_blocks = 36; // @gotags: json:"otcTier90Blocks"
+  uint64 otc_tier120_blocks = 37; // @gotags: json:"otcTier120Blocks"
 }
 
 // RestakingPolicyEntry declares the desired share of canoLiq's stake exposure

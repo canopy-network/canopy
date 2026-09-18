@@ -985,10 +985,32 @@ Global flags (also configurable via env vars `CANOLIQCTL_RPC_URL`,
 --rpc-url      node query RPC (default http://localhost:50002)
 --admin-url    node admin RPC, hosts the keystore (default http://localhost:50003)
 --network-id   Canopy network id (default 1)
---chain-id     canoLiq committee chain id (default 2)
+--chain-id     chain id of the NODE being submitted to (default 1)
 --fee          tx fee in uCNPY (default 10000)
 --password     keystore password — required
+--no-wait      print the tx hash and exit without confirming the outcome
+--wait-timeout how long to wait for inclusion or rejection (default 45s)
 ```
+
+> **Commands wait for a real outcome by default.** Submitting is not succeeding: `/v1/tx` admits
+> a transaction on `CheckBasic` alone — no chain-id check, no signature check, no state — so it
+> returns a hash for transactions the next mempool re-check will reject and drop. `canoliqctl`
+> therefore polls `tx-by-hash` for inclusion and `failed-txs` for rejection, printing the block a
+> transaction landed in or exiting non-zero with the node's own reason. Pass `--no-wait` for the
+> old fire-and-forget behaviour.
+>
+> **Global flags must precede the positional arguments** — `canoliqctl deposit --no-wait <address>
+> <amount>`, not `… <address> <amount> --no-wait`. Go's flag parser stops at the first
+> non-flag argument, so a trailing flag is silently ignored. This applies to every global flag,
+> not just `--no-wait`.
+
+> **`--chain-id` is the node's chain id, not the canoLiq committee id.** A transaction is signed
+> for the chain it is submitted to; `fsm/transaction.go::CheckReplay` rejects a mismatch with
+> `ErrWrongChainId` before the plugin is consulted. The committee id lives in the *plugin* config
+> (`canoliq-config.*.json`) and only scopes fee pools and committee membership — testnet pairs
+> node chain 1 with committee 42, mainnet with committee 19. Passing the committee id here fails
+> silently: `/v1/tx` runs only `CheckBasic`, so it returns a hash, and the mempool re-check then
+> drops the transaction with nothing printed.
 
 Phase 1 worked example (deposit → redeem → claim once unbond matures):
 
@@ -1215,9 +1237,9 @@ value would rank it above 24 months. `OTCLockTier` is a separate enum.
 ### CLI
 
 ```
-canoliqctl otc-lock <nickname> <ccnpy-amount> <90d|120d>
-canoliqctl otc-lock-claim <nickname> <lock-id>
-canoliqctl otc-lock-cancel <nickname> <lock-id>   # forfeits the CPLQ reward
+canoliqctl otc-lock <address> <ccnpy-amount> <90d|120d>
+canoliqctl otc-lock-claim <address> <lock-id>
+canoliqctl otc-lock-cancel <address> <lock-id>   # forfeits the CPLQ reward
 ```
 
 Open positions appear under `otcLocks` on `GET /v1/account/{addr}`; the program

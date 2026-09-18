@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -23,10 +22,6 @@ func cmdCPLQClaimVested(args []string, gf globalFlags) error {
 	}
 
 	msg := &contract.MessageCPLQClaimVested{FromAddress: from}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_claim_vested", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("cplq-claim-vested submitted: tx_hash=%s from=%s\n", hash, signer.Address)
-	return nil
+	return submitAndReport(gf, signer, "cplq_claim_vested", msg, "cplq-claim-vested",
+		fmt.Sprintf("from=%s", signer.Address))
 }
