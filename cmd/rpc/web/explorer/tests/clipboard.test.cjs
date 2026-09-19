@@ -9,21 +9,35 @@ const source = ts.transpileModule(
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
 ).outputText
 
-function setup({ secure = false, writeText, copyResult = true, copyError } = {}) {
+function setup({ secure = false, writeText, copyResult = true, copyError, hasSelection = true } = {}) {
     const calls = []
     class HTMLElement {
         focus() { calls.push('focus') }
     }
     const textarea = {
         style: {},
-        setAttribute() {},
+        readOnly: false,
+        selectionStart: 0,
+        selectionEnd: 0,
         select() { calls.push(['select', this.value]) },
+        setSelectionRange(start, end) {
+            this.selectionStart = start
+            this.selectionEnd = end
+        },
         remove() { calls.push('remove') },
+    }
+    const range = { selectNodeContents(element) { this.element = element } }
+    const selection = {
+        removeAllRanges() { this.range = null },
+        addRange(range) { this.range = range },
     }
     const context = {
         exports: {},
         HTMLElement,
-        window: { isSecureContext: secure },
+        window: {
+            isSecureContext: secure,
+            getSelection: () => hasSelection ? selection : null,
+        },
         navigator: { clipboard: writeText ? { writeText } : undefined },
         document: {
             activeElement: new HTMLElement(),
@@ -32,8 +46,15 @@ function setup({ secure = false, writeText, copyResult = true, copyError } = {})
                 return textarea
             },
             body: { appendChild() { calls.push('append') } },
+            createRange: () => range,
             execCommand(command) {
                 assert.equal(command, 'copy')
+                // Model iOS: select() alone does not select the textarea value.
+                assert.equal(textarea.readOnly, false)
+                assert.equal(textarea.contentEditable, 'true')
+                assert.equal(textarea.selectionStart, 0)
+                assert.equal(textarea.selectionEnd, textarea.value.length)
+                if (hasSelection) assert.equal(selection.range.element, textarea)
                 calls.push('copy')
                 if (copyError) throw copyError
                 return copyResult
@@ -69,6 +90,19 @@ test('awaits the Clipboard API on secure origins without using a textarea', asyn
 
 test('copies the full text on HTTP without navigator.clipboard', async () => {
     const { copyText, calls } = setup()
+    await copyText(text)
+    assert.deepEqual(calls, fallbackCalls)
+})
+
+test('explicitly selects the complete value for iOS, including Unicode', async () => {
+    const { copyText, calls } = setup()
+    const value = 'Address \u{1F4CB}\nsecond line'
+    await copyText(value)
+    assert.deepEqual(calls, ['append', ['select', value], 'copy', 'remove', 'focus'])
+})
+
+test('still copies when the window selection is unavailable', async () => {
+    const { copyText, calls } = setup({ hasSelection: false })
     await copyText(text)
     assert.deepEqual(calls, fallbackCalls)
 })
