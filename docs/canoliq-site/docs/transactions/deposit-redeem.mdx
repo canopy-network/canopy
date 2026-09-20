@@ -54,11 +54,11 @@ canoliqctl claim <address> <redemption_id>
 export CANOLIQCTL_PASSWORD=hunter2
 
 # Deposit 1 CNPY (1,000,000 uCNPY)
-./canoliqctl deposit alice 1000000
+./canoliqctl deposit 851e90eaef1fa27debaee2c2591503bdeec1d123 1000000
 
 # Redeem 0.25 cCNPY (250,000 uCCNPY)
-./canoliqctl redeem alice 250000
+./canoliqctl redeem 851e90eaef1fa27debaee2c2591503bdeec1d123 250000
 
 # After unstaking window (~UnstakingBlocks blocks)
-./canoliqctl claim alice 0
+./canoliqctl claim 851e90eaef1fa27debaee2c2591503bdeec1d123 0
 ```
