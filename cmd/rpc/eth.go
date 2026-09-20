@@ -1172,9 +1172,12 @@ func (s *Server) passesAddressFilter(addr []byte, addresses []string) (ok bool) 
 	for _, sender := range addresses {
 		// remove the prefix
 		padded := strings.TrimPrefix(sender, "0x")
+		if len(padded) < 40 {
+			continue
+		}
 		// take the last 40 hex characters (20 bytes)
 		last20Hex := padded[len(padded)-40:]
-		if strings.ToLower(last20Hex) == strings.ToLower(lib.BytesToString(addr)) {
+		if strings.EqualFold(last20Hex, lib.BytesToString(addr)) {
 			return true
 		}
 	}

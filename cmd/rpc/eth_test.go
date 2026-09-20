@@ -30,6 +30,17 @@ func TestEthMaxPriorityFeePerGas(t *testing.T) {
 	require.Equal(t, "0x0", (*hexutil.Big)(&value).String())
 }
 
+func TestPassesAddressFilterSkipsShortAddresses(t *testing.T) {
+	server := &Server{}
+	address := bytes.Repeat([]byte{0xab}, 20)
+	matchingFilter := "0x" + lib.BytesToString(address)
+
+	require.NotPanics(t, func() {
+		require.True(t, server.passesAddressFilter(address, []string{"0x1", matchingFilter}))
+	})
+	require.False(t, server.passesAddressFilter(address, []string{"0x1"}))
+}
+
 func TestRLPV2EffectiveGasPriceDistinguishesPendingAndMined(t *testing.T) {
 	key, err := ethCrypto.GenerateKey()
 	require.NoError(t, err)
