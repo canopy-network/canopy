@@ -1012,28 +1012,41 @@ Global flags (also configurable via env vars `CANOLIQCTL_RPC_URL`,
 > silently: `/v1/tx` runs only `CheckBasic`, so it returns a hash, and the mempool re-check then
 > drops the transaction with nothing printed.
 
+> **If every pool reads zero and `/v1/health` shows `genesisComplete: false`, check `genesisPath`
+> first.** The plugin self-bootstraps genesis from `BeginBlock` when the node's `genesis.json`
+> carries no canoLiq section, but only when `genesisPath` is set. Left empty, it skips silently
+> and the plugin runs forever uninitialized with `ProcessRewards` a no-op — a chain that looks
+> healthy while canoLiq does nothing. It now logs a one-line warning when that happens.
+>
+> The config named by `CANOLIQ_CONFIG` is read **once at plugin startup** and is not reloaded per
+> block, so fixing the JSON requires restarting the plugin process. Outside localnet, a
+> `genesisPath` that is set but unreadable or malformed now refuses to start rather than
+> deferring the error to a per-block failure.
+
 Phase 1 worked example (deposit → redeem → claim once unbond matures):
 
 ```bash
 export CANOLIQCTL_PASSWORD=hunter2
-./canoliqctl deposit alice 1000000           # 1 CNPY → cCNPY
-./canoliqctl redeem  alice 250000            # burn 0.25 cCNPY, queue redemption
+# Commands identify the signer by hex address, not a keystore nickname.
+ADDR=851e90eaef1fa27debaee2c2591503bdeec1d123
+./canoliqctl deposit $ADDR 1000000           # 1 CNPY → cCNPY
+./canoliqctl redeem  $ADDR 250000            # burn 0.25 cCNPY, queue redemption
 # advance past unbond_complete_height (Canopy's UnstakingBlocks param)
-./canoliqctl claim   alice 0                 # claim redemption #0
+./canoliqctl claim   $ADDR 0                 # claim redemption #0
 ```
 
 Phase 2 commands (governance, staking, buyback, treasury):
 
 ```bash
-./canoliqctl cplq-stake          alice 5000000              # optional: --lock <none|3m|6m|12m|24m>
-./canoliqctl cplq-unstake        alice 1000000
-./canoliqctl cplq-claim-unstake  alice 0
-./canoliqctl vote                alice <proposal-id> yes
-./canoliqctl buyback-execute     alice <proposal-id>
-./canoliqctl spend-execute       alice <proposal-id>
-./canoliqctl multisig-approve    signer1 <spend-id>
-./canoliqctl cplq-transfer       alice <to-hex> 1000000
-./canoliqctl cplq-claim-vested   alice
+./canoliqctl cplq-stake          $ADDR 5000000              # optional: --lock <none|3m|6m|12m|24m>
+./canoliqctl cplq-unstake        $ADDR 1000000
+./canoliqctl cplq-claim-unstake  $ADDR 0
+./canoliqctl vote                $ADDR <proposal-id> yes
+./canoliqctl buyback-execute     $ADDR <proposal-id>
+./canoliqctl spend-execute       $ADDR <proposal-id>
+./canoliqctl multisig-approve    <signer-address> <spend-id>
+./canoliqctl cplq-transfer       $ADDR <to-hex> 1000000
+./canoliqctl cplq-claim-vested   $ADDR
 ```
 
 The optional `--lock <tier>` on `cplq-stake` commits the stake to a vote-escrow
@@ -1054,28 +1067,34 @@ The proposer must hold ≥ `min_stake_to_propose` CPLQ at creation height.
 
 ```bash
 # 1. Param change — full-set CanoliqParams replacement (loaded from JSON)
-./canoliqctl proposal-create param-change alice ./new-params.json \
+./canoliqctl proposal-create param-change $ADDR ./new-params.json \
     --description "lower fee from 12% to 8%"
 
 # 2. Buyback — CNPY → CPLQ extraction at a vote-set price
-./canoliqctl proposal-create buyback alice 100000000 1500000 burn \
+./canoliqctl proposal-create buyback $ADDR 100000000 1500000 burn \
     --description "Q4 buyback and burn"
 # args: cnpy-amount  price-uCNPY-per-CPLQ  mode (burn|distribute)
 
 # 3. Treasury spend — transfer from canoliq treasury to a recipient
-./canoliqctl proposal-create treasury-spend alice 0xabc...123 50000000 cnpy \
+./canoliqctl proposal-create treasury-spend $ADDR 0xabc...123 50000000 cnpy \
     --description "infrastructure grant"
 # args: recipient-hex  amount  denomination (cnpy|cplq)
 
 # 4. Validator eject — remove a validator from the committee registry (F12)
-./canoliqctl proposal-create validator-eject alice 0xdef...456 \
+./canoliqctl proposal-create validator-eject $ADDR 0xdef...456 \
     --description "eject unresponsive validator"
 # args: validator-hex
 
 # 5. Emergency — security-critical fast-track action with optional param diff (F13)
-./canoliqctl proposal-create emergency alice ./emergency-params.json \
+./canoliqctl proposal-create emergency $ADDR ./emergency-params.json \
     --description "freeze deposits pending investigation"
 # args: optional params-json-file (omit for a signalling-only emergency)
+
+# 6. OTC program fund — move CPLQ from treasury_cplq into the OTC lock program
+#    budget. The only path by which the program is funded; nothing mints.
+./canoliqctl proposal-create otc-program-fund $ADDR 500000000000 \
+    --description "fund the OTC lock program with 500,000 CPLQ"
+# args: amount-uCPLQ (capped at the treasury CPLQ balance at execution time)
 ```
 
 The `param-change` JSON file uses the same shape as the `params` block
