@@ -141,13 +141,22 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 			if e != nil {
 				return false, e
 			}
-			// load the previous quorum height quorum certificate from the indexer
-			lastCertificate, e := c.FSM.LoadCertificateHashesOnly(c.FSM.Height() - 1)
-			if e != nil {
-				return false, e
+			// The first consensus block has no prior certificate or indexed block.
+			// Later heights must resolve both predecessors from the indexer.
+			var lastCertificate *lib.QuorumCertificate
+			lastBlock := &lib.BlockResult{BlockHeader: new(lib.BlockHeader)}
+			if c.FSM.Height() > 1 {
+				lastCertificate, e = c.FSM.LoadCertificateHashesOnly(c.FSM.Height() - 1)
+				if e != nil {
+					return false, e
+				}
+				lastBlock, e = c.FSM.LoadBlock(c.FSM.Height() - 1)
+				if e != nil {
+					return false, e
+				}
 			}
 			// validate the verifiable delay function from the bft module
-			if vdf != nil {
+			if c.FSM.Height() > 1 && vdf != nil {
 				// if the verifiable delay function is NOT valid for using the last block hash
 				if !crypto.VerifyVDF(lastCertificate.BlockHash, vdf.Output, vdf.Proof, int(vdf.Iterations)) {
 					// nullify the bad VDF
@@ -155,11 +164,6 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 					// log the issue but still continue with the proposal
 					c.log.Error(lib.ErrInvalidVDF().Error())
 				}
-			}
-			// load the last block from the indexer
-			lastBlock, e := c.FSM.LoadBlock(c.FSM.Height() - 1)
-			if e != nil {
-				return false, e
 			}
 			// replace the VDF and last certificate in the header
 			p.Block.BlockHeader.LastQuorumCertificate, p.Block.BlockHeader.Vdf = lastCertificate, vdf
@@ -564,6 +568,10 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool) (b *li
 
 // HandlePeerBlock() validates and handles an inbound certificate (with a block) from a remote peer
 func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.QuorumCertificate, lib.ErrorI) {
+	return c.handlePeerBlock(msg, syncing, false)
+}
+
+func (c *Controller) handlePeerBlock(msg *lib.BlockMessage, syncing, verifyQC bool) (*lib.QuorumCertificate, lib.ErrorI) {
 	// log the start of 'peer block handling'
 	c.log.Info("Handling peer block")
 	// define a convenience variable for the certificate
@@ -599,7 +607,7 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 			}
 		}
 	}
-	if !syncing || qc.Header.Height%CheckpointFrequency == 0 {
+	if verifyQC || !syncing || qc.Header.Height%CheckpointFrequency == 0 {
 		// load the committee from the root chain using the root height embedded in the certificate message
 		v, err := c.Consensus.LoadCommittee(c.LoadRootChainId(qc.Header.Height), qc.Header.RootHeight)
 		if err != nil {

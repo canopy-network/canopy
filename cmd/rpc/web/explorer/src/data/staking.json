@@ -206,7 +206,6 @@
     "metrics": {
       "totalSupply": "Total Supply",
       "stakedSupply": "Staked Supply",
-      "liquidSupply": "Liquid Supply",
       "stakingRatio": "Staking Ratio"
     },
     "table": {

@@ -188,10 +188,10 @@ func TestProposerMessageQCRejectsWrongRootHeightForJustification(t *testing.T) {
 
 	errI := c.bft.HandleMessage(msg)
 	require.Error(t, errI)
-	require.ErrorContains(t, errI, "wrong root height")
+	require.ErrorContains(t, errI, "wrong phase")
 }
 
-func TestProposerMessageQCAllowsWrongRootHeightOnlyWhenPartialQC(t *testing.T) {
+func TestProposerMessageQCRejectsWrongRootHeightForPartialQC(t *testing.T) {
 	c := newTestConsensus(t, Propose, 3)
 
 	// local view root height is 1 (from newTestConsensus); craft a QC for a different root height.
@@ -228,8 +228,7 @@ func TestProposerMessageQCAllowsWrongRootHeightOnlyWhenPartialQC(t *testing.T) {
 	}
 	require.NoError(t, msg.Sign(c.valKeys[0]))
 
-	require.NoError(t, c.bft.HandleMessage(msg))
-	require.Len(t, c.bft.PartialQCs, 1)
+	require.ErrorContains(t, c.bft.HandleMessage(msg), "wrong phase")
 }
 
 func TestHandleMessageNilSignatureReturnsError(t *testing.T) {
@@ -288,4 +287,15 @@ func TestProposerMessageRejectsInvalidHighQC(t *testing.T) {
 	errI := c.bft.HandleMessage(msg)
 	require.Error(t, errI)
 	require.Equal(t, lib.CodeInvalidAggregateSignature, errI.Code())
+}
+
+func TestProposerMessageRejectsPostElectionRelay(t *testing.T) {
+	c := newTestConsensus(t, Precommit, 3)
+	c.simPrecommitPhase(t, 0)
+	msg := c.bft.Proposals[0][phaseToString(Precommit)][0]
+	require.NoError(t, msg.Sign(c.valKeys[1]))
+
+	err := c.bft.HandleMessage(msg)
+	require.Error(t, err)
+	require.Equal(t, lib.CodeInvalidSigner, err.Code())
 }

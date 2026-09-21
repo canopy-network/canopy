@@ -120,6 +120,7 @@ type P2PMetrics struct {
 	PacketsPerMessage   prometheus.Histogram   // number of packets per message
 	SendQueueTimeout    prometheus.Counter     // count of send queue timeout errors
 	SendQueueFull       *prometheus.CounterVec // count of send queue full events by topic
+	InboxFlush          *prometheus.CounterVec // count of messages dropped by the full-node inbox dead-letter flush by topic
 
 	// Heartbeat / liveness telemetry (low-cardinality; no per-peer labels)
 	HeartbeatPingSent prometheus.Counter   // heartbeat ping packets queued for send
@@ -174,6 +175,7 @@ type FSMMetrics struct {
 	CheckTxReplayTime                        prometheus.Histogram // how long does replay validation take?
 	CheckTxMessageTime                       prometheus.Histogram // how long does message validation/fee/signer resolution take?
 	CheckTxSignatureTime                     prometheus.Histogram // how long does signature validation take?
+	RestrictedTxCount                        prometheus.Gauge     // how many restricted transactions were rejected in the current block?
 	StateOperationTime                       *prometheus.HistogramVec
 	ValidatorStatus                          *prometheus.GaugeVec // what's the status of this validator?
 	ValidatorType                            *prometheus.GaugeVec // what's the type of this validator?
@@ -374,6 +376,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_p2p_send_queue_full_total",
 				Help: "Total count of send queue full events by topic",
 			}, []string{"topic"}),
+			InboxFlush: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_p2p_inbox_flush_dropped_total",
+				Help: "Total count of messages dropped by the full-node inbox dead-letter flush by topic",
+			}, []string{"topic"}),
 
 			HeartbeatPingSent: promauto.NewCounter(prometheus.CounterOpts{
 				Name: "canopy_p2p_heartbeat_ping_sent_total",
@@ -546,6 +552,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			CheckTxSignatureTime: promauto.NewHistogram(prometheus.HistogramOpts{
 				Name: "canopy_fsm_check_tx_signature_time",
 				Help: "Execution time of signature validation in CheckTx",
+			}),
+			RestrictedTxCount: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_fsm_restricted_tx_count",
+				Help: "Number of restricted signer or recipient transactions rejected in the current block",
 			}),
 			StateOperationTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_fsm_state_operation_time",

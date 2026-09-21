@@ -30,7 +30,12 @@ func GenerateVDF(seed []byte, iterations int, stop <-chan struct{}) (out []byte,
 }
 
 // VerifyVDF() verifies VDF bytes given a seed and iterations
-func VerifyVDF(seed, out, proof []byte, iterations int) bool {
+func VerifyVDF(seed, out, proof []byte, iterations int) (valid bool) {
+	defer func() {
+		if recover() != nil {
+			valid = false
+		}
+	}()
 	discriminant, classGroup := initVDF(seed)
 	y, p := new(ClassGroup), new(ClassGroup)
 	if err := y.Decode(out, discriminant); err != nil {
