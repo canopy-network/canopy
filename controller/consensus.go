@@ -115,6 +115,8 @@ func (c *Controller) Sync() {
 		case <-limiter.TimeToReset():
 			limiter.Reset()
 		case <-requestTicker.C:
+			// Remove timed-out requests before attempting to refill the queue
+			c.applyTimeouts(queue)
 			// Get current chain height
 			fsmHeight := c.FSM.Height()
 			// Get an updated list of available peers
@@ -151,8 +153,6 @@ func (c *Controller) Sync() {
 				maxHeight, minVDFIterations = m, v
 				c.log.Debugf("Updated chain %d with max height: %d and iterations %d", c.Config.ChainId, maxHeight, minVDFIterations)
 			}
-			// Remove any block requests that have timed out
-			c.applyTimeouts(queue)
 		}
 	}
 	// Syncing complete
@@ -183,7 +183,7 @@ func (c *Controller) processQueue(startHeight, stopHeight uint64, queue map[uint
 		// lock the controller
 		c.Lock()
 		// process the block message received from the peer
-		_, err := c.HandlePeerBlock(blockMsg, true)
+		_, err := c.handlePeerBlock(blockMsg, true, height+1 == stopHeight)
 		// unlock controller
 		c.Unlock()
 		// check error from HandlePeerBlock
@@ -316,16 +316,19 @@ func (c *Controller) ListenForConsensus() {
 		}
 		// execute in a sub-function to unify error handling and enable 'defer' functionality
 		if err := func() (err lib.ErrorI) {
-			// check and add the message to the cache to prevent duplicates
-			if ok := cache.Add(msg); !ok {
-				// duplicate, exit
-				return
-			}
 			// create a new 'consensus message' to unmarshal the bytes to
 			bftMsg := new(bft.Message)
 			// try to unmarshal into a consensus message
 			if err = lib.Unmarshal(msg.Message, bftMsg); err != nil {
 				// exit with error
+				return
+			}
+			// direct consensus messages must come from their signer; gossip messages may come from a relay
+			if !validConsensusSender(msg.Sender.Address.PublicKey, bftMsg, c.P2P.GossipMode()) {
+				return lib.ErrInvalidSigner()
+			}
+			// check and add the message to the cache to prevent duplicates
+			if ok := cache.Add(msg); !ok {
 				return
 			}
 			// check whether the message should be gossiped
@@ -351,6 +354,10 @@ func (c *Controller) ListenForConsensus() {
 			c.P2P.ChangeReputation(msg.Sender.Address.PublicKey, p2p.InvalidMsgRep)
 		}
 	}
+}
+
+func validConsensusSender(sender []byte, msg *bft.Message, gossipMode bool) bool {
+	return msg.GetSignature() != nil && (gossipMode || bytes.Equal(sender, msg.Signature.PublicKey))
 }
 
 // ShouldGossip() controls whether a consensus message should be gossiped
@@ -617,6 +624,9 @@ func (c *Controller) UpdateP2PMustConnect(v *lib.ConsensusValidators) {
 	// update the validator count metric
 	lenMustConnects := len(mustConnects)
 	c.Metrics.UpdateValidatorCount(lenMustConnects)
+	// inform the P2P module whether this node is a validator; full nodes (non-validators)
+	// enable the inbox dead-letter policy that drops a backed-up inbox to avoid stalling
+	c.P2P.SetSelfIsValidator(selfIsValidator)
 	// if this node 'is validator'
 	if selfIsValidator {
 		// log the must connect update

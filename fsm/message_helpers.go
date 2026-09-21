@@ -480,6 +480,9 @@ func (x *MessageCertificateResults) Check() lib.ErrorI {
 	if err := x.Qc.CheckBasic(); err != nil {
 		return err
 	}
+	if x.Qc.Header.Phase != lib.Phase_PRECOMMIT_VOTE {
+		return lib.ErrWrongPhase()
+	}
 	results := x.Qc.Results
 	if results == nil {
 		return ErrEmptyCertificateResults()

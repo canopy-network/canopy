@@ -207,7 +207,7 @@ func (p *PageParams) skipToIndex() int {
 	// set the defaults
 	defaultPerPage, maxPerPage := 10, 5000
 	// if the perPage isn't set
-	if p.PerPage == 0 {
+	if p.PerPage <= 0 {
 		// use the default
 		p.PerPage = defaultPerPage
 	}
@@ -217,7 +217,7 @@ func (p *PageParams) skipToIndex() int {
 		p.PerPage = maxPerPage
 	}
 	// start page count at 1 not 0
-	if p.PageNumber == 0 {
+	if p.PageNumber <= 0 {
 		// set to page 1
 		p.PageNumber = 1
 	}

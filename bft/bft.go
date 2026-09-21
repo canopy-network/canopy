@@ -155,12 +155,9 @@ func (b *BFT) Start() {
 			func() {
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
-				// calculate time since
-				since := time.Since(resetBFT.StartTime)
-				// allow if 'since' is less than 1 block old
-				if int(since.Milliseconds()) < b.Config.BlockTimeMS() {
+				processTime = validProcessTime(resetBFT.StartTime, time.Duration(b.Config.BlockTimeMS())*time.Millisecond)
+				if processTime != 0 {
 					b.log.Infof("Using included timestamp to calculate process time: %s", resetBFT.StartTime.Format(time.StampMilli))
-					processTime = since
 				}
 				// if is a root-chain update reset back to round 0 but maintain locks to prevent 'fork attacks'
 				// else increment the height and don't maintain locks
@@ -183,6 +180,13 @@ func (b *BFT) Start() {
 			}()
 		}
 	}
+}
+
+func validProcessTime(start time.Time, maxAge time.Duration) time.Duration {
+	if since := time.Since(start); since > 0 && since < maxAge {
+		return since
+	}
+	return 0
 }
 
 // HandlePhase() is the main BFT Phase stepping loop
@@ -609,8 +613,8 @@ func (b *BFT) Pacemaker() bool {
 			continue
 		}
 		totalVotedPower += validator.VotingPower
-		// if totalVotePower >= +33%, it's safe to advance to that round
-		if totalVotedPower >= lib.Uint64ReducePercentage(b.ValidatorSet.MinimumMaj23, 50) {
+		// if totalVotePower > 1/3, it's safe to advance to that round
+		if totalVotedPower > b.ValidatorSet.TotalPower/3 {
 			pacemakerRound = vote.Qc.Header.Round // set the highest round where +1/3rds have been
 			break
 		}

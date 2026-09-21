@@ -2,11 +2,12 @@ package fsm
 
 import (
 	"bytes"
+	"math"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/types/known/anypb"
-	"math"
-	"time"
 )
 
 /* This file contains transaction handling logic - for the payload handling check message.go */
@@ -158,6 +159,9 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 		if err != nil {
 			return
 		}
+		if tx.MessageType != msg.Name() {
+			return nil, lib.ErrUnknownMessageName(tx.MessageType)
+		}
 		// validate the fee associated with the transaction
 		if err = s.CheckFee(tx.Fee, msg); err != nil {
 			return
@@ -178,6 +182,20 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	sender, err := s.CheckSignature(tx, authorizedSigners, batchVerifier)
 	if err != nil {
 		return
+	}
+	var restrictedAddress []byte
+	switch {
+	case s.isRestricted(sender.Bytes()):
+		restrictedAddress = sender.Bytes()
+	case s.isRestricted(recipient):
+		restrictedAddress = recipient
+	}
+	if restrictedAddress != nil {
+		if s.Metrics != nil {
+			s.Metrics.RestrictedTxCount.Inc()
+			s.log.Debugf("found restricted address %x in transaction %s of type %s", restrictedAddress, txHash, tx.MessageType)
+		}
+		return nil, ErrRestrictedAddress()
 	}
 	if s.Metrics != nil {
 		s.Metrics.CheckTxSignatureTime.Observe(time.Since(signatureStartTime).Seconds())

@@ -9,6 +9,9 @@ import (
 
 // BeginBlock() is code that is executed at the start of `applying` the block
 func (s *StateMachine) BeginBlock() (lib.Events, lib.ErrorI) {
+	if s.Metrics != nil {
+		s.Metrics.RestrictedTxCount.Set(0)
+	}
 	s.events.Refer(lib.EventStageBeginBlock)
 	// execute plugin begin block if enabled
 	if s.Plugin != nil {

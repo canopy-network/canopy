@@ -2,8 +2,8 @@ package fsm
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
-	"math"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -16,6 +16,8 @@ import (
 const (
 	CurrentProtocolVersion         = 2
 	slowApplyTransactionsThreshold = 2 * time.Second
+	// defaultPluginStateReadLimit bounds plugin range reads when no explicit limit is provided.
+	defaultPluginStateReadLimit uint64 = 5000
 )
 
 /* This is the 'main' file of the state machine store, with the structure definition and other high level operations */
@@ -121,6 +123,9 @@ func (s *StateMachine) Initialize(store lib.StoreI) (genesis bool, err lib.Error
 	// load the previous block
 	blk, e := s.LoadBlock(s.Height() - 1)
 	if e != nil {
+		if s.height == 1 && strings.Contains(e.Error(), "block not found") {
+			return
+		}
 		return false, e
 	}
 	// set totalVDFIterations in the state machine
@@ -216,10 +221,15 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversi
 	if !rootStartTime.IsZero() {
 		s.Metrics.UpdateFSMApplyBlockRootTime(rootStartTime)
 	}
-	// load the last block from the indexer
-	lastBlock, err := s.LoadBlock(s.height - 1)
-	if err != nil {
-		return nil, nil, err
+	// The state committed from genesis is version 1, but there is no indexed
+	// block yet. Treat the predecessor of the first consensus block as an empty
+	// genesis boundary; later heights must always resolve their prior block.
+	lastBlock := &lib.BlockResult{BlockHeader: new(lib.BlockHeader)}
+	if s.height > 1 {
+		lastBlock, err = s.LoadBlock(s.height - 1)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	// get the transaction root
 	transactionRoot, err := r.TransactionRoot()
@@ -813,6 +823,27 @@ func (s *StateMachine) Discard()                                      { s.store.
 func (s *StateMachine) ProposalVoteConfig() GovProposalVoteConfig     { return s.proposeVoteConfig }
 func (s *StateMachine) SetProposalVoteConfig(c GovProposalVoteConfig) { s.proposeVoteConfig = c }
 
+// isRestricted() checks if an address is restricted from transacting
+func (s *StateMachine) isRestricted(address []byte) bool {
+	if len(address) != crypto.AddressSize {
+		return false
+	}
+	value := hex.EncodeToString(address)
+	if _, found := lib.RestrictedAddresses[value]; found {
+		return true
+	}
+	// AcceptAllProposals bypasses only node-local restrictions that may vary across validators and affect BFT consensus; the deterministic hardcoded list always applies.
+	if s.proposeVoteConfig == AcceptAllProposals {
+		return false
+	}
+	for _, configured := range s.Config.RestrictedAddresses {
+		if strings.TrimPrefix(strings.ToLower(configured), "0x") == value {
+			return true
+		}
+	}
+	return false
+}
+
 var _ lib.PluginCompatibleFSM = new(StateMachine)
 
 // StateRead() implements the 'state read' interface for plugins
@@ -846,9 +877,9 @@ func (s *StateMachine) StateRead(request *lib.PluginStateReadRequest) (response 
 		}
 		// calculate entries
 		var entries []*lib.PluginStateEntry
-		// allow 0 limit
+		// apply the default range limit
 		if r.Limit == 0 {
-			r.Limit = math.MaxUint64
+			r.Limit = defaultPluginStateReadLimit
 		}
 		// while the iterator is valid and the limit is not reached
 		for i := uint64(0); i < r.Limit && it.Valid(); i++ {

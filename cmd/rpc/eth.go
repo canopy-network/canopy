@@ -1670,7 +1670,7 @@ func (s *Server) findIndexedTxByHash(st *store.Store, hash string) (*lib.TxResul
 	txHash, err := lib.StringToBytes(cleanHex(hash))
 	if err == nil {
 		tx, txErr := st.GetTxByHash(txHash)
-		if txErr == nil && tx.TxHash != "" {
+		if txErr == nil && tx != nil && tx.TxHash != "" {
 			block, blockErr := st.GetBlockByHeight(tx.Height)
 			if blockErr == nil && !isNilBlock(block) {
 				return tx, block, nil
