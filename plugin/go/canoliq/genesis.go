@@ -200,6 +200,60 @@ func (c *Canoliq) runGenesis(req *contract.PluginGenesisRequest) *contract.Plugi
 	return c.SaveGlobals(g)
 }
 
+// applyDevnetTvlCapOverride re-applies genesisPath's tvlCapBps to the live
+// params on every block, even after GenesisComplete is set.
+//
+// Genesis is one-shot: runGenesis short-circuits once GenesisComplete is
+// true, so a long-lived devnet/localnet committee that outruns its TVL cap
+// from reward accrual alone (see isDevProfile) has no way to pick up a
+// corrected cap from a redeployed genesis.json. The only other route is
+// wiping canoLiq's state under prefix {20} (CustomStatePrefixes) and letting
+// genesis run again — for which there is no tooling in canoliqctl or the
+// canopy CLI today, and a full data-dir wipe risks a height regression
+// against what the root chain already has recorded for this committee.
+//
+// This is deliberately narrower than that: it reads genesisPath fresh every
+// block (a mounted ConfigMap updates in place, so this also converges
+// without a pod restart) and mutates only TvlCapBps on the live params,
+// never a full-params replace — a passed ProposalParamChange writes the
+// whole CanoliqParams wholesale and silently zeroes any field the payload
+// omits (see params_roundtrip_test.go); this does not carry that risk since
+// it never touches the other fields.
+//
+// Restricted to isDevProfile profiles, symmetric with the genesis-time
+// SafetyCheck / runGenesis uncapped-genesis allowance — testnet/mainnet
+// still require a governance vote to change tvlCapBps.
+func (c *Canoliq) applyDevnetTvlCapOverride() *contract.PluginError {
+	if !isDevProfile(c.Config.Profile) || c.Config.GenesisPath == "" {
+		return nil
+	}
+	gf, e := loadGenesisFile(c.Config.GenesisPath, nil)
+	if e != nil {
+		// genesisPath was already proven readable at startup by SafetyCheck
+		// (non-localnet profiles) — a read failure here means something
+		// changed after boot. This override is a dev-only convenience, not a
+		// correctness path, so skip rather than fail an otherwise-healthy
+		// block over it.
+		return nil
+	}
+	if gf.Params == nil || gf.Params.TvlCapBps == nil {
+		return nil
+	}
+	params, err := c.LoadParams()
+	if err != nil {
+		return err
+	}
+	want := *gf.Params.TvlCapBps
+	if params.TvlCapBps == want {
+		return nil
+	}
+	params.TvlCapBps = want
+	if err := ValidateParams(params); err != nil {
+		return err
+	}
+	return c.SaveParams(params)
+}
+
 // applyGenesisValidatorRegistry writes the seeded validator set when
 // genesis carries one. No-op for empty/missing entries — the legacy
 // aggregator path in distributeValidatorShare keeps working.
