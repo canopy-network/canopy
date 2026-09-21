@@ -110,6 +110,12 @@ func (o *TxOutcome) Error() string {
 //
 // The failed-tx cache has a ~5 minute TTL server-side, so confirmation has to
 // start promptly after submission rather than being deferred.
+//
+// One caveat on timeout: GetFailedTxsPage returns an empty 200 page rather
+// than an error when block processing holds the controller lock, and an empty
+// page is indistinguishable from "this address has no failures". The
+// one-second retry loop below absorbs that, but only if the caller allows more
+// than a single block time, so keep --wait-timeout comfortably above it.
 func ConfirmTx(rpcURL, signerAddress, txHash string, timeout time.Duration) (*TxOutcome, error) {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -144,38 +150,54 @@ func queryByHash(rpcURL, txHash string) *TxOutcome {
 	return &TxOutcome{Hash: txHash, Committed: r.Committed, Height: r.Height}
 }
 
+// failedTxsPerPage is the page size requested from /v1/query/failed-txs.
+const failedTxsPerPage = 100
+
 // queryFailed looks txHash up in the node's failed-tx cache, returning the
 // recorded reason. Scoped to the signer's address so the scan stays small.
+//
+// It walks every page rather than only the first. The cache is address-scoped
+// but not small: a signer that has burned through more than one page of
+// failures would otherwise never match its own hash, and ConfirmTx would
+// report a timeout for a transaction the node had definitively rejected.
 func queryFailed(rpcURL, signerAddress, txHash string) *TxOutcome {
-	body, status, err := postJSONStatus(rpcURL+"/v1/query/failed-txs",
-		fmt.Sprintf(`{"address":%q,"perPage":100}`, signerAddress))
-	if err != nil || status != http.StatusOK {
-		return nil
-	}
-	var page struct {
-		Results []struct {
-			TxHash string `json:"txHash"`
-			Error  struct {
-				Code   uint64 `json:"code"`
-				Module string `json:"module"`
-				Msg    string `json:"msg"`
-			} `json:"error"`
-		} `json:"results"`
-	}
-	if json.Unmarshal(body, &page) != nil {
-		return nil
-	}
-	for _, r := range page.Results {
-		if !strings.EqualFold(r.TxHash, txHash) {
-			continue
+	for pageNumber := 1; ; pageNumber++ {
+		body, status, err := postJSONStatus(rpcURL+"/v1/query/failed-txs",
+			fmt.Sprintf(`{"address":%q,"perPage":%d,"pageNumber":%d}`,
+				signerAddress, failedTxsPerPage, pageNumber))
+		if err != nil || status != http.StatusOK {
+			return nil
 		}
-		return &TxOutcome{
-			Hash:   txHash,
-			Failed: true,
-			Code:   r.Error.Code,
-			Module: r.Error.Module,
-			Msg:    r.Error.Msg,
+		var page struct {
+			TotalPages int `json:"totalPages"`
+			Results    []struct {
+				TxHash string `json:"txHash"`
+				Error  struct {
+					Code   uint64 `json:"code"`
+					Module string `json:"module"`
+					Msg    string `json:"msg"`
+				} `json:"error"`
+			} `json:"results"`
+		}
+		if json.Unmarshal(body, &page) != nil {
+			return nil
+		}
+		for _, r := range page.Results {
+			if !strings.EqualFold(r.TxHash, txHash) {
+				continue
+			}
+			return &TxOutcome{
+				Hash:   txHash,
+				Failed: true,
+				Code:   r.Error.Code,
+				Module: r.Error.Module,
+				Msg:    r.Error.Msg,
+			}
+		}
+		// Stop on the last page, on an empty page, or on a server that reports
+		// no total: any of those means there is nothing further to walk.
+		if len(page.Results) == 0 || pageNumber >= page.TotalPages {
+			return nil
 		}
 	}
-	return nil
 }

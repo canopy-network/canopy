@@ -210,10 +210,19 @@ func (c *Canoliq) DeliverMessageOTCLockCreate(msg *contract.MessageOTCLockCreate
 	if ccnpyBal < msg.CcnpyAmount {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCCNPY()}
 	}
-	reward := otcReward(msg.CcnpyAmount, otcTierBps(msg.Tier, params))
+	tierBps := otcTierBps(msg.Tier, params)
+	// A zero tier rate is a disabled tier, not an exhausted budget. Reporting
+	// both the same way sent operators hunting through program funding for a
+	// rate governance had set to zero.
+	if tierBps == 0 {
+		return &contract.PluginDeliverResponse{Error: ErrOTCTierRateZero()}
+	}
+	reward := otcReward(msg.CcnpyAmount, tierBps)
 	available := DecodeUint64(availBz)
 	// Reserve up front or reject. This is the guarantee that a matured
-	// position always has its payout already set aside.
+	// position always has its payout already set aside. A reward that rounds
+	// to zero is still refused here: a position must never open with nothing
+	// reserved against it.
 	if reward == 0 || available < reward {
 		return &contract.PluginDeliverResponse{Error: ErrOTCBudgetExhausted()}
 	}
@@ -543,11 +552,29 @@ func (c *Canoliq) fundOTCProgram(p *contract.ProposalOTCProgramFund) *contract.P
 			available = DecodeUint64(r.Entries[0].Value)
 		}
 	}
-	if treasury < p.Amount {
-		return ErrInsufficientTreasuryCPLQ()
+	// Clamp rather than reject. This runs from dispatchPassed, i.e. from
+	// BeginBlock, where returning an error aborts the block; the proposal is
+	// then never cleaned up and the next block hits the same error forever.
+	// treasury_cplq is mutable between the vote and the tally (a SPEND_CPLQ
+	// treasury spend, a buyback, or simply a second funding proposal passing
+	// in the same tally), so a strict check here is a state-dependent error on
+	// a path that cannot tolerate one.
+	//
+	// Clamping is also what the operator documentation already promises:
+	// "amount-uCPLQ (capped at the treasury CPLQ balance at execution time)".
+	// queueTreasurySpend takes the same position, deliberately deferring its
+	// balance check to the user-initiated execute transaction.
+	amount := p.Amount
+	if amount > treasury {
+		amount = treasury
 	}
-	treasury -= p.Amount
-	available += p.Amount
+	// An empty treasury makes this a no-op rather than a failure. The DAO's
+	// decision stands; there was simply nothing to move.
+	if amount == 0 {
+		return nil
+	}
+	treasury -= amount
+	available += amount
 	sets := []*contract.PluginSetOp{{Key: availKey, Value: EncodeUint64(available)}}
 	deletes := make([]*contract.PluginDeleteOp, 0, 1)
 	if treasury == 0 {

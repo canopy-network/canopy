@@ -119,4 +119,29 @@ Create proposals with:
 canoliqctl proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency|otc-program-fund> <args> [--description …]
 ```
 
+## What happens when a passed proposal cannot be applied
+
+Passing the vote and being applied are two separate things.
+
+A proposal's payload is type-checked when it is created, but it is not fully validated until it
+executes, which happens in the block that tallies the vote. A payload can therefore clear its
+quorum and approval bar and still be unapplicable: a parameter set whose fee split does not total
+10000, a buyback at a zero price, a treasury spend naming a malformed recipient.
+
+When that happens the proposal is **dropped, not retried**. It is removed from the active set
+exactly as an executed proposal would be, the change it described is not applied, and the chain
+keeps producing blocks. The failure is logged, and operators running the alert webhook receive a
+`proposal_execution_failed` alert carrying the proposal id, its action type, and the reason.
+
+Dropping is deliberate. Execution runs inside the tally block, so treating the failure as a block
+error would fail that block; because a rejected block commits nothing, the proposal would still be
+active in the next block and fail the same way, and the chain would stop for good. One bad payload
+must not be able to do that, so a proposal that cannot be applied is discarded and the block
+proceeds.
+
+The practical consequence for proposers: a failed proposal costs a full voting period and has to be
+resubmitted, corrected, from scratch. Validate before you submit. `canoliqctl` does this for you,
+rejecting an incomplete or invalid parameter file at the terminal rather than letting it reach a
+vote. Anything submitted through raw RPC has no such safety net.
+
 

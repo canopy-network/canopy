@@ -67,11 +67,24 @@ The program starts with nothing. CPLQ reaches it only through a passed governanc
 The DAO decides the budget size, and can top it up later with another proposal. Nothing else can
 put CPLQ into the program.
 
-:::note This proposal currently uses the fallback governance tier
-`ProposalOTCProgramFund` does not yet have its own row in the governance tier matrix, so it
-falls back to the scalar defaults — a 33% quorum and a simple majority — rather than a tier
-sized for it. See [Governance Tiers](../governance/governance-tiers.mdx).
+:::note Funding is capped at the treasury balance
+A proposal names an amount, but execution moves `min(amount, treasury_cplq)`. The treasury can
+shrink between the vote and the tally: a treasury spend may execute, a buyback may run, or a second
+funding proposal may pass in the same tally and take its share first.
+
+Funding therefore never fails. A proposal that passes against a treasury holding less than it asked
+for moves whatever is there, and one that passes against an empty treasury does nothing at all. The
+DAO's decision stands either way; there was simply less to move than it voted for.
+
+The alternative, rejecting the proposal, is not available here. Funding executes inside the block
+that tallies the vote, so an error would fail that block, and since a rejected block commits
+nothing the proposal would be retried in the next block and fail identically, forever. Capping is
+what keeps a funding vote from being able to stop the chain.
 :::
+
+`ProposalOTCProgramFund` carries the same bar as a large treasury spend, a 10% quorum and 67%
+approval, with no timelock. See [Governance Tiers](../governance/governance-tiers.mdx) for why the
+timelock is zero.
 
 ## The budget is a hard cap
 

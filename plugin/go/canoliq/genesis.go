@@ -168,7 +168,11 @@ func (c *Canoliq) runGenesis(req *contract.PluginGenesisRequest) *contract.Plugi
 	}
 	params := DefaultParams()
 	if gf.Params != nil {
-		params = paramsFromJSON(gf.Params)
+		var perr *contract.PluginError
+		params, perr = paramsFromJSON(gf.Params)
+		if perr != nil {
+			return perr
+		}
 		if err := ValidateParams(params); err != nil {
 			return err
 		}
@@ -207,16 +211,9 @@ func (c *Canoliq) applyGenesisValidatorRegistry(gf *GenesisFile) *contract.Plugi
 		Entries: make([]*contract.ValidatorRegistryEntry, 0, len(gf.ValidatorRegistry)),
 	}
 	for _, e := range gf.ValidatorRegistry {
-		raw := e.Address
-		if len(raw) >= 2 && (raw[:2] == "0x" || raw[:2] == "0X") {
-			raw = raw[2:]
-		}
-		addr, err := hex.DecodeString(raw)
-		if err != nil {
-			return ErrStateUnmarshal(fmt.Errorf("validator address %q: %w", e.Address, err))
-		}
-		if len(addr) != 20 {
-			return ErrStateUnmarshal(fmt.Errorf("validator address %q must be 20 bytes", e.Address))
+		addr, aerr := decodeGenesisAddress(e.Address)
+		if aerr != nil {
+			return aerr
 		}
 		reg.Entries = append(reg.Entries, &contract.ValidatorRegistryEntry{
 			Address: addr,
@@ -289,13 +286,8 @@ func validateGenesis(gf *GenesisFile) *contract.PluginError {
 			// to pass validation here and then have its decode error discarded
 			// in applyGenesisBuckets, minting a whole tranche to a key nobody
 			// can ever spend from. Genesis is one-shot, so that is unrecoverable.
-			raw := strings.TrimPrefix(strings.TrimPrefix(r.Address, "0x"), "0X")
-			decoded, err := hex.DecodeString(raw)
-			if err != nil {
-				return ErrStateUnmarshal(fmt.Errorf("invalid hex address %q: %w", r.Address, err))
-			}
-			if len(decoded) != 20 {
-				return ErrStateUnmarshal(fmt.Errorf("address %q must be 20 bytes, got %d", r.Address, len(decoded)))
+			if _, aerr := decodeGenesisAddress(r.Address); aerr != nil {
+				return aerr
 			}
 		}
 		if recBps != 10_000 {
@@ -322,7 +314,19 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 	// stake.go::blocksPerMonth — see the note there (L5).
 	blocksPerMonth := blocksPerYear / 12
 	sets := make([]*contract.PluginSetOp, 0)
-	indexUpdates := make(map[string]*contract.VestingIndex)
+	// Keyed by the DECODED address bytes, never by the JSON string. Genesis
+	// accepts an address with or without a 0x prefix and in either case, so
+	// "0xAB…", "0XAB…", "ab…" and "AB…" are four distinct strings that decode
+	// to one address. Keying on the string would emit four set ops on the one
+	// KeyForVestingIndex key, and two set ops on one key do not compose (see
+	// the treasuryCplq note below) — last write wins. The losing spelling's
+	// schedule ids would vanish from the index while the VestingSchedule
+	// records themselves persisted, and since DeliverMessageCPLQClaimVested
+	// walks the index rather than range-scanning, those tranches would be
+	// permanently unclaimable. Genesis runs once, so there is no recovery.
+	// Map iteration order is nondeterministic too, so different nodes would
+	// keep different spellings and diverge.
+	indexUpdates := make(map[string]*vestingIndexUpdate)
 	scheduleCounter := uint64(0)
 	// treasuryCplq accumulates across every treasury-destined bucket so the
 	// scalar is written once. readScalar would not see a pending set op, and
@@ -343,12 +347,9 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 			// instead of discarding means it stays impossible if that guard is
 			// ever weakened — genesis is one-shot and a mis-decoded address
 			// mints a whole tranche to an unspendable key.
-			addrBytes, err := hex.DecodeString(strings.TrimPrefix(strings.TrimPrefix(r.Address, "0x"), "0X"))
-			if err != nil {
-				return ErrStateUnmarshal(fmt.Errorf("invalid hex address %q: %w", r.Address, err))
-			}
-			if len(addrBytes) != 20 {
-				return ErrStateUnmarshal(fmt.Errorf("address %q must be 20 bytes, got %d", r.Address, len(addrBytes)))
+			addrBytes, aerr := decodeGenesisAddress(r.Address)
+			if aerr != nil {
+				return aerr
 			}
 			amount := mulDiv(bucketTotal, r.Bps, 10_000)
 			if amount == 0 {
@@ -388,25 +389,21 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 				Key:   KeyForVesting(addrBytes, scheduleID),
 				Value: bz,
 			})
-			idx, ok := indexUpdates[r.Address]
+			upd, ok := indexUpdates[string(addrBytes)]
 			if !ok {
-				idx = &contract.VestingIndex{}
-				indexUpdates[r.Address] = idx
+				upd = &vestingIndexUpdate{addr: addrBytes, index: &contract.VestingIndex{}}
+				indexUpdates[string(addrBytes)] = upd
 			}
-			idx.ScheduleIds = append(idx.ScheduleIds, scheduleID)
+			upd.index.ScheduleIds = append(upd.index.ScheduleIds, scheduleID)
 		}
 	}
-	for addr, idx := range indexUpdates {
-		addrBytes, e := hex.DecodeString(strings.TrimPrefix(strings.TrimPrefix(addr, "0x"), "0X"))
+	for _, upd := range indexUpdates {
+		bz, e := contract.Marshal(upd.index)
 		if e != nil {
-			return ErrStateUnmarshal(fmt.Errorf("invalid hex address %q: %w", addr, e))
-		}
-		bz, e2 := contract.Marshal(idx)
-		if e2 != nil {
-			return e2
+			return e
 		}
 		sets = append(sets, &contract.PluginSetOp{
-			Key:   KeyForVestingIndex(addrBytes),
+			Key:   KeyForVestingIndex(upd.addr),
 			Value: bz,
 		})
 	}
@@ -422,7 +419,7 @@ func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobal
 	return nil
 }
 
-func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
+func paramsFromJSON(p *GenesisParamsJSON) (*contract.CanoliqParams, *contract.PluginError) {
 	d := DefaultParams()
 	if p.FeeBps != 0 {
 		d.FeeBps = p.FeeBps
@@ -452,12 +449,22 @@ func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
 		d.TreasuryThreshold = p.TreasuryThreshold
 	}
 	if len(p.MultisigSigners) > 0 {
+		// Strip the 0x prefix like every other address path in this file, and
+		// surface a bad entry instead of dropping it. Silently skipping a
+		// malformed signer is not a small bug: the skipped entries leave a
+		// short list, or an empty one, which is then assigned over the
+		// default. ValidateParams skips its whole threshold and
+		// duplicate-signer block when the list is empty, so MultisigThreshold
+		// lands unguarded and above-threshold treasury spends quietly lose
+		// their multisig requirement. A genesis that listed its signers in 0x
+		// form used to produce exactly that.
 		signers := make([][]byte, 0, len(p.MultisigSigners))
 		for _, hexAddr := range p.MultisigSigners {
-			b, err := hex.DecodeString(hexAddr)
-			if err == nil && len(b) == 20 {
-				signers = append(signers, b)
+			b, aerr := decodeGenesisAddress(hexAddr)
+			if aerr != nil {
+				return nil, aerr
 			}
+			signers = append(signers, b)
 		}
 		d.MultisigSigners = signers
 	}
@@ -527,7 +534,36 @@ func paramsFromJSON(p *GenesisParamsJSON) *contract.CanoliqParams {
 		}
 		d.Governance = tiers
 	}
-	return d
+	return d, nil
+}
+
+// decodeGenesisAddress decodes a 20-byte address from a genesis JSON string,
+// accepting an optional 0x/0X prefix.
+//
+// Every address in a genesis file goes through here. Both halves matter:
+// hex.DecodeString accepts any even-length input, so the length check is what
+// stops a truncated address from minting a tranche to a key nobody holds, and
+// a missed prefix strip silently turns a valid address into a decode failure.
+// Genesis runs once, so either mistake is unrecoverable, which is why this is
+// one function rather than the same six lines copied to each call site.
+func decodeGenesisAddress(addr string) ([]byte, *contract.PluginError) {
+	raw := strings.TrimPrefix(strings.TrimPrefix(addr, "0x"), "0X")
+	b, err := hex.DecodeString(raw)
+	if err != nil {
+		return nil, ErrStateUnmarshal(fmt.Errorf("invalid hex address %q: %w", addr, err))
+	}
+	if len(b) != 20 {
+		return nil, ErrStateUnmarshal(fmt.Errorf("address %q must be 20 bytes, got %d", addr, len(b)))
+	}
+	return b, nil
+}
+
+// vestingIndexUpdate accumulates one address's vesting schedule ids during
+// genesis, carrying the decoded address alongside so the write loop does not
+// have to re-decode the map key.
+type vestingIndexUpdate struct {
+	addr  []byte
+	index *contract.VestingIndex
 }
 
 // liquidExisting returns the running CPLQ balance for `key` that is already

@@ -444,10 +444,29 @@ func TestFundOTCProgramMovesTreasuryCplq(t *testing.T) {
 	if g.CplqTotalSupply != CPLQTotalSupply {
 		t.Errorf("total supply = %d, want %d unchanged", g.CplqTotalSupply, CPLQTotalSupply)
 	}
-	// Over-funding is refused rather than silently clamped.
-	if err := c.fundOTCProgram(&contract.ProposalOTCProgramFund{Amount: 1_000_000_000_000}); err == nil || err.Code != codeInsufficientTreasuryCPLQ {
-		t.Errorf("over-fund: got %v, want codeInsufficientTreasuryCPLQ", err)
+	// Over-funding clamps to whatever the treasury still holds rather than
+	// erroring. This runs from dispatchPassed inside BeginBlock, where a
+	// returned error aborts the block and then repeats forever, so a
+	// state-dependent rejection here is a chain halt.
+	remaining := readScalarKey(s, KeyForTreasuryCPLQ())
+	if err := c.fundOTCProgram(&contract.ProposalOTCProgramFund{Amount: 1_000_000_000_000}); err != nil {
+		t.Fatalf("over-fund should clamp, not fail: %v", err)
 	}
+	if got := readScalarKey(s, KeyForTreasuryCPLQ()); got != 0 {
+		t.Errorf("treasury after clamped over-fund = %d, want 0 (fully drained)", got)
+	}
+	if got := readScalarKey(s, KeyForOTCBudgetAvailable()); got != testBudget+remaining {
+		t.Errorf("program budget = %d, want %d (first fund plus the clamped remainder)", got, uint64(testBudget)+remaining)
+	}
+	// An empty treasury makes funding a no-op, still without an error.
+	if err := c.fundOTCProgram(&contract.ProposalOTCProgramFund{Amount: 500}); err != nil {
+		t.Fatalf("fund against an empty treasury should no-op, not fail: %v", err)
+	}
+	if got := readScalarKey(s, KeyForOTCBudgetAvailable()); got != testBudget+remaining {
+		t.Errorf("budget moved on an empty-treasury fund: got %d", got)
+	}
+	// A zero-amount payload is still malformed, which is a payload error
+	// rather than a state-dependent one, so it stays an error.
 	if err := c.fundOTCProgram(&contract.ProposalOTCProgramFund{Amount: 0}); err == nil {
 		t.Error("zero-amount fund proposal should be refused")
 	}
@@ -701,5 +720,41 @@ func TestOTCLockTermChangeDoesNotMoveOpenPositions(t *testing.T) {
 	}
 	if got, want := second.MatureHeight-second.StartHeight, uint64(10*blocksPerDay); got != want {
 		t.Errorf("new position term = %d blocks, want %d", got, want)
+	}
+}
+
+// TestOTCZeroTierRateIsNotReportedAsExhaustedBudget covers the diagnostic
+// split. A tier rate of zero and a budget too small to cover the reward used
+// to produce the same ErrOTCBudgetExhausted, which sent operators looking at
+// program funding for a tier governance had deliberately disabled.
+func TestOTCZeroTierRateIsNotReportedAsExhaustedBudget(t *testing.T) {
+	c, s := newTestCanoliq()
+	params := DefaultParams()
+	params.OtcTier90Bps = 0 // disable the 90-day tier, leave 120-day running
+	seedParams(t, c, params)
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, CplqTotalSupply: CPLQTotalSupply})
+	user := addr20(0xA1)
+	seedAccount(s, user, 1_000_000)
+	s.set(KeyForCCNPYBalance(user), EncodeUint64(testLockAmount*4))
+	s.set(KeyForOTCBudgetAvailable(), EncodeUint64(testBudget))
+	c.plugin.setHeight(10)
+
+	r := c.DeliverMessageOTCLockCreate(&contract.MessageOTCLockCreate{
+		FromAddress: user, CcnpyAmount: testLockAmount, Tier: contract.OTCLockTier_OTC_LOCK_90D,
+	}, testFee, params)
+	if r.Error == nil {
+		t.Fatal("a lock on a zero-rate tier should be refused")
+	}
+	if r.Error.Code != codeOTCTierRateZero {
+		t.Errorf("got code %d (%s), want codeOTCTierRateZero: a disabled tier is not an exhausted budget",
+			r.Error.Code, r.Error.Msg)
+	}
+
+	// The other tier is unaffected, which is the whole point of allowing a
+	// zero rate.
+	if r := c.DeliverMessageOTCLockCreate(&contract.MessageOTCLockCreate{
+		FromAddress: user, CcnpyAmount: testLockAmount, Tier: contract.OTCLockTier_OTC_LOCK_120D,
+	}, testFee, params); r.Error != nil {
+		t.Errorf("the 120-day tier should still work: %v", r.Error)
 	}
 }
