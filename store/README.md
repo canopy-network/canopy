@@ -153,14 +153,14 @@ The main operations supported by `Txn` according to the `RWStoreI` interface are
 #### Key prefixing
 
 All keys in `Txn` are automatically prefixed with a unique identifier (e.g., "s/" for state
-store, "c/" for commitment store) to achieve two main purposes:
+store, "x/" for commitment nodes and commit IDs) to achieve two main purposes:
 
 1. **Data Isolation**: Each component (`StateStore`, `StateCommitStore`, `Indexer`) maintains its own
    prefix-based namespace, preventing key collisions in the shared BadgerDB instance.
 
 2. **Efficient Iteration**: Since BadgerDB stores keys in lexicographical order, prefixes enable
    efficient range queries within specific components. For example, iterating through all state
-   store entries ("s/...") without touching commitment store data ("c/...").
+   store entries ("s/...") without touching commitment and commit ID data ("x/...").
 
 These prefixes are only used internally and never exposed to the user.
 

@@ -1,4 +1,13 @@
-FROM node:24-alpine AS builder
+# Pin the builder to the native build platform (e.g. amd64 on CI) so the
+# Node/vite frontend build never runs under QEMU emulation. Emulating the
+# rollup/esbuild native code for a foreign arch (linux/arm64) crashes with
+# "qemu: uncaught target signal 4 (Illegal instruction)". The frontend output
+# is architecture-independent and the Go binaries are cross-compiled below.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS builder
+
+# Populated automatically by buildx for the requested target platform.
+ARG TARGETOS
+ARG TARGETARCH
 
 ARG BRANCH='latest'
 ARG CLI_DIR
@@ -31,13 +40,13 @@ RUN apk update && apk add --no-cache make bash nodejs npm
 RUN make build/wallet
 RUN make build/explorer
 
-# Builds auto-update CLI
-RUN CGO_ENABLED=0 GOOS=linux go build -a -o bin ./cmd/auto-update/.
+# Builds auto-update CLI (cross-compiled for the target arch)
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o bin ./cmd/auto-update/.
 
 # Only build if the file at ${BIN_PATH} doesn't already exist
 RUN if [ ! -f "${BIN_PATH}" ]; then \
     echo "File ${BIN_PATH} not found. Building it..."; \
-    CGO_ENABLED=0 GOOS=linux go build -a -o "${BIN_PATH}" ./cmd/main/...; \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o "${BIN_PATH}" ./cmd/main/...; \
   else \
     echo "File ${BIN_PATH} already exists. Skipping build."; \
   fi

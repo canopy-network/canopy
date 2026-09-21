@@ -26,6 +26,7 @@ const (
 	dataFlowRatePerS       = maxMessageSize                      // the maximum number of bytes that may be sent or received per second per MultiConn
 	maxChanSize            = 1                                   // maximum number of items in a channel before blocking
 	maxInboxQueueSize      = 1000                                // maximum number of items in inbox queue before blocking
+	inboxFlushThreshold    = maxInboxQueueSize * 4 / 5           // 80% full: on full nodes, trigger a dead-letter flush of the inbox to avoid stalling
 	maxStreamSendQueueSize = 1000                                // maximum number of items in a stream send queue before blocking
 	keepAlivePeriod        = 10 * time.Second                    // TCP keep-alive probe interval
 	heartbeatInterval      = time.Second                         // how often to send heartbeat pings
@@ -494,6 +495,7 @@ type Stream struct {
 	mu           sync.Mutex                   // mutex to prevent race conditions when sending packets (all packets of the same message should be one right after the other)
 	closed       bool                         // flag to identify if stream is closed
 	logger       lib.LoggerI
+	p2p          *P2P // back-reference to the P2P module (used for validator status + metrics on the inbox DLQ)
 }
 
 // queueSends() schedules the packets to be sent ensuring coordination with the mutex
@@ -567,6 +569,9 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet, metrics *l
 			metrics.ReceiveAssemblyTime.Observe(time.Since(assemblyStart).Seconds())
 		}
 		//s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
+		// full-node dead-letter policy: if the inbox is critically backed up, drop the entire
+		// backlog so the node can recover with fresh messages instead of stalling (see dropInboxIfBackedUp)
+		s.dropInboxIfBackedUp()
 		// add to inbox for other parts of the app to read
 		select {
 		case s.inbox <- m:
@@ -581,6 +586,37 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet, metrics *l
 		s.msgAssembler = s.msgAssembler[:0]
 	}
 	return 0, nil
+}
+
+// dropInboxIfBackedUp() full-node-only DLQ: when the inbox hits inboxFlushThreshold (80%), drop the
+// entire backlog so the node recovers with fresh messages instead of stalling (no-op for validators)
+func (s *Stream) dropInboxIfBackedUp() {
+	// only full nodes flush; validators must not drop messages. Also guard the reserved
+	// heartbeat stream which has a nil inbox.
+	if s.inbox == nil || s.p2p == nil || s.p2p.SelfIsValidator() {
+		return
+	}
+	// fast path: nothing to do unless the inbox is critically backed up
+	if len(s.inbox) < inboxFlushThreshold {
+		return
+	}
+	// drain the entire backlog non-blockingly
+	dropped := 0
+	for {
+		select {
+		case <-s.inbox:
+			dropped++
+		default:
+			if dropped > 0 {
+				topic := lib.Topic_name[int32(s.topic)]
+				s.logger.Errorf("DLQ: %s inbox exceeded %d msgs on full node; dropped %d backlog messages to avoid stalling", topic, inboxFlushThreshold, dropped)
+				if s.p2p.metrics != nil {
+					s.p2p.metrics.InboxFlush.WithLabelValues(topic).Add(float64(dropped))
+				}
+			}
+			return
+		}
+	}
 }
 
 // HELPERS BELOW
