@@ -233,3 +233,142 @@ func TestIsDevProfileMembership(t *testing.T) {
 		}
 	}
 }
+
+// writeGenesisWithCap writes a minimal genesis file with the given
+// tvlCapBps (nil = the params block omits the key entirely) and returns its
+// path, for tests that drive applyDevnetTvlCapOverride via GenesisPath
+// rather than PluginGenesisRequest.GenesisJson.
+func writeGenesisWithCap(t *testing.T, capBps *uint64) string {
+	t.Helper()
+	gf := genesisWithParams(&GenesisParamsJSON{TvlCapBps: capBps, MultisigThreshold: 3})
+	p := filepath.Join(t.TempDir(), "genesis.json")
+	if err := os.WriteFile(p, mustJSON(t, gf), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	return p
+}
+
+// A long-lived devnet committee outruns its cap from reward accrual alone
+// (isDevProfile's whole reason to exist), and genesis is one-shot — this is
+// the post-genesis knob that lets a redeployed genesis.json still take
+// effect without wiping canoLiq's state under prefix {20}.
+func TestApplyDevnetTvlCapOverrideUpdatesLiveParams(t *testing.T) {
+	zero := uint64(0)
+	c, _ := newTestCanoliq()
+	c.Config.Profile = ProfileDevnet
+	c.Config.GenesisPath = writeGenesisWithCap(t, &zero)
+
+	// Genesis already ran under the old (capped) params — simulate that
+	// directly rather than via c.Genesis, since the point of this test is
+	// what happens *after* GenesisComplete is already true.
+	g, err := c.LoadGlobals()
+	if err != nil {
+		t.Fatalf("load globals: %v", err)
+	}
+	g.GenesisComplete = true
+	if err := c.SaveGlobals(g); err != nil {
+		t.Fatalf("save globals: %v", err)
+	}
+	if err := c.SaveParams(DefaultParams()); err != nil {
+		t.Fatalf("seed params: %v", err)
+	}
+
+	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+		t.Fatalf("bootstrapGenesisIfNeeded: %v", err)
+	}
+	got, err := c.LoadParams()
+	if err != nil {
+		t.Fatalf("load params: %v", err)
+	}
+	if got.TvlCapBps != 0 {
+		t.Fatalf("TvlCapBps: got %d want 0 (from redeployed genesis)", got.TvlCapBps)
+	}
+	// Nothing else should have moved — this is a single-field override, not
+	// a ProposalParamChange-style full replace.
+	if got.FeeBps != DefaultParams().FeeBps {
+		t.Fatalf("FeeBps changed from %d to %d — override must not touch other params", DefaultParams().FeeBps, got.FeeBps)
+	}
+
+	// Converges: a second call with the same genesis file is a no-op that
+	// still reads back the same value (not just "doesn't crash").
+	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+		t.Fatalf("second bootstrapGenesisIfNeeded: %v", err)
+	}
+	got2, err := c.LoadParams()
+	if err != nil {
+		t.Fatalf("load params (2nd): %v", err)
+	}
+	if got2.TvlCapBps != 0 {
+		t.Fatalf("TvlCapBps after 2nd call: got %d want 0", got2.TvlCapBps)
+	}
+}
+
+// testnet/mainnet keep requiring a governance vote to change tvlCapBps —
+// the post-genesis override is symmetric with the genesis-time
+// SafetyCheck/runGenesis allowance, both keyed on isDevProfile.
+func TestApplyDevnetTvlCapOverrideSkippedOffDevProfiles(t *testing.T) {
+	zero := uint64(0)
+	for _, profile := range []string{ProfileTestnet, ProfileMainnet} {
+		c, _ := newTestCanoliq()
+		c.Config.Profile = profile
+		c.Config.GenesisPath = writeGenesisWithCap(t, &zero)
+
+		g, err := c.LoadGlobals()
+		if err != nil {
+			t.Fatalf("profile=%q: load globals: %v", profile, err)
+		}
+		g.GenesisComplete = true
+		if err := c.SaveGlobals(g); err != nil {
+			t.Fatalf("profile=%q: save globals: %v", profile, err)
+		}
+		if err := c.SaveParams(DefaultParams()); err != nil {
+			t.Fatalf("profile=%q: seed params: %v", profile, err)
+		}
+
+		if err := c.bootstrapGenesisIfNeeded(); err != nil {
+			t.Fatalf("profile=%q: bootstrapGenesisIfNeeded: %v", profile, err)
+		}
+		got, err := c.LoadParams()
+		if err != nil {
+			t.Fatalf("profile=%q: load params: %v", profile, err)
+		}
+		if got.TvlCapBps != DefaultParams().TvlCapBps {
+			t.Fatalf("profile=%q: TvlCapBps: got %d want unchanged default %d — testnet/mainnet must not pick up genesis overrides post-genesis",
+				profile, got.TvlCapBps, DefaultParams().TvlCapBps)
+		}
+	}
+}
+
+// No params block, or a params block that omits tvlCapBps, must leave the
+// live value untouched — the override only fires when the genesis file
+// explicitly opts in.
+func TestApplyDevnetTvlCapOverrideNoOpWithoutExplicitCap(t *testing.T) {
+	c, _ := newTestCanoliq()
+	c.Config.Profile = ProfileDevnet
+	c.Config.GenesisPath = writeGenesisWithCap(t, nil) // params present, TvlCapBps absent
+
+	g, err := c.LoadGlobals()
+	if err != nil {
+		t.Fatalf("load globals: %v", err)
+	}
+	g.GenesisComplete = true
+	if err := c.SaveGlobals(g); err != nil {
+		t.Fatalf("save globals: %v", err)
+	}
+	seeded := DefaultParams()
+	seeded.TvlCapBps = 3300
+	if err := c.SaveParams(seeded); err != nil {
+		t.Fatalf("seed params: %v", err)
+	}
+
+	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+		t.Fatalf("bootstrapGenesisIfNeeded: %v", err)
+	}
+	got, err := c.LoadParams()
+	if err != nil {
+		t.Fatalf("load params: %v", err)
+	}
+	if got.TvlCapBps != 3300 {
+		t.Fatalf("TvlCapBps: got %d want unchanged 3300 (genesis omitted the field)", got.TvlCapBps)
+	}
+}
