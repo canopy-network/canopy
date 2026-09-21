@@ -319,18 +319,30 @@ func (c Config) SafetyCheck() error {
 		return fmt.Errorf("canoliq: refusing to start profile=%q with redemptionUnstakingBlocks=%d (must be >= %d — set it to match Canopy's valParams.UnstakingBlocks)",
 			c.Profile, c.RedemptionUnstakingBlocks, minNonLocalnetRedemptionBlocks)
 	}
+	// An empty GenesisPath is not necessarily wrong: the canoLiq section can
+	// instead be merged into the genesis.json the node boots from, in which
+	// case the FSM dispatches it as a PluginGenesisRequest and the path is
+	// legitimately unused. That case cannot be distinguished from a missing
+	// setting at startup, so it is caught at runtime instead — see
+	// bootstrapGenesisIfNeeded, which warns rather than skipping in silence.
 	if c.GenesisPath == "" {
 		return nil
 	}
+	// From here the path is set, so the operator's intent is unambiguous and a
+	// path that does not resolve is a misconfiguration, not a deferral. These
+	// used to return nil on the theory that runGenesis would report it with a
+	// better message. It does, but only per-block from BeginBlock, and only
+	// once the node is already running — and genesis is one-shot, so a startup
+	// failure is the right place to stop.
 	data, err := os.ReadFile(c.GenesisPath)
 	if err != nil {
-		// Genesis loading errors surface later in runGenesis with a
-		// clearer message; don't double-report here.
-		return nil
+		return fmt.Errorf("canoliq: refusing to start profile=%q with unreadable genesisPath %q: %v (the path must resolve inside the container, not on the host)",
+			c.Profile, c.GenesisPath, err)
 	}
 	var gf GenesisFile
 	if err := json.Unmarshal(data, &gf); err != nil {
-		return nil
+		return fmt.Errorf("canoliq: refusing to start profile=%q with malformed genesis at %q: %v",
+			c.Profile, c.GenesisPath, err)
 	}
 	for _, b := range gf.Buckets {
 		for _, r := range b.Recipients {

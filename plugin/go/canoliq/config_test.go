@@ -1,7 +1,9 @@
 package canoliq
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -419,10 +421,19 @@ func TestShippedTemplatesRefuseToBoot(t *testing.T) {
 		t.Run(path, func(t *testing.T) {
 			c := DefaultConfig()
 			c.Profile = ProfileMainnet
+			c.ChainId = mainnetCommitteeId
 			c.RedemptionUnstakingBlocks = 30240
 			c.GenesisPath = path
-			if err := c.SafetyCheck(); err == nil {
+			err := c.SafetyCheck()
+			if err == nil {
 				t.Fatalf("%s booted with placeholders still in place", path)
+			}
+			// Assert *why* it refused. SafetyCheck has several failure modes and
+			// more have been added since; without this the test would keep
+			// passing on an unreadable path or an unset chain id and silently
+			// stop covering the placeholders it exists to catch.
+			if !strings.Contains(err.Error(), "placeholder") {
+				t.Fatalf("%s refused for the wrong reason (want a placeholder rejection): %v", path, err)
 			}
 		})
 	}
@@ -490,5 +501,106 @@ func TestMainnetConfigCarriesCommitteeId(t *testing.T) {
 	}
 	if c.ChainId != mainnetCommitteeId {
 		t.Fatalf("mainnet committee id = %d, want %d", c.ChainId, mainnetCommitteeId)
+	}
+}
+
+// TestSafetyCheckRejectsBrokenGenesisPath covers a genesisPath that is set but
+// does not resolve, or resolves to something unparseable. Both used to return
+// nil on the theory that runGenesis would report it later with a better
+// message. It does — but only per-block from BeginBlock, once the node is
+// already running, and genesis is one-shot.
+func TestSafetyCheckRejectsBrokenGenesisPath(t *testing.T) {
+	malformed := filepath.Join(t.TempDir(), "genesis.json")
+	mustWrite(t, malformed, `{"buckets": [ this is not json`)
+
+	cases := []struct {
+		name, path, wantSubstr string
+	}{
+		{"missing file", filepath.Join(t.TempDir(), "does-not-exist.json"), "unreadable genesisPath"},
+		{"malformed json", malformed, "malformed genesis"},
+	}
+	for _, tc := range cases {
+		for _, profile := range []string{ProfileDevnet, ProfileTestnet, ProfileMainnet} {
+			t.Run(tc.name+"/"+profile, func(t *testing.T) {
+				c := DefaultConfig()
+				c.Profile = profile
+				c.ChainId = 19
+				c.RedemptionUnstakingBlocks = 30240
+				c.GenesisPath = tc.path
+				err := c.SafetyCheck()
+				if err == nil {
+					t.Fatalf("%s was accepted under profile=%q", tc.name, profile)
+				}
+				if !strings.Contains(err.Error(), tc.wantSubstr) {
+					t.Fatalf("error should say %q, got: %v", tc.wantSubstr, err)
+				}
+				if !strings.Contains(err.Error(), tc.path) {
+					t.Fatalf("error should name the offending path, got: %v", err)
+				}
+			})
+		}
+	}
+
+	// Localnet stays exempt, as it is for every other guard.
+	c := DefaultConfig()
+	c.Profile = ProfileLocalnet
+	c.GenesisPath = filepath.Join(t.TempDir(), "does-not-exist.json")
+	if err := c.SafetyCheck(); err != nil {
+		t.Fatalf("localnet must stay exempt: %v", err)
+	}
+}
+
+// TestSafetyCheckAllowsEmptyGenesisPath pins the deliberate hole in the guard
+// above. An empty path is legitimate when the canoLiq section was merged into
+// the node's own genesis.json, because the FSM then dispatches it as a
+// PluginGenesisRequest. That is indistinguishable at startup from a deployment
+// that forgot the setting, so it must not fail here — bootstrapGenesisIfNeeded
+// warns at runtime instead.
+func TestSafetyCheckAllowsEmptyGenesisPath(t *testing.T) {
+	for _, profile := range []string{ProfileDevnet, ProfileTestnet, ProfileMainnet} {
+		c := DefaultConfig()
+		c.Profile = profile
+		c.ChainId = 19
+		c.RedemptionUnstakingBlocks = 30240
+		c.GenesisPath = ""
+		if err := c.SafetyCheck(); err != nil {
+			t.Fatalf("profile=%q: an empty genesisPath must not fail at startup: %v", profile, err)
+		}
+	}
+}
+
+// TestBootstrapWarnsOnceWhenGenesisPathMissing covers the runtime half of the
+// fix. A deployment whose genesisPath is unset and whose node genesis carries
+// no canoLiq section sits at genesis_complete=false forever with every pool at
+// zero and ProcessRewards a no-op. That produced no signal at all, so the only
+// symptom was a chain that looked healthy while canoLiq quietly did nothing.
+//
+// BeginBlock must keep succeeding (the merged-genesis case is legitimate, and
+// tests drive BeginBlock without a genesis file), but it must say so — once,
+// since a per-block warning would bury the line it is meant to surface.
+func TestBootstrapWarnsOnceWhenGenesisPathMissing(t *testing.T) {
+	c, _ := newTestCanoliq()
+	c.Config.GenesisPath = ""
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	for h := uint64(1); h <= 5; h++ {
+		if resp := c.BeginBlock(&contract.PluginBeginRequest{Height: h}); resp.Error != nil {
+			t.Fatalf("BeginBlock at height %d: %v", h, resp.Error)
+		}
+	}
+
+	out := buf.String()
+	if n := strings.Count(out, "no genesisPath configured"); n != 1 {
+		t.Fatalf("warning fired %d times across 5 blocks, want exactly 1:\n%s", n, out)
+	}
+	// The message has to carry the fix, not just the symptom: the config is
+	// read once at startup, so editing it does not self-correct per block.
+	for _, want := range []string{"CANOLIQ_CONFIG", "restart"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("warning should mention %q so the reader knows what to do:\n%s", want, out)
+		}
 	}
 }

@@ -2,6 +2,7 @@ package canoliq
 
 import (
 	"log"
+	"sync"
 
 	"github.com/canopy-network/go-plugin/contract"
 )
@@ -16,6 +17,10 @@ type Canoliq struct {
 	FSMConfig *contract.PluginFSMConfig
 	plugin    *Plugin
 	fsmId     uint64
+	// warnMissingGenesisOnce keeps the "no genesisPath" warning to a single
+	// line. bootstrapGenesisIfNeeded runs every block, and a per-block warning
+	// would bury the log it is meant to draw attention to.
+	warnMissingGenesisOnce sync.Once
 }
 
 // Genesis runs the canoLiq genesis distribution exactly once. It is idempotent:
@@ -64,8 +69,28 @@ func (c *Canoliq) bootstrapGenesisIfNeeded() *contract.PluginError {
 		return nil
 	}
 	if c.Config.GenesisPath == "" {
-		// No genesis source configured. Tests that drive BeginBlock
-		// without a genesis file rely on this branch to skip cleanly.
+		// No genesis source configured. This is legitimate when the canoLiq
+		// section was merged into the node's own genesis.json, because the FSM
+		// then dispatches it as a PluginGenesisRequest and Genesis() completes
+		// there. It is also exactly what a deployment that simply forgot to set
+		// genesisPath looks like — and the two are indistinguishable here.
+		//
+		// The difference only shows up over time: if the FSM never dispatches,
+		// the plugin sits at genesis_complete=false forever with every pool at
+		// zero and ProcessRewards a no-op. That used to produce no signal at
+		// all, so the only symptom was a chain that looked healthy while
+		// canoLiq quietly did nothing. Warn once so the cause is in the log
+		// rather than something to be inferred from the code.
+		//
+		// Tests that drive BeginBlock without a genesis file also rely on this
+		// branch to skip cleanly, which is why it warns instead of failing.
+		c.warnMissingGenesisOnce.Do(func() {
+			log.Printf("canoliq: WARN genesis_complete=false and no genesisPath configured — " +
+				"if the canoLiq section is not merged into the node's genesis.json, the plugin " +
+				"will never initialize and every pool stays at zero. Set genesisPath in the " +
+				"config named by CANOLIQ_CONFIG and restart the plugin (the config is read once " +
+				"at startup and is not reloaded per block).")
+		})
 		return nil
 	}
 	return c.runGenesis(nil)
