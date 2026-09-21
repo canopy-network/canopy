@@ -374,3 +374,82 @@ func TestT1MixedFlightIndependentTally(t *testing.T) {
 		t.Errorf("proposal index should be empty post-tally, got %v", idx.Ids)
 	}
 }
+
+// TestT1DispatchFailureDoesNotHaltTheChain is the regression test for a
+// permanent chain halt.
+//
+// processProposals runs from BeginBlock. It used to return a dispatch error
+// straight through, failing ApplyBlock. Because a rejected block commits
+// nothing, the proposal stayed in the index and the next block retried the
+// same doomed dispatch, so one unexecutable proposal stopped the chain for
+// good with no on-chain remedy.
+//
+// Dispatch is genuinely fallible: DeliverMessageCPLQProposalCreate only
+// type-checks the payload through unwrapPayload and never validates it, so
+// ValidateParams first runs at dispatch, long after the proposal was accepted
+// and voted on.
+func TestT1DispatchFailureDoesNotHaltTheChain(t *testing.T) {
+	c, s := newTestCanoliq()
+	params := shortGovParams()
+	seedParams(t, c, params)
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+
+	a, b := addr20(0x51), addr20(0x52)
+	seedAccount(s, a, 1_000_000)
+	seedAccount(s, b, 1_000_000)
+	seedCPLQ(s, a, 6_000_000)
+	seedCPLQ(s, b, 4_000_000)
+	for _, st := range []struct {
+		addr   []byte
+		amount uint64
+	}{{a, 6_000_000}, {b, 4_000_000}} {
+		if r := c.DeliverMessageCPLQStake(&contract.MessageCPLQStake{FromAddress: st.addr, Amount: st.amount}, 10_000, params); r.Error != nil {
+			t.Fatalf("stake: %v", r.Error)
+		}
+	}
+
+	c.plugin.setHeight(10)
+	// A param-change whose fee split does not total 10000. ValidateParams
+	// rejects it, but only at dispatch.
+	bad := shortGovParams()
+	bad.UserRebateBps, bad.TreasuryBps, bad.ValidatorBps, bad.BuybackBps = 1, 1, 1, 1
+	badPayload, _ := anypb.New(&contract.ProposalParamChange{Params: bad})
+	if r := c.DeliverMessageCPLQProposalCreate(&contract.MessageCPLQProposalCreate{FromAddress: a, Payload: badPayload}, 10_000, params); r.Error != nil {
+		t.Fatalf("create: %v", r.Error)
+	}
+	if r := c.DeliverMessageCPLQVote(&contract.MessageCPLQVote{FromAddress: a, ProposalId: 1, Choice: contract.VoteChoice_VOTE_YES}, 10_000, params); r.Error != nil {
+		t.Fatalf("vote a: %v", r.Error)
+	}
+	if r := c.DeliverMessageCPLQVote(&contract.MessageCPLQVote{FromAddress: b, ProposalId: 1, Choice: contract.VoteChoice_VOTE_NO}, 10_000, params); r.Error != nil {
+		t.Fatalf("vote b: %v", r.Error)
+	}
+
+	// 60% yes clears the 51% bar, so the proposal passes and dispatch is
+	// attempted. The block must still apply.
+	c.plugin.setHeight(20)
+	if r := c.BeginBlock(&contract.PluginBeginRequest{Height: 20}); r.Error != nil {
+		t.Fatalf("a failed dispatch halted the block, which halts the chain: %v", r.Error)
+	}
+	// The invalid params were not applied.
+	got, err := c.LoadParams()
+	if err != nil {
+		t.Fatalf("load params: %v", err)
+	}
+	if got.UserRebateBps != params.UserRebateBps {
+		t.Errorf("invalid params were applied: user_rebate_bps = %d", got.UserRebateBps)
+	}
+	// The proposal is dropped rather than retried. Leaving it in the index is
+	// what turned a one-block failure into a permanent halt.
+	if idx := loadProposalIndex(s); len(idx.Ids) != 0 {
+		t.Errorf("proposal should be cleaned up after a failed dispatch, index = %v", idx.Ids)
+	}
+	// The decisive check: the next block is fine too.
+	c.plugin.setHeight(21)
+	if r := c.BeginBlock(&contract.PluginBeginRequest{Height: 21}); r.Error != nil {
+		t.Fatalf("the block after a failed dispatch also failed, so the halt repeats: %v", r.Error)
+	}
+	// It did not count as executed.
+	if g := loadGlobals(t, s); g.PassedProposalCount != 0 {
+		t.Errorf("a proposal that failed to execute counted as passed: %d", g.PassedProposalCount)
+	}
+}

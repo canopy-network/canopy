@@ -26,13 +26,20 @@ Their sum is the program's total budget. Neither is part of circulating supply.
 
 | Event | `available` | `reserved` | Circulating CPLQ |
 |-------|-------------|------------|------------------|
-| `ProposalOTCProgramFund` executes | `+= amount` | — | unchanged |
+| `ProposalOTCProgramFund` executes | `+= min(amount, treasury)` | — | unchanged |
 | Lock created | `-= reward` | `+= reward` | unchanged |
 | Claim at maturity | — | `-= reward` | `+= reward` |
 | Cancel before maturity | `+= reward` | `-= reward` | unchanged |
 
 Funding debits the protocol's CPLQ treasury balance by the same amount, so the two together
 conserve total protocol-held CPLQ.
+
+:::note Funding moves what is there, not what was asked for
+A funding proposal names an amount, but execution moves `min(amount, treasury_cplq)` and never
+fails. It runs inside the block that tallies the vote, where returning an error would fail the
+block and, since a rejected block commits nothing, repeat forever. See
+[OTC Lock Program](../tokenomics/otc-lock-program.mdx) for the full reasoning.
+:::
 
 ## Reserve-at-lock-time is what makes the cap hard
 
@@ -44,7 +51,10 @@ program holds.** Had the reward instead been computed at maturity, a burst of lo
 collectively promise more than the budget and the last claimants would find nothing left.
 
 A reward that rounds to zero is also rejected, so a position can never open with nothing
-reserved against it.
+reserved against it. A tier whose rate governance has set to zero is rejected separately, with
+`ErrOTCTierRateZero` rather than `ErrOTCBudgetExhausted`, so a disabled tier does not look like a
+funding problem. Zero remains a legal rate: it is how one tier is switched off while the other
+keeps running.
 
 ## Reward math
 
@@ -103,6 +113,7 @@ earned reward. Splitting them makes forfeiture deliberate.
 | `ErrInvalidOTCLockTier` | Tier is unset or unrecognized |
 | `ErrOTCLockBelowMinimum` | Position is smaller than `otc_min_lock_uccnpy` |
 | `ErrOTCBudgetExhausted` | Unreserved budget cannot cover the reward |
+| `ErrOTCTierRateZero` | The requested tier's reward rate is zero, i.e. the tier is disabled |
 | `ErrOTCLockNotFound` | No position for that address and id |
 | `ErrOTCLockNotMature` | Claim arrived before `mature_height` |
 | `ErrOTCLockMatured` | Cancel arrived at or after `mature_height` |

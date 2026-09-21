@@ -29,6 +29,7 @@ const (
 	AlertValidatorConcentration = "validator_concentration"
 	AlertTVLDrop                = "tvl_drop"
 	AlertStuckRedemption        = "stuck_redemption"
+	AlertProposalExecFailed     = "proposal_execution_failed"
 )
 
 // Alert severities.

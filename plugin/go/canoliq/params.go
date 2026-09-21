@@ -30,10 +30,51 @@ func (c *Canoliq) LoadParams() (*contract.CanoliqParams, *contract.PluginError) 
 	if e := contract.Unmarshal(resp.Results[0].Entries[0].Value, params); e != nil {
 		return nil, e
 	}
+	backfillParams(params)
 	if err := ValidateParams(params); err != nil {
 		return nil, err
 	}
 	return params, nil
+}
+
+// backfillParams fills in fields that a params record persisted by an older
+// build cannot carry, so that adding a required field does not invalidate
+// every record already in state.
+//
+// The hazard this exists to prevent: LoadParams runs ValidateParams on every
+// read, and processProposals reads params from BeginBlock. A field added after
+// genesis decodes as zero forever, so a new "must be non-zero" invariant would
+// make LoadParams fail chain-wide the moment the binary is upgraded, taking
+// ApplyBlock down with it. That is a permanent halt with no on-chain remedy.
+//
+// Only fields for which zero is never a legitimate operator choice belong
+// here. The tier *rates* are deliberately absent: zero is how governance
+// disables one tier while leaving the other running, so backfilling them would
+// silently re-enable a tier the DAO turned off.
+//
+// This mirrors the tolerance ValidateParams already grants the
+// voting-period/unstaking pair for exactly the same reason.
+func backfillParams(p *contract.CanoliqParams) {
+	if p == nil {
+		return
+	}
+	d := DefaultParams()
+	// OTC tier terms (proto fields 36/37) landed after the first genesis.
+	// Zero would mature a position in the block it opened, which is why
+	// ValidateParams rejects it, so a zero here is always "absent", never
+	// "chosen".
+	if p.OtcTier90Blocks == 0 {
+		p.OtcTier90Blocks = d.OtcTier90Blocks
+	}
+	if p.OtcTier120Blocks == 0 {
+		p.OtcTier120Blocks = d.OtcTier120Blocks
+	}
+	// The minimum position size is only meaningful when at least one tier is
+	// live. Gate on that so a record with both tiers disabled stays untouched
+	// and still validates.
+	if p.OtcMinLockUccnpy == 0 && (p.OtcTier90Bps > 0 || p.OtcTier120Bps > 0) {
+		p.OtcMinLockUccnpy = d.OtcMinLockUccnpy
+	}
 }
 
 // SaveParams writes the canoLiq parameters to state after validation.

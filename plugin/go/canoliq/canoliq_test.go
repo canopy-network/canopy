@@ -955,3 +955,97 @@ func TestBundledLocalnetGenesisSeedsTwoValidators(t *testing.T) {
 		}
 	}
 }
+
+// TestGenesisVestingIndexDedupesAddressSpellings is the regression test for a
+// silent, unrecoverable genesis bug.
+//
+// Genesis accepts an address with or without a 0x prefix and in either case,
+// so one address has several valid spellings. The vesting index used to be
+// accumulated in a map keyed by the raw JSON string, then written under a key
+// derived from the decoded bytes, so two spellings produced two set ops on one
+// state key. Set ops do not compose (last write wins), so the losing
+// spelling's schedule ids vanished from the index while its VestingSchedule
+// records persisted. DeliverMessageCPLQClaimVested walks the index rather than
+// range-scanning, so those tranches became permanently unclaimable. Genesis
+// runs once, so there is no recovery, and map iteration order is
+// nondeterministic, so different nodes would keep different spellings and
+// diverge.
+func TestGenesisVestingIndexDedupesAddressSpellings(t *testing.T) {
+	c, s := newTestCanoliq()
+	shared := addr20(0xd1)
+	bare := hex.EncodeToString(shared)
+	prefixed := "0x" + strings.ToUpper(bare)
+
+	gf := miniGenesis()
+	// Two vesting buckets paying the same address under different spellings.
+	gf.Buckets[0].Recipients = []GenesisAllocation{{Address: bare, Bps: 10000}}
+	gf.Buckets[4].Recipients = []GenesisAllocation{{Address: prefixed, Bps: 10000}}
+
+	if resp := c.Genesis(&contract.PluginGenesisRequest{GenesisJson: mustJSON(t, gf)}); resp.Error != nil {
+		t.Fatalf("genesis: %v", resp.Error)
+	}
+
+	bz := s.get(KeyForVestingIndex(shared))
+	if len(bz) == 0 {
+		t.Fatal("no vesting index written for the shared address")
+	}
+	idx := new(contract.VestingIndex)
+	if err := contract.Unmarshal(bz, idx); err != nil {
+		t.Fatalf("unmarshal index: %v", err)
+	}
+	// Both tranches must be reachable. One id here means a whole bucket's
+	// vesting was stranded.
+	if len(idx.ScheduleIds) != 2 {
+		t.Fatalf("index holds %d schedule ids (%v), want 2: a spelling was dropped and its tranche is unclaimable",
+			len(idx.ScheduleIds), idx.ScheduleIds)
+	}
+	// Every indexed id must resolve to a real schedule.
+	for _, id := range idx.ScheduleIds {
+		if len(s.get(KeyForVesting(shared, id))) == 0 {
+			t.Errorf("index references schedule %d but no record exists", id)
+		}
+	}
+}
+
+// TestGenesisMultisigSignersAcceptPrefix covers the genesis params path, where
+// a signer list was decoded without stripping 0x and with decode errors
+// silently discarded. A genesis listing its signers in 0x form produced an
+// empty list, and ValidateParams skips its entire threshold and
+// duplicate-signer block when the list is empty, so MultisigThreshold landed
+// unguarded and above-threshold treasury spends lost their multisig
+// requirement.
+func TestGenesisMultisigSignersAcceptPrefix(t *testing.T) {
+	gf := miniGenesis()
+	gf.Params = &GenesisParamsJSON{
+		MultisigSigners: []string{
+			"0x" + hex.EncodeToString(addr20(0xe1)),
+			hex.EncodeToString(addr20(0xe2)),
+			"0X" + strings.ToUpper(hex.EncodeToString(addr20(0xe3))),
+		},
+		MultisigThreshold: 2,
+	}
+	c, _ := newTestCanoliq()
+	if resp := c.Genesis(&contract.PluginGenesisRequest{GenesisJson: mustJSON(t, gf)}); resp.Error != nil {
+		t.Fatalf("genesis: %v", resp.Error)
+	}
+	params, err := c.LoadParams()
+	if err != nil {
+		t.Fatalf("load params: %v", err)
+	}
+	if len(params.MultisigSigners) != 3 {
+		t.Fatalf("multisig signers = %d, want 3: a prefixed signer was dropped, which disables threshold validation",
+			len(params.MultisigSigners))
+	}
+
+	// A genuinely malformed signer must now fail genesis loudly rather than
+	// being skipped into a short list.
+	bad := miniGenesis()
+	bad.Params = &GenesisParamsJSON{
+		MultisigSigners:   []string{"0xnothex", hex.EncodeToString(addr20(0xe2))},
+		MultisigThreshold: 1,
+	}
+	c2, _ := newTestCanoliq()
+	if resp := c2.Genesis(&contract.PluginGenesisRequest{GenesisJson: mustJSON(t, bad)}); resp.Error == nil {
+		t.Error("a malformed multisig signer should fail genesis, not be silently dropped")
+	}
+}

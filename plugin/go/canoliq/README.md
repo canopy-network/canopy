@@ -1102,11 +1102,17 @@ in `genesis.localnet.json` / `genesis.testnet.json`; copy that block to
 a file, edit, and pass the path. `multisigSigners` are accepted as hex
 strings (with or without `0x` prefix), exactly like the genesis files.
 
-The plugin's `dispatchPassed` runs `ValidateParams` on the payload only
-when the proposal passes — so an invalid bps split or signer/threshold
-mismatch in your JSON survives `proposal-create` but fails at execution.
-Pre-validate by ensuring the four split bps fields total 10000 and
-`multisigThreshold ≤ len(multisigSigners)`.
+`canoliqctl` validates the file before submitting: it rejects one that
+omits any key (a param-change replaces the whole set, so a missing key
+would be written as zero rather than left alone) and runs the plugin's
+own `ValidateParams` locally. A bad bps split or a
+`multisigThreshold > len(multisigSigners)` fails at the terminal, not
+after a voting period.
+
+That check lives in the CLI, not on the chain. A proposal submitted
+through raw RPC is only type-checked at creation and first meets
+`ValidateParams` at execution, where an invalid payload is dropped after
+burning a full voting period.
 
 ## Registering canoLiq as a Canopy committee
 

@@ -135,3 +135,68 @@ func TestConfirmTxIgnoresOtherSendersFailures(t *testing.T) {
 		t.Fatalf("a foreign failure was matched to our hash: %+v", got)
 	}
 }
+
+// TestQueryFailedWalksEveryPage covers a signer whose failure sits beyond the
+// first page of the failed-tx cache. queryFailed used to request one page and
+// stop, so ConfirmTx reported a timeout ("may still be pending") for a
+// transaction the node had definitively rejected.
+func TestQueryFailedWalksEveryPage(t *testing.T) {
+	const wanted = "deadbeef"
+	const totalPages = 3
+	var pagesServed []string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body := string(raw)
+		if !strings.HasSuffix(r.URL.Path, "/failed-txs") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		pagesServed = append(pagesServed, body)
+		w.WriteHeader(http.StatusOK)
+		// The hash lives on the last page only.
+		if strings.Contains(body, `"pageNumber":3`) {
+			fmt.Fprintf(w, `{"totalPages":%d,"totalCount":201,"results":[{"txHash":%q,"error":{"code":26,"module":"state_machine","msg":"wrong chain id"}}]}`,
+				totalPages, wanted)
+			return
+		}
+		fmt.Fprintf(w, `{"totalPages":%d,"totalCount":201,"results":[{"txHash":"0000","error":{"code":1,"module":"x","msg":"other"}}]}`, totalPages)
+	}))
+	defer srv.Close()
+
+	got := queryFailed(srv.URL, "signeraddr", wanted)
+	if got == nil {
+		t.Fatal("failure on page 3 was not found; a rejected tx would be reported as a timeout")
+	}
+	if !got.Failed || got.Msg != "wrong chain id" {
+		t.Errorf("wrong outcome: %+v", got)
+	}
+	if len(pagesServed) != 3 {
+		t.Errorf("served %d pages, want 3", len(pagesServed))
+	}
+}
+
+// TestQueryFailedStopsAtTheLastPage guards the other direction: the walk must
+// terminate rather than requesting pages forever when the hash is absent.
+func TestQueryFailedStopsAtTheLastPage(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.ReadAll(r.Body)
+		requests++
+		if requests > 10 {
+			t.Error("queryFailed did not stop paging")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"totalPages":2,"totalCount":2,"results":[{"txHash":"0000","error":{"code":1,"module":"x","msg":"other"}}]}`)
+	}))
+	defer srv.Close()
+
+	if got := queryFailed(srv.URL, "signeraddr", "notpresent"); got != nil {
+		t.Errorf("found a hash that is not in the cache: %+v", got)
+	}
+	if requests != 2 {
+		t.Errorf("made %d requests, want 2 (stop at totalPages)", requests)
+	}
+}

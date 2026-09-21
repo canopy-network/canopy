@@ -59,6 +59,10 @@ const (
 	codeOTCLockNotFound
 	codeOTCLockNotMature
 	codeOTCLockMatured
+	// Appended, never inserted: these codes are iota-derived and travel in
+	// PluginError.Code, so renumbering an existing one would change the error
+	// every already-deployed client sees.
+	codeOTCTierRateZero
 )
 
 // newError constructs a PluginError stamped with the canoLiq module.
@@ -306,6 +310,18 @@ func ErrOTCLockBelowMinimum() *contract.PluginError {
 // guarantees no matured position outruns what the program can pay.
 func ErrOTCBudgetExhausted() *contract.PluginError {
 	return newError(codeOTCBudgetExhausted, "OTC lock program budget exhausted")
+}
+
+// ErrOTCTierRateZero is returned when the requested tier's reward rate is
+// zero, which makes every reward on that tier round to nothing.
+//
+// Distinct from ErrOTCBudgetExhausted on purpose. Both used to surface as
+// "budget exhausted", which pointed an operator at the program's funding when
+// the actual cause was a tier they had disabled via governance. Zero stays a
+// legal rate: it is the only way to turn one tier off while leaving the other
+// running.
+func ErrOTCTierRateZero() *contract.PluginError {
+	return newError(codeOTCTierRateZero, "OTC lock tier reward rate is zero")
 }
 
 // ErrOTCLockNotFound is returned when the (address, lock_id) pair has no
