@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, Copy } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { copyText } from '../../lib/clipboard'
 import AnimatedNumber from '../AnimatedNumber'
 import accountDetailTexts from '../../data/accountDetail.json'
 import { cnpyDetailFormat, toCNPY } from '../../lib/utils'
@@ -37,11 +39,11 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
 
     const copyToClipboard = async () => {
         try {
-            await navigator.clipboard.writeText(account.address)
+            await copyText(account.address)
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
-        } catch (err) {
-            console.error('Failed to copy address:', err)
+        } catch {
+            toast.error('Unable to copy address')
         }
     }
 
