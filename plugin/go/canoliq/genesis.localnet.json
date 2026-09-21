@@ -40,14 +40,9 @@
     {
       "name": "DAO Treasury (canoLiq)",
       "bps": 1500,
+      "destination": "treasury",
       "cliffMonths": 0,
-      "vestMonths": 0,
-      "recipients": [
-        {
-          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-          "bps": 10000
-        }
-      ]
+      "vestMonths": 0
     },
     {
       "name": "Founders & Core Team",
@@ -95,7 +90,72 @@
       "00000000000000000000000000000000000000b5"
     ],
     "multisigThreshold": 3,
-    "treasuryThreshold": 1000000000
+    "treasuryThreshold": 1000000000,
+    "_comment": "Localnet shortens every governance and lock window so the flows they gate are actually exercisable, in the same spirit as canoliq-config.localnet.json's 5-block redemption window. Production terms live in genesis.mainnet.json.",
+    "votingPeriodBlocks": 20,
+    "timelockBlocks": 5,
+    "cplqUnstakingBlocks": 20,
+    "governance": [
+      {
+        "action": 1,
+        "quorumBps": 500,
+        "approvalBps": 5100,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 2,
+        "quorumBps": 500,
+        "approvalBps": 5100,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 3,
+        "quorumBps": 1000,
+        "approvalBps": 6700,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 4,
+        "quorumBps": 800,
+        "approvalBps": 6700,
+        "timelockBlocks": 0,
+        "votingPeriodBlocks": 10
+      },
+      {
+        "action": 5,
+        "quorumBps": 500,
+        "approvalBps": 5100,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 6,
+        "quorumBps": 1000,
+        "approvalBps": 6700,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 7,
+        "quorumBps": 1500,
+        "approvalBps": 7500,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 8,
+        "quorumBps": 1000,
+        "approvalBps": 6700,
+        "timelockBlocks": 0,
+        "votingPeriodBlocks": 20
+      }
+    ],
+    "otcTier90Blocks": 20,
+    "otcTier120Blocks": 30,
+    "otcMinLockUccnpy": 10000000
   },
   "validatorRegistry": [
     {

@@ -128,7 +128,7 @@ func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecu
 		}
 		sets = append(sets, &contract.PluginSetOp{Key: KeyForGlobals(), Value: gBz})
 	case contract.BuybackMode_BUYBACK_DISTRIBUTE_STAKERS:
-		distributeSets, err := c.distributeBuybackToStakers(cplqAcquired)
+		distributeSets, err := c.distributeBuybackToStakers(cplqAcquired, treasuryCPLQ)
 		if err != nil {
 			return &contract.PluginDeliverResponse{Error: err}
 		}
@@ -170,7 +170,19 @@ func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecu
 // distributeBuybackToStakers builds the set ops crediting acquired CPLQ to
 // each active staker pro-rata to their CPLQStake. Rounding remainder is
 // credited to the largest staker so the total exactly matches cplq_acquired.
-func (c *Canoliq) distributeBuybackToStakers(cplqAcquired uint64) ([]*contract.PluginSetOp, *contract.PluginError) {
+//
+// treasuryAfterDraw is the treasury_cplq value the caller has ALREADY staged
+// after deducting cplqAcquired. The two void paths below refund by adding the
+// acquired amount back to that value, restoring the original balance exactly.
+//
+// This previously re-read the key with readScalar, which returns committed
+// state and therefore did not see the caller's pending deduction. Since the
+// FSM applies set ops last-write-wins and the refund op is appended after the
+// deduction, the net effect was `original + cplqAcquired` — a silent CPLQ mint
+// with no CplqTotalSupply adjustment. It was unreachable only because
+// treasury_cplq had no funding source and the guard above always failed;
+// funding the treasury at genesis makes it live, hence the fix lands here.
+func (c *Canoliq) distributeBuybackToStakers(cplqAcquired, treasuryAfterDraw uint64) ([]*contract.PluginSetOp, *contract.PluginError) {
 	idx, err := c.loadStakeIndex()
 	if err != nil {
 		return nil, err
@@ -179,7 +191,7 @@ func (c *Canoliq) distributeBuybackToStakers(cplqAcquired uint64) ([]*contract.P
 		// No stakers to distribute to; treat as a buyback void (return CPLQ to
 		// treasury) by emitting no sets — caller already deducted treasury_cplq,
 		// so we re-credit it.
-		return []*contract.PluginSetOp{{Key: KeyForTreasuryCPLQ(), Value: EncodeUint64(c.readScalar(KeyForTreasuryCPLQ()) + cplqAcquired)}}, nil
+		return []*contract.PluginSetOp{{Key: KeyForTreasuryCPLQ(), Value: EncodeUint64(treasuryAfterDraw + cplqAcquired)}}, nil
 	}
 	stakes := make([]*contract.CPLQStake, 0, len(idx.Addresses))
 	totalStake := uint64(0)
@@ -195,7 +207,7 @@ func (c *Canoliq) distributeBuybackToStakers(cplqAcquired uint64) ([]*contract.P
 		totalStake += stake.Amount
 	}
 	if totalStake == 0 {
-		return []*contract.PluginSetOp{{Key: KeyForTreasuryCPLQ(), Value: EncodeUint64(c.readScalar(KeyForTreasuryCPLQ()) + cplqAcquired)}}, nil
+		return []*contract.PluginSetOp{{Key: KeyForTreasuryCPLQ(), Value: EncodeUint64(treasuryAfterDraw + cplqAcquired)}}, nil
 	}
 	// Boost each staker's effective weight by their lock tier (T2 §4.2): a
 	// LOCK_12M staker's 100 CPLQ counts as 150 against the distribution.

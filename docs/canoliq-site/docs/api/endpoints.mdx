@@ -4,6 +4,9 @@ sidebar_label: Endpoints
 
 # HTTP Endpoints
 
+**In one sentence:** a read-only HTTP API for monitoring a running node — no transaction can be
+submitted through it.
+
 All routes are `GET` only.
 
 | Path | Returns |
@@ -71,12 +74,17 @@ GET /v1/pools
   "validatorIncentives": [],
   "peakTvlUcnpy": "1050000000",
   "insuranceTargetUcnpy": "52500000",
-  "insuranceFundedBps": 800
+  "insuranceFundedBps": 800,
+  "otcBudgetAvailable": "500000000000",
+  "otcBudgetReserved": "2500000000"
 }
 ```
 
 See [Insurance Fund](../advanced/insurance.mdx) for `peakTvlUcnpy`, `insuranceTargetUcnpy`,
 and `insuranceFundedBps`.
+
+`otcBudgetAvailable` is unreserved [OTC lock program](../tokenomics/otc-lock-program.mdx) CPLQ;
+`otcBudgetReserved` is the total already promised to open lock positions. Both are in uCPLQ.
 
 ### Graduation
 
@@ -133,7 +141,8 @@ GET /v1/globals
   "nextProposalId": 5,
   "nextBuybackId": 2,
   "nextSpendId": 3,
-  "nextUnstakeId": 7
+  "nextUnstakeId": 7,
+  "nextOtcLockId": 3
 }
 ```
 
@@ -158,10 +167,26 @@ GET /v1/account/{addr}
       "claimedAmount": "2000000000",
       "unlockedAmount": "3000000000"
     }
+  ],
+  "otcLocks": [
+    {
+      "id": 1,
+      "ccnpyAmount": "50000000000",
+      "tier": "OTC_LOCK_90D",
+      "rewardCplq": "2500000000",
+      "startHeight": 120000,
+      "matureHeight": 1416000
+    }
   ]
 }
 ```
 
+`otcLocks` lists the caller's open [OTC lock positions](../tokenomics/otc-lock-program.mdx) and
+is omitted entirely when there are none. `matureHeight` is the first block at which the position
+can be claimed.
+
 ## Known Gaps
 
-There are no per-address indexes for redemptions or unstaking-CPLQ records. To list those for an address, the caller needs the id (returned by the originating tx). A future iteration can add per-address indexes if operator demand emerges.
+There is no dedicated route for OTC lock positions. They are returned on `/v1/account/{addr}`
+alongside vesting schedules, which covers the per-address case; listing every open position
+across all addresses is not currently possible over HTTP.

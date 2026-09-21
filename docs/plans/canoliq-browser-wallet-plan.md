@@ -78,7 +78,8 @@ lands on a testnet chain.**
    confirming the toolchain works.
 3. Add a **golden-vector test** in Go: have `canoliqctl/internal` print
    `getSignBytes` (hex) + signature for a fixed `MessageCanoliqDeposit`
-   (fixed key, time, height, fee, networkId=1, chainId=2). Reproduce byte-for-byte
+   (fixed key, time, height, fee, networkId=1, chainId=1 — the NODE's chain id, not the
+   canoLiq committee id). Reproduce byte-for-byte
    in a tiny TS script. **This test is the contract** between Go and the browser —
    keep it in CI.
 4. Run the TS signer from a real browser context (Vite dev page, not Node) to
@@ -139,7 +140,8 @@ Framework-agnostic, no React. Port from `rpc_test.ts`, hardened for the browser.
   `waitForInclusion(hash, sender)` (poll `/v1/query/txs-by-sender`).
 - `buildSignSubmit(priv, msgType, msgFields, {fee, networkId, chainId})` —
   the one-call orchestrator (height fetch → encode → signBytes → sign → envelope
-  → submit). Defaults: `networkId=1`, `chainId=2`, `fee=10000` uCNPY.
+  → submit). Defaults: `networkId=1`, `chainId=1` (the node's chain id, **not** the canoLiq
+  committee id), `fee=10000` uCNPY.
 
 **Acceptance:** unit tests green against golden vectors; integration test lands a
 deposit and a `cplq-stake` on testnet purely from the module.
@@ -279,4 +281,4 @@ protocol audit that gates mainnet.
 - Browser-signer reference: `plugin/typescript/tutorial/src/rpc_test.ts`
 - Message protos: `plugin/go/proto/canoliq.proto`
 - Read-only routes / ports / pitfalls: `plugin/go/canoliq/README.md`
-- Defaults: `networkId=1`, `chainId=2`, `fee=10000` uCNPY
+- Defaults: `networkId=1`, `chainId=1` (the node's chain id, **not** the canoLiq committee id), `fee=10000` uCNPY

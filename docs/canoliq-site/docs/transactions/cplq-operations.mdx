@@ -4,12 +4,20 @@ sidebar_label: CPLQ Operations
 
 # CPLQ Operations
 
+**In one sentence:** the five commands for moving, staking, and unlocking your CPLQ.
+
+:::note Use the signer's hex address
+Every `canoliqctl` command below identifies the signing account by its **hex address**. The
+`--help` text calls this a nickname, and the lookup is written to accept either, but a node's
+admin RPC hex-decodes the value, so a keystore nickname is rejected. Pass the address.
+:::
+
 ## CPLQ Transfer
 
 Transfers liquid (already-vested) CPLQ between accounts.
 
 ```bash
-canoliqctl cplq-transfer <from_address> <to_address_hex> <amount_uCPLQ>
+canoliqctl cplq-transfer <from-address> <to-address-hex> <amount-uCPLQ>
 ```
 
 Only vested CPLQ can be transferred. Vesting-locked CPLQ is not spendable.
@@ -19,7 +27,7 @@ Only vested CPLQ can be transferred. Vesting-locked CPLQ is not spendable.
 Locks liquid CPLQ into a stake record, granting governance weight.
 
 ```bash
-canoliqctl cplq-stake <address> <amount_uCPLQ>
+canoliqctl cplq-stake <address> <amount-uCPLQ> [--lock none|3m|6m|12m|24m]
 ```
 
 **Effect**:
@@ -29,9 +37,17 @@ canoliqctl cplq-stake <address> <amount_uCPLQ>
 - `staked_at_height` is recorded for vote eligibility
 
 :::tip Lock for more voting power
-A stake can commit to a [vote-escrow lock tier](../tokenomics/vote-escrow.mdx) (`LOCK_3M`
-through `LOCK_24M`) to multiply voting weight up to 4× and boost buyback rewards. Locks only
-ever strengthen, and locked stake cannot be unstaked until its `lock_end_height`.
+Pass `--lock` to commit the stake to a [vote-escrow lock tier](../tokenomics/vote-escrow.mdx) —
+`3m`, `6m`, `12m`, or `24m` — multiplying voting weight up to 4× and boosting your share of
+buyback rewards. Omit it (or pass `none`) to stake without a lock.
+
+Locks only ever strengthen: you can raise a stake to a longer tier, never shorten it, and
+locked stake cannot be unstaked until its lock ends.
+:::
+
+:::note Not the same as an OTC lock
+This locks **CPLQ** for governance weight. The [OTC lock program](./otc-locks.mdx) locks
+**cCNPY** for a one-off CPLQ reward. They are separate systems with separate durations.
 :::
 
 ## CPLQ Unstake
@@ -39,7 +55,7 @@ ever strengthen, and locked stake cannot be unstaked until its `lock_end_height`
 Queues an unstake, returning CPLQ to liquid balance after the unbond window.
 
 ```bash
-canoliqctl cplq-unstake <address> <amount_uCPLQ>
+canoliqctl cplq-unstake <address> <amount-uCPLQ>
 ```
 
 **Effect**:
@@ -53,7 +69,7 @@ canoliqctl cplq-unstake <address> <amount_uCPLQ>
 Claims a matured unstake, returning CPLQ to liquid balance.
 
 ```bash
-canoliqctl cplq-claim-unstake <address> <unstake_id>
+canoliqctl cplq-claim-unstake <address> <unstake-id>
 ```
 
 ## CPLQ Claim Vested

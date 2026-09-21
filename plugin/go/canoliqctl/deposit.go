@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -30,10 +29,6 @@ func cmdDeposit(args []string, gf globalFlags) error {
 		FromAddress: from,
 		Amount:      amount,
 	}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "canoliq_deposit", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("deposit submitted: tx_hash=%s from=%s amount=%d\n", hash, signer.Address, amount)
-	return nil
+	return submitAndReport(gf, signer, "canoliq_deposit", msg, "deposit",
+		fmt.Sprintf("from=%s amount=%d", signer.Address, amount))
 }

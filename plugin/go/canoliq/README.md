@@ -985,33 +985,68 @@ Global flags (also configurable via env vars `CANOLIQCTL_RPC_URL`,
 --rpc-url      node query RPC (default http://localhost:50002)
 --admin-url    node admin RPC, hosts the keystore (default http://localhost:50003)
 --network-id   Canopy network id (default 1)
---chain-id     canoLiq committee chain id (default 2)
+--chain-id     chain id of the NODE being submitted to (default 1)
 --fee          tx fee in uCNPY (default 10000)
 --password     keystore password — required
+--no-wait      print the tx hash and exit without confirming the outcome
+--wait-timeout how long to wait for inclusion or rejection (default 45s)
 ```
+
+> **Commands wait for a real outcome by default.** Submitting is not succeeding: `/v1/tx` admits
+> a transaction on `CheckBasic` alone — no chain-id check, no signature check, no state — so it
+> returns a hash for transactions the next mempool re-check will reject and drop. `canoliqctl`
+> therefore polls `tx-by-hash` for inclusion and `failed-txs` for rejection, printing the block a
+> transaction landed in or exiting non-zero with the node's own reason. Pass `--no-wait` for the
+> old fire-and-forget behaviour.
+>
+> **Global flags must precede the positional arguments** — `canoliqctl deposit --no-wait <address>
+> <amount>`, not `… <address> <amount> --no-wait`. Go's flag parser stops at the first
+> non-flag argument, so a trailing flag is silently ignored. This applies to every global flag,
+> not just `--no-wait`.
+
+> **`--chain-id` is the node's chain id, not the canoLiq committee id.** A transaction is signed
+> for the chain it is submitted to; `fsm/transaction.go::CheckReplay` rejects a mismatch with
+> `ErrWrongChainId` before the plugin is consulted. The committee id lives in the *plugin* config
+> (`canoliq-config.*.json`) and only scopes fee pools and committee membership — testnet pairs
+> node chain 1 with committee 42, mainnet with committee 19. Passing the committee id here fails
+> silently: `/v1/tx` runs only `CheckBasic`, so it returns a hash, and the mempool re-check then
+> drops the transaction with nothing printed.
+
+> **If every pool reads zero and `/v1/health` shows `genesisComplete: false`, check `genesisPath`
+> first.** The plugin self-bootstraps genesis from `BeginBlock` when the node's `genesis.json`
+> carries no canoLiq section, but only when `genesisPath` is set. Left empty, it skips silently
+> and the plugin runs forever uninitialized with `ProcessRewards` a no-op — a chain that looks
+> healthy while canoLiq does nothing. It now logs a one-line warning when that happens.
+>
+> The config named by `CANOLIQ_CONFIG` is read **once at plugin startup** and is not reloaded per
+> block, so fixing the JSON requires restarting the plugin process. Outside localnet, a
+> `genesisPath` that is set but unreadable or malformed now refuses to start rather than
+> deferring the error to a per-block failure.
 
 Phase 1 worked example (deposit → redeem → claim once unbond matures):
 
 ```bash
 export CANOLIQCTL_PASSWORD=hunter2
-./canoliqctl deposit alice 1000000           # 1 CNPY → cCNPY
-./canoliqctl redeem  alice 250000            # burn 0.25 cCNPY, queue redemption
+# Commands identify the signer by hex address, not a keystore nickname.
+ADDR=851e90eaef1fa27debaee2c2591503bdeec1d123
+./canoliqctl deposit $ADDR 1000000           # 1 CNPY → cCNPY
+./canoliqctl redeem  $ADDR 250000            # burn 0.25 cCNPY, queue redemption
 # advance past unbond_complete_height (Canopy's UnstakingBlocks param)
-./canoliqctl claim   alice 0                 # claim redemption #0
+./canoliqctl claim   $ADDR 0                 # claim redemption #0
 ```
 
 Phase 2 commands (governance, staking, buyback, treasury):
 
 ```bash
-./canoliqctl cplq-stake          alice 5000000              # optional: --lock <none|3m|6m|12m|24m>
-./canoliqctl cplq-unstake        alice 1000000
-./canoliqctl cplq-claim-unstake  alice 0
-./canoliqctl vote                alice <proposal-id> yes
-./canoliqctl buyback-execute     alice <proposal-id>
-./canoliqctl spend-execute       alice <proposal-id>
-./canoliqctl multisig-approve    signer1 <spend-id>
-./canoliqctl cplq-transfer       alice <to-hex> 1000000
-./canoliqctl cplq-claim-vested   alice
+./canoliqctl cplq-stake          $ADDR 5000000              # optional: --lock <none|3m|6m|12m|24m>
+./canoliqctl cplq-unstake        $ADDR 1000000
+./canoliqctl cplq-claim-unstake  $ADDR 0
+./canoliqctl vote                $ADDR <proposal-id> yes
+./canoliqctl buyback-execute     $ADDR <proposal-id>
+./canoliqctl spend-execute       $ADDR <proposal-id>
+./canoliqctl multisig-approve    <signer-address> <spend-id>
+./canoliqctl cplq-transfer       $ADDR <to-hex> 1000000
+./canoliqctl cplq-claim-vested   $ADDR
 ```
 
 The optional `--lock <tier>` on `cplq-stake` commits the stake to a vote-escrow
@@ -1032,28 +1067,34 @@ The proposer must hold ≥ `min_stake_to_propose` CPLQ at creation height.
 
 ```bash
 # 1. Param change — full-set CanoliqParams replacement (loaded from JSON)
-./canoliqctl proposal-create param-change alice ./new-params.json \
+./canoliqctl proposal-create param-change $ADDR ./new-params.json \
     --description "lower fee from 12% to 8%"
 
 # 2. Buyback — CNPY → CPLQ extraction at a vote-set price
-./canoliqctl proposal-create buyback alice 100000000 1500000 burn \
+./canoliqctl proposal-create buyback $ADDR 100000000 1500000 burn \
     --description "Q4 buyback and burn"
 # args: cnpy-amount  price-uCNPY-per-CPLQ  mode (burn|distribute)
 
 # 3. Treasury spend — transfer from canoliq treasury to a recipient
-./canoliqctl proposal-create treasury-spend alice 0xabc...123 50000000 cnpy \
+./canoliqctl proposal-create treasury-spend $ADDR 0xabc...123 50000000 cnpy \
     --description "infrastructure grant"
 # args: recipient-hex  amount  denomination (cnpy|cplq)
 
 # 4. Validator eject — remove a validator from the committee registry (F12)
-./canoliqctl proposal-create validator-eject alice 0xdef...456 \
+./canoliqctl proposal-create validator-eject $ADDR 0xdef...456 \
     --description "eject unresponsive validator"
 # args: validator-hex
 
 # 5. Emergency — security-critical fast-track action with optional param diff (F13)
-./canoliqctl proposal-create emergency alice ./emergency-params.json \
+./canoliqctl proposal-create emergency $ADDR ./emergency-params.json \
     --description "freeze deposits pending investigation"
 # args: optional params-json-file (omit for a signalling-only emergency)
+
+# 6. OTC program fund — move CPLQ from treasury_cplq into the OTC lock program
+#    budget. The only path by which the program is funded; nothing mints.
+./canoliqctl proposal-create otc-program-fund $ADDR 500000000000 \
+    --description "fund the OTC lock program with 500,000 CPLQ"
+# args: amount-uCPLQ (capped at the treasury CPLQ balance at execution time)
 ```
 
 The `param-change` JSON file uses the same shape as the `params` block
@@ -1061,11 +1102,17 @@ in `genesis.localnet.json` / `genesis.testnet.json`; copy that block to
 a file, edit, and pass the path. `multisigSigners` are accepted as hex
 strings (with or without `0x` prefix), exactly like the genesis files.
 
-The plugin's `dispatchPassed` runs `ValidateParams` on the payload only
-when the proposal passes — so an invalid bps split or signer/threshold
-mismatch in your JSON survives `proposal-create` but fails at execution.
-Pre-validate by ensuring the four split bps fields total 10000 and
-`multisigThreshold ≤ len(multisigSigners)`.
+`canoliqctl` validates the file before submitting: it rejects one that
+omits any key (a param-change replaces the whole set, so a missing key
+would be written as zero rather than left alone) and runs the plugin's
+own `ValidateParams` locally. A bad bps split or a
+`multisigThreshold > len(multisigSigners)` fails at the terminal, not
+after a voting period.
+
+That check lives in the CLI, not on the chain. A proposal submitted
+through raw RPC is only type-checked at creation and first meets
+`ValidateParams` at execution, where an invalid payload is dropped after
+burning a full voting period.
 
 ## Registering canoLiq as a Canopy committee
 
@@ -1122,10 +1169,106 @@ release in milestone-gated tranches at the DAO's discretion.
 | `MessageBuybackExecute` | Triggers a passed buyback proposal (BURN or DISTRIBUTE_STAKERS) |
 | `MessageDAOTreasurySpend` | Triggers a passed treasury spend (timelock + multisig above threshold) |
 | `MessageMultisigApprove` | Per-signer approval of an above-threshold spend |
+| `MessageOTCLockCreate` | Locks cCNPY for a 90d/120d term and reserves its CPLQ reward from the program budget |
+| `MessageOTCLockClaim` | Releases a matured lock: returns the cCNPY and pays the reserved CPLQ |
+| `MessageOTCLockCancel` | Exits a lock early: returns the cCNPY, forfeits the whole CPLQ reward |
 
 The plain `MessageSend` is also accepted so the canoLiq plugin is a drop-in
 replacement for the tutorial when the `CANOPY_PLUGIN_MODE=canoliq` binary is
 selected.
+
+## OTC lock program
+
+Term-lock for cCNPY holders: lock cCNPY for a fixed tier, receive a one-off
+CPLQ reward at maturity.
+
+| Tier | Duration | Blocks | Reward | Param |
+|---|---|---|---|---|
+| `OTC_LOCK_90D` | 90 days | 1,296,000 | 5% | `otcTier90Bps` |
+| `OTC_LOCK_120D` | 120 days | 1,728,000 | 8% | `otcTier120Bps` |
+
+The reward is a **1:1 micro-unit quantity conversion**,
+`reward_uCPLQ = locked_uccnpy * tier_bps / 10000`. There is no price and no
+oracle, which keeps the whitepaper's "no external price oracle on the core
+yield path" commitment intact. At the default minimum of 50,000 cCNPY a 90-day
+position reserves 2,500 CPLQ.
+
+### Funding
+
+CPLQ supply is fixed at genesis and nothing mints, so every uCPLQ the program
+pays already exists. The budget is filled by a passed `ProposalOTCProgramFund`,
+which moves CPLQ from `treasury_cplq` into `canoliq/otc_budget/available`.
+
+That path depends on the treasury actually holding CPLQ, which before this
+change it never did: `applyGenesisBuckets` only wrote per-address balances, so
+`treasury_cplq` read zero forever and both of its consumers — `SPEND_CPLQ`
+treasury spends and every `MessageBuybackExecute` — failed their balance guard
+on any real chain. A genesis bucket now credits it directly:
+
+```json
+{ "name": "DAO Treasury (canoLiq)", "bps": 1500, "destination": "treasury" }
+```
+
+A treasury-destined bucket takes no recipients, cannot vest, and does **not**
+count toward `cplq_circulating_supply` — treasury holdings are not circulating.
+
+### Budget accounting
+
+Two scalars under domain 30: `available` (unreserved) and `reserved`
+(committed to open positions).
+
+| Event | available | reserved | circulating |
+|---|---|---|---|
+| Fund proposal passes | `+= amount` | — | unchanged |
+| Lock created | `-= reward` | `+= reward` | unchanged |
+| Claim at maturity | — | `-= reward` | `+= reward` |
+| Early exit | `+= reward` | `-= reward` | unchanged |
+
+Reserving at lock time, and rejecting the lock when `available < reward`, is
+what makes the cap hard: no matured position can outrun what the program can
+pay. The circulating bump on claim is required by the L4 supply invariant,
+since the reward leaves a non-circulating reserve for a liquid balance. A
+forfeited reward never circulates, so cancel must not bump.
+
+### Lock mechanics
+
+A lock **moves** the cCNPY out of the holder's balance into the position
+record, the same way vesting and vote-escrow lock tokens, rather than
+annotating the balance. Two consequences worth knowing:
+
+- `DeliverMessageCanoliqRedeem` needs no change. The balance it reads is
+  already reduced, so locked cCNPY is simply not there to redeem.
+- `globals.total_ccnpy_supply` is deliberately **untouched**. The cCNPY still
+  exists, it has only changed custody. Leaving the supply alone is exactly what
+  keeps a locked position appreciating at the pool's normal exchange rate for
+  the whole term. Decrementing it would silently stop locked positions earning
+  and hand every unlocked holder a windfall.
+
+Maturity is user-driven: nothing scans open positions per block, so the cost of
+the program to block production stays flat as it grows.
+
+`Cancel` is a separate message from `Claim`, and is refused at or after
+`mature_height`. By then the reward is earned, so cancelling would destroy it
+for nothing when a claim would pay. Forfeiture should always be deliberate.
+
+### Tiers are not `LockTier`
+
+`LockTier` is a closed 3/6/12/24-month set whose only consumers are governance
+vote weight and buyback distribution shares, neither of which this program
+grants. Its ordering is also load-bearing — `DeliverMessageCPLQStake` uses
+`msg.LockTier > stake.LockTier` as "stronger tier" — so appending a 4-month
+value would rank it above 24 months. `OTCLockTier` is a separate enum.
+
+### CLI
+
+```
+canoliqctl otc-lock <address> <ccnpy-amount> <90d|120d>
+canoliqctl otc-lock-claim <address> <lock-id>
+canoliqctl otc-lock-cancel <address> <lock-id>   # forfeits the CPLQ reward
+```
+
+Open positions appear under `otcLocks` on `GET /v1/account/{addr}`; the program
+budget appears as `otcBudgetAvailable` / `otcBudgetReserved` on `GET /v1/pools`.
 
 ## Governance lifecycle
 

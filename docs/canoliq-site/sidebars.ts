@@ -41,6 +41,7 @@ const sidebars: SidebarsConfig = {
         'tokenomics/overview',
         'tokenomics/fee-structure',
         'tokenomics/vote-escrow',
+        'tokenomics/otc-lock-program',
         'tokenomics/vesting',
       ],
     },
@@ -51,6 +52,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'transactions/deposit-redeem',
         'transactions/cplq-operations',
+        'transactions/otc-locks',
         'transactions/reference',
       ],
     },
@@ -75,6 +77,7 @@ const sidebars: SidebarsConfig = {
         'advanced/insurance',
         'advanced/tvl-cap',
         'advanced/restaking',
+        'advanced/otc-lock-accounting',
         'advanced/autonomy-graduation',
         'advanced/alerts',
         'advanced/state-keys',

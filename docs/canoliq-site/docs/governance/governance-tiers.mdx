@@ -12,10 +12,10 @@ A routine fee tweak and a multi-million-CNPY treasury spend should not clear the
 canoLiq classifies each proposal by its **action type** and applies the matching tier of
 rules.
 
-## The seven tiers
+## The eight configured tiers
 
-When a proposal is created, its payload is inspected and assigned one of seven `ActionType`
-values. Each carries its own rule set (defaults shown; all are governance-tunable):
+When a proposal is created, its payload is inspected and assigned an `ActionType`. Eight of
+them carry their own rule set (defaults shown; all are governance-tunable):
 
 | Action | Quorum | Approval | Timelock | Voting period |
 |--------|--------|----------|----------|---------------|
@@ -26,10 +26,35 @@ values. Each carries its own rule set (defaults shown; all are governance-tunabl
 | `ACTION_VALIDATOR_EJECT` | 5% | 51% | 48h | 7 days |
 | `ACTION_PROTOCOL_UPGRADE` | 10% | 67% | 7 days | 7 days |
 | `ACTION_AUTONOMY_GRADUATE` | 15% | 75% | 14 days | 7 days |
+| `ACTION_OTC_PROGRAM_FUND` | 10% | 67% | none | 7 days |
 
 Percentages are stored in basis points (e.g. 67% = `6,700 bps`). Time periods are stored as
 block counts at the 6-second block time: 24h ≈ `14,400`, 48h ≈ `28,800`, 7d ≈ `100,800`,
 14d ≈ `201,600` blocks.
+
+:::note Why OTC program funding has no timelock
+Funding the [OTC lock program](../tokenomics/otc-lock-program.mdx) moves CPLQ between two
+protocol-held balances — the DAO treasury and the program budget — and **neither is circulating
+supply**. Nothing leaves the protocol, and CPLQ only enters circulation later, when someone
+claims a matured lock. The transfer therefore executes in the block the proposal passes, and the
+vote itself is the control. It still clears the same 10% / 67% bar as a large treasury spend.
+:::
+
+### Actions with no configured tier
+
+One action type ships without a row in the matrix and resolves through the
+[scalar fallback](#scalar-fallback) below — a 33% quorum, a simple majority, a 48-hour timelock,
+and a 7-day vote:
+
+| Action | Payload |
+|--------|---------|
+| `ACTION_UNKNOWN` | `ProposalBuyback` |
+
+:::caution
+The fallback quorum (33%) is far higher than any configured tier (5–15%), while its approval bar
+(just over 50%) is the lowest. A buyback therefore needs unusually high turnout but only a simple
+majority.
+:::
 
 ### What each field means
 
@@ -54,6 +79,8 @@ governance parameters mid-vote cannot move the goalposts on an in-flight proposa
 - A `ProposalTreasurySpend` → `ACTION_TREASURY_SPEND_SMALL` or `_LARGE` depending on amount.
 - `ProposalValidatorEject`, `ProposalProtocolUpgrade`, `ProposalEmergency`, and the autonomy
   graduation proposal map to their matching action types.
+- `ProposalOTCProgramFund` → `ACTION_OTC_PROGRAM_FUND`.
+- `ProposalBuyback` has no configured tier and uses the scalars.
 
 ## Scalar fallback
 

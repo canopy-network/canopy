@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -34,13 +33,9 @@ func cmdCPLQStake(args []string, gf globalFlags) error {
 	}
 
 	msg := &contract.MessageCPLQStake{FromAddress: from, Amount: amount, LockTier: lockTier}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_stake", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("cplq-stake submitted: tx_hash=%s from=%s amount=%d lock=%s\n",
-		hash, signer.Address, amount, strings.ToLower(strings.TrimPrefix(lockTier.String(), "LOCK_")))
-	return nil
+	return submitAndReport(gf, signer, "cplq_stake", msg, "cplq-stake",
+		fmt.Sprintf("from=%s amount=%d lock=%s", signer.Address, amount,
+			strings.ToLower(strings.TrimPrefix(lockTier.String(), "LOCK_"))))
 }
 
 // parseLockFlag pulls an optional "--lock <tier>" out of args and returns the
@@ -108,12 +103,8 @@ func cmdCPLQUnstake(args []string, gf globalFlags) error {
 	}
 
 	msg := &contract.MessageCPLQUnstake{FromAddress: from, Amount: amount}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_unstake", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("cplq-unstake submitted: tx_hash=%s from=%s amount=%d\n", hash, signer.Address, amount)
-	return nil
+	return submitAndReport(gf, signer, "cplq_unstake", msg, "cplq-unstake",
+		fmt.Sprintf("from=%s amount=%d", signer.Address, amount))
 }
 
 // cmdCPLQClaimUnstake submits MessageCPLQClaimUnstake, returning matured
@@ -136,10 +127,6 @@ func cmdCPLQClaimUnstake(args []string, gf globalFlags) error {
 	}
 
 	msg := &contract.MessageCPLQClaimUnstake{FromAddress: from, UnstakeId: id}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_claim_unstake", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("cplq-claim-unstake submitted: tx_hash=%s from=%s unstake_id=%d\n", hash, signer.Address, id)
-	return nil
+	return submitAndReport(gf, signer, "cplq_claim_unstake", msg, "cplq-claim-unstake",
+		fmt.Sprintf("from=%s unstake_id=%d", signer.Address, id))
 }

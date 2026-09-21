@@ -18,6 +18,8 @@ canoLiq is implemented as a sibling of `plugin/go/contract/`. It reuses the prot
 
 ### Key Components
 
+Orientation for contributors reading the plugin source; operators do not need this table.
+
 | File | Purpose |
 |------|---------|
 | `canoliq.go` | Main contract logic, CheckTx/DeliverTx handlers |
@@ -32,10 +34,31 @@ canoLiq is implemented as a sibling of `plugin/go/contract/`. It reuses the prot
 | `treasury.go` | Treasury spend with multisig + timelock |
 | `vesting.go` | Vesting schedule tracking and claim |
 | `stake.go` | CPLQ staking and unstaking |
+| `otclock.go` | OTC lock program: create, claim, cancel, and program funding |
+| `registry.go` | Validator registry, reconciled against committee membership |
+| `restaking.go` | Restaking allocation policy and drift reporting |
+| `graduation.go` | Autonomy-graduation metric tracking |
+| `alerts.go` | Push-alert evaluation and webhook dispatch |
+| `params.go` | Parameter validation and persistence |
 | `rpc.go` | Read-only HTTP query server (Phase 3) |
 | `query.go` | Query helpers for RPC endpoints |
+| `snapshot.go` | Block-cadence state snapshot backing the query API |
+| `lazy_query.go` | Per-address views resolved off the snapshot path |
 
 ## Environment Variables
+
+:::caution Two different chain IDs
+A transaction is signed for the chain ID of the **node** it is submitted to — that is what
+`CANOLIQCTL_CHAIN_ID` sets, and it now defaults to `1`. The `chainId` in the *plugin* config is
+something else entirely: the canoLiq **committee ID** on Canopy, used to scope fee pools and
+committee membership. The two are meant to differ — testnet pairs node chain `1` with committee
+`42`, mainnet with committee `19`.
+
+Never copy the committee ID into `CANOLIQCTL_CHAIN_ID`. Signing for the wrong chain fails
+silently: `canoliqctl` prints a transaction hash and exits 0, the node admits the transaction to
+its mempool, then drops it, and nothing in the output says so. If a command reports success but
+state never changes, check this first.
+:::
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -44,6 +67,7 @@ canoLiq is implemented as a sibling of `plugin/go/contract/`. It reuses the prot
 | `CANOLIQCTL_RPC_URL` | Node query RPC URL | `http://localhost:50002` |
 | `CANOLIQCTL_ADMIN_URL` | Admin RPC URL (keystore) | `http://localhost:50003` |
 | `CANOLIQCTL_NETWORK_ID` | Canopy network ID | `1` |
-| `CANOLIQCTL_CHAIN_ID` | canoLiq committee chain ID | `2` |
+| `CANOLIQCTL_CHAIN_ID` | Chain ID of the node being submitted to (**not** the canoLiq committee ID) | `1` |
+| `CANOLIQCTL_NO_WAIT` | Skip outcome confirmation; print the tx hash and exit | `false` |
 | `CANOLIQCTL_PASSWORD` | Keystore password | — |
 | `CANOLIQ_RPC_ADDR` | Plugin RPC listen address (Phase 3) | — (disabled) |

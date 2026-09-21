@@ -4,24 +4,50 @@ sidebar_label: Vesting
 
 # Vesting Schedules
 
-CPLQ allocations at genesis are distributed via vesting schedules with cliff and linear unlock periods.
+**In one sentence:** most CPLQ is not liquid at launch — 22% of supply waits a full year before
+it starts unlocking, and the 15% DAO treasury tranche never lands in a wallet at all.
 
-## Genesis Schedules
+CPLQ allocations are fixed at genesis and released on vesting schedules with cliff and linear
+unlock periods. The total window is `cliff + linear vest`, unlocking linearly between the end of
+the cliff and the end of the window.
 
-The genesis buckets ship with these cliff/vest windows (source of truth:
-`plugin/go/canoliq/genesis.*.json`; a bucket with `cliffMonths = vestMonths = 0` is liquid
-immediately). The total window is `cliffMonths + vestMonths`, unlocking linearly between the
-cliff and the end.
+## Mainnet Schedules
 
-| Bucket | Cliff | Linear vest | Total window |
-|--------|-------|-------------|--------------|
-| Validators & Infrastructure | 12 mo | 24 mo | 36 mo (3 yr) |
-| Founders & Core Team | 12 mo | 36 mo | 48 mo (4 yr) |
-| Strategic Partners & Integrations | 6 mo | 12 mo | 18 mo |
-| Liquidity Incentives | — | — | immediate |
-| Community & Airdrops | — | — | immediate |
-| DAO Treasury (canoLiq) | — | — | immediate |
-| Developer Grants & Ecosystem | — | — | immediate |
+Source of truth: `plugin/go/canoliq/genesis.mainnet.json`, which implements the schedules in
+CPLQ Tokenomics v1.2 §6.
+
+| Bucket | Allocation | Cliff | Linear vest | Total window |
+|--------|-----------|-------|-------------|--------------|
+| Validators & Infrastructure | 22% | 12 mo | 24 mo | 36 mo (3 yr) |
+| Community & Airdrops | 20% | — | 12 mo | 12 mo |
+| Liquidity Incentives | 15% | — | 24 mo | 24 mo |
+| DAO Treasury (canoLiq) | 15% | — | — | not vested — see below |
+| Founders & Core Team | 12% | 12 mo | 36 mo | 48 mo (4 yr) |
+| Strategic Partners & Integrations | 10% | 6 mo | 12 mo | 18 mo |
+| Developer Grants & Ecosystem | 6% | — | — | liquid at genesis |
+
+:::note The DAO Treasury tranche is not a wallet
+The 15% treasury bucket is credited to the protocol's own `treasury_cplq` balance, not to any
+address. It has no recipients, cannot vest, and **does not count toward circulating supply**.
+It is spent only by a passed governance proposal — treasury spends, the buyback, and funding
+the [OTC Lock Program](./otc-lock-program.mdx).
+:::
+
+:::note Circulating supply at genesis is small
+Only buckets with no cliff **and** no vesting period are liquid at genesis, and only those count
+toward circulating supply. On mainnet that is Developer Grants alone, so genesis circulating
+supply is **6,000,000 CPLQ** of the 100,000,000 total.
+
+Everything else enters circulation gradually: vesting allocations as recipients claim them, and
+treasury CPLQ only when governance spends it. (Localnet and testnet show a much larger figure
+because they ship several buckets with vesting switched off.)
+:::
+
+:::warning Localnet and testnet differ
+The bundled `genesis.localnet.json` and `genesis.testnet.json` shorten Liquidity Incentives and
+Community & Airdrops to unlock immediately so test networks are usable straight away. The table
+above is mainnet. Always check the genesis file for the network you are actually on.
+:::
 
 :::note Why the validator cliff is 12 months, not 6
 The canoLiq Whitepaper's distribution table (§5.2) once listed a **6-month** cliff for the

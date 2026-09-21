@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -29,12 +28,8 @@ func cmdSpendExecute(args []string, gf globalFlags) error {
 	}
 
 	msg := &contract.MessageDAOTreasurySpend{FromAddress: from, ProposalId: proposalID}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "dao_treasury_spend", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("spend-execute submitted: tx_hash=%s from=%s proposal_id=%d\n", hash, signer.Address, proposalID)
-	return nil
+	return submitAndReport(gf, signer, "dao_treasury_spend", msg, "spend-execute",
+		fmt.Sprintf("from=%s proposal_id=%d", signer.Address, proposalID))
 }
 
 // cmdMultisigApprove submits MessageMultisigApprove for a queued treasury
@@ -58,10 +53,6 @@ func cmdMultisigApprove(args []string, gf globalFlags) error {
 	}
 
 	msg := &contract.MessageMultisigApprove{FromAddress: from, SpendId: spendID}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "multisig_approve", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("multisig-approve submitted: tx_hash=%s signer=%s spend_id=%d\n", hash, signer.Address, spendID)
-	return nil
+	return submitAndReport(gf, signer, "multisig_approve", msg, "multisig-approve",
+		fmt.Sprintf("signer=%s spend_id=%d", signer.Address, spendID))
 }

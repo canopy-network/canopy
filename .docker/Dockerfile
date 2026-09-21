@@ -33,14 +33,26 @@ COPY --from=builder /go/src/github.com/canopy-network/canopy/bin ./
 RUN mkdir -p /app/plugin/go/canoliq
 COPY --from=builder /go-plugin /app/plugin/go/go-plugin
 COPY plugin/go/pluginctl.sh /app/plugin/go/pluginctl.sh
-# Bundle both genesis variants and both runtime configs so a single image
-# can be redeployed against either environment by switching CANOLIQ_CONFIG.
+# Bundle all three genesis variants and all three runtime configs so a single image
+# can be redeployed against any environment by switching CANOLIQ_CONFIG.
 COPY plugin/go/canoliq/genesis.localnet.json     /app/plugin/go/canoliq/genesis.localnet.json
 COPY plugin/go/canoliq/genesis.testnet.json      /app/plugin/go/canoliq/genesis.testnet.json
+COPY plugin/go/canoliq/genesis.mainnet.json      /app/plugin/go/canoliq/genesis.mainnet.json
 COPY plugin/go/canoliq/canoliq-config.localnet.json /app/plugin/go/canoliq/canoliq-config.localnet.json
 COPY plugin/go/canoliq/canoliq-config.testnet.json  /app/plugin/go/canoliq/canoliq-config.testnet.json
-# Default canoliq-config.json points at localnet; testnet/mainnet
-# deployments override CANOLIQ_CONFIG to canoliq-config.testnet.json.
+COPY plugin/go/canoliq/canoliq-config.mainnet.json  /app/plugin/go/canoliq/canoliq-config.mainnet.json
+# Default canoliq-config.json points at localnet; testnet/mainnet deployments
+# override CANOLIQ_CONFIG to the matching config.
+#
+# IMPORTANT for anyone deploying this image: leaving CANOLIQ_CONFIG unset does
+# NOT merely skip config loading — main.go falls back to canoliq.DefaultConfig(),
+# which is profile=localnet, chainId=2, and a 5-block redemption window. Under
+# the localnet profile every startup guard is skipped by design. Always set
+# CANOLIQ_CONFIG explicitly for anything that is not a local dev chain.
+#
+# The bundled testnet/mainnet genesis files are TEMPLATES whose addresses are
+# unfilled placeholders; SafetyCheck refuses to start on them, by design. Mount
+# or bake a filled-in copy before deploying.
 RUN cp /app/plugin/go/canoliq/canoliq-config.localnet.json \
        /app/plugin/go/canoliq/canoliq-config.json
 RUN chmod +x /app/plugin/go/pluginctl.sh /app/plugin/go/go-plugin

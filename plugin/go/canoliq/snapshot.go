@@ -35,6 +35,8 @@ type Snapshot struct {
 	TreasuryCPLQ        uint64
 	BuybackPool         uint64
 	InsurancePool       uint64
+	OTCBudgetAvailable  uint64
+	OTCBudgetReserved   uint64
 	ValidatorIncentives map[string]uint64
 	ValidatorRegistry   *contract.ValidatorRegistry
 	ActiveProposalIDs   []uint64
@@ -120,6 +122,8 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		qTreasuryCPLQ
 		qBuyback
 		qInsurance
+		qOTCAvail
+		qOTCResv
 		qRegistry
 		qPropIdx
 		qSpendIdx
@@ -134,6 +138,8 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		{QueryId: qTreasuryCPLQ, Key: KeyForTreasuryCPLQ()},
 		{QueryId: qBuyback, Key: KeyForBuybackPool()},
 		{QueryId: qInsurance, Key: KeyForInsurancePool()},
+		{QueryId: qOTCAvail, Key: KeyForOTCBudgetAvailable()},
+		{QueryId: qOTCResv, Key: KeyForOTCBudgetReserved()},
 		{QueryId: qRegistry, Key: KeyForValidatorRegistry()},
 		{QueryId: qPropIdx, Key: KeyForProposalIndex()},
 		{QueryId: qSpendIdx, Key: KeyForSpendIndex()},
@@ -215,6 +221,10 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 			snap.BuybackPool = DecodeUint64(raw)
 		case qInsurance:
 			snap.InsurancePool = DecodeUint64(raw)
+		case qOTCAvail:
+			snap.OTCBudgetAvailable = DecodeUint64(raw)
+		case qOTCResv:
+			snap.OTCBudgetReserved = DecodeUint64(raw)
 		case qRegistry:
 			reg := new(contract.ValidatorRegistry)
 			if e := contract.Unmarshal(raw, reg); e != nil {

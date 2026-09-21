@@ -38,6 +38,7 @@ message CanoliqGlobals {
   uint64 turnout_sum_bps = 19;           // sum of per-proposal turnout (bps)
   uint64 turnout_sample_count = 20;      // tallied proposals contributing turnout
   uint64 treasury_spent_total = 21;      // cumulative treasury spend (runway burn)
+  uint64 next_otc_lock_id = 22;          // monotonic OTC lock position id counter
 }
 ```
 
@@ -82,6 +83,12 @@ message CanoliqParams {
   uint64 graduation_min_turnout_bps = 29;     // Default 1500 (15%)
   uint64 graduation_min_daily_tx = 30;        // Default 10_000
   uint64 graduation_min_runway_months = 31;   // Default 12
+  // OTC lock program — reward rates and minimum position size
+  uint64 otc_tier90_bps = 33;            // Default 500 (5% of locked cCNPY)
+  uint64 otc_tier120_bps = 34;           // Default 800 (8% of locked cCNPY)
+  uint64 otc_min_lock_uccnpy = 35;       // Default 50_000_000_000 (50,000 cCNPY)
+  uint64 otc_tier90_blocks = 36;         // Default 1_296_000 (~90d at 6s blocks)
+  uint64 otc_tier120_blocks = 37;        // Default 1_728_000 (~120d at 6s blocks)
 }
 ```
 
@@ -268,6 +275,24 @@ message AlertState {
 }
 ```
 
+## OTCLock
+
+An open [OTC lock](../tokenomics/otc-lock-program.mdx) position. The locked cCNPY is held here
+rather than on the holder's spendable balance, which is what makes it unredeemable for the term.
+`reward_cplq` is fixed at creation and reserved from the program budget at that moment.
+
+```protobuf
+message OTCLock {
+  uint64 id = 1;
+  bytes address = 2;
+  uint64 ccnpy_amount = 3;     // uccnpy held by this position
+  OTCLockTier tier = 4;
+  uint64 reward_cplq = 5;      // uCPLQ reserved against this position
+  uint64 start_height = 6;
+  uint64 mature_height = 7;    // first height at which a claim succeeds
+}
+```
+
 ## Indexes
 
 All indexes exist because the FSM does not support range scans — each enumerates ids/addresses
@@ -313,6 +338,14 @@ message CPLQStakeIndex {
 }
 ```
 
+### OTCLockIndex
+
+```protobuf
+message OTCLockIndex {
+  repeated uint64 ids = 1;  // open OTC lock position ids per address
+}
+```
+
 ## Enums
 
 ### ActionType
@@ -330,6 +363,7 @@ enum ActionType {
   ACTION_VALIDATOR_EJECT = 5;
   ACTION_PROTOCOL_UPGRADE = 6;
   ACTION_AUTONOMY_GRADUATE = 7;
+  ACTION_OTC_PROGRAM_FUND = 8;   // 10% quorum / 67% approval / no timelock
 }
 ```
 
@@ -345,6 +379,22 @@ enum LockTier {
   LOCK_6M = 2;     // 2.0× voting, +25% boost
   LOCK_12M = 3;    // 3.0× voting, +50% boost
   LOCK_24M = 4;    // 4.0× voting, +75% boost
+}
+```
+
+### OTCLockTier
+
+Identifies which [OTC lock](../tokenomics/otc-lock-program.mdx) tier a position belongs to.
+Unrelated to `LockTier`: this locks cCNPY for a one-off CPLQ reward, not CPLQ for voting weight.
+
+The names are fixed identifiers, not a restatement of the terms — each tier's actual length comes
+from its `otc_tier*_blocks` parameter and is governance-tunable.
+
+```protobuf
+enum OTCLockTier {
+  OTC_LOCK_UNSPECIFIED = 0;  // rejected; never a valid choice
+  OTC_LOCK_90D = 1;          // term otc_tier90_blocks;  pays otc_tier90_bps
+  OTC_LOCK_120D = 2;         // term otc_tier120_blocks; pays otc_tier120_bps
 }
 ```
 

@@ -4,7 +4,10 @@ sidebar_label: Proposal Types
 
 # Proposal Types
 
-canoLiq supports six proposal types, each carried as a `google.protobuf.Any` payload. The
+**In one sentence:** every change to canoLiq is made by passing one of seven proposal types, and
+which type you use decides how hard it is to pass.
+
+canoLiq supports seven proposal types, each carried as a `google.protobuf.Any` payload. The
 payload determines the proposal's `ActionType`, which in turn selects its
 [governance tier](./governance-tiers.mdx) (quorum, approval threshold, timelock, voting
 period):
@@ -17,6 +20,7 @@ period):
 | `ProposalValidatorEject` | `ACTION_VALIDATOR_EJECT` | Remove a validator from the registry |
 | `ProposalEmergency` | `ACTION_EMERGENCY` | Fast-track action with an optional param diff |
 | `ProposalProtocolUpgrade` | `ACTION_PROTOCOL_UPGRADE` | Signal a target protocol version |
+| `ProposalOTCProgramFund` | `ACTION_OTC_PROGRAM_FUND` | Move CPLQ from the DAO treasury into the [OTC lock program](../tokenomics/otc-lock-program.mdx) budget |
 
 ## Param Change
 
@@ -109,6 +113,35 @@ Once a proposal exists, cast votes with:
 canoliqctl vote <address> <proposal-id> yes
 ```
 
-:::note
-`proposal-create` is intentionally not yet wired as a standalone CLI command. Its payload is a `google.protobuf.Any` carrying one of the six sub-types above, each with a distinct argument surface. Construct proposals via in-process tests or hand-built JSON.
-:::
+Create proposals with:
+
+```bash
+canoliqctl proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency|otc-program-fund> <args> [--description …]
+```
+
+## What happens when a passed proposal cannot be applied
+
+Passing the vote and being applied are two separate things.
+
+A proposal's payload is type-checked when it is created, but it is not fully validated until it
+executes, which happens in the block that tallies the vote. A payload can therefore clear its
+quorum and approval bar and still be unapplicable: a parameter set whose fee split does not total
+10000, a buyback at a zero price, a treasury spend naming a malformed recipient.
+
+When that happens the proposal is **dropped, not retried**. It is removed from the active set
+exactly as an executed proposal would be, the change it described is not applied, and the chain
+keeps producing blocks. The failure is logged, and operators running the alert webhook receive a
+`proposal_execution_failed` alert carrying the proposal id, its action type, and the reason.
+
+Dropping is deliberate. Execution runs inside the tally block, so treating the failure as a block
+error would fail that block; because a rejected block commits nothing, the proposal would still be
+active in the next block and fail the same way, and the chain would stop for good. One bad payload
+must not be able to do that, so a proposal that cannot be applied is discarded and the block
+proceeds.
+
+The practical consequence for proposers: a failed proposal costs a full voting period and has to be
+resubmitted, corrected, from scratch. Validate before you submit. `canoliqctl` does this for you,
+rejecting an incomplete or invalid parameter file at the terminal rather than letting it reach a
+vote. Anything submitted through raw RPC has no such safety net.
+
+

@@ -1,6 +1,8 @@
 package canoliq
 
 import (
+	"log"
+
 	"github.com/canopy-network/go-plugin/contract"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -382,10 +384,28 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 		passed := proposalPasses(prop, params)
 		if passed {
 			prop.Status = contract.ProposalStatus_PROPOSAL_PASSED
+			// A failed dispatch must never abort the block. processProposals
+			// runs from BeginBlock, so returning an error here fails
+			// ApplyBlock; because a rejected block commits nothing, the
+			// proposal stays in the index and every subsequent block retries
+			// the same doomed dispatch. That is a permanent chain halt with no
+			// on-chain remedy, triggered by one bad proposal.
+			//
+			// Dispatch is genuinely fallible: DeliverMessageCPLQProposalCreate
+			// only type-checks the payload via unwrapPayload and never
+			// validates it, so ValidateParams, the buyback price check and the
+			// treasury-spend recipient check all first run here, long after
+			// the payload was accepted and voted on.
+			//
+			// So log it, page the operator, and fall through to cleanup. The
+			// proposal is dropped rather than retried: it passed the vote but
+			// could not be applied, and leaving it in the index would only
+			// reproduce the halt one block later.
 			if err := c.dispatchPassed(prop, params, height); err != nil {
-				return err
+				c.reportDispatchFailure(prop, height, err)
+			} else {
+				passedDelta++
 			}
-			passedDelta++
 		} else {
 			prop.Status = contract.ProposalStatus_PROPOSAL_FAILED
 		}
@@ -503,6 +523,8 @@ func (c *Canoliq) dispatchPassed(prop *contract.Proposal, params *contract.Canol
 		return nil
 	case *contract.ProposalTreasurySpend:
 		return c.queueTreasurySpend(prop, p, params, height)
+	case *contract.ProposalOTCProgramFund:
+		return c.fundOTCProgram(p)
 	case *contract.ProposalValidatorEject:
 		// F12: drop the validator from the committee registry and clear its
 		// accrued incentives. Idempotent.
@@ -552,7 +574,8 @@ func unwrapPayload(any *anypb.Any) (interface{}, *contract.PluginError) {
 	}
 	switch msg.(type) {
 	case *contract.ProposalParamChange, *contract.ProposalBuyback, *contract.ProposalTreasurySpend,
-		*contract.ProposalValidatorEject, *contract.ProposalEmergency, *contract.ProposalProtocolUpgrade:
+		*contract.ProposalValidatorEject, *contract.ProposalEmergency, *contract.ProposalProtocolUpgrade,
+		*contract.ProposalOTCProgramFund:
 		return msg, nil
 	default:
 		return nil, ErrUnknownProposalPayload()
@@ -581,7 +604,38 @@ func actionTypeForPayload(payload interface{}) contract.ActionType {
 		return contract.ActionType_ACTION_EMERGENCY
 	case *contract.ProposalProtocolUpgrade:
 		return contract.ActionType_ACTION_PROTOCOL_UPGRADE
+	case *contract.ProposalOTCProgramFund:
+		return contract.ActionType_ACTION_OTC_PROGRAM_FUND
 	default:
 		return contract.ActionType_ACTION_UNKNOWN
 	}
+}
+
+// reportDispatchFailure records a proposal that passed its vote but could not
+// be applied. It is the only trace such a proposal leaves: processProposals
+// deletes the record via cleanupProposal either way, and prop.Status is never
+// persisted, so without this the failure would be invisible.
+//
+// It fires the webhook directly rather than through applyAlert. applyAlert
+// debounces on a per-kind watermark and persists AlertState, both of which are
+// wrong here: every failed proposal is a distinct event rather than a
+// recurring condition, and this runs on an error path where an extra StateWrite
+// is one more thing that can fail. fireAlert dispatches off-thread and returns
+// nothing, so it cannot stall BeginBlock or fail it.
+func (c *Canoliq) reportDispatchFailure(prop *contract.Proposal, height uint64, err *contract.PluginError) {
+	action := prop.ActionType.String()
+	log.Printf("canoliq: WARN proposal %d (%s) passed but failed to execute at height %d: %s — dropping it; block production continues",
+		prop.Id, action, height, err.Msg)
+	c.plugin.fireAlert(AlertEnvelope{
+		Kind:     AlertProposalExecFailed,
+		Height:   height,
+		Severity: severityCrit,
+		Message:  "governance proposal passed but failed to execute",
+		Details: map[string]any{
+			"proposalId": prop.Id,
+			"action":     action,
+			"error":      err.Msg,
+			"code":       err.Code,
+		},
+	})
 }

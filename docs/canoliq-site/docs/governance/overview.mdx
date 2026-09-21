@@ -16,15 +16,20 @@ The parameters below are the **scalar fallback** used when no tier matches an ac
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `voting_period_blocks` | — | Blocks a proposal accepts votes |
+| `voting_period_blocks` | 100,800 (~7d) | Blocks a proposal accepts votes |
 | `quorum_bps` | 3300 | Fraction of snapshot staked CPLQ required to participate (33%) |
 | `pass_threshold_bps` | 5001 | Yes / (yes + no) needed to pass (50%+1) |
-| `min_stake_to_propose` | — | Minimum staked CPLQ a proposer must hold |
-| `treasury_threshold` | — | Spend amount above which multisig + timelock kick in |
-| `multisig_signers` | — | Authorized multisig signer addresses |
-| `multisig_threshold` | — | Minimum approvals for above-threshold spends |
-| `timelock_blocks` | — | Delay between proposal pass and execution |
-| `cplq_unstaking_blocks` | — | Unbond window for CPLQ stake |
+| `min_stake_to_propose` | 1,000,000 (1 CPLQ) | Minimum staked CPLQ a proposer must hold |
+| `treasury_threshold` | 1,000,000,000 uCNPY | Spend amount above which multisig + timelock kick in |
+| `multisig_signers` | set at genesis | Authorized multisig signer addresses |
+| `multisig_threshold` | 3 | Minimum approvals for above-threshold spends |
+| `timelock_blocks` | 28,800 (~48h) | Delay between proposal pass and execution |
+| `cplq_unstaking_blocks` | 100,800 (~7d) | Unbond window for CPLQ stake; must be ≥ voting period |
+
+:::caution Do not size a vote off the 33% figure
+A fee change needs 5% quorum, an emergency 8%, an upgrade 10%. Check
+[Governance Tiers](./governance-tiers.mdx) for the action you are actually proposing.
+:::
 
 ## Voting Weight
 

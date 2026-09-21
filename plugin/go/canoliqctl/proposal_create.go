@@ -27,9 +27,9 @@ import (
 //
 // Usage:
 //
-//	canoliqctl proposal-create param-change    <nickname> <params-json-file> [--description ...]
-//	canoliqctl proposal-create buyback         <nickname> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description ...]
-//	canoliqctl proposal-create treasury-spend  <nickname> <recipient-hex> <amount> <cnpy|cplq> [--description ...]
+//	canoliqctl proposal-create param-change    <address> <params-json-file> [--description ...]
+//	canoliqctl proposal-create buyback         <address> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description ...]
+//	canoliqctl proposal-create treasury-spend  <address> <recipient-hex> <amount> <cnpy|cplq> [--description ...]
 func cmdProposalCreate(args []string, gf globalFlags) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: %s", commandUsages["proposal-create"])
@@ -45,10 +45,12 @@ func cmdProposalCreate(args []string, gf globalFlags) error {
 		return cmdProposalValidatorEject(args[1:], gf)
 	case "emergency":
 		return cmdProposalEmergency(args[1:], gf)
+	case "otc-program-fund":
+		return cmdProposalOTCProgramFund(args[1:], gf)
 	case "help", "-h", "--help":
 		return printProposalCreateHelp()
 	default:
-		return fmt.Errorf("unknown proposal-create subcommand %q (want param-change|buyback|treasury-spend|validator-eject|emergency)", args[0])
+		return fmt.Errorf("unknown proposal-create subcommand %q (want param-change|buyback|treasury-spend|validator-eject|emergency|otc-program-fund)", args[0])
 	}
 }
 
@@ -61,6 +63,7 @@ func printProposalCreateHelp() error {
 	fmt.Println("  treasury-spend  authorize a transfer from treasury_canoliq (CNPY) or treasury_cplq (CPLQ)")
 	fmt.Println("  validator-eject remove a validator from the committee registry (F12)")
 	fmt.Println("  emergency       security-critical fast-track action with optional param diff (F13)")
+	fmt.Println("  otc-program-fund move CPLQ from treasury_cplq into the OTC lock program budget")
 	return nil
 }
 
@@ -70,7 +73,7 @@ func printProposalCreateHelp() error {
 // dispatchPassed, so invalid bps sums or signer/threshold mismatches surface
 // only after the proposal passes — operators should pre-validate.
 func cmdProposalParamChange(args []string, gf globalFlags) error {
-	usage := "proposal-create param-change <nickname> <params-json-file> [--description \"…\"]"
+	usage := "proposal-create param-change <address> <params-json-file> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 2 {
 		return fmt.Errorf("expected 2 positional args (usage: %s)", usage)
@@ -100,7 +103,7 @@ func cmdProposalParamChange(args []string, gf globalFlags) error {
 // price-micro-cnpy-per-cplq is "how many uCNPY = 1 CPLQ × 10^6"; the plugin
 // computes `cplq_acquired = cnpy_amount * 10^6 / price`.
 func cmdProposalBuyback(args []string, gf globalFlags) error {
-	usage := "proposal-create buyback <nickname> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description \"…\"]"
+	usage := "proposal-create buyback <address> <cnpy-amount> <price-micro-cnpy-per-cplq> <burn|distribute> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 4 {
 		return fmt.Errorf("expected 4 positional args (usage: %s)", usage)
@@ -144,7 +147,7 @@ func cmdProposalBuyback(args []string, gf globalFlags) error {
 // Above-threshold spends additionally require multisig + timelock — those
 // are enforced at execution, not at proposal create.
 func cmdProposalTreasurySpend(args []string, gf globalFlags) error {
-	usage := "proposal-create treasury-spend <nickname> <recipient-hex> <amount> <cnpy|cplq> [--description \"…\"]"
+	usage := "proposal-create treasury-spend <address> <recipient-hex> <amount> <cnpy|cplq> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 4 {
 		return fmt.Errorf("expected 4 positional args (usage: %s)", usage)
@@ -187,7 +190,7 @@ func cmdProposalTreasurySpend(args []string, gf globalFlags) error {
 // validator from the committee registry on pass (F12). The plugin infers the
 // ACTION_VALIDATOR_EJECT tier (5% quorum / 51% / 48h) from the payload type.
 func cmdProposalValidatorEject(args []string, gf globalFlags) error {
-	usage := "proposal-create validator-eject <nickname> <validator-hex> [--description \"…\"]"
+	usage := "proposal-create validator-eject <address> <validator-hex> [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 2 {
 		return fmt.Errorf("expected 2 positional args (usage: %s)", usage)
@@ -214,11 +217,43 @@ func cmdProposalValidatorEject(args []string, gf globalFlags) error {
 	return submitProposalCreate(gf, signer, from, payload, description, "validator-eject")
 }
 
+// cmdProposalOTCProgramFund submits a ProposalOTCProgramFund, moving CPLQ from
+// treasury_cplq into the OTC lock program's unreserved budget on pass. This is
+// the only path by which the program is funded: nothing mints, and the amount
+// is capped at the treasury balance at execution time.
+func cmdProposalOTCProgramFund(args []string, gf globalFlags) error {
+	usage := "proposal-create otc-program-fund <address> <amount-uCPLQ> [--description \"…\"]"
+	rest, description := parseDescriptionFlag(args)
+	if len(rest) < 2 {
+		return fmt.Errorf("expected 2 positional args (usage: %s)", usage)
+	}
+	signer, err := fetchSigner(gf.adminURL, rest[0], gf.password)
+	if err != nil {
+		return err
+	}
+	from, err := addrFromHex(signer.Address)
+	if err != nil {
+		return err
+	}
+	amount, err := parseUint(rest[1], "amount-uCPLQ")
+	if err != nil {
+		return err
+	}
+	if amount == 0 {
+		return fmt.Errorf("amount-uCPLQ must be non-zero")
+	}
+	payload, err := anypb.New(&contract.ProposalOTCProgramFund{Amount: amount})
+	if err != nil {
+		return fmt.Errorf("wrap otc-program-fund payload: %w", err)
+	}
+	return submitProposalCreate(gf, signer, from, payload, description, "otc-program-fund")
+}
+
 // cmdProposalEmergency submits a ProposalEmergency on the fast-track tier
 // (ACTION_EMERGENCY: 8% quorum / 67% / 24h vote / no timelock). An optional
 // params-json-file is included as the emergency param diff applied on pass.
 func cmdProposalEmergency(args []string, gf globalFlags) error {
-	usage := "proposal-create emergency <nickname> [params-json-file] [--description \"…\"]"
+	usage := "proposal-create emergency <address> [params-json-file] [--description \"…\"]"
 	rest, description := parseDescriptionFlag(args)
 	if len(rest) < 1 {
 		return fmt.Errorf("expected at least 1 positional arg (usage: %s)", usage)
@@ -256,14 +291,9 @@ func submitProposalCreate(gf globalFlags, signer *internal.Key, from []byte,
 		Payload:     payload,
 		Description: description,
 	}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_proposal_create", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("proposal-create %s submitted: tx_hash=%s from=%s description=%q\n",
-		kind, hash, signer.Address, description)
-	fmt.Printf("  payload typeUrl=%s bytes=%d\n", payload.TypeUrl, len(payload.Value))
-	return nil
+	return submitAndReport(gf, signer, "cplq_proposal_create", msg, "proposal-create "+kind,
+		fmt.Sprintf("from=%s description=%q payload=%s (%d bytes)",
+			signer.Address, description, payload.TypeUrl, len(payload.Value)))
 }
 
 // parseDescriptionFlag pulls "--description X" out of args. We use a
@@ -437,6 +467,13 @@ type paramsJSON struct {
 	GraduationMinRunwayMonths uint64               `json:"graduationMinRunwayMonths"`
 	Governance                []governanceTierJSON `json:"governance"`
 	RestakingPolicy           []restakingEntryJSON `json:"restakingPolicy"`
+
+	// OTC lock program tier rates, minimum position size, and tier terms.
+	OtcTier90Bps     uint64 `json:"otcTier90Bps"`
+	OtcTier120Bps    uint64 `json:"otcTier120Bps"`
+	OtcMinLockUccnpy uint64 `json:"otcMinLockUccnpy"`
+	OtcTier90Blocks  uint64 `json:"otcTier90Blocks"`
+	OtcTier120Blocks uint64 `json:"otcTier120Blocks"`
 }
 
 // governanceTierJSON is one row of the per-action governance matrix. Action is
@@ -537,6 +574,11 @@ func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 		GraduationMinRunwayMonths: p.GraduationMinRunwayMonths,
 		Governance:                tiers,
 		RestakingPolicy:           restaking,
+		OtcTier90Bps:              p.OtcTier90Bps,
+		OtcTier120Bps:             p.OtcTier120Bps,
+		OtcMinLockUccnpy:          p.OtcMinLockUccnpy,
+		OtcTier90Blocks:           p.OtcTier90Blocks,
+		OtcTier120Blocks:          p.OtcTier120Blocks,
 	}, nil
 }
 

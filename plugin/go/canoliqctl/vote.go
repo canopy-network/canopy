@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/canopy-network/go-plugin/canoliqctl/internal"
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -44,13 +43,8 @@ func cmdVote(args []string, gf globalFlags) error {
 		ProposalId:  proposalID,
 		Choice:      choice,
 	}
-	hash, err := internal.SubmitPluginTx(gf.rpcURL, signer, "cplq_vote", msg, txParams(gf))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("vote submitted: tx_hash=%s from=%s proposal_id=%d choice=%s\n",
-		hash, signer.Address, proposalID, choice)
-	return nil
+	return submitAndReport(gf, signer, "cplq_vote", msg, "vote",
+		fmt.Sprintf("from=%s proposal_id=%d choice=%s", signer.Address, proposalID, choice))
 }
 
 func parseVoteChoice(s string) (contract.VoteChoice, error) {

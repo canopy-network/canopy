@@ -18,7 +18,9 @@ On `BeginBlock` after `expiry_height`, the plugin tallies votes:
 yes + no + abstain ≥ quorum_bps × snapshot_total_staked / 10000
 ```
 
-Default: 33% of snapshot total staked CPLQ must participate.
+`quorum_bps` here is whatever the proposal's [governance tier](./governance-tiers.mdx)
+specifies — 5% to 15% depending on the action. The 33% scalar default applies only to action
+types with no configured tier.
 
 ### Pass Threshold
 
