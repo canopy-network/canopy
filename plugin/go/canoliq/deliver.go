@@ -412,6 +412,96 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	return &contract.PluginDeliverResponse{}
 }
 
+// DeliverMessageCanoliqTransfer moves liquid cCNPY between two accounts.
+// Mirrors DeliverMessageCPLQTransfer exactly, but on the cCNPY balance
+// prefix. Deliberately does not touch globals.TotalCcnpySupply or
+// globals.TotalPooledCnpy — a transfer redistributes an existing claim on
+// the pool, it doesn't mint or burn one, so the aggregate backing ratio
+// (and therefore the pool-math accounting #34/#36 guard) is untouched.
+func (c *Canoliq) DeliverMessageCanoliqTransfer(msg *contract.MessageCanoliqTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
+	_ = params
+	fromBalKey := KeyForCCNPYBalance(msg.FromAddress)
+	toBalKey := KeyForCCNPYBalance(msg.ToAddress)
+	cnpyFromKey := contract.KeyForAccount(msg.FromAddress)
+	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
+	fbQ, tbQ, cQ, feeQ := qid(), qid(), qid(), qid()
+	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
+		Keys: []*contract.PluginKeyRead{
+			{QueryId: fbQ, Key: fromBalKey},
+			{QueryId: tbQ, Key: toBalKey},
+			{QueryId: cQ, Key: cnpyFromKey},
+			{QueryId: feeQ, Key: feePoolKey},
+		},
+	})
+	if err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
+	if resp.Error != nil {
+		return &contract.PluginDeliverResponse{Error: resp.Error}
+	}
+	var fromBz, toBz []byte
+	cnpyFrom := new(contract.Account)
+	feePool := new(contract.Pool)
+	for _, r := range resp.Results {
+		if len(r.Entries) == 0 {
+			continue
+		}
+		switch r.QueryId {
+		case fbQ:
+			fromBz = r.Entries[0].Value
+		case tbQ:
+			toBz = r.Entries[0].Value
+		case cQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, cnpyFrom); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
+		case feeQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, feePool); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
+		}
+	}
+	if cnpyFrom.Amount < fee {
+		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}
+	}
+	fromBal := DecodeUint64(fromBz)
+	toBal := DecodeUint64(toBz)
+	if fromBal < msg.Amount {
+		return &contract.PluginDeliverResponse{Error: ErrInsufficientCCNPY()}
+	}
+	fromBal -= msg.Amount
+	toBal += msg.Amount
+	cnpyFrom.Amount -= fee
+	feePool.Amount += fee
+	cnpyFromB, e := contract.Marshal(cnpyFrom)
+	if e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
+	feeBz, e := contract.Marshal(feePool)
+	if e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
+	sets := []*contract.PluginSetOp{
+		{Key: toBalKey, Value: EncodeUint64(toBal)},
+		{Key: feePoolKey, Value: feeBz},
+	}
+	var deletes []*contract.PluginDeleteOp
+	if fromBal == 0 {
+		deletes = append(deletes, &contract.PluginDeleteOp{Key: fromBalKey})
+	} else {
+		sets = append(sets, &contract.PluginSetOp{Key: fromBalKey, Value: EncodeUint64(fromBal)})
+	}
+	if cnpyFrom.Amount == 0 {
+		deletes = append(deletes, &contract.PluginDeleteOp{Key: cnpyFromKey})
+	} else {
+		sets = append(sets, &contract.PluginSetOp{Key: cnpyFromKey, Value: cnpyFromB})
+	}
+	if _, e := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets, Deletes: deletes}); e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
+	return &contract.PluginDeliverResponse{}
+}
+
 // DeliverMessageCPLQTransfer moves liquid CPLQ between two accounts.
 func (c *Canoliq) DeliverMessageCPLQTransfer(msg *contract.MessageCPLQTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	_ = params

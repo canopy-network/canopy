@@ -53,6 +53,22 @@ message MessageCPLQClaimVested {
   bytes from_address = 1; // @gotags: json:"fromAddress"
 }
 
+// MessageCanoliqTransfer transfers liquid cCNPY between accounts. Pure
+// internal-balance move — does not touch total_pooled_cnpy or
+// total_ccnpy_supply, so it cannot interact with the pool-math accounting
+// #34/#36 guard (no mint, no burn, no change to the aggregate backing ratio).
+// Appended here rather than grouped with the other canoliq_* messages above
+// so every existing message keeps its wire-generated index (purely additive
+// proto change).
+message MessageCanoliqTransfer {
+  // from_address: the sender (must match the signer)
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  // to_address: the recipient
+  bytes to_address = 2; // @gotags: json:"toAddress"
+  // amount: amount of cCNPY to transfer (uCCNPY)
+  uint64 amount = 3;
+}
+
 // CanoliqGlobals is the singleton record tracking pool-wide accounting.
 message CanoliqGlobals {
   // total_ccnpy_supply: aggregate cCNPY in circulation (uCCNPY)
@@ -168,6 +184,10 @@ message CanoliqParams {
   uint64 claim_fee = 8; // @gotags: json:"claimFee"
   // cplq_transfer_fee: minimum tx fee for a CPLQ transfer (uCNPY)
   uint64 cplq_transfer_fee = 9; // @gotags: json:"cplqTransferFee"
+  // canoliq_transfer_fee: minimum tx fee for a cCNPY transfer (uCNPY). Field
+  // 38 rather than adjacent to cplq_transfer_fee — 10-37 are already taken by
+  // unrelated params elsewhere in this message.
+  uint64 canoliq_transfer_fee = 38; // @gotags: json:"canoliqTransferFee"
   // insurance_bps: share of treasury credit redirected to insurance (default 500 = 5% of treasury slice)
   uint64 insurance_bps = 10; // @gotags: json:"insuranceBps"
   // treasury_threshold: spend amount above which multisig + timelock kick in (uCNPY-equivalent)

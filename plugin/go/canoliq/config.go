@@ -33,6 +33,7 @@ var CanoliqConfig = &contract.PluginConfig{
 		"canoliq_deposit",
 		"canoliq_redeem",
 		"canoliq_claim_redemption",
+		"canoliq_transfer",
 		"cplq_transfer",
 		"cplq_claim_vested",
 		"cplq_stake",
@@ -52,6 +53,7 @@ var CanoliqConfig = &contract.PluginConfig{
 		"type.googleapis.com/types.MessageCanoliqDeposit",
 		"type.googleapis.com/types.MessageCanoliqRedeem",
 		"type.googleapis.com/types.MessageCanoliqClaimRedemption",
+		"type.googleapis.com/types.MessageCanoliqTransfer",
 		"type.googleapis.com/types.MessageCPLQTransfer",
 		"type.googleapis.com/types.MessageCPLQClaimVested",
 		"type.googleapis.com/types.MessageCPLQStake",
@@ -394,6 +396,7 @@ func DefaultParams() *contract.CanoliqParams {
 		RedeemFee:          10_000,
 		ClaimFee:           10_000,
 		CplqTransferFee:    10_000,
+		CanoliqTransferFee: 10_000,
 		InsuranceBps:       500, // 5% of treasury slice — matches Tokenomics v1.2 §8 / WP §9.2 ("insurance fund of 5% of DAO treasury")
 		InsuranceTargetBps: 500, // T4: reserve target = 5% of peak TVL (WP §9.2); skim auto-off at target
 		// TvlCapBps: self-imposed TVL ceiling as a fraction of total Canopy

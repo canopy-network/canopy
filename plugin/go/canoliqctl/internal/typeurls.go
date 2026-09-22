@@ -9,6 +9,7 @@ var MsgTypeURL = map[string]string{
 	"canoliq_deposit":          "type.googleapis.com/types.MessageCanoliqDeposit",
 	"canoliq_redeem":           "type.googleapis.com/types.MessageCanoliqRedeem",
 	"canoliq_claim_redemption": "type.googleapis.com/types.MessageCanoliqClaimRedemption",
+	"canoliq_transfer":         "type.googleapis.com/types.MessageCanoliqTransfer",
 	"cplq_transfer":            "type.googleapis.com/types.MessageCPLQTransfer",
 	"cplq_claim_vested":        "type.googleapis.com/types.MessageCPLQClaimVested",
 	"cplq_stake":               "type.googleapis.com/types.MessageCPLQStake",

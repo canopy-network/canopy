@@ -125,6 +125,8 @@ func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.Plugin
 		return c.CheckMessageCanoliqRedeem(x, request.Tx.Fee, params)
 	case *contract.MessageCanoliqClaimRedemption:
 		return c.CheckMessageCanoliqClaimRedemption(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqTransfer:
+		return c.CheckMessageCanoliqTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCPLQTransfer:
 		return c.CheckMessageCPLQTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCPLQClaimVested:
@@ -212,6 +214,8 @@ func (c *Canoliq) dispatchDeliver(request *contract.PluginDeliverRequest) *contr
 		return c.DeliverMessageCanoliqRedeem(x, request.Tx.Fee, params)
 	case *contract.MessageCanoliqClaimRedemption:
 		return c.DeliverMessageCanoliqClaimRedemption(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqTransfer:
+		return c.DeliverMessageCanoliqTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCPLQTransfer:
 		return c.DeliverMessageCPLQTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCPLQClaimVested:
@@ -309,6 +313,25 @@ func (c *Canoliq) CheckMessageCanoliqClaimRedemption(msg *contract.MessageCanoli
 	}
 	return &contract.PluginCheckResponse{
 		Recipient:         msg.FromAddress,
+		AuthorizedSigners: [][]byte{msg.FromAddress},
+	}
+}
+
+// CheckMessageCanoliqTransfer validates a cCNPY transfer statelessly. Pure
+// internal-balance move (see DeliverMessageCanoliqTransfer) — never mints or
+// burns, so it cannot interact with the pool-math accounting (#34/#36).
+func (c *Canoliq) CheckMessageCanoliqTransfer(msg *contract.MessageCanoliqTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+	if len(msg.FromAddress) != 20 || len(msg.ToAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.Amount == 0 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if fee < params.CanoliqTransferFee {
+		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
+	}
+	return &contract.PluginCheckResponse{
+		Recipient:         msg.ToAddress,
 		AuthorizedSigners: [][]byte{msg.FromAddress},
 	}
 }

@@ -44,6 +44,21 @@ message MessageCanoliqClaimRedemption {
 }
 ```
 
+### MessageCanoliqTransfer
+
+Transfers liquid cCNPY between accounts. Pure internal-balance move — does
+not mint or burn, so it never touches `total_ccnpy_supply` or
+`total_pooled_cnpy` (the pool's backing ratio is unaffected by who holds the
+cCNPY, only by how much exists in total).
+
+```protobuf
+message MessageCanoliqTransfer {
+  bytes from_address = 1;  // 20-byte address (must match the signer)
+  bytes to_address = 2;    // 20-byte address
+  uint64 amount = 3;       // cCNPY amount (uCCNPY)
+}
+```
+
 ## CPLQ Operations
 
 ### MessageCPLQTransfer
