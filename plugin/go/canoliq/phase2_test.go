@@ -728,7 +728,7 @@ func TestPerValidatorProRataDistribution(t *testing.T) {
 // equation: delta == userYield + treasury + insurance + buyback + validators.
 func TestInsuranceConservationFullSplit(t *testing.T) {
 	c, s := newTestCanoliq()
-	g := &contract.CanoliqGlobals{GenesisComplete: true}
+	g := &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy}
 	seedGlobals(s, g)
 	const X = 950 // committee reward received (observed as bonded-stake growth)
 	seedReward(t, s, c, X)

@@ -2,6 +2,8 @@ package canoliq
 
 import (
 	"testing"
+
+	"github.com/canopy-network/go-plugin/contract"
 )
 
 // seedOrphanedPool puts a Canoliq into the exact state
@@ -172,5 +174,95 @@ func TestReconcileOrphanedPoolOnDevnetPreservesPendingRedemption(t *testing.T) {
 	}
 	if escrow := readEscrow(s); escrow != got.PendingRedemptionCnpy {
 		t.Fatalf("escrow: got %d want %d (== TotalPooledCnpy(0) + PendingRedemptionCnpy)", escrow, got.PendingRedemptionCnpy)
+	}
+}
+
+// TestOwnerlessRewardRoutesToTreasury is the regression guard for the
+// canoliq-98803 / chain-404 deadlock, from the prevention side.
+//
+// reconcileOrphanedPoolOnDevnet heals a chain that already carries an orphaned
+// pool, but it is dev-profile-only by design. This covers the other half: the
+// pool must never become orphaned in the first place, on any profile.
+//
+// TotalPooledCnpy is the denominator of computeMint's exchange rate, so
+// crediting it while TotalCcnpySupply is zero manufactures CNPY that no share
+// has a claim on and walks the mint ratio toward zero. Once accrued reward
+// outgrows a realistic deposit, every deposit computes mint == 0 and nothing
+// can lift the supply off zero to recover.
+func TestOwnerlessRewardRoutesToTreasury(t *testing.T) {
+	c, s := newTestCanoliq()
+	seedParams(t, c, DefaultParams())
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+
+	// Ten blocks of reward against a pool nobody holds a share in.
+	for i := 1; i <= 10; i++ {
+		seedReward(t, s, c, 5_000_000)
+		if err := c.ProcessRewards(&contract.PluginEndRequest{Height: uint64(i)}); err != nil {
+			t.Fatalf("sweep %d: %v", i, err)
+		}
+	}
+
+	g := loadGlobals(t, s)
+	if g.TotalPooledCnpy != 0 {
+		t.Errorf("pooled CNPY accrued with no cCNPY outstanding: got %d, want 0", g.TotalPooledCnpy)
+	}
+	if treasuryCnpy(s) == 0 {
+		t.Error("the ownerless slice should have landed in the treasury")
+	}
+	// The escrow invariant must hold: an ownerless slice backs no cCNPY, so it
+	// must not be credited to escrow either.
+	if got, want := readEscrow(s), g.TotalPooledCnpy+g.PendingRedemptionCnpy; got != want {
+		t.Errorf("escrow invariant broken: escrow=%d want pooled(%d)+pending(%d)=%d",
+			got, g.TotalPooledCnpy, g.PendingRedemptionCnpy, want)
+	}
+
+	// The decisive check: a deposit still works. Before the fix this is where
+	// "pool math error: mint computed to zero" appeared, permanently.
+	user := addr20(0x42)
+	seedAccount(s, user, 100_000_000)
+	if r := c.DeliverMessageCanoliqDeposit(
+		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000_000}, 10_000, DefaultParams(),
+	); r.Error != nil {
+		t.Fatalf("deposit bricked by ownerless accrual: %v", r.Error)
+	}
+	if got := readCcnpy(s, user); got != 1_000_000 {
+		t.Errorf("first deposit into an empty pool should mint ~1:1: got %d", got)
+	}
+}
+
+// TestOwnerlessBranchStopsOnceSupplyExists confirms the redirect is confined to
+// the degenerate state: as soon as any real cCNPY exists, reward accrues to the
+// pool exactly as before and lifts the exchange rate.
+func TestOwnerlessBranchStopsOnceSupplyExists(t *testing.T) {
+	c, s := newTestCanoliq()
+	seedParams(t, c, DefaultParams())
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+	user := addr20(0x43)
+	seedAccount(s, user, 100_000_000)
+
+	if r := c.DeliverMessageCanoliqDeposit(
+		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000_000}, 10_000, DefaultParams(),
+	); r.Error != nil {
+		t.Fatalf("deposit: %v", r.Error)
+	}
+	before := loadGlobals(t, s).TotalPooledCnpy
+	treasuryBefore := treasuryCnpy(s)
+
+	seedReward(t, s, c, 5_000_000)
+	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 1}); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+
+	g := loadGlobals(t, s)
+	if g.TotalPooledCnpy <= before {
+		t.Errorf("reward must still compound into a live pool: pooled %d -> %d", before, g.TotalPooledCnpy)
+	}
+	// The treasury still receives only its own 30% slice, not the user slice.
+	userSliceIfMisrouted := g.TotalPooledCnpy - before
+	if treasuryCnpy(s)-treasuryBefore >= userSliceIfMisrouted {
+		t.Error("user slice was misrouted to the treasury despite a live pool")
+	}
+	if got, want := readEscrow(s), g.TotalPooledCnpy+g.PendingRedemptionCnpy; got != want {
+		t.Errorf("escrow invariant broken: escrow=%d want %d", got, want)
 	}
 }
