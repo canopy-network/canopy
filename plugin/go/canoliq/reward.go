@@ -140,6 +140,33 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	// User accrual: net rewards plus the user-rebate slice flow into the
 	// pooled CNPY backing cCNPY, lifting the cCNPY/CNPY exchange rate.
 	userSlice := netToUsers + split.UserRebate
+	// ...unless there is no cCNPY in existence to lift. TotalPooledCnpy is the
+	// denominator of the exchange rate, so crediting it while TotalCcnpySupply
+	// is zero manufactures pooled CNPY that no share has a claim on and drives
+	// computeMint's ratio toward zero:
+	//
+	//   mint = amount * (total_ccnpy + 1) / (total_pooled + 1)
+	//
+	// Once accrued reward alone outgrows a realistic deposit, every deposit
+	// computes mint == 0 and is rejected, and nothing can lift TotalCcnpySupply
+	// off zero to break the deadlock. That is the canoliq-98803 / chain-404
+	// failure, and it needs no chain reset: a full redeem leaves
+	// TotalCcnpySupply at zero with dust in the pool (computeRedeem floors in
+	// the pool's favour by design), after which ordinary reward accrual walks
+	// the rate off a cliff on its own.
+	//
+	// So route an ownerless slice to the DAO treasury instead. The CNPY stays
+	// protocol-held and conserved, it simply accrues where it has a defined
+	// owner. reconcileOrphanedPoolOnDevnet cleans up chains already carrying an
+	// orphaned pool, but it is dev-profile-only by design; this is the
+	// prevention half, and it runs everywhere because it never rewrites an
+	// existing balance. The instant any real deposit mints cCNPY, this branch
+	// stops firing and accrual returns to the pool untouched.
+	ownerless := uint64(0)
+	if globals.TotalCcnpySupply == 0 {
+		ownerless = userSlice
+		userSlice = 0
+	}
 	globals.TotalPooledCnpy += userSlice
 	// Advance the peak-TVL high water mark (T4) post-accrual.
 	if globals.TotalPooledCnpy > globals.PeakTvlUcnpy {
@@ -150,6 +177,10 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	// redeem against real CNPY. Keeps escrow == TotalPooledCnpy + PendingRedemptionCnpy.
 	// (The reward CNPY itself lives in the bonded committee stake; escrow becomes
 	// a claim on it, redeemable once the position is unbonded.)
+	//
+	// An ownerless slice is deliberately NOT credited here: it is not backing
+	// any cCNPY, and adding it would break that invariant. It lands in the
+	// treasury scalar below instead, so physical CNPY is still conserved.
 	escrow.Amount += userSlice
 	// Record the observed committee stake so the next block isolates only the
 	// fresh growth (reward) as delta.
@@ -187,7 +218,8 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 			}
 		}
 	}
-	treasuryDelta := (split.Treasury - insurance) + txFees
+	// ownerless carries the user slice that had no cCNPY to back it (see above).
+	treasuryDelta := (split.Treasury - insurance) + txFees + ownerless
 	if treasuryDelta > 0 {
 		treasuryKey := KeyForTreasuryCNPY()
 		sets = append(sets, &contract.PluginSetOp{

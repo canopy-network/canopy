@@ -37,7 +37,7 @@ func loadRegistry(t *testing.T, s *fakeStore) map[string]uint64 {
 // nothing), and the next sweep must distribute its compounded growth.
 func TestSyncAdmitsPostGenesisValidator(t *testing.T) {
 	c, s := newTestCanoliq()
-	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 	// No registry at all — genesis carried no validatorRegistry block.
 	val := addr20(0xC0)
 	setCommitteeStake(s, c, val, 1_000_000_000)
@@ -78,7 +78,7 @@ func TestSyncAdmitsPostGenesisValidator(t *testing.T) {
 // yield. Only the already-registered member's growth counts.
 func TestSyncNewMemberBondIsNotReward(t *testing.T) {
 	c, s := newTestCanoliq()
-	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 	v1, v2 := addr20(0xC0), addr20(0xC1)
 	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: v1, Stake: rewardBaseStake}}}
 	s.set(KeyForValidatorRegistry(), mustMarshal(reg))
@@ -111,7 +111,7 @@ func TestSyncNewMemberBondIsNotReward(t *testing.T) {
 // which was always summed from live stake) caps it.
 func TestSyncStaleBaselineCappedByAggregate(t *testing.T) {
 	c, s := newTestCanoliq()
-	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 	val := addr20(0xC0)
 	// Genesis weight of 1 vs. a live bond of rewardBaseStake.
 	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: val, Stake: 1}}}

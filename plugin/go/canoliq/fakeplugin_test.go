@@ -93,6 +93,17 @@ func (s *fakeStore) write(req *contract.PluginStateWriteRequest) *contract.Plugi
 // false fail-closed. Tests that exercise specific cap values override
 // Supply.Staked via seedCanopySupply, and TestT3FailClosedOnAbsentSupply
 // s.del()s the key to exercise the genuinely-absent branch.
+// testLivePoolCcnpy seeds a non-zero cCNPY supply for tests that sweep rewards
+// without first making a deposit.
+//
+// ProcessRewards routes the user slice to the DAO treasury instead of the pool
+// when TotalCcnpySupply is zero, because pooled CNPY with no shares outstanding
+// has no owner and collapses computeMint's exchange rate. A reward-split test
+// that seeds no supply would therefore exercise that ownerless branch rather
+// than the normal 40/30/15/15 path it means to assert. The exact value is
+// immaterial: the split depends only on the reward delta and the params.
+const testLivePoolCcnpy = 1_000_000
+
 func newTestCanoliq() (*Canoliq, *fakeStore) {
 	store := newFakeStore()
 	cfg := Config{ChainId: 2, DataDirPath: "/tmp/canoliq-test"}

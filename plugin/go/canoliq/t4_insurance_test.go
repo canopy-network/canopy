@@ -55,7 +55,7 @@ func TestT4SkimActiveBelowTarget(t *testing.T) {
 	c, s := newTestCanoliq()
 	seedParams(t, c, DefaultParams())
 	// peak 10M → target 500k; reserve starts at 0 (below target).
-	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, PeakTvlUcnpy: 10_000_000})
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy, PeakTvlUcnpy: 10_000_000})
 	runSweep(t, c, s, 0, t4Delta, 1)
 	if got := insurancePool(s); got != t4InsuranceSkim {
 		t.Errorf("insurance skim should run below target: got %d want %d", got, t4InsuranceSkim)
@@ -71,7 +71,7 @@ func TestT4SkimOffAtTargetConserves(t *testing.T) {
 	c, s := newTestCanoliq()
 	seedParams(t, c, DefaultParams())
 	// peak 10M → target 500k; seed reserve exactly at target.
-	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, PeakTvlUcnpy: 10_000_000})
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy, PeakTvlUcnpy: 10_000_000})
 	s.set(KeyForInsurancePool(), EncodeUint64(500_000))
 
 	runSweep(t, c, s, 0, t4Delta, 1)
