@@ -75,6 +75,17 @@ func backfillParams(p *contract.CanoliqParams) {
 	if p.OtcMinLockUccnpy == 0 && (p.OtcTier90Bps > 0 || p.OtcTier120Bps > 0) {
 		p.OtcMinLockUccnpy = d.OtcMinLockUccnpy
 	}
+	// canoliq_transfer_fee (proto field 38) landed after genesis on any chain
+	// already running — same class as the OTC tier fields above: a params
+	// record persisted before this field existed decodes it as zero forever,
+	// which would otherwise mean free cCNPY transfers by omission rather than
+	// governance choice. ValidateParams does not require fees to be
+	// non-zero, so unlike the OTC tiers this isn't correctness-critical, but
+	// backfilling keeps a zero here meaning the same thing it means for
+	// every other fee field: "never explicitly set."
+	if p.CanoliqTransferFee == 0 {
+		p.CanoliqTransferFee = d.CanoliqTransferFee
+	}
 }
 
 // SaveParams writes the canoLiq parameters to state after validation.

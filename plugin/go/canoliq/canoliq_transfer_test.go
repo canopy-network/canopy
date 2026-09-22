@@ -45,6 +45,54 @@ func TestCanoliqTransferRespectsLiquidBalance(t *testing.T) {
 	}
 }
 
+// TestCanoliqTransferRejectsSelfTransfer is the regression test for the
+// review finding on #37: fromBalKey and toBalKey alias to the same state key
+// when from_address == to_address. DeliverMessageCanoliqTransfer reads that
+// one key into both fromBal and toBal, then writes both back — the FSM
+// applies all Sets before Deletes (fsm/state.go), so the second write wins
+// and the balance is destroyed rather than left unchanged: a partial
+// self-transfer loses `amount`, a full self-transfer loses everything (the
+// toBalKey set is immediately followed by the fromBal==0 branch deleting
+// that same key). Both Check and Deliver must reject this outright.
+func TestCanoliqTransferRejectsSelfTransfer(t *testing.T) {
+	c, s := newTestCanoliq()
+	self := addr20(0x0f)
+	p := DefaultParams()
+
+	if resp := c.CheckMessageCanoliqTransfer(
+		&contract.MessageCanoliqTransfer{FromAddress: self, ToAddress: self, Amount: 100}, p.CanoliqTransferFee, p,
+	); resp.Error == nil {
+		t.Error("CheckTx should reject from_address == to_address")
+	}
+
+	// Partial: balance must survive at its original value, not amount-less.
+	seedAccount(s, self, 10_000)
+	s.set(KeyForCCNPYBalance(self), EncodeUint64(500))
+	resp := c.DeliverMessageCanoliqTransfer(
+		&contract.MessageCanoliqTransfer{FromAddress: self, ToAddress: self, Amount: 200}, 10_000, p,
+	)
+	if resp.Error == nil {
+		t.Fatal("Deliver should reject a self-transfer rather than silently destroying balance")
+	}
+	if readCcnpy(s, self) != 500 {
+		t.Fatalf("self-transfer must not touch the balance: got %d, want 500", readCcnpy(s, self))
+	}
+
+	// Full: the more destructive case (would have zeroed the balance entirely).
+	full := addr20(0x10)
+	seedAccount(s, full, 10_000)
+	s.set(KeyForCCNPYBalance(full), EncodeUint64(500))
+	resp = c.DeliverMessageCanoliqTransfer(
+		&contract.MessageCanoliqTransfer{FromAddress: full, ToAddress: full, Amount: 500}, 10_000, p,
+	)
+	if resp.Error == nil {
+		t.Fatal("Deliver should reject a full-balance self-transfer")
+	}
+	if readCcnpy(s, full) != 500 {
+		t.Fatalf("full self-transfer must not zero the balance: got %d, want 500", readCcnpy(s, full))
+	}
+}
+
 // TestCanoliqTransferDoesNotTouchPoolAccounting is the point of this
 // message's design: a transfer redistributes an existing claim on the pool,
 // it must never mint, burn, or otherwise move totalCcnpySupply /

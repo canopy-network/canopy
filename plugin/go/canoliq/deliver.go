@@ -1,6 +1,8 @@
 package canoliq
 
 import (
+	"bytes"
+
 	"github.com/canopy-network/go-plugin/contract"
 )
 
@@ -420,6 +422,13 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 // (and therefore the pool-math accounting #34/#36 guard) is untouched.
 func (c *Canoliq) DeliverMessageCanoliqTransfer(msg *contract.MessageCanoliqTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	_ = params
+	// Defense in depth: Check already rejects this, but Deliver does its own
+	// validation rather than trusting Check, and this specific case is a
+	// read-modify-write aliasing hazard (fromBalKey == toBalKey), not just a
+	// redundant business-rule check — worth guarding here independently.
+	if bytes.Equal(msg.FromAddress, msg.ToAddress) {
+		return &contract.PluginDeliverResponse{Error: ErrInvalidAddress()}
+	}
 	fromBalKey := KeyForCCNPYBalance(msg.FromAddress)
 	toBalKey := KeyForCCNPYBalance(msg.ToAddress)
 	cnpyFromKey := contract.KeyForAccount(msg.FromAddress)
@@ -505,6 +514,13 @@ func (c *Canoliq) DeliverMessageCanoliqTransfer(msg *contract.MessageCanoliqTran
 // DeliverMessageCPLQTransfer moves liquid CPLQ between two accounts.
 func (c *Canoliq) DeliverMessageCPLQTransfer(msg *contract.MessageCPLQTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginDeliverResponse {
 	_ = params
+	// Defense in depth: Check already rejects this (see
+	// CheckMessageCPLQTransfer), but this specific case is a read-modify-write
+	// aliasing hazard (fromBalKey == toBalKey), not just a redundant
+	// business-rule check — worth guarding here independently.
+	if bytes.Equal(msg.FromAddress, msg.ToAddress) {
+		return &contract.PluginDeliverResponse{Error: ErrInvalidAddress()}
+	}
 	fromBalKey := KeyForCPLQBalance(msg.FromAddress)
 	toBalKey := KeyForCPLQBalance(msg.ToAddress)
 	cnpyFromKey := contract.KeyForAccount(msg.FromAddress)
