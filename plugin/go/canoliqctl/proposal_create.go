@@ -441,6 +441,7 @@ type paramsJSON struct {
 	RedeemFee           uint64   `json:"redeemFee"`
 	ClaimFee            uint64   `json:"claimFee"`
 	CplqTransferFee     uint64   `json:"cplqTransferFee"`
+	CanoliqTransferFee  uint64   `json:"canoliqTransferFee"`
 	InsuranceBps        uint64   `json:"insuranceBps"`
 	TreasuryThreshold   uint64   `json:"treasuryThreshold"`
 	MultisigSigners     []string `json:"multisigSigners"`
@@ -550,6 +551,7 @@ func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 		RedeemFee:           p.RedeemFee,
 		ClaimFee:            p.ClaimFee,
 		CplqTransferFee:     p.CplqTransferFee,
+		CanoliqTransferFee:  p.CanoliqTransferFee,
 		InsuranceBps:        p.InsuranceBps,
 		TreasuryThreshold:   p.TreasuryThreshold,
 		MultisigSigners:     signers,

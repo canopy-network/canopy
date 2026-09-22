@@ -11,6 +11,7 @@ Complete reference of all canoLiq transaction messages.
 | `MessageCanoliqDeposit` | Deposits CNPY → mints cCNPY at current exchange rate | 1 |
 | `MessageCanoliqRedeem` | Burns cCNPY → queues `Redemption` (matures after unstaking window) | 1 |
 | `MessageCanoliqClaimRedemption` | Withdraws a matured `Redemption` to the user's CNPY account | 1 |
+| `MessageCanoliqTransfer` | Transfers liquid cCNPY between accounts (pure balance move, no mint/burn) | 1 |
 | `MessageCPLQTransfer` | Transfers liquid (vested) CPLQ between accounts | 1 |
 | `MessageCPLQClaimVested` | Unlocks newly-vested CPLQ across all vesting schedules | 1 |
 | `MessageCPLQStake` | Locks liquid CPLQ for governance weight | 2 |
@@ -33,6 +34,7 @@ Complete reference of all canoLiq transaction messages.
 | Deposit | `deposit_fee` |
 | Redeem | `redeem_fee` |
 | Claim Redemption | `claim_fee` |
+| cCNPY Transfer | `canoliq_transfer_fee` |
 | CPLQ Transfer | `cplq_transfer_fee` |
 | CPLQ Claim Vested | `claim_fee` |
 | CPLQ Stake | `stake_fee` |
