@@ -45,7 +45,7 @@ func TestObserveFirstRunSeedsBaselineNoDistribution(t *testing.T) {
 // fee + 40/30/15/15 split.
 func TestObserveStakeGrowthDistributesReward(t *testing.T) {
 	c, s := newTestCanoliq()
-	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 	// seedReward records rewardBaseStake as the baseline and grows the position
 	// by N; ProcessRewards should observe exactly N.
 	const N = 1_000_000
@@ -105,7 +105,7 @@ func TestObserveStakeDecreaseResetsBaselineNoDistribution(t *testing.T) {
 // observed stake, so their stake does not inflate the reward delta.
 func TestObserveExcludesValidatorsOffCommittee(t *testing.T) {
 	c, s := newTestCanoliq()
-	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 	onCommittee, offCommittee := addr20(0xC0), addr20(0xC1)
 	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{
 		{Address: onCommittee, Stake: rewardBaseStake},

@@ -290,7 +290,7 @@ func TestClaimRedemptionMaturity(t *testing.T) {
 func TestRewardSplitWhitepaperExample(t *testing.T) {
 	c, s := newTestCanoliq()
 	// Genesis must be marked complete so the reward sweep runs.
-	g := &contract.CanoliqGlobals{GenesisComplete: true}
+	g := &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy}
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
 	// Observe X=1000 uCNPY of committee reward as bonded-stake growth.
@@ -342,7 +342,7 @@ func TestRewardSplitWhitepaperExample(t *testing.T) {
 // 88% × Rewards Received."
 func TestWhitepaperSection7Reconciliation(t *testing.T) {
 	c, s := newTestCanoliq()
-	g := &contract.CanoliqGlobals{GenesisComplete: true}
+	g := &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy}
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
 	const R = 950 // canoLiq's committee share — non-round to exercise truncation
@@ -635,7 +635,7 @@ func TestDeliverCPLQClaimVestedFlow(t *testing.T) {
 // but was previously only tested at a single sweep.
 func TestRewardSweepMultiBlock(t *testing.T) {
 	c, s := newTestCanoliq()
-	g := &contract.CanoliqGlobals{GenesisComplete: true}
+	g := &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy}
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)
 

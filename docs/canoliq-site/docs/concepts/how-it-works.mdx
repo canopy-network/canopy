@@ -41,6 +41,18 @@ exchange rate simply rises, and your cCNPY is worth more CNPY over time. This is
 exchange rate = total pooled CNPY ÷ total cCNPY supply   (rises as rewards arrive)
 ```
 
+:::note When nobody holds cCNPY
+That formula needs a denominator. If the supply is zero, which is the state before the first
+deposit and again after every last holder redeems, there is no cCNPY for a reward to make more
+valuable, so the staker slice goes to the DAO treasury for those blocks instead of into the pool.
+
+Without that rule the pool would accumulate CNPY that no cCNPY has a claim on, and since minting
+divides by the pooled total, each block would shrink what the next depositor receives until
+deposits were refused outright. Routing the ownerless slice keeps the pool empty until someone
+actually holds a share, so the next deposit is minted 1:1 exactly like the first one. Accrual
+returns to the pool the moment any cCNPY exists.
+:::
+
 ### 3. A protocol fee is taken and split four ways
 
 Before rewards lift the exchange rate, canoLiq takes a **12% protocol fee** and splits it:

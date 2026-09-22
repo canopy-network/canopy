@@ -16,7 +16,7 @@ import (
 // lands in treasury untouched.
 func TestL3TxFeesBypassRewardSplitAndRouteToTreasury(t *testing.T) {
 	c, s := newTestCanoliq()
-	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 
 	const reward = 1_000_000
 	const txFee = 10_000
