@@ -61,16 +61,20 @@ func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginB
 // running it from BeginBlock is safe whether or not the FSM also dispatches
 // the explicit Genesis call.
 //
-// Once genesis has already completed, applyDevnetTvlCapOverride takes over —
-// see its doc comment for why a dev-profile committee needs a narrow
-// post-genesis knob instead of being able to just re-run genesis.
+// Once genesis has already completed, applyDevnetTvlCapOverride and
+// reconcileOrphanedPoolOnDevnet take over — see their doc comments for why a
+// dev-profile committee needs these narrow post-genesis knobs instead of
+// being able to just re-run genesis.
 func (c *Canoliq) bootstrapGenesisIfNeeded() *contract.PluginError {
 	g, err := c.LoadGlobals()
 	if err != nil {
 		return err
 	}
 	if g.GenesisComplete {
-		return c.applyDevnetTvlCapOverride()
+		if err := c.applyDevnetTvlCapOverride(); err != nil {
+			return err
+		}
+		return c.reconcileOrphanedPoolOnDevnet()
 	}
 	if c.Config.GenesisPath == "" {
 		// No genesis source configured. This is legitimate when the canoLiq

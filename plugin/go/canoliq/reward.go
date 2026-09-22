@@ -228,6 +228,82 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	return nil
 }
 
+// reconcileOrphanedPoolOnDevnet zeroes TotalPooledCnpy (and the escrow pool
+// backing it) on isDevProfile profiles when TotalCcnpySupply is still zero —
+// i.e. ProcessRewards has been compounding committee reward into the pool
+// (see the "User accrual" comment above) for a chain that has never had a
+// single real deposit mint any cCNPY against it.
+//
+// computeMint's exchange rate is amount*(totalCcnpy+1)/(totalPooled+1); with
+// totalCcnpy==0 that reduces to amount/(totalPooled+1). Once accrued reward
+// alone outgrows any realistic single deposit, every new deposit computes
+// mint=0 and is rejected by CheckMessageCanoliqDeposit ("pool math error:
+// mint computed to zero") — permanently, since nothing can grow
+// TotalCcnpySupply off zero to break the deadlock. A long-lived devnet
+// committee earns reward from having a staked validator alone, with no
+// deposit activity required to get there, so this is reachable purely by
+// leaving a devnet chain running (the same underlying pattern as the
+// tvlCapBps devnet override next door).
+//
+// Safe to run every block: it only ever mutates state while
+// TotalCcnpySupply is exactly zero, i.e. before any real depositor holds a
+// claim on the pool. The instant a real deposit mints the first cCNPY, this
+// becomes permanently inert (TotalCcnpySupply != 0 short-circuits above) —
+// it can never touch a balance any user holds a claim against.
+//
+// Resets the escrow pool in lockstep to preserve the
+// escrow == TotalPooledCnpy + PendingRedemptionCnpy invariant (state.go),
+// and the TVL high-water mark so it does not keep pointing at an accrual
+// nothing backs anymore.
+func (c *Canoliq) reconcileOrphanedPoolOnDevnet() *contract.PluginError {
+	if !isDevProfile(c.Config.Profile) {
+		return nil
+	}
+	globals, err := c.LoadGlobals()
+	if err != nil {
+		return err
+	}
+	if globals.TotalCcnpySupply != 0 || globals.TotalPooledCnpy == 0 {
+		return nil
+	}
+	escrowKey := KeyForEscrowPool()
+	eq := qid()
+	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
+		Keys: []*contract.PluginKeyRead{{QueryId: eq, Key: escrowKey}},
+	})
+	if err != nil {
+		return err
+	}
+	if resp.Error != nil {
+		return resp.Error
+	}
+	escrow := new(contract.Pool)
+	if len(resp.Results) > 0 && len(resp.Results[0].Entries) > 0 {
+		if e := contract.Unmarshal(resp.Results[0].Entries[0].Value, escrow); e != nil {
+			return e
+		}
+	}
+	// PendingRedemptionCnpy must already be 0 here — nothing could have been
+	// redeemed with zero cCNPY ever minted — but compute from it rather than
+	// assume, so the invariant holds even if that ever stops being true.
+	escrow.Amount = globals.PendingRedemptionCnpy
+	globals.TotalPooledCnpy = 0
+	globals.PeakTvlUcnpy = 0
+	eBz, e := contract.Marshal(escrow)
+	if e != nil {
+		return e
+	}
+	if err := c.SaveGlobals(globals); err != nil {
+		return err
+	}
+	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
+		Sets: []*contract.PluginSetOp{{Key: escrowKey, Value: eBz}},
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 // validatorOnCommittee reports whether val is a member of the given committee.
 func validatorOnCommittee(val *contract.Validator, chainId uint64) bool {
 	for _, id := range val.Committees {
