@@ -24,6 +24,7 @@ func TestLoadParamsBackfillsFieldsAddedAfterGenesis(t *testing.T) {
 	legacy.OtcTier90Blocks = 0
 	legacy.OtcTier120Blocks = 0
 	legacy.OtcMinLockUccnpy = 0
+	legacy.CanoliqTransferFee = 0 // field 38, same class: added after some chains had already genesised
 	bz, e := contract.Marshal(legacy)
 	if e != nil {
 		t.Fatalf("marshal legacy params: %v", e)
@@ -45,6 +46,10 @@ func TestLoadParamsBackfillsFieldsAddedAfterGenesis(t *testing.T) {
 	}
 	if got.OtcMinLockUccnpy != d.OtcMinLockUccnpy {
 		t.Errorf("OtcMinLockUccnpy = %d, want the default %d", got.OtcMinLockUccnpy, d.OtcMinLockUccnpy)
+	}
+	if got.CanoliqTransferFee != d.CanoliqTransferFee {
+		t.Errorf("CanoliqTransferFee = %d, want the default %d (a pre-existing chain would otherwise get free cCNPY transfers by omission, not governance choice)",
+			got.CanoliqTransferFee, d.CanoliqTransferFee)
 	}
 }
 

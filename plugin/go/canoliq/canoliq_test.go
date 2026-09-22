@@ -457,6 +457,37 @@ func TestCPLQTransferRespectsLiquidBalance(t *testing.T) {
 	}
 }
 
+// TestCPLQTransferRejectsSelfTransfer is the regression test for the same
+// aliasing hazard found in MessageCanoliqTransfer's review (#37) — inherited
+// here since MessageCanoliqTransfer was modeled directly on this handler.
+// fromBalKey/toBalKey alias to the same state key when from == to; Deliver
+// reads it into both fromBal and toBal and writes both back, so a
+// self-transfer destroys the balance instead of no-op'ing. No TotalCplqSupply
+// record exists to desync, but it still burns a holder's CPLQ for nothing.
+func TestCPLQTransferRejectsSelfTransfer(t *testing.T) {
+	c, s := newTestCanoliq()
+	self := addr20(0x11)
+	p := DefaultParams()
+
+	if resp := c.CheckMessageCPLQTransfer(
+		&contract.MessageCPLQTransfer{FromAddress: self, ToAddress: self, Amount: 100}, p.CplqTransferFee, p,
+	); resp.Error == nil {
+		t.Error("CheckTx should reject from_address == to_address")
+	}
+
+	seedAccount(s, self, 10_000)
+	s.set(KeyForCPLQBalance(self), EncodeUint64(500))
+	resp := c.DeliverMessageCPLQTransfer(
+		&contract.MessageCPLQTransfer{FromAddress: self, ToAddress: self, Amount: 500}, 10_000, p,
+	)
+	if resp.Error == nil {
+		t.Fatal("Deliver should reject a self-transfer rather than silently destroying balance")
+	}
+	if readCplq(s, self) != 500 {
+		t.Fatalf("self-transfer must not touch the balance: got %d, want 500", readCplq(s, self))
+	}
+}
+
 // TestGenesisAllocationTotals: after running genesis, sum of all liquid
 // balances + sum of all VestingSchedule.TotalAmount must equal CPLQTotalSupply.
 func TestGenesisAllocationTotals(t *testing.T) {

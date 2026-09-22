@@ -1,6 +1,7 @@
 package canoliq
 
 import (
+	"bytes"
 	"log"
 	"sync"
 
@@ -125,6 +126,8 @@ func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.Plugin
 		return c.CheckMessageCanoliqRedeem(x, request.Tx.Fee, params)
 	case *contract.MessageCanoliqClaimRedemption:
 		return c.CheckMessageCanoliqClaimRedemption(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqTransfer:
+		return c.CheckMessageCanoliqTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCPLQTransfer:
 		return c.CheckMessageCPLQTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCPLQClaimVested:
@@ -212,6 +215,8 @@ func (c *Canoliq) dispatchDeliver(request *contract.PluginDeliverRequest) *contr
 		return c.DeliverMessageCanoliqRedeem(x, request.Tx.Fee, params)
 	case *contract.MessageCanoliqClaimRedemption:
 		return c.DeliverMessageCanoliqClaimRedemption(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqTransfer:
+		return c.DeliverMessageCanoliqTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCPLQTransfer:
 		return c.DeliverMessageCPLQTransfer(x, request.Tx.Fee, params)
 	case *contract.MessageCPLQClaimVested:
@@ -313,9 +318,45 @@ func (c *Canoliq) CheckMessageCanoliqClaimRedemption(msg *contract.MessageCanoli
 	}
 }
 
+// CheckMessageCanoliqTransfer validates a cCNPY transfer statelessly. Pure
+// internal-balance move (see DeliverMessageCanoliqTransfer) — never mints or
+// burns, so it cannot interact with the pool-math accounting (#34/#36).
+func (c *Canoliq) CheckMessageCanoliqTransfer(msg *contract.MessageCanoliqTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+	if len(msg.FromAddress) != 20 || len(msg.ToAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	// A self-transfer aliases the same KeyForCCNPYBalance entry into both
+	// fromBal and toBal in Deliver; the FSM applies all Sets in order (see
+	// fsm/state.go), so the second write wins and silently destroys the
+	// balance (partial: loses `amount`; full: the fromBal==0 delete removes
+	// the very key the transfer just wrote). Reject outright rather than
+	// special-case the aliasing in Deliver.
+	if bytes.Equal(msg.FromAddress, msg.ToAddress) {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.Amount == 0 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if fee < params.CanoliqTransferFee {
+		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
+	}
+	return &contract.PluginCheckResponse{
+		Recipient:         msg.ToAddress,
+		AuthorizedSigners: [][]byte{msg.FromAddress},
+	}
+}
+
 // CheckMessageCPLQTransfer validates a CPLQ transfer statelessly.
 func (c *Canoliq) CheckMessageCPLQTransfer(msg *contract.MessageCPLQTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
 	if len(msg.FromAddress) != 20 || len(msg.ToAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	// Same aliasing hazard as CheckMessageCanoliqTransfer: Deliver reads the
+	// same KeyForCPLQBalance entry into both fromBal/toBal, and the FSM's
+	// Sets-then-Deletes ordering means a self-transfer silently destroys the
+	// balance rather than being a no-op. No TotalCplqSupply record exists to
+	// desync here, but it still burns a holder's CPLQ for nothing.
+	if bytes.Equal(msg.FromAddress, msg.ToAddress) {
 		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
 	}
 	if msg.Amount == 0 {

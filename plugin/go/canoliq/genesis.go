@@ -93,6 +93,7 @@ type GenesisParamsJSON struct {
 	RedeemFee           uint64   `json:"redeemFee"`
 	ClaimFee            uint64   `json:"claimFee"`
 	CplqTransferFee     uint64   `json:"cplqTransferFee"`
+	CanoliqTransferFee  uint64   `json:"canoliqTransferFee"`
 	InsuranceBps        uint64   `json:"insuranceBps"`
 	TreasuryThreshold   uint64   `json:"treasuryThreshold"`
 	MultisigSigners     []string `json:"multisigSigners"` // hex-encoded 20-byte addresses
@@ -495,6 +496,9 @@ func paramsFromJSON(p *GenesisParamsJSON) (*contract.CanoliqParams, *contract.Pl
 	}
 	if p.CplqTransferFee != 0 {
 		d.CplqTransferFee = p.CplqTransferFee
+	}
+	if p.CanoliqTransferFee != 0 {
+		d.CanoliqTransferFee = p.CanoliqTransferFee
 	}
 	if p.InsuranceBps != 0 {
 		d.InsuranceBps = p.InsuranceBps
