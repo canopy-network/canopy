@@ -5,8 +5,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/canopy-network/canopy/bft"
+	"github.com/canopy-network/canopy/lib"
 	"github.com/stretchr/testify/require"
 )
+
+func TestValidConsensusSender(t *testing.T) {
+	msg := &bft.Message{Signature: &lib.Signature{PublicKey: []byte{1}}}
+	require.True(t, validConsensusSender([]byte{1}, msg, false))
+	require.False(t, validConsensusSender([]byte{2}, msg, false))
+	require.True(t, validConsensusSender([]byte{2}, msg, true))
+	require.False(t, validConsensusSender([]byte{1}, &bft.Message{}, true))
+}
 
 func TestResolvePluginCtlPath(t *testing.T) {
 	wd, err := os.Getwd()

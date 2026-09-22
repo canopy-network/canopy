@@ -81,6 +81,15 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 	if err = x.Qc.CheckBasic(); err != nil {
 		return
 	}
+	qcHeader := x.Header.Copy()
+	qcHeader.Phase--
+	if !x.Qc.Header.Equals(qcHeader) {
+		return false, lib.ErrWrongPhase()
+	}
+	// ensure the sender is justified as the proposer
+	if !bytes.Equal(x.Qc.ProposerKey, x.Signature.PublicKey) {
+		return false, lib.ErrInvalidSigner()
+	}
 	// if an unexpected root height
 	if x.Qc.Header.RootHeight != p.rootHeight {
 		// load the proper committee
@@ -136,10 +145,6 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 		return false, lib.ErrInvalidQCCommitteeHeight()
 	}
 	if x.Header.Phase == Propose {
-		// ensure the sender is justified as the proposer
-		if !bytes.Equal(x.Qc.ProposerKey, x.Signature.PublicKey) {
-			return false, lib.ErrInvalidSigner()
-		}
 		// ensure the block isn't nil
 		if x.Qc.Block == nil {
 			return false, lib.ErrNilBlock()

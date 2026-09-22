@@ -1,6 +1,8 @@
 package lib
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -40,4 +42,15 @@ func TestFileConfig(t *testing.T) {
 	require.NoError(t, err)
 	// compare got vs expected
 	require.Equal(t, config, got)
+}
+
+func TestRestrictedAddressesOmitEmpty(t *testing.T) {
+	bz, err := json.Marshal(DefaultConfig())
+	require.NoError(t, err)
+	require.NotContains(t, string(bz), "restrictedAddresses")
+	c := DefaultConfig()
+	c.RestrictedAddresses = []string{"01"}
+	bz, err = json.Marshal(c)
+	require.NoError(t, err)
+	require.True(t, bytes.Contains(bz, []byte(`"restrictedAddresses":["01"]`)))
 }

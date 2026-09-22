@@ -239,6 +239,7 @@ func (tc *testConsensus) simLead(t *testing.T, mk crypto.MultiPublicKeyI, round 
 			ResultsHash: resHash,
 			Block:       block,
 			BlockHash:   blkHash,
+			ProposerKey: tc.bft.ProposerKey,
 			Signature: &lib.AggregateSignature{
 				Signature: as,
 				Bitmap:    mk.Bitmap(),
@@ -276,6 +277,7 @@ func (tc *testConsensus) simVote(t *testing.T, round uint64, phase Phase, callba
 				Header:      tc.view(phase, round),
 				BlockHash:   blkHash,
 				ResultsHash: resHash,
+				ProposerKey: tc.bft.ProposerKey,
 			},
 		}
 		// execute callback on the message to allow custom phase functionality
@@ -354,6 +356,7 @@ func (tc *testConsensus) newPartialQCDoubleSign(t *testing.T, phase Phase) {
 		Header:      tc.view(phase-1, 1),
 		BlockHash:   crypto.Hash([]byte("some proposal")),
 		ResultsHash: crypto.Hash([]byte("some results")),
+		ProposerKey: tc.valKeys[0].PublicKey().Bytes(),
 	}
 	// create the bytes to be signed by the 'double signers'
 	sb := qc.SignBytes()

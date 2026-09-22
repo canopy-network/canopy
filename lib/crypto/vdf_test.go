@@ -117,6 +117,17 @@ func TestRandomInput(t *testing.T) {
 	}
 }
 
+func TestVerifyVDFRejectsMalformedProofs(t *testing.T) {
+	seed := []byte{0xde, 0xad, 0xbe, 0xef}
+	const iterations = 50
+	validOut, validProof := GenerateVDF(seed, iterations, nil)
+	zeroCoefficient := []byte{0x0a, 0x01, 0x00, 0x12, 0x01, 0x00}
+	require.False(t, VerifyVDF(seed, nil, validProof, iterations))
+	require.False(t, VerifyVDF(seed, validOut, nil, iterations))
+	require.False(t, VerifyVDF(seed, zeroCoefficient, validProof, iterations))
+	require.False(t, VerifyVDF(seed, validOut, zeroCoefficient, iterations))
+}
+
 func TestInterruptGenerator(t *testing.T) {
 	seed := []byte{0xde, 0xad, 0xbe, 0xef}
 	stop := make(chan struct{})
