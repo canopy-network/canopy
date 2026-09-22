@@ -82,7 +82,7 @@ type RCManager struct {
 	controller    *controller.Controller        // reference to controller for state access
 	subscriptions map[uint64]*RCSubscription    // chainId -> subscription
 	subscribers   map[uint64][]*RCSubscriber    // chainId -> subscribers
-	l             *sync.Mutex                   // thread safety
+	l             *controller.ControllerLock    // shared, centrally-managed controller lock (see controller/lock.go)
 	afterRCUpdate func(info *lib.RootChainInfo) // callback after the root chain info update
 	upgrader      websocket.Upgrader            // upgrade http connection to ws
 	log           lib.LoggerI                   // stdout log
@@ -135,7 +135,7 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 		controller:                 controller,
 		subscriptions:              make(map[uint64]*RCSubscription),
 		subscribers:                make(map[uint64][]*RCSubscriber),
-		l:                          controller.Mutex,
+		l:                          controller.ControllerLock,
 		afterRCUpdate:              controller.UpdateRootChainInfo,
 		upgrader:                   websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 		log:                        logger,
@@ -217,22 +217,24 @@ func (r *RCManager) GetHeight(rootChainId uint64) uint64 {
 // GetRootChainInfo() retrieves the root chain info from the root chain 'on-demand'
 func (r *RCManager) GetRootChainInfo(rootChainId, chainId uint64) (info *lib.RootChainInfo, err lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	// lock for thread safety
+	// grab the subscription under the lock, but do NOT hold the (shared controller) lock across the
+	// remote root-chain call below: a hung call would pin the controller mutex and wedge the node
 	r.l.Lock()
-	defer r.l.Unlock()
-	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
+	r.l.Unlock()
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
 	}
-	// get the info
+	// execute the remote call without holding the controller lock
 	info, err = sub.RootChainInfo(0, chainId)
 	if err != nil {
 		return nil, err
 	}
-	// update the info
+	// store the refreshed info under the lock
+	r.l.Lock()
 	sub.Info = info
+	r.l.Unlock()
 	// exit with the info
 	return
 }
