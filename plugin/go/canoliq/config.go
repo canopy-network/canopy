@@ -149,6 +149,13 @@ type AlertConfig struct {
 	// redemptions exceeds this value (default 10). Counts the global
 	// mature-redemption index up to current height; severity crit.
 	StuckRedemptionCount uint64 `json:"stuckRedemptionCount,omitempty"`
+	// SupplyDesyncFloorBps fires supply_pool_desync when a reference 1 CNPY
+	// deposit would mint fewer than this many bps of "fair" cCNPY against the
+	// current totalCcnpySupply/totalPooledCnpy ratio (default 100 = 1%). See
+	// PR #34 — a desync originating below the plugin (base-chain reset,
+	// rollback) can still leave cCNPY supply out of step with pooled CNPY,
+	// and #34 only stops it from *worsening* through normal reward accrual.
+	SupplyDesyncFloorBps uint64 `json:"supplyDesyncFloorBps,omitempty"`
 }
 
 // localnetPlaceholderAddress is the single hex address every bundled
