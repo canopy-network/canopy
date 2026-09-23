@@ -114,6 +114,15 @@ type Config struct {
 	GenesisPath               string `json:"genesisPath"`
 	RpcAddress                string `json:"rpcAddress"`
 	RedemptionUnstakingBlocks uint64 `json:"redemptionUnstakingBlocks"`
+	// ActivationHeight pins the block at which bootstrapGenesisIfNeeded runs
+	// genesis from GenesisPath. The self-bootstrap otherwise fires at whatever
+	// height the plugin first starts with a GenesisPath, which differs per node:
+	// a validator activating live at height N and a full node re-syncing from
+	// height 1 would write canoLiq state at different blocks and fork. With a
+	// pinned height every node — live or replaying — writes it in the same
+	// block. 0 keeps the legacy run-immediately behavior; SafetyCheck refuses
+	// 0 under profile=mainnet whenever GenesisPath is set.
+	ActivationHeight uint64 `json:"activationHeight,omitempty"`
 	// Alerts configures the optional push-alert webhook (T6). Nil or empty
 	// WebhookURL disables it (mirrors RpcAddress). CANOLIQ_ALERT_URL overrides
 	// the URL at startup.
@@ -151,6 +160,13 @@ type AlertConfig struct {
 	// redemptions exceeds this value (default 10). Counts the global
 	// mature-redemption index up to current height; severity crit.
 	StuckRedemptionCount uint64 `json:"stuckRedemptionCount,omitempty"`
+	// SupplyDesyncFloorBps fires supply_pool_desync when a reference 1 CNPY
+	// deposit would mint fewer than this many bps of "fair" cCNPY against the
+	// current totalCcnpySupply/totalPooledCnpy ratio (default 100 = 1%). See
+	// PR #34 — a desync originating below the plugin (base-chain reset,
+	// rollback) can still leave cCNPY supply out of step with pooled CNPY,
+	// and #34 only stops it from *worsening* through normal reward accrual.
+	SupplyDesyncFloorBps uint64 `json:"supplyDesyncFloorBps,omitempty"`
 }
 
 // localnetPlaceholderAddress is the single hex address every bundled
@@ -377,6 +393,14 @@ func (c Config) SafetyCheck() error {
 	if !isDevProfile(c.Profile) && gf.Params != nil && gf.Params.TvlCapBps != nil && *gf.Params.TvlCapBps == 0 {
 		return fmt.Errorf("canoliq: refusing to start profile=%q with tvlCapBps=0 in %s (an uncapped genesis is allowed only on the localnet and devnet profiles; elsewhere lifting the TVL cap is a governance decision per WP §9.4)",
 			c.Profile, c.GenesisPath)
+	}
+	// Checked last so the more specific genesis errors above surface first.
+	// A mainnet genesis written at an unpinned height is exactly the fork the
+	// ActivationHeight field exists to prevent — fail closed rather than let
+	// each node pick its own block.
+	if c.Profile == ProfileMainnet && c.ActivationHeight == 0 {
+		return fmt.Errorf("canoliq: refusing to start profile=%q with genesisPath set but activationHeight=0 (pin the block at which genesis runs so every node writes canoLiq state at the same height)",
+			c.Profile)
 	}
 	return nil
 }

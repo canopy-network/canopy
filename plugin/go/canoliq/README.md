@@ -927,6 +927,31 @@ divergence, (b) a Canopy-core state-machine fix, or (c) graduation
 to a new chain (Phase 3 §3 — not yet built). Build a snapshot
 export tool *before* you need it.
 
+#### cCNPY supply desynced from pooled CNPY
+
+The above covers CPLQ supply arithmetic; this is the separate
+cCNPY/pooled-CNPY case. `totalCcnpySupply` can fall out of step with
+`totalPooledCnpy` — a full redeem drains supply to 0 while pooled
+retains dust (deliberate, see `fee.go:22-25`), and a desync
+originating below the plugin (a base-chain reset, a rollback) can
+do the same at any supply level. PR #34 stops normal reward accrual
+from creating or worsening this once it's reached zero, but a
+below-the-plugin desync is invisible to the plugin itself.
+
+The `supply_pool_desync` alert (T6, `alerts.go`) is the detection
+side: every `EndBlock` it asks `computeMint` what a reference 1 CNPY
+deposit would mint right now and fires `crit` if that's below
+`supplyDesyncFloorBps` (default 1%) of fair. Check `/v1/globals` for
+`totalCcnpySupply` and `totalPooledCnpy` directly to confirm.
+
+Recovery is the same shape as CPLQ state corruption — no rollback
+button. On testnet, prefer a fresh chainId over diagnosing. On
+mainnet: (a) a governance `param_change` that compensates (there is
+currently no purpose-built proposal type for this specific
+divergence — `ACTION_PROTOCOL_UPGRADE` is the closest existing
+lever), or (b) escalate to a Canopy core engineer if the divergence
+traces to base-chain state rather than anything the plugin wrote.
+
 ### Production deployment checklist
 
 A condensed pre-flight you can paste into a release ticket:
@@ -1499,7 +1524,9 @@ Full config block (all knobs optional except `webhookUrl`):
   "concentrationAlertBps": 6600,             // one validator > 66% of stake
   "tvlDropBps": 2000,                        // TVL drop > 20% over window
   "defaultMinIntervalBlocks": 100,           // debounce between re-fires
-  "minIntervalBlocks": { "tvl_drop": 50 }    // per-kind debounce override
+  "minIntervalBlocks": { "tvl_drop": 50 },   // per-kind debounce override
+  "stuckRedemptionCount": 10,                // mature unclaimed redemptions
+  "supplyDesyncFloorBps": 100                // reference-deposit mint floor, 1%
 }
 ```
 
@@ -1510,12 +1537,13 @@ Full config block (all knobs optional except `webhookUrl`):
 | `buyback_drain` | warn | buyback pool drains > `drainAlertBps` within a `windowBlocks` window |
 | `validator_concentration` | warn | one committee validator holds > `concentrationAlertBps` of total stake |
 | `tvl_drop` | crit | total pooled CNPY drops > `tvlDropBps` within a `windowBlocks` window |
+| `stuck_redemption` | crit | mature unclaimed redemptions exceed `stuckRedemptionCount` |
+| `supply_pool_desync` | crit | a reference 1 CNPY deposit would mint < `supplyDesyncFloorBps` of fair cCNPY — see [State corruption suspected](#state-corruption-suspected) |
 
 Drain/drop use a **tumbling** window: the baseline re-anchors every
 `windowBlocks` blocks (not a true sliding window — simpler, no per-block
-ring buffer). Concentration is instantaneous. A *stuck-redemption* condition
-is planned but deferred: it needs a global mature-unclaimed-redemption index
-that does not exist yet.
+ring buffer). Concentration, stuck-redemption, and supply-pool-desync are
+all instantaneous state checks, not rate-of-change.
 
 ### Payload
 

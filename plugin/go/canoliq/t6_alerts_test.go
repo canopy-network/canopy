@@ -143,6 +143,85 @@ func TestT6ThresholdEdge(t *testing.T) {
 	}
 }
 
+// evalDesyncAt seeds totalCcnpySupply/totalPooledCnpy directly (evalAt only
+// covers buyback/pooled) and runs one evaluation pass at height.
+func evalDesyncAt(t *testing.T, c *Canoliq, s *fakeStore, height, supply, pooled uint64) {
+	t.Helper()
+	g := loadGlobals(t, s)
+	g.TotalCcnpySupply = supply
+	g.TotalPooledCnpy = pooled
+	seedGlobals(s, g)
+	if err := c.refreshSnapshot(height); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if err := c.evaluateAlerts(height); err != nil {
+		t.Fatalf("evaluateAlerts: %v", err)
+	}
+}
+
+// TestT6SupplyPoolDesyncFires reproduces PR #34's own degenerate state (the
+// residual dust left behind by a full redeem, with no shareholders) and
+// expects a crit alert — the exact production symptom, minus needing #34's
+// pre-fix reward-accrual loop to reach it.
+func TestT6SupplyPoolDesyncFires(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	evalDesyncAt(t, c, s, 1, 0, 46_400_001) // supply=0, dust pooled — PR #34's own numbers
+	if countKind(*got, AlertSupplyPoolDesync) != 1 {
+		t.Fatalf("expected supply_pool_desync alert, got %d", countKind(*got, AlertSupplyPoolDesync))
+	}
+	e := (*got)[len(*got)-1]
+	if e.Severity != severityCrit {
+		t.Errorf("severity: got %s, want crit", e.Severity)
+	}
+	if e.Details["referenceMintBps"] != uint64(0) {
+		t.Errorf("referenceMintBps: got %v, want 0", e.Details["referenceMintBps"])
+	}
+}
+
+// TestT6SupplyPoolDesyncNotJustZero confirms the degenerate zone extends past
+// exactly totalCcnpySupply==0 — PR #34's own table showed supply=100 against
+// a 46.4M pool still mints a badly unfavorable rate, which is exactly the
+// "worse than being refused" case the PR called out.
+func TestT6SupplyPoolDesyncNotJustZero(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	evalDesyncAt(t, c, s, 1, 100, 46_400_001)
+	if countKind(*got, AlertSupplyPoolDesync) != 1 {
+		t.Fatalf("supply=100 against a dust-heavy pool should still fire, got %d fires", countKind(*got, AlertSupplyPoolDesync))
+	}
+}
+
+// TestT6SupplyPoolDesyncHealthyDoesNotFire: a freshly-genesised (0/0) pool and
+// a pool with a real, live 1:1-ish ratio must not false-positive.
+func TestT6SupplyPoolDesyncHealthyDoesNotFire(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	evalDesyncAt(t, c, s, 1, 0, 0) // virgin genesis state — no deposits yet
+	if countKind(*got, AlertSupplyPoolDesync) != 0 {
+		t.Error("virgin 0/0 state should not fire")
+	}
+	c2, s2, got2 := newAlertTest(t)
+	evalDesyncAt(t, c2, s2, 1, 1_000_000, 1_050_000) // a live pool, modest real yield
+	if countKind(*got2, AlertSupplyPoolDesync) != 0 {
+		t.Error("a healthy live pool should not fire")
+	}
+}
+
+// TestT6SupplyPoolDesyncResolves: once a deposit restores a live ratio, the
+// watermark clears and a later re-desync fires again — same debounce/
+// resolution contract as every other alert in this file.
+func TestT6SupplyPoolDesyncResolves(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	evalDesyncAt(t, c, s, 1, 0, 46_400_001) // fires
+	evalDesyncAt(t, c, s, 2, 0, 46_400_001) // still desynced, within debounce -> no re-fire
+	if n := countKind(*got, AlertSupplyPoolDesync); n != 1 {
+		t.Fatalf("debounce: expected 1 fire, got %d", n)
+	}
+	evalDesyncAt(t, c, s, 3, 1_000_000, 1_050_000) // resolved: a real deposit landed
+	evalDesyncAt(t, c, s, 4, 0, 46_400_001)         // desyncs again -> fires again
+	if n := countKind(*got, AlertSupplyPoolDesync); n != 2 {
+		t.Fatalf("post-resolution: expected 2 total fires, got %d", n)
+	}
+}
+
 // TestT6PostAlertDelivery exercises the real HTTP path: json/slack/discord
 // formats reach a mock receiver, and a 500 response is handled gracefully.
 func TestT6PostAlertDelivery(t *testing.T) {

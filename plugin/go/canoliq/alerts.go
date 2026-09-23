@@ -30,6 +30,7 @@ const (
 	AlertTVLDrop                = "tvl_drop"
 	AlertStuckRedemption        = "stuck_redemption"
 	AlertProposalExecFailed     = "proposal_execution_failed"
+	AlertSupplyPoolDesync       = "supply_pool_desync"
 )
 
 // Alert severities.
@@ -49,6 +50,7 @@ const (
 	alertDefaultConcentBps         = 6_600 // 66%
 	alertDefaultTVLDropBps         = 2_000 // 20%
 	alertDefaultStuckRedemptionCnt = 10    // mature unclaimed redemptions
+	alertDefaultDesyncFloorBps     = 100   // 1% — see checkSupplyPoolDesync
 )
 
 // AlertEnvelope is the canonical alert payload. Slack / Discord adapters
@@ -180,6 +182,12 @@ func (cfg *AlertConfig) stuckRedemptionCount() uint64 {
 	}
 	return alertDefaultStuckRedemptionCnt
 }
+func (cfg *AlertConfig) desyncFloorBps() uint64 {
+	if cfg != nil && cfg.SupplyDesyncFloorBps > 0 {
+		return cfg.SupplyDesyncFloorBps
+	}
+	return alertDefaultDesyncFloorBps
+}
 func (cfg *AlertConfig) minInterval(kind string) uint64 {
 	if cfg != nil {
 		if v, ok := cfg.MinIntervalBlocks[kind]; ok {
@@ -212,6 +220,9 @@ func (c *Canoliq) evaluateAlerts(height uint64) *contract.PluginError {
 		return err
 	}
 	if err := c.checkStuckRedemption(height, cfg); err != nil {
+		return err
+	}
+	if err := c.checkSupplyPoolDesync(s, height, cfg); err != nil {
 		return err
 	}
 	return nil
@@ -330,6 +341,44 @@ func (c *Canoliq) checkValidatorConcentration(s *Snapshot, height uint64, cfg *A
 	return c.applyAlert(AlertValidatorConcentration, fired, height, severityWarn,
 		"validator stake concentration above threshold", map[string]any{
 			"maxStake": max, "totalStake": total, "concentrationBps": concentBps, "thresholdBps": cfg.concentBps(),
+		}, st)
+}
+
+// checkSupplyPoolDesync fires when totalCcnpySupply has fallen out of step
+// with totalPooledCnpy such that new deposits mint far below fair value —
+// the exact failure mode #31/#34 addressed (an empty-pool redeem leaves dust
+// in totalPooledCnpy with totalCcnpySupply at 0, and pre-#34 reward accrual
+// made it worse every block). #34 stops normal reward accrual from *creating*
+// or *worsening* this state, but a desync originating below the plugin — a
+// base-chain reset, a rollback, any anomaly the plugin cannot itself observe —
+// is invisible to it. This check is the general symptom, independent of
+// cause: ask computeMint (the same function DeliverMessageCanoliqDeposit
+// itself calls) what a reference 1 CNPY deposit would mint right now, and
+// alert if that's below desyncFloorBps of fair (10,000 uccnpy at a 1:1 rate).
+// Instantaneous — no tumbling window, this is a state check, not a rate of
+// change — and `crit` severity: it means deposits are either failing outright
+// or minting at an undisclosed, badly unfavorable rate.
+//
+// The floor is intentionally far below anything reachable through legitimate
+// operation: even decades of real staking yield compounding in cCNPY's favor
+// moves the reference mint gradually toward zero from 1,000,000, not to the
+// near-zero values (2, 215) #34's own reproduction table showed for a
+// genuinely desynced pool. See PR #34's "Still open" section — this is the
+// detection half it explicitly left for follow-up.
+func (c *Canoliq) checkSupplyPoolDesync(s *Snapshot, height uint64, cfg *AlertConfig) *contract.PluginError {
+	st, err := c.loadAlertState(AlertSupplyPoolDesync)
+	if err != nil {
+		return err
+	}
+	pooled := s.Globals.TotalPooledCnpy
+	supply := s.Globals.TotalCcnpySupply
+	referenceMint := computeMint(1_000_000, supply, pooled)
+	referenceMintBps := mulDiv(referenceMint, 10_000, 1_000_000)
+	fired := referenceMintBps < cfg.desyncFloorBps()
+	return c.applyAlert(AlertSupplyPoolDesync, fired, height, severityCrit,
+		"cCNPY supply desynced from pooled CNPY — a reference deposit would mint far below fair value", map[string]any{
+			"totalPooledCnpy": pooled, "totalCcnpySupply": supply,
+			"referenceMintBps": referenceMintBps, "floorBps": cfg.desyncFloorBps(),
 		}, st)
 }
 

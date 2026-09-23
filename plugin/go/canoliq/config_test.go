@@ -82,6 +82,7 @@ func TestSafetyCheckTestnetAcceptsRealAddress(t *testing.T) {
 	c := DefaultConfig()
 	c.Profile = ProfileMainnet
 	c.RedemptionUnstakingBlocks = 30240 // valid window (M2) so only the address path is exercised
+	c.ActivationHeight = 10_000
 	c.GenesisPath = gp
 	if err := c.SafetyCheck(); err != nil {
 		t.Fatalf("mainnet safety check rejected real address: %v", err)
@@ -367,6 +368,7 @@ func TestSafetyCheckRejectsUnrecognizedProfile(t *testing.T) {
 		c := DefaultConfig()
 		c.Profile = profile
 		c.RedemptionUnstakingBlocks = 30240
+		c.ActivationHeight = 10_000
 		c.GenesisPath = gp
 		if err := c.SafetyCheck(); err != nil {
 			t.Errorf("profile %q rejected: %v", profile, err)
@@ -414,28 +416,45 @@ func TestSafetyCheckRejectsTemplatePlaceholders(t *testing.T) {
 }
 
 // TestShippedTemplatesRefuseToBoot is the regression test for the whole class:
-// both shipped non-localnet templates must be unbootable as committed. If
-// someone fills one in and commits it, this fails loudly, which is the point.
+// the shipped testnet template must be unbootable as committed. (The mainnet
+// genesis used to be covered here too; it now carries the real launch
+// addresses — see TestMainnetGenesisIsLaunchReady.)
 func TestShippedTemplatesRefuseToBoot(t *testing.T) {
-	for _, path := range []string{"genesis.testnet.json", "genesis.mainnet.json"} {
-		t.Run(path, func(t *testing.T) {
-			c := DefaultConfig()
-			c.Profile = ProfileMainnet
-			c.ChainId = mainnetCommitteeId
-			c.RedemptionUnstakingBlocks = 30240
-			c.GenesisPath = path
-			err := c.SafetyCheck()
-			if err == nil {
-				t.Fatalf("%s booted with placeholders still in place", path)
-			}
-			// Assert *why* it refused. SafetyCheck has several failure modes and
-			// more have been added since; without this the test would keep
-			// passing on an unreadable path or an unset chain id and silently
-			// stop covering the placeholders it exists to catch.
-			if !strings.Contains(err.Error(), "placeholder") {
-				t.Fatalf("%s refused for the wrong reason (want a placeholder rejection): %v", path, err)
-			}
-		})
+	c := DefaultConfig()
+	c.Profile = ProfileMainnet
+	c.ChainId = mainnetCommitteeId
+	c.RedemptionUnstakingBlocks = 30240
+	c.ActivationHeight = 10_000
+	c.GenesisPath = "genesis.testnet.json"
+	err := c.SafetyCheck()
+	if err == nil {
+		t.Fatalf("genesis.testnet.json booted with placeholders still in place")
+	}
+	// Assert *why* it refused. SafetyCheck has several failure modes and
+	// more have been added since; without this the test would keep
+	// passing on an unreadable path or an unset chain id and silently
+	// stop covering the placeholders it exists to catch.
+	if !strings.Contains(err.Error(), "placeholder") {
+		t.Fatalf("genesis.testnet.json refused for the wrong reason (want a placeholder rejection): %v", err)
+	}
+}
+
+// TestMainnetGenesisIsLaunchReady: genesis.mainnet.json is no longer a
+// template — it carries the real bucket recipients and multisig signers and
+// is what gets deployed on committee 29. It must pass every SafetyCheck guard
+// once an activation height is pinned, and be refused without one.
+func TestMainnetGenesisIsLaunchReady(t *testing.T) {
+	c := DefaultConfig()
+	c.Profile = ProfileMainnet
+	c.ChainId = mainnetCommitteeId
+	c.RedemptionUnstakingBlocks = 30240
+	c.GenesisPath = "genesis.mainnet.json"
+	if err := c.SafetyCheck(); err == nil || !strings.Contains(err.Error(), "activationHeight=0") {
+		t.Fatalf("mainnet genesis without activationHeight: want refusal, got %v", err)
+	}
+	c.ActivationHeight = 10_000
+	if err := c.SafetyCheck(); err != nil {
+		t.Fatalf("mainnet genesis rejected: %v", err)
 	}
 }
 
@@ -473,11 +492,12 @@ func TestSafetyCheckRejectsUnsetChainId(t *testing.T) {
 	// A real committee id passes.
 	c = DefaultConfig()
 	c.Profile = ProfileMainnet
-	c.ChainId = 19
+	c.ChainId = 29
 	c.RedemptionUnstakingBlocks = 30240
+	c.ActivationHeight = 10_000
 	c.GenesisPath = gp
 	if err := c.SafetyCheck(); err != nil {
-		t.Fatalf("chainId=19 should pass: %v", err)
+		t.Fatalf("chainId=29 should pass: %v", err)
 	}
 }
 
@@ -487,11 +507,10 @@ func TestSafetyCheckRejectsUnsetChainId(t *testing.T) {
 // every fee-pool key is scoped by it and committee membership is matched on
 // it, so a wrong value fails silently rather than loudly (see
 // TestSafetyCheckRejectsUnsetChainId).
-const mainnetCommitteeId = 19
+const mainnetCommitteeId = 29
 
 // TestMainnetConfigCarriesCommitteeId pins the shipped mainnet config to the
-// registered committee id. The genesis it points at is still a placeholder
-// template that refuses to boot (TestShippedTemplatesRefuseToBoot), but genesis
+// registered committee id (29, confirmed via the graduation record). Genesis
 // is one-shot, so a regression here must fail in CI rather than on a live
 // mainnet.
 func TestMainnetConfigCarriesCommitteeId(t *testing.T) {
