@@ -17,14 +17,17 @@ build-local:
 	rm -rf bin && dotnet publish -c Release -r linux-x64 --self-contained true -o bin
 
 # Testing
-test:
-	dotnet test
+# Build first, then run tests with --no-build --no-restore so the test step
+# never triggers an implicit NuGet restore against the network (which can hang
+# when nuget.org is slow or unreachable). Packages are restored during `build`.
+test: build
+	dotnet test --no-build --no-restore
 
-test-verbose:
-	dotnet test --verbosity normal
+test-verbose: build
+	dotnet test --no-build --no-restore --verbosity normal
 
-test-tutorial:
-	dotnet test tutorial/CanopyPlugin.Tutorial.csproj --logger "console;verbosity=detailed"
+test-tutorial: build
+	dotnet test tutorial/CanopyPlugin.Tutorial.csproj --no-build --no-restore --logger "console;verbosity=detailed"
 
 test-cov:
 	dotnet test --collect:"XPlat Code Coverage" --results-directory:./TestResults

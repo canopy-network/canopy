@@ -600,11 +600,15 @@ cd plugin/csharp
 make test-tutorial
 ```
 
-Or run directly:
+Or run directly. Build first, then run the tests with `--no-build --no-restore`
+so the test step doesn't trigger an implicit NuGet restore against the network
+(a bare `dotnet test` can hang at `Determining projects to restore...` when
+nuget.org is slow or unreachable):
 
 ```bash
-cd plugin/csharp/tutorial
-dotnet test --logger "console;verbosity=detailed"
+cd plugin/csharp
+dotnet build
+dotnet test tutorial/CanopyPlugin.Tutorial.csproj --no-build --no-restore --logger "console;verbosity=detailed"
 ```
 
 ### Test Prerequisites

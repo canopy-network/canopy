@@ -577,15 +577,22 @@ docker run -it --entrypoint /bin/sh canopy-python
 
 ## Step 8: Testing
 
-Run the RPC tests from the `tutorial` directory:
+Run the RPC tests from the `tutorial` directory.
+
+On most modern Linux distributions the system Python is "externally managed"
+([PEP 668](https://peps.python.org/pep-0668/)), so installing packages with a
+bare `pip install` fails with an `externally-managed-environment` error. Use a
+virtual environment to avoid this:
 
 ```bash
 cd plugin/python/tutorial
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 python rpc_test.py
 ```
 
-Or using make:
+Or using make (which creates and uses the `.venv` for you):
 
 ```bash
 cd plugin/python/tutorial
@@ -673,8 +680,10 @@ After implementing the new transaction types and starting Canopy with the plugin
 cd ~/canopy
 ~/go/bin/canopy start
 
-# Terminal 2: Run the tests
+# Terminal 2: Run the tests (inside a virtual environment)
 cd ~/canopy/plugin/python/tutorial
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 python rpc_test.py
 ```
