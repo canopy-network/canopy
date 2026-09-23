@@ -20,7 +20,6 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
-import java.util.Base64
 import kotlin.random.Random
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -233,14 +232,6 @@ class RpcTest {
     }
     
     /**
-     * Convert hex string to base64 (for protojson bytes encoding).
-     */
-    private fun hexToBase64(hexStr: String): String {
-        val bytes = hexStr.hexToBytes()
-        return Base64.getEncoder().encodeToString(bytes)
-    }
-    
-    /**
      * HTTP POST helper that sends JSON and returns response body.
      */
     private fun postRawJson(url: String, jsonBody: String): String {
@@ -381,8 +372,8 @@ class RpcTest {
         height: Long
     ): String {
         val faucetMsg = mapOf(
-            "signerAddress" to hexToBase64(signerKey.address),
-            "recipientAddress" to hexToBase64(recipientAddr),
+            "signerAddress" to signerKey.address,
+            "recipientAddress" to recipientAddr,
             "amount" to amount
         )
         
@@ -404,8 +395,8 @@ class RpcTest {
         height: Long
     ): String {
         val sendMsg = mapOf(
-            "fromAddress" to hexToBase64(fromAddr),
-            "toAddress" to hexToBase64(toAddr),
+            "fromAddress" to fromAddr,
+            "toAddress" to toAddr,
             "amount" to amount
         )
         
@@ -427,8 +418,8 @@ class RpcTest {
         height: Long
     ): String {
         val rewardMsg = mapOf(
-            "adminAddress" to hexToBase64(adminAddr),
-            "recipientAddress" to hexToBase64(recipientAddr),
+            "adminAddress" to adminAddr,
+            "recipientAddress" to recipientAddr,
             "amount" to amount
         )
         
@@ -458,11 +449,11 @@ class RpcTest {
             else -> throw IllegalArgumentException("Unknown message type: $msgType")
         }
         
-        // Create protobuf message for signing
+        // Create protobuf message for signing (addresses are hex in msgJson)
         val msgProtoBytes = when (msgType) {
             "send" -> {
-                val fromAddr = Base64.getDecoder().decode(msgJson["fromAddress"] as String)
-                val toAddr = Base64.getDecoder().decode(msgJson["toAddress"] as String)
+                val fromAddr = (msgJson["fromAddress"] as String).hexToBytes()
+                val toAddr = (msgJson["toAddress"] as String).hexToBytes()
                 MessageSend.newBuilder()
                     .setFromAddress(ByteString.copyFrom(fromAddr))
                     .setToAddress(ByteString.copyFrom(toAddr))
@@ -471,8 +462,8 @@ class RpcTest {
                     .toByteArray()
             }
             "reward" -> {
-                val adminAddr = Base64.getDecoder().decode(msgJson["adminAddress"] as String)
-                val recipientAddr = Base64.getDecoder().decode(msgJson["recipientAddress"] as String)
+                val adminAddr = (msgJson["adminAddress"] as String).hexToBytes()
+                val recipientAddr = (msgJson["recipientAddress"] as String).hexToBytes()
                 MessageReward.newBuilder()
                     .setAdminAddress(ByteString.copyFrom(adminAddr))
                     .setRecipientAddress(ByteString.copyFrom(recipientAddr))
@@ -481,8 +472,8 @@ class RpcTest {
                     .toByteArray()
             }
             "faucet" -> {
-                val signerAddr = Base64.getDecoder().decode(msgJson["signerAddress"] as String)
-                val recipientAddr = Base64.getDecoder().decode(msgJson["recipientAddress"] as String)
+                val signerAddr = (msgJson["signerAddress"] as String).hexToBytes()
+                val recipientAddr = (msgJson["recipientAddress"] as String).hexToBytes()
                 MessageFaucet.newBuilder()
                     .setSignerAddress(ByteString.copyFrom(signerAddr))
                     .setRecipientAddress(ByteString.copyFrom(recipientAddr))
@@ -518,49 +509,29 @@ class RpcTest {
         // Get public key bytes
         val pubKeyBytes = signerKey.publicKey.hexToBytes()
         
-        // Build the transaction JSON
-        val txJsonObject = if (msgType == "send") {
-            // "send" is in RegisteredMessages, must use msg field
-            buildJsonObject {
-                put("type", JsonPrimitive(msgType))
-                put("msg", buildJsonObject {
-                    for ((k, v) in msgJson) {
-                        when (v) {
-                            is String -> put(k, JsonPrimitive(v))
-                            is Long -> put(k, JsonPrimitive(v))
-                            is Number -> put(k, JsonPrimitive(v.toLong()))
-                            else -> put(k, JsonPrimitive(v.toString()))
-                        }
+        // Build the transaction using structured JSON for every plugin message.
+        val txJsonObject = buildJsonObject {
+            put("type", JsonPrimitive(msgType))
+            put("msg", buildJsonObject {
+                for ((k, v) in msgJson) {
+                    when (v) {
+                        is String -> put(k, JsonPrimitive(v))
+                        is Long -> put(k, JsonPrimitive(v))
+                        is Number -> put(k, JsonPrimitive(v.toLong()))
+                        else -> put(k, JsonPrimitive(v.toString()))
                     }
-                })
-                put("signature", buildJsonObject {
-                    put("publicKey", JsonPrimitive(pubKeyBytes.toHexString()))
-                    put("signature", JsonPrimitive(signature.toHexString()))
-                })
-                put("time", JsonPrimitive(txTime))
-                put("createdHeight", JsonPrimitive(height))
-                put("fee", JsonPrimitive(fee))
-                put("memo", JsonPrimitive(""))
-                put("networkID", JsonPrimitive(networkId))
-                put("chainID", JsonPrimitive(chainId))
-            }
-        } else {
-            // Plugin-only types: use msgTypeUrl/msgBytes for exact byte control
-            buildJsonObject {
-                put("type", JsonPrimitive(msgType))
-                put("msgTypeUrl", JsonPrimitive(typeUrl))
-                put("msgBytes", JsonPrimitive(msgProtoBytes.toHexString()))
-                put("signature", buildJsonObject {
-                    put("publicKey", JsonPrimitive(pubKeyBytes.toHexString()))
-                    put("signature", JsonPrimitive(signature.toHexString()))
-                })
-                put("time", JsonPrimitive(txTime))
-                put("createdHeight", JsonPrimitive(height))
-                put("fee", JsonPrimitive(fee))
-                put("memo", JsonPrimitive(""))
-                put("networkID", JsonPrimitive(networkId))
-                put("chainID", JsonPrimitive(chainId))
-            }
+                }
+            })
+            put("signature", buildJsonObject {
+                put("publicKey", JsonPrimitive(pubKeyBytes.toHexString()))
+                put("signature", JsonPrimitive(signature.toHexString()))
+            })
+            put("time", JsonPrimitive(txTime))
+            put("createdHeight", JsonPrimitive(height))
+            put("fee", JsonPrimitive(fee))
+            put("memo", JsonPrimitive(""))
+            put("networkID", JsonPrimitive(networkId))
+            put("chainID", JsonPrimitive(chainId))
         }
         
         // Send the transaction
