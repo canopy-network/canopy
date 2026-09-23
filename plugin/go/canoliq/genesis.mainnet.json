@@ -86,11 +86,11 @@
   "params": {
     "_comment": "3-of-5 multisig. All five signers must be distinct wallets held by five different people; ValidateParams rejects duplicates because countMultisigApprovals would otherwise let one holder cast two of the three required approvals. treasuryThreshold is in uCNPY.",
     "multisigSigners": [
-      "0000000000000000000000000000000000000010",
-      "0000000000000000000000000000000000000011",
-      "0000000000000000000000000000000000000012",
-      "0000000000000000000000000000000000000013",
-      "0000000000000000000000000000000000000014"
+      "09780c8fb3425113539382cb89c9fcd8f0eaa0ec",
+      "782556ae8d0a8a298c79065e1053d5daf6d482ec",
+      "b961f74240791533514ba1faf95a8ea7ba0ee003",
+      "2ea135d117f3b154c8d4e1912869edcc47c9a625",
+      "a46576db9388f1b9d7bebbadf7f34a042b5eccaa"
     ],
     "multisigThreshold": 3,
     "treasuryThreshold": 1000000000,
