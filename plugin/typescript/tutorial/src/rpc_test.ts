@@ -44,11 +44,6 @@ function randomAddressHex(): string {
     return randomBytes(20).toString('hex');
 }
 
-// Convert hex string to base64 (for protojson bytes encoding)
-function hexToBase64(hexStr: string): string {
-    return Buffer.from(hexStr, 'hex').toString('base64');
-}
-
 // Convert hex string to Uint8Array
 function hexToBytes(hexStr: string): Uint8Array {
     return new Uint8Array(Buffer.from(hexStr, 'hex'));
@@ -242,13 +237,13 @@ async function buildSignAndSendTx(
             throw new Error(`Unknown message type: ${msgType}`);
     }
 
-    // Create protobuf message for signing
+    // Create protobuf message for signing (addresses are hex in msgJSON)
     // Note: protobufjs uses camelCase field names in JavaScript
     let msgProto: Uint8Array;
     switch (msgType) {
         case 'send': {
-            const fromAddr = Buffer.from(msgJSON['fromAddress'] as string, 'base64');
-            const toAddr = Buffer.from(msgJSON['toAddress'] as string, 'base64');
+            const fromAddr = hexToBytes(msgJSON['fromAddress'] as string);
+            const toAddr = hexToBytes(msgJSON['toAddress'] as string);
             const msg = types.MessageSend.create({
                 fromAddress: fromAddr,
                 toAddress: toAddr,
@@ -258,8 +253,8 @@ async function buildSignAndSendTx(
             break;
         }
         case 'reward': {
-            const adminAddr = Buffer.from(msgJSON['adminAddress'] as string, 'base64');
-            const recipientAddr = Buffer.from(msgJSON['recipientAddress'] as string, 'base64');
+            const adminAddr = hexToBytes(msgJSON['adminAddress'] as string);
+            const recipientAddr = hexToBytes(msgJSON['recipientAddress'] as string);
             const msg = types.MessageReward.create({
                 adminAddress: adminAddr,
                 recipientAddress: recipientAddr,
@@ -269,8 +264,8 @@ async function buildSignAndSendTx(
             break;
         }
         case 'faucet': {
-            const signerAddr = Buffer.from(msgJSON['signerAddress'] as string, 'base64');
-            const recipientAddr = Buffer.from(msgJSON['recipientAddress'] as string, 'base64');
+            const signerAddr = hexToBytes(msgJSON['signerAddress'] as string);
+            const recipientAddr = hexToBytes(msgJSON['recipientAddress'] as string);
             const msg = types.MessageFaucet.create({
                 signerAddress: signerAddr,
                 recipientAddress: recipientAddr,
@@ -302,42 +297,21 @@ async function buildSignAndSendTx(
     // Get public key bytes
     const pubKeyBytes = hexToBytes(signerKey.publicKey);
 
-    // Build the transaction JSON
-    // For "send" (which is in RegisteredMessages), we must use "msg" field
-    // For plugin-only types (faucet, reward), we use msgTypeUrl/msgBytes for exact byte control
-    let tx: Record<string, unknown>;
-    if (msgType === 'send') {
-        tx = {
-            type: msgType,
-            msg: msgJSON,
-            signature: {
-                publicKey: bytesToHex(pubKeyBytes),
-                signature: bytesToHex(signature)
-            },
-            time: Number(txTime),
-            createdHeight: Number(height),
-            fee: Number(fee),
-            memo: '',
-            networkID: Number(networkId),
-            chainID: Number(chainId)
-        };
-    } else {
-        tx = {
-            type: msgType,
-            msgTypeUrl: typeURL,
-            msgBytes: bytesToHex(msgProto),
-            signature: {
-                publicKey: bytesToHex(pubKeyBytes),
-                signature: bytesToHex(signature)
-            },
-            time: Number(txTime),
-            createdHeight: Number(height),
-            fee: Number(fee),
-            memo: '',
-            networkID: Number(networkId),
-            chainID: Number(chainId)
-        };
-    }
+    // Build the transaction using structured JSON for every plugin message.
+    const tx: Record<string, unknown> = {
+        type: msgType,
+        msg: msgJSON,
+        signature: {
+            publicKey: bytesToHex(pubKeyBytes),
+            signature: bytesToHex(signature)
+        },
+        time: Number(txTime),
+        createdHeight: Number(height),
+        fee: Number(fee),
+        memo: '',
+        networkID: Number(networkId),
+        chainID: Number(chainId)
+    };
 
     // Send the transaction
     const respBody = await postRawJSON(`${rpcURL}/v1/tx`, JSON.stringify(tx, null, 2));
@@ -356,8 +330,8 @@ async function sendFaucetTx(
     height: bigint
 ): Promise<string> {
     const faucetMsg = {
-        signerAddress: hexToBase64(signerKey.address),
-        recipientAddress: hexToBase64(recipientAddr),
+        signerAddress: signerKey.address,
+        recipientAddress: recipientAddr,
         amount: Number(amount)
     };
 
@@ -386,8 +360,8 @@ async function sendSendTx(
     height: bigint
 ): Promise<string> {
     const sendMsg = {
-        fromAddress: hexToBase64(fromAddr),
-        toAddress: hexToBase64(toAddr),
+        fromAddress: fromAddr,
+        toAddress: toAddr,
         amount: Number(amount)
     };
 
@@ -407,8 +381,8 @@ async function sendRewardTx(
     height: bigint
 ): Promise<string> {
     const rewardMsg = {
-        adminAddress: hexToBase64(adminAddr),
-        recipientAddress: hexToBase64(recipientAddr),
+        adminAddress: adminAddr,
+        recipientAddress: recipientAddr,
         amount: Number(amount)
     };
 

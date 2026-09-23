@@ -407,15 +407,6 @@ namespace CanopyPlugin.Tutorial
         }
 
         /// <summary>
-        /// Convert hex string to base64 (for protojson bytes encoding).
-        /// </summary>
-        private static string HexToBase64(string hexStr)
-        {
-            var bytes = BLSCrypto.HexToBytes(hexStr);
-            return Convert.ToBase64String(bytes);
-        }
-
-        /// <summary>
         /// HTTP POST helper that sends JSON and returns response body.
         /// </summary>
         private static async Task<string> PostRawJsonAsync(string url, string jsonBody)
@@ -567,8 +558,8 @@ namespace CanopyPlugin.Tutorial
         {
             var faucetMsg = new Dictionary<string, object>
             {
-                ["signerAddress"] = HexToBase64(signerKey.Address),
-                ["recipientAddress"] = HexToBase64(recipientAddr),
+                ["signerAddress"] = signerKey.Address,
+                ["recipientAddress"] = recipientAddr,
                 ["amount"] = amount
             };
 
@@ -591,8 +582,8 @@ namespace CanopyPlugin.Tutorial
         {
             var sendMsg = new Dictionary<string, object>
             {
-                ["fromAddress"] = HexToBase64(fromAddr),
-                ["toAddress"] = HexToBase64(toAddr),
+                ["fromAddress"] = fromAddr,
+                ["toAddress"] = toAddr,
                 ["amount"] = amount
             };
 
@@ -615,8 +606,8 @@ namespace CanopyPlugin.Tutorial
         {
             var rewardMsg = new Dictionary<string, object>
             {
-                ["adminAddress"] = HexToBase64(adminAddr),
-                ["recipientAddress"] = HexToBase64(recipientAddr),
+                ["adminAddress"] = adminAddr,
+                ["recipientAddress"] = recipientAddr,
                 ["amount"] = amount
             };
 
@@ -647,25 +638,25 @@ namespace CanopyPlugin.Tutorial
                 _ => throw new ArgumentException($"Unknown message type: {msgType}")
             };
 
-            // Create protobuf message for signing
+            // Create protobuf message for signing (addresses are hex in msgJson)
             byte[] msgProtoBytes = msgType switch
             {
                 "send" => new MessageSend
                 {
-                    FromAddress = ByteString.CopyFrom(Convert.FromBase64String((string)msgJson["fromAddress"])),
-                    ToAddress = ByteString.CopyFrom(Convert.FromBase64String((string)msgJson["toAddress"])),
+                    FromAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["fromAddress"])),
+                    ToAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["toAddress"])),
                     Amount = (ulong)msgJson["amount"]
                 }.ToByteArray(),
                 "reward" => new MessageReward
                 {
-                    AdminAddress = ByteString.CopyFrom(Convert.FromBase64String((string)msgJson["adminAddress"])),
-                    RecipientAddress = ByteString.CopyFrom(Convert.FromBase64String((string)msgJson["recipientAddress"])),
+                    AdminAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["adminAddress"])),
+                    RecipientAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["recipientAddress"])),
                     Amount = (ulong)msgJson["amount"]
                 }.ToByteArray(),
                 "faucet" => new MessageFaucet
                 {
-                    SignerAddress = ByteString.CopyFrom(Convert.FromBase64String((string)msgJson["signerAddress"])),
-                    RecipientAddress = ByteString.CopyFrom(Convert.FromBase64String((string)msgJson["recipientAddress"])),
+                    SignerAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["signerAddress"])),
+                    RecipientAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["recipientAddress"])),
                     Amount = (ulong)msgJson["amount"]
                 }.ToByteArray(),
                 _ => throw new ArgumentException($"Unknown message type: {msgType}")
@@ -697,49 +688,23 @@ namespace CanopyPlugin.Tutorial
             // Get public key bytes
             var pubKeyBytes = BLSCrypto.HexToBytes(signerKey.PublicKey);
 
-            // Build the transaction JSON
-            object txJsonObject;
-            if (msgType == "send")
+            // Build the transaction using structured JSON for every plugin message.
+            object txJsonObject = new Dictionary<string, object>
             {
-                // "send" is in RegisteredMessages, must use msg field
-                txJsonObject = new Dictionary<string, object>
+                ["type"] = msgType,
+                ["msg"] = msgJson,
+                ["signature"] = new Dictionary<string, string>
                 {
-                    ["type"] = msgType,
-                    ["msg"] = msgJson,
-                    ["signature"] = new Dictionary<string, string>
-                    {
-                        ["publicKey"] = BLSCrypto.BytesToHex(pubKeyBytes),
-                        ["signature"] = BLSCrypto.BytesToHex(signature)
-                    },
-                    ["time"] = txTime,
-                    ["createdHeight"] = height,
-                    ["fee"] = fee,
-                    ["memo"] = "",
-                    ["networkID"] = networkId,
-                    ["chainID"] = chainId
-                };
-            }
-            else
-            {
-                // Plugin-only types: use msgTypeUrl/msgBytes for exact byte control
-                txJsonObject = new Dictionary<string, object>
-                {
-                    ["type"] = msgType,
-                    ["msgTypeUrl"] = typeUrl,
-                    ["msgBytes"] = BLSCrypto.BytesToHex(msgProtoBytes),
-                    ["signature"] = new Dictionary<string, string>
-                    {
-                        ["publicKey"] = BLSCrypto.BytesToHex(pubKeyBytes),
-                        ["signature"] = BLSCrypto.BytesToHex(signature)
-                    },
-                    ["time"] = txTime,
-                    ["createdHeight"] = height,
-                    ["fee"] = fee,
-                    ["memo"] = "",
-                    ["networkID"] = networkId,
-                    ["chainID"] = chainId
-                };
-            }
+                    ["publicKey"] = BLSCrypto.BytesToHex(pubKeyBytes),
+                    ["signature"] = BLSCrypto.BytesToHex(signature)
+                },
+                ["time"] = txTime,
+                ["createdHeight"] = height,
+                ["fee"] = fee,
+                ["memo"] = "",
+                ["networkID"] = networkId,
+                ["chainID"] = chainId
+            };
 
             // Send the transaction
             var txJson = JsonSerializer.Serialize(txJsonObject);

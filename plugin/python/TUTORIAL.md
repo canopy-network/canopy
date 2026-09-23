@@ -728,8 +728,10 @@ When submitting signed transactions to the RPC endpoint (`/v1/tx`), the signatur
 Key points:
 - Canopy uses BLS12-381 signatures (96-byte G2 signatures)
 - Use the `blspy` library with `BasicSchemeMPL` for signing
+- Encode every protobuf `bytes` field as a hexadecimal string in the message JSON
 - Sign the deterministically marshaled protobuf bytes of the Transaction (without signature field)
-- For plugin-only message types (faucet, reward), use `msgTypeUrl` and `msgBytes` fields for exact byte control
+- Submit native and plugin-only message types as structured `msg` JSON through `/v1/tx`
+- The JSON hex encoding does not change the raw bytes stored in the protobuf message
 
 See `rpc_test.py` in `plugin/python/tutorial` for the complete signing implementation.
 
