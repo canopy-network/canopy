@@ -54,18 +54,29 @@ type Snapshot struct {
 	CanopyTotalStake uint64
 	// CanopySupplyPresent is true when the Canopy Supply singleton was
 	// decoded successfully at snapshot height (regardless of .Staked value).
-	// QueryHealth needs this to distinguish "fail-closed" (Supply absent →
-	// deposit handler rejects) from "awaiting-canopy-stake" (Supply present
-	// with Staked=0 → deposit handler accepts) per H3 in
-	// docs/canoliq-v1_2-implementation-plan.md.
+	// QueryHealth needs this to distinguish "fail-closed" (Supply absent) from
+	// "awaiting-canopy-stake" (Supply present with Staked=0). Both reject
+	// deposits; they are reported separately because one is a
+	// misconfiguration and the other resolves itself.
 	CanopySupplyPresent bool
 	// CurrentRestakingAllocation maps Canopy committee id → uCNPY exposure
-	// derived from canoLiq's operator set's lib.Validator.committees[] +
+	// derived from canoLiq's OWNED bonds' lib.Validator.committees[] +
 	// staked_amount (WP §7 restaking semantics: same bond, multiple
 	// committees). Computed inside refreshSnapshot from the per-operator
 	// Validator reads added to Batch 2. nil when the registry is empty or
-	// no operators are registered with Canopy yet.
+	// canoLiq owns no bond yet.
+	//
+	// Ownership matters here for the same reason it does in the reward sweep:
+	// a committee operator's bond is their collateral, not canoLiq's exposure,
+	// and counting it would overstate concentration and TVL by whatever the
+	// operators bonded themselves.
 	CurrentRestakingAllocation map[uint64]uint64
+	// OwnedNotCompounding lists canoLiq-owned bonds whose reward cannot be
+	// observed as stake growth, because Canopy is paying it to the output
+	// address instead (compound=false, or the bond is unstaking). The reward
+	// is real; the sweep simply cannot see it, so this drives an alert rather
+	// than an accounting adjustment.
+	OwnedNotCompounding [][]byte
 }
 
 // emptySnapshot is returned to query helpers when EndBlock has not yet run
@@ -302,14 +313,18 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 		queryToValIncent[q] = addr
 		keys = append(keys, &contract.PluginKeyRead{QueryId: q, Key: KeyForValidatorIncentives(addr)})
 	}
-	// Canopy validator reads — one per registered operator. The decoded
-	// committees[] feed CurrentRestakingAllocation. Falls back to the
-	// legacy aggregator addr when the registry is empty (in which case the
-	// allocation map will likely stay empty too — the aggregator usually
-	// isn't a real Canopy validator).
+	// Canopy validator reads — one per canoLiq-OWNED bond. The decoded
+	// committees[] feed CurrentRestakingAllocation, and compound/unstaking
+	// state feeds OwnedNotCompounding.
+	//
+	// Unowned committee members are skipped: their bond is their own
+	// collateral, so it is not canoLiq exposure and reading it would only
+	// widen the fan-out. That also means no aggregator fallback here — the
+	// synthetic aggregator address is never a real Canopy validator, and it is
+	// certainly never a bond canoLiq owns.
 	queryToCanopyVal := map[uint64][]byte{}
 	for _, e := range snap.ValidatorRegistry.Entries {
-		if e == nil || len(e.Address) == 0 {
+		if e == nil || len(e.Address) == 0 || !e.Owned {
 			continue
 		}
 		q := qid()
@@ -360,7 +375,7 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 				snap.ValidatorIncentives[hexAddress(addr)] = DecodeUint64(raw)
 				continue
 			}
-			if _, ok := queryToCanopyVal[r.QueryId]; ok {
+			if addr, ok := queryToCanopyVal[r.QueryId]; ok {
 				v := new(contract.Validator)
 				if e := contract.Unmarshal(raw, v); e != nil {
 					return e
@@ -370,6 +385,9 @@ func (c *Canoliq) refreshSnapshot(height uint64) *contract.PluginError {
 				}
 				for _, committeeID := range v.Committees {
 					snap.CurrentRestakingAllocation[committeeID] += v.StakedAmount
+				}
+				if !v.Compound || v.UnstakingHeight != 0 {
+					snap.OwnedNotCompounding = append(snap.OwnedNotCompounding, addr)
 				}
 			}
 		}

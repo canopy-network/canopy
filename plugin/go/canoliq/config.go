@@ -167,6 +167,11 @@ type AlertConfig struct {
 	// rollback) can still leave cCNPY supply out of step with pooled CNPY,
 	// and #34 only stops it from *worsening* through normal reward accrual.
 	SupplyDesyncFloorBps uint64 `json:"supplyDesyncFloorBps,omitempty"`
+	// RewardAttributionBps fires reward_attribution_anomaly when a single
+	// block's attributed reward exceeds this fraction of the pool it lifts
+	// (default 100 = 1%). The mainnet committee-29 incident ran at 11,900 bps,
+	// so this pages on the first bad block rather than after the damage.
+	RewardAttributionBps uint64 `json:"rewardAttributionBps,omitempty"`
 }
 
 // localnetPlaceholderAddress is the single hex address every bundled

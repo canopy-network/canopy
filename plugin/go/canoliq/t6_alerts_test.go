@@ -297,3 +297,139 @@ func waitBody(t *testing.T, ch chan []byte) []byte {
 		return nil
 	}
 }
+
+// evalAttributionAt seeds the globals the reward-attribution alert reads,
+// refreshes the snapshot and evaluates at `height`.
+func evalAttributionAt(t *testing.T, c *Canoliq, s *fakeStore, height, attributed, pooled, ownedStake uint64) {
+	t.Helper()
+	g := loadGlobals(t, s)
+	g.LastAttributedReward = attributed
+	g.TotalPooledCnpy = pooled
+	g.TotalCcnpySupply = pooled // keep the rate ~1:1 so the desync check stays quiet
+	g.LastProcessedRewardPool = ownedStake
+	seedGlobals(s, g)
+	if err := c.refreshSnapshot(height); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if err := c.evaluateAlerts(height); err != nil {
+		t.Fatalf("evaluateAlerts: %v", err)
+	}
+}
+
+// TestRewardAttributionAlertFiresOnIncidentNumbers uses the real mainnet
+// committee-29 figures: ~11.90 CNPY attributed in one block against a ~10 CNPY
+// pool. That is 11,900 bps against the 100 bps default, so the alert must fire
+// on the first bad block rather than after forty minutes and ~562x.
+func TestRewardAttributionAlertFiresOnIncidentNumbers(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	evalAttributionAt(t, c, s, 1, 11_900_000, 10_000_000, 10_000_000)
+	if countKind(*got, AlertRewardAttribution) != 1 {
+		t.Fatalf("expected reward_attribution_anomaly, got %d", countKind(*got, AlertRewardAttribution))
+	}
+	e := (*got)[len(*got)-1]
+	if e.Severity != severityCrit {
+		t.Errorf("severity: got %s want crit", e.Severity)
+	}
+	if e.Details["attributedBps"] != uint64(11_900) {
+		t.Errorf("attributedBps: got %v want 11900", e.Details["attributedBps"])
+	}
+}
+
+// TestRewardAttributionAlertQuietOnRealisticYield: a plausible block must not
+// page. Real committee reward is a fraction of a basis point of the position
+// it accrues to, so the 100 bps threshold has orders of magnitude of headroom.
+func TestRewardAttributionAlertQuietOnRealisticYield(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	// 12 CNPY of reward on an 8,235 CNPY position — ~15 bps.
+	evalAttributionAt(t, c, s, 1, 12_000_000, 8_235_000_000, 8_235_000_000)
+	if n := countKind(*got, AlertRewardAttribution); n != 0 {
+		t.Errorf("realistic yield should not fire, got %d", n)
+	}
+}
+
+// TestRewardAttributionAlertUsesLargerBasis guards the denominator choice. A
+// pool much smaller than the position backing it is normal early on (one
+// depositor, a large operator bond), and dividing by the pool alone would page
+// on every block. The basis is the larger of the two.
+func TestRewardAttributionAlertUsesLargerBasis(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	evalAttributionAt(t, c, s, 1, 1_000_000, 10_000_000, 8_235_000_000)
+	if n := countKind(*got, AlertRewardAttribution); n != 0 {
+		t.Errorf("basis should be the owned stake, not the smaller pool; got %d fires", n)
+	}
+}
+
+// TestOwnedStakeMissingAlertFires: the committee is earning, cCNPY is
+// outstanding, and canoLiq owns none of the stake. Attributing zero is correct
+// here, but it must not be silent — otherwise a chain where nobody declared a
+// stake output address looks exactly like a healthy one having a quiet block.
+func TestOwnedStakeMissingAlertFires(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	seedCanoliqRegistry(t, s,
+		&contract.ValidatorRegistryEntry{Address: addr20(0xA1), Stake: 8_235_000_000},
+	)
+	evalAttributionAt(t, c, s, 1, 0, 10_000_000, 0)
+	if countKind(*got, AlertOwnedStakeMissing) != 1 {
+		t.Fatalf("expected owned_stake_missing, got %d", countKind(*got, AlertOwnedStakeMissing))
+	}
+	if e := (*got)[len(*got)-1]; e.Severity != severityWarn {
+		t.Errorf("severity: got %s want warn — nothing is lost, the protocol just is not earning", e.Severity)
+	}
+}
+
+// TestOwnedStakeMissingQuietWhenOwned: once a bond is owned, the alert clears.
+func TestOwnedStakeMissingQuietWhenOwned(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	seedCanopyValidator(t, s, addr20(0xA1), 8_235_000_000, []uint64{c.Config.ChainId})
+	seedCanoliqRegistry(t, s,
+		&contract.ValidatorRegistryEntry{Address: addr20(0xA1), Stake: 8_235_000_000, Owned: true},
+	)
+	evalAttributionAt(t, c, s, 1, 0, 10_000_000, 8_235_000_000)
+	if n := countKind(*got, AlertOwnedStakeMissing); n != 0 {
+		t.Errorf("owned bond present, alert should stay quiet; got %d", n)
+	}
+}
+
+// TestOwnedBondNotCompoundingAlertFires: Canopy only adds reward to a bond's
+// staked_amount when the record is compounding and not unstaking. An owned
+// bond that is neither earns real reward the stake-growth sweep cannot see.
+func TestOwnedBondNotCompoundingAlertFires(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	val := addr20(0xA1)
+	s.set(contract.KeyForValidator(val), mustMarshal(&contract.Validator{
+		Address:      val,
+		StakedAmount: 8_235_000_000,
+		Committees:   []uint64{c.Config.ChainId},
+		Output:       testStakeOutput,
+		Compound:     false, // paying out to the output address instead
+	}))
+	seedCanoliqRegistry(t, s,
+		&contract.ValidatorRegistryEntry{Address: val, Stake: 8_235_000_000, Owned: true},
+	)
+	evalAttributionAt(t, c, s, 1, 0, 10_000_000, 8_235_000_000)
+	if countKind(*got, AlertOwnedBondNotCompounding) != 1 {
+		t.Fatalf("expected owned_bond_not_compounding, got %d", countKind(*got, AlertOwnedBondNotCompounding))
+	}
+}
+
+// TestOwnedBondUnstakingAlertsToo: unstaking is the second way Canopy stops
+// compounding into a bond, and it is just as invisible to the sweep.
+func TestOwnedBondUnstakingAlertsToo(t *testing.T) {
+	c, s, got := newAlertTest(t)
+	val := addr20(0xA1)
+	s.set(contract.KeyForValidator(val), mustMarshal(&contract.Validator{
+		Address:         val,
+		StakedAmount:    8_235_000_000,
+		Committees:      []uint64{c.Config.ChainId},
+		Output:          testStakeOutput,
+		Compound:        true,
+		UnstakingHeight: 500,
+	}))
+	seedCanoliqRegistry(t, s,
+		&contract.ValidatorRegistryEntry{Address: val, Stake: 8_235_000_000, Owned: true},
+	)
+	evalAttributionAt(t, c, s, 1, 0, 10_000_000, 8_235_000_000)
+	if countKind(*got, AlertOwnedBondNotCompounding) != 1 {
+		t.Fatalf("an unstaking owned bond should alert too, got %d", countKind(*got, AlertOwnedBondNotCompounding))
+	}
+}
