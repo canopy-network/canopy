@@ -744,6 +744,57 @@ func (x *Orders) Equals(y *Orders) bool {
 	return true
 }
 
+type ordersJSON struct {
+	LockOrders  []*LockOrder `json:"lockOrders"`
+	ResetOrders []HexBytes   `json:"resetOrders"`
+	CloseOrders []HexBytes   `json:"closeOrders"`
+}
+
+// MarshalJSON() represents every order ID as hex.
+func (x Orders) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ordersJSON{
+		LockOrders:  x.LockOrders,
+		ResetOrders: byteSlicesToHex(x.ResetOrders),
+		CloseOrders: byteSlicesToHex(x.CloseOrders),
+	})
+}
+
+// UnmarshalJSON() accepts order IDs as hex.
+func (x *Orders) UnmarshalJSON(jsonBytes []byte) error {
+	j := new(ordersJSON)
+	if err := json.Unmarshal(jsonBytes, j); err != nil {
+		return err
+	}
+	*x = Orders{
+		LockOrders:  j.LockOrders,
+		ResetOrders: hexToByteSlices(j.ResetOrders),
+		CloseOrders: hexToByteSlices(j.CloseOrders),
+	}
+	return nil
+}
+
+func byteSlicesToHex(values [][]byte) []HexBytes {
+	if values == nil {
+		return nil
+	}
+	result := make([]HexBytes, len(values))
+	for i, value := range values {
+		result[i] = value
+	}
+	return result
+}
+
+func hexToByteSlices(values []HexBytes) [][]byte {
+	if values == nil {
+		return nil
+	}
+	result := make([][]byte, len(values))
+	for i, value := range values {
+		result[i] = value
+	}
+	return result
+}
+
 // Equals() compares two LockOrders for equality
 func (x *LockOrder) Equals(y *LockOrder) bool {
 	// if both the lock orders are empty

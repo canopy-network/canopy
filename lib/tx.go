@@ -235,7 +235,32 @@ func (x *Transaction) UnmarshalJSON(jsonBytes []byte) (err error) {
 	if err = json.Unmarshal(jsonBytes, j); err != nil {
 		return err
 	}
-	// first try unmarshalling using the global plugin registration
+	// Native transaction codecs already implement the global hex contract and
+	// retain message-specific representations for non-bytes fields.
+	m, found := RegisteredMessages[j.Type]
+	if found {
+		msg := m.New()
+		if err = json.Unmarshal(j.Msg, msg); err != nil {
+			return
+		}
+		a, e := NewAny(msg)
+		if e != nil {
+			return e
+		}
+		*x = Transaction{
+			MessageType:   j.Type,
+			Msg:           a,
+			Signature:     j.Signature,
+			CreatedHeight: j.CreatedHeight,
+			Time:          j.Time,
+			Fee:           j.Fee,
+			Memo:          j.Memo,
+			NetworkId:     j.NetworkId,
+			ChainId:       j.ChainId,
+		}
+		return nil
+	}
+	// Otherwise try unmarshalling through a protobuf descriptor.
 	if len(j.Msg) > 0 {
 		anyMsg, e := AnyFromJSONForMessageType(j.Type, j.Msg)
 		if e == nil {
@@ -255,53 +280,20 @@ func (x *Transaction) UnmarshalJSON(jsonBytes []byte) (err error) {
 			return e
 		}
 	}
-	// get the type of the message payload based on the 'message types' that were globally registered upon app start
-	m, found := RegisteredMessages[j.Type]
-	// if the message type is not found among the registered messages
-	if !found {
-		if j.MsgTypeURL == "" && j.MsgBytes == "" {
-			// exit with error
-			return ErrUnknownMessageName(j.Type)
-		}
-		var msgValue []byte
-		if j.MsgBytes != "" {
-			msgValue, err = StringToBytes(j.MsgBytes)
-			if err != nil {
-				return err
-			}
-		}
-		// populate the underlying transaction object using raw any bytes
-		*x = Transaction{
-			MessageType:   j.Type,
-			Msg:           &anypb.Any{TypeUrl: j.MsgTypeURL, Value: msgValue},
-			Signature:     j.Signature,
-			CreatedHeight: j.CreatedHeight,
-			Time:          j.Time,
-			Fee:           j.Fee,
-			Memo:          j.Memo,
-			NetworkId:     j.NetworkId,
-			ChainId:       j.ChainId,
-		}
-		return nil
+	if j.MsgTypeURL == "" && j.MsgBytes == "" {
+		return ErrUnknownMessageName(j.Type)
 	}
-	// create a new instance of the message
-	msg := m.New()
-	// populate the new message using the json bytes in the json object
-	if err = json.Unmarshal(j.Msg, msg); err != nil {
-		// exit with error
-		return
+	var msgValue []byte
+	if j.MsgBytes != "" {
+		msgValue, err = StringToBytes(j.MsgBytes)
+		if err != nil {
+			return err
+		}
 	}
-	// convert the message to a proto.Any
-	a, err := NewAny(msg)
-	// if an error occurred during the conversion
-	if err != nil {
-		// exit with error
-		return
-	}
-	// populate the underlying transaction object
+	// Populate the underlying transaction object using raw Any bytes.
 	*x = Transaction{
 		MessageType:   j.Type,
-		Msg:           a,
+		Msg:           &anypb.Any{TypeUrl: j.MsgTypeURL, Value: msgValue},
 		Signature:     j.Signature,
 		CreatedHeight: j.CreatedHeight,
 		Time:          j.Time,
@@ -310,8 +302,7 @@ func (x *Transaction) UnmarshalJSON(jsonBytes []byte) (err error) {
 		NetworkId:     j.NetworkId,
 		ChainId:       j.ChainId,
 	}
-	// exit
-	return
+	return nil
 }
 
 // TRANSACTION RESULT CODE BELOW
