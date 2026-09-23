@@ -68,8 +68,61 @@ its own `EndBlock`, before this hook runs, compounding the reward into the
 bonded stake of the committee's validators. The sweep therefore observes the
 block-over-block *growth of that bonded stake* and isolates it against
 `CanoliqGlobals.LastProcessedRewardPool`, which means "last observed aggregate
-committee stake", not a pool balance. Read `ProcessRewards`' doc comment before
-changing any of it.
+**canoLiq-owned** stake", not a pool balance and not the committee total. Read
+`ProcessRewards`' doc comment before changing any of it.
+
+### Membership and ownership are two different roles
+
+This is the single thing to get right in this file, and the thing that was
+wrong on mainnet.
+
+- **Membership** is `Validator.committees[]` containing `chainId`. It decides
+  who shares the 15% validator-incentive slice, pro-rata by stake, in
+  `distributeValidatorShare`. Every committee member qualifies, because that
+  slice pays operators for running the committee regardless of whose CNPY sits
+  in their bond.
+- **Ownership** is `Validator.output` appearing in
+  `params.stake_output_addresses`. It decides the received reward `R`. Canopy
+  returns a bond and its early-withdrawal rewards to `output`
+  (`fsm/committee.go::DistributeCommitteeReward`), so `output` is the record's
+  economic beneficiary. Every other bond on the committee is an operator
+  earning on their own collateral (WP §1.1: operators bond their own CNPY, and
+  it is their own CNPY that gets slashed).
+
+Summing growth over the whole committee credits cCNPY holders with other
+people's yield. On mainnet committee 29 that took a 10 CNPY deposit to ~562x in
+forty minutes off an 8,235 CNPY bond canoLiq did not own — and because the
+phantom reward lands in the escrow pool, the escrow guard in claim-redemption
+passes and the payout becomes an un-backed account credit. WP §3.3 is explicit
+that `R` is canoLiq's stake-weighted share.
+
+`ValidatorRegistryEntry.Owned` persists the verdict rather than leaving each
+consumer to re-derive it, so the snapshot, `/v1/restaking` and the alerts
+cannot drift from what the sweep acted on.
+
+Two invariants that live in docs, not code, because Canopy cannot express them:
+
+1. A listed output address may only receive records whose **entire** bond is
+   canoLiq principal. One `output` per record means a mixed bond (operator
+   collateral plus pool CNPY) pointed at a listed address reproduces the same
+   over-attribution with a different trigger.
+2. An owned bond must set `compound=true` and must not be unstaking, or Canopy
+   pays its reward to the output address as liquid CNPY where stake-growth
+   observation cannot see it. `AlertOwnedBondNotCompounding` catches this. Do
+   **not** try to capture that reward by diffing the output account's balance —
+   it also moves for transfers and gas, and treating those as reward
+   reintroduces the same class of bug.
+
+**An empty ownership set means `R = 0`, and that is correct** whenever the
+protocol has no staked position. Under-crediting truthfully beats minting yield
+against stake it does not own. `AlertOwnedStakeMissing` keeps that from being a
+silent default. It is reachable, not permanent: a `delegate=true` record with
+`output` set to a canoLiq address makes it non-zero. Canopy has the delegation
+primitive (`lib.Validator.delegate`, `fsm/committee.go::GetDelegates`); what is
+missing is a signable identity for the escrow pool, which is plugin state under
+prefix `{20}`.
+
+### The rest of the sweep
 
 The observed member set is the plugin's `ValidatorRegistry` singleton
 (`KeyForValidatorRegistry`), reconciled against Canopy's live committee
@@ -79,19 +132,39 @@ why governance ejection needs the `KeyForEjectedValidator` tombstone
 (`domainEjected`) to survive the next sync. The genesis `validatorRegistry`
 block is a bootstrap convenience only; the first `EndBlock` overwrites it.
 
+After the `min(per-validator, aggregate)` estimate, a plausibility clamp bounds
+one block to `params.max_reward_bps_per_block` of owned stake. The excess is
+**deferred in `globals.carried_reward`, not discarded** — nested-delegate
+rewards arrive by stake-weighted lottery, so a legitimate win is lumpy and
+truncating would quietly destroy real yield. It has to be an explicit field:
+the registry re-baselines every member at its live stake each block, so the
+watermark alone cannot carry it and the `min()` would zero it on the next
+block. `0` means "unset" and backfills to the default, because a params record
+written before the field existed decodes it as zero and must not inherit "no
+clamp"; `10_000` is the deliberate off switch, since a cap of 100% of owned
+stake can never bind.
+
 Consequences:
 
 - Tests seed a live `contract.Validator` record per member (`setCommitteeStake`)
   *and* pin `LastProcessedRewardPool`; a registry entry with no matching live
   validator record is dropped by the sync. See `seedReward`.
+- Tests that expect reward must ALSO declare ownership in the params held in
+  **state** — `ProcessRewards` calls `LoadParams()`, not whatever a test passes
+  to a `Deliver*` handler. `seedStakeOutputParams` does that, and amends rather
+  than replaces so it composes with tests that tuned other fields.
+  `setCommitteeStakeWithOutput` builds the unowned case.
+- Tests with synthetic ratios (1000 uCNPY of reward compounded into a 1000
+  uCNPY bond) trip the clamp. `disableRewardClamp` turns it off and says why.
 - A no-growth block must be a no-op; covered by the third block in
   `TestRewardSweepMultiBlock`.
 
 The validator share is distributed pro-rata over that same set, weighted by
-live `StakedAmount`. **When the registry is empty** the legacy single-aggregator
-address (`committeeAggregatorAddr` = 20 bytes of `0xCA`) holds the entire
-share — Phase 1 baseline. Don't confuse the two paths in tests: assert against
-either the per-validator keys or the aggregator key, not both.
+live `StakedAmount` and **ignoring `Owned`** — that is the membership role, see
+above. **When the registry is empty** the legacy single-aggregator address
+(`committeeAggregatorAddr` = 20 bytes of `0xCA`) holds the entire share — Phase
+1 baseline. Don't confuse the two paths in tests: assert against either the
+per-validator keys or the aggregator key, not both.
 
 ## Fee math
 
@@ -402,6 +475,15 @@ so the module field stays consistent.
 - **Forgetting to pin the watermark** after a deposit when also injecting a
   reward in the same test → reward sweep treats the deposit fee as reward
   inflow and yields are off.
+- **Confusing committee membership with stake ownership.** Being on committee
+  `chainId` does not make a bond canoLiq's; `Validator.output` does. Crediting
+  membership is the mainnet committee-29 bug. The inverse mistake is just as
+  wrong: skipping unowned members in `distributeValidatorShare` would stop
+  paying operators for work they actually do.
+- **Seeding a reward test without declaring ownership in state.**
+  `ProcessRewards` reads params via `LoadParams()`, so params built in a test
+  variable and handed to a `Deliver*` call are invisible to it — the sweep sees
+  the default empty set and attributes nothing. Use `seedStakeOutputParams`.
 - **Setting `GenesisComplete=true` but skipping `SaveParams`** → handlers
   that call `LoadParams()` get `DefaultParams` instead of the genesis-time
   override.

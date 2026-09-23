@@ -216,7 +216,7 @@ func TestT6SupplyPoolDesyncResolves(t *testing.T) {
 		t.Fatalf("debounce: expected 1 fire, got %d", n)
 	}
 	evalDesyncAt(t, c, s, 3, 1_000_000, 1_050_000) // resolved: a real deposit landed
-	evalDesyncAt(t, c, s, 4, 0, 46_400_001)         // desyncs again -> fires again
+	evalDesyncAt(t, c, s, 4, 0, 46_400_001)        // desyncs again -> fires again
 	if n := countKind(*got, AlertSupplyPoolDesync); n != 2 {
 		t.Fatalf("post-resolution: expected 2 total fires, got %d", n)
 	}

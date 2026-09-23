@@ -227,3 +227,135 @@ func TestSyncKeepsEjectedValidatorOut(t *testing.T) {
 		t.Fatalf("ejected stake must be out of the observation: watermark got %d want %d", got, rewardBaseStake)
 	}
 }
+
+// TestSyncMarksOwnedEntries: the sync records, per member, whether the bond is
+// canoLiq's. The flag is persisted rather than re-derived so the snapshot,
+// restaking exposure and alerts cannot drift from what the reward sweep acted
+// on — the drift being precisely how membership and ownership got conflated in
+// the first place.
+func TestSyncMarksOwnedEntries(t *testing.T) {
+	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
+
+	ours, theirs := addr20(0xC0), addr20(0xC1)
+	setCommitteeStake(s, c, ours, 1_000_000_000)
+	setCommitteeStakeWithOutput(s, c, theirs, 8_235_000_000, testForeignOutput)
+
+	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 1}); err != nil {
+		t.Fatalf("process rewards: %v", err)
+	}
+
+	byAddr := map[string]*contract.ValidatorRegistryEntry{}
+	for _, e := range loadRegistryEntries(t, s) {
+		byAddr[string(e.Address)] = e
+	}
+	if len(byAddr) != 2 {
+		t.Fatalf("both members should stay registered, got %d", len(byAddr))
+	}
+	if e := byAddr[string(ours)]; e == nil || !e.Owned {
+		t.Errorf("our bond should be marked owned, got %+v", e)
+	}
+	if e := byAddr[string(theirs)]; e == nil || e.Owned {
+		t.Errorf("a foreign-output bond must not be marked owned, got %+v", e)
+	}
+	// Membership survives: the foreign bond keeps its stake weight for the
+	// validator-incentive share-out.
+	if e := byAddr[string(theirs)]; e != nil && e.Stake != 8_235_000_000 {
+		t.Errorf("foreign member stake weight: got %d want 8_235_000_000", e.Stake)
+	}
+}
+
+// TestSyncEjectionBeatsOwnership: a governance ejection tombstone drops a
+// member even when canoLiq owns its bond. Ejection is the stronger statement,
+// and letting ownership re-admit the member would undo a passed F12 proposal
+// on the next block.
+func TestSyncEjectionBeatsOwnership(t *testing.T) {
+	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
+
+	val := addr20(0xC0)
+	setCommitteeStake(s, c, val, 1_000_000_000)
+	s.set(KeyForEjectedValidator(val), EncodeUint64(1))
+
+	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: 2}); err != nil {
+		t.Fatalf("process rewards: %v", err)
+	}
+	if entries := loadRegistryEntries(t, s); len(entries) != 0 {
+		t.Errorf("ejected owned validator must stay out, got %+v", entries)
+	}
+	if wm := loadGlobals(t, s).LastProcessedRewardPool; wm != 0 {
+		t.Errorf("ejected stake must not count toward the owned watermark, got %d", wm)
+	}
+}
+
+// TestSyncEmptyOutputCannotReachTheSweep guards a sharp edge: an empty entry
+// in the ownership set must never match a validator record that carries no
+// output, because that would hand ownership of arbitrary bonds to a typo.
+//
+// The guard turns out to sit upstream of the sweep. LoadParams validates on
+// every read, so a params record carrying a malformed address is rejected
+// before ProcessRewards can act on it, and the sweep fails the block rather
+// than mis-attributing. syncCommitteeRegistry still requires a 20-byte output
+// as a second line of defence; this test pins the first.
+func TestSyncEmptyOutputCannotReachTheSweep(t *testing.T) {
+	c, s := newTestCanoliq()
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
+
+	// SaveParams would reject this, so write the record directly — what a
+	// corrupted or hand-crafted state would look like.
+	p := DefaultParams()
+	p.StakeOutputAddresses = [][]byte{{}}
+	s.set(KeyForParams(), mustMarshal(p))
+
+	val := addr20(0xC0)
+	s.set(contract.KeyForValidator(val), mustMarshal(&contract.Validator{
+		Address:      val,
+		StakedAmount: 1_000_000_000,
+		Committees:   []uint64{c.Config.ChainId},
+		Compound:     true,
+		// no Output
+	}))
+
+	err := c.ProcessRewards(&contract.PluginEndRequest{Height: 1})
+	if err == nil {
+		t.Fatal("a malformed ownership set must not be usable; the sweep should fail the block")
+	}
+	if err.Code != codeInvalidParams {
+		t.Errorf("error code: got %d want codeInvalidParams (%d)", err.Code, codeInvalidParams)
+	}
+	// Nothing was attributed on the way to failing.
+	if g := loadGlobals(t, s); g.TotalPooledCnpy != 0 || g.LastAttributedReward != 0 {
+		t.Errorf("state moved on a rejected params record: %+v", g)
+	}
+}
+
+// TestSyncRequiresTwentyByteOutput is the second line of defence, exercised
+// directly: whatever reaches the matcher, only a real 20-byte output counts.
+func TestSyncRequiresTwentyByteOutput(t *testing.T) {
+	c, s := newTestCanoliq()
+	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
+
+	val := addr20(0xC0)
+	s.set(contract.KeyForValidator(val), mustMarshal(&contract.Validator{
+		Address:      val,
+		StakedAmount: 1_000_000_000,
+		Committees:   []uint64{c.Config.ChainId},
+		Compound:     true,
+		Output:       []byte{0x50, 0x50}, // short, malformed
+	}))
+
+	obs, err := c.syncCommitteeRegistry(&contract.CanoliqParams{
+		StakeOutputAddresses: [][]byte{{0x50, 0x50}},
+	})
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if obs.ownedTotal != 0 {
+		t.Errorf("a short output must not confer ownership, got ownedTotal=%d", obs.ownedTotal)
+	}
+	if obs.committeeTotal != 1_000_000_000 {
+		t.Errorf("membership is unaffected: got committeeTotal=%d", obs.committeeTotal)
+	}
+}

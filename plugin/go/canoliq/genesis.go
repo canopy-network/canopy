@@ -115,6 +115,24 @@ type GenesisParamsJSON struct {
 	// genesis really does want the cap off. Permitted only on the development
 	// profiles — see isDevProfile.
 	TvlCapBps *uint64 `json:"tvlCapBps"`
+	// StakeOutputAddresses lists the canoLiq-controlled output addresses that
+	// identify which Canopy bonds belong to the protocol. Only their stake
+	// growth becomes reward (reward.go::ProcessRewards, WP §3.3). Hex-encoded
+	// 20-byte addresses, same convention as multisigSigners.
+	//
+	// Absent means an empty set, which means R = 0 — the correct reading when
+	// the protocol has no staked position, and the safe direction regardless.
+	// Seed an address here only once a validator or delegate record exists
+	// whose ENTIRE bond is canoLiq principal: Canopy gives each record one
+	// output, so pointing a mixed bond at a listed address re-creates the
+	// over-attribution this exists to prevent.
+	StakeOutputAddresses []string `json:"stakeOutputAddresses"`
+	// MaxRewardBpsPerBlock caps one block's attributed reward as a fraction of
+	// owned stake. Plain `!= 0` fallback: zero means absent, and zero is not a
+	// meaningful value (it would read as "no clamp", which is the one thing
+	// omission must never mean here — see backfillParams). 10_000 is the
+	// deliberate off switch.
+	MaxRewardBpsPerBlock uint64 `json:"maxRewardBpsPerBlock"`
 	// OTC lock program tier rates and minimum position size. Plain `!= 0`
 	// fallback like the rest: zero means absent, and zero is not a meaningful
 	// value for any of the three (a zero rate is a program that pays nothing,
@@ -528,6 +546,23 @@ func paramsFromJSON(p *GenesisParamsJSON) (*contract.CanoliqParams, *contract.Pl
 	}
 	if p.MultisigThreshold != 0 {
 		d.MultisigThreshold = p.MultisigThreshold
+	}
+	if len(p.StakeOutputAddresses) > 0 {
+		// Same strict decode as the signer list above, and for a sharper
+		// reason: a dropped entry here silently stops attributing reward for
+		// that bond, so cCNPY under-earns with nothing in state to show why.
+		outputs := make([][]byte, 0, len(p.StakeOutputAddresses))
+		for _, hexAddr := range p.StakeOutputAddresses {
+			b, aerr := decodeGenesisAddress(hexAddr)
+			if aerr != nil {
+				return nil, aerr
+			}
+			outputs = append(outputs, b)
+		}
+		d.StakeOutputAddresses = outputs
+	}
+	if p.MaxRewardBpsPerBlock != 0 {
+		d.MaxRewardBpsPerBlock = p.MaxRewardBpsPerBlock
 	}
 	if p.VotingPeriodBlocks != 0 {
 		d.VotingPeriodBlocks = p.VotingPeriodBlocks

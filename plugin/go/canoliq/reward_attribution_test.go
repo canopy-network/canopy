@@ -284,8 +284,8 @@ func TestAttributionClampCarriesExcessForward(t *testing.T) {
 
 	const (
 		bond   = 1_000_000_000
-		capBps = 100            // 1% of owned stake per block
-		spike  = 25_000_000     // 2.5% — 2.5 blocks' worth of cap
+		capBps = 100        // 1% of owned stake per block
+		spike  = 25_000_000 // 2.5% — 2.5 blocks' worth of cap
 	)
 	val := addr20(0xC0)
 	seedGlobals(s, liveGlobals(bond))

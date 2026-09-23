@@ -19,36 +19,45 @@ What's implemented now:
 
 - **Policy declaration** — governance can store a list of
   `(committee_id, target_weight_bps, min_stake_ucnpy, max_stake_ucnpy)` entries.
-- **Per-committee observation** — the protocol reads each registered operator's
-  `lib.Validator.committees[]` + `staked_amount` and sums by committee to derive
-  canoLiq's actual exposure.
+- **Per-committee observation** — the protocol reads each **canoLiq-owned**
+  bond's `lib.Validator.committees[]` + `staked_amount` and sums by committee to
+  derive canoLiq's actual exposure.
 - **Drift reporting** — `/v1/restaking` surfaces observed weight vs target, plus
   `under_min` / `over_max` flags, plus an aggregate `policy_compliant` boolean.
 
 What's deferred:
 
-- **Active rebalancing.** The protocol does not currently re-route delegations
-  in response to drift; that requires a delegation-routing primitive (a way for
-  canoLiq to atomically shift its pool's delegation between operators) that
-  isn't defined in the codebase yet. The compliance signals are designed so
-  operators can act manually in the meantime — by adjusting which operators
-  canoLiq's `ValidatorRegistry` favours, or by ejecting operators via the
-  existing `ACTION_VALIDATOR_EJECT` governance tier.
+- **Active rebalancing.** The protocol does not currently re-route its stake in
+  response to drift. Canopy does have a delegation primitive
+  (`lib.Validator.delegate`); what is missing is a signable identity for
+  canoLiq's escrow pool, which lives in plugin state rather than in an account
+  that can sign a `MessageStake`. So the protocol cannot bond or move its own
+  position. The compliance signals are designed so operators can act manually
+  in the meantime.
 
 ## Restaking semantics
 
-Canopy lets one validator serve multiple committees with the same surety bond
-("restaking"). So if operator A bonds `1_000_000` uCNPY and lists
-`committees = [2, 7]`, A's full `1_000_000` counts toward canoLiq's exposure on
+Canopy lets one validator record serve multiple committees with the same surety
+bond ("restaking"). So if a canoLiq-owned bond holds `1_000_000` uCNPY and lists
+`committees = [2, 7]`, its full `1_000_000` counts toward canoLiq's exposure on
 **both** committees 2 and 7 — not split between them. Per-committee exposure is
 therefore:
 
 ```
-exposure[c] = Σ operator.staked_amount  for operators whose committees[] contains c
+exposure[c] = Σ staked_amount  over OWNED bonds whose committees[] contains c
 ```
 
-The plugin reads each registered operator's Canopy `Validator` record (via
-`KeyForValidator`) and computes this sum at each snapshot.
+Owned, not "every operator on the committee". A bond belongs to canoLiq when its
+Canopy `output` address is listed in `params.stakeOutputAddresses` — the same
+test the reward sweep applies, read from the same persisted flag so the two
+cannot disagree. An operator's own bond is their collateral: they put it up, and
+it is theirs that gets slashed. Counting it here would overstate canoLiq's
+exposure, and its concentration and TVL figures, by whatever the operators
+bonded themselves.
+
+The plugin reads each owned bond's Canopy `Validator` record (via
+`KeyForValidator`) and computes this sum at each snapshot. Until canoLiq owns a
+bond, `/v1/restaking` correctly reports zero exposure.
 
 The "registered operator" set is canoLiq's `ValidatorRegistry` — seeded at
 genesis (`plugin/go/canoliq/genesis.{localnet,testnet}.json`'s

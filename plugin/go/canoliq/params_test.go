@@ -105,3 +105,51 @@ func TestValidateParamsStillRejectsExplicitBadTerms(t *testing.T) {
 		t.Error("ValidateParams mutated its argument; backfilling belongs on the read path only")
 	}
 }
+
+// TestValidateParamsStakeOutputAddresses: the ownership set is the lever that
+// decides whose stake growth becomes cCNPY yield, so it gets the same shape and
+// distinctness checks as the multisig signer set. Empty stays valid — it is the
+// default, and it is the safe direction.
+func TestValidateParamsStakeOutputAddresses(t *testing.T) {
+	good := func() []byte { return addr20(0x50) }
+	other := func() []byte { return addr20(0x51) }
+
+	tests := []struct {
+		name    string
+		addrs   [][]byte
+		wantErr bool
+	}{
+		{"empty is the default and is valid", nil, false},
+		{"one well-formed address", [][]byte{good()}, false},
+		{"two distinct addresses", [][]byte{good(), other()}, false},
+		{"short address", [][]byte{make([]byte, 19)}, true},
+		{"long address", [][]byte{make([]byte, 21)}, true},
+		{"duplicate address", [][]byte{good(), good()}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := DefaultParams()
+			p.StakeOutputAddresses = tt.addrs
+			err := ValidateParams(p)
+			if tt.wantErr != (err != nil) {
+				t.Errorf("ValidateParams: err=%v wantErr=%v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidateParamsMaxRewardBps: 10_000 bps is the documented off switch (a
+// cap of 100% of owned stake can never bind). Anything above it is the same
+// meaning spelled a second way, so it is rejected rather than accepted.
+func TestValidateParamsMaxRewardBps(t *testing.T) {
+	for _, tc := range []struct {
+		bps     uint64
+		wantErr bool
+	}{{0, false}, {100, false}, {10_000, false}, {10_001, true}} {
+		p := DefaultParams()
+		p.MaxRewardBpsPerBlock = tc.bps
+		if err := ValidateParams(p); tc.wantErr != (err != nil) {
+			t.Errorf("bps=%d: err=%v wantErr=%v", tc.bps, err, tc.wantErr)
+		}
+	}
+}

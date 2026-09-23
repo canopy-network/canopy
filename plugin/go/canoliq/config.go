@@ -451,18 +451,18 @@ func DefaultParams() *contract.CanoliqParams {
 		// 1% of owned stake per block is far above any real emission rate and
 		// far below a runaway. See the clamp in ProcessRewards.
 		MaxRewardBpsPerBlock: 100,
-		MultisigThreshold:         3,
-		VotingPeriodBlocks:        100_800, // ~7d at 6s blocks
-		QuorumBps:                 3300,    // 33% of snapshot staked CPLQ
-		PassThresholdBps:          5001,    // just-above 50% of (yes+no)
-		TimelockBlocks:            28_800,  // ~48h at 6s blocks
-		CplqUnstakingBlocks:       100_800, // ~7d at 6s — must be ≥ voting period
-		ProposalFee:               10_000,
-		VoteFee:                   10_000,
-		StakeFee:                  10_000,
-		MultisigApproveFee:        10_000,
-		MinStakeToPropose:         1_000_000, // 1 CPLQ minimum to deter spam
-		Governance:                defaultGovernanceTiers(),
+		MultisigThreshold:    3,
+		VotingPeriodBlocks:   100_800, // ~7d at 6s blocks
+		QuorumBps:            3300,    // 33% of snapshot staked CPLQ
+		PassThresholdBps:     5001,    // just-above 50% of (yes+no)
+		TimelockBlocks:       28_800,  // ~48h at 6s blocks
+		CplqUnstakingBlocks:  100_800, // ~7d at 6s — must be ≥ voting period
+		ProposalFee:          10_000,
+		VoteFee:              10_000,
+		StakeFee:             10_000,
+		MultisigApproveFee:   10_000,
+		MinStakeToPropose:    1_000_000, // 1 CPLQ minimum to deter spam
+		Governance:           defaultGovernanceTiers(),
 		// OTC lock program: 90d pays 5%, 120d pays 8%, both as basis points of
 		// the locked cCNPY quantity converted 1:1 into uCPLQ. Minimum position
 		// is 50,000 cCNPY, which reserves 2,500 CPLQ at the 90d tier.
