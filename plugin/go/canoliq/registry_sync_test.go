@@ -37,6 +37,7 @@ func loadRegistry(t *testing.T, s *fakeStore) map[string]uint64 {
 // nothing), and the next sweep must distribute its compounded growth.
 func TestSyncAdmitsPostGenesisValidator(t *testing.T) {
 	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 	// No registry at all — genesis carried no validatorRegistry block.
 	val := addr20(0xC0)
@@ -78,6 +79,7 @@ func TestSyncAdmitsPostGenesisValidator(t *testing.T) {
 // yield. Only the already-registered member's growth counts.
 func TestSyncNewMemberBondIsNotReward(t *testing.T) {
 	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 	v1, v2 := addr20(0xC0), addr20(0xC1)
 	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: v1, Stake: rewardBaseStake}}}
@@ -111,6 +113,7 @@ func TestSyncNewMemberBondIsNotReward(t *testing.T) {
 // which was always summed from live stake) caps it.
 func TestSyncStaleBaselineCappedByAggregate(t *testing.T) {
 	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 	val := addr20(0xC0)
 	// Genesis weight of 1 vs. a live bond of rewardBaseStake.
@@ -135,6 +138,7 @@ func TestSyncStaleBaselineCappedByAggregate(t *testing.T) {
 // level, so the next block's growth is measured from there.
 func TestSyncPerValidatorShrinkIsNotReward(t *testing.T) {
 	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
 	val := addr20(0xC0)
 	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: val, Stake: 2_000_000_000}}}
@@ -198,6 +202,7 @@ func TestSyncDropsDepartedValidator(t *testing.T) {
 // would re-admit the ejected operator.
 func TestSyncKeepsEjectedValidatorOut(t *testing.T) {
 	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
 	v1, v2 := addr20(0xC0), addr20(0xC1)
 	setCommitteeStake(s, c, v1, rewardBaseStake)

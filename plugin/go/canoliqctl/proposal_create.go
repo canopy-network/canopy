@@ -469,6 +469,15 @@ type paramsJSON struct {
 	Governance                []governanceTierJSON `json:"governance"`
 	RestakingPolicy           []restakingEntryJSON `json:"restakingPolicy"`
 
+	// Reward ownership. stakeOutputAddresses lists the canoLiq-controlled
+	// output addresses that identify which Canopy bonds belong to the protocol;
+	// only their stake growth becomes reward. Omitting the key sends an empty
+	// set, which turns reward attribution off — a param-change is a full-set
+	// replacement, so carry the current value forward unless you mean to clear
+	// it.
+	StakeOutputAddresses []string `json:"stakeOutputAddresses"`
+	MaxRewardBpsPerBlock uint64   `json:"maxRewardBpsPerBlock"`
+
 	// OTC lock program tier rates, minimum position size, and tier terms.
 	OtcTier90Bps     uint64 `json:"otcTier90Bps"`
 	OtcTier120Bps    uint64 `json:"otcTier120Bps"`
@@ -522,6 +531,16 @@ func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 		}
 		signers = append(signers, b)
 	}
+	// Stake output addresses take the same encodings as multisig signers (hex,
+	// 0x-hex, base64) and the same 20-byte shape check.
+	outputs := make([][]byte, 0, len(p.StakeOutputAddresses))
+	for _, a := range p.StakeOutputAddresses {
+		b, err := decodeSigner(a)
+		if err != nil {
+			return nil, fmt.Errorf("stake output address: %w", err)
+		}
+		outputs = append(outputs, b)
+	}
 	var tiers []*contract.GovernanceTier
 	for _, t := range p.Governance {
 		tiers = append(tiers, &contract.GovernanceTier{
@@ -566,6 +585,9 @@ func (p paramsJSON) toContract() (*contract.CanoliqParams, error) {
 		StakeFee:            p.StakeFee,
 		MultisigApproveFee:  p.MultisigApproveFee,
 		MinStakeToPropose:   p.MinStakeToPropose,
+
+		StakeOutputAddresses: outputs,
+		MaxRewardBpsPerBlock: p.MaxRewardBpsPerBlock,
 
 		TvlCapBps:                 p.TvlCapBps,
 		InsuranceTargetBps:        p.InsuranceTargetBps,

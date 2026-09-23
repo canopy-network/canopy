@@ -7,9 +7,8 @@ option go_package = "github.com/canopy-network/go-plugin/contract";
 // to inspect address / staked amount / committees membership without
 // re-implementing the validator state machine. Field numbers MUST match the
 // FSM's Validator so wire-format unmarshal succeeds; fields we don't need
-// (public_key, net_address, max_paused_height, unstaking_height, output,
-// delegate, compound) are intentionally omitted — proto3 ignores unknown
-// fields during decode.
+// (public_key, net_address, max_paused_height, delegate) are intentionally
+// omitted — proto3 ignores unknown fields during decode.
 message Validator {
   // address: the short version of the operator public key.
   bytes address = 1;
@@ -20,4 +19,21 @@ message Validator {
   // validator participates in. Restaking gives each listed committee the
   // operator's full staked_amount as exposure. Field number must be 5.
   repeated uint64 committees = 5;
+  // unstaking_height: non-zero while the bond is unbonding. Canopy stops
+  // compounding reward into an unstaking bond and pays the early-withdrawal
+  // amount to `output` instead (fsm/committee.go::DistributeCommitteeReward),
+  // so canoLiq's stake-growth observation sees nothing for such a bond.
+  // Field number must be 7.
+  uint64 unstaking_height = 7; // @gotags: json:"unstakingHeight"
+  // output: the address Canopy returns this bond, and its early-withdrawal
+  // rewards, to. That makes it the record's economic beneficiary, and canoLiq
+  // uses it as the ownership key for reward attribution: a bond contributes to
+  // canoLiq's received reward only when its output is listed in
+  // CanoliqParams.stake_output_addresses. Field number must be 8.
+  bytes output = 8;
+  // compound: true when Canopy adds reward to staked_amount rather than paying
+  // it out to `output`. canoLiq-owned bonds MUST compound, or their reward
+  // arrives as a liquid balance that stake-growth observation cannot see.
+  // Field number must be 10.
+  bool compound = 10;
 }

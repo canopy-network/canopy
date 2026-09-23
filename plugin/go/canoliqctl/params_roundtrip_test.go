@@ -75,6 +75,8 @@ func fullyPopulatedParams(t *testing.T) *contract.CanoliqParams {
 	// Non-scalar fields reflection cannot fill meaningfully.
 	p.MultisigSigners = [][]byte{mustAddr("1b6454361f65ac5cc13c6b775692ba3d64cbcb84")}
 	p.MultisigThreshold = 1 // must be within [1, len(signers)]
+	p.StakeOutputAddresses = [][]byte{mustAddr("c0ffee0000000000000000000000000000000001")}
+	p.MaxRewardBpsPerBlock = 100 // reflection fills uint64s, but keep it valid (≤ 10_000)
 	p.Governance = []*contract.GovernanceTier{{
 		Action:    contract.ActionType_ACTION_FEE_CHANGE,
 		QuorumBps: 41, ApprovalBps: 42, TimelockBlocks: 43, VotingPeriodBlocks: 44,
@@ -154,6 +156,11 @@ func TestParamsRoundTripFromQueryOutputIsLossless(t *testing.T) {
 		mustAddr("1b6454361f65ac5cc13c6b775692ba3d64cbcb84"),
 		mustAddr("2ea35a0ef4ef34c58c176ae0ad6b6a4fbf33346f"),
 		mustAddr("b749e623b0b3dc8a6fce9f89c539d3351e92a6c5"),
+	}
+	// Same base64-vs-hex hazard, and losing this one silently switches reward
+	// attribution off rather than merely mangling a signer list.
+	orig.StakeOutputAddresses = [][]byte{
+		mustAddr("c0ffee0000000000000000000000000000000001"),
 	}
 	orig.MultisigThreshold = 2
 

@@ -10,33 +10,59 @@ import (
 // committee reward and applies the 12% protocol fee with the canonical
 // 40/30/15/15 split.
 //
-// Observation source — canoLiq's committee stake, NOT the committee fee pool.
+// Observation source — canoLiq's OWN bonded stake, NOT the committee fee pool
+// and NOT the committee's aggregate stake.
+//
 // Canopy funds the committee reward pool (KeyForFeePool(chainId)) in BeginBlock
 // and then fully distributes + zeroes it in EndBlock's DistributeCommitteeRewards,
 // which runs *before* this plugin EndBlock hook. So the pool is always 0 by the
 // time we look — it cannot be swept. Instead, Canopy compounds each block's
 // committee reward into the bonded StakedAmount of the committee's validators
 // (DistributeCommitteeReward, Compound=true). We therefore observe the
-// block-over-block growth of canoLiq's committee validator stake as the
-// received reward R, and store the last observed aggregate in
-// globals.last_processed_reward_pool (repurposed to mean "last observed
-// committee stake"). canoLiq's own protocol tx-fees are tracked separately in
-// KeyForTxFeeAccrual and route straight to the DAO treasury.
+// block-over-block growth of that bonded stake, and store the last observed
+// aggregate in globals.last_processed_reward_pool (repurposed to mean "last
+// observed owned stake"). canoLiq's own protocol tx-fees are tracked separately
+// in KeyForTxFeeAccrual and route straight to the DAO treasury.
+//
+// Two roles, and they are not the same set
+// ----------------------------------------
+// Committee membership determines who shares the 15% validator-incentive slice:
+// every committee member, by stake weight, via distributeValidatorShare.
+//
+// Ownership determines R. Only bonds whose Validator.output is listed in
+// params.stake_output_addresses are canoLiq's; every other bond on the
+// committee is an operator earning on their own collateral (WP §1.1: operators
+// bond their own CNPY as collateral, and it is their own CNPY that is slashed).
+// Crediting the whole committee's growth to cCNPY holders hands them other
+// people's yield — on mainnet committee 29 that took a 10 CNPY deposit to ~562x
+// in forty minutes off an 8,235 CNPY bond canoLiq did not own. WP §3.3 is
+// explicit that R is canoLiq's stake-weighted share.
+//
+// With an empty ownership set R is 0, which is the correct reading when the
+// protocol has no staked position: under-crediting truthfully beats minting
+// yield against stake it does not own.
 //
 // The observed member set is reconciled against Canopy's live committee
 // membership on every call (registry.go::syncCommitteeRegistry) so validators
 // that join or leave committee `chainId` post-genesis are accounted for. The
-// reward is the *lesser* of two independent estimates of that growth:
+// reward is the *lesser* of two independent estimates of the owned growth:
 //
-//   - per-validator: Σ growth of members already registered last block, which
-//     ignores the bond a newly admitted member brings with it, and
-//   - aggregate: the growth of the whole member set against the watermark,
-//     which ignores a stale per-validator baseline (e.g. the first sync after
-//     an upgrade, where the seeded genesis weights are not real stakes).
+//   - per-validator: Σ growth of owned members already registered last block,
+//     which ignores the bond a newly admitted member brings with it, and
+//   - aggregate: the growth of the owned set against the watermark, which
+//     ignores a stale per-validator baseline (e.g. the first sync after an
+//     upgrade, where the seeded genesis weights are not real stakes).
 //
 // Each estimate is exact except in the case the other one covers, so the min
 // is right whenever either is, and conservative (under-credits for one block)
 // when membership churns in both directions at once.
+//
+// Finally a plausibility clamp bounds one block's credit to
+// params.max_reward_bps_per_block of observed owned stake. Unlike the min()
+// above, the clamp does not discard the excess — it carries it forward in the
+// watermark, because nested-delegate rewards arrive by stake-weighted lottery
+// and a legitimate win is lumpy. Truncating would quietly destroy real user
+// yield; carrying forward rate-limits a bug without confiscating a payout.
 func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.PluginError {
 	params, err := c.LoadParams()
 	if err != nil {
@@ -83,7 +109,7 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	}
 	// Reconcile the committee member set with Canopy's live validator records
 	// and observe the growth of their bonded stake.
-	obs, err := c.syncCommitteeRegistry()
+	obs, err := c.syncCommitteeRegistry(params)
 	if err != nil {
 		return err
 	}
@@ -91,17 +117,37 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	if e != nil {
 		return e
 	}
-	observedStake := obs.total
+	// Owned stake only. obs.committeeTotal is a weight base for the validator
+	// slice below and is deliberately not an input here.
+	observedStake := obs.ownedTotal
 	baseline := globals.LastProcessedRewardPool
-	// rewardDelta is pure Canopy committee reward — see the min() rationale in
-	// the doc comment above.
-	rewardDelta := obs.reward
+	// rewardDelta is pure Canopy committee reward on canoLiq's own bonds — see
+	// the min() rationale in the doc comment above.
+	rewardDelta := obs.ownedReward
 	if observedStake <= baseline {
-		// An unstake / slash / departure shrank the aggregate position: take no
-		// reward this block and let the watermark reset to the new level.
+		// An unstake / slash / departure shrank the owned position: take no
+		// reward this block and let the watermark reset to the new level. This
+		// is also the branch that absorbs the first block after an upgrade,
+		// where the watermark still holds the old committee-wide aggregate.
 		rewardDelta = 0
 	} else if aggregate := observedStake - baseline; aggregate < rewardDelta {
 		rewardDelta = aggregate
+	}
+	// Pick up anything a previous block's clamp deferred. This is added after
+	// the min() above, not before: the min guards the *observation* against a
+	// stale per-validator baseline, and carried reward is already-observed
+	// value that the two estimates cannot see any more (the registry
+	// re-baselines every member at its live stake each block).
+	rewardDelta += globals.CarriedReward
+	// Plausibility clamp. Defers the excess rather than discarding it (see the
+	// doc comment). 10_000 bps switches it off, since a cap of 100% of owned
+	// stake can never bind; 0 never reaches here, backfillParams having already
+	// replaced it with the default.
+	credited := rewardDelta
+	if params.MaxRewardBpsPerBlock > 0 {
+		if maxCredit := mulDiv(observedStake, params.MaxRewardBpsPerBlock, 10_000); credited > maxCredit {
+			credited = maxCredit
+		}
 	}
 	// Seed-and-return when there is no growth to distribute. baseline == 0 is
 	// the first observation ever (fresh node / post-upgrade): adopt the current
@@ -113,6 +159,11 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 			globals.PeakTvlUcnpy = globals.TotalPooledCnpy
 		}
 		globals.LastProcessedRewardPool = observedStake
+		// Clear the attribution figure so a stale value from a previous block
+		// cannot keep the reward-attribution alert asserted. CarriedReward is
+		// deliberately left alone: it is value already observed and still owed,
+		// and a quiet block is not a reason to drop it.
+		globals.LastAttributedReward = 0
 		gBz, err := contract.Marshal(globals)
 		if err != nil {
 			return err
@@ -127,10 +178,10 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	// L3: canoLiq's own protocol tx-fees accrue in their own scalar (every
 	// handler credits it) and route straight to the DAO treasury. They are
 	// protocol revenue, not committee reward, so they are NOT part of the 12%
-	// fee + 40/30/15/15 split applied to rewardDelta.
+	// fee + 40/30/15/15 split applied to the attributed reward.
 	txFees := c.readScalar(KeyForTxFeeAccrual())
-	fee := FeeOnReward(rewardDelta, params.FeeBps)
-	netToUsers := rewardDelta - fee
+	fee := FeeOnReward(credited, params.FeeBps)
+	netToUsers := credited - fee
 	split := SplitFee(fee, &FeeSplitParams{
 		UserRebateBps: params.UserRebateBps,
 		TreasuryBps:   params.TreasuryBps,
@@ -182,9 +233,14 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	// any cCNPY, and adding it would break that invariant. It lands in the
 	// treasury scalar below instead, so physical CNPY is still conserved.
 	escrow.Amount += userSlice
-	// Record the observed committee stake so the next block isolates only the
-	// fresh growth (reward) as delta.
+	// Record the observed owned stake so the next block isolates only the
+	// fresh growth (reward) as delta. This advances fully even when the clamp
+	// bit: the deferred remainder rides in CarriedReward instead, which keeps
+	// the watermark meaning exactly one thing ("stake observed last sweep")
+	// rather than two.
 	globals.LastProcessedRewardPool = observedStake
+	globals.LastAttributedReward = credited
+	globals.CarriedReward = rewardDelta - credited
 
 	gBz, e := contract.Marshal(globals)
 	if e != nil {
@@ -381,6 +437,13 @@ func (c *Canoliq) committeeAggregatorAddr() []byte {
 // Phase 1 behavior — so Phase 1 tests continue to pass unchanged. Rounding
 // remainder is credited to the largest-stake validator so the credited
 // total exactly equals the input share.
+//
+// Every committee member is weighted here, owned or not. That is the
+// membership role, and it is deliberately not the ownership role that gates R
+// in ProcessRewards: the 15% slice pays operators for running the committee,
+// which they do regardless of whose CNPY is bonded in their record. Do not
+// "fix" this to skip entry.Owned == false; see the two-roles section of
+// ProcessRewards' doc comment.
 //
 // `registry` is the set reconciled by this block's syncCommitteeRegistry, not
 // a re-read of state: the reconciled copy is only written at the end of

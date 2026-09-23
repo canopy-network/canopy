@@ -437,6 +437,15 @@ func DefaultParams() *contract.CanoliqParams {
 		GraduationMinRunwayMonths: 12,
 		TreasuryThreshold:         1_000_000_000, // 1k CNPY-equivalent in uCNPY
 		MultisigSigners:           nil,           // populated at genesis (genesis.json) or via param-change vote
+		// StakeOutputAddresses is deliberately nil. An empty ownership set means
+		// no bond on the committee is canoLiq's, so the reward sweep attributes
+		// nothing — the correct reading whenever the protocol has no staked
+		// position of its own. Populating it is a governance act
+		// (reward.go::ProcessRewards, WP §3.3).
+		StakeOutputAddresses: nil,
+		// 1% of owned stake per block is far above any real emission rate and
+		// far below a runaway. See the clamp in ProcessRewards.
+		MaxRewardBpsPerBlock: 100,
 		MultisigThreshold:         3,
 		VotingPeriodBlocks:        100_800, // ~7d at 6s blocks
 		QuorumBps:                 3300,    // 33% of snapshot staked CPLQ
@@ -541,6 +550,30 @@ func ValidateParams(p *contract.CanoliqParams) *contract.PluginError {
 			}
 			seenSigner[string(s)] = true
 		}
+	}
+	// Stake output addresses (reward ownership). Same shape rules as the
+	// multisig signer set: 20-byte addresses, all distinct. An empty set is
+	// valid and is the default — it means R = 0, which is the safe direction.
+	// A duplicate would be harmless to the sweep (it builds a set) but signals
+	// a governance payload someone got wrong, so reject it here rather than
+	// silently normalize.
+	if len(p.StakeOutputAddresses) > 0 {
+		seenOutput := make(map[string]bool, len(p.StakeOutputAddresses))
+		for _, a := range p.StakeOutputAddresses {
+			if len(a) != 20 {
+				return ErrInvalidParams()
+			}
+			if seenOutput[string(a)] {
+				return ErrInvalidParams()
+			}
+			seenOutput[string(a)] = true
+		}
+	}
+	// 10_000 bps is the documented "off" setting — a cap of 100% of owned stake
+	// can never bind. Anything above it is the same thing spelled ambiguously,
+	// so reject rather than accept two encodings of one meaning.
+	if p.MaxRewardBpsPerBlock > 10_000 {
+		return ErrInvalidParams()
 	}
 	// OTC lock program. Tier rates are bounded rather than merely non-zero: at
 	// 1:1 quantity conversion a rate above 100% would reserve more uCPLQ than

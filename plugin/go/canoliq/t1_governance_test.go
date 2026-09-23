@@ -212,6 +212,8 @@ func TestT1ValidatorEjectSkipsRewards(t *testing.T) {
 	c, s := newTestCanoliq()
 	params := DefaultParams()
 	seedParams(t, c, params)
+	seedStakeOutputParams(t, c)
+	disableRewardClamp(t, c)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
 	v1, v2 := addr20(0x01), addr20(0x02)
 	registry := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{
