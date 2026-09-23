@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	cryptorand "crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -597,19 +596,12 @@ func checkTxNotFailed(rpcURL, senderAddr string) (int, error) {
 	return result.TotalCount, nil
 }
 
-// hexToBase64 converts a hex string to base64 (for protojson bytes encoding)
-func hexToBase64(hexStr string) string {
-	bytes, _ := hex.DecodeString(hexStr)
-	return base64.StdEncoding.EncodeToString(bytes)
-}
-
 // sendFaucetTx sends a faucet transaction using raw JSON
 func sendFaucetTx(rpcURL string, signerKey *keyGroup, recipientAddr string, amount, fee, networkID, chainID, height uint64) (string, error) {
 	// Create the faucet message as JSON map
-	// protojson expects base64 for bytes fields
 	faucetMsg := map[string]interface{}{
-		"signerAddress":    hexToBase64(signerKey.Address),
-		"recipientAddress": hexToBase64(recipientAddr),
+		"signerAddress":    signerKey.Address,
+		"recipientAddress": recipientAddr,
 		"amount":           float64(amount),
 	}
 
@@ -619,10 +611,9 @@ func sendFaucetTx(rpcURL string, signerKey *keyGroup, recipientAddr string, amou
 // sendSendTx sends a send transaction using raw JSON
 func sendSendTx(rpcURL string, senderKey *keyGroup, fromAddr, toAddr string, amount, fee, networkID, chainID, height uint64) (string, error) {
 	// Create the send message as JSON map
-	// protojson expects base64 for bytes fields
 	sendMsg := map[string]interface{}{
-		"fromAddress": hexToBase64(fromAddr),
-		"toAddress":   hexToBase64(toAddr),
+		"fromAddress": fromAddr,
+		"toAddress":   toAddr,
 		"amount":      float64(amount),
 	}
 
@@ -632,10 +623,9 @@ func sendSendTx(rpcURL string, senderKey *keyGroup, fromAddr, toAddr string, amo
 // sendRewardTx sends a reward transaction using raw JSON
 func sendRewardTx(rpcURL string, adminKey *keyGroup, adminAddr, recipientAddr string, amount, fee, networkID, chainID, height uint64) (string, error) {
 	// Create the reward message as JSON map
-	// protojson expects base64 for bytes fields
 	rewardMsg := map[string]interface{}{
-		"adminAddress":     hexToBase64(adminAddr),
-		"recipientAddress": hexToBase64(recipientAddr),
+		"adminAddress":     adminAddr,
+		"recipientAddress": recipientAddr,
 		"amount":           float64(amount),
 	}
 
@@ -668,28 +658,27 @@ func buildSignAndSendTx(rpcURL string, signerKey *keyGroup, msgType string, msgJ
 
 	// Marshal the message to proto bytes for signing
 	// We need to create the actual proto message
-	// Addresses in msgJSON are base64-encoded (for protojson compatibility)
 	var msgProto proto.Message
 	switch msgType {
 	case "send":
-		fromAddr, _ := base64.StdEncoding.DecodeString(msgJSON["fromAddress"].(string))
-		toAddr, _ := base64.StdEncoding.DecodeString(msgJSON["toAddress"].(string))
+		fromAddr, _ := hex.DecodeString(msgJSON["fromAddress"].(string))
+		toAddr, _ := hex.DecodeString(msgJSON["toAddress"].(string))
 		msgProto = &contract.MessageSend{
 			FromAddress: fromAddr,
 			ToAddress:   toAddr,
 			Amount:      uint64(msgJSON["amount"].(float64)),
 		}
 	case "reward":
-		adminAddr, _ := base64.StdEncoding.DecodeString(msgJSON["adminAddress"].(string))
-		recipientAddr, _ := base64.StdEncoding.DecodeString(msgJSON["recipientAddress"].(string))
+		adminAddr, _ := hex.DecodeString(msgJSON["adminAddress"].(string))
+		recipientAddr, _ := hex.DecodeString(msgJSON["recipientAddress"].(string))
 		msgProto = &contract.MessageReward{
 			AdminAddress:     adminAddr,
 			RecipientAddress: recipientAddr,
 			Amount:           uint64(msgJSON["amount"].(float64)),
 		}
 	case "faucet":
-		signerAddr, _ := base64.StdEncoding.DecodeString(msgJSON["signerAddress"].(string))
-		recipientAddr, _ := base64.StdEncoding.DecodeString(msgJSON["recipientAddress"].(string))
+		signerAddr, _ := hex.DecodeString(msgJSON["signerAddress"].(string))
+		recipientAddr, _ := hex.DecodeString(msgJSON["recipientAddress"].(string))
 		msgProto = &contract.MessageFaucet{
 			SignerAddress:    signerAddr,
 			RecipientAddress: recipientAddr,
@@ -729,49 +718,20 @@ func buildSignAndSendTx(rpcURL string, signerKey *keyGroup, msgType string, msgJ
 		return "", fmt.Errorf("failed to decode public key: %v", err)
 	}
 
-	// Marshal the message to get the exact bytes for the Any.Value
-	msgProtoBytes, err := proto.Marshal(msgProto)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal message proto: %v", err)
-	}
-
-	// Build the transaction
-	// For "send" (which is in RegisteredMessages), we must use "msg" field
-	// For plugin-only types (faucet, reward), we use msgTypeUrl/msgBytes for exact byte control
-	var tx map[string]interface{}
-	if msgType == "send" {
-		// "send" is in RegisteredMessages, must use msg field
-		tx = map[string]interface{}{
-			"type": msgType,
-			"msg":  msgJSON,
-			"signature": map[string]string{
-				"publicKey": hex.EncodeToString(pubKeyBytes),
-				"signature": hex.EncodeToString(signature),
-			},
-			"time":          txTime,
-			"createdHeight": height,
-			"fee":           fee,
-			"memo":          "",
-			"networkID":     networkID,
-			"chainID":       chainID,
-		}
-	} else {
-		// Plugin-only types: use msgTypeUrl/msgBytes for exact byte control
-		tx = map[string]interface{}{
-			"type":       msgType,
-			"msgTypeUrl": typeURL,
-			"msgBytes":   hex.EncodeToString(msgProtoBytes),
-			"signature": map[string]string{
-				"publicKey": hex.EncodeToString(pubKeyBytes),
-				"signature": hex.EncodeToString(signature),
-			},
-			"time":          txTime,
-			"createdHeight": height,
-			"fee":           fee,
-			"memo":          "",
-			"networkID":     networkID,
-			"chainID":       chainID,
-		}
+	// Build the transaction using structured JSON for every plugin message.
+	tx := map[string]interface{}{
+		"type": msgType,
+		"msg":  msgJSON,
+		"signature": map[string]string{
+			"publicKey": hex.EncodeToString(pubKeyBytes),
+			"signature": hex.EncodeToString(signature),
+		},
+		"time":          txTime,
+		"createdHeight": height,
+		"fee":           fee,
+		"memo":          "",
+		"networkID":     networkID,
+		"chainID":       chainID,
 	}
 
 	txJSONBytes, err := json.MarshalIndent(tx, "", "  ")
