@@ -13,34 +13,39 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// MarshalAnypbJSON() marshals an anypb to JSON using the globalPluginSchemaRegistry
+// MarshalAnypbJSON() marshals an anypb to JSON with protobuf bytes fields represented as hex.
 func MarshalAnypbJSON(any *anypb.Any) (json.RawMessage, error) {
 	if any == nil {
 		return nil, nil
 	}
-	// try with the globalPluginSchemaRegistry first
-	desc := globalPluginSchemaRegistry.FindMessageDescriptorForTypeURL(any.TypeUrl)
+	// Native transaction codecs already implement the global hex contract and
+	// also retain message-specific representations for non-bytes fields.
+	payload, payloadErr := FromAny(any)
+	if payloadErr == nil {
+		if msgI, ok := payload.(MessageI); ok {
+			msg, err := MarshalJSON(msgI)
+			return msg, err
+		}
+		jsonBytes, err := protojson.MarshalOptions{}.Marshal(payload)
+		if err == nil {
+			return transformProtoJSONBytes(jsonBytes, payload.ProtoReflect().Descriptor(), base64ToHex)
+		}
+	}
+	// Dynamically registered plugin messages are not available through the
+	// process-wide protobuf type registry, so resolve their descriptors here.
+	desc := messageDescriptorForTypeURL(any.TypeUrl)
 	if desc != nil && len(any.Value) > 0 {
 		dynamic := dynamicpb.NewMessage(desc)
 		if err := proto.Unmarshal(any.Value, dynamic); err == nil {
 			jsonBytes, e := protojson.MarshalOptions{}.Marshal(dynamic)
 			if e == nil {
-				return transformPluginJSONBytes(jsonBytes, desc, base64ToHex)
-			}
-		}
-	}
-	// fallback to standard anypb.UnmarshalNew()
-	payload, payloadErr := FromAny(any)
-	if payloadErr == nil {
-		if msgI, ok := payload.(MessageI); ok {
-			msg, err := MarshalJSON(msgI)
-			if err == nil {
-				return msg, nil
+				return transformProtoJSONBytes(jsonBytes, desc, base64ToHex)
 			}
 		}
 	}
@@ -80,7 +85,7 @@ func AnyFromJSONForMessageType(messageType string, msg json.RawMessage) (*anypb.
 	desc := globalPluginSchemaRegistry.FindMessageDescriptorForMessageType(messageType)
 	typeURL := messageType
 	if strings.Contains(messageType, "/") {
-		desc = globalPluginSchemaRegistry.FindMessageDescriptorForTypeURL(messageType)
+		desc = messageDescriptorForTypeURL(messageType)
 	} else if desc != nil {
 		typeURL = "type.googleapis.com/" + string(desc.FullName())
 	}
@@ -88,7 +93,7 @@ func AnyFromJSONForMessageType(messageType string, msg json.RawMessage) (*anypb.
 		return nil, ErrUnknownMessageName(messageType)
 	}
 	dynamic := dynamicpb.NewMessage(desc)
-	protoJSON, err := transformPluginJSONBytes(msg, desc, hexToBase64)
+	protoJSON, err := transformProtoJSONBytes(msg, desc, hexToBase64)
 	if err != nil {
 		return nil, ErrJSONUnmarshal(err)
 	}
@@ -102,8 +107,19 @@ func AnyFromJSONForMessageType(messageType string, msg json.RawMessage) (*anypb.
 	return &anypb.Any{TypeUrl: typeURL, Value: bz}, nil
 }
 
-// transformPluginJSONBytes changes the JSON representation of every protobuf bytes field.
-func transformPluginJSONBytes(jsonBytes []byte, desc protoreflect.MessageDescriptor, transform func(string) (string, error)) ([]byte, error) {
+func messageDescriptorForTypeURL(typeURL string) protoreflect.MessageDescriptor {
+	if desc := globalPluginSchemaRegistry.FindMessageDescriptorForTypeURL(typeURL); desc != nil {
+		return desc
+	}
+	messageType, err := protoregistry.GlobalTypes.FindMessageByURL(typeURL)
+	if err != nil {
+		return nil
+	}
+	return messageType.Descriptor()
+}
+
+// transformProtoJSONBytes changes the JSON representation of every protobuf bytes field.
+func transformProtoJSONBytes(jsonBytes []byte, desc protoreflect.MessageDescriptor, transform func(string) (string, error)) ([]byte, error) {
 	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 	decoder.UseNumber()
 	var value any
@@ -115,15 +131,15 @@ func transformPluginJSONBytes(jsonBytes []byte, desc protoreflect.MessageDescrip
 	}
 	object, ok := value.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("plugin message JSON must be an object")
+		return nil, fmt.Errorf("protobuf message JSON must be an object")
 	}
-	if err := transformPluginJSONMessage(object, desc, transform); err != nil {
+	if err := transformProtoJSONMessage(object, desc, transform); err != nil {
 		return nil, err
 	}
 	return json.Marshal(object)
 }
 
-func transformPluginJSONMessage(object map[string]any, desc protoreflect.MessageDescriptor, transform func(string) (string, error)) error {
+func transformProtoJSONMessage(object map[string]any, desc protoreflect.MessageDescriptor, transform func(string) (string, error)) error {
 	fields := desc.Fields()
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
@@ -136,7 +152,7 @@ func transformPluginJSONMessage(object map[string]any, desc protoreflect.Message
 		if !found {
 			continue
 		}
-		transformed, err := transformPluginJSONField(value, field, transform)
+		transformed, err := transformProtoJSONField(value, field, transform)
 		if err != nil {
 			return fmt.Errorf("field %s: %w", field.FullName(), err)
 		}
@@ -145,14 +161,14 @@ func transformPluginJSONMessage(object map[string]any, desc protoreflect.Message
 	return nil
 }
 
-func transformPluginJSONField(value any, field protoreflect.FieldDescriptor, transform func(string) (string, error)) (any, error) {
+func transformProtoJSONField(value any, field protoreflect.FieldDescriptor, transform func(string) (string, error)) (any, error) {
 	if field.IsMap() {
 		object, ok := value.(map[string]any)
 		if !ok {
 			return value, nil
 		}
 		for key, entry := range object {
-			transformed, err := transformPluginJSONScalar(entry, field.MapValue(), transform)
+			transformed, err := transformProtoJSONScalar(entry, field.MapValue(), transform)
 			if err != nil {
 				return nil, err
 			}
@@ -166,7 +182,7 @@ func transformPluginJSONField(value any, field protoreflect.FieldDescriptor, tra
 			return value, nil
 		}
 		for i, entry := range list {
-			transformed, err := transformPluginJSONScalar(entry, field, transform)
+			transformed, err := transformProtoJSONScalar(entry, field, transform)
 			if err != nil {
 				return nil, err
 			}
@@ -174,10 +190,10 @@ func transformPluginJSONField(value any, field protoreflect.FieldDescriptor, tra
 		}
 		return list, nil
 	}
-	return transformPluginJSONScalar(value, field, transform)
+	return transformProtoJSONScalar(value, field, transform)
 }
 
-func transformPluginJSONScalar(value any, field protoreflect.FieldDescriptor, transform func(string) (string, error)) (any, error) {
+func transformProtoJSONScalar(value any, field protoreflect.FieldDescriptor, transform func(string) (string, error)) (any, error) {
 	if field.Kind() == protoreflect.BytesKind {
 		text, ok := value.(string)
 		if !ok {
@@ -188,7 +204,7 @@ func transformPluginJSONScalar(value any, field protoreflect.FieldDescriptor, tr
 	if field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind {
 		object, ok := value.(map[string]any)
 		if ok {
-			return object, transformPluginJSONMessage(object, field.Message(), transform)
+			return object, transformProtoJSONMessage(object, field.Message(), transform)
 		}
 	}
 	return value, nil
