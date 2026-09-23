@@ -212,7 +212,7 @@ func TestSafetyCheckRejectsUncappedGenesisOffDevProfiles(t *testing.T) {
 	}
 	// A capped genesis starts everywhere.
 	for _, profile := range []string{ProfileTestnet, ProfileMainnet, ProfileDevnet} {
-		cfg := Config{Profile: profile, ChainId: 2, RedemptionUnstakingBlocks: 30240, GenesisPath: write(t, &capped)}
+		cfg := Config{Profile: profile, ChainId: 2, RedemptionUnstakingBlocks: 30240, ActivationHeight: 10_000, GenesisPath: write(t, &capped)}
 		if err := cfg.SafetyCheck(); err != nil {
 			t.Fatalf("profile=%q with a capped genesis: %v", profile, err)
 		}
@@ -273,7 +273,7 @@ func TestApplyDevnetTvlCapOverrideUpdatesLiveParams(t *testing.T) {
 		t.Fatalf("seed params: %v", err)
 	}
 
-	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+	if err := c.bootstrapGenesisIfNeeded(0); err != nil {
 		t.Fatalf("bootstrapGenesisIfNeeded: %v", err)
 	}
 	got, err := c.LoadParams()
@@ -291,7 +291,7 @@ func TestApplyDevnetTvlCapOverrideUpdatesLiveParams(t *testing.T) {
 
 	// Converges: a second call with the same genesis file is a no-op that
 	// still reads back the same value (not just "doesn't crash").
-	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+	if err := c.bootstrapGenesisIfNeeded(0); err != nil {
 		t.Fatalf("second bootstrapGenesisIfNeeded: %v", err)
 	}
 	got2, err := c.LoadParams()
@@ -325,7 +325,7 @@ func TestApplyDevnetTvlCapOverrideSkippedOffDevProfiles(t *testing.T) {
 			t.Fatalf("profile=%q: seed params: %v", profile, err)
 		}
 
-		if err := c.bootstrapGenesisIfNeeded(); err != nil {
+		if err := c.bootstrapGenesisIfNeeded(0); err != nil {
 			t.Fatalf("profile=%q: bootstrapGenesisIfNeeded: %v", profile, err)
 		}
 		got, err := c.LoadParams()
@@ -361,7 +361,7 @@ func TestApplyDevnetTvlCapOverrideNoOpWithoutExplicitCap(t *testing.T) {
 		t.Fatalf("seed params: %v", err)
 	}
 
-	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+	if err := c.bootstrapGenesisIfNeeded(0); err != nil {
 		t.Fatalf("bootstrapGenesisIfNeeded: %v", err)
 	}
 	got, err := c.LoadParams()

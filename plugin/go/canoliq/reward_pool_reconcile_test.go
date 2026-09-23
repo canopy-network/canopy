@@ -37,7 +37,7 @@ func TestReconcileOrphanedPoolOnDevnetZeroesPool(t *testing.T) {
 	c.Config.Profile = ProfileDevnet
 	seedOrphanedPool(t, c, s, orphaned)
 
-	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+	if err := c.bootstrapGenesisIfNeeded(0); err != nil {
 		t.Fatalf("bootstrapGenesisIfNeeded: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestReconcileOrphanedPoolOnDevnetInertAfterRealDeposit(t *testing.T) {
 		t.Fatalf("save globals: %v", err)
 	}
 
-	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+	if err := c.bootstrapGenesisIfNeeded(0); err != nil {
 		t.Fatalf("bootstrapGenesisIfNeeded: %v", err)
 	}
 
@@ -107,7 +107,7 @@ func TestReconcileOrphanedPoolOnDevnetSkippedOffDevProfiles(t *testing.T) {
 		c.Config.Profile = profile
 		seedOrphanedPool(t, c, s, 14_908_429_287_755)
 
-		if err := c.bootstrapGenesisIfNeeded(); err != nil {
+		if err := c.bootstrapGenesisIfNeeded(0); err != nil {
 			t.Fatalf("profile=%q: bootstrapGenesisIfNeeded: %v", profile, err)
 		}
 
@@ -135,7 +135,7 @@ func TestReconcileOrphanedPoolOnDevnetNoOpOnEmptyPool(t *testing.T) {
 		t.Fatalf("save globals: %v", err)
 	}
 
-	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+	if err := c.bootstrapGenesisIfNeeded(0); err != nil {
 		t.Fatalf("bootstrapGenesisIfNeeded: %v", err)
 	}
 	if got := readEscrow(s); got != 0 {
@@ -161,7 +161,7 @@ func TestReconcileOrphanedPoolOnDevnetPreservesPendingRedemption(t *testing.T) {
 		t.Fatalf("save globals: %v", err)
 	}
 
-	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+	if err := c.bootstrapGenesisIfNeeded(0); err != nil {
 		t.Fatalf("bootstrapGenesisIfNeeded: %v", err)
 	}
 
