@@ -542,6 +542,8 @@ Each handler then decodes the raw bytes into the plugin's own `Faucet`/`Reward` 
 - Without `?address`, it does a **range read** over the record prefix (`faucet_prefix()` / `reward_prefix()`) and returns every record.
 - With `?address=<hex>`, it does a **single-key read** (`key_for_faucet(addr)` / `key_for_reward(addr)`) and returns just that recipient's record.
 
+> **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`key_for_faucet(addr)` = `join_len_prefix(FAUCET_PREFIX, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `faucet_prefix()` returns (`join_len_prefix(FAUCET_PREFIX)`, i.e. `b"\x01\x64"`), **not** the raw byte `b"\x64"`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `key_for_faucet(addr)` are already length-prefixed, so they're unaffected.)
+
 The server is already started from `main.py` (no change needed):
 
 ```python

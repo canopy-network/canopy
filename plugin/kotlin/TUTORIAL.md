@@ -495,6 +495,8 @@ Then add the `handleQueryFaucets` / `handleQueryRewards` handlers (and the JSON/
 - Without `?address`, it does a **range read** over the record prefix (`faucetPrefix()` / `rewardPrefix()`) and returns every record.
 - With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record.
 
+> **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`keyForFaucet(addr)` = `joinLenPrefix(FAUCET_PREFIX, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `faucetPrefix()` returns (`joinLenPrefix(FAUCET_PREFIX)`, i.e. `byteArrayOf(0x01, 0x64)`), **not** the raw `byteArrayOf(0x64)`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `keyForFaucet(addr)` are already length-prefixed, so they're unaffected.)
+
 The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`). The RPC server is optional and non-fatal: set `rpcAddress` to empty to disable it, and a bind failure (e.g. port already in use) is logged without crashing the plugin.
 
 ### Query the endpoints

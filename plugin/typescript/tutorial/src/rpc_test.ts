@@ -447,11 +447,14 @@ async function testPluginTransactions(): Promise<void> {
 
     // Wait for faucet transaction to be included in a block
     console.log('Waiting for faucet transaction to be confirmed...');
+    // Generous timeout: a dev node can take many blocks to finalize/index a tx (especially right
+    // after a restart while consensus warms up), so don't fail on transient finalization lag.
+    const txTimeout = 120000; // 120s
     const faucetIncluded = await waitForTxInclusion(
         QUERY_RPC_URL,
         account1Addr,
         faucetTxHash,
-        30000
+        txTimeout
     );
     if (!faucetIncluded) {
         throw new Error('Faucet transaction not included within timeout');
@@ -495,7 +498,7 @@ async function testPluginTransactions(): Promise<void> {
 
     // Wait for send transaction to be included
     console.log('Waiting for send transaction to be confirmed...');
-    const sendIncluded = await waitForTxInclusion(QUERY_RPC_URL, account1Addr, sendTxHash, 30000);
+    const sendIncluded = await waitForTxInclusion(QUERY_RPC_URL, account1Addr, sendTxHash, txTimeout);
     if (!sendIncluded) {
         throw new Error('Send transaction not included within timeout');
     }
@@ -543,7 +546,7 @@ async function testPluginTransactions(): Promise<void> {
         QUERY_RPC_URL,
         account2Addr,
         rewardTxHash,
-        30000
+        txTimeout
     );
     if (!rewardIncluded) {
         throw new Error('Reward transaction not included within timeout');
