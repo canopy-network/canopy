@@ -1,8 +1,11 @@
 package lib
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -27,7 +30,7 @@ func MarshalAnypbJSON(any *anypb.Any) (json.RawMessage, error) {
 		if err := proto.Unmarshal(any.Value, dynamic); err == nil {
 			jsonBytes, e := protojson.MarshalOptions{}.Marshal(dynamic)
 			if e == nil {
-				return jsonBytes, nil
+				return transformPluginJSONBytes(jsonBytes, desc, base64ToHex)
 			}
 		}
 	}
@@ -85,7 +88,11 @@ func AnyFromJSONForMessageType(messageType string, msg json.RawMessage) (*anypb.
 		return nil, ErrUnknownMessageName(messageType)
 	}
 	dynamic := dynamicpb.NewMessage(desc)
-	if err := protojson.Unmarshal(msg, dynamic); err != nil {
+	protoJSON, err := transformPluginJSONBytes(msg, desc, hexToBase64)
+	if err != nil {
+		return nil, ErrJSONUnmarshal(err)
+	}
+	if err = protojson.Unmarshal(protoJSON, dynamic); err != nil {
 		return nil, ErrJSONUnmarshal(err)
 	}
 	bz, err := proto.MarshalOptions{Deterministic: true}.Marshal(dynamic)
@@ -93,6 +100,114 @@ func AnyFromJSONForMessageType(messageType string, msg json.RawMessage) (*anypb.
 		return nil, ErrToAny(err)
 	}
 	return &anypb.Any{TypeUrl: typeURL, Value: bz}, nil
+}
+
+// transformPluginJSONBytes changes the JSON representation of every protobuf bytes field.
+func transformPluginJSONBytes(jsonBytes []byte, desc protoreflect.MessageDescriptor, transform func(string) (string, error)) ([]byte, error) {
+	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return nil, fmt.Errorf("invalid JSON after plugin message")
+	}
+	object, ok := value.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("plugin message JSON must be an object")
+	}
+	if err := transformPluginJSONMessage(object, desc, transform); err != nil {
+		return nil, err
+	}
+	return json.Marshal(object)
+}
+
+func transformPluginJSONMessage(object map[string]any, desc protoreflect.MessageDescriptor, transform func(string) (string, error)) error {
+	fields := desc.Fields()
+	for i := 0; i < fields.Len(); i++ {
+		field := fields.Get(i)
+		name := field.JSONName()
+		value, found := object[name]
+		if !found {
+			name = string(field.Name())
+			value, found = object[name]
+		}
+		if !found {
+			continue
+		}
+		transformed, err := transformPluginJSONField(value, field, transform)
+		if err != nil {
+			return fmt.Errorf("field %s: %w", field.FullName(), err)
+		}
+		object[name] = transformed
+	}
+	return nil
+}
+
+func transformPluginJSONField(value any, field protoreflect.FieldDescriptor, transform func(string) (string, error)) (any, error) {
+	if field.IsMap() {
+		object, ok := value.(map[string]any)
+		if !ok {
+			return value, nil
+		}
+		for key, entry := range object {
+			transformed, err := transformPluginJSONScalar(entry, field.MapValue(), transform)
+			if err != nil {
+				return nil, err
+			}
+			object[key] = transformed
+		}
+		return object, nil
+	}
+	if field.IsList() {
+		list, ok := value.([]any)
+		if !ok {
+			return value, nil
+		}
+		for i, entry := range list {
+			transformed, err := transformPluginJSONScalar(entry, field, transform)
+			if err != nil {
+				return nil, err
+			}
+			list[i] = transformed
+		}
+		return list, nil
+	}
+	return transformPluginJSONScalar(value, field, transform)
+}
+
+func transformPluginJSONScalar(value any, field protoreflect.FieldDescriptor, transform func(string) (string, error)) (any, error) {
+	if field.Kind() == protoreflect.BytesKind {
+		text, ok := value.(string)
+		if !ok {
+			return value, nil
+		}
+		return transform(text)
+	}
+	if field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind {
+		object, ok := value.(map[string]any)
+		if ok {
+			return object, transformPluginJSONMessage(object, field.Message(), transform)
+		}
+	}
+	return value, nil
+}
+
+func hexToBase64(value string) (string, error) {
+	bz, err := StringToBytes(value)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(bz), nil
+}
+
+func base64ToHex(value string) (string, error) {
+	bz, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		return "", err
+	}
+	return BytesToString(bz), nil
 }
 
 var globalPluginSchemaRegistry = NewPluginSchemaRegistry()
