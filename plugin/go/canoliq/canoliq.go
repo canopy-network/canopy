@@ -22,6 +22,9 @@ type Canoliq struct {
 	// line. bootstrapGenesisIfNeeded runs every block, and a per-block warning
 	// would bury the log it is meant to draw attention to.
 	warnMissingGenesisOnce sync.Once
+	// warnMissedActivationOnce keeps the "activationHeight already passed"
+	// warning to a single log line instead of one per block.
+	warnMissedActivationOnce sync.Once
 }
 
 // Genesis runs the canoLiq genesis distribution exactly once. It is idempotent:
@@ -38,10 +41,10 @@ func (c *Canoliq) Genesis(req *contract.PluginGenesisRequest) *contract.PluginGe
 // has no canoliq plugin section), then tally and dispatch any expired
 // proposals.
 func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginBeginResponse {
-	if err := c.bootstrapGenesisIfNeeded(); err != nil {
+	height := req.GetHeight()
+	if err := c.bootstrapGenesisIfNeeded(height); err != nil {
 		return &contract.PluginBeginResponse{Error: err}
 	}
-	height := req.GetHeight()
 	if err := c.advanceGraduationWindow(height); err != nil {
 		return &contract.PluginBeginResponse{Error: err}
 	}
@@ -66,7 +69,10 @@ func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginB
 // reconcileOrphanedPoolOnDevnet take over — see their doc comments for why a
 // dev-profile committee needs these narrow post-genesis knobs instead of
 // being able to just re-run genesis.
-func (c *Canoliq) bootstrapGenesisIfNeeded() *contract.PluginError {
+//
+// When Config.ActivationHeight > 0, genesis runs only in the BeginBlock of
+// exactly that height, so every node writes canoLiq state in the same block.
+func (c *Canoliq) bootstrapGenesisIfNeeded(height uint64) *contract.PluginError {
 	g, err := c.LoadGlobals()
 	if err != nil {
 		return err
@@ -101,6 +107,22 @@ func (c *Canoliq) bootstrapGenesisIfNeeded() *contract.PluginError {
 				"at startup and is not reloaded per block).")
 		})
 		return nil
+	}
+	if act := c.Config.ActivationHeight; act > 0 {
+		if height < act {
+			return nil // inert until the pinned block; state stays untouched
+		}
+		if height > act {
+			// The pinned block passed without genesis running (the config was
+			// deployed too late). Running it now would write state at a height
+			// other nodes did not, so stay inert and say so — never return an
+			// error here, that would halt block production.
+			c.warnMissedActivationOnce.Do(func() {
+				log.Printf("canoliq: WARN activationHeight=%d already passed (current height %d) and genesis never ran — "+
+					"the plugin stays inert. Set a future activationHeight on every node and restart.", act, height)
+			})
+			return nil
+		}
 	}
 	return c.runGenesis(nil)
 }

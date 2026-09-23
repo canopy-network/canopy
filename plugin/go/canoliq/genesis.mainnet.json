@@ -1,5 +1,5 @@
 {
-  "_comment": "MAINNET GENESIS TEMPLATE. Every address below is an unfilled placeholder and the node WILL REFUSE TO START until each is replaced (config.go::SafetyCheck rejects any address matching the template placeholder shape under a non-localnet profile). Replace all bucket recipients and all five multisigSigners with real, distinct addresses. NOTE: the canoLiq section of this file is not part of Canopy's own genesis schema, so it must be merged into the genesis.json the node actually boots from, or reached via canoliq-config.mainnet.json::genesisPath; a Canopy genesis with no 'buckets' key causes the plugin to fall back to whatever genesisPath points at.",
+  "_comment": "canoLiq MAINNET genesis for committee 29 (chain 29). Bucket recipients and the five multisigSigners are the real launch addresses. Genesis is one-shot and irreversible: it runs once, in the BeginBlock of canoliq-config's activationHeight, on every committee-29 node. NOTE: the canoLiq section is not part of Canopy's own genesis schema; it is reached via canoliq-config.mainnet.json::genesisPath.",
   "blocksPerYear": 5256000,
   "buckets": [
     {
@@ -98,6 +98,11 @@
     "otcTier120Bps": 800,
     "otcMinLockUccnpy": 50000000000
   },
-  "_validatorRegistryComment": "Seed with the real Canopy validator addresses of the launch operators (5-10). Shipping this empty routes the entire 15% validator-incentive slice to the synthetic all-0xCA aggregator key, which nobody can spend from. The registry is reconciled against live committee membership every block, so these must be genuine validator addresses.",
-  "validatorRegistry": []
+  "_validatorRegistryComment": "Seeded with the committee-29 validator set at launch: val-a (Canopy Foundation, 10,000 CNPY staked on-chain). Must list only genuine committee-29 validators; the registry is reconciled against live committee membership every block. Left empty, the 15% validator-incentive slice would route to the synthetic all-0xCA aggregator key, which nobody can spend from.",
+  "validatorRegistry": [
+    {
+      "address": "737ef80e8476450b6970dd6c1e44c93699c8e0c0",
+      "stake": 10000000000
+    }
+  ]
 }
