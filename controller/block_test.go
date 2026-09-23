@@ -36,6 +36,7 @@ func TestUpdateTelemetryHandlesGetAccountError(t *testing.T) {
 		Address:   bytes.Repeat([]byte{1}, crypto.AddressSize),
 		FSM:       sm,
 		isSyncing: &atomic.Bool{},
+		log:       lib.NewNullLogger(),
 	}
 	// build a minimal block and quorum certificate for the telemetry update
 	block := &lib.Block{BlockHeader: &lib.BlockHeader{}}
