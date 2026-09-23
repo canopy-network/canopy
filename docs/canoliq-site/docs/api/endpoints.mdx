@@ -50,8 +50,10 @@ GET /v1/health
 
 `tvlCapBps` is the governance-set cap as a fraction of total Canopy stake (default `3300` =
 33%; `0` = uncapped). `tvlCapStatus` is one of `"uncapped"`, `"active"`,
-`"awaiting-canopy-stake"`, `"fail-closed"` — operators rely on this to tell apart "cap
-silently inactive" from "cap rejecting everything" when `tvlCapUcnpyEffective` is `0`.
+`"awaiting-canopy-stake"`, `"fail-closed"` — operators rely on this to tell apart the two
+rejecting states when `tvlCapUcnpyEffective` is `0`: `"fail-closed"` is a misconfiguration
+someone must act on, `"awaiting-canopy-stake"` resolves itself once Canopy has bonded stake.
+Only `"uncapped"` accepts deposits with `tvlCapUcnpyEffective` at `0`.
 `tvlCapUcnpyEffective` is the live computed uCNPY cap (`mulDiv(canopyTotalStake, tvlCapBps,
 10_000)`; `0` when uncapped, awaiting Canopy stake, or fail-closed — pair with
 `tvlCapStatus` to disambiguate). `tvlUtilizationBps` is `totalPooledCnpy /
