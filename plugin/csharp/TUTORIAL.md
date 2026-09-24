@@ -525,6 +525,8 @@ Each handler calls the detached, read-only `QueryStateAsync`:
 - Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
 - With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
 
+> **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`KeyForFaucet(addr)` = `JoinLenPrefix(FaucetPrefixBytes, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `FaucetPrefix()` returns (`JoinLenPrefix(FaucetPrefixBytes)`, i.e. `[0x01, 0x64]`), **not** the raw byte `[0x64]`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `KeyForFaucet(addr)` are already length-prefixed, so they're unaffected.)
+
 Because the skeleton already starts the server from `Program.cs`, no change to `Program.cs` is needed — your new routes are served as soon as you rebuild.
 
 ### Query the endpoints
@@ -715,8 +717,10 @@ When submitting signed transactions to the RPC endpoint (`/v1/tx`), the signatur
 
 Key points:
 - Canopy uses BLS12-381 signatures (not Ed25519)
+- Encode every protobuf `bytes` field as a hexadecimal string in the message JSON
 - Sign the deterministically marshaled protobuf bytes of the Transaction (without signature field)
-- For plugin-only message types (faucet, reward), use `msgTypeUrl` and `msgBytes` fields for exact byte control
+- Submit native and plugin-only message types as structured `msg` JSON through `/v1/tx`
+- The JSON hex encoding does not change the raw bytes stored in the protobuf message
 
 See `RpcTest.cs` in `plugin/csharp/tutorial` for the complete signing implementation.
 
