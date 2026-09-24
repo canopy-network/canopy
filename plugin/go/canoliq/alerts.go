@@ -235,6 +235,11 @@ func (c *Canoliq) evaluateAlerts(height uint64) *contract.PluginError {
 	if err := c.checkSupplyPoolDesync(s, height, cfg); err != nil {
 		return err
 	}
+	// Alert state is persisted in plugin state, so the kinds added with the
+	// reward fix only run from its activation height (see rewardfix.go).
+	if !c.rewardFixActive(height) {
+		return nil
+	}
 	if err := c.checkRewardAttribution(s, height, cfg); err != nil {
 		return err
 	}

@@ -202,6 +202,12 @@ func (c *Canoliq) runGenesis(req *contract.PluginGenesisRequest) *contract.Plugi
 	// testnet and mainnet may only become uncapped by DAO vote (WP §9.4), so
 	// refuse to boot rather than let a mis-pointed genesis file silently
 	// disable the ceiling.
+	if !c.rewardFixActive(c.plugin.CurrentHeight()) {
+		// max_reward_bps_per_block did not exist before the reward fix; a
+		// genesis replayed below its activation height must persist the same
+		// params bytes it originally did. Reads backfill the default.
+		params.MaxRewardBpsPerBlock = 0
+	}
 	if params.TvlCapBps == 0 && !isDevProfile(c.Config.Profile) {
 		return ErrUncappedOutsideDevProfile(c.Config.Profile)
 	}

@@ -109,7 +109,8 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	}
 	// Reconcile the committee member set with Canopy's live validator records
 	// and observe the growth of their bonded stake.
-	obs, err := c.syncCommitteeRegistry(params)
+	fixActive := c.rewardFixActive(req.GetHeight())
+	obs, err := c.syncCommitteeRegistryAt(params, fixActive)
 	if err != nil {
 		return err
 	}
@@ -138,13 +139,15 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	// stale per-validator baseline, and carried reward is already-observed
 	// value that the two estimates cannot see any more (the registry
 	// re-baselines every member at its live stake each block).
-	rewardDelta += globals.CarriedReward
+	if fixActive {
+		rewardDelta += globals.CarriedReward
+	}
 	// Plausibility clamp. Defers the excess rather than discarding it (see the
 	// doc comment). 10_000 bps switches it off, since a cap of 100% of owned
 	// stake can never bind; 0 never reaches here, backfillParams having already
 	// replaced it with the default.
 	credited := rewardDelta
-	if params.MaxRewardBpsPerBlock > 0 {
+	if fixActive && params.MaxRewardBpsPerBlock > 0 {
 		if maxCredit := mulDiv(observedStake, params.MaxRewardBpsPerBlock, 10_000); credited > maxCredit {
 			credited = maxCredit
 		}
@@ -239,8 +242,10 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 	// the watermark meaning exactly one thing ("stake observed last sweep")
 	// rather than two.
 	globals.LastProcessedRewardPool = observedStake
-	globals.LastAttributedReward = credited
-	globals.CarriedReward = rewardDelta - credited
+	if fixActive {
+		globals.LastAttributedReward = credited
+		globals.CarriedReward = rewardDelta - credited
+	}
 
 	gBz, e := contract.Marshal(globals)
 	if e != nil {

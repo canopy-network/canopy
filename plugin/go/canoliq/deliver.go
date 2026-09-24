@@ -77,6 +77,11 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 			staked = supply.Staked
 		}
 		decision := evaluateTVLCap(params.TvlCapBps, supply != nil, staked)
+		if decision.Status == TVLCapStatusAwaitingCanopyStake && !c.rewardFixActive(c.plugin.CurrentHeight()) {
+			// Before the activation height a readable Supply with zero stake
+			// accepted uncapped, and blocks from then must replay as they were.
+			decision.Err = nil
+		}
 		if decision.Err != nil {
 			return &contract.PluginDeliverResponse{Error: decision.Err}
 		}

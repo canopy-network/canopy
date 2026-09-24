@@ -105,6 +105,15 @@ type committeeObservation struct {
 // params supplies stake_output_addresses, the ownership set. It is passed in
 // rather than re-read because ProcessRewards has already loaded it.
 func (c *Canoliq) syncCommitteeRegistry(params *contract.CanoliqParams) (*committeeObservation, *contract.PluginError) {
+	return c.syncCommitteeRegistryAt(params, true)
+}
+
+// syncCommitteeRegistryAt is syncCommitteeRegistry with the ownership split
+// switchable. fixActive=false reproduces the pre-fix observation byte for
+// byte — every member counts toward R and no entry is marked Owned — so blocks
+// before the activation height replay exactly as they were produced. See
+// rewardfix.go.
+func (c *Canoliq) syncCommitteeRegistryAt(params *contract.CanoliqParams, fixActive bool) (*committeeObservation, *contract.PluginError) {
 	// One round-trip for all three inputs: the stored registry (last-observed
 	// stake per member), the ejection tombstones, and the live validator set.
 	qReg, qEject, qVals := qid(), qid(), qid()
@@ -168,11 +177,15 @@ func (c *Canoliq) syncCommitteeRegistry(params *contract.CanoliqParams) (*commit
 		// malformed or absent field and must not match, least of all an empty
 		// output against an empty entry in the set.
 		owned = owned && len(val.Output) == 20
+		if !fixActive {
+			// Pre-fix semantics: the whole committee's growth counted as R.
+			owned = true
+		}
 		obs.committeeTotal += val.StakedAmount
 		obs.registry.Entries = append(obs.registry.Entries, &contract.ValidatorRegistryEntry{
 			Address: val.Address,
 			Stake:   val.StakedAmount,
-			Owned:   owned,
+			Owned:   owned && fixActive,
 		})
 		if !owned {
 			// Someone else's bond, compounding someone else's reward.
@@ -192,7 +205,7 @@ func (c *Canoliq) syncCommitteeRegistry(params *contract.CanoliqParams) (*commit
 		if prev, known := baseline[string(val.Address)]; known && val.StakedAmount > prev {
 			obs.ownedReward += val.StakedAmount - prev
 		}
-		if !val.Compound || val.UnstakingHeight != 0 {
+		if fixActive && (!val.Compound || val.UnstakingHeight != 0) {
 			obs.notCompounding = append(obs.notCompounding, val.Address)
 		}
 	}
