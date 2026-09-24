@@ -87,12 +87,15 @@ func (s *fakeStore) write(req *contract.PluginStateWriteRequest) *contract.Plugi
 // the store directly to pre-seed accounts/pools/params and to assert on the
 // resulting state after handlers run.
 //
-// A zero-staked Canopy Supply is seeded by default so tests that exercise
-// the deposit path with DefaultParams (which sets TvlCapBps = 3300) hit
-// the "Supply present, Staked == 0 → uncapped" branch — accepted, no
-// false fail-closed. Tests that exercise specific cap values override
-// Supply.Staked via seedCanopySupply, and TestT3FailClosedOnAbsentSupply
-// s.del()s the key to exercise the genuinely-absent branch.
+// A large-staked Canopy Supply is seeded by default so tests that exercise
+// the deposit path with DefaultParams (which sets TvlCapBps = 3300) run with
+// the cap *active but non-binding* — enforced, yet far above any amount a
+// test deposits. Staked == 0 is no longer a usable default: it now rejects
+// with ErrCanopyStakeUnavailable (see evaluateTVLCap). Tests that exercise
+// specific cap values override Supply.Staked via seedCanopySupply, and
+// TestT3FailClosedOnAbsentSupply s.del()s the key to exercise the
+// genuinely-absent branch.
+
 // testLivePoolCcnpy seeds a non-zero cCNPY supply for tests that sweep rewards
 // without first making a deposit.
 //
@@ -104,6 +107,12 @@ func (s *fakeStore) write(req *contract.PluginStateWriteRequest) *contract.Plugi
 // immaterial: the split depends only on the reward delta and the params.
 const testLivePoolCcnpy = 1_000_000
 
+// testCanopyStaked is the default Canopy Supply.Staked seeded by
+// newTestCanoliq. At DefaultParams' TvlCapBps = 3300 this puts the effective
+// cap at 330,000 CNPY — active, so the enforcement path is genuinely
+// exercised, but orders of magnitude above what any test deposits.
+const testCanopyStaked = uint64(1_000_000_000_000)
+
 func newTestCanoliq() (*Canoliq, *fakeStore) {
 	store := newFakeStore()
 	cfg := Config{ChainId: 2, DataDirPath: "/tmp/canoliq-test"}
@@ -113,7 +122,7 @@ func newTestCanoliq() (*Canoliq, *fakeStore) {
 		plugin: p,
 		fsmId:  1,
 	}
-	bz, _ := contract.Marshal(&contract.Supply{Staked: 0})
+	bz, _ := contract.Marshal(&contract.Supply{Staked: testCanopyStaked})
 	store.set(contract.KeyForSupply(), bz)
 	return c, store
 }

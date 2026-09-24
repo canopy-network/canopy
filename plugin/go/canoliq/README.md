@@ -1367,10 +1367,10 @@ auto-disables once the pool reaches the `insurance_target_bps` target
 
 ## Committee validator registry
 
-The plugin-internal `ValidatorRegistry` singleton is the member set both
-the reward observation and the 15% validator-incentive pro-rata run
-against. It is **reconciled against Canopy's live committee membership on
-every block**, inside `EndBlock` before the sweep
+The plugin-internal `ValidatorRegistry` singleton is the member set the 15%
+validator-incentive pro-rata runs against, and the record of which of those
+members' bonds canoLiq actually owns. It is **reconciled against Canopy's live
+committee membership on every block**, inside `EndBlock` before the sweep
 (`registry.go::syncCommitteeRegistry`): the plugin range-reads every
 `lib.Validator` record and keeps those whose `Committees[]` contains this
 chain id — the same derivation the FSM uses (`getValidatorSet`), and the
@@ -1384,7 +1384,50 @@ the committee stops, with no genesis edit or governance vote. Each entry's
 as both the pro-rata weight and the next block's per-validator reward
 baseline.
 
-Two consequences worth knowing:
+### Membership pays the incentive slice; ownership earns the reward
+
+Being on the committee and being canoLiq's stake are different things, and the
+registry tracks them separately.
+
+Every member, owned or not, draws its stake-weighted share of the 15%
+validator-incentive slice. That slice pays operators for running the committee,
+which they do regardless of whose CNPY is bonded in their record.
+
+Only **owned** members contribute to the reward `R` that lifts the cCNPY
+exchange rate. A member is owned when its Canopy `Validator.output` address
+appears in `params.stakeOutputAddresses`. Canopy returns a bond and its
+early-withdrawal rewards to `output`, so that address is the record's economic
+beneficiary; an operator's bond is their own collateral, and per WP §1.1 it is
+their own CNPY that gets slashed, not depositors'.
+
+Crediting every member's growth to cCNPY holders hands them other people's
+yield. On mainnet committee 29 it took a 10 CNPY deposit to ~562x in forty
+minutes. WP §3.3 is explicit that `R` is canoLiq's stake-weighted share.
+
+**`stakeOutputAddresses` ships empty, which means `R = 0`.** That is the
+correct reading when the protocol owns no bonded position, and the safe
+direction regardless: under-crediting truthfully beats minting yield against
+stake canoLiq does not own. The `owned_stake_missing` alert fires when the
+committee is earning and canoLiq owns none of it, so this cannot pass unnoticed.
+
+To start earning, two things have to be true, and neither is checkable on
+chain:
+
+1. A Canopy validator or delegate record exists whose **entire** bond is
+   canoLiq principal, with `output` set to an address canoLiq controls. Canopy
+   gives each record one `output`, so a mixed bond — operator collateral plus
+   pool CNPY — pointed at a listed address re-creates the same
+   over-attribution.
+2. That record sets `compound=true` and is not unstaking. Otherwise Canopy pays
+   its reward to the output address as liquid CNPY, which the stake-growth
+   observation cannot see; the `owned_bond_not_compounding` alert flags it, and
+   the CNPY is recoverable by hand but not through the exchange rate.
+
+Then add the address with a param-change proposal. Note that a param change is
+a **full-set replacement**: carry the existing addresses forward, or the
+omitted ones stop earning.
+
+Two further consequences worth knowing:
 
 - **A newly admitted member's bond is not reward.** The observation sums
   per-validator growth over members that were already registered, so
@@ -1414,6 +1457,11 @@ When the registry is **empty** — no validator has opted into the committee
 yet — the legacy aggregator key
 (`KeyForValidatorIncentives(committeeAggregatorAddr)`) holds the full
 share; there is nothing to observe, so no reward is distributed either.
+
+The genesis block seeds `stake` and membership only. Ownership is never seeded
+from `validatorRegistry`: it is recomputed every block from `output` against
+`params.stakeOutputAddresses`, so the way to grant it is the params list, not
+the registry.
 
 ## State key layout
 

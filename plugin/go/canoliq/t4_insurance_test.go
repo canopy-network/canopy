@@ -28,8 +28,9 @@ func runSweep(t *testing.T, c *Canoliq, s *fakeStore, lastProcessed, delta, heig
 		g.LastProcessedRewardPool = base
 		s.set(KeyForGlobals(), mustMarshal(g))
 	}
+	seedStakeOutputParams(t, c)
 	valAddr := addr20(0xC0)
-	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: valAddr, Stake: rewardBaseStake}}}
+	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: valAddr, Stake: rewardBaseStake, Owned: true}}}
 	s.set(KeyForValidatorRegistry(), mustMarshal(reg))
 	setCommitteeStake(s, c, valAddr, base+delta)
 	if err := c.ProcessRewards(&contract.PluginEndRequest{Height: height}); err != nil {

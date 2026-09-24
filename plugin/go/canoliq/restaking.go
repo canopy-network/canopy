@@ -10,23 +10,34 @@ import (
 // (Restaking Optimization). Phase C as scoped: declare the desired
 // per-committee allocation, observe the actual exposure derived from
 // Canopy state, report the drift via /v1/restaking. Active rebalancing
-// (issuing delegation re-routing) is out of scope for now — that requires
-// a delegation-routing primitive not yet defined in the codebase.
+// is out of scope for now — not because Canopy lacks a delegation
+// primitive (lib.Validator.delegate plus fsm/committee.go's GetDelegates
+// and LotteryWinner is exactly that), but because the escrow pool is
+// plugin state under prefix {20} rather than a signable account, so the
+// protocol cannot submit a MessageStake on its own behalf.
 //
 // Restaking semantics (Canopy):
-//   - canoLiq pools CNPY from depositors and delegates it to whitelisted
-//     operators. Each operator bonds their own CNPY plus the delegated
-//     pool share, and lists which Canopy committees they serve via
-//     lib.Validator.committees[]. Same bond, multiple committees.
+//   - canoLiq's CNPY is bonded in Canopy validator/delegate records whose
+//     `output` address is one canoLiq controls. Each record lists which
+//     committees it serves via lib.Validator.committees[]. Same bond,
+//     multiple committees.
 //   - canoLiq's exposure to committee `c` is therefore:
 //
-//       exposure[c] = Σ operator.staked_amount  for operators whose
-//                                                committees[] contains c
+//       exposure[c] = Σ staked_amount  over OWNED records whose
+//                                      committees[] contains c
 //
-//     The same operator stake counts toward every committee they serve
-//     — that's the point of restaking. canoLiq does NOT directly bond
-//     across committees; the committee mix follows from which operators
-//     it has delegated to.
+//     The same bond counts toward every committee it serves — that's the
+//     point of restaking.
+//
+// Owned, not "every operator on the committee". A whitelisted operator's
+// bond is their own collateral: WP §1.1 has them bonding their own CNPY,
+// and the risk section has that same CNPY slashed rather than depositors'.
+// Summing operator bonds here would overstate canoLiq's exposure by
+// whatever the operators put up themselves, and it is the same conflation
+// that let the reward sweep credit cCNPY holders with an entire foreign
+// validator's emission (see reward.go::ProcessRewards). The ownership
+// verdict comes from ValidatorRegistryEntry.Owned, so this view and the
+// reward sweep cannot disagree about whose stake it is.
 
 // CommitteeAllocation reports canoLiq's observed exposure to one Canopy
 // committee plus any policy drift against the matching policy entry.

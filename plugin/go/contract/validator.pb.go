@@ -26,9 +26,8 @@ const (
 // to inspect address / staked amount / committees membership without
 // re-implementing the validator state machine. Field numbers MUST match the
 // FSM's Validator so wire-format unmarshal succeeds; fields we don't need
-// (public_key, net_address, max_paused_height, unstaking_height, output,
-// delegate, compound) are intentionally omitted — proto3 ignores unknown
-// fields during decode.
+// (public_key, net_address, max_paused_height, delegate) are intentionally
+// omitted — proto3 ignores unknown fields during decode.
 type Validator struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// address: the short version of the operator public key.
@@ -39,7 +38,24 @@ type Validator struct {
 	// committees: the list of Canopy chain ids whose committees this
 	// validator participates in. Restaking gives each listed committee the
 	// operator's full staked_amount as exposure. Field number must be 5.
-	Committees    []uint64 `protobuf:"varint,5,rep,packed,name=committees,proto3" json:"committees,omitempty"`
+	Committees []uint64 `protobuf:"varint,5,rep,packed,name=committees,proto3" json:"committees,omitempty"`
+	// unstaking_height: non-zero while the bond is unbonding. Canopy stops
+	// compounding reward into an unstaking bond and pays the early-withdrawal
+	// amount to `output` instead (fsm/committee.go::DistributeCommitteeReward),
+	// so canoLiq's stake-growth observation sees nothing for such a bond.
+	// Field number must be 7.
+	UnstakingHeight uint64 `protobuf:"varint,7,opt,name=unstaking_height,json=unstakingHeight,proto3" json:"unstakingHeight"` // @gotags: json:"unstakingHeight"
+	// output: the address Canopy returns this bond, and its early-withdrawal
+	// rewards, to. That makes it the record's economic beneficiary, and canoLiq
+	// uses it as the ownership key for reward attribution: a bond contributes to
+	// canoLiq's received reward only when its output is listed in
+	// CanoliqParams.stake_output_addresses. Field number must be 8.
+	Output []byte `protobuf:"bytes,8,opt,name=output,proto3" json:"output,omitempty"`
+	// compound: true when Canopy adds reward to staked_amount rather than paying
+	// it out to `output`. canoLiq-owned bonds MUST compound, or their reward
+	// arrives as a liquid balance that stake-growth observation cannot see.
+	// Field number must be 10.
+	Compound      bool `protobuf:"varint,10,opt,name=compound,proto3" json:"compound,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -95,17 +111,42 @@ func (x *Validator) GetCommittees() []uint64 {
 	return nil
 }
 
+func (x *Validator) GetUnstakingHeight() uint64 {
+	if x != nil {
+		return x.UnstakingHeight
+	}
+	return 0
+}
+
+func (x *Validator) GetOutput() []byte {
+	if x != nil {
+		return x.Output
+	}
+	return nil
+}
+
+func (x *Validator) GetCompound() bool {
+	if x != nil {
+		return x.Compound
+	}
+	return false
+}
+
 var File_validator_proto protoreflect.FileDescriptor
 
 const file_validator_proto_rawDesc = "" +
 	"\n" +
-	"\x0fvalidator.proto\x12\x05types\"j\n" +
+	"\x0fvalidator.proto\x12\x05types\"\xc9\x01\n" +
 	"\tValidator\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12#\n" +
 	"\rstaked_amount\x18\x04 \x01(\x04R\fstakedAmount\x12\x1e\n" +
 	"\n" +
 	"committees\x18\x05 \x03(\x04R\n" +
-	"committeesB.Z,github.com/canopy-network/go-plugin/contractb\x06proto3"
+	"committees\x12)\n" +
+	"\x10unstaking_height\x18\a \x01(\x04R\x0funstakingHeight\x12\x16\n" +
+	"\x06output\x18\b \x01(\fR\x06output\x12\x1a\n" +
+	"\bcompound\x18\n" +
+	" \x01(\bR\bcompoundB.Z,github.com/canopy-network/go-plugin/contractb\x06proto3"
 
 var (
 	file_validator_proto_rawDescOnce sync.Once

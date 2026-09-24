@@ -68,8 +68,15 @@ const (
 	// TVLCapStatusAwaitingCanopyStake — TvlCapBps > 0 but the live
 	// effective uCNPY cap is zero, either because Canopy Supply.Staked is
 	// 0 or because mulDiv truncates to 0 at very low Canopy stake. Deposits
-	// accepted this block; the cap re-engages automatically once Canopy
-	// stake grows. Per H3 (cc5c789e) / M6 (385f3424).
+	// are REJECTED with ErrCanopyStakeUnavailable; the cap re-engages
+	// automatically once Canopy stake grows.
+	//
+	// This state is kept distinct from TVLCapStatusFailClosed even though
+	// both reject, because they mean different things to an operator:
+	// fail-closed is a misconfiguration (Supply missing from state, someone
+	// must act), while awaiting-canopy-stake is a host chain that has not
+	// bonded any stake yet and resolves on its own. /v1/health reports the
+	// two separately; the deposit handler treats them the same.
 	TVLCapStatusAwaitingCanopyStake = "awaiting-canopy-stake"
 	// TVLCapStatusFailClosed — TvlCapBps > 0 AND the Canopy Supply
 	// singleton is missing from state. The deposit handler rejects every
@@ -149,17 +156,18 @@ type tvlCapDecision struct {
 	// CapUcnpy is the effective uCNPY ceiling. Zero unless Status ==
 	// TVLCapStatusActive.
 	CapUcnpy uint64
-	// Err is set only when Status == TVLCapStatusFailClosed
-	// (ErrCanopyStakeUnavailable). The deposit handler returns it
-	// directly; QueryHealth ignores it.
+	// Err is set for the two rejecting statuses, TVLCapStatusFailClosed and
+	// TVLCapStatusAwaitingCanopyStake (both ErrCanopyStakeUnavailable). The
+	// deposit handler returns it directly; QueryHealth ignores it.
 	Err *contract.PluginError
 }
 
 // evaluateTVLCap is the shared four-way decision used by both deliver.go
 // (which cares about reject/accept) and QueryHealth (which cares about
-// the status string). If the decision tree changes — e.g. flipping
-// 'Supply present + Staked=0' from accept to reject — change it here
-// and both sides update together. Previously these were parallel
+// the status string). If the decision tree changes, change it here and
+// both sides update together. That split is what lets 'Supply present +
+// Staked=0' reject at the deposit handler while still reporting its own
+// distinct status at /v1/health: QueryHealth reads Status and ignores Err. Previously these were parallel
 // implementations in deliver.go and deriveTVLCapStatus, with a real
 // desync risk that PR self-review caught (M9 in
 // docs/canoliq-v1_2-implementation-plan.md tracking).
@@ -172,7 +180,14 @@ func evaluateTVLCap(tvlCapBps uint64, supplyPresent bool, staked uint64) tvlCapD
 	}
 	capUcnpy := mulDiv(staked, tvlCapBps, 10_000)
 	if capUcnpy == 0 {
-		return tvlCapDecision{Status: TVLCapStatusAwaitingCanopyStake}
+		// Supply is readable but the cap computes to zero — Canopy has no
+		// bonded stake yet, or so little that mulDiv truncates. Fail closed.
+		// A cap of zero cannot bound anything, and WP §9.4 exists precisely to
+		// bound systemic risk: accepting deposits here would mean canoLiq is
+		// open for business before its host chain has a validator set, with no
+		// ceiling at all. ErrCanopyStakeUnavailable already documents this
+		// case ("unreadable or staked = 0"); only the code lagged.
+		return tvlCapDecision{Status: TVLCapStatusAwaitingCanopyStake, Err: ErrCanopyStakeUnavailable()}
 	}
 	return tvlCapDecision{Status: TVLCapStatusActive, CapUcnpy: capUcnpy}
 }

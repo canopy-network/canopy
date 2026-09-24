@@ -13,19 +13,47 @@ alerts add the opposite: an *unattended* path for the handful of events someone 
 needs to react to fast. Alerts are **off by default** and enabled by configuring a webhook
 URL.
 
-## The three conditions
+## The conditions
 
 | Alert | Fires when… | Window | Severity | Default threshold |
 |-------|-------------|--------|----------|-------------------|
 | `buyback_drain` | the buyback pool shrinks too fast | tumbling | `warn` | 5,000 bps (50%) |
 | `validator_concentration` | one validator holds too much committee stake | instantaneous | `warn` | 6,600 bps (66%) |
 | `tvl_drop` | total pooled CNPY falls too fast | tumbling | `crit` | 2,000 bps (20%) |
+| `reward_attribution_anomaly` | one block credits an implausible amount of reward | instantaneous | `crit` | 100 bps (1%) |
+| `owned_stake_missing` | the committee is earning but canoLiq owns none of it | instantaneous | `warn` | — |
+| `owned_bond_not_compounding` | a canoLiq-owned bond pays out instead of compounding | instantaneous | `warn` | — |
+
+The three reward-attribution alerts are worth reading together, because they
+cover the two ways the exchange rate can be wrong.
+
+**`reward_attribution_anomaly`** is the backstop on crediting too much. It
+compares one block's attributed reward against the larger of pooled CNPY and
+owned stake. Real committee reward is a fraction of a basis point per block, so
+1% is orders of magnitude of headroom. For calibration: the mainnet committee-29
+incident that motivated this ran at 11,900 bps, meaning it would have paged on
+the first bad block rather than being noticed forty minutes later.
+
+**`owned_stake_missing`** covers crediting nothing. Attributing zero reward is
+correct when canoLiq owns no bonded position — see
+[how it works](../concepts/how-it-works.mdx) — but it must not be
+indistinguishable from a healthy chain having a quiet block. This fires when the
+committee is compounding, cCNPY is outstanding, and none of the stake earning it
+is canoLiq's. It is a `warn` because nothing is lost or mis-credited; the
+protocol simply is not earning, and the fix is operational.
+
+**`owned_bond_not_compounding`** covers earning invisibly. Canopy only adds
+reward to a bond's stake when the record is compounding and not unstaking;
+otherwise it pays out to the bond's output address as liquid CNPY, where the
+stake-growth observation cannot see it. The reward is real and recoverable by
+hand, just not through the exchange rate. Set `compound=true` on the bond.
 
 - **Tumbling window:** the protocol records a baseline at the start of each window
   (`window_blocks`, default 100) and compares the current value against it. A drop larger
   than the threshold fires the alert. When the window elapses, a fresh baseline is taken.
-- **Instantaneous:** validator concentration is checked every block as `max validator stake ÷
-  total committee stake`, with no window.
+- **Instantaneous:** the rest are state checks run every block, with no window — validator
+  concentration as `max validator stake ÷ total committee stake`, and the three
+  reward-attribution conditions against the current globals and registry.
 
 ## Debounce: no alert storms
 
@@ -90,6 +118,7 @@ to override the URL at startup). An empty `webhookUrl` disables the whole subsys
 | `drainAlertBps` | buyback-drain threshold | 5,000 (50%) |
 | `concentrationAlertBps` | validator-concentration threshold | 6,600 (66%) |
 | `tvlDropBps` | TVL-drop threshold | 2,000 (20%) |
+| `rewardAttributionBps` | one-block reward-attribution threshold | 100 (1%) |
 
 ```json
 {

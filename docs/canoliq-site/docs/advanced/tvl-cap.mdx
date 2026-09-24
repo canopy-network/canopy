@@ -59,7 +59,7 @@ correlate `tvlCapBps` and `canopyTotalStake` to infer it.
 |---|---|---|---|
 | `0` | any | uncapped (governance never set a cap) | `"uncapped"` |
 | `> 0` | absent (key not in state) | **rejects** all deposits with `ErrCanopyStakeUnavailable` | `"fail-closed"` |
-| `> 0` | present, computed cap is 0 (`staked == 0`, or so small that `mulDiv` truncates to 0) | accepts — cap re-engages once Canopy stake grows past the truncation point | `"awaiting-canopy-stake"` |
+| `> 0` | present, computed cap is 0 (`staked == 0`, or so small that `mulDiv` truncates to 0) | **rejects** all deposits with `ErrCanopyStakeUnavailable` — cap re-engages once Canopy stake grows past the truncation point | `"awaiting-canopy-stake"` |
 | `> 0` | present, computed cap > 0 | enforces `mulDiv(staked, tvl_cap_bps, 10_000)` cap | `"active"` |
 
 The rationale:
@@ -67,17 +67,25 @@ The rationale:
 - **Absent Supply** means the cap-policy state itself hasn't initialized;
   silently bypassing the cap would defeat WP §9.4 (the cap exists to bound
   systemic risk). Reject.
-- **Present Supply with `staked == 0`** is a legitimate fresh-network state
-  — Canopy is up and tracking, but no validator has staked yet. Rejecting
-  deposits during that window would brick canoLiq on every fresh genesis.
-  Accept; the cap re-engages automatically once the first stake lands.
+- **Present Supply with `staked == 0`** means Canopy is up and tracking but no
+  validator has bonded yet. A computed cap of zero bounds nothing, so accepting
+  here would leave the deposit path with no ceiling at all — canoLiq open for
+  business before its host chain has a validator set. Reject; the cap re-engages
+  automatically once the first stake lands.
 
-Operators bringing up a fresh development chain may want to set
-`tvl_cap_bps = 0` explicitly during bring-up (see [Tuning it](#tuning-it) —
-allowed on the `localnet` and `devnet` profiles only), or rely on the
-`awaiting-canopy-stake` window without setting a cap. The fail-closed branch
-only triggers when the Canopy `Supply` singleton is genuinely missing from state
-— a configuration error rather than an expected lifecycle state.
+Both rejecting states return the same error, but they keep separate statuses
+because they mean different things to an operator. `fail-closed` is a
+misconfiguration: the `Supply` singleton is genuinely missing from state and
+someone has to act. `awaiting-canopy-stake` is a lifecycle state that resolves
+on its own as soon as Canopy has bonded stake. `evaluateTVLCap` returns one
+decision struct carrying both a status and an error precisely so the deposit
+handler and `/v1/health` can read different fields off the same decision and
+never disagree.
+
+Operators bringing up a fresh development chain should set `tvl_cap_bps = 0`
+explicitly during bring-up (see [Tuning it](#tuning-it) — allowed on the
+`localnet` and `devnet` profiles only). Waiting out the `awaiting-canopy-stake`
+window is no longer an option, since deposits are refused for its duration.
 
 ## Tuning it
 
@@ -191,7 +199,8 @@ GET /v1/health
   `tvlCapStatus` disambiguates.
 - `tvlCapUcnpyEffective` — `mulDiv(canopyTotalStake, tvlCapBps, 10_000)`. Zero
   when uncapped, awaiting Canopy stake, or fail-closed; pair with `tvlCapStatus`
-  to interpret.
+  to interpret. Note that zero here does not mean "no limit": in the two
+  rejecting states it means deposits are refused outright.
 - `tvlUtilizationBps` — `total_pooled_cnpy ÷ tvl_cap_ucnpy_effective` in basis
   points (here, 73.5% full). Zero when the effective cap is zero, regardless of
   status.

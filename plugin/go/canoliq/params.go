@@ -86,6 +86,18 @@ func backfillParams(p *contract.CanoliqParams) {
 	if p.CanoliqTransferFee == 0 {
 		p.CanoliqTransferFee = d.CanoliqTransferFee
 	}
+	// max_reward_bps_per_block (proto field 40) landed with the reward
+	// ownership fix. A params record written before it existed decodes it as
+	// zero, and zero means "clamp disabled" — the one value you never want to
+	// inherit by omission, since it is the safety net on the very bug that
+	// motivated the field. Backfill it to the default.
+	if p.MaxRewardBpsPerBlock == 0 {
+		p.MaxRewardBpsPerBlock = d.MaxRewardBpsPerBlock
+	}
+	// stake_output_addresses (proto field 39) is deliberately NOT backfilled.
+	// Empty is both the default and a legitimate governance choice, and it is
+	// the fail-safe direction: backfilling could only ever turn attribution on
+	// for bonds nobody declared. There is nothing to inherit here.
 }
 
 // SaveParams writes the canoLiq parameters to state after validation.

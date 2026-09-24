@@ -25,12 +25,15 @@ import (
 
 // Alert kinds. Used as the AlertEnvelope.Kind and the KeyForAlertState suffix.
 const (
-	AlertBuybackDrain           = "buyback_drain"
-	AlertValidatorConcentration = "validator_concentration"
-	AlertTVLDrop                = "tvl_drop"
-	AlertStuckRedemption        = "stuck_redemption"
-	AlertProposalExecFailed     = "proposal_execution_failed"
-	AlertSupplyPoolDesync       = "supply_pool_desync"
+	AlertBuybackDrain            = "buyback_drain"
+	AlertValidatorConcentration  = "validator_concentration"
+	AlertTVLDrop                 = "tvl_drop"
+	AlertStuckRedemption         = "stuck_redemption"
+	AlertProposalExecFailed      = "proposal_execution_failed"
+	AlertSupplyPoolDesync        = "supply_pool_desync"
+	AlertRewardAttribution       = "reward_attribution_anomaly"
+	AlertOwnedStakeMissing       = "owned_stake_missing"
+	AlertOwnedBondNotCompounding = "owned_bond_not_compounding"
 )
 
 // Alert severities.
@@ -51,6 +54,7 @@ const (
 	alertDefaultTVLDropBps         = 2_000 // 20%
 	alertDefaultStuckRedemptionCnt = 10    // mature unclaimed redemptions
 	alertDefaultDesyncFloorBps     = 100   // 1% — see checkSupplyPoolDesync
+	alertDefaultRewardAttribBps    = 100   // 1% of the pool in one block — see checkRewardAttribution
 )
 
 // AlertEnvelope is the canonical alert payload. Slack / Discord adapters
@@ -188,6 +192,12 @@ func (cfg *AlertConfig) desyncFloorBps() uint64 {
 	}
 	return alertDefaultDesyncFloorBps
 }
+func (cfg *AlertConfig) rewardAttributionBps() uint64 {
+	if cfg != nil && cfg.RewardAttributionBps > 0 {
+		return cfg.RewardAttributionBps
+	}
+	return alertDefaultRewardAttribBps
+}
 func (cfg *AlertConfig) minInterval(kind string) uint64 {
 	if cfg != nil {
 		if v, ok := cfg.MinIntervalBlocks[kind]; ok {
@@ -223,6 +233,20 @@ func (c *Canoliq) evaluateAlerts(height uint64) *contract.PluginError {
 		return err
 	}
 	if err := c.checkSupplyPoolDesync(s, height, cfg); err != nil {
+		return err
+	}
+	// Alert state is persisted in plugin state, so the kinds added with the
+	// reward fix only run from its activation height (see rewardfix.go).
+	if !c.rewardFixActive(height) {
+		return nil
+	}
+	if err := c.checkRewardAttribution(s, height, cfg); err != nil {
+		return err
+	}
+	if err := c.checkOwnedStakeMissing(s, height, cfg); err != nil {
+		return err
+	}
+	if err := c.checkOwnedBondNotCompounding(s, height, cfg); err != nil {
 		return err
 	}
 	return nil
@@ -442,4 +466,119 @@ func (c *Canoliq) saveAlertState(kind string, st *contract.AlertState) *contract
 		return err
 	}
 	return nil
+}
+
+// checkRewardAttribution fires when a single block credits an implausible
+// amount of reward relative to the pool it is lifting.
+//
+// This is the backstop on the ownership filter in ProcessRewards, and the
+// threshold is calibrated against the incident that motivated it: on mainnet
+// committee 29 the sweep was attributing ~11.90 CNPY per block to a ~10 CNPY
+// pool, which is 11,900 bps against this 100 bps default. It would have paged
+// on the first block, rather than being noticed forty minutes and ~562x later.
+//
+// The denominator is the larger of pooled CNPY and observed owned stake, so a
+// pool that is small relative to the position backing it cannot manufacture a
+// false positive, and neither can a zero.
+//
+// Instantaneous and `crit`: a legitimate block never comes close. Real staking
+// yield is fractions of a basis point per block, and the plausibility clamp in
+// ProcessRewards already caps a block at 1% of *owned stake*. Firing here means
+// either the clamp is set wide or attribution is crediting stake the protocol
+// does not own — the failure this whole path exists to prevent.
+func (c *Canoliq) checkRewardAttribution(s *Snapshot, height uint64, cfg *AlertConfig) *contract.PluginError {
+	st, err := c.loadAlertState(AlertRewardAttribution)
+	if err != nil {
+		return err
+	}
+	attributed := s.Globals.LastAttributedReward
+	base := s.Globals.TotalPooledCnpy
+	if owned := s.Globals.LastProcessedRewardPool; owned > base {
+		base = owned
+	}
+	var attributedBps uint64
+	if base > 0 {
+		attributedBps = mulDiv(attributed, 10_000, base)
+	} else if attributed > 0 {
+		// Reward credited against nothing at all. Not expressible as a ratio,
+		// and unambiguously wrong.
+		attributedBps = 10_000
+	}
+	fired := attributedBps > cfg.rewardAttributionBps()
+	return c.applyAlert(AlertRewardAttribution, fired, height, severityCrit,
+		"one block attributed an implausible amount of reward — check stake ownership attribution", map[string]any{
+			"lastAttributedReward": attributed, "basisUcnpy": base,
+			"attributedBps": attributedBps, "thresholdBps": cfg.rewardAttributionBps(),
+		}, st)
+}
+
+// checkOwnedStakeMissing fires when the committee is compounding reward but
+// canoLiq owns none of the stake earning it, so the exchange rate is flat.
+//
+// Zero attribution is the correct and deliberate default — no owned bond means
+// no reward to claim (reward.go::ProcessRewards) — but it must not be a silent
+// default. Without this, a chain where nobody ever declared a stake output
+// address looks identical to a healthy one that simply had a quiet block, and
+// depositors would earn nothing indefinitely with no operator-visible signal.
+//
+// `warn`, not `crit`: nothing is being lost or mis-credited, the protocol is
+// just not earning. The fix is operational — stake a delegate record whose
+// output is a canoLiq address, then declare that address by param change.
+func (c *Canoliq) checkOwnedStakeMissing(s *Snapshot, height uint64, cfg *AlertConfig) *contract.PluginError {
+	st, err := c.loadAlertState(AlertOwnedStakeMissing)
+	if err != nil {
+		return err
+	}
+	var committeeStake uint64
+	owned := 0
+	for _, e := range s.ValidatorRegistry.GetEntries() {
+		committeeStake += e.Stake
+		if e.Owned {
+			owned++
+		}
+	}
+	// Only meaningful once there is a committee to have missed out on, and
+	// once someone holds cCNPY that a flat exchange rate actually shortchanges.
+	fired := owned == 0 && committeeStake > 0 && s.Globals.TotalCcnpySupply > 0
+	return c.applyAlert(AlertOwnedStakeMissing, fired, height, severityWarn,
+		"committee stake is earning but canoLiq owns none of it — cCNPY accrues no yield", map[string]any{
+			"committeeStakeUcnpy": committeeStake,
+			"committeeMembers":    len(s.ValidatorRegistry.GetEntries()),
+			"ownedMembers":        owned,
+			"totalCcnpySupply":    s.Globals.TotalCcnpySupply,
+		}, st)
+}
+
+// checkOwnedBondNotCompounding fires when a canoLiq-owned bond is not
+// compounding, or is unstaking.
+//
+// Canopy adds committee reward to a bond's staked_amount only when the record
+// is compounding and not unstaking; otherwise it pays the early-withdrawal
+// amount to the output address as liquid CNPY
+// (fsm/committee.go::DistributeCommitteeReward). The reward sweep observes
+// stake growth, so for such a bond it observes zero and cCNPY holders see no
+// yield even though the protocol is earning.
+//
+// Deliberately an alert rather than an accounting adjustment. Capturing that
+// reward would mean diffing the output address's account balance, which also
+// moves for transfers and gas — treating those movements as reward would
+// reintroduce exactly the class of bug this whole path exists to fix.
+//
+// `warn`: nothing is mis-credited and nothing is lost, the CNPY is sitting at
+// the output address and is recoverable by hand. The fix is to set
+// compound=true on the bond.
+func (c *Canoliq) checkOwnedBondNotCompounding(s *Snapshot, height uint64, cfg *AlertConfig) *contract.PluginError {
+	st, err := c.loadAlertState(AlertOwnedBondNotCompounding)
+	if err != nil {
+		return err
+	}
+	addrs := make([]string, 0, len(s.OwnedNotCompounding))
+	for _, a := range s.OwnedNotCompounding {
+		addrs = append(addrs, hexAddress(a))
+	}
+	fired := len(addrs) > 0
+	return c.applyAlert(AlertOwnedBondNotCompounding, fired, height, severityWarn,
+		"a canoLiq-owned bond is not compounding — its reward is invisible to the exchange rate", map[string]any{
+			"validators": addrs, "count": len(addrs),
+		}, st)
 }
