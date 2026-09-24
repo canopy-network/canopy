@@ -1,0 +1,70 @@
+---
+sidebar_label: Vote-Escrow (Lock Tiers)
+---
+
+# Vote-Escrow Lock Tiers
+
+**In one sentence:** locking your staked CPLQ for longer gives you more voting power and a
+bigger share of buyback rewards — the longer the commitment, the larger the boost.
+
+Vote-escrow (sometimes "ve-tokenomics") rewards people who align with the protocol for the
+long term. Staking CPLQ already earns you a vote; *locking* that stake for a fixed period
+multiplies it.
+
+## The tiers
+
+When you [stake CPLQ](../transactions/cplq-operations.mdx), you choose a lock tier. Each tier
+sets a lock duration, a **voting multiplier**, and a **reward boost** applied to buyback
+distributions:
+
+| Tier | Lock duration | Voting multiplier | Reward boost |
+|------|---------------|-------------------|--------------|
+| `LOCK_NONE` | none (unlock anytime) | 1.0× | +0% |
+| `LOCK_3M` | 3 months | 1.5× | +10% |
+| `LOCK_6M` | 6 months | 2.0× | +25% |
+| `LOCK_12M` | 12 months | 3.0× | +50% |
+| `LOCK_24M` | 24 months | 4.0× | +75% |
+
+Durations use a 30-day month at the 6-second block time: 1 month ≈ `432,000` blocks, so
+`LOCK_3M` ≈ `1,296,000` blocks, up to `LOCK_24M` ≈ `10,368,000` blocks.
+
+:::note
+Multipliers are stored in basis points internally (`10,000 = 1.0×`), e.g. `LOCK_24M` is
+`40,000 bps = 4.0×`. The reward boost is likewise in bps (`7,500 bps = +75%`).
+:::
+
+## How voting weight is calculated
+
+Your weight on a proposal is your staked amount scaled by your tier multiplier:
+
+```
+voting weight = staked amount × tier multiplier
+              = staked amount × (voteMultBps ÷ 10,000)
+```
+
+A holder with 1,000 CPLQ at `LOCK_12M` votes with the weight of 3,000 unlocked CPLQ.
+
+Weight is also subject to the governance **snapshot rule**: it is measured as of the
+proposal's creation height, and stake added *after* a proposal opens has zero weight on that
+proposal. See [Governance Overview](../governance/overview.mdx).
+
+## Rules that protect the lock
+
+- **Locks only ever strengthen.** Re-staking with a higher tier raises your tier, and a
+  later computed lock-end extends your `lock_end_height`. You can never weaken or shorten an
+  existing lock by staking again.
+- **Locked stake cannot be unstaked early.** A `MessageCPLQUnstake` is rejected until the
+  current height reaches your `lock_end_height`. `LOCK_NONE` stake can be unstaked any time
+  (still subject to the normal unstaking cooldown).
+
+## Where the boost pays off
+
+The reward boost weights your share of **buyback distributions** when a passed buyback uses
+`BUYBACK_DISTRIBUTE_STAKERS` mode — longer locks receive proportionally more of the
+distributed CPLQ. See [Buyback](../advanced/buyback.mdx).
+
+## Related
+
+- [CPLQ Operations](../transactions/cplq-operations.mdx) — staking, unstaking, claiming
+- [Governance Overview](../governance/overview.mdx) — how votes are counted
+- [Buyback](../advanced/buyback.mdx) — where the reward boost applies

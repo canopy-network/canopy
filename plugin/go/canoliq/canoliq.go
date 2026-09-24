@@ -1,0 +1,511 @@
+package canoliq
+
+import (
+	"bytes"
+	"log"
+	"sync"
+
+	"github.com/canopy-network/go-plugin/contract"
+)
+
+// Canoliq is the per-FSM-request execution context. Every inbound FSM
+// lifecycle message creates a fresh Canoliq with the request's fsmId so
+// concurrent requests do not interfere with one another. Height is tracked
+// on the long-lived Plugin (not the per-request Canoliq) and surfaced via
+// Plugin.height().
+type Canoliq struct {
+	Config    Config
+	FSMConfig *contract.PluginFSMConfig
+	plugin    *Plugin
+	fsmId     uint64
+	// warnMissingGenesisOnce keeps the "no genesisPath" warning to a single
+	// line. bootstrapGenesisIfNeeded runs every block, and a per-block warning
+	// would bury the log it is meant to draw attention to.
+	warnMissingGenesisOnce sync.Once
+	// warnMissedActivationOnce keeps the "activationHeight already passed"
+	// warning to a single log line instead of one per block.
+	warnMissedActivationOnce sync.Once
+}
+
+// Genesis runs the canoLiq genesis distribution exactly once. It is idempotent:
+// subsequent calls observe genesis_complete=true and short-circuit.
+func (c *Canoliq) Genesis(req *contract.PluginGenesisRequest) *contract.PluginGenesisResponse {
+	if err := c.runGenesis(req); err != nil {
+		return &contract.PluginGenesisResponse{Error: err}
+	}
+	return &contract.PluginGenesisResponse{}
+}
+
+// BeginBlock runs the per-block governance + treasury hooks: self-bootstrap
+// genesis if the FSM never sent a PluginGenesisRequest (chain genesis.json
+// has no canoliq plugin section), then tally and dispatch any expired
+// proposals.
+func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginBeginResponse {
+	height := req.GetHeight()
+	if err := c.bootstrapGenesisIfNeeded(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
+	if err := c.applyMainnetRewardCorrection(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
+	if err := c.applyMainnetOwnedBond(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
+	if err := c.advanceGraduationWindow(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
+	if err := c.processProposals(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
+	return &contract.PluginBeginResponse{}
+}
+
+// bootstrapGenesisIfNeeded runs runGenesis exactly once when the plugin
+// detects it has not been initialized. The Canopy FSM only sends a
+// PluginGenesisRequest if the chain-genesis.json carries a plugin section
+// for this plugin id; in localnet/Docker setups that section is typically
+// absent, so without this self-bootstrap the plugin runs forever with
+// genesis_complete=false and ProcessRewards is a no-op.
+//
+// runGenesis is idempotent (short-circuits on globals.GenesisComplete), so
+// running it from BeginBlock is safe whether or not the FSM also dispatches
+// the explicit Genesis call.
+//
+// Once genesis has already completed, applyDevnetTvlCapOverride and
+// reconcileOrphanedPoolOnDevnet take over — see their doc comments for why a
+// dev-profile committee needs these narrow post-genesis knobs instead of
+// being able to just re-run genesis.
+//
+// When Config.ActivationHeight > 0, genesis runs only in the BeginBlock of
+// exactly that height, so every node writes canoLiq state in the same block.
+func (c *Canoliq) bootstrapGenesisIfNeeded(height uint64) *contract.PluginError {
+	g, err := c.LoadGlobals()
+	if err != nil {
+		return err
+	}
+	if g.GenesisComplete {
+		if err := c.applyDevnetTvlCapOverride(); err != nil {
+			return err
+		}
+		return c.reconcileOrphanedPoolOnDevnet()
+	}
+	if c.Config.GenesisPath == "" {
+		// No genesis source configured. This is legitimate when the canoLiq
+		// section was merged into the node's own genesis.json, because the FSM
+		// then dispatches it as a PluginGenesisRequest and Genesis() completes
+		// there. It is also exactly what a deployment that simply forgot to set
+		// genesisPath looks like — and the two are indistinguishable here.
+		//
+		// The difference only shows up over time: if the FSM never dispatches,
+		// the plugin sits at genesis_complete=false forever with every pool at
+		// zero and ProcessRewards a no-op. That used to produce no signal at
+		// all, so the only symptom was a chain that looked healthy while
+		// canoLiq quietly did nothing. Warn once so the cause is in the log
+		// rather than something to be inferred from the code.
+		//
+		// Tests that drive BeginBlock without a genesis file also rely on this
+		// branch to skip cleanly, which is why it warns instead of failing.
+		c.warnMissingGenesisOnce.Do(func() {
+			log.Printf("canoliq: WARN genesis_complete=false and no genesisPath configured — " +
+				"if the canoLiq section is not merged into the node's genesis.json, the plugin " +
+				"will never initialize and every pool stays at zero. Set genesisPath in the " +
+				"config named by CANOLIQ_CONFIG and restart the plugin (the config is read once " +
+				"at startup and is not reloaded per block).")
+		})
+		return nil
+	}
+	if act := c.Config.ActivationHeight; act > 0 {
+		if height < act {
+			return nil // inert until the pinned block; state stays untouched
+		}
+		if height > act {
+			// The pinned block passed without genesis running (the config was
+			// deployed too late). Running it now would write state at a height
+			// other nodes did not, so stay inert and say so — never return an
+			// error here, that would halt block production.
+			c.warnMissedActivationOnce.Do(func() {
+				log.Printf("canoliq: WARN activationHeight=%d already passed (current height %d) and genesis never ran — "+
+					"the plugin stays inert. Set a future activationHeight on every node and restart.", act, height)
+			})
+			return nil
+		}
+	}
+	return c.runGenesis(nil)
+}
+
+// CheckTx statelessly validates a transaction and returns the authorized
+// signer set. The 'send' message is delegated to the existing contract
+// package handler so the canoLiq plugin remains a superset of the tutorial.
+func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.PluginCheckResponse {
+	params, err := c.LoadParams()
+	if err != nil {
+		return &contract.PluginCheckResponse{Error: err}
+	}
+	msg, err := contract.FromAny(request.Tx.Msg)
+	if err != nil {
+		return &contract.PluginCheckResponse{Error: err}
+	}
+	switch x := msg.(type) {
+	case *contract.MessageSend:
+		return c.checkMessageSend(x, request.Tx.Fee)
+	case *contract.MessageCanoliqDeposit:
+		return c.CheckMessageCanoliqDeposit(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqRedeem:
+		return c.CheckMessageCanoliqRedeem(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqClaimRedemption:
+		return c.CheckMessageCanoliqClaimRedemption(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqTransfer:
+		return c.CheckMessageCanoliqTransfer(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQTransfer:
+		return c.CheckMessageCPLQTransfer(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQClaimVested:
+		return c.CheckMessageCPLQClaimVested(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQStake:
+		return c.CheckMessageCPLQStake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQUnstake:
+		return c.CheckMessageCPLQUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQClaimUnstake:
+		return c.CheckMessageCPLQClaimUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQProposalCreate:
+		return c.CheckMessageCPLQProposalCreate(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQVote:
+		return c.CheckMessageCPLQVote(x, request.Tx.Fee, params)
+	case *contract.MessageBuybackExecute:
+		return c.CheckMessageBuybackExecute(x, request.Tx.Fee, params)
+	case *contract.MessageDAOTreasurySpend:
+		return c.CheckMessageDAOTreasurySpend(x, request.Tx.Fee, params)
+	case *contract.MessageMultisigApprove:
+		return c.CheckMessageMultisigApprove(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockCreate:
+		return c.CheckMessageOTCLockCreate(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockClaim:
+		return c.CheckMessageOTCLockClaim(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockCancel:
+		return c.CheckMessageOTCLockCancel(x, request.Tx.Fee, params)
+	default:
+		return &contract.PluginCheckResponse{Error: ErrUnsupportedMessage()}
+	}
+}
+
+// DeliverTx applies a transaction. Same dispatch shape as CheckTx. On a
+// successful delivery the T5 daily-transaction window counter is advanced
+// (see countGraduationTx) so the autonomy-graduation surface can report
+// throughput.
+func (c *Canoliq) DeliverTx(request *contract.PluginDeliverRequest) *contract.PluginDeliverResponse {
+	resp := c.dispatchDeliver(request)
+	if resp != nil && resp.Error == nil {
+		if err := c.countGraduationTx(); err != nil {
+			return &contract.PluginDeliverResponse{Error: err}
+		}
+		// L3: every handler credits this tx's fee to the committee pool. Accrue
+		// it so ProcessRewards can exclude it from the staking-reward delta and
+		// route it to the treasury, instead of distributing tx-fee revenue as if
+		// it were a staking reward (the WP §3.3/§4 fee model applies only to
+		// committee rewards).
+		if err := c.accrueTxFee(request.Tx.Fee); err != nil {
+			return &contract.PluginDeliverResponse{Error: err}
+		}
+	}
+	return resp
+}
+
+// accrueTxFee adds a successful tx's fee to the tx-fee accrual scalar (L3).
+// No-op for a zero fee.
+func (c *Canoliq) accrueTxFee(fee uint64) *contract.PluginError {
+	if fee == 0 {
+		return nil
+	}
+	key := KeyForTxFeeAccrual()
+	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
+		Sets: []*contract.PluginSetOp{{Key: key, Value: EncodeUint64(c.readScalar(key) + fee)}},
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// dispatchDeliver routes a delivered tx to its message handler.
+func (c *Canoliq) dispatchDeliver(request *contract.PluginDeliverRequest) *contract.PluginDeliverResponse {
+	params, err := c.LoadParams()
+	if err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
+	msg, err := contract.FromAny(request.Tx.Msg)
+	if err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
+	switch x := msg.(type) {
+	case *contract.MessageSend:
+		return c.deliverMessageSend(x, request.Tx.Fee)
+	case *contract.MessageCanoliqDeposit:
+		return c.DeliverMessageCanoliqDeposit(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqRedeem:
+		return c.DeliverMessageCanoliqRedeem(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqClaimRedemption:
+		return c.DeliverMessageCanoliqClaimRedemption(x, request.Tx.Fee, params)
+	case *contract.MessageCanoliqTransfer:
+		return c.DeliverMessageCanoliqTransfer(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQTransfer:
+		return c.DeliverMessageCPLQTransfer(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQClaimVested:
+		return c.DeliverMessageCPLQClaimVested(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQStake:
+		return c.DeliverMessageCPLQStake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQUnstake:
+		return c.DeliverMessageCPLQUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQClaimUnstake:
+		return c.DeliverMessageCPLQClaimUnstake(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQProposalCreate:
+		return c.DeliverMessageCPLQProposalCreate(x, request.Tx.Fee, params)
+	case *contract.MessageCPLQVote:
+		return c.DeliverMessageCPLQVote(x, request.Tx.Fee, params)
+	case *contract.MessageBuybackExecute:
+		return c.DeliverMessageBuybackExecute(x, request.Tx.Fee, params)
+	case *contract.MessageDAOTreasurySpend:
+		return c.DeliverMessageDAOTreasurySpend(x, request.Tx.Fee, params)
+	case *contract.MessageMultisigApprove:
+		return c.DeliverMessageMultisigApprove(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockCreate:
+		return c.DeliverMessageOTCLockCreate(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockClaim:
+		return c.DeliverMessageOTCLockClaim(x, request.Tx.Fee, params)
+	case *contract.MessageOTCLockCancel:
+		return c.DeliverMessageOTCLockCancel(x, request.Tx.Fee, params)
+	default:
+		return &contract.PluginDeliverResponse{Error: ErrUnsupportedMessage()}
+	}
+}
+
+// EndBlock runs the per-block reward sweep that applies the 12% protocol fee
+// and the 40/30/15/15 split to canoLiq's committee reward pool, refreshes
+// the read-only snapshot used by the HTTP query layer, and drains any
+// pending per-address lazy queries. All of these need an active FSM
+// context for state reads — see snapshot.go and lazy_query.go.
+func (c *Canoliq) EndBlock(req *contract.PluginEndRequest) *contract.PluginEndResponse {
+	if err := c.ProcessRewards(req); err != nil {
+		return &contract.PluginEndResponse{Error: err}
+	}
+	if err := c.refreshSnapshot(req.GetHeight()); err != nil {
+		return &contract.PluginEndResponse{Error: err}
+	}
+	c.drainLazyQueries()
+	// T6: evaluate push-alert conditions against the freshly-published
+	// snapshot. Dispatch is non-blocking; a webhook failure never stalls here.
+	if err := c.evaluateAlerts(req.GetHeight()); err != nil {
+		return &contract.PluginEndResponse{Error: err}
+	}
+	return &contract.PluginEndResponse{}
+}
+
+// CheckMessageCanoliqDeposit validates a deposit statelessly: address shape,
+// non-zero amount, and minimum tx fee.
+func (c *Canoliq) CheckMessageCanoliqDeposit(msg *contract.MessageCanoliqDeposit, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+	if len(msg.FromAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.Amount == 0 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if fee < params.DepositFee {
+		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
+	}
+	return &contract.PluginCheckResponse{
+		Recipient:         msg.FromAddress,
+		AuthorizedSigners: [][]byte{msg.FromAddress},
+	}
+}
+
+// CheckMessageCanoliqRedeem validates a redeem request statelessly.
+func (c *Canoliq) CheckMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+	if len(msg.FromAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.CcnpyAmount == 0 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if fee < params.RedeemFee {
+		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
+	}
+	return &contract.PluginCheckResponse{
+		Recipient:         msg.FromAddress,
+		AuthorizedSigners: [][]byte{msg.FromAddress},
+	}
+}
+
+// CheckMessageCanoliqClaimRedemption validates a claim_redemption request statelessly.
+func (c *Canoliq) CheckMessageCanoliqClaimRedemption(msg *contract.MessageCanoliqClaimRedemption, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+	if len(msg.FromAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if fee < params.ClaimFee {
+		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
+	}
+	return &contract.PluginCheckResponse{
+		Recipient:         msg.FromAddress,
+		AuthorizedSigners: [][]byte{msg.FromAddress},
+	}
+}
+
+// CheckMessageCanoliqTransfer validates a cCNPY transfer statelessly. Pure
+// internal-balance move (see DeliverMessageCanoliqTransfer) — never mints or
+// burns, so it cannot interact with the pool-math accounting (#34/#36).
+func (c *Canoliq) CheckMessageCanoliqTransfer(msg *contract.MessageCanoliqTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+	if len(msg.FromAddress) != 20 || len(msg.ToAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	// A self-transfer aliases the same KeyForCCNPYBalance entry into both
+	// fromBal and toBal in Deliver; the FSM applies all Sets in order (see
+	// fsm/state.go), so the second write wins and silently destroys the
+	// balance (partial: loses `amount`; full: the fromBal==0 delete removes
+	// the very key the transfer just wrote). Reject outright rather than
+	// special-case the aliasing in Deliver.
+	if bytes.Equal(msg.FromAddress, msg.ToAddress) {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.Amount == 0 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if fee < params.CanoliqTransferFee {
+		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
+	}
+	return &contract.PluginCheckResponse{
+		Recipient:         msg.ToAddress,
+		AuthorizedSigners: [][]byte{msg.FromAddress},
+	}
+}
+
+// CheckMessageCPLQTransfer validates a CPLQ transfer statelessly.
+func (c *Canoliq) CheckMessageCPLQTransfer(msg *contract.MessageCPLQTransfer, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+	if len(msg.FromAddress) != 20 || len(msg.ToAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	// Same aliasing hazard as CheckMessageCanoliqTransfer: Deliver reads the
+	// same KeyForCPLQBalance entry into both fromBal/toBal, and the FSM's
+	// Sets-then-Deletes ordering means a self-transfer silently destroys the
+	// balance rather than being a no-op. No TotalCplqSupply record exists to
+	// desync here, but it still burns a holder's CPLQ for nothing.
+	if bytes.Equal(msg.FromAddress, msg.ToAddress) {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.Amount == 0 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if fee < params.CplqTransferFee {
+		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
+	}
+	return &contract.PluginCheckResponse{
+		Recipient:         msg.ToAddress,
+		AuthorizedSigners: [][]byte{msg.FromAddress},
+	}
+}
+
+// CheckMessageCPLQClaimVested validates a CPLQ claim_vested request.
+func (c *Canoliq) CheckMessageCPLQClaimVested(msg *contract.MessageCPLQClaimVested, fee uint64, params *contract.CanoliqParams) *contract.PluginCheckResponse {
+	if len(msg.FromAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if fee < params.ClaimFee {
+		return &contract.PluginCheckResponse{Error: ErrFeeBelowMinimum()}
+	}
+	return &contract.PluginCheckResponse{
+		Recipient:         msg.FromAddress,
+		AuthorizedSigners: [][]byte{msg.FromAddress},
+	}
+}
+
+// checkMessageSend forwards to a minimal local validator for plain CNPY
+// transfers. Identical to the contract tutorial check, kept here so the
+// canoLiq plugin can be a drop-in replacement that still supports send.
+func (c *Canoliq) checkMessageSend(msg *contract.MessageSend, _ uint64) *contract.PluginCheckResponse {
+	if len(msg.FromAddress) != 20 || len(msg.ToAddress) != 20 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.Amount == 0 {
+		return &contract.PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	return &contract.PluginCheckResponse{
+		Recipient:         msg.ToAddress,
+		AuthorizedSigners: [][]byte{msg.FromAddress},
+	}
+}
+
+// deliverMessageSend implements the same CNPY-transfer logic as the contract
+// tutorial. It is duplicated rather than imported because contract.Contract's
+// plugin handle is unexported and the canoliq plugin uses a different Plugin
+// runtime for FSM IO.
+func (c *Canoliq) deliverMessageSend(msg *contract.MessageSend, fee uint64) *contract.PluginDeliverResponse {
+	fromKey := contract.KeyForAccount(msg.FromAddress)
+	toKey := contract.KeyForAccount(msg.ToAddress)
+	feePoolKey := contract.KeyForFeePool(c.Config.ChainId)
+	fromQ, toQ, feeQ := qid(), qid(), qid()
+	resp, err := c.plugin.StateRead(c, &contract.PluginStateReadRequest{
+		Keys: []*contract.PluginKeyRead{
+			{QueryId: feeQ, Key: feePoolKey},
+			{QueryId: fromQ, Key: fromKey},
+			{QueryId: toQ, Key: toKey},
+		},
+	})
+	if err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
+	if resp.Error != nil {
+		return &contract.PluginDeliverResponse{Error: resp.Error}
+	}
+	from, to, feePool := new(contract.Account), new(contract.Account), new(contract.Pool)
+	for _, r := range resp.Results {
+		if len(r.Entries) == 0 {
+			continue
+		}
+		switch r.QueryId {
+		case fromQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, from); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
+		case toQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, to); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
+		case feeQ:
+			if e := contract.Unmarshal(r.Entries[0].Value, feePool); e != nil {
+				return &contract.PluginDeliverResponse{Error: e}
+			}
+		}
+	}
+	deduct := msg.Amount + fee
+	if from.Amount < deduct {
+		return &contract.PluginDeliverResponse{Error: contract.ErrInsufficientFunds()}
+	}
+	if string(fromKey) == string(toKey) {
+		to = from
+	}
+	from.Amount -= deduct
+	feePool.Amount += fee
+	to.Amount += msg.Amount
+	fromBz, e := contract.Marshal(from)
+	if e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
+	toBz, e := contract.Marshal(to)
+	if e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
+	feeBz, e := contract.Marshal(feePool)
+	if e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
+	sets := []*contract.PluginSetOp{
+		{Key: feePoolKey, Value: feeBz},
+		{Key: toKey, Value: toBz},
+	}
+	var deletes []*contract.PluginDeleteOp
+	if from.Amount == 0 {
+		deletes = append(deletes, &contract.PluginDeleteOp{Key: fromKey})
+	} else {
+		sets = append(sets, &contract.PluginSetOp{Key: fromKey, Value: fromBz})
+	}
+	if _, e := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets, Deletes: deletes}); e != nil {
+		return &contract.PluginDeliverResponse{Error: e}
+	}
+	log.Printf("canoliq: send delivered: %x → %x amount=%d fee=%d", msg.FromAddress, msg.ToAddress, msg.Amount, fee)
+	return &contract.PluginDeliverResponse{}
+}

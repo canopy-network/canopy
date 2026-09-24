@@ -1,0 +1,147 @@
+---
+sidebar_label: Proposal Types
+---
+
+# Proposal Types
+
+**In one sentence:** every change to canoLiq is made by passing one of seven proposal types, and
+which type you use decides how hard it is to pass.
+
+canoLiq supports seven proposal types, each carried as a `google.protobuf.Any` payload. The
+payload determines the proposal's `ActionType`, which in turn selects its
+[governance tier](./governance-tiers.mdx) (quorum, approval threshold, timelock, voting
+period):
+
+| Payload | ActionType | What it does |
+|---------|------------|--------------|
+| `ProposalParamChange` | `ACTION_FEE_CHANGE` | Replace the full `CanoliqParams` set |
+| `ProposalBuyback` | `ACTION_UNKNOWN` → scalar fallback tier | Authorize one buyback execution |
+| `ProposalTreasurySpend` | `ACTION_TREASURY_SPEND_SMALL`, or `_LARGE` for CPLQ spends over 1M CPLQ | Transfer from a treasury bucket |
+| `ProposalValidatorEject` | `ACTION_VALIDATOR_EJECT` | Remove a validator from the registry |
+| `ProposalEmergency` | `ACTION_EMERGENCY` | Fast-track action with an optional param diff |
+| `ProposalProtocolUpgrade` | `ACTION_PROTOCOL_UPGRADE` | Signal a target protocol version |
+| `ProposalOTCProgramFund` | `ACTION_OTC_PROGRAM_FUND` | Move CPLQ from the DAO treasury into the [OTC lock program](../tokenomics/otc-lock-program.mdx) budget |
+
+## Param Change
+
+Updates the entire `CanoliqParams` set. This is a **full-set replacement**, not a delta.
+
+```protobuf
+message ProposalParamChange {
+  CanoliqParams params = 1;
+}
+```
+
+All `ValidateParams` invariants are checked:
+- Fee split BPS must total 10,000
+- `insurance_bps ≤ 10,000`
+- `quorum_bps ≤ 10,000`
+- `pass_threshold_bps ≤ 10,000`
+- `multisig_threshold ≤ len(multisig_signers)` when signers present
+- `cplq_unstaking_blocks ≥ voting_period_blocks`
+
+## Buyback
+
+Authorizes a single buyback execution:
+
+```protobuf
+message ProposalBuyback {
+  uint64 cnpy_amount = 1;
+  uint64 price_micro_cnpy_per_cplq = 2;
+  BuybackMode mode = 3;  // BURN or DISTRIBUTE_STAKERS
+}
+```
+
+- Drains CNPY from `canoliq/buyback/pool`
+- Computes `cplq_acquired = cnpy_amount * 1_000_000 / price_micro_cnpy_per_cplq`
+- Debts CPLQ from `canoliq/treasury/cplq`
+
+## Treasury Spend
+
+Authorizes a transfer from a treasury bucket:
+
+```protobuf
+message ProposalTreasurySpend {
+  bytes recipient = 1;
+  uint64 amount = 2;
+  SpendDenomination denomination = 3;  // CNPY or CPLQ
+}
+```
+
+- Below `treasury_threshold`: Executes directly
+- Above threshold: Requires timelock + multisig approvals
+
+## Validator Eject
+
+Removes a validator from the canoLiq `ValidatorRegistry` (idempotent — clears its incentive
+accrual on dispatch):
+
+```protobuf
+message ProposalValidatorEject {
+  bytes validator_address = 1;  // 20-byte address to remove
+}
+```
+
+## Emergency
+
+A fast-tracked action (tighter voting period per its tier) with an optional parameter change
+applied immediately on pass:
+
+```protobuf
+message ProposalEmergency {
+  string description = 1;              // human-readable rationale
+  ProposalParamChange param_change = 2; // optional CanoliqParams replacement
+}
+```
+
+## Protocol Upgrade
+
+Signals a target protocol version with an opaque upgrade descriptor:
+
+```protobuf
+message ProposalProtocolUpgrade {
+  string version = 1;  // target version string
+  bytes payload = 2;   // opaque upgrade descriptor
+}
+```
+
+## Creating and Voting on a Proposal
+
+Once a proposal exists, cast votes with:
+
+```bash
+canoliqctl vote <address> <proposal-id> yes
+```
+
+Create proposals with:
+
+```bash
+canoliqctl proposal-create <param-change|buyback|treasury-spend|validator-eject|emergency|otc-program-fund> <args> [--description …]
+```
+
+## What happens when a passed proposal cannot be applied
+
+Passing the vote and being applied are two separate things.
+
+A proposal's payload is type-checked when it is created, but it is not fully validated until it
+executes, which happens in the block that tallies the vote. A payload can therefore clear its
+quorum and approval bar and still be unapplicable: a parameter set whose fee split does not total
+10000, a buyback at a zero price, a treasury spend naming a malformed recipient.
+
+When that happens the proposal is **dropped, not retried**. It is removed from the active set
+exactly as an executed proposal would be, the change it described is not applied, and the chain
+keeps producing blocks. The failure is logged, and operators running the alert webhook receive a
+`proposal_execution_failed` alert carrying the proposal id, its action type, and the reason.
+
+Dropping is deliberate. Execution runs inside the tally block, so treating the failure as a block
+error would fail that block; because a rejected block commits nothing, the proposal would still be
+active in the next block and fail the same way, and the chain would stop for good. One bad payload
+must not be able to do that, so a proposal that cannot be applied is discarded and the block
+proceeds.
+
+The practical consequence for proposers: a failed proposal costs a full voting period and has to be
+resubmitted, corrected, from scratch. Validate before you submit. `canoliqctl` does this for you,
+rejecting an incomplete or invalid parameter file at the terminal rather than letting it reach a
+vote. Anything submitted through raw RPC has no such safety net.
+
+

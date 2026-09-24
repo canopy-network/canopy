@@ -1,0 +1,14 @@
+{
+  "activePolls": {
+    "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c": {
+      "02cd4e5eb53ea665702042a6ed6d31d616054dc5": true
+    }
+  },
+  "pollMeta": {
+    "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c": {
+      "startPoll": "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c",
+      "url": "https://forum.cnpy.network/something",
+      "endHeight": 1000000000000
+    }
+  }
+}

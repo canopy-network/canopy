@@ -1,0 +1,170 @@
+{
+  "blocksPerYear": 5256000,
+  "buckets": [
+    {
+      "name": "Validators & Infrastructure",
+      "bps": 2200,
+      "cliffMonths": 12,
+      "vestMonths": 24,
+      "recipients": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Liquidity Incentives",
+      "bps": 1500,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Community & Airdrops",
+      "bps": 2000,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "DAO Treasury (canoLiq)",
+      "bps": 1500,
+      "destination": "treasury",
+      "cliffMonths": 0,
+      "vestMonths": 0
+    },
+    {
+      "name": "Founders & Core Team",
+      "bps": 1200,
+      "cliffMonths": 12,
+      "vestMonths": 36,
+      "recipients": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Strategic Partners & Integrations",
+      "bps": 1000,
+      "cliffMonths": 6,
+      "vestMonths": 12,
+      "recipients": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Developer Grants & Ecosystem",
+      "bps": 600,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "bps": 10000
+        }
+      ]
+    }
+  ],
+  "params": {
+    "multisigSigners": [
+      "00000000000000000000000000000000000000b1",
+      "00000000000000000000000000000000000000b2",
+      "00000000000000000000000000000000000000b3",
+      "00000000000000000000000000000000000000b4",
+      "00000000000000000000000000000000000000b5"
+    ],
+    "multisigThreshold": 3,
+    "treasuryThreshold": 1000000000,
+    "_comment": "Localnet shortens every governance and lock window so the flows they gate are actually exercisable, in the same spirit as canoliq-config.localnet.json's 5-block redemption window. Production terms live in genesis.mainnet.json.",
+    "votingPeriodBlocks": 20,
+    "timelockBlocks": 5,
+    "cplqUnstakingBlocks": 20,
+    "governance": [
+      {
+        "action": 1,
+        "quorumBps": 500,
+        "approvalBps": 5100,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 2,
+        "quorumBps": 500,
+        "approvalBps": 5100,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 3,
+        "quorumBps": 1000,
+        "approvalBps": 6700,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 4,
+        "quorumBps": 800,
+        "approvalBps": 6700,
+        "timelockBlocks": 0,
+        "votingPeriodBlocks": 10
+      },
+      {
+        "action": 5,
+        "quorumBps": 500,
+        "approvalBps": 5100,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 6,
+        "quorumBps": 1000,
+        "approvalBps": 6700,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 7,
+        "quorumBps": 1500,
+        "approvalBps": 7500,
+        "timelockBlocks": 5,
+        "votingPeriodBlocks": 20
+      },
+      {
+        "action": 8,
+        "quorumBps": 1000,
+        "approvalBps": 6700,
+        "timelockBlocks": 0,
+        "votingPeriodBlocks": 20
+      }
+    ],
+    "otcTier90Blocks": 20,
+    "otcTier120Blocks": 30,
+    "otcMinLockUccnpy": 10000000
+  },
+  "validatorRegistry": [
+    {
+      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+      "stake": 1000000000
+    },
+    {
+      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+      "stake": 1000000000
+    }
+  ]
+}

@@ -23,7 +23,7 @@
         2
       ],
       "netAddress": "tcp://node-2",
-      "stakedAmount": 1000000000,
+      "stakedAmount": 1000000000000,
       "output": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
     }
   ],
