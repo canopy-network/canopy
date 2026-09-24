@@ -96,20 +96,101 @@ const rewardBaseStake uint64 = 1_000_000_000
 // this committee with StakedAmount == stake. ProcessRewards sums these across
 // the ValidatorRegistry as canoLiq's observed committee position.
 func setCommitteeStake(s *fakeStore, c *Canoliq, addr []byte, stake uint64) {
-	val := &contract.Validator{Address: addr, StakedAmount: stake, Committees: []uint64{c.Config.ChainId}}
+	setCommitteeStakeWithOutput(s, c, addr, stake, testStakeOutput)
+}
+
+// setCommitteeStakeWithOutput is setCommitteeStake with an explicit output
+// address, for tests that need a bond canoLiq does NOT own. Reward attribution
+// keys on Validator.output, so a record pointed anywhere but
+// params.stake_output_addresses contributes zero reward however much it grows.
+func setCommitteeStakeWithOutput(s *fakeStore, c *Canoliq, addr []byte, stake uint64, output []byte) {
+	val := &contract.Validator{
+		Address:      addr,
+		StakedAmount: stake,
+		Committees:   []uint64{c.Config.ChainId},
+		Output:       output,
+		Compound:     true,
+	}
 	s.set(contract.KeyForValidator(addr), mustMarshal(val))
 }
 
+// testStakeOutput is the canoLiq-controlled output address the test harness
+// points owned bonds at. seedStakeOutputParams puts it in the params set.
+var testStakeOutput = addr20(0x50)
+
+// testForeignOutput is an output address canoLiq does not control — the shape
+// of val-a on mainnet committee 29, and the reason this whole file needed
+// changing.
+var testForeignOutput = addr20(0x51)
+
+// seedStakeOutputParams declares testStakeOutput as a canoLiq-owned stake
+// output in the params held in state.
+//
+// ProcessRewards reads params from *state* via LoadParams, not from whatever a
+// test passes to a Deliver* handler, so a reward test that only builds a params
+// value in memory will observe the default empty set and attribute nothing.
+//
+// It amends the params already in state (falling back to DefaultParams when
+// none are saved) rather than replacing them, so it composes with tests that
+// have tuned other fields — insurance bps, fee bps — before seeding a reward.
+func seedStakeOutputParams(t *testing.T, c *Canoliq) {
+	t.Helper()
+	p, err := c.LoadParams()
+	if err != nil {
+		t.Fatalf("load params: %v", err)
+	}
+	for _, a := range p.StakeOutputAddresses {
+		if string(a) == string(testStakeOutput) {
+			return
+		}
+	}
+	p.StakeOutputAddresses = append(p.StakeOutputAddresses, testStakeOutput)
+	if err := c.SaveParams(p); err != nil {
+		t.Fatalf("seed stake-output params: %v", err)
+	}
+}
+
+// disableRewardClamp turns off the per-block plausibility clamp for tests whose
+// numbers are deliberately unrealistic — a fee-split test that compounds 1000
+// uCNPY of reward into a 1000 uCNPY position, say, because small round numbers
+// make the 40/30/15/15 arithmetic checkable by hand. At the default 100 bps
+// such a block is ~100x over the cap and would be rate-limited, which is the
+// clamp working correctly and has nothing to do with what those tests assert.
+// Tests that exercise the clamp itself set the bps explicitly instead.
+//
+// 10_000 rather than 0 is the off switch: 0 means "unset" and backfillParams
+// replaces it with the default, while a cap of 100% of owned stake can never
+// bind.
+func disableRewardClamp(t *testing.T, c *Canoliq) {
+	t.Helper()
+	p, err := c.LoadParams()
+	if err != nil {
+		t.Fatalf("load params: %v", err)
+	}
+	p.MaxRewardBpsPerBlock = 10_000
+	if err := c.SaveParams(p); err != nil {
+		t.Fatalf("disable reward clamp: %v", err)
+	}
+}
+
 // seedReward arranges for the next ProcessRewards to observe exactly `reward`
-// uCNPY of fresh committee reward. It registers a single committee validator,
-// records rewardBaseStake as the observation baseline in globals, and sets the
-// validator's live stake to rewardBaseStake+reward (the growth Canopy compounded
-// into the bonded position). All other globals fields are preserved. Returns the
-// committee validator address, where the validator-incentive slice lands.
+// uCNPY of fresh committee reward. It registers a single canoLiq-OWNED committee
+// validator, records rewardBaseStake as the observation baseline in globals, and
+// sets the validator's live stake to rewardBaseStake+reward (the growth Canopy
+// compounded into the bonded position). All other globals fields are preserved.
+// Returns the committee validator address, where the validator-incentive slice
+// lands.
+//
+// Ownership is not incidental here. Since the attribution fix, stake growth on a
+// bond whose Validator.output is not in params.stake_output_addresses observes as
+// zero reward, so this helper both points the bond at testStakeOutput and saves
+// params declaring it. A test that seeds a validator by hand and expects reward
+// must do the same.
 func seedReward(t *testing.T, s *fakeStore, c *Canoliq, reward uint64) []byte {
 	t.Helper()
+	seedStakeOutputParams(t, c)
 	addr := addr20(0xC0)
-	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: addr, Stake: rewardBaseStake}}}
+	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: addr, Stake: rewardBaseStake, Owned: true}}}
 	s.set(KeyForValidatorRegistry(), mustMarshal(reg))
 	setCommitteeStake(s, c, addr, rewardBaseStake+reward)
 	g := loadGlobals(t, s)
@@ -666,6 +747,7 @@ func TestDeliverCPLQClaimVestedFlow(t *testing.T) {
 // but was previously only tested at a single sweep.
 func TestRewardSweepMultiBlock(t *testing.T) {
 	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
 	g := &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy}
 	gBz, _ := contract.Marshal(g)
 	s.set(KeyForGlobals(), gBz)

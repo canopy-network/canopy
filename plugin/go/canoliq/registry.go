@@ -42,29 +42,78 @@ import (
 //  2. Governance ejection must survive the sync. ejectValidator writes a
 //     tombstone at KeyForEjectedValidator; sync skips tombstoned addresses so
 //     a passed F12 proposal is not undone by the next block's reconciliation.
+//
+// Membership is not ownership — the distinction this file turns on
+// ------------------------------------------------------------------
+// Being on the committee says a validator earns Canopy reward. It says nothing
+// about whose CNPY is bonded. Canopy gives each validator record one `output`
+// address, which is where that bond and its early-withdrawal rewards return to
+// (fsm/committee.go::DistributeCommitteeReward), so `output` is the record's
+// economic beneficiary. A record whose output is not canoLiq's is an operator
+// earning on their own collateral, and its growth belongs to them.
+//
+// Summing growth over the whole committee therefore credits cCNPY holders with
+// other people's yield. That is not theoretical: on mainnet committee 29 it
+// took a 10 CNPY deposit to ~562x in forty minutes by crediting it with the
+// full emission of an 8,235 CNPY bond that canoLiq did not own. So the sync
+// tracks the two roles separately:
+//
+//   - every committee member, owned or not, keeps its entry and its stake
+//     weight, because the 15% validator-incentive slice is shared across the
+//     committee (reward.go::distributeValidatorShare); and
+//   - only members whose output is listed in params.stake_output_addresses
+//     contribute to the received reward R.
+//
+// The ownership verdict is persisted on the entry (`Owned`) rather than
+// re-derived by each consumer, so the snapshot, the restaking exposure view
+// and the alerts cannot drift from what the reward sweep actually did.
 
-// committeeObservation is the result of one reconciliation pass: the registry
-// as it should now be persisted (entries carry the *live* stake, which is both
-// the next block's per-validator baseline and the pro-rata weight used by
-// distributeValidatorShare), the reward observed since the last pass, and the
-// aggregate committee stake.
+// committeeObservation is the result of one reconciliation pass. The field
+// names carry the membership/ownership split deliberately: `committeeTotal` is
+// a weight base and nothing else, while the two `owned*` fields are the only
+// inputs to the received reward R.
 type committeeObservation struct {
-	// registry is the reconciled member set, sorted by address.
+	// registry is the reconciled member set, sorted by address. Entries carry
+	// the *live* stake, which is both the next block's per-validator baseline
+	// and the pro-rata weight used by distributeValidatorShare, plus the
+	// Owned flag marking canoLiq's own bonds.
 	registry *contract.ValidatorRegistry
-	// reward is the sum of per-validator stake growth over members that were
-	// already registered at the previous observation. Members admitted by this
-	// pass contribute 0.
-	reward uint64
-	// total is the aggregate live stake of the reconciled member set, stored
+	// committeeTotal is the aggregate live stake of every reconciled member,
+	// owned or not. It is the weight base for the validator-incentive slice.
+	// It is NOT a reward input — see the file header.
+	committeeTotal uint64
+	// ownedTotal is the aggregate live stake of canoLiq-owned members, stored
 	// in globals.last_processed_reward_pool as the observation watermark.
-	total uint64
+	ownedTotal uint64
+	// ownedReward is the sum of per-validator stake growth over *owned*
+	// members that were already registered at the previous observation.
+	// Members admitted by this pass contribute 0.
+	ownedReward uint64
+	// notCompounding lists owned members whose bond cannot show reward as
+	// stake growth, because Canopy is paying them out to the output address
+	// instead (compound=false, or unstaking). Their reward is real but
+	// invisible here, so the caller raises an alert rather than silently
+	// under-crediting. See reward.go's AlertOwnedBondNotCompounding.
+	notCompounding [][]byte
 }
 
 // syncCommitteeRegistry reconciles the stored ValidatorRegistry against
 // Canopy's live validator set and returns the resulting observation. It does
 // not write: the caller batches the registry set op with the rest of the
 // reward sweep so a block either applies both or neither.
-func (c *Canoliq) syncCommitteeRegistry() (*committeeObservation, *contract.PluginError) {
+//
+// params supplies stake_output_addresses, the ownership set. It is passed in
+// rather than re-read because ProcessRewards has already loaded it.
+func (c *Canoliq) syncCommitteeRegistry(params *contract.CanoliqParams) (*committeeObservation, *contract.PluginError) {
+	return c.syncCommitteeRegistryAt(params, true)
+}
+
+// syncCommitteeRegistryAt is syncCommitteeRegistry with the ownership split
+// switchable. fixActive=false reproduces the pre-fix observation byte for
+// byte — every member counts toward R and no entry is marked Owned — so blocks
+// before the activation height replay exactly as they were produced. See
+// rewardfix.go.
+func (c *Canoliq) syncCommitteeRegistryAt(params *contract.CanoliqParams, fixActive bool) (*committeeObservation, *contract.PluginError) {
 	// One round-trip for all three inputs: the stored registry (last-observed
 	// stake per member), the ejection tombstones, and the live validator set.
 	qReg, qEject, qVals := qid(), qid(), qid()
@@ -110,6 +159,12 @@ func (c *Canoliq) syncCommitteeRegistry() (*committeeObservation, *contract.Plug
 			}
 		}
 	}
+	// The ownership set. Empty is the normal default and means no bond on the
+	// committee is canoLiq's, so R is 0 — see the file header.
+	ownedOutputs := make(map[string]struct{}, len(params.GetStakeOutputAddresses()))
+	for _, a := range params.GetStakeOutputAddresses() {
+		ownedOutputs[string(a)] = struct{}{}
+	}
 	obs := &committeeObservation{
 		registry: &contract.ValidatorRegistry{Entries: make([]*contract.ValidatorRegistryEntry, 0, len(live))},
 	}
@@ -117,18 +172,42 @@ func (c *Canoliq) syncCommitteeRegistry() (*committeeObservation, *contract.Plug
 		if _, gone := ejected[string(val.Address)]; gone {
 			continue
 		}
-		obs.total += val.StakedAmount
+		_, owned := ownedOutputs[string(val.Output)]
+		// A 20-byte output is the only shape Canopy writes; anything else is a
+		// malformed or absent field and must not match, least of all an empty
+		// output against an empty entry in the set.
+		owned = owned && len(val.Output) == 20
+		if !fixActive {
+			// Pre-fix semantics: the whole committee's growth counted as R.
+			owned = true
+		}
+		obs.committeeTotal += val.StakedAmount
+		obs.registry.Entries = append(obs.registry.Entries, &contract.ValidatorRegistryEntry{
+			Address: val.Address,
+			Stake:   val.StakedAmount,
+			Owned:   owned && fixActive,
+		})
+		if !owned {
+			// Someone else's bond, compounding someone else's reward.
+			continue
+		}
+		obs.ownedTotal += val.StakedAmount
 		// Only stake growth of a member we already observed is reward; a
 		// newly admitted member is baselined at its current bond (see the
 		// file comment). Shrinkage (unstake / slash) contributes nothing
 		// rather than netting against another member's genuine reward.
+		//
+		// The baseline covers every member, not just previously-owned ones, so
+		// a bond that was already on the committee when governance added its
+		// output address is baselined at the stake it already had. Its delta on
+		// the flip block is 0, and a pre-existing bond can never read as one
+		// block of reward.
 		if prev, known := baseline[string(val.Address)]; known && val.StakedAmount > prev {
-			obs.reward += val.StakedAmount - prev
+			obs.ownedReward += val.StakedAmount - prev
 		}
-		obs.registry.Entries = append(obs.registry.Entries, &contract.ValidatorRegistryEntry{
-			Address: val.Address,
-			Stake:   val.StakedAmount,
-		})
+		if fixActive && (!val.Compound || val.UnstakingHeight != 0) {
+			obs.notCompounding = append(obs.notCompounding, val.Address)
+		}
 	}
 	return obs, nil
 }
@@ -146,11 +225,15 @@ func (c *Canoliq) syncCommitteeRegistry() (*committeeObservation, *contract.Plug
 //
 // Note on filtering: membership is taken straight from `committees[]`, the
 // same field Canopy pays committee rewards against. Unstaking / paused /
-// non-compounding operators are deliberately not filtered out — the plugin's
-// view of a Canopy validator (contract.Validator) carries only address, stake
-// and committees, and none of those states can manufacture reward anyway: a
-// frozen or non-compounding position simply shows no stake growth and so
-// observes as 0.
+// non-compounding operators are deliberately not filtered out here, because
+// none of those states can manufacture reward: a frozen or non-compounding
+// position simply shows no stake growth and so observes as 0.
+//
+// That is harmless for a bond canoLiq does not own. For an *owned* bond it is
+// not: the reward is real, Canopy is just paying it to the output address as
+// liquid CNPY instead of compounding it, so the observation under-credits.
+// syncCommitteeRegistry collects those addresses in obs.notCompounding and the
+// caller alerts on them.
 func committeeValidators(entries []*contract.PluginStateEntry, chainId uint64) ([]*contract.Validator, *contract.PluginError) {
 	out := make([]*contract.Validator, 0, len(entries))
 	for _, e := range entries {

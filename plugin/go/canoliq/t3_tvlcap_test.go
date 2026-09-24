@@ -151,13 +151,13 @@ func TestT3FailClosedOnAbsentSupply(t *testing.T) {
 	}
 }
 
-// TestT3AcceptsWhenCapTruncatesToZero: integer-truncation edge — at
+// TestT3RejectsWhenCapTruncatesToZero: integer-truncation edge — at
 // very low Canopy stake, mulDiv(staked, bps, 10000) truncates to 0
-// (e.g. Staked=1 with bps=3300 → cap=0). Treated same as Staked=0:
-// accept this block; the cap re-engages once Canopy stake grows past
-// the truncation point. Without this guard, Staked=0 would accept
-// while Staked=1..3 would reject everything — an asymmetric quirk.
-func TestT3AcceptsWhenCapTruncatesToZero(t *testing.T) {
+// (e.g. Staked=1 with bps=3300 → cap=0). Treated the same as Staked=0:
+// reject, because a cap of zero bounds nothing and accepting would leave
+// the deposit path with no ceiling at all. Staked=0 and Staked=1..3 now
+// behave identically, which is more symmetric than the old split.
+func TestT3RejectsWhenCapTruncatesToZero(t *testing.T) {
 	user := addr20(0x06)
 	c, s := newTestCanoliq()
 	// Staked=1, bps=3300 → mulDiv = 1*3300/10000 = 0 (integer truncation).
@@ -169,11 +169,12 @@ func TestT3AcceptsWhenCapTruncatesToZero(t *testing.T) {
 		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000_000},
 		10_000, cappedParams(3_300),
 	)
-	if r.Error != nil {
-		t.Fatalf("deposit at truncate-to-zero cap should be accepted: %v", r.Error)
+	if r.Error == nil || r.Error.Code != codeCanopyStakeUnavailable {
+		t.Fatalf("deposit at truncate-to-zero cap should be rejected: %v", r.Error)
 	}
-	if g := loadGlobals(t, s); g.TotalPooledCnpy != 11_000_000 {
-		t.Errorf("pooled after deposit: got %d want 11_000_000", g.TotalPooledCnpy)
+	// State must be unchanged.
+	if g := loadGlobals(t, s); g.TotalPooledCnpy != 10_000_000 {
+		t.Errorf("pooled changed on reject: got %d want 10_000_000", g.TotalPooledCnpy)
 	}
 
 	// Sanity: once Staked is large enough for capUcnpy > 0, the cap
@@ -193,12 +194,15 @@ func TestT3AcceptsWhenCapTruncatesToZero(t *testing.T) {
 	}
 }
 
-// TestT3AcceptsWhenSupplyPresentButStakedZero: Supply present but
+// TestT3RejectsWhenSupplyPresentButStakedZero: Supply present but
 // .Staked == 0 means Canopy is up and tracking, just nobody has staked
-// yet (legitimate fresh-network state). The cap is uncapped this block
-// — deposits go through. The cap re-engages automatically once staking
-// begins. (Rejecting here would brick canoLiq on every fresh genesis.)
-func TestT3AcceptsWhenSupplyPresentButStakedZero(t *testing.T) {
+// yet. Deposits are rejected: with no bonded stake on the host chain
+// there is nothing for the WP §9.4 cap to bound systemic risk against,
+// and canoLiq should not be open for business before Canopy has a
+// validator set. The cap re-engages automatically once staking begins,
+// so this resolves without operator action — which is why it keeps a
+// status distinct from fail-closed at /v1/health.
+func TestT3RejectsWhenSupplyPresentButStakedZero(t *testing.T) {
 	user := addr20(0x05)
 	c, s := newTestCanoliq()
 	seedCanopySupply(t, s, 0)
@@ -209,11 +213,12 @@ func TestT3AcceptsWhenSupplyPresentButStakedZero(t *testing.T) {
 		&contract.MessageCanoliqDeposit{FromAddress: user, Amount: 1_000_000},
 		10_000, cappedParams(3_300),
 	)
-	if r.Error != nil {
-		t.Fatalf("deposit with Supply.Staked=0 should be accepted: %v", r.Error)
+	if r.Error == nil || r.Error.Code != codeCanopyStakeUnavailable {
+		t.Fatalf("deposit with Supply.Staked=0 should be rejected: %v", r.Error)
 	}
-	if g := loadGlobals(t, s); g.TotalPooledCnpy != 11_000_000 {
-		t.Errorf("pooled after deposit: got %d want 11_000_000", g.TotalPooledCnpy)
+	// State must be unchanged.
+	if g := loadGlobals(t, s); g.TotalPooledCnpy != 10_000_000 {
+		t.Errorf("pooled changed on reject: got %d want 10_000_000", g.TotalPooledCnpy)
 	}
 }
 
@@ -327,5 +332,29 @@ func TestT3HealthTVLCapStatusAllFourStates(t *testing.T) {
 	}
 	if got := c5.plugin.QueryHealth().TVLCapStatus; got != TVLCapStatusFailClosed {
 		t.Errorf("absent supply: got %q want %q", got, TVLCapStatusFailClosed)
+	}
+}
+
+// TestT3AwaitingCanopyStakeRejectsButKeepsDistinctStatus pins the split that
+// evaluateTVLCap's tvlCapDecision exists for: the deposit handler and
+// /v1/health read the same decision but different fields, so
+// awaiting-canopy-stake can reject like fail-closed while still reporting a
+// status an operator can tell apart. Conflating the two would lose the
+// "resolves on its own" vs "someone must act" distinction.
+func TestT3AwaitingCanopyStakeRejectsButKeepsDistinctStatus(t *testing.T) {
+	d := evaluateTVLCap(3_300, true, 0)
+	if d.Status != TVLCapStatusAwaitingCanopyStake {
+		t.Errorf("status: got %q want %q", d.Status, TVLCapStatusAwaitingCanopyStake)
+	}
+	if d.Err == nil || d.Err.Code != codeCanopyStakeUnavailable {
+		t.Errorf("awaiting-canopy-stake must reject: got err=%v", d.Err)
+	}
+	if d.CapUcnpy != 0 {
+		t.Errorf("cap should stay 0: got %d", d.CapUcnpy)
+	}
+
+	// The genuinely-absent case keeps its own, different status.
+	if fc := evaluateTVLCap(3_300, false, 0); fc.Status != TVLCapStatusFailClosed {
+		t.Errorf("absent Supply status: got %q want %q", fc.Status, TVLCapStatusFailClosed)
 	}
 }

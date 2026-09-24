@@ -77,10 +77,12 @@ message CanoliqGlobals {
   uint64 total_pooled_cnpy = 2; // @gotags: json:"totalPooledCnpy"
   // pending_redemption_cnpy: CNPY reserved for in-flight redemptions (uCNPY)
   uint64 pending_redemption_cnpy = 3; // @gotags: json:"pendingRedemptionCnpy"
-  // last_processed_reward_pool: aggregate canoLiq committee stake observed at
-  // the last reward sweep. Reward is the block-over-block growth of this value
-  // (Canopy compounds committee rewards into bonded stake); the field name is
-  // retained for wire/JSON compatibility. See reward.go::ProcessRewards.
+  // last_processed_reward_pool: aggregate canoLiq-OWNED committee stake
+  // observed at the last reward sweep — the bonds whose Validator.output is
+  // listed in params.stake_output_addresses, not the whole committee. Reward
+  // is the block-over-block growth of this value (Canopy compounds committee
+  // rewards into bonded stake); the field name is retained for wire/JSON
+  // compatibility. See reward.go::ProcessRewards.
   uint64 last_processed_reward_pool = 4; // @gotags: json:"lastProcessedRewardPool"
   // cplq_total_supply: hard-cap CPLQ supply minted at genesis (uCPLQ)
   uint64 cplq_total_supply = 5; // @gotags: json:"cplqTotalSupply"
@@ -122,6 +124,20 @@ message CanoliqGlobals {
   // next_otc_lock_id: monotonically-increasing OTC lock position id counter.
   // Global rather than per-address, matching next_unstake_id.
   uint64 next_otc_lock_id = 22; // @gotags: json:"nextOtcLockId"
+  // last_attributed_reward: the reward credited by the most recent sweep
+  // (uCNPY), after ownership filtering and the plausibility clamp. Persisted
+  // so the reward-attribution alert evaluates off the snapshot like every
+  // other check, rather than firing from inside ProcessRewards.
+  uint64 last_attributed_reward = 23; // @gotags: json:"lastAttributedReward"
+  // carried_reward: observed reward the plausibility clamp deferred rather
+  // than credited (uCNPY). Added to the next sweep's delta before clamping, so
+  // a lumpy-but-legitimate payout is rate-limited instead of confiscated.
+  //
+  // It has to be explicit. The watermark alone cannot carry it: the registry
+  // re-baselines each member at its live stake every block, so the
+  // per-validator estimate is zero on the following block and the min() that
+  // guards against stale baselines would discard the remainder.
+  uint64 carried_reward = 24; // @gotags: json:"carriedReward"
 }
 
 // Redemption is a queued cCNPY → CNPY conversion that matures after the
@@ -285,6 +301,34 @@ message CanoliqParams {
   // OTCLock.mature_height is fixed when the position is created.
   uint64 otc_tier90_blocks = 36; // @gotags: json:"otcTier90Blocks"
   uint64 otc_tier120_blocks = 37; // @gotags: json:"otcTier120Blocks"
+  // stake_output_addresses: the canoLiq-controlled addresses that identify
+  // which Canopy bonds belong to the protocol. A committee validator record
+  // contributes to the received reward R only when its Validator.output
+  // appears here; every other bond on the committee earns for its own
+  // operator and contributes nothing (WP §3.3 — canoLiq receives its
+  // stake-weighted share, not the committee's whole emission).
+  //
+  // Canopy has exactly one output per validator record, so a listed address
+  // may only receive records whose ENTIRE bond is canoLiq principal. Pointing
+  // a mixed bond (operator collateral plus pool CNPY) at a listed address
+  // re-creates the over-attribution this field exists to prevent.
+  //
+  // Empty is the default and means R = 0. That is the safe direction: the
+  // protocol under-credits rather than minting yield against stake it does
+  // not own.
+  repeated bytes stake_output_addresses = 39; // @gotags: json:"stakeOutputAddresses"
+  // max_reward_bps_per_block: plausibility clamp on a single block's
+  // attributed reward, in bps of observed owned stake (default 100 = 1%).
+  // Excess is carried forward in the watermark rather than discarded, because
+  // nested-delegate rewards arrive by stake-weighted lottery and a legitimate
+  // win is lumpy.
+  //
+  // 0 means "unset" and is backfilled to the default, because a params record
+  // written before this field existed decodes it as 0 and must not silently
+  // inherit "no clamp". To switch the clamp off deliberately, set 10_000: a
+  // cap of 100% of owned stake can never bind, since the attributed reward is
+  // itself bounded by that stake's growth.
+  uint64 max_reward_bps_per_block = 40; // @gotags: json:"maxRewardBpsPerBlock"
 }
 
 // RestakingPolicyEntry declares the desired share of canoLiq's stake exposure
@@ -680,6 +724,13 @@ message ValidatorRegistryEntry {
   bytes address = 1;
   // stake: weight used for share-out (uCNPY-equivalent)
   uint64 stake = 2;
+  // owned: whether this validator's bond belongs to canoLiq, i.e. its
+  // Validator.output is listed in CanoliqParams.stake_output_addresses.
+  // Only owned bonds contribute to the received reward R; every committee
+  // member, owned or not, still shares the validator-incentive slice.
+  // Persisted rather than re-derived so the snapshot, restaking and alert
+  // consumers all read the same answer the reward sweep acted on.
+  bool owned = 3; // @gotags: json:"owned"
 }
 
 // ValidatorRegistry is the singleton list of canoLiq committee validators

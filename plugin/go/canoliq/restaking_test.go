@@ -150,8 +150,8 @@ func TestSnapshotRestakeSemantics(t *testing.T) {
 	// committee 3 only.
 	seedCanopyValidator(t, s, b, 500, []uint64{3})
 	seedCanoliqRegistry(t, s,
-		&contract.ValidatorRegistryEntry{Address: a, Stake: 1000},
-		&contract.ValidatorRegistryEntry{Address: b, Stake: 500},
+		&contract.ValidatorRegistryEntry{Address: a, Stake: 1000, Owned: true},
+		&contract.ValidatorRegistryEntry{Address: b, Stake: 500, Owned: true},
 	)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
 
@@ -181,8 +181,8 @@ func TestSnapshotSkipsAbsentOperator(t *testing.T) {
 	// `unknown` deliberately not seeded as a Canopy validator.
 
 	seedCanoliqRegistry(t, s,
-		&contract.ValidatorRegistryEntry{Address: known, Stake: 100},
-		&contract.ValidatorRegistryEntry{Address: unknown, Stake: 999}, // canoLiq says here, Canopy disagrees
+		&contract.ValidatorRegistryEntry{Address: known, Stake: 100, Owned: true},
+		&contract.ValidatorRegistryEntry{Address: unknown, Stake: 999, Owned: true}, // canoLiq says here, Canopy disagrees
 	)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
 
@@ -338,8 +338,8 @@ func TestSnapshotPopulatesRestakingAllocation(t *testing.T) {
 	seedCanopyValidator(t, s, b, 500_000, []uint64{7})
 
 	registry := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{
-		{Address: a, Stake: 1_000_000},
-		{Address: b, Stake: 500_000},
+		{Address: a, Stake: 1_000_000, Owned: true},
+		{Address: b, Stake: 500_000, Owned: true},
 	}}
 	regBz, err := contract.Marshal(registry)
 	if err != nil {
@@ -393,7 +393,7 @@ func TestQueryRestakingShapeWithPolicy(t *testing.T) {
 	c, s := newTestCanoliq()
 	a := addr20(0xA1)
 	seedCanopyValidator(t, s, a, 1000, []uint64{1})
-	registry := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: a, Stake: 1000}}}
+	registry := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: a, Stake: 1000, Owned: true}}}
 	regBz, _ := contract.Marshal(registry)
 	s.set(KeyForValidatorRegistry(), regBz)
 

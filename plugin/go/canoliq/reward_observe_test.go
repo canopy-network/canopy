@@ -18,6 +18,7 @@ import (
 // rate stays put.
 func TestObserveFirstRunSeedsBaselineNoDistribution(t *testing.T) {
 	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true}) // LastProcessedRewardPool == 0
 	// A committee validator already holds a large bonded position.
 	val := addr20(0xC0)
@@ -78,6 +79,7 @@ func TestObserveStakeGrowthDistributesReward(t *testing.T) {
 // the baseline to the new (lower) level so growth resumes cleanly.
 func TestObserveStakeDecreaseResetsBaselineNoDistribution(t *testing.T) {
 	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true})
 	val := addr20(0xC0)
 	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{{Address: val, Stake: rewardBaseStake}}}
@@ -105,6 +107,7 @@ func TestObserveStakeDecreaseResetsBaselineNoDistribution(t *testing.T) {
 // observed stake, so their stake does not inflate the reward delta.
 func TestObserveExcludesValidatorsOffCommittee(t *testing.T) {
 	c, s := newTestCanoliq()
+	seedStakeOutputParams(t, c)
 	seedGlobals(s, &contract.CanoliqGlobals{GenesisComplete: true, TotalCcnpySupply: testLivePoolCcnpy})
 	onCommittee, offCommittee := addr20(0xC0), addr20(0xC1)
 	reg := &contract.ValidatorRegistry{Entries: []*contract.ValidatorRegistryEntry{

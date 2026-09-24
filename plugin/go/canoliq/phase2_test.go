@@ -681,6 +681,8 @@ func TestPerValidatorProRataDistribution(t *testing.T) {
 	c, s := newTestCanoliq()
 	params := DefaultParams()
 	seedParams(t, c, params)
+	seedStakeOutputParams(t, c)
+	disableRewardClamp(t, c)
 	g := &contract.CanoliqGlobals{GenesisComplete: true}
 	seedGlobals(s, g)
 	// Seed validator registry with 70/20/10 pro-rata weights.

@@ -41,6 +41,21 @@ exchange rate simply rises, and your cCNPY is worth more CNPY over time. This is
 exchange rate = total pooled CNPY ÷ total cCNPY supply   (rises as rewards arrive)
 ```
 
+:::note Which rewards count
+Canopy pays committee rewards by compounding them into each validator's bonded stake, and
+canoLiq watches that stake grow to learn what it earned. Only the bonds canoLiq **owns** count
+toward the exchange rate — the ones whose Canopy payout address belongs to the protocol.
+
+Every other validator on the committee is an operator earning on collateral they bonded
+themselves. Their stake grows for the same reason, and none of it is yours. Counting it would
+mean the exchange rate rising on someone else's yield, which is an accounting error that
+eventually cannot be paid out.
+
+The practical consequence: if canoLiq holds no bonded position of its own, the exchange rate
+sits still even while the committee is busy. The protocol reports zero rather than inventing a
+number, and operators are alerted so the gap gets closed rather than ignored.
+:::
+
 :::note When nobody holds cCNPY
 That formula needs a denominator. If the supply is zero, which is the state before the first
 deposit and again after every last holder redeems, there is no cCNPY for a reward to make more
