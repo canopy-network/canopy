@@ -48,6 +48,9 @@ func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginB
 	if err := c.applyMainnetRewardCorrection(height); err != nil {
 		return &contract.PluginBeginResponse{Error: err}
 	}
+	if err := c.applyMainnetOwnedBond(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
 	if err := c.advanceGraduationWindow(height); err != nil {
 		return &contract.PluginBeginResponse{Error: err}
 	}
