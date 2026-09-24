@@ -518,6 +518,26 @@ func TestCheckpointJSONHexEncoding(t *testing.T) {
 	require.Equal(t, original.BlockHash, decoded.BlockHash)
 }
 
+func TestOrdersJSONHexEncoding(t *testing.T) {
+	original := &Orders{
+		ResetOrders: [][]byte{{0x00, 0x11, 0xaa, 0xff}},
+		CloseOrders: [][]byte{{0xde, 0xad, 0xbe, 0xef}},
+	}
+	encoded, err := json.Marshal(original)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"lockOrders": null,
+		"resetOrders": ["0011aaff"],
+		"closeOrders": ["deadbeef"]
+	}`, string(encoded))
+
+	decoded := new(Orders)
+	require.NoError(t, json.Unmarshal(encoded, decoded))
+	require.True(t, original.Equals(decoded))
+
+	require.Error(t, json.Unmarshal([]byte(`{"resetOrders":["ABGq/w=="]}`), new(Orders)))
+}
+
 func TestRewardRecipientsCheckBasicRejectsOverflowBypass(t *testing.T) {
 	recipients := &RewardRecipients{
 		PaymentPercents: []*PaymentPercents{

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { copyText } from '../../lib/clipboard'
 import AnimatedNumber from '../AnimatedNumber'
 import toast from 'react-hot-toast'
 import { Account, TransactionsBySender, TransactionsByRec } from '../../lib/api'
@@ -30,10 +31,14 @@ const formatAccountBalance = (amount: number | undefined) =>
         maximumFractionDigits: 2,
     })
 
-const copyToClipboard = (text: string) => {
+const copyToClipboard = async (text: string) => {
     if (text && text !== 'N/A') {
-        navigator.clipboard.writeText(text)
-        toast.success('Copied to clipboard')
+        try {
+            await copyText(text)
+            toast.success('Copied to clipboard')
+        } catch {
+            toast.error('Unable to copy to clipboard')
+        }
     }
 }
 

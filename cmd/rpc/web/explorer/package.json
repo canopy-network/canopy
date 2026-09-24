@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:clipboard": "node --test tests/clipboard.test.cjs",
     "preview": "vite preview",
     "type-check": "tsc --noEmit"
   },

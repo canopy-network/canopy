@@ -1,3 +1,5 @@
+import { copyText } from './clipboard'
+
 export const rowNavigationIgnoreSelector =
     'a, button, input, select, textarea, summary, [role="button"], [data-row-click-ignore="true"]'
 
@@ -130,32 +132,9 @@ export function isEmpty(obj: object): boolean {
 
 // copy() copies text to clipboard and triggers a toast notification
 export function copy(state: any, setState: (state: any) => void, detail: string, toastText: string = "Copied!"): void {
-    if (navigator.clipboard && window.isSecureContext) {
-        // if HTTPS - use Clipboard API
-        navigator.clipboard
-            .writeText(detail)
-            .then(() => setState({ ...state, toast: toastText }))
-            .catch(() => fallbackCopy(state, setState, detail, toastText));
-    } else {
-        fallbackCopy(state, setState, detail, toastText);
-    }
-}
-
-// fallbackCopy() copies text to clipboard if clipboard API is unavailable
-export function fallbackCopy(state: any, setState: (state: any) => void, detail: string, toastText: string = "Copied!"): void {
-    // if http - use textarea
-    const textArea = document.createElement("textarea");
-    textArea.value = detail;
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-        document.execCommand("copy");
-        setState({ ...state, toast: toastText });
-    } catch (err) {
-        console.error("Fallback copy failed", err);
-        setState({ ...state, toast: "Clipboard access denied" });
-    }
-    document.body.removeChild(textArea);
+    void copyText(detail)
+        .then(() => setState({ ...state, toast: toastText }))
+        .catch(() => setState({ ...state, toast: "Clipboard access denied" }));
 }
 
 // convertTx() sanitizes and simplifies a transaction object

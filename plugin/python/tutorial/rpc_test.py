@@ -15,7 +15,6 @@ import sys
 import time
 import json
 import secrets
-import base64
 from dataclasses import dataclass
 import urllib.request
 import urllib.error
@@ -53,11 +52,6 @@ def random_suffix() -> str:
 def random_address_hex() -> str:
     """Generate a fresh random 20-byte address as a hex string."""
     return os.urandom(20).hex()
-
-
-def hex_to_base64(hex_str: str) -> str:
-    """Convert hex string to base64 (for protojson bytes encoding)."""
-    return base64.b64encode(bytes.fromhex(hex_str)).decode('utf-8')
 
 
 def hex_to_bytes(hex_str: str) -> bytes:
@@ -227,23 +221,23 @@ def build_sign_and_send_tx(
     if not type_url:
         raise ValueError(f"Unknown message type: {msg_type}")
     
-    # Create protobuf message for signing
+    # Create protobuf message for signing (addresses are hex in msg_json)
     if msg_type == 'send':
         msg = tx_pb2.MessageSend()
-        msg.from_address = base64.b64decode(msg_json['fromAddress'])
-        msg.to_address = base64.b64decode(msg_json['toAddress'])
+        msg.from_address = hex_to_bytes(msg_json['fromAddress'])
+        msg.to_address = hex_to_bytes(msg_json['toAddress'])
         msg.amount = msg_json['amount']
         msg_proto = msg.SerializeToString()
     elif msg_type == 'reward':
         msg = tx_pb2.MessageReward()
-        msg.admin_address = base64.b64decode(msg_json['adminAddress'])
-        msg.recipient_address = base64.b64decode(msg_json['recipientAddress'])
+        msg.admin_address = hex_to_bytes(msg_json['adminAddress'])
+        msg.recipient_address = hex_to_bytes(msg_json['recipientAddress'])
         msg.amount = msg_json['amount']
         msg_proto = msg.SerializeToString()
     elif msg_type == 'faucet':
         msg = tx_pb2.MessageFaucet()
-        msg.signer_address = base64.b64decode(msg_json['signerAddress'])
-        msg.recipient_address = base64.b64decode(msg_json['recipientAddress'])
+        msg.signer_address = hex_to_bytes(msg_json['signerAddress'])
+        msg.recipient_address = hex_to_bytes(msg_json['recipientAddress'])
         msg.amount = msg_json['amount']
         msg_proto = msg.SerializeToString()
     else:
@@ -268,40 +262,21 @@ def build_sign_and_send_tx(
     # Get public key bytes
     pub_key_bytes = hex_to_bytes(signer_key.public_key)
     
-    # Build the transaction JSON
-    # For "send" (which is in RegisteredMessages), we must use "msg" field
-    # For plugin-only types (faucet, reward), we use msgTypeUrl/msgBytes for exact byte control
-    if msg_type == 'send':
-        tx = {
-            'type': msg_type,
-            'msg': msg_json,
-            'signature': {
-                'publicKey': bytes_to_hex(pub_key_bytes),
-                'signature': bytes_to_hex(signature),
-            },
-            'time': tx_time,
-            'createdHeight': height,
-            'fee': fee,
-            'memo': '',
-            'networkID': network_id,
-            'chainID': chain_id,
-        }
-    else:
-        tx = {
-            'type': msg_type,
-            'msgTypeUrl': type_url,
-            'msgBytes': bytes_to_hex(msg_proto),
-            'signature': {
-                'publicKey': bytes_to_hex(pub_key_bytes),
-                'signature': bytes_to_hex(signature),
-            },
-            'time': tx_time,
-            'createdHeight': height,
-            'fee': fee,
-            'memo': '',
-            'networkID': network_id,
-            'chainID': chain_id,
-        }
+    # Build the transaction using structured JSON for every plugin message.
+    tx = {
+        'type': msg_type,
+        'msg': msg_json,
+        'signature': {
+            'publicKey': bytes_to_hex(pub_key_bytes),
+            'signature': bytes_to_hex(signature),
+        },
+        'time': tx_time,
+        'createdHeight': height,
+        'fee': fee,
+        'memo': '',
+        'networkID': network_id,
+        'chainID': chain_id,
+    }
     
     # Send the transaction
     resp_body = post_raw_json(f"{rpc_url}/v1/tx", json.dumps(tx, indent=2))
@@ -320,8 +295,8 @@ def send_faucet_tx(
 ) -> str:
     """Send a faucet transaction."""
     faucet_msg = {
-        'signerAddress': hex_to_base64(signer_key.address),
-        'recipientAddress': hex_to_base64(recipient_addr),
+        'signerAddress': signer_key.address,
+        'recipientAddress': recipient_addr,
         'amount': amount,
     }
     
@@ -341,8 +316,8 @@ def send_send_tx(
 ) -> str:
     """Send a send transaction."""
     send_msg = {
-        'fromAddress': hex_to_base64(from_addr),
-        'toAddress': hex_to_base64(to_addr),
+        'fromAddress': from_addr,
+        'toAddress': to_addr,
         'amount': amount,
     }
     
@@ -362,8 +337,8 @@ def send_reward_tx(
 ) -> str:
     """Send a reward transaction."""
     reward_msg = {
-        'adminAddress': hex_to_base64(admin_addr),
-        'recipientAddress': hex_to_base64(recipient_addr),
+        'adminAddress': admin_addr,
+        'recipientAddress': recipient_addr,
         'amount': amount,
     }
     
