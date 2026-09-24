@@ -323,8 +323,10 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// delete each transaction from the mempool
 		c.Mempool.DeleteTransaction(block.Transactions...)
 	}
-	// parse committed block for straw polls
-	c.FSM.ParsePollTransactions(blockResult)
+	// parse straw polls off the controller lock: it does blocking file I/O and a stalled disk here
+	// would otherwise wedge the node. non-critical, so best-effort (capture FSM as c.FSM is replaced below)
+	blockFSM := c.FSM
+	go blockFSM.ParsePollTransactions(blockResult)
 	// if self was the proposer
 	if bytes.Equal(qc.ProposerKey, c.PublicKey) && !syncing {
 		// send the certificate results transaction on behalf of the quorum
@@ -433,8 +435,10 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// exit with error
 		return
 	}
-	// parse committed block for straw polls
-	c.FSM.ParsePollTransactions(blockResult)
+	// parse straw polls off the controller lock: it does blocking file I/O and a stalled disk here
+	// would otherwise wedge the node. non-critical, so best-effort (capture FSM as c.FSM is replaced below)
+	blockFSM := c.FSM
+	go blockFSM.ParsePollTransactions(blockResult)
 	// sync path: no mempool maintenance and no parallelism, only commit inline
 	if syncing {
 		return c.commitToStore(storeI, qc, block.BlockHeader.Height)

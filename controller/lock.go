@@ -11,32 +11,18 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-// This file centralizes ALL controller-level locking behind a single managed mutex. The Controller
-// embeds *ControllerLock (in place of *sync.Mutex), so every c.Lock()/c.Unlock()/c.TryLock() call —
-// including the BFT loop, which locks through the Controller interface — funnels through here.
-//
-// Why: the controller mutex is a single global lock shared by block handling, consensus, the BFT
-// loop, the mempool proposal path and RPC readers. If any holder blocks while holding it (a blocking
-// channel send, a P2P send, or a hung root-chain RPC), the block-inbox consumer can never acquire it
-// and the node silently stops processing blocks until a restart — with no error logs, because a
-// goroutine blocked *waiting* on a mutex never logs, and the holder isn't tracked. Centralizing makes
-// waits and (critically) long holds observable, and a watchdog dumps all goroutine stacks so the
-// exact holder/deadlock is identifiable.
+// This file centralizes all controller locking behind a single managed mutex so lock waits/holds
+// are observable and a stuck holder can be identified from a goroutine dump (see watchdog below)
 
 const (
-	// how long a caller may wait to acquire the lock before we log a warning
-	lockWaitWarnThreshold = 2 * time.Second
-	// how long the lock may be held before the watchdog flags a probable stall/deadlock
-	lockHoldWarnThreshold = 5 * time.Second
-	// how often the watchdog checks the current holder
-	lockWatchdogInterval = time.Second
-	// re-dump goroutines this often while the lock stays stuck, to keep tracking a live deadlock
-	lockReDumpInterval = 30 * time.Second
+	lockWaitWarnThreshold = 2 * time.Second  // warn if a caller waits longer than this to acquire
+	lockHoldWarnThreshold = 5 * time.Second  // watchdog flags a probable stall if held longer than this
+	lockWatchdogInterval  = time.Second      // how often the watchdog checks the current holder
+	lockReDumpInterval    = 30 * time.Second // re-dump goroutines this often while still stuck
 )
 
-// ControllerLock is the single, centrally-managed mutex for the Controller. It satisfies the same
-// Lock()/Unlock()/TryLock() surface as *sync.Mutex so it is a drop-in embed, while tracking the
-// current holder and flagging pathological waits/holds.
+// ControllerLock is the controller's mutex; it mirrors *sync.Mutex (Lock/Unlock/TryLock) so it's a
+// drop-in embed while tracking the current holder and flagging bad waits/holds
 type ControllerLock struct {
 	mu  sync.Mutex  // the actual lock
 	log lib.LoggerI // logger for wait/hold diagnostics
@@ -50,14 +36,14 @@ type ControllerLock struct {
 	stopped atomic.Bool // set on Stop() to end the watchdog
 }
 
-// NewControllerLock() creates the managed controller lock and starts its watchdog goroutine.
+// NewControllerLock() creates the managed lock and starts its watchdog
 func NewControllerLock(log lib.LoggerI) *ControllerLock {
 	l := &ControllerLock{log: log}
 	go l.watchdog()
 	return l
 }
 
-// Lock() acquires the controller lock, recording the holder and warning on long waits.
+// Lock() acquires the lock, records the holder, and warns on long waits
 func (l *ControllerLock) Lock() {
 	start := time.Now()
 	l.mu.Lock()
@@ -68,7 +54,7 @@ func (l *ControllerLock) Lock() {
 	}
 }
 
-// TryLock() attempts to acquire the lock without blocking, recording the holder on success.
+// TryLock() acquires the lock without blocking, recording the holder on success
 func (l *ControllerLock) TryLock() bool {
 	if !l.mu.TryLock() {
 		return false
@@ -77,7 +63,7 @@ func (l *ControllerLock) TryLock() bool {
 	return true
 }
 
-// Unlock() releases the controller lock, warning if it was held for a suspiciously long time.
+// Unlock() releases the lock, warning if it was held too long
 func (l *ControllerLock) Unlock() {
 	l.meta.Lock()
 	since, caller := l.holderSince, l.holderCaller
@@ -90,10 +76,10 @@ func (l *ControllerLock) Unlock() {
 	l.mu.Unlock()
 }
 
-// Stop() terminates the watchdog goroutine (used on controller shutdown / in tests).
+// Stop() terminates the watchdog goroutine
 func (l *ControllerLock) Stop() { l.stopped.Store(true) }
 
-// setHolder() records the metadata of the goroutine that just acquired the lock.
+// setHolder() records the goroutine that just acquired the lock
 func (l *ControllerLock) setHolder(caller string) {
 	l.meta.Lock()
 	l.held = true
@@ -103,7 +89,7 @@ func (l *ControllerLock) setHolder(caller string) {
 	l.meta.Unlock()
 }
 
-// currentHolder() returns a short description of the current holder for logging.
+// currentHolder() returns a short description of the current holder for logging
 func (l *ControllerLock) currentHolder() string {
 	l.meta.Lock()
 	defer l.meta.Unlock()
@@ -113,8 +99,7 @@ func (l *ControllerLock) currentHolder() string {
 	return fmt.Sprintf("%s (held %s)", l.holderCaller, time.Since(l.holderSince).Round(time.Millisecond))
 }
 
-// watchdog() periodically checks whether the lock has been held past the threshold and, if so, dumps
-// every goroutine's stack so the exact holder and any deadlock cycle can be identified from the logs.
+// watchdog() dumps all goroutine stacks when the lock is held past the threshold, so the stuck holder is identifiable
 func (l *ControllerLock) watchdog() {
 	ticker := time.NewTicker(lockWatchdogInterval)
 	defer ticker.Stop()
@@ -132,7 +117,7 @@ func (l *ControllerLock) watchdog() {
 		if hold < lockHoldWarnThreshold {
 			continue
 		}
-		// dump on first breach and then at a slower cadence while it remains stuck
+		// dump once on breach, then only every lockReDumpInterval while still stuck
 		if !lastDump.IsZero() && time.Since(lastDump) < lockReDumpInterval {
 			continue
 		}
@@ -151,9 +136,9 @@ func (l *ControllerLock) watchdog() {
 	}
 }
 
-// lockCaller() returns the file:line of the code that called Lock()/TryLock().
+// lockCaller() returns the file:line that called Lock()/TryLock()
 func lockCaller() string {
-	// skip: lockCaller (0) -> Lock/TryLock (1) -> the actual caller (2)
+	// skip: lockCaller (0) -> Lock/TryLock (1) -> caller (2)
 	if _, file, line, ok := runtime.Caller(2); ok {
 		return fmt.Sprintf("%s:%d", filepath.Base(file), line)
 	}

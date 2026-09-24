@@ -43,7 +43,7 @@ type Controller struct {
 	checkpoints     map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
 	isSyncing       *atomic.Bool                       // is the chain currently being downloaded from peers
 	log             lib.LoggerI                        // object for logging
-	*ControllerLock                                    // centralized, watchdog-monitored controller mutex (see lock.go)
+	*ControllerLock                                    // controller mutex (see lock.go)
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
@@ -189,7 +189,7 @@ func (c *Controller) Stop() {
 			c.log.Error(err.Error())
 		}
 	}
-	// stop the controller lock watchdog goroutine
+	// stop the lock watchdog
 	c.ControllerLock.Stop()
 }
 

@@ -82,7 +82,7 @@ type RCManager struct {
 	controller    *controller.Controller        // reference to controller for state access
 	subscriptions map[uint64]*RCSubscription    // chainId -> subscription
 	subscribers   map[uint64][]*RCSubscriber    // chainId -> subscribers
-	l             *controller.ControllerLock    // shared, centrally-managed controller lock (see controller/lock.go)
+	l             *controller.ControllerLock    // shared controller lock (see controller/lock.go)
 	afterRCUpdate func(info *lib.RootChainInfo) // callback after the root chain info update
 	upgrader      websocket.Upgrader            // upgrade http connection to ws
 	log           lib.LoggerI                   // stdout log
@@ -217,8 +217,8 @@ func (r *RCManager) GetHeight(rootChainId uint64) uint64 {
 // GetRootChainInfo() retrieves the root chain info from the root chain 'on-demand'
 func (r *RCManager) GetRootChainInfo(rootChainId, chainId uint64) (info *lib.RootChainInfo, err lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	// grab the subscription under the lock, but do NOT hold the (shared controller) lock across the
-	// remote root-chain call below: a hung call would pin the controller mutex and wedge the node
+	// grab the subscription under the lock, but don't hold it across the remote call below: a hung
+	// call would pin the shared controller lock and wedge the node
 	r.l.Lock()
 	sub, found := r.subscriptions[rootChainId]
 	r.l.Unlock()
