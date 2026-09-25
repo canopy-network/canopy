@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -39,12 +38,12 @@ type Controller struct {
 	Consensus *bft.BFT          // the async consensus process between the committee members for the chain
 	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
 
-	RCManager   lib.RCManagerI                     // the data manager for the 'root chain'
-	Plugin      *lib.Plugin                        // extensible plugin for FSM
-	checkpoints map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
-	isSyncing   *atomic.Bool                       // is the chain currently being downloaded from peers
-	log         lib.LoggerI                        // object for logging
-	*sync.Mutex                                    // mutex for thread safety
+	RCManager       lib.RCManagerI                     // the data manager for the 'root chain'
+	Plugin          *lib.Plugin                        // extensible plugin for FSM
+	checkpoints     map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
+	isSyncing       *atomic.Bool                       // is the chain currently being downloaded from peers
+	log             lib.LoggerI                        // object for logging
+	*ControllerLock                                    // controller mutex (see lock.go)
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
@@ -66,18 +65,18 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	}
 	// create the controller
 	controller = &Controller{
-		Address:    address.Bytes(),
-		PublicKey:  valKey.PublicKey().Bytes(),
-		PrivateKey: valKey,
-		Config:     c,
-		Metrics:    metrics,
-		FSM:        fsm,
-		Mempool:    mempool,
-		Consensus:  nil,
-		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
-		isSyncing:  &atomic.Bool{},
-		log:        l,
-		Mutex:      &sync.Mutex{},
+		Address:        address.Bytes(),
+		PublicKey:      valKey.PublicKey().Bytes(),
+		PrivateKey:     valKey,
+		Config:         c,
+		Metrics:        metrics,
+		FSM:            fsm,
+		Mempool:        mempool,
+		Consensus:      nil,
+		P2P:            p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
+		isSyncing:      &atomic.Bool{},
+		log:            l,
+		ControllerLock: NewControllerLock(l),
 	}
 	// load checkpoints from file (if provided)
 	controller.loadCheckpointsFile()
@@ -190,9 +189,24 @@ func (c *Controller) Stop() {
 			c.log.Error(err.Error())
 		}
 	}
+	// stop the lock watchdog
+	c.ControllerLock.Stop()
 }
 
 // ROOT CHAIN CALLS BELOW
+
+// signalResetBFT() delivers a reset to the BFT loop without ever blocking the caller; the BFT loop
+// drains ResetBFT while holding the controller (and maybe RCManager) lock, so a blocking send from a
+// lock holder would deadlock the node
+func (c *Controller) signalResetBFT(reset bft.ResetBFT) {
+	select {
+	case c.Consensus.ResetBFT <- reset:
+	default:
+		// buffer full: deliver from a detached, lock-free goroutine so the BFT loop can drain it
+		c.log.Warn("ResetBFT buffer full; delivering reset asynchronously to avoid blocking under lock")
+		go func() { c.Consensus.ResetBFT <- reset }()
+	}
+}
 
 // UpdateRootChainInfo() receives updates from the root-chain thread
 func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
@@ -211,13 +225,13 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		timestamp = time.UnixMicro(int64(info.Timestamp))
 	}
 	c.Mempool.dirtyVersion.Add(1)
-	// if the last validator set is empty
+	// signal a reset without blocking (caller holds the RCManager lock the BFT loop may also need)
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp}
+		c.signalResetBFT(bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp})
 	} else {
 		// signal to reset consensus
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp}
+		c.signalResetBFT(bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp})
 	}
 	// update the peer 'must connect'
 	c.UpdateP2PMustConnect(info.ValidatorSet)

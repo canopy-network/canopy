@@ -58,10 +58,12 @@ type P2P struct {
 	config                 lib.Config
 	metrics                *lib.Metrics
 	log                    lib.LoggerI
-	gossip                 bool        // whether gossip mode is active
-	selfIsValidator        atomic.Bool // whether this node is an active validator (full nodes get the inbox DLQ, validators don't)
-	failedPeers            sync.Map    // peers that have connection errors
-	mustConnectIndex       sync.Map    // pubKey string -> netAddress (for reconnect/dial correctness)
+	gossip                 bool          // whether gossip mode is active
+	selfIsValidator        atomic.Bool   // whether this node is an active validator (full nodes get the inbox DLQ, validators don't)
+	syncing                atomic.Bool   // whether the node is actively syncing (suppresses the block inbox DLQ so Sync() keeps its in-order responses)
+	mustResync             chan struct{} // full-node signal: block inbox backed up, controller should resync (buffered/coalesced)
+	failedPeers            sync.Map      // peers that have connection errors
+	mustConnectIndex       sync.Map      // pubKey string -> netAddress (for reconnect/dial correctness)
 }
 
 // New() creates an initialized pointer instance of a P2P object
@@ -99,6 +101,7 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 		PeerSet:                NewPeerSet(c, p, m, l),
 		book:                   peerBook,
 		MustConnectsReceiver:   make(chan []*lib.PeerAddress, maxChanSize),
+		mustResync:             make(chan struct{}, 1),
 		maxMembersPerCommittee: int(maxMembersPerCommittee),
 		bannedIPs:              bannedIPs,
 		log:                    l,
@@ -858,6 +861,29 @@ func (p *P2P) SetSelfIsValidator(isValidator bool) {
 // SelfIsValidator returns whether this node is currently an active validator.
 func (p *P2P) SelfIsValidator() bool {
 	return p.selfIsValidator.Load()
+}
+
+// SetSyncing records whether the node is actively syncing (suppresses the block inbox DLQ so
+// Sync() can consume the in-order block responses it depends on)
+func (p *P2P) SetSyncing(syncing bool) {
+	p.syncing.Store(syncing)
+}
+
+// IsSyncing returns whether the node is currently in an active sync
+func (p *P2P) IsSyncing() bool {
+	return p.syncing.Load()
+}
+
+// MustResync returns a channel that fires when a full node's block inbox has backed up so the
+// controller can trigger an active resync instead of relying on gossip that can't fill the gaps
+func (p *P2P) MustResync() <-chan struct{} { return p.mustResync }
+
+// signalResync performs a non-blocking, coalesced send on the mustResync channel
+func (p *P2P) signalResync() {
+	select {
+	case p.mustResync <- struct{}{}:
+	default: // a resync is already pending; coalesce
+	}
 }
 
 // GossipMode returns the current gossip mode for the P2P instance

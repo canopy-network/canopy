@@ -419,7 +419,7 @@ func newTestFailedTxServer(t *testing.T, entries []*lib.FailedTx) *Server {
 	setUnexportedField(t, mempool, "cachedFailedTxs", cache)
 
 	return &Server{
-		controller: &controller.Controller{Mutex: &sync.Mutex{}, Mempool: mempool},
+		controller: &controller.Controller{ControllerLock: controller.NewControllerLock(nil), Mempool: mempool},
 		logger:     lib.NewDefaultLogger(),
 	}
 }

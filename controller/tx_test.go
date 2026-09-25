@@ -63,7 +63,7 @@ func TestHandleTransactionsOnlyMarksDirtyOnSuccessfulNewTx(t *testing.T) {
 
 func TestGetPendingTxByHashUsesCachedResults(t *testing.T) {
 	ctrl := &Controller{
-		Mutex: &sync.Mutex{},
+		ControllerLock: NewControllerLock(nil),
 		Mempool: &Mempool{
 			L: &sync.Mutex{},
 			cachedResults: lib.TxResults{
@@ -106,7 +106,7 @@ func TestPendingReadersReturnImmediatelyWhenMempoolIsLocked(t *testing.T) {
 		L:             &sync.Mutex{},
 		cachedResults: lib.TxResults{{TxHash: "abc123"}},
 	}
-	ctrl := &Controller{Mutex: &sync.Mutex{}, Mempool: mempool}
+	ctrl := &Controller{ControllerLock: NewControllerLock(nil), Mempool: mempool}
 	mempool.L.Lock()
 	defer mempool.L.Unlock()
 

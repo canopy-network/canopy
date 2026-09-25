@@ -1,6 +1,8 @@
 package fsm
 
 import (
+	"sync"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
@@ -386,8 +388,18 @@ func (s *StateMachine) getParams(space string, ptr any, emptyErr func() lib.Erro
 
 // POLLING CODE BELOW
 
+// pollFileMu serializes access to the straw-poll file across async runs (see ParsePollTransactions)
+var pollFileMu sync.Mutex
+
 // ParsePollTransactions() parses the last valid block for memo commands to execute specialized 'straw polling' functionality
+// NOTE: does blocking file I/O, so callers must run it off the controller lock (a stalled disk would otherwise wedge the node)
 func (s *StateMachine) ParsePollTransactions(b *lib.BlockResult) {
+	// skip if a previous run is still in flight (e.g. a stalled disk) to avoid piling up goroutines
+	if !pollFileMu.TryLock() {
+		s.log.Debug("Skipping poll parse; previous run still in flight")
+		return
+	}
+	defer pollFileMu.Unlock()
 	// create a new object reference to ensure non-nil results
 	ap := new(ActivePolls)
 	// load the active polls from the json file
@@ -401,8 +413,8 @@ func (s *StateMachine) ParsePollTransactions(b *lib.BlockResult) {
 		if e != nil {
 			return
 		}
-		// check for a poll transaction
-		if err := ap.CheckForPollTransaction(pub.Address(), tx.Transaction.Memo, s.Height()); err != nil {
+		// check for a poll transaction; use the committed block height so this is safe off the commit goroutine
+		if err := ap.CheckForPollTransaction(pub.Address(), tx.Transaction.Memo, b.BlockHeader.Height); err != nil {
 			// simply log the error
 			s.log.Error(err.Error())
 			// exit
