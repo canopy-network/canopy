@@ -2,6 +2,7 @@ import React from 'react'
 import { Copy } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { copyText } from '../../lib/clipboard'
 
 interface CopyableIdentifierProps {
     value: string
@@ -12,25 +13,9 @@ interface CopyableIdentifierProps {
     iconClassName?: string
 }
 
-const fallbackCopy = (value: string) => {
-    const textarea = document.createElement('textarea')
-    textarea.value = value
-    textarea.setAttribute('readonly', '')
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-}
-
 const copyValue = async (value: string, label: string) => {
     try {
-        if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(value)
-        } else {
-            fallbackCopy(value)
-        }
+        await copyText(value)
         toast.success(`${label} copied`)
     } catch {
         toast.error(`Unable to copy ${label.toLowerCase()}`)

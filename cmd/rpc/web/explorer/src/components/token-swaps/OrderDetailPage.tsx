@@ -2,6 +2,7 @@ import React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Copy } from 'lucide-react'
+import { copyText } from '../../lib/clipboard'
 import { useOrder } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 
@@ -32,16 +33,20 @@ const OrderDetailPage: React.FC = () => {
     const numericCommittee = Number(committeeParam)
     const { data: orderData, isLoading, error } = useOrder(numericCommittee, orderId || '')
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text)
-        toast.success('Copied to clipboard!', {
-            icon: '📋',
-            style: {
-                background: '#1a1a1a',
-                color: '#fafafa',
-                border: '1px solid #45ca46',
-            },
-        })
+    const copyToClipboard = async (text: string) => {
+        try {
+            await copyText(text)
+            toast.success('Copied to clipboard!', {
+                icon: '📋',
+                style: {
+                    background: '#1a1a1a',
+                    color: '#fafafa',
+                    border: '1px solid #45ca46',
+                },
+            })
+        } catch {
+            toast.error('Unable to copy to clipboard')
+        }
     }
 
     const truncate = (str: string, n: number = 12) => {
