@@ -38,6 +38,15 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 	if qc != nil && qc.Signature != nil && qc.Header != nil {
 		qc.Signature.LogNonSigners(vs.ValidatorSet, qc.ProposerKey, qc.Header.Height, qc.Header.ChainId, s.log)
 	}
+	// protocol v3+: committee-member liveness gating
+	if s.IsFeatureEnabled(3) {
+		// promote every QC signer to 'active' so participating provisional members earn their voting power
+		if err = s.ActivateCommitteeSigners(qc, vs); err != nil {
+			return 0, err
+		}
+		// exclude provisional (zero-power) members from non-sign counting/slashing
+		nonSignerPubKeys = s.filterProvisionalNonSigners(vs, nonSignerPubKeys)
+	}
 	// increment the non-signing count for the non-signers
 	if err = s.IncrementNonSigners(qc.Header.ChainId, nonSignerPubKeys); err != nil {
 		return 0, err
