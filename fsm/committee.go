@@ -282,6 +282,13 @@ func (s *StateMachine) UpdateCommittees(address crypto.AddressI, oldValidator *V
 	if err := s.DeleteCommittees(address, oldValidator.StakedAmount, oldValidator.Committees); err != nil {
 		return err
 	}
+	// protocol v3+: drop 'active' status only for committees the validator is leaving (kept committees,
+	// e.g. from auto-compounding edit-stakes, retain their liveness status)
+	if s.IsFeatureEnabled(3) {
+		if err := s.deleteActiveCommitteesOnLeave(address, oldValidator.Committees, newCommittees); err != nil {
+			return err
+		}
+	}
 	// set the committee information using the updated stake and committees
 	return s.SetCommittees(address, newStakedAmount, newCommittees)
 }
@@ -334,6 +341,216 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 		return nil
 	}
 	return s.Delete(KeyForCommittee(chainId, address, stakeForCommittee))
+}
+
+// COMMITTEE MEMBER LIVENESS (ACTIVATION) CODE BELOW
+// protocol v3+: a committee member joins with zero voting power ('provisional') until it proves liveness
+// by signing a QuorumCertificate; this stops a large restaker from halting a running committee
+
+// activeCommitteeMemberValue is a non-nil marker so 'Get' calls can differentiate from non-existing keys
+var activeCommitteeMemberValue = []byte{0x1}
+
+// SetCommitteeMemberActive() marks a validator as a liveness-proven ('active') member of the committee
+func (s *StateMachine) SetCommitteeMemberActive(chainId uint64, address crypto.AddressI) lib.ErrorI {
+	return s.Set(KeyForActiveCommittee(chainId, address), activeCommitteeMemberValue)
+}
+
+// DeleteCommitteeMemberActive() removes the liveness-proven ('active') status of a committee member
+func (s *StateMachine) DeleteCommitteeMemberActive(chainId uint64, address crypto.AddressI) lib.ErrorI {
+	return s.Delete(KeyForActiveCommittee(chainId, address))
+}
+
+// IsCommitteeMemberActive() returns if a validator has proven liveness ('active') for the committee
+func (s *StateMachine) IsCommitteeMemberActive(chainId uint64, address crypto.AddressI) (bool, lib.ErrorI) {
+	bz, err := s.Get(KeyForActiveCommittee(chainId, address))
+	if err != nil {
+		return false, err
+	}
+	return bz != nil, nil
+}
+
+// GetActiveCommitteeMemberSet() returns the set of liveness-proven ('active') member addresses for a chainId
+func (s *StateMachine) GetActiveCommitteeMemberSet(chainId uint64) (set map[string]struct{}, err lib.ErrorI) {
+	set = make(map[string]struct{})
+	err = s.IterateAndExecute(ActiveCommitteePrefix(chainId), func(key, _ []byte) lib.ErrorI {
+		addr, e := AddressFromKey(key)
+		if e != nil {
+			s.log.Warnf("skipping malformed active-committee key: %x", key)
+			return nil
+		}
+		set[string(addr.Bytes())] = struct{}{}
+		return nil
+	})
+	return
+}
+
+// ActivateCommitteeSigners() marks every signer of the QuorumCertificate as an 'active' committee member
+func (s *StateMachine) ActivateCommitteeSigners(qc *lib.QuorumCertificate, vs *lib.ValidatorSet) lib.ErrorI {
+	// nothing to do if the certificate, signature, or committee are missing
+	if qc == nil || qc.Signature == nil || qc.Header == nil || vs == nil {
+		return nil
+	}
+	// retrieve the public keys of those who signed the certificate
+	signers, _, err := qc.Signature.GetSigners(*vs)
+	if err != nil {
+		return err
+	}
+	chainId := qc.Header.ChainId
+	// for each signer; ensure it is recorded as an 'active' committee member
+	for _, pk := range signers {
+		pubKey, cryptoErr := crypto.NewPublicKeyFromBytes(pk)
+		if cryptoErr != nil {
+			return lib.ErrPubKeyFromBytes(cryptoErr)
+		}
+		address := pubKey.Address()
+		active, e := s.IsCommitteeMemberActive(chainId, address)
+		if e != nil {
+			return e
+		}
+		if !active {
+			if e = s.SetCommitteeMemberActive(chainId, address); e != nil {
+				return e
+			}
+		}
+	}
+	return nil
+}
+
+// filterProvisionalNonSigners() drops provisional (zero-power) members from the non-signer list so they
+// are not penalized for failing to sign a committee they don't yet hold voting power in
+func (s *StateMachine) filterProvisionalNonSigners(vs *lib.ValidatorSet, nonSignerPubKeys [][]byte) [][]byte {
+	if vs == nil {
+		return nonSignerPubKeys
+	}
+	filtered := make([][]byte, 0, len(nonSignerPubKeys))
+	for _, pk := range nonSignerPubKeys {
+		val, err := vs.GetValidator(pk)
+		// keep the non-signer only if it is a genuine (non-zero voting power) committee member
+		if err != nil || val == nil || val.VotingPower == 0 {
+			continue
+		}
+		filtered = append(filtered, pk)
+	}
+	return filtered
+}
+
+// deleteActiveCommitteesOnLeave() drops the 'active' status for committees the validator is leaving
+// (in oldCommittees but not newCommittees), so a re-join must prove liveness again
+func (s *StateMachine) deleteActiveCommitteesOnLeave(address crypto.AddressI, oldCommittees, newCommittees []uint64) lib.ErrorI {
+	for _, chainId := range oldCommittees {
+		if slices.Contains(newCommittees, chainId) {
+			continue
+		}
+		if err := s.DeleteCommitteeMemberActive(chainId, address); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// COMMITTEE LIVENESS RECOVERY (STALL WATCHDOG) CODE BELOW
+// protocol v3+: an already-active member holding > 1/3 of committee power can still halt the committee by
+// going dark after proving liveness (a nested-chain deadlock: no QC can form to auto-pause it). The root
+// chain keeps producing blocks, so it detects the stall and demotes the blocker back to 'provisional';
+// remaining online members can then reach quorum, and the blocker re-activates if it signs a QC again
+
+// CommitteeLivenessWindow is the number of root-chain blocks a committee may go without a certificate
+// result before it is considered 'stalled' and eligible for automatic liveness recovery
+const CommitteeLivenessWindow = uint64(60)
+
+// HandleStalledCommittees() demotes the largest active member of any committee that has gone without a
+// certificate result for CommitteeLivenessWindow blocks (root chain only, protocol v3+)
+func (s *StateMachine) HandleStalledCommittees() lib.ErrorI {
+	// only applies under protocol v3+
+	if !s.IsFeatureEnabled(3) {
+		return nil
+	}
+	// committees are only built/served on a root chain; nested chains have nothing to recover here
+	rootChainId, err := s.GetRootChainId()
+	if err != nil {
+		return err
+	}
+	if s.Config.ChainId != rootChainId {
+		return nil
+	}
+	// retrieve the master list of committee data
+	committeesData, err := s.GetCommitteesData()
+	if err != nil {
+		return err
+	}
+	rootHeight := s.Height()
+	// for each committee with recorded data
+	for _, data := range committeesData.List {
+		// skip the self (root) chain: its own liveness is implied by this block being produced
+		if data.ChainId == s.Config.ChainId {
+			continue
+		}
+		// skip committees that have never produced a certificate (join-gating already covers those)
+		if data.LastRootHeightUpdated == 0 || rootHeight <= data.LastRootHeightUpdated {
+			continue
+		}
+		// skip committees that are still within the liveness window (not yet considered stalled)
+		if rootHeight-data.LastRootHeightUpdated < CommitteeLivenessWindow {
+			continue
+		}
+		// the committee is stalled; attempt to restore liveness
+		if err = s.demoteStalledCommitteeBlocker(data.ChainId); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// demoteStalledCommitteeBlocker() demotes a stalled committee's largest active member back to provisional,
+// but only if it alone can block a +2/3 quorum (power > 1/3 of active total) and another active member remains
+func (s *StateMachine) demoteStalledCommitteeBlocker(chainId uint64) lib.ErrorI {
+	// load the 'active' member set; if empty the committee is in bootstrap and there is nothing to demote
+	active, err := s.GetActiveCommitteeMemberSet(chainId)
+	if err != nil {
+		return err
+	}
+	if len(active) == 0 {
+		return nil
+	}
+	// build the current (gated) committee to read the effective voting powers
+	vs, err := s.GetCommitteeMembers(chainId)
+	if err != nil {
+		return err
+	}
+	// find the largest active member (nonzero voting power) and the total active power
+	var activeTotal, largestPower uint64
+	var largestPubKey []byte
+	activeCount := 0
+	for _, m := range vs.ValidatorSet.ValidatorSet {
+		// provisional members carry zero voting power; skip them
+		if m.VotingPower == 0 {
+			continue
+		}
+		activeCount++
+		activeTotal += m.VotingPower
+		// deterministic selection: highest power, breaking ties by the lexicographically smaller pubkey
+		if largestPubKey == nil || m.VotingPower > largestPower ||
+			(m.VotingPower == largestPower && bytes.Compare(m.PublicKey, largestPubKey) < 0) {
+			largestPower, largestPubKey = m.VotingPower, m.PublicKey
+		}
+	}
+	// need at least two active members so demotion leaves someone able to run the chain
+	if activeCount <= 1 || largestPubKey == nil {
+		return nil
+	}
+	// only demote a member that can single-handedly block a +2/3 quorum (power > 1/3 of the active total)
+	if largestPower <= activeTotal/3 {
+		return nil
+	}
+	// resolve the address and demote the member back to provisional
+	addrBz, err := s.pubKeyBytesToAddress(largestPubKey)
+	if err != nil {
+		return err
+	}
+	address := crypto.NewAddressFromBytes(addrBz)
+	s.log.Warnf("committee %d stalled for >= %d blocks; demoting largest active member %s (power %d) to restore liveness",
+		chainId, CommitteeLivenessWindow, address.String(), largestPower)
+	return s.DeleteCommitteeMemberActive(chainId, address)
 }
 
 // DELEGATIONS BELOW

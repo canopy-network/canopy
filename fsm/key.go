@@ -43,6 +43,7 @@ var (
 	orderBookPrefix        = []byte{13} // store key prefix for 'sell orders' before they are bid on
 	retiredCommitteePrefix = []byte{14} // store key prefix for 'retired' (dead) committees
 	dexPrefix              = []byte{15} // store key prefix for 'dex' functionality
+	activeCommitteePrefix  = []byte{16} // store key prefix for committee members who have proven liveness (feature 3+)
 	lockedBatchSegment = []byte{1}
 	nextBatchSement    = []byte{2}
 )
@@ -69,6 +70,9 @@ func PausedPrefix(height uint64) []byte { return lib.JoinLenPrefix(pausedPrefix,
 func LastProposersPrefix() []byte       { return lib.JoinLenPrefix(lastProposersPrefix) }
 func CommitteePrefix(id uint64) []byte  { return lib.JoinLenPrefix(committeePrefix, formatUint64(id)) }
 func DelegatePrefix(id uint64) []byte   { return lib.JoinLenPrefix(delegatePrefix, formatUint64(id)) }
+func ActiveCommitteePrefix(id uint64) []byte {
+	return lib.JoinLenPrefix(activeCommitteePrefix, formatUint64(id))
+}
 func CommitteesDataPrefix() []byte      { return lib.JoinLenPrefix(committeesDataPrefix) }
 func RetiredCommitteesPrefix() []byte   { return lib.JoinLenPrefix(retiredCommitteePrefix) }
 func KeyForPool(n uint64) []byte        { return lib.JoinLenPrefix(poolPrefix, formatUint64(n)) }
@@ -89,6 +93,9 @@ func KeyForCommittee(chainId uint64, addr crypto.AddressI, stake uint64) []byte 
 }
 func KeyForDelegate(chainId uint64, addr crypto.AddressI, stake uint64) []byte {
 	return append(DelegatePrefix(chainId), lib.JoinLenPrefix(formatUint64(stake), addr.Bytes())...)
+}
+func KeyForActiveCommittee(chainId uint64, addr crypto.AddressI) []byte {
+	return append(ActiveCommitteePrefix(chainId), lib.JoinLenPrefix(addr.Bytes())...)
 }
 func KeyForRetiredCommittee(cId uint64) []byte {
 	return lib.JoinLenPrefix(retiredCommitteePrefix, formatUint64(cId))

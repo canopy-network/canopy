@@ -81,6 +81,10 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	if err = s.DistributeCommitteeRewards(); err != nil {
 		return nil, err
 	}
+	// protocol v3+: recover any committee stalled by an offline blocking-power member (demote it)
+	if err = s.HandleStalledCommittees(); err != nil {
+		return nil, err
+	}
 	// force unstakes validators who have been paused for MaxPauseBlocks
 	if err = s.ForceUnstakeMaxPaused(); err != nil {
 		return
