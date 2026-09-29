@@ -279,8 +279,25 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 			}
 		}
 	}
+	// The validator slice: from MainnetProposerIncentiveHeight it pays this
+	// block's proposer directly (proposerincentive.go), with any part that has
+	// no eligible proposer going to the treasury below. Before that, and on
+	// other profiles, it accrues to the registry-weighted ledger.
+	var valSets []*contract.PluginSetOp
+	valToTreasury := uint64(0)
+	if split.Validators > 0 {
+		var err *contract.PluginError
+		if c.proposerIncentiveActive(req.GetHeight()) {
+			valSets, valToTreasury, err = c.payValidatorShareToProposer(split.Validators, req.GetProposerAddress())
+		} else {
+			valSets, err = c.distributeValidatorShare(split.Validators, obs.registry)
+		}
+		if err != nil {
+			return err
+		}
+	}
 	// ownerless carries the user slice that had no cCNPY to back it (see above).
-	treasuryDelta := (split.Treasury - insurance) + txFees + ownerless
+	treasuryDelta := (split.Treasury - insurance) + txFees + ownerless + valToTreasury
 	if treasuryDelta > 0 {
 		treasuryKey := KeyForTreasuryCNPY()
 		sets = append(sets, &contract.PluginSetOp{
@@ -307,17 +324,10 @@ func (c *Canoliq) ProcessRewards(req *contract.PluginEndRequest) *contract.Plugi
 			Value: EncodeUint64(c.readScalar(buybackKey) + split.Buyback),
 		})
 	}
-	if split.Validators > 0 {
-		valSets, err := c.distributeValidatorShare(split.Validators, obs.registry)
-		if err != nil {
-			return err
-		}
-		sets = append(sets, valSets...)
-	}
+	sets = append(sets, valSets...)
 	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets}); err != nil {
 		return err
 	}
-	_ = req
 	return nil
 }
 
