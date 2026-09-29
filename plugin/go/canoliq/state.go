@@ -269,6 +269,12 @@ func EjectedValidatorPrefix() []byte {
 	return JoinLenPrefix(canoliqPrefix, domainEjected)
 }
 
+// ValidatorIncentivesPrefix is the range-read prefix covering every
+// KeyForValidatorIncentives entry.
+func ValidatorIncentivesPrefix() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainValIncent)
+}
+
 // KeyForAlertState returns the per-kind alert bookkeeping key (T6).
 func KeyForAlertState(kind string) []byte {
 	return JoinLenPrefix(canoliqPrefix, domainAlertState, []byte(kind))
