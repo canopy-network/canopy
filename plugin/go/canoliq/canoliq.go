@@ -54,6 +54,9 @@ func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginB
 	if err := c.applyMainnetIncentiveMigration(height); err != nil {
 		return &contract.PluginBeginResponse{Error: err}
 	}
+	if err := c.applyMainnetAccountAddressMigration(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
 	if err := c.advanceGraduationWindow(height); err != nil {
 		return &contract.PluginBeginResponse{Error: err}
 	}
@@ -480,6 +483,12 @@ func (c *Canoliq) deliverMessageSend(msg *contract.MessageSend, fee uint64) *con
 	}
 	if string(fromKey) == string(toKey) {
 		to = from
+	}
+	// A recipient with no record yet must still carry its address; see
+	// accountaddress.go.
+	if c.accountAddressFixActive(c.currentHeight()) {
+		from.Address = msg.FromAddress
+		to.Address = msg.ToAddress
 	}
 	from.Amount -= deduct
 	feePool.Amount += fee
