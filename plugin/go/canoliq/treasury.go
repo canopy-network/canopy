@@ -312,6 +312,9 @@ func (c *Canoliq) applySpend(spend *contract.TreasurySpend) *contract.PluginErro
 		if err != nil {
 			return err
 		}
+		if c.accountAddressFixActive(c.currentHeight()) {
+			recip.Address = spend.Payload.Recipient
+		}
 		recip.Amount += spend.Payload.Amount
 		recipBz, e := contract.Marshal(recip)
 		if e != nil {
