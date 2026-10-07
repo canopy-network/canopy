@@ -702,7 +702,6 @@ var blockedCountries = []string{
 	"RU", // Russia
 	"SD", // Sudan
 	"SS", // South Sudan
-	"SY", // Syria
 	"VE", // Venezuela
 	"YE", // Yemen
 	"ZW", // Zimbabwe
