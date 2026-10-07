@@ -115,8 +115,6 @@ func (c *Controller) Sync() {
 		case <-limiter.TimeToReset():
 			limiter.Reset()
 		case <-requestTicker.C:
-			// Remove timed-out requests before attempting to refill the queue
-			c.applyTimeouts(queue)
 			// Get current chain height
 			fsmHeight := c.FSM.Height()
 			// Get an updated list of available peers
@@ -153,6 +151,8 @@ func (c *Controller) Sync() {
 				maxHeight, minVDFIterations = m, v
 				c.log.Debugf("Updated chain %d with max height: %d and iterations %d", c.Config.ChainId, maxHeight, minVDFIterations)
 			}
+			// Remove any block requests that have timed out
+			c.applyTimeouts(queue)
 		}
 	}
 	// Syncing complete
