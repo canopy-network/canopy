@@ -29,7 +29,7 @@ import (
 // accounts carry their address. It must be above the height at which every
 // committee-29 node runs this release; pick it with margin for
 // pluginAutoUpdate.
-const MainnetAccountAddressFixHeight uint64 = 145_000
+const MainnetAccountAddressFixHeight uint64 = 130_500
 
 // accountAddressFixActive reports whether credited account records carry
 // their address at `height`. Other profiles have it from genesis.
