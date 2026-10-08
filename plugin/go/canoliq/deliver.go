@@ -67,7 +67,13 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 	// source of truth for the four-way decision tree shared with
 	// /v1/health: uncapped / active / awaiting-canopy-stake / fail-closed.
 	// See the tvl-cap docs page for the operator-facing semantics.
-	if params.TvlCapBps > 0 {
+	// From MainnetFixedTvlCapHeight a fixed ceiling replaces it on mainnet
+	// (tvlcapfixed.go).
+	if fixedTvlCapActive(c.Config.Profile, c.plugin.CurrentHeight()) {
+		if globals.TotalPooledCnpy+msg.Amount > MainnetFixedTvlCapUcnpy {
+			return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
+		}
+	} else if params.TvlCapBps > 0 {
 		supply, perr := c.readCanopySupply()
 		if perr != nil {
 			return &contract.PluginDeliverResponse{Error: perr}
