@@ -129,6 +129,9 @@ type StakerView struct {
 func (p *Plugin) QueryHealth() *HealthView {
 	s := p.Snapshot()
 	decision := evaluateTVLCap(s.Params.TvlCapBps, s.CanopySupplyPresent, s.CanopyTotalStake)
+	if fixedTvlCapActive(p.config.Profile, s.Height) {
+		decision = tvlCapDecision{Status: TVLCapStatusFixed, CapUcnpy: MainnetFixedTvlCapUcnpy}
+	}
 	var utilBps uint64
 	if decision.CapUcnpy > 0 {
 		utilBps = mulDiv(s.Globals.TotalPooledCnpy, 10_000, decision.CapUcnpy)
