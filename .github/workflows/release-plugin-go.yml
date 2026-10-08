@@ -1,14 +1,44 @@
 name: Release Go Plugin
 
+# Cuts a tagged Go plugin release, either automatically on a merge to main that
+# touches plugin/go, or manually via workflow_dispatch with an explicit version.
+#
+# The paths filter is deliberate: without it every docs- or docker-only merge
+# would publish a release whose binaries are byte-identical to the previous one
+# (plugin-go-v2026.217.0 was exactly that). Releases should track plugin
+# changes. Use workflow_dispatch to cut one regardless.
+#
+# The filter is safe to scope this narrowly because plugin/go is a fully
+# independent Go module: plugin/go/go.mod declares no `replace` and does not
+# require github.com/canopy-network/canopy, so `go list -deps .` resolves to
+# exactly three first-party packages, all under plugin/go. Changes to fsm/,
+# lib/, controller/, cmd/ or .docker/ cannot alter the built binary.
+#
+# This file is listed too, because it pins the Go version and build flags —
+# editing it does change the artifact despite living outside plugin/go. Same
+# reasoning as build-test.yaml including .github/workflows/**.
 on:
   workflow_dispatch:
     inputs:
       tag:
         description: "Semantic version for the plugin release (e.g. 1.0.0). The 'plugin-go-v' prefix is added automatically."
         required: true
+  push:
+    branches:
+      - main
+    paths:
+      - "plugin/go/**"
+      - ".github/workflows/release-plugin-go.yml"
 
 permissions:
   contents: write
+
+# Serialize releases: two merges landing close together would otherwise race to
+# publish. Do not cancel in progress — a half-published release is worse than a
+# queued one.
+concurrency:
+  group: release-plugin-go
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -26,12 +56,24 @@ jobs:
         with:
           go-version: "1.26"
 
+      # `tag` is a workflow_dispatch input and is empty on push, so an automatic
+      # run has to derive its own version. run_number keeps it unique: two
+      # merges on the same day would otherwise collide, and action-gh-release
+      # will not cleanly cut a second release on an existing tag. The derived
+      # form YYYY.DDD.RUN is valid MAJOR.MINOR.PATCH semver, so it passes the
+      # same validation as a hand-entered version. The input is read via env
+      # rather than inline ${{ }} so a crafted version cannot inject shell.
       - name: Validate version and compute tag
         id: compute
         env:
           VERSION: ${{ github.event.inputs.tag }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
+          set -euo pipefail
           PREFIX="plugin-go-v"
+          if [ -z "$VERSION" ]; then
+            VERSION="$(date -u +%Y).$((10#$(date -u +%j))).${RUN_NUMBER}"
+          fi
           # Back-compat: accept the full tag form (e.g. plugin-go-v1.0.4) too, not just
           # the bare version. DO NOT REMOVE: old forks pass the full tag when releasing.
           VERSION="${VERSION#"$PREFIX"}"
@@ -76,6 +118,8 @@ jobs:
           name: "Go Plugin ${{ needs.validate.outputs.tag }}"
           body: |
             Go Plugin Release ${{ needs.validate.outputs.tag }}
+
+            Commit: ${{ github.sha }}
 
             ## Assets
             - `go-plugin-linux-amd64.tar.gz` - Linux x86_64

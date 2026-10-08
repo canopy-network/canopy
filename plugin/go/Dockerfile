@@ -23,6 +23,7 @@ RUN apk add --no-cache bash procps && mkdir -p /tmp/plugin /root/.canopy plugin/
 COPY --from=canopy-builder /canopy .
 COPY --from=plugin-builder /plugin plugin/go/go-plugin
 COPY plugin/go/pluginctl.sh plugin/go/pluginctl.sh
+COPY plugin/go/canoliq/ plugin/go/canoliq/
 RUN chmod +x plugin/go/pluginctl.sh plugin/go/go-plugin
 
 # Set plugin type for Canopy to start

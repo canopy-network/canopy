@@ -1,0 +1,61 @@
+---
+sidebar_label: Overview
+---
+
+# Tokenomics Overview
+
+**In one sentence:** canoLiq runs on a yield-bearing receipt token and a fixed-supply governance
+token, and this page is the reference for both.
+
+canoLiq manages two tokens alongside CNPY — a yield-bearing receipt and a fixed-supply
+governance token. If you want the friendly version first, read
+[The Two Tokens](../concepts/two-tokens.mdx); this page is the reference.
+
+## cCNPY — Liquid Staking Receipt
+
+cCNPY is minted against deposited CNPY at the **current exchange rate** — the very first deposit is 1:1, and thereafter the amount minted reflects how much CNPY already backs each cCNPY. It represents the holder's share of the total pooled CNPY backing.
+
+- **Minting**: Users deposit CNPY via `MessageCanoliqDeposit`, receiving cCNPY at the current rate
+- **Redemption**: Users burn cCNPY via `MessageCanoliqRedeem`, queuing a CNPY redemption
+- **Claim**: After the unstaking window, users claim matured redemptions via `MessageCanoliqClaimRedemption`
+
+The exchange rate fluctuates as staking rewards accrue:
+
+```
+exchangeRate = totalPooledCNPY / totalCCNPYSupply
+```
+
+## CPLQ — Governance Token
+
+CPLQ is a **fixed-supply** (100M) governance and value-capture token.
+
+- **Total Supply**: 100,000,000 CPLQ (100,000,000,000,000 uCPLQ with 6-decimal precision)
+- **Minting**: Entire supply minted at genesis, distributed across vesting buckets
+- **Governance**: CPLQ holders stake for governance weight; voting weight is snapshotted at proposal creation
+- **Vote-Escrow**: Locking staked CPLQ for 3–24 months multiplies voting weight (up to 4×) and boosts buyback rewards — see [Vote-Escrow](./vote-escrow.mdx)
+- **Vesting**: Allocations follow cliff + linear vesting schedules; recipients must call `MessageCPLQClaimVested` to unlock
+
+### Genesis Distribution Buckets
+
+The full 100,000,000 CPLQ supply is allocated at genesis. Mainnet allocations follow CPLQ
+Tokenomics v1.2 §2:
+
+| Bucket | BPS | Share | CPLQ | Vesting |
+|--------|-----|-------|------|---------|
+| Validators & Infrastructure | 2200 | 22% | 22,000,000 | 12-mo cliff, then 24-mo linear |
+| Community & Airdrops | 2000 | 20% | 20,000,000 | 12-mo linear, no cliff |
+| Liquidity Incentives | 1500 | 15% | 15,000,000 | 24-mo linear, no cliff |
+| DAO Treasury (canoLiq) | 1500 | 15% | 15,000,000 | Not vested — protocol-held, non-circulating |
+| Founders & Core Team | 1200 | 12% | 12,000,000 | 12-mo cliff, then 36-mo linear |
+| Strategic Partners & Integrations | 1000 | 10% | 10,000,000 | 6-mo cliff, then 12-mo linear |
+| Developer Grants & Ecosystem | 600 | 6% | 6,000,000 | Liquid at genesis |
+
+Bucket BPS must sum to `10,000`. See [Vesting](./vesting.mdx) for the schedules in full.
+
+Note that **allocated is not circulating**. Only buckets with no cliff and no vesting are liquid
+at genesis — on mainnet just Developer Grants — so genesis circulating supply is **6,000,000
+CPLQ**. Vesting allocations enter circulation as they are claimed, and the DAO Treasury tranche
+is credited to the protocol rather than a wallet, entering circulation only when governance
+spends it.
+
+Localnet and testnet ship shortened schedules; the values above are `genesis.mainnet.json`.

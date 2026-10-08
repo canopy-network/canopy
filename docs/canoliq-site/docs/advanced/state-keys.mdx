@@ -1,0 +1,71 @@
+---
+sidebar_label: State Keys
+---
+
+# State Key Layout
+
+**In one sentence:** every canoLiq record lives under a single reserved byte prefix, with a
+one-byte "domain" discriminator picking the record type — so the plugin never collides with
+Canopy core state and can build compact, unambiguous keys.
+
+All canoLiq keys live under prefix `[]byte{20}`. Canopy core reserves the contiguous
+single-byte range `1–15` (accounts, pools, governance, etc.), and writing under a
+reserved prefix makes `FSM.StateWrite` panic — so canoLiq deliberately sits at `20`,
+clear of that range. The handshake validates the prefix at startup.
+
+| Prefix | Owner |
+|--------|-------|
+| `1–15` | Canopy core (accounts, pools, governance, …) |
+| `20` | canoLiq plugin |
+
+## Subdomain Discriminators
+
+Inside the plugin prefix, each key begins with a one-byte domain discriminator (encoded
+as a `JoinLenPrefix` segment). Source of truth: `plugin/go/canoliq/state.go`.
+
+| Domain | ID | Shape | Phase |
+|--------|----|-------|-------|
+| Globals | 1 | Singleton | 1 |
+| cCNPY Balance | 2 | Per-address | 1 |
+| CPLQ Balance | 3 | Per-address | 1 |
+| Vesting Schedule | 4 | Per-address, per-id | 1 |
+| Vesting Index | 5 | Per-address | 1 |
+| Redemption | 6 | Per-address, per-id | 1 |
+| Treasury | 7 | Pool — two slots: `canopy`, `cplq` | 1 |
+| Buyback Pool | 8 | Pool scalar | 2 |
+| Validator Incentive | 9 | Per-validator (+ registry singleton) | 1 |
+| Params | 11 | Singleton | 1 |
+| CPLQ Stake | 12 | Per-address | 2 |
+| CPLQ Unstaking | 13 | Per-address, per-id | 2 |
+| Proposal | 14 | Per-id (+ index singleton) | 2 |
+| Vote | 15 | Per-proposal, per-voter | 2 |
+| Buyback Order | 16 | Per-id | 2 |
+| Treasury Spend | 17 | Per-id (+ index singleton) | 2 |
+| Multisig Approval | 18 | Per-spend, per-signer | 2 |
+| Insurance Pool | 19 | Pool scalar | 2 |
+| Stake Index | 20 | Index singleton | 2 |
+| Redemption Index | 21 | Per-address | 1 |
+| Unstake Index | 22 | Per-address | 2 |
+| Alert State | 23 | Per-alert-kind | 3 |
+| Mature Redemption | 24 | Height-ordered scan key | 1 |
+| Escrow | 25 | Singleton | 1 |
+| Tx Fee Accrual | 26 | Singleton | 1 |
+| Ejected Validator | 27 | Per-validator tombstone | 2 |
+| OTC Lock | 28 | Per-address, per-id | 3 |
+| OTC Lock Index | 29 | Per-address | 3 |
+| OTC Budget | 30 | Pool — two slots: `available`, `reserved` | 3 |
+
+:::note
+Domain `10` is intentionally unused (a gap left between the Phase-1 and later domains);
+`Params` sits at `11`. The `20` here is the *inner* Stake-Index domain, distinct from the
+outer `{20}` plugin prefix — they occupy different key positions.
+:::
+
+## Iterating state
+
+The FSM answers **point reads** by key. To enumerate records, canoLiq keeps explicit
+index domains — `Vesting Index`, `Redemption Index`, `Unstake Index`, `OTC Lock Index`,
+`Proposal` index, `Stake Index`, the treasury-spend index, and the validator registry — each
+listing the ids or addresses that belong to a set. Mature redemptions are the one range-ordered case:
+they are stored under a `Mature Redemption` key prefixed by maturity height, so the
+protocol can scan everything that has come due at or before the current block.

@@ -1,0 +1,9 @@
+{
+  "_comment": "TESTNET plugin config — set chainId to whatever Canopy testnet has free for the canoLiq committee, redemptionUnstakingBlocks to match Canopy's valParams.UnstakingBlocks (typically thousands of blocks). The plugin's safety check refuses to start if genesis.testnet.json still carries the localnet placeholder address.",
+  "profile": "testnet",
+  "chainId": 42,
+  "dataDirPath": "/tmp/plugin",
+  "genesisPath": "/app/plugin/go/canoliq/genesis.testnet.json",
+  "rpcAddress": "0.0.0.0:8587",
+  "redemptionUnstakingBlocks": 30240
+}

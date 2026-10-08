@@ -1,0 +1,67 @@
+---
+sidebar_label: Overview
+---
+
+# Transactions Overview
+
+**In one sentence:** every action you can take on canoLiq is one of a fixed list of message
+types, each with a flat fee and no scripting.
+
+A **transaction** is any action you send to the protocol. canoLiq accepts messages for five
+kinds of work: liquid staking (deposit/redeem), CPLQ operations (transfer, stake, claim),
+governance (propose, vote), treasury management (spend, approve), and OTC locks (lock, claim,
+cancel). Each message type is a distinct, explicitly supported action — there is no
+general-purpose scripting.
+
+Every transaction pays a small flat fee (default `10,000 uCNPY` per message type) and is
+validated before it touches state. New to the protocol? See
+[How It Works](../concepts/how-it-works.mdx) for the bigger picture first.
+
+## Transaction Categories
+
+### Phase 1 — Liquid Staking
+
+| Message | Description |
+|---------|-------------|
+| `MessageCanoliqDeposit` | Deposits CNPY, mints cCNPY |
+| `MessageCanoliqRedeem` | Burns cCNPY, queues redemption |
+| `MessageCanoliqClaimRedemption` | Claims matured CNPY redemption |
+| `MessageCPLQTransfer` | Transfers liquid CPLQ |
+| `MessageCPLQClaimVested` | Unlocks vested CPLQ |
+
+### Phase 2 — Governance & Treasury
+
+| Message | Description |
+|---------|-------------|
+| `MessageCPLQStake` | Locks CPLQ for governance weight |
+| `MessageCPLQUnstake` | Queues CPLQ unstaking |
+| `MessageCPLQClaimUnstake` | Claims matured CPLQ unstake |
+| `MessageCPLQProposalCreate` | Opens a governance proposal |
+| `MessageCPLQVote` | Votes on a proposal |
+| `MessageBuybackExecute` | Executes a passed buyback proposal |
+| `MessageDAOTreasurySpend` | Executes a passed treasury spend |
+| `MessageMultisigApprove` | Approves an above-threshold spend |
+
+### Phase 3 — OTC Lock Program
+
+See [OTC Locks](./otc-locks.mdx) for how these work in practice.
+
+| Message | Description |
+|---------|-------------|
+| `MessageOTCLockCreate` | Locks cCNPY for a 90- or 120-day term and reserves its CPLQ reward |
+| `MessageOTCLockClaim` | Closes a matured position: cCNPY back, plus the reserved CPLQ |
+| `MessageOTCLockCancel` | Early exit: cCNPY back, CPLQ reward forfeited to the budget |
+
+### Standard
+
+| Message | Description |
+|---------|-------------|
+| `MessageSend` | Standard CNPY transfer (accepted as drop-in compatibility) |
+
+## Transaction Lifecycle
+
+Each transaction goes through:
+
+1. **CheckTx** — Stateless validation (fee check, address validation, authorized signers)
+2. **DeliverTx** — Stateful execution (read state, apply logic, write state)
+3. **EndBlock** (if applicable) — Reward sweep, proposal tally, spend execution

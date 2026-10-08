@@ -1,0 +1,52 @@
+---
+sidebar_label: Reading Guide
+sidebar_position: 3
+---
+
+# Reading Guide
+
+:::tip In one sentence
+Pick the path that matches why you're here — newcomer, operator, or contributor — and
+follow it top to bottom.
+:::
+
+These docs serve both people new to blockchains and engineers who already know Canopy.
+Every page opens with a plain-language summary; the sections below it keep full technical
+detail. Choose a path:
+
+## I'm new to this — I just want to understand canoLiq
+
+1. [What Is Canopy?](./what-is-canopy.mdx) — the platform canoLiq runs on
+2. [What Is Liquid Staking?](./what-is-liquid-staking.mdx) — the idea canoLiq implements
+3. [How It Works](../concepts/how-it-works.mdx) — the whole protocol, end to end, no proto needed
+4. [The Two Tokens](../concepts/two-tokens.mdx) — cCNPY vs CPLQ
+5. Keep the [Glossary](../concepts/glossary.mdx) open in a tab
+
+## I want to run or deploy canoLiq
+
+1. [Getting Started → Overview](../getting-started/overview.mdx) — prerequisites and layout
+2. [Building](../getting-started/building.mdx) — build and run modes (localnet, Docker)
+3. [Committee Setup](../getting-started/committee-setup.mdx) — register as a Canopy committee
+4. [API Reference](../api/endpoints.mdx) — the read-only HTTP endpoints for monitoring
+
+## I want to transact or integrate
+
+1. [Transactions → Overview](../transactions/overview.mdx) — the message catalog
+2. [Deposit & Redeem](../transactions/deposit-redeem.mdx) and
+   [CPLQ Operations](../transactions/cplq-operations.mdx) — the CLI flows
+3. [OTC Locks](../transactions/otc-locks.mdx) — term-locking cCNPY for a CPLQ reward
+4. [Transaction Reference](../transactions/reference.mdx) — every message + fee schedule
+
+## I want to change the code
+
+1. [Tokenomics](../tokenomics/overview.mdx) and [Governance](../governance/overview.mdx) —
+   the economic and voting rules
+2. [Advanced](../advanced/buyback.mdx) — buyback, treasury, insurance, TVL cap, restaking,
+   graduation, alerts, and [state keys](../advanced/state-keys.mdx)
+3. [Protobuf Reference](../proto/messages.mdx) — the exact message and type definitions
+
+:::note Source of truth
+When a doc and the code disagree, the code wins. Protocol *numbers* (fees, distributions,
+thresholds) come from the canoLiq v1.2 papers; the plugin source under
+`plugin/go/canoliq/` is authoritative for behavior.
+:::
