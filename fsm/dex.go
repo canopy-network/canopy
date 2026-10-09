@@ -2,12 +2,13 @@ package fsm
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
 	"math/big"
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 // dexLPEvictionIDDomain separates replacement withdrawal IDs from other deterministic DEX IDs.
@@ -65,6 +66,10 @@ const dexLPEvictionIDDomain = "dex-lp-eviction-v1"
 // HandleDexBatch() initiates the 'dex' lifecycle
 func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateResult, isNested bool) (err lib.ErrorI) {
 	remoteBatch := results.DexBatch
+	// pin the fallback decision to the committed certificate batch, before the cache swap below:
+	// on sync/replay s.cache.rootDexBatch is seeded from the *next* certificate, so reading the
+	// flag off it fires the fallback a block early and diverges from canonical state
+	livenessFallback := remoteBatch.GetLivenessFallback()
 	// if nested, replace chainId with root chainId
 	if isNested {
 		// set 'chain id' as the root chain
@@ -73,8 +78,10 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 		}
 		// use the root chainId as the remote batch
 		remoteBatch = results.RootDexBatch
-		// retrieve the cached root dex batch
-		if remoteBatch != nil && !remoteBatch.LivenessFallback {
+		// for nested, the committed fallback decision lives on the root dex batch
+		livenessFallback = remoteBatch.GetLivenessFallback()
+		// cache is the batch data source only, not the decision
+		if remoteBatch != nil && !livenessFallback {
 			// use cache
 			remoteBatch = s.cache.rootDexBatch
 		}
@@ -94,7 +101,7 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 		return
 	}
 	// if executing the liveness fallback (nested chain only)
-	if remoteBatch.LivenessFallback {
+	if livenessFallback {
 		// handle the liveness fallback
 		if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {
 			return
