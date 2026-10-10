@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"strconv"
 	"strings"
@@ -129,36 +130,50 @@ func (s *Server) startRPC(router *httprouter.Router, host, port string) {
 // updatePollResults() updates the poll results based on the current token power
 func (s *Server) updatePollResults() {
 	for {
-		p := new(fsm.ActivePolls)
-		if err := func() (err error) {
-			if err = p.NewFromFile(s.config.DataDirPath); err != nil {
-				return
-			}
-
-			s.readOnlyState(0, func(sm *fsm.StateMachine) lib.ErrorI {
-				// cleanup old polls
-				p.Cleanup(sm.Height())
-				if err := p.SaveToFile(s.config.DataDirPath); err != nil {
-					return err
+		func() {
+			// The store can be closed out from under this ticker during process
+			// shutdown (this loop has no shutdown signal of its own to stop on),
+			// which makes readOnlyState() panic rather than return an error —
+			// see store.NewSMT(). Recover here rather than let a shutdown-timing
+			// race crash the whole process; this mirrors the same
+			// recover-and-log pattern already used for the per-connection
+			// goroutines in p2p.ListenForInboundPeers.
+			defer func() {
+				if r := recover(); r != nil {
+					s.logger.Errorf("recovered from panic in updatePollResults: %v, stack: %s", r, string(debug.Stack()))
+				}
+			}()
+			p := new(fsm.ActivePolls)
+			if err := func() (err error) {
+				if err = p.NewFromFile(s.config.DataDirPath); err != nil {
+					return
 				}
 
-				// convert the poll to a result
-				result, err := sm.PollsToResults(p)
-				if err != nil || len(result) == 0 {
-					return err
-				}
+				s.readOnlyState(0, func(sm *fsm.StateMachine) lib.ErrorI {
+					// cleanup old polls
+					p.Cleanup(sm.Height())
+					if err := p.SaveToFile(s.config.DataDirPath); err != nil {
+						return err
+					}
 
-				// make results available to RPC clients
-				s.pollMux.Lock()
-				s.poll = result
-				s.pollMux.Unlock()
+					// convert the poll to a result
+					result, err := sm.PollsToResults(p)
+					if err != nil || len(result) == 0 {
+						return err
+					}
+
+					// make results available to RPC clients
+					s.pollMux.Lock()
+					s.poll = result
+					s.pollMux.Unlock()
+					return nil
+				})
 				return nil
-			})
-			return nil
 
-		}(); err != nil {
-			// s.logger.Error(err.Error())
-		}
+			}(); err != nil {
+				// s.logger.Error(err.Error())
+			}
+		}()
 		time.Sleep(time.Second * 3)
 	}
 }
