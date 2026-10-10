@@ -100,7 +100,7 @@ make test
 - Code must adhere to official Go formatting (use [`gofmt`](https://golang.org/cmd/gofmt)).
 - (Optional) Use [EditorConfig](https://editorconfig.org) for consistent formatting.
 - All code should follow Go documentation/commentary guidelines.
-- PRs should be opened against the `development` branch.
+- PRs should be opened against the `main` branch.
 
 [![Pre-Release](https://img.shields.io/github/release-pre/canopy-network/canopy.svg)](https://github.com/canopy-network/canopy/releases)
 [![Contributors](https://img.shields.io/github/contributors/canopy-network/canopy.svg)](https://github.com/canopy-network/canopy/pulse)
