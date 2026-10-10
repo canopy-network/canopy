@@ -1120,7 +1120,7 @@ func (c *Client) heightIdAndPointsRequest(routeName string, height, id uint64, p
 
 func (c *Client) url(routeName, param string, admin ...bool) string {
 	// if an admin call
-	if admin != nil && admin[0] {
+	if len(admin) > 0 && admin[0] {
 		return c.adminRpcUrl + routePaths[routeName].Path + param
 	}
 	// if non admin call
