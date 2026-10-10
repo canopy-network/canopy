@@ -320,7 +320,12 @@ func (b *BFT) GetValidateMessageParams(msg *Message) (*validateMessageParams, li
 	// get variables needed to validate the messages
 	var blockHash, resultsHash []byte
 	if b.Block != nil {
-		blockHash, resultsHash = b.GetBlockHash(), b.Results.Hash()
+		blockHash = b.GetBlockHash()
+		var hashErr lib.ErrorI
+		resultsHash, hashErr = b.Results.Hash()
+		if hashErr != nil {
+			return nil, hashErr
+		}
 	}
 	return &validateMessageParams{
 		view:              b.View.Copy(),
