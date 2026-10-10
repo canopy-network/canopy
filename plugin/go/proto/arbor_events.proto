@@ -1,0 +1,243 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/ARBOR-L/ARBOR/plugin/go/contract";
+
+// ─────────────────────────────────────────────
+// Encoding-boundary / freeze events (ARCM §9.3a, AYIS §3.2/4.6, Principle 14)
+// ─────────────────────────────────────────────
+
+// EventIndexEncodingOverflowHalted fires when a BeginBlock-context TryEncodeUint128
+// call fails for B_index, S_rate, or R_fund's interest-routing leg. Sets
+// index_overflow_halted for this market only.
+message EventIndexEncodingOverflowHalted {
+  string market_id = 1;
+  string field = 2;              // "B_index" | "S_rate" | "R_fund"
+  string attempted_value = 3;    // decimal string, the value that failed to encode
+}
+
+// ─────────────────────────────────────────────
+// Insolvent-market value routing (ARCM §9.3, J1/K1)
+// ─────────────────────────────────────────────
+
+// EventInsolventMarketValueRecovered fires each time recovered value routes to
+// R_fund for an Insolvent market (interest, repay principal, or liquidation proceeds).
+message EventInsolventMarketValueRecovered {
+  string market_id = 1;
+  uint64 recovered_amount = 2;
+  string source = 3;              // "interest" | "repay_principal" | "liquidation_proceeds"
+}
+
+// ─────────────────────────────────────────────
+// Dust-clamp events (ARCM §19.2.1b, AYIS §4.4 — H4 fix: pre-clamp value, not post-clamp zero)
+// ─────────────────────────────────────────────
+
+// EventTotalSuppliedDustClamp fires when a withdrawal clamps market.total_supplied to zero
+message EventTotalSuppliedDustClamp {
+  string market_id = 1;
+  uint64 actual_withdrawn = 2;
+  uint64 pre_clamp_value = 3;     // [H4] the amount actually clamped away
+}
+
+// EventTotalSharesOutstandingDustClamp fires when a redemption clamps
+// total_shares_outstanding to zero
+message EventTotalSharesOutstandingDustClamp {
+  string market_id = 1;
+  uint64 shares_redeemed = 2;
+  uint64 pre_clamp_value = 3;     // [H4] the amount actually clamped away
+}
+
+// EventTotalBorrowedDustClamp fires when applyDebtDelta's decrement branch
+// clamps market.TotalBorrowed to zero because the decrease amount (from
+// repay or liquidation) was >= the current aggregate. Mirrors
+// EventTotalSuppliedDustClamp's fix (ARCM v3.11.1 Section III.6 / AYIS
+// Section 4.4) for the identical failure class on the borrower-side
+// aggregate: without this event, the clamp is silent and the resulting
+// total_borrowed == 0 (while a position may still show nonzero
+// debtPrincipal, per ARCM Invariant I3's drift tolerance) is
+// indistinguishable from a market with genuinely no outstanding debt.
+message EventTotalBorrowedDustClamp {
+  string market_id = 1;
+  string source = 2;              // "repay" | "liquidation"
+  uint64 decrease_amount = 3;     // the delta that triggered the clamp
+  uint64 pre_clamp_value = 4;     // the amount actually clamped away
+}
+
+// ─────────────────────────────────────────────
+// Layer 2 (reserve fund draw-down) events (ARCM §9.2 Layer 2)
+// ─────────────────────────────────────────────
+
+// EventReserveFundDrawDown fires when Layer2DrawDown fully covers a
+// bad-debt shortfall from a market's own R_fund (covered=true only --
+// binary gate, bad_debt_layer2.go; no event fires on covered=false,
+// consistent with Layer3DrawDown's identical binary-gate contract).
+// [RETROACTIVE FIX] Layer2DrawDown has existed and been live since before
+// this event was added -- this closes a real observability gap: R_fund
+// draw-downs were previously silent on-chain, unlike every other state
+// mutation in this file's Layer 4/dust-clamp/migration sections, all of
+// which already emit a named event. This is purely additive; it does not
+// change Layer2DrawDown's contract, return values, or binary-gate logic.
+message EventReserveFundDrawDown {
+  string market_id = 1;
+  uint64 bad_debt = 2;              // amount drawn -- == the full shortfall, since binary gate
+  string remaining_reserve_fund = 3; // decimal string, uint128-scale -- R_fund balance after this draw
+}
+
+// ─────────────────────────────────────────────
+// Layer 3 (protocol treasury draw-down) events (ARCM §9.2 Layer 3)
+// ─────────────────────────────────────────────
+
+// EventTreasuryDrawDown fires when Layer3DrawDownArbor or Layer3DrawDownNASM
+// fully covers a bad-debt shortfall from its respective T_fund pool
+// (covered=true only -- binary gate, bad_debt_layer3.go; no event fires on
+// covered=false, matching Layer2DrawDown's own silent-on-miss precedent).
+//
+// [REVERSED] T_fund was originally a single pool shared by Arbor and
+// NASM/NUSD; this event originally had no pool field since there was only
+// one pool. Reversed to two isolated pools (see PrefixTreasuryArbor/
+// PrefixTreasuryNASM in state_keys.go) -- the pool field below was added
+// so an off-chain observer can tell which pool fired, since bad_debt and
+// remaining_treasury alone are now ambiguous between the two.
+message EventTreasuryDrawDown {
+  string market_id = 1;            // the market whose liquidation triggered this draw
+  uint64 bad_debt = 2;              // amount drawn -- == the full shortfall, since binary gate
+  string remaining_treasury = 3;    // decimal string, uint128-scale -- T_fund balance after this draw
+  string pool = 4;                  // "arbor" | "nasm" -- which isolated T_fund pool this draw came from
+}
+
+// ─────────────────────────────────────────────
+// Layer 4 (bad-debt socialization) events (ARCM §9.2b, §9.2, AYIS §5.4.3)
+// ─────────────────────────────────────────────
+
+// EventLayer4PendingCountWarning fires when the soft backlog threshold is crossed
+message EventLayer4PendingCountWarning {
+  string market_id = 1;
+  uint32 pending_count = 2;
+  string pending_bad_debt_total = 3;  // decimal string, uint128-scale (L2-widen)
+}
+
+// EventLayer4PendingBadDebtTotalSaturated fires when the widened uint128 counter
+// would overflow (astronomically unlikely post-widen; retained as a tripwire)
+message EventLayer4PendingBadDebtTotalSaturated {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+}
+
+// EventLayer4PendingCountUnderflow fires on a decrement-below-zero attempt
+// (should never occur; defensive signal only)
+message EventLayer4PendingCountUnderflow {
+  string market_id = 1;
+}
+
+// EventDepositWithdrawBlockedDuringPendingLoss fires when deposit/withdraw/borrow
+// is rejected due to layer4_pending_count > 0
+message EventDepositWithdrawBlockedDuringPendingLoss {
+  string market_id = 1;
+  string tx_type = 2;
+}
+
+// EventLossFactorExhausted fires when bad_debt >= total_supplied_equiv, driving
+// loss_factor to zero and transitioning the market to Insolvent
+message EventLossFactorExhausted {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+  uint64 total_supplied_equiv = 3;
+}
+
+// EventBadDebtSocialization fires on every non-exhausting Layer 4 haircut application
+message EventBadDebtSocialization {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+  string new_loss_factor = 3;     // decimal string, uint128-scale, RAY-precision
+}
+
+// EventLossFactorAppliedToAlreadyInsolventMarket fires on the K3 idempotency
+// guard's early-return path (queued application against an already-Insolvent market)
+message EventLossFactorAppliedToAlreadyInsolventMarket {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+}
+
+// ─────────────────────────────────────────────
+// Migration (ARCM §12.4, M4)
+// ─────────────────────────────────────────────
+
+// EventReserveFundEncodingMigrationCompleted fires once, at the announced upgrade
+// height, after the one-time {18} uint64->uint128 zero-extension pass completes
+message EventReserveFundEncodingMigrationCompleted {
+  uint64 completed_at_height = 1;
+}
+
+// ─────────────────────────────────────────────
+// Waterfall event log (ARCM §9.2, Layers 2-4) — durable, queryable history
+// ─────────────────────────────────────────────
+
+// WaterfallEvent is a flat, purpose-built record of one bad-debt waterfall
+// step (Layer 2 reserve-fund draw, Layer 3 treasury draw, or Layer 4 lender
+// socialization), persisted to the {42} rolling log independently of the
+// DeliverTx Event already emitted for that same step (EventReserveFundDrawDown,
+// EventTreasuryDrawDown, EventBadDebtSocialization, EventLossFactorExhausted,
+// EventLossFactorAppliedToAlreadyInsolventMarket -- see those messages above).
+// Deliberately NOT a wrapper around those existing Event/anypb payloads: this
+// codebase's DeliverTx Event mechanism has no query surface of its own (Events
+// are returned in PluginDeliverResponse and consumed by Canopy core, not
+// re-readable from plugin state afterward) -- see apply_loss_factor.go's own
+// "EVENT EMISSION, RETURNED NOT EMITTED" doc comment for the identical gap
+// this message closes. A flat record avoids re-parsing four different anypb
+// payload types on every range-scan read.
+message WaterfallEvent {
+  uint64 block_height = 1;
+  string market_id = 2;
+  string layer = 3;               // "layer2" | "layer3" | "layer4"
+  string event_type = 4;          // "reserve_fund_draw_down" | "treasury_draw_down" |
+                                   // "bad_debt_socialization" | "loss_factor_exhausted" |
+                                   // "loss_factor_applied_to_already_insolvent_market"
+  uint64 bad_debt = 5;
+  string remaining_balance = 6;   // decimal string -- meaning depends on layer:
+                                   // layer2: R_fund remaining; layer3: T_fund remaining;
+                                   // layer4: new_loss_factor. Empty for the K3
+                                   // idempotency-guard event_type (no balance changed).
+  string pool = 7;                // "arbor" | "nasm" -- layer3 only, empty otherwise
+}
+
+// ─────────────────────────────────────────────
+// NASM vault liquidation (NASM Consolidated Spec Section 7)
+// ─────────────────────────────────────────────
+
+// EventNasmVaultLiquidated fires on every successful liquidate_nasm_vault
+// call -- a normal, fully-covered liquidation (collateral_seized <=
+// vault.collateral_quantity). Distinct from ARCM's EventBadDebtSocialization
+// (which means a Layer 4 lender-haircut application, a different mechanism
+// entirely) -- NASM liquidation has no waterfall step of its own yet
+// (Phase 1 scope limit, see ErrNasmLiquidationBadDebt), so this event
+// reports the liquidation itself, not a waterfall outcome.
+message EventNasmVaultLiquidated {
+  string vault_id = 1;
+  bytes liquidator = 2;
+  uint64 repay_amount = 3;
+  uint64 collateral_seized = 4;
+  uint64 remaining_vault_debt = 5;   // 0 if the vault was fully closed
+  bool vault_closed = 6;
+}
+
+// ─────────────────────────────────────────────
+// Devnet faucet (testnet-only, see MessageClaimFaucet's own doc comment
+// in arbor.proto for the fee-exemption and cooldown design rationale)
+// ─────────────────────────────────────────────
+
+// FaucetClaimEvent is emitted once per asset per claim_faucet tx (up to 4
+// events per successful call, one for each of BTC/ETH/USDC/CNPY),
+// mirroring WaterfallEvent's flat-record convention above -- avoids
+// re-parsing a nested per-asset status list on every range-scan read.
+// Emitted whether the asset was actually credited or skipped for
+// cooldown, so a full claim history (including skips) is reconstructable
+// from the event log alone without needing to separately query
+// FaucetClaimRecord for what didn't happen.
+message FaucetClaimEvent {
+  uint64 block_height     = 1;
+  bytes  address           = 2;
+  string asset_id          = 3;
+  string status             = 4;  // "credited" | "skipped_cooldown"
+  uint64 amount             = 5;  // amount credited; 0 if skipped
+  uint64 blocks_remaining   = 6;  // cooldown blocks left; 0 if credited
+}

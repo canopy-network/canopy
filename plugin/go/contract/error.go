@@ -74,3 +74,411 @@ func ErrInvalidAmount() *PluginError {
 func ErrTxFeeBelowStateLimit() *PluginError {
 	return NewError(14, DefaultModule, "tx.fee is below state limit")
 }
+
+/* Arbor-owned error codes, starting at 195 per ARCM v3.11/AYIS v1.11 combined
+   audit Part I.8 platform-grounding note (codes 1-14 are Canopy-reserved). */
+
+const ArborModule = "arbor"
+
+func ErrInvalidMarketID(err error) *PluginError {
+	return NewError(195, ArborModule, fmt.Sprintf("invalid market_id: %s", err.Error()))
+}
+
+func ErrMarketAlreadyExists(marketID string) *PluginError {
+	return NewError(196, ArborModule, fmt.Sprintf("market %q already exists", marketID))
+}
+
+func ErrInvalidAssetTier() *PluginError {
+	return NewError(197, ArborModule, "asset_tier must be 0-4 (ARCM Section 3)")
+}
+
+func ErrReserveFactorOutOfBounds() *PluginError {
+	return NewError(198, ArborModule, "reserve_factor_bps must be 200-3000 (AYIS Section 13)")
+}
+
+func ErrTreasuryCutOutOfBounds() *PluginError {
+	return NewError(242, ArborModule, "treasury_cut_bps must be 25-150")
+}
+
+func ErrUnauthorized() *PluginError {
+	return NewError(199, ArborModule, "signer is not authorized for this action")
+}
+
+func ErrMarketNotFound(marketID string) *PluginError {
+	return NewError(200, ArborModule, fmt.Sprintf("market %q not found", marketID))
+}
+
+func ErrUint128EncodingOverflow(value string) *PluginError {
+	return NewError(201, ArborModule, fmt.Sprintf("value %s exceeds uint128 range at a DeliverTx-context encode boundary", value))
+}
+
+func ErrMarketInsolvent(marketID string) *PluginError {
+	return NewError(202, ArborModule, fmt.Sprintf("market %q is insolvent (loss_factor == 0), AYIS Section 4.3 H1", marketID))
+}
+
+func ErrMarketIndexOverflowHalted(marketID string) *PluginError {
+	return NewError(203, ArborModule, fmt.Sprintf("market %q is index-overflow-halted, ARCM Section 9.3a", marketID))
+}
+
+func ErrMarketLayer4Pending(marketID string) *PluginError {
+	return NewError(204, ArborModule, fmt.Sprintf("market %q has a pending Layer 4 loss-factor application, ARCM Section 9.2b", marketID))
+}
+
+func ErrShareOverflow(marketID string, amount uint64, shares string) *PluginError {
+	return NewError(205, ArborModule, fmt.Sprintf("market %q: shares value %s for amount %d exceeds uint64 range, AYIS Section 4.3 J2", marketID, shares, amount))
+}
+
+func ErrTotalSharesOverflow(marketID string, current uint64, shares string) *PluginError {
+	return NewError(206, ArborModule, fmt.Sprintf("market %q: adding shares %s to total_shares_outstanding %d would overflow uint64, AYIS Section 4.3 L1", marketID, shares, current))
+}
+
+func ErrTokenOverflow(marketID string, shares uint64, tokens string) *PluginError {
+	return NewError(207, ArborModule, fmt.Sprintf("market %q: token value %s for shares %d exceeds uint64 range, AYIS Section 4.4 J2", marketID, tokens, shares))
+}
+
+// ErrCollateralSeizedOverflow guards liquidate_position.go's
+// collateralSeized big.Int -> uint64 cast (ARCM Section 8). Reachable if
+// an oracle-submitted debtPrice/collateralPrice ratio is extreme enough
+// to push ceil(RepayAmount * debtPrice * LIFBps / (collateralPrice *
+// 10000)) past 64 bits -- session finding, previously unguarded.
+func ErrCollateralSeizedOverflow(marketID string, repayAmount uint64, collateralSeized string) *PluginError {
+	return NewError(239, ArborModule, fmt.Sprintf("market %q: collateralSeized value %s for repayAmount %d exceeds uint64 range, ARCM Section 8", marketID, collateralSeized, repayAmount))
+}
+
+// ErrBadDebtNativeOverflow guards liquidate_position.go's badDebtNative
+// big.Int -> uint64 cast (ARCM Section 9.2, Layer 2 bad-debt path).
+// Reachable under the same extreme oracle-price-ratio condition as
+// ErrCollateralSeizedOverflow above -- session finding, previously
+// disclosed as unguarded rather than fixed.
+func ErrBadDebtNativeOverflow(marketID string, badDebtCollateral string, badDebtNative string) *PluginError {
+	return NewError(240, ArborModule, fmt.Sprintf("market %q: badDebtNative value %s for badDebtCollateral %s exceeds uint64 range, ARCM Section 9.2", marketID, badDebtNative, badDebtCollateral))
+}
+
+func ErrTotalSuppliedOverflow(marketID string, current uint64, amount uint64) *PluginError {
+	return NewError(208, ArborModule, fmt.Sprintf("market %q: adding amount %d to total_supplied %d would overflow uint64, ARCM Section 19.2.1b M2", marketID, amount, current))
+}
+
+func ErrInsufficientShares(marketID string, have uint64, want uint64) *PluginError {
+	return NewError(209, ArborModule, fmt.Sprintf("market %q: position has %d shares, cannot redeem %d", marketID, have, want))
+}
+
+func ErrLenderPositionNotFound(marketID string, addr string) *PluginError {
+	return NewError(210, ArborModule, fmt.Sprintf("no lender position for address %s in market %q", addr, marketID))
+}
+
+func ErrDepositBelowMinimum(amount uint64) *PluginError {
+	return NewError(211, ArborModule, fmt.Sprintf("deposit amount %d is below MIN_DEPOSIT, AYIS Section 13", amount))
+}
+
+func ErrInsufficientSubmitters(marketID string, have, want int) *PluginError {
+	return NewError(212, ArborModule, fmt.Sprintf("market %q: authorized_submitters has %d entries, need at least %d (ARCM Section 10, MinReporters)", marketID, have, want))
+}
+
+func ErrAssetNotInMarket(marketID, assetID string) *PluginError {
+	return NewError(213, ArborModule, fmt.Sprintf("market %q does not reference asset %q as either its collateral or debt asset (ARCM Section 10)", marketID, assetID))
+}
+
+func ErrCollateralOverflow(marketID string, current uint64, amount uint64) *PluginError {
+	return NewError(214, ArborModule, fmt.Sprintf("market %q: adding amount %d to collateral_quantity %d would overflow uint64", marketID, amount, current))
+}
+
+func ErrInvalidAssetID(err error) *PluginError {
+	return NewError(215, ArborModule, fmt.Sprintf("invalid asset_id: %s", err.Error()))
+}
+
+func ErrTierOutOfRange(tier uint32) *PluginError {
+	return NewError(216, ArborModule, fmt.Sprintf("tier %d invalid: set_asset_tier accepts 0-3 only (tier 4/Blacklisted cannot be set via this transaction, ARCM Section 3)", tier))
+}
+
+func ErrAssetTierNotFound(assetID string) *PluginError {
+	return NewError(217, ArborModule, fmt.Sprintf("asset %q has no tier registry entry, cannot be used as collateral (ARCM Section 3, state_keys.go PrefixAssetTier)", assetID))
+}
+
+func ErrNoCollateralPosition(marketID string, addr []byte) *PluginError {
+	return NewError(218, ArborModule, fmt.Sprintf("no collateral position for address %x in market %q -- deposit_collateral must run before borrow", addr, marketID))
+}
+
+func ErrPriceUnavailable(marketID, assetID string) *PluginError {
+	return NewError(219, ArborModule, fmt.Sprintf("market %q: no resolvable oracle price for asset %q (ARCM Section 10, quorum/freshness not met)", marketID, assetID))
+}
+
+func ErrExceedsMaxLTV(marketID string, requestedDebt, maxBorrow uint64) *PluginError {
+	return NewError(220, ArborModule, fmt.Sprintf("market %q: requested total debt %d exceeds max-LTV borrow capacity %d (ARCM Section 4)", marketID, requestedDebt, maxBorrow))
+}
+
+func ErrTotalBorrowedOverflow(marketID string, current uint64, amount uint64) *PluginError {
+	return NewError(221, ArborModule, fmt.Sprintf("market %q: adding amount %d to total_borrowed/debt %d would overflow uint64", marketID, amount, current))
+}
+
+func ErrBorrowerPositionNotFound(marketID string, addr []byte) *PluginError {
+	return NewError(222, ArborModule, fmt.Sprintf("no borrower position for address %x in market %q", addr, marketID))
+}
+
+func ErrTotalBorrowedUnderflow(marketID string, current uint64, amount uint64) *PluginError {
+	return NewError(223, ArborModule, fmt.Sprintf("market %q: subtracting repaid amount %d from total_borrowed %d would underflow", marketID, amount, current))
+}
+
+func ErrMarketIndexNotInitialized(marketID string) *PluginError {
+	return NewError(224, ArborModule, fmt.Sprintf("market %q: borrow index ({25}) not initialized -- create_market invariant violated", marketID))
+}
+
+func ErrAccountBalanceOverflow(addr []byte, current uint64, amount uint64) *PluginError {
+	return NewError(225, ArborModule, fmt.Sprintf("account %x: adding amount %d to balance %d would overflow uint64", addr, amount, current))
+}
+
+func ErrInt64CastOverflow(context string, value uint64) *PluginError {
+	return NewError(226, ArborModule, fmt.Sprintf("%s: value %d exceeds math.MaxInt64, cannot be safely represented as a signed delta (ARCM Section 19.3, C1)", context, value))
+}
+
+func ErrTotalBorrowedOverflowCentralized(marketID string, current uint64, increase uint64) *PluginError {
+	return NewError(227, ArborModule, fmt.Sprintf("market %q: applyDebtDelta increase %d would overflow total_borrowed %d", marketID, increase, current))
+}
+
+func ErrInsufficientCollateral(marketID string, have uint64, want uint64) *PluginError {
+	return NewError(228, ArborModule, fmt.Sprintf("market %q: position has %d collateral, cannot withdraw %d", marketID, have, want))
+}
+
+func ErrWithdrawalExceedsHF(marketID string, resultingHFScaled string) *PluginError {
+	return NewError(229, ArborModule, fmt.Sprintf("market %q: withdrawal would leave health factor at %s (scaled, liquidatable at <=1000000), ARCM Section 5", marketID, resultingHFScaled))
+}
+
+func ErrMarketPoolOverflow(marketID string, current uint64, amount uint64) *PluginError {
+	return NewError(230, ArborModule, fmt.Sprintf("market %q: adding amount %d to escrow pool balance %d would overflow uint64", marketID, amount, current))
+}
+
+func ErrRepayExceedsDebt(marketID string, currentDebt uint64, repayAmount uint64) *PluginError {
+	return NewError(231, ArborModule, fmt.Sprintf("market %q: repay amount %d exceeds current debt %d -- no escrow exists to refund an overpayment, resubmit with amount <= current debt", marketID, repayAmount, currentDebt))
+}
+
+// ErrAssetBalanceOverflow: devnet faucet credit path. Same checked-add
+// discipline as ErrMarketPoolOverflow above -- see creditAssetBalanceAmount
+// in custody_arith.go.
+func ErrAssetBalanceOverflow(assetID string, addr []byte, current uint64, amount uint64) *PluginError {
+	return NewError(477, ArborModule, fmt.Sprintf("asset %q, address %x: adding amount %d to balance %d would overflow uint64", assetID, addr, amount, current))
+}
+
+func ErrPositionNotLiquidatable(marketID string, hfScaled string) *PluginError {
+	return NewError(232, ArborModule, fmt.Sprintf("market %q: position health factor %s (scaled) is above the liquidation threshold (<=1000000), ARCM Section 5", marketID, hfScaled))
+}
+
+func ErrRepayExceedsCloseFactor(marketID string, requested, maxAllowed uint64) *PluginError {
+	return NewError(233, ArborModule, fmt.Sprintf("market %q: liquidation repay amount %d exceeds close-factor cap %d for this position's HF tier, ARCM Section 7", marketID, requested, maxAllowed))
+}
+
+func ErrLiquidationBadDebt(marketID string, badDebt uint64) *PluginError {
+	return NewError(234, ArborModule, fmt.Sprintf("market %q: liquidation leaves bad debt %d (debt-asset-native units) -- Layer 2 (reserve fund) checked and insufficient to cover; Layer 3 (protocol treasury) and Layer 4 (lender socialization) not yet implemented, ARCM Section 9.2", marketID, badDebt))
+}
+
+func ErrMarketPaused(marketID string) *PluginError {
+	return NewError(235, ArborModule, fmt.Sprintf("market %q: paused by governance/risk-committee action -- no deposit/withdraw/borrow/repay/collateral/liquidation activity permitted until resumed, ARCM Section 13/16", marketID))
+}
+
+func ErrMarketDeprecated(marketID string) *PluginError {
+	return NewError(236, ArborModule, fmt.Sprintf("market %q: permanently deprecated (ARCM Section 19.2) -- no new deposits, borrows, or collateral additions permitted; existing positions may still withdraw, repay, or be liquidated", marketID))
+}
+
+func ErrMarketNotPaused(marketID string) *PluginError {
+	return NewError(237, ArborModule, fmt.Sprintf("market %q: not currently paused, nothing to resume", marketID))
+}
+
+// [NEW] ErrSelfLiquidation -- liquidator and borrower are the same address.
+// Without this guard, a borrower could liquidate their own underwater
+// position and collect the LIF bonus (ARCM Section 8) risk-free -- that
+// bonus exists to compensate an INDEPENDENT liquidator for monitoring and
+// execution risk a self-liquidating borrower never bears. repay.go already
+// covers the legitimate case of a borrower closing their own position
+// without a bonus.
+func ErrSelfLiquidation() *PluginError {
+	return NewError(238, ArborModule, "liquidator and borrower_address must not be the same address -- self-liquidation is not permitted; use repay to close your own position instead")
+}
+
+// ErrScaledDebtOverflow guards ScaledDebt()'s numerator big.Int -> uint64
+// cast (AYIS Section 6, ARCM Section 2.2's mandatory scaled-debt rule).
+// Previously disclosed as an unguarded, deliberate carve-out in
+// scaled_debt.go's own doc comment (no amplification path analogous to
+// MintShares()/RedeemShares()/SumLenderBalancesInMarket(), per AYIS
+// v1.11 Section 10.6) -- closed here per Arbor Handoff Part 2, item 2.
+func ErrScaledDebtOverflow(marketID string, debtPrincipal uint64, scaledDebt string) *PluginError {
+	return NewError(241, ArborModule, fmt.Sprintf("market %q: scaled debt value %s for debtPrincipal %d exceeds uint64 range, AYIS Section 6", marketID, scaledDebt, debtPrincipal))
+}
+
+// ErrVaultAlreadyExists guards mint_nusd's vault_id collision check --
+// NASM vaults, like Markets (ErrMarketAlreadyExists), must never be
+// silently overwritten by a second create with the same identifier, which
+// would corrupt an existing vault's real collateral_quantity/nusd_principal
+// with a fresh vault's initial values.
+func ErrVaultAlreadyExists(vaultID string) *PluginError {
+	return NewError(243, ArborModule, fmt.Sprintf("NASM vault %q already exists", vaultID))
+}
+
+// ErrNasmTierIneligible guards mint_nusd's collateral eligibility check
+// (NASM Consolidated Spec Section 3.1). Returned when ResolveNasmTier
+// reports found=false -- covering three distinct upstream cases (no {29}
+// registry entry, ARCM Tier 2/3, or an asset that structurally never
+// appears in {29} as Tier 0/1, e.g. RWA fractions), all correctly meaning
+// "not eligible to back NUSD minting." See nasm_tier.go's own doc comment
+// on ResolveNasmTier for the full three-case breakdown.
+func ErrNasmTierIneligible(assetID string) *PluginError {
+	return NewError(244, ArborModule, fmt.Sprintf("asset %q is not eligible NASM collateral (must be ARCM Tier 0 or Tier 1, NASM Spec Section 3.1)", assetID))
+}
+
+// ErrNasmHealthFactorTooLow guards mint_nusd's post-mint HF_n check (NASM
+// Consolidated Spec Section 4.1 Step 4, Section 2.2's HF_n formula). A
+// vault must have HF_n > 1.0 immediately after minting -- mirrors ARCM's
+// ErrExceedsMaxLTV in spirit (both reject a request that would leave a
+// position under-collateralized relative to its liquidation threshold),
+// but NASM's own error since the underlying formula, tier table, and
+// liquidation threshold (LTV_n_liq, not ARCM's LTVLiqBps) are NASM-owned.
+func ErrNasmHealthFactorTooLow(vaultID string, requestedNusd uint64, maxNusdAtHF1 string) *PluginError {
+	return NewError(245, ArborModule, fmt.Sprintf("NASM vault %q: requested nusd_amount %d would leave HF_n <= 1.0; max mintable at HF_n > 1.0 is approximately %s NUSD", vaultID, requestedNusd, maxNusdAtHF1))
+}
+
+// ErrInvalidVaultID wraps a ValidateVaultID failure, matching
+// ErrInvalidMarketID/ErrInvalidAssetID's own wrap-and-forward pattern
+// exactly.
+func ErrInvalidVaultID(err error) *PluginError {
+	return NewError(246, ArborModule, fmt.Sprintf("invalid vault_id: %s", err.Error()))
+}
+
+// ErrNasmPriceUnavailable is mint_nusd's own oracle-unavailable error --
+// deliberately NOT a reuse of ErrPriceUnavailable, whose message hardcodes
+// "market %q", which would be actively misleading for a NASM vault_id (a
+// vault is not a market). Same underlying condition (ARCM Section 10's
+// permissioned price cache has no resolvable entry for this asset), NASM's
+// own wording.
+func ErrNasmPriceUnavailable(vaultID, assetID string) *PluginError {
+	return NewError(247, ArborModule, fmt.Sprintf("NASM vault %q: no resolvable oracle price for asset %q (ARCM Section 10, quorum/freshness not met)", vaultID, assetID))
+}
+
+// ErrScaledNusdDebtOverflow guards ScaledNusdDebt()'s numerator big.Int ->
+// uint64 cast, mirroring ErrScaledDebtOverflow's own guard for ARCM's
+// ScaledDebt() exactly (same cast-safety discipline, NASM's own vault_id
+// context instead of market_id).
+func ErrScaledNusdDebtOverflow(vaultID string, nusdPrincipal uint64, scaledDebt string) *PluginError {
+	return NewError(248, ArborModule, fmt.Sprintf("NASM vault %q: scaled NUSD debt value %s for nusd_principal %d exceeds uint64 range, NASM Consolidated Spec Section 6.2", vaultID, scaledDebt, nusdPrincipal))
+}
+
+// ErrNasmVaultNotFound guards burn_nusd's vault existence check --
+// distinct from ErrVaultAlreadyExists (mint_nusd's collision guard), the
+// opposite condition.
+func ErrNasmVaultNotFound(vaultID string) *PluginError {
+	return NewError(249, ArborModule, fmt.Sprintf("NASM vault %q not found", vaultID))
+}
+
+// ErrNotVaultOwner guards burn_nusd's owner-scoped-only check (NASM
+// Consolidated Spec Section 4.2: "Verify sender is the vault_id owner" --
+// Section 5's entire peg-defense rationale depends on burn_nusd never
+// being callable by anyone other than the vault's current owner; there is
+// no aggregate-pool or third-party-redemption path in this design at all).
+func ErrNotVaultOwner(vaultID string) *PluginError {
+	return NewError(250, ArborModule, fmt.Sprintf("NASM vault %q: sender is not the vault owner -- burn_nusd is owner-scoped only, NASM Spec Section 4.2", vaultID))
+}
+
+// ErrNusdInsufficientBalance guards burn_nusd's balance check (NASM
+// Consolidated Spec Section 4.2 Step 2: "Verify sender holds >=
+// nusd_amount NUSD"). Deliberately its own error rather than reusing the
+// generic ErrInsufficientFunds() -- that error carries no NUSD-specific
+// context (vault_id, requested amount, actual balance), and this
+// project's own convention is to prefer a context-rich error at the
+// specific call site where one is easy to provide (see
+// ErrNasmPriceUnavailable's own doc comment on the identical reasoning
+// for not reusing ErrPriceUnavailable).
+func ErrNusdInsufficientBalance(vaultID string, requested, available uint64) *PluginError {
+	return NewError(251, ArborModule, fmt.Sprintf("NASM vault %q: requested burn amount %d exceeds sender's NUSD balance %d", vaultID, requested, available))
+}
+
+// ErrSelfLiquidationNasm mirrors ErrSelfLiquidation's exact reasoning
+// (liquidate_position.go), applied to NASM vaults: without this guard, a
+// vault owner could liquidate their own underwater vault and collect the
+// LIF bonus (NASM Spec Section 7's reused LIF mechanism) risk-free -- a
+// bonus that exists to compensate an INDEPENDENT liquidator for
+// monitoring/execution risk a self-liquidating owner never bears. A vault
+// owner who wants to close their own underwater position without a bonus
+// already has burn_nusd for that.
+func ErrSelfLiquidationNasm(vaultID string) *PluginError {
+	return NewError(252, ArborModule, fmt.Sprintf("NASM vault %q: liquidator and vault owner must not be the same address -- self-liquidation is not permitted; use burn_nusd to close your own position instead", vaultID))
+}
+
+// ErrNasmVaultNotLiquidatable mirrors ErrPositionNotLiquidatable
+// (liquidate_position.go), NASM's own vault_id context instead of
+// market_id, and NASM's own HF_n formula/threshold (identical numeric
+// scale and boundary as ARCM's HF, per NASM Spec Section 2.2's structural
+// reuse of ARCM's HF formula).
+func ErrNasmVaultNotLiquidatable(vaultID string, hfScaled string) *PluginError {
+	return NewError(253, ArborModule, fmt.Sprintf("NASM vault %q: health factor %s (scaled) is above the liquidation threshold (<=1000000), NASM Spec Section 2.2", vaultID, hfScaled))
+}
+
+// ErrRepayExceedsCloseFactorNasm mirrors ErrRepayExceedsCloseFactor
+// (liquidate_position.go) exactly -- NASM Spec Section 7: "Dynamic Close
+// Factor -- Unchanged -- same 3-tier HF-based CF schedule applies to
+// NUSD vaults," so the underlying cap logic is identical, just NASM's
+// own vault_id context.
+func ErrRepayExceedsCloseFactorNasm(vaultID string, requested, maxAllowed uint64) *PluginError {
+	return NewError(254, ArborModule, fmt.Sprintf("NASM vault %q: repay amount %d exceeds close-factor-capped maximum %d, NASM Spec Section 7", vaultID, requested, maxAllowed))
+}
+
+// ErrNasmLiquidationBadDebt guards liquidate_nusd_vault's Phase 1 scope
+// limit: a liquidation whose collateral_seized would exceed the vault's
+// own locked collateral_quantity (a bad-debt scenario) is hard-rejected
+// rather than partially seizing and leaving an unaccounted shortfall.
+// DISCLOSED, NOT SILENT -- mirrors the exact scope-limiting pattern
+// liquidate_position.go's own (now-corrected) history shows ARCM took
+// before Layer 2-4 existed: NASM's own bad-debt waterfall (R_nusd draw-
+// down at {41}, Arbor treasury fallback per NASM Spec Section 11.2) is
+// not yet wired into any liquidation path. Given NASM's substantially
+// wider safety margins (65-70%/55-62% LTV vs ARCM's 80-85%/75-82%), this
+// scenario is expected to be rare in practice, but is a real, reachable
+// code path, not a theoretical one -- must not be silently mishandled.
+// ErrNasmLiquidationBadDebt is returned when a NASM vault liquidation's
+// required collateral seizure exceeds the vault's own locked collateral
+// AND Layer3DrawDownNASM (R_nusd draw-down, {41}) could not fully cover
+// the shortfall -- the all-or-nothing gate's covered=false outcome.
+// [MESSAGE FIXED] Previously said "NASM's own bad-debt waterfall is not
+// yet wired into liquidation" -- true when this error was first written,
+// no longer true as of Layer3DrawDownNASM's wiring into
+// liquidate_nasm_vault.go's Step 7. This is now the CORRECT, expected
+// response when R_nusd's own balance is insufficient to cover a
+// particular shortfall (Layer 4 system-wide socialization not yet built
+// for NASM, NASM Spec Section 11.2), not a statement that the waterfall
+// itself is missing.
+func ErrNasmLiquidationBadDebt(vaultID string, collateralSeized, collateralAvailable uint64) *PluginError {
+	return NewError(255, ArborModule, fmt.Sprintf("NASM vault %q: liquidation would require seizing %d collateral but only %d is locked -- R_nusd (Layer 3) could not fully cover the shortfall, and NASM Layer 4 (system-wide socialization) is not yet built, NASM Spec Section 11.2", vaultID, collateralSeized, collateralAvailable))
+}
+
+// ErrInvalidNasmTier guards applyTierBackingDelta/CheckTierConcentrationCap
+// (nasm_tier_backing.go) against a nasmTier value outside {0, 1} --
+// unreachable in practice given ResolveNasmTier's own contract (nasm_tier.go
+// only ever returns 0, 1, or found=false), guarded explicitly rather than
+// assumed, per this project's standard.
+func ErrInvalidNasmTier(nasmTier uint8) *PluginError {
+	return NewError(256, ArborModule, fmt.Sprintf("invalid NASM tier %d: must be 0 (N-0) or 1 (N-1)", nasmTier))
+}
+
+// ErrNasmTierBackingOverflow guards applyTierBackingDelta's increase branch
+// (nasm_tier_backing.go), mirroring ErrTotalBorrowedOverflowCentralized's
+// identical uint64-overflow guard shape for debt_delta.go's applyDebtDelta.
+func ErrNasmTierBackingOverflow(nasmTier uint8, current, increase uint64) *PluginError {
+	return NewError(257, ArborModule, fmt.Sprintf("NASM tier %d backing overflow: current=%d, increase=%d would exceed uint64 range", nasmTier, current, increase))
+}
+
+// ErrNasmTierConcentrationCapExceeded is returned when a mint_nusd would
+// push a single NASM tier's share of total NUSD supply above
+// MaxTierShareBps (NASM Spec Section 3.3). newTierTotal/newGrandTotal are
+// included as decimal strings (via big.Int.String()) rather than the raw
+// uint64/*big.Int values themselves, matching this codebase's established
+// convention for surfacing big.Int state in error messages (e.g.
+// ErrBadDebtNativeOverflow's identical .String() usage).
+func ErrNasmTierConcentrationCapExceeded(nasmTier uint8, newTierTotal, newGrandTotal string, maxTierShareBps uint64) *PluginError {
+	return NewError(258, ArborModule, fmt.Sprintf("NASM tier %d mint rejected: would bring tier backing to %s of %s total NUSD supply, exceeding the %d bps (%.1f%%) per-tier concentration cap, NASM Spec Section 3.3", nasmTier, newTierTotal, newGrandTotal, maxTierShareBps, float64(maxTierShareBps)/100))
+}
+
+// ErrOracleUntrustworthy is returned when OracleUntrustworthy() (
+// oracle_untrustworthy.go) returns true for a given collateral asset,
+// gating burn_nusd or liquidate_nasm_vault per NASM Consolidated Spec
+// Section 9.2. vaultID and assetID are both included so the specific
+// vault AND the specific asset that triggered the gate are both visible
+// in the error without a caller needing to cross-reference the vault
+// record separately.
+func ErrOracleUntrustworthy(vaultID string, assetID string) *PluginError {
+	return NewError(259, ArborModule, fmt.Sprintf("NASM vault %q: oracle for collateral asset %q is untrustworthy (stale beyond %d blocks, circuit breaker active, or emergency mode active) -- NASM Spec Section 9.2", vaultID, assetID, EmergencyThresholdBlocks))
+}

@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"github.com/canopy-network/go-plugin/contract"
+	"github.com/ARBOR-L/ARBOR/plugin/go/contract"
 	"os"
 	"os/signal"
 	"syscall"

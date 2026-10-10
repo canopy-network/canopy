@@ -1,0 +1,97 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/ARBOR-L/ARBOR/plugin/go/contract";
+
+// MarketStatus mirrors ARCM's market.status enum (Section 9, Section 13, Section 16).
+enum MarketStatus {
+  ACTIVE = 0;
+  PAUSED = 1;      // governance action (ARCM Section 13)
+  INSOLVENT = 2;   // loss_factor reached zero (AYIS Section 5.4.3, I11)
+  DEPRECATED = 3;  // permanently retired (ARCM Section 19.2)
+}
+
+// Market is the {16} record: core market metadata plus the flags and counters
+// ARCM's bad-debt waterfall and freeze mechanism operate on. See ARCM v3.11.1
+// Section 19.1 for the canonical field set this implements.
+message Market {
+  string market_id = 1;
+  string collateral_asset_id = 2;
+  string debt_asset_id = 3;
+  uint32 asset_tier = 4;                    // 0-4, ARCM Section 4 LTV table
+  uint64 reserve_factor_bps = 5;            // AYIS Section 13
+  bytes  creator = 6;
+
+  MarketStatus status = 7;
+  bool   index_overflow_halted = 8;         // ARCM Section 9.3a
+
+  uint32 layer4_pending_count = 9;          // ARCM Section 9.2b
+  bytes  layer4_pending_bad_debt_total = 10; // uint128, EncodeUint128 raw bytes (widened v3.11, L2-widen)
+
+  uint64 total_borrowed = 11;               // guarded via applyDebtDelta, C1
+  uint64 total_supplied = 12;               // ARCM Section 19.2.1b
+
+  uint64 last_accrual_block = 13;           // AYIS Section 7 Step 11
+
+  repeated bytes authorized_submitters = 14; // ARCM Section 10 permissioned
+                                              // price feed; trusted addresses
+                                              // for update_price on this
+                                              // market's two assets (shared
+                                              // list). Set once at
+                                              // create_market, immutable --
+                                              // no governance add/remove path
+                                              // exists yet.
+}
+
+// BorrowerPosition is the {17} record (ARCM Section 6, AYIS Section 6).
+message BorrowerPosition {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 collateral_quantity = 3;
+  uint64 debt_principal = 4;
+  bytes  borrow_index_at_open = 5;  // uint128, EncodeUint128 raw bytes -- B_index snapshot at open
+}
+
+// PriceRecord is one {19} entry, keyed by (asset_id, submitter) --
+// ARCM Section 10's permissioned price feed. Multiple independent
+// submitters each write their own record per asset; quorum (MIN_REPORTERS)
+// and deviation (30% circuit breaker) are resolved by aggregating across
+// all of an asset's records at READ time, not by any single record being
+// authoritative on its own. block_height is chain-assigned at write time
+// (not submitter-supplied) for Section 11's staleness checks.
+message PriceRecord {
+  string asset_id = 1;
+  bytes  submitter = 2;
+  uint64 price = 3;          // USD per unit, x1e8
+  uint32 confidence_bps = 4;
+  uint64 block_height = 5;
+}
+
+// LenderPosition is the {24} record (AYIS Section 5.1).
+message LenderPosition {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 shares = 3;
+  uint64 deposit_block = 4;
+}
+
+// LossFactorQueueEntry is a {28} record (AYIS Section 12.4, ARCM v3.11.1
+// Section 9.3b Rule 3). One entry per market_id: a backstop-triggered
+// Layer 4 exhaustion enqueues a bad_debt amount here (via
+// EnqueueLossFactorApplication) rather than calling ApplyLossFactor()
+// synchronously, so BeginBlock's ProcessLossFactorQueue() can drain it
+// later in the same call under Section 12.3's Accrual Ordering Contract
+// (AccrueInterest MUST run before this queue drains). A market has at
+// most one outstanding entry at a time -- K3's idempotency guard in
+// ApplyLossFactor() means a second enqueue against an already-Insolvent
+// market is a no-op at drain time, not a second queued entry, so this
+// message does not need its own sequence/ordering field.
+message LossFactorQueueEntry {
+  string market_id = 1;
+  uint64 bad_debt = 2;
+  uint64 enqueued_block = 3;  // observability only; not read by any
+                              // drain-order logic (drain order is
+                              // unspecified/immaterial per AYIS 5.4.3,
+                              // MAX_LOSS_FACTOR_APPLICATIONS_PER_BLOCK
+                              // bounds work per block, not by age)
+}
