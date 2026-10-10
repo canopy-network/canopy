@@ -223,15 +223,15 @@ func (x *AggregateSignature) LogNonSigners(validatorList *ConsensusValidators, p
 	// if an error occurred during the conversion
 	if err != nil {
 		// exit with error
+		logger.Errorf("LogNonSigners: could not build the validator set: %s", err.Error())
 		return
 	}
 	// create a copy of the multi-public-key from the validator set
 	key := vs.MultiKey.Copy()
 	// set the 'who signed' bitmap in a copy of the key
 	if e := key.SetBitmap(x.Bitmap); e != nil {
-		// convert the error to a lib.ErrorI
-		err = ErrInvalidSignerBitmap(e)
 		// exit with error
+		logger.Errorf("LogNonSigners: %s", ErrInvalidSignerBitmap(e).Error())
 		return
 	}
 	producerAddress, producerNetAddress := "", ""
@@ -252,9 +252,8 @@ func (x *AggregateSignature) LogNonSigners(validatorList *ConsensusValidators, p
 		signed, er := key.SignerEnabledAt(i)
 		// if an error occurred during this check
 		if er != nil {
-			// convert the error to a lib.ErrorI
-			err = ErrInvalidSignerBitmap(er)
 			// exit
+			logger.Errorf("LogNonSigners: %s", ErrInvalidSignerBitmap(er).Error())
 			return
 		}
 		// if so, add to the pubkeys and add to the power
