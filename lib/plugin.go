@@ -40,7 +40,8 @@ type Plugin struct {
 	pending       map[uint64]chan isPluginToFSM_Payload // the outstanding requests from the FSM
 	requestFSMs   map[uint64]PluginCompatibleFSM        // maps request IDs to their FSM context for concurrent operations
 	queryProvider PluginQueryProvider                   // serves detached, read-only state queries from the plugin
-	l             sync.Mutex                            // thread safety
+	l             sync.Mutex                            // thread safety for pending maps
+	writeMu       sync.Mutex                            // serializes length-prefixed socket writes
 	log           LoggerI                               // the logger associated with the plugin
 	timeout       time.Duration                         // plugin request timeout
 }
@@ -667,6 +668,9 @@ func (p *Plugin) receiveProtoMsg(ptr proto.Message) ErrorI {
 
 // sendLengthPrefixed() sends a message that is prefix by length through a tcp connection
 func (p *Plugin) sendLengthPrefixed(bz []byte) ErrorI {
+	// serialize writes: handlers send concurrently after unlocking p.l
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
 	// debug log length prefixed send start
 	p.log.Debugf("sendLengthPrefixed() sending %d bytes", len(bz))
 	// create the length prefix (4 bytes, big endian)
