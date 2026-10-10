@@ -231,6 +231,9 @@ type genesisState struct {
 	Supply        *Supply             `json:"supply"`
 	OrderBooks    *lib.OrderBooks     `protobuf:"bytes,7,opt,name=order_books,json=orderBooks,proto3" json:"orderBooks,omitempty"`
 	DoubleSigners []*lib.DoubleSigner `protobuf:"bytes,6,rep,name=double_signers,json=doubleSigners,proto3" json:"doubleSigners,omitempty"` // only used for export
+	// RetiredCommittees must be serialized so that retired (non-subsidized) committees survive a
+	// genesis export/import round trip; otherwise they silently become live again on restart.
+	RetiredCommittees []uint64 `json:"retiredCommittees,omitempty"`
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the GenesisState object
@@ -240,15 +243,16 @@ func (x *GenesisState) MarshalJSON() ([]byte, error) {
 		t = time.UnixMicro(int64(x.Time)).Format(time.DateTime)
 	}
 	return json.Marshal(genesisState{
-		Time:          t,
-		Pools:         x.Pools,
-		Accounts:      x.Accounts,
-		NonSigners:    x.NonSigners,
-		Validators:    x.Validators,
-		Params:        x.Params,
-		Supply:        x.Supply,
-		OrderBooks:    x.OrderBooks,
-		DoubleSigners: x.DoubleSigners,
+		Time:              t,
+		Pools:             x.Pools,
+		Accounts:          x.Accounts,
+		NonSigners:        x.NonSigners,
+		Validators:        x.Validators,
+		Params:            x.Params,
+		Supply:            x.Supply,
+		OrderBooks:        x.OrderBooks,
+		DoubleSigners:     x.DoubleSigners,
+		RetiredCommittees: x.RetiredCommittees,
 	})
 }
 
@@ -268,5 +272,6 @@ func (x *GenesisState) UnmarshalJSON(bz []byte) (err error) {
 	x.Params, x.Pools, x.Supply = ptr.Params, ptr.Pools, ptr.Supply
 	x.Accounts, x.Validators, x.NonSigners = ptr.Accounts, ptr.Validators, ptr.NonSigners
 	x.OrderBooks, x.DoubleSigners = ptr.OrderBooks, ptr.DoubleSigners
+	x.RetiredCommittees = ptr.RetiredCommittees
 	return
 }
