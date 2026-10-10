@@ -197,7 +197,7 @@ func (s *StateMachine) indexerBlob(height uint64, stateKeys [][]byte, selectiveS
 		return nil, err
 	}
 	// retrieve next dex batches
-	nextDexBatches, err := sm.IterateAndAppend(lib.JoinLenPrefix(dexPrefix, nextBatchSement))
+	nextDexBatches, err := sm.IterateAndAppend(lib.JoinLenPrefix(dexPrefix, nextBatchSegment))
 	if err != nil {
 		return nil, err
 	}

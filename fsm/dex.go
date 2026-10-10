@@ -993,7 +993,7 @@ func (s *StateMachine) GetDexBatches(lockedBatch bool) (b []*lib.DexBatch, err l
 	if lockedBatch {
 		prefix = lib.JoinLenPrefix(dexPrefix, lockedBatchSegment)
 	} else {
-		prefix = lib.JoinLenPrefix(dexPrefix, nextBatchSement)
+		prefix = lib.JoinLenPrefix(dexPrefix, nextBatchSegment)
 	}
 	// iterate over the dex prefix
 	it, err := s.Iterator(prefix)
