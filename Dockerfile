@@ -20,7 +20,7 @@ RUN if [ ! -f "${BIN_PATH}" ]; then \
   echo "File ${BIN_PATH} already exists. Skipping build."; \
   fi
 
-FROM alpine:3.19
+FROM alpine:3.22
 
 RUN apk add --no-cache pigz ca-certificates
 
