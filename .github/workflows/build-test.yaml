@@ -28,6 +28,44 @@ jobs:
         uses: actions/checkout@v4
       - name: Build Services
         run: make build/canopy-full
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.26
+      - name: Checkout code
+        uses: actions/checkout@v4
+      # Note: .docker/ is excluded because it contains Dockerfiles named
+      # Dockerfile.go, which gofmt tries (and fails) to parse as Go source.
+      - name: Check formatting
+        run: |
+          unformatted=$(find . -name '*.go' \
+            -not -path './.docker/*' \
+            -not -path '*/node_modules/*' \
+            -print0 | xargs -0 gofmt -l)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt'd:"
+            echo "$unformatted"
+            echo ""
+            echo "Run 'gofmt -w' on them and commit the result."
+            exit 1
+          fi
+      # cmd/rpc embeds the built wallet and explorer assets, and the embed
+      # directories are gitignored, so any tool that has to type-check the
+      # module fails on a fresh checkout. Placeholders are enough to satisfy
+      # the embed without paying for a full npm build in this job.
+      - name: Create web asset placeholders
+        run: |
+          mkdir -p cmd/rpc/web/explorer/dist cmd/rpc/web/wallet/out
+          touch cmd/rpc/web/explorer/dist/.gitkeep cmd/rpc/web/wallet/out/.gitkeep
+      - name: Check for known vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
   test:
     name: Test
     runs-on: ubuntu-latest
