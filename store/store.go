@@ -507,7 +507,11 @@ func (s *Store) IncreaseVersion() { func() { s.version++; s.sc = nil }() }
 
 // Version() returns the current version number of the Store, representing the height or version
 // number of the state. This is used to track the versioning of the state data.
-func (s *Store) Version() uint64 { return s.version }
+func (s *Store) Version() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.version
+}
 
 // SetSyncing tells the store whether the node is currently syncing
 func (s *Store) SetSyncing(v bool) { s.syncing.Store(v) }
