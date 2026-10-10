@@ -31,6 +31,12 @@ export interface NodeData {
   validatorSet: any;
 }
 
+const isNoValidatorsError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  Number((error as { code?: unknown }).code) === 29;
+
 /**
  * Hook to fetch the current chain's committeeId from admin.config
  */
@@ -156,7 +162,12 @@ export const useNodeData = (nodeId: string) => {
           dsFetch("admin.consensusInfo"),
           dsFetch("admin.peerInfo"),
           dsFetch("admin.resourceUsage"),
-          dsFetch("validatorSet", { height: 0, committeeId: committeeId! }),
+          dsFetch("validatorSet", { height: 0, committeeId: committeeId! }).catch((error) => {
+            if (isNoValidatorsError(error)) {
+              return { validatorSet: [] };
+            }
+            throw error;
+          }),
         ]);
 
         return {
