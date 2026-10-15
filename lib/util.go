@@ -752,6 +752,10 @@ func AddToPort(portStr string, add uint64) (string, ErrorI) {
 	if port < MinAllowedPort {
 		return "", ErrBadPortLowLimit()
 	}
+	// check if add would cause overflow when converting to int
+	if add > math.MaxInt64 {
+		return "", ErrMaxPort()
+	}
 	// add the given number to the port
 	newPort := port + int(add)
 	// ensure the new port doesn't exceed the max port number (65535)
