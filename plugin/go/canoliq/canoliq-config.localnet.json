@@ -1,0 +1,9 @@
+{
+  "_comment": "Localnet plugin config — used by the bundled docker compose. 5-block redemption window keeps claim-after-maturity exercises fast. Profile=localnet disables the placeholder-address safety check.",
+  "profile": "localnet",
+  "chainId": 2,
+  "dataDirPath": "/tmp/plugin",
+  "genesisPath": "/app/plugin/go/canoliq/genesis.localnet.json",
+  "rpcAddress": "0.0.0.0:8587",
+  "redemptionUnstakingBlocks": 5
+}

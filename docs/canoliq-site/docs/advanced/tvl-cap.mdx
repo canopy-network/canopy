@@ -1,0 +1,212 @@
+---
+sidebar_label: TVL Cap
+---
+
+# TVL Cap
+
+**In one sentence:** a self-imposed ceiling on canoLiq's TVL expressed as a
+percentage of **total Canopy network stake** — the protocol declines deposits that
+would push its share past the governance-set fraction.
+
+Whitepaper §9.4 ("Concentration Risk") commits canoLiq to *"self-impose a TVL cap of
+33% of total Canopy network stake pending ecosystem maturation and governance approval
+to lift this cap."* The mechanism below implements that exactly: the cap rides on
+live Canopy state, so it widens as Canopy's stake grows and tightens if Canopy's
+stake shrinks.
+
+## How it works
+
+On every deposit, the protocol:
+
+1. Reads the network-wide `lib.Supply.staked` from Canopy state (the total locked
+   CNPY across all committees, including delegations).
+2. Computes the **effective cap** in uCNPY:
+
+   ```
+   cap_ucnpy = canopy_total_stake × tvl_cap_bps ÷ 10_000
+   ```
+
+3. Rejects the deposit if `total_pooled_cnpy + deposit_amount > cap_ucnpy`.
+
+```
+if tvl_cap_bps > 0:
+    supply = readCanopySupply()
+    if supply is None:
+        reject the deposit  # ErrCanopyStakeUnavailable — fail-closed
+    if supply.staked > 0:
+        cap = mulDiv(supply.staked, tvl_cap_bps, 10_000)
+        if (total_pooled_cnpy + deposit_amount) > cap:
+            reject the deposit  # ErrTVLCapExceeded
+    # supply present but staked == 0 → accept this block (uncapped)
+```
+
+- **Default `tvl_cap_bps = 3300`** (= 33% per WP §9.4). Governance can raise or
+  lower it; setting it to `0` removes the cap entirely.
+- The cap moves with Canopy. As Canopy's network stake grows, the effective uCNPY
+  cap grows proportionally — operators do **not** need to file a parameter change
+  for every Canopy growth tick.
+- The check applies only to **deposits**. Reward accrual to the pool and existing
+  balances are never affected — the cap throttles *inflows* only.
+- A deposit that would exceed the cap fails entirely, not partially.
+
+## Three states for the cap
+
+`tvl_cap_bps` interacts with Canopy's `Supply` state in three ways. `/v1/health`
+surfaces the runtime state via `tvlCapStatus` so operators don't have to
+correlate `tvlCapBps` and `canopyTotalStake` to infer it.
+
+| `tvl_cap_bps` | Canopy `Supply` | Behaviour | `tvlCapStatus` |
+|---|---|---|---|
+| `0` | any | uncapped (governance never set a cap) | `"uncapped"` |
+| `> 0` | absent (key not in state) | **rejects** all deposits with `ErrCanopyStakeUnavailable` | `"fail-closed"` |
+| `> 0` | present, computed cap is 0 (`staked == 0`, or so small that `mulDiv` truncates to 0) | **rejects** all deposits with `ErrCanopyStakeUnavailable` — cap re-engages once Canopy stake grows past the truncation point | `"awaiting-canopy-stake"` |
+| `> 0` | present, computed cap > 0 | enforces `mulDiv(staked, tvl_cap_bps, 10_000)` cap | `"active"` |
+
+The rationale:
+
+- **Absent Supply** means the cap-policy state itself hasn't initialized;
+  silently bypassing the cap would defeat WP §9.4 (the cap exists to bound
+  systemic risk). Reject.
+- **Present Supply with `staked == 0`** means Canopy is up and tracking but no
+  validator has bonded yet. A computed cap of zero bounds nothing, so accepting
+  here would leave the deposit path with no ceiling at all — canoLiq open for
+  business before its host chain has a validator set. Reject; the cap re-engages
+  automatically once the first stake lands.
+
+Both rejecting states return the same error, but they keep separate statuses
+because they mean different things to an operator. `fail-closed` is a
+misconfiguration: the `Supply` singleton is genuinely missing from state and
+someone has to act. `awaiting-canopy-stake` is a lifecycle state that resolves
+on its own as soon as Canopy has bonded stake. `evaluateTVLCap` returns one
+decision struct carrying both a status and an error precisely so the deposit
+handler and `/v1/health` can read different fields off the same decision and
+never disagree.
+
+Operators bringing up a fresh development chain should set `tvl_cap_bps = 0`
+explicitly during bring-up (see [Tuning it](#tuning-it) — allowed on the
+`localnet` and `devnet` profiles only). Waiting out the `awaiting-canopy-stake`
+window is no longer an option, since deposits are refused for its duration.
+
+## Tuning it
+
+The cap is a governance parameter (`tvl_cap_bps`). A
+[parameter-change proposal](../governance/overview.mdx) raises it, lowers it, or
+sets it to `0` to remove the limit. Per WP §9.4, lifting the cap requires DAO
+approval — it is a governance lever, not an operator setting.
+
+On a **running** chain that is the only way to change it: plugin genesis no-ops
+once `genesis_complete` is set, so a param-change proposal is what moves the cap
+without a state reset.
+
+Param-change lands on the `FEE_CHANGE` tier: 5% quorum, 51% approval, a **7-day
+voting period**. Note that a param-change is **not timelocked** — `dispatchPassed`
+calls `SaveParams` synchronously in the block the tally closes, and the tier's
+`TimelockBlocks` is read only by `queueTreasurySpend`. So the new params take
+effect the moment voting ends, with no abort window. Plan the review before the
+vote closes, not after. The emergency tier (8% / 67%, 24h voting) carries an
+optional param diff that likewise applies immediately on pass.
+
+At **genesis**, `tvlCapBps` can also be set in the `params` block of the plugin
+genesis file:
+
+```json
+{ "params": { "tvlCapBps": 0 } }
+```
+
+Omitting the key keeps the `DefaultParams()` value of `3300`. An explicit `0`
+runs the committee uncapped.
+
+**Setting `0` is permitted only on the development profiles, `localnet` and
+`devnet`.** `testnet` and `mainnet` refuse to run genesis with an uncapped
+ceiling. This is a whitelist rather than a mainnet blacklist on purpose: an
+unset, misspelled, or newly added profile fails closed with the cap enforced
+instead of inheriting an uncapped genesis by omission.
+
+A non-zero override is allowed on any profile, so a chain that wants room
+without going uncapped can set a deliberately high `tvlCapBps` instead — or a
+deliberately low one to exercise the T3 rejection path.
+
+### The `devnet` profile
+
+`devnet` is for a shared, long-lived development chain — hosted rather than
+local, the kind of environment a team tests and audits against. It sits between
+`localnet` and `testnet` deliberately:
+
+| | uncapped genesis (`tvlCapBps: 0`) | `SafetyCheck` guard rails |
+|---|---|---|
+| `localnet` | allowed | **skipped** |
+| `devnet` | allowed | **enforced** |
+| `testnet` | refused | enforced |
+| `mainnet` | refused | enforced |
+
+That middle row is why `devnet` exists as its own profile rather than operators
+running a shared chain as `localnet`. Localnet skips `SafetyCheck` entirely —
+placeholder bucket addresses and an implausibly small
+`redemptionUnstakingBlocks` both stop being caught. A shared devnet needs the
+uncapped-genesis escape hatch *without* giving those up.
+
+## Long-lived committees will breach the cap
+
+The cap is not stable over time on a committee where canoLiq's own validators
+make up most of Canopy's staked supply — the normal situation on a devnet with
+one test validator.
+
+`ProcessRewards` observes block-over-block growth of committee validator stake
+as reward `R` and routes `netToUsers + user_rebate` — **92.8%** of `R` at the
+default 12% fee with a 40% rebate slice — into `total_pooled_cnpy`. The same
+growth lifts `Supply.staked`, but the ceiling moves by only `tvl_cap_bps` of it,
+**33%**.
+
+So the pool climbs about **2.8x faster than its own ceiling**, and the breach is
+arithmetic rather than a matter of deposit volume: it happens with zero
+depositors. Because the block subsidy is a fixed mint
+(`InitialTokensPerBlock >> halvenings`) that does not scale with staked supply,
+raising genesis validator stake buys runway proportional to that stake but never
+removes the countdown.
+
+For a long-lived committee on `localnet` or `devnet`, set `tvlCapBps: 0` at
+genesis rather than periodically re-inflating the validator stake. On mainnet
+the tension is theoretical as long as canoLiq's committee is a modest share of
+network stake — the denominator there grows with *everyone's* rewards, while the
+pool only accrues canoLiq's own.
+
+## Watching utilization
+
+`/v1/health` reports the cap configuration, the live computed cap, the observed
+Canopy total stake, and current utilization — enough for operators and front ends
+to show *"X% of effective cap used"* and warn before deposits start bouncing:
+
+```json
+GET /v1/health
+{
+  "height": 12345,
+  "genesisComplete": true,
+  "chainId": 2,
+  "tvlCapBps": 3300,
+  "tvlCapStatus": "active",
+  "canopyTotalStake": 100000000000,
+  "tvlCapUcnpyEffective": 33000000000,
+  "tvlUtilizationBps": 7350
+}
+```
+
+- `tvlCapBps` — the governance-set fraction.
+- `tvlCapStatus` — one of `"uncapped"`, `"active"`, `"awaiting-canopy-stake"`,
+  `"fail-closed"`. See the [three-states table](#three-states-for-the-cap) for
+  what each means.
+- `canopyTotalStake` — `lib.Supply.staked` at snapshot height. `0` if Canopy
+  Supply is absent OR if Canopy Supply is present with `staked = 0`;
+  `tvlCapStatus` disambiguates.
+- `tvlCapUcnpyEffective` — `mulDiv(canopyTotalStake, tvlCapBps, 10_000)`. Zero
+  when uncapped, awaiting Canopy stake, or fail-closed; pair with `tvlCapStatus`
+  to interpret. Note that zero here does not mean "no limit": in the two
+  rejecting states it means deposits are refused outright.
+- `tvlUtilizationBps` — `total_pooled_cnpy ÷ tvl_cap_ucnpy_effective` in basis
+  points (here, 73.5% full). Zero when the effective cap is zero, regardless of
+  status.
+
+## Related
+
+- [Deposit & Redeem](../transactions/overview.mdx)
+- [Governance](../governance/overview.mdx) — how to change the cap
+- [API Endpoints](../api/endpoints.mdx) — `/v1/health`
