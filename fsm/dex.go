@@ -1052,7 +1052,7 @@ func (s *StateMachine) GetDexPrices() (p []*lib.DexPrice, err lib.ErrorI) {
 
 // getPrice() returns the dex price for a dex batch
 func (s *StateMachine) getPrice(batch *lib.DexBatch) (p *lib.DexPrice, err lib.ErrorI) {
-	// if the dex batch is uninitalized
+	// if the dex batch is uninitialized
 	if batch.PoolSize == 0 || batch.CounterPoolSize == 0 {
 		return nil, ErrInvalidLiquidityPool()
 	}

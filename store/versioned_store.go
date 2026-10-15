@@ -128,7 +128,7 @@ func (vs *VersionedStore) Get(key []byte) ([]byte, lib.ErrorI) {
 	return val, err
 }
 
-// get() performs SeekGE to ^version and return the first entry.
+// get() performs SeekGE to ^version and returns the first entry.
 func (vs *VersionedStore) get(userKey []byte) (value []byte, tombstone byte, err lib.ErrorI) {
 	value, tombstone, found, err := vs.getRaw(userKey)
 	if err != nil {
