@@ -26,7 +26,7 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "protobuf>=4.21.0,<5.0.0",
+    "protobuf>=4.21.0",
     "fastapi>=0.104.0,<1.0.0",
     "uvicorn[standard]>=0.24.0,<1.0.0",
     "pydantic>=2.5.0,<3.0.0",
@@ -64,14 +64,17 @@ Repository = "https://github.com/canopy/canopy-plugin-python.git"
 Issues = "https://github.com/canopy/canopy-plugin-python/issues"
 
 [project.scripts]
-canopy-plugin = "plugin.main:main"
+canopy-plugin = "main:main"
+
+[tool.setuptools]
+py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["plugin*"]
+include = ["contract*"]
 
 [tool.setuptools.package-data]
-plugin = ["py.typed", "proto/*.proto"]
+contract = ["py.typed", "proto/*.proto"]
 
 [tool.black]
 line-length = 88
