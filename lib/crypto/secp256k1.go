@@ -8,6 +8,12 @@ import (
 	"encoding/json"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	// DO NOT REPLACE: golang.org/x/crypto/ripemd160 is deprecated upstream and
+	// staticcheck reports it as SA1019, but RIPEMD-160 is part of the SECP256K1
+	// address derivation below and therefore consensus critical. Swapping it for
+	// a "modern" hash would change every SECP256K1 address on the network and
+	// hard-fork the chain. If the package is ever removed from x/crypto, vendor
+	// an equivalent RIPEMD-160 implementation rather than changing the algorithm.
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -160,6 +166,7 @@ func (s *SECP256K1PublicKey) UnmarshalJSON(b []byte) (err error) {
 // - BTC, BCH, BSV, (and other forks) <1 byte version> + RIPEMD-160(SHA-256(pubkey)) + <4 byte Checksum>
 // `RIPEMD-160(SHA-256(pubkey))` seems to be the most common theme in addressing for SECP256K1 public keys
 func (s *SECP256K1PublicKey) Address() AddressI {
+	// consensus critical: this hash defines the on-chain address format
 	hasher := ripemd160.New()
 	hasher.Write(Hash(s.Bytes()))
 	address := Address(hasher.Sum(nil))
