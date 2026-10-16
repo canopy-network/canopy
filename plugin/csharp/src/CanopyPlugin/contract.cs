@@ -69,9 +69,10 @@ namespace CanopyPlugin
         public async Task<PluginCheckResponse> CheckTxAsync(PluginCheckRequest request)
         {
             // validate fee
+            var feeQueryId = (ulong)Random.NextInt64();
             var resp = await Plugin.StateReadAsync(this, new PluginStateReadRequest
             {
-                Keys = { new PluginKeyRead { QueryId = (ulong)Random.NextInt64(), Key = ByteString.CopyFrom(KeyForFeeParams()) } }
+                Keys = { new PluginKeyRead { QueryId = feeQueryId, Key = ByteString.CopyFrom(KeyForFeeParams()) } }
             });
 
             if (resp.Error != null)
@@ -80,7 +81,26 @@ namespace CanopyPlugin
             }
 
             // convert bytes into fee parameters
-            var minFees = Unmarshal<FeeParams>(resp.Results[0].Entries[0].Value.ToByteArray());
+            var feeEntry = resp.Results
+                .FirstOrDefault(result => result != null && result.QueryId == feeQueryId)?
+                .Entries
+                .FirstOrDefault();
+
+            if (feeEntry == null || feeEntry.Value == null || feeEntry.Value.Length == 0)
+            {
+                return new PluginCheckResponse { Error = ErrUnmarshal("fee params") };
+            }
+
+            FeeParams? minFees;
+            try
+            {
+                minFees = Unmarshal<FeeParams>(feeEntry.Value.ToByteArray());
+            }
+            catch (InvalidProtocolBufferException)
+            {
+                return new PluginCheckResponse { Error = ErrUnmarshal("fee params") };
+            }
+
             if (minFees == null)
             {
                 return new PluginCheckResponse { Error = ErrUnmarshal("fee params") };
