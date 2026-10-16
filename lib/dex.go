@@ -68,7 +68,7 @@ func (x *DexBatch) IsEmpty() bool {
 	return len(x.ReceiptHash) == 0 && len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdrawals) == 0 && len(x.Deposits) == 0
 }
 
-// EnsureNonNil() ensures the slices in the batch are not empty
+// EnsureNonNil() initialises nil batch slices as empty slices for consistent serialisation.
 // NOTE: pool points is the exception because it's omitted unless remote locked batch is pulled due to liveness fallback
 func (x *DexBatch) EnsureNonNil() {
 	if x.Orders == nil {

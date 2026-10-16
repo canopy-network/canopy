@@ -299,9 +299,8 @@ func (s *StateMachine) DeleteValidator(validator *Validator) lib.ErrorI {
 
 // UNSTAKING VALIDATORS BELOW
 
-// SetValidatorUnstaking() updates a Validator as 'unstaking' and removes it from its respective committees
-// NOTE: finish unstaking height is the height in the future when the validator will be deleted and their
-// funds be returned
+// SetValidatorUnstaking() marks a validator as unstaking and records when their stake can be returned.
+// The unstaking flag excludes them from committee sets until they are deleted.
 func (s *StateMachine) SetValidatorUnstaking(address crypto.AddressI, validator *Validator, finishUnstakingHeight uint64) lib.ErrorI {
 	// set an entry in the database to mark this validator as unstaking, a single byte is used to allow 'get' calls to differentiate between non-existing keys
 	if err := s.Set(KeyForUnstaking(finishUnstakingHeight, address), []byte{0x1}); err != nil {
@@ -320,8 +319,7 @@ func (s *StateMachine) SetValidatorUnstaking(address crypto.AddressI, validator 
 	return s.SetValidator(validator)
 }
 
-// SetValidatorUnstakingIfBelowMinimum() updates a validator as 'unstaking' and removes it from its respective committees
-// if it is below the minimum stake according to saved params
+// SetValidatorUnstakingIfBelowMinimum() starts unstaking when the validator falls below the saved minimum stake.
 func (s *StateMachine) SetValidatorUnstakingIfBelowMinimum(validator *Validator, params *ValidatorParams) (bool, lib.ErrorI) {
 	var belowMinimum, unstakingBlocks = false, uint64(0)
 	// skip if already unstaking
