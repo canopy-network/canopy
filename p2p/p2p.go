@@ -47,6 +47,7 @@ const (
 
 type P2P struct {
 	privateKey             crypto.PrivateKeyI
+	listenerMu             sync.Mutex // guards listener, which Start() writes and Stop() reads
 	listener               net.Listener
 	channels               lib.Channels
 	meta                   *lib.PeerMeta
@@ -122,11 +123,26 @@ func (p *P2P) Start() {
 	go p.DialFailedPeers(dialFailedPeersInterval)
 }
 
+// ListenerAddress() returns the address the inbound listener is bound to, or nil
+// if the listener has not been initialized yet. Safe for concurrent use: the
+// listener is published by ListenForInboundPeers() from its own goroutine.
+func (p *P2P) ListenerAddress() net.Addr {
+	p.listenerMu.Lock()
+	defer p.listenerMu.Unlock()
+	if p.listener == nil {
+		return nil
+	}
+	return p.listener.Addr()
+}
+
 // Stop() stops the P2P service
 func (p *P2P) Stop() {
 	// it's possible the listener has not yet been initialized before stopping
-	if p.listener != nil {
-		if err := p.listener.Close(); err != nil {
+	p.listenerMu.Lock()
+	listener := p.listener
+	p.listenerMu.Unlock()
+	if listener != nil {
+		if err := listener.Close(); err != nil {
 			p.log.Error(err.Error())
 		}
 	}
@@ -141,11 +157,16 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 		p.log.Fatal(ErrFailedListen(er).Error())
 	}
 	p.log.Infof("Starting net.Listener on tcp://%s", listenAddress.NetAddress)
-	p.listener = netutil.LimitListener(ln, p.MaxPossibleInbound())
+	listener := netutil.LimitListener(ln, p.MaxPossibleInbound())
+	// publish the listener so Stop() can close it
+	p.listenerMu.Lock()
+	p.listener = listener
+	p.listenerMu.Unlock()
 	// continuous service until program exit
 	for {
-		// wait for and then accept inbound tcp connection
-		c, err := p.listener.Accept()
+		// wait for and then accept inbound tcp connection; the local reference is
+		// used so the hot accept path stays lock-free
+		c, err := listener.Accept()
 		if err != nil {
 			<-time.After(5 * time.Second)
 			p.log.Errorf("Accept error: %v", err)
