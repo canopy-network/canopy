@@ -62,6 +62,14 @@ func ErrInvalidMerkleTreeProof() lib.ErrorI {
 	return lib.NewError(lib.CodeInvalidMerkleTreeProof, lib.StorageModule, "merkle tree proof is invalid")
 }
 
+func ErrChildNotFound(childKey string) lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidMerkleTree, lib.StorageModule, fmt.Sprintf("child node not found for key: %s", childKey))
+}
+
+func ErrChildNotReplaced(oldKey string) lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidMerkleTree, lib.StorageModule, fmt.Sprintf("child node not found for replacement, key: %s", oldKey))
+}
+
 func ErrReadBytes(err error) lib.ErrorI {
 	return lib.NewError(lib.CodeReadBytes, lib.StorageModule, fmt.Sprintf("random read bytes failed with err: %s", err.Error()))
 }
