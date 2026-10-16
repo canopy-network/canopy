@@ -147,6 +147,13 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 		// wait for and then accept inbound tcp connection
 		c, err := p.listener.Accept()
 		if err != nil {
+			// A closed listener means the node is shutting down, not a fault.
+			// Exit the loop quietly instead of logging the same error every
+			// 5 seconds for the rest of the process's life.
+			if strings.Contains(err.Error(), ErrListenerClosed) {
+				p.log.Debugf("Inbound listener closed, stopping accept loop")
+				return
+			}
 			<-time.After(5 * time.Second)
 			p.log.Errorf("Accept error: %v", err)
 			continue
