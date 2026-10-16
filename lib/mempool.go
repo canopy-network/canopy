@@ -34,7 +34,7 @@ type Mempool interface {
 // FeeMempool is a Mempool implementation that prioritizes transactions with the highest fees
 type FeeMempool struct {
 	pool     MempoolTxs    // the actual pool of transactions
-	txsBytes int           // collective number of bytes in the pool
+	txsBytes int64         // collective number of bytes in the pool
 	config   MempoolConfig // user configuration of the pool
 }
 
@@ -64,9 +64,9 @@ func (f *FeeMempool) AddTransactions(txs ...[]byte) (recheck bool, err ErrorI) {
 	// create a list of MempoolTxs
 	mempoolTxs := make([]MempoolTx, 0, len(txs))
 	batchTxs := make(map[string]struct{}, len(txs))
-	txsBytes := 0
+	txsBytes := int64(0)
 	for _, tx := range txs {
-		txBytes := len(tx)
+		txBytes := int64(len(tx))
 		// check if the mempool already contains the transaction
 		hash := crypto.HashString(tx)
 		if _, found := f.pool.m[hash]; found {
@@ -119,7 +119,7 @@ func (f *FeeMempool) AddTransactions(txs ...[]byte) (recheck bool, err ErrorI) {
 		// for each dropped transaction
 		for _, d := range dropped {
 			// subtract the txsBytes
-			f.txsBytes -= len(d.Tx)
+			f.txsBytes -= int64(len(d.Tx))
 		}
 	}
 	// if any are dropped or re-order happened
@@ -162,7 +162,7 @@ func (f *FeeMempool) DeleteTransaction(tx ...[]byte) {
 	// delete the transaction from the pool
 	_, deletedBz := f.pool.delete(tx)
 	// subtract the from the tx bytes count
-	f.txsBytes -= deletedBz
+	f.txsBytes -= int64(deletedBz)
 }
 
 // Clear() empties the mempool and resets its state
@@ -179,7 +179,8 @@ func (f *FeeMempool) TxCount() int { return len(f.pool.s) }
 // TxsBytes() returns the total size in bytes of all transactions in the mempool
 func (f *FeeMempool) TxsBytes() int {
 	// return the number of bytes in the memory pool
-	return f.txsBytes
+	// Convert to int for backward compatibility with the Mempool interface
+	return int(f.txsBytes)
 }
 
 // Iterator() creates a new iterator for traversing the transactions in the mempool
