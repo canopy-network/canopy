@@ -88,3 +88,13 @@ func TestAddProposal(t *testing.T) {
 		})
 	}
 }
+
+func TestGetProposalAfterNewCommitteeResetWithoutElectionCandidate(t *testing.T) {
+	b := &BFT{
+		Proposals: make(ProposalsForHeight),
+	}
+
+	b.ProposalsResetForNewCommittee()
+
+	require.Nil(t, b.getProposal(0, ElectionVote))
+}
