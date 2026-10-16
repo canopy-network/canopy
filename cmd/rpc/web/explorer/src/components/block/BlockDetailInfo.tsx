@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { copyText } from '../../lib/clipboard'
 import blockDetailTexts from '../../data/blockDetail.json'
 import { GREEN_BADGE_CLASS } from '../ui/badgeStyles'
-import { formatCNPY } from '../../lib/utils'
+import { escapeHtml, formatCNPY } from '../../lib/utils'
 
 interface BlockDetailInfoProps {
     block: {
@@ -90,7 +90,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
                 <div className="border border-white/10 rounded-lg p-4">
                     <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
                         <code className="text-gray-300">
-                            {JSON.stringify(blockData, null, 2)
+                            {escapeHtml(JSON.stringify(blockData, null, 2))
                                 .split('\n')
                                 .map((line, index) => (
                                     <div key={index} className="flex">
