@@ -401,11 +401,14 @@ func (x *CertificateResult) Equals(y *CertificateResult) bool {
 }
 
 // Hash() returns the cryptographic hash of the canonical Sign Bytes of the CertificateResult
-func (x *CertificateResult) Hash() []byte {
+func (x *CertificateResult) Hash() ([]byte, ErrorI) {
 	// convert the certificate results to proto bytes
-	bz, _ := Marshal(x)
+	bz, err := Marshal(x)
+	if err != nil {
+		return nil, err
+	}
 	// return the hash of the bytes
-	return crypto.Hash(bz)
+	return crypto.Hash(bz), nil
 }
 
 // REWARD RECIPIENT CODE BELOW
