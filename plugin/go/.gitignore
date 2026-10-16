@@ -1,3 +1,7 @@
 node_modules/*
 go-plugin
 tutorial/tutorial
+submit_tx
+oracle_beat.sh
+oracle_heartbeat.log
+*.log

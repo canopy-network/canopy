@@ -1,0 +1,327 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/ARBOR-L/ARBOR/plugin/go/contract";
+
+// ─────────────────────────────────────────────
+// Market lifecycle
+// ─────────────────────────────────────────────
+
+// MessageCreateMarket creates a new isolated lending market (ARCM §3, §19.2)
+message MessageCreateMarket {
+  string market_id = 1;
+  string collateral_asset_id = 2;
+  string debt_asset_id = 3;
+  uint32 asset_tier = 4;           // 0-4, ARCM §4 LTV table
+  uint64 reserve_factor_bps = 5;   // 200-3000 bps, AYIS §13
+  bytes  creator = 6;
+  repeated bytes authorized_submitters = 7; // ARCM §10 permissioned price feed;
+                                             // trusted addresses for update_price on
+                                             // this market's two assets (shared list,
+                                             // not per-asset). Immutable as of this
+                                             // version -- no governance-gated
+                                             // add/remove path exists yet. Must satisfy
+                                             // MinReporters (hardcoded 3, mirrors
+                                             // interest_rate.go's precedent of
+                                             // hardcoding pending {22}'s governance
+                                             // param store, which does not exist yet).
+}
+
+// MessageUpdateMarketParams updates governance-bounded per-market params (ARCM §13, §15)
+message MessageUpdateMarketParams {
+  string market_id = 1;
+  bytes  authority = 2;
+  uint64 reserve_factor_bps = 3;
+}
+
+// MessagePauseMarket halts a market via governance/risk-committee action (ARCM §13, §16)
+message MessagePauseMarket {
+  string market_id = 1;
+  bytes  authority = 2;
+}
+
+// MessageResumeMarket resumes a paused market
+message MessageResumeMarket {
+  string market_id = 1;
+  bytes  authority = 2;
+}
+
+// MessageDeprecateMarket permanently retires a market
+message MessageDeprecateMarket {
+  string market_id = 1;
+  bytes  authority = 2;
+}
+
+// ─────────────────────────────────────────────
+// Oracle (ARCM §10)
+// ─────────────────────────────────────────────
+
+// MessageUpdatePrice submits a permissioned price feed reading
+message MessageUpdatePrice {
+  string asset_id = 1;             // must match this market's collateral_asset_id
+                                    // or debt_asset_id (checked at DeliverTx)
+  uint64 price = 2;                // USD per unit, x1e8
+  uint32 confidence_bps = 3;
+  bytes  submitter = 4;
+  string market_id = 5;            // scopes this submission to one market's
+                                    // authorized_submitters list (ARCM Section
+                                    // 10 is a PER-MARKET permissioned feed, not
+                                    // a global asset-price authority -- added
+                                    // to avoid an unbounded PrefixMarkets scan
+                                    // to reverse-lookup market from asset_id)
+}
+
+// ─────────────────────────────────────────────
+// Collateral (borrower side, ARCM §6)
+// ─────────────────────────────────────────────
+
+// MessageDepositCollateral posts collateral against a borrower position
+message MessageDepositCollateral {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 quantity = 3;             // native units, 9-decimal convention (ARCM §2.1a)
+}
+
+// MessageWithdrawCollateral removes collateral, subject to post-withdrawal HF check
+message MessageWithdrawCollateral {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 quantity = 3;
+}
+
+// ─────────────────────────────────────────────
+// Supply / lending side (AYIS §4)
+// ─────────────────────────────────────────────
+
+// MessageDeposit supplies the market's asset in exchange for aToken shares (AYIS MintShares)
+message MessageDeposit {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 amount = 3;                // native asset units
+}
+
+// MessageWithdraw redeems aToken shares for the underlying asset (AYIS RedeemShares)
+message MessageWithdraw {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 shares = 3;                 // aToken shares, not underlying amount
+}
+
+// ─────────────────────────────────────────────
+// Borrow / repay (ARCM §6, §19.2.1)
+// ─────────────────────────────────────────────
+
+// MessageBorrow opens or increases a borrow position against posted collateral
+message MessageBorrow {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 borrow_amount = 3;
+}
+
+// MessageRepay reduces or closes a borrow position
+message MessageRepay {
+  string market_id = 1;
+  bytes  address = 2;
+  uint64 repay_amount = 3;
+}
+
+// ─────────────────────────────────────────────
+// Liquidation (ARCM §6, §19.2.2)
+// ─────────────────────────────────────────────
+
+// MessageLiquidatePosition liquidates an undercollateralized borrower position
+message MessageLiquidatePosition {
+  string market_id = 1;
+  bytes  liquidator = 2;
+  bytes  borrower_address = 3;
+  uint64 repay_amount = 4;           // capped at debt x close_factor, ARCM §7
+}
+
+// ─────────────────────────────────────────────
+// Asset tier registry (ARCM §3.1/§3.2)
+// ─────────────────────────────────────────────
+
+// MessageSetAssetTier registers or updates an asset's canonical risk tier
+// (0=Tier0/CNPY .. 3=Tier3/Restricted; Tier 4/Blacklisted is never stored,
+// see state_keys.go PrefixAssetTier). Authority-gated -- single hardcoded
+// address for now, standing in for the risk-committee multisig ARCM §13
+// names as the intended actor for tier promotion/demotion; same disclosed-
+// placeholder pattern as authorized_submitters above. Real governance-gated
+// multisig/timelock is a future milestone, not implemented here.
+message MessageSetAssetTier {
+  string asset_id = 1;
+  uint32 tier = 2;                 // 0-3 only; checked at DeliverTx
+  bytes  authority = 3;
+}
+
+// MessageSetTreasuryCut sets the GLOBAL treasury_cut_bps governance parameter
+// (see bad_debt_layer3.go's own doc comment on PrefixTreasuryArbor/
+// PrefixTreasuryNASM being global, not per-market -- this parameter mirrors
+// that scope). Unlike reserve_factor_bps (per-market, set via create_market/
+// update_market_params), treasury_cut_bps applies uniformly to every
+// market's interest accrual (AYIS Section 7 Step 10, extended): a single
+// governance-set rate feeds Arbor's own protocol treasury ({40}) from every
+// market's interest_earned, rather than each market creator choosing (and
+// potentially free-riding by setting to 0) their own contribution to a
+// shared, protocol-wide backstop. Bounds: 25-150 bps (0.25%-1.5%),
+// deliberately narrower than reserve_factor_bps's 200-3000 -- Layer 3 (this
+// treasury) is a secondary, lower-probability-of-use backstop behind Layer
+// 2's per-market reserve, not a primary defense, so it should not tax lender
+// yield as heavily. Floor raised from an initially-considered 10 bps: Layer
+// 3 only fires after a market's OWN R_fund is already exhausted by a single
+// shortfall, implying a real bad-debt event large enough to matter; too low
+// a floor risks the treasury accumulating too slowly to ever meaningfully
+// help, the same "looks wired but silently doesn't matter" failure mode
+// this codebase's own discipline elsewhere exists to avoid. No market_id
+// field -- this is a single global value, analogous to
+// KeyForTreasuryArbor/KeyForTreasuryNASM's own no-argument, global-balance
+// shape (state_keys.go).
+message MessageSetTreasuryCut {
+  bytes  authority = 1;
+  uint64 treasury_cut_bps = 2; // 25-150 bps, checked at DeliverTx
+}
+
+// ─────────────────────────────────────────────
+// NASM (NUSD / Arbor Stability Module) transactions -- NASM Consolidated
+// Specification Section 4, 13.
+// ─────────────────────────────────────────────
+
+// MessageMintNusd opens a new NASM vault: locks eligible collateral
+// (NASM Spec Section 3.1's N-0/N-1 tiers only, resolved via
+// nasm_tier.go's ResolveNasmTier against ARCM's existing {29} registry --
+// see that file's doc comment for why NASM does not maintain a separate
+// registry) and mints newly-issued NUSD against it in one atomic
+// transaction (NASM Spec Section 4.1).
+//
+// vault_id is caller-supplied, NOT derived (matches market_id's own
+// precedent -- see ValidateVaultID/KeyForNasmVault in state_keys.go).
+// This is a deliberate departure from BorrowerPosition's owner-address-
+// keyed pattern: NASM Spec Section 5.2 requires vault ownership to be a
+// transferable claim, which an address-derived key would foreclose. The
+// caller chooses vault_id and it never changes for that vault's lifetime,
+// even if ownership later transfers.
+//
+// KNOWN GAP, DISCLOSED: the per-tier mint concentration cap (NASM Spec
+// Section 3.3, Max_tier_share_bps) is NOT enforced by this message as of
+// this version. That check requires a running total-backing-value
+// accumulator per tier, which does not exist in state yet (a range-scan
+// over all {30} vaults at every mint was considered and rejected --
+// unbounded per-transaction cost, the same anti-pattern
+// KeyForPriceRecord's own market_id field was added to avoid; see
+// update_price.go's doc comment). The accumulator will be added once
+// burn_nusd exists, so it can be correctly kept in sync on both mint and
+// burn from the start rather than shipping an increment-only value that
+// silently drifts. Matches this codebase's established disclosure
+// convention for known-deferred checks (see deposit.go's MIN_DEPOSIT
+// comment, create_market.go's hardcoded MinReporters comment).
+message MessageMintNusd {
+  string vault_id = 1;
+  bytes  owner = 2;
+  string collateral_asset_id = 3;
+  uint64 collateral_quantity = 4;
+  uint64 nusd_amount_requested = 5;
+}
+
+// MessageBurnNusd is the sole mechanism by which NUSD is removed from
+// circulation and collateral released (NASM Consolidated Spec Section
+// 4.2) -- owner-scoped only, no aggregate-pool redemption, no third-party
+// vault seizure. sender MUST be the vault's current owner (checked at
+// DeliverTx via NasmVault.Owner) -- there is no code path by which NUSD
+// burned by holder A can release collateral from a vault owned by holder
+// B (Section 4.2's own closing guarantee, Invariant N-I8).
+//
+// nusd_amount may exceed the vault's actual current debt (ScaledNusdDebt)
+// -- DeliverTx computes compare-before-subtract (Section 4.2 Step 6) and
+// only actually burns/debits up to current_debt, never more, regardless
+// of what nusd_amount requests. This is NOT the same refund risk ARCM's
+// repay.go's ErrRepayExceedsDebt was fixed to avoid (that fix closed a
+// path where an escrow-less refund would have minted unbacked value);
+// here, burn_nusd only ever debits NusdBalance for the true amount owed,
+// never more than the sender already holds and never creating any new
+// value -- structurally safer than a refund-by-minting design.
+message MessageBurnNusd {
+  string vault_id = 1;
+  bytes  sender = 2;
+  uint64 nusd_amount = 3;
+}
+
+// MessageLiquidateNasmVault liquidates an undercollateralized NASM vault
+// (HF_n <= 1.0), per NASM Consolidated Spec Section 7: reuses ARCM's own
+// ComputeHealthFactorScaled and CloseFactorBpsForHF functions directly
+// (unchanged formulas, NASM's own tier params as input), substituting
+// ScaledNusdDebt for ARCM's ScaledDebt as the debt input, and NASM's own
+// tighter LTV_n_liq/LIF values (nasm_tier.go's nasmTierParamsTable) in
+// place of ARCM's lending tier table.
+//
+// repay_amount is denominated in NUSD (1e6 precision), debited from the
+// LIQUIDATOR's own NusdBalance (NOT Account.Amount -- mirrors burn_nusd's
+// custody split exactly) -- liquidating a NASM vault burns NUSD out of
+// circulation, the same as any other debt reduction.
+//
+// [FIX, session finding] The comment below previously described the
+// bad-debt path as unconditionally hard-rejecting -- true when originally
+// written, no longer true. Layer3DrawDownNASM (R_nusd draw-down, {41}) is
+// now wired into this transaction's own bad-debt branch: a shortfall is
+// first offered to R_nusd, and only hard-rejects (ErrNasmLiquidationBadDebt)
+// if R_nusd cannot fully cover it (NASM Layer 4 system-wide socialization
+// is still not built, so an uncovered shortfall still has no further
+// fallback -- see that error's own current doc comment, error.go, for the
+// precise, up-to-date scope).
+message MessageLiquidateNasmVault {
+  string vault_id = 1;
+  bytes  liquidator = 2;
+  uint64 repay_amount = 3;
+}
+
+// MessageSetEmergencyMode sets or clears a single asset's {21}
+// EmergencyModeFlag record, per NASM Consolidated Spec Section 9.2's
+// "risk-committee override" trigger (EMERGENCY_TRIGGER_OVERRIDE). Mirrors
+// MessageSetAssetTier's own single-hardcoded-authority pattern exactly
+// (arbor.proto's own comment on that message: "standing in for the
+// risk-committee multisig ARCM Section 13 names as the intended actor").
+// Automatic staleness-based triggering (EMERGENCY_TRIGGER_STALENESS) is a
+// SEPARATE, not-yet-built path (would need a BeginBlock-context caller,
+// same class of gap this codebase's own ProcessLossFactorQueue closed for
+// a different subsystem) -- this message only ever sets
+// EMERGENCY_TRIGGER_OVERRIDE when active=true.
+message MessageSetEmergencyMode {
+  string asset_id  = 1;
+  bool   active     = 2;
+  bytes  authority  = 3;
+}
+
+// MessageSetCircuitBreaker sets or clears a single asset's {20}
+// CircuitBreakerState record. Same authority pattern as
+// MessageSetEmergencyMode above. See CircuitBreakerState's own doc comment
+// (arbor_state.proto) for why this is CURRENTLY THE ONLY way this flag can
+// ever become active -- no automatic deviation-detection algorithm exists
+// yet (upstream ARCM/AYIS spec's own TWAP mechanism is marked "OPEN (NF) /
+// Deferred" in its audit trail).
+message MessageSetCircuitBreaker {
+  string asset_id  = 1;
+  bool   active     = 2;
+  bytes  authority  = 3;
+}
+
+// MessageClaimFaucet is a devnet-only, fee-exempt tx that credits the
+// signer's AssetBalance ({37}) for all 4 faucet-supported assets (BTC,
+// ETH, USDC, CNPY) in a single call, subject to each asset's own
+// independent FAUCET_COOLDOWN_BLOCKS (3600 blocks, ~20h at this chain's
+// 20s block time) tracked per-address-per-asset via FaucetClaimRecord
+// ({38}). Per-asset, not all-or-nothing: an asset still on cooldown is
+// silently skipped (see FaucetClaimEvent's status field), not rejected --
+// so claiming BTC does not block ETH/USDC/CNPY from being credited in the
+// same call if their own cooldowns have separately expired. Exempt from
+// CheckTx's SendFee floor (see CheckTx's own carve-out comment) so a
+// brand-new, zero-balance address can bootstrap test funds without
+// already holding gas -- THIS EXEMPTION IS TESTNET-ONLY, has no
+// x_devnet_faucet_enabled build gate yet (deliberately deferred, not an
+// oversight -- flag for removal before any mainnet fork). No fields
+// beyond the implicit signer requirement: address is required so
+// CheckMessageClaimFaucet can validate and return it as the sole
+// AuthorizedSigner, same pattern as every other Message* type in this
+// file (see MessageSetEmergencyMode/MessageSetCircuitBreaker above) --
+// there is no envelope-level signer extraction in this codebase.
+message MessageClaimFaucet {
+  bytes address = 1; // @gotags: json:"address"
+}
