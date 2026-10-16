@@ -1077,3 +1077,26 @@ func TestSafeNode(t *testing.T) {
 		})
 	}
 }
+
+// TestStartElectionVotePhaseWithNilSortitionData ensures the ELECTION_VOTE phase does not panic
+// when StartElectionPhase returned early and left SortitionData nil. HandlePhase advances the
+// phase unconditionally, so this state is reachable whenever loading the self validator or the
+// last proposers fails (for example a pruned historical store read).
+func TestStartElectionVotePhaseWithNilSortitionData(t *testing.T) {
+	c := newTestConsensus(t, ElectionVote, 3)
+	// simulate StartElectionPhase having bailed out before populating the sortition data
+	c.bft.SortitionData = nil
+	// drain the pacemaker message RoundInterrupt gossips so the phase change cannot block
+	go func() {
+		for {
+			select {
+			case <-c.cont.sendToReplicasChan:
+			case <-c.cont.gossipConsensusChan:
+			}
+		}
+	}()
+	// must not panic
+	require.NotPanics(t, c.bft.StartElectionVotePhase)
+	// and must recover by interrupting the round rather than proceeding with a nil deref
+	require.Equal(t, RoundInterrupt, c.bft.Phase)
+}
