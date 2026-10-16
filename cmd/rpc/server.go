@@ -79,11 +79,11 @@ func NewServer(controller *controller.Controller, config lib.Config, logger lib.
 
 // Start initializes the Canopy RPC servers
 func (s *Server) Start() {
-	hostport := strings.Split(s.config.ListenAddress, ":")
+	host := listenHost(s.config.ListenAddress)
 	// Start the Query and Admin RPC servers concurrently
-	go s.startRPC(createRouter(s), hostport[0], s.config.RPCPort)
-	go s.startRPC(createAdminRouter(s), hostport[0], s.config.AdminPort)
-	go s.startRPC(createDebugRouter(), hostport[0], s.config.ProfilingPort)
+	go s.startRPC(createRouter(s), host, s.config.RPCPort)
+	go s.startRPC(createAdminRouter(s), host, s.config.AdminPort)
+	go s.startRPC(createDebugRouter(), host, s.config.ProfilingPort)
 
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
@@ -165,12 +165,20 @@ func (s *Server) updatePollResults() {
 
 // startStaticFileServers starts a file server for the wallet and explorer
 func (s *Server) startStaticFileServers() {
-	hostport := strings.Split(s.config.ListenAddress, ":")
-	s.logger.Infof("Starting Web Wallet 🔑 http://%s:%s ⬅️", hostport[0], s.config.WalletPort)
+	host := listenHost(s.config.ListenAddress)
+	s.logger.Infof("Starting Web Wallet 🔑 http://%s:%s ⬅️", host, s.config.WalletPort)
 
 	s.runStaticFileServer(walletFS, walletStaticDir, s.config.WalletPort, s.config)
-	s.logger.Infof("Starting Block Explorer 🔍️ http://%s:%s ⬅️", hostport[0], s.config.ExplorerPort)
+	s.logger.Infof("Starting Block Explorer 🔍️ http://%s:%s ⬅️", host, s.config.ExplorerPort)
 	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
+}
+
+func listenHost(address string) string {
+	host, _, err := net.SplitHostPort(address)
+	if err == nil {
+		return host
+	}
+	return strings.Split(address, colon)[0]
 }
 
 // startHeapProfiler writes periodic heap profiles to the data directory
