@@ -111,14 +111,14 @@ func (s *ETHSECP256K1PublicKey) String() string { return hex.EncodeToString(s.By
 func (s *ETHSECP256K1PublicKey) Equals(i PublicKeyI) bool { return bytes.Equal(s.Bytes(), i.Bytes()) }
 
 // RecoverPublicKey() recovers a public key from ethereum the transaction and validates the signature
-func RecoverPublicKey(signer types.Signer, tx types.Transaction) (PublicKeyI, error) {
+func RecoverPublicKey(signer types.Signer, tx *types.Transaction) (PublicKeyI, error) {
 	// extract signature values
 	Vb, R, S := tx.RawSignatureValues()
 	if Vb == nil || R == nil || S == nil {
 		return nil, types.ErrInvalidSig
 	}
 	// compute sighash (what was signed)
-	sigHash := signer.Hash(&tx)
+	sigHash := signer.Hash(tx)
 	// normalize V to 0 or 1
 	var recoveryID byte
 	V := Vb.Uint64()
