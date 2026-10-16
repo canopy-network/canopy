@@ -444,7 +444,9 @@ func preflightProtoBytes(b []byte) error {
 			if l > protoMaxFieldBytes {
 				return fmt.Errorf("length-delimited field exceeds max size: %d > %d", l, protoMaxFieldBytes)
 			}
-			if l < 0 || offset+int(l) > len(b) {
+			// l is a uint64 and is already bounded by protoMaxFieldBytes above,
+			// so the int conversion below cannot overflow.
+			if offset+int(l) > len(b) {
 				return fmt.Errorf("length-delimited field exceeds buffer bounds")
 			}
 			offset += int(l)
