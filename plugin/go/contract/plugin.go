@@ -26,7 +26,8 @@ type Plugin struct {
 	conn            net.Conn                              // the underlying unix sock file connection
 	pending         map[uint64]chan isFSMToPlugin_Payload // the outstanding requests from the contract
 	requestContract map[uint64]*Contract                  // maps request IDs to their contract context for concurrent operations
-	l               sync.Mutex                            // thread safety
+	l               sync.Mutex                            // thread safety for pending maps
+	writeMu         sync.Mutex                            // serializes length-prefixed socket writes
 	config          Config                                // general app config
 }
 
@@ -329,6 +330,9 @@ func (p *Plugin) receiveProtoMsg(ptr proto.Message) *PluginError {
 
 // sendLengthPrefixed() sends a message that is prefix by length through a tcp connection
 func (p *Plugin) sendLengthPrefixed(bz []byte) *PluginError {
+	// serialize writes: inbound handlers send concurrently after unlocking p.l
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
 	// create the length prefix (4 bytes, big endian)
 	lengthPrefix := make([]byte, 4)
 	binary.BigEndian.PutUint32(lengthPrefix, uint32(len(bz)))
