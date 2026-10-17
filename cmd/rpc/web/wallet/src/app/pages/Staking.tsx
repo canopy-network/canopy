@@ -6,7 +6,6 @@ import React, {
   useCallback,
 } from "react";
 import { motion } from "framer-motion";
-import { useStakingData } from "@/hooks/useStakingData";
 import { useValidators } from "@/hooks/useValidators";
 import { useAccountData } from "@/hooks/useAccountData";
 import { useMultipleValidatorRewardsHistory } from "@/hooks/useMultipleValidatorRewardsHistory";
@@ -42,9 +41,6 @@ const containerVariants = {
 };
 
 export default function Staking(): JSX.Element {
-  const {
-    data: staking = { totalStaked: 0, totalRewards: 0, chartData: [] } as any,
-  } = useStakingData();
   const { totalStaked } = useAccountData();
   const { data: validators = [] } = useValidators();
   const { openAction } = useActionModal();
@@ -114,6 +110,11 @@ export default function Staking(): JSX.Element {
       };
     });
   }, [validators, rewardsHistory]);
+
+  const totalRewards24h = useMemo(
+    () => rows.reduce((total, validator) => total + validator.rewards24h, 0),
+    [rows],
+  );
 
   const prepareCSVData = useCallback(() => {
     const header = [
@@ -199,7 +200,7 @@ export default function Staking(): JSX.Element {
       {/* Top stats */}
       <StatsCards
         totalStaked={totalStaked}
-        totalRewards={staking.totalRewards24h || 0}
+        totalRewards={totalRewards24h}
         validatorsCount={validators.length}
         chainCount={chainCount}
         activeValidatorsCount={activeValidatorsCount}
