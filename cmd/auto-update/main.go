@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/cli"
-	"github.com/canopy-network/canopy/cmd/rpc"
 	"github.com/canopy-network/canopy/lib"
 )
 
@@ -109,9 +108,9 @@ func main() {
 	binaryVersion := getSoftwareVersion(autoUpdaterEnabled, binPath)
 	if autoUpdaterEnabled {
 		logger.Infof("auto-update enabled (updater version: %s, canopy version: %s)",
-			rpc.SoftwareVersion, binaryVersion)
+			lib.SoftwareVersion, binaryVersion)
 	} else {
-		logger.Infof("auto-update disabled (canopy version: %s)", rpc.SoftwareVersion)
+		logger.Infof("auto-update disabled (canopy version: %s)", lib.SoftwareVersion)
 	}
 	// handle external shutdown signals
 	sigChan := make(chan os.Signal, 1)
@@ -275,7 +274,7 @@ func effectiveBinPath(paths ...string) string {
 
 func getSoftwareVersion(autoUpdate bool, binPath string) string {
 	if !autoUpdate {
-		return rpc.SoftwareVersion
+		return lib.SoftwareVersion
 	}
 	// forward only --data-dir so the check targets the initialized directory and
 	// avoids passing newer flags an older installed binary may not recognize

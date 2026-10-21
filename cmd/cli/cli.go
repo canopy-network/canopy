@@ -57,7 +57,7 @@ var versionCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(rpc.SoftwareVersion)
+		fmt.Println(lib.SoftwareVersion)
 	},
 }
 
@@ -175,7 +175,7 @@ func Start() {
 		l.Fatal(err.Error())
 	}
 	// initialize and start the metrics server
-	metrics := lib.NewMetricsServer(validatorKey.PublicKey().Address(), float64(config.ChainId), rpc.SoftwareVersion, config.MetricsConfig, l)
+	metrics := lib.NewMetricsServer(validatorKey.PublicKey().Address(), float64(config.ChainId), lib.SoftwareVersion, config.MetricsConfig, l)
 	// create a new database object from the config
 	db, err := store.New(config, metrics, l)
 	if err != nil {

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/canopy-network/canopy/lib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,5 +27,29 @@ func TestRun(t *testing.T) {
 	})
 	t.Run("too many arguments", func(t *testing.T) {
 		require.Error(t, run([]string{"1.0.0", "2.0.0"}))
+	})
+}
+
+func TestRunCheckServerVersion(t *testing.T) {
+	// Strip only the optional "v"; build metadata like "+beta" is significant.
+	version := strings.TrimPrefix(lib.SoftwareVersion, "v")
+	t.Run("matching bare version", func(t *testing.T) {
+		require.NoError(t, run([]string{"--check-server-version", version}))
+	})
+	t.Run("matching v-prefixed version", func(t *testing.T) {
+		require.NoError(t, run([]string{"--check-server-version", "v" + version}))
+	})
+	t.Run("mismatched version", func(t *testing.T) {
+		require.Error(t, run([]string{"--check-server-version", "99.99.99"}))
+	})
+	t.Run("mismatched build metadata", func(t *testing.T) {
+		i := strings.IndexByte(version, '+')
+		if i < 0 {
+			t.Skip("server version has no build metadata to differ on")
+		}
+		require.Error(t, run([]string{"--check-server-version", version[:i]}))
+	})
+	t.Run("skips check when flag absent", func(t *testing.T) {
+		require.NoError(t, run([]string{"99.99.99"}))
 	})
 }

@@ -33,8 +33,9 @@ jobs:
         run: |
           # Tolerate a leading "v" (e.g. v1.0.0) so the tag isn't doubled into "vv1.0.0".
           VERSION="${VERSION#v}"
-          # Validate via the shared script (same semver check as the auto-updater).
-          go run ./cmd/scripts/semver "$VERSION"
+          # Validate via the shared script (same semver check as the auto-updater) and
+          # ensure it matches lib.SoftwareVersion.
+          go run ./cmd/scripts/semver --check-server-version "$VERSION"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Version '$VERSION' is valid. Release tag: v${VERSION}"
 

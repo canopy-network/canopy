@@ -19,7 +19,7 @@ import (
 
 // Version writes Canopy software's version information
 func (s *Server) Version(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	write(w, SoftwareVersion, http.StatusOK)
+	write(w, lib.SoftwareVersion, http.StatusOK)
 }
 
 // Transaction submits a transaction
