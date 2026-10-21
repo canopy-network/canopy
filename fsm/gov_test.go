@@ -154,6 +154,44 @@ func TestUpdateParam(t *testing.T) {
 	}
 }
 
+func TestPollsToResultsZeroTotalTokens(t *testing.T) {
+	sm := newTestStateMachine(t)
+	validatorKey := newTestKeyGroup(t)
+	const stakeAmount = uint64(100)
+	const daoAmount = uint64(1)
+
+	require.NoError(t, sm.SetValidators([]*Validator{{
+		Address:      validatorKey.Address.Bytes(),
+		PublicKey:    validatorKey.PublicKey.Bytes(),
+		StakedAmount: stakeAmount,
+		Committees:   []uint64{sm.Config.ChainId},
+	}}, &Supply{}))
+	require.NoError(t, sm.SetPool(&Pool{Id: lib.DAOPoolID, Amount: daoAmount}))
+	require.NoError(t, sm.SetSupply(&Supply{Total: stakeAmount + daoAmount, Staked: stakeAmount}))
+
+	const proposalHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	polls := &ActivePolls{
+		Polls: map[string]map[string]bool{
+			proposalHash: {
+				validatorKey.Address.String(): true,
+			},
+		},
+		PollMeta: map[string]*StartPoll{
+			proposalHash: {StartPoll: proposalHash, Url: "https://example.com", EndHeight: 10},
+		},
+	}
+
+	results, err := sm.PollsToResults(polls)
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), results[proposalHash].Accounts.TotalTokens)
+	require.Equal(t, uint64(0), results[proposalHash].Accounts.ApprovePercentage)
+	require.Equal(t, uint64(0), results[proposalHash].Accounts.RejectPercentage)
+	require.Equal(t, uint64(0), results[proposalHash].Accounts.VotedPercentage)
+	require.Equal(t, uint64(100), results[proposalHash].Validators.ApprovePercentage)
+	require.Equal(t, uint64(100), results[proposalHash].Validators.VotedPercentage)
+}
+
 func TestConformStateToParamUpdate(t *testing.T) {
 	const amount = uint64(100)
 	// preset param sets to test the adjustment after the update
