@@ -151,6 +151,10 @@ func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.Plugin
 	if err != nil {
 		return &contract.PluginCheckResponse{Error: err}
 	}
+	// Range checks on amount and fee, gated on height (safetychecks.go).
+	if err := c.checkTxRanges(msg, request.Tx.Fee); err != nil {
+		return &contract.PluginCheckResponse{Error: err}
+	}
 	switch x := msg.(type) {
 	case *contract.MessageSend:
 		return c.checkMessageSend(x, request.Tx.Fee)
@@ -222,8 +226,12 @@ func (c *Canoliq) accrueTxFee(fee uint64) *contract.PluginError {
 		return nil
 	}
 	key := KeyForTxFeeAccrual()
+	accrued := c.readScalar(key)
+	if err := c.guardAdds(accrued, fee); err != nil {
+		return err
+	}
 	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
-		Sets: []*contract.PluginSetOp{{Key: key, Value: EncodeUint64(c.readScalar(key) + fee)}},
+		Sets: []*contract.PluginSetOp{{Key: key, Value: EncodeUint64(accrued + fee)}},
 	}); err != nil {
 		return err
 	}
@@ -238,6 +246,11 @@ func (c *Canoliq) dispatchDeliver(request *contract.PluginDeliverRequest) *contr
 	}
 	msg, err := contract.FromAny(request.Tx.Msg)
 	if err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
+	// Deliver repeats the Check-path range checks rather than trusting them
+	// (safetychecks.go).
+	if err := c.checkTxRanges(msg, request.Tx.Fee); err != nil {
 		return &contract.PluginDeliverResponse{Error: err}
 	}
 	switch x := msg.(type) {
@@ -477,12 +490,24 @@ func (c *Canoliq) deliverMessageSend(msg *contract.MessageSend, fee uint64) *con
 			}
 		}
 	}
+	if err := c.guardAdds(msg.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	deduct := msg.Amount + fee
 	if from.Amount < deduct {
 		return &contract.PluginDeliverResponse{Error: contract.ErrInsufficientFunds()}
 	}
-	if string(fromKey) == string(toKey) {
+	selfSend := string(fromKey) == string(toKey)
+	if selfSend {
 		to = from
+	}
+	if err := c.guardAdds(feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
+	if !selfSend {
+		if err := c.guardAdds(to.Amount, msg.Amount); err != nil {
+			return &contract.PluginDeliverResponse{Error: err}
+		}
 	}
 	// A recipient with no record yet must still carry its address; see
 	// accountaddress.go.

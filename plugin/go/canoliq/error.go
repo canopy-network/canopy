@@ -63,6 +63,8 @@ const (
 	// PluginError.Code, so renumbering an existing one would change the error
 	// every already-deployed client sees.
 	codeOTCTierRateZero
+	codeAmountOutOfRange
+	codeFeeAboveMaximum
 )
 
 // newError constructs a PluginError stamped with the canoLiq module.
@@ -344,4 +346,16 @@ func ErrOTCLockNotMature() *contract.PluginError {
 // mistimed transaction.
 func ErrOTCLockMatured() *contract.PluginError {
 	return newError(codeOTCLockMatured, "OTC lock position has matured; claim it instead of cancelling")
+}
+
+// ErrAmountOutOfRange is returned when an amount, fee, or a balance it is
+// added to falls outside the representable range (see safetychecks.go).
+func ErrAmountOutOfRange() *contract.PluginError {
+	return newError(codeAmountOutOfRange, "amount or fee out of range")
+}
+
+// ErrFeeAboveMaximum is returned when a transaction fee exceeds
+// MaxTxFeeUcnpy (see safetychecks.go).
+func ErrFeeAboveMaximum() *contract.PluginError {
+	return newError(codeFeeAboveMaximum, fmt.Sprintf("fee above maximum of %d uCNPY", MaxTxFeeUcnpy))
 }

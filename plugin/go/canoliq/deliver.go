@@ -69,8 +69,11 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 	// See the tvl-cap docs page for the operator-facing semantics.
 	// From MainnetFixedTvlCapHeight a fixed ceiling replaces it on mainnet
 	// (tvlcapfixed.go).
+	if err := c.guardAdds(msg.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	if fixedTvlCapActive(c.Config.Profile, c.plugin.CurrentHeight()) {
-		if globals.TotalPooledCnpy+msg.Amount > MainnetFixedTvlCapUcnpy {
+		if c.poolExceedsCap(globals.TotalPooledCnpy, msg.Amount, MainnetFixedTvlCapUcnpy) {
 			return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
 		}
 	} else if params.TvlCapBps > 0 {
@@ -91,7 +94,7 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 		if decision.Err != nil {
 			return &contract.PluginDeliverResponse{Error: decision.Err}
 		}
-		if decision.CapUcnpy > 0 && globals.TotalPooledCnpy+msg.Amount > decision.CapUcnpy {
+		if decision.CapUcnpy > 0 && c.poolExceedsCap(globals.TotalPooledCnpy, msg.Amount, decision.CapUcnpy) {
 			return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
 		}
 	}
@@ -103,13 +106,22 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 	if mint == 0 {
 		return &contract.PluginDeliverResponse{Error: ErrPoolMath("mint computed to zero")}
 	}
+	current := DecodeUint64(balanceBz)
+	if err := c.guardAdds(
+		feePool.Amount, fee,
+		escrow.Amount, msg.Amount,
+		current, mint,
+		globals.TotalCcnpySupply, mint,
+		globals.TotalPooledCnpy, msg.Amount,
+	); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	from.Amount -= deduct
 	feePool.Amount += fee
 	// H1: persist the deposited principal into the dedicated escrow pool so it
 	// actually backs the cCNPY just minted. This keeps the invariant
 	// escrow.Amount == TotalPooledCnpy + PendingRedemptionCnpy.
 	escrow.Amount += msg.Amount
-	current := DecodeUint64(balanceBz)
 	current += mint
 	globals.TotalCcnpySupply += mint
 	globals.TotalPooledCnpy += msg.Amount
@@ -213,6 +225,9 @@ func (c *Canoliq) DeliverMessageCanoliqRedeem(msg *contract.MessageCanoliqRedeem
 	cnpyOwed := computeRedeem(msg.CcnpyAmount, globals.TotalCcnpySupply, globals.TotalPooledCnpy)
 	if cnpyOwed == 0 {
 		return &contract.PluginDeliverResponse{Error: ErrPoolMath("redeem computed to zero")}
+	}
+	if err := c.guardAdds(globals.PendingRedemptionCnpy, cnpyOwed, feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
 	}
 	bal -= msg.CcnpyAmount
 	globals.TotalCcnpySupply -= msg.CcnpyAmount
@@ -370,6 +385,9 @@ func (c *Canoliq) DeliverMessageCanoliqClaimRedemption(msg *contract.MessageCano
 	if escrow.Amount < redemption.CnpyAmount {
 		return &contract.PluginDeliverResponse{Error: ErrPoolMath("escrow underflow on claim")}
 	}
+	if err := c.guardAdds(from.Amount-fee, redemption.CnpyAmount, feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	escrow.Amount -= redemption.CnpyAmount
 	from.Amount = from.Amount - fee + redemption.CnpyAmount
 	feePool.Amount += fee
@@ -489,6 +507,9 @@ func (c *Canoliq) DeliverMessageCanoliqTransfer(msg *contract.MessageCanoliqTran
 	if fromBal < msg.Amount {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCCNPY()}
 	}
+	if err := c.guardAdds(toBal, msg.Amount, feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	fromBal -= msg.Amount
 	toBal += msg.Amount
 	cnpyFrom.Amount -= fee
@@ -580,6 +601,9 @@ func (c *Canoliq) DeliverMessageCPLQTransfer(msg *contract.MessageCPLQTransfer, 
 	toBal := DecodeUint64(toBz)
 	if fromBal < msg.Amount {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCPLQ()}
+	}
+	if err := c.guardAdds(toBal, msg.Amount, feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
 	}
 	fromBal -= msg.Amount
 	toBal += msg.Amount
@@ -703,6 +727,9 @@ func (c *Canoliq) DeliverMessageCPLQClaimVested(msg *contract.MessageCPLQClaimVe
 			continue
 		}
 		delta := newClaim - sched.ClaimedAmount
+		if err := c.guardAdds(totalUnlocked, delta); err != nil {
+			return &contract.PluginDeliverResponse{Error: err}
+		}
 		sched.ClaimedAmount = newClaim
 		totalUnlocked += delta
 		bz, e := contract.Marshal(sched)
@@ -713,6 +740,9 @@ func (c *Canoliq) DeliverMessageCPLQClaimVested(msg *contract.MessageCPLQClaimVe
 	}
 	if totalUnlocked == 0 {
 		return &contract.PluginDeliverResponse{Error: ErrNothingToClaim()}
+	}
+	if err := c.guardAdds(DecodeUint64(balBz), totalUnlocked, feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
 	}
 	bal := DecodeUint64(balBz) + totalUnlocked
 	cnpy.Amount -= fee
@@ -764,6 +794,9 @@ func (c *Canoliq) bumpCirculating(delta uint64) *contract.PluginError {
 		if e := contract.Unmarshal(resp.Results[0].Entries[0].Value, globals); e != nil {
 			return e
 		}
+	}
+	if err := c.guardAdds(globals.CplqCirculatingSupply, delta); err != nil {
+		return err
 	}
 	globals.CplqCirculatingSupply += delta
 	bz, e := contract.Marshal(globals)

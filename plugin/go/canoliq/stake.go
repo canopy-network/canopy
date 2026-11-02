@@ -238,6 +238,9 @@ func (c *Canoliq) DeliverMessageCPLQStake(msg *contract.MessageCPLQStake, fee ui
 	if bal < msg.Amount {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCPLQ()}
 	}
+	if err := c.guardAdds(feePool.Amount, fee, stake.Amount, msg.Amount, globals.TotalStakedCplq, msg.Amount); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	bal -= msg.Amount
 	cnpy.Amount -= fee
 	feePool.Amount += fee
@@ -386,6 +389,9 @@ func (c *Canoliq) DeliverMessageCPLQUnstake(msg *contract.MessageCPLQUnstake, fe
 	if cnpy.Amount < fee {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}
 	}
+	if err := c.guardAdds(feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	stake.Amount -= msg.Amount
 	cnpy.Amount -= fee
 	feePool.Amount += fee
@@ -522,6 +528,9 @@ func (c *Canoliq) DeliverMessageCPLQClaimUnstake(msg *contract.MessageCPLQClaimU
 	}
 	if cnpy.Amount < fee {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}
+	}
+	if err := c.guardAdds(feePool.Amount, fee, DecodeUint64(balBz), unstake.Amount); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
 	}
 	cnpy.Amount -= fee
 	feePool.Amount += fee

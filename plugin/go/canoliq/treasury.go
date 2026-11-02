@@ -174,6 +174,9 @@ func (c *Canoliq) DeliverMessageDAOTreasurySpend(msg *contract.MessageDAOTreasur
 			return &contract.PluginDeliverResponse{Error: ErrSpendNotReady()}
 		}
 	}
+	if err := c.guardAdds(feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	if err := c.applySpend(spend); err != nil {
 		return &contract.PluginDeliverResponse{Error: err}
 	}
@@ -265,6 +268,9 @@ func (c *Canoliq) DeliverMessageMultisigApprove(msg *contract.MessageMultisigApp
 	if cnpy.Amount < fee {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}
 	}
+	if err := c.guardAdds(feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	cnpy.Amount -= fee
 	feePool.Amount += fee
 	approval := &contract.MultisigApproval{SpendId: msg.SpendId, Signer: msg.FromAddress, Height: c.currentHeight()}
@@ -315,6 +321,9 @@ func (c *Canoliq) applySpend(spend *contract.TreasurySpend) *contract.PluginErro
 		if c.accountAddressFixActive(c.currentHeight()) {
 			recip.Address = spend.Payload.Recipient
 		}
+		if err := c.guardAdds(recip.Amount, spend.Payload.Amount); err != nil {
+			return err
+		}
 		recip.Amount += spend.Payload.Amount
 		recipBz, e := contract.Marshal(recip)
 		if e != nil {
@@ -361,7 +370,11 @@ func (c *Canoliq) applySpend(spend *contract.TreasurySpend) *contract.PluginErro
 		}
 		treasury -= spend.Payload.Amount
 		recipBalKey := KeyForCPLQBalance(spend.Payload.Recipient)
-		recipBal := DecodeUint64(c.readBytes(recipBalKey)) + spend.Payload.Amount
+		prevBal := DecodeUint64(c.readBytes(recipBalKey))
+		if err := c.guardAdds(prevBal, spend.Payload.Amount); err != nil {
+			return err
+		}
+		recipBal := prevBal + spend.Payload.Amount
 		spend.Executed = true
 		spendBz, e := contract.Marshal(spend)
 		if e != nil {
