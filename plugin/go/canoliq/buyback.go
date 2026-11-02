@@ -96,8 +96,12 @@ func (c *Canoliq) DeliverMessageBuybackExecute(msg *contract.MessageBuybackExecu
 	if treasuryCPLQ < cplqAcquired {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientTreasuryCPLQ()}
 	}
+	prevTreasuryCNPY := c.readScalar(KeyForTreasuryCNPY())
+	if err := c.guardAdds(prevTreasuryCNPY, cnpyDraw, feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	treasuryCPLQ -= cplqAcquired
-	treasuryCNPY := c.readScalar(KeyForTreasuryCNPY()) + cnpyDraw
+	treasuryCNPY := prevTreasuryCNPY + cnpyDraw
 	available -= cnpyDraw
 	cnpy.Amount -= fee
 	feePool.Amount += fee

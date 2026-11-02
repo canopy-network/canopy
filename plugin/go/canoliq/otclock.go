@@ -229,6 +229,9 @@ func (c *Canoliq) DeliverMessageOTCLockCreate(msg *contract.MessageOTCLockCreate
 	if cnpy.Amount < fee {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}
 	}
+	if err := c.guardAdds(feePool.Amount, fee, DecodeUint64(resvBz), reward); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	cnpy.Amount -= fee
 	feePool.Amount += fee
 	ccnpyBal -= msg.CcnpyAmount
@@ -313,6 +316,9 @@ func (c *Canoliq) DeliverMessageOTCLockClaim(msg *contract.MessageOTCLockClaim, 
 	if st.cnpy.Amount < fee {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}
 	}
+	if err := c.guardAdds(st.feePool.Amount, fee, st.ccnpyBal, st.lock.CcnpyAmount, st.cplqBal, st.lock.RewardCplq); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	st.cnpy.Amount -= fee
 	st.feePool.Amount += fee
 	// cCNPY returns to the spendable balance; the reserved CPLQ is paid.
@@ -353,6 +359,9 @@ func (c *Canoliq) DeliverMessageOTCLockCancel(msg *contract.MessageOTCLockCancel
 	}
 	if st.cnpy.Amount < fee {
 		return &contract.PluginDeliverResponse{Error: ErrInsufficientCNPY()}
+	}
+	if err := c.guardAdds(st.feePool.Amount, fee, st.ccnpyBal, st.lock.CcnpyAmount, st.available, st.lock.RewardCplq); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
 	}
 	st.cnpy.Amount -= fee
 	st.feePool.Amount += fee

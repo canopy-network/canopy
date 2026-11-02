@@ -117,6 +117,9 @@ func (c *Canoliq) DeliverMessageCPLQProposalCreate(msg *contract.MessageCPLQProp
 	if err != nil {
 		return &contract.PluginDeliverResponse{Error: err}
 	}
+	if err := c.guardAdds(feePool.Amount, fee); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	cnpy.Amount -= fee
 	feePool.Amount += fee
 	height := c.currentHeight()
@@ -272,6 +275,9 @@ func (c *Canoliq) DeliverMessageCPLQVote(msg *contract.MessageCPLQVote, fee uint
 		}
 		// Vote weight = raw stake × the lock tier's voting multiplier (T2).
 		weight = voteWeightFor(stake)
+	}
+	if err := c.guardAdds(feePool.Amount, fee, prop.YesWeight, weight, prop.NoWeight, weight, prop.AbstainWeight, weight); err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
 	}
 	cnpy.Amount -= fee
 	feePool.Amount += fee
