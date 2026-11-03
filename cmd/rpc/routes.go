@@ -33,6 +33,7 @@ const (
 	ValParamRoutePath              = "/v1/query/val-params"
 	EcoParamRoutePath              = "/v1/query/eco-params"
 	StateRoutePath                 = "/v1/query/state"
+	ProofRoutePath                 = "/v1/query/proof"
 	StateDiffRoutePath             = "/v1/query/state-diff"
 	StateDiffGetRoutePath          = "/v1/query/state-diff"
 	CertByHeightRoutePath          = "/v1/query/cert-by-height"
@@ -130,6 +131,7 @@ const (
 	ValParamRouteName              = "val-params"
 	EcoParamRouteName              = "eco-params"
 	StateRouteName                 = "state"
+	ProofRouteName                 = "proof"
 	StateDiffRouteName             = "state-diff"
 	StateDiffGetRouteName          = "state-diff-get"
 	CertByHeightRouteName          = "cert-by-height"
@@ -237,6 +239,7 @@ var routePaths = routes{
 	ValParamRouteName:              {Method: http.MethodPost, Path: ValParamRoutePath},
 	EcoParamRouteName:              {Method: http.MethodPost, Path: EcoParamRoutePath},
 	StateRouteName:                 {Method: http.MethodGet, Path: StateRoutePath},
+	ProofRouteName:                 {Method: http.MethodPost, Path: ProofRoutePath},
 	StateDiffRouteName:             {Method: http.MethodPost, Path: StateDiffRoutePath},
 	StateDiffGetRouteName:          {Method: http.MethodGet, Path: StateDiffGetRoutePath},
 	CertByHeightRouteName:          {Method: http.MethodPost, Path: CertByHeightRoutePath},
@@ -339,6 +342,7 @@ func createRouter(s *Server) *httprouter.Router {
 		EcoParamRouteName:              s.EcoParameters,
 		SupplyRouteName:                s.Supply,
 		StateRouteName:                 s.State,
+		ProofRouteName:                 s.Proof,
 		StateDiffRouteName:             s.StateDiff,
 		StateDiffGetRouteName:          s.StateDiff,
 		CertByHeightRouteName:          s.CertByHeight,

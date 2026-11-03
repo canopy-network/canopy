@@ -348,26 +348,44 @@ type pluginQueryProvider struct {
 	controller *Controller
 }
 
-// QueryState() executes a read-only state read against a TimeMachine snapshot at the given height (0 = latest committed)
-func (p *pluginQueryProvider) QueryState(height uint64, request *lib.PluginStateReadRequest) (lib.PluginStateReadResponse, lib.ErrorI) {
+// QueryState() executes a read-only state read against a TimeMachine snapshot at the given height
+// (0 = latest committed). It also returns the snapshot's state commitment root and the concrete
+// height it resolved to, so merkle proofs requested in the read can be verified against them.
+func (p *pluginQueryProvider) QueryState(height uint64, request *lib.PluginStateReadRequest) (lib.PluginStateReadResponse, []byte, uint64, lib.ErrorI) {
 	// guard: a nil read request would nil-deref in StateRead()
 	if request == nil {
-		return lib.PluginStateReadResponse{}, lib.ErrNilPluginQueryRead()
+		return lib.PluginStateReadResponse{}, nil, 0, lib.ErrNilPluginQueryRead()
 	}
 	// create a read-only state snapshot at the requested height
 	sm, err := p.controller.FSM.TimeMachine(height)
 	if err != nil {
-		return lib.PluginStateReadResponse{}, lib.ErrTimeMachine(err)
+		return lib.PluginStateReadResponse{}, nil, 0, lib.ErrTimeMachine(err)
 	}
 	// at height 0 (fresh node, pre-first-commit) TimeMachine returns the LIVE FSM, not a snapshot;
 	// never read from — nor Discard() — the live consensus store
 	if sm == p.controller.FSM {
-		return lib.PluginStateReadResponse{}, lib.ErrNoCommittedState()
+		return lib.PluginStateReadResponse{}, nil, 0, lib.ErrNoCommittedState()
 	}
 	// ensure proper cleanup of the snapshot
 	defer sm.Discard()
-	// execute the read against the read-only state
-	return sm.StateRead(request)
+	// the snapshot store must support proofs/roots (TimeMachine returns a read-only lib.StoreI)
+	store, ok := sm.Store().(lib.StoreI)
+	if !ok {
+		return lib.PluginStateReadResponse{}, nil, 0, fsm.ErrWrongStoreType()
+	}
+	// compute the state root ONCE up front. This also initializes the sparse-merkle-tree, which is a
+	// prerequisite for GetProof() during the read below, and gives the client the root to verify against
+	root, err := store.Root()
+	if err != nil {
+		return lib.PluginStateReadResponse{}, nil, 0, err
+	}
+	// execute the read (which attaches per-key proofs for any key that requested one)
+	resp, err := sm.StateRead(request)
+	if err != nil {
+		return lib.PluginStateReadResponse{}, nil, 0, err
+	}
+	// the resolved height is the version the read-only snapshot is pinned to
+	return resp, root, store.Version(), nil
 }
 
 // resolvePluginCtlPath() locates the plugin control script from common startup locations

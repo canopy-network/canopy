@@ -29,8 +29,11 @@ type PluginCompatibleFSM interface {
 // queries from the plugin. Unlike PluginCompatibleFSM, these queries are not tied to an
 // in-flight tx/block lifecycle and operate against a historical read-only snapshot of state.
 type PluginQueryProvider interface {
-	// QueryState() executes a 'read request' against a read-only state snapshot at the given height (0 = latest committed)
-	QueryState(height uint64, request *PluginStateReadRequest) (response PluginStateReadResponse, err ErrorI)
+	// QueryState() executes a 'read request' against a read-only state snapshot at the given height
+	// (0 = latest committed). It also returns the state commitment root and the concrete height the
+	// query resolved to, so that any merkle proofs included in the response can be verified against an
+	// independently authenticated root at a known height.
+	QueryState(height uint64, request *PluginStateReadRequest) (response PluginStateReadResponse, stateRoot []byte, resolvedHeight uint64, err ErrorI)
 }
 
 // Plugin defines the 'VM-less' extension of the Finite State Machine
@@ -438,13 +441,16 @@ func (p *Plugin) handleQueryRequest(msg *PluginToFSM) ErrorI {
 		response.Error = NewPluginError(ErrNilPluginQueryRead())
 	} else {
 		// execute the detached read-only query
-		read, err := provider.QueryState(request.GetHeight(), request.GetRead())
+		read, stateRoot, resolvedHeight, err := provider.QueryState(request.GetHeight(), request.GetRead())
 		if err != nil {
 			p.log.Debugf("handleQueryRequest() query provider error: %v", err)
 			response.Error = NewPluginError(err)
 		} else {
 			p.log.Debugf("handleQueryRequest() query provider success: %+v", read)
 			response.Read = &read
+			// surface the snapshot's root + resolved height so proofs in 'read' can be verified
+			response.StateRoot = stateRoot
+			response.Height = resolvedHeight
 		}
 	}
 	// send response back to the plugin
