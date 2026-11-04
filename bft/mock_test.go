@@ -574,6 +574,10 @@ func (t *testController) LoadCommitteeData() (*lib.CommitteeData, lib.ErrorI) {
 	return &lib.CommitteeData{}, nil
 }
 func (t *testController) RootChainHeight() uint64 { return 0 }
+func (t *testController) ActiveRootHeight() (uint64, bool) {
+	return t.RootChainHeight(), false
+}
+func (t *testController) CheckRootBuildHeight(_ uint64, _ bool) lib.ErrorI { return nil }
 func (t *testController) LoadLastProposers(_ uint64) (*lib.Proposers, lib.ErrorI) {
 	return t.proposers, nil
 }

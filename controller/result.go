@@ -23,6 +23,8 @@ func (c *Controller) NewCertificateResults(
 	// calculate reward recipients, creating a 'certificate results' object reference in the process
 	rewardsStartTime := time.Now()
 	results = c.CalculateRewardRecipients(fsm, block.BlockHeader.ProposerAddress, rcBuildHeight)
+	// record the root height this block was built on, it pins the committee for the next height
+	results.RootBuildHeight = rcBuildHeight
 	rewardsDuration := time.Since(rewardsStartTime)
 	if c.Metrics != nil {
 		c.Metrics.CertResultsRewards.Observe(rewardsDuration.Seconds())
