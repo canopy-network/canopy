@@ -25,6 +25,9 @@ type Canoliq struct {
 	// warnMissedActivationOnce keeps the "activationHeight already passed"
 	// warning to a single log line instead of one per block.
 	warnMissedActivationOnce sync.Once
+	// reqHeight is the height carried on a CheckTx/DeliverTx request (0 for
+	// other requests). See currentHeight in governancelimits.go.
+	reqHeight uint64
 }
 
 // Genesis runs the canoLiq genesis distribution exactly once. It is idempotent:
@@ -58,6 +61,9 @@ func (c *Canoliq) BeginBlock(req *contract.PluginBeginRequest) *contract.PluginB
 		return &contract.PluginBeginResponse{Error: err}
 	}
 	if err := c.advanceGraduationWindow(height); err != nil {
+		return &contract.PluginBeginResponse{Error: err}
+	}
+	if err := c.applyPendingParamChanges(height); err != nil {
 		return &contract.PluginBeginResponse{Error: err}
 	}
 	if err := c.processProposals(height); err != nil {
@@ -143,6 +149,7 @@ func (c *Canoliq) bootstrapGenesisIfNeeded(height uint64) *contract.PluginError 
 // signer set. The 'send' message is delegated to the existing contract
 // package handler so the canoLiq plugin remains a superset of the tutorial.
 func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.PluginCheckResponse {
+	c.reqHeight = request.GetHeight()
 	params, err := c.LoadParams()
 	if err != nil {
 		return &contract.PluginCheckResponse{Error: err}
@@ -202,6 +209,7 @@ func (c *Canoliq) CheckTx(request *contract.PluginCheckRequest) *contract.Plugin
 // (see countGraduationTx) so the autonomy-graduation surface can report
 // throughput.
 func (c *Canoliq) DeliverTx(request *contract.PluginDeliverRequest) *contract.PluginDeliverResponse {
+	c.reqHeight = request.GetHeight()
 	resp := c.dispatchDeliver(request)
 	if resp != nil && resp.Error == nil {
 		if err := c.countGraduationTx(); err != nil {

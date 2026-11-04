@@ -131,15 +131,24 @@ func (c *Canoliq) DeliverMessageCPLQProposalCreate(msg *contract.MessageCPLQProp
 	// back to the scalar voting-period / quorum / timelock knobs.
 	action := actionTypeForPayload(payload)
 	tier := tierFor(params, action)
+	// From activation: active-proposal caps, sensitive parameter changes
+	// voted on the strictest tier (governancelimits.go).
+	if c.governanceLimitsActive(height) {
+		if tier, err = c.prepareProposalCreate(msg.FromAddress, payload, params, idx, tier); err != nil {
+			return &contract.PluginDeliverResponse{Error: err}
+		}
+	}
 	votingPeriod := params.VotingPeriodBlocks
 	if tier != nil && tier.VotingPeriodBlocks > 0 {
 		votingPeriod = tier.VotingPeriodBlocks
 	}
+	votingPeriod = c.effectiveVotingPeriod(votingPeriod)
 	// M1: snapshot the lock-boosted stake total as the quorum/turnout
 	// denominator so it is measured on the same basis as the boosted vote
 	// tallies (voteWeightFor). Using raw TotalStakedCplq here let a single
 	// long-lock voter clear quorum with a fraction of the implied stake.
-	snapshotTotalStaked, sErr := c.boostedStakeTotal()
+	// From activation it is a running total (governancelimits.go).
+	snapshotTotalStaked, totalSet, sErr := c.snapshotBoostedTotal()
 	if sErr != nil {
 		return &contract.PluginDeliverResponse{Error: sErr}
 	}
@@ -181,6 +190,9 @@ func (c *Canoliq) DeliverMessageCPLQProposalCreate(msg *contract.MessageCPLQProp
 		{Key: gKey, Value: gBz},
 		{Key: idxKey, Value: idxBz},
 		{Key: feePoolKey, Value: feeBz},
+	}
+	if totalSet != nil {
+		sets = append(sets, totalSet)
 	}
 	var deletes []*contract.PluginDeleteOp
 	if cnpy.Amount == 0 {
@@ -387,7 +399,7 @@ func (c *Canoliq) processProposals(_ uint64) *contract.PluginError {
 			turnoutSumDelta += turnout
 			turnoutCountDelta++
 		}
-		passed := proposalPasses(prop, params)
+		passed := c.proposalPassesAt(prop, params, height)
 		if passed {
 			prop.Status = contract.ProposalStatus_PROPOSAL_PASSED
 			// A failed dispatch must never abort the block. processProposals
@@ -502,6 +514,11 @@ func (c *Canoliq) dispatchPassed(prop *contract.Proposal, params *contract.Canol
 		if p.Params == nil {
 			return ErrInvalidProposalPayload()
 		}
+		// From activation the change waits out its tier timelock and must
+		// respect the floors and sensitive-parameter rule (governancelimits.go).
+		if c.governanceLimitsActive(height) {
+			return c.dispatchParamChangeGated(prop, p.Params, params, height, false)
+		}
 		if err := ValidateParams(p.Params); err != nil {
 			return err
 		}
@@ -539,6 +556,9 @@ func (c *Canoliq) dispatchPassed(prop *contract.Proposal, params *contract.Canol
 		// F13: emergency actions run on the fast-track tier (24h vote, no
 		// timelock). The optional param diff applies immediately on pass.
 		if p.ParamChange != nil && p.ParamChange.Params != nil {
+			if c.governanceLimitsActive(height) {
+				return c.dispatchParamChangeGated(prop, p.ParamChange.Params, params, height, true)
+			}
 			if err := ValidateParams(p.ParamChange.Params); err != nil {
 				return err
 			}
@@ -557,6 +577,13 @@ func (c *Canoliq) dispatchPassed(prop *contract.Proposal, params *contract.Canol
 // state. Caller is responsible for trimming the proposal index list.
 func (c *Canoliq) cleanupProposal(prop *contract.Proposal) *contract.PluginError {
 	deletes := []*contract.PluginDeleteOp{{Key: KeyForProposal(prop.Id)}}
+	// From activation the proposal's vote records are deleted with it
+	// (governancelimits.go); the note below describes the earlier behaviour.
+	voteDeletes, err := c.voteDeletesFor(prop.Id)
+	if err != nil {
+		return err
+	}
+	deletes = append(deletes, voteDeletes...)
 	// Vote records are per-(proposal, voter); without a per-proposal voter
 	// index we cannot enumerate them. We do not persist a voter list because
 	// votes are accessed only by direct key. Stale vote keys after proposal

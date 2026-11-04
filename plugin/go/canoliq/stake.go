@@ -241,6 +241,14 @@ func (c *Canoliq) DeliverMessageCPLQStake(msg *contract.MessageCPLQStake, fee ui
 	if err := c.guardAdds(feePool.Amount, fee, stake.Amount, msg.Amount, globals.TotalStakedCplq, msg.Amount); err != nil {
 		return &contract.PluginDeliverResponse{Error: err}
 	}
+	limitsActive := c.governanceLimitsActive(c.currentHeight())
+	if limitsActive && !stakePresent && msg.Amount < MinCplqStakeUcplq {
+		return &contract.PluginDeliverResponse{Error: ErrStakeBelowMinimum()}
+	}
+	var oldWeight uint64
+	if stakePresent {
+		oldWeight = voteWeightFor(stake)
+	}
 	bal -= msg.Amount
 	cnpy.Amount -= fee
 	feePool.Amount += fee
@@ -269,6 +277,10 @@ func (c *Canoliq) DeliverMessageCPLQStake(msg *contract.MessageCPLQStake, fee ui
 		}
 	}
 	globals.TotalStakedCplq += msg.Amount
+	totalSet, err := c.boostedTotalUpdate(oldWeight, voteWeightFor(stake))
+	if err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	stakeBz, e := contract.Marshal(stake)
 	if e != nil {
 		return &contract.PluginDeliverResponse{Error: e}
@@ -294,6 +306,9 @@ func (c *Canoliq) DeliverMessageCPLQStake(msg *contract.MessageCPLQStake, fee ui
 		{Key: idxKey, Value: idxBz},
 		{Key: gKey, Value: gBz},
 		{Key: feePoolKey, Value: feeBz},
+	}
+	if totalSet != nil {
+		sets = append(sets, totalSet)
 	}
 	var deletes []*contract.PluginDeleteOp
 	if bal == 0 {
@@ -392,7 +407,21 @@ func (c *Canoliq) DeliverMessageCPLQUnstake(msg *contract.MessageCPLQUnstake, fe
 	if err := c.guardAdds(feePool.Amount, fee); err != nil {
 		return &contract.PluginDeliverResponse{Error: err}
 	}
+	if c.governanceLimitsActive(c.currentHeight()) {
+		if rest := stake.Amount - msg.Amount; rest > 0 && rest < MinCplqStakeUcplq {
+			return &contract.PluginDeliverResponse{Error: ErrStakeBelowMinimum()}
+		}
+	}
+	oldWeight := voteWeightFor(stake)
 	stake.Amount -= msg.Amount
+	var newWeight uint64
+	if stake.Amount > 0 {
+		newWeight = voteWeightFor(stake)
+	}
+	totalSet, err := c.boostedTotalUpdate(oldWeight, newWeight)
+	if err != nil {
+		return &contract.PluginDeliverResponse{Error: err}
+	}
 	cnpy.Amount -= fee
 	feePool.Amount += fee
 	if globals.TotalStakedCplq >= msg.Amount {
@@ -435,6 +464,9 @@ func (c *Canoliq) DeliverMessageCPLQUnstake(msg *contract.MessageCPLQUnstake, fe
 		{Key: unstIdxKey, Value: unstIdxBz},
 		{Key: gKey, Value: gBz},
 		{Key: feePoolKey, Value: feeBz},
+	}
+	if totalSet != nil {
+		sets = append(sets, totalSet)
 	}
 	var deletes []*contract.PluginDeleteOp
 	if stake.Amount == 0 {

@@ -65,6 +65,8 @@ const (
 	codeOTCTierRateZero
 	codeAmountOutOfRange
 	codeFeeAboveMaximum
+	codeTooManyProposals
+	codeStakeBelowMinimum
 )
 
 // newError constructs a PluginError stamped with the canoLiq module.
@@ -358,4 +360,16 @@ func ErrAmountOutOfRange() *contract.PluginError {
 // MaxTxFeeUcnpy (see safetychecks.go).
 func ErrFeeAboveMaximum() *contract.PluginError {
 	return newError(codeFeeAboveMaximum, fmt.Sprintf("fee above maximum of %d uCNPY", MaxTxFeeUcnpy))
+}
+
+// ErrTooManyProposals is returned when the active-proposal limit, global or
+// per proposer, is reached (governancelimits.go).
+func ErrTooManyProposals() *contract.PluginError {
+	return newError(codeTooManyProposals, "active proposal limit reached")
+}
+
+// ErrStakeBelowMinimum is returned when a CPLQ stake position would be
+// opened, or left, below MinCplqStakeUcplq (governancelimits.go).
+func ErrStakeBelowMinimum() *contract.PluginError {
+	return newError(codeStakeBelowMinimum, fmt.Sprintf("CPLQ stake position below minimum of %d uCPLQ", MinCplqStakeUcplq))
 }
