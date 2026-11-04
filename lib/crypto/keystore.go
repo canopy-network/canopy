@@ -289,11 +289,20 @@ func DecryptPrivateKey(epk *EncryptedPrivateKey, password []byte) (pk PrivateKey
 	if time == 0 && memoryKB == 0 && threads == 0 {
 		time, memoryKB, threads = DefaultKdfTime, DefaultKdfMemoryKB, DefaultKdfThreads
 	}
-	gcm, nonce, err := kdf(password, salt, time, memoryKB, uint8(threads))
+	gcm, legacyNonce, err := kdf(password, salt, time, memoryKB, uint8(threads))
 	if err != nil {
 		return nil, err
 	}
-	plainText, err := gcm.Open(nil, nonce, encrypted, nil)
+	// current format: a random nonce is prepended to the ciphertext (e.g. keystores
+	// exported from launchpad / newer wallets). Try that interpretation first.
+	nonceSize := gcm.NonceSize()
+	if len(encrypted) > nonceSize {
+		if plainText, openErr := gcm.Open(nil, encrypted[:nonceSize], encrypted[nonceSize:], nil); openErr == nil {
+			return NewPrivateKeyFromBytes(plainText)
+		}
+	}
+	// legacy format: the nonce was derived from the key material instead of stored
+	plainText, err := gcm.Open(nil, legacyNonce, encrypted, nil)
 	if err != nil {
 		return nil, err
 	}
