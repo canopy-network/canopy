@@ -46,6 +46,8 @@ var (
 	domainOTCLock       = []byte{28}
 	domainOTCLockIndex  = []byte{29}
 	domainOTCBudget     = []byte{30}
+	domainPendingParams = []byte{31}
+	domainBoostedTotal  = []byte{32}
 
 	treasuryCanopy = []byte("canopy")
 	treasuryCplq   = []byte("cplq")
@@ -373,4 +375,28 @@ func DecodeUint64(b []byte) uint64 {
 		return 0
 	}
 	return binary.BigEndian.Uint64(b)
+}
+
+// KeyForPendingParamChange returns the record of a passed parameter change
+// waiting out its timelock (governancelimits.go).
+func KeyForPendingParamChange(proposalID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainPendingParams, FormatUint64(proposalID))
+}
+
+// KeyForPendingParamIndex returns the singleton index of pending parameter
+// changes.
+func KeyForPendingParamIndex() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainPendingParams, indexSingleton)
+}
+
+// KeyForBoostedStakeTotal returns the running total of lock-boosted CPLQ
+// stake weight (governancelimits.go).
+func KeyForBoostedStakeTotal() []byte {
+	return JoinLenPrefix(canoliqPrefix, domainBoostedTotal)
+}
+
+// VotePrefixForProposal returns the prefix every KeyForVote key of a
+// proposal starts with.
+func VotePrefixForProposal(proposalID uint64) []byte {
+	return JoinLenPrefix(canoliqPrefix, domainVote, FormatUint64(proposalID))
 }

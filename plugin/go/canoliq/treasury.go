@@ -180,6 +180,16 @@ func (c *Canoliq) DeliverMessageDAOTreasurySpend(msg *contract.MessageDAOTreasur
 	if err := c.applySpend(spend); err != nil {
 		return &contract.PluginDeliverResponse{Error: err}
 	}
+	// applySpend may have credited the caller's own account. From activation,
+	// re-read it so the fee debit below builds on that write instead of
+	// overwriting it with the balance read before the spend.
+	if c.governanceBookkeepingActive(c.currentHeight()) {
+		fresh, err := c.loadAccount(cnpyKey)
+		if err != nil {
+			return &contract.PluginDeliverResponse{Error: err}
+		}
+		cnpy = fresh
+	}
 	cnpy.Amount -= fee
 	feePool.Amount += fee
 	cnpyBz, e := contract.Marshal(cnpy)

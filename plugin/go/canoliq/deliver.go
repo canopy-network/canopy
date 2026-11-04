@@ -72,7 +72,7 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 	if err := c.guardAdds(msg.Amount, fee); err != nil {
 		return &contract.PluginDeliverResponse{Error: err}
 	}
-	if fixedTvlCapActive(c.Config.Profile, c.plugin.CurrentHeight()) {
+	if fixedTvlCapActive(c.Config.Profile, c.currentHeight()) {
 		if c.poolExceedsCap(globals.TotalPooledCnpy, msg.Amount, MainnetFixedTvlCapUcnpy) {
 			return &contract.PluginDeliverResponse{Error: ErrTVLCapExceeded()}
 		}
@@ -86,7 +86,7 @@ func (c *Canoliq) DeliverMessageCanoliqDeposit(msg *contract.MessageCanoliqDepos
 			staked = supply.Staked
 		}
 		decision := evaluateTVLCap(params.TvlCapBps, supply != nil, staked)
-		if decision.Status == TVLCapStatusAwaitingCanopyStake && !c.rewardFixActive(c.plugin.CurrentHeight()) {
+		if decision.Status == TVLCapStatusAwaitingCanopyStake && !c.rewardFixActive(c.currentHeight()) {
 			// Before the activation height a readable Supply with zero stake
 			// accepted uncapped, and blocks from then must replay as they were.
 			decision.Err = nil
@@ -722,7 +722,7 @@ func (c *Canoliq) DeliverMessageCPLQClaimVested(msg *contract.MessageCPLQClaimVe
 		if e := contract.Unmarshal(r.Entries[0].Value, sched); e != nil {
 			return &contract.PluginDeliverResponse{Error: e}
 		}
-		newClaim := unlockedAmount(sched, height)
+		newClaim := c.unlockedAmountAt(sched, height)
 		if newClaim <= sched.ClaimedAmount {
 			continue
 		}
@@ -809,15 +809,4 @@ func (c *Canoliq) bumpCirculating(delta uint64) *contract.PluginError {
 		return err
 	}
 	return nil
-}
-
-// currentHeight returns the latest block height observed by the long-lived
-// plugin. Used by handlers that need height to evaluate vesting unlock or
-// redemption maturity. Returns 0 if no block lifecycle event has been seen
-// yet (typical in unit tests with a stub plugin).
-func (c *Canoliq) currentHeight() uint64 {
-	if c == nil || c.plugin == nil {
-		return 0
-	}
-	return c.plugin.CurrentHeight()
 }
