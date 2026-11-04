@@ -223,7 +223,7 @@ func waitForKill() {
 }
 
 func getFirstPassword(log lib.LoggerI) string {
-	// allow flag config to skip initial password
+	// allow flag config to skip initial password (and its confirmation)
 	if pwd != "" {
 		return pwd
 	}
@@ -234,8 +234,18 @@ func getFirstPassword(log lib.LoggerI) string {
 		if e != nil {
 			log.Fatal(e.Error())
 		}
-		if password == nil {
+		if len(password) == 0 {
 			log.Infof("Password cannot be empty")
+			continue
+		}
+		// confirm the password to protect against typos locking the user out of a new key
+		log.Infof("Confirm password for your new private key:")
+		confirm, e := term.ReadPassword(int(os.Stdin.Fd()))
+		if e != nil {
+			log.Fatal(e.Error())
+		}
+		if string(password) != string(confirm) {
+			log.Infof("Passwords do not match, please try again")
 			continue
 		}
 		return string(password)

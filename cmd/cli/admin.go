@@ -93,7 +93,7 @@ var (
 		Use:   "ks-new-key",
 		Short: "add a new key to the keystore of the node",
 		Run: func(cmd *cobra.Command, args []string) {
-			writeToConsole(client.KeystoreNewKey(getPassword(), getNickname()))
+			writeToConsole(client.KeystoreNewKey(getPasswordConfirm(), getNickname()))
 		},
 	}
 
@@ -115,7 +115,7 @@ var (
 		Short: "add a new key to the keystore of the node using the raw private key",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			writeToConsole(client.KeystoreImportRaw(args[0], getPassword(), getNickname()))
+			writeToConsole(client.KeystoreImportRaw(args[0], getPasswordConfirm(), getNickname()))
 		},
 	}
 
@@ -529,4 +529,31 @@ func getPassword() string {
 		return string(password)
 	}
 	return pwd
+}
+
+// getPasswordConfirm prompts for a password twice and fails if the two entries don't match.
+// Used when adding a new key so the user can't lock themselves out with a typo. If the
+// --password flag was supplied, it's used directly without prompting for confirmation.
+func getPasswordConfirm() string {
+	if pwd != "" {
+		return pwd
+	}
+	fmt.Println("Enter password:")
+	password, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		l.Fatal(err.Error())
+	}
+	if len(password) == 0 {
+		fmt.Println("Password cannot be empty")
+		return getPasswordConfirm()
+	}
+	fmt.Println("Confirm password:")
+	confirm, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		l.Fatal(err.Error())
+	}
+	if string(password) != string(confirm) {
+		l.Fatal("passwords do not match")
+	}
+	return string(password)
 }

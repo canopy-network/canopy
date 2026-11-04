@@ -15,6 +15,7 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
 
     const [newKeyForm, setNewKeyForm] = useState({
         password: '',
+        confirmPassword: '',
         walletName: ''
     });
 
@@ -38,6 +39,11 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
             return;
         }
 
+        if (newKeyForm.password !== newKeyForm.confirmPassword) {
+            toast.error({ title: 'Password mismatch', description: 'Passwords do not match.' });
+            return;
+        }
+
         const loadingToast = toast.info({
             title: 'Creating wallet...',
             description: 'Please wait while your wallet is created.',
@@ -58,7 +64,7 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
                 description: `Wallet "${newKeyForm.walletName}" is ready.`,
             });
 
-            setNewKeyForm({ password: '', walletName: '' });
+            setNewKeyForm({ password: '', confirmPassword: '', walletName: '' });
             onSuccess?.();
 
             const newAddress = typeof response === 'string' ? response : (response as any)?.address;
@@ -108,6 +114,18 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
                             placeholder="Password"
                             value={newKeyForm.password}
                             onChange={(e) => setNewKeyForm({ ...newKeyForm, password: e.target.value })}
+                            className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-2 block text-sm font-medium text-foreground/80">
+                            Confirm Password
+                        </label>
+                        <input
+                            type="password"
+                            placeholder="Confirm your password...."
+                            value={newKeyForm.confirmPassword}
+                            onChange={(e) => setNewKeyForm({ ...newKeyForm, confirmPassword: e.target.value })}
                             className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
                         />
                     </div>
