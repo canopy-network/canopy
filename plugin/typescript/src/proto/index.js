@@ -6011,6 +6011,8 @@ $root.types = (function() {
          * @memberof types
          * @interface IPluginQueryResponse
          * @property {types.IPluginStateReadResponse|null} [read] PluginQueryResponse read
+         * @property {Uint8Array|null} [stateRoot] PluginQueryResponse stateRoot
+         * @property {number|Long|null} [height] PluginQueryResponse height
          * @property {types.IPluginError|null} [error] PluginQueryResponse error
          */
 
@@ -6036,6 +6038,22 @@ $root.types = (function() {
          * @instance
          */
         PluginQueryResponse.prototype.read = null;
+
+        /**
+         * PluginQueryResponse stateRoot.
+         * @member {Uint8Array} stateRoot
+         * @memberof types.PluginQueryResponse
+         * @instance
+         */
+        PluginQueryResponse.prototype.stateRoot = $util.newBuffer([]);
+
+        /**
+         * PluginQueryResponse height.
+         * @member {number|Long} height
+         * @memberof types.PluginQueryResponse
+         * @instance
+         */
+        PluginQueryResponse.prototype.height = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
         /**
          * PluginQueryResponse error.
@@ -6071,6 +6089,10 @@ $root.types = (function() {
                 writer = $Writer.create();
             if (message.read != null && Object.hasOwnProperty.call(message, "read"))
                 $root.types.PluginStateReadResponse.encode(message.read, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.stateRoot != null && Object.hasOwnProperty.call(message, "stateRoot"))
+                writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.stateRoot);
+            if (message.height != null && Object.hasOwnProperty.call(message, "height"))
+                writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.height);
             if (message.error != null && Object.hasOwnProperty.call(message, "error"))
                 $root.types.PluginError.encode(message.error, writer.uint32(/* id 99, wireType 2 =*/794).fork()).ldelim();
             return writer;
@@ -6111,6 +6133,14 @@ $root.types = (function() {
                 switch (tag >>> 3) {
                 case 1: {
                         message.read = $root.types.PluginStateReadResponse.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 2: {
+                        message.stateRoot = reader.bytes();
+                        break;
+                    }
+                case 3: {
+                        message.height = reader.uint64();
                         break;
                     }
                 case 99: {
@@ -6157,6 +6187,12 @@ $root.types = (function() {
                 if (error)
                     return "read." + error;
             }
+            if (message.stateRoot != null && message.hasOwnProperty("stateRoot"))
+                if (!(message.stateRoot && typeof message.stateRoot.length === "number" || $util.isString(message.stateRoot)))
+                    return "stateRoot: buffer expected";
+            if (message.height != null && message.hasOwnProperty("height"))
+                if (!$util.isInteger(message.height) && !(message.height && $util.isInteger(message.height.low) && $util.isInteger(message.height.high)))
+                    return "height: integer|Long expected";
             if (message.error != null && message.hasOwnProperty("error")) {
                 var error = $root.types.PluginError.verify(message.error);
                 if (error)
@@ -6182,6 +6218,20 @@ $root.types = (function() {
                     throw TypeError(".types.PluginQueryResponse.read: object expected");
                 message.read = $root.types.PluginStateReadResponse.fromObject(object.read);
             }
+            if (object.stateRoot != null)
+                if (typeof object.stateRoot === "string")
+                    $util.base64.decode(object.stateRoot, message.stateRoot = $util.newBuffer($util.base64.length(object.stateRoot)), 0);
+                else if (object.stateRoot.length >= 0)
+                    message.stateRoot = object.stateRoot;
+            if (object.height != null)
+                if ($util.Long)
+                    (message.height = $util.Long.fromValue(object.height)).unsigned = true;
+                else if (typeof object.height === "string")
+                    message.height = parseInt(object.height, 10);
+                else if (typeof object.height === "number")
+                    message.height = object.height;
+                else if (typeof object.height === "object")
+                    message.height = new $util.LongBits(object.height.low >>> 0, object.height.high >>> 0).toNumber(true);
             if (object.error != null) {
                 if (typeof object.error !== "object")
                     throw TypeError(".types.PluginQueryResponse.error: object expected");
@@ -6205,10 +6255,29 @@ $root.types = (function() {
             var object = {};
             if (options.defaults) {
                 object.read = null;
+                if (options.bytes === String)
+                    object.stateRoot = "";
+                else {
+                    object.stateRoot = [];
+                    if (options.bytes !== Array)
+                        object.stateRoot = $util.newBuffer(object.stateRoot);
+                }
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, true);
+                    object.height = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.height = options.longs === String ? "0" : 0;
                 object.error = null;
             }
             if (message.read != null && message.hasOwnProperty("read"))
                 object.read = $root.types.PluginStateReadResponse.toObject(message.read, options);
+            if (message.stateRoot != null && message.hasOwnProperty("stateRoot"))
+                object.stateRoot = options.bytes === String ? $util.base64.encode(message.stateRoot, 0, message.stateRoot.length) : options.bytes === Array ? Array.prototype.slice.call(message.stateRoot) : message.stateRoot;
+            if (message.height != null && message.hasOwnProperty("height"))
+                if (typeof message.height === "number")
+                    object.height = options.longs === String ? String(message.height) : message.height;
+                else
+                    object.height = options.longs === String ? $util.Long.prototype.toString.call(message.height) : options.longs === Number ? new $util.LongBits(message.height.low >>> 0, message.height.high >>> 0).toNumber(true) : message.height;
             if (message.error != null && message.hasOwnProperty("error"))
                 object.error = $root.types.PluginError.toObject(message.error, options);
             return object;
@@ -6522,6 +6591,7 @@ $root.types = (function() {
          * @interface IPluginKeyRead
          * @property {number|Long|null} [queryId] PluginKeyRead queryId
          * @property {Uint8Array|null} [key] PluginKeyRead key
+         * @property {boolean|null} [prove] PluginKeyRead prove
          */
 
         /**
@@ -6556,6 +6626,14 @@ $root.types = (function() {
         PluginKeyRead.prototype.key = $util.newBuffer([]);
 
         /**
+         * PluginKeyRead prove.
+         * @member {boolean} prove
+         * @memberof types.PluginKeyRead
+         * @instance
+         */
+        PluginKeyRead.prototype.prove = false;
+
+        /**
          * Creates a new PluginKeyRead instance using the specified properties.
          * @function create
          * @memberof types.PluginKeyRead
@@ -6583,6 +6661,8 @@ $root.types = (function() {
                 writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.queryId);
             if (message.key != null && Object.hasOwnProperty.call(message, "key"))
                 writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.key);
+            if (message.prove != null && Object.hasOwnProperty.call(message, "prove"))
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.prove);
             return writer;
         };
 
@@ -6627,6 +6707,10 @@ $root.types = (function() {
                         message.key = reader.bytes();
                         break;
                     }
+                case 3: {
+                        message.prove = reader.bool();
+                        break;
+                    }
                 default:
                     reader.skipType(tag & 7);
                     break;
@@ -6668,6 +6752,9 @@ $root.types = (function() {
             if (message.key != null && message.hasOwnProperty("key"))
                 if (!(message.key && typeof message.key.length === "number" || $util.isString(message.key)))
                     return "key: buffer expected";
+            if (message.prove != null && message.hasOwnProperty("prove"))
+                if (typeof message.prove !== "boolean")
+                    return "prove: boolean expected";
             return null;
         };
 
@@ -6697,6 +6784,8 @@ $root.types = (function() {
                     $util.base64.decode(object.key, message.key = $util.newBuffer($util.base64.length(object.key)), 0);
                 else if (object.key.length >= 0)
                     message.key = object.key;
+            if (object.prove != null)
+                message.prove = Boolean(object.prove);
             return message;
         };
 
@@ -6726,6 +6815,7 @@ $root.types = (function() {
                     if (options.bytes !== Array)
                         object.key = $util.newBuffer(object.key);
                 }
+                object.prove = false;
             }
             if (message.queryId != null && message.hasOwnProperty("queryId"))
                 if (typeof message.queryId === "number")
@@ -6734,6 +6824,8 @@ $root.types = (function() {
                     object.queryId = options.longs === String ? $util.Long.prototype.toString.call(message.queryId) : options.longs === Number ? new $util.LongBits(message.queryId.low >>> 0, message.queryId.high >>> 0).toNumber(true) : message.queryId;
             if (message.key != null && message.hasOwnProperty("key"))
                 object.key = options.bytes === String ? $util.base64.encode(message.key, 0, message.key.length) : options.bytes === Array ? Array.prototype.slice.call(message.key) : message.key;
+            if (message.prove != null && message.hasOwnProperty("prove"))
+                object.prove = message.prove;
             return object;
         };
 
@@ -7341,6 +7433,8 @@ $root.types = (function() {
          * @interface IPluginReadResult
          * @property {number|Long|null} [queryId] PluginReadResult queryId
          * @property {Array.<types.IPluginStateEntry>|null} [entries] PluginReadResult entries
+         * @property {Array.<types.IProofNode>|null} [proof] PluginReadResult proof
+         * @property {boolean|null} [exists] PluginReadResult exists
          */
 
         /**
@@ -7353,6 +7447,7 @@ $root.types = (function() {
          */
         function PluginReadResult(properties) {
             this.entries = [];
+            this.proof = [];
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -7374,6 +7469,22 @@ $root.types = (function() {
          * @instance
          */
         PluginReadResult.prototype.entries = $util.emptyArray;
+
+        /**
+         * PluginReadResult proof.
+         * @member {Array.<types.IProofNode>} proof
+         * @memberof types.PluginReadResult
+         * @instance
+         */
+        PluginReadResult.prototype.proof = $util.emptyArray;
+
+        /**
+         * PluginReadResult exists.
+         * @member {boolean} exists
+         * @memberof types.PluginReadResult
+         * @instance
+         */
+        PluginReadResult.prototype.exists = false;
 
         /**
          * Creates a new PluginReadResult instance using the specified properties.
@@ -7404,6 +7515,11 @@ $root.types = (function() {
             if (message.entries != null && message.entries.length)
                 for (var i = 0; i < message.entries.length; ++i)
                     $root.types.PluginStateEntry.encode(message.entries[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.proof != null && message.proof.length)
+                for (var i = 0; i < message.proof.length; ++i)
+                    $root.types.ProofNode.encode(message.proof[i], writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.exists != null && Object.hasOwnProperty.call(message, "exists"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.exists);
             return writer;
         };
 
@@ -7448,6 +7564,16 @@ $root.types = (function() {
                         if (!(message.entries && message.entries.length))
                             message.entries = [];
                         message.entries.push($root.types.PluginStateEntry.decode(reader, reader.uint32()));
+                        break;
+                    }
+                case 3: {
+                        if (!(message.proof && message.proof.length))
+                            message.proof = [];
+                        message.proof.push($root.types.ProofNode.decode(reader, reader.uint32()));
+                        break;
+                    }
+                case 4: {
+                        message.exists = reader.bool();
                         break;
                     }
                 default:
@@ -7497,6 +7623,18 @@ $root.types = (function() {
                         return "entries." + error;
                 }
             }
+            if (message.proof != null && message.hasOwnProperty("proof")) {
+                if (!Array.isArray(message.proof))
+                    return "proof: array expected";
+                for (var i = 0; i < message.proof.length; ++i) {
+                    var error = $root.types.ProofNode.verify(message.proof[i]);
+                    if (error)
+                        return "proof." + error;
+                }
+            }
+            if (message.exists != null && message.hasOwnProperty("exists"))
+                if (typeof message.exists !== "boolean")
+                    return "exists: boolean expected";
             return null;
         };
 
@@ -7531,6 +7669,18 @@ $root.types = (function() {
                     message.entries[i] = $root.types.PluginStateEntry.fromObject(object.entries[i]);
                 }
             }
+            if (object.proof) {
+                if (!Array.isArray(object.proof))
+                    throw TypeError(".types.PluginReadResult.proof: array expected");
+                message.proof = [];
+                for (var i = 0; i < object.proof.length; ++i) {
+                    if (typeof object.proof[i] !== "object")
+                        throw TypeError(".types.PluginReadResult.proof: object expected");
+                    message.proof[i] = $root.types.ProofNode.fromObject(object.proof[i]);
+                }
+            }
+            if (object.exists != null)
+                message.exists = Boolean(object.exists);
             return message;
         };
 
@@ -7547,14 +7697,18 @@ $root.types = (function() {
             if (!options)
                 options = {};
             var object = {};
-            if (options.arrays || options.defaults)
+            if (options.arrays || options.defaults) {
                 object.entries = [];
-            if (options.defaults)
+                object.proof = [];
+            }
+            if (options.defaults) {
                 if ($util.Long) {
                     var long = new $util.Long(0, 0, true);
                     object.queryId = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                 } else
                     object.queryId = options.longs === String ? "0" : 0;
+                object.exists = false;
+            }
             if (message.queryId != null && message.hasOwnProperty("queryId"))
                 if (typeof message.queryId === "number")
                     object.queryId = options.longs === String ? String(message.queryId) : message.queryId;
@@ -7565,6 +7719,13 @@ $root.types = (function() {
                 for (var j = 0; j < message.entries.length; ++j)
                     object.entries[j] = $root.types.PluginStateEntry.toObject(message.entries[j], options);
             }
+            if (message.proof && message.proof.length) {
+                object.proof = [];
+                for (var j = 0; j < message.proof.length; ++j)
+                    object.proof[j] = $root.types.ProofNode.toObject(message.proof[j], options);
+            }
+            if (message.exists != null && message.hasOwnProperty("exists"))
+                object.exists = message.exists;
             return object;
         };
 
@@ -7595,6 +7756,276 @@ $root.types = (function() {
         };
 
         return PluginReadResult;
+    })();
+
+    types.ProofNode = (function() {
+
+        /**
+         * Properties of a ProofNode.
+         * @memberof types
+         * @interface IProofNode
+         * @property {Uint8Array|null} [key] ProofNode key
+         * @property {Uint8Array|null} [value] ProofNode value
+         * @property {number|null} [bitmask] ProofNode bitmask
+         */
+
+        /**
+         * Constructs a new ProofNode.
+         * @memberof types
+         * @classdesc Represents a ProofNode.
+         * @implements IProofNode
+         * @constructor
+         * @param {types.IProofNode=} [properties] Properties to set
+         */
+        function ProofNode(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ProofNode key.
+         * @member {Uint8Array} key
+         * @memberof types.ProofNode
+         * @instance
+         */
+        ProofNode.prototype.key = $util.newBuffer([]);
+
+        /**
+         * ProofNode value.
+         * @member {Uint8Array} value
+         * @memberof types.ProofNode
+         * @instance
+         */
+        ProofNode.prototype.value = $util.newBuffer([]);
+
+        /**
+         * ProofNode bitmask.
+         * @member {number} bitmask
+         * @memberof types.ProofNode
+         * @instance
+         */
+        ProofNode.prototype.bitmask = 0;
+
+        /**
+         * Creates a new ProofNode instance using the specified properties.
+         * @function create
+         * @memberof types.ProofNode
+         * @static
+         * @param {types.IProofNode=} [properties] Properties to set
+         * @returns {types.ProofNode} ProofNode instance
+         */
+        ProofNode.create = function create(properties) {
+            return new ProofNode(properties);
+        };
+
+        /**
+         * Encodes the specified ProofNode message. Does not implicitly {@link types.ProofNode.verify|verify} messages.
+         * @function encode
+         * @memberof types.ProofNode
+         * @static
+         * @param {types.IProofNode} message ProofNode message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ProofNode.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.key != null && Object.hasOwnProperty.call(message, "key"))
+                writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.key);
+            if (message.value != null && Object.hasOwnProperty.call(message, "value"))
+                writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.value);
+            if (message.bitmask != null && Object.hasOwnProperty.call(message, "bitmask"))
+                writer.uint32(/* id 3, wireType 0 =*/24).int32(message.bitmask);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ProofNode message, length delimited. Does not implicitly {@link types.ProofNode.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof types.ProofNode
+         * @static
+         * @param {types.IProofNode} message ProofNode message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ProofNode.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ProofNode message from the specified reader or buffer.
+         * @function decode
+         * @memberof types.ProofNode
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {types.ProofNode} ProofNode
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ProofNode.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.types.ProofNode();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.key = reader.bytes();
+                        break;
+                    }
+                case 2: {
+                        message.value = reader.bytes();
+                        break;
+                    }
+                case 3: {
+                        message.bitmask = reader.int32();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ProofNode message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof types.ProofNode
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {types.ProofNode} ProofNode
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ProofNode.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ProofNode message.
+         * @function verify
+         * @memberof types.ProofNode
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ProofNode.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.key != null && message.hasOwnProperty("key"))
+                if (!(message.key && typeof message.key.length === "number" || $util.isString(message.key)))
+                    return "key: buffer expected";
+            if (message.value != null && message.hasOwnProperty("value"))
+                if (!(message.value && typeof message.value.length === "number" || $util.isString(message.value)))
+                    return "value: buffer expected";
+            if (message.bitmask != null && message.hasOwnProperty("bitmask"))
+                if (!$util.isInteger(message.bitmask))
+                    return "bitmask: integer expected";
+            return null;
+        };
+
+        /**
+         * Creates a ProofNode message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof types.ProofNode
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {types.ProofNode} ProofNode
+         */
+        ProofNode.fromObject = function fromObject(object) {
+            if (object instanceof $root.types.ProofNode)
+                return object;
+            var message = new $root.types.ProofNode();
+            if (object.key != null)
+                if (typeof object.key === "string")
+                    $util.base64.decode(object.key, message.key = $util.newBuffer($util.base64.length(object.key)), 0);
+                else if (object.key.length >= 0)
+                    message.key = object.key;
+            if (object.value != null)
+                if (typeof object.value === "string")
+                    $util.base64.decode(object.value, message.value = $util.newBuffer($util.base64.length(object.value)), 0);
+                else if (object.value.length >= 0)
+                    message.value = object.value;
+            if (object.bitmask != null)
+                message.bitmask = object.bitmask | 0;
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ProofNode message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof types.ProofNode
+         * @static
+         * @param {types.ProofNode} message ProofNode
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ProofNode.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                if (options.bytes === String)
+                    object.key = "";
+                else {
+                    object.key = [];
+                    if (options.bytes !== Array)
+                        object.key = $util.newBuffer(object.key);
+                }
+                if (options.bytes === String)
+                    object.value = "";
+                else {
+                    object.value = [];
+                    if (options.bytes !== Array)
+                        object.value = $util.newBuffer(object.value);
+                }
+                object.bitmask = 0;
+            }
+            if (message.key != null && message.hasOwnProperty("key"))
+                object.key = options.bytes === String ? $util.base64.encode(message.key, 0, message.key.length) : options.bytes === Array ? Array.prototype.slice.call(message.key) : message.key;
+            if (message.value != null && message.hasOwnProperty("value"))
+                object.value = options.bytes === String ? $util.base64.encode(message.value, 0, message.value.length) : options.bytes === Array ? Array.prototype.slice.call(message.value) : message.value;
+            if (message.bitmask != null && message.hasOwnProperty("bitmask"))
+                object.bitmask = message.bitmask;
+            return object;
+        };
+
+        /**
+         * Converts this ProofNode to JSON.
+         * @function toJSON
+         * @memberof types.ProofNode
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ProofNode.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for ProofNode
+         * @function getTypeUrl
+         * @memberof types.ProofNode
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        ProofNode.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/types.ProofNode";
+        };
+
+        return ProofNode;
     })();
 
     types.PluginStateWriteRequest = (function() {

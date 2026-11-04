@@ -154,6 +154,30 @@ type hashRequest struct {
 	Hash string `json:"hash"`
 }
 
+// proofRequest requests a merkle membership/non-membership proof for a raw state key at a height
+type proofRequest struct {
+	Key lib.HexBytes `json:"key"`
+	heightRequest
+}
+
+// proofNode is a single node of a sparse-merkle-tree proof (leaf/sibling) in the proof response
+type proofNode struct {
+	Key     lib.HexBytes `json:"key"`
+	Value   lib.HexBytes `json:"value"`
+	Bitmask int32        `json:"bitmask"`
+}
+
+// proofResponse carries the value and a merkle proof for a state key, plus the height and
+// state root the answer was read at, so an untrusted client can verify it against a trusted header
+type proofResponse struct {
+	Height uint64       `json:"height"`
+	Root   lib.HexBytes `json:"root"`
+	Key    lib.HexBytes `json:"key"`
+	Value  lib.HexBytes `json:"value"`
+	Exists bool         `json:"exists"`
+	Proof  []proofNode  `json:"proof"`
+}
+
 type addressRequest struct {
 	Address lib.HexBytes `json:"address"`
 }

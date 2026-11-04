@@ -514,6 +514,70 @@ func (s *Server) State(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 	})
 }
 
+// Proof returns a sparse-merkle-tree membership (or non-membership) proof for an arbitrary raw
+// state key at a given height, together with the state root and height the proof commits to. This
+// is the trust-minimizing read path: an untrusted RPC node cannot forge a value or hide a key, as
+// the client recomputes the key itself and verifies the proof against a root it authenticates
+// independently (via the quorum certificate for the height).
+//
+// NOTE: historical proofs are only available while the state-commitment nodes for that height are
+// retained; after pruning, deep historical heights may be unavailable. Latest-height proofs
+// (height = 0) always work.
+func (s *Server) Proof(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	req := new(proofRequest)
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	// create a fresh, read-only store view (never the live consensus store) to generate the proof
+	base, ok := s.setupStore(w)
+	if !ok {
+		return
+	}
+	defer base.Discard()
+	st := base
+	// if a historical height was requested, open a read-only view at that height
+	if req.Height != 0 {
+		ro, err := base.NewReadOnly(req.Height)
+		if err != nil {
+			write(w, err, http.StatusInternalServerError)
+			return
+		}
+		defer ro.Discard()
+		st = ro
+	}
+	// read the value stored at the key (nil/empty => non-membership)
+	value, err := st.Get(req.Key)
+	if err != nil {
+		write(w, err, http.StatusInternalServerError)
+		return
+	}
+	// compute the state root (this also initializes the SMT, required before GetProof)
+	root, err := st.Root()
+	if err != nil {
+		write(w, err, http.StatusInternalServerError)
+		return
+	}
+	// generate the membership/non-membership proof for the key
+	proof, err := st.GetProof(req.Key)
+	if err != nil {
+		write(w, err, http.StatusInternalServerError)
+		return
+	}
+	// convert the proof nodes into the response shape
+	nodes := make([]proofNode, len(proof))
+	for i, n := range proof {
+		nodes[i] = proofNode{Key: lib.HexBytes(n.Key), Value: lib.HexBytes(n.Value), Bitmask: n.Bitmask}
+	}
+	write(w, &proofResponse{
+		Height: st.Version(),
+		Root:   root,
+		Key:    req.Key,
+		Value:  value,
+		Exists: len(value) != 0,
+		Proof:  nodes,
+	}, http.StatusOK)
+}
+
 // StateDiff returns the different between the state at two block heights
 func (s *Server) StateDiff(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	sm1, sm2, opts, ok := s.getDoubleStateMachineFromHeightParams(w, r, p)
