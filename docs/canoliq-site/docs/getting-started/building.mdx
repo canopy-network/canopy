@@ -1,0 +1,56 @@
+---
+sidebar_label: Building & Running
+---
+
+# Building & Running
+
+## Build the Plugin
+
+```bash
+cd plugin/go
+make build
+```
+
+This produces `./go-plugin` — a binary that serves either the send tutorial or canoLiq based on `CANOPY_PLUGIN_MODE`.
+
+## Run the Plugin
+
+### Standalone (against a running Canopy node)
+
+```bash
+CANOPY_PLUGIN_MODE=canoliq ./go-plugin
+```
+
+The plugin connects to the Canopy FSM via Unix socket at `/tmp/plugin/plugin.sock`.
+
+### With Docker Localnet
+
+```bash
+# From the repository root
+make docker/build
+make docker/up && make docker/logs
+```
+
+The Docker compose binds the plugin RPC to `0.0.0.0:8587` (node-1) and `0.0.0.0:8588` (node-2).
+
+### With Custom Config
+
+Optionally point `CANOLIQ_CONFIG` at a JSON file:
+
+```json
+{
+  "chainId": 2,
+  "dataDirPath": "/path/to/data",
+  "genesisPath": "/path/to/genesis.json"
+}
+```
+
+```bash
+CANOLIQ_CONFIG=/path/to/config.json CANOPY_PLUGIN_MODE=canoliq ./go-plugin
+```
+
+## View Logs
+
+```bash
+tail -f /tmp/plugin/go-plugin.log
+```

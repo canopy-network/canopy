@@ -1,0 +1,80 @@
+{
+  "time": "2024-12-14 20:10:52",
+  "accounts": [
+    {
+      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+      "amount": 1000000
+    },
+    {
+      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+      "amount": 1000000
+    },
+    {
+      "address": "6f94783856d5ce46d24dd5946215086211d70776",
+      "amount": 1000000
+    }
+  ],
+  "nonSigners": null,
+  "validators": [
+    {
+      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+      "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
+      "committees": [1, 2],
+      "netAddress": "tcp://node-1",
+      "stakedAmount": 1000000000,
+      "output": "851e90eaef1fa27debaee2c2591503bdeec1d123"
+    },
+    {
+      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+      "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
+      "committees": [1, 2],
+      "netAddress": "tcp://node-2",
+      "stakedAmount": 1000000000,
+      "output": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
+    }
+  ],
+  "params": {
+    "consensus": {
+      "blockSize": 1000000,
+      "protocolVersion": "1/0",
+      "rootChainID": 1,
+      "retired": 0
+    },
+    "validator": {
+      "unstakingBlocks": 2,
+      "maxPauseBlocks": 4380,
+      "doubleSignSlashPercentage": 10,
+      "nonSignSlashPercentage": 1,
+      "maxNonSign": 4,
+      "nonSignWindow": 10,
+      "maxCommittees": 15,
+      "maxCommitteeSize": 100,
+      "earlyWithdrawalPenalty": 20,
+      "delegateUnstakingBlocks": 2,
+      "minimumOrderSize": 1000,
+      "stakePercentForSubsidizedCommittee": 33,
+      "maxSlashPerCommittee": 15,
+      "delegateRewardPercentage": 10,
+      "buyDeadlineBlocks": 15,
+      "lockOrderFeeMultiplier": 2
+    },
+    "fee": {
+      "sendFee": 10000,
+      "stakeFee": 10000,
+      "editStakeFee": 10000,
+      "unstakeFee": 10000,
+      "pauseFee": 10000,
+      "unpauseFee": 10000,
+      "changeParameterFee": 10000,
+      "daoTransferFee": 10000,
+      "subsidyFee": 10000,
+      "createOrderFee": 10000,
+      "editOrderFee": 10000,
+      "deleteOrderFee": 10000
+    },
+    "governance": {
+      "daoRewardPercentage": 10
+    }
+  },
+  "supply": null
+}

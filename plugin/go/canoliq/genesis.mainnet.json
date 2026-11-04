@@ -1,0 +1,109 @@
+{
+  "_comment": "canoLiq MAINNET genesis for committee 29 (chain 29). Bucket recipients and the five multisigSigners are the real launch addresses. Genesis is one-shot and irreversible: it runs once, in the BeginBlock of canoliq-config's activationHeight, on every committee-29 node. NOTE: the canoLiq section is not part of Canopy's own genesis schema; it is reached via canoliq-config.mainnet.json::genesisPath.",
+  "blocksPerYear": 5256000,
+  "buckets": [
+    {
+      "name": "Validators & Infrastructure",
+      "bps": 2200,
+      "cliffMonths": 12,
+      "vestMonths": 24,
+      "recipients": [
+        {
+          "address": "859a488ccbd1d9e22658ced19ee66cf0bd47b57a",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Liquidity Incentives",
+      "bps": 1500,
+      "cliffMonths": 0,
+      "vestMonths": 24,
+      "recipients": [
+        {
+          "address": "615a5fe376e288412ba62d63c0a045cf430b5302",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Community & Airdrops",
+      "bps": 2000,
+      "cliffMonths": 0,
+      "vestMonths": 12,
+      "recipients": [
+        {
+          "address": "6d9a83be4fc0fff19f054a1f000d332c1dc33796",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "DAO Treasury (canoLiq)",
+      "bps": 1500,
+      "_comment": "Credits the protocol-owned treasury_cplq scalar, not an address. This is what funds SPEND_CPLQ treasury spends, the buyback, and ProposalOTCProgramFund.",
+      "destination": "treasury",
+      "cliffMonths": 0,
+      "vestMonths": 0
+    },
+    {
+      "name": "Founders & Core Team",
+      "bps": 1200,
+      "cliffMonths": 12,
+      "vestMonths": 36,
+      "recipients": [
+        {
+          "address": "bcbe3e116710bb583ad9dc3ba6925693d155ef4b",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Strategic Partners & Integrations",
+      "bps": 1000,
+      "cliffMonths": 6,
+      "vestMonths": 12,
+      "recipients": [
+        {
+          "address": "fd2cc7ac1f6324a7c1195029ef2e8cd677244b2c",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Developer Grants & Ecosystem",
+      "bps": 600,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "e0b028e8fcd8ba8cff0bba3a441e8951666126eb",
+          "bps": 10000
+        }
+      ]
+    }
+  ],
+  "params": {
+    "_comment": "3-of-5 multisig. All five signers must be distinct wallets held by five different people; ValidateParams rejects duplicates because countMultisigApprovals would otherwise let one holder cast two of the three required approvals. treasuryThreshold is in uCNPY.",
+    "multisigSigners": [
+      "09780c8fb3425113539382cb89c9fcd8f0eaa0ec",
+      "782556ae8d0a8a298c79065e1053d5daf6d482ec",
+      "b961f74240791533514ba1faf95a8ea7ba0ee003",
+      "2ea135d117f3b154c8d4e1912869edcc47c9a625",
+      "a46576db9388f1b9d7bebbadf7f34a042b5eccaa"
+    ],
+    "multisigThreshold": 3,
+    "treasuryThreshold": 1000000000,
+    "otcTier90Bps": 500,
+    "otcTier120Bps": 800,
+    "otcMinLockUccnpy": 50000000000
+  },
+  "_stakeOutputComment": "params.stakeOutputAddresses is deliberately absent, which means an empty set, which means the reward sweep attributes nothing (R = 0). That is correct today: canoLiq owns no bonded position on committee 29, and every bond there is an operator's own collateral. Crediting their stake growth to cCNPY holders is exactly the bug this default prevents. Add an address ONLY once a Canopy validator or delegate record exists whose ENTIRE bond is canoLiq principal and whose output is that address -- Canopy gives each record a single output, so a mixed bond (operator collateral plus pool CNPY) pointed at a listed address re-creates the same over-attribution. The bond must also set compound=true, or its reward is paid out to the output address as liquid CNPY where stake-growth observation cannot see it. On a running chain this is a param-change proposal, not a genesis edit.",
+  "_validatorRegistryComment": "Seeded with the committee-29 validator set at launch: val-a (Canopy Foundation, 10,000 CNPY staked on-chain). Must list only genuine committee-29 validators; the registry is reconciled against live committee membership every block. Left empty, the 15% validator-incentive slice would route to the synthetic all-0xCA aggregator key, which nobody can spend from. Note this is MEMBERSHIP, not ownership: entries here share the validator-incentive slice, and are separately marked owned=false unless their output appears in stakeOutputAddresses.",
+  "validatorRegistry": [
+    {
+      "address": "737ef80e8476450b6970dd6c1e44c93699c8e0c0",
+      "stake": 10000000000
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+---
+sidebar_label: Committee Setup
+---
+
+# Registering canoLiq as a Canopy Committee
+
+canoLiq runs as its own Canopy committee with a separate `chainId`. No fork is required — validators opt in through Canopy's existing restaking flow.
+
+## Steps
+
+### 1. Pick a `chainId`
+
+Ensure it does not collide with an existing committee. The default is `2`; override via `CANOLIQ_CONFIG`.
+
+### 2. Validators Opt In
+
+Each participating validator submits a `MessageEditStake` adding the canoLiq `chainId` to its `Validator.Committees[]` list:
+
+```bash
+canopy tx edit-stake --committees 1,2 --amount <stake_amount>
+```
+
+### 3. Request a Subsidy
+
+Submit a `MessageSubsidy` proposal so the Canopy DAO funds the canoLiq committee reward pool. The plugin's `EndBlock` hook reads from this pool and applies the 12% fee.
+
+### 4. Run the Plugin
+
+```bash
+# Via config
+# In ~/.canopy/config.json:
+# "plugin": "canoliq"
+
+# Or via environment
+CANOPY_PLUGIN_MODE=canoliq canopy start
+```
+
+On first boot, the plugin runs `Genesis` once, minting the 100M CPLQ supply to recipients in `genesis.json` according to bucket weights and vesting schedules.
+
+## Genesis Configuration
+
+`genesis.json` lists CPLQ allocation buckets and per-recipient weights:
+
+- The sum of bucket `bps` must be `10000`
+- Recipients within a bucket must also sum to `10000`
+- Buckets with `cliffMonths == 0 && vestMonths == 0` mint to a liquid CPLQ balance immediately
+- Otherwise, a `VestingSchedule` is written
+
+Update placeholder hex addresses before running on mainnet.

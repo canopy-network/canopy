@@ -1,0 +1,40 @@
+---
+sidebar_label: Overview
+---
+
+# API Reference Overview
+
+The canoLiq plugin runs a small read-only HTTP server **inside the plugin process** so operators can read plugin-owned state without going through the FSM.
+
+## Enabling the API
+
+Set `CANOLIQ_RPC_ADDR` (or `Config.RpcAddress`) to a listen address. Empty/unset disables the server.
+
+```bash
+export CANOLIQ_RPC_ADDR=127.0.0.1:8587
+CANOPY_PLUGIN_MODE=canoliq ./go-plugin
+```
+
+### Docker Localnet Ports
+
+| Node | Container Port | Host Port |
+|------|---------------|-----------|
+| node-1 | 8587 | 8587 |
+| node-2 | 8587 | 8588 |
+
+## Design
+
+- All routes are **read-only** — they go through `query.go` helpers that issue point `StateRead` calls
+- JSON encoding piggybacks on `@gotags` already attached to proto types
+- `google.protobuf.Any` fields serialize as `{typeUrl, value}`
+
+## Error Responses
+
+| Status | Cause |
+|--------|-------|
+| 400 | Malformed address or invalid parameter |
+| 404 | Missing entity |
+| 405 | Non-GET method |
+| 500 | Plugin-internal failure (with JSON error body) |
+
+Address parameters accept `0x`-prefixed or bare 40-character hex.

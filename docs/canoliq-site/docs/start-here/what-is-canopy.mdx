@@ -1,0 +1,63 @@
+---
+sidebar_label: What Is Canopy?
+sidebar_position: 1
+---
+
+# What Is Canopy? (and where canoLiq fits)
+
+:::tip In one sentence
+Canopy is a blockchain network that lets independent "nested chains" run their own
+logic while sharing security — and canoLiq is one such nested chain, running as a
+plugin.
+:::
+
+New to blockchains entirely? This page gives you just enough vocabulary to read the rest
+of these docs. If a word is unfamiliar, the [Glossary](../concepts/glossary.mdx) defines
+every term canoLiq uses.
+
+## A blockchain in one paragraph
+
+A **blockchain** is a shared database that many computers ("nodes") agree on without a
+central owner. Nodes take turns proposing the next batch of changes (a **block**) and vote
+to accept it. The nodes that stake value to participate in this voting are **validators**.
+Because everyone replays the same rules over the same data, the result is a ledger every
+participant can trust. **CNPY** is Canopy's native token — the value validators stake and
+users pay fees in.
+
+## What makes Canopy different: nested chains
+
+Most blockchains run a single application. Canopy instead hosts many **nested chains** (also
+called committees). Each nested chain:
+
+- has its **own chain ID** and its own rules,
+- is secured by a **committee** of Canopy validators who opt in to run it, and
+- can receive **subsidies** (a share of Canopy's block rewards) for the work its validators do.
+
+This means a project can launch its own chain logic without bootstrapping a validator set
+from scratch — it borrows Canopy's.
+
+## The FSM and the plugin model
+
+The part of a Canopy node that applies the rules and updates state is the **FSM** (finite
+state machine). canoLiq does **not** modify the Canopy FSM. Instead it runs as a separate
+**plugin** process and talks to the FSM over a local socket, handling the standard
+transaction lifecycle:
+
+- **CheckTx** — cheap, stateless validation when a transaction arrives.
+- **DeliverTx** — the real state change when the transaction is included in a block.
+- **EndBlock** — bookkeeping that runs once per block (for canoLiq, this is where rewards
+  are swept and split).
+
+Keeping canoLiq in a plugin means it can evolve its own economics and governance without
+forking Canopy.
+
+## Where canoLiq fits
+
+canoLiq is a nested chain that offers **liquid staking** on Canopy. Users deposit CNPY and
+get a tradable receipt token instead of having their stake locked. The next page explains
+what that means and why it is useful.
+
+**Next:** [What Is Liquid Staking?](./what-is-liquid-staking.mdx) →
+
+Want to go deeper on Canopy itself? See the
+[Canopy Network repository](https://github.com/canopy-network/canopy).

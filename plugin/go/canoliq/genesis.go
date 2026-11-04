@@ -1,0 +1,687 @@
+package canoliq
+
+import (
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/canopy-network/go-plugin/contract"
+)
+
+// CPLQTotalSupply is the hard-coded fixed CPLQ supply (100M CPLQ in uCPLQ).
+// 1 CPLQ = 1_000_000 uCPLQ for parity with uCNPY micro-units.
+const CPLQTotalSupply uint64 = 100_000_000 * 1_000_000
+
+// GenesisFile is the JSON shape persisted at plugin/go/canoliq/genesis.json.
+// Each Bucket lists the recipient addresses and the bps weights summing to
+// 10_000 across the seven canonical buckets.
+//
+// ValidatorRegistry seeds the canoLiq committee validator set used by
+// reward.go::distributeValidatorShare for per-validator pro-rata. When
+// present and non-empty, the 15% validator-incentive slice is split
+// proportional to per-validator stake. When absent or empty, the legacy
+// committee aggregator path stays in effect (Phase 1 baseline).
+type GenesisFile struct {
+	BlocksPerYear     uint64                          `json:"blocksPerYear"`
+	Buckets           []GenesisBucket                 `json:"buckets"`
+	Params            *GenesisParamsJSON              `json:"params,omitempty"`
+	ValidatorRegistry []GenesisValidatorRegistryEntry `json:"validatorRegistry,omitempty"`
+}
+
+// GenesisValidatorRegistryEntry pairs a validator address with the stake
+// weight used to share out the per-validator reward slice. Stake is in
+// the same uCNPY-equivalent unit as Canopy's `Validator.StakedAmount`,
+// so operators can copy it directly from the chain's existing validator
+// set or seed it manually.
+type GenesisValidatorRegistryEntry struct {
+	Address string `json:"address"` // hex-encoded 20-byte address (with or without 0x)
+	Stake   uint64 `json:"stake"`   // share-out weight
+}
+
+// Bucket destinations. Empty string normalizes to BucketDestAddress for
+// backwards compatibility with every genesis file written before this existed.
+//
+// BucketDestTreasury credits the protocol-owned treasury_cplq scalar instead
+// of a recipient address. It exists because nothing else ever credited that
+// scalar: applyGenesisBuckets only ever wrote per-address balances and vesting
+// schedules, so treasury_cplq read zero forever and both of its consumers —
+// SPEND_CPLQ treasury spends (treasury.go::applySpend) and every
+// MessageBuybackExecute (buyback.go) — failed their balance guard on any real
+// chain. A treasury-destined bucket takes no recipients and does not count
+// toward CplqCirculatingSupply, since treasury holdings are not circulating.
+const (
+	BucketDestAddress  = "address"
+	BucketDestTreasury = "treasury"
+)
+
+// GenesisBucket describes one of the CPLQ allocation tranches.
+type GenesisBucket struct {
+	Name string `json:"name"`
+	Bps  uint64 `json:"bps"`
+	// Destination selects where the tranche lands: "address" (the default,
+	// splitting across Recipients) or "treasury" (the treasury_cplq scalar).
+	Destination string              `json:"destination,omitempty"`
+	CliffMonths uint64              `json:"cliffMonths"`
+	VestMonths  uint64              `json:"vestMonths"`
+	Recipients  []GenesisAllocation `json:"recipients"`
+}
+
+// isTreasuryDest reports whether the bucket credits the protocol treasury.
+func (b GenesisBucket) isTreasuryDest() bool {
+	return b.Destination == BucketDestTreasury
+}
+
+// GenesisAllocation is a single (address, share) pair within a bucket.
+// Share is in bps within the bucket; shares within a bucket must sum to 10_000.
+type GenesisAllocation struct {
+	Address string `json:"address"`
+	Bps     uint64 `json:"bps"`
+}
+
+// GenesisParamsJSON optionally overrides DefaultParams() at genesis time.
+// Phase 2 fields (insurance, governance, multisig) are honored when present
+// and fall back to DefaultParams() values otherwise.
+type GenesisParamsJSON struct {
+	FeeBps              uint64   `json:"feeBps"`
+	UserRebateBps       uint64   `json:"userRebateBps"`
+	TreasuryBps         uint64   `json:"treasuryBps"`
+	ValidatorBps        uint64   `json:"validatorBps"`
+	BuybackBps          uint64   `json:"buybackBps"`
+	DepositFee          uint64   `json:"depositFee"`
+	RedeemFee           uint64   `json:"redeemFee"`
+	ClaimFee            uint64   `json:"claimFee"`
+	CplqTransferFee     uint64   `json:"cplqTransferFee"`
+	CanoliqTransferFee  uint64   `json:"canoliqTransferFee"`
+	InsuranceBps        uint64   `json:"insuranceBps"`
+	TreasuryThreshold   uint64   `json:"treasuryThreshold"`
+	MultisigSigners     []string `json:"multisigSigners"` // hex-encoded 20-byte addresses
+	MultisigThreshold   uint64   `json:"multisigThreshold"`
+	VotingPeriodBlocks  uint64   `json:"votingPeriodBlocks"`
+	QuorumBps           uint64   `json:"quorumBps"`
+	PassThresholdBps    uint64   `json:"passThresholdBps"`
+	TimelockBlocks      uint64   `json:"timelockBlocks"`
+	CplqUnstakingBlocks uint64   `json:"cplqUnstakingBlocks"`
+	ProposalFee         uint64   `json:"proposalFee"`
+	VoteFee             uint64   `json:"voteFee"`
+	StakeFee            uint64   `json:"stakeFee"`
+	MultisigApproveFee  uint64   `json:"multisigApproveFee"`
+	MinStakeToPropose   uint64   `json:"minStakeToPropose"`
+	// TvlCapBps is a pointer, unlike every other field here, because 0 is a
+	// meaningful value for it: it means "uncapped" (WP §9.4). The `!= 0`
+	// convention the other fields use cannot express an explicit zero, so nil
+	// means "absent, keep the DefaultParams value" and a non-nil zero means
+	// genesis really does want the cap off. Permitted only on the development
+	// profiles — see isDevProfile.
+	TvlCapBps *uint64 `json:"tvlCapBps"`
+	// StakeOutputAddresses lists the canoLiq-controlled output addresses that
+	// identify which Canopy bonds belong to the protocol. Only their stake
+	// growth becomes reward (reward.go::ProcessRewards, WP §3.3). Hex-encoded
+	// 20-byte addresses, same convention as multisigSigners.
+	//
+	// Absent means an empty set, which means R = 0 — the correct reading when
+	// the protocol has no staked position, and the safe direction regardless.
+	// Seed an address here only once a validator or delegate record exists
+	// whose ENTIRE bond is canoLiq principal: Canopy gives each record one
+	// output, so pointing a mixed bond at a listed address re-creates the
+	// over-attribution this exists to prevent.
+	StakeOutputAddresses []string `json:"stakeOutputAddresses"`
+	// MaxRewardBpsPerBlock caps one block's attributed reward as a fraction of
+	// owned stake. Plain `!= 0` fallback: zero means absent, and zero is not a
+	// meaningful value (it would read as "no clamp", which is the one thing
+	// omission must never mean here — see backfillParams). 10_000 is the
+	// deliberate off switch.
+	MaxRewardBpsPerBlock uint64 `json:"maxRewardBpsPerBlock"`
+	// OTC lock program tier rates and minimum position size. Plain `!= 0`
+	// fallback like the rest: zero means absent, and zero is not a meaningful
+	// value for any of the three (a zero rate is a program that pays nothing,
+	// a zero minimum permits dust positions).
+	OtcTier90Bps     uint64 `json:"otcTier90Bps"`
+	OtcTier120Bps    uint64 `json:"otcTier120Bps"`
+	OtcMinLockUccnpy uint64 `json:"otcMinLockUccnpy"`
+	// Tier terms in blocks. Same `!= 0` convention: zero means absent, and zero
+	// is not a meaningful term (a position would mature in the block it opened).
+	OtcTier90Blocks  uint64 `json:"otcTier90Blocks"`
+	OtcTier120Blocks uint64 `json:"otcTier120Blocks"`
+	// Governance optionally replaces the whole per-action tier matrix. Unlike
+	// every scalar above this is all-or-nothing: a non-empty list replaces
+	// defaultGovernanceTiers() outright, matching ProposalParamChange's
+	// full-set-replacement semantics, so a partial list silently drops the
+	// tiers it omits to the scalar fallback. Absent (nil) keeps the defaults.
+	//
+	// This exists because the tier matrix was otherwise only settable in the
+	// binary, which left every tiered action carrying a 7-day voting period on
+	// localnet and made the whole governance surface untestable there.
+	Governance []GenesisGovernanceTierJSON `json:"governance,omitempty"`
+}
+
+// GenesisGovernanceTierJSON is one row of the per-action governance matrix.
+// Action is the numeric ActionType, matching both the enum's JSON encoding and
+// the shape canoliqctl's paramsJSON already uses for ProposalParamChange.
+type GenesisGovernanceTierJSON struct {
+	Action             int32  `json:"action"`
+	QuorumBps          uint64 `json:"quorumBps"`
+	ApprovalBps        uint64 `json:"approvalBps"`
+	TimelockBlocks     uint64 `json:"timelockBlocks"`
+	VotingPeriodBlocks uint64 `json:"votingPeriodBlocks"`
+}
+
+// runGenesis is the body of Canoliq.Genesis. It is a no-op once the globals
+// record reports genesis_complete=true. Loads the genesis distribution from
+// the configured path (Config.GenesisPath) or req.GenesisJson if non-nil.
+func (c *Canoliq) runGenesis(req *contract.PluginGenesisRequest) *contract.PluginError {
+	g, err := c.LoadGlobals()
+	if err != nil {
+		return err
+	}
+	if g.GenesisComplete {
+		return nil
+	}
+	gf, e := loadGenesisFile(c.Config.GenesisPath, req)
+	if e != nil {
+		return e
+	}
+	if err := validateGenesis(gf); err != nil {
+		return err
+	}
+	params := DefaultParams()
+	if gf.Params != nil {
+		var perr *contract.PluginError
+		params, perr = paramsFromJSON(gf.Params)
+		if perr != nil {
+			return perr
+		}
+		if err := ValidateParams(params); err != nil {
+			return err
+		}
+	}
+	// An uncapped genesis is a development-environment affordance. isDevProfile
+	// is a whitelist, so an unset or unrecognized profile fails closed with the
+	// cap enforced rather than inheriting an uncapped genesis by omission.
+	// testnet and mainnet may only become uncapped by DAO vote (WP §9.4), so
+	// refuse to boot rather than let a mis-pointed genesis file silently
+	// disable the ceiling.
+	if !c.rewardFixActive(c.plugin.CurrentHeight()) {
+		// max_reward_bps_per_block did not exist before the reward fix; a
+		// genesis replayed below its activation height must persist the same
+		// params bytes it originally did. Reads backfill the default.
+		params.MaxRewardBpsPerBlock = 0
+	}
+	if params.TvlCapBps == 0 && !isDevProfile(c.Config.Profile) {
+		return ErrUncappedOutsideDevProfile(c.Config.Profile)
+	}
+	if err := c.SaveParams(params); err != nil {
+		return err
+	}
+	g.CplqTotalSupply = CPLQTotalSupply
+	if err := c.applyGenesisBuckets(gf, g); err != nil {
+		return err
+	}
+	if err := c.applyGenesisValidatorRegistry(gf); err != nil {
+		return err
+	}
+	g.GenesisComplete = true
+	return c.SaveGlobals(g)
+}
+
+// applyDevnetTvlCapOverride re-applies genesisPath's tvlCapBps to the live
+// params on every block, even after GenesisComplete is set.
+//
+// Genesis is one-shot: runGenesis short-circuits once GenesisComplete is
+// true, so a long-lived devnet/localnet committee that outruns its TVL cap
+// from reward accrual alone (see isDevProfile) has no way to pick up a
+// corrected cap from a redeployed genesis.json. The only other route is
+// wiping canoLiq's state under prefix {20} (CustomStatePrefixes) and letting
+// genesis run again — for which there is no tooling in canoliqctl or the
+// canopy CLI today, and a full data-dir wipe risks a height regression
+// against what the root chain already has recorded for this committee.
+//
+// This is deliberately narrower than that: it reads genesisPath fresh every
+// block (a mounted ConfigMap updates in place, so this also converges
+// without a pod restart) and mutates only TvlCapBps on the live params,
+// never a full-params replace — a passed ProposalParamChange writes the
+// whole CanoliqParams wholesale and silently zeroes any field the payload
+// omits (see params_roundtrip_test.go); this does not carry that risk since
+// it never touches the other fields.
+//
+// Restricted to isDevProfile profiles, symmetric with the genesis-time
+// SafetyCheck / runGenesis uncapped-genesis allowance — testnet/mainnet
+// still require a governance vote to change tvlCapBps.
+func (c *Canoliq) applyDevnetTvlCapOverride() *contract.PluginError {
+	if !isDevProfile(c.Config.Profile) || c.Config.GenesisPath == "" {
+		return nil
+	}
+	gf, e := loadGenesisFile(c.Config.GenesisPath, nil)
+	if e != nil {
+		// genesisPath was already proven readable at startup by SafetyCheck
+		// (non-localnet profiles) — a read failure here means something
+		// changed after boot. This override is a dev-only convenience, not a
+		// correctness path, so skip rather than fail an otherwise-healthy
+		// block over it.
+		return nil
+	}
+	if gf.Params == nil || gf.Params.TvlCapBps == nil {
+		return nil
+	}
+	params, err := c.LoadParams()
+	if err != nil {
+		return err
+	}
+	want := *gf.Params.TvlCapBps
+	if params.TvlCapBps == want {
+		return nil
+	}
+	params.TvlCapBps = want
+	if err := ValidateParams(params); err != nil {
+		return err
+	}
+	return c.SaveParams(params)
+}
+
+// applyGenesisValidatorRegistry writes the seeded validator set when
+// genesis carries one. No-op for empty/missing entries — the legacy
+// aggregator path in distributeValidatorShare keeps working.
+func (c *Canoliq) applyGenesisValidatorRegistry(gf *GenesisFile) *contract.PluginError {
+	if len(gf.ValidatorRegistry) == 0 {
+		return nil
+	}
+	reg := &contract.ValidatorRegistry{
+		Entries: make([]*contract.ValidatorRegistryEntry, 0, len(gf.ValidatorRegistry)),
+	}
+	for _, e := range gf.ValidatorRegistry {
+		addr, aerr := decodeGenesisAddress(e.Address)
+		if aerr != nil {
+			return aerr
+		}
+		reg.Entries = append(reg.Entries, &contract.ValidatorRegistryEntry{
+			Address: addr,
+			Stake:   e.Stake,
+		})
+	}
+	bz, e := contract.Marshal(reg)
+	if e != nil {
+		return e
+	}
+	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{
+		Sets: []*contract.PluginSetOp{{Key: KeyForValidatorRegistry(), Value: bz}},
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func loadGenesisFile(path string, req *contract.PluginGenesisRequest) (*GenesisFile, *contract.PluginError) {
+	var data []byte
+	if req != nil && len(req.GenesisJson) > 0 {
+		data = req.GenesisJson
+	} else if path != "" {
+		bz, err := os.ReadFile(path)
+		if err != nil {
+			return nil, ErrStateUnmarshal(err)
+		}
+		data = bz
+	} else {
+		return nil, ErrStateUnmarshal(fmt.Errorf("no genesis source configured"))
+	}
+	gf := new(GenesisFile)
+	if err := json.Unmarshal(data, gf); err != nil {
+		return nil, ErrStateUnmarshal(err)
+	}
+	return gf, nil
+}
+
+func validateGenesis(gf *GenesisFile) *contract.PluginError {
+	if gf == nil || len(gf.Buckets) == 0 {
+		return ErrStateUnmarshal(fmt.Errorf("genesis must list at least one bucket"))
+	}
+	bpsSum := uint64(0)
+	for _, b := range gf.Buckets {
+		bpsSum += b.Bps
+		switch b.Destination {
+		case "", BucketDestAddress, BucketDestTreasury:
+		default:
+			return ErrStateUnmarshal(fmt.Errorf("bucket %q: unknown destination %q (want %q or %q)",
+				b.Name, b.Destination, BucketDestAddress, BucketDestTreasury))
+		}
+		// A treasury-destined bucket has no recipients to split across, so the
+		// recipients-sum rule does not apply. Listing any is a config error
+		// rather than a silently ignored field.
+		if b.isTreasuryDest() {
+			if len(b.Recipients) != 0 {
+				return ErrStateUnmarshal(fmt.Errorf("bucket %q: destination %q takes no recipients (got %d)",
+					b.Name, BucketDestTreasury, len(b.Recipients)))
+			}
+			if b.CliffMonths != 0 || b.VestMonths != 0 {
+				return ErrStateUnmarshal(fmt.Errorf("bucket %q: destination %q cannot vest", b.Name, BucketDestTreasury))
+			}
+			continue
+		}
+		recBps := uint64(0)
+		for _, r := range b.Recipients {
+			recBps += r.Bps
+			// Length matters as much as decodability. hex.DecodeString accepts
+			// any even-length string, so a truncated or over-long address used
+			// to pass validation here and then have its decode error discarded
+			// in applyGenesisBuckets, minting a whole tranche to a key nobody
+			// can ever spend from. Genesis is one-shot, so that is unrecoverable.
+			if _, aerr := decodeGenesisAddress(r.Address); aerr != nil {
+				return aerr
+			}
+		}
+		if recBps != 10_000 {
+			return ErrStateUnmarshal(fmt.Errorf("bucket %q: recipients bps sum %d (want 10000)", b.Name, recBps))
+		}
+	}
+	if bpsSum != 10_000 {
+		return ErrStateUnmarshal(fmt.Errorf("bucket bps sum %d (want 10000)", bpsSum))
+	}
+	return nil
+}
+
+// applyGenesisBuckets allocates CPLQ to recipients and writes either a liquid
+// balance (cliff_months==0) or a VestingSchedule with linear unlock between
+// cliff and end. Tranches with vest_months==0 unlock the full amount at the
+// cliff and are stored as a one-instant schedule for accounting clarity.
+func (c *Canoliq) applyGenesisBuckets(gf *GenesisFile, g *contract.CanoliqGlobals) *contract.PluginError {
+	blocksPerYear := gf.BlocksPerYear
+	if blocksPerYear == 0 {
+		blocksPerYear = 5_256_000 // assume ~6s blocks
+	}
+	// Calendar month for vesting = blocksPerYear/12 (≈30.4 days). This is
+	// deliberately distinct from the fixed 30-day month used for lock tiers in
+	// stake.go::blocksPerMonth — see the note there (L5).
+	blocksPerMonth := blocksPerYear / 12
+	sets := make([]*contract.PluginSetOp, 0)
+	// Keyed by the DECODED address bytes, never by the JSON string. Genesis
+	// accepts an address with or without a 0x prefix and in either case, so
+	// "0xAB…", "0XAB…", "ab…" and "AB…" are four distinct strings that decode
+	// to one address. Keying on the string would emit four set ops on the one
+	// KeyForVestingIndex key, and two set ops on one key do not compose (see
+	// the treasuryCplq note below) — last write wins. The losing spelling's
+	// schedule ids would vanish from the index while the VestingSchedule
+	// records themselves persisted, and since DeliverMessageCPLQClaimVested
+	// walks the index rather than range-scanning, those tranches would be
+	// permanently unclaimable. Genesis runs once, so there is no recovery.
+	// Map iteration order is nondeterministic too, so different nodes would
+	// keep different spellings and diverge.
+	indexUpdates := make(map[string]*vestingIndexUpdate)
+	scheduleCounter := uint64(0)
+	// treasuryCplq accumulates across every treasury-destined bucket so the
+	// scalar is written once. readScalar would not see a pending set op, and
+	// two set ops on one key do not compose — last write wins (fsm/state.go).
+	treasuryCplq := uint64(0)
+	for _, b := range gf.Buckets {
+		bucketTotal := mulDiv(CPLQTotalSupply, b.Bps, 10_000)
+		if b.isTreasuryDest() {
+			// Deliberately no CplqCirculatingSupply bump: treasury holdings are
+			// not circulating. They enter circulation only when a passed
+			// proposal pays them out, and that path does the bump itself.
+			treasuryCplq += bucketTotal
+			continue
+		}
+		for _, r := range b.Recipients {
+			// validateGenesis has already proven this decodes to 20 bytes, so a
+			// failure here is impossible rather than merely unlikely. Returning
+			// instead of discarding means it stays impossible if that guard is
+			// ever weakened — genesis is one-shot and a mis-decoded address
+			// mints a whole tranche to an unspendable key.
+			addrBytes, aerr := decodeGenesisAddress(r.Address)
+			if aerr != nil {
+				return aerr
+			}
+			amount := mulDiv(bucketTotal, r.Bps, 10_000)
+			if amount == 0 {
+				continue
+			}
+			if b.CliffMonths == 0 && b.VestMonths == 0 {
+				// fully liquid at TGE
+				key := KeyForCPLQBalance(addrBytes)
+				existing, exists := liquidExisting(sets, key)
+				existing += amount
+				if exists {
+					replaceSet(sets, key, EncodeUint64(existing))
+				} else {
+					sets = append(sets, &contract.PluginSetOp{Key: key, Value: EncodeUint64(existing)})
+				}
+				g.CplqCirculatingSupply += amount
+				continue
+			}
+			scheduleCounter++
+			scheduleID := scheduleCounter
+			cliff := b.CliffMonths * blocksPerMonth
+			end := cliff + b.VestMonths*blocksPerMonth
+			sched := &contract.VestingSchedule{
+				Address:       addrBytes,
+				ScheduleId:    scheduleID,
+				TotalAmount:   amount,
+				CliffHeight:   cliff,
+				StartHeight:   cliff,
+				EndHeight:     end,
+				ClaimedAmount: 0,
+			}
+			bz, e := contract.Marshal(sched)
+			if e != nil {
+				return e
+			}
+			sets = append(sets, &contract.PluginSetOp{
+				Key:   KeyForVesting(addrBytes, scheduleID),
+				Value: bz,
+			})
+			upd, ok := indexUpdates[string(addrBytes)]
+			if !ok {
+				upd = &vestingIndexUpdate{addr: addrBytes, index: &contract.VestingIndex{}}
+				indexUpdates[string(addrBytes)] = upd
+			}
+			upd.index.ScheduleIds = append(upd.index.ScheduleIds, scheduleID)
+		}
+	}
+	for _, upd := range indexUpdates {
+		bz, e := contract.Marshal(upd.index)
+		if e != nil {
+			return e
+		}
+		sets = append(sets, &contract.PluginSetOp{
+			Key:   KeyForVestingIndex(upd.addr),
+			Value: bz,
+		})
+	}
+	if treasuryCplq > 0 {
+		sets = append(sets, &contract.PluginSetOp{
+			Key:   KeyForTreasuryCPLQ(),
+			Value: EncodeUint64(treasuryCplq),
+		})
+	}
+	if _, err := c.plugin.StateWrite(c, &contract.PluginStateWriteRequest{Sets: sets}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func paramsFromJSON(p *GenesisParamsJSON) (*contract.CanoliqParams, *contract.PluginError) {
+	d := DefaultParams()
+	if p.FeeBps != 0 {
+		d.FeeBps = p.FeeBps
+	}
+	if p.UserRebateBps+p.TreasuryBps+p.ValidatorBps+p.BuybackBps != 0 {
+		d.UserRebateBps = p.UserRebateBps
+		d.TreasuryBps = p.TreasuryBps
+		d.ValidatorBps = p.ValidatorBps
+		d.BuybackBps = p.BuybackBps
+	}
+	if p.DepositFee != 0 {
+		d.DepositFee = p.DepositFee
+	}
+	if p.RedeemFee != 0 {
+		d.RedeemFee = p.RedeemFee
+	}
+	if p.ClaimFee != 0 {
+		d.ClaimFee = p.ClaimFee
+	}
+	if p.CplqTransferFee != 0 {
+		d.CplqTransferFee = p.CplqTransferFee
+	}
+	if p.CanoliqTransferFee != 0 {
+		d.CanoliqTransferFee = p.CanoliqTransferFee
+	}
+	if p.InsuranceBps != 0 {
+		d.InsuranceBps = p.InsuranceBps
+	}
+	if p.TreasuryThreshold != 0 {
+		d.TreasuryThreshold = p.TreasuryThreshold
+	}
+	if len(p.MultisigSigners) > 0 {
+		// Strip the 0x prefix like every other address path in this file, and
+		// surface a bad entry instead of dropping it. Silently skipping a
+		// malformed signer is not a small bug: the skipped entries leave a
+		// short list, or an empty one, which is then assigned over the
+		// default. ValidateParams skips its whole threshold and
+		// duplicate-signer block when the list is empty, so MultisigThreshold
+		// lands unguarded and above-threshold treasury spends quietly lose
+		// their multisig requirement. A genesis that listed its signers in 0x
+		// form used to produce exactly that.
+		signers := make([][]byte, 0, len(p.MultisigSigners))
+		for _, hexAddr := range p.MultisigSigners {
+			b, aerr := decodeGenesisAddress(hexAddr)
+			if aerr != nil {
+				return nil, aerr
+			}
+			signers = append(signers, b)
+		}
+		d.MultisigSigners = signers
+	}
+	if p.MultisigThreshold != 0 {
+		d.MultisigThreshold = p.MultisigThreshold
+	}
+	if len(p.StakeOutputAddresses) > 0 {
+		// Same strict decode as the signer list above, and for a sharper
+		// reason: a dropped entry here silently stops attributing reward for
+		// that bond, so cCNPY under-earns with nothing in state to show why.
+		outputs := make([][]byte, 0, len(p.StakeOutputAddresses))
+		for _, hexAddr := range p.StakeOutputAddresses {
+			b, aerr := decodeGenesisAddress(hexAddr)
+			if aerr != nil {
+				return nil, aerr
+			}
+			outputs = append(outputs, b)
+		}
+		d.StakeOutputAddresses = outputs
+	}
+	if p.MaxRewardBpsPerBlock != 0 {
+		d.MaxRewardBpsPerBlock = p.MaxRewardBpsPerBlock
+	}
+	if p.VotingPeriodBlocks != 0 {
+		d.VotingPeriodBlocks = p.VotingPeriodBlocks
+	}
+	if p.QuorumBps != 0 {
+		d.QuorumBps = p.QuorumBps
+	}
+	if p.PassThresholdBps != 0 {
+		d.PassThresholdBps = p.PassThresholdBps
+	}
+	if p.TimelockBlocks != 0 {
+		d.TimelockBlocks = p.TimelockBlocks
+	}
+	if p.CplqUnstakingBlocks != 0 {
+		d.CplqUnstakingBlocks = p.CplqUnstakingBlocks
+	}
+	if p.ProposalFee != 0 {
+		d.ProposalFee = p.ProposalFee
+	}
+	if p.VoteFee != 0 {
+		d.VoteFee = p.VoteFee
+	}
+	if p.StakeFee != 0 {
+		d.StakeFee = p.StakeFee
+	}
+	if p.MultisigApproveFee != 0 {
+		d.MultisigApproveFee = p.MultisigApproveFee
+	}
+	if p.MinStakeToPropose != 0 {
+		d.MinStakeToPropose = p.MinStakeToPropose
+	}
+	// Pointer, not `!= 0` — see the field comment: an explicit 0 is the whole
+	// point of the knob, so only a nil pointer falls back to the default.
+	if p.TvlCapBps != nil {
+		d.TvlCapBps = *p.TvlCapBps
+	}
+	if p.OtcTier90Bps != 0 {
+		d.OtcTier90Bps = p.OtcTier90Bps
+	}
+	if p.OtcTier120Bps != 0 {
+		d.OtcTier120Bps = p.OtcTier120Bps
+	}
+	if p.OtcMinLockUccnpy != 0 {
+		d.OtcMinLockUccnpy = p.OtcMinLockUccnpy
+	}
+	if p.OtcTier90Blocks != 0 {
+		d.OtcTier90Blocks = p.OtcTier90Blocks
+	}
+	if p.OtcTier120Blocks != 0 {
+		d.OtcTier120Blocks = p.OtcTier120Blocks
+	}
+	if len(p.Governance) > 0 {
+		tiers := make([]*contract.GovernanceTier, 0, len(p.Governance))
+		for _, t := range p.Governance {
+			tiers = append(tiers, &contract.GovernanceTier{
+				Action:             contract.ActionType(t.Action),
+				QuorumBps:          t.QuorumBps,
+				ApprovalBps:        t.ApprovalBps,
+				TimelockBlocks:     t.TimelockBlocks,
+				VotingPeriodBlocks: t.VotingPeriodBlocks,
+			})
+		}
+		d.Governance = tiers
+	}
+	return d, nil
+}
+
+// decodeGenesisAddress decodes a 20-byte address from a genesis JSON string,
+// accepting an optional 0x/0X prefix.
+//
+// Every address in a genesis file goes through here. Both halves matter:
+// hex.DecodeString accepts any even-length input, so the length check is what
+// stops a truncated address from minting a tranche to a key nobody holds, and
+// a missed prefix strip silently turns a valid address into a decode failure.
+// Genesis runs once, so either mistake is unrecoverable, which is why this is
+// one function rather than the same six lines copied to each call site.
+func decodeGenesisAddress(addr string) ([]byte, *contract.PluginError) {
+	raw := strings.TrimPrefix(strings.TrimPrefix(addr, "0x"), "0X")
+	b, err := hex.DecodeString(raw)
+	if err != nil {
+		return nil, ErrStateUnmarshal(fmt.Errorf("invalid hex address %q: %w", addr, err))
+	}
+	if len(b) != 20 {
+		return nil, ErrStateUnmarshal(fmt.Errorf("address %q must be 20 bytes, got %d", addr, len(b)))
+	}
+	return b, nil
+}
+
+// vestingIndexUpdate accumulates one address's vesting schedule ids during
+// genesis, carrying the decoded address alongside so the write loop does not
+// have to re-decode the map key.
+type vestingIndexUpdate struct {
+	addr  []byte
+	index *contract.VestingIndex
+}
+
+// liquidExisting returns the running CPLQ balance for `key` that is already
+// staged in `sets`. Used so multiple recipients in the same bucket sharing an
+// address get aggregated into one set op rather than overwriting each other.
+func liquidExisting(sets []*contract.PluginSetOp, key []byte) (uint64, bool) {
+	for _, s := range sets {
+		if string(s.Key) == string(key) {
+			return DecodeUint64(s.Value), true
+		}
+	}
+	return 0, false
+}
+
+func replaceSet(sets []*contract.PluginSetOp, key, value []byte) {
+	for _, s := range sets {
+		if string(s.Key) == string(key) {
+			s.Value = value
+			return
+		}
+	}
+}

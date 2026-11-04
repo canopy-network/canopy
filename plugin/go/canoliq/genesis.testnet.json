@@ -1,0 +1,99 @@
+{
+  "_comment": "TESTNET GENESIS TEMPLATE. Every address below is an unfilled placeholder and the node WILL REFUSE TO START until each is replaced (config.go::SafetyCheck rejects any address matching the template placeholder shape under a non-localnet profile). Previously this file shipped seven distinct fake addresses chosen so the old single-address check would pass, which meant a half-filled copy booted happily; the placeholders are now collectively recognizable instead.",
+  "blocksPerYear": 5256000,
+  "buckets": [
+    {
+      "name": "Validators & Infrastructure",
+      "bps": 2200,
+      "cliffMonths": 12,
+      "vestMonths": 24,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000001",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Liquidity Incentives",
+      "bps": 1500,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000002",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Community & Airdrops",
+      "bps": 2000,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000003",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "DAO Treasury (canoLiq)",
+      "bps": 1500,
+      "destination": "treasury",
+      "cliffMonths": 0,
+      "vestMonths": 0
+    },
+    {
+      "name": "Founders & Core Team",
+      "bps": 1200,
+      "cliffMonths": 12,
+      "vestMonths": 36,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000004",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Strategic Partners & Integrations",
+      "bps": 1000,
+      "cliffMonths": 6,
+      "vestMonths": 12,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000005",
+          "bps": 10000
+        }
+      ]
+    },
+    {
+      "name": "Developer Grants & Ecosystem",
+      "bps": 600,
+      "cliffMonths": 0,
+      "vestMonths": 0,
+      "recipients": [
+        {
+          "address": "0000000000000000000000000000000000000006",
+          "bps": 10000
+        }
+      ]
+    }
+  ],
+  "params": {
+    "_comment": "Multisig signers and thresholds for testnet. 3-of-5; treasuryThreshold lowered to 50_000_000 uCPLQ so the multisig branch is actually exercised on modest testnet spends. All five signers must be distinct: ValidateParams rejects duplicates.",
+    "multisigSigners": [
+      "0000000000000000000000000000000000000010",
+      "0000000000000000000000000000000000000011",
+      "0000000000000000000000000000000000000012",
+      "0000000000000000000000000000000000000013",
+      "0000000000000000000000000000000000000014"
+    ],
+    "multisigThreshold": 3,
+    "treasuryThreshold": 50000000
+  },
+  "_validatorRegistryComment": "Shipped empty for first testnet bring-up (2026-06-18 decision). The plugin falls back to a single committee aggregator key, which obscures per-validator pro-rata reward credit; populate before the validator-eject T1 scenarios and before mainnet.",
+  "validatorRegistry": []
+}
