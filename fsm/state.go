@@ -286,21 +286,30 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	failedCheckTxs := map[int]error{}
 	// retain stable multisig intent IDs from the successful precheck pass
 	multisigIntentIDs := make([][]byte, len(txs))
+	// Retain decoded transactions and signer identities so execution does not repeat public-key parsing.
+	precheckedTxs := make([]*precheckedTransaction, len(txs))
 	// map signature batch indices back to original tx indices
 	batchToTxIdx := make([]int, 0, len(txs))
 	// first batch validate signatures over the entire set
 	checkStartTime := time.Now()
 	for i, tx := range txs {
+		if ctx.Err() != nil {
+			return lib.ErrMempoolStopSignal()
+		}
 		preCount := batchVerifier.Count()
+		// run inexpensive checks before batching signatures to avoid wasted crypto while preserving execution precheck semantics without state changes.
 		checkStore := s.Store().(lib.StoreI)
 		checkTxn, e := s.TxnWrap()
 		if e != nil {
 			return e
 		}
 		checkResult, checkErr := s.CheckTx(tx, "", batchVerifier)
+		checkTxn.Discard()
+		s.SetStore(checkStore)
 		if checkErr != nil {
 			failedCheckTxs[i] = checkErr
 		} else {
+			precheckedTxs[i] = &precheckedTransaction{transaction: checkResult.tx, sender: checkResult.sender}
 			intentID, intentErr := checkResult.tx.GetMultisigIntentID()
 			if intentErr != nil {
 				failedCheckTxs[i] = intentErr
@@ -308,8 +317,6 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 				multisigIntentIDs[i] = intentID
 			}
 		}
-		checkTxn.Discard()
-		s.SetStore(checkStore)
 		postCount := batchVerifier.Count()
 		for j := preCount; j < postCount; j++ {
 			batchToTxIdx = append(batchToTxIdx, i)
@@ -320,6 +327,9 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 		s.Metrics.ApplyTxsCheckTime.Observe(checkDuration.Seconds())
 	}
 	// execute batch verification of the signatures in the block
+	if ctx.Err() != nil {
+		return lib.ErrMempoolStopSignal()
+	}
 	batchVerifyStartTime := time.Now()
 	for _, failedIdx := range batchVerifier.Verify() {
 		if failedIdx < 0 || failedIdx >= len(batchToTxIdx) {
@@ -393,7 +403,7 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 		}
 		// apply the tx to the state machine, generating a transaction result
 		executeStartTime := time.Now()
-		result, events, e := s.ApplyTransaction(uint64(r.Count), tx, hashString, crypto.NewBatchVerifier(true))
+		result, events, e := s.applyTransaction(uint64(r.Count), tx, hashString, crypto.NewBatchVerifier(true), precheckedTxs[i])
 		executeDuration += time.Since(executeStartTime)
 		if e != nil {
 			// add to the failed list

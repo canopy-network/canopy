@@ -1,10 +1,13 @@
 package bft
 
 import (
+	"testing"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
-	"testing"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestSignBytes(t *testing.T) {
@@ -147,6 +150,18 @@ func TestSignBytes(t *testing.T) {
 	}
 }
 
+// TestObsoleteElectionProposalIsRejectedBeforeValidation() verifies deterministic mode rejects obsolete election proposals early.
+func TestObsoleteElectionProposalIsRejectedBeforeValidation(t *testing.T) {
+	c := newTestConsensus(t, Election, 3)
+	msg := &Message{Header: c.view(Election)}
+
+	require.True(t, msg.IsProposerMessage())
+	err := c.bft.HandleMessage(msg)
+	require.Error(t, err)
+	require.Equal(t, lib.CodeWrongPhase, err.Code())
+	require.Empty(t, c.bft.Proposals[0][phaseToString(Election)])
+}
+
 func TestProposerMessageQCRejectsWrongRootHeightForJustification(t *testing.T) {
 	c := newTestConsensus(t, Propose, 3)
 
@@ -243,16 +258,146 @@ func TestHandleMessageNilSignatureReturnsError(t *testing.T) {
 	require.Equal(t, ErrPartialSignatureEmpty().Code(), errI.Code())
 }
 
+// TestNextHeightMessageWaitsForBlockReset() verifies next-height messages remain buffered until the block reset.
+func TestNextHeightMessageWaitsForBlockReset(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	msg := &Message{Header: c.view(Propose)}
+	msg.Header.Height++
+	require.NoError(t, msg.Sign(c.valKeys[0]))
+
+	// The message is not validated against height 1 and lost; it is retained until the block listener advances consensus to its height.
+	require.NoError(t, c.bft.HandleMessage(msg))
+	require.Len(t, c.bft.futureMsgs, 1)
+	require.Equal(t, proto.Size(msg), c.bft.futureBytes)
+	require.Empty(t, c.bft.Proposals[msg.Header.Round][phaseToString(msg.Header.Phase)])
+	require.Nil(t, c.bft.takeFutureMessages(c.bft.Height))
+	require.Len(t, c.bft.futureMsgs, 1)
+
+	c.bft.Height = msg.Header.Height
+	deferred := c.bft.takeFutureMessages(c.bft.Height)
+	require.Equal(t, []*Message{msg}, deferred)
+	require.Empty(t, c.bft.futureMsgs)
+	require.Zero(t, c.bft.futureBytes)
+}
+
+// TestNextHeightMessageRejectedWhenFutureBufferIsFull() verifies the future-message buffer remains bounded.
+func TestNextHeightMessageRejectedWhenFutureBufferIsFull(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	c.bft.futureBytes = maxFutureMessageBytes
+	msg := &Message{Header: c.view(Propose)}
+	msg.Header.Height++
+	require.NoError(t, msg.Sign(c.valKeys[0]))
+
+	require.Error(t, c.bft.HandleMessage(msg))
+	require.Empty(t, c.bft.futureMsgs)
+}
+
+func TestNextHeightMessageFromNonMemberIsNotDeferred(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	key, err := crypto.NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	msg := &Message{Header: c.view(Propose)}
+	msg.Header.Height++
+	require.NoError(t, msg.Sign(key))
+
+	require.Error(t, c.bft.HandleMessage(msg))
+	require.Empty(t, c.bft.futureMsgs)
+	require.Zero(t, c.bft.futureBytes)
+}
+
+func TestNextHeightMessagesAreBoundedPerSigner(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	for round := uint64(0); round < maxFutureMessagesPerSigner; round++ {
+		msg := &Message{Header: c.view(Propose, round)}
+		msg.Header.Height++
+		require.NoError(t, msg.Sign(c.valKeys[0]))
+		require.NoError(t, c.bft.HandleMessage(msg))
+	}
+	msg := &Message{Header: c.view(Propose, maxFutureMessagesPerSigner)}
+	msg.Header.Height++
+	require.NoError(t, msg.Sign(c.valKeys[0]))
+
+	require.Error(t, c.bft.HandleMessage(msg))
+	require.Len(t, c.bft.futureMsgs, maxFutureMessagesPerSigner)
+}
+
+// TestNextHeightPacemakerWaitsForResetBeforeRoundWindowCheck() verifies next-height pacemaker messages wait for reset before round validation.
+func TestNextHeightPacemakerWaitsForResetBeforeRoundWindowCheck(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	c.bft.Round = 5
+	c.bft.round.Store(5)
+	msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, 0)}}
+	msg.Qc.Header.Height++
+	require.NoError(t, msg.Sign(c.valKeys[0]))
+
+	require.NoError(t, c.bft.HandleMessage(msg))
+	require.Equal(t, []*Message{msg}, c.bft.futureMsgs)
+}
+
+// TestLegacyModeDoesNotBufferNextHeightMessage() verifies legacy mode does not use deterministic next-height buffering.
+func TestLegacyModeDoesNotBufferNextHeightMessage(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	c.bft.Config.ProposerMode = lib.ProposerModeVRF
+	msg := &Message{Header: c.view(Propose)}
+	msg.Header.Height++
+	require.NoError(t, msg.Sign(c.valKeys[0]))
+
+	require.Error(t, c.bft.HandleMessage(msg))
+	require.Empty(t, c.bft.futureMsgs)
+}
+
 func TestPacemakerMessageSignatureBindsClaimedRound(t *testing.T) {
 	c := newTestConsensus(t, Propose, 3)
-	msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, 1)}}
+	msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, 0)}}
 	require.NoError(t, msg.Sign(c.valKeys[1]))
 
-	msg.Qc.Header.Round = 2
+	msg.Qc.Header.Round = 1
 
 	errI := c.bft.HandleMessage(msg)
 	require.Error(t, errI)
 	require.Equal(t, ErrInvalidPartialSignature().Code(), errI.Code())
+}
+
+// TestPacemakerMessageAllowsArbitraryHigherRoundCatchUp() verifies authenticated pacemaker evidence permits higher-round catch-up.
+func TestPacemakerMessageAllowsArbitraryHigherRoundCatchUp(t *testing.T) {
+	c := newTestConsensus(t, Propose, 4)
+	for _, validator := range []int{1, 2} {
+		msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, 3)}}
+		require.NoError(t, msg.Sign(c.valKeys[validator]))
+		require.NoError(t, c.bft.HandleMessage(msg))
+	}
+
+	round, ok := c.bft.TimeoutCatchUpRound()
+	require.True(t, ok)
+	require.Equal(t, uint64(3), round)
+	c.bft.SetHeightAnchor(time.Now())
+	newViewSent := make(chan struct{})
+	go func() {
+		<-c.cont.sendToProposerChan
+		close(newViewSent)
+	}()
+	c.bft.Controller.Lock()
+	c.bft.advanceReadyPhases()
+	c.bft.Controller.Unlock()
+	<-newViewSent
+	require.Equal(t, uint64(3), c.bft.Round)
+	c.bft.PhaseTimer.Stop()
+}
+
+// TestPacemakerMessageRetentionIsBoundedAcrossRounds() verifies retained pacemaker votes remain bounded across rounds.
+func TestPacemakerMessageRetentionIsBoundedAcrossRounds(t *testing.T) {
+	c := newTestConsensus(t, Propose, 1)
+	for round := uint64(0); round < 100; round++ {
+		msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, round)}}
+		require.NoError(t, msg.Sign(c.valKeys[0]))
+		require.NoError(t, c.bft.HandleMessage(msg))
+		require.LessOrEqual(t, len(c.bft.PacemakerMessages), maxPacemakerMessagesPerSigner)
+	}
+	rounds := make([]uint64, 0, maxPacemakerMessagesPerSigner)
+	for _, msg := range c.bft.PacemakerMessages {
+		rounds = append(rounds, msg.Qc.Header.Round)
+	}
+	require.ElementsMatch(t, []uint64{98, 99}, rounds)
 }
 
 func TestProposerMessageRejectsInvalidHighQC(t *testing.T) {

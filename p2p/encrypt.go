@@ -34,13 +34,27 @@ var (
 	handshakeTimeout = 1 * time.Second
 )
 
+// TransportV2ActivationUnix is the network-wide hard cutover time; zero keeps V2 disabled to prevent accidental peer partitioning.
+const TransportV2ActivationUnix int64 = 0
+
+// transportV2ActiveAt() reports whether transport V2 is active at the supplied time.
+func transportV2ActiveAt(now time.Time) bool {
+	return transportV2ActiveAtUnix(now, TransportV2ActivationUnix)
+}
+
+// transportV2ActiveAtUnix() reports whether the supplied activation timestamp has been reached.
+func transportV2ActiveAtUnix(now time.Time, activationUnix int64) bool {
+	return activationUnix != 0 && now.Unix() >= activationUnix
+}
+
 // EncryptedConn is made of the underlying tcp connection, send and receive AEAD ciphers, and the peer address
 // NOTE: receiving and sending have two distinct AEAD state objects for key / nonce management and simultaneous send/receive
 type EncryptedConn struct {
-	conn    net.Conn   // underlying connection
-	receive aeadState  // encryption state for receiving messages
-	send    aeadState  // encryption state for sending messages
-	mu      sync.Mutex // mutex to prevent unsafe use of net conn
+	conn        net.Conn   // underlying connection
+	receive     aeadState  // encryption state for receiving messages
+	send        aeadState  // encryption state for sending messages
+	mu          sync.Mutex // mutex to prevent unsafe use of net conn
+	transportV2 bool       // fixed for the lifetime of this connection
 
 	Address *lib.PeerAddress // authenticated remote peer information
 }
@@ -55,10 +69,15 @@ type aeadState struct {
 
 // NewHandshake() executes the authentication protocol between two tcp connections to result in an encryption connection
 func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKeyI) (encryptedConn *EncryptedConn, e lib.ErrorI) {
+	return newHandshake(conn, meta, privateKey, transportV2ActiveAt(time.Now()))
+}
+
+// newHandshake() authenticates a peer and establishes an encrypted connection using the selected transport version.
+func newHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKeyI, transportV2 bool) (encryptedConn *EncryptedConn, e lib.ErrorI) {
 	// create a temporary keypair to establish a shared secret
 	tempPrivateKey, _ := crypto.NewEd25519PrivateKey()
 	tempPublicKey := tempPrivateKey.PublicKey().Bytes()
-	encryptedConn = &EncryptedConn{conn: conn}
+	encryptedConn = &EncryptedConn{conn: conn, transportV2: transportV2}
 	// swap temporary keys
 	peerTempPublicKey, e := keySwap(encryptedConn, tempPublicKey, handshakeTimeout)
 	if e != nil {
@@ -133,40 +152,56 @@ func (c *EncryptedConn) Write(data []byte) (n int, err error) {
 	// thread safety sends
 	c.send.Lock()
 	defer c.send.Unlock()
-	// setup data variables
-	chunkSize, chunk := 0, []byte(nil)
+	if !c.transportV2 {
+		return c.writeLegacy(data)
+	}
 	// loop until no more data to send
 	for dataSize := len(data); dataSize > 0; dataSize = len(data) {
-		// a 'buffer pool' saves resources by re-using buffers, take 2 buffers from the pool
-		cipherTextBuffer, plainTextBuffer := pool.Get(crypto.EncryptedFrameSize), pool.Get(crypto.FrameSize)
-		// if total data to write can be fit into a single chunk
-		if dataSize < crypto.MaxDataSize {
-			chunk = data
-			data = nil
-		} else { // else load the next chunk and save the rest of the data
-			chunk = data[:crypto.MaxDataSize]
-			data = data[crypto.MaxDataSize:]
-		}
-		chunkSize = len(chunk)
-		// size of data is the first 4 bytes of the message
-		binary.LittleEndian.PutUint32(plainTextBuffer, uint32(chunkSize))
-		// the actual chunk comes after the first 4 bytes
-		copy(plainTextBuffer[crypto.LengthHeaderSize:], chunk)
-		// encrypt the plain text into the cipher buffer
-		c.send.aead.Seal(cipherTextBuffer[:0], c.send.nonce[:], plainTextBuffer, nil)
+		chunkSize := min(dataSize, crypto.MaxDataSize)
+		chunk := data[:chunkSize]
+		data = data[chunkSize:]
+		// Authenticate the variable record length as AEAD associated data and bound it before receive-side allocation.
+		wireSize := crypto.LengthHeaderSize + chunkSize + crypto.Poly1305TagSize
+		wireBuffer := pool.Get(wireSize)
+		header := wireBuffer[:crypto.LengthHeaderSize]
+		binary.LittleEndian.PutUint32(header, uint32(chunkSize))
+		ciphertext := c.send.aead.Seal(wireBuffer[crypto.LengthHeaderSize:crypto.LengthHeaderSize], c.send.nonce[:], chunk, header)
 		// increment the 'write state' nonce to follow the security parameters of the AEAD protocol
 		incrementNonce(c.send.nonce)
-		// write the cipher text to the underlying connection
-		if _, er := c.conn.Write(cipherTextBuffer); er != nil {
+		// Complete any legal short write before advancing the nonce to preserve peer framing.
+		if er := writeAll(c.conn, wireBuffer[:crypto.LengthHeaderSize+len(ciphertext)]); er != nil {
+			pool.Put(wireBuffer)
 			return 0, ErrFailedWrite(er)
 		}
 		// update number of bytes written
 		n += chunkSize
-		// release the buffers back into the pool for reuse
-		pool.Put(cipherTextBuffer)
-		pool.Put(plainTextBuffer)
+		pool.Put(wireBuffer)
 	}
 	return
+}
+
+// writeLegacy() encrypts and writes data using fixed-size transport V1 records.
+func (c *EncryptedConn) writeLegacy(data []byte) (n int, err error) {
+	for len(data) != 0 {
+		chunkSize := min(len(data), crypto.LegacyMaxDataSize)
+		chunk := data[:chunkSize]
+		data = data[chunkSize:]
+		plainTextBuffer := pool.Get(crypto.LegacyFrameSize)
+		cipherTextBuffer := pool.Get(crypto.LegacyEncryptedFrameSize)
+		binary.LittleEndian.PutUint32(plainTextBuffer, uint32(chunkSize))
+		copy(plainTextBuffer[crypto.LengthHeaderSize:], chunk)
+		ciphertext := c.send.aead.Seal(cipherTextBuffer[:0], c.send.nonce[:], plainTextBuffer, nil)
+		incrementNonce(c.send.nonce)
+		if er := writeAll(c.conn, ciphertext); er != nil {
+			pool.Put(plainTextBuffer)
+			pool.Put(cipherTextBuffer)
+			return n, ErrFailedWrite(er)
+		}
+		n += chunkSize
+		pool.Put(plainTextBuffer)
+		pool.Put(cipherTextBuffer)
+	}
+	return n, nil
 }
 
 // Read() checks the connection for cipher data bytes, if found,
@@ -184,33 +219,78 @@ func (c *EncryptedConn) Read(data []byte) (n int, err error) {
 	if bzRead, hadUnread := c.checkUnread(data); hadUnread {
 		return bzRead, nil
 	}
-	// a 'buffer pool' saves resources by re-using buffers, take 2 buffers from the pool
-	cipherTextBuffer, plainTextBuffer := pool.Get(crypto.EncryptedFrameSize), pool.Get(crypto.FrameSize)
+	if !c.transportV2 {
+		return c.readLegacy(data)
+	}
+	// Read and bound the variable-size record before allocating its payload.
+	var header [crypto.LengthHeaderSize]byte
+	if _, er := io.ReadFull(c.conn, header[:]); er != nil {
+		return 0, er
+	}
+	chunkLength := binary.LittleEndian.Uint32(header[:])
+	if chunkLength == 0 || chunkLength > crypto.MaxDataSize {
+		return 0, ErrChunkLargerThanMax()
+	}
+	ciphertextSize := int(chunkLength) + crypto.Poly1305TagSize
+	cipherTextBuffer := pool.Get(ciphertextSize)
+	plainTextBuffer := pool.Get(int(chunkLength))
 	defer func() { pool.Put(plainTextBuffer); pool.Put(cipherTextBuffer) }()
-	// load up bytes from the connection into the cipher text buffer
 	if _, er := io.ReadFull(c.conn, cipherTextBuffer); er != nil {
 		return 0, er
 	}
-	// decrypt and load the cipher text buffer into the plain text buffer
-	if _, er := c.receive.aead.Open(plainTextBuffer[:0], c.receive.nonce[:], cipherTextBuffer, nil); er != nil {
-		return n, ErrConnDecryptFailed(er)
+	// Authenticate the length header so modification fails instead of changing the plaintext interpretation.
+	chunk, er := c.receive.aead.Open(plainTextBuffer[:0], c.receive.nonce[:], cipherTextBuffer, header[:])
+	if er != nil {
+		return 0, ErrConnDecryptFailed(er)
 	}
-	// increment the 'read state' nonce to follow the security parameters of the AEAD protocol
 	incrementNonce(c.receive.nonce)
-	// read the first 4 bytes to get the length of the chunk
-	chunkLength := binary.LittleEndian.Uint32(plainTextBuffer) // read the length header
-	// ensure it follows the max chunk sizing protocol
-	if chunkLength > crypto.MaxDataSize {
-		return 0, ErrChunkLargerThanMax()
-	}
-	// remove the first 4 bytes to get the chunk payload
-	chunk := plainTextBuffer[crypto.LengthHeaderSize : crypto.LengthHeaderSize+chunkLength]
 	// load the chunk into the data buffer
 	n = copy(data, chunk)
 	// if the data buffer is smaller than the chunk, hold them in the 'unread buffer'
 	// to be loaded in the following iteration
 	c.holdUnread(n, chunk)
 	return
+}
+
+// readLegacy() reads and decrypts fixed-size transport V1 records.
+func (c *EncryptedConn) readLegacy(data []byte) (n int, err error) {
+	cipherTextBuffer := pool.Get(crypto.LegacyEncryptedFrameSize)
+	plainTextBuffer := pool.Get(crypto.LegacyFrameSize)
+	defer func() { pool.Put(plainTextBuffer); pool.Put(cipherTextBuffer) }()
+	if _, er := io.ReadFull(c.conn, cipherTextBuffer); er != nil {
+		return 0, er
+	}
+	plainText, er := c.receive.aead.Open(plainTextBuffer[:0], c.receive.nonce[:], cipherTextBuffer, nil)
+	if er != nil {
+		return 0, ErrConnDecryptFailed(er)
+	}
+	incrementNonce(c.receive.nonce)
+	chunkLength := binary.LittleEndian.Uint32(plainText[:crypto.LengthHeaderSize])
+	if chunkLength > crypto.LegacyMaxDataSize {
+		return 0, ErrChunkLargerThanMax()
+	}
+	chunk := plainText[crypto.LengthHeaderSize : crypto.LengthHeaderSize+chunkLength]
+	n = copy(data, chunk)
+	c.holdUnread(n, chunk)
+	return n, nil
+}
+
+// TransportV2() reports whether this encrypted connection uses transport V2.
+func (c *EncryptedConn) TransportV2() bool { return c != nil && c.transportV2 }
+
+// writeAll() writes a complete transport record despite legal short writes.
+func writeAll(conn net.Conn, data []byte) error {
+	for len(data) != 0 {
+		n, err := conn.Write(data)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return io.ErrUnexpectedEOF
+		}
+		data = data[n:]
+	}
+	return nil
 }
 
 // checkUnread() checks to see if the 'unread buffer' was filled from a partially read chunk

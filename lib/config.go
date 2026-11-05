@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/units"
 )
@@ -98,7 +99,7 @@ func DefaultMainConfig() MainConfig {
 				Url:     "http://localhost:50002", // RooChainURL points to self
 			},
 		},
-		RunVDF:          true,          // run the VDF by default
+		RunVDF:          false,         // checkpoints replace the VDF on the fast chain
 		ChainId:         CanopyChainId, // default chain url is 1
 		Headless:        false,         // serve the web wallet and block explorer by default
 		AutoUpdate:      true,          // set it as default while in inmature state
@@ -213,20 +214,73 @@ type ConsensusConfig struct {
 	PrecommitVoteTimeoutMS  int `json:"precommitVoteTimeoutMS"`  // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to COMMIT phase
 	CommitTimeoutMS         int `json:"commitTimeoutMS"`         // minus Precommit-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the COMMIT-PROCESS phase
 	RoundInterruptTimeoutMS int `json:"roundInterruptTimeoutMS"` // minus gossiping current Round time, how long (in milliseconds) the replica sleeps before moving to PACEMAKER phase
+
+	ProposerMode              string `json:"proposerMode"`              // proposer-selection protocol: "vrf" (legacy) or "stakeWeightedRoundRobin" (fast)
+	RoundRobinBlockIntervalMS int    `json:"roundRobinBlockIntervalMS"` // round-zero pacing target used only by stakeWeightedRoundRobin
+	BlockConsensusLeadTimeMS  int    `json:"blockConsensusLeadTimeMS"`  // minimum proposal-to-timestamp budget used by stakeWeightedRoundRobin
+	MaximumFutureBlockTimeMS  int    `json:"maximumFutureBlockTimeMS"`  // maximum accepted future timestamp; coordinate across stakeWeightedRoundRobin validators
 }
+
+const (
+	defaultRoundRobinBlockIntervalMS = 500
+	defaultBlockConsensusLeadTimeMS  = 175
+	defaultMaximumFutureBlockTimeMS  = 1000
+)
 
 // DefaultConsensusConfig() configures the block time
 func DefaultConsensusConfig() ConsensusConfig {
 	return ConsensusConfig{
-		NewHeightTimeoutMs:     4500, // 4.5 seconds
-		ElectionTimeoutMS:      1500, // 1.5 seconds
-		ElectionVoteTimeoutMS:  1500, // 1.5 seconds
-		ProposeTimeoutMS:       2500, // 2.5 seconds
-		ProposeVoteTimeoutMS:   4000, // 4 seconds
-		PrecommitTimeoutMS:     2000, // 2 seconds
-		PrecommitVoteTimeoutMS: 2000, // 2 seconds
-		CommitTimeoutMS:        2000, // 2 seconds
+		NewHeightTimeoutMs:     500,
+		ElectionTimeoutMS:      100, // deterministic leader selection is local
+		ElectionVoteTimeoutMS:  500, // collect new-view votes / wait for proposal
+		ProposeTimeoutMS:       500, // proposal propagation failure detector
+		ProposeVoteTimeoutMS:   500, // proposal vote failure detector
+		PrecommitTimeoutMS:     500, // precommit propagation failure detector
+		PrecommitVoteTimeoutMS: 500, // precommit vote failure detector
+		CommitTimeoutMS:        500, // commit propagation failure detector
+
+		ProposerMode:              ProposerModeVRF,
+		RoundRobinBlockIntervalMS: defaultRoundRobinBlockIntervalMS,
+		BlockConsensusLeadTimeMS:  defaultBlockConsensusLeadTimeMS,
+		MaximumFutureBlockTimeMS:  defaultMaximumFutureBlockTimeMS,
+		RoundInterruptTimeoutMS:   250, // collect pacemaker votes before the next round
 	}
+}
+
+const (
+	// ProposerModeVRF preserves the original election protocol as the default for configs without proposerMode.
+	ProposerModeVRF = "vrf"
+	// ProposerModeStakeWeightedRoundRobin enables the deterministic leader schedule and configurable optimistic pacemaker.
+	ProposerModeStakeWeightedRoundRobin = "stakeWeightedRoundRobin"
+)
+
+// UsesDeterministicProposers() reports whether this node uses the fast proposer protocol, which must match across validators.
+func (c *ConsensusConfig) UsesDeterministicProposers() bool {
+	return c != nil && c.ProposerMode == ProposerModeStakeWeightedRoundRobin
+}
+
+// RoundRobinBlockInterval() returns the coordinated round-zero pacing target, defaulting to 500 ms for old or zero-value configs.
+func (c *ConsensusConfig) RoundRobinBlockInterval() time.Duration {
+	if c == nil || c.RoundRobinBlockIntervalMS <= 0 {
+		return defaultRoundRobinBlockIntervalMS * time.Millisecond
+	}
+	return time.Duration(c.RoundRobinBlockIntervalMS) * time.Millisecond
+}
+
+// BlockConsensusLeadTime returns the minimum proposal-to-timestamp budget used by stake-weighted round-robin.
+func (c *ConsensusConfig) BlockConsensusLeadTime() time.Duration {
+	if c == nil || c.BlockConsensusLeadTimeMS <= 0 {
+		return defaultBlockConsensusLeadTimeMS * time.Millisecond
+	}
+	return time.Duration(c.BlockConsensusLeadTimeMS) * time.Millisecond
+}
+
+// MaximumFutureBlockTime returns the maximum accepted future timestamp used by stake-weighted round-robin.
+func (c *ConsensusConfig) MaximumFutureBlockTime() time.Duration {
+	if c == nil || c.MaximumFutureBlockTimeMS <= 0 {
+		return defaultMaximumFutureBlockTimeMS * time.Millisecond
+	}
+	return time.Duration(c.MaximumFutureBlockTimeMS) * time.Millisecond
 }
 
 // BlockTimeMS() returns the expected block time in milliseconds
@@ -334,8 +388,8 @@ type MempoolConfig struct {
 // DefaultMempoolConfig() returns the developer created Mempool options
 func DefaultMempoolConfig() MempoolConfig {
 	return MempoolConfig{
-		MaxTotalBytes:              uint64(10 * units.MB),      // 10 MB max size
-		MaxTransactionCount:        5000,                       // 5000 max transactions
+		MaxTotalBytes:              uint64(64 * units.MB),      // buffer many full 500 ms blocks
+		MaxTransactionCount:        250000,                     // roughly 25 seconds at 10K TPS
 		IndividualMaxTxSize:        uint32(4 * units.Kilobyte), // 4 KB max individual tx size
 		DropPercentage:             35,                         // drop 35% if limits are reached
 		LazyMempoolCheckFrequencyS: 2,                          // check every 2 seconds

@@ -71,6 +71,8 @@ message ConsensusParams {
   uint64 retired = 4;
   // reset_committee: clears committee data for the provided committee id
   uint64 reset_committee = 5; // @gotags: json:"resetCommittee"
+  // preserve_non_signer_rewards: when true, missed validator signatures are tracked and penalized without reducing the proposer's allocation
+  bool preserve_non_signer_rewards = 6; // @gotags: json:"preserveNonSignerRewards"
 }
 
 // ValidatorParams is the parameter space that defines the rules and criteria for validators in the blockchain

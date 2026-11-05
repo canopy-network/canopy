@@ -38,6 +38,12 @@ type BFT struct {
 
 	Controller               // reference to the Controller for callbacks like producing and validating the proposal via the plugin or gossiping commit message
 	ResetBFT   chan ResetBFT // trigger that resets the BFT due to a new Target block or a new Canopy block
+
+	advanceBFT   chan struct{} // edge-triggered notification that the current phase has enough data to advance
+	futureMsgs   []*Message    // messages that arrived before the preceding block reset
+	futureHeight uint64
+	futureBytes  int
+
 	syncing    *atomic.Bool  // if chain for this committee is currently catching up to latest height
 	phase      atomic.Int32  // atomic mirror of View.Phase for external readers
 	round      atomic.Uint64 // atomic mirror of View.Round for external readers
@@ -46,14 +52,21 @@ type BFT struct {
 	forcedRound        uint64    // admin-scheduled round; 0 means none
 	forcedRoundAt      time.Time // earliest time at which forcedRound may be entered
 	forcedTimeoutRound *uint64   // pending/active timeout round override
+	forceRoundTimer    *time.Timer
+	roundZeroNewView   bool // a lock-preserving committee reset must exchange locks before proposing
 
 	PhaseTimer *time.Timer // ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
+
+	roundDeadline time.Time // coordinated absolute deadline for the current round
+	// A manual round jump starts a coordinated timeout schedule at the requested time, with these fields mapping its actual round to the requested backoff level.
+	roundScheduleStart   uint64
+	timeoutScheduleStart uint64
 
 	PublicKey    []byte             // self consensus public key
 	PrivateKey   crypto.PrivateKeyI // self consensus private key
 	Config       lib.Config         // self configuration
 	Metrics      *lib.Metrics       // telemetry
-	BFTStartTime time.Time          // start time of BFT for this height
+	BFTStartTime time.Time          // anchor of the active coordinated round schedule
 	log          lib.LoggerI        // logging
 }
 
@@ -86,8 +99,10 @@ func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64, con
 		log:               l,
 		Controller:        con,
 		ResetBFT:          make(chan ResetBFT, 100),
+		advanceBFT:        make(chan struct{}, 1),
 		syncing:           con.Syncing(),
 		PhaseTimer:        lib.NewTimer(),
+		forceRoundTimer:   lib.NewTimer(),
 		VDFService:        vdf,
 		Metrics:           m,
 		HighVDF:           new(crypto.VDF),
@@ -115,6 +130,11 @@ func (b *BFT) ProposalVoteDeadlineUnixMilli() int64 {
 	return b.deadlineMs.Load()
 }
 
+// usesDeterministicProposers() reports whether the configured proposer mode is deterministic.
+func (b *BFT) usesDeterministicProposers() bool {
+	return b != nil && b.Config.ConsensusConfig.UsesDeterministicProposers()
+}
+
 // Start() initiates the HotStuff BFT service.
 // - Phase Timeout ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
 // This design balances synchronization speed during adverse conditions with maximizing voter participation under normal conditions
@@ -122,19 +142,25 @@ func (b *BFT) ProposalVoteDeadlineUnixMilli() int64 {
 //   - (a) Canopy chainId <committeeSet changed, reset but keep locks to prevent conflicting validator sets between peers during a view change>
 //   - (b) Target chainId <mission accomplished, move to next height>
 func (b *BFT) Start() {
-	var err lib.ErrorI
-	// load the committee from the base chain
-	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.ChainHeight()), b.Controller.RootChainHeight())
-	if err != nil {
-		b.log.Warn(err.Error())
-	}
-	// load the committee data
-	b.CommitteeData, err = b.Controller.LoadCommitteeData()
-	if err != nil {
-		b.log.Warn(err.Error())
-	}
+	// Publish the initial root height, validator set, and committee metadata as one snapshot, just as on later height/round refreshes.
+	b.RefreshRootChainInfo()
 	for {
 		select {
+		case <-b.forceRoundTimer.C:
+			func() {
+				b.Controller.Lock()
+				defer b.Controller.Unlock()
+				b.applyForcedRound()
+			}()
+
+		// Consensus messages drive optimistic phase advancement; timers detect missing proposals, votes, and asynchronous peers.
+		case <-b.advanceBFT:
+			func() {
+				b.Controller.Lock()
+				defer b.Controller.Unlock()
+				b.advanceReadyPhases()
+			}()
+
 		// EXECUTE PHASE
 		// - This triggers when the phase's sleep time has expired, indicating that all expected messages for this phase should have already been received
 		case <-b.PhaseTimer.C:
@@ -144,40 +170,60 @@ func (b *BFT) Start() {
 				defer b.Controller.Unlock()
 				// Update BFT metrics
 				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.LoadRootChainId(b.Height), b.Round, b.Phase, startTime)
-				// handle the phase
-				b.HandlePhase()
+				// if using VRF mode -> handle each phase
+				if !b.usesDeterministicProposers() {
+					b.HandlePhase()
+					return
+				}
+				// Hold a ready commit until its agreed timestamp; every other timer expiry is the single deadline for the entire round.
+				if b.Phase == CommitProcess && b.GetProposal() != nil {
+					b.HandlePhase()
+					return
+				}
+				b.RoundInterrupt()
 			}()
 
 		// RESET BFT
 		// - This triggers when receiving a new Commit Block (QC) from either root-chainId (a) or the Target-ChainId (b)
 		case resetBFT := <-b.ResetBFT:
-			var processTime time.Duration
+			var deferred []*Message
 			func() {
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
-				processTime = validProcessTime(resetBFT.StartTime, time.Duration(b.Config.BlockTimeMS())*time.Millisecond)
-				if processTime != 0 {
-					b.log.Infof("Using included timestamp to calculate process time: %s", resetBFT.StartTime.Format(time.StampMilli))
-				}
-				// if is a root-chain update reset back to round 0 but maintain locks to prevent 'fork attacks'
-				// else increment the height and don't maintain locks
-				if !resetBFT.IsRootChainUpdate {
-					b.log.Info("Reset BFT (NEW_HEIGHT)")
-					b.NewHeight(false)
-					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
-					b.BFTStartTime = time.Now()
-					b.deadlineMs.Store(b.BFTStartTime.Add(time.Duration(b.Config.BlockTimeMS()*3) * time.Millisecond).UnixMilli())
-				} else {
+				if resetBFT.IsRootChainUpdate {
 					b.log.Info("Reset BFT (NEW_COMMITTEE)")
-					//if b.LoadIsOwnRoot() {
-					b.NewHeight(true)
-					//} else if b.Round != 0 {
-					//	b.NewHeight(true)
-					// set the wait timers to start consensus
-					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
-					//}
+				} else {
+					b.log.Info("Reset BFT (NEW_HEIGHT)")
 				}
+				b.NewHeight(resetBFT.IsRootChainUpdate)
+				if b.usesDeterministicProposers() {
+					b.SetHeightAnchor(resetBFT.StartTime)
+					b.StartRound()
+					if !resetBFT.IsRootChainUpdate {
+						b.deadlineMs.Store(b.RoundDeadline(2).UnixMilli())
+					}
+				} else {
+					processTime := validProcessTime(resetBFT.StartTime, time.Duration(b.Config.BlockTimeMS())*time.Millisecond)
+					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
+					if !resetBFT.IsRootChainUpdate {
+						b.BFTStartTime = time.Now()
+						b.deadlineMs.Store(b.BFTStartTime.Add(time.Duration(b.Config.BlockTimeMS()*3) * time.Millisecond).UnixMilli())
+					}
+				}
+				deferred = b.takeFutureMessages(b.Height)
 			}()
+			// Replay a next-height consensus message that overtook its finalized block only after the atomic height/committee reset is visible.
+			for _, msg := range deferred {
+				if err := b.HandleMessage(msg); err != nil {
+					b.log.Errorf("Handling deferred consensus message failed with err: %s", err.Error())
+					continue
+				}
+				if b.usesDeterministicProposers() {
+					b.Controller.Lock()
+					b.advanceReadyPhases()
+					b.Controller.Unlock()
+				}
+			}
 		}
 	}
 }
@@ -187,6 +233,39 @@ func validProcessTime(start time.Time, maxAge time.Duration) time.Duration {
 		return since
 	}
 	return 0
+}
+
+// advanceReadyPhases() executes every phase made ready by in-memory messages while the caller holds the controller lock.
+func (b *BFT) advanceReadyPhases() {
+	if round, ok := b.TimeoutQuorumRound(); ok {
+		b.GossipTimeoutQuorum(round)
+		if round >= b.Round {
+			b.EnterRound(round + 1)
+		}
+	}
+	if round, ok := b.TimeoutCatchUpRound(); ok && round > b.Round {
+		b.log.Infof("Timeout evidence advanced local round to %d", round)
+		b.EnterRound(round)
+	}
+	for b.PhaseHas23Maj() {
+		phase := b.Phase
+		b.HandlePhase()
+		// CommitProcess waits for the block listener to persist and reset the height; this also guards against accidental phase-handler loops.
+		if b.Phase == phase {
+			return
+		}
+	}
+}
+
+// SignalPhaseAdvance() wakes the consensus loop to recheck phase readiness; duplicate signals are coalesced.
+func (b *BFT) SignalPhaseAdvance() {
+	if !b.usesDeterministicProposers() {
+		return
+	}
+	select {
+	case b.advanceBFT <- struct{}{}:
+	default:
+	}
 }
 
 // HandlePhase() is the main BFT Phase stepping loop
@@ -204,7 +283,6 @@ func (b *BFT) HandlePhase() {
 		stopTimers()
 		return
 	}
-	// measure process time to have the most accurate timer timeouts
 	startTime := time.Now()
 	switch b.Phase {
 	case Election:
@@ -232,63 +310,55 @@ func (b *BFT) HandlePhase() {
 	b.SetTimerForNextPhase(time.Since(startTime))
 }
 
-// StartElectionPhase() begins the ElectionPhase after the CommitProcess (normal) or Pacemaker (previous Round failure) timeouts
-// ELECTION PHASE:
-// - Replicas run the Cumulative Distribution Function and a 'practical' Verifiable Random Function
-// - If they are a candidate they send the VRF Out to the replicas
+// StartElectionPhase deterministically selects the leader from the validator set and current view without sending a network message.
 func (b *BFT) StartElectionPhase() {
 	b.log.Info(b.View.ToString())
-	// retrieve Validator object from the ValidatorSet
-	selfValidator, err := b.ValidatorSet.GetValidator(b.PublicKey)
-	if err != nil {
-		b.log.Error(err.Error())
+	if !b.usesDeterministicProposers() {
+		selfValidator, err := b.ValidatorSet.GetValidator(b.PublicKey)
+		if err != nil {
+			b.log.Error(err.Error())
+			return
+		}
+		lastProposers, err := b.LoadLastProposers(b.RootHeight)
+		if err != nil {
+			b.log.Error(err.Error())
+			return
+		}
+		b.SortitionData = &lib.SortitionData{
+			LastProposerAddresses: lastProposers.Addresses,
+			RootHeight:            b.RootHeight, Height: b.Height, Round: b.Round,
+			TotalValidators: b.ValidatorSet.NumValidators,
+			TotalPower:      b.ValidatorSet.TotalPower, VotingPower: selfValidator.VotingPower,
+		}
+		_, vrf, isCandidate := Sortition(&SortitionParams{SortitionData: b.SortitionData, PrivateKey: b.PrivateKey})
+		if isCandidate {
+			b.log.Info("Self is a leader candidate 🗳️")
+			b.SendToReplicas(b.ValidatorSet, &Message{Header: b.View.Copy(), Vrf: vrf})
+		}
 		return
 	}
-	lastProposers, err := b.LoadLastProposers(b.RootHeight)
-	if err != nil {
-		b.log.Error(err.Error())
+	b.ProposerKey = SelectProposerWeightedRoundRobin(b.View, b.ValidatorSet.ValidatorSet, b.ValidatorSet.TotalPower)
+	if len(b.ProposerKey) == 0 {
+		b.log.Error("unable to select deterministic proposer")
 		return
 	}
-	// initialize the sortition parameters
-	b.SortitionData = &lib.SortitionData{
-		LastProposerAddresses: lastProposers.Addresses,      // LastProposers ensures defense against Grinding Attacks
-		RootHeight:            b.RootHeight,                 // the height of the root ensures a unique sortition for each root height
-		Height:                b.Height,                     // height ensures a unique sortition seed for each height
-		Round:                 b.Round,                      // round ensures a unique sortition seed for each round
-		TotalValidators:       b.ValidatorSet.NumValidators, // validator count is required for CDF
-		TotalPower:            b.ValidatorSet.TotalPower,    // total power between all validators is required for CDF
-		VotingPower:           selfValidator.VotingPower,    // self voting power is required for CDF
-	}
-	// SORTITION (CDF + VRF)
-	_, vrf, isCandidate := Sortition(&SortitionParams{
-		SortitionData: b.SortitionData,
-		PrivateKey:    b.PrivateKey,
-	})
-	// if is a possible proposer candidate, then send the VRF to other Replicas for the ElectionVote
-	if isCandidate {
-		b.log.Info("Self is a leader candidate 🗳️")
-		b.SendToReplicas(b.ValidatorSet, &Message{
-			Header: b.View.Copy(),
-			Vrf:    vrf,
-		})
-	}
+	b.log.Infof("Selected deterministic proposer %s", lib.BytesToTruncatedString(b.ProposerKey))
+	// ElectionVote now acts only as a new-view vote carrying locks and evidence, so it needs no candidate collection window.
+	b.SignalPhaseAdvance()
 }
 
 // StartElectionVotePhase() begins the ElectionVotePhase after the ELECTION phase timeout
 // ELECTION-VOTE PHASE:
-// - Replicas review messages from Candidates and determine the 'Leader' by the highest VRF
-// - If no Candidate messages received, fallback to stake weighted random 'Leader' selection
+// - Replicas use the leader already derived from the validator set and view
 // - Replicas send a signed (aggregable) ELECTION vote to the Leader (Proposer)
 // - With this vote, the Replica attaches any Byzantine evidence or 'Locked' QC they have collected as well as their VDF output
 func (b *BFT) StartElectionVotePhase() {
 	b.log.Info(b.View.ToString())
-	// get the candidates from messages received
-	candidates := b.GetElectionCandidates()
-	if len(candidates) == 0 {
-		b.log.Warn("No election candidates, falling back to weighted pseudorandom")
+	if !b.usesDeterministicProposers() {
+		b.ProposerKey = SelectProposerFromCandidates(b.GetElectionCandidates(), b.SortitionData, b.ValidatorSet.ValidatorSet)
+	} else if len(b.ProposerKey) == 0 {
+		b.ProposerKey = SelectProposerWeightedRoundRobin(b.View, b.ValidatorSet.ValidatorSet, b.ValidatorSet.TotalPower)
 	}
-	// select Proposer (set is required for self-send)
-	b.ProposerKey = SelectProposerFromCandidates(candidates, b.SortitionData, b.ValidatorSet.ValidatorSet)
 	defer func() { b.ProposerKey = nil }()
 	if b.SelfIsProposer() {
 		b.log.Info("Voting SELF as the proposer")
@@ -321,7 +391,19 @@ func (b *BFT) StartElectionVotePhase() {
 // - Leader creates a PROPOSE message from the Proposal and justifies the message with the +2/3 threshold multi-signature
 func (b *BFT) StartProposePhase() {
 	b.log.Info(b.View.ToString())
+	if b.usesDeterministicProposers() {
+		if len(b.ProposerKey) == 0 {
+			b.ProposerKey = SelectProposerWeightedRoundRobin(b.View, b.ValidatorSet.ValidatorSet, b.ValidatorSet.TotalPower)
+		}
+		if !b.SelfIsProposer() {
+			return
+		}
+	}
 	vote, as, err := b.GetMajorityVote()
+	if err != nil && b.usesDeterministicProposers() && b.Round == 0 && !b.roundZeroNewView {
+		// Accept an already collected new-view quorum for compatibility with in-flight messages, but never wait for it on the active round-zero path.
+		vote, as, err = b.roundZeroProposerProof()
+	}
 	if err != nil {
 		return
 	}
@@ -342,6 +424,10 @@ func (b *BFT) StartProposePhase() {
 	} else {
 		b.Block, b.Results = b.HighQC.Block, b.HighQC.Results
 	}
+	// Adopt a later target slot before broadcasting so an expired round timer cannot race the proposer's self-delivered proposal.
+	if b.usesDeterministicProposers() {
+		b.extendRoundDeadlineFromProposal(b.Block)
+	}
 	// send PROPOSE message to the replicas
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Header: b.View.Copy(),
@@ -358,6 +444,29 @@ func (b *BFT) StartProposePhase() {
 		LastDoubleSignEvidence: b.ByzantineEvidence.DSE.Evidence, // evidence is attached (if any) to validate the Proposal
 		RcBuildHeight:          b.RCBuildHeight,                  // the root chain height when the block was built
 	})
+}
+
+// roundZeroProposerProof() creates a one-signer proof for a fresh height; committee resets and higher rounds still require a +2/3 new-view certificate.
+func (b *BFT) roundZeroProposerProof() (*Message, *lib.AggregateSignature, lib.ErrorI) {
+	header := b.View.Copy()
+	header.Phase = ElectionVote // retained wire value; semantically proposer proof/new-view
+	vote := &Message{Qc: &QC{Header: header, ProposerKey: b.PublicKey}}
+	if err := vote.Sign(b.PrivateKey); err != nil {
+		return nil, nil, err
+	}
+	_, idx, errI := b.ValidatorSet.GetValidatorAndIdx(b.PublicKey)
+	if errI != nil {
+		return nil, nil, errI
+	}
+	multiKey := b.ValidatorSet.MultiKey.Copy()
+	if err := multiKey.AddSigner(vote.Signature.Signature, idx); err != nil {
+		return nil, nil, ErrUnableToAddSigner(err)
+	}
+	signature, err := multiKey.AggregateSignatures()
+	if err != nil {
+		return nil, nil, ErrAggregateSignature(err)
+	}
+	return vote, &lib.AggregateSignature{Signature: signature, Bitmap: multiKey.Bitmap()}, nil
 }
 
 // StartProposeVotePhase() begins the ProposeVote after the PROPOSE phase timeout
@@ -405,6 +514,10 @@ func (b *BFT) StartProposeVotePhase() {
 		b.RoundInterrupt()
 		return
 	}
+	// Adopt a validated proposal's later signed timestamp as the shared deadline while leaving the round-zero failure path at 500 ms for invalid or missing proposals.
+	if b.usesDeterministicProposers() {
+		b.extendRoundDeadlineFromProposal(msg.Qc.Block)
+	}
 	// Store the proposal data to enforce consistency during this voting round
 	// Note: This is not the same as a `lock`, since a `lock` would keep the data even after the round changes
 	b.Block, b.Results = msg.Qc.Block, msg.Qc.Results
@@ -422,6 +535,32 @@ func (b *BFT) StartProposeVotePhase() {
 			ProposerKey: b.ProposerKey,
 		},
 	})
+}
+
+// extendRoundDeadlineFromProposal() adopts a locally produced or live-validated proposal timestamp when construction moves beyond the nominal round.
+func (b *BFT) extendRoundDeadlineFromProposal(blockBytes []byte) {
+	timestamp, err := proposalTimestamp(blockBytes)
+	if err != nil {
+		return
+	}
+	proposalTime := time.UnixMicro(int64(timestamp))
+	if !proposalTime.After(b.roundDeadline) {
+		return
+	}
+	b.roundDeadline = proposalTime
+	b.SetWaitTimers(time.Until(b.roundDeadline))
+}
+
+// proposalTimestamp() decodes and returns a proposal block's timestamp.
+func proposalTimestamp(blockBytes []byte) (uint64, lib.ErrorI) {
+	block := new(lib.Block)
+	if err := lib.Unmarshal(blockBytes, block); err != nil {
+		return 0, err
+	}
+	if block.BlockHeader == nil {
+		return 0, lib.ErrNilBlockHeader()
+	}
+	return block.BlockHeader.Time, nil
 }
 
 // StartPrecommitPhase() begins the PrecommitPhase after the PROPOSE-VOTE phase timeout
@@ -502,6 +641,19 @@ func (b *BFT) StartCommitPhase() {
 	if !b.SelfIsProposer() {
 		return
 	}
+	var timestamp uint64
+	if b.usesDeterministicProposers() {
+		// Use the agreed block timestamp as the next-height pacing anchor.
+		var err lib.ErrorI
+		timestamp, err = proposalTimestamp(b.Block)
+		if err != nil {
+			b.log.Error(err.Error())
+			b.RoundInterrupt()
+			return
+		}
+	} else {
+		timestamp = uint64(time.Now().Add(b.WaitTime(Commit, b.Round)).UnixMicro())
+	}
 	// get the VoteSet and aggregate signature that has +2/3 majority (by voting power) signatures from Replicas
 	vote, as, err := b.GetMajorityVote()
 	if err != nil {
@@ -519,7 +671,7 @@ func (b *BFT) StartCommitPhase() {
 			ProposerKey: b.ProposerKey,
 			Signature:   as,
 		},
-		Timestamp: uint64(time.Now().Add(b.WaitTime(Commit, b.Round)).UnixMicro()),
+		Timestamp: timestamp,
 	})
 }
 
@@ -542,6 +694,20 @@ func (b *BFT) StartCommitProcessPhase() {
 		b.RoundInterrupt()
 		return
 	}
+	timestamp := msg.Timestamp
+	if b.usesDeterministicProposers() {
+		var err lib.ErrorI
+		timestamp, err = proposalTimestamp(b.Block)
+		if err != nil {
+			b.log.Error(err.Error())
+			b.RoundInterrupt()
+			return
+		}
+		if wait := time.Until(time.UnixMicro(int64(timestamp))); wait > 0 {
+			b.SetWaitTimers(wait)
+			return
+		}
+	}
 	msg.Qc.Block, msg.Qc.Results = b.Block, b.Results
 	// preset the Byzantine Evidence for the next height
 	b.ByzantineEvidence = &ByzantineEvidence{
@@ -550,11 +716,12 @@ func (b *BFT) StartCommitProcessPhase() {
 	// non-blocking
 	go func() {
 		// send the block to self for committing
-		b.SelfSendBlock(msg.Qc, msg.Timestamp)
-		// wait to allow for CommitProcess to finish
-		<-time.After(time.Duration(b.Config.CommitTimeoutMS) * time.Millisecond)
-		// gossip committed block message to peers
-		b.GossipBlock(msg.Qc, b.PublicKey, msg.Timestamp)
+		b.SelfSendBlock(msg.Qc, timestamp)
+		if !b.usesDeterministicProposers() {
+			<-time.After(time.Duration(b.Config.CommitTimeoutMS) * time.Millisecond)
+		}
+		// Gossip the finalized block immediately so a replica that missed the live COMMIT can catch up before the next deadline.
+		b.GossipBlock(msg.Qc, b.PublicKey, timestamp)
 	}()
 }
 
@@ -562,65 +729,49 @@ func (b *BFT) StartCommitProcessPhase() {
 // ROUND-INTERRUPT:
 // - Replica sends current View message to other replicas (Pacemaker vote)
 func (b *BFT) RoundInterrupt() {
+	deterministic := b.usesDeterministicProposers()
+	if !deterministic {
+		b.Config.RoundInterruptTimeoutMS = b.msLeftInRound()
+		b.log.Warnf("Starting next round in %.2f secs", (time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond).Seconds())
+	} else if !b.roundDeadline.IsZero() {
+		if wait := time.Until(b.roundDeadline); wait > 0 {
+			b.log.Warnf("Round %d failed; preserving coordinated deadline in %.2f secs", b.Round, wait.Seconds())
+			b.SetWaitTimers(wait)
+			return
+		}
+		b.log.Warnf("Round %d deadline reached; broadcasting timeout vote", b.Round)
+	}
 	_ = b.VDFService.Finish() // stop VDF service because the block hash that was being used as a seed will change
-	b.Config.RoundInterruptTimeoutMS = b.msLeftInRound()
-	b.log.Warnf("Starting next round in %.2f secs", (time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond).Seconds())
 	b.Phase = RoundInterrupt
 	b.phase.Store(int32(b.Phase))
 	b.BlockResult = nil
 	b.VDFCache = []*Message{}
 	b.ResetFSM()
+	if deterministic {
+		// Keep relaying the highest timeout certificate so an advanced validator does not strand peers that missed one of its votes.
+		if round, ok := b.TimeoutQuorumRound(); ok {
+			b.GossipTimeoutQuorum(round)
+		}
+	}
 	// send pacemaker message
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Qc: &lib.QuorumCertificate{
 			Header: b.View.Copy(),
 		},
 	})
+	if deterministic {
+		// Re-broadcast while waiting for a timeout quorum; this timer never advances the round by itself.
+		b.SetWaitTimers(time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond)
+	}
 }
 
 // Pacemaker() begins the Pacemaker process after ROUND-INTERRUPT timeout occurs
-// - sets the highest round that +2/3rds majority of replicas have seen
+// - joins the highest round supported by more than one third of voting power
 func (b *BFT) Pacemaker() bool {
 	b.log.Info(b.View.ToString())
-	forcedRound := b.forcedRound
-	if forcedRound != 0 {
-		if wait := time.Until(b.forcedRoundAt); wait > 0 {
-			b.SetWaitTimers(wait, 0)
-			return false
-		}
-		b.Round = forcedRound - 1
-		b.forcedRound = 0
-	}
 	b.NewRound(false)
-	if forcedRound != 0 {
-		b.log.Warnf("Forced consensus round to %d", b.Round)
-		return true
-	}
-	// sort the pacemaker votes from the highest Round to the lowest Round
-	var sortedVotes []*Message
-	for _, vote := range b.PacemakerMessages {
-		sortedVotes = append(sortedVotes, vote)
-	}
-	sort.Slice(sortedVotes, func(i, j int) bool {
-		return sortedVotes[i].Qc.Header.Round >= sortedVotes[j].Qc.Header.Round
-	})
-	// loop from the highest Round to the lowest Round, summing the voting power until reaching round 0 or getting +2/3rds majority
-	totalVotedPower, pacemakerRound := uint64(0), uint64(0)
-	for _, vote := range sortedVotes {
-		validator, err := b.ValidatorSet.GetValidator(vote.Signature.PublicKey)
-		if err != nil {
-			b.log.Warn(err.Error())
-			continue
-		}
-		totalVotedPower += validator.VotingPower
-		// if totalVotePower > 1/3, it's safe to advance to that round
-		if totalVotedPower > b.ValidatorSet.TotalPower/3 {
-			pacemakerRound = vote.Qc.Header.Round // set the highest round where +1/3rds have been
-			break
-		}
-	}
 	// if +1/3rd Round is larger than local Round - advance to the +1/3rd Round to better join the Majority
-	if pacemakerRound > b.Round {
+	if pacemakerRound, ok := b.TimeoutCatchUpRound(); ok && pacemakerRound > b.Round {
 		b.log.Infof("Pacemaker peers set round: %d", pacemakerRound)
 		b.Round = pacemakerRound
 		b.round.Store(b.Round)
@@ -628,8 +779,7 @@ func (b *BFT) Pacemaker() bool {
 	return true
 }
 
-// ScheduleForceRound enters the exact target round at the first pacemaker
-// boundary at or after at. The caller must hold the Controller lock.
+// ScheduleForceRound enters the exact target round at the requested time while the caller holds the Controller lock.
 func (b *BFT) ScheduleForceRound(round uint64, at time.Time, timeoutRound *uint64) error {
 	if round <= b.Round {
 		return fmt.Errorf("target round %d must be greater than current round %d", round, b.Round)
@@ -638,32 +788,154 @@ func (b *BFT) ScheduleForceRound(round uint64, at time.Time, timeoutRound *uint6
 	b.forcedRoundAt = at
 	b.forcedTimeoutRound = timeoutRound
 	b.log.Warnf("Scheduled forced consensus round %d at %s", round, at.Format(time.RFC3339Nano))
-	if b.Phase == Pacemaker {
-		b.SetWaitTimers(time.Until(at), 0)
-	}
+	lib.ResetTimer(b.forceRoundTimer, time.Until(at))
 	return nil
+}
+
+// applyForcedRound() handles the administrative recovery timer independently of the normal phase timer.
+func (b *BFT) applyForcedRound() {
+	round := b.forcedRound
+	if round == 0 {
+		return
+	}
+	if wait := time.Until(b.forcedRoundAt); wait > 0 {
+		lib.ResetTimer(b.forceRoundTimer, wait)
+		return
+	}
+	b.forcedRound = 0
+	if round <= b.Round {
+		b.forcedTimeoutRound = nil
+		return
+	}
+	if b.usesDeterministicProposers() {
+		timeoutRound := round
+		if b.forcedTimeoutRound != nil {
+			timeoutRound = *b.forcedTimeoutRound
+		}
+		// Re-anchor deadlines at the shared activation time while keeping the actual round and requested timeout backoff indices separate.
+		b.BFTStartTime = b.forcedRoundAt
+		b.roundScheduleStart = round
+		b.timeoutScheduleStart = timeoutRound
+	}
+	b.log.Warnf("Forced consensus round to %d", round)
+	b.EnterRound(round)
 }
 
 // PacemakerMessages is a collection of 'View' messages keyed by each Replica's public key
 // These messages help Replicas synchronize their Rounds more effectively during periods of instability or failure
 type PacemakerMessages map[string]*Message // [ public_key_string ] -> View message
 
+const maxPacemakerMessagesPerSigner = 2
+
 // AddPacemakerMessage() adds the 'View' message to the list (keyed by public key string)
 func (b *BFT) AddPacemakerMessage(msg *Message) (err lib.ErrorI) {
 	b.Controller.Lock()
 	defer b.Controller.Unlock()
-	b.PacemakerMessages[lib.BytesToString(msg.Signature.PublicKey)] = msg
+	key := lib.BytesToString(msg.Signature.PublicKey)
+	if b.usesDeterministicProposers() {
+		key = fmt.Sprintf("%d/%s", msg.Qc.Header.Round, key)
+	}
+	b.PacemakerMessages[key] = msg
+	if b.usesDeterministicProposers() {
+		// Retain each signer's two newest authenticated timeout votes to support catch-up and relay the preceding certificate with bounded memory.
+		oldestKey, oldestRound, count := key, msg.Qc.Header.Round, 0
+		for storedKey, stored := range b.PacemakerMessages {
+			if !bytes.Equal(stored.Signature.PublicKey, msg.Signature.PublicKey) {
+				continue
+			}
+			count++
+			if stored.Qc.Header.Round < oldestRound {
+				oldestKey, oldestRound = storedKey, stored.Qc.Header.Round
+			}
+		}
+		if count > maxPacemakerMessagesPerSigner {
+			delete(b.PacemakerMessages, oldestKey)
+		}
+	}
+	b.SignalPhaseAdvance()
 	return
+}
+
+// TimeoutQuorumRound() returns the highest exact round with timeout messages signed by +2/3 of voting power.
+func (b *BFT) TimeoutQuorumRound() (uint64, bool) {
+	powerByRound := make(map[uint64]uint64)
+	for _, msg := range b.PacemakerMessages {
+		validator, err := b.ValidatorSet.GetValidator(msg.Signature.PublicKey)
+		if err != nil {
+			continue
+		}
+		round := msg.Qc.Header.Round
+		powerByRound[round] += validator.VotingPower
+	}
+	highest, found := uint64(0), false
+	for round, power := range powerByRound {
+		if power >= b.ValidatorSet.MinimumMaj23 && (!found || round > highest) {
+			highest, found = round, true
+		}
+	}
+	return highest, found
+}
+
+// TimeoutCatchUpRound() returns the highest round supported by more than one third of voting power at that round or above, counting each signer once.
+func (b *BFT) TimeoutCatchUpRound() (uint64, bool) {
+	messages := make([]*Message, 0, len(b.PacemakerMessages))
+	for _, msg := range b.PacemakerMessages {
+		messages = append(messages, msg)
+	}
+	sort.Slice(messages, func(i, j int) bool { return messages[i].Qc.Header.Round > messages[j].Qc.Header.Round })
+	seen := make(map[string]struct{}, len(messages))
+	var power uint64
+	for _, msg := range messages {
+		signer := lib.BytesToString(msg.Signature.PublicKey)
+		if _, ok := seen[signer]; ok {
+			continue
+		}
+		validator, err := b.ValidatorSet.GetValidator(msg.Signature.PublicKey)
+		if err != nil {
+			continue
+		}
+		seen[signer] = struct{}{}
+		power += validator.VotingPower
+		if power > b.ValidatorSet.TotalPower/3 {
+			return msg.Qc.Header.Round, true
+		}
+	}
+	return 0, false
+}
+
+// GossipTimeoutQuorum() relays the validated signed votes in an exact-round timeout certificate so lagging replicas can verify the same quorum.
+func (b *BFT) GossipTimeoutQuorum(round uint64) {
+	for _, msg := range b.PacemakerMessages {
+		if msg.Qc.Header.Round == round {
+			b.GossipConsensus(msg, nil)
+		}
+	}
 }
 
 // PhaseHas23Maj() returns true if the node received enough messages to optimistically move forward
 func (b *BFT) PhaseHas23Maj() bool {
+	deterministic := b.usesDeterministicProposers()
 	switch b.Phase {
-	case ElectionVote, ProposeVote, PrecommitVote, CommitProcess:
+	case RoundInterrupt:
+		if !deterministic {
+			return false
+		}
+		round, ok := b.TimeoutQuorumRound()
+		return ok && round >= b.Round
+	case ElectionVote:
+		return !deterministic && b.GetProposal() != nil
+	case ProposeVote, PrecommitVote, CommitProcess:
 		return b.GetProposal() != nil
 	case Propose, Precommit, Commit:
+		if deterministic && b.Phase == Propose && b.Round == 0 && !b.roundZeroNewView && b.SelfIsProposer() && b.getProposalAtPhase(b.Round, Propose) == nil {
+			return true
+		}
 		_, _, err := b.GetMajorityVote()
-		return err == nil
+		if err == nil {
+			return true
+		}
+		// Let a replica cross a no-op leader phase immediately when it has already received the leader's message.
+		return deterministic && b.getProposalAtPhase(b.Round, b.Phase) != nil
 	}
 	return false
 }
@@ -703,29 +975,118 @@ func (b *BFT) NewRound(newHeight bool) {
 	b.VDFCache = []*Message{}
 }
 
+// SetHeightAnchor() records the last finalized block's authenticated timestamp as the common anchor for new-height round deadlines.
+func (b *BFT) SetHeightAnchor(anchor time.Time) {
+	if anchor.IsZero() {
+		anchor = time.Now()
+	}
+	b.BFTStartTime = anchor
+	b.roundScheduleStart = 0
+	b.timeoutScheduleStart = 0
+}
+
+// RoundDeadline() returns the round's absolute end using 1, 3, 5, ... target intervals from the finalized timestamp or coordinated recovery time.
+func (b *BFT) RoundDeadline(round uint64) time.Time {
+	if round < b.roundScheduleStart {
+		return b.BFTStartTime
+	}
+	units := roundScheduleUnits(b.timeoutScheduleStart, round-b.roundScheduleStart)
+	return b.BFTStartTime.Add(time.Duration(units) * b.Config.ConsensusConfig.RoundRobinBlockInterval())
+}
+
+// roundScheduleUnits() returns cumulative 1, 3, 5, ... target intervals from the starting backoff level through step without overflowing.
+func roundScheduleUnits(start, step uint64) uint64 {
+	const maxIndex uint64 = 100_000
+	if start >= maxIndex {
+		start = maxIndex - 1
+	}
+	end := maxIndex
+	if step < maxIndex-start-1 {
+		end = start + step + 1
+	}
+	return end*end - start*start
+}
+
+// StartRound() enters the locally derived proposer's phase directly, sending a new-view vote first for later rounds and lock-preserving committee resets.
+func (b *BFT) StartRound() {
+	if !b.usesDeterministicProposers() {
+		b.Phase = Election
+		b.phase.Store(int32(b.Phase))
+		b.SetWaitTimers(b.WaitTime(Election, b.Round))
+		return
+	}
+	b.ProposerKey = SelectProposerWeightedRoundRobin(b.View, b.ValidatorSet.ValidatorSet, b.ValidatorSet.TotalPower)
+	b.Phase = Propose
+	b.phase.Store(int32(b.Phase))
+	b.roundDeadline = b.RoundDeadline(b.Round)
+	b.SetWaitTimers(time.Until(b.roundDeadline))
+	if len(b.ProposerKey) == 0 {
+		b.log.Error("unable to select deterministic proposer")
+		return
+	}
+	if b.Round != 0 || b.roundZeroNewView {
+		b.SendNewView()
+	} else if b.SelfIsProposer() {
+		b.SignalPhaseAdvance()
+	}
+}
+
+// EnterRound() joins an exact round selected by a timeout certificate or authenticated higher-round catch-up evidence.
+func (b *BFT) EnterRound(round uint64) {
+	if round <= b.Round {
+		return
+	}
+	b.Round = round - 1
+	b.NewRound(false)
+	b.StartRound()
+}
+
+// SendNewView() forwards locks and evidence to the deterministic proposer using the ElectionVote enum retained for wire compatibility.
+func (b *BFT) SendNewView() {
+	header := b.View.Copy()
+	header.Phase = ElectionVote
+	b.SendToProposer(&Message{
+		Qc: &QC{
+			Header:      header,
+			ProposerKey: b.ProposerKey,
+		},
+		HighQc:                 b.HighQC,
+		LastDoubleSignEvidence: b.ByzantineEvidence.DSE.Evidence,
+		RcBuildHeight:          b.RCBuildHeight,
+	})
+}
+
 // RefreshRootChainInfo() updates the cached root chain info with the latest known
 func (b *BFT) RefreshRootChainInfo() {
-	var err lib.ErrorI
-	// update heights
+	// Target-chain height is independent of the root-chain committee snapshot.
 	b.Height = b.Controller.ChainHeight()
-	b.RootHeight = b.Controller.RootChainHeight()
-	// update the validator set
-	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.Height), b.RootHeight)
+	rootHeight := b.Controller.RootChainHeight()
+	// Load the full root-chain snapshot before publishing it so a transient RPC failure cannot erase or mislabel the last authenticated snapshot.
+	validatorSet, err := b.Controller.LoadCommittee(b.LoadRootChainId(b.Height), rootHeight)
 	if err != nil {
 		b.log.Errorf("LoadCommittee() failed with err: %s", err.Error())
+		return
 	}
-	// update the committee data
-	b.CommitteeData, err = b.Controller.LoadCommitteeData()
+	committeeData, err := b.Controller.LoadCommitteeData()
 	if err != nil {
 		b.log.Errorf("LoadCommitteeData() failed with err: %s", err.Error())
+		return
 	}
+	b.RootHeight = rootHeight
+	b.ValidatorSet = validatorSet
+	b.CommitteeData = committeeData
 }
 
 // NewHeight() initializes / resets consensus variables preparing for the NewHeight
 func (b *BFT) NewHeight(keepLocks ...bool) {
+	keepLock := len(keepLocks) != 0 && keepLocks[0]
 	// A force-round recovery is scoped to the height on which it was requested.
 	b.forcedRound = 0
 	b.forcedTimeoutRound = nil
+	lib.StopTimer(b.forceRoundTimer)
+	b.roundScheduleStart = 0
+	b.timeoutScheduleStart = 0
+	b.roundZeroNewView = keepLock
 	// reset VotesForHeight
 	b.Votes = make(VotesForHeight)
 	// reset ProposalsForHeight
@@ -734,13 +1095,16 @@ func (b *BFT) NewHeight(keepLocks ...bool) {
 	b.PacemakerMessages = make(PacemakerMessages)
 	// initialize Round 0
 	b.NewRound(true)
-	// set phase to Election
+	// Deterministic mode enters PROPOSE directly while legacy mode retains the VRF election protocol.
 	b.Phase = Election
+	if b.usesDeterministicProposers() {
+		b.Phase = Propose
+	}
 	b.phase.Store(int32(b.Phase))
 	// if resetting due to new Canopy Block and Validator Set then KeepLocks
 	// - protecting any who may have committed against attacks like malicious proposers from withholding
 	// COMMIT_MSG and sending it after the next block is produces
-	if keepLocks == nil || !keepLocks[0] {
+	if !keepLock {
 		// fully reset the proposals
 		b.Proposals = make(ProposalsForHeight)
 		// reset PartialQCs
@@ -778,17 +1142,34 @@ func (b *BFT) SafeNode(msg *Message) lib.ErrorI {
 
 // SetTimerForNextPhase() calculates the wait time for a specific phase/Round, resets the Phase wait timer
 func (b *BFT) SetTimerForNextPhase(processTime time.Duration) {
-	waitTime := b.WaitTime(b.Phase, b.Round)
+	if !b.usesDeterministicProposers() {
+		waitTime := b.WaitTime(b.Phase, b.Round)
+		switch b.Phase {
+		default:
+			b.Phase++
+		case CommitProcess:
+			return
+		case Pacemaker:
+			b.Phase = Election
+		}
+		b.phase.Store(int32(b.Phase))
+		b.SetWaitTimers(waitTime, processTime)
+		return
+	}
 	switch b.Phase {
 	default:
 		b.Phase++
 	case CommitProcess:
 		return // don't set a timer
+	case RoundInterrupt:
+		return
 	case Pacemaker:
-		b.Phase = Election
+		// Retain compatibility for administrative forced rounds; normal round changes enter StartRound directly from a timeout quorum.
+		b.Phase = Propose
 	}
 	b.phase.Store(int32(b.Phase))
-	b.SetWaitTimers(waitTime, processTime)
+	// Successful messages advance phases optimistically, but every phase in a round shares one absolute failure deadline.
+	b.SetWaitTimers(time.Until(b.roundDeadline))
 }
 
 // WaitTime() returns the wait time (wait and receive consensus messages) for a specific Phase.Round
@@ -815,7 +1196,7 @@ func (b *BFT) WaitTime(phase Phase, round uint64) (waitTime time.Duration) {
 		// arbitrarily sleep for 1 minute -- the BFT should be reset by an inbound block
 		waitTime = b.waitTime(60000, round)
 	case RoundInterrupt:
-		// don't pass again through 'wait time' as it's already calculated at the msLeftInRound()
+		// Give replicas a configured window to exchange pacemaker votes before entering the next round.
 		waitTime = time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond
 	case Pacemaker:
 		waitTime = 0
@@ -828,53 +1209,19 @@ func (b *BFT) waitTime(sleepTimeMS int, round uint64) time.Duration {
 	return time.Duration(uint64(sleepTimeMS)*(2*round+1)) * time.Millisecond
 }
 
-// msLeftInRound() calculates the milliseconds left in the round
 func (b *BFT) msLeftInRound() int {
-	// calculate the ms for each phase
-	electionMs := b.WaitTime(Election, b.Round).Milliseconds()
-	electionVoteMs := b.WaitTime(ElectionVote, b.Round).Milliseconds()
-	proposeMs := b.WaitTime(Propose, b.Round).Milliseconds()
-	proposeVoteMs := b.WaitTime(ProposeVote, b.Round).Milliseconds()
-	precommitMs := b.WaitTime(Precommit, b.Round).Milliseconds()
-	precommitVoteMs := b.WaitTime(PrecommitVote, b.Round).Milliseconds()
-	commitMs := b.WaitTime(Commit, b.Round).Milliseconds()
-	// ms left in round = RoundWaitTime - TimeSpentInRound
-	switch b.Phase {
-	case Election:
-		return int(electionMs + electionVoteMs + proposeMs + proposeVoteMs + precommitMs + precommitVoteMs + commitMs)
-	case ElectionVote:
-		return int(electionVoteMs + proposeMs + proposeVoteMs + precommitMs + precommitVoteMs + commitMs)
-	case Propose:
-		return int(proposeMs + proposeVoteMs + precommitMs + precommitVoteMs + commitMs)
-	case ProposeVote:
-		return int(proposeVoteMs + precommitMs + precommitVoteMs + commitMs)
-	case Precommit:
-		return int(precommitMs + precommitVoteMs + commitMs)
-	case PrecommitVote:
-		return int(precommitVoteMs + commitMs)
-	case Commit:
-		return int(commitMs)
-	default:
-		return 0
+	remaining := int64(0)
+	for phase := b.Phase; phase <= Commit; phase++ {
+		remaining += b.WaitTime(phase, b.Round).Milliseconds()
 	}
+	return int(remaining)
 }
 
-// SetWaitTimers() sets the phase wait timer
-// - Phase Timeout ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
-// This design balances synchronization speed during adverse conditions with maximizing voter participation under normal conditions
-func (b *BFT) SetWaitTimers(phaseWaitTime, processTime time.Duration) {
-	b.log.Debugf("Process time: %.2fs, Wait time: %.2fs", processTime.Seconds(), phaseWaitTime.Seconds())
-	subtract := func(wt, pt time.Duration) (t time.Duration) {
-		if pt > 24*time.Hour {
-			return wt
-		}
-		if wt <= pt {
-			return 0
-		}
-		return wt - pt
+// SetWaitTimers resets the shared consensus timer
+func (b *BFT) SetWaitTimers(phaseWaitTime time.Duration, processTimes ...time.Duration) {
+	if len(processTimes) != 0 && processTimes[0] > 0 && processTimes[0] < phaseWaitTime {
+		phaseWaitTime -= processTimes[0]
 	}
-	// calculate the phase timer by subtracting the process time
-	phaseWaitTime = subtract(phaseWaitTime, processTime)
 	b.log.Debugf("Setting consensus timer: %.2f sec", phaseWaitTime.Seconds())
 	// set Phase timers to go off in their respective timeouts
 	lib.ResetTimer(b.PhaseTimer, phaseWaitTime)

@@ -13,6 +13,21 @@ func (b *BFT) HandleMessage(message proto.Message) lib.ErrorI {
 	// ensure is a valid `Consensus Message` type
 	switch msg := message.(type) {
 	case *Message:
+		if msg == nil {
+			return ErrEmptyMessage()
+		}
+		// Reject obsolete VRF election proposals before validator lookup, locking, or signature verification.
+		if b.usesDeterministicProposers() && msg != nil && msg.Header != nil && msg.Header.Phase == Election {
+			return lib.ErrWrongPhase()
+		}
+		if err := checkSignatureBasic(msg.Signature); err != nil {
+			return err
+		}
+		if b.usesDeterministicProposers() {
+			if handled, err := b.deferFutureMessage(msg); handled {
+				return err
+			}
+		}
 		// capture the parameters needed to validate the message
 		params, err := b.GetValidateMessageParams(msg)
 		if err != nil {
@@ -31,7 +46,11 @@ func (b *BFT) HandleMessage(message proto.Message) lib.ErrorI {
 				return b.AddPacemakerMessage(msg)
 			}
 			// store Vote
-			return b.AddVote(msg)
+			if err = b.AddVote(msg); err != nil {
+				return err
+			}
+			b.SignalPhaseAdvance()
+			return nil
 		case msg.IsProposerMessage(): // consensus message from the Leader
 			// validate the Leader message
 			partialQC, err := b.CheckProposerMessage(msg, params)
@@ -46,33 +65,101 @@ func (b *BFT) HandleMessage(message proto.Message) lib.ErrorI {
 				return b.AddPartialQC(msg)
 			}
 			// store Proposal
-			return b.AddProposal(msg)
+			if err = b.AddProposal(msg); err != nil {
+				return err
+			}
+			b.SignalPhaseAdvance()
+			return nil
 		}
 	}
 	return ErrUnknownConsensusMsg(message)
 }
 
+const (
+	maxFutureMessages          = 256
+	maxFutureMessagesPerSigner = 8
+	maxFutureMessageBytes      = lib.GlobalMaxBlockSize
+)
+
+// deferFutureMessage() holds a bounded one-height lookahead until ResetBFT publishes the matching height and committee snapshot.
+func (b *BFT) deferFutureMessage(msg *Message) (bool, lib.ErrorI) {
+	view := msg.GetHeader()
+	if view == nil {
+		view = msg.GetQc().GetHeader()
+	}
+	b.Controller.Lock()
+	defer b.Controller.Unlock()
+	if view == nil || view.Height != b.Height+1 {
+		return false, nil
+	}
+	height := view.Height
+	// Authenticate membership against the message's claimed committee snapshot before retaining it.
+	// Full view and proposal validation still waits until the local height has advanced.
+	validators := b.ValidatorSet
+	if view.RootHeight != b.RootHeight {
+		var err lib.ErrorI
+		validators, err = b.LoadCommittee(b.LoadRootChainId(b.Height), view.RootHeight)
+		if err != nil {
+			return true, err
+		}
+	}
+	if _, err := validators.GetValidator(msg.Signature.PublicKey); err != nil {
+		return true, err
+	}
+	size := proto.Size(msg)
+	if len(b.futureMsgs) >= maxFutureMessages || size > maxFutureMessageBytes-b.futureBytes {
+		return true, lib.ErrWrongCertHeight(height, b.Height)
+	}
+	signerMessages := 0
+	for _, deferred := range b.futureMsgs {
+		if bytes.Equal(deferred.Signature.PublicKey, msg.Signature.PublicKey) {
+			signerMessages++
+		}
+	}
+	if signerMessages >= maxFutureMessagesPerSigner {
+		return true, lib.ErrWrongCertHeight(height, b.Height)
+	}
+	// Verify the signed payload before consuming the lookahead; full view validation runs after reset.
+	if err := checkSignature(msg.Signature, msg); err != nil {
+		return true, err
+	}
+	b.futureMsgs = append(b.futureMsgs, msg)
+	b.futureHeight = height
+	b.futureBytes += size
+	return true, nil
+}
+
+// takeFutureMessages() removes and returns buffered messages for the requested height.
+// The caller holds the controller lock shared with deferFutureMessage().
+func (b *BFT) takeFutureMessages(height uint64) []*Message {
+	if len(b.futureMsgs) == 0 || b.futureHeight != height {
+		return nil // preserve H+1 messages across a same-height committee reset
+	}
+	messages := b.futureMsgs
+	b.futureMsgs, b.futureHeight, b.futureBytes = nil, 0, 0
+	return messages
+}
+
 // CheckProposerMessage() validates an inbound message from the Leader Validator
 func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPartialQC bool, err lib.ErrorI) {
+	if b.usesDeterministicProposers() && x != nil && x.Header != nil && x.Header.Phase == Election {
+		return false, lib.ErrWrongPhase()
+	}
 	// basic sanity checks on the message
 	if err = x.checkBasic(p.view); err != nil {
 		return false, err
 	}
-	// ELECTION
 	if x.Header.Phase == Election {
-		// validate target height
 		if x.Header.Height != p.height {
 			return false, lib.ErrWrongCertHeight(x.Header.Height, p.height)
 		}
-		// sanity check the VRF
 		if err = checkSignatureBasic(x.Vrf); err != nil {
 			return false, err
 		}
-		// ensure the VRF is for the sender
 		if !bytes.Equal(x.Signature.PublicKey, x.Vrf.PublicKey) {
 			return false, ErrMismatchPublicKeys()
 		}
-		return
+		return false, nil
 	}
 	// PROPOSE, PRECOMMIT, COMMIT
 	var vals = p.vals
@@ -106,6 +193,18 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 	isPartialQC, err = x.Qc.Check(vals, b.LoadMaxBlockSize(), p.view, false)
 	if err != nil {
 		return
+	}
+	// Fresh round zero accepts the deterministic proposer's one-signer proof, while committee resets and block commits still require their normal quorums.
+	if b.usesDeterministicProposers() && isPartialQC && x.Header.Phase == Propose && x.Header.Round == 0 && !p.roundZeroNewView {
+		var signers [][]byte
+		signers, _, err = x.Qc.Signature.GetSigners(vals)
+		if err != nil {
+			return false, err
+		}
+		if len(signers) != 1 || !bytes.Equal(signers[0], x.Signature.PublicKey) || !bytes.Equal(x.Signature.PublicKey, p.proposerKey) {
+			return false, lib.ErrInvalidSigner()
+		}
+		isPartialQC = false
 	}
 	if x.HighQc != nil {
 		if err = x.HighQc.CheckBasic(); err != nil {
@@ -331,6 +430,8 @@ func (b *BFT) GetValidateMessageParams(msg *Message) (*validateMessageParams, li
 		cHeightUpdated:    b.CommitteeData.LastChainHeightUpdated,
 		blockHash:         blockHash,
 		resultsHash:       resultsHash,
+		proposerKey:       bytes.Clone(b.ProposerKey),
+		roundZeroNewView:  b.roundZeroNewView,
 	}, nil
 }
 
@@ -344,6 +445,8 @@ type validateMessageParams struct {
 	cHeightUpdated    uint64    // the last 'chain' height the committee updated
 	blockHash         []byte    // the hash of the proposal.Block (if any)
 	resultsHash       []byte    // the hash of the proposal.Results (if any)
+	proposerKey       []byte    // deterministic proposer captured with the view
+	roundZeroNewView  bool      // whether round zero requires a lock-carrying new-view quorum
 }
 
 // checkSignature() validates the signature of a SignByte implementation (object that can be converted to Sign Bytes)
