@@ -1,11 +1,49 @@
 package crypto
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// TestDecryptPrivateKeyPrependedNonce ensures a keystore produced with a random,
+// prepended nonce (the format exported by launchpad / newer wallets) can be
+// decrypted here. Previously decrypt only supported the key-derived-nonce layout,
+// so importing a launchpad-exported keyfile failed (surfaced as a 400 / bad password).
+func TestDecryptPrivateKeyPrependedNonce(t *testing.T) {
+	password := []byte("password")
+	// pre-create a new private key
+	private, err := NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	// random 16-byte salt, matching the encrypt path
+	salt := make([]byte, 16)
+	_, err = rand.Read(salt)
+	require.NoError(t, err)
+	// derive the AES-GCM cipher using the default Argon2 params
+	gcm, _, err := kdf(password, salt, DefaultKdfTime, DefaultKdfMemoryKB, DefaultKdfThreads)
+	require.NoError(t, err)
+	// generate an independent random nonce and prepend it to the ciphertext
+	nonce := make([]byte, gcm.NonceSize())
+	_, err = rand.Read(nonce)
+	require.NoError(t, err)
+	combined := append(nonce, gcm.Seal(nil, nonce, private.Bytes(), nil)...)
+	// build the encrypted key record as launchpad would export it
+	epk := &EncryptedPrivateKey{
+		PublicKey:  hex.EncodeToString(private.PublicKey().Bytes()),
+		Salt:       hex.EncodeToString(salt),
+		Encrypted:  hex.EncodeToString(combined),
+		KeyAddress: private.PublicKey().Address().String(),
+	}
+	// decrypt and validate round-trip
+	got, err := DecryptPrivateKey(epk, password)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, private, got)
+	// a wrong password must still fail
+	_, err = DecryptPrivateKey(epk, []byte("wrong"))
+	require.Error(t, err)
+}
 
 func TestKeystoreImportWithOpts(t *testing.T) {
 	password := []byte("password")
