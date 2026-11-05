@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F7F3EA"/><stop offset="1" stop-color="#EDE6D6"/></linearGradient>
+    <linearGradient id="trunkG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F3B2C"/><stop offset="1" stop-color="#122318"/></linearGradient>
+  </defs>
+  <rect x="8" y="8" width="496" height="496" rx="108" fill="url(#bgG)" stroke="#1F3B2C" stroke-width="6"/>
+  <rect x="26" y="26" width="460" height="460" rx="92" fill="none" stroke="#C9A24B" stroke-width="1.5" opacity="0.55"/>
+  <line x1="256" y1="392" x2="256" y2="300" stroke="url(#trunkG)" stroke-width="14" stroke-linecap="round"/><g stroke="#1F3B2C" stroke-width="8" stroke-linecap="round" fill="none"><line x1="256" y1="300" x2="182" y2="238" stroke-width="8" stroke-linecap="round"/><line x1="256" y1="300" x2="330" y2="238" stroke-width="8" stroke-linecap="round"/><line x1="182" y1="238" x2="132" y2="176" stroke-width="8" stroke-linecap="round"/><line x1="182" y1="238" x2="196" y2="164" stroke-width="8" stroke-linecap="round"/><line x1="330" y1="238" x2="380" y2="176" stroke-width="8" stroke-linecap="round"/><line x1="330" y1="238" x2="316" y2="164" stroke-width="8" stroke-linecap="round"/><line x1="256" y1="300" x2="256" y2="196" stroke-width="8" stroke-linecap="round"/></g><g fill="#1F3B2C"><circle cx="256" cy="300" r="12"/><circle cx="182" cy="238" r="10"/><circle cx="330" cy="238" r="10"/></g><g fill="#C9A24B"><circle cx="132" cy="176" r="9"/><circle cx="196" cy="164" r="9"/><circle cx="256" cy="196" r="9"/><circle cx="316" cy="164" r="9"/><circle cx="380" cy="176" r="9"/></g><path d="M118 190 Q256 108 394 190" fill="none" stroke="#1F3B2C" stroke-width="4" opacity="0.5"/><line x1="196" y1="392" x2="316" y2="392" stroke="#1F3B2C" stroke-width="6" stroke-linecap="round"/>
+</svg>

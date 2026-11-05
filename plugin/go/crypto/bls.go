@@ -99,6 +99,5 @@ func (b *BLS12381PublicKey) Verify(msg []byte, sig []byte) bool {
 	return b.scheme.Verify(b.Point, msg, sig) == nil
 }
 
-func newBLSScheme() *bdn.Scheme    { return bdn.NewSchemeOnG2(newBLSSuite()) }
-func newBLSSuite() pairing.Suite  { return bls12381.NewBLS12381Suite() }
-
+func newBLSScheme() *bdn.Scheme  { return bdn.NewSchemeOnG2(newBLSSuite()) }
+func newBLSSuite() pairing.Suite { return bls12381.NewBLS12381Suite() }

@@ -1,7 +1,7 @@
 package crypto
 
 import (
-	"github.com/canopy-network/go-plugin/contract"
+	"github.com/ARBOR-L/ARBOR/plugin/go/contract"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
