@@ -40,7 +40,7 @@ type ParamSpace interface {
 func DefaultParams() *Params {
 	return &Params{
 		Consensus: &ConsensusParams{
-			BlockSize:       uint64(units.MB),
+			BlockSize:       uint64(32 * units.MB),
 			ProtocolVersion: NewProtocolVersion(0, 1),
 			RootChainId:     1,
 			Retired:         0,
@@ -117,6 +117,8 @@ const (
 	ParamResetCommittee  = "resetCommittee"  // committee id to reset its committee data
 )
 
+const ParamPreserveNonSignerRewards = "preserveNonSignerRewards" // don't reduce certificate rewards for missed signatures
+
 var _ ParamSpace = &ConsensusParams{}
 
 // Check() validates the consensus params
@@ -141,6 +143,11 @@ func (x *ConsensusParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.RootChainId = value
 	case ParamResetCommittee:
 		x.ResetCommittee = value
+	case ParamPreserveNonSignerRewards:
+		if value > 1 {
+			return ErrInvalidParam(ParamPreserveNonSignerRewards)
+		}
+		x.PreserveNonSignerRewards = value == 1
 	default:
 		return ErrUnknownParam()
 	}

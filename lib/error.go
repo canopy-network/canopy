@@ -93,6 +93,8 @@ const (
 	CodeInvalidResultsHash          ErrorCode = 30
 	CodeNonNilBlock                 ErrorCode = 31
 	CodeProtoParse                  ErrorCode = 32
+	CodeFutureBlockTime             ErrorCode = 33
+	CodeNonMonotonicBlockTime       ErrorCode = 34
 
 	// Consensus Module
 	ConsensusModule ErrorModule = "consensus"
@@ -419,6 +421,16 @@ func ErrWrongLengthBlockHash() ErrorI {
 
 func ErrNilBlockTime() ErrorI {
 	return NewError(CodeNilBlockTime, MainModule, "nil block time")
+}
+
+// ErrFutureBlockTime() reports a block timestamp beyond the permitted future bound.
+func ErrFutureBlockTime(got, maximum uint64) ErrorI {
+	return NewError(CodeFutureBlockTime, MainModule, fmt.Sprintf("block time too far in future: got=%d maximum=%d", got, maximum))
+}
+
+// ErrNonMonotonicBlockTime() reports a block timestamp that does not advance chain time.
+func ErrNonMonotonicBlockTime(got, previous uint64) ErrorI {
+	return NewError(CodeNonMonotonicBlockTime, MainModule, fmt.Sprintf("block time must increase: got=%d previous=%d", got, previous))
 }
 
 func ErrWrongLengthLastBlockHash() ErrorI {

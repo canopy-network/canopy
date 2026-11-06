@@ -241,8 +241,10 @@ type ConsensusParams struct {
 	Retired uint64 `protobuf:"varint,4,opt,name=retired,proto3" json:"retired,omitempty"`
 	// reset_committee: clears committee data for the provided committee id
 	ResetCommittee uint64 `protobuf:"varint,5,opt,name=reset_committee,json=resetCommittee,proto3" json:"resetCommittee"` // @gotags: json:"resetCommittee"
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// preserve_non_signer_rewards: when true, missed validator signatures are tracked and penalized without reducing the proposer's allocation.
+	PreserveNonSignerRewards bool `protobuf:"varint,6,opt,name=preserve_non_signer_rewards,json=preserveNonSignerRewards,proto3" json:"preserveNonSignerRewards"` // @gotags: json:"preserveNonSignerRewards"
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *ConsensusParams) Reset() {
@@ -308,6 +310,14 @@ func (x *ConsensusParams) GetResetCommittee() uint64 {
 		return x.ResetCommittee
 	}
 	return 0
+}
+
+// GetPreserveNonSignerRewards() returns whether missed signatures preserve certificate rewards.
+func (x *ConsensusParams) GetPreserveNonSignerRewards() bool {
+	if x != nil {
+		return x.PreserveNonSignerRewards
+	}
+	return false
 }
 
 // ValidatorParams is the parameter space that defines the rules and criteria for validators in the blockchain
@@ -775,14 +785,15 @@ const file_gov_proto_rawDesc = "" +
 	"Governance\"C\n" +
 	"\x0fProtocolVersion\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\x04R\aversion\"\xc2\x01\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\"\x81\x02\n" +
 	"\x0fConsensusParams\x12\x1d\n" +
 	"\n" +
 	"block_size\x18\x01 \x01(\x04R\tblockSize\x12)\n" +
 	"\x10protocol_version\x18\x02 \x01(\tR\x0fprotocolVersion\x12\"\n" +
 	"\rroot_chain_id\x18\x03 \x01(\x04R\vrootChainId\x12\x18\n" +
 	"\aretired\x18\x04 \x01(\x04R\aretired\x12'\n" +
-	"\x0freset_committee\x18\x05 \x01(\x04R\x0eresetCommittee\"\xa0\b\n" +
+	"\x0freset_committee\x18\x05 \x01(\x04R\x0eresetCommittee\x12=\n" +
+	"\x1bpreserve_non_signer_rewards\x18\x06 \x01(\bR\x18preserveNonSignerRewards\"\xa0\b\n" +
 	"\x0fValidatorParams\x12)\n" +
 	"\x10unstaking_blocks\x18\x01 \x01(\x04R\x0funstakingBlocks\x12(\n" +
 	"\x10max_pause_blocks\x18\x02 \x01(\x04R\x0emaxPauseBlocks\x12?\n" +

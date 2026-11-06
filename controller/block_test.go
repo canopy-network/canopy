@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/stretchr/testify/require"
@@ -13,6 +14,38 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 )
+
+// TestNextProposalTimeSkipsOldSlotsArithmetically() verifies stale proposal slots are skipped arithmetically.
+func TestNextProposalTimeSkipsOldSlotsArithmetically(t *testing.T) {
+	interval := 750 * time.Millisecond
+	leadTime := 225 * time.Millisecond
+	previous := uint64(time.Unix(1, 0).UnixMicro())
+	now := time.Date(2026, time.October, 24, 12, 0, 0, 0, time.UTC)
+	got := nextProposalTime(previous, now, interval, leadTime)
+	minimum := now.Add(leadTime)
+
+	require.False(t, got.Before(minimum))
+	intervalMicros := uint64(interval / time.Microsecond)
+	require.Zero(t, (uint64(got.UnixMicro())-(previous+intervalMicros))%intervalMicros)
+}
+
+// TestNextProposalTimeUsesImmediateNextSlotWhenReady() verifies the immediate next slot is used when sufficient lead time remains.
+func TestNextProposalTimeUsesImmediateNextSlotWhenReady(t *testing.T) {
+	now := time.Date(2026, time.October, 24, 12, 0, 0, 0, time.UTC)
+	previous := uint64(now.UnixMicro())
+	config := lib.DefaultConsensusConfig()
+	interval := config.RoundRobinBlockInterval()
+	require.True(t, now.Add(interval).Equal(nextProposalTime(previous, now, interval, config.BlockConsensusLeadTime())))
+}
+
+// TestValidateProposalTimeRequiresMonotonicTimestamp() verifies proposal timestamps increase monotonically.
+func TestValidateProposalTimeRequiresMonotonicTimestamp(t *testing.T) {
+	previous := &lib.BlockResult{BlockHeader: &lib.BlockHeader{Time: 1_000}}
+	require.Error(t, validateProposalTime(999, previous))
+	require.Error(t, validateProposalTime(1_000, previous))
+	require.NoError(t, validateProposalTime(1_001, previous))
+	require.Error(t, validateProposalTime(1_001, nil))
+}
 
 // failGetStore is a store whose Get() always fails, used to force GetAccount() and
 // GetValidator() to return a nil result alongside an error, mirroring a store read failure.

@@ -39,6 +39,7 @@ func newTestConsensus(t *testing.T, phase Phase, numValidators int) (tc *testCon
 	// Disable VDF service for testing
 	config := lib.DefaultConfig()
 	config.RunVDF = false
+	config.ProposerMode = lib.ProposerModeStakeWeightedRoundRobin
 	// create the bft object using the mocks
 	tc.bft, err = New(config, tc.valKeys[0], 1, 1, tc.cont, config.RunVDF, nil, lib.NewDefaultLogger())
 	tc.bft.ValidatorSet = tc.valSet
@@ -93,23 +94,10 @@ func newTestValSet(t *testing.T, numValidators int) (valSet ValSet, valKeys []cr
 	return
 }
 
-// simElectionPhase() simulates the election phase of the BFT lifecycle
+// simElectionPhase() simulates deterministic leader selection.
 func (tc *testConsensus) simElectionPhase(t *testing.T) {
-	// set the sortition data for the election
-	tc.setSortitionData(t)
-	// for each validator, act like a Leader Candidate
-	// NOTE: in real execution, the Validator checks if
-	// it's a Candidate before sending messages out
-	for _, k := range tc.valKeys {
-		// signs and sends a message with their VRF
-		msg := &Message{
-			Header: tc.view(Election),
-			Vrf:    VRF(tc.cont.proposers.Addresses, 0, 1, 0, k),
-		}
-		require.NoError(t, msg.Sign(k))
-		require.NoError(t, tc.bft.HandleMessage(msg))
-	}
-	return
+	tc.bft.StartElectionPhase()
+	require.NotEmpty(t, tc.bft.ProposerKey)
 }
 
 // simElectionVotePhase() simulates the ELECTION-VOTE phase of the BFT lifecycle
@@ -501,6 +489,12 @@ type testController struct {
 	gossipConsensusChan chan *Message
 	sendToProposerChan  chan lib.Signable
 	sendToReplicasChan  chan lib.Signable
+
+	rootHeight           uint64
+	committeeData        *lib.CommitteeData
+	loadCommitteeErr     lib.ErrorI
+	loadCommitteeDataErr lib.ErrorI
+	proposalTime         uint64
 }
 
 func (t *testController) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
@@ -524,7 +518,12 @@ func (t *testController) ChainHeight() uint64 {
 }
 
 func (t *testController) ProduceProposal(_ *ByzantineEvidence, _ *crypto.VDF) (rcBuildHeight uint64, block []byte, results *lib.CertificateResult, err lib.ErrorI) {
-	block = t.NewTestBlock()
+	proposal := t.newTestBlock()
+	proposal.BlockHeader.Time = t.proposalTime
+	block, err = lib.Marshal(proposal)
+	if err != nil {
+		return
+	}
 	results = &lib.CertificateResult{
 		RewardRecipients: &lib.RewardRecipients{
 			PaymentPercents: []*lib.PaymentPercents{{
@@ -546,6 +545,9 @@ func (t *testController) ValidateProposal(_ uint64, qc *lib.QuorumCertificate, _
 }
 
 func (t *testController) LoadCommittee(rootChainId, rootHeight uint64) (lib.ValidatorSet, lib.ErrorI) {
+	if t.loadCommitteeErr != nil {
+		return lib.ValidatorSet{}, t.loadCommitteeErr
+	}
 	return t.valSet[rootChainId], nil
 }
 func (t *testController) LoadCertificate(_ uint64) (*lib.QuorumCertificate, lib.ErrorI) {
@@ -571,9 +573,15 @@ func (t *testController) LoadMinimumEvidenceHeight(_, _ uint64) (*uint64, lib.Er
 func (t *testController) IsValidDoubleSigner(_, _ uint64, _ []byte) bool { return true }
 func (t *testController) Syncing() *atomic.Bool                          { return &atomic.Bool{} }
 func (t *testController) LoadCommitteeData() (*lib.CommitteeData, lib.ErrorI) {
+	if t.loadCommitteeDataErr != nil {
+		return nil, t.loadCommitteeDataErr
+	}
+	if t.committeeData != nil {
+		return t.committeeData, nil
+	}
 	return &lib.CommitteeData{}, nil
 }
-func (t *testController) RootChainHeight() uint64 { return 0 }
+func (t *testController) RootChainHeight() uint64 { return t.rootHeight }
 func (t *testController) LoadLastProposers(_ uint64) (*lib.Proposers, lib.ErrorI) {
 	return t.proposers, nil
 }

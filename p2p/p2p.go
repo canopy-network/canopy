@@ -120,6 +120,34 @@ func (p *P2P) Start() {
 	go p.MonitorInboxStats(inboxMonitorInterval)
 	// Start dialing failed peers
 	go p.DialFailedPeers(dialFailedPeersInterval)
+	go p.scheduleTransportV2Cutover()
+}
+
+// scheduleTransportV2Cutover() closes V1 connections at activation so new handshakes select V2 without fallback.
+func (p *P2P) scheduleTransportV2Cutover() {
+	if TransportV2ActivationUnix == 0 {
+		return
+	}
+	activation := time.Unix(TransportV2ActivationUnix, 0)
+	wait := time.Until(activation)
+	if wait > 0 {
+		p.log.Warnf("Transport V2 hard cutover scheduled for %s", activation.UTC().Format(time.RFC3339))
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		<-timer.C
+	}
+	p.log.Warn("Transport V2 cutover active; reconnecting V1 peers")
+	p.PeerSet.mux.RLock()
+	connections := make([]*MultiConn, 0, len(p.PeerSet.m))
+	for _, peer := range p.PeerSet.m {
+		if peer != nil && peer.conn != nil && !peer.conn.transportV2 {
+			connections = append(connections, peer.conn)
+		}
+	}
+	p.PeerSet.mux.RUnlock()
+	for _, connection := range connections {
+		connection.Error(ErrTransportCutover())
+	}
 }
 
 // Stop() stops the P2P service

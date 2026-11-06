@@ -2,11 +2,13 @@ package bft
 
 import (
 	"bytes"
+	"fmt"
+	"testing"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 const (
@@ -15,130 +17,306 @@ const (
 
 func TestStartElectionPhase(t *testing.T) {
 	tests := []struct {
-		name            string
-		detail          string
-		selfIsValidator bool
-		numValidators   int
-		isCandidate     bool
+		name          string
+		numValidators int
 	}{
 		{
-			name:            "self is leader",
-			detail:          `deterministic key set ensures 'self' is an election candidate with a set of 6 Validators`,
-			selfIsValidator: true,
-			numValidators:   6,
-			isCandidate:     true,
+			name:          "two validators",
+			numValidators: 2,
 		},
 		{
-			name:            "self is not leader",
-			detail:          `deterministic key set ensures 'self' is an not election candidate with a set of 5 Validators`,
-			selfIsValidator: true,
-			numValidators:   5,
-			isCandidate:     false,
-		},
-		{
-			name:            "self is not a validator",
-			detail:          `self is not a validator within the deterministic key`,
-			selfIsValidator: false,
-			numValidators:   3,
-			isCandidate:     false,
+			name:          "eight validators",
+			numValidators: 8,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// setup
 			c := newTestConsensus(t, Election, test.numValidators)
-			// use validator 0 as the test replica
-			pub, private := c.valKeys[0].PublicKey(), c.valKeys[0]
-			if !test.selfIsValidator {
-				pk, err := crypto.NewBLS12381PrivateKey()
-				require.NoError(t, err)
-				c.bft.PublicKey = pk.PublicKey().Bytes()
-			}
-			// deterministic key set ensures 'self' is not an election candidate with a set of 4 Validators
-			go c.bft.StartElectionPhase()
-			if !test.isCandidate {
-				// if not supposed to be a 'candidate', ensure no ELECTION message sent
-				select {
-				case <-c.cont.sendToReplicasChan:
-					t.Fatal("unexpected message")
-				case <-time.After(100 * time.Millisecond):
-					return
-				}
-			} else {
-				// if supposed to be a 'candidate', validate the ELECTION message
-				expectedView := lib.View{
-					Height:     1,
-					Round:      0,
-					Phase:      Election,
-					RootHeight: 1,
-					NetworkId:  1,
-					ChainId:    lib.CanopyChainId,
-				}
-				select {
-				case <-time.After(testTimeout):
-					t.Fatal("timeout")
-				case m := <-c.cont.sendToReplicasChan:
-					msg, ok := m.(*Message)
-					require.True(t, ok)
-					require.Equal(t, expectedView, *msg.Header)
-					require.Equal(t, pub.Bytes(), msg.Vrf.PublicKey)
-					require.Equal(t, private.Sign(lib.FormatInputIntoSeed(c.cont.proposers.Addresses, expectedView.RootHeight, expectedView.Height, expectedView.Round)), msg.Vrf.Signature)
-				}
+			expected := SelectProposerWeightedRoundRobin(c.bft.View, c.valSet.ValidatorSet, c.valSet.TotalPower)
+
+			c.bft.StartElectionPhase()
+
+			require.Equal(t, expected, c.bft.ProposerKey)
+			select {
+			case <-c.cont.sendToReplicasChan:
+				t.Fatal("deterministic election must not broadcast candidates")
+			default:
 			}
 		})
 	}
 }
 
-func TestValidProcessTimeRejectsFutureTimestamp(t *testing.T) {
-	require.Zero(t, validProcessTime(time.Now().Add(time.Hour), time.Second))
-	require.Zero(t, validProcessTime(time.Now().Add(-time.Hour), time.Second))
-	require.Positive(t, validProcessTime(time.Now().Add(-time.Millisecond), time.Second))
+// TestLegacyVRFProposerModePreservesElection() verifies that legacy VRF mode retains the election phase.
+func TestLegacyVRFProposerModePreservesElection(t *testing.T) {
+	c := newTestConsensus(t, Election, 6)
+	c.bft.Config.ProposerMode = lib.ProposerModeVRF
+
+	go c.bft.StartElectionPhase()
+	select {
+	case signable := <-c.cont.sendToReplicasChan:
+		message, ok := signable.(*Message)
+		require.True(t, ok)
+		require.NotNil(t, message.Vrf)
+		require.NotNil(t, c.bft.SortitionData)
+		require.Nil(t, c.bft.ProposerKey)
+	case <-time.After(testTimeout):
+		t.Fatal("legacy VRF candidate was not broadcast")
+	}
+
+	c.bft.StartRound()
+	require.Equal(t, Election, c.bft.Phase)
+	c.bft.PhaseTimer.Stop()
+}
+
+// TestRoundDeadlinesAreTimestampAnchoredAndBackOff() verifies anchored deadlines and round backoff.
+func TestRoundDeadlinesAreTimestampAnchoredAndBackOff(t *testing.T) {
+	c := newTestConsensus(t, Propose, 4)
+	c.bft.Config.RoundRobinBlockIntervalMS = 750
+	anchor := time.Date(2026, time.October, 24, 12, 0, 0, 0, time.UTC)
+	c.bft.SetHeightAnchor(anchor)
+
+	require.Equal(t, anchor.Add(750*time.Millisecond), c.bft.RoundDeadline(0))
+	require.Equal(t, anchor.Add(3*time.Second), c.bft.RoundDeadline(1))
+	require.Equal(t, anchor.Add(6750*time.Millisecond), c.bft.RoundDeadline(2))
+}
+
+// TestForcedRoundDeadlineUsesRequestedTimeoutSchedule() verifies forced rounds use the requested timeout schedule.
+func TestForcedRoundDeadlineUsesRequestedTimeoutSchedule(t *testing.T) {
+	c := newTestConsensus(t, Propose, 1)
+	c.bft.Round = 2
+	c.bft.round.Store(2)
+	// Reproduce recovery from a stale finalized timestamp; the old implementation derived round 7 from this anchor and expired it immediately.
+	c.bft.SetHeightAnchor(time.Unix(1, 0))
+	forceAt := time.Now()
+	timeoutRound := uint64(0)
+	require.NoError(t, c.bft.ScheduleForceRound(7, forceAt, &timeoutRound))
+	select {
+	case <-c.bft.forceRoundTimer.C:
+	case <-time.After(testTimeout):
+		t.Fatal("force-round timer did not fire")
+	}
+	newViewSent := make(chan struct{})
+	go func() {
+		<-c.cont.sendToProposerChan
+		close(newViewSent)
+	}()
+	c.bft.applyForcedRound()
+	<-newViewSent
+
+	require.Equal(t, forceAt.Add(500*time.Millisecond), c.bft.roundDeadline)
+	require.Equal(t, forceAt.Add(2*time.Second), c.bft.RoundDeadline(8))
+	require.Equal(t, forceAt.Add(4500*time.Millisecond), c.bft.RoundDeadline(9))
+}
+
+// TestValidatedProposalExtendsDeadlineMonotonically() verifies validated proposals only extend deadlines.
+func TestValidatedProposalExtendsDeadlineMonotonically(t *testing.T) {
+	c := newTestConsensus(t, Propose, 4)
+	anchor := time.Now().Add(-250 * time.Millisecond).Truncate(time.Microsecond)
+	c.bft.SetHeightAnchor(anchor)
+	interval := c.bft.Config.ConsensusConfig.RoundRobinBlockInterval()
+	c.bft.roundDeadline = anchor.Add(interval)
+
+	encode := func(at time.Time) []byte {
+		bz, err := lib.Marshal(&lib.Block{BlockHeader: &lib.BlockHeader{Time: uint64(at.UnixMicro())}})
+		require.NoError(t, err)
+		return bz
+	}
+
+	c.bft.extendRoundDeadlineFromProposal(encode(anchor.Add(2 * interval)))
+	require.Equal(t, anchor.Add(2*interval), c.bft.roundDeadline)
+
+	c.bft.extendRoundDeadlineFromProposal(encode(anchor.Add(interval)))
+	require.Equal(t, anchor.Add(2*interval), c.bft.roundDeadline,
+		"an older proposal timestamp must not shorten the deadline")
+}
+
+// TestProposerAdoptsProducedBlockDeadlineBeforeBroadcast() verifies proposers adopt the produced block deadline before broadcasting.
+func TestProposerAdoptsProducedBlockDeadlineBeforeBroadcast(t *testing.T) {
+	c := newTestConsensus(t, Propose, 1)
+	c.bft.ProposerKey = c.bft.PublicKey
+	c.bft.roundDeadline = time.Now().Add(-time.Second)
+	proposalTime := time.Now().Add(500 * time.Millisecond).Truncate(time.Microsecond)
+	c.cont.proposalTime = uint64(proposalTime.UnixMicro())
+	// Model the original round deadline already being selectable while proposal construction holds the controller lock.
+	lib.ResetTimer(c.bft.PhaseTimer, 0)
+	time.Sleep(time.Millisecond)
+
+	go c.bft.StartProposePhase()
+	select {
+	case <-c.cont.sendToReplicasChan:
+	case <-time.After(testTimeout):
+		t.Fatal("proposal was not broadcast")
+	}
+
+	require.Equal(t, proposalTime, c.bft.roundDeadline)
+	select {
+	case <-c.bft.PhaseTimer.C:
+		t.Fatal("expired round timer remained armed after proposal production")
+	default:
+	}
+	c.bft.PhaseTimer.Stop()
+}
+
+// TestCommitteeResetCollectsRoundZeroNewViews() verifies committee resets collect round-zero new-view votes.
+func TestCommitteeResetCollectsRoundZeroNewViews(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	c.cont.rootHeight = 1
+	locked := c.setupTestableHighQC(t, false, true)
+	c.bft.HighQC = locked
+	c.bft.NewHeight(true)
+	c.bft.SetHeightAnchor(time.Now())
+
+	go c.bft.StartRound()
+	select {
+	case signable := <-c.cont.sendToProposerChan:
+		msg := signable.(*Message)
+		require.Equal(t, ElectionVote, msg.Qc.Header.Phase)
+		require.Same(t, locked, msg.HighQc)
+	case <-time.After(testTimeout):
+		t.Fatal("committee reset did not send a round-zero new-view vote")
+	}
+
+	c.bft.ProposerKey = c.bft.PublicKey
+	c.bft.StartProposePhase()
+	select {
+	case <-c.cont.sendToReplicasChan:
+		t.Fatal("committee-reset proposer used the one-signer round-zero shortcut")
+	default:
+	}
+
+	c.simElectionVotePhase(t, 0, false, false, false, 0)
+	go c.bft.StartProposePhase()
+	select {
+	case signable := <-c.cont.sendToReplicasChan:
+		msg := signable.(*Message)
+		require.Same(t, locked, msg.HighQc)
+		signers, _, err := msg.Qc.Signature.GetSigners(c.bft.ValidatorSet)
+		require.NoError(t, err)
+		require.Len(t, signers, 2)
+	case <-time.After(testTimeout):
+		t.Fatal("committee-reset proposer did not propose after new-view quorum")
+	}
+	c.bft.PhaseTimer.Stop()
+}
+
+// TestCommitteeResetDoesNotAcceptRoundZeroOneSignerProof() verifies committee resets reject a round-zero single-signer proof.
+func TestCommitteeResetDoesNotAcceptRoundZeroOneSignerProof(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	c.bft.ProposerKey = c.bft.PublicKey
+	vote, signature, err := c.bft.roundZeroProposerProof()
+	require.NoError(t, err)
+	block, blockHash, results, resultsHash := c.proposal(t)
+	msg := &Message{
+		Header: c.view(Propose),
+		Qc: &QC{
+			Header:      vote.Qc.Header,
+			Block:       block,
+			BlockHash:   blockHash,
+			Results:     results,
+			ResultsHash: resultsHash,
+			ProposerKey: c.bft.PublicKey,
+			Signature:   signature,
+		},
+	}
+	require.NoError(t, msg.Sign(c.bft.PrivateKey))
+	c.bft.roundZeroNewView = true
+	params, errI := c.bft.GetValidateMessageParams(msg)
+	require.NoError(t, errI)
+	partial, errI := c.bft.CheckProposerMessage(msg, params)
+	require.NoError(t, errI)
+	require.True(t, partial)
+
+	c.bft.roundZeroNewView = false
+	params, errI = c.bft.GetValidateMessageParams(msg)
+	require.NoError(t, errI)
+	partial, errI = c.bft.CheckProposerMessage(msg, params)
+	require.NoError(t, errI)
+	require.False(t, partial)
+}
+
+// TestTimeoutQuorumRequiresTwoThirdsInOneExactRound() verifies timeout quorums cannot combine votes from different rounds.
+func TestTimeoutQuorumRequiresTwoThirdsInOneExactRound(t *testing.T) {
+	c := newTestConsensus(t, Propose, 4)
+	add := func(validator, round int) {
+		msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, uint64(round))}}
+		require.NoError(t, msg.Sign(c.valKeys[validator]))
+		key := fmt.Sprintf("%d/%s", round, lib.BytesToString(msg.Signature.PublicKey))
+		c.bft.PacemakerMessages[key] = msg
+	}
+
+	add(0, 0)
+	add(1, 0)
+	add(2, 1)
+	add(3, 1)
+	_, ok := c.bft.TimeoutQuorumRound()
+	require.False(t, ok, "votes from different rounds must not be combined")
+
+	add(2, 0)
+	round, ok := c.bft.TimeoutQuorumRound()
+	require.True(t, ok)
+	require.Equal(t, uint64(0), round)
+}
+
+// TestTimeoutCatchUpRequiresDistinctOneThirdPower() verifies catch-up evidence requires distinct one-third voting power.
+func TestTimeoutCatchUpRequiresDistinctOneThirdPower(t *testing.T) {
+	c := newTestConsensus(t, RoundInterrupt, 4)
+	add := func(validator int, round uint64) {
+		msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, round)}}
+		require.NoError(t, msg.Sign(c.valKeys[validator]))
+		key := fmt.Sprintf("%d/%s", round, lib.BytesToString(msg.Signature.PublicKey))
+		c.bft.PacemakerMessages[key] = msg
+	}
+
+	add(0, 3)
+	add(0, 4)
+	_, ok := c.bft.TimeoutCatchUpRound()
+	require.False(t, ok, "one validator must not be counted once per round")
+
+	add(1, 3)
+	round, ok := c.bft.TimeoutCatchUpRound()
+	require.True(t, ok)
+	require.Equal(t, uint64(3), round)
+}
+
+// TestTimeoutCatchUpHealsAdjacentRoundSplit() verifies catch-up evidence heals validators split across adjacent rounds.
+func TestTimeoutCatchUpHealsAdjacentRoundSplit(t *testing.T) {
+	c := newTestConsensus(t, RoundInterrupt, 2)
+	msg := &Message{Qc: &QC{Header: c.view(RoundInterrupt, 1)}}
+	require.NoError(t, msg.Sign(c.valKeys[1]))
+	key := fmt.Sprintf("1/%s", lib.BytesToString(msg.Signature.PublicKey))
+	c.bft.PacemakerMessages[key] = msg
+
+	round, ok := c.bft.TimeoutCatchUpRound()
+	require.True(t, ok)
+	require.Equal(t, uint64(1), round,
+		"a round-zero validator must be able to join the round-one validator")
 }
 
 func TestStartElectionVotePhase(t *testing.T) {
 	tests := []struct {
-		name                 string
-		detail               string
-		numValidators        int
-		isElectionCandidate  bool
-		noElectionCandidates bool
-		hasBE                bool
+		name          string
+		numValidators int
+		hasBE         bool
 	}{
 		{
-			name:                "self is election candidate",
-			detail:              `deterministic key set ensures 'self' is an election candidate with a set of 2 Validators`,
-			numValidators:       3,
-			isElectionCandidate: true,
+			name:          "three validators",
+			numValidators: 3,
 		},
 		{
-			name:                "self is not an election candidate",
-			detail:              `deterministic key set ensures 'self' is not an election candidate with a set of 5 Validators`,
-			numValidators:       5,
-			isElectionCandidate: false,
-		},
-		{
-			name:                 "pseudorandom",
-			detail:               `didn't 'handle messages' from any candidate, fallback to pseudorandom`,
-			numValidators:        8,
-			noElectionCandidates: true,
+			name:          "eight validators",
+			numValidators: 8,
 		},
 		{
 			name:          "byzantine evidence not nil",
-			detail:        `testing sending the byzantine evidence to the leader with the leader vote`,
 			numValidators: 5,
 			hasBE:         true,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// setup
 			c := newTestConsensus(t, ElectionVote, test.numValidators)
-			switch {
-			case test.noElectionCandidates:
-				c.setSortitionData(t)
-			default:
-				c.simElectionPhase(t)
-			}
+			expectedProposer := SelectProposerWeightedRoundRobin(c.bft.View, c.valSet.ValidatorSet, c.valSet.TotalPower)
+			c.bft.ProposerKey = expectedProposer
 			expectedDoubleSignEvidence := DoubleSignEvidences{}
 			if test.hasBE {
 				expectedDoubleSignEvidence.Evidence = c.newTestDoubleSignEvidence(t)
@@ -146,7 +324,7 @@ func TestStartElectionVotePhase(t *testing.T) {
 					DSE: expectedDoubleSignEvidence,
 				}
 			}
-			pub, _, expectedView := c.valKeys[0].PublicKey(), c.valKeys[0], lib.View{
+			expectedView := lib.View{
 				NetworkId:  lib.CanopyMainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 				Height:     1,
@@ -163,11 +341,7 @@ func TestStartElectionVotePhase(t *testing.T) {
 				require.True(t, ok)
 				require.NotNil(t, msg.Qc)
 				require.Equal(t, *msg.Qc.Header, expectedView)
-				if test.isElectionCandidate || test.noElectionCandidates {
-					require.Equal(t, msg.Qc.ProposerKey, pub.Bytes())
-				} else {
-					require.Equal(t, msg.Qc.ProposerKey, c.valKeys[3].PublicKey().Bytes())
-				}
+				require.Equal(t, expectedProposer, msg.Qc.ProposerKey)
 				if test.hasBE {
 					require.NotNil(t, msg.LastDoubleSignEvidence)
 					require.Equal(t, expectedDoubleSignEvidence.Evidence, msg.LastDoubleSignEvidence)
@@ -187,8 +361,8 @@ func TestStartProposePhase(t *testing.T) {
 		hasSafetyHQC   bool
 	}{
 		{
-			name:   "self is not proposer",
-			detail: `no election vote quorum certificate received`,
+			name:   "round zero deterministic proposer",
+			detail: `no network new-view quorum certificate required`,
 		},
 		{
 			name:        "self is proposer",
@@ -218,6 +392,7 @@ func TestStartProposePhase(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// setup
 			c := newTestConsensus(t, Propose, 3)
+			c.bft.ProposerKey = c.bft.PublicKey
 			var multiKey crypto.MultiPublicKeyI
 			if test.receiveEVQC {
 				multiKey = c.simElectionVotePhase(t, 0, test.hasBE, test.hasLivenessHQC, test.hasSafetyHQC, 0)
@@ -240,13 +415,8 @@ func TestStartProposePhase(t *testing.T) {
 			go c.bft.StartProposePhase()
 			select {
 			case <-time.After(testTimeout):
-				if test.receiveEVQC {
-					t.Fatal("timeout")
-				}
+				t.Fatal("timeout")
 			case m := <-c.cont.sendToReplicasChan:
-				if !test.receiveEVQC {
-					t.Fatal("unexpected message")
-				}
 				msg, ok := m.(*Message)
 				require.True(t, ok)
 				require.Equal(t, expectedView, *msg.Header)
@@ -256,9 +426,15 @@ func TestStartProposePhase(t *testing.T) {
 				require.NoError(t, e)
 				require.Equal(t, block, msg.Qc.Block)
 				require.Equal(t, results.Hash(), msg.Qc.Results.Hash())
-				expectedAggSig, err := multiKey.AggregateSignatures()
-				require.NoError(t, err)
-				require.Equal(t, expectedAggSig, msg.Qc.Signature.Signature)
+				if test.receiveEVQC {
+					expectedAggSig, err := multiKey.AggregateSignatures()
+					require.NoError(t, err)
+					require.Equal(t, expectedAggSig, msg.Qc.Signature.Signature)
+				} else {
+					signers, _, err := msg.Qc.Signature.GetSigners(c.bft.ValidatorSet)
+					require.NoError(t, err)
+					require.Equal(t, [][]byte{c.bft.PublicKey}, signers)
+				}
 				if test.hasBE {
 					expectedDSE := c.newTestDoubleSignEvidence(t)
 					require.EqualExportedValues(t, expectedDSE[0].VoteA, msg.LastDoubleSignEvidence[0].VoteA)
@@ -688,6 +864,8 @@ func TestStartCommitProcessPhase(t *testing.T) {
 func TestRoundInterrupt(t *testing.T) {
 	// setup
 	c := newTestConsensus(t, Propose, 3)
+	c.bft.Config.RoundInterruptTimeoutMS = 123
+	c.bft.Round = 2
 	go c.bft.RoundInterrupt()
 	select {
 	case <-time.After(testTimeout):
@@ -698,12 +876,15 @@ func TestRoundInterrupt(t *testing.T) {
 		require.EqualExportedValues(t, msg.Qc.Header, &lib.View{
 			NetworkId:  lib.CanopyMainnetNetworkId,
 			Height:     1,
-			Round:      0,
+			Round:      2,
 			RootHeight: 1,
 			ChainId:    lib.CanopyChainId,
 			Phase:      RoundInterrupt,
 		})
 		require.Equal(t, c.bft.Phase, RoundInterrupt)
+		require.Equal(t, 123, c.bft.Config.RoundInterruptTimeoutMS,
+			"round interrupt must not overwrite the configured pacemaker window")
+		require.Equal(t, 123*time.Millisecond, c.bft.WaitTime(RoundInterrupt, c.bft.Round))
 	}
 }
 
@@ -742,6 +923,7 @@ func TestPacemaker(t *testing.T) {
 				numValidators = 2
 			}
 			c := newTestConsensus(t, Propose, numValidators)
+			c.bft.Config.ProposerMode = lib.ProposerModeVRF
 			if test.hasPeerPacemakerVotes {
 				c.simPacemakerPhase(t)
 			}
@@ -753,6 +935,7 @@ func TestPacemaker(t *testing.T) {
 
 func TestPacemakerRequiresMoreThanOneThird(t *testing.T) {
 	c := newTestConsensus(t, Propose, 2)
+	c.bft.Config.ProposerMode = lib.ProposerModeVRF
 	c.bft.ValidatorSet.ValidatorSet.ValidatorSet[0].VotingPower = 67
 	c.bft.ValidatorSet.ValidatorSet.ValidatorSet[1].VotingPower = 33
 	c.bft.ValidatorSet.TotalPower = 100
@@ -765,7 +948,7 @@ func TestPacemakerRequiresMoreThanOneThird(t *testing.T) {
 }
 
 func TestScheduleForceRound(t *testing.T) {
-	c := newTestConsensus(t, Election, 1)
+	c := newTestConsensus(t, Propose, 1)
 	c.bft.Round = 2
 	c.bft.round.Store(2)
 	lockedQC := &QC{}
@@ -773,21 +956,65 @@ func TestScheduleForceRound(t *testing.T) {
 
 	timeoutRound := uint64(0)
 	require.NoError(t, c.bft.ScheduleForceRound(7, time.Now().Add(time.Hour), &timeoutRound))
-	c.bft.Phase = Pacemaker
-	c.bft.HandlePhase()
-	require.Equal(t, Pacemaker, c.bft.Phase)
+	c.bft.applyForcedRound()
+	require.Equal(t, Propose, c.bft.Phase)
 	require.Equal(t, uint64(2), c.bft.Round)
 
 	require.NoError(t, c.bft.ScheduleForceRound(7, time.Now(), &timeoutRound))
-	c.bft.HandlePhase()
+	select {
+	case <-c.bft.forceRoundTimer.C:
+	case <-time.After(testTimeout):
+		t.Fatal("force-round timer did not fire")
+	}
+	newViewSent := make(chan struct{})
+	go func() {
+		<-c.cont.sendToProposerChan
+		close(newViewSent)
+	}()
+	c.bft.applyForcedRound()
+	<-newViewSent
 	require.Equal(t, uint64(7), c.bft.CurrentRound())
-	require.Equal(t, Election, c.bft.Phase)
+	require.Equal(t, Propose, c.bft.Phase)
 	require.Same(t, lockedQC, c.bft.HighQC)
 	require.Equal(t, time.Duration(c.bft.Config.ElectionTimeoutMS)*time.Millisecond, c.bft.WaitTime(Election, c.bft.Round+1))
 	require.Error(t, c.bft.ScheduleForceRound(7, time.Now(), nil))
 	c.bft.NewHeight()
 	require.Nil(t, c.bft.forcedTimeoutRound)
 	c.bft.PhaseTimer.Stop()
+}
+
+// TestRefreshRootChainInfoPublishesCommitteeSnapshotAtomically() verifies root-chain committee snapshots are published atomically.
+func TestRefreshRootChainInfoPublishesCommitteeSnapshotAtomically(t *testing.T) {
+	c := newTestConsensus(t, Propose, 1)
+	oldValidators := c.bft.ValidatorSet.ValidatorSet
+	oldCommitteeData := &lib.CommitteeData{LastRootHeightUpdated: 7}
+	c.bft.RootHeight = 7
+	c.bft.CommitteeData = oldCommitteeData
+
+	newValidators, _, _ := newTestValSet(t, 2)
+	newCommitteeData := &lib.CommitteeData{LastRootHeightUpdated: 8}
+	c.cont.rootHeight = 8
+	c.cont.valSet[lib.CanopyChainId] = newValidators
+	c.cont.committeeData = newCommitteeData
+
+	c.cont.loadCommitteeErr = lib.ErrNoValidators()
+	c.bft.RefreshRootChainInfo()
+	require.Equal(t, uint64(7), c.bft.RootHeight)
+	require.Same(t, oldValidators, c.bft.ValidatorSet.ValidatorSet)
+	require.Same(t, oldCommitteeData, c.bft.CommitteeData)
+
+	c.cont.loadCommitteeErr = nil
+	c.cont.loadCommitteeDataErr = lib.ErrNoValidators()
+	c.bft.RefreshRootChainInfo()
+	require.Equal(t, uint64(7), c.bft.RootHeight)
+	require.Same(t, oldValidators, c.bft.ValidatorSet.ValidatorSet)
+	require.Same(t, oldCommitteeData, c.bft.CommitteeData)
+
+	c.cont.loadCommitteeDataErr = nil
+	c.bft.RefreshRootChainInfo()
+	require.Equal(t, uint64(8), c.bft.RootHeight)
+	require.Same(t, newValidators.ValidatorSet, c.bft.ValidatorSet.ValidatorSet)
+	require.Same(t, newCommitteeData, c.bft.CommitteeData)
 }
 
 func TestPhaseHas23Maj(t *testing.T) {
@@ -895,7 +1122,7 @@ func TestNewRound(t *testing.T) {
 			c.simPrecommitPhase(t, 0)
 			c.simCommitPhase(t, 0, 0)
 			c.simPacemakerPhase(t)
-			eleLen, evVoteLen, propNil, propVoteLen, precNil, precVoteLen, comNil, expRound, paceLen := 4, 1, false, 1, false, 1, false, uint64(0), 3
+			eleLen, evVoteLen, propNil, propVoteLen, precNil, precVoteLen, comNil, expRound, paceLen := 0, 1, false, 1, false, 1, false, uint64(0), 3
 			if test.newRound || test.newHeight {
 				eleLen, evVoteLen, propNil, propVoteLen, precNil, precVoteLen, comNil, expRound = 0, 0, true, 0, true, 0, true, 1
 			}

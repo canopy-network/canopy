@@ -18,18 +18,8 @@ func TestAddProposal(t *testing.T) {
 		error   string
 	}{
 		{
-			name:   "same phase",
-			detail: "a message for this view was already received but it was from a different proposer",
-			preAdd: []*Message{
-				{
-					Header: &lib.View{
-						Phase: lib.Phase_ELECTION,
-					},
-					Signature: &lib.Signature{
-						PublicKey: keys[0].PublicKey().Bytes(),
-					},
-				},
-			},
+			name:   "obsolete election proposal",
+			detail: "deterministic election does not store VRF candidates",
 			message: &Message{
 				Header: &lib.View{
 					Phase: lib.Phase_ELECTION,
@@ -38,6 +28,7 @@ func TestAddProposal(t *testing.T) {
 					PublicKey: keys[1].PublicKey().Bytes(),
 				},
 			},
+			error: "wrong phase",
 		},
 
 		{
@@ -46,7 +37,7 @@ func TestAddProposal(t *testing.T) {
 			preAdd: []*Message{
 				{
 					Header: &lib.View{
-						Phase: lib.Phase_ELECTION,
+						Phase: lib.Phase_PROPOSE,
 					},
 					Signature: &lib.Signature{
 						PublicKey: keys[0].PublicKey().Bytes(),
@@ -55,7 +46,7 @@ func TestAddProposal(t *testing.T) {
 			},
 			message: &Message{
 				Header: &lib.View{
-					Phase: lib.Phase_PROPOSE,
+					Phase: lib.Phase_PRECOMMIT,
 				},
 				Signature: &lib.Signature{
 					PublicKey: keys[1].PublicKey().Bytes(),

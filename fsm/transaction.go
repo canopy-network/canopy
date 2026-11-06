@@ -17,11 +17,29 @@ const BlockAcceptanceRange = 4320
 
 // ApplyTransaction() processes the transaction within the state machine, returning the corresponding TxResult.
 func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (*lib.TxResult, []*lib.Event, lib.ErrorI) {
+	return s.applyTransaction(index, transaction, txHash, batchVerifier, nil)
+}
+
+type precheckedTransaction struct {
+	transaction *lib.Transaction
+	sender      crypto.AddressI
+}
+
+// applyTransaction() executes one prechecked transaction and returns its result and emitted events.
+func (s *StateMachine) applyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier, prechecked *precheckedTransaction) (*lib.TxResult, []*lib.Event, lib.ErrorI) {
 	applyTransactionStartTime := time.Now()
 	s.events.Refer(txHash)
 	// validate the transaction and get the check result
 	checkTxStartTime := time.Now()
-	result, err := s.CheckTx(transaction, txHash, batchVerifier)
+	var (
+		result *CheckTxResult
+		err    lib.ErrorI
+	)
+	if prechecked == nil {
+		result, err = s.CheckTx(transaction, txHash, batchVerifier)
+	} else {
+		result, err = s.checkTx(prechecked.transaction, txHash, batchVerifier, prechecked.sender)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -108,13 +126,6 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 
 // CheckTx() validates the transaction object
 func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (result *CheckTxResult, err lib.ErrorI) {
-	// create various result variables
-	var (
-		authorizedSigners [][]byte
-		msg               lib.MessageI
-		recipient         []byte
-		plugin            bool
-	)
 	tx := new(lib.Transaction)
 	// populate the object ref with the bytes of the transaction
 	decodeStartTime := time.Now()
@@ -128,6 +139,18 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	if s.Metrics != nil {
 		s.Metrics.CheckTxDecodeTime.Observe(time.Since(decodeStartTime).Seconds())
 	}
+	return s.checkTx(tx, txHash, batchVerifier, nil)
+}
+
+// checkTx() validates transaction replay, message, fee, authorization, and signature requirements.
+func (s *StateMachine) checkTx(tx *lib.Transaction, txHash string, batchVerifier *crypto.BatchVerifier, precheckedSender crypto.AddressI) (result *CheckTxResult, err lib.ErrorI) {
+	// create various result variables
+	var (
+		authorizedSigners [][]byte
+		msg               lib.MessageI
+		recipient         []byte
+		plugin            bool
+	)
 	// validate the timestamp (prune friendly - replay protection)
 	replayStartTime := time.Now()
 	if err = s.CheckReplay(tx, txHash); err != nil {
@@ -179,9 +202,14 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	}
 	// validate the signature of the transaction
 	signatureStartTime := time.Now()
-	sender, err := s.CheckSignature(tx, authorizedSigners, batchVerifier)
-	if err != nil {
-		return
+	sender := precheckedSender
+	if sender == nil {
+		sender, err = s.CheckSignature(tx, authorizedSigners, batchVerifier)
+		if err != nil {
+			return
+		}
+	} else if err = authorizeSender(sender, authorizedSigners); err != nil {
+		return nil, err
 	}
 	var restrictedAddress []byte
 	switch {
@@ -223,6 +251,16 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	}, nil
 }
 
+// authorizeSender() verifies that the sender appears in the message's authorized signer set.
+func authorizeSender(sender crypto.AddressI, authorizedSigners [][]byte) lib.ErrorI {
+	for _, authorized := range authorizedSigners {
+		if sender.Equals(crypto.NewAddressFromBytes(authorized)) {
+			return nil
+		}
+	}
+	return ErrUnauthorizedTx()
+}
+
 // CheckTxResult is the result object from CheckTx()
 type CheckTxResult struct {
 	tx        *lib.Transaction // the transaction object
@@ -234,6 +272,18 @@ type CheckTxResult struct {
 
 // CheckSignature() validates the signer and the digital signature associated with the transaction object
 func (s *StateMachine) CheckSignature(tx *lib.Transaction, authorizedSigners [][]byte, batchSigVerifier *crypto.BatchVerifier) (crypto.AddressI, lib.ErrorI) {
+	address, err := s.checkSignatureEnvelope(tx, batchSigVerifier)
+	if err != nil {
+		return nil, err
+	}
+	if err = authorizeSender(address, authorizedSigners); err != nil {
+		return nil, err
+	}
+	return address, nil
+}
+
+// checkSignatureEnvelope() validates a signature and returns its address without message-specific authorization for the later execution pass.
+func (s *StateMachine) checkSignatureEnvelope(tx *lib.Transaction, batchSigVerifier *crypto.BatchVerifier) (crypto.AddressI, lib.ErrorI) {
 	// validate the actual signature bytes
 	if tx.Signature == nil || len(tx.Signature.Signature) == 0 {
 		return nil, ErrEmptySignature()
@@ -278,17 +328,7 @@ func (s *StateMachine) CheckSignature(tx *lib.Transaction, authorizedSigners [][
 		}
 	}
 	// calculate the corresponding address from the public key
-	address := publicKey.Address()
-	// for each authorized signer
-	for _, authorized := range authorizedSigners {
-		// if the address that signed the transaction matches one of the authorized signers
-		if address.Equals(crypto.NewAddressFromBytes(authorized)) {
-			// return the signer address
-			return address, nil
-		}
-	}
-	// if no authorized signer matched the signer address, it's unauthorized
-	return nil, ErrUnauthorizedTx()
+	return publicKey.Address(), nil
 }
 
 // CheckReplay() validates the timestamp of the transaction

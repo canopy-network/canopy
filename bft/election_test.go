@@ -179,6 +179,119 @@ func TestSelectProposerFromCandidates(t *testing.T) {
 	}
 }
 
+// TestSelectProposerWeightedRoundRobin() verifies deterministic stake-weighted proposer selection.
+func TestSelectProposerWeightedRoundRobin(t *testing.T) {
+	validators := &lib.ConsensusValidators{ValidatorSet: []*lib.ConsensusValidator{
+		{PublicKey: []byte("validator-a"), VotingPower: 1},
+		{PublicKey: []byte("validator-b"), VotingPower: 2},
+		{PublicKey: []byte("validator-c"), VotingPower: 3},
+	}}
+	const totalPower = uint64(6)
+	const samples = uint64(60_000)
+	const tolerance = float64(samples) / 100
+	view := &lib.View{NetworkId: 1, ChainId: 1, Height: 1}
+
+	// The immutable 64-bit schedule converges on each validator's stake share.
+	heightCounts := make(map[string]int)
+	for height := uint64(1); height <= samples; height++ {
+		view.Height, view.Round = height, 0
+		proposer := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+		heightCounts[string(proposer)]++
+	}
+	require.InDelta(t, float64(samples/6), heightCounts["validator-a"], tolerance)
+	require.InDelta(t, float64(samples/3), heightCounts["validator-b"], tolerance)
+	require.InDelta(t, float64(samples/2), heightCounts["validator-c"], tolerance)
+
+	// Recovery rounds use an independent immutable stride with the same weighting.
+	roundCounts := make(map[string]int)
+	view.Height = 10
+	for round := uint64(0); round < samples; round++ {
+		view.Round = round
+		proposer := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+		roundCounts[string(proposer)]++
+	}
+	require.InDelta(t, float64(samples/6), roundCounts["validator-a"], tolerance)
+	require.InDelta(t, float64(samples/3), roundCounts["validator-b"], tolerance)
+	require.InDelta(t, float64(samples/2), roundCounts["validator-c"], tolerance)
+
+	view.Height, view.Round = 42, 3
+	first := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+	second := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+	require.Equal(t, first, second)
+	require.Nil(t, SelectProposerWeightedRoundRobin(view, validators, totalPower+1))
+	require.Nil(t, SelectProposerWeightedRoundRobin(nil, validators, totalPower))
+}
+
+// TestSelectProposerWeightedRoundRobinStakeEditDoesNotRekeySchedule() verifies stake edits do not re-key the proposer schedule.
+func TestSelectProposerWeightedRoundRobinStakeEditDoesNotRekeySchedule(t *testing.T) {
+	view := &lib.View{NetworkId: 1, ChainId: 1}
+	for height := uint64(1); height <= 1_000; height++ {
+		view.Height, view.Round = height, 0
+		before := weightedRoundRobinPowerIndex(view, 2_000_000_000)
+		after := weightedRoundRobinPowerIndex(view, 2_000_000_001)
+		require.GreaterOrEqual(t, after, before)
+		require.LessOrEqual(t, after-before, uint64(1))
+	}
+}
+
+// TestSelectProposerWeightedRoundRobinIgnoresValidatorInputOrder() verifies validator input order does not affect selection.
+func TestSelectProposerWeightedRoundRobinIgnoresValidatorInputOrder(t *testing.T) {
+	firstOrder := &lib.ConsensusValidators{ValidatorSet: []*lib.ConsensusValidator{
+		{PublicKey: []byte("validator-c"), VotingPower: 3, NetAddress: "tcp://one.example"},
+		{PublicKey: []byte("validator-a"), VotingPower: 1, NetAddress: "tcp://one.example"},
+		{PublicKey: []byte("validator-b"), VotingPower: 2, NetAddress: "tcp://one.example"},
+	}}
+	secondOrder := &lib.ConsensusValidators{ValidatorSet: []*lib.ConsensusValidator{
+		{PublicKey: []byte("validator-b"), VotingPower: 2, NetAddress: "tcp://two.example"},
+		{PublicKey: []byte("validator-c"), VotingPower: 3, NetAddress: "tcp://two.example"},
+		{PublicKey: []byte("validator-a"), VotingPower: 1, NetAddress: "tcp://two.example"},
+	}}
+	view := &lib.View{NetworkId: 1, ChainId: 1}
+	for height := uint64(1); height <= 12; height++ {
+		for round := uint64(0); round < 6; round++ {
+			view.Height, view.Round = height, round
+			require.Equal(t,
+				SelectProposerWeightedRoundRobin(view, firstOrder, 6),
+				SelectProposerWeightedRoundRobin(view, secondOrder, 6),
+			)
+		}
+	}
+}
+
+// TestSelectProposerWeightedRoundRobinDoesNotPinSubThirdValidator() verifies adjacent tickets do not pin a sub-third validator.
+func TestSelectProposerWeightedRoundRobinDoesNotPinSubThirdValidator(t *testing.T) {
+	validators := &lib.ConsensusValidators{ValidatorSet: []*lib.ConsensusValidator{
+		{PublicKey: []byte("validator-a"), VotingPower: 1},
+		{PublicKey: []byte("validator-b"), VotingPower: 1},
+		{PublicKey: []byte("validator-c"), VotingPower: 1},
+		{PublicKey: []byte("validator-d"), VotingPower: 1},
+	}}
+	// These chain IDs produced runs of 13,323 rounds and 3,452 heights with hash-derived odd strides; a quarter-power validator must now rotate on every adjacent ticket along either schedule dimension.
+	for _, chainID := range []uint64{6_212, 13_210} {
+		view := &lib.View{NetworkId: 1, ChainId: chainID, Height: 1}
+		var previous []byte
+		for round := uint64(0); round < 20_000; round++ {
+			view.Round = round
+			proposer := SelectProposerWeightedRoundRobin(view, validators, 4)
+			if previous != nil {
+				require.NotEqual(t, previous, proposer, "chain %d pinned proposer at round %d", chainID, round)
+			}
+			previous = proposer
+		}
+
+		view.Round = 0
+		previous = nil
+		for height := uint64(1); height <= 20_000; height++ {
+			view.Height = height
+			proposer := SelectProposerWeightedRoundRobin(view, validators, 4)
+			if previous != nil {
+				require.NotEqual(t, previous, proposer, "chain %d pinned proposer at height %d", chainID, height)
+			}
+			previous = proposer
+		}
+	}
+}
+
 func newTestSortitionData(t *testing.T, c *testConsensus) *lib.SortitionData {
 	var lastNProposers [][]byte
 	for _, k := range c.valKeys {

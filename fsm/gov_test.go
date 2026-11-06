@@ -73,6 +73,25 @@ func TestUpdateParam(t *testing.T) {
 			},
 		},
 		{
+			name:   "consensus non-signer reward policy enabled",
+			detail: "the opt-in reward policy is represented as a boolean governance parameter",
+			update: paramUpdate{
+				space: "cons",
+				name:  ParamPreserveNonSignerRewards,
+				value: &lib.UInt64Wrapper{Value: 1},
+			},
+		},
+		{
+			name:   "consensus non-signer reward policy rejects non-boolean value",
+			detail: "the boolean governance parameter only accepts zero or one",
+			update: paramUpdate{
+				space: "cons",
+				name:  ParamPreserveNonSignerRewards,
+				value: &lib.UInt64Wrapper{Value: 2},
+			},
+			error: "invalid param: preserveNonSignerRewards",
+		},
+		{
 			name:   "consensus param block size below header rejected",
 			detail: "block size must be at least header size to avoid max-size underflow",
 			update: paramUpdate{
@@ -145,6 +164,9 @@ func TestUpdateParam(t *testing.T) {
 				require.Equal(t, uint64Value.Value, got.Validator.MaxCommittees)
 			case ParamProtocolVersion: // consensus
 				require.Equal(t, stringValue.Value, got.Consensus.ProtocolVersion)
+			case ParamPreserveNonSignerRewards: // consensus
+				require.Equal(t, uint64(1), uint64Value.Value)
+				require.True(t, got.Consensus.PreserveNonSignerRewards)
 			case ParamDAORewardPercentage: // gov
 				require.Equal(t, uint64Value.Value, got.Governance.DaoRewardPercentage)
 			case ParamCertificateResultsFee: // fee
@@ -152,6 +174,14 @@ func TestUpdateParam(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestConsensusParamsMissingRewardPolicyDefaultsToLegacy() verifies old parameter payloads retain the legacy reward policy.
+func TestConsensusParamsMissingRewardPolicyDefaultsToLegacy(t *testing.T) {
+	// A pre-upgrade ConsensusParams payload containing only block_size=1.
+	params := new(ConsensusParams)
+	require.NoError(t, proto.Unmarshal([]byte{0x08, 0x01}, params))
+	require.False(t, params.PreserveNonSignerRewards)
 }
 
 func TestConformStateToParamUpdate(t *testing.T) {

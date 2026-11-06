@@ -210,6 +210,11 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	if info.Timestamp != 0 {
 		timestamp = time.UnixMicro(int64(info.Timestamp))
 	}
+	// Ignore self-root loopback updates already applied by CommitCertificate so a second reset cannot invalidate next-height votes.
+	if c.Config.ConsensusConfig.UsesDeterministicProposers() && info.RootChainId == c.Config.ChainId {
+		c.UpdateP2PMustConnect(info.ValidatorSet)
+		return
+	}
 	c.Mempool.dirtyVersion.Add(1)
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
@@ -225,6 +230,10 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 
 // LoadCommittee() gets the ValidatorSet that is authorized to come to Consensus agreement on the Proposal for a specific height/chainId
 func (c *Controller) LoadCommittee(rootChainId, rootHeight uint64) (lib.ValidatorSet, lib.ErrorI) {
+	// Read a root chain's committed local committee directly to avoid a network-delayed loopback snapshot after commit.
+	if c.Config.ConsensusConfig.UsesDeterministicProposers() && rootChainId == c.Config.ChainId {
+		return c.FSM.LoadCommittee(c.Config.ChainId, rootHeight)
+	}
 	return c.RCManager.GetValidatorSet(rootChainId, c.Config.ChainId, rootHeight)
 }
 
@@ -502,6 +511,9 @@ func (c *Controller) ResetFSM() { c.FSM.Reset() }
 // RootChainHeight() returns the height of the canopy root-chain
 func (c *Controller) RootChainHeight() uint64 {
 	chainId, _ := c.FSM.GetRootChainId()
+	if c.Config.ConsensusConfig.UsesDeterministicProposers() && chainId == c.Config.ChainId {
+		return c.FSM.Height()
+	}
 	return c.RCManager.GetHeight(chainId)
 }
 

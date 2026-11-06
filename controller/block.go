@@ -130,6 +130,9 @@ func (c *Controller) SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64) 
 func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypto.VDF) (rcBuildHeight uint64, blockBytes []byte, results *lib.CertificateResult, err lib.ErrorI) {
 	var clean bool
 	c.log.Debugf("Producing proposal as leader")
+	c.Mempool.proposalGate.Lock()
+	defer c.Mempool.proposalGate.Unlock()
+	// Wait for consensus-critical finalized-height preparation instead of cancelling and rebuilding the same block on the live path.
 	// once done proposing, 'reset' the proposal mode back to default to 'accept all'
 	defer c.FSM.Reset()
 	// loop until we get a clean pass to prevent mid-proposal races
@@ -154,6 +157,15 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 				if e != nil {
 					return false, e
 				}
+			}
+			// Timestamp a cached proposal at transmission so its shared next-height deadline is not stale when the block finalizes.
+			if c.Config.ConsensusConfig.UsesDeterministicProposers() {
+				proposalTime := time.Now()
+				if lastBlock.BlockHeader.Time != 0 {
+					proposalTime = nextProposalTime(lastBlock.BlockHeader.Time, time.Now(),
+						c.Config.ConsensusConfig.RoundRobinBlockInterval(), c.Config.ConsensusConfig.BlockConsensusLeadTime())
+				}
+				p.Block.BlockHeader.Time = uint64(proposalTime.UnixMicro())
 			}
 			// validate the verifiable delay function from the bft module
 			if c.FSM.Height() > 1 && vdf != nil {
@@ -197,6 +209,8 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 
 // ValidateProposal() fully validates a proposal in the form of a quorum certificate and resets back to begin block state
 func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertificate, evidence *bft.ByzantineEvidence) (blockResult *lib.BlockResult, err lib.ErrorI) {
+	// Cancel speculative mempool work so it does not compete with consensus-critical proposal validation.
+	c.Mempool.cancelProposalBuild()
 	// reset the mempool at the beginning of the function to preserve the state for CommitCertificate()
 	c.FSM.Reset()
 	// log the beginning of proposal validation
@@ -210,6 +224,13 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 	if err != nil {
 		// exit with error
 		return
+	}
+	// Enforce this liveness bound outside the FSM so a proposal cannot park consensus far in the future.
+	if c.Config.ConsensusConfig.UsesDeterministicProposers() {
+		maximumTime := uint64(time.Now().Add(c.Config.ConsensusConfig.MaximumFutureBlockTime()).UnixMicro())
+		if block.BlockHeader.Time > maximumTime {
+			return nil, lib.ErrFutureBlockTime(block.BlockHeader.Time, maximumTime)
+		}
 	}
 	// validate the byzantine evidence portion of the proposal (bft is canopy controlled)
 	if err = c.Consensus.ValidateByzantineEvidence(qc.Results.SlashRecipients, evidence); err != nil {
@@ -242,6 +263,33 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 	return
 }
 
+// nextProposalTime() returns the first target slot with enough consensus lead time in constant time.
+func nextProposalTime(previous uint64, now time.Time, targetInterval, leadTime time.Duration) time.Time {
+	intervalMicros := uint64(targetInterval / time.Microsecond)
+	next := previous + intervalMicros
+	minimum := uint64(now.Add(leadTime).UnixMicro())
+	if next < minimum {
+		delta := minimum - next
+		slots := delta / intervalMicros
+		if delta%intervalMicros != 0 {
+			slots++
+		}
+		next += slots * intervalMicros
+	}
+	return time.UnixMicro(int64(next))
+}
+
+// validateProposalTime() rejects proposal timestamps that are not strictly newer than the previous block.
+func validateProposalTime(proposed uint64, previous *lib.BlockResult) lib.ErrorI {
+	if previous == nil || previous.BlockHeader == nil {
+		return lib.ErrNilBlockHeader()
+	}
+	if proposed <= previous.BlockHeader.Time {
+		return lib.ErrNonMonotonicBlockTime(proposed, previous.BlockHeader.Time)
+	}
+	return nil
+}
+
 // CommitCertificate() is executed after the quorum agrees on a block
 // - applies block against the fsm
 // - indexes the block and its transactions
@@ -253,8 +301,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	start := time.Now()
 	syncing := c.isSyncing.Load()
 	if !syncing {
-		// cancel any running mempool check and lock the mempool for live operation
-		c.Mempool.stop()
+		c.Mempool.cancelProposalBuild()
 		c.Mempool.L.Lock()
 		defer c.Mempool.L.Unlock()
 	}
@@ -320,21 +367,17 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		return err
 	}
 	if !syncing {
-		// refresh the mempool FSM from the newly committed height before rebuilding
+		// Keep each validator's next-height proposal warm so the selected leader can transmit immediately.
 		c.Mempool.FSM.Discard()
 		if c.Mempool.FSM, err = c.FSM.Copy(); err != nil {
 			return err
 		}
-		// check the mempool to cache a proposal block and validate the mempool itself
 		c.Mempool.dirtyVersion.Add(1)
 		resetProposalConfig := c.SetFSMInConsensusModeForProposals()
 		if e := c.Mempool.CheckMempool(); e != nil {
-			resetProposalConfig()
 			c.log.Warnf("Post-commit mempool rebuild failed: %s", e.Error())
-		} else {
-			resetProposalConfig()
 		}
-		// reset mempool FSM
+		resetProposalConfig()
 		c.Mempool.FSM.Reset()
 	}
 	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
@@ -369,7 +412,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	syncing := c.isSyncing.Load()
 	if !syncing {
 		// cancel any running mempool check and lock the mempool for live operation
-		c.Mempool.stop()
+		c.Mempool.cancelProposalBuild()
 		c.Mempool.L.Lock()
 		defer c.Mempool.L.Unlock()
 	}
@@ -517,6 +560,15 @@ func (c *Controller) commitToStore(storeI lib.StoreI, qc *lib.QuorumCertificate,
 func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool) (b *lib.BlockResult, err lib.ErrorI) {
 	// define convenience variables for the block header, hash, and height
 	candidate, candidateHash, candidateHeight := block.BlockHeader, lib.BytesToString(block.BlockHeader.Hash), block.BlockHeader.Height
+	if c.Config.ConsensusConfig.UsesDeterministicProposers() && candidateHeight > 1 {
+		lastBlock, loadErr := c.FSM.LoadBlock(candidateHeight - 1)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if timeErr := validateProposalTime(candidate.Time, lastBlock); timeErr != nil {
+			return nil, timeErr
+		}
+	}
 	// check the last qc in the candidate and set it in the ephemeral indexer to prepare for block application
 	if err = c.CheckAndSetLastCertificate(candidate); err != nil {
 		// exit with error
@@ -640,6 +692,10 @@ func (c *Controller) handlePeerBlock(msg *lib.BlockMessage, syncing, verifyQC bo
 	if err != nil {
 		// exit with error
 		return nil, err
+	}
+	// Normalize the compatibility transport timestamp to the QC-authenticated block timestamp before commit, gossip, and ResetBFT.
+	if c.Config.ConsensusConfig.UsesDeterministicProposers() {
+		msg.Time = block.BlockHeader.Time
 	}
 	// create a temp variable to double-check our saved block result against the peers
 	result := c.Consensus.BlockResult

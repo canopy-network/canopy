@@ -324,7 +324,8 @@ func (c *Controller) ListenForConsensus() {
 				return
 			}
 			// direct consensus messages must come from their signer; gossip messages may come from a relay
-			if !validConsensusSender(msg.Sender.Address.PublicKey, bftMsg, c.P2P.GossipMode()) {
+			allowRelay := c.P2P.GossipMode() || (c.Config.ConsensusConfig.UsesDeterministicProposers() && bftMsg.IsPacemakerMessage())
+			if !validConsensusSender(msg.Sender.Address.PublicKey, bftMsg, allowRelay) {
 				return lib.ErrInvalidSigner()
 			}
 			// check and add the message to the cache to prevent duplicates
@@ -365,6 +366,10 @@ func (c *Controller) ShouldGossip(msg *bft.Message) (gossip bool, exit bool) {
 	// only gossip when enabled
 	if !c.P2P.GossipMode() {
 		return
+	}
+	// Drop retired VRF election proposals before gossip regardless of their other fields.
+	if msg == nil || (c.Config.ConsensusConfig.UsesDeterministicProposers() && msg.Header != nil && msg.Header.Phase == bft.Election) {
+		return false, true
 	}
 	// gossip cases
 	switch {
@@ -659,6 +664,7 @@ func (c *Controller) pollMaxHeight(backoff int) (max, minVDF uint64, syncingPeer
 	go c.RequestBlock(true)
 	// debug log the current status
 	c.log.Debug("Waiting for peer max heights")
+	timeout := time.After(p2p.PollMaxHeightTimeoutS * time.Second * time.Duration(backoff))
 	// loop until timeout case
 	for {
 		// block until one of the cases is satisfied
@@ -694,7 +700,7 @@ func (c *Controller) pollMaxHeight(backoff int) (max, minVDF uint64, syncingPeer
 				maxHeight = int(blockMessage.MaxHeight)
 			}
 		// if a timeout occurred
-		case <-time.After(p2p.PollMaxHeightTimeoutS * time.Second * time.Duration(backoff)):
+		case <-timeout:
 			// if the maximum height or vdf iterations remains unset
 			if maxHeight == -1 || minimumVDFIterations == -1 {
 				// log the status of no heights received
