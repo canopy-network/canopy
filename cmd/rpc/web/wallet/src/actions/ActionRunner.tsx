@@ -137,7 +137,11 @@ export default function ActionRunner({
   // NEW: Load action-level DS (replaces per-field DS for better performance)
   const actionDsConfig = React.useMemo(() => (action as any)?.ds, [action]);
 
-  // Build context for DS (without ds itself to avoid circular dependency)
+  // Snapshot of previously-resolved DS results so DS params can reference sibling DS
+  // (e.g. an `account` DS querying `ds.validator.output`); kept in state so updates re-resolve
+  const [resolvedDsSnapshot, setResolvedDsSnapshot] = React.useState<Record<string, any>>({});
+
+  // Build context for DS; `ds` exposes previously-resolved sibling DS results to params
   // Use form (not debounced) for DS context to ensure immediate reactivity with prefilledData
   // The DS hook itself handles debouncing internally where needed
   const dsCtx = React.useMemo(
@@ -152,8 +156,9 @@ export default function ActionRunner({
           }
         : undefined,
       params,
+      ds: resolvedDsSnapshot,
     }),
-    [normalizedLiveForm, chain, selectedAccount, params],
+    [normalizedLiveForm, chain, selectedAccount, params, resolvedDsSnapshot],
   );
 
   const { ds: actionDs, isLoading: isDsLoading, fetchStatus: dsFetchStatus } = useActionDs(
@@ -162,6 +167,18 @@ export default function ActionRunner({
     actionId,
     selectedAccount?.address,
   );
+
+  // Sync the DS snapshot with resolved DS results; guard against no-op updates to avoid render loops
+  React.useEffect(() => {
+    setResolvedDsSnapshot((prev) => {
+      try {
+        if (JSON.stringify(prev) === JSON.stringify(actionDs)) return prev;
+      } catch {
+        // fall through and update if serialization fails
+      }
+      return actionDs;
+    });
+  }, [actionDs]);
 
   // Extract critical DS keys from manifest (DS that must load before showing form)
   const criticalDsKeys = React.useMemo(() => {
