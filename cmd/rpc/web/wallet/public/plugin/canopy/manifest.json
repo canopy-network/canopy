@@ -422,10 +422,10 @@
       "ds": {
         "account": {
           "account": {
-            "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
+            "address": "{{form.signerResponsible === 'operator' ? form.operator : (ds.validator ? ds.validator.output : form.output)}}"
           },
           "__options": {
-            "enabled": "{{ (form.signerResponsible === 'operator' && form.operator) || (form.signerResponsible === 'reward' && form.output) }}"
+            "enabled": "{{ (form.signerResponsible === 'operator' && form.operator) || (form.signerResponsible === 'reward' && (ds.validator ? ds.validator.output : form.output)) }}"
           }
         },
         "validator": {
@@ -587,9 +587,9 @@
             "title": "Signer Account Balance: {{formatToCoin<{{ds.account.amount ?? 0}}>}} {{chain.denom.symbol}}",
             "description": "Available balance for transaction fees and additional stake",
             "icon": "Wallet",
-            "variant": "info",
-            "showIf": "{{ form.signerResponsible && form.operator && form.output }}",
-            "step": "addresses",
+          "variant": "info",
+          "showIf": "{{ form.signerResponsible && form.operator && (ds.validator ? ds.validator.output : form.output) }}",
+          "step": "addresses",
             "span": {
               "base": 12
             }
@@ -801,7 +801,7 @@
             },
             {
               "label": "Signer Address",
-              "value": "{{form.signerResponsible == 'operator' ? 'Operator Address' : 'Rewards Address'}} | {{shortAddress<{{form.signerResponsible == 'operator' ? form.operator : form.output}}>}}"
+              "value": "{{form.signerResponsible == 'operator' ? 'Operator Address' : 'Rewards Address'}} | {{shortAddress<{{form.signerResponsible == 'operator' ? form.operator : (ds.validator ? ds.validator.output : form.output)}}>}}"
             },
             {
               "label": "{{ ds.validator ? 'Edit Stake' : 'New Stake' }}",
@@ -862,11 +862,11 @@
           "coerce": "boolean"
         },
         "output": {
-          "value": "{{form.output}}",
+          "value": "{{form.output || (ds.validator ? ds.validator.output : form.output)}}",
           "coerce": "string"
         },
         "signer": {
-          "value": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}",
+          "value": "{{form.signerResponsible === 'operator' ? form.operator : (ds.validator ? ds.validator.output : form.output)}}",
           "coerce": "string"
         },
         "memo": {
