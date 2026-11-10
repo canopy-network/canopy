@@ -293,6 +293,31 @@ func (s *Server) TransactionDAOTransfer(w http.ResponseWriter, r *http.Request, 
 	})
 }
 
+// TransactionChangeByzantineOutput proposes redirecting the returned stake of an unstaking Validator.
+func (s *Server) TransactionChangeByzantineOutput(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		outputAddress, err := crypto.NewAddressFromString(ptr.Output)
+		if err != nil {
+			return nil, err
+		}
+		if err = s.getFeeFromState(ptr, fsm.MessageChangeByzantineOutputName); err != nil {
+			return nil, err
+		}
+		return fsm.NewChangeByzantineOutputTx(
+			p,
+			crypto.NewAddress(ptr.ValidatorAddress),
+			outputAddress,
+			ptr.StartBlock,
+			ptr.EndBlock,
+			s.config.NetworkID,
+			s.config.ChainId,
+			ptr.Fee,
+			s.controller.ChainHeight(),
+			ptr.Memo,
+		)
+	})
+}
+
 // TransactionSubsidy subsidizes the reward pool of a committee
 func (s *Server) TransactionSubsidy(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
