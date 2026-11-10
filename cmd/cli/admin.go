@@ -57,6 +57,7 @@ func init() {
 	adminCmd.AddCommand(txUnpauseCmd)
 	adminCmd.AddCommand(txChangeParamCmd)
 	adminCmd.AddCommand(txDAOTransferCmd)
+	adminCmd.AddCommand(txChangeByzantineOutputCmd)
 	adminCmd.AddCommand(txSubsidyCmd)
 	adminCmd.AddCommand(txCreateOrderCmd)
 	adminCmd.AddCommand(txEditOrderCmd)
@@ -234,6 +235,24 @@ var (
 		Args:  cobra.MinimumNArgs(4),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeTxResultToConsole(client.TxDaoTransfer(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), getPassword(), !sim, fee, mint))
+		},
+	}
+
+	txChangeByzantineOutputCmd = &cobra.Command{
+		Use:   "tx-change-byzantine-output <proposer address or nickname> <validator address> <new output address> <proposal-start-block> <proposal-end-block> --fee=10000 --simulate=true",
+		Short: "propose redirecting the returned stake of an unstaking validator",
+		Args:  cobra.ExactArgs(5),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxChangeByzantineOutput(
+				argGetAddrOrNickname(args[0]),
+				argGetAddr(args[1]),
+				argGetAddr(args[2]),
+				uint64(argToInt(args[3])),
+				uint64(argToInt(args[4])),
+				getPassword(),
+				!sim,
+				fee,
+			))
 		},
 	}
 
