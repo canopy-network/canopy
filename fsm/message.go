@@ -32,6 +32,8 @@ func (s *StateMachine) HandleMessage(msg lib.MessageI) lib.ErrorI {
 		return s.HandleMessageChangeParameter(x)
 	case *MessageDAOTransfer:
 		return s.HandleMessageDAOTransfer(x)
+	case *MessageChangeByzantineOutput:
+		return s.HandleMessageChangeByzantineOutput(x)
 	case *MessageCertificateResults:
 		return s.HandleMessageCertificateResults(x)
 	case *MessageSubsidy:
@@ -332,6 +334,23 @@ func (s *StateMachine) HandleMessageDAOTransfer(msg *MessageDAOTransfer) lib.Err
 	}
 	// add to account
 	return s.AccountAdd(crypto.NewAddressFromBytes(msg.Address), msg.Amount)
+}
+
+// HandleMessageChangeByzantineOutput redirects the returned stake of an unstaking Validator after governance
+// approval. Keeping this separate from EditStake prevents governance from changing any other Validator field.
+func (s *StateMachine) HandleMessageChangeByzantineOutput(msg *MessageChangeByzantineOutput) lib.ErrorI {
+	if err := s.ApproveProposal(msg); err != nil {
+		return ErrRejectProposal()
+	}
+	validator, err := s.GetValidator(crypto.NewAddressFromBytes(msg.ValidatorAddress))
+	if err != nil {
+		return err
+	}
+	if validator.UnstakingHeight == 0 {
+		return ErrValidatorNotUnstaking()
+	}
+	validator.Output = msg.OutputAddress
+	return s.SetValidator(validator)
 }
 
 // HandleMessageCertificateResults() is the proper handler for a `CertificateResults` message
@@ -645,6 +664,8 @@ func (s *StateMachine) GetFeeForMessageName(name string) (fee uint64, err lib.Er
 		return feeParams.ChangeParameterFee, nil
 	case MessageDAOTransferName:
 		return feeParams.DaoTransferFee, nil
+	case MessageChangeByzantineOutputName:
+		return feeParams.ChangeByzantineOutputFee, nil
 	case MessageCertificateResultsName:
 		return feeParams.CertificateResultsFee, nil
 	case MessageSubsidyName:
@@ -690,6 +711,8 @@ func (s *StateMachine) GetAuthorizedSignersFor(msg lib.MessageI) (signers [][]by
 		return [][]byte{x.Signer}, nil
 	case *MessageDAOTransfer:
 		return [][]byte{x.Address}, nil
+	case *MessageChangeByzantineOutput:
+		return [][]byte{x.Signer}, nil
 	case *MessageSubsidy:
 		return [][]byte{x.Address}, nil
 	case *MessageCertificateResults:

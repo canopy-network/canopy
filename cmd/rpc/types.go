@@ -260,6 +260,16 @@ type txDaoTransfer struct {
 	txChangeParamRequest
 }
 
+type txChangeByzantineOutput struct {
+	Fee              uint64       `json:"fee"`
+	ValidatorAddress lib.HexBytes `json:"validatorAddress"`
+	Output           string       `json:"output"`
+	Submit           bool         `json:"submit"`
+	Password         string       `json:"password"`
+	fromFields
+	txChangeParamRequest
+}
+
 type txSubsidy struct {
 	Fee      uint64 `json:"fee"`
 	Amount   uint64 `json:"amount"`
@@ -403,6 +413,7 @@ type txRequest struct {
 	PubKey             string          `json:"pubKey"`
 	NetAddress         string          `json:"netAddress"`
 	Output             string          `json:"output"`
+	ValidatorAddress   lib.HexBytes    `json:"validatorAddress"`
 	OpCode             lib.HexBytes    `json:"opCode"`
 	Data               lib.HexBytes    `json:"data"`
 	Fee                uint64          `json:"fee"`

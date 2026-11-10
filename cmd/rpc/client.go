@@ -658,6 +658,30 @@ func (c *Client) TxDaoTransfer(from AddrOrNickname, amt, startBlk, endBlk uint64
 	return c.transactionRequest(TxDAOTransferRouteName, txReq, submit)
 }
 
+func (c *Client) TxChangeByzantineOutput(from AddrOrNickname, validatorAddress, output string,
+	startBlk, endBlk uint64, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	validator, err := lib.NewHexBytesFromString(validatorAddress)
+	if err != nil {
+		return nil, nil, err
+	}
+	txReq := txChangeByzantineOutput{
+		Fee:              optFee,
+		ValidatorAddress: validator,
+		Output:           output,
+		Submit:           submit,
+		Password:         pwd,
+		txChangeParamRequest: txChangeParamRequest{
+			StartBlock: startBlk,
+			EndBlock:   endBlk,
+		},
+	}
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+	return c.transactionRequest(TxByzOutputRouteName, txReq, submit)
+}
+
 func (c *Client) TxSubsidy(from AddrOrNickname, amt, chainId uint64, opCode string,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	txReq := txSubsidy{
