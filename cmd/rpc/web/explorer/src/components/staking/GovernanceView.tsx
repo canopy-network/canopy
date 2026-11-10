@@ -104,6 +104,7 @@ const GovernanceView: React.FC = () => {
                 'unpauseFee',
                 'changeParameterFee',
                 'daoTransferFee',
+                'changeByzantineOutputFee',
                 'certificateResultsFee',
                 'subsidyFee',
                 'createOrderFee',

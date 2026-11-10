@@ -304,20 +304,31 @@ func DecryptPrivateKey(epk *EncryptedPrivateKey, password []byte) (pk PrivateKey
 	if err != nil {
 		return nil, err
 	}
+	// recorded public key, used to disambiguate a 32-byte ED25519 seed from a 32-byte BLS12-381 key
+	recordedPublicKey, _ := hex.DecodeString(epk.PublicKey)
 	// use this key's own recorded params, falling back to defaults for pre-existing keys
 	time, memoryKB, threads := epk.KdfTime, epk.KdfMemoryKB, uint32(epk.KdfThreads)
 	if time == 0 && memoryKB == 0 && threads == 0 {
 		time, memoryKB, threads = DefaultKdfTime, DefaultKdfMemoryKB, DefaultKdfThreads
 	}
-	gcm, nonce, err := kdf(password, salt, time, memoryKB, uint8(threads))
+	gcm, legacyNonce, err := kdf(password, salt, time, memoryKB, uint8(threads))
 	if err != nil {
 		return nil, err
 	}
-	plainText, err := gcm.Open(nil, nonce, encrypted, nil)
+	// current format: a random nonce is prepended to the ciphertext (e.g. keystores
+	// exported from launchpad / newer wallets). Try that interpretation first.
+	nonceSize := gcm.NonceSize()
+	if len(encrypted) > nonceSize {
+		if plainText, openErr := gcm.Open(nil, encrypted[:nonceSize], encrypted[nonceSize:], nil); openErr == nil {
+			return NewPrivateKeyFromBytesWithPublicKey(plainText, recordedPublicKey)
+		}
+	}
+	// legacy format: the nonce was derived from the key material instead of stored
+	plainText, err := gcm.Open(nil, legacyNonce, encrypted, nil)
 	if err != nil {
 		return nil, err
 	}
-	return NewPrivateKeyFromBytes(plainText)
+	return NewPrivateKeyFromBytesWithPublicKey(plainText, recordedPublicKey)
 }
 
 // kdf derives an AES-GCM encryption key and nonce from a password and salt using Argon2 key derivation

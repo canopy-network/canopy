@@ -531,6 +531,16 @@ func TestCheckTxRejectsReversedGovernanceRange(t *testing.T) {
 				Signer:         kg.Address.Bytes(),
 			},
 		},
+		{
+			name: "change byzantine output",
+			msg: &MessageChangeByzantineOutput{
+				ValidatorAddress: kg.Address.Bytes(),
+				OutputAddress:    kg.Address.Bytes(),
+				Signer:           kg.Address.Bytes(),
+				StartHeight:      math.MaxUint64 - 5,
+				EndHeight:        3,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

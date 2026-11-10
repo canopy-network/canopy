@@ -124,6 +124,10 @@ func ErrValidatorUnstaking() lib.ErrorI {
 	return lib.NewError(lib.CodeValidatorUnstaking, lib.StateMachineModule, "validator is unstaking")
 }
 
+func ErrValidatorNotUnstaking() lib.ErrorI {
+	return lib.NewError(lib.CodeValidatorUnstaking, lib.StateMachineModule, "validator is not unstaking")
+}
+
 func ErrValidatorPaused() lib.ErrorI {
 	return lib.NewError(lib.CodeValidatorPaused, lib.StateMachineModule, "validator paused")
 }
