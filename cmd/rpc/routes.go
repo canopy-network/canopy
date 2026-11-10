@@ -83,6 +83,7 @@ const (
 	TxUnpauseRoutePath         = "/v1/admin/tx-unpause"
 	TxChangeParamRoutePath     = "/v1/admin/tx-change-param"
 	TxDAOTransferRoutePath     = "/v1/admin/tx-dao-transfer"
+	TxByzOutputRoutePath       = "/v1/admin/tx-change-byzantine-output"
 	TxCreateOrderRoutePath     = "/v1/admin/tx-create-order"
 	TxEditOrderRoutePath       = "/v1/admin/tx-edit-order"
 	TxDeleteOrderRoutePath     = "/v1/admin/tx-delete-order"
@@ -184,6 +185,7 @@ const (
 	TxUnpauseRouteName              = "tx-unpause"
 	TxChangeParamRouteName          = "tx-change-param"
 	TxDAOTransferRouteName          = "tx-dao-transfer"
+	TxByzOutputRouteName            = "tx-change-byzantine-output"
 	TxSubsidyRouteName              = "tx-subsidy"
 	TxCreateOrderRouteName          = "tx-create-order"
 	TxEditOrderRouteName            = "tx-edit-order"
@@ -288,6 +290,7 @@ var routePaths = routes{
 	TxUnpauseRouteName:              {Method: http.MethodPost, Path: TxUnpauseRoutePath},
 	TxChangeParamRouteName:          {Method: http.MethodPost, Path: TxChangeParamRoutePath},
 	TxDAOTransferRouteName:          {Method: http.MethodPost, Path: TxDAOTransferRoutePath},
+	TxByzOutputRouteName:            {Method: http.MethodPost, Path: TxByzOutputRoutePath},
 	TxCreateOrderRouteName:          {Method: http.MethodPost, Path: TxCreateOrderRoutePath},
 	TxEditStakeRouteName:            {Method: http.MethodPost, Path: TxEditStakeRoutePath},
 	TxDeleteOrderRouteName:          {Method: http.MethodPost, Path: TxDeleteOrderRoutePath},
@@ -408,6 +411,7 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		TxUnpauseRouteName:              s.TransactionUnpause,
 		TxChangeParamRouteName:          s.TransactionChangeParam,
 		TxDAOTransferRouteName:          s.TransactionDAOTransfer,
+		TxByzOutputRouteName:            s.TransactionChangeByzantineOutput,
 		TxCreateOrderRouteName:          s.TransactionCreateOrder,
 		TxEditOrderRouteName:            s.TransactionEditOrder,
 		TxDeleteOrderRouteName:          s.TransactionDeleteOrder,

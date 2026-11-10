@@ -75,6 +75,7 @@
 - /v1/admin/tx-unpause
 - /v1/admin/tx-change-param
 - /v1/admin/tx-dao-transfer
+- /v1/admin/tx-change-byzantine-output
 - /v1/admin/tx-create-order
 - /v1/admin/tx-edit-order
 - /v1/admin/tx-delete-order
@@ -923,6 +924,7 @@ $ curl -X POST localhost:50002/v1/query/non-signers \
   - **unpauseFee**: `uint64` - the minimum fee in micro denomination needed to execute a `unpause` transaction
   - **changeParameterFee**: `uint64` - the minimum fee in micro denomination needed to execute a `changeParameter` transaction
   - **daoTransferFee**: `uint64` - the minimum fee in micro denomination needed to execute a `daoTransfer` transaction
+  - **changeByzantineOutputFee**: `uint64` - the minimum fee in micro denomination needed to execute a `changeByzantineOutput` transaction
   - **certificateResultsFee**: `uint64` - the minimum fee in micro denomination needed to execute a `certificateResults` transaction
   - **subsidyFee**: `uint64` - the minimum fee in micro denomination needed to execute a `subsidy` transaction
   - **createOrderFee**: `uint64` - the minimum fee in micro denomination needed to execute a `createOrder` transaction
@@ -973,6 +975,7 @@ $ curl -X POST localhost:50002/v1/query/params \
     "unpauseFee": 10000,
     "changeParameterFee": 10000,
     "daoTransferFee": 10000,
+    "changeByzantineOutputFee": 10000,
     "certificateResultsFee": 0,
     "subsidyFee": 10000,
     "createOrderFee": 10000,
@@ -1064,6 +1067,7 @@ $ curl -X POST localhost:50002/v1/query/supply \
 - **unpauseFee**: `uint64` - the minimum fee in micro denomination needed to execute a `unpause` transaction
 - **changeParameterFee**: `uint64` - the minimum fee in micro denomination needed to execute a `changeParameter` transaction
 - **daoTransferFee**: `uint64` - the minimum fee in micro denomination needed to execute a `daoTransfer` transaction
+- **changeByzantineOutputFee**: `uint64` - the minimum fee in micro denomination needed to execute a `changeByzantineOutput` transaction
 - **certificateResultsFee**: `uint64` - the minimum fee in micro denomination needed to execute a `certificateResults` transaction
 - **subsidyFee**: `uint64` - the minimum fee in micro denomination needed to execute a `subsidy` transaction
 - **createOrderFee**: `uint64` - the minimum fee in micro denomination needed to execute a `createOrder` transaction
@@ -1088,6 +1092,7 @@ $ curl -X POST localhost:50002/v1/query/fee-params \
     "unpauseFee": 10000,
     "changeParameterFee": 10000,
     "daoTransferFee": 10000,
+    "changeByzantineOutputFee": 10000,
     "certificateResultsFee": 0,
     "subsidyFee": 10000,
     "createOrderFee": 10000,
@@ -2496,6 +2501,13 @@ $ curl -X POST localhost:50002/v1/query/txs-by-rec \
       - **amount**: `uint64` - amount of tokens
       - **startHeight**: `uint64` - start block height for vote window
       - **endHeight**: `uint64` - end block height for vote window
+      - **proposalHash**: `string` - internal hash to track the proposal
+    - **messageChangeByzantineOutput**:
+      - **validatorAddress**: `hex string` - the unstaking validator whose returned stake is being redirected
+      - **outputAddress**: `hex string` - the new address that will receive the returned stake
+      - **signer**: `hex string` - the sender/creator of the proposal
+      - **startHeight**: `uint64` - start block height for proposal validity
+      - **endHeight**: `uint64` - end block height for proposal validity
       - **proposalHash**: `string` - internal hash to track the proposal
     - **messageSubsidy**:
       - **address**: `hex string` - sender of the funds
@@ -4622,6 +4634,42 @@ $ curl -X POST http://localhost:50003/v1/admin/tx-dao-transfer \
   "networkID": 1,
   "chainID": 1
 }
+```
+
+## Txn Change Byzantine Output
+
+**Route:** `/v1/admin/tx-change-byzantine-output`
+
+**Description**: generates/submits a governance proposal to change the output address of an unstaking validator. The proposal requires approval from more than two-thirds of validator voting power and cannot modify an active validator.
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the proposal creator whose key signs the transaction
+- **validatorAddress**: `hex-string` - the unstaking validator to update
+- **output**: `hex-string` - the new address that will receive the returned stake
+- **startBlock**: `uint64` - first block at which the proposal may execute
+- **endBlock**: `uint64` - last block at which the proposal may execute
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or return the generated transaction
+- **password**: `string` - the password used to decrypt the proposal creator's private key
+
+**Response**: (See tx-by-hash and MessageChangeByzantineOutput)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-change-byzantine-output \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "validatorAddress":"dfd3c8dff19da7682f7fe5fde062c813b55c9eee",
+    "output":"ab1e0120ac7f11a6f60baa24b2b187eaf1e2e6f5",
+    "startBlock":1,
+    "endBlock":100,
+    "fee":0,
+    "submit":false,
+    "password":"test"
+  }'
 ```
 
 ## Txn Change Parameter

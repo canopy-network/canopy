@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -17,6 +18,20 @@ import (
 const (
 	KeyStoreName = "keystore.json"
 )
+
+// nicknameRegex restricts nicknames to letters, digits, dashes and underscores
+var nicknameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// ValidateNickname() returns an error if the nickname is empty or contains disallowed characters
+func ValidateNickname(nickname string) error {
+	if nickname == "" {
+		return errors.New("nickname is required")
+	}
+	if !nicknameRegex.MatchString(nickname) {
+		return fmt.Errorf("invalid nickname %q: only letters, digits, '-' and '_' are allowed", nickname)
+	}
+	return nil
+}
 
 // NewKeyGroup() generates a public key and address that pairs with the private key
 func NewKeyGroup(pk PrivateKeyI) *KeyGroup {
@@ -77,6 +92,10 @@ type ImportOpts struct {
 
 // Import() imports an encrypted private key to the store
 func (ks *Keystore) Import(encrypted *EncryptedPrivateKey, opts ImportOpts) error {
+	// validate before mutating the keystore
+	if err := ValidateNickname(opts.Nickname); err != nil {
+		return err
+	}
 	// TODO: better naming
 	encrypted.KeyAddress = hex.EncodeToString(opts.Address)
 	encrypted.KeyNickname = opts.Nickname
@@ -91,13 +110,10 @@ func (ks *Keystore) Import(encrypted *EncryptedPrivateKey, opts ImportOpts) erro
 		delete(ks.NicknameMap, oldNickname)
 	}
 
-	if opts.Nickname != "" {
-		_, ok := ks.NicknameMap[opts.Nickname]
-		if ok && opts.Nickname != oldNickname {
-			return errors.New("nickname already used")
-		}
-		ks.NicknameMap[opts.Nickname] = encrypted.KeyAddress
+	if _, ok := ks.NicknameMap[opts.Nickname]; ok && opts.Nickname != oldNickname {
+		return errors.New("nickname already used")
 	}
+	ks.NicknameMap[opts.Nickname] = encrypted.KeyAddress
 
 	ks.AddressMap[encrypted.KeyAddress] = encrypted
 
@@ -112,6 +128,10 @@ type ImportRawOpts struct {
 func (ks *Keystore) ImportRaw(privateKeyBytes []byte, password string, opts ImportRawOpts) (address string, err error) {
 	if password == "" {
 		return "", fmt.Errorf("invalid password")
+	}
+	// fail fast before the argon2 encryption cost
+	if err = ValidateNickname(opts.Nickname); err != nil {
+		return "", err
 	}
 
 	privateKey, err := NewPrivateKeyFromBytes(privateKeyBytes)
@@ -284,20 +304,31 @@ func DecryptPrivateKey(epk *EncryptedPrivateKey, password []byte) (pk PrivateKey
 	if err != nil {
 		return nil, err
 	}
+	// recorded public key, used to disambiguate a 32-byte ED25519 seed from a 32-byte BLS12-381 key
+	recordedPublicKey, _ := hex.DecodeString(epk.PublicKey)
 	// use this key's own recorded params, falling back to defaults for pre-existing keys
 	time, memoryKB, threads := epk.KdfTime, epk.KdfMemoryKB, uint32(epk.KdfThreads)
 	if time == 0 && memoryKB == 0 && threads == 0 {
 		time, memoryKB, threads = DefaultKdfTime, DefaultKdfMemoryKB, DefaultKdfThreads
 	}
-	gcm, nonce, err := kdf(password, salt, time, memoryKB, uint8(threads))
+	gcm, legacyNonce, err := kdf(password, salt, time, memoryKB, uint8(threads))
 	if err != nil {
 		return nil, err
 	}
-	plainText, err := gcm.Open(nil, nonce, encrypted, nil)
+	// current format: a random nonce is prepended to the ciphertext (e.g. keystores
+	// exported from launchpad / newer wallets). Try that interpretation first.
+	nonceSize := gcm.NonceSize()
+	if len(encrypted) > nonceSize {
+		if plainText, openErr := gcm.Open(nil, encrypted[:nonceSize], encrypted[nonceSize:], nil); openErr == nil {
+			return NewPrivateKeyFromBytesWithPublicKey(plainText, recordedPublicKey)
+		}
+	}
+	// legacy format: the nonce was derived from the key material instead of stored
+	plainText, err := gcm.Open(nil, legacyNonce, encrypted, nil)
 	if err != nil {
 		return nil, err
 	}
-	return NewPrivateKeyFromBytes(plainText)
+	return NewPrivateKeyFromBytesWithPublicKey(plainText, recordedPublicKey)
 }
 
 // kdf derives an AES-GCM encryption key and nonce from a password and salt using Argon2 key derivation
