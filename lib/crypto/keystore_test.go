@@ -112,6 +112,54 @@ func TestKeystoreImportWithOpts(t *testing.T) {
 	require.EqualExportedValues(t, private, pKey.PrivateKey)
 }
 
+func TestValidateNickname(t *testing.T) {
+	tests := []struct {
+		name     string
+		nickname string
+		valid    bool
+	}{
+		{name: "empty", nickname: "", valid: false},
+		{name: "alphanumeric", nickname: "pablito123", valid: true},
+		{name: "dash", nickname: "my-key", valid: true},
+		{name: "underscore", nickname: "rewards_ops", valid: true},
+		{name: "path traversal", nickname: "../../.ssh/authorized_keys", valid: false},
+		{name: "absolute path", nickname: "/etc/cron.d/p", valid: false},
+		{name: "dot", nickname: "validator_key.json", valid: false},
+		{name: "space", nickname: "Rewards Juan", valid: false},
+		{name: "newline", nickname: "key\nssh-ed25519", valid: false},
+		{name: "unicode", nickname: "clé", valid: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := ValidateNickname(test.nickname)
+			if test.valid {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestKeystoreImportRejectsInvalidNickname(t *testing.T) {
+	password := "password"
+	private, err := NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	address := private.PublicKey().Address().Bytes()
+	encrypted, err := EncryptPrivateKey(private.PublicKey().Bytes(), private.Bytes(), []byte(password), private.PublicKey().Address().String())
+	require.NoError(t, err)
+	ks := NewKeystoreInMemory()
+	// both import paths must reject and leave the keystore untouched
+	require.Error(t, ks.Import(encrypted, ImportOpts{Address: address, Nickname: "../validator_key.json"}))
+	_, err = ks.ImportRaw(private.Bytes(), password, ImportRawOpts{Nickname: "../../../etc/cron.d/p"})
+	require.Error(t, err)
+	require.Error(t, ks.Import(encrypted, ImportOpts{Address: address}))
+	_, err = ks.ImportRaw(private.Bytes(), password, ImportRawOpts{})
+	require.Error(t, err)
+	require.Empty(t, ks.AddressMap)
+	require.Empty(t, ks.NicknameMap)
+}
+
 func TestKeystoreImportRawWithOpts(t *testing.T) {
 	password := "password"
 	// pre-create a new private key
@@ -122,7 +170,7 @@ func TestKeystoreImportRawWithOpts(t *testing.T) {
 	// create a new in-memory keystore
 	ks := NewKeystoreInMemory()
 	// execute the function call
-	gotAddress, err := ks.ImportRaw(private.Bytes(), password, ImportRawOpts{})
+	gotAddress, err := ks.ImportRaw(private.Bytes(), password, ImportRawOpts{Nickname: "test"})
 	require.NoError(t, err)
 	// validate got address vs expected
 	require.Equal(t, hex.EncodeToString(address), gotAddress)

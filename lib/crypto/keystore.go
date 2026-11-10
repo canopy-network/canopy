@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -17,6 +18,20 @@ import (
 const (
 	KeyStoreName = "keystore.json"
 )
+
+// nicknameRegex restricts nicknames to letters, digits, dashes and underscores
+var nicknameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// ValidateNickname() returns an error if the nickname is empty or contains disallowed characters
+func ValidateNickname(nickname string) error {
+	if nickname == "" {
+		return errors.New("nickname is required")
+	}
+	if !nicknameRegex.MatchString(nickname) {
+		return fmt.Errorf("invalid nickname %q: only letters, digits, '-' and '_' are allowed", nickname)
+	}
+	return nil
+}
 
 // NewKeyGroup() generates a public key and address that pairs with the private key
 func NewKeyGroup(pk PrivateKeyI) *KeyGroup {
@@ -77,6 +92,10 @@ type ImportOpts struct {
 
 // Import() imports an encrypted private key to the store
 func (ks *Keystore) Import(encrypted *EncryptedPrivateKey, opts ImportOpts) error {
+	// validate before mutating the keystore
+	if err := ValidateNickname(opts.Nickname); err != nil {
+		return err
+	}
 	// TODO: better naming
 	encrypted.KeyAddress = hex.EncodeToString(opts.Address)
 	encrypted.KeyNickname = opts.Nickname
@@ -91,13 +110,10 @@ func (ks *Keystore) Import(encrypted *EncryptedPrivateKey, opts ImportOpts) erro
 		delete(ks.NicknameMap, oldNickname)
 	}
 
-	if opts.Nickname != "" {
-		_, ok := ks.NicknameMap[opts.Nickname]
-		if ok && opts.Nickname != oldNickname {
-			return errors.New("nickname already used")
-		}
-		ks.NicknameMap[opts.Nickname] = encrypted.KeyAddress
+	if _, ok := ks.NicknameMap[opts.Nickname]; ok && opts.Nickname != oldNickname {
+		return errors.New("nickname already used")
 	}
+	ks.NicknameMap[opts.Nickname] = encrypted.KeyAddress
 
 	ks.AddressMap[encrypted.KeyAddress] = encrypted
 
@@ -112,6 +128,10 @@ type ImportRawOpts struct {
 func (ks *Keystore) ImportRaw(privateKeyBytes []byte, password string, opts ImportRawOpts) (address string, err error) {
 	if password == "" {
 		return "", fmt.Errorf("invalid password")
+	}
+	// fail fast before the argon2 encryption cost
+	if err = ValidateNickname(opts.Nickname); err != nil {
+		return "", err
 	}
 
 	privateKey, err := NewPrivateKeyFromBytes(privateKeyBytes)
